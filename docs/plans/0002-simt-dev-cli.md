@@ -363,21 +363,32 @@ validator is ~150 lines, and dropping `dependencies` is what makes `npx` instant
 Steps 1-5 are useful with zero content migration and should land first, because they deliver
 the token win (tier 0/1/2 discovery) before any repo has changed.
 
-## 12. Open questions
+## 12. Rulings on the open questions
 
-1. **Does `brief` inline skill bodies, or emit a fetch plan?** Inlining is one call and
-   simplest; a fetch plan keeps the brief tiny and lets the agent pull bodies only if a step
-   actually needs them. Default is probably inlining under `--budget`, with `--plan` for the
-   other mode. Both should exist.
-2. **Monorepo support.** Not needed today, but the fingerprint should not assume a single
-   root so that merging repos later is not a rewrite.
-3. **Should the graph live in simt-dev or in a repo of its own?** Keeping it in simt-dev is
-   simpler; a separate repo would let content updates ship without tool releases.
-4. **Rule versions vs skill versions.** One pinned SHA per repo is simplest. Independent
-   per-artifact pinning lets a repo take a new skill without a rules bump, at the cost of a
-   more complex manifest.
-5. **Windows.** Nothing here requires it, but `core.hooksPath` and shebang handling deserve a
-   decision before `npm publish`.
+Settled 2026-10-05. Recorded as ADRs in `docs/decisions/`.
+
+1. **`brief` supports both.** Inlines resolved bodies by default, truncated at `--budget`
+   (default 20 KB), so one call usually suffices. `--plan` emits a fetch plan for the large
+   cases — `cloudflare` (552 KB, 81 references), `prototype-ui-fidelity` plus its 14 KB
+   reference. Fewest round-trips without losing a floor on context.
+2. **Monorepo: design for it, don't ship it.** The fingerprint accepts an explicit root,
+   detection is a bounded recursive scan, and resolution takes an optional path filter — so a
+   future workspace needs no resolver rewrite. No workspace manifest format, no monorepo UI,
+   no tests for a thing no repo needs.
+3. **The graph stays in simt-dev.** The apparent counter-argument does not hold: the tool reads
+   `skills.graph.json` from whatever SHA a repo pins, so content edits require only a simt-dev
+   commit and never an npm publish. Only tool *code* changes need a release. One repo, one pin,
+   one CI.
+4. **One pinned SHA for everything.** `projection.simtDevSha` pins rules, skills, agents and
+   tooling together. Per-artifact pinning is rejected because skills hard-reference rule files
+   — `postflight-preview-check` cites `.cursor/rules/preview-postflight.mdc` — so independent
+   pins can produce rule+skill combinations nobody tested.
+5. **Windows is supported from v1.** See ADR-011 for what this obliges. Costs more than the
+   `os: ["darwin","linux"]` opt-out would have, and buys an install story that does not break
+   on the first non-Mac contributor.
+6. **Package is `@quazarmedia/simt-dev`, binary `simt-dev`.** Publish requires npm org
+   membership with publish rights on the QuazarMedia scope; first publish is a one-off manual
+   step by the org owner.
 
 ## 13. What this deliberately does not do
 

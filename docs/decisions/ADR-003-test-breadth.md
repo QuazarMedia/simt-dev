@@ -1,0 +1,45 @@
+# ADR-003 — Focused tests are the default; a full suite needs a named trigger
+
+Status: **accepted** · 2026-10-05 · affects all repos
+
+## Context
+
+- `simt-social` / `simt-social-api`: "Focused tests are the default gate, and full suites are
+  the exception… **absent a named trigger, running a full suite is a defect, not diligence.**"
+- `bunnyland-server`: `fail_under = 100` plus `scripts/test-all` as the pre-push default, and
+  CONTRIBUTING's loop says "run the full gate locally (lint + tests + coverage)."
+- `simt-garmin`: reframes the axis entirely as a layer-conditional 5a–5m matrix.
+- `simt-social-media`: no policy — it just lists `npm run test:unit && npm run test:e2e`.
+
+The Social pair make a full suite a sin. media presents it as unremarkable. bunnyland makes it
+mandatory. These cannot all be org rules as stated.
+
+## Ruling
+
+Focused tests are the default gate. Running a full suite is legitimate **only** against a
+named trigger:
+
+1. Phase exit.
+2. Release gate.
+3. Behaviour that crosses a system boundary.
+4. A repo-declared numeric gate (see ADR-006 for where that number lives).
+5. Explicit user or caller instruction.
+6. Pre-push on a protected branch, in a repo that declares this trigger in `simt-dev.json`.
+
+Re-running a full suite as a progress meter is a defect. bunnyland already says exactly this
+("do not run the full gate repeatedly as a progress meter") — that sentence is adopted as
+canonical.
+
+## Consequences
+
+- Each repo's `simt-dev.json` declares which of the six triggers are active for it. bunnyland
+  activates 4 and 6; the Social repos activate 1, 2 and 3.
+- A reviewer can ask "which trigger?" and get a number, not an opinion.
+- media gains an explicit policy instead of an implicit one that contradicts its siblings.
+
+## Rejected
+
+- **"A full suite is a defect."** Wrong for a release gate and wrong for a repo whose coverage
+  floor is a hard number; it makes the rule get ignored rather than followed.
+- **Full suite by default.** Re-pays the whole cost on every iteration; the Social pair are
+  right that an inflated brief is a defect in the brief, not thoroughness.

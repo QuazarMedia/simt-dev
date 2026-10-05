@@ -62,8 +62,13 @@ export function buildManifest({ root, stack = [], sha, existing = null }) {
   const gatesFinal = existing?.gates ? { ...gates, ...existing.gates } : gates;
 
   return {
+    // Every value here is read by a person who cannot see simt-dev's own tree, so
+    // this comment names only things that are true in the repo it lands in. An
+    // earlier version pointed at docs/decisions/ and claimed each value cites the ADR
+    // that requires it; no value cited one, so it was decoration that misdescribed
+    // the file. The provenance that IS real is the recorded SHA in `projection`.
     $comment:
-      'Managed by simt-dev. Rulings live in docs/decisions/ - each value below cites the ADR that requires it.',
+      'Written and maintained by simt-dev. Edit by hand only if you intend to take ownership of this file: `simt-dev sync` regenerates the projected rules, and re-running `simt-dev init` refreshes the SHA without weakening a value you set here.',
     id: existing?.id ?? defaultId(root),
     stack: existing?.stack?.length ? existing.stack : stack,
     limits: limitsFinal,

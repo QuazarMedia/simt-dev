@@ -65,10 +65,13 @@ export async function dispatch(argv) {
 
   const step = STEPS.get(path);
   if (step !== undefined) {
+    // Two things a reader must be able to act on, and neither may name a path inside
+    // simt-dev: they run this tool, not its source tree. The step number is the
+    // stable handle; the file that documents it is an implementation detail.
     return fail(
-      `\`simt ${path}\` is declared but not implemented`,
+      `\`simt-dev ${path}\` is declared but not implemented`,
       EXIT.UNSUPPORTED,
-      `see docs/plans/0002-simt-dev-cli.md section 11, step ${step}`,
+      `implementation step ${step} is not built yet`,
     );
   }
   const args = positional.slice(offset);

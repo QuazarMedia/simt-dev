@@ -1,0 +1,235 @@
+// Every byte simt-dev ships into another repository, checked against the rule in
+// AGENTS.md: it must be readable and actionable by someone who has only the
+// receiving repository.
+//
+// This file exists because that rule was stated and then violated repeatedly. The
+// first violations were found by hand, after the text had already reached a repo.
+// A rule an agent can read is worth less than a gate it cannot pass, so each
+// violation class here is a failing test rather than a paragraph.
+//
+// The distinction these tests draw is never "does this look like an internal path".
+// It is "who owns this path" - see the docs/plans/ case in LEAKS below, which is
+// a correct default that a naive grep would flag.
+
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { readFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+import { loadRules, select } from '../src/projection/project.mjs';
+import { loadMdcRules, renderMdc } from '../src/projection/mdc.mjs';
+import { compose } from '../src/projection/markers.mjs';
+import { buildManifest } from '../src/projection/manifest.mjs';
+import { PACKAGE_ROOT } from '../src/workspace.mjs';
+import { dispatch } from '../src/commands/index.mjs';
+import { EXIT } from '../src/output/index.mjs';
+
+const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * Paths and phrases that only mean something inside simt-dev's own tree.
+ *
+ * `docs/plans/` is deliberately absent. It appears in intake-questions as a
+ * substitution DEFAULT: "your plans live here, relative to you". A repo reading
+ * it resolves it against itself, which is correct. The defect class is a path
+ * that resolves against *this* repository, not a path that resembles one.
+ */
+const LEAKS = [
+  { re: /docs\/decisions\//, what: 'a decision-record path' },
+  { re: /rules\/stacks\//, what: 'this repository\'s rule layout' },
+  { re: /rules\/core\.md/, what: 'this repository\'s rule layout' },
+  { re: /rules\/mdc\//, what: 'this repository\'s rule layout' },
+  { re: /\bsimt-(app|space|goto|social|blog|landing|garmin|jobs|media|wearable)\b/, what: 'a repository from this estate' },
+  { re: /\b(bunnyland|wakt-app|app-ui)\b/, what: 'a repository from this estate' },
+  { re: /\bthe estate\b|\ball 16 repos\b|\bthis audit\b/i, what: 'an investigation artefact' },
+];
+
+/** Text addressed to whoever maintains the rules, projected into a repo nobody maintains. */
+const AUTHOR_ADDRESSED = [
+  { re: /edit the source/i, what: 'an instruction to edit upstream source' },
+  { re: /edits here are overwritten/i, what: 'an instruction to edit upstream source' },
+  { re: /this file is projected/i, what: 'narration about the projection itself' },
+];
+
+// Every profile in the repo, so adding one cannot opt out of these checks.
+const PROFILES = ['node', 'python', 'jvm-android', 'connectiq', 'cloudflare-workers', 'react-web', 'container'];
+
+/**
+ * Provenance lines the tool writes about itself.
+ *
+ * `<!-- simt-dev:sources=rules/core.md -->` is namespaced under `simt-dev:`, is an
+ * HTML comment an agent never reads, and is the one thing that tells a maintainer
+ * which files produced a region. It is tool metadata, not prose addressed to the
+ * reader - so it is exempt from the path check and nothing else.
+ */
+const NAMESPACED_PROVENANCE = /^\s*<!--\s*simt-dev:[^>]*-->\s*$/gm;
+
+function assertClean(where, text) {
+  // Author-addressed text is checked everywhere, including comments: the old header
+  // said "edit the source in simt-dev" from inside a comment, and that was a real
+  // leak to a real reader.
+  for (const { re, what } of AUTHOR_ADDRESSED) {
+    const m = re.exec(text);
+    assert.equal(m, null, `${where} ships ${what}: ${JSON.stringify(m?.[0])}\n\n${text}`);
+  }
+  const prose = text.replace(NAMESPACED_PROVENANCE, '');
+  for (const { re, what } of LEAKS) {
+    const m = re.exec(prose);
+    assert.equal(m, null, `${where} ships ${what}: ${JSON.stringify(m?.[0])}\n\n${text}`);
+  }
+}
+
+// --- 1. The rule bodies -------------------------------------------------------------
+
+test('no rule body ships text only its author can act on', async () => {
+  const rules = await loadRules();
+  assert.ok(rules.length >= 8, 'expected the rule set to be non-trivial');
+  for (const rule of rules) {
+    assertClean(`rules/${rule.file}`, rule.body);
+  }
+});
+
+test('every profile is covered by the leak check', async () => {
+  const rules = await loadRules();
+  const ids = rules.map((r) => r.id);
+  for (const profile of PROFILES) {
+    assert.ok(ids.includes(profile), `no rule with id "${profile}" exists, so it is unchecked. Found: ${ids.join(', ')}`);
+  }
+});
+
+// --- 2. What a rule projects to, for a repo that gets it -----------------------------
+
+test('a rendered projection is clean for every stack that selects it', async () => {
+  const rules = await loadRules();
+  for (const stack of [['python'], ['gradle', 'kotlin', 'wear-os'], ['cloudflare-workers', 'hono'], ['react', 'firebase'], ['node']]) {
+    const { selected } = select(rules, stack);
+    assert.ok(selected.length > 0, `no rules selected for ${stack.join(',')}`);
+    const body = selected.map((r) => r.body).join('\n\n');
+    assertClean(`projection for ${stack.join(',')}`, body);
+  }
+});
+
+test('a rendered .mdc is clean, with no repo substitutions supplied', async () => {
+  for (const rule of await loadMdcRules()) {
+    const { body } = renderMdc(rule, {});
+    assertClean(`rendered ${rule.id}.mdc`, body);
+  }
+});
+
+// --- 3. The other artefacts that land in a consumer -----------------------------------
+
+test('the generated-region header names only actions a reader can take', () => {
+  const text = compose('Body.', { sha: 'abc1234', sources: ['rules/core.md'] });
+  assertClean('generated-region header', text);
+  // The command it tells them to run must exist under the shipped name.
+  assert.match(text, /simt-dev sync/, text);
+  assert.match(text, /Do not edit/i, text);
+});
+
+test('the manifest comment describes the manifest', async () => {
+  const manifest = buildManifest({ root: '/tmp/some-repo', stack: ['node'], sha: 'abc1234' });
+  const text = JSON.stringify(manifest, null, 2);
+  assertClean('simt-dev.json', text);
+  // It must not claim provenance it does not carry. An earlier version said every
+  // value cites the ADR that requires it; zero values cited one.
+  assert.equal(/\bADR-\d+/.test(text), false, 'the manifest claims ADR provenance it does not carry');
+  // The provenance that is real is the recorded SHA.
+  assert.match(text, /simtDevSha/, text);
+});
+
+// --- 4. Strings the tool prints, which reach a reader in an arbitrary directory -------
+
+test('every command name the tool prints is the name this package ships', async () => {
+  const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+  const bin = Object.keys(pkg.bin);
+  assert.deepEqual(bin, ['simt-dev'], 'the shipped binary name changed; update the guard');
+
+  // Any bare `simt <subcommand>` in user-facing source is a command that does not
+  // exist. This caught 102 sites at once, all of them remedy text, all of them
+  // telling a reader to run something unrunnable.
+  const files = [
+    'src/commands/help.mjs', 'src/commands/index.mjs', 'src/commands/sync.mjs',
+    'src/commands/init.mjs', 'src/commands/rules.mjs', 'src/commands/skills.mjs',
+    'src/commands/skillsinstall.mjs', 'src/commands/hooks.mjs', 'src/commands/upgrade.mjs',
+    'src/commands/compare.mjs', 'src/commands/mcp.mjs', 'src/commands/graph.mjs',
+    'src/compare/row.mjs', 'src/compare/discover.mjs', 'src/compare/hooksstate.mjs',
+    'src/upgrade/plan.mjs', 'src/projection/conflicts.mjs', 'src/projection/manifest.mjs',
+    'src/projection/project.mjs', 'src/projection/markers.mjs', 'src/projection/mdc.mjs',
+    'src/output/index.mjs', 'src/hooks/shim.mjs', 'src/hooks/gates.mjs',
+    'src/hooks/dispatcher.mjs', 'src/mcp/tools.mjs', 'src/mcp/server.mjs',
+    'src/decisions/index.mjs', 'src/resolve/source.mjs',
+  ];
+  for (const file of files) {
+    const text = await readFile(join(ROOT, file), 'utf8');
+    const m = /\bsimt (?:init|sync|check|rules|skills|hooks|compare|doctor|upgrade|mcp|graph)\b/.exec(text);
+    assert.equal(m, null, `${file} tells the reader to run "${m?.[0]}", which is not a command. The binary is "simt-dev".`);
+  }
+});
+
+test('no remedy or pointer names a path that resolves only inside simt-dev', async () => {
+  // Scans user-facing *output*, not comments. A comment may and should cite the
+  // file a decision lives in - that is how the next maintainer finds it. A remedy
+  // may not, because the reader is standing in a different directory.
+  const files = [
+    'src/commands/help.mjs', 'src/commands/index.mjs', 'src/commands/rules.mjs',
+    'src/commands/compare.mjs', 'src/commands/hooks.mjs', 'src/commands/upgrade.mjs',
+    'src/commands/skills.mjs', 'src/commands/skillsinstall.mjs', 'src/commands/init.mjs',
+    'src/compare/row.mjs', 'src/compare/discover.mjs', 'src/upgrade/plan.mjs',
+    'src/projection/conflicts.mjs', 'src/projection/manifest.mjs', 'src/output/index.mjs',
+    'src/hooks/gates.mjs', 'src/hooks/shim.mjs', 'src/mcp/tools.mjs',
+  ];
+  // Strip comments so the check is about what a reader sees.
+  const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*(\/\/|\*).*$/gm, '');
+  for (const file of files) {
+    const text = stripComments(await readFile(join(ROOT, file), 'utf8'));
+    for (const path of ['docs/decisions/', 'docs/plans/', 'rules/stacks/']) {
+      assert.ok(!text.includes(path), `${file} prints "${path}", which resolves only inside simt-dev`);
+    }
+  }
+});
+
+test('help does not describe the tool as belonging to one estate', async () => {
+  // `help` writes through emit() and returns an exit code, so the text has to be
+  // captured rather than returned.
+  const { help } = await import('../src/commands/help.mjs');
+  const chunks = [];
+  const real = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (c) => { chunks.push(String(c)); return true; };
+  let code;
+  try {
+    code = await help(['help']);
+  } finally {
+    process.stdout.write = real;
+  }
+  assert.equal(code, EXIT.OK);
+  const text = chunks.join('');
+  assert.ok(text.length > 200, 'help produced nothing to check');
+  assertClean('simt-dev help', text);
+  // It previously said "for the SIMT ecosystem", which is the same assumption as a
+  // repository name in a projected rule, one level up.
+  assert.ok(!/\bSIMT\b/.test(text), 'help claims the tool belongs to one estate');
+});
+
+// --- 5. The failure mode that started all of this ------------------------------------
+
+test('the check is not vacuous: a known leak is actually caught', async () => {
+  // A guard that cannot fail is decoration. Assert the detector works by feeding it
+  // each class of violation it exists to catch.
+  for (const sample of [
+    'Edit the source in simt-dev and run: simt sync.',
+    'Settled by an ADR in `docs/decisions/`.',
+    'Stack bodies live in `rules/stacks/`.',
+    'Unlike simt-app, do this.',
+    'This file is projected into each repo.',
+    'Only what is true in all 16 repos.',
+  ]) {
+    let threw = false;
+    try {
+      assertClean('sample', sample);
+    } catch {
+      threw = true;
+    }
+    assert.ok(threw, `the guard failed to catch: ${JSON.stringify(sample)}`);
+  }
+});

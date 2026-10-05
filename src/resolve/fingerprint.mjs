@@ -9,7 +9,7 @@
 // returns on any host.
 
 import { readdir, readFile, stat } from 'node:fs/promises';
-import { join, sep } from 'node:path';
+import { join } from 'node:path';
 
 /** tag -> human-readable marker(s) that imply it. First match wins per tag. */
 const MARKERS = [
@@ -159,4 +159,17 @@ function dedupe(list) {
   return [...new Set(list)];
 }
 
-export const __internals = { MARKERS, EXTENSION_TAGS, DEP_TAGS, sep };
+/**
+ * Every tag `fingerprint()` can emit. The registry validator checks skill
+ * `stack` arrays against this set: a tag the detector cannot produce would match
+ * nothing, silently, forever. Keep it derived from the tables above rather than
+ * restated by hand, so adding a marker file cannot desynchronise the two.
+ */
+export const STACK_TAGS = new Set([
+  ...MARKERS.map(([tag]) => tag),
+  ...EXTENSION_TAGS.values(),
+  ...DEP_TAGS.values(),
+  'wear-os', // derived from a wear/ module, not a marker file
+]);
+
+export const __internals = { MARKERS, EXTENSION_TAGS, DEP_TAGS };

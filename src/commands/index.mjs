@@ -8,6 +8,7 @@
 
 import { EXIT, emit, fail, isJson } from '../output/index.mjs';
 import { help } from './help.mjs';
+import { lintCommand } from './graph.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 
@@ -19,7 +20,6 @@ const STEPS = new Map([
   ['upgrade', 10],
   ['compare', 9],
   ['mcp', 10],
-  ['graph lint', 2],
   ['skills index', 4],
   ['skills brief', 5],
   ['skills show', 5],
@@ -53,6 +53,9 @@ export async function dispatch(argv) {
 
   const [first, second] = positional;
   const path = commandPath(first, second);
+  // Arguments after the command path. A group consumed two tokens (`graph lint`),
+  // a bare command one, so the offset depends on the shape that resolved.
+  const offset = GROUPS.has(first) && second !== undefined ? 2 : 1;
 
   if (path === null) {
     return fail(`unknown command \`${[first, second].filter(Boolean).join(' ')}\``, EXIT.USAGE);
@@ -66,7 +69,9 @@ export async function dispatch(argv) {
       `see docs/plans/0002-simt-dev-cli.md section 11, step ${step}`,
     );
   }
-  if (path === 'doctor') return runDoctor(positional.slice(1), flags);
+  const args = positional.slice(offset);
+  if (path === 'doctor') return runDoctor(args, flags);
+  if (path === 'graph lint') return lintCommand(args, flags);
   return fail(`unknown command \`${path}\``, EXIT.USAGE);
 }
 
@@ -90,8 +95,11 @@ function commandPath(first, second) {
   return key;
 }
 
-/** Subcommands that exist now rather than later, so they must not be rejected. */
-const KNOWN_SUBS = new Set(['doctor']);
+/**
+ * Subcommands implemented now, so they must not be rejected as unknown.
+ * Implemented paths live here; declared-but-unimplemented ones live in STEPS.
+ */
+const KNOWN_SUBS = new Set(['doctor', 'graph lint']);
 
 function parseOrExit(argv) {
   const parsed = parse(argv);

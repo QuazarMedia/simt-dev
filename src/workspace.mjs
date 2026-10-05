@@ -232,10 +232,12 @@ function disabled(value, source, detail, searched) {
  * Index 0 is the right one to name: on POSIX that is `$XDG_CONFIG_HOME/...` when set and
  * `$HOME/.config/...` when not, which is the path the reader most likely already expects.
  */
+// The remedy is a phrase, not a sentence: several callers embed it after their own
+// lead-in ("workspace none configured - <here>"), so it must not start with one.
 export const WORKSPACE_REMEDY = (() => {
   const first = configPaths()[0];
   const where = first ?? join('$HOME', '.config', CONFIG_DIR, CONFIG_FILE);
-  return `set one with --workspace <path>, the SIMT_DEV_WORKSPACE environment variable, or ${where}`;
+  return `--workspace <path>, the SIMT_DEV_WORKSPACE environment variable, or ${where}`;
 })();
 
 function absolute(p) {

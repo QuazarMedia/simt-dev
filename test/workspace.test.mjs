@@ -272,6 +272,9 @@ test('WORKSPACE_REMEDY names a real path and never "undefined"', async () => {
   assert.ok(WORKSPACE_REMEDY.endsWith(CONFIG_FILE), WORKSPACE_REMEDY);
   assert.ok(WORKSPACE_REMEDY.includes('--workspace'), 'the flag is the answer that always works');
   assert.ok(WORKSPACE_REMEDY.includes('SIMT_DEV_WORKSPACE'));
+  // It is a phrase, not a sentence: callers embed it after their own lead-in, so a
+  // leading "set one with" produced "set one with set one with ...".
+  assert.ok(!WORKSPACE_REMEDY.startsWith('set '), WORKSPACE_REMEDY);
 });
 
 // --- degraded mode, end to end -----------------------------------------------

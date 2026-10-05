@@ -15,6 +15,7 @@ import { existsSync } from 'node:fs';
 
 import { EXIT, emit, fail, isJson, note as emitNote } from '../output/index.mjs';
 import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
+import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { tokenize, rankSkills, closure, resolveAlias, scoreSkill, stackCompatible } from '../resolve/resolve.mjs';
@@ -325,7 +326,7 @@ export async function briefCommand(args, flags) {
     lines.push('', 'BODIES');
     for (const entry of picked) {
       lines.push('', `--- ${entry.skill.name} (${entry.skill.summary})`);
-      lines.push(await readBody(entry.skill, workspaceRoot));
+      lines.push(await readBody(entry.skill, workspaceRoot, root));
     }
   }
 
@@ -372,8 +373,16 @@ export async function showCommand(args, flags) {
 
   const source = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
   const { note: workspace, root: workspaceRoot } = await announceWorkspace(flags);
+  // The repo is a location for a declared source too, so `show` reads a body the
+  // caller already has instead of reporting the body missing (ADR-015).
+  const root = flags.root ?? process.cwd();
+  const body = await sourcePath(skill, workspaceRoot, root);
+  const bodyFrom = body === null ? 'none' : body.startsWith(`${root}/`) ? 'repo' : 'workspace';
   if (isJson(flags)) {
-    emit(`${JSON.stringify({ ok: true, ...skill, workspace }, null, 2)}\n`, { maxBytes: flags.maxBytes ?? 0 });
+    emit(
+      `${JSON.stringify({ ok: true, ...skill, workspace, body, bodyFrom }, null, 2)}\n`,
+      { maxBytes: flags.maxBytes ?? 0 },
+    );
     return EXIT.OK;
   }
   emit(
@@ -389,9 +398,10 @@ export async function showCommand(args, flags) {
       skill.requires?.length ? `requires      ${skill.requires.join(', ')}` : null,
       '',
       `source        ${source ? `${source.repo}/${source.path} (${source.role})` : 'none'}`,
+      `body          ${body === null ? '(unavailable)' : `${bodyFrom}  ${body}`}`,
       workspace,
       '',
-      await readBody(skill, workspaceRoot),
+      await readBody(skill, workspaceRoot, root),
     ]
       .filter((l) => l !== null)
       .join('\n'),
@@ -456,26 +466,39 @@ export async function whyCommand(args, flags) {
 // --- bodies -------------------------------------------------------------------
 
 /**
- * Resolve a skill's canonical source to an absolute path.
+ * Resolve a skill's body to an absolute path.
  *
- * Sources are declared as `repo/path`, so this needs the workspace that CONTAINS
- * the repos. That used to be `resolve(here, '..', '..', '..')`, which is right in
- * the checkout and wrong in `node_modules` - so every source resolved to a path
- * that could not exist and `skills` failed with 38 ENOENT lines. Now it comes from
- * configuration, and `null` is a legitimate answer meaning "this installation has
- * no workspace, so there are no bodies to fetch" (ADR-014).
+ * Sources are declared as `repo/path`, so finding one needs the workspace that
+ * CONTAINS the repos. That used to be `resolve(here, '..', '..', '..')`, which is
+ * right in the checkout and wrong in `node_modules` - so every source resolved to a
+ * path that could not exist and `skills` failed with 38 ENOENT lines. Now it comes
+ * from configuration, and `null` is a legitimate answer meaning "this installation
+ * has no workspace" (ADR-014).
+ *
+ * A second location exists and is not a fallback: the repo being read is itself a
+ * location for a declared source, matched on bytes rather than on hope (ADR-015).
+ * The canonical source is still tried first, so a workspace body always wins.
  */
-function sourcePath(skill, workspaceRoot) {
-  const source = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
-  if (!source) return null;
-  if (!workspaceRoot) return null;
-  return join(workspaceRoot, source.repo, source.path);
+async function sourcePath(skill, workspaceRoot, root) {
+  const canonical = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
+
+  if (canonical) {
+    const found = await locateSource(canonical, { workspaceRoot, root });
+    if (found.path) return found.path;
+  }
+
+  const held = await sourceHeldLocally(skill, root, { workspaceRoot });
+  if (held && !held.ambiguous) return held.path;
+
+  // A skill with no canonical source, or one whose bytes match nothing, has no
+  // body. Say so rather than printing an empty section.
+  return canonical && workspaceRoot ? join(workspaceRoot, canonical.repo, canonical.path) : null;
 }
 
-async function readBody(skill, workspaceRoot) {
-  const full = sourcePath(skill, workspaceRoot);
+async function readBody(skill, workspaceRoot, root) {
+  const full = await sourcePath(skill, workspaceRoot, root);
   if (!full) {
-    return `(body unavailable: this installation has no workspace, so ${skill.name} has no body to fetch; ${WORKSPACE_REMEDY})`;
+    return `(body unavailable: this installation has no workspace and ${root ?? 'this directory'} does not hold ${skill.name}; ${WORKSPACE_REMEDY})`;
   }
   if (!existsSync(full)) return `(body unavailable: ${full} is not on this machine)`;
   try {
@@ -487,14 +510,18 @@ async function readBody(skill, workspaceRoot) {
 }
 
 /**
- * The one explanation every command needs when bodies are unavailable: which
- * source answered, and what to do when none did. Printed once, not per skill -
- * 38 identical remedies is the same noise as 38 ENOENTs.
+ * Which source answered the workspace question, and what to do when none did.
+ * Printed once, not per skill - 38 identical remedies is the same noise as 38
+ * ENOENTs.
  */
 async function workspaceLine(flags) {
   const ws = await resolveWorkspace(flags);
   if (ws.root) return `workspace ${ws.root} (${ws.source}: ${ws.detail})`;
-  return `workspace none configured - skill bodies are unavailable; ${WORKSPACE_REMEDY}`;
+  // The wording states only the workspace fact. Whether a body is reachable is a
+  // different question with a different answer per skill, because the repo itself
+  // can hold a declared source (ADR-015) - claiming bodies are unavailable here
+  // would contradict the `body repo ...` line printed directly above it.
+  return `workspace none configured - set one with ${WORKSPACE_REMEDY}`;
 }
 
 /** Commands that print bodies or install them announce the workspace up front. */

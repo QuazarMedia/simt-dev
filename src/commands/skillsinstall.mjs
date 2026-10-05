@@ -29,6 +29,7 @@ import { loadRegistry, REGISTRY_PATH, measureSkill } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { MANIFEST, buildManifest, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { headSha } from '../projection/project.mjs';
+import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 
@@ -68,26 +69,34 @@ export async function installCommand(args, flags) {
     );
   }
 
+  // A workspace is where the canonical bodies live. It is not required, because the
+  // repository being installed into is itself a location for a declared source: a
+  // clone of one repo holds that repo's own bodies with no workspace anywhere. See
+  // resolve/source.mjs - bytes, not location, decide identity.
+  const ws = await resolveWorkspace(flags);
+  if (ws.error) return fail(`workspace config: ${ws.error}`, EXIT.CONFIG, 'fix the JSON, or remove the file');
+
   const root = flags.root ?? process.cwd();
   const repo = await fingerprint(root);
-  const pick = chooseSource(skill, repo.signals, flags);
+  const pick = await chooseSource(skill, repo.signals, flags, { root, workspaceRoot: ws.root });
   if (pick.error) return fail(pick.error, EXIT.USAGE, pick.remedy);
 
-  // Installing a body you cannot read is not a degraded mode, it is a failed
-  // install, so this one genuinely refuses rather than degrading. The difference
-  // from `skills show` is the point: `show` can still be useful without a
-  // workspace (it prints metadata), `install` cannot.
-  const ws = await resolveWorkspace(flags);
-  if (ws.error) return fail(`workspace config: ${ws.error}`, EXIT.CONFIG, WORKSPACE_REMEDY);
-  if (!ws.root) {
+  const found = await locateSource(pick.source, { workspaceRoot: ws.root, root });
+  if (!found.path) {
+    // Two reasons land here and they need different wording: no workspace at all,
+    // or a workspace that should hold this body and does not. An install that
+    // cannot read a body has failed, so this is never a degraded mode - the
+    // opposite of `skills show`, which stays useful with no workspace.
+    const because = ws.root
+      ? `the workspace at ${ws.root} should hold it and does not`
+      : 'no workspace is configured and this repo does not hold it';
     return fail(
-      `no workspace, so ${name} has no body to install from`,
+      `${skill.name}: ${label(pick.source)} - ${found.reason} (${because})`,
       EXIT.CONFIG,
-      WORKSPACE_REMEDY,
+      ws.root ? `check the clone at ${ws.root}, or: ${WORKSPACE_REMEDY}` : WORKSPACE_REMEDY,
     );
   }
-
-  const src = join(ws.root, pick.source.repo, pick.source.path);
+  const src = found.path;
   let measured;
   try {
     measured = await measureSkill(src);
@@ -95,7 +104,7 @@ export async function installCommand(args, flags) {
     return fail(
       `${pick.source.repo}/${pick.source.path}: ${error.code ?? error.message}`,
       EXIT.CONFIG,
-      'the registry points at a path that does not exist; run: simt graph lint',
+      'the registry points at a body that cannot be read; run: simt graph lint',
     );
   }
 
@@ -119,12 +128,14 @@ export async function installCommand(args, flags) {
     skill: name,
     variant: pick.variant,
     source: record.from,
+    locatedBy: found.how,
     dest: `${dir}/${name}`,
     action,
     bytes: measured.bytes,
     files: measured.files,
     wrapped: measured.flat,
     record,
+    note: pick.note ?? null,
     written: false,
   };
 
@@ -137,8 +148,9 @@ export async function installCommand(args, flags) {
     [
       `install ${name}${pick.variant ? ` (variant ${pick.variant})` : ''}`,
       `repo     ${root.split('/').pop()} (${repo.stack.join(', ') || 'undetected'})`,
-      `workspace ${ws.root} (${ws.source}: ${ws.detail})`,
+      `workspace ${ws.root ?? '(none)'} (${ws.source}: ${ws.detail})`,
       `source   ${record.from}${pick.reason ? ` - ${pick.reason}` : ''}`,
+      `read     ${found.how}${found.how === 'repo' ? ` (${src})` : ''}`,
       `dest     ${payload.dest}`,
       `size     ${measured.bytes} bytes in ${measured.files} file${measured.files === 1 ? '' : 's'}`,
       `status   ${action}`,
@@ -155,6 +167,8 @@ export async function installCommand(args, flags) {
       .join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );
+
+  if (pick.note) note(pick.note);
 
   if (action === 'in-place') {
     // The repo already holds the canonical source: the symlink fan-out means the
@@ -200,81 +214,182 @@ export async function installCommand(args, flags) {
   return EXIT.OK;
 }
 
+/** The variant a source carries, identified by its declared bytes. A single-body
+ *  skill has none, so this returns null rather than inventing an id. */
+function variantForBytes(skill, source) {
+  const match = (skill.variants ?? []).find((v) => v.bytes === source.bytes);
+  return match ? match.id : null;
+}
+
+/** The one declared source carrying a variant's bytes. Lint has already checked
+ *  that every declared size matches disk, so size identifies the body. */
+function sourceForVariant(skill, variantId) {
+  const sources = skill.sources ?? [];
+  const v = (skill.variants ?? []).find((x) => x.id === variantId);
+  if (!v) return null;
+  const match = sources.filter((s) => s.bytes === v.bytes);
+  return match.length === 1 ? match[0] : { ambiguous: match.length };
+}
+
+const label = (s) => `${s.repo}/${s.path}`;
+
 /**
  * Pick the source to install.
  *
- * With variants, the repo's own signals decide which body applies - and an
- * ambiguous or absent match is an error, because guessing here produces exactly
- * the two-repo divergence the variants exist to prevent.
+ * Precedence, and why each step exists:
+ *
+ *   1. `--from`  - an explicit instruction. It is obeyed even when it disagrees
+ *      with what the repo holds, because the author is answering a question the
+ *      tool cannot; the disagreement is reported as a note, not a block.
+ *   2. `--variant` - also explicit, same treatment.
+ *   3. The repo's signals pick exactly one variant. This is the normal path.
+ *   4. **The repo already holds exactly one declared source.** This is the step
+ *      that makes a single-repo clone work: such a clone's `package.json` usually
+ *      cannot tell `web` from `api`, but its own 5048 bytes of `slice-commit` are
+ *      an exact answer. Content beats taxonomy.
+ *   5. Refuse. Ambiguity and absence are both reported, never guessed.
+ *
+ * Step 3 can also *contradict* step 4 - signals say `api`, the bytes on disk are
+ * `web`. That is a real disagreement worth surfacing, because one of the two
+ * inputs is wrong and the reader needs to know which.
  */
-function chooseSource(skill, signals, flags) {
+async function chooseSource(skill, signals, flags, { root = null, workspaceRoot = null } = {}) {
   const sources = skill.sources ?? [];
+  const held = await sourceHeldLocally(skill, root, { workspaceRoot });
 
+  if (held?.ambiguous) {
+    return {
+      error: `${skill.name}: this repo matches ${held.held.length} declared sources at once (${held.held
+        .map((h) => label(h.source))
+        .join(', ')})`,
+      remedy:
+        'the registry and this repo disagree about what it holds; name the one you mean with --from <repo/path>',
+    };
+  }
+
+  const holdNote = held
+    ? `  note    this repo already holds the ${variantForBytes(skill, held.source) ?? 'single'} body at ${label(held.source)}`
+    : null;
+
+  // --- explicit choices ------------------------------------------------------
   if (flags.from) {
-    const found = sources.find((s) => `${s.repo}/${s.path}` === flags.from);
+    const found = sources.find((s) => label(s) === flags.from);
     if (!found) {
       return {
         error: `--from ${flags.from} is not a declared source of ${skill.name}`,
-        remedy: `declared: ${sources.map((s) => `${s.repo}/${s.path}`).join(', ')}`,
+        remedy: `declared: ${sources.map(label).join(', ')}`,
       };
     }
-    return { source: found, variant: flags.variant ?? null, reason: 'chosen with --from' };
+    return {
+      source: found,
+      variant: flags.variant ?? variantForBytes(skill, found),
+      reason: 'chosen with --from',
+      note: holdNote,
+    };
   }
 
   const canonical = sources.find((s) => s.role === 'canonical') ?? sources[0];
 
   if (!skill.variants?.length) {
-    return { source: canonical, variant: null, reason: 'single body' };
+    return { source: canonical, variant: null, reason: 'single body', note: holdNote };
   }
 
   if (flags.variant) {
-    const v = skill.variants.find((x) => x.id === flags.variant);
-    if (!v) {
+    const resolved = sourceForVariant(skill, flags.variant);
+    if (!resolved) {
       return {
         error: `${skill.name} has no variant "${flags.variant}"`,
         remedy: `variants: ${skill.variants.map((x) => x.id).join(', ')}`,
       };
     }
-    // A variant declares bytes, not a path. The source carrying those bytes is
-    // the body that variant describes - and `graph lint` has already verified
-    // every declared byte count against the file on disk.
-    const match = sources.filter((s) => s.bytes === v.bytes);
-    if (match.length !== 1) {
+    if (resolved.ambiguous !== undefined) {
       return {
-        error: `variant ${v.id} (${v.bytes} bytes) does not identify exactly one source (${match.length} matched)`,
+        error: `variant ${flags.variant} (${skill.variants.find((x) => x.id === flags.variant).bytes} bytes) does not identify exactly one source (${resolved.ambiguous} matched)`,
         remedy: `choose explicitly: simt skills install ${skill.name} --from <repo/path>`,
       };
     }
-    return { source: match[0], variant: v.id, reason: 'chosen with --variant' };
+    return { source: resolved, variant: flags.variant, reason: 'chosen with --variant', note: holdNote };
   }
 
+  // --- the repo's signals ----------------------------------------------------
   const tags = new Set(signals);
   const matched = skill.variants.filter((v) => v.stack.some((t) => tags.has(t)));
-  if (matched.length === 0) {
+
+  if (matched.length === 1) {
+    const chosen = sourceForVariant(skill, matched[0].id);
+    if (!chosen || chosen.ambiguous !== undefined) {
+      return {
+        error: `variant ${matched[0].id} does not identify exactly one source (${chosen?.ambiguous ?? 0} matched)`,
+        remedy: `choose explicitly: simt skills install ${skill.name} --from <repo/path>`,
+      };
+    }
+    if (held && held.source !== chosen) {
+      // The two signals disagree. Installing either one silently would pick a side.
+      return {
+        error: `${skill.name}: the repo's signals select the ${matched[0].id} variant (${label(
+          chosen,
+        )}) but this repo already holds the ${variantForBytes(skill, held.source)} variant (${label(
+          held.source,
+        )})`,
+        remedy: `decide which is right: simt skills install ${skill.name} --variant ${variantForBytes(
+          skill,
+          held.source,
+        )}, or --from ${label(chosen)}`,
+      };
+    }
     return {
-      error: `${skill.name} has ${skill.variants.length} variants and none matches this repo (${signals.join(', ') || 'no signals'})`,
-      remedy: `choose explicitly: simt skills install ${skill.name} --variant <${skill.variants.map((v) => v.id).join('|')}>`,
+      source: chosen,
+      variant: matched[0].id,
+      reason: `repo signals select ${matched[0].stack.join('/')}`,
+      note: holdNote,
     };
   }
+
   if (matched.length > 1) {
+    // Several variants claim this repo. The repo's own bytes are the tie-breaker
+    // that is not a guess - if it holds one of them, that one is the answer.
+    if (held) {
+      const heldVariant = variantForBytes(skill, held.source);
+      return {
+        source: held.source,
+        variant: heldVariant,
+        reason: `signals are ambiguous (${matched.map((v) => v.id).join(', ')}); the repo's own copy decides`,
+        note: holdNote,
+      };
+    }
     return {
       error: `${skill.name}: variants ${matched.map((v) => v.id).join(', ')} all match this repo`,
       remedy: `choose explicitly: simt skills install ${skill.name} --variant <id>`,
     };
   }
 
-  const v = matched[0];
-  const match = sources.filter((s) => s.bytes === v.bytes);
-  if (match.length !== 1) {
+  // --- nothing matched: the repo's own contents are the last real signal -----
+  if (held) {
+    const heldVariant = variantForBytes(skill, held.source);
     return {
-      error: `variant ${v.id} (${v.bytes} bytes) does not identify exactly one source (${match.length} matched)`,
-      remedy: `choose explicitly: simt skills install ${skill.name} --from <repo/path>`,
+      source: held.source,
+      variant: heldVariant,
+      reason: heldVariant
+        ? `no signal matched (${signals.join(', ') || 'none'}), but the repo already holds the ${heldVariant} variant`
+        : `no signal matched (${signals.join(', ') || 'none'}), but the repo already holds this body`,
+      note: holdNote,
     };
   }
+
+  // A directory that is the RIGHT shape but the WRONG body is a different failure
+  // from having nothing, and saying "none matches this repo" would send the reader
+  // looking at their stack tags instead of at the file that is actually there.
+  const impostor = sources.find((s) => existsSync(join(root, s.path)));
+  if (impostor) {
+    return {
+      error: `${skill.name}: ${root}/${impostor.path} exists but is not the declared body (${impostor.bytes} bytes declared)`,
+      remedy: `run: simt graph lint --workspace <path>  to see what the registry expects, or delete the local copy`,
+    };
+  }
+
   return {
-    source: match[0],
-    variant: v.id,
-    reason: `repo signals select ${v.stack.join('/')}`,
+    error: `${skill.name} has ${skill.variants.length} variants and none matches this repo (${signals.join(', ') || 'no signals'})`,
+    remedy: `choose explicitly: simt skills install ${skill.name} --variant <${skill.variants.map((v) => v.id).join('|')}>`,
   };
 }
 

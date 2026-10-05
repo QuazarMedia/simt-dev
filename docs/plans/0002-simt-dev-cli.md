@@ -361,6 +361,7 @@ validator is ~150 lines, and dropping `dependencies` is what makes `npx` instant
 | 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA | next | pending |
 | 11 | Genericity: emitted facts + repo-local profiles | a repo can adopt an unknown ecosystem with no engine change | **done** (ADR-013; 20 facts, `KNOWN_TAGS` one vocabulary, local profiles, `container` profile on `has-dockerfile`) |
 | 12 | Workspace as configuration; single repo is first class | a published install works with no workspace, and one repo is a supported shape | **done** (ADR-014; `--workspace` / env / config file / verified heuristic, `off` sentinel, degraded mode, 32 consumer-shaped tests) |
+| 13 | A source is content; the repo is a location | a single-repo clone can install and show with no workspace | **done** (ADR-015; byte-verified lookup at the workspace location and the repo location, `sourceHeldLocally` as a resolution signal, contradiction refused / ambiguity decided) |
 
 Steps 1-5 are useful with zero content migration and land first, because they deliver the
 token win (tier 0/1/2 discovery) before any repo has changed. Step 6 then proved the
@@ -624,3 +625,48 @@ does not exist at all in an npm install. The `compare` row that says `manifest p
 this is Y; run: simt upgrade` therefore names a command that will land on step 10. That step
 has to decide where the consumer set comes from — a workspace root recorded in `simt-dev.json`
 is the honest answer for the SIMT estate, and `--root` is the honest answer for everyone else.
+
+## 16. A source is content, and the repo is a location
+
+Section 15 made the workspace optional. It did not make lookup work, and the user who asked for
+section 15 found the next defect immediately: someone who cloned **only `simt-social`** has the
+`simt-social` body of `slice-commit` at `.agents/skills/slice-commit`, with no workspace, and both
+`skills install` and `skills show` said the body was unavailable while it sat in the working tree.
+
+Ruling: [ADR-015](../decisions/ADR-015-a-source-is-content-not-a-location.md).
+
+Three things were wrong, and only the first is a filesystem problem:
+
+1. `sources: [{repo, path, bytes, role}]` resolved at exactly one place, `join(workspaceRoot, …)`.
+   The second place is `<root>/<path>` — the repository being operated on *is* a location for a
+   declared source when the registry's `repo` is that repository.
+2. Variant selection asked the wrong question. A single-repo clone's `package.json` says `node`,
+   which matches neither the `web` nor the `api` variant of `slice-commit`, so selection refused —
+   while the clone's own 5048 bytes were an exact answer. **The tool asked the manifest a question
+   the manifest could not answer and ignored the evidence in front of it.**
+3. A byte count can decide identity and a stack tag cannot. Every source declares its size and
+   `graph lint` already verifies each declared size against disk, so `locateSource` accepts a
+   candidate location *only* when the measured size equals the declared size, and
+   `sourceHeldLocally` becomes a resolution signal rather than a fallback.
+
+`chooseSource` precedence, and each step's reason:
+
+| Order | Signal | Why it is here |
+|---|---|---|
+| 1 | `--from` | Explicit. Obeyed even when it contradicts the repo; the disagreement is a note. |
+| 2 | `--variant` | Explicit, same treatment. |
+| 3 | the repo's stack signals name one variant | the normal path |
+| 4 | **the repo already holds exactly one declared source** | settles both an unmatched repo and an ambiguous one, from evidence rather than a guess |
+| 5 | refuse, naming the reason | a refusal must be actionable |
+
+Two rules that look alike and are deliberately opposite: signals naming one variant while the repo
+holds another is a **refusal** (one of two inputs is wrong, and installing silently would pick a
+side); signals naming several variants while the repo holds one of them **installs that one** (the
+bytes are not a guess). And a right-shaped-but-wrong-body file gets its own message — `<path>
+exists but is not the declared body (5048 bytes declared)` — because "none of the variants matches
+this repo" is true and sends the reader to the wrong place.
+
+`skills show` reads a repo-local body and prints which location answered (`body repo <path>`);
+`skills install` prints a matching `read` line. Install still **fails** when it cannot read a body
+while `show` still answers, because a catalogue plus a pointer is useful with no workspace and a
+half-installed skill is not.

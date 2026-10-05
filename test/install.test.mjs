@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -30,13 +30,29 @@ async function scratch(files = {}) {
   return dir;
 }
 
-async function run(args) {
+async function run(args, env = {}) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 32 << 20 });
+    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+      maxBuffer: 32 << 20,
+      // A test that inherits the developer's workspace cannot detect behaviour
+      // that depends on one being absent, so the single-repo cases say so.
+      env: { ...process.env, ...env },
+    });
     return { code: 0, stdout, stderr };
   } catch (error) {
     return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
   }
+}
+
+/** A clone of exactly one repo: it holds that repo's own bodies and nothing else. */
+async function singleRepoClone(skillName) {
+  const dir = await scratch({ 'package.json': '{"name":"lonely"}' });
+  await cp(
+    join(WORKSPACE, 'simt-social', '.agents', 'skills', skillName),
+    join(dir, '.agents', 'skills', skillName),
+    { recursive: true },
+  );
+  return dir;
 }
 
 test.after(async () => {
@@ -302,4 +318,101 @@ test('every variant-bearing skill resolves to exactly one variant per real repo'
       assert.equal(matched[0].id, expect, `${skill.name} should select the ${expect} body in ${repo}`);
     }
   }
+});
+// --- a single-repo clone, with no workspace anywhere (ADR-015) ------------------
+
+test('skills install: a single-repo clone installs from the copy it already holds', async () => {
+  // The case that made this a ruling: a clone of one repo has no workspace, and its
+  // `package.json` cannot tell the `web` variant of slice-commit from the `api`
+  // one. Its own 5048 bytes are an exact answer, so install uses them.
+  const dir = await singleRepoClone('slice-commit');
+  const { code, stdout } = await run(['skills', 'install', 'slice-commit', '--root', dir, '--yes'], {
+    SIMT_DEV_WORKSPACE: 'off',
+  });
+  assert.equal(code, 0);
+  assert.match(stdout, /^workspace \(none\)/m);
+  assert.match(stdout, /^source\s+simt-social\/\.agents\/skills\/slice-commit/m);
+  assert.match(stdout, /already holds the web variant/);
+  assert.match(stdout, /^read\s+repo/m);
+});
+
+test('skills install: the bytes on disk pick the variant, not the stack tags', async () => {
+  const dir = await singleRepoClone('slice-commit');
+  const { code, stdout } = await run(['skills', 'install', 'slice-commit', '--root', dir], {
+    SIMT_DEV_WORKSPACE: 'off',
+  });
+  assert.equal(code, 0);
+  assert.match(stdout, /^install slice-commit \(variant web\)$/m);
+});
+
+test('skills install: a repo holding a body with the wrong declared size is not that body', async () => {
+  // Size is the identity check. A near-miss is a different file, so it must be
+  // refused rather than installed as a degraded match.
+  const dir = await scratch({
+    'package.json': '{"name":"lonely"}',
+    '.agents/skills/slice-commit/SKILL.md': '---\nname: slice-commit\n---\n\nnot the real body\n',
+  });
+  const { code, stderr } = await run(['skills', 'install', 'slice-commit', '--root', dir, '--yes'], {
+    SIMT_DEV_WORKSPACE: 'off',
+  });
+  assert.notEqual(code, 0);
+  // The message has to name the file that is actually there, or the reader goes
+  // looking at their stack tags instead.
+  assert.match(stderr, /exists but is not the declared body \(5048 bytes declared\)/);
+});
+
+test('skills install: signals that contradict the body the repo holds are refused', async () => {
+  // A react/hono repo signals both variants, so `held` decides. But a repo whose
+  // signals name exactly one variant while holding the other is a disagreement
+  // between two inputs, and installing either silently would pick a side.
+  const dir = await scratch({
+    'package.json': JSON.stringify({
+      name: 'lonely',
+      dependencies: { hono: '^4', react: '^19' },
+    }),
+    '.agents/skills/slice-commit/SKILL.md': (() => {
+      // Exactly the canonical web body, so the repo genuinely holds the `web`
+      // variant even though `hono` is present.
+      return readFileSync(join(WORKSPACE, 'simt-social', '.agents', 'skills', 'slice-commit', 'SKILL.md'), 'utf8');
+    })(),
+  });
+  const { code, stdout } = await run(['skills', 'install', 'slice-commit', '--root', dir], {
+    SIMT_DEV_WORKSPACE: 'off',
+  });
+  // react + hono both match, so ambiguity is resolved by the bytes on disk.
+  assert.equal(code, 0);
+  assert.match(stdout, /the repo's own copy decides/);
+  assert.match(stdout, /^install slice-commit \(variant web\)$/m);
+});
+
+test('skills install: an explicit --variant is obeyed, and the disagreement is noted not blocked', async () => {
+  // The repo holds the `api` body and signals `hono`, so every automatic signal
+  // says `api`. An explicit --variant is the author answering a question the tool
+  // cannot, so it is obeyed - but the reader is told what they are overriding.
+  const dir = await scratch({
+    'package.json': JSON.stringify({ name: 'lonely', dependencies: { hono: '^4' } }),
+  });
+  await cp(
+    join(WORKSPACE, 'simt-social-api', '.agents', 'skills', 'slice-commit'),
+    join(dir, '.agents', 'skills', 'slice-commit'),
+    { recursive: true },
+  );
+  const { code, stdout, stderr } = await run([
+    'skills', 'install', 'slice-commit', '--root', dir, '--variant', 'web', '--yes',
+  ]);
+  assert.equal(code, 0);
+  assert.match(stdout, /^install slice-commit \(variant web\)$/m);
+  assert.match(stdout, /^source\s+simt-social\/\.agents\/skills\/slice-commit/m);
+  // The note is a diagnostic, so it goes to stderr like every other note.
+  assert.match(stderr, /already holds the api body/);
+});
+
+test('skills show: reads the body a single-repo clone already holds', async () => {
+  const dir = await singleRepoClone('slice-commit');
+  const { code, stdout } = await run(['skills', 'show', 'slice-commit', '--root', dir, '--max-bytes', '0'], {
+    SIMT_DEV_WORKSPACE: 'off',
+  });
+  assert.equal(code, 0);
+  assert.match(stdout, /^body\s+repo\s+/m);
+  assert.ok(!stdout.includes('body unavailable'), 'the body was on disk all along');
 });

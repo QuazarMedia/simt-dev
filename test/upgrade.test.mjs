@@ -69,7 +69,7 @@ test('upgrade plan: a repo with no manifest is not-adopted, not behind', () => {
     manifest: null,
     manifestExists: false,
     manifestError: null,
-    target: TARGET,
+    targets: [TARGET],
     sha: 'aaaaaaa',
   });
   assert.equal(p.state, 'not-adopted');
@@ -86,7 +86,7 @@ test('upgrade plan: a stale pin alone is an update, and says the region was fine
     manifest: { projection: { simtDevSha: '0000000' } },
     manifestExists: true,
     manifestError: null,
-    target: TARGET,
+    targets: [TARGET],
     sha: 'aaaaaaa',
   });
   assert.equal(p.action, 'updated');
@@ -100,7 +100,7 @@ test('upgrade plan: changed rules alone are an update, and says the pin was fine
     manifest: { projection: { simtDevSha: 'aaaaaaa' } },
     manifestExists: true,
     manifestError: null,
-    target: { ...TARGET, action: 'updated' },
+    targets: [{ ...TARGET, action: 'updated' }],
     sha: 'aaaaaaa',
   });
   assert.equal(p.action, 'updated');
@@ -114,7 +114,9 @@ test('upgrade plan: a malformed region is skipped, never written over', () => {
     manifest: { projection: { simtDevSha: '0000000' } },
     manifestExists: true,
     manifestError: null,
-    target: { ...TARGET, action: 'malformed', reason: 'begin marker with no matching end marker', line: 4 },
+    targets: [
+      { ...TARGET, action: 'malformed', reason: 'begin marker with no matching end marker', line: 4 },
+    ],
     sha: 'aaaaaaa',
   });
   assert.equal(p.action, 'skip');
@@ -129,7 +131,7 @@ test('upgrade plan: a manifest with no region is a repair, not a version bump', 
     manifest: { projection: { simtDevSha: '0000000' } },
     manifestExists: true,
     manifestError: null,
-    target: { file: 'AGENTS.md', action: 'added', previousBytes: 0, bytes: 500 },
+    targets: [{ file: 'AGENTS.md', action: 'added', previousBytes: 0, bytes: 500 }],
     sha: 'aaaaaaa',
   });
   assert.equal(p.action, 'skip');
@@ -143,7 +145,7 @@ test('upgrade plan: an unparseable manifest is skipped, not overwritten', () => 
     manifest: null,
     manifestExists: true,
     manifestError: 'unparseable: Unexpected token',
-    target: TARGET,
+    targets: [TARGET],
     sha: 'aaaaaaa',
   });
   assert.equal(p.action, 'skip');
@@ -322,4 +324,67 @@ test('upgrade: never commits or pushes (ADR-001)', async () => {
   assert.equal(String(before.stdout ?? '').trim(), String(after.stdout ?? '').trim());
   const { stdout } = await exec('git', ['-C', join(ws, 'alpha'), 'status', '--porcelain']);
   assert.match(stdout, /simt-dev\.json/, 'the changes are left uncommitted for the human to review');
+});
+// --- upgrade restamps every generated file, not only AGENTS.md -----------------
+
+test('upgrade: a current AGENTS.md with stale .mdc rules is still behind', async () => {
+  // The defect this test exists for. `upgrade` planned and wrote `targets[0]` only, so a
+  // repo whose AGENTS.md region was current but whose three `.mdc` rules were stale was
+  // reported "restamped" while three of its four generated files stayed behind - and
+  // `check` was red immediately after a successful upgrade.
+  const root = await mkdtemp(join(tmpdir(), 'simt-up-mdc-'));
+  const a = await repo(join(root, 'a'), { 'wrangler.jsonc': '{"name":"a"}' });
+  const adopted = await run(['init', a, '--yes']);
+  assert.equal(adopted.code, 0, adopted.stderr);
+  await pin(a, 'aaaaaaa');
+
+  // Rewind only the `.mdc` rules to a stale SHA, leaving AGENTS.md current.
+  const mdc = join(a, '.cursor/rules/test-gate.mdc');
+  const stale = (await readFile(mdc, 'utf8')).replace(/simt-dev:sha=[0-9a-f]+/, 'simt-dev:sha=aaaaaaa');
+  await writeFile(mdc, stale);
+  const agentsSha = /simt-dev:sha=[0-9a-f]+/.exec(await readFile(join(a, 'AGENTS.md'), 'utf8'))[0];
+  const agentsNow = /simt-dev:sha=[0-9a-f]+/.exec(await readFile(join(a, 'AGENTS.md'), 'utf8'))[0];
+  assert.equal(agentsSha, agentsNow);
+
+  const before = await runJson(['upgrade', '--root', a]);
+  assert.equal(before.payload.summary.updated, 1, JSON.stringify(before.payload.summary));
+
+  const applied = await run(['upgrade', '--root', a, '--yes']);
+  assert.equal(applied.code, 0, applied.stderr);
+
+  // Every generated file now carries the current SHA, not just AGENTS.md.
+  const head = /simt-dev:sha=[0-9a-f]+/.exec(agentsNow)[0].replace('simt-dev:sha=', '');
+  const afterMdc = /simt-dev:sha=[0-9a-f]+/.exec(await readFile(mdc, 'utf8'))[0];
+  assert.equal(afterMdc, `simt-dev:sha=${head}`, 'the .mdc rule was left behind');
+  assert.equal((await run(['check', '--root', a])).code, 0, 'check is red after a successful upgrade');
+});
+
+test('upgrade: a malformed AGENTS.md is a fault, while a malformed .mdc rule is repaired', async () => {
+  // The two are not the same fault, and conflating them would be wrong in both
+  // directions. A managed `.mdc` rule is a generated file: a malformed region there is
+  // replaced wholesale and nothing hand-owned is lost. AGENTS.md holds hand-written prose
+  // around the region, so overwriting it could destroy work - it is a fault, the run
+  // fails, and nothing is written anywhere in the repo.
+  const root = await mkdtemp(join(tmpdir(), 'simt-up-bad-'));
+  const a = await repo(join(root, 'a'), { 'wrangler.jsonc': '{"name":"a"}' });
+  assert.equal((await run(['init', a, '--yes'])).code, 0);
+  await pin(a, 'aaaaaaa');
+
+  // A broken .mdc region is repaired by the write, because the whole file is generated.
+  const mdc = join(a, '.cursor/rules/test-gate.mdc');
+  await writeFile(mdc, (await readFile(mdc, 'utf8')).replace('<!-- simt-dev:end -->', ''));
+  assert.equal((await run(['upgrade', '--root', a, '--yes'])).code, 0);
+  assert.equal((await run(['check', '--root', a])).code, 0, 'the broken rule was not repaired');
+
+  // A broken AGENTS.md region is a fault, and nothing is written.
+  await pin(a, 'aaaaaaa');
+  const agents = join(a, 'AGENTS.md');
+  await writeFile(agents, (await readFile(agents, 'utf8')).replace('<!-- simt-dev:end -->', ''));
+  const mdcBefore = await readFile(mdc, 'utf8');
+  const { payload } = await runJson(['upgrade', '--root', a]);
+  assert.equal(payload.summary.faults, 1);
+  assert.deepEqual(payload.summary.skippedStates, ['malformed-region']);
+  assert.match(payload.plans[0].remedy, /AGENTS\.md/);
+  assert.equal((await readJson(join(a, 'simt-dev.json'))).projection.simtDevSha, 'aaaaaaa');
+  assert.equal(await readFile(mdc, 'utf8'), mdcBefore, 'one fault must not be repaired while the rest is left alone');
 });

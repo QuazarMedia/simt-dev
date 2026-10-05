@@ -22,9 +22,9 @@
 //      silently behind is the failure `compare` exists to surface, and this command must
 //      not be the thing that creates it.
 
-import { writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 
-import { basename, resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
 import { headSha, plan } from '../projection/project.mjs';
@@ -69,7 +69,7 @@ export async function upgradeCommand(positional, flags) {
   for (const repo of found.repos) {
     const { manifest, exists, error } = await readManifest(repo);
     const result = await plan(repo);
-    plans.push(planUpgrade({ name: basename(repo), path: repo, manifest, manifestExists: exists, manifestError: error, target: result.targets[0], sha }));
+    plans.push(planUpgrade({ name: basename(repo), path: repo, manifest, manifestExists: exists, manifestError: error, targets: result.targets, sha }));
   }
   const summary = summariseUpgrade(plans);
 
@@ -80,6 +80,9 @@ export async function upgradeCommand(positional, flags) {
   // the flags.
   const applied = [];
   const failed = [];
+  // The exact files written, collected from the writes themselves. Reconstructing the
+  // list afterwards from the plan would be a second source of truth for what happened.
+  const writtenFiles = new Set();
   if (summary.updated > 0 && flags.yes === true) {
     for (const p of plans) {
       if (p.action !== 'updated') continue;
@@ -87,8 +90,16 @@ export async function upgradeCommand(positional, flags) {
         // Region first, then the pin. The reverse order would leave a window in which the
         // manifest claims a simt-dev whose rules are not on disk yet - and `check` would
         // report CURRENT against a stamp that does not describe the bytes next to it.
+        // Every planned target, not just AGENTS.md: a repo can have a current AGENTS.md
+        // and three stale `.mdc` rules, and restamping only the first leaves `check` red
+        // straight after a successful upgrade.
         const { targets } = await plan(p.path);
-        await writeFile(targets[0].path, targets[0].text);
+        for (const t of targets) {
+          if (t.action === 'unchanged' || t.action === 'malformed') continue;
+          await mkdir(dirname(t.path), { recursive: true });
+          await writeFile(t.path, t.text);
+          writtenFiles.add(t.file);
+        }
         const { manifest } = await readManifest(p.path);
         await writeManifest(p.path, {
           ...manifest,
@@ -132,7 +143,7 @@ export async function upgradeCommand(positional, flags) {
   for (const f of failed) note(`FAILED   ${f.name}  ${f.error}`);
 
   if (applied.length > 0) {
-    note(`wrote    ${applied.length} repo${applied.length === 1 ? '' : 's'}: ${applied.join(', ')}  (AGENTS.md + ${MANIFEST})`);
+    note(`wrote    ${applied.length} repo${applied.length === 1 ? '' : 's'}: ${applied.join(', ')}  (${[...writtenFiles].join(', ') || 'nothing'} + ${MANIFEST})`);
     note('next     review the diff, then commit in each repo; simt-dev never commits or pushes (ADR-001)');
   } else if (summary.updated > 0) {
     note(`dry-run  ${summary.updated} repo${summary.updated === 1 ? '' : 's'} would change; apply with: simt upgrade --yes`);

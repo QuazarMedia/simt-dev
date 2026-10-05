@@ -17,10 +17,13 @@
  * @param {object|null} input.manifest parsed simt-dev.json, or null
  * @param {boolean} input.manifestExists
  * @param {string|null} input.manifestError parse failure, when there is one
- * @param {object|null} input.target the planned region from `plan(root).targets[0]`
+ * @param {object[]} input.targets every planned target from `plan(root).targets`: the
+ *   AGENTS.md region first, then the generated `.mdc` rules
  * @param {string} input.sha the SHA this simt-dev stamps into regions
  */
-export function planUpgrade({ name, path, manifest, manifestExists, manifestError, target, sha }) {
+export function planUpgrade({ name, path, manifest, manifestExists, manifestError, targets, sha }) {
+  const list = Array.isArray(targets) ? targets : [];
+  const primary = list[0] ?? null;
   const base = { name, path, sha, pinnedSha: manifest?.projection?.simtDevSha ?? null };
 
   // A repo that never adopted is not behind; it is absent. `simt init` is the command
@@ -38,19 +41,35 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       remedy: 'fix the JSON, or run: simt init',
     };
   }
-  if (target.action === 'malformed') {
+  // Only a hand-owned file's malformed region is a fault. A managed `.mdc` rule is a
+  // generated file, so a malformed region there is repaired by replacement and nothing
+  // hand-written is lost — `plan` reports its action as `updated`, not `malformed`, and
+  // the write fixes it. AGENTS.md holds hand-written prose around its region, so
+  // overwriting it could destroy work: that is the fault, and the whole repo is left
+  // alone so no file is half-migrated.
+  const malformed = list.find((t) => t.action === 'malformed');
+  if (malformed) {
     return {
       ...base,
       state: 'malformed-region',
       action: 'skip',
-      detail: `AGENTS.md region is malformed (${target.reason})`,
-      remedy: `fix the markers at AGENTS.md:${target.line}, then: simt sync`,
+      detail: `${malformed.file} region is malformed (${malformed.reason})`,
+      remedy: `fix the markers at ${malformed.file}:${malformed.line}, then: simt sync`,
+    };
+  }
+  if (primary === null) {
+    return {
+      ...base,
+      state: 'no-region',
+      action: 'skip',
+      detail: 'no generated file could be planned for this repo',
+      remedy: 'run: simt check',
     };
   }
   // A manifest with no region is a repo mid-adoption or one that lost its region.
   // `check` already reports it as unmanaged; `upgrade` writing a region into it would
   // turn a repair into a side effect of a version bump.
-  if (target.action === 'added' && !target.previousBytes) {
+  if (list.every((t) => t.action === 'added' && !t.previousBytes)) {
     return {
       ...base,
       state: 'no-region',
@@ -60,7 +79,10 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
     };
   }
 
-  const regionBehind = target.action !== 'unchanged';
+  // Every target counts: a repo whose AGENTS.md is current but whose `.mdc` rules are
+  // stale is behind, and restamping only the first of its files would leave `check` red
+  // immediately after a successful `upgrade`.
+  const regionBehind = list.some((t) => t.action !== 'unchanged');
   const pinBehind = base.pinnedSha !== sha;
   if (!regionBehind && !pinBehind) {
     return { ...base, state: 'current', action: 'unchanged', detail: 'already at this simt-dev' };

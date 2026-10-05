@@ -72,7 +72,11 @@ export async function loadMdcRules() {
       // that does not.
       applies: meta.applies === 'always' ? 'always' : Array.isArray(meta.applies) ? meta.applies : [],
       optIn: meta.optIn === true,
-      substitutions: subs.length > 0 ? subs : substitutions,
+      // A rule with no `substitutions:` block has no placeholders, so an empty list
+      // is the correct answer. (This was `substitutions` — an undefined binding that
+      // would only have fired on a future rule without the block, which is exactly
+      // the kind of latent crash a new rule is most likely to trigger.)
+      substitutions: subs,
       bytes: Buffer.byteLength(text),
       body: stripFrontmatter(text),
       error:
@@ -217,15 +221,45 @@ export function renderMdc(rule, declared = {}) {
   return { body, problems };
 }
 
-/** Replace every `{{key}}`, or remove the whole line when the value is empty. */
+/**
+ * Replace every `{{key}}`, or remove the whole bullet when the value is empty.
+ *
+ * "Whole bullet" rather than "the line containing the token": an empty value on a
+ * wrapped bullet leaves its continuation lines behind, and the rule then reads as
+ * half a sentence starting with a lowercase word. A markdown bullet is the token's
+ * line plus every more-indented line that follows it.
+ *
+ * One placeholder per line is a rule on the content side, not a preference. Dropping
+ * a line removes EVERY token on it, so `{{a}}{{b}}` with `a` empty deletes `b` too —
+ * silently, and with no leftover placeholder left to report. Two independent optional
+ * clauses on one line lose one clause with no diagnostic at all.
+ */
 function dropOrReplace(text, key, value) {
   const token = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
   if (value !== '') return text.replace(token, value);
-  return text
-    .split('\n')
-    .filter((line) => !token.test(line))
-    .join('\n')
-    .replace(/\n{3,}/g, '\n\n');
+  // A second, non-global pattern for the line scan: reusing a `/g` regex with
+  // `.test()` carries `lastIndex` between lines, so every other line would be
+  // tested against the wrong offset.
+  const probe = new RegExp(`\\{\\{${key}\\}\\}`);
+
+  const kept = [];
+  let dropping = false;
+  for (const line of text.split('\n')) {
+    if (probe.test(line)) {
+      dropping = true;
+      continue;
+    }
+    if (dropping) {
+      // A continuation of the bullet just dropped: indented, and not itself the
+      // start of a new block element.
+      const indent = /^(\s*)/.exec(line)[1].length;
+      if (line.trim() === '') continue;
+      if (indent > 0 && !/^\s*([-*+]|\d+\.)\s/.test(line)) continue;
+      dropping = false;
+    }
+    kept.push(line);
+  }
+  return kept.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
 /** The frontmatter a projected `.mdc` keeps. `alwaysApply` and `description` are

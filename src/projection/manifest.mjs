@@ -16,7 +16,7 @@
 // prints the reason for each value it writes.
 
 import { readFile, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 export const MANIFEST = 'simt-dev.json';
 
@@ -122,7 +122,11 @@ function dedupe(list) {
  * those), where no remote name exists to read.
  */
 function defaultId(root) {
-  const name = basename(root);
+  // Resolve before taking the basename: `basename('.')` is `''`, so every repo adopted
+  // with `--root .` or a bare positional was written as `unnamed-repo`. The id is the
+  // one field in the manifest a human reads, and it was wrong for the most natural
+  // invocation of the command.
+  const name = basename(resolve(root));
   return name === '' || name === '.' ? 'unnamed-repo' : name;
 }
 

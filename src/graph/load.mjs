@@ -17,7 +17,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { STACK_TAGS } from '../resolve/fingerprint.mjs';
+import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REGISTRY_PATH = resolve(HERE, '..', '..', 'graph', 'skills.graph.json');
@@ -179,11 +179,11 @@ export function lintRegistry(registry) {
 
 function checkStack(at, stack, err) {
   for (const tag of stack ?? []) {
-    if (!STACK_TAGS.has(tag)) {
+    if (!KNOWN_TAGS.has(tag)) {
       // A tag the detector cannot emit matches nothing, forever, with no error at
       // resolution time. This is the check that turns a silent dead entry into a
-      // loud one.
-      err(`${at}: stack tag "${tag}" is not emitted by fingerprint() (known: ${[...STACK_TAGS].sort().join(', ')})`);
+      // loud one. The vocabulary is stack tags plus emitted facts (ADR-013).
+      err(`${at}: tag "${tag}" is not emitted by fingerprint() (known: ${[...KNOWN_TAGS].sort().join(', ')})`);
     }
   }
   for (const duplicate of duplicates(stack)) {

@@ -24,7 +24,7 @@ import { EXIT, emit, fail, isJson, note } from '../output/index.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { RULE_FILES, scanDocument, summarise } from '../projection/conflicts.mjs';
 import { MANIFEST, buildManifest, readManifest, writeManifest } from '../projection/manifest.mjs';
-import { plan, headSha } from '../projection/project.mjs';
+import { plan, headSha, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
 
 const run = promisify(execFile);
 
@@ -65,6 +65,7 @@ export async function initCommand(positional, flags) {
     command: 'init',
     root,
     stack: detected.stack,
+    facts: detected.facts,
     profiles: projected.profiles,
     fallback: projected.fallback,
     notes: projected.notes,
@@ -230,6 +231,7 @@ function render(payload, manifest, region) {
   const lines = [
     `repo        ${payload.root}`,
     `stack       ${payload.stack.length > 0 ? payload.stack.join(', ') : '(undetected)'}`,
+    `facts       ${payload.facts.length > 0 ? payload.facts.join(' ') : '(none)'}`,
     `profiles    ${payload.profiles.join(', ')}${payload.fallback ? ' (fallback)' : ''}`,
     `mode        ${payload.adoption ? 'adopt existing repo' : 'scaffold new repo'}`,
     `sha         ${manifest.projection.simtDevSha}`,
@@ -244,6 +246,10 @@ function render(payload, manifest, region) {
       `prePush=${manifest.gates.prePush.join(',') || '(none)'} ` +
       `coverage=${manifest.limits.coverage ?? 'undeclared (ADR-006)'} ` +
       `fileLines=${manifest.limits.fileLines.warn}/${manifest.limits.fileLines.error} (ADR-005)`,
+  );
+  lines.push(
+    `  ${'profiles'.padEnd(9)} ${LOCAL_PROFILE_DIR}/*.md  ` +
+      `repo-local profiles are selected by the same matcher (ADR-013)`,
   );
   if (region) {
     lines.push(

@@ -5,7 +5,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { lintRegistry, loadRegistry } from '../src/graph/load.mjs';
-import { STACK_TAGS } from '../src/resolve/fingerprint.mjs';
+import { KNOWN_TAGS } from '../src/resolve/fingerprint.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const REGISTRY = await readFile(resolve(ROOT, 'graph', 'skills.graph.json'), 'utf8');
@@ -51,7 +51,7 @@ test('registry: every capability has at least one covering skill', () => {
 test('registry: stack tags are all emitted by fingerprint', () => {
   // A tag the detector cannot produce matches nothing, silently, forever.
   const used = new Set(real.skills.flatMap((s) => s.stack));
-  const unknown = [...used].filter((tag) => !STACK_TAGS.has(tag));
+  const unknown = [...used].filter((tag) => !KNOWN_TAGS.has(tag));
   assert.deepEqual(unknown, [], `tags fingerprint() cannot emit: ${unknown.join(', ')}`);
 });
 

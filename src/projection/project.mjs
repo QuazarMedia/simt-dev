@@ -7,8 +7,14 @@
 //      inspected, diffed and asserted on without a scratch directory.
 //
 // The core rule set is always included. Stack profiles are selected by
-// intersection with the repo's fingerprint, plus one fallback profile so a JS/TS
-// repo is never left with core rules and nothing else.
+// intersection with the repo's fingerprint - platform tags *and* emitted facts,
+// which are interchangeable in a profile (ADR-013) - plus one fallback profile
+// so a JS/TS repo is never left with core rules and nothing else.
+//
+// Profiles may live in the repo, not only here. `.simt-dev/profiles/*.md` uses
+// the same frontmatter contract as `rules/stacks/*.md` and is selected by the
+// same matcher, so supporting an ecosystem nobody here has heard of requires no
+// code change and no release.
 
 import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -21,23 +27,27 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const ROOT = resolve(HERE, '..', '..');
 const RULES_DIR = join(ROOT, 'rules');
 
+/** Repo-local profile directory, relative to a repo root (ADR-013 section 2). */
+export const LOCAL_PROFILE_DIR = '.simt-dev/profiles';
+
 /** The one file every repo gets. Chosen deliberately: AGENTS.md is read by the
  *  most agents, including ones that ignore .cursor/ entirely. */
 export const PRIMARY_TARGET = 'AGENTS.md';
 
 /**
  * @param {string} root repo root
- * @returns {Promise<{root:string, stack:string[], profiles:object[], rules:object,
- *                    targets:object[], notes:string[]}>}
+ * @returns {Promise<{root:string, stack:string[], facts:string[], profiles:string[],
+ *                    rules:object[], targets:object[], notes:string[]}>}
  */
 export async function plan(root) {
   const desired = await desiredRegion(root);
-  const { stack, profiles, fallback, notes, body, meta, all } = desired;
+  const { stack, facts, profiles, fallback, notes, body, meta, all } = desired;
   const target = await targetFor(root, body, meta);
 
   return {
     root,
     stack,
+    facts,
     profiles,
     fallback,
     rules: all,
@@ -53,13 +63,17 @@ export async function plan(root) {
  * where none exists, and CI would flake on a clean tree.
  */
 async function desiredRegion(root) {
-  const { stack } = await fingerprint(root);
-  const all = await loadRules();
-  const { selected, fallback, notes } = select(all, stack);
+  const { stack, facts } = await fingerprint(root);
+  const all = await loadRules(root);
+  const { selected, fallback, notes } = select(all, stack, facts);
   const body = render(selected);
-  const meta = { sha: await headSha(), sources: selected.map((r) => `rules/${r.file}`) };
+  const meta = {
+    sha: await headSha(),
+    sources: selected.map((r) => r.source),
+  };
   return {
     stack,
+    facts,
     all,
     profiles: selected.map((r) => r.id),
     fallback,
@@ -70,30 +84,58 @@ async function desiredRegion(root) {
 }
 
 /**
- * Read every rule file once, with its frontmatter parsed.
+ * Read every rule file once, with its frontmatter parsed, plus any repo-local
+ * profile under `.simt-dev/profiles/`.
+ *
  * A rule without an `id` is a defect, not a default: ids are what `rules why`
  * and the generated region's source list refer to.
+ *
+ * A local profile with the same id as a central one SHADOWS it — replaces it
+ * rather than stacking with it. Two profiles claiming the same id would project
+ * the same rules twice, and duplicated source-of-truth text is a review blocker,
+ * not a style nit. The shadow is reported in `notes` so it is never silent.
  */
-export async function loadRules() {
+export async function loadRules(root = null) {
   const entries = await readdir(RULES_DIR, { withFileTypes: true });
-  const files = [
-    ...entries.filter((e) => e.isFile() && e.name.endsWith('.md')).map((e) => e.name),
-    ...entries
-      .filter((e) => e.isDirectory() && e.name === 'stacks')
-      .flatMap(() => []),
-  ];
+  const files = entries.filter((e) => e.isFile() && e.name.endsWith('.md')).map((e) => e.name);
   const stackFiles = entries.some((e) => e.isDirectory() && e.name === 'stacks')
     ? (await readdir(join(RULES_DIR, 'stacks')))
         .filter((n) => n.endsWith('.md'))
         .map((n) => `stacks/${n}`)
     : [];
 
-  const out = [];
+  const collected = [];
+
   for (const file of [...files, ...stackFiles].sort()) {
-    const text = await readFile(join(RULES_DIR, file), 'utf8');
+    collected.push({ file, dir: RULES_DIR, origin: 'central', source: `rules/${file}` });
+  }
+
+  if (root !== null) {
+    const localDir = join(root, LOCAL_PROFILE_DIR);
+    let localNames = [];
+    try {
+      localNames = (await readdir(localDir)).filter((n) => n.endsWith('.md')).sort();
+    } catch {
+      localNames = [];
+    }
+    for (const name of localNames) {
+      collected.push({
+        file: name,
+        dir: localDir,
+        origin: 'local',
+        source: `${LOCAL_PROFILE_DIR}/${name}`,
+      });
+    }
+  }
+
+  const out = [];
+  for (const item of collected) {
+    const text = await readFile(join(item.dir, item.file), 'utf8');
     const meta = parseFrontmatter(text);
     out.push({
-      file,
+      file: item.file,
+      origin: item.origin,
+      source: item.source,
       id: meta.id ?? null,
       title: meta.title ?? null,
       applies: meta.applies ?? [],
@@ -108,36 +150,84 @@ export async function loadRules() {
 
 /**
  * Selection is pure set intersection: core always, then every profile whose
- * `applies` intersects the repo's stack tags. `node` is the fallback, so it is
- * only chosen when nothing more specific matched — otherwise every JS repo
- * would receive both node and react-web.
+ * `applies` intersects the repo's signals. `node` is the fallback, so it is only
+ * chosen when nothing more specific matched — otherwise every JS repo would
+ * receive both node and react-web.
+ *
+ * `signals` is stack tags ∪ facts (ADR-013). A profile may name either, and a
+ * fact is the more durable choice because it survives the framework being
+ * replaced.
+ *
+ * `shadowed` lists local profiles that replaced a central one, so a caller can
+ * report it rather than silently changing what a repo receives.
  */
-export function select(rules, stack) {
+export function select(rules, stack, facts = []) {
   const notes = [];
-  const core = rules.filter((r) => r.applies === 'always');
-  const profiles = rules.filter((r) => Array.isArray(r.applies) && !r.fallback);
-  const fallbacks = rules.filter((r) => r.fallback);
+  const shadowed = [];
+  const ids = new Map();
+  for (const rule of rules) {
+    if (rule.id === null) continue;
+    const prior = ids.get(rule.id);
+    if (prior === undefined) {
+      ids.set(rule.id, rule);
+      continue;
+    }
+    // A local profile is allowed to replace a central one; two of the same
+    // origin are a defect the caller must be able to see.
+    const localWins = rule.origin === 'local' && prior.origin !== 'local';
+    if (localWins) {
+      ids.set(rule.id, rule);
+      shadowed.push({
+        id: rule.id,
+        winner: rule.source,
+        replaced: prior.source,
+        ok: true,
+      });
+    } else {
+      shadowed.push({
+        id: rule.id,
+        winner: prior.source,
+        replaced: rule.source,
+        ok: false,
+      });
+    }
+  }
+  const keep = new Set(ids.values());
 
-  const tags = new Set(stack);
-  const matched = profiles.filter((r) => r.applies.some((tag) => tags.has(tag)));
+  const effective = rules.filter((r) => r.id === null || keep.has(r));
+  const effCore = effective.filter((r) => r.applies === 'always');
+  const effProfiles = effective.filter((r) => Array.isArray(r.applies) && !r.fallback);
+  const effFallbacks = effective.filter((r) => r.fallback);
+
+  const signals = [...new Set([...(stack ?? []), ...(facts ?? [])])];
+  const tags = new Set(signals);
+  const matched = effProfiles.filter((r) => r.applies.some((tag) => tags.has(tag)));
 
   let usedFallback = false;
-  const selected = [...core, ...matched];
+  const selected = [...effCore, ...matched];
   if (matched.length === 0) {
-    for (const f of fallbacks) {
+    for (const f of effFallbacks) {
       if (f.applies.some((tag) => tags.has(tag))) {
         selected.push(f);
         usedFallback = true;
-        notes.push(`no specific stack profile matched ${stack.join(', ') || '(no tags)'}; using fallback ${f.id}`);
+        notes.push(
+          `no specific profile matched ${signals.join(', ') || '(no signals)'}; using fallback ${f.id}`,
+        );
       }
     }
   }
   if (matched.length === 0 && usedFallback === false) {
     notes.push(
-      `no stack profile matched ${stack.length > 0 ? stack.join(', ') : '(no detected stack tags)'}; projecting shared rules only`,
+      `no profile matched ${signals.length > 0 ? signals.join(', ') : '(no detected signals)'}; projecting shared rules only`,
     );
   }
-  return { selected, fallback: usedFallback, notes };
+  for (const s of shadowed.filter((x) => x.ok)) {
+    notes.push(`local profile ${s.id} shadows ${s.replaced}`);
+  }
+  for (const s of shadowed.filter((x) => !x.ok)) {
+    notes.push(`duplicate profile id ${s.id}: ignored ${s.replaced}, kept ${s.winner}`);
+  }
+  return { selected, fallback: usedFallback, notes, shadowed };
 }
 
 /** The region body. Stack profiles come after core so the general rule wins a

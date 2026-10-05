@@ -154,6 +154,14 @@ async function runDoctor(positional, flags) {
       `root     ${root}`,
       `stack    ${result.stack.length > 0 ? result.stack.join(', ') : '(undetected)'}`,
       `evidence ${result.evidence.length > 0 ? result.evidence.join(' ') : '(none)'}`,
+      // Facts are what a profile selects on when it wants to survive the
+      // framework being replaced, so they are reported with the path that proved
+      // each one rather than as a bare list (ADR-013).
+      `facts    ${
+        result.facts.length > 0
+          ? result.facts.map((f) => `${f}(${result.factEvidence[f] ?? '?'})`).join(' ')
+          : '(none)'
+      }`,
       `manifest ${result.manifest ? (result.manifest.error ?? result.manifest.id ?? 'present') : '(absent)'}`,
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },

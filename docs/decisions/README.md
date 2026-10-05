@@ -20,6 +20,7 @@ record's status line — never by editing the ruling in place.
 | [010](ADR-010-runner-invocation.md) | Invoke through the repo's own runner, never a package runner | accepted |
 | [011](ADR-011-windows-support.md) | Windows is supported from v1 for the CLI | **superseded by 012** |
 | [012](ADR-012-drop-windows-support.md) | Windows support dropped; POSIX only | accepted |
+| [013](ADR-013-genericity-by-facts-and-local-profiles.md) | Genericity comes from emitted facts and repo-local profiles | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -27,6 +28,8 @@ platform decision for the CLI described in
 [plan 0002](../plans/0002-simt-dev-cli.md), and they are a worked example of the
 supersession rule above: 011 was accepted, 012 reversed it the same day, and 011's record was
 kept rather than rewritten because the cost table it contains is the evidence 012 relies on.
+ADR-013 is the same rule applied to the tool rather than to the repos: the mechanism carries
+no product taxonomy, and adding an ecosystem is a profile file rather than a code change.
 
 ## The rule these records enforce
 

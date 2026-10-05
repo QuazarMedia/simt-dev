@@ -359,6 +359,7 @@ validator is ~150 lines, and dropping `dependencies` is what makes `npx` instant
 | 8 | `hooks` dispatcher | one pre-commit works across all 3 pilot stacks | **done** (141 tests; fail-closed, ADR-004 staged-only, ADR-010 no `npx`) |
 | 9 | `compare` | replaces the hand audit | next | pending |
 | 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA | pending |
+| 11 | Genericity: emitted facts + repo-local profiles | a repo can adopt an unknown ecosystem with no engine change | **done** (ADR-013; 20 facts, `KNOWN_TAGS` one vocabulary, local profiles, `container` profile on `has-dockerfile`) |
 
 Steps 1-5 are useful with zero content migration and land first, because they deliver the
 token win (tier 0/1/2 discovery) before any repo has changed. Step 6 then proved the
@@ -366,6 +367,11 @@ distribution mechanism against a scratch copy of a real repo: an unmanaged file,
 a stale-SHA-only edit and a malformed region each fail the gate with a distinct remedy, a
 second `sync` is a byte-for-byte no-op, and hand-written content outside the markers survives
 a round trip identically.
+
+Step 11 was pulled **ahead of step 9** deliberately. It changes the tag vocabulary every
+later step reads, so `compare` and `mcp` are both cheaper once it is settled. Its scope and
+ruling are [ADR-013](../decisions/ADR-013-genericity-by-facts-and-local-profiles.md); the
+design is §14.
 
 ## 12. Rulings on the open questions
 
@@ -414,3 +420,92 @@ Settled 2026-10-05. Recorded as ADRs in `docs/decisions/`.
 
 
 
+## 14. Genericity — emitted facts, local profiles, and where a hosted service is allowed
+
+The tool is named for SIMT; the mechanisms are not. Measured: `argv.mjs`, `resolve.mjs` and
+`graph/load.mjs` contain **zero** non-comment, non-string SIMT references. What is coupled to
+SIMT is the *vocabulary* — `fingerprint()`'s three detection tables are keyed by curated
+product names (`connectiq`, `hono`, `maplibre`, `react-router`). Library names as stack
+identity age badly: a profile selecting on a library breaks the day the library is swapped.
+
+Ruling: [ADR-013](../decisions/ADR-013-genericity-by-facts-and-local-profiles.md).
+
+### 14.1 Two kinds of signal
+
+| | `stack` | `facts` |
+|---|---|---|
+| Meaning | "this repo is a Cloudflare Worker" | "this tree has a `pyproject.toml`" |
+| Source | curated tables keyed by product and library names | evidence observed in the working tree |
+| Grows with | new ecosystems (needs a code change) | nothing — the fact was already observed |
+| Use it when | precision about a platform matters | you need to survive the framework being replaced |
+
+`fingerprint()` returns both. Selection is the union, so `applies: [has-cargo-toml]` and
+`applies: [cloudflare-workers]` are equally valid. Existing profiles keep their `stack` tags —
+they are *good* tags; new profiles are expected to prefer a fact where a fact will do. The
+observable promise is unchanged and is already tested: **every tag a profile may name is one
+the engine emits**, and the registry validator plus the profile loader read that vocabulary
+from one derived export so they cannot desynchronise.
+
+`facts` names are `has-*` and are deliberately boring: a manifest, a lockfile, a directory
+convention, a container file. None of them encodes an opinion.
+
+### 14.2 Profiles may live in the repo
+
+`simt init` prints where local profiles live, and the manifest gains `profiles: [<id>, …]`
+so a reviewer reads the repo's intent rather than inferring it. The directory itself needs no
+creation: the first file in it creates it, and an empty directory would not survive git
+anyway. Central profiles ship in `rules/stacks/`; **local profiles are read from
+`.simt-dev/profiles/*.md`** with the same frontmatter contract (ADR-009) and the same matcher.
+A local profile may declare `fallback: true`.
+
+The central directory is still called `stacks/`, which is now historical: a profile is selected
+by *signal*, and `container` is not a stack at all.
+
+Local profiles are **additive and shadowing**: a local `id` replaces the central profile of
+the same id, and otherwise both are candidates. Central content is never silently overwritten
+in place — it is superseded by an explicit, reviewable file. A repo that ships its own
+profile has decided something about its own conventions; when that decision is wrong, the fix
+is a one-file PR in the repo that is wrong, which is the correct blast radius (ADR-002).
+
+### 14.3 A hosted service may serve authoring; it may never serve resolution
+
+| | Authoring | Resolution |
+|---|---|---|
+| Hosted MCP is useful | yes — finding profiles, learning an ecosystem, publishing findings | **no** |
+| Non-determinism | tolerable: a human reviews the output | fatal: "did the agent follow the rules?" becomes unanswerable |
+| Offline | irrelevant | required: a hook and a gate must not depend on a network call |
+| Diffable in a PR | partially | required: `simt check` output is the gate's whole product |
+| On failure | loudly, at authoring time | must fail **closed**, with a remedy |
+
+Conflating the two yields a tool nobody trusts in CI. Community extensibility therefore
+ships as a **registry of portable profile files** in a git repository, fetched and pinned by
+the same single-SHA mechanism (ruling #4) that already pins rules — same trust model, no
+hosted runtime, and the diff a reviewer sees is the diff of a profile file.
+
+### 14.4 What that looks like in the tree
+
+`rules/stacks/container.md` is the worked example and the only profile keyed purely on a
+fact:
+
+```yaml
+---
+id: container
+title: Containers
+applies: [has-dockerfile]
+---
+```
+
+It reaches exactly two of the sixteen repos — `bunnyland-server` and `simt-goto`, the two that
+have a `Dockerfile` — and no others. That is the whole claim: a portable profile written
+against an observable fact, selected with no engine change, no release, and no central table
+entry. Written the other way round, as a `stack` entry keyed on "this repo is a Docker
+project", it would have needed a code change and would have gone stale the day a repo switched
+to Podman or built with `ko`.
+
+### 14.5 What still genuinely needs an agent
+
+Not detection — detecting Django is one line, and an agent doing it is an agent we had to
+trust not to get it wrong. **First-time profile authoring** is the judgement part: deciding
+which four rules matter for an ecosystem nobody has written a profile for yet. It stays
+bounded because the agent writes *one profile file*, not the engine. That is the whole
+extensibility story, and it is why no code contribution is required to support a new stack.

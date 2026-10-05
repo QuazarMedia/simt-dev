@@ -355,8 +355,8 @@ validator is ~150 lines, and dropping `dependencies` is what makes `npx` instant
 | 4 | `skills index` / `find` / `show` | index under 6 KB for the full registry | done (5 663 bytes for 38 skills) |
 | 5 | `skills brief` + `why` | `eval` corpus passes; every selection traceable | done |
 | 6 | Projection engine + `simt check` | drift detected in a deliberately stale repo | done |
-| 7 | `init` with conflict reporting | dry-run adoption produces a reviewable diff on all 3 pilots | next |
-| 8 | `hooks` dispatcher | one pre-commit works across all 3 pilot stacks | pending |
+| 7 | `init` with conflict reporting | dry-run adoption produces a reviewable diff on all 3 pilots | done |
+| 8 | `hooks` dispatcher | one pre-commit works across all 3 pilot stacks | next |
 | 9 | `compare` | replaces the hand audit | pending |
 | 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA | pending |
 

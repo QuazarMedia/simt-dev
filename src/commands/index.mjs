@@ -17,12 +17,12 @@ import {
   whyCommand as skillsWhy,
 } from './skills.mjs';
 import { syncCommand, checkCommand } from './sync.mjs';
+import { initCommand } from './init.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 
 /** command path -> implementation sequence step (plan 0002 section 11). */
 const STEPS = new Map([
-  ['init', 7],
   ['upgrade', 10],
   ['compare', 9],
   ['mcp', 10],
@@ -81,6 +81,7 @@ export async function dispatch(argv) {
     'skills why': skillsWhy,
     sync: syncCommand,
     check: checkCommand,
+    init: initCommand,
   };
   const run = IMPLEMENTED[path];
   if (run) return run(args, flags);

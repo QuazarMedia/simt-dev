@@ -2,6 +2,8 @@ import { emit } from '../output/index.mjs';
 import { parse } from '../argv.mjs';
 
 const COMMANDS = `simt init [path]            adopt or scaffold a repo into the ecosystem
+                           (dry-run unless --yes; conflicts block without
+                           --accept-conflicts; never commits or pushes)
 simt doctor                 classify a repo and check config health
 simt check                  the gate: projection drift, manifest validity, policy
 simt sync [--check]         regenerate the projection (idempotent)

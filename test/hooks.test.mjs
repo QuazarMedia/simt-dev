@@ -304,7 +304,7 @@ test('dispatcher: an empty gate list passes but says why', async () => {
   const root = await fixture({ manifest: { gates: { preCommit: [], prePush: [] } } });
   const result = await runGates('pre-commit', { root, manifest: { gates: { preCommit: [], prePush: [] } } });
   assert.equal(result.failed, false);
-  assert.match(result.note, /declares no gates\.preCommit/);
+  assert.match(result.notes[0], /declares no gates\.preCommit/);
 });
 
 test('dispatcher: pre-push reads gates.prePush, not preCommit', async () => {
@@ -469,4 +469,26 @@ test('a real git commit is blocked by a gate that cannot run', async () => {
 
 test('gateNames matches knownGates', () => {
   assert.deepEqual(gateNames(), knownGates());
+});
+test('hooks run: an empty gate list prints one note, not one line per character', async () => {
+  // The note sat next to `gates` as a bare string while the caller iterated it, so a
+  // string iterated character by character: 180 lines of noise from a hook whose only
+  // job is to be readable. Found by running `hooks run` on the first repo that
+  // legitimately has no pre-commit gate.
+  const { runGates } = await import('../src/hooks/dispatcher.mjs');
+  const result = await runGates('pre-commit', { root: '/nonexistent', manifest: { gates: { preCommit: [] } } });
+  assert.equal(result.failed, false);
+  assert.ok(Array.isArray(result.notes), 'notes must be an array, not a string');
+  assert.equal(result.notes.length, 1);
+  assert.equal(result.gates.length, 0);
+});
+
+test('hooks run: the empty-gate note explains the two readings, not just one', async () => {
+  const { runGates } = await import('../src/hooks/dispatcher.mjs');
+  const { notes } = await runGates('pre-push', { root: '/nonexistent', manifest: { gates: { prePush: [] } } });
+  // The note must not read as "you forgot something": a repo with no formatter and no
+  // linter has no pre-commit gate, and that is a correct manifest.
+  assert.match(notes[0], /valid answer/);
+  assert.match(notes[0], /no tool/);
+  assert.ok(!/accident/i.test(notes[0]), 'the old wording implied the empty list was a mistake');
 });

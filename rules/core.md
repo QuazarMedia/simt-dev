@@ -48,6 +48,9 @@ commands belongs in this repository, not here.
 - The pre-commit hook owns format and lint for staged files; do not re-run what it just ran.
   Manual runs are correct when the hook is absent, when diagnosing a failure, or for a check
   the hook does not cover. (ADR-004)
+- Declare a gate only if this repository can run it — a script that exists, a tool that is
+  installed, a command you name. A gate that cannot run blocks every commit until someone
+  reaches for `--no-verify`. (ADR-017)
 - Invoke tools through the repository's own runner — `npm run`, `uv run -m`, `./gradlew` —
   never a package runner like `npx` or a bare console entrypoint. (ADR-010)
 

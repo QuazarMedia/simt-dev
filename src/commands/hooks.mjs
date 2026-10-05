@@ -53,7 +53,7 @@ async function runHook(args, flags) {
     return result.failed ? EXIT.FAIL : EXIT.OK;
   }
 
-  for (const n of result.note ?? []) note(`note     ${n}`);
+  for (const n of result.notes ?? []) note(`note     ${n}`);
   const lines = [`hooks    ${event}`, `gates    ${(manifest.gates[gateKey(event)] ?? []).join(', ') || '(none declared)'}`];
   for (const g of result.gates) {
     lines.push(`${g.status.toUpperCase().padEnd(8)} ${g.name.padEnd(20)} ${g.detail}${g.adr ? `  [${g.adr}]` : ''}`);

@@ -17,6 +17,11 @@
 
 import { readFile, writeFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
+// gates.mjs imports nothing, so this direction cannot cycle. It is the gate table
+// this file already selects from; duplicating the runnability rules here would be two
+// answers to "can this repo run that gate", which is precisely the kind of drift this
+// file exists to prevent elsewhere.
+import { getGate } from '../hooks/gates.mjs';
 
 export const MANIFEST = 'simt-dev.json';
 
@@ -65,17 +70,126 @@ const TAG_GATES = [
 ];
 
 /**
+ * Can this repo actually run the gate?
+ *
+ * A declared gate that cannot run is worse than an absent one. Absent, an author sees
+ * nothing and knows nothing is being checked; declared-and-unrunnable, the dispatcher
+ * fails closed on every commit and the only exit an author can find is `--no-verify`,
+ * which teaches the whole team that the gate is theatre. The dispatcher is right to
+ * fail closed — the defect is declaring a gate this repo has no way to run.
+ *
+ * The check mirrors what the dispatcher actually attempts:
+ *   - `script` gates  run `npm run <script>`, so the script must exist
+ *   - `staged` gates  look for each named tool in `node_modules/.bin`, so it must be
+ *     installed, not merely declared as a dependency
+ *   - `command` gates run whatever the manifest's `gates.commands` declares, so a
+ *     command gate with no declared command is unrunnable by definition
+ *
+ * @param {object} gate an entry from GATES in src/hooks/gates.mjs
+ * @param {{scripts?: Record<string,string>, binaries?: string[], commands?: Record<string,string>}} capability
+ */
+export function gateRunnable(gate, capability = {}) {
+  if (!gate) return { runnable: false, why: 'unknown gate' };
+  if (gate.kind === 'command') {
+    const declared = capability.commands?.[gate.name];
+    return declared
+      ? { runnable: true, why: `runs: ${declared}` }
+      : { runnable: false, why: `no command is declared for it in gates.commands` };
+  }
+  if (gate.kind === 'script') {
+    const script = gate.script ?? gate.name;
+    return capability.scripts?.[script]
+      ? { runnable: true, why: `runs: npm run ${script}` }
+      : { runnable: false, why: `no "${script}" script in package.json` };
+  }
+  // staged: a formatter must actually be installed
+  for (const tool of gate.tools ?? []) {
+    if (!(capability.binaries ?? []).includes(tool)) {
+      return { runnable: false, why: `${tool} is not installed in node_modules/.bin` };
+    }
+  }
+  return { runnable: true, why: `formats staged files with ${(gate.tools ?? []).join(', ')}` };
+}
+
+/**
+ * What the reader has to do to make a dropped gate runnable.
+ *
+ * A drop is a decision the tool made on the repo's behalf, so it owes the reader the
+ * undo. Every remedy is one of three real choices — install the tool, add the script,
+ * or name the command — because "this repo cannot run format" with no next step reads
+ * as simt-dev deciding formatting does not matter here.
+ */
+function gateRemedy(gate, { existing = false } = {}) {
+  const name = gate?.name ?? 'the gate';
+  const fix =
+    gate?.kind === 'staged'
+      ? `install ${gate.tools.join(', ')} as a dev dependency`
+      : gate?.kind === 'script'
+        ? `add a "${gate.script ?? name}" script to package.json`
+        : gate?.kind === 'command'
+          ? `declare the program under "gates.commands" in ${MANIFEST}`
+          : `remove "${name}" from the gates list in ${MANIFEST}`;
+  // A re-init never re-adds a gate to a manifest that already has one, so "install the
+  // tool and re-run init" would send the reader round the loop and back to where they
+  // started. On an existing manifest the declaration is the second half of the fix.
+  return existing
+    ? `${fix}, then add "${name}" to gates.preCommit or gates.prePush in ${MANIFEST}`
+    : `${fix}, then re-run: simt-dev init --yes`;
+}
+
+/**
+ * The stack table, filtered by what this repo can actually run.
+ *
+ * A declared gate that cannot run is worse than an absent one. Absent, an author sees
+ * nothing and knows nothing is being checked; declared-and-unrunnable, the dispatcher
+ * fails closed on every commit and the only exit an author can find is `--no-verify`,
+ * which teaches the whole team that the gate is theatre. The dispatcher is right to
+ * fail closed — the defect is declaring a gate this repo has no way to run.
+ *
+ * The filter mirrors what the dispatcher actually attempts:
+ *   - `script` gates  run `npm run <script>`, so the script must exist
+ *   - `staged` gates  look for each named tool in `node_modules/.bin`, so it must be
+ *     installed, not merely declared as a dependency
+ *   - `command` gates run whatever `gates.commands` declares, so a command gate with
+ *     no declared command is unrunnable by definition
+ *
+ * @returns {{gates: {preCommit: string[], prePush: string[]}, dropped: {gate: string, why: string}[]}}
+ */
+export function planGates(stack = [], capability = null) {
+  const proposed = defaultGates(stack);
+  if (!capability) return { gates: proposed, dropped: [] };
+  const dropped = [];
+  const runnable = (list) =>
+    list.filter((name) => {
+      const gate = getGate(name);
+      const verdict = gateRunnable(gate, capability);
+      if (!verdict.runnable) {
+        dropped.push({ gate: name, why: verdict.why, remedy: gateRemedy(gate) });
+      }
+      return verdict.runnable;
+    });
+  return { gates: { preCommit: runnable(proposed.preCommit), prePush: runnable(proposed.prePush) }, dropped };
+}
+
+/**
  * Build a manifest from a fingerprint. Pure, so the whole default surface is
  * testable without a filesystem.
+ *
+ * When `capability` is supplied, newly proposed gates the repo cannot run are dropped.
+ * Gates the repo ALREADY declared are kept regardless: that is the repo's choice to
+ * make, and quietly disarming a gate somebody declared on purpose is a worse surprise
+ * than a visible one.
  */
-export function buildManifest({ root, stack = [], sha, existing = null }) {
+export function buildManifest({ root, stack = [], sha, existing = null, capability = null }) {
   const gates = defaultGates(stack);
   const limits = defaultLimits(stack);
 
   // A re-init must never silently weaken a repo's own declaration: existing
   // limits and gates win over defaults, and only the projection stamp is refreshed.
   const limitsFinal = existing?.limits ? { ...limits, ...existing.limits } : limits;
-  const gatesFinal = existing?.gates ? { ...gates, ...existing.gates } : gates;
+  const gatesFinal = existing?.gates
+    ? { ...gates, ...existing.gates }
+    : planGates(stack, capability).gates;
 
   return {
     ...MANIFEST_COMMENT,
@@ -97,6 +211,41 @@ export function buildManifest({ root, stack = [], sha, existing = null }) {
     substitutions: existing?.substitutions ?? {},
     projection: { simtDevSha: sha ?? null },
   };
+}
+
+/**
+ * Declared gates this repo cannot run, as findings.
+ *
+ * `init` no longer writes them, but a manifest written by an older version still
+ * carries them and a hand-edited one can add them back. Leaving that to
+ * `hooks status` means the repo is green until someone installs hooks, at which
+ * point every commit fails and the first exit anyone finds is `--no-verify`.
+ * So the check that guards the generated rules also reports the landmine.
+ *
+ * @returns {{file: string, status: string, gate: string, detail: string, remedy: string}[]}
+ */
+export function unrunnableGates(manifest, capability) {
+  const declared = [
+    ...(manifest?.gates?.preCommit ?? []),
+    ...(manifest?.gates?.prePush ?? []),
+  ];
+  const findings = [];
+  const seen = new Set();
+  for (const name of declared) {
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const gate = getGate(name);
+    const verdict = gateRunnable(gate, capability);
+    if (verdict.runnable) continue;
+    findings.push({
+      file: MANIFEST,
+      status: 'unrunnable',
+      gate: name,
+      detail: `declares gate "${name}", which this repo cannot run: ${verdict.why}`,
+      remedy: gateRemedy(gate, { existing: true }),
+    });
+  }
+  return findings;
 }
 
 /** ADR-005: 400 is a review trigger, 1000 a hard ceiling. Generated files exempt. */

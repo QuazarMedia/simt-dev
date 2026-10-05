@@ -120,8 +120,14 @@ export function compose(body, { sha, sources = [] } = {}) {
   if (sources.length > 0) {
     header.push(`<!-- simt-dev:sources=${sources.join(',')} -->`);
   }
+  // Addressed to whoever reads this repo, not to whoever owns the rules upstream.
+  // "Edit the source in simt-dev" was the wrong instruction twice over: a consumer
+  // of the published package has no such tree, and an agent reading this repo has
+  // no business editing the region it was told not to edit. The only two actions
+  // available to a reader are: don't edit it, or regenerate it.
   header.push(
-    '<!-- Edit the source in simt-dev and run: simt sync. Edits here are overwritten. -->',
+    '<!-- Generated content. Do not edit by hand - your changes are overwritten.',
+    '     Run `simt-dev sync` to regenerate, or `simt-dev check` to see what is stale. -->',
   );
   const trimmed = body.replace(/\n+$/, '');
   return [BEGIN, ...header, ...(trimmed === '' ? [] : trimmed.split('\n')), END].join('\n');

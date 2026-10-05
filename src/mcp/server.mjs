@@ -60,7 +60,7 @@ export async function handle(request, tools, { version } = {}) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: { ...SERVER_INFO, version: version ?? '0.0.0' },
         instructions:
-          'Read-only. Every answer is JSON. `simt skills brief` is the one to call first: it returns the pre-assembled set for a task, plus what it deliberately left out and why.',
+          'Read-only. Every answer is JSON. `simt-dev skills brief` is the one to call first: it returns the pre-assembled set for a task, plus what it deliberately left out and why.',
       });
 
     case 'notifications/initialized':

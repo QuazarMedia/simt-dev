@@ -1,4 +1,4 @@
-// simt compare - workspace discovery and matrix rows.
+// simt-dev compare - workspace discovery and matrix rows.
 //
 // The fixture repos here are synthetic and minimal, because the properties worth
 // testing are properties of the ALGORITHM: how a `.git` file is classified, what
@@ -67,7 +67,7 @@ async function scratch() {
 
 /**
  * Put a real generated region in place, the way a repo that has run
- * `simt init && simt sync` would look. Returns the SHA it was stamped with, so a
+ * `simt-dev init && simt-dev sync` would look. Returns the SHA it was stamped with, so a
  * test can assert on a mismatch against a specific version rather than whatever
  * HEAD happens to be.
  */

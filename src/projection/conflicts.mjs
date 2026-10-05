@@ -16,7 +16,7 @@
  *
  *  `.cursor/rules/*.mdc` was NOT here for the whole life of the tool, and that is
  *  worth recording: the estate's three always-on `.mdc` families were the single
- *  worst-drifted content in it, and `simt init` reported `CONFLICTS none detected`
+ *  worst-drifted content in it, and `simt-dev init` reported `CONFLICTS none detected`
  *  on the repo holding them. A conflict detector that only looks at the filenames
  *  it was written for will quietly miss a whole rule surface added later. */
 export const RULE_FILES = ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md'];

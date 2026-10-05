@@ -1,4 +1,4 @@
-// simt mcp - the line protocol.
+// simt-dev mcp - the line protocol.
 //
 // `handle()` is pure, so most of this file tests it without a pipe. The end-to-end test at
 // the end exists because the failure nobody catches otherwise is a stray byte of prose on
@@ -74,7 +74,7 @@ test('mcp: a tool that fails is a RESULT with isError, never a protocol error', 
       description: 'always fails',
       inputSchema: { type: 'object' },
       async run() {
-        throw Object.assign(new Error('no region'), { remedy: 'run: simt sync' });
+        throw Object.assign(new Error('no region'), { remedy: 'run: simt-dev sync' });
       },
     },
   ];
@@ -83,7 +83,7 @@ test('mcp: a tool that fails is a RESULT with isError, never a protocol error', 
   assert.equal(r.result.isError, true);
   const payload = JSON.parse(r.result.content[0].text);
   assert.equal(payload.error, 'no region');
-  assert.equal(payload.remedy, 'run: simt sync');
+  assert.equal(payload.remedy, 'run: simt-dev sync');
 });
 
 test('mcp: truncation is announced in the text, never silent', async () => {
@@ -127,7 +127,7 @@ test('mcp: every command that writes is reachable only from the CLI', async () =
 // --- end to end over a real pipe ------------------------------------------------
 
 /**
- * Feed lines to `simt mcp` and collect the session.
+ * Feed lines to `simt-dev mcp` and collect the session.
  *
  * `spawn` rather than `execFile` with an `input` option, because there is no such option:
  * the child's stdin would never be closed, the server would wait forever for EOF, and the

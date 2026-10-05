@@ -19,7 +19,7 @@ async function fixture(files = {}) {
 
 test('every rule file carries an id', async () => {
   // A rule without an id would be projected with no traceable source, so
-  // `simt rules why` could never resolve it.
+  // `simt-dev rules why` could never resolve it.
   const rules = await loadRules();
   assert.ok(rules.length >= 7, `expected core + 6 profiles, got ${rules.length}`);
   for (const r of rules) {
@@ -112,13 +112,16 @@ test('the projected region is idempotent', async () => {
 });
 
 test('sync never touches hand-written content outside the markers', async () => {
-  const handWritten = `# My repo\n\nHouse rules that belong to me.\n\n${BEGIN}\nstale\n${END}\n\n## My own section\n\nStill mine.\n`;
+  // The sentinel is a nonsense token on purpose. An earlier version used the word
+  // "stale", which then collided with ordinary prose in the generated header and
+  // failed the test for the wrong reason.
+  const handWritten = `# My repo\n\nHouse rules that belong to me.\n\n${BEGIN}\nZZ-OLD-REGION-BODY-ZZ\n${END}\n\n## My own section\n\nStill mine.\n`;
   const root = await fixture({ 'pyproject.toml': '', 'AGENTS.md': handWritten });
   const result = await plan(root);
   const text = result.targets[0].text;
   assert.match(text, /House rules that belong to me\./);
   assert.match(text, /## My own section/);
-  assert.equal(text.includes('stale'), false, 'stale region must be replaced');
+  assert.equal(text.includes('ZZ-OLD-REGION-BODY-ZZ'), false, 'the old region body must be replaced');
 });
 
 test('check reports current, drift, unmanaged and absent distinctly', async () => {
@@ -128,7 +131,7 @@ test('check reports current, drift, unmanaged and absent distinctly', async () =
   assert.equal((await checkTarget(managed)).status, 'current');
 
   // Drift: an identical body recorded against a different simt-dev SHA must
-  // still read as drift, or `simt check` is blind to the provenance change.
+  // still read as drift, or `simt-dev check` is blind to the provenance change.
   // The meta must be reproduced exactly, including the sources header that
   // compose() embeds; omitting it would itself look like drift.
   const { diff } = await import('../src/projection/markers.mjs');

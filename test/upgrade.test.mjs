@@ -1,8 +1,8 @@
-// simt upgrade - moving a pin across many repositories.
+// simt-dev upgrade - moving a pin across many repositories.
 //
 // Every test runs the tool the way a CONSUMER runs it. The failure this file exists to
 // prevent is a command that only works from its own source tree, or that quietly writes
-// something it did not report. So each test adopts real repositories with `simt init`,
+// something it did not report. So each test adopts real repositories with `simt-dev init`,
 // pins them at a known SHA, and then checks what `upgrade` did to the FILES.
 
 import assert from 'node:assert/strict';
@@ -76,7 +76,7 @@ test('upgrade plan: a repo with no manifest is not-adopted, not behind', () => {
   assert.equal(p.action, 'skip');
   // The remedy must name the command that actually adopts a repo. "behind" would
   // suggest this command could fix it, and it cannot.
-  assert.equal(p.remedy, 'simt init');
+  assert.equal(p.remedy, 'simt-dev init');
 });
 
 test('upgrade plan: a stale pin alone is an update, and says the region was fine', () => {
@@ -135,7 +135,7 @@ test('upgrade plan: a manifest with no region is a repair, not a version bump', 
     sha: 'aaaaaaa',
   });
   assert.equal(p.action, 'skip');
-  assert.equal(p.remedy, 'run: simt sync');
+  assert.equal(p.remedy, 'run: simt-dev sync');
 });
 
 test('upgrade plan: an unparseable manifest is skipped, not overwritten', () => {

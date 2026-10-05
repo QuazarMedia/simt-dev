@@ -11,7 +11,7 @@ Applies to: `gradle`, `kotlin`, `wear-os`.
 ## Build
 
 - `./gradlew` only. Never a system `gradle`. Never `--configuration-cache` where a repo
-  documents that it breaks (simt-garmin records this explicitly).
+  documents that it breaks.
 - `./gradlew spotlessApply` is the formatting entrypoint in repos that use Spotless.
 
 ## Modules and layers

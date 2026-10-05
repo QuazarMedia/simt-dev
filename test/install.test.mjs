@@ -96,7 +96,7 @@ test('skills install: writes into the layout the repo already has', async () => 
 test('skills install: without a name it fails with usage', async () => {
   const { code, stderr } = await run(['skills', 'install']);
   assert.equal(code, 2);
-  assert.match(stderr, /usage: simt skills install/);
+  assert.match(stderr, /usage: simt-dev skills install/);
 });
 
 test('skills install: an unknown skill exits USAGE and suggests a near match', async () => {

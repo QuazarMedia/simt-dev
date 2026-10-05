@@ -109,7 +109,7 @@ export function unresolved(name, { hasScript, binary, command, stack }) {
     return {
       gate: name,
       reason: `unknown gate; the shared dispatcher knows: ${Object.keys(GATES).sort().join(', ')}`,
-      remedy: `remove "${name}" from simt-dev.json gates, or run: simt upgrade`,
+      remedy: `remove "${name}" from simt-dev.json gates, or run: simt-dev upgrade`,
     };
   }
   if (gate.kind === 'script' && !hasScript(gate.script)) {

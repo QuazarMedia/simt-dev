@@ -179,7 +179,7 @@ test('init: a repo with no commits is still adoptable', async () => {
   assert.match(manifest, /simtDevSha/);
 });
 test('manifest: the default id is the repo name, not unnamed-repo (ADR-016 follow-up)', () => {
-  // `basename('.')` is `''`, so the most natural invocation — `simt init .` — wrote an
+  // `basename('.')` is `''`, so the most natural invocation — `simt-dev init .` — wrote an
   // `unnamed-repo` id into the one field of the manifest a human reads.
   assert.equal(buildManifest({ root: '.', stack: [] }).id, process.cwd().split('/').pop());
   assert.equal(buildManifest({ root: process.cwd(), stack: [] }).id, process.cwd().split('/').pop());

@@ -9,6 +9,13 @@
 import { EXIT, emit, fail, isJson } from '../output/index.mjs';
 import { help } from './help.mjs';
 import { lintCommand } from './graph.mjs';
+import {
+  indexCommand as skillsIndex,
+  findCommand as skillsFind,
+  briefCommand as skillsBrief,
+  showCommand as skillsShow,
+  whyCommand as skillsWhy,
+} from './skills.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 
@@ -20,11 +27,6 @@ const STEPS = new Map([
   ['upgrade', 10],
   ['compare', 9],
   ['mcp', 10],
-  ['skills index', 4],
-  ['skills brief', 5],
-  ['skills show', 5],
-  ['skills why', 5],
-  ['skills find', 4],
   ['skills install', 5],
   ['rules list', 6],
   ['rules show', 6],
@@ -70,8 +72,17 @@ export async function dispatch(argv) {
     );
   }
   const args = positional.slice(offset);
-  if (path === 'doctor') return runDoctor(args, flags);
-  if (path === 'graph lint') return lintCommand(args, flags);
+  const IMPLEMENTED = {
+    doctor: runDoctor,
+    'graph lint': lintCommand,
+    'skills index': skillsIndex,
+    'skills find': skillsFind,
+    'skills brief': skillsBrief,
+    'skills show': skillsShow,
+    'skills why': skillsWhy,
+  };
+  const run = IMPLEMENTED[path];
+  if (run) return run(args, flags);
   return fail(`unknown command \`${path}\``, EXIT.USAGE);
 }
 
@@ -99,7 +110,15 @@ function commandPath(first, second) {
  * Subcommands implemented now, so they must not be rejected as unknown.
  * Implemented paths live here; declared-but-unimplemented ones live in STEPS.
  */
-const KNOWN_SUBS = new Set(['doctor', 'graph lint']);
+const KNOWN_SUBS = new Set([
+  'doctor',
+  'graph lint',
+  'skills index',
+  'skills find',
+  'skills brief',
+  'skills show',
+  'skills why',
+]);
 
 function parseOrExit(argv) {
   const parsed = parse(argv);

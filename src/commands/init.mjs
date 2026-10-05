@@ -17,14 +17,15 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 import { EXIT, emit, fail, isJson, note } from '../output/index.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { RULE_FILES, scanDocument, summarise } from '../projection/conflicts.mjs';
+import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs';
 import { MANIFEST, buildManifest, readManifest, writeManifest } from '../projection/manifest.mjs';
-import { plan, headSha, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
+import { plan, headSha, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
+import { parse as parseRegion } from '../projection/markers.mjs';
 
 const run = promisify(execFile);
 
@@ -51,6 +52,7 @@ export async function initCommand(positional, flags) {
   const summary = summarise(findings);
   const projected = await plan(root);
   const region = projected.targets[0];
+  const mdcProblems = projected.mdcProblems ?? [];
 
   const adoption = exists || Boolean(region?.exists);
   const dryRun = flags.dryRun === true;
@@ -78,12 +80,35 @@ export async function initCommand(positional, flags) {
       bytes: region.bytes,
       malformed: region.action === 'malformed',
     },
+    // Every planned target, not just AGENTS.md. The plan is rendered before anything is
+    // written, so a dry run and a real run describe the same set of files.
+    targets: projected.targets.map((t) => ({
+      file: t.file,
+      action: t.action,
+      previousBytes: t.previousBytes,
+      bytes: t.bytes,
+    })),
     findings,
     summary,
     dryRun,
     written: false,
     git: null,
   };
+
+  // A `.mdc` rule that cannot render is a defect in this build. Adopting a repo
+  // without it would leave the family half-retired, and the user would have no way
+  // to tell which half from the diff.
+  if (mdcProblems.length > 0) {
+    payload.ok = false;
+    payload.blockedBy = 'mdc-problem';
+    for (const p of mdcProblems) note(`PROBLEM  ${p}`);
+    if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
+    return fail(
+      `${mdcProblems.length} canonical .mdc rule(s) cannot be projected (${mdcProblems[0]})`,
+      EXIT.FAIL,
+      'declare the missing substitution in simt-dev.json, or run: simt graph lint',
+    );
+  }
 
   // Step 3: block on a real conflict before doing anything else. A duplicate is
   // reported but never blocks - restating a ruling is a hygiene problem, while
@@ -94,7 +119,7 @@ export async function initCommand(positional, flags) {
     if (isJson(flags)) {
       emit(`${JSON.stringify(payload, null, 2)}\n`);
     } else {
-      emit(render(payload, manifest, region));
+      emit(render(payload, manifest));
       note('');
       note(
         `blocked  ${summary.conflicts} conflict${summary.conflicts === 1 ? '' : 's'}; nothing written`,
@@ -107,15 +132,19 @@ export async function initCommand(positional, flags) {
     );
   }
 
-  if (region?.action === 'malformed') {
+  // One malformed target refuses the whole adoption, not just that file. Writing the
+  // others first would leave the repo half-adopted with the half that failed having
+  // produced no change at all — indistinguishable, in the diff, from never running.
+  const malformed = projected.targets.filter((t) => t.action === 'malformed');
+  if (malformed.length > 0) {
     payload.ok = false;
     payload.blockedBy = 'malformed-region';
     if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
-    else emit(render(payload, manifest, region));
+    else emit(render(payload, manifest));
     return fail(
-      `${region.file}: ${region.reason}`,
+      `${malformed.length} target(s) have a malformed generated region (${malformed[0].file}: ${malformed[0].reason})`,
       EXIT.FAIL,
-      `fix the markers at ${region.file}:${region.line}, then rerun: simt init --yes`,
+      `fix the markers at ${malformed[0].file}:${malformed[0].line}, then rerun: simt init --yes`,
     );
   }
 
@@ -123,7 +152,7 @@ export async function initCommand(positional, flags) {
   if (isJson(flags)) {
     if (!apply) emit(`${JSON.stringify(payload, null, 2)}\n`);
   } else {
-    emit(render(payload, manifest, region));
+    emit(render(payload, manifest));
   }
   if (!apply) {
     note('');
@@ -142,11 +171,29 @@ export async function initCommand(positional, flags) {
   await writeManifest(root, manifest);
   note(`wrote    ${MANIFEST} (${manifestAction})`);
 
-  if (region && region.action !== 'unchanged') {
-    await writeFile(region.path, region.text);
-    note(`wrote    ${region.file} (${region.action})`);
-  } else if (region) {
-    note(`current  ${region.file} (already up to date)`);
+  // Every planned target is written, not just the AGENTS.md region. An adoption that
+  // scaffolds the manifest and one region but leaves the `.mdc` rules for a later
+  // `sync` produces a repo whose `check` fails on files the user was never told
+  // about — which reads as a broken adoption rather than an unfinished one.
+  for (const target of projected.targets) {
+    if (target.action === 'unchanged') {
+      note(`current  ${target.file} (already up to date)`);
+      continue;
+    }
+    if (target.action === 'malformed') {
+      // Checked before any write above; reaching here means the guard moved.
+      return fail(
+        `${target.file}: ${target.reason}`,
+        EXIT.FAIL,
+        `fix the markers at ${target.file}:${target.line}, then rerun: simt init --yes`,
+      );
+    }
+    // A `.mdc` target lives in `.cursor/rules/`, which a repo that had no Cursor
+    // configuration at all will not have. Creating the directory is part of
+    // adopting, not a detail of writing the file.
+    await mkdir(dirname(target.path), { recursive: true });
+    await writeFile(target.path, target.text);
+    note(`wrote    ${target.file} (${target.action})`);
   }
   payload.written = true;
 
@@ -157,17 +204,21 @@ export async function initCommand(positional, flags) {
   return EXIT.OK;
 }
 
-/** Scan whichever of RULE_FILES exist. A missing file is not a finding. */
+/** Scan whichever rule files exist, named or globbed. A missing file is not a
+ *  finding. Generated regions are skipped: quoting a ruling is not a conflict with
+ *  it, and the region is rewritten by `sync` anyway. */
 async function scanRepo(root) {
   const findings = [];
-  for (const file of RULE_FILES) {
+  for (const path of await rulePaths(root)) {
     let text;
     try {
-      text = await readFile(join(root, file), 'utf8');
+      text = await readFile(path, 'utf8');
     } catch {
       continue;
     }
-    findings.push(...scanDocument(text, file));
+    const region = parseRegion(text);
+    const handWritten = region.status === 'ok' ? `${region.before}\n${region.after}` : text;
+    findings.push(...scanDocument(handWritten, path));
   }
   return findings;
 }
@@ -227,7 +278,7 @@ async function git(cwd, args) {
 }
 
 /** Every line is a decision with a reason. Nothing is silent. */
-function render(payload, manifest, region) {
+function render(payload, manifest) {
   const lines = [
     `repo        ${payload.root}`,
     `stack       ${payload.stack.length > 0 ? payload.stack.join(', ') : '(undetected)'}`,
@@ -251,12 +302,21 @@ function render(payload, manifest, region) {
     `  ${'profiles'.padEnd(9)} ${LOCAL_PROFILE_DIR}/*.md  ` +
       `repo-local profiles are selected by the same matcher (ADR-013)`,
   );
-  if (region) {
+  // Every planned target is listed, not just AGENTS.md. A plan that omits the files it
+  // will write is the same defect as writing only the first target: the reader is told
+  // about one file and four change.
+  for (const target of payload.targets) {
+    // The containment guarantee is a property of AGENTS.md ONLY. A managed `.mdc` is
+    // a generated file: its frontmatter survives, its body is replaced, and printing
+    // the containment caveat on it would understate the edit the reader is approving.
+    const isPrimary = target.file === PRIMARY_TARGET;
     lines.push(
-      `  ${region.action.padEnd(9)} ${region.file}  ${region.previousBytes} -> ${region.bytes} bytes`,
+      `  ${target.action.padEnd(9)} ${target.file}  ${target.previousBytes} -> ${target.bytes} bytes` +
+        (isPrimary
+          ? '  hand-written content outside the markers is never modified'
+          : '  generated file: frontmatter kept, body replaced (ADR-016)'),
     );
   }
-  lines.push('            hand-written content outside the markers is never modified');
 
   const { findings, summary } = payload;
   if (summary.conflicts > 0) {

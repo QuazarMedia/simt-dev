@@ -21,7 +21,7 @@
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
 import { tokenize, rankSkills, closure, scoreSkill, stackCompatible } from '../resolve/resolve.mjs';
-import { loadRules, select, checkTarget, headSha } from '../projection/project.mjs';
+import { loadRules, select, checkTargets, headSha } from '../projection/project.mjs';
 import { loadDecisions, byId, citations } from '../decisions/index.mjs';
 import { discover } from '../compare/discover.mjs';
 import { buildRow, summarise } from '../compare/row.mjs';
@@ -360,7 +360,7 @@ export const TOOLS = [
     inputSchema: rootArg,
     async run(args) {
       const root = rootOf(args);
-      const findings = [await checkTarget(root)];
+      const findings = await checkTargets(root);
       for (const r of await loadRules()) {
         if (r.error) findings.push({ file: `rules/${r.file}`, status: 'invalid', detail: r.error });
       }

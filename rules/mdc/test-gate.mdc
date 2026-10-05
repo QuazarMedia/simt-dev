@@ -1,0 +1,50 @@
+---
+id: test-gate
+target: .cursor/rules/test-gate.mdc
+description: Full-pass tests and test deltas are mandatory before commit or reviewer approval
+alwaysApply: true
+applies: always
+substitutions:
+  - key: exampleTestPath
+    default: path/to/the.changed.test.ts
+    describe: one real test file for this repo, used only as the named example
+  - key: pathKinds
+    default: feature/contract/route
+    describe: this repo's executable path vocabulary
+  - key: producerNoun
+    default: API producer
+    describe: what produces a contract this repo consumes
+---
+
+# Test Gate
+
+Applies to every feature slice, bugfix, and plan tracker task. Docs/config-only chores are
+exempt from test deltas but require named doc/format checks to pass.
+
+## Implementer Requirements
+
+1. **Name exact commands and test files**: e.g. `npm run test:focused -- {{exampleTestPath}}`.
+2. **100% Pass Required**: the named commands must exit 0 with every test passing. A
+   partial pass (e.g. 6/8 passing) is a hard blocker, and so is quoting the passing subset.
+3. **Behavioral Test Deltas**:
+   - New {{pathKinds}} path -> new or extended test asserting the behavior.
+   - Bugfix -> regression test reproducing the failure mode.
+   - If no test file changed, justify why the existing tests fully prove the invariant.
+4. **Cross-Repo Order**: commit the {{producerNoun}} (contract/migration) before any
+   consumer generates against it. Never apply remote migrations or deploy from uncommitted
+   code.
+
+## Reviewer Mandatory Block
+
+Return `BLOCK` when:
+
+- Any test fails, is skipped (without pre-existing justification), or is unrun.
+- An executable diff has no test delta and no explicit justification.
+- The coordinator cites partial suite results or defers a failing test.
+- **Consumer side:** a consumer requires a new API field with no backward-compatibility or
+  deploy-order evidence.
+- **Producer side:** the {{producerNoun}} ships without a test asserting the new invariant
+  or field.
+
+The last two are complementary, not alternatives. A reviewer that checks only one of them
+misses half of the failure they exist to catch.

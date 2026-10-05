@@ -23,7 +23,7 @@ record's status line — never by editing the ruling in place.
 | [013](ADR-013-genericity-by-facts-and-local-profiles.md) | Genericity comes from emitted facts and repo-local profiles | accepted |
 | [014](ADR-014-workspace-is-configuration.md) | The workspace is configuration, and a single repo is a supported shape | accepted |
 | [015](ADR-015-a-source-is-content-not-a-location.md) | A source is identified by its content; the repo is a location, not a precondition | accepted |
-| [014](ADR-014-workspace-is-configuration.md) | The workspace is configuration; a single repo is a first-class case | accepted |
+| [016](ADR-016-a-divergent-rule-is-retired-not-merged.md) | A divergent rule is retired by a union, not merged by a variant | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -36,10 +36,15 @@ no product taxonomy, and adding an ecosystem is a profile file rather than a cod
 ADR-014 and ADR-015 are the same rule applied to the **filesystem**. ADR-014 made the workspace
 optional; ADR-015 found that a repository is itself a location for a declared source, so a clone of
 one repo is self-sufficient with no configuration at all. Both were found by running the tool the
-way a consumer runs it, not the way its author does.
-ADR-014 completes it on the filesystem, where ADR-013 did not reach: the tool's own directory
-layout turned out to be part of its interface, and every test that ran from the checkout could
-not see that it only worked from the checkout.
+way a consumer runs it, not the way its author does: the tool's own directory layout turned out to
+be part of its interface, and every test that ran from the checkout could not see that it only
+worked from the checkout.
+
+ADR-016 applies the rule to rule content itself. The estate's three always-on `.mdc` families
+existed in eight copies, none byte-identical, the worst pair differing by one byte while hiding
+three semantic losses. The canonical body is therefore the **union** of what every copy needed —
+not a per-stack variant, because two of the differences were rules each repo was missing rather
+than a choice either repo made.
 
 ## The rule these records enforce
 

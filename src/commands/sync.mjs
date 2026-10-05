@@ -1,91 +1,134 @@
-// simt sync — write the generated region.
+// simt sync — write the generated regions.
 // simt check — the gate.
 //
-// They share plan/project.mjs so they can never disagree about what the region
+// They share plan/project.mjs so they can never disagree about what the regions
 // should contain. sync decides whether to act; check decides severity and exit
 // code. sync never pushes and never commits (ADR-001).
+//
+// Two properties come from writing several targets rather than one:
+//
+//   - ALL-OR-NOTHING. A malformed region in any target refuses the whole run, and
+//     the refusal happens before the first write. Appending a second region to a
+//     document with a broken one would duplicate every rule while reporting
+//     success; writing the good targets and skipping the bad one would leave the
+//     repo half-adopted with no record of which half.
+//   - EVERY WRITE IS REPORTED. Silently syncing AGENTS.md and not mentioning the
+//     three `.mdc` rules would let a reader believe a repo is fully current when
+//     only the file they happened to open is.
 
 import { writeFile } from 'node:fs/promises';
 
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
-import { plan, checkTarget, loadRules, select } from '../projection/project.mjs';
+import { plan, checkTargets, checkTarget, loadRules, select } from '../projection/project.mjs';
 
 export async function syncCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
   const checkOnly = flags.check === true;
 
   const result = await plan(root);
-  const target = result.targets[0];
 
-  // A malformed region is refused, never overwritten. Appending a second region
-  // would duplicate every rule while reporting success.
-  if (target.action === 'malformed') {
+  // A `.mdc` rule that cannot render is a defect in this build, not in the repo,
+  // and projecting the rest would leave a family half-retired.
+  if (result.mdcProblems.length > 0) {
     if (isJson(flags)) {
-      emitJson({ ok: false, command: 'sync', root, error: target.reason, file: target.file, line: target.line });
+      emitJson({
+        ok: false,
+        command: 'sync',
+        root,
+        error: result.mdcProblems[0],
+        problems: result.mdcProblems,
+      });
+    }
+    for (const p of result.mdcProblems) note(`PROBLEM ${p}`);
+    return fail(
+      `${result.mdcProblems.length} canonical .mdc rule(s) cannot be projected (${result.mdcProblems[0]})`,
+      EXIT.FAIL,
+      'declare the missing substitution in simt-dev.json, or run: simt graph lint',
+    );
+  }
+
+  const broken = result.targets.filter((t) => t.action === 'malformed');
+  if (broken.length > 0) {
+    const first = broken[0];
+    if (isJson(flags)) {
+      emitJson({
+        ok: false,
+        command: 'sync',
+        root,
+        error: first.reason,
+        file: first.file,
+        line: first.line,
+        alsoBroken: broken.slice(1).map((t) => t.file),
+      });
     }
     return fail(
-      `${target.file} has a malformed generated region (${target.reason})`,
+      `${broken.length} file(s) have a malformed generated region (${first.file}: ${first.reason})`,
       EXIT.FAIL,
-      `fix the markers at ${target.file}:${target.line}, then: simt sync`,
+      `fix the markers at ${first.file}:${first.line}, then: simt sync`,
     );
   }
 
   for (const n of result.notes) note(`note ${n}`);
 
+  const targets = result.targets.map((t) => ({
+    file: t.file,
+    action: t.action,
+    bytes: t.bytes,
+    previousBytes: t.previousBytes,
+  }));
+  const changed = result.targets.filter((t) => t.action !== 'unchanged');
+
+  // Writes happen BEFORE output in every mode. An earlier build emitted `--json`
+  // first and returned, so `upgrade --yes --json` reported a plan and changed
+  // nothing — the exact combination automation reaches for.
+  if (checkOnly !== true && flags.dryRun !== true) {
+    for (const t of changed) {
+      await writeFile(t.path, t.text);
+      note(`wrote    ${t.file}`);
+    }
+  }
+
   if (isJson(flags)) {
     emitJson(
       {
-        ok: true,
+        ok: checkOnly ? changed.length === 0 : true,
         command: checkOnly ? 'sync --check' : 'sync',
         root,
         stack: result.stack,
         profiles: result.profiles,
-        sha: target.sha,
-        targets: [
-          {
-            file: target.file,
-            action: target.action,
-            bytes: target.bytes,
-            previousBytes: target.previousBytes,
-          },
-        ],
-        written: false,
+        sha: result.targets[0].sha,
+        targets,
+        written: checkOnly || flags.dryRun === true ? false : changed.length,
       },
       {},
     );
   } else {
-    emit(
-      [
-        `repo      ${root}`,
-        `stack     ${result.stack.length > 0 ? result.stack.join(', ') : '(undetected)'}`,
-        `profiles  ${result.profiles.join(', ')}${result.fallback ? ' (fallback)' : ''}`,
-        `sha       ${target.sha}`,
-        '',
-        `${target.file}  ${target.action}  ${target.previousBytes} -> ${target.bytes} bytes`,
-        target.action === 'unchanged' ? 'already current; nothing written' : '',
-        checkOnly && target.action !== 'unchanged' ? 'would write; rerun without --check' : '',
-      ]
-        .filter((l) => l !== '')
-        .join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
-    );
+    const lines = [
+      `repo      ${root}`,
+      `stack     ${result.stack.length > 0 ? result.stack.join(', ') : '(undetected)'}`,
+      `profiles  ${result.profiles.join(', ')}${result.fallback ? ' (fallback)' : ''}`,
+      `sha       ${result.targets[0].sha}`,
+      '',
+      ...result.targets.map(
+        (t) => `${t.file}  ${t.action}  ${t.previousBytes} -> ${t.bytes} bytes`,
+      ),
+    ];
+    if (changed.length === 0) lines.push('already current; nothing written');
+    else if (checkOnly) lines.push('would write; rerun without --check');
+    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   }
 
-  if (target.action === 'unchanged') return EXIT.OK;
-  if (checkOnly) return EXIT.FAIL;
+  if (checkOnly) return changed.length === 0 ? EXIT.OK : EXIT.FAIL;
   if (flags.dryRun === true) {
     note('dry-run  no files written');
     return EXIT.OK;
   }
-
-  await writeFile(target.path, target.text);
-  note(`wrote    ${target.file}`);
   return EXIT.OK;
 }
 
 export async function checkCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
-  const findings = [await checkTarget(root)];
+  const findings = await checkTargets(root);
   const rules = await loadRules();
 
   // A rule file with no id would be projected without a traceable source, so it
@@ -118,4 +161,4 @@ export async function checkCommand(positional, flags) {
   return bad.length === 0 ? EXIT.OK : EXIT.FAIL;
 }
 
-export { plan, checkTarget, select };
+export { plan, checkTargets, checkTarget, select };

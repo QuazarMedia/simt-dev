@@ -74,6 +74,12 @@ export function buildManifest({ root, stack = [], sha, existing = null }) {
     // is the declaration a reviewer reads to see the repo's intent stated rather
     // than inferred.
     profiles: existing?.profiles ?? [],
+    // ADR-016: per-repo values for the canonical `.mdc` rules' declared
+    // substitutions, keyed by rule id. Seeded empty rather than absent so the
+    // shape is visible in the file before anything needs it. `__optIn` is not a
+    // substitution value: it lists the rules this repo declares it has a problem
+    // with, which is something detection cannot infer.
+    substitutions: existing?.substitutions ?? {},
     projection: { simtDevSha: sha ?? null },
   };
 }

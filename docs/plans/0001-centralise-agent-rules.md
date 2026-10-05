@@ -163,19 +163,47 @@ files it replaces and why.
 **Phase 3 — Prove the engine.** `sync.mjs --check` exits non-zero on drift. Reusable workflow
 live.
 
-**Phase 4 — Pilot, 3 repos, maximum failure-mode coverage.**
+**Phase 4 — Pilot, 3 repos: one web, one API, one mobile.** One per consumer surface, so the
+pilot proves the three shapes the estate actually ships rather than three shapes that happen
+to be easy to find.
 
-| Repo | Why this one |
-|---|---|
-| `simt-social-media` | Worst drift in the estate: no `intake-questions.mdc`, 3 BLOCK triggers, deleted `Allowed Without Account`, frozen at the pre-refactor generation since 2026-09-12 |
-| `simt-app` | **No `AGENTS.md` at all**, 12 `.mdc`, and the Kotlin/Compose profile — proves the profile mechanism |
-| `bunnyland-server` | Byte-identical `CLAUDE.md`, Python stack, `fail_under=100`, the only branch/PR rules in the estate |
+| Repo | Surface | Why this one |
+|---|---|---|
+| `simt-space` | web | **Zero agent configuration at all** — no `AGENTS.md`, no `.agents`/`.cursor`/`.claude`, so `init` scaffolds from nothing (`0 -> 6387` bytes). A hand-written `.git/hooks/pre-commit` (4 KB, the best prose in the estate) sits in the *default* location with `core.hooksPath` unset, so adopting the dispatcher means taking over a hook nobody declared. The only `printWidth: 120` prettier config, prettier installed with **no script invoking it**, no `.editorconfig`, and the only repo with a two-entry `git.config` include. `wrangler.jsonc` makes it a Workers repo, so it selects `core + cloudflare-workers` rather than the `node` fallback |
+| `simt-social-api` | API | The only pilot that **adopts an existing `AGENTS.md`** (`12850 -> 19238`, hand-written content preserved outside the markers) and the largest agent surface in the estate: 6 agents + **18 skills** + 3 `.mdc`. Canonical owner of `add-country-galaxy` (the 238-line cross-repo playbook), so retiring the web stub has to happen here. Holds the producer-side `BLOCK` bullet that `simt-social` is missing, the credential-handling prohibition that conflicts with the web copy's build-config bullet, `has-migrations-dir`, and a `pre-push` with a 90-line Cloudflare API Shield publish block. A production-branch push is a production deploy with D1 migrations, so ADR-001 is load-bearing here. Reports 1 duplicate (`AGENTS.md:29`, ADR-005) — reported, not blocking |
+| `simt-app` | mobile | Also **no `AGENTS.md`** (`0 -> 5667`), but with **12 `.mdc` + 7 skills already in place**, so it is the case where a scaffolded central region has to coexist with a repo's own hand-written rules rather than be the only rules. Proves the Kotlin/Compose/Wear profile, including the Wear `applicationId` invariant. `core.hooksPath hooks` points at a directory whose `pre-push` was deleted in `ca0e803b4`, leaving the real git-lfs `pre-push` in `scripts/hooks/` unreferenced |
 
-Three stacks, three different failure modes. If it survives these it survives everything.
+Three routes that are genuinely different: **scaffold with nothing to collide with**
+(`simt-space`), **adopt an existing `AGENTS.md`** (`simt-social-api`), and **scaffold beside
+an existing rules layer** (`simt-app`). A mechanism that survives all three has no fourth
+shape to meet in this estate.
+
+**What this trio no longer covers, stated rather than hidden.** The earlier draft picked
+`bunnyland-server` for its byte-identical `CLAUDE.md`, the `python` profile and the estate's
+only declared numeric coverage bar (`fail_under = 100`), and `simt-social-media` for having
+the worst `.mdc` drift. Swapping to one-web/one-API/one-mobile drops both, which means:
+
+- `rules/stacks/python.md` and `rules/stacks/container.md` are **not** exercised in the
+  pilot. `bunnyland-server` is the sole Python repo and the only Dockerfile holder besides
+  `simt-goto`; both adopt in Phase 5, and both profiles are already verified by `simt init`
+  dry-run today.
+- The duplicate-`CLAUDE.md` repair stays in Phase 6, where it already had a line.
+- `simt-social-media`'s missing `intake-questions.mdc` and its 3-trigger `test-gate.mdc` are
+  **unmeasured by the pilot**. That is the largest remaining risk in this swap: media is a
+  Cloudflare Worker with the *least* process scaffolding in the estate, so if adoption
+  depends on scaffolding already being present, the pilot would not reveal it. Mitigation
+  without changing the trio — `simt-social-api` adopts the same three `.mdc` families, so
+  retiring the drifted twins in Phase 6 covers media, and media's two missing rules are
+  restored by the canonical `intake-questions` it never had rather than by migrating its own.
+
+Three web repos against one Python repo is the shape the estate actually has, which is why
+this trade is worth stating rather than arguing.
 
 **Phase 5 — Roll out the remaining 13**, grouped by stack so one set of decisions covers a
-group: Workers/TS (social, social-api, goto, jobs) · static/LESS (blog, landing,
-social-landing, space) · JVM (garmin, wakt-app) · bare (app-ui, space-review).
+group: Workers/TS (social, social-media, api, goto, jobs) · static/LESS (blog, landing,
+social-landing) · JVM (garmin, wakt-app) · Python (bunnyland-server) · bare (app-ui,
+space-review). `simt-app`, `simt-social-api` and `simt-space` are the Phase 4 pilots and are
+not repeated here; `simt-dev` is the tool and never adopts itself.
 
 **Phase 6 — Retire the duplication.** Delete the 13 tracked `git.config` copies (keep
 simt-space's local fallback — it already works and is proven). Replace bunnyland's
@@ -184,7 +212,8 @@ canonical + stub. Add `git.config` and `graphify-out/` to `.prettierignore`.
 
 **Phase 7 — Defect sweep.** Independent of centralisation, do it while the context is fresh:
 garmin's malformed ```bash fence, broken DoD numbering and permanently-red `memcheck` gate
-· simt-app's 0-byte `pre-push` · simt-space's dead prettier install (no script invokes it) ·
+· simt-app's orphaned git-lfs `scripts/hooks/pre-push`, unreferenced since `hooks/pre-push`
+was deleted in `ca0e803b4` · simt-space's dead prettier install (no script invokes it) ·
 the 8 dangling references (`web-perf`, `pages/`, `workers-ai/`, 5 firebase files) ·
 `app-ui-submodule.mdc`'s hardcoded `/Users/said.elimam/...` absolute path · npm Dependabot ·
 `packageManager` · the 3 `.nvmrc` files.

@@ -1,0 +1,169 @@
+// Resolve a gate to something executable, or explain precisely why it cannot be.
+//
+// Every failure mode returns a remedy the author can act on without reading
+// this source. That is the difference between a hook people keep and a hook
+// people disable: a hook that fails vaguely gets `--no-verify`, and once
+// `--no-verify` is normal, no hook in the estate means anything.
+//
+// ADR-010: nothing here invokes `npx` or `npm exec`. Script gates go through
+// `npm run`, and staged gates resolve the formatter from the project's own
+// `node_modules/.bin` - the declared dependency's binary, not one fetched at
+// hook time.
+
+import { access } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { join } from 'node:path';
+
+import { FORMATTABLE, GATES, GATES as _G } from './gates.mjs';
+
+/** Gate names the shared dispatcher knows, sorted. */
+export function knownGates() {
+  return Object.keys(GATES).sort();
+}
+
+export function gateKind(name) {
+  return GATES[name]?.kind ?? null;
+}
+
+export function gateWhy(name) {
+  return GATES[name]?.why ?? null;
+}
+
+export function gateAdr(name) {
+  return GATES[name]?.adr ?? null;
+}
+
+/**
+ * Is this path an executable file?
+ * @param {string} path
+ */
+export async function isExecutable(path) {
+  try {
+    await access(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Resolve the formatter binary a `staged` gate should invoke.
+ *
+ * Prettier is required because ADR-004 makes format a staged-files obligation
+ * and the estate's single agreed formatter is prettier. A repo without it gets a
+ * failure with a remedy, never a silent pass.
+ */
+export async function resolveStagedTool(root, gate) {
+  const tools = gate.tools ?? [];
+  const tried = [];
+  for (const tool of tools) {
+    const path = join(root, 'node_modules', '.bin', tool);
+    if (await isExecutable(path)) return { tool, path, tried };
+    tried.push(path);
+  }
+  return { tool: null, path: null, tried };
+}
+
+/** Does package.json declare this script? */
+export function hasScript(pkg, script) {
+  if (!pkg || typeof pkg.scripts !== 'object' || pkg.scripts === null) return false;
+  return typeof pkg.scripts[script] === 'string' && pkg.scripts[script].length > 0;
+}
+
+/**
+ * Build the argv for a gate, or return a structured refusal.
+ *
+ * @param {object} gate
+ * @param {object} ctx
+ * @param {string} ctx.root
+ * @param {object|null} ctx.pkg parsed package.json, or null when absent
+ * @param {string[]} ctx.staged staged paths (empty for pre-push)
+ * @param {Record<string,string>|undefined} ctx.commands manifest gates.commands
+ * @returns {Promise<{ok: true, argv: string[], kind: string, detail: string}
+ *                  | {ok: false, gate: string, kind: string, reason: string, remedy: string}>}
+ */
+export async function resolveGate(gate, { root, pkg, staged, commands }) {
+  const name = gate.name;
+  const declared = commands?.[name];
+
+  if (gate.kind === 'staged') {
+    const tool = await resolveStagedTool(root, gate);
+    if (tool.path === null) {
+      return {
+        ok: false,
+        gate: name,
+        kind: gate.kind,
+        reason: `no formatter binary in node_modules/.bin (looked for ${(gate.tools ?? []).join(', ')})`,
+        remedy: 'run the repo install command, or remove "format" from simt-dev.json gates',
+      };
+    }
+    const files = staged.filter((f) => FORMATTABLE.has(extname(f)));
+    if (files.length === 0) {
+      return {
+        ok: true,
+        kind: gate.kind,
+        argv: null, // nothing to do; the dispatcher reports this as a pass with a count
+        detail: `no staged files this gate handles (looked for ${[...FORMATTABLE].join(', ')})`,
+      };
+    }
+    return {
+      ok: true,
+      kind: gate.kind,
+      argv: [tool.path, '--write', ...files],
+      detail: `${files.length} staged file(s) via node_modules/.bin/${tool.tool}`,
+    };
+  }
+
+  if (gate.kind === 'script') {
+    const script = gate.script;
+    if (!hasScript(pkg, script)) {
+      return {
+        ok: false,
+        gate: name,
+        kind: gate.kind,
+        reason: `package.json declares no "${script}" script`,
+        remedy: `add "${script}" to scripts, or remove "${name}" from simt-dev.json gates`,
+      };
+    }
+    return {
+      ok: true,
+      kind: gate.kind,
+      argv: ['npm', 'run', '--silent', script],
+      detail: `npm run ${script}`,
+    };
+  }
+
+  if (gate.kind === 'command') {
+    if (!declared) {
+      return {
+        ok: false,
+        gate: name,
+        kind: gate.kind,
+        reason: 'no command declared for this gate in simt-dev.json',
+        remedy: `set gates.commands["${name}"] to the command that proves it, or remove "${name}" from simt-dev.json gates`,
+      };
+    }
+    const argv = declared.trim().split(/\s+/).filter(Boolean);
+    return {
+      ok: true,
+      kind: gate.kind,
+      argv,
+      detail: `declared command: ${declared}`,
+    };
+  }
+
+  return {
+    ok: false,
+    gate: name,
+    kind: 'unknown',
+    reason: `unknown gate kind "${gate.kind}"`,
+    remedy: `this is a bug in simt-dev; known gates: ${knownGates().join(', ')}`,
+  };
+}
+
+function extname(path) {
+  const dot = path.lastIndexOf('.');
+  return dot > 0 ? path.slice(dot).toLowerCase() : '';
+}
+
+export const __internals = { extname, FORMATTABLE };

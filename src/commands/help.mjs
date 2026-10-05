@@ -17,7 +17,7 @@ simt skills find <query>    search across capability and keyword
 simt skills install <name>  pin a skill into the repo as a local override
 
 simt rules list|show|why    rules with provenance back to the ADR that settled them
-simt hooks install|status   shared hook dispatcher and this repo's gates
+simt hooks install|status   install the shared dispatcher; report what it would run
 simt compare                org-wide matrix across every sibling repo
 simt mcp                    expose the same surface as MCP tools`;
 

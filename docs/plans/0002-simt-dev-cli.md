@@ -211,7 +211,7 @@ simt skills install <name>    pin a skill into the repo as a local override
 simt skills graph [--mermaid] capability/skill graph
 
 simt rules list|show|why      rules with provenance back to the ADR that settled them
-simt hooks install|status     shared hook dispatcher + this repo's gate list
+simt hooks install|status     install the shared dispatcher; report what it would run
 simt compare                  org-wide matrix: every repo x rules SHA, hooks, gates, skills
 simt mcp                      expose everything as MCP tools (optional)
 ```
@@ -356,8 +356,8 @@ validator is ~150 lines, and dropping `dependencies` is what makes `npx` instant
 | 5 | `skills brief` + `why` | `eval` corpus passes; every selection traceable | done |
 | 6 | Projection engine + `simt check` | drift detected in a deliberately stale repo | done |
 | 7 | `init` with conflict reporting | dry-run adoption produces a reviewable diff on all 3 pilots | done |
-| 8 | `hooks` dispatcher | one pre-commit works across all 3 pilot stacks | next |
-| 9 | `compare` | replaces the hand audit | pending |
+| 8 | `hooks` dispatcher | one pre-commit works across all 3 pilot stacks | **done** (141 tests; fail-closed, ADR-004 staged-only, ADR-010 no `npx`) |
+| 9 | `compare` | replaces the hand audit | next | pending |
 | 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA | pending |
 
 Steps 1-5 are useful with zero content migration and land first, because they deliver the

@@ -18,6 +18,7 @@ import {
 } from './skills.mjs';
 import { syncCommand, checkCommand } from './sync.mjs';
 import { initCommand } from './init.mjs';
+import { hooksCommand } from './hooks.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 
@@ -30,8 +31,6 @@ const STEPS = new Map([
   ['rules list', 6],
   ['rules show', 6],
   ['rules why', 6],
-  ['hooks install', 8],
-  ['hooks status', 8],
 ]);
 
 /** groups whose subcommands may be omitted, and the default for each. */
@@ -82,6 +81,9 @@ export async function dispatch(argv) {
     sync: syncCommand,
     check: checkCommand,
     init: initCommand,
+    'hooks install': (args, flags) => hooksCommand('install', args, flags),
+    'hooks status': (args, flags) => hooksCommand('status', args, flags),
+    'hooks run': (args, flags) => hooksCommand('run', args, flags),
   };
   const run = IMPLEMENTED[path];
   if (run) return run(args, flags);
@@ -120,6 +122,9 @@ const KNOWN_SUBS = new Set([
   'skills brief',
   'skills show',
   'skills why',
+  'hooks install',
+  'hooks status',
+  'hooks run',
 ]);
 
 function parseOrExit(argv) {

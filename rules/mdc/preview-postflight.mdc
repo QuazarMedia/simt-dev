@@ -23,6 +23,18 @@ substitutions:
   - key: productionDomainNote
     default: ""
     describe: one clause naming this repo's own production domain binding
+  # These two arrived as one slot in the original files: `simt-social` put a
+  # build-config instruction where `simt-social-api` put a domain-binding note, which
+  # read as a conflict. They are not alternatives, so the union carries both — but a
+  # repo that only needs one, or neither, declares that. `simt-social-media` sets no
+  # `SOCIAL_API_BASE_URL` (it serves derivatives and calls no API) and states its own
+  # custom-domain binding instead, so it declares exactly that.
+  - key: previewApiBaseUrlNote
+    default: "- Point the preview build at the preview API Worker: set `SOCIAL_API_BASE_URL` in the Cloudflare Workers Builds preview environment to the preview API Worker URL."
+    describe: build-config instruction, when this repo actually has a preview API base URL to set
+  - key: googleOnlyNote
+    default: "- Production and public browser flows remain Google-only."
+    describe: the identity policy this repo enforces in production
 ---
 
 # Preview-Only Authenticated Postflight
@@ -34,11 +46,10 @@ identity (`POSTFLIGHT_PASSWORD_UID`).
 ## Requirements
 
 - Authenticated checks must target preview URLs (`{{previewUrlHost}}`).
-- Production and public browser flows remain Google-only.
-- Point the preview build at the preview API Worker: set `SOCIAL_API_BASE_URL` in the
-  Cloudflare Workers Builds preview environment to the preview API Worker URL.
 - Postflight credentials live in the operator keychain only; never in source, chat, D1, or
   logs.
+{{googleOnlyNote}}
+{{previewApiBaseUrlNote}}
 {{productionDomainNote}}
 
 ## Forbidden

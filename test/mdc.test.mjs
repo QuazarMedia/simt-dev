@@ -194,3 +194,73 @@ test('autonomous-push is matched in every phrasing the estate actually used', ()
     );
   }
 });
+test('an empty substitution drops the whole bullet, not just the token line', () => {
+  // The failure this prevents: a two-line bullet whose first line carries the token
+  // keeps its second line, so the rule reads as a sentence fragment.
+  const rule = {
+    body: '## Requirements\n\n{{apiBaseUrlNote}}\n  to the preview Worker URL.\n- Keep the credential in the keychain.\n',
+    substitutions: [{ key: 'apiBaseUrlNote', default: '- Set `SOCIAL_API_BASE_URL`' }],
+  };
+  const { body, problems } = renderMdc(rule, { apiBaseUrlNote: '' });
+  assert.deepEqual(problems, []);
+  assert.ok(!body.includes('to the preview Worker URL.'), body);
+  assert.ok(body.includes('Keep the credential in the keychain.'), body);
+});
+
+test('two optional clauses on one line lose one with no diagnostic', () => {
+  // Dropping a line removes every token on it, so `{{a}}{{b}}` with `a` empty deletes
+  // `b` as well — and leaves no leftover placeholder for the leftover check to report.
+  // The rule is on the content side: one placeholder per line.
+  const rule = {
+    body: '## Requirements\n\n- Credentials stay in the keychain.\n{{apiBaseUrlNote}}{{domainNote}}\n',
+    substitutions: [
+      { key: 'apiBaseUrlNote', default: '- Set the preview base URL.' },
+      { key: 'domainNote', default: '- Name the production domain binding.' },
+    ],
+  };
+  const both = renderMdc(rule, {});
+  assert.ok(both.body.includes('Set the preview base URL.'));
+  assert.ok(both.body.includes('Name the production domain binding.'));
+
+  // With both on separate lines, dropping one leaves the other intact.
+  const separate = {
+    ...rule,
+    body: '## Requirements\n\n- Credentials stay in the keychain.\n{{apiBaseUrlNote}}\n{{domainNote}}\n',
+  };
+  const { body, problems } = renderMdc(separate, { apiBaseUrlNote: '' });
+  assert.deepEqual(problems, []);
+  assert.ok(!body.includes('Set the preview base URL.'), body);
+  assert.ok(body.includes('Name the production domain binding.'), body);
+});
+
+test('every shipped rule reports a substitutions array, declared or not', async () => {
+  // `substitutions: subs.length > 0 ? subs : substitutions` referenced an undefined
+  // binding. It only fired for a rule WITHOUT the block — which is what a newly authored
+  // rule looks like — so no shipped rule could reach it and no test could catch it.
+  for (const rule of await loadMdcRules()) {
+    assert.ok(Array.isArray(rule.substitutions), rule.file);
+  }
+});
+
+test('an opt-in rule reaches media with only the clauses media can act on', async () => {
+  const { loadMdcRules } = await import('../src/projection/mdc.mjs');
+  const rule = (await loadMdcRules()).find((r) => r.id === 'preview-postflight');
+  const { body, problems } = renderMdc(rule, {
+    previewWorkers: '`simt-social-media-preview`',
+    previewUrlHost: 'simt-social-media-preview.<account>',
+    productionDomains: '`media.simt.social`',
+    // media serves derivatives and calls no API, so it has no base URL to point at.
+    previewApiBaseUrlNote: '',
+    productionDomainNote:
+      '- Production custom domain `media.simt.social` is configured in `wrangler.jsonc` for `main` only.',
+  });
+  assert.deepEqual(problems, []);
+  assert.ok(!body.includes('SOCIAL_API_BASE_URL'), body);
+  assert.ok(body.includes('media.simt.social'), body);
+  assert.ok(body.includes('main` only.'), body);
+  // The sections media had deleted come back, and the credential prohibition keeps
+  // the D1 clause media had dropped.
+  assert.ok(body.includes('## Allowed Without Account'), body);
+  assert.ok(body.includes('D1 migration verification'), body);
+  assert.ok(body.includes('never in source, chat, D1, or'), body);
+});

@@ -149,6 +149,27 @@ async function mdcTargets(root, sha) {
 
   const declared = await readDeclared(root);
 
+  // A manifest key that no shipped rule declares is a typo, or a leftover from a rule
+  // that was renamed. Both read as "configured" in the one file a reviewer opens to
+  // see what a repo has chosen, and neither has any effect — so one is reported rather
+  // than ignored. `__optIn` is the one key with no rule of the same name.
+  const knownKeys = new Set(['__optIn']);
+  for (const rule of rules) for (const sub of rule.substitutions) knownKeys.add(sub.key);
+  for (const ruleId of Object.keys(declared.values)) {
+    if (ruleId === '__optIn') continue;
+    if (!rules.some((r) => r.id === ruleId)) {
+      notes.push(
+        `manifest declares substitutions for "${ruleId}", which no canonical rule matches; ignored`,
+      );
+      continue;
+    }
+    for (const key of Object.keys(declared.values[ruleId] ?? {})) {
+      if (!knownKeys.has(key)) {
+        problems.push(`${ruleId}: manifest declares substitution "${key}", which the rule does not define`);
+      }
+    }
+  }
+
   for (const rule of rules) {
     if (rule.error !== null) {
       problems.push(`${rule.file}: ${rule.error}`);

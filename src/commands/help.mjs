@@ -15,8 +15,12 @@ simt skills show <name>     tier-2 body (respects --max-bytes)
 simt skills why <name>      the signal chain that selected it
 simt skills find <query>    search across capability and keyword
 simt skills install <name>  pin a skill into the repo as a local override
+                           (dry-run unless --yes; a multi-variant skill needs
+                           --variant or --from rather than a guess)
 
-simt rules list|show|why    rules with provenance back to the ADR that settled them
+simt rules list             the rule catalogue (--root marks what applies to a repo)
+simt rules show <id>        one rule body
+simt rules why <id|ADR-NNN> the decision that settled it, and whether it is still in force
 simt hooks install|status   install the shared dispatcher; report what it would run
 simt compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
@@ -33,11 +37,14 @@ const FLAGS = `--json                 structured output
 --root <path>           repository root (default: cwd)
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
---all                   ignore the budget and resolve everything`;
+--all                   ignore the budget and resolve everything
+--variant <id>          which body of a multi-variant skill to use
+--from <repo/path>      install from a declared source by name`;
 
 const PRINCIPLES = `design rules:
   deterministic       same repo + same task = same answer, forever
-  explainable         simt skills why prints the signal chain for any selection
+  explainable         skills why prints the signal chain for any selection;
+                      rules why prints the decision behind any rule
   zero dependencies   a DX tool that needs an install step fails on a fresh machine
   bounded output      one fact per line, fixed field order, explicit TRUNCATED lines`;
 

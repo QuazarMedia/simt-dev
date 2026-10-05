@@ -27,7 +27,18 @@ const BOOL_FLAGS = new Set([
   'accept-conflicts',
 ]);
 
-const VALUE_FLAGS = new Set(['budget', 'max-bytes', 'paths', 'skill', 'task', 'root']);
+const VALUE_FLAGS = new Set([
+  'budget',
+  'max-bytes',
+  'paths',
+  'skill',
+  'task',
+  'root',
+  // skills install: which body of a multi-variant skill, and which source when the
+  // bytes alone do not identify one.
+  'variant',
+  'from',
+]);
 
 /**
  * @param {string[]} argv raw arguments, excluding node and the script path

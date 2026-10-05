@@ -353,8 +353,8 @@ validator is ~150 lines, and dropping `dependencies` is what makes `npx` instant
 | 2 | `graph/skills.graph.json` covering all 38 unique names | `simt graph lint` clean, no orphans | done |
 | 3 | `fingerprint` + detector tests | all 16 repos classify correctly from marker files alone | done |
 | 4 | `skills index` / `find` / `show` | index under 6 KB for the full registry | done (5 663 bytes for 38 skills) |
-| 5 | `skills brief` + `why` | `eval` corpus passes; every selection traceable | done |
-| 6 | Projection engine + `simt check` | drift detected in a deliberately stale repo | done |
+| 5 | `skills brief` + `why` + `install` | `eval` corpus passes; every selection traceable | done (`install` pins a skill into a repo and records its provenance) |
+| 6 | Projection engine + `simt check` + `rules list\|show\|why` | drift detected in a deliberately stale repo | done (`rules why` closes the loop from a rule line back to the ADR that settled it) |
 | 7 | `init` with conflict reporting | dry-run adoption produces a reviewable diff on all 3 pilots | done |
 | 8 | `hooks` dispatcher | one pre-commit works across all 3 pilot stacks | **done** (141 tests; fail-closed, ADR-004 staged-only, ADR-010 no `npx`) |
 | 9 | `compare` | replaces the hand audit | **done** (org matrix: adoption, region, hooks, gates; worktrees attributed not double-counted; exits non-zero only on defects, not on non-adoption) |
@@ -401,6 +401,30 @@ Two findings it produces that a per-repo view cannot:
   hand-edited; one whose SHA differs is simply behind. Both are fixed by `simt sync`, but they
   are different problems, and reporting "projection is X but this simt-dev is X" for a
   hand-edit sends the reader looking for a version problem that does not exist.
+
+`rules list|show|why` and `skills install` completed the command surface without either
+command growing a new mechanism. Four decisions are worth recording:
+
+- **`rules why` runs in both directions.** Given a rule id it prints the decisions that settled
+  it; given `ADR-NNN` it prints the rules that decision restsates. Only the first direction is
+  obviously useful, but the second is the one a reviewer needs: the audit's problem was never
+  "why does this rule exist", it was "which of these thirteen rules is this ADR talking about".
+- **A rule that cites no ADR is reported, not passed over.** `react-web` prints
+  `provenance NONE`. Returning an empty list would look identical to "no decisions involve
+  this", which hides precisely the finding a reviewer needs — prose with no decision behind
+  it is how the 2026-10-05 audit happened in the first place.
+- **A superseded record is a warning, not a failure.** `rules why ADR-011` exits 0 and says the
+  record was retained as evidence for [ADR-012](../decisions/ADR-012-drop-windows-support.md).
+  A retained record is the supersession rule working; making it exit non-zero would pressure
+  a future author into editing the ruling in place, which is the one thing that rule forbids.
+- **`skills install` picks the variant from the repo's own signals and refuses on
+  ambiguity.** It never guesses. That refusal immediately earned its keep: the `api` variants
+  of the five duplicated skills declared `["cloudflare-workers", "hono"]`, and since
+  `simt-social` ships its own `wrangler.jsonc` it *also* emits `cloudflare-workers` — so every
+  variant matched both repos and install refused everywhere. Narrowing them to `["hono"]`, the
+  tag that actually discriminates, fixed a registry defect that no structural lint could see.
+  Lint can check that variants are pairwise disjoint; it cannot check that the tag is
+  *discriminative in practice*.
 
 ## 12. Rulings on the open questions
 

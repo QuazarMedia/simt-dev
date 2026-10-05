@@ -18,6 +18,7 @@ import { EXIT, emit, fail, isJson } from '../output/index.mjs';
 import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { tokenize, rankSkills, closure, resolveAlias, scoreSkill, stackCompatible } from '../resolve/resolve.mjs';
+import { nearMatches } from '../resolve/near.mjs';
 
 const DEFAULT_BUDGET = 20480;
 
@@ -353,9 +354,7 @@ export async function showCommand(args, flags) {
 
   const skill = registry.skills.find((s) => s.name === name);
   if (!skill) {
-    const near = registry.skills
-      .map((s) => s.name)
-      .filter((n) => n.includes(name) || name.includes(n));
+    const near = nearMatches(name, registry.skills.map((s) => s.name));
     return fail(
       `no skill named "${name}"${near.length ? ` (did you mean ${near.join(', ')}?)` : ''}`,
       EXIT.USAGE,
@@ -401,7 +400,14 @@ export async function whyCommand(args, flags) {
   if (!ok) return fail(errors[0], EXIT.REGISTRY);
 
   const skill = registry.skills.find((s) => s.name === name);
-  if (!skill) return fail(`no skill named "${name}"`, EXIT.USAGE, 'run: simt skills find <query>');
+  if (!skill) {
+    const near = nearMatches(name, registry.skills.map((s) => s.name));
+    return fail(
+      `no skill named "${name}"${near.length ? ` (did you mean ${near.join(', ')}?)` : ''}`,
+      EXIT.USAGE,
+      'run: simt skills find <query>',
+    );
+  }
 
   const root = flags.root ?? process.cwd();
   const repo = await fingerprint(root);

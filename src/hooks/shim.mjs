@@ -39,7 +39,7 @@ export function renderShim(event) {
 #
 # Every decision this hook makes is declared in simt-dev.json, so a reviewer reads
 # the gate list in a diff instead of reverse-engineering shell. Reinstall with:
-# simt hooks install
+# simt-dev hooks install
 #
 # This file only locates the dispatcher and hands over. It resolves in order:
 #   1. ${D}SIMT_DEV_BIN    explicit override, for CI images and odd checkouts

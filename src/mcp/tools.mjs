@@ -48,7 +48,7 @@ async function registry(args) {
   const { registry, errors, ok, verified, workspace } = await loadRegistry(REGISTRY_PATH, args ?? {});
   if (!ok) {
     throw Object.assign(new Error(errors[0]), {
-      remedy: 'run: simt graph lint',
+      remedy: 'run: simt-dev graph lint',
     });
   }
   return { registry, verified, workspace };

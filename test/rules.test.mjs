@@ -230,7 +230,7 @@ test('rules why <ADR>: an unknown record exits USAGE', async () => {
 test('rules why: without an argument it fails rather than guessing a rule', async () => {
   const { code, stderr } = await run(['rules', 'why']);
   assert.equal(code, 2);
-  assert.match(stderr, /usage: simt rules why/);
+  assert.match(stderr, /usage: simt-dev rules why/);
 });
 
 // --- the invariant that matters: selection and provenance agree ---------------

@@ -26,11 +26,11 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   const primary = list[0] ?? null;
   const base = { name, path, sha, pinnedSha: manifest?.projection?.simtDevSha ?? null };
 
-  // A repo that never adopted is not behind; it is absent. `simt init` is the command
+  // A repo that never adopted is not behind; it is absent. `simt-dev init` is the command
   // for it, and calling this a failure would make the exit code describe the estate's
   // migration progress rather than this run's correctness.
   if (!manifestExists) {
-    return { ...base, state: 'not-adopted', action: 'skip', detail: 'no simt-dev.json', remedy: 'simt init' };
+    return { ...base, state: 'not-adopted', action: 'skip', detail: 'no simt-dev.json', remedy: 'simt-dev init' };
   }
   if (manifestError) {
     return {
@@ -38,7 +38,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       state: 'broken-manifest',
       action: 'skip',
       detail: `simt-dev.json is unparseable (${manifestError})`,
-      remedy: 'fix the JSON, or run: simt init',
+      remedy: 'fix the JSON, or run: simt-dev init',
     };
   }
   // Only a hand-owned file's malformed region is a fault. A managed `.mdc` rule is a
@@ -54,7 +54,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       state: 'malformed-region',
       action: 'skip',
       detail: `${malformed.file} region is malformed (${malformed.reason})`,
-      remedy: `fix the markers at ${malformed.file}:${malformed.line}, then: simt sync`,
+      remedy: `fix the markers at ${malformed.file}:${malformed.line}, then: simt-dev sync`,
     };
   }
   if (primary === null) {
@@ -63,7 +63,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       state: 'no-region',
       action: 'skip',
       detail: 'no generated file could be planned for this repo',
-      remedy: 'run: simt check',
+      remedy: 'run: simt-dev check',
     };
   }
   // A manifest with no region is a repo mid-adoption or one that lost its region.
@@ -75,7 +75,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       state: 'no-region',
       action: 'skip',
       detail: 'simt-dev.json exists but AGENTS.md has no generated region',
-      remedy: 'run: simt sync',
+      remedy: 'run: simt-dev sync',
     };
   }
 

@@ -6,14 +6,11 @@ applies: always
 
 # Shared rules
 
-Every rule below is settled by an ADR in `docs/decisions/`. Each carries the ADR number so
-`simt rules why` can trace any line back to the decision that produced it, and so a rule is
-never edited without the record changing with it.
+Every rule below carries the number of the decision that settled it. Run
+`simt-dev rules why ADR-NNN` to read that decision, including whether it is still in force.
 
-This file is projected into each repo inside a generated region. It is stack-agnostic on
-purpose: stack-specific bodies live in `rules/stacks/` and are projected alongside it, never
-inlined here. A core file that grows every repo's exception is how a shared rule becomes
-nobody's rule.
+These rules are stack-agnostic. Whatever is specific to your stack, your product or your
+commands belongs in this repository, not here.
 
 ## Truth
 
@@ -71,5 +68,6 @@ nobody's rule.
 
 ## Scope of these rules
 
-Product policy, stack-specific rule bodies, repo commands and paths stay in the repo. This file
-states only what is true in all 16 repos. See `docs/plans/0001-centralise-agent-rules.md` §3.2.
+Product policy, stack-specific rule bodies, repo commands and paths stay in the repo. A rule
+here states only what holds everywhere; the moment one repository needs an exception, it is that
+repository's rule, not a widening of this one.

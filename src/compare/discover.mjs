@@ -1,4 +1,4 @@
-// Find the sibling repositories a `simt compare` should report on.
+// Find the sibling repositories a `simt-dev compare` should report on.
 //
 // Three things here are load-bearing, and each exists because the alternative is
 // a wrong answer rather than a missing one:

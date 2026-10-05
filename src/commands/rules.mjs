@@ -1,4 +1,4 @@
-// `simt rules` - the rule catalogue and its provenance.
+// `simt-dev rules` - the rule catalogue and its provenance.
 //
 // A rule is only meaningful if you can answer "why is this here?". Three
 // commands, mirroring the skill surface deliberately: `list` is the catalogue,
@@ -139,7 +139,7 @@ async function selectionFor(rules, root) {
 
 export async function showCommand(args, flags) {
   const id = args[0];
-  if (!id) return fail('rules show needs a rule id', EXIT.USAGE, 'usage: simt rules show <id>');
+  if (!id) return fail('rules show needs a rule id', EXIT.USAGE, 'usage: simt-dev rules show <id>');
 
   const { rules, broken } = await load(flags.root ?? null);
   const rule = rules.find((r) => r.id === id);
@@ -178,7 +178,7 @@ export async function showCommand(args, flags) {
  */
 export async function whyCommand(args, flags) {
   const what = args[0];
-  if (!what) return fail('rules why needs a rule id or an ADR id', EXIT.USAGE, 'usage: simt rules why <rule-id|ADR-NNN>');
+  if (!what) return fail('rules why needs a rule id or an ADR id', EXIT.USAGE, 'usage: simt-dev rules why <rule-id|ADR-NNN>');
 
   const { rules, broken } = await load(flags.root ?? null);
   const { ok, decisions, errors } = await loadDecisions();
@@ -296,6 +296,6 @@ function unknown(id, rules) {
   return fail(
     `no rule with id "${id}"${near.length > 0 ? ` (did you mean ${near.join(', ')}?)` : ''}`,
     EXIT.USAGE,
-    'run: simt rules list',
+    'run: simt-dev rules list',
   );
 }

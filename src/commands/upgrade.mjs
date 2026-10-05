@@ -1,4 +1,4 @@
-// simt upgrade - move every consumer to this simt-dev, as one reviewable set.
+// simt-dev upgrade - move every consumer to this simt-dev, as one reviewable set.
 //
 // Why this command exists, and why it is shaped the way it is:
 //
@@ -146,7 +146,7 @@ export async function upgradeCommand(positional, flags) {
     note(`wrote    ${applied.length} repo${applied.length === 1 ? '' : 's'}: ${applied.join(', ')}  (${[...writtenFiles].join(', ') || 'nothing'} + ${MANIFEST})`);
     note('next     review the diff, then commit in each repo; simt-dev never commits or pushes (ADR-001)');
   } else if (summary.updated > 0) {
-    note(`dry-run  ${summary.updated} repo${summary.updated === 1 ? '' : 's'} would change; apply with: simt upgrade --yes`);
+    note(`dry-run  ${summary.updated} repo${summary.updated === 1 ? '' : 's'} would change; apply with: simt-dev upgrade --yes`);
   } else if (summary.skipped > 0) {
     note(`note     nothing to write; ${summary.skipped} repo${summary.skipped === 1 ? '' : 's'} skipped (see above)`);
   } else {

@@ -1,33 +1,33 @@
 import { emit } from '../output/index.mjs';
 import { parse } from '../argv.mjs';
 
-const COMMANDS = `simt init [path]            adopt or scaffold a repo into the ecosystem
+const COMMANDS = `simt-dev init [path]            adopt or scaffold a repo into the ecosystem
                            (dry-run unless --yes; conflicts block without
                            --accept-conflicts; never commits or pushes)
-simt doctor                 classify a repo and check config health
-simt check                  the gate: projection drift, manifest validity, policy
-simt sync [--check]         regenerate the projection (idempotent)
-simt upgrade                move every consumer to this simt-dev SHA, as one set
+simt-dev doctor                 classify a repo and check config health
+simt-dev check                  the gate: projection drift, manifest validity, policy
+simt-dev sync [--check]         regenerate the projection (idempotent)
+simt-dev upgrade                move every consumer to this simt-dev SHA, as one set
                            (dry-run unless --yes; moves a pin only - it never
                            adopts or repairs a repo; never commits or pushes)
 
-simt skills index           tier-0 catalog: every skill, one line each
-simt skills brief --task    tier-1 pre-assembled brief  <- the common case
-simt skills show <name>     tier-2 body (respects --max-bytes)
-simt skills why <name>      the signal chain that selected it
-simt skills find <query>    search across capability and keyword
-simt skills install <name>  pin a skill into the repo as a local override
+simt-dev skills index           tier-0 catalog: every skill, one line each
+simt-dev skills brief --task    tier-1 pre-assembled brief  <- the common case
+simt-dev skills show <name>     tier-2 body (respects --max-bytes)
+simt-dev skills why <name>      the signal chain that selected it
+simt-dev skills find <query>    search across capability and keyword
+simt-dev skills install <name>  pin a skill into the repo as a local override
                            (dry-run unless --yes; a multi-variant skill needs
                            --variant or --from rather than a guess)
 
-simt rules list             the rule catalogue (--root marks what applies to a repo)
-simt rules show <id>        one rule body
-simt rules why <id|ADR-NNN> the decision that settled it, and whether it is still in force
-simt hooks install|status   install the shared dispatcher; report what it would run
-simt compare                org-wide matrix across every sibling repo
+simt-dev rules list             the rule catalogue (--root marks what applies to a repo)
+simt-dev rules show <id>        one rule body
+simt-dev rules why <id|ADR-NNN> the decision that settled it, and whether it is still in force
+simt-dev hooks install|status   install the shared dispatcher; report what it would run
+simt-dev compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)
-simt mcp                    the read-only surface as MCP tools over stdio
+simt-dev mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
 
@@ -65,7 +65,7 @@ export async function help(argv) {
   }
   emit(
     [
-      'simt-dev - developer and agent tooling for the SIMT ecosystem',
+      'simt-dev - shared agent rules, skills and gates for a repo ecosystem',
       '',
       'usage: simt-dev <command> [args] [flags]',
       '',

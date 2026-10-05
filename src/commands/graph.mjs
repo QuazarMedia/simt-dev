@@ -1,4 +1,4 @@
-// `simt graph lint` - verify the hand-authored registry against reality.
+// `simt-dev graph lint` - verify the hand-authored registry against reality.
 //
 // Implementation sequence step 2. This command is the reason hand-authoring the
 // registry is safe: 38 nodes across 6 repos is bookkeeping that rots silently.

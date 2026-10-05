@@ -1,5 +1,5 @@
-// simt sync — write the generated regions.
-// simt check — the gate.
+// simt-dev sync — write the generated regions.
+// simt-dev check — the gate.
 //
 // They share plan/project.mjs so they can never disagree about what the regions
 // should contain. sync decides whether to act; check decides severity and exit
@@ -64,7 +64,7 @@ export async function syncCommand(positional, flags) {
     return fail(
       `${broken.length} file(s) have a malformed generated region (${first.file}: ${first.reason})`,
       EXIT.FAIL,
-      `fix the markers at ${first.file}:${first.line}, then: simt sync`,
+      `fix the markers at ${first.file}:${first.line}, then: simt-dev sync`,
     );
   }
 

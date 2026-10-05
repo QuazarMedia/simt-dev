@@ -1,4 +1,4 @@
-// simt hooks install | status | run
+// simt-dev hooks install | status | run
 //
 // Three commands with one shared body. `install` writes the shims and points
 // core.hooksPath at them; `status` reports what is installed and what would
@@ -29,7 +29,7 @@ export async function hooksCommand(sub, args, flags) {
   if (sub === 'install') return installHooks(root, flags);
   if (sub === 'status') return hooksStatus(root, flags);
   if (sub === 'run') return runHook(args, flags);
-  return fail(`unknown hooks subcommand ${sub}`, EXIT.USAGE, 'run: simt hooks status');
+  return fail(`unknown hooks subcommand ${sub}`, EXIT.USAGE, 'run: simt-dev hooks status');
 }
 
 /** The shim execs this; the event name is baked into the shim, so it is arg 0. */
@@ -42,7 +42,7 @@ async function runHook(args, flags) {
   const { manifest, exists, error } = await readManifest(root);
   if (error) return fail(`${MANIFEST}: ${error}`, EXIT.CONFIG);
   if (!exists) {
-    return fail(`${root} has no ${MANIFEST}; the hook cannot know its gate list`, EXIT.CONFIG, `run: simt init --root ${root}`);
+    return fail(`${root} has no ${MANIFEST}; the hook cannot know its gate list`, EXIT.CONFIG, `run: simt-dev init --root ${root}`);
   }
 
   const result = await runGates(event, { root, manifest });
@@ -73,7 +73,7 @@ async function installHooks(root, flags) {
   const { manifest, exists, error } = await readManifest(root);
   if (error) return fail(`${MANIFEST}: ${error}`, EXIT.CONFIG);
   if (!exists) {
-    return fail(`${root} has no ${MANIFEST}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: simt init --root ${root}`);
+    return fail(`${root} has no ${MANIFEST}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: simt-dev init --root ${root}`);
   }
 
   const current = await readHooksPath(root);
@@ -199,7 +199,7 @@ async function hooksStatus(root, flags) {
   const lines = [
     `repo     ${root}`,
     `hooks    ${current ?? '(unset)'}  ${current === HOOKS_DIR ? '(simt-dev)' : current === null ? '(none)' : '(another routing)'}`,
-    `manifest ${exists ? `${MANIFEST} present` : `${MANIFEST} MISSING - run: simt init`}`,
+    `manifest ${exists ? `${MANIFEST} present` : `${MANIFEST} MISSING - run: simt-dev init`}`,
     '',
   ];
   for (const i of installed) {

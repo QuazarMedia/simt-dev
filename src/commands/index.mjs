@@ -3,7 +3,7 @@
 // Every command named in docs/plans/0002-simt-dev-cli.md section 5 is registered
 // here from day one. A command that is declared but not yet implemented exits
 // UNSUPPORTED with a pointer to its implementation step; it never silently
-// succeeds. An agent that calls `simt compare` on an unreleased build must get a
+// succeeds. An agent that calls `simt-dev compare` on an unreleased build must get a
 // failure, not an empty result it will read as "no drift".
 
 import { EXIT, emit, fail, isJson } from '../output/index.mjs';
@@ -102,7 +102,7 @@ export async function dispatch(argv) {
 /**
  * Normalise argv into a registry key, or null when unrecognised.
  * A group with an omitted subcommand resolves to that group's default, so
- * `simt skills` is `simt skills index`.
+ * `simt-dev skills` is `simt-dev skills index`.
  */
 function commandPath(first, second) {
   if (first === undefined) return null;
@@ -111,7 +111,7 @@ function commandPath(first, second) {
   const group = GROUPS.get(first);
   if (second === undefined) return `${first} ${group}`;
   // Reject a second token that is not a subcommand of this group, rather than
-  // silently routing `simt skills nonsense` to the default subcommand.
+  // silently routing `simt-dev skills nonsense` to the default subcommand.
   const key = `${first} ${second}`;
   if (!STEPS.has(key) && !KNOWN_SUBS.has(key)) {
     return null;

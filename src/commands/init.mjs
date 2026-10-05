@@ -1,4 +1,4 @@
-// simt init - adopt a repo into the ecosystem, or scaffold a new one.
+// simt-dev init - adopt a repo into the ecosystem, or scaffold a new one.
 //
 // The governing idea: init never destroys hand-written work. It writes a manifest
 // and a generated region, reports every conflict it found BEFORE writing anything,
@@ -37,7 +37,7 @@ export async function initCommand(positional, flags) {
 
   const detected = await fingerprint(root);
   if (detected.error) {
-    return fail(`${root}: ${detected.error}`, EXIT.CONFIG, 'run: simt init <path>');
+    return fail(`${root}: ${detected.error}`, EXIT.CONFIG, 'run: simt-dev init <path>');
   }
 
   const sha = await headSha();
@@ -128,7 +128,7 @@ export async function initCommand(positional, flags) {
     return fail(
       `${root} contradicts ${summary.byAdr.join(', ')}`,
       EXIT.FAIL,
-      'edit the quoted lines, then rerun: simt init --yes | or accept: simt init --accept-conflicts --yes',
+      'edit the quoted lines, then rerun: simt-dev init --yes | or accept: simt-dev init --accept-conflicts --yes',
     );
   }
 
@@ -144,7 +144,7 @@ export async function initCommand(positional, flags) {
     return fail(
       `${malformed.length} target(s) have a malformed generated region (${malformed[0].file}: ${malformed[0].reason})`,
       EXIT.FAIL,
-      `fix the markers at ${malformed[0].file}:${malformed[0].line}, then rerun: simt init --yes`,
+      `fix the markers at ${malformed[0].file}:${malformed[0].line}, then rerun: simt-dev init --yes`,
     );
   }
 
@@ -159,7 +159,7 @@ export async function initCommand(positional, flags) {
     note(
       dryRun
         ? 'dry-run  nothing written'
-        : `dry-run  nothing written; apply with: simt init --yes${adoption ? ' (add --accept-conflicts to proceed despite conflicts)' : ''}`,
+        : `dry-run  nothing written; apply with: simt-dev init --yes${adoption ? ' (add --accept-conflicts to proceed despite conflicts)' : ''}`,
     );
     return EXIT.OK;
   }
@@ -185,7 +185,7 @@ export async function initCommand(positional, flags) {
       return fail(
         `${target.file}: ${target.reason}`,
         EXIT.FAIL,
-        `fix the markers at ${target.file}:${target.line}, then rerun: simt init --yes`,
+        `fix the markers at ${target.file}:${target.line}, then rerun: simt-dev init --yes`,
       );
     }
     // A `.mdc` target lives in `.cursor/rules/`, which a repo that had no Cursor
@@ -200,7 +200,7 @@ export async function initCommand(positional, flags) {
   if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
 
   note('');
-  note('next     simt sync, then simt check in CI. Commit when you are happy with the diff.');
+  note('next     simt-dev sync, then simt-dev check in CI. Commit when you are happy with the diff.');
   return EXIT.OK;
 }
 

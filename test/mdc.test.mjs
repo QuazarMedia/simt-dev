@@ -138,7 +138,7 @@ test('the rules are pure content: no absolute path or repo name leaks in', async
 // --- the conflict scanner must be able to REACH .mdc files ---------------------
 //
 // The estate's three always-on .mdc families were its worst-drifted content, and
-// `simt init` reported `CONFLICTS none detected` on the repo holding them, because
+// `simt-dev init` reported `CONFLICTS none detected` on the repo holding them, because
 // RULE_FILES named only AGENTS.md/CLAUDE.md/CONTRIBUTING.md. A detector that only
 // looks at the filenames it was written for misses a whole rule surface added later.
 
@@ -263,4 +263,52 @@ test('an opt-in rule reaches media with only the clauses media can act on', asyn
   assert.ok(body.includes('## Allowed Without Account'), body);
   assert.ok(body.includes('D1 migration verification'), body);
   assert.ok(body.includes('never in source, chat, D1, or'), body);
+});
+
+// --- A projected rule must be readable by someone who only has this repository ---
+//
+// The drift that produced this suite was found by asking whether the projected text
+// makes sense to a reader who cannot see simt-dev's own tree. Three classes of leak
+// were real and are now regression-tested:
+//
+//   1. instructions addressed to whoever owns the rules upstream ("edit the source in
+//      simt-dev") - a consumer of the published package has no such tree, and the
+//      region it lands in tells its reader not to edit it;
+//   2. paths that resolve inside simt-dev but not in the repo the rule is projected
+//      into - the same failure class ADR-015 fixed for skill sources;
+//   3. the name of another repository in the estate, which is meaningless outside it.
+//
+// These run against the *rendered* output, not the source, because that is what a
+// consumer reads.
+
+test('a projected rule names no path that only resolves inside simt-dev', async () => {
+  for (const rule of await loadMdcRules()) {
+    const { body } = renderMdc(rule, {});
+    // Paths that mean "inside the tool" rather than "inside your repo".
+    //
+    // `docs/plans/` is deliberately NOT on this list: it is a substitution default
+    // for where a repo keeps its own plans, and it resolves correctly relative to
+    // the reader. The distinction is who owns the path, not whether it looks like one.
+    for (const leaked of ['docs/decisions/', 'rules/stacks/', 'rules/core.md', 'rules/mdc/']) {
+      assert.ok(!body.includes(leaked), `${rule.id} projects a tool-internal path: ${leaked}\n${body}`);
+    }
+  }
+});
+
+test('a projected rule names no other repository in the estate', async () => {
+  for (const rule of await loadMdcRules()) {
+    const { body } = renderMdc(rule, {});
+    assert.ok(!/\bsimt-(?!dev\b)/.test(body), `${rule.id} names a specific repo:\n${body}`);
+  }
+});
+
+test('the provenance header gives the reader the two actions that exist', async () => {
+  const text = inject('', 'Body.', { sha: 'abc1234' }).text;
+  // What a reader can actually do.
+  assert.match(text, /simt-dev sync/, text);
+  assert.match(text, /Do not edit/i, text);
+  // What a reader cannot do. This phrasing was correct for the rules' maintainer and
+  // wrong for everyone else, which is why it is now asserted absent.
+  assert.ok(!/edit the source/i.test(text), text);
+  assert.ok(!/edits here are overwritten/i.test(text), text);
 });

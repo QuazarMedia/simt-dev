@@ -493,7 +493,7 @@ export async function checkTargets(root) {
       findings.push({
         file: rule.target,
         status: 'absent',
-        detail: 'no canonical .mdc rule here; run: simt sync',
+        detail: 'no canonical .mdc rule here; run: simt-dev sync',
       });
       continue;
     }
@@ -511,7 +511,7 @@ export async function checkTargets(root) {
       findings.push({
         file: rule.target,
         status: 'unmanaged',
-        detail: 'no generated region; run: simt sync',
+        detail: 'no generated region; run: simt-dev sync',
       });
       continue;
     }
@@ -536,7 +536,7 @@ export async function checkTargets(root) {
     findings.push({
       file: rule.target,
       status: d.action === 'unchanged' ? 'current' : 'drift',
-      detail: d.action === 'unchanged' ? undefined : `region is ${d.action}; run: simt sync`,
+      detail: d.action === 'unchanged' ? undefined : `region is ${d.action}; run: simt-dev sync`,
       recordedSha: state.sha ?? null,
     });
   }
@@ -560,7 +560,7 @@ async function checkPrimary(root) {
   try {
     existing = await readFile(path, 'utf8');
   } catch {
-    return { file: PRIMARY_TARGET, status: 'absent', detail: 'no AGENTS.md; run: simt sync' };
+    return { file: PRIMARY_TARGET, status: 'absent', detail: 'no AGENTS.md; run: simt-dev sync' };
   }
   const state = parse(existing);
   if (state.status === 'malformed') {
@@ -572,13 +572,13 @@ async function checkPrimary(root) {
     };
   }
   if (state.status === 'absent') {
-    return { file: PRIMARY_TARGET, status: 'unmanaged', detail: 'no generated region; run: simt sync' };
+    return { file: PRIMARY_TARGET, status: 'unmanaged', detail: 'no generated region; run: simt-dev sync' };
   }
   const d = diff(existing, body, meta);
   return {
     file: PRIMARY_TARGET,
     status: d.action === 'unchanged' ? 'current' : 'drift',
-    detail: d.action === 'unchanged' ? undefined : `region is ${d.action}; run: simt sync`,
+    detail: d.action === 'unchanged' ? undefined : `region is ${d.action}; run: simt-dev sync`,
     recordedSha: state.sha ?? null,
     expectedSha: meta.sha,
   };

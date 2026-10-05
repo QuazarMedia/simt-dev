@@ -1,4 +1,4 @@
-// `simt skills` - tier 0 (index), tier 1 (brief), tier 2 (show), plus find/why.
+// `simt-dev skills` - tier 0 (index), tier 1 (brief), tier 2 (show), plus find/why.
 //
 // Implementation sequence steps 4 and 5.
 //
@@ -125,7 +125,7 @@ export async function indexCommand(args, flags) {
       'name                          bytes    stack                  summary',
       ...rows,
       '',
-      'deferred entries return a pointer, not a body. Fetch one with: simt skills show <name>',
+      'deferred entries return a pointer, not a body. Fetch one with: simt-dev skills show <name>',
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );
@@ -178,7 +178,7 @@ async function emitAll(registry, repoStack, flags) {
 
 export async function findCommand(args, flags) {
   const query = args.join(' ').trim();
-  if (!query) return fail('find needs a query', EXIT.USAGE, 'usage: simt skills find <query>');
+  if (!query) return fail('find needs a query', EXIT.USAGE, 'usage: simt-dev skills find <query>');
 
   const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
   if (!ok) return fail(errors[0], EXIT.REGISTRY);
@@ -196,7 +196,7 @@ export async function findCommand(args, flags) {
   }
 
   if (results.length === 0) {
-    emit([`no skill matches "${query}"`, '', 'run: simt skills index  (the full catalogue)'].join('\n'));
+    emit([`no skill matches "${query}"`, '', 'run: simt-dev skills index  (the full catalogue)'].join('\n'));
     return EXIT.OK;
   }
 
@@ -320,7 +320,7 @@ export async function briefCommand(args, flags) {
   if (flags.plan) {
     lines.push('', 'PLAN (fetch each body only when a step needs it)');
     for (const entry of picked) {
-      lines.push(`  simt skills show ${entry.skill.name}`);
+      lines.push(`  simt-dev skills show ${entry.skill.name}`);
     }
   } else {
     lines.push('', 'BODIES');
@@ -344,7 +344,7 @@ export async function briefCommand(args, flags) {
     for (const { skill, reason } of notSelected) {
       lines.push(`  ${skill.name.padEnd(26)} ${reason}`);
     }
-    lines.push('', '  notes: simt skills why <name> | simt skills show <name>');
+    lines.push('', '  notes: simt-dev skills why <name> | simt-dev skills show <name>');
   }
 
   lines.push('', 'OVERRIDE  --skill <name> | --budget <bytes> | --all | --paths <globs>');
@@ -356,7 +356,7 @@ export async function briefCommand(args, flags) {
 
 export async function showCommand(args, flags) {
   const name = args[0];
-  if (!name) return fail('show needs a skill name', EXIT.USAGE, 'usage: simt skills show <name>');
+  if (!name) return fail('show needs a skill name', EXIT.USAGE, 'usage: simt-dev skills show <name>');
 
   const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
   if (!ok) return fail(errors[0], EXIT.REGISTRY);
@@ -367,7 +367,7 @@ export async function showCommand(args, flags) {
     return fail(
       `no skill named "${name}"${near.length ? ` (did you mean ${near.join(', ')}?)` : ''}`,
       EXIT.USAGE,
-      'run: simt skills find <query>',
+      'run: simt-dev skills find <query>',
     );
   }
 
@@ -414,7 +414,7 @@ export async function showCommand(args, flags) {
 
 export async function whyCommand(args, flags) {
   const name = args[0];
-  if (!name) return fail('why needs a skill name', EXIT.USAGE, 'usage: simt skills why <name>');
+  if (!name) return fail('why needs a skill name', EXIT.USAGE, 'usage: simt-dev skills why <name>');
 
   const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
   if (!ok) return fail(errors[0], EXIT.REGISTRY);
@@ -425,7 +425,7 @@ export async function whyCommand(args, flags) {
     return fail(
       `no skill named "${name}"${near.length ? ` (did you mean ${near.join(', ')}?)` : ''}`,
       EXIT.USAGE,
-      'run: simt skills find <query>',
+      'run: simt-dev skills find <query>',
     );
   }
 

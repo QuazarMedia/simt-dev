@@ -27,7 +27,11 @@ const REMEDY = {
  * code is impossible to forget.
  */
 export function fail(message, code = EXIT.FAIL, remedy) {
-  const resolved = remedy ?? REMEDY[code] ?? 'see: docs/decisions/README.md';
+  // The fallback must be a command, never a path. `docs/decisions/` was the old
+  // default and it was only ever resolvable from inside simt-dev's own checkout;
+  // a reader in a consumer repo got a remedy naming a file that does not exist
+  // where they are. Every remedy here is something the reader can run.
+  const resolved = remedy ?? REMEDY[code] ?? 'run: simt-dev --help';
   process.stderr.write(`ERROR ${code} ${message}\nREMEDY ${resolved}\n`);
   return code;
 }

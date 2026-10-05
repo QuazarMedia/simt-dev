@@ -25,11 +25,14 @@ Apply documented defaults without questions for:
   tracker table (`{{plansGlob}}`).
 - Standard engineering conventions.
 
-## When To Ask (1-3 Questions Max)
+## When To Ask (1-5 Questions Max)
 
 Ask only when a functionality, business, privacy, security, or technical decision is not
 settled in authority docs, and the answer materially changes behavior, scope, contracts,
 migrations, or risk.
+
+Five is a ceiling, not a quota. Ask fewer when fewer decisions are genuinely open; never pad
+the list to reach it, and never split one decision into several questions to fit under it.
 
 - Use the interactive `AskQuestion` tool with the recommended default first.
 - If unavailable, present numbered choices with `(recommended)` on the first option.

@@ -326,7 +326,10 @@ export const TOOLS = [
           id: d.id,
           title: d.title,
           status: d.status,
-          record: `docs/decisions/${d.file}`,
+          // The record travels inside the installed package. A relative path would resolve
+          // against the consuming repo and name a file that is not there, which is
+          // worse than giving no path at all.
+          readWith: `simt-dev rules why ${d.id}`,
           supersededBy: d.supersededBy,
           supersedes: d.supersedes,
           rules: rules.filter((r) => citations(r.body).includes(id)).map((r) => r.id),

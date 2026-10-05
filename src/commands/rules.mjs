@@ -233,7 +233,7 @@ async function ruleDirection(id, rules, decisions, flags, broken) {
   for (const adr of cited) {
     const d = index.get(adr);
     if (!d) {
-      lines.push(`  ${adr}  MISSING - cited by the rule but no record exists in docs/decisions/`);
+      lines.push(`  ${adr}  MISSING - the rule cites it, but this installation has no record of it`);
       continue;
     }
     lines.push(`  ${d.id}  ${d.title}`);
@@ -258,7 +258,10 @@ async function ruleDirection(id, rules, decisions, flags, broken) {
 async function adrDirection(adr, rules, decisions, flags) {
   const d = decisions.find((x) => x.id === adr);
   if (!d) {
-    return fail(`no decision record ${adr}`, EXIT.USAGE, 'list them with: ls docs/decisions/');
+    // Was 'list them with: ls docs/decisions/' - a path relative to simt-dev's own
+    // tree, which resolves to nothing in the repo the reader is standing in. The
+    // remedy must be a command they can run.
+    return fail(`no decision record ${adr}`, EXIT.USAGE, 'list the known decisions with: simt-dev rules list');
   }
 
   const restates = rules.filter((r) => citations(r.body).includes(d.id));
@@ -279,7 +282,10 @@ async function adrDirection(adr, rules, decisions, flags) {
     `${d.id} - ${d.title}`,
     '',
     `status    ${d.status}`,
-    `record    docs/decisions/${d.file}`,
+    // No path here. The record travels inside the installed package, so a relative
+    // path would resolve against the reader's repo and name nothing. The id is the
+    // stable handle: `simt-dev rules why ADR-NNN` prints the whole record anywhere.
+    `read it with  simt-dev rules why ${d.id}`,
     `restates  ${restates.length > 0 ? restates.map((r) => r.id).join(', ') : '(no rule cites it)'}`,
   ];
   if (d.supersededBy) lines.push('', `SUPERSEDED by ${d.supersededBy} - this record is retained as evidence, not as policy.`);

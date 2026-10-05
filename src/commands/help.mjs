@@ -77,8 +77,10 @@ export async function help(argv) {
       '',
       PRINCIPLES,
       '',
-      'plans    docs/plans/0002-simt-dev-cli.md',
-      'rulings  docs/decisions/README.md',
+      // The plans ship inside the installed package but have no command that surfaces
+      // them, so naming the path would again be advice the reader cannot take. They
+      // are an implementation record; the rulings are the part a reader can act on.
+      'rulings  simt-dev rules list   the decisions behind the rules you just read',
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );

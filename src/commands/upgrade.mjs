@@ -28,7 +28,7 @@ import { basename, dirname, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
 import { headSha, plan } from '../projection/project.mjs';
-import { MANIFEST, readManifest, writeManifest } from '../projection/manifest.mjs';
+import { MANIFEST, MANIFEST_COMMENT, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { FAULT_STATES, planUpgrade, summariseUpgrade } from '../upgrade/plan.mjs';
 import { discover } from '../compare/discover.mjs';
 import { resolveWorkspace, targetRoot, WORKSPACE_REMEDY } from '../workspace.mjs';
@@ -101,9 +101,16 @@ export async function upgradeCommand(positional, flags) {
           writtenFiles.add(t.file);
         }
         const { manifest } = await readManifest(p.path);
+        // Preserve what the repo chose; refresh what simt-dev generates. $comment is
+        // ours - it describes this file's provenance - so carrying the previous copy
+        // forward left a stale, and in one version a false, description in place
+        // forever, because `sync` does not own the manifest and nothing else rewrites
+        // it. An adopted repo would never have corrected it.
+        const { $comment, ...chosen } = manifest ?? {};
         await writeManifest(p.path, {
-          ...manifest,
-          projection: { ...(manifest.projection ?? {}), simtDevSha: sha },
+          ...MANIFEST_COMMENT,
+          ...chosen,
+          projection: { ...(manifest?.projection ?? {}), simtDevSha: sha },
         });
         applied.push(p.name);
       } catch (error) {

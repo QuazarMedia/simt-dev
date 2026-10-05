@@ -21,6 +21,22 @@ import { basename, join, resolve } from 'node:path';
 export const MANIFEST = 'simt-dev.json';
 
 /**
+ * The one definition of the file's own comment, exported because `upgrade` rewrites
+ * the manifest and must not carry a stale copy forward. Two literals for one string
+ * is how the old one survived every upgrade.
+ *
+ * Every value here is read by someone who cannot see simt-dev's own tree, so this
+ * names only things true in the repo it lands in. An earlier version pointed at
+ * docs/decisions/ and claimed each value cites the ADR that requires it; no value
+ * cited one, so it was decoration that misdescribed the file. The provenance that IS
+ * real is the recorded SHA under `projection`.
+ */
+export const MANIFEST_COMMENT = {
+  $comment:
+    'Written and maintained by simt-dev. Edit by hand only if you intend to take ownership of this file: `simt-dev sync` regenerates the projected rules, and re-running `simt-dev init` refreshes the SHA without weakening a value you set here.',
+};
+
+/**
  * Gate names the shared dispatcher knows how to run (step 8). Choosing these from
  * the detected stack rather than asking a human keeps `init` non-interactive.
  */
@@ -62,13 +78,7 @@ export function buildManifest({ root, stack = [], sha, existing = null }) {
   const gatesFinal = existing?.gates ? { ...gates, ...existing.gates } : gates;
 
   return {
-    // Every value here is read by a person who cannot see simt-dev's own tree, so
-    // this comment names only things that are true in the repo it lands in. An
-    // earlier version pointed at docs/decisions/ and claimed each value cites the ADR
-    // that requires it; no value cited one, so it was decoration that misdescribed
-    // the file. The provenance that IS real is the recorded SHA in `projection`.
-    $comment:
-      'Written and maintained by simt-dev. Edit by hand only if you intend to take ownership of this file: `simt-dev sync` regenerates the projected rules, and re-running `simt-dev init` refreshes the SHA without weakening a value you set here.',
+    ...MANIFEST_COMMENT,
     id: existing?.id ?? defaultId(root),
     stack: existing?.stack?.length ? existing.stack : stack,
     limits: limitsFinal,

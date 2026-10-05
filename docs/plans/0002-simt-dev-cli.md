@@ -360,6 +360,7 @@ validator is ~150 lines, and dropping `dependencies` is what makes `npx` instant
 | 9 | `compare` | replaces the hand audit | **done** (org matrix: adoption, region, hooks, gates; worktrees attributed not double-counted; exits non-zero only on defects, not on non-adoption) |
 | 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA | next | pending |
 | 11 | Genericity: emitted facts + repo-local profiles | a repo can adopt an unknown ecosystem with no engine change | **done** (ADR-013; 20 facts, `KNOWN_TAGS` one vocabulary, local profiles, `container` profile on `has-dockerfile`) |
+| 12 | Workspace as configuration; single repo is first class | a published install works with no workspace, and one repo is a supported shape | **done** (ADR-014; `--workspace` / env / config file / verified heuristic, `off` sentinel, degraded mode, 32 consumer-shaped tests) |
 
 Steps 1-5 are useful with zero content migration and land first, because they deliver the
 token win (tier 0/1/2 discovery) before any repo has changed. Step 6 then proved the
@@ -562,3 +563,64 @@ trust not to get it wrong. **First-time profile authoring** is the judgement par
 which four rules matter for an ecosystem nobody has written a profile for yet. It stays
 bounded because the agent writes *one profile file*, not the engine. That is the whole
 extensibility story, and it is why no code contribution is required to support a new stack.
+
+## 15. Where the workspace comes from, and why a single repo is a supported shape
+
+ADR-013 made the *vocabulary* generic. It did not touch the filesystem, and the filesystem was
+where the tool was still quietly SIMT-shaped: `WORKSPACE_ROOT` was `resolve(HERE, '..', '..',
+'..')` — three levels up from a source file. That is `/code/simt` in the checkout and
+`node_modules/@quazarmedia` in an installed package. Every `skills` command and `graph lint`
+failed outside the checkout with 38 `ENOENT`s and a remedy (`run: simt graph lint`) that named
+a workspace the reader did not have.
+
+Ruling: [ADR-014](../decisions/ADR-014-workspace-is-configuration.md).
+
+### 15.1 Four sources, one answer, and the answer is always printed
+
+| Precedence | Source | Form |
+|---:|---|---|
+| 1 | `--workspace <path>` | explicit, per invocation |
+| 2 | `SIMT_DEV_WORKSPACE` | explicit, per shell or CI job |
+| 3 | user config file | persistent, per machine |
+| 4 | sibling heuristic | **last, and only if it verifies** |
+
+The config file is read in the OS-appropriate place, first existing candidate winning:
+`$XDG_CONFIG_HOME/simt-dev/config.json`, then `$HOME/.config/simt-dev/config.json`, then
+`~/Library/Application Support/simt-dev/config.json` on macOS, then `%APPDATA%/…` on Windows.
+
+The heuristic is the parent of the installed package, accepted **only if it actually looks
+like a workspace** — a child directory with a `.git` in it. Without that check the heuristic
+would "succeed" in `node_modules` and produce a confidently wrong answer, which is worse than
+no answer.
+
+Every command that consults the workspace prints which source answered (`workspace /code/simt
+(heuristic: sibling of this package)`). An invisible configuration is a configuration nobody
+can debug, and the first version of this bug was invisible in exactly that way.
+
+Any source may **decline** with `off` (also `none`, `no`, `0`, `-`). That exists mostly for
+tests: without a way to decline the heuristic, no test running from the checkout could reach
+the unconfigured path, and the degraded mode would have shipped untested.
+
+### 15.2 Absent, wrong and moved are three different facts
+
+All three produce a warning rather than an error, because none of them is a defect in the tool
+— but they need different remedies, so they are not collapsed into one message.
+
+| Fact | Message names | Exit |
+|---|---|---|
+| absent | how to set one, per source, with the config path for this OS | 0 |
+| set but missing | the path **and** which source named it | 0 |
+| set but wrong | the path **and** the repos the registry expects in it | 0 |
+
+A workspace that exists but holds none of the repositories the registry names is the case that
+matters most: it is what a moved or renamed checkout looks like, and reporting it as "missing"
+sends the reader to the wrong place.
+
+### 15.3 The honest boundary
+
+`upgrade` needs to find every repo that consumes this simt-dev, and there is still **no consumer
+registry** — the only knowledge of siblings is a one-level-deep scan of the workspace, which
+does not exist at all in an npm install. The `compare` row that says `manifest pins simt-dev X,
+this is Y; run: simt upgrade` therefore names a command that will land on step 10. That step
+has to decide where the consumer set comes from — a workspace root recorded in `simt-dev.json`
+is the honest answer for the SIMT estate, and `--root` is the honest answer for everyone else.

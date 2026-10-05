@@ -22,8 +22,7 @@
 
 import { cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 
 import { EXIT, emit, fail, isJson, note } from '../output/index.mjs';
 import { loadRegistry, REGISTRY_PATH, measureSkill } from '../graph/load.mjs';
@@ -31,13 +30,7 @@ import { fingerprint } from '../resolve/fingerprint.mjs';
 import { MANIFEST, buildManifest, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { headSha } from '../projection/project.mjs';
 import { nearMatches } from '../resolve/near.mjs';
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-
-/** Repos are siblings of simt-dev, so a declared `repo/path` resolves one level up. */
-function workspaceRoot() {
-  return resolve(HERE, '..', '..', '..');
-}
+import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 
 /**
  * Where skills live in this repo. The estate already has a convention - a
@@ -62,7 +55,7 @@ export async function installCommand(args, flags) {
     );
   }
 
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH);
+  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
   if (!ok) return fail(errors[0], EXIT.REGISTRY);
 
   const skill = registry.skills.find((s) => s.name === name);
@@ -80,7 +73,21 @@ export async function installCommand(args, flags) {
   const pick = chooseSource(skill, repo.signals, flags);
   if (pick.error) return fail(pick.error, EXIT.USAGE, pick.remedy);
 
-  const src = join(workspaceRoot(), pick.source.repo, pick.source.path);
+  // Installing a body you cannot read is not a degraded mode, it is a failed
+  // install, so this one genuinely refuses rather than degrading. The difference
+  // from `skills show` is the point: `show` can still be useful without a
+  // workspace (it prints metadata), `install` cannot.
+  const ws = await resolveWorkspace(flags);
+  if (ws.error) return fail(`workspace config: ${ws.error}`, EXIT.CONFIG, WORKSPACE_REMEDY);
+  if (!ws.root) {
+    return fail(
+      `no workspace, so ${name} has no body to install from`,
+      EXIT.CONFIG,
+      WORKSPACE_REMEDY,
+    );
+  }
+
+  const src = join(ws.root, pick.source.repo, pick.source.path);
   let measured;
   try {
     measured = await measureSkill(src);
@@ -130,6 +137,7 @@ export async function installCommand(args, flags) {
     [
       `install ${name}${pick.variant ? ` (variant ${pick.variant})` : ''}`,
       `repo     ${root.split('/').pop()} (${repo.stack.join(', ') || 'undetected'})`,
+      `workspace ${ws.root} (${ws.source}: ${ws.detail})`,
       `source   ${record.from}${pick.reason ? ` - ${pick.reason}` : ''}`,
       `dest     ${payload.dest}`,
       `size     ${measured.bytes} bytes in ${measured.files} file${measured.files === 1 ? '' : 's'}`,

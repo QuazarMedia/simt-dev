@@ -26,24 +26,31 @@ import { headSha } from '../projection/project.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { buildRow, summarise } from '../compare/row.mjs';
 import { discover } from '../compare/discover.mjs';
+import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 
 /** Gate kinds, so a row can tell a command gate with no command from a script gate. */
 const GATE_KINDS = new Map(Object.entries(GATES).map(([name, g]) => [name, g.kind]));
 
 export async function compareCommand(positional, flags) {
-  // The workspace is the PARENT of simt-dev by default, not simt-dev itself: the
-  // siblings are the consumers. `--root` overrides it, and a user who names a repo
-  // gets that repo's siblings compared, which is the intuitive reading.
-  const root = resolve(flags.root ?? positional[0] ?? '..');
+  // The estate root. `--root` is explicit and wins; otherwise it is the resolved
+  // workspace, which may be none (ADR-014: a single repo is a first-class case, and
+  // "no workspace" is a fact to report rather than a failure).
+  //
+  // A path that IS a repository is compared as itself, not scanned for children:
+  // naming one repo almost certainly meant that repo. Discovery decides which,
+  // rather than this command guessing.
+  const explicit = flags.root ?? positional[0];
+  const ws = explicit ? { root: null, source: 'flag', detail: '--root' } : await resolveWorkspace(flags);
+  const root = resolve(explicit ?? ws.root ?? process.cwd());
   const found = await discover(root);
   if (found.error) {
-    return fail(`${root}: ${found.error}`, EXIT.CONFIG, 'pass --root <workspace>');
+    return fail(`${root}: ${found.error}`, EXIT.CONFIG, 'pass --root <path>');
   }
   if (found.repos.length === 0) {
     return fail(
       `${root} contains no git repositories`,
       EXIT.CONFIG,
-      'point --root at the directory holding the repos',
+      `point --root at the directory holding the repos, or at one repo to see just it`,
     );
   }
 
@@ -58,7 +65,9 @@ export async function compareCommand(positional, flags) {
   for (const repo of found.repos) rows.push(await buildRow(repo, context));
 
   const summary = summarise(rows, {
-    workspace: root,
+    root,
+    shape: found.shape,
+    source: ws.source,
     expectedSha,
     worktrees: found.worktrees.length,
     directories: found.directories.length,
@@ -68,7 +77,23 @@ export async function compareCommand(positional, flags) {
     emitJson({
       ok: !rows.some((r) => r.problems.length > 0),
       command: 'compare',
-      summary,
+      root: summary.root,
+      shape: summary.shape,
+      source: summary.source,
+      expectedSha: summary.expectedSha,
+      summary: {
+        repos: summary.repos,
+        adopted: summary.adopted,
+        unmanaged: summary.unmanaged,
+        broken: summary.broken,
+        drifted: summary.drifted,
+        current: summary.current,
+        noRegion: summary.noRegion,
+        malformed: summary.malformed,
+        hooksRouted: summary.hooksRouted,
+        withProblems: summary.withProblems,
+        shas: summary.shas,
+      },
       rows,
       worktrees: found.worktrees.map((w) => ({
         name: w.name,
@@ -82,6 +107,11 @@ export async function compareCommand(positional, flags) {
   }
 
   emit(render(rows, summary, found), { maxBytes: flags.maxBytes ?? 0 });
+  if (summary.shape === 'repo') {
+    note('note     one repository compared; pass --root at a workspace directory to compare its siblings');
+  } else if (summary.source === 'none') {
+    note(`note     no workspace configured, so this compared the current directory; ${WORKSPACE_REMEDY}`);
+  }
   for (const w of found.worktrees) {
     // A worktree is reported, not compared. Its files are the parent repo's HEAD
     // checked out elsewhere, so its projection state is the parent's - reporting
@@ -107,7 +137,11 @@ export async function compareCommand(positional, flags) {
  */
 function render(rows, summary, found) {
   const lines = [
-    `workspace ${summary.workspace}`,
+    // `workspace` and `repo` are the same field with different names, and the name is the
+    // honest one: a reader who sees "workspace" and gets one repo was told a lie. `root`
+    // plus `shape` is the one reading that is true in both cases (ADR-014).
+    `${summary.shape === 'repo' ? 'repo     ' : 'workspace'} ${summary.root}`,
+    `shape    ${summary.shape}${summary.shape === 'workspace' ? ` (root from ${summary.source})` : ''}`,
     `simt-dev  ${summary.expectedSha}`,
     `repos     ${summary.repos} (${summary.adopted} adopted, ${summary.unmanaged} unmanaged${summary.broken > 0 ? `, ${summary.broken} broken` : ''})`,
     `region    ${summary.current} current, ${summary.drifted} drifted, ${summary.noRegion} with no region, ${summary.malformed} malformed`,

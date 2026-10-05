@@ -10,12 +10,12 @@
 // black box.
 
 import { readFile } from 'node:fs/promises';
-import { dirname, join, resolve as resolvePath } from 'node:path';
+import { join } from 'node:path';
 import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 
-import { EXIT, emit, fail, isJson } from '../output/index.mjs';
+import { EXIT, emit, fail, isJson, note as emitNote } from '../output/index.mjs';
 import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
+import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { tokenize, rankSkills, closure, resolveAlias, scoreSkill, stackCompatible } from '../resolve/resolve.mjs';
 import { nearMatches } from '../resolve/near.mjs';
@@ -73,14 +73,16 @@ const kb = (bytes) => `${(bytes / 1000).toFixed(1)}k`;
 // --- tier 0: index ------------------------------------------------------------
 
 export async function indexCommand(args, flags) {
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH);
+  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
   if (!ok) return fail(errors[0], EXIT.REGISTRY);
+  const workspace = await workspaceLine(flags);
 
   if (isJson(flags)) {
     emit(
       `${JSON.stringify(
         {
           ok: true,
+          workspace,
           skills: registry.skills.map((s) => ({
             name: s.name,
             summary: s.summary,
@@ -117,6 +119,7 @@ export async function indexCommand(args, flags) {
   emit(
     [
       `${registry.skills.length} skills, ${kb(total)} total, ${deferredCount} deferred`,
+      workspace,
       '',
       'name                          bytes    stack                  summary',
       ...rows,
@@ -176,17 +179,18 @@ export async function findCommand(args, flags) {
   const query = args.join(' ').trim();
   if (!query) return fail('find needs a query', EXIT.USAGE, 'usage: simt skills find <query>');
 
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH);
+  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
   if (!ok) return fail(errors[0], EXIT.REGISTRY);
 
   const tokens = tokenize(query);
+  const workspace = await workspaceLine(flags);
   const results = registry.skills
     .map((skill) => ({ skill, ...scoreSkill(skill, { repoStack: [], taskTokens: tokens, paths: [] }) }))
     .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name));
 
   if (isJson(flags)) {
-    emit(`${JSON.stringify({ ok: true, query, results: results.map((r) => ({ name: r.skill.name, score: r.score, reasons: r.reasons })) }, null, 2)}\n`, { maxBytes: flags.maxBytes ?? 0 });
+    emit(`${JSON.stringify({ ok: true, query, workspace, results: results.map((r) => ({ name: r.skill.name, score: r.score, reasons: r.reasons })) }, null, 2)}\n`, { maxBytes: flags.maxBytes ?? 0 });
     return EXIT.OK;
   }
 
@@ -198,6 +202,7 @@ export async function findCommand(args, flags) {
   emit(
     [
       `${results.length} match${results.length === 1 ? '' : 'es'} for "${query}"`,
+      workspace,
       '',
       ...results.map(
         (r) =>
@@ -212,11 +217,12 @@ export async function findCommand(args, flags) {
 // --- brief: tier 1 ------------------------------------------------------------
 
 export async function briefCommand(args, flags) {
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH);
+  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
   if (!ok) return fail(errors[0], EXIT.REGISTRY);
 
   const root = flags.root ?? process.cwd();
   const repo = await fingerprint(root);
+  const { note: workspace, root: workspaceRoot } = await announceWorkspace(flags);
   // stack ∪ facts: a skill may declare either, so the gate must see both.
   const repoStack = repo.signals;
   const paths = flags.paths ? parsePathList(flags.paths) : await dirtyPaths(root);
@@ -282,6 +288,7 @@ export async function briefCommand(args, flags) {
         {
           ok: true,
           repo: { root, stack: repoStack },
+          workspace,
           task: flags.task ?? null,
           budget,
           resolved: picked.map((e) => ({ name: e.skill.name, bytes: e.skill.bytes, why: [...e.reasons, ...[...e.via].map((v) => `requires:${v}`)] })),
@@ -299,6 +306,7 @@ export async function briefCommand(args, flags) {
   lines.push(
     `RESOLVED ${picked.length} skills, ${kb(used)}${flags.all || used <= budget ? '' : ' (budget capped)'} - repo ${root.split('/').pop()} (${repoLine(repo)})`,
   );
+  lines.push(workspace);
   lines.push('');
 
   for (const entry of picked) {
@@ -317,7 +325,7 @@ export async function briefCommand(args, flags) {
     lines.push('', 'BODIES');
     for (const entry of picked) {
       lines.push('', `--- ${entry.skill.name} (${entry.skill.summary})`);
-      lines.push(await readBody(entry.skill));
+      lines.push(await readBody(entry.skill, workspaceRoot));
     }
   }
 
@@ -349,7 +357,7 @@ export async function showCommand(args, flags) {
   const name = args[0];
   if (!name) return fail('show needs a skill name', EXIT.USAGE, 'usage: simt skills show <name>');
 
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH);
+  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
   if (!ok) return fail(errors[0], EXIT.REGISTRY);
 
   const skill = registry.skills.find((s) => s.name === name);
@@ -363,8 +371,9 @@ export async function showCommand(args, flags) {
   }
 
   const source = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
+  const { note: workspace, root: workspaceRoot } = await announceWorkspace(flags);
   if (isJson(flags)) {
-    emit(`${JSON.stringify({ ok: true, ...skill }, null, 2)}\n`, { maxBytes: flags.maxBytes ?? 0 });
+    emit(`${JSON.stringify({ ok: true, ...skill, workspace }, null, 2)}\n`, { maxBytes: flags.maxBytes ?? 0 });
     return EXIT.OK;
   }
   emit(
@@ -380,8 +389,9 @@ export async function showCommand(args, flags) {
       skill.requires?.length ? `requires      ${skill.requires.join(', ')}` : null,
       '',
       `source        ${source ? `${source.repo}/${source.path} (${source.role})` : 'none'}`,
+      workspace,
       '',
-      await readBody(skill),
+      await readBody(skill, workspaceRoot),
     ]
       .filter((l) => l !== null)
       .join('\n'),
@@ -396,7 +406,7 @@ export async function whyCommand(args, flags) {
   const name = args[0];
   if (!name) return fail('why needs a skill name', EXIT.USAGE, 'usage: simt skills why <name>');
 
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH);
+  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
   if (!ok) return fail(errors[0], EXIT.REGISTRY);
 
   const skill = registry.skills.find((s) => s.name === name);
@@ -421,7 +431,9 @@ export async function whyCommand(args, flags) {
     `${skill.name} - score ${score}`,
     '',
     `repo stack     ${repo.stack.join(', ') || 'undetected'}`,
+    `repo facts     ${repo.facts.join(', ') || 'none'}`,
     `repo evidence  ${repo.evidence.join(' ') || 'none'}`,
+    await workspaceLine(flags),
     `paths seen     ${paths.length > 0 ? paths.slice(0, 8).join(' ') : '(none - pass --paths or stage files)'}`,
     `task tokens    ${tokens.length > 0 ? tokens.join(' ') : '(none - pass --task)'}`,
     '',
@@ -445,23 +457,50 @@ export async function whyCommand(args, flags) {
 
 /**
  * Resolve a skill's canonical source to an absolute path.
- * Repos are siblings of simt-dev, so this is one level up from the package root.
+ *
+ * Sources are declared as `repo/path`, so this needs the workspace that CONTAINS
+ * the repos. That used to be `resolve(here, '..', '..', '..')`, which is right in
+ * the checkout and wrong in `node_modules` - so every source resolved to a path
+ * that could not exist and `skills` failed with 38 ENOENT lines. Now it comes from
+ * configuration, and `null` is a legitimate answer meaning "this installation has
+ * no workspace, so there are no bodies to fetch" (ADR-014).
  */
-function sourcePath(skill) {
+function sourcePath(skill, workspaceRoot) {
   const source = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
   if (!source) return null;
-  const here = dirname(fileURLToPath(import.meta.url));
-  return join(resolvePath(here, '..', '..'), '..', source.repo, source.path);
+  if (!workspaceRoot) return null;
+  return join(workspaceRoot, source.repo, source.path);
 }
 
-async function readBody(skill) {
-  const full = sourcePath(skill);
-  if (!full || !existsSync(full)) return `(body unavailable: ${full ?? 'no source'})`;
+async function readBody(skill, workspaceRoot) {
+  const full = sourcePath(skill, workspaceRoot);
+  if (!full) {
+    return `(body unavailable: this installation has no workspace, so ${skill.name} has no body to fetch; ${WORKSPACE_REMEDY})`;
+  }
+  if (!existsSync(full)) return `(body unavailable: ${full} is not on this machine)`;
   try {
     const target = existsSync(join(full, 'SKILL.md')) ? join(full, 'SKILL.md') : full;
     return (await readFile(target, 'utf8')).trimEnd();
   } catch (error) {
     return `(body unreadable: ${error.message})`;
   }
+}
+
+/**
+ * The one explanation every command needs when bodies are unavailable: which
+ * source answered, and what to do when none did. Printed once, not per skill -
+ * 38 identical remedies is the same noise as 38 ENOENTs.
+ */
+async function workspaceLine(flags) {
+  const ws = await resolveWorkspace(flags);
+  if (ws.root) return `workspace ${ws.root} (${ws.source}: ${ws.detail})`;
+  return `workspace none configured - skill bodies are unavailable; ${WORKSPACE_REMEDY}`;
+}
+
+/** Commands that print bodies or install them announce the workspace up front. */
+async function announceWorkspace(flags) {
+  const note = await workspaceLine(flags);
+  const { root } = await resolveWorkspace(flags);
+  return { note, root };
 }
 

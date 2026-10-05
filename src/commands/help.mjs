@@ -35,6 +35,9 @@ const FLAGS = `--json                 structured output
 --task "<text>"         the task text used for capability resolution
 --paths <globs>         comma-separated path globs used for path resolution
 --root <path>           repository root (default: cwd)
+--workspace <path>      where the skill sources live; "off" declines it
+                        (default: SIMT_DEV_WORKSPACE, then the user config
+                        file, then the sibling heuristic if it verifies)
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
 --all                   ignore the budget and resolve everything

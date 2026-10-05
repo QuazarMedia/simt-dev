@@ -20,6 +20,8 @@
     "src",
     "graph",
     "rules",
+    "docs/decisions",
+    "docs/plans",
     "skills",
     "agents",
     "tooling",

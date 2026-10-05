@@ -14,23 +14,55 @@
 // are measured once per declared source and never double-counted.
 
 import { readdir, readFile, stat } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
+import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REGISTRY_PATH = resolve(HERE, '..', '..', 'graph', 'skills.graph.json');
 
-/** Where sibling repos live relative to simt-dev. Sources are declared as `repo/path`. */
-const WORKSPACE_ROOT = resolve(HERE, '..', '..', '..');
+/**
+ * Where sibling repos live. Sources are declared as `repo/path`, so resolving one
+ * needs a directory that CONTAINS repositories.
+ *
+ * This used to be `resolve(HERE, '..', '..', '..')`, which is correct in the checkout
+ * and wrong in `node_modules`, where it lands inside the scope directory and every
+ * source resolves to a path that cannot exist. It is now configuration - flag,
+ * environment, user config file, then a sibling heuristic that must verify - and a
+ * failure to resolve is a WARNING, not 38 `ENOENT` lines (ADR-014).
+ *
+ * Resolved once per process and memoised, because every caller needs the same answer
+ * and the answer cannot change while the process runs.
+ */
+let workspacePromise = null;
+export function workspace(flags = {}) {
+  if (!workspacePromise) workspacePromise = resolveWorkspace(flags);
+  return workspacePromise;
+}
+
+/** Test seam: forget the memoised workspace so the next call re-resolves. */
+export function resetWorkspace() {
+  workspacePromise = null;
+}
 
 const VALID_ROLES = new Set(['canonical', 'variant', 'stub', 'duplicate', 'deprecated']);
 
 /**
- * @returns {Promise<{ok: boolean, registry: object|null, errors: string[], warnings: string[]}>}
+ * Load and verify the registry.
+ *
+ * `verified: false` means the structural checks passed but disk verification was SKIPPED
+ * because no workspace was available. That is a warning, not an error: the catalogue is
+ * still perfectly readable, and its byte counts simply could not be checked against
+ * files. Treating an absent workspace as a registry failure is the same mistake as
+ * printing 38 `ENOENT` lines - it converts "not configured" into "broken" (ADR-014).
+ *
+ * @returns {Promise<{ok: boolean, registry: object|null, errors: string[], warnings: string[],
+ *                    verified: boolean, workspace: {root: string|null, source: string, detail: string}>}
  */
-export async function loadRegistry(path = REGISTRY_PATH) {
+export async function loadRegistry(path = REGISTRY_PATH, flags = {}) {
   let registry;
   try {
     registry = JSON.parse(await readFile(path, 'utf8'));
@@ -40,6 +72,8 @@ export async function loadRegistry(path = REGISTRY_PATH) {
       registry: null,
       errors: [`${path}: unreadable or invalid JSON (${error.message})`],
       warnings: [],
+      verified: false,
+      workspace: { root: null, source: 'none', detail: 'not resolved' },
     };
   }
 
@@ -50,13 +84,70 @@ export async function loadRegistry(path = REGISTRY_PATH) {
   for (const error of lint.sync) errors.push(error);
   for (const warning of lint.warnings) warnings.push(warning);
 
-  // Disk verification is async: a registry that no longer matches the repos is
-  // worse than one that is merely malformed, because it still resolves.
-  const disk = await lintSourcesOnDisk(registry, lint.index);
-  errors.push(...disk.errors);
-  warnings.push(...disk.warnings);
+  const ws = await workspace(flags);
 
-  return { ok: errors.length === 0, registry, errors, warnings };
+  if (ws.error) {
+    // A config file that exists and does not parse is a real mistake, and it is the
+    // author's to fix - so this one IS an error. An absent config is not.
+    errors.push(`${ws.detail}: ${ws.error}`);
+  } else if (ws.root === null) {
+    warnings.push(
+      `skill sources are not available: no workspace configured, so byte counts were not verified`,
+    );
+    warnings.push(WORKSPACE_REMEDY);
+  } else if (!existsSync(ws.root)) {
+    // A workspace that was CONFIGURED but is not there is a different fact from one
+    // that was never configured: the reader named a directory that has moved. Naming
+    // it is useful; turning it into 38 ENOENT lines is not, and it is the same
+    // mistake as above with an extra cause (ADR-014).
+    warnings.push(
+      `skill sources were not verified: the configured workspace ${ws.root} (from ${ws.detail}) does not exist`,
+    );
+  } else if (!holdsAnyRepo(registry, ws.root)) {
+    // Exists, but holds none of the directories the registry names. Either the
+    // reader pointed at the wrong directory or the repos are not cloned there. Both
+    // are one fact with one remedy, and neither is 38 ENOENT lines.
+    const named = [...new Set((registry.skills ?? []).flatMap((s) => (s.sources ?? []).map((x) => x.repo)))].sort();
+    warnings.push(
+      `skill sources were not verified: ${ws.root} (from ${ws.detail}) contains none of the ` +
+        `repositories the registry names (${named.slice(0, 4).join(', ')}${named.length > 4 ? ', …' : ''})`,
+    );
+  } else {
+    // Disk verification is async: a registry that no longer matches the repos is
+    // worse than one that is merely malformed, because it still resolves.
+    const disk = await lintSourcesOnDisk(registry, ws.root);
+    errors.push(...disk.errors);
+    warnings.push(...disk.warnings);
+  }
+
+  const verified =
+    ws.error === null && ws.root !== null && existsSync(ws.root) && holdsAnyRepo(registry, ws.root);
+
+  return {
+    ok: errors.length === 0,
+    registry,
+    errors,
+    warnings,
+    verified,
+    workspace: { root: ws.root, source: ws.source, detail: ws.detail },
+  };
+}
+
+/**
+ * Does this directory hold any of the repositories the registry names?
+ *
+ * Existence is not enough. Pointing `--workspace` at the wrong directory - a home
+ * folder, an empty tmpdir, the wrong checkout - produces 38 ENOENTs that read as a
+ * broken registry rather than a wrong pointer, which is exactly backwards.
+ */
+function holdsAnyRepo(registry, root) {
+  const named = new Set(
+    (registry.skills ?? []).flatMap((s) => (s.sources ?? []).map((x) => x.repo)).filter(Boolean),
+  );
+  for (const repo of named) {
+    if (existsSync(join(root, repo))) return true;
+  }
+  return false;
 }
 
 /** Pure structural checks. No filesystem access. */
@@ -312,7 +403,7 @@ for (const duplicate of duplicates(sources.map((s) => `${s.repo}/${s.path}`))) {
 }
 
 /** Compare declared sizes against the filesystem. */
-async function lintSourcesOnDisk(registry, index) {
+async function lintSourcesOnDisk(registry, workspaceRoot) {
   const errors = [];
   const warnings = [];
 
@@ -320,7 +411,7 @@ async function lintSourcesOnDisk(registry, index) {
     for (const source of skill.sources ?? []) {
       const at = `${skill.name}: ${source.repo}/${source.path}`;
       if (!source.repo || !source.path) continue;
-      const full = join(WORKSPACE_ROOT, source.repo, source.path);
+      const full = join(workspaceRoot, source.repo, source.path);
 
       let measured;
       try {

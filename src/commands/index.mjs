@@ -24,6 +24,7 @@ import { installCommand } from './skillsinstall.mjs';
 import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
+import { resolveWorkspace } from '../workspace.mjs';
 
 /** command path -> implementation sequence step (plan 0002 section 11). */
 const STEPS = new Map([
@@ -148,6 +149,11 @@ function parseOrExit(argv) {
 async function runDoctor(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
   const result = await fingerprint(root);
+  // Which source answered the workspace question, and where it looked. A tool
+  // that silently fell back to the wrong directory would make every downstream
+  // answer confidently wrong, so the answer is reported rather than inferred
+  // (ADR-014).
+  const ws = await resolveWorkspace(flags);
 
   if (isJson(flags)) {
     emit(`${JSON.stringify({ ok: true, command: 'doctor', root, ...result }, null, 2)}\n`);
@@ -170,8 +176,17 @@ async function runDoctor(positional, flags) {
           : '(none)'
       }`,
       `manifest ${result.manifest ? (result.manifest.error ?? result.manifest.id ?? 'present') : '(absent)'}`,
+      `workspace ${ws.root ?? '(none)'}  (${ws.source}: ${ws.detail})`,
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );
+  // An unconfigured workspace is a fact, not a failure: a single repo with no
+  // workspace around it is a normal, supported case. A config file that EXISTS and
+  // does not parse is a real mistake, and that does fail - with the parse error,
+  // because naming the file without saying what is wrong with it sends the reader
+  // to the file and gives them nothing to look for.
+  if (ws.error) {
+    return fail(`workspace config ${ws.detail}: ${ws.error}`, EXIT.CONFIG, 'fix the JSON, or remove the file');
+  }
   return EXIT.OK;
 }

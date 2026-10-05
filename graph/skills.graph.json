@@ -6,566 +6,1648 @@
   "stackVocabularySource": "src/resolve/fingerprint.mjs",
   "conventions": {
     "variants": "One node, several bodies, discriminated by stack. Used when the SAME skill name exists in several repos with genuinely different content (the 8 duplicated Social names).",
+    "variant-stack": "A variant stack must name the tag that DIFFERS between the bodies, not a tag both repos share. cloudflare-workers is emitted by simt-social as well as simt-social-api (both ship a wrangler.jsonc), so an api variant listing it matches the web repo too and stops discriminating; hono is the tag that actually separates them. Lint can check that variant stacks are pairwise disjoint, but not that they are discriminative in practice - the goldens test resolves every variant-bearing skill against both real repos and requires exactly one match.",
     "variant-of": "Several nodes that are siblings, discriminated by stack. Used when siblings have DIFFERENT names (web-security-review / api-security-review). Both mechanisms resolve identically: one body per stack.",
     "sources.role": "canonical = the body that becomes the single home. variant = a real distinct body. stub = a thin pointer to another node. duplicate = byte-identical to the canonical body. deprecated = retired name, see alias-of.",
     "deferred": "Derived, not chosen: deferred is true exactly when totalBytes exceeds deferredThreshold. Hand-editing it is a lint error."
   },
-
   "capabilities": [
-    { "id": "scaffold", "summary": "Create a new module, screen, overlay, route or destination" },
-    { "id": "persistence", "summary": "Database schema, migrations, Room, D1, DataStore" },
-    { "id": "build", "summary": "Compile, format, verify, CI" },
-    { "id": "testing", "summary": "Write, run or audit tests; coverage" },
-    { "id": "commit", "summary": "Commit or ship a completed slice or bugfix" },
-    { "id": "security", "summary": "Threat, privacy and trust-boundary review" },
-    { "id": "release", "summary": "Deploy, release gate, preview postflight" },
-    { "id": "observability", "summary": "Structured logs, metrics, traces, SLOs" },
-    { "id": "contract", "summary": "Cross-repo API contract and generated types" },
-    { "id": "maps", "summary": "MapLibre, PMTiles, gazetteers, launch galaxies" },
-    { "id": "accessibility", "summary": "Localisation, RTL, WCAG, keyboard, reduced motion" },
-    { "id": "ui-design", "summary": "Prototype fidelity and design-system tokens" },
-    { "id": "quality", "summary": "Production readiness, performance budgets" },
-    { "id": "platform", "summary": "Cloudflare platform configuration and reference" },
-    { "id": "auth", "summary": "Firebase setup, authentication, security rules" },
-    { "id": "knowledge", "summary": "Codebase architecture and file relationships" },
-    { "id": "feature-slice", "summary": "Implement a product slice in web or API" },
-    { "id": "seeding", "summary": "QA accounts and demo data" },
-    { "id": "orchestration", "summary": "Coordinate multiple specialist agents" },
-    { "id": "documentation", "summary": "Feature plans and in-repo documentation" },
-    { "id": "content", "summary": "Published editorial content and press assets" },
-    { "id": "positioning", "summary": "GNSS, RTK, PPP, satellite positioning" },
-    { "id": "wear", "summary": "Wear OS app and phone-watch Data Layer" }
+    {
+      "id": "scaffold",
+      "summary": "Create a new module, screen, overlay, route or destination"
+    },
+    {
+      "id": "persistence",
+      "summary": "Database schema, migrations, Room, D1, DataStore"
+    },
+    {
+      "id": "build",
+      "summary": "Compile, format, verify, CI"
+    },
+    {
+      "id": "testing",
+      "summary": "Write, run or audit tests; coverage"
+    },
+    {
+      "id": "commit",
+      "summary": "Commit or ship a completed slice or bugfix"
+    },
+    {
+      "id": "security",
+      "summary": "Threat, privacy and trust-boundary review"
+    },
+    {
+      "id": "release",
+      "summary": "Deploy, release gate, preview postflight"
+    },
+    {
+      "id": "observability",
+      "summary": "Structured logs, metrics, traces, SLOs"
+    },
+    {
+      "id": "contract",
+      "summary": "Cross-repo API contract and generated types"
+    },
+    {
+      "id": "maps",
+      "summary": "MapLibre, PMTiles, gazetteers, launch galaxies"
+    },
+    {
+      "id": "accessibility",
+      "summary": "Localisation, RTL, WCAG, keyboard, reduced motion"
+    },
+    {
+      "id": "ui-design",
+      "summary": "Prototype fidelity and design-system tokens"
+    },
+    {
+      "id": "quality",
+      "summary": "Production readiness, performance budgets"
+    },
+    {
+      "id": "platform",
+      "summary": "Cloudflare platform configuration and reference"
+    },
+    {
+      "id": "auth",
+      "summary": "Firebase setup, authentication, security rules"
+    },
+    {
+      "id": "knowledge",
+      "summary": "Codebase architecture and file relationships"
+    },
+    {
+      "id": "feature-slice",
+      "summary": "Implement a product slice in web or API"
+    },
+    {
+      "id": "seeding",
+      "summary": "QA accounts and demo data"
+    },
+    {
+      "id": "orchestration",
+      "summary": "Coordinate multiple specialist agents"
+    },
+    {
+      "id": "documentation",
+      "summary": "Feature plans and in-repo documentation"
+    },
+    {
+      "id": "content",
+      "summary": "Published editorial content and press assets"
+    },
+    {
+      "id": "positioning",
+      "summary": "GNSS, RTK, PPP, satellite positioning"
+    },
+    {
+      "id": "wear",
+      "summary": "Wear OS app and phone-watch Data Layer"
+    }
   ],
-
   "skills": [
     {
       "name": "add-country-galaxy",
       "summary": "Onboard a launch galaxy across simt-api map assets, simt-social-api registry/D1 and the web consumer",
-      "capabilities": ["maps", "contract", "scaffold"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript", "cloudflare-workers", "hono"],
-      "paths": ["scripts/maps/**", "migrations/**", "app/features/country/**"],
-      "keywords": ["country", "galaxy", "gazetteer", "pmtiles", "launch", "iso", "registry"],
+      "capabilities": [
+        "maps",
+        "contract",
+        "scaffold"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript",
+        "cloudflare-workers",
+        "hono"
+      ],
+      "paths": [
+        "scripts/maps/**",
+        "migrations/**",
+        "app/features/country/**"
+      ],
+      "keywords": [
+        "country",
+        "galaxy",
+        "gazetteer",
+        "pmtiles",
+        "launch",
+        "iso",
+        "registry"
+      ],
       "bytes": 15604,
       "variants": [
-        { "id": "api", "stack": ["cloudflare-workers", "hono", "typescript"], "bytes": 15604 },
-        { "id": "web", "stack": ["react", "node-web"], "bytes": 1852 }
+        {
+          "id": "api",
+          "stack": [
+            "hono"
+          ],
+          "bytes": 15604
+        },
+        {
+          "id": "web",
+          "stack": [
+            "react",
+            "node-web"
+          ],
+          "bytes": 1852
+        }
       ],
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/add-country-galaxy", "bytes": 15604, "role": "canonical" },
-        { "repo": "simt-social", "path": ".agents/skills/add-country-galaxy", "bytes": 1852, "role": "stub", "note": "44-line Phase-3 pointer to the canonical copy; the cleanest alias pattern already in the estate" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/add-country-galaxy",
+          "bytes": 15604,
+          "role": "canonical"
+        },
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/add-country-galaxy",
+          "bytes": 1852,
+          "role": "stub",
+          "note": "44-line Phase-3 pointer to the canonical copy; the cleanest alias pattern already in the estate"
+        }
       ],
       "note": "Spans three repos and deliberately excludes simt-social-media."
     },
     {
       "name": "add-feature-module",
       "summary": "Scaffold a brand-new Gradle module (feature, core or data) in the SIMT Android app",
-      "capabilities": ["scaffold", "build"],
-      "stack": ["gradle", "kotlin"],
-      "paths": ["**/build.gradle.kts", "settings.gradle.kts"],
-      "keywords": ["module", "gradle", "scaffold", "convention plugin", "hilt", "feature"],
+      "capabilities": [
+        "scaffold",
+        "build"
+      ],
+      "stack": [
+        "gradle",
+        "kotlin"
+      ],
+      "paths": [
+        "**/build.gradle.kts",
+        "settings.gradle.kts"
+      ],
+      "keywords": [
+        "module",
+        "gradle",
+        "scaffold",
+        "convention plugin",
+        "hilt",
+        "feature"
+      ],
       "bytes": 4864,
       "sources": [
-        { "repo": "simt-app", "path": ".cursor/skills/add-feature-module", "bytes": 4864, "role": "canonical" }
+        {
+          "repo": "simt-app",
+          "path": ".cursor/skills/add-feature-module",
+          "bytes": 4864,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "add-screen-or-overlay",
       "summary": "Add a screen, dialog, bottom sheet or modal, including the build-enforced overlay policy",
-      "capabilities": ["scaffold", "accessibility", "ui-design"],
-      "stack": ["gradle", "kotlin"],
-      "paths": ["**/*.kt"],
-      "keywords": ["screen", "dialog", "sheet", "modal", "overlay", "navigation", "route"],
+      "capabilities": [
+        "scaffold",
+        "accessibility",
+        "ui-design"
+      ],
+      "stack": [
+        "gradle",
+        "kotlin"
+      ],
+      "paths": [
+        "**/*.kt"
+      ],
+      "keywords": [
+        "screen",
+        "dialog",
+        "sheet",
+        "modal",
+        "overlay",
+        "navigation",
+        "route"
+      ],
       "bytes": 6731,
       "sources": [
-        { "repo": "simt-app", "path": ".cursor/skills/add-screen-or-overlay", "bytes": 6731, "role": "canonical" }
+        {
+          "repo": "simt-app",
+          "path": ".cursor/skills/add-screen-or-overlay",
+          "bytes": 6731,
+          "role": "canonical"
+        }
       ],
       "note": "Carries a hard rule enforced by the build: features must not import androidx.compose.ui.window.Dialog; checkOverlayModalPolicy fails ./gradlew check."
     },
     {
       "name": "api-feature-slice",
       "summary": "Implement or review a Social API feature slice in Hono and TypeScript",
-      "capabilities": ["feature-slice", "security", "observability"],
-      "stack": ["node", "cloudflare-workers", "hono", "typescript"],
-      "paths": ["src/routes/**", "src/services/**", "src/contracts/**"],
-      "keywords": ["route", "hono", "zod", "openapi", "endpoint", "operation", "d1"],
+      "capabilities": [
+        "feature-slice",
+        "security",
+        "observability"
+      ],
+      "stack": [
+        "node",
+        "cloudflare-workers",
+        "hono",
+        "typescript"
+      ],
+      "paths": [
+        "src/routes/**",
+        "src/services/**",
+        "src/contracts/**"
+      ],
+      "keywords": [
+        "route",
+        "hono",
+        "zod",
+        "openapi",
+        "endpoint",
+        "operation",
+        "d1"
+      ],
       "bytes": 4493,
       "variantOf": "feature-slice",
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/api-feature-slice", "bytes": 4493, "role": "canonical" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/api-feature-slice",
+          "bytes": 4493,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "api-contract-sync",
       "summary": "Synchronise web code with the generated simt-social-api OpenAPI contract",
-      "capabilities": ["contract"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript"],
-      "paths": ["app/contracts/**", "simt-social-openapi-contract.json"],
-      "keywords": ["openapi", "contract", "schema", "etag", "cursor", "generated", "consumer"],
+      "capabilities": [
+        "contract"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript"
+      ],
+      "paths": [
+        "app/contracts/**",
+        "simt-social-openapi-contract.json"
+      ],
+      "keywords": [
+        "openapi",
+        "contract",
+        "schema",
+        "etag",
+        "cursor",
+        "generated",
+        "consumer"
+      ],
       "bytes": 2973,
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/api-contract-sync", "bytes": 2973, "role": "canonical" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/api-contract-sync",
+          "bytes": 2973,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "api-security-review",
       "summary": "Review Social API security: auth, IDOR, private data, D1 invariants, Queues, Durable Objects",
-      "capabilities": ["security"],
-      "stack": ["node", "cloudflare-workers", "hono", "typescript"],
-      "paths": ["src/**"],
-      "keywords": ["idor", "auth", "firebase", "d1", "queue", "durable object", "r2", "capability", "audit"],
+      "capabilities": [
+        "security"
+      ],
+      "stack": [
+        "node",
+        "cloudflare-workers",
+        "hono",
+        "typescript"
+      ],
+      "paths": [
+        "src/**"
+      ],
+      "keywords": [
+        "idor",
+        "auth",
+        "firebase",
+        "d1",
+        "queue",
+        "durable object",
+        "r2",
+        "capability",
+        "audit"
+      ],
       "bytes": 4380,
       "variantOf": "security-review",
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/api-security-review", "bytes": 4380, "role": "canonical" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/api-security-review",
+          "bytes": 4380,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "bug-commit",
       "summary": "Validate and commit a completed bugfix with a mandatory regression test and a root-cause fix",
-      "capabilities": ["commit", "testing"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript", "cloudflare-workers", "hono"],
+      "capabilities": [
+        "commit",
+        "testing"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript",
+        "cloudflare-workers",
+        "hono"
+      ],
       "paths": [],
-      "keywords": ["bugfix", "regression test", "root cause", "commit", "sha", "revert"],
+      "keywords": [
+        "bugfix",
+        "regression test",
+        "root cause",
+        "commit",
+        "sha",
+        "revert"
+      ],
       "bytes": 5135,
       "variants": [
-        { "id": "web", "stack": ["react", "node-web"], "bytes": 5000 },
-        { "id": "api", "stack": ["cloudflare-workers", "hono"], "bytes": 5135 }
+        {
+          "id": "web",
+          "stack": [
+            "react",
+            "node-web"
+          ],
+          "bytes": 5000
+        },
+        {
+          "id": "api",
+          "stack": [
+            "hono"
+          ],
+          "bytes": 5135
+        }
       ],
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/bug-commit", "bytes": 5135, "role": "canonical" },
-        { "repo": "simt-social", "path": ".agents/skills/bug-commit", "bytes": 5000, "role": "variant", "note": "34 drifted lines against the canonical copy" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/bug-commit",
+          "bytes": 5135,
+          "role": "canonical"
+        },
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/bug-commit",
+          "bytes": 5000,
+          "role": "variant",
+          "note": "34 drifted lines against the canonical copy"
+        }
       ]
     },
     {
       "name": "build-test-verify",
       "summary": "Gradle commands, definition of done and CI behaviour for the SIMT Android app",
-      "capabilities": ["build", "testing"],
-      "stack": ["gradle", "kotlin"],
-      "paths": ["**/*.gradle.kts", "**/build/**"],
-      "keywords": ["gradle", "build", "test", "spotless", "apk", "aab", "verify", "ci"],
+      "capabilities": [
+        "build",
+        "testing"
+      ],
+      "stack": [
+        "gradle",
+        "kotlin"
+      ],
+      "paths": [
+        "**/*.gradle.kts",
+        "**/build/**"
+      ],
+      "keywords": [
+        "gradle",
+        "build",
+        "test",
+        "spotless",
+        "apk",
+        "aab",
+        "verify",
+        "ci"
+      ],
       "bytes": 4123,
       "sources": [
-        { "repo": "simt-app", "path": ".cursor/skills/build-test-verify", "bytes": 4123, "role": "canonical" }
+        {
+          "repo": "simt-app",
+          "path": ".cursor/skills/build-test-verify",
+          "bytes": 4123,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "cloudflare",
       "summary": "Cloudflare platform reference: Workers, D1, R2, KV, Queues, Durable Objects, observability",
-      "capabilities": ["platform"],
-      "stack": ["cloudflare-workers"],
-      "paths": ["wrangler.jsonc", "wrangler.toml"],
-      "keywords": ["cloudflare", "workers", "d1", "r2", "kv", "queue", "durable object", "wrangler", "workers ai"],
+      "capabilities": [
+        "platform"
+      ],
+      "stack": [
+        "cloudflare-workers"
+      ],
+      "paths": [
+        "wrangler.jsonc",
+        "wrangler.toml"
+      ],
+      "keywords": [
+        "cloudflare",
+        "workers",
+        "d1",
+        "r2",
+        "kv",
+        "queue",
+        "durable object",
+        "wrangler",
+        "workers ai"
+      ],
       "bytes": 384277,
       "deferred": true,
       "vendored": true,
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/cloudflare", "bytes": 384277, "role": "canonical", "note": "81 reference files; frontmatter declares references/pages and references/workers-ai which do not exist" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/cloudflare",
+          "bytes": 384277,
+          "role": "canonical",
+          "note": "81 reference files; frontmatter declares references/pages and references/workers-ai which do not exist"
+        }
       ],
       "note": "Largest body in the estate at 384 KB. Always deferred; never inlined by skills brief."
     },
     {
       "name": "cloudflare-release",
       "summary": "Implement, validate or release Cloudflare Worker integrations, bindings and preview resources",
-      "capabilities": ["release", "platform"],
-      "stack": ["cloudflare-workers", "hono", "typescript"],
-      "paths": ["wrangler.jsonc", "package.json"],
-      "keywords": ["deploy", "release", "binding", "wrangler", "preview", "rollback", "secret", "rate limiter"],
+      "capabilities": [
+        "release",
+        "platform"
+      ],
+      "stack": [
+        "cloudflare-workers",
+        "hono",
+        "typescript"
+      ],
+      "paths": [
+        "wrangler.jsonc",
+        "package.json"
+      ],
+      "keywords": [
+        "deploy",
+        "release",
+        "binding",
+        "wrangler",
+        "preview",
+        "rollback",
+        "secret",
+        "rate limiter"
+      ],
       "bytes": 4538,
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/cloudflare-release", "bytes": 4538, "role": "canonical" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/cloudflare-release",
+          "bytes": 4538,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "complete-testing",
       "summary": "Risk-proportionate test design, implementation and audit for an executable behavior slice",
-      "capabilities": ["testing"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript", "cloudflare-workers", "hono"],
-      "paths": ["test/**", "e2e/**", "**/*.test.ts", "**/*.spec.ts"],
-      "keywords": ["test", "vitest", "playwright", "e2e", "unit", "browser matrix", "flake", "sentinel"],
+      "capabilities": [
+        "testing"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript",
+        "cloudflare-workers",
+        "hono"
+      ],
+      "paths": [
+        "test/**",
+        "e2e/**",
+        "**/*.test.ts",
+        "**/*.spec.ts"
+      ],
+      "keywords": [
+        "test",
+        "vitest",
+        "playwright",
+        "e2e",
+        "unit",
+        "browser matrix",
+        "flake",
+        "sentinel"
+      ],
       "bytes": 7324,
       "variants": [
-        { "id": "web", "stack": ["react", "node-web"], "bytes": 7324 },
-        { "id": "api", "stack": ["cloudflare-workers", "hono"], "bytes": 6309 }
+        {
+          "id": "web",
+          "stack": [
+            "react",
+            "node-web"
+          ],
+          "bytes": 7324
+        },
+        {
+          "id": "api",
+          "stack": [
+            "hono"
+          ],
+          "bytes": 6309
+        }
       ],
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/complete-testing", "bytes": 7324, "role": "canonical" },
-        { "repo": "simt-social-api", "path": ".agents/skills/complete-testing", "bytes": 6309, "role": "variant", "note": "143 drifted lines; the only duplicated skill pair where over half the body differs" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/complete-testing",
+          "bytes": 7324,
+          "role": "canonical"
+        },
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/complete-testing",
+          "bytes": 6309,
+          "role": "variant",
+          "note": "143 drifted lines; the only duplicated skill pair where over half the body differs"
+        }
       ]
     },
     {
       "name": "coverage-hunt",
       "summary": "Drive modules toward full coverage by fanning review agents over uncovered lines",
-      "capabilities": ["testing"],
-      "stack": ["python"],
-      "paths": ["src/**", "tests/**", "pyproject.toml"],
-      "keywords": ["coverage", "uncovered", "fan out", "review agents", "module"],
+      "capabilities": [
+        "testing"
+      ],
+      "stack": [
+        "python"
+      ],
+      "paths": [
+        "src/**",
+        "tests/**",
+        "pyproject.toml"
+      ],
+      "keywords": [
+        "coverage",
+        "uncovered",
+        "fan out",
+        "review agents",
+        "module"
+      ],
       "bytes": 7266,
       "sources": [
-        { "repo": "bunnyland-server", "path": ".agents/skills/coverage-hunt.md", "bytes": 7266, "role": "canonical", "note": "FLAT .md with no directory and no name: frontmatter key; ADR-009 requires wrapping it as coverage-hunt/SKILL.md" }
+        {
+          "repo": "bunnyland-server",
+          "path": ".agents/skills/coverage-hunt.md",
+          "bytes": 7266,
+          "role": "canonical",
+          "note": "FLAT .md with no directory and no name: frontmatter key; ADR-009 requires wrapping it as coverage-hunt/SKILL.md"
+        }
       ]
     },
     {
       "name": "create-blog-guide",
       "summary": "Author, validate and publish a SIMT Blog guide from structured JSON",
-      "capabilities": ["content", "documentation"],
-      "stack": ["node", "node-web", "less"],
-      "paths": ["content/posts/**", "scripts/blog-*.js"],
-      "keywords": ["blog", "post", "guide", "article", "seo", "frontmatter", "i18n", "publish"],
+      "capabilities": [
+        "content",
+        "documentation"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "less"
+      ],
+      "paths": [
+        "content/posts/**",
+        "scripts/blog-*.js"
+      ],
+      "keywords": [
+        "blog",
+        "post",
+        "guide",
+        "article",
+        "seo",
+        "frontmatter",
+        "i18n",
+        "publish"
+      ],
       "bytes": 16559,
       "sources": [
-        { "repo": "simt-blog", "path": ".agents/skills/create-blog-guide", "bytes": 16559, "role": "canonical" }
+        {
+          "repo": "simt-blog",
+          "path": ".agents/skills/create-blog-guide",
+          "bytes": 16559,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "create-blog-visuals",
       "summary": "Create, source and validate visuals for SIMT Blog guides: hero art, inline SVG figures and photographs",
-      "capabilities": ["content", "ui-design"],
-      "stack": ["node", "node-web", "less"],
-      "paths": ["content/posts/**", "scripts/art/**", "scripts/figures.js"],
-      "keywords": ["hero", "illustration", "figure", "svg", "photograph", "visual", "celestial"],
+      "capabilities": [
+        "content",
+        "ui-design"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "less"
+      ],
+      "paths": [
+        "content/posts/**",
+        "scripts/art/**",
+        "scripts/figures.js"
+      ],
+      "keywords": [
+        "hero",
+        "illustration",
+        "figure",
+        "svg",
+        "photograph",
+        "visual",
+        "celestial"
+      ],
       "bytes": 14773,
       "sources": [
-        { "repo": "simt-blog", "path": ".agents/skills/create-blog-visuals", "bytes": 14773, "role": "canonical" }
+        {
+          "repo": "simt-blog",
+          "path": ".agents/skills/create-blog-visuals",
+          "bytes": 14773,
+          "role": "canonical"
+        }
       ],
       "note": "Target of the blog-figures.mdc and blog-illustrations.mdc shims, which delegate rather than duplicate."
     },
     {
       "name": "data-layer",
       "summary": "Add or modify persistence and platform services: Room, DataStore, repositories, sensors",
-      "capabilities": ["persistence"],
-      "stack": ["gradle", "kotlin"],
-      "paths": ["**/data/**", "**/*.kt"],
-      "keywords": ["room", "datastore", "migration", "repository", "dao", "entity", "sensor", "location"],
+      "capabilities": [
+        "persistence"
+      ],
+      "stack": [
+        "gradle",
+        "kotlin"
+      ],
+      "paths": [
+        "**/data/**",
+        "**/*.kt"
+      ],
+      "keywords": [
+        "room",
+        "datastore",
+        "migration",
+        "repository",
+        "dao",
+        "entity",
+        "sensor",
+        "location"
+      ],
       "bytes": 6461,
       "sources": [
-        { "repo": "simt-app", "path": ".cursor/skills/data-layer", "bytes": 6461, "role": "canonical" }
+        {
+          "repo": "simt-app",
+          "path": ".cursor/skills/data-layer",
+          "bytes": 6461,
+          "role": "canonical"
+        }
       ],
       "note": "Room database version 16 at the time of writing."
     },
     {
       "name": "data-seeding",
       "summary": "Seed preview or production D1 with demo activities and onboarded QA accounts",
-      "capabilities": ["seeding", "testing"],
-      "stack": ["cloudflare-workers", "hono", "typescript"],
-      "paths": ["scripts/**", "migrations/**"],
-      "keywords": ["seed", "demo data", "qa account", "manual qa", "preview", "open data"],
+      "capabilities": [
+        "seeding",
+        "testing"
+      ],
+      "stack": [
+        "cloudflare-workers",
+        "hono",
+        "typescript"
+      ],
+      "paths": [
+        "scripts/**",
+        "migrations/**"
+      ],
+      "keywords": [
+        "seed",
+        "demo data",
+        "qa account",
+        "manual qa",
+        "preview",
+        "open data"
+      ],
       "bytes": 9365,
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/data-seeding", "bytes": 9365, "role": "canonical" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/data-seeding",
+          "bytes": 9365,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "d1-safe-change",
       "summary": "Create, review, test or deploy a D1 schema change safely and forward-only",
-      "capabilities": ["persistence"],
-      "stack": ["cloudflare-workers", "hono", "typescript"],
-      "paths": ["migrations/**", "wrangler.jsonc"],
-      "keywords": ["migration", "schema", "index", "trigger", "constraint", "idempotency", "outbox", "coexistence"],
+      "capabilities": [
+        "persistence"
+      ],
+      "stack": [
+        "cloudflare-workers",
+        "hono",
+        "typescript"
+      ],
+      "paths": [
+        "migrations/**",
+        "wrangler.jsonc"
+      ],
+      "keywords": [
+        "migration",
+        "schema",
+        "index",
+        "trigger",
+        "constraint",
+        "idempotency",
+        "outbox",
+        "coexistence"
+      ],
       "bytes": 3534,
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/d1-safe-change", "bytes": 3534, "role": "canonical" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/d1-safe-change",
+          "bytes": 3534,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "documenting-features",
       "summary": "Author or update feature plans and code reviews under docs/feature-plans",
-      "capabilities": ["documentation"],
-      "stack": ["gradle", "kotlin"],
-      "paths": ["docs/**"],
-      "keywords": ["docs", "feature plan", "code review", "migration note", "performance note"],
+      "capabilities": [
+        "documentation"
+      ],
+      "stack": [
+        "gradle",
+        "kotlin"
+      ],
+      "paths": [
+        "docs/**"
+      ],
+      "keywords": [
+        "docs",
+        "feature plan",
+        "code review",
+        "migration note",
+        "performance note"
+      ],
       "bytes": 4957,
       "sources": [
-        { "repo": "simt-app", "path": ".cursor/skills/documenting-features", "bytes": 4957, "role": "canonical" }
+        {
+          "repo": "simt-app",
+          "path": ".cursor/skills/documenting-features",
+          "bytes": 4957,
+          "role": "canonical"
+        }
       ],
       "note": "Carries the dual-write rule: a behaviour-changing fix updates both the plan and the review record."
     },
     {
       "name": "durable-objects",
       "summary": "Create and review Cloudflare Durable Objects: state, RPC, alarms, WebSockets",
-      "capabilities": ["platform"],
-      "stack": ["cloudflare-workers"],
-      "paths": ["src/**"],
-      "keywords": ["durable object", "rpc", "alarm", "websocket", "sqlite", "sharding", "concurrency"],
+      "capabilities": [
+        "platform"
+      ],
+      "stack": [
+        "cloudflare-workers"
+      ],
+      "paths": [
+        "src/**"
+      ],
+      "keywords": [
+        "durable object",
+        "rpc",
+        "alarm",
+        "websocket",
+        "sqlite",
+        "sharding",
+        "concurrency"
+      ],
       "bytes": 28434,
       "deferred": true,
       "vendored": true,
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/durable-objects", "bytes": 28434, "role": "canonical" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/durable-objects",
+          "bytes": 28434,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "firebase-auth-basics",
       "summary": "Firebase Authentication setup, providers, tokens and security rules",
-      "capabilities": ["auth"],
-      "stack": ["firebase", "node", "node-web", "react"],
-      "paths": ["firebase.json", "**/auth/**"],
-      "keywords": ["firebase", "auth", "provider", "token", "sign in", "security rules", "oidc"],
+      "capabilities": [
+        "auth"
+      ],
+      "stack": [
+        "firebase",
+        "node",
+        "node-web",
+        "react"
+      ],
+      "paths": [
+        "firebase.json",
+        "**/auth/**"
+      ],
+      "keywords": [
+        "firebase",
+        "auth",
+        "provider",
+        "token",
+        "sign in",
+        "security rules",
+        "oidc"
+      ],
       "bytes": 13147,
       "vendored": true,
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/firebase-auth-basics", "bytes": 13147, "role": "canonical", "note": "Cites references/flutter_setup.md and references/client_sdk_android.md, which do not exist; its security_rules.md recommends two skills that do not exist" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/firebase-auth-basics",
+          "bytes": 13147,
+          "role": "canonical",
+          "note": "Cites references/flutter_setup.md and references/client_sdk_android.md, which do not exist; its security_rules.md recommends two skills that do not exist"
+        }
       ]
     },
     {
       "name": "firebase-basics",
       "summary": "Firebase CLI bootstrap, project selection, config files and per-agent environment setup",
-      "capabilities": ["auth"],
-      "stack": ["firebase", "node", "node-web", "react"],
-      "paths": ["firebase.json", ".firebaserc"],
-      "keywords": ["firebase", "cli", "project", "google-services.json", "emulator", "init"],
+      "capabilities": [
+        "auth"
+      ],
+      "stack": [
+        "firebase",
+        "node",
+        "node-web",
+        "react"
+      ],
+      "paths": [
+        "firebase.json",
+        ".firebaserc"
+      ],
+      "keywords": [
+        "firebase",
+        "cli",
+        "project",
+        "google-services.json",
+        "emulator",
+        "init"
+      ],
       "bytes": 35088,
       "deferred": true,
       "vendored": true,
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/firebase-basics", "bytes": 35088, "role": "canonical", "note": "Cites references/android_setup.md, references/ios_setup.md and references/refresh/android_studio.md, none of which exist" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/firebase-basics",
+          "bytes": 35088,
+          "role": "canonical",
+          "note": "Cites references/android_setup.md, references/ios_setup.md and references/refresh/android_studio.md, none of which exist"
+        }
       ]
     },
     {
       "name": "gnss-engine",
       "summary": "Navigate and extend the GNSS raw-measurement engine: RTCM, NTRIP, WLS, Kalman, Hatch filtering",
-      "capabilities": ["positioning"],
-      "stack": ["gradle", "kotlin"],
-      "paths": ["feature/gnss/**", "**/gnss/**"],
-      "keywords": ["gnss", "rtk", "ppp", "rtcm", "sbas", "ntrip", "ephemeris", "pseudorange", "ionosphere", "kalman"],
+      "capabilities": [
+        "positioning"
+      ],
+      "stack": [
+        "gradle",
+        "kotlin"
+      ],
+      "paths": [
+        "feature/gnss/**",
+        "**/gnss/**"
+      ],
+      "keywords": [
+        "gnss",
+        "rtk",
+        "ppp",
+        "rtcm",
+        "sbas",
+        "ntrip",
+        "ephemeris",
+        "pseudorange",
+        "ionosphere",
+        "kalman"
+      ],
       "bytes": 7196,
       "sources": [
-        { "repo": "simt-app", "path": ".cursor/skills/gnss-engine", "bytes": 7196, "role": "canonical" }
+        {
+          "repo": "simt-app",
+          "path": ".cursor/skills/gnss-engine",
+          "bytes": 7196,
+          "role": "canonical"
+        }
       ],
       "note": "Physics-heavy and review-hardened; do not simplify formulas, constants or gating logic."
     },
     {
       "name": "graphify",
       "summary": "Turn any input into a queryable knowledge graph with query, path and explain tools",
-      "capabilities": ["knowledge"],
-      "stack": ["node", "node-web", "react", "typescript", "cloudflare-workers", "hono"],
-      "paths": ["graphify-out/**"],
-      "keywords": ["graph", "architecture", "relationship", "query", "explain", "god node", "knowledge graph"],
+      "capabilities": [
+        "knowledge"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "typescript",
+        "cloudflare-workers",
+        "hono"
+      ],
+      "paths": [
+        "graphify-out/**"
+      ],
+      "keywords": [
+        "graph",
+        "architecture",
+        "relationship",
+        "query",
+        "explain",
+        "god node",
+        "knowledge graph"
+      ],
       "bytes": 84534,
       "deferred": true,
       "vendored": true,
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/graphify", "bytes": 84534, "role": "canonical", "note": "byte-identical to the simt-social copy, version-pinned 0.9.32" },
-        { "repo": "simt-social", "path": ".agents/skills/graphify", "bytes": 84534, "role": "duplicate" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/graphify",
+          "bytes": 84534,
+          "role": "canonical",
+          "note": "byte-identical to the simt-social copy, version-pinned 0.9.32"
+        },
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/graphify",
+          "bytes": 84534,
+          "role": "duplicate"
+        }
       ]
     },
     {
       "name": "localization-accessibility",
       "summary": "Implement or audit localisation, Arabic RTL, WCAG 2.2 AA, keyboard and reduced motion",
-      "capabilities": ["accessibility"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript", "less"],
-      "paths": ["app/i18n/**", "**/*.css", "**/*.less"],
-      "keywords": ["i18n", "rtl", "arabic", "wcag", "accessibility", "keyboard", "reduced motion", "locale", "reflow"],
+      "capabilities": [
+        "accessibility"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript",
+        "less"
+      ],
+      "paths": [
+        "app/i18n/**",
+        "**/*.css",
+        "**/*.less"
+      ],
+      "keywords": [
+        "i18n",
+        "rtl",
+        "arabic",
+        "wcag",
+        "accessibility",
+        "keyboard",
+        "reduced motion",
+        "locale",
+        "reflow"
+      ],
       "bytes": 3362,
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/localization-accessibility", "bytes": 3362, "role": "canonical" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/localization-accessibility",
+          "bytes": 3362,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "maplibre-ui",
       "summary": "Build, debug and visually validate MapLibre GL JS and PMTiles behaviour",
-      "capabilities": ["maps"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript", "maplibre"],
-      "paths": ["app/features/map/**", "**/*.pmtiles"],
-      "keywords": ["maplibre", "pmtiles", "cluster", "viewport", "camera", "atlas", "map", "layer"],
+      "capabilities": [
+        "maps"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript",
+        "maplibre"
+      ],
+      "paths": [
+        "app/features/map/**",
+        "**/*.pmtiles"
+      ],
+      "keywords": [
+        "maplibre",
+        "pmtiles",
+        "cluster",
+        "viewport",
+        "camera",
+        "atlas",
+        "map",
+        "layer"
+      ],
       "bytes": 3504,
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/maplibre-ui", "bytes": 3504, "role": "canonical" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/maplibre-ui",
+          "bytes": 3504,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "milestone-commit",
       "summary": "Deprecated alias for slice-commit, retained so existing invocations still resolve",
-      "capabilities": ["commit"],
-      "stack": ["node", "node-web", "react", "cloudflare-workers", "hono"],
+      "capabilities": [
+        "commit"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "cloudflare-workers",
+        "hono"
+      ],
       "paths": [],
-      "keywords": ["milestone", "commit", "deprecated", "alias"],
+      "keywords": [
+        "milestone",
+        "commit",
+        "deprecated",
+        "alias"
+      ],
       "bytes": 609,
       "aliasOf": "slice-commit",
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/milestone-commit", "bytes": 609, "role": "deprecated" },
-        { "repo": "simt-social", "path": ".agents/skills/milestone-commit", "bytes": 603, "role": "deprecated" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/milestone-commit",
+          "bytes": 609,
+          "role": "deprecated"
+        },
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/milestone-commit",
+          "bytes": 603,
+          "role": "deprecated"
+        }
       ]
     },
     {
       "name": "observability-review",
       "summary": "Typed structured logs, metrics, traces, SLOs, alerts and privacy redaction",
-      "capabilities": ["observability", "release"],
-      "stack": ["cloudflare-workers", "hono", "typescript"],
-      "paths": ["src/**"],
-      "keywords": ["log", "metric", "trace", "slo", "alert", "dashboard", "runbook", "correlation", "cardinality", "redaction"],
+      "capabilities": [
+        "observability",
+        "release"
+      ],
+      "stack": [
+        "cloudflare-workers",
+        "hono",
+        "typescript"
+      ],
+      "paths": [
+        "src/**"
+      ],
+      "keywords": [
+        "log",
+        "metric",
+        "trace",
+        "slo",
+        "alert",
+        "dashboard",
+        "runbook",
+        "correlation",
+        "cardinality",
+        "redaction"
+      ],
       "bytes": 4909,
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/observability-review", "bytes": 4909, "role": "canonical" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/observability-review",
+          "bytes": 4909,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "parallel-feature-team",
       "summary": "Coordinate product, frontend, backend, test, security, compliance, design and docs agents for one requirement",
-      "capabilities": ["orchestration"],
-      "stack": ["node", "node-web", "react", "typescript", "cloudflare-workers", "hono"],
-      "paths": [".github/prompts/**"],
-      "keywords": ["parallel", "subagent", "coordinate", "team", "one writer per file", "minimum viable team"],
+      "capabilities": [
+        "orchestration"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "typescript",
+        "cloudflare-workers",
+        "hono"
+      ],
+      "paths": [
+        ".github/prompts/**"
+      ],
+      "keywords": [
+        "parallel",
+        "subagent",
+        "coordinate",
+        "team",
+        "one writer per file",
+        "minimum viable team"
+      ],
       "bytes": 1131,
-      "requires": ["slice-commit"],
+      "requires": [
+        "slice-commit"
+      ],
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/parallel-feature-team", "bytes": 1131, "role": "canonical", "note": "4-line drift from the API copy; the API copy hardcodes a cross-repo path to this one" },
-        { "repo": "simt-social-api", "path": ".agents/skills/parallel-feature-team", "bytes": 1127, "role": "duplicate" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/parallel-feature-team",
+          "bytes": 1131,
+          "role": "canonical",
+          "note": "4-line drift from the API copy; the API copy hardcodes a cross-repo path to this one"
+        },
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/parallel-feature-team",
+          "bytes": 1127,
+          "role": "duplicate"
+        }
       ]
     },
     {
       "name": "postflight-preview-check",
       "summary": "Run preview-only authenticated postflight after a slice commit and close release evidence",
-      "capabilities": ["release", "testing"],
-      "stack": ["node", "node-web", "react", "typescript", "cloudflare-workers", "hono"],
-      "paths": ["wrangler.jsonc", "docs/runbooks/**"],
-      "keywords": ["postflight", "preview", "authenticated", "evidence", "workers builds", "api shield", "migration proof"],
+      "capabilities": [
+        "release",
+        "testing"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "typescript",
+        "cloudflare-workers",
+        "hono"
+      ],
+      "paths": [
+        "wrangler.jsonc",
+        "docs/runbooks/**"
+      ],
+      "keywords": [
+        "postflight",
+        "preview",
+        "authenticated",
+        "evidence",
+        "workers builds",
+        "api shield",
+        "migration proof"
+      ],
       "bytes": 12984,
       "variants": [
-        { "id": "api", "stack": ["cloudflare-workers", "hono"], "bytes": 12984 },
-        { "id": "web", "stack": ["react", "node-web"], "bytes": 6606 }
+        {
+          "id": "api",
+          "stack": [
+            "hono"
+          ],
+          "bytes": 12984
+        },
+        {
+          "id": "web",
+          "stack": [
+            "react",
+            "node-web"
+          ],
+          "bytes": 6606
+        }
       ],
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/postflight-preview-check", "bytes": 12984, "role": "canonical", "note": "262 drifted lines; adds API Shield publishing and a production-domain denylist covering media.simt.social and goto.simt.app that the web copy lacks" },
-        { "repo": "simt-social", "path": ".agents/skills/postflight-preview-check", "bytes": 6606, "role": "variant" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/postflight-preview-check",
+          "bytes": 12984,
+          "role": "canonical",
+          "note": "262 drifted lines; adds API Shield publishing and a production-domain denylist covering media.simt.social and goto.simt.app that the web copy lacks"
+        },
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/postflight-preview-check",
+          "bytes": 6606,
+          "role": "variant"
+        }
       ]
     },
     {
       "name": "production-quality-review",
       "summary": "Cross-discipline release gate for browser-sensitive, visual and performance slices",
-      "capabilities": ["quality", "accessibility", "observability"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript"],
-      "paths": ["app/**"],
-      "keywords": ["core web vitals", "budget", "cross-engine", "release readiness", "blocker", "lighthouse"],
+      "capabilities": [
+        "quality",
+        "accessibility",
+        "observability"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript"
+      ],
+      "paths": [
+        "app/**"
+      ],
+      "keywords": [
+        "core web vitals",
+        "budget",
+        "cross-engine",
+        "release readiness",
+        "blocker",
+        "lighthouse"
+      ],
       "bytes": 5869,
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/production-quality-review", "bytes": 5869, "role": "canonical", "note": "Cites a skill named web-perf, which exists in no repo" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/production-quality-review",
+          "bytes": 5869,
+          "role": "canonical",
+          "note": "Cites a skill named web-perf, which exists in no repo"
+        }
       ]
     },
     {
       "name": "prototype-ui-fidelity",
       "summary": "Implement or review every UI change against the interactive prototype and Cosmos tokens",
-      "capabilities": ["ui-design", "accessibility"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript", "less"],
-      "paths": ["app/**", "mockups/**"],
-      "keywords": ["mockup", "prototype", "cosmos", "design token", "fidelity", "visual", "composition"],
+      "capabilities": [
+        "ui-design",
+        "accessibility"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript",
+        "less"
+      ],
+      "paths": [
+        "app/**",
+        "mockups/**"
+      ],
+      "keywords": [
+        "mockup",
+        "prototype",
+        "cosmos",
+        "design token",
+        "fidelity",
+        "visual",
+        "composition"
+      ],
       "bytes": 20581,
       "deferred": true,
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/prototype-ui-fidelity", "bytes": 20581, "role": "canonical", "note": "carries a 14 KB references/cosmos-design-system.md" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/prototype-ui-fidelity",
+          "bytes": 20581,
+          "role": "canonical",
+          "note": "carries a 14 KB references/cosmos-design-system.md"
+        }
       ]
     },
     {
       "name": "slice-commit",
       "summary": "Validate and commit a completed implementation slice, updating the active feature plan tracker",
-      "capabilities": ["commit"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript", "cloudflare-workers", "hono"],
+      "capabilities": [
+        "commit"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript",
+        "cloudflare-workers",
+        "hono"
+      ],
       "paths": [],
-      "keywords": ["slice", "commit", "conventional commit", "tracker", "sha", "do not push"],
+      "keywords": [
+        "slice",
+        "commit",
+        "conventional commit",
+        "tracker",
+        "sha",
+        "do not push"
+      ],
       "bytes": 5048,
       "variants": [
-        { "id": "web", "stack": ["react", "node-web"], "bytes": 5048 },
-        { "id": "api", "stack": ["cloudflare-workers", "hono"], "bytes": 4866 }
+        {
+          "id": "web",
+          "stack": [
+            "react",
+            "node-web"
+          ],
+          "bytes": 5048
+        },
+        {
+          "id": "api",
+          "stack": [
+            "hono"
+          ],
+          "bytes": 4866
+        }
       ],
-      "requires": ["complete-testing"],
+      "requires": [
+        "complete-testing"
+      ],
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/slice-commit", "bytes": 5048, "role": "canonical" },
-        { "repo": "simt-social-api", "path": ".agents/skills/slice-commit", "bytes": 4866, "role": "variant", "note": "87 drifted lines; adds the rule that an executable slice is never pushed without a passing build in the slice packet" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/slice-commit",
+          "bytes": 5048,
+          "role": "canonical"
+        },
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/slice-commit",
+          "bytes": 4866,
+          "role": "variant",
+          "note": "87 drifted lines; adds the rule that an executable slice is never pushed without a passing build in the slice packet"
+        }
       ]
     },
     {
       "name": "update-press-kit",
       "summary": "Update, validate and package the SIMT press kit and media assets",
-      "capabilities": ["content"],
-      "stack": ["node", "node-web", "less"],
-      "paths": ["public/**", "content/**"],
-      "keywords": ["press", "press kit", "boilerplate", "media asset", "logo", "fact sheet"],
+      "capabilities": [
+        "content"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "less"
+      ],
+      "paths": [
+        "public/**",
+        "content/**"
+      ],
+      "keywords": [
+        "press",
+        "press kit",
+        "boilerplate",
+        "media asset",
+        "logo",
+        "fact sheet"
+      ],
       "bytes": 20555,
       "deferred": true,
       "sources": [
-        { "repo": "simt-landing", "path": ".agents/skills/update-press-kit", "bytes": 20555, "role": "canonical" }
+        {
+          "repo": "simt-landing",
+          "path": ".agents/skills/update-press-kit",
+          "bytes": 20555,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "wear-data-sync",
       "summary": "Work on the Wear OS app and phone-watch Data Layer communication",
-      "capabilities": ["wear", "persistence"],
-      "stack": ["gradle", "kotlin", "wear-os"],
-      "paths": ["wear/**", "data/wear/**"],
-      "keywords": ["wear", "watch", "data layer", "horologist", "target sync", "applicationid"],
+      "capabilities": [
+        "wear",
+        "persistence"
+      ],
+      "stack": [
+        "gradle",
+        "kotlin",
+        "wear-os"
+      ],
+      "paths": [
+        "wear/**",
+        "data/wear/**"
+      ],
+      "keywords": [
+        "wear",
+        "watch",
+        "data layer",
+        "horologist",
+        "target sync",
+        "applicationid"
+      ],
       "bytes": 3538,
       "sources": [
-        { "repo": "simt-app", "path": ".cursor/skills/wear-data-sync", "bytes": 3538, "role": "canonical" }
+        {
+          "repo": "simt-app",
+          "path": ".cursor/skills/wear-data-sync",
+          "bytes": 3538,
+          "role": "canonical"
+        }
       ],
       "note": "applicationId must stay \"app.simt\" or the Data Layer silently stops delivering; wear targets SDK 36 while the phone targets 37."
     },
     {
       "name": "web-feature-slice",
       "summary": "Implement or review a Social web route or screen slice consuming the generated contract",
-      "capabilities": ["feature-slice", "accessibility", "contract"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript"],
-      "paths": ["app/features/**", "app/routes/**"],
-      "keywords": ["route", "react", "tanstack", "rsvp", "profile", "form", "screen", "locale"],
+      "capabilities": [
+        "feature-slice",
+        "accessibility",
+        "contract"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript"
+      ],
+      "paths": [
+        "app/features/**",
+        "app/routes/**"
+      ],
+      "keywords": [
+        "route",
+        "react",
+        "tanstack",
+        "rsvp",
+        "profile",
+        "form",
+        "screen",
+        "locale"
+      ],
       "bytes": 4844,
       "variantOf": "feature-slice",
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/web-feature-slice", "bytes": 4844, "role": "canonical" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/web-feature-slice",
+          "bytes": 4844,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "web-security-review",
       "summary": "Review browser security: session, onboarding privacy, CSP, storage, media blobs, admin UI",
-      "capabilities": ["security"],
-      "stack": ["node", "node-web", "react", "react-router", "typescript"],
-      "paths": ["app/**"],
-      "keywords": ["csp", "xss", "storage", "cache", "logout", "blob url", "rtl spoofing", "analytics", "admin"],
+      "capabilities": [
+        "security"
+      ],
+      "stack": [
+        "node",
+        "node-web",
+        "react",
+        "react-router",
+        "typescript"
+      ],
+      "paths": [
+        "app/**"
+      ],
+      "keywords": [
+        "csp",
+        "xss",
+        "storage",
+        "cache",
+        "logout",
+        "blob url",
+        "rtl spoofing",
+        "analytics",
+        "admin"
+      ],
       "bytes": 4622,
       "variantOf": "security-review",
       "sources": [
-        { "repo": "simt-social", "path": ".agents/skills/web-security-review", "bytes": 4622, "role": "canonical" }
+        {
+          "repo": "simt-social",
+          "path": ".agents/skills/web-security-review",
+          "bytes": 4622,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "workers-best-practices",
       "summary": "Review and author Cloudflare Workers code against production best practices",
-      "capabilities": ["platform", "quality"],
-      "stack": ["cloudflare-workers"],
-      "paths": ["src/**", "wrangler.jsonc"],
-      "keywords": ["worker", "anti-pattern", "floating promise", "global state", "secret", "binding", "stream"],
+      "capabilities": [
+        "platform",
+        "quality"
+      ],
+      "stack": [
+        "cloudflare-workers"
+      ],
+      "paths": [
+        "src/**",
+        "wrangler.jsonc"
+      ],
+      "keywords": [
+        "worker",
+        "anti-pattern",
+        "floating promise",
+        "global state",
+        "secret",
+        "binding",
+        "stream"
+      ],
       "bytes": 31720,
       "deferred": true,
       "vendored": true,
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/workers-best-practices", "bytes": 31720, "role": "canonical" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/workers-best-practices",
+          "bytes": 31720,
+          "role": "canonical"
+        }
       ]
     },
     {
       "name": "wrangler",
       "summary": "Wrangler CLI reference for Workers, KV, R2, D1, Queues, Durable Objects and secrets",
-      "capabilities": ["platform", "release"],
-      "stack": ["cloudflare-workers"],
-      "paths": ["wrangler.jsonc", "package.json"],
-      "keywords": ["wrangler", "cli", "deploy", "d1 migrations apply", "secret", "kv", "r2", "queue"],
+      "capabilities": [
+        "platform",
+        "release"
+      ],
+      "stack": [
+        "cloudflare-workers"
+      ],
+      "paths": [
+        "wrangler.jsonc",
+        "package.json"
+      ],
+      "keywords": [
+        "wrangler",
+        "cli",
+        "deploy",
+        "d1 migrations apply",
+        "secret",
+        "kv",
+        "r2",
+        "queue"
+      ],
       "bytes": 18359,
       "vendored": true,
       "sources": [
-        { "repo": "simt-social-api", "path": ".agents/skills/wrangler", "bytes": 18359, "role": "canonical" }
+        {
+          "repo": "simt-social-api",
+          "path": ".agents/skills/wrangler",
+          "bytes": 18359,
+          "role": "canonical"
+        }
       ]
     }
   ],
-
   "siblingGroups": [
     {
       "name": "feature-slice",
       "capability": "feature-slice",
       "discriminator": "stack",
-      "members": ["api-feature-slice", "web-feature-slice"],
+      "members": [
+        "api-feature-slice",
+        "web-feature-slice"
+      ],
       "note": "Phase 6 may collapse both nodes into one security-review-style node named feature-slice with two variants. Kept as two named nodes until that content migration happens."
     },
     {
       "name": "security-review",
       "capability": "security",
       "discriminator": "stack",
-      "members": ["api-security-review", "web-security-review"],
+      "members": [
+        "api-security-review",
+        "web-security-review"
+      ],
       "note": "Owned across both repos by the principal-cyber-security-engineer agent."
     }
   ]

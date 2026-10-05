@@ -359,7 +359,6 @@ export async function measureSkill(full) {
 
   let bytes = 0;
   let files = 0;
-  let flat = false;
   const walk = async (dir) => {
     for (const entry of await readdir(dir, { withFileTypes: true })) {
       const child = join(dir, entry.name);
@@ -370,16 +369,17 @@ export async function measureSkill(full) {
       const data = await readFile(child);
       bytes += data.byteLength;
       files += 1;
-      if (dir === full && !entry.name.includes('SKILL.md')) {
-        // A file sitting directly beside where SKILL.md should be.
-        if (entry.name.endsWith('.md')) flat = true;
-      }
     }
   };
   await walk(full);
 
   // Confirm the entry point exists, because a directory of reference files
   // without SKILL.md is not a skill.
+  //
+  // `flat` means one thing only: this entry has no SKILL.md to read. It is NOT
+  // "has a .md file sitting beside SKILL.md" - a `checklist.md` reference in the
+  // same directory is a reference, and treating it as a flat layout made install
+  // try to readFile() a directory.
   let hasEntry = false;
   try {
     await stat(join(full, 'SKILL.md'));
@@ -392,7 +392,7 @@ export async function measureSkill(full) {
     throw Object.assign(new Error(`${full} has no SKILL.md entry point${md}`), { code: 'NO_SKILL_MD' });
   }
 
-  return { bytes, files, flat };
+  return { bytes, files, flat: false };
 }
 
 function duplicates(list) {

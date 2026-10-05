@@ -20,6 +20,8 @@ import { syncCommand, checkCommand } from './sync.mjs';
 import { initCommand } from './init.mjs';
 import { hooksCommand } from './hooks.mjs';
 import { compareCommand } from './compare.mjs';
+import { installCommand } from './skillsinstall.mjs';
+import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 
@@ -27,10 +29,6 @@ import { fingerprint } from '../resolve/fingerprint.mjs';
 const STEPS = new Map([
   ['upgrade', 10],
   ['mcp', 10],
-  ['skills install', 5],
-  ['rules list', 6],
-  ['rules show', 6],
-  ['rules why', 6],
 ]);
 
 /** groups whose subcommands may be omitted, and the default for each. */
@@ -78,6 +76,10 @@ export async function dispatch(argv) {
     'skills brief': skillsBrief,
     'skills show': skillsShow,
     'skills why': skillsWhy,
+    'skills install': installCommand,
+    'rules list': rulesList,
+    'rules show': rulesShow,
+    'rules why': rulesWhy,
     sync: syncCommand,
     check: checkCommand,
     init: initCommand,
@@ -123,6 +125,10 @@ const KNOWN_SUBS = new Set([
   'skills brief',
   'skills show',
   'skills why',
+  'skills install',
+  'rules list',
+  'rules show',
+  'rules why',
   'hooks install',
   'hooks status',
   'hooks run',

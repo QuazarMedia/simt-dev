@@ -8,6 +8,10 @@
   "engines": {
     "node": ">=20"
   },
+  "os": [
+    "darwin",
+    "linux"
+  ],
   "bin": {
     "simt-dev": "bin/simt-dev.mjs"
   },

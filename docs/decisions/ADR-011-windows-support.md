@@ -1,6 +1,11 @@
 # ADR-011 — Windows is supported from v1
 
-Status: **accepted** · 2026-10-05 · affects the `simt-dev` CLI
+Status: **superseded by [ADR-012](ADR-012-drop-windows-support.md)** · 2026-10-05
+Affects: the `simt-dev` CLI
+
+> Superseded the same day. The cost table below is retained because it is what ADR-012's
+> reasoning turns on: three of the five obligations are permanent tax on the hook dispatcher
+> and the projection injector, not one-off work. See ADR-012 for the weighing.
 
 ## Context
 

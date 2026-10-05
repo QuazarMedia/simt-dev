@@ -4,8 +4,9 @@
 // detection gets you most of the way, and simt-dev.json exists to make the
 // remainder explicit and reviewable (ADR: 0002 section 4.1).
 //
-// Design note (ADR-011, Windows v1): every path is normalised to forward slashes
-// before comparison, so a Windows path never fails to match a marker.
+// POSIX only (ADR-012). Marker paths are normalised to forward slashes anyway,
+// because a marker set written by hand in the registry must match what readdir
+// returns on any host.
 
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';

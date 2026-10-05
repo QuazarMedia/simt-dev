@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // simt-dev - developer and agent tooling for the SIMT ecosystem.
 //
-// Windows note (ADR-011): npm generates the .cmd shim for this file, so the
-// shebang is a convenience for POSIX shells, not the only entry path.
+// POSIX only (ADR-012). package.json declares os: [darwin, linux], so npm refuses
+// the install elsewhere rather than letting a hook fail obscurely.
 
 import { dispatch } from '../src/commands/index.mjs';
 import { EXIT, fail } from '../src/output/index.mjs';

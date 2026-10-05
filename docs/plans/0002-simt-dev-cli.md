@@ -383,9 +383,15 @@ Settled 2026-10-05. Recorded as ADRs in `docs/decisions/`.
    tooling together. Per-artifact pinning is rejected because skills hard-reference rule files
    — `postflight-preview-check` cites `.cursor/rules/preview-postflight.mdc` — so independent
    pins can produce rule+skill combinations nobody tested.
-5. **Windows is supported from v1.** See ADR-011 for what this obliges. Costs more than the
-   `os: ["darwin","linux"]` opt-out would have, and buys an install story that does not break
-   on the first non-Mac contributor.
+5. **POSIX only: macOS and Linux.** `package.json` declares `"os": ["darwin", "linux"]`, so npm
+   refuses the install on Windows with a clear message rather than failing obscurely inside a
+   git hook. Initially ruled as Windows-v1 support and reversed the same day — see
+   [ADR-011](../decisions/ADR-011-windows-support.md) and
+   [ADR-012](../decisions/ADR-012-drop-windows-support.md). No repo in the estate has a
+   Windows developer or a Windows-ready toolchain, so the CLI would have been the only
+   Windows-ready artefact serving nobody, at the cost of three permanent obligations on the
+   hook dispatcher and the projection injector. The projection injector still normalises line
+   endings, which is a cross-POSIX problem: 10 of 16 repos have no `.editorconfig`.
 6. **Package is `@quazarmedia/simt-dev`, binary `simt-dev`.** Publish requires npm org
    membership with publish rights on the QuazarMedia scope; first publish is a one-off manual
    step by the org owner.

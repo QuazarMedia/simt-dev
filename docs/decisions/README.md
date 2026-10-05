@@ -18,11 +18,15 @@ record's status line — never by editing the ruling in place.
 | [008](ADR-008-verdict-vocabulary.md) | One review verdict vocabulary: three values | accepted |
 | [009](ADR-009-skill-layout.md) | Skills are `<name>/SKILL.md` with mandatory frontmatter | accepted |
 | [010](ADR-010-runner-invocation.md) | Invoke through the repo's own runner, never a package runner | accepted |
-| [011](ADR-011-windows-support.md) | Windows is supported from v1 for the CLI | accepted |
+| [011](ADR-011-windows-support.md) | Windows is supported from v1 for the CLI | **superseded by 012** |
+| [012](ADR-012-drop-windows-support.md) | Windows support dropped; POSIX only | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
-audit; each record names the repos whose text it replaces. ADR-011 is a platform decision for
-the CLI described in [plan 0002](../plans/0002-simt-dev-cli.md).
+audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
+platform decision for the CLI described in
+[plan 0002](../plans/0002-simt-dev-cli.md), and they are a worked example of the
+supersession rule above: 011 was accepted, 012 reversed it the same day, and 011's record was
+kept rather than rewritten because the cost table it contains is the evidence 012 relies on.
 
 ## The rule these records enforce
 

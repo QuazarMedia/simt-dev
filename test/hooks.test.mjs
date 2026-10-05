@@ -76,6 +76,71 @@ test('shim: does not escape the shell variables it interpolates', async () => {
   assert.match(body, /\$\{SIMT_DEV_BIN:-\}/);
 });
 
+test('shim: every parameter expansion carries a default', () => {
+  // Regression: the "cannot locate the dispatcher" remedy echoed $SIMT_DEV_BIN
+  // unguarded. The shim runs under `set -eu`, so that one line aborted the shell
+  // with "SIMT_DEV_BIN: unbound variable" and the reader got an error instead of
+  // the message explaining it. `sh -n` cannot catch this - the script is valid,
+  // it just dies at runtime, in the one branch that only runs when nothing
+  // resolved. So the guard is structural.
+  for (const event of EVENTS) {
+    const body = renderShim(event);
+    const names = [...body.matchAll(/\$\{([A-Z_][A-Z0-9_]*)\}/g)].map((m) => m[1]);
+    for (const name of names) {
+      assert.ok(
+        body.includes(`\${${name}:-`),
+        `${event}: $${name} expands without a default and dies under \`set -u\``,
+      );
+    }
+  }
+});
+
+test('shim: SIMT_DEV_BIN naming a .mjs entry point is run through node', async () => {
+  // Regression: `exec "$SIMT_DEV_BIN"` treats the whole value as one filename, so
+  // the documented override could not be used from a source checkout - the normal
+  // case for anyone working on simt-dev itself.
+  const root = await mkdtemp(join(tmpdir(), 'simt-shim-'));
+  temps.push(root);
+  await writeFile(join(root, 'simt-dev.json'), JSON.stringify({ gates: { preCommit: [], prePush: [] } }));
+  await mkdir(join(root, '.git'), { recursive: true });
+  await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
+
+  const path = join(root, fileFor('pre-commit'));
+  await mkdir(join(path, '..'), { recursive: true });
+  await writeFile(path, renderShim('pre-commit'));
+  await chmod(path, 0o755);
+
+  const { stdout } = await exec('sh', [path], {
+    cwd: root,
+    env: { ...process.env, SIMT_DEV_BIN: BIN, PATH: process.env.PATH },
+  });
+  assert.match(stdout, /^hooks\s+pre-commit/m);
+});
+
+test('shim: SIMT_DEV_BIN naming a command line is refused, not half-executed', async () => {
+  // There is no safe way to split a command line in sh without eval. Guessing
+  // would run the wrong program; refusing says exactly what to set instead.
+  const root = await mkdtemp(join(tmpdir(), 'simt-shim-'));
+  temps.push(root);
+  await mkdir(join(root, '.git'), { recursive: true });
+  await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
+
+  const path = join(root, fileFor('pre-commit'));
+  await mkdir(join(path, '..'), { recursive: true });
+  await writeFile(path, renderShim('pre-commit'));
+  await chmod(path, 0o755);
+
+  const result = await exec('sh', [path], {
+    cwd: root,
+    // PATH stays intact: emptying it makes `sh` itself unresolvable, so execFile
+    // never runs the script at all. The refusal happens before any PATH lookup.
+    env: { ...process.env, SIMT_DEV_BIN: `node ${BIN}` },
+  }).catch((error) => ({ stderr: error.stderr, code: error.code }));
+
+  assert.match(result.stderr, /names a command line, not a program/);
+  assert.equal(result.code, 1);
+});
+
 test('shim: does not forward git arguments into argv', () => {
   // pre-push passes a remote name and URL; forwarding them would make argv
   // read them as command arguments.

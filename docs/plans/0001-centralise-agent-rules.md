@@ -160,6 +160,23 @@ injector + `--check` mode). No consuming repo touched.
 skills, 8 agent policies, tooling baselines, hook library. Each canonical file records which
 files it replaces and why.
 
+**Phase 2a — DONE (`rules/mdc/*.mdc`, ADR-016).** The three always-on `.mdc` families are
+authored as **unions**, not variants, because two of the eight differences were rules a repo
+was *missing* rather than a choice it made. `test-gate` carries both the producer-side and
+consumer-side `BLOCK` bullets plus social's `6/8 pass` example; `preview-postflight` carries both
+the `SOCIAL_API_BASE_URL` build instruction and the keychain/never-in-D1 prohibition and restores
+media's deleted `## Allowed Without Account`; `intake-questions` keeps `migrations` and social's
+fuller Required First Turn. Only genuinely per-repo substrate is a declared substitution
+(`{{plansGlob}}`, path vocabularies, domain lists), and an empty value **drops** its line, which is
+how one canonical body reaches a repo with no plan tracker. `preview-postflight` is `optIn`
+because detection cannot tell a Workers repo that has this problem from one that does not.
+
+**Phase 2b — DONE (rule discovery).** `RULE_FILES` named only `AGENTS.md`, `CLAUDE.md` and
+`CONTRIBUTING.md` for the whole life of the tool, so `simt init` reported `CONFLICTS none detected`
+on `simt-social-api` — the repo holding the worst-drifted content in the estate — because it never
+looked at the `.mdc` files. Discovery is now by name **and** by glob, and generated regions are
+stripped before scanning so quoting a ruling is never mistaken for contradicting it.
+
 **Phase 3 — Prove the engine.** `sync.mjs --check` exits non-zero on drift. Reusable workflow
 live.
 
@@ -209,6 +226,12 @@ not repeated here; `simt-dev` is the tool and never adopts itself.
 simt-space's local fallback — it already works and is proven). Replace bunnyland's
 byte-identical `CLAUDE.md` with a pointer. Collapse the 7 drifted Social skill twins to
 canonical + stub. Add `git.config` and `graphify-out/` to `.prettierignore`.
+
+The 8 divergent `.mdc` copies are retired by `sync`, not by hand: a managed `.mdc` is a generated
+file whose frontmatter is preserved and whose body is replaced, with the retirement reported as
+`retiring N bytes of divergent hand-written rule text` so the deletion is auditable. Phase 6 only
+has to *confirm* the result and delete the per-repo `substitutions` values that are no longer
+needed. `simt-social-media` gains an `intake-questions.mdc` it never had.
 
 **Phase 7 — Defect sweep.** Independent of centralisation, do it while the context is fresh:
 garmin's malformed ```bash fence, broken DoD numbering and permanently-red `memcheck` gate

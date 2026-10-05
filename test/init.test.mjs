@@ -36,6 +36,7 @@ test('manifest: an existing manifest is never weakened by a re-init', () => {
     limits: { coverage: 100, fileLines: { warn: 250, error: 600 } },
     gates: { preCommit: ['ruff'], prePush: ['pytest'] },
     localSkills: ['coverage-hunt'],
+    substitutions: { 'test-gate': { plansGlob: '../simt-social/docs/plans/*' } },
   };
   const next = buildManifest({ root: '/x/y', stack: ['gradle'], sha: 'abc1234', existing });
   assert.equal(next.id, 'custom-id');
@@ -43,10 +44,23 @@ test('manifest: an existing manifest is never weakened by a re-init', () => {
   assert.deepEqual(next.limits.fileLines, { warn: 250, error: 600 });
   assert.deepEqual(next.gates.preCommit, ['ruff']);
   assert.deepEqual(next.localSkills, ['coverage-hunt']);
+  // ADR-016: the repo's own substitution values survive a re-init. Losing them would
+  // reset every generated `.mdc` rule to its defaults, which is a silent edit of four
+  // files nobody asked to change.
+  assert.deepEqual(next.substitutions['test-gate'], {
+    plansGlob: '../simt-social/docs/plans/*',
+  });
   // The declared stack wins over detection, or a re-init would silently reclassify.
   assert.deepEqual(next.stack, ['python']);
   // Only the projection stamp is refreshed.
   assert.equal(next.projection.simtDevSha, 'abc1234');
+});
+
+test('manifest: substitutions are seeded, not absent (ADR-016)', () => {
+  // An absent key looks like an oversight; an empty object says the shape exists and
+  // nothing needs filling in yet.
+  const { substitutions } = buildManifest({ root: '/x/y', stack: ['node'] });
+  assert.deepEqual(substitutions, {});
 });
 
 test('manifest: connectiq gets memory and codegen-drift gates (ADR-006)', () => {

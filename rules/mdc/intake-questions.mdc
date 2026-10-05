@@ -1,0 +1,44 @@
+---
+id: intake-questions
+target: .cursor/rules/intake-questions.mdc
+description: Ask only unresolved business/technical decisions before work
+alwaysApply: true
+applies: always
+substitutions:
+  - key: plansGlob
+    default: docs/plans/*
+    describe: glob for this repo's active plan tracker tables
+---
+
+# Intake Questions
+
+When starting, resuming, or scoping a feature slice or plan task, do not jump into code
+without resolving open material decisions.
+
+## Agent Defaults (Do Not Ask)
+
+Apply documented defaults without questions for:
+
+- Operational/procedural choices (tracker updates, commit vs push, validation depth,
+  artifact shape).
+- Slice sequencing and repository ownership when already defined in the active plan
+  tracker table (`{{plansGlob}}`).
+- Standard engineering conventions.
+
+## When To Ask (1-3 Questions Max)
+
+Ask only when a functionality, business, privacy, security, or technical decision is not
+settled in authority docs, and the answer materially changes behavior, scope, contracts,
+migrations, or risk.
+
+- Use the interactive `AskQuestion` tool with the recommended default first.
+- If unavailable, present numbered choices with `(recommended)` on the first option.
+- Do not ask operational or procedural choices; apply the best documented option.
+
+## Required First Turn
+
+1. State the smallest independently valuable slice, the owning repo, the active plan
+   tracker task ID (from `{{plansGlob}}`), and the acceptance checks.
+2. Either ask the unresolved material decision questions, or state that the authority docs
+   leave no material open decision and proceed to implementation.
+3. Proceed without waiting when no material decision remains.

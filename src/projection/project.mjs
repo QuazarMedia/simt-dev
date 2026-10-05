@@ -22,6 +22,8 @@ import { dirname, join, resolve } from 'node:path';
 
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { diff, parse, inject, BEGIN, END } from './markers.mjs';
+import { loadMdcRules, renderMdc, mdcFrontmatter } from './mdc.mjs';
+import { MANIFEST } from './manifest.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const ROOT = resolve(HERE, '..', '..');
@@ -35,6 +37,17 @@ export const LOCAL_PROFILE_DIR = '.simt-dev/profiles';
 export const PRIMARY_TARGET = 'AGENTS.md';
 
 /**
+ * Manifest key holding per-rule substitution values, keyed by rule id.
+ *
+ * Substitutions live in the manifest rather than in the rule file because they are
+ * facts about the repo — which glob holds its plans, which domains are production
+ * — while a rule is shared by every repo that adopts it. Putting them in the rule
+ * either hard-codes one repo's paths for everyone or pushes the decision back
+ * into prose, which is the drift this mechanism exists to remove.
+ */
+export const SUBSTITUTIONS_KEY = 'substitutions';
+
+/**
  * @param {string} root repo root
  * @returns {Promise<{root:string, stack:string[], facts:string[], profiles:string[],
  *                    rules:object[], targets:object[], notes:string[]}>}
@@ -44,6 +57,14 @@ export async function plan(root) {
   const { stack, facts, profiles, fallback, notes, body, meta, all } = desired;
   const target = await targetFor(root, body, meta);
 
+  // `.mdc` rules are separate generated regions in separate files, each keeping
+  // its own frontmatter OUTSIDE the region because the editor reads
+  // `description` and `alwaysApply` before any rule text. They are returned as
+  // additional targets rather than folded into the AGENTS.md body: a Cursor rule
+  // file that contains the whole region would be read by Cursor and ignored by
+  // everything else, which is the split the estate already had.
+  const mdc = await mdcTargets(root, meta.sha);
+
   return {
     root,
     stack,
@@ -51,9 +72,157 @@ export async function plan(root) {
     profiles,
     fallback,
     rules: all,
-    targets: [target],
-    notes,
+    targets: [target, ...mdc.targets],
+    mdcProblems: mdc.problems,
+    notes: [...notes, ...mdc.notes],
   };
+}
+
+/** The existing frontmatter block, or null when the file has none. */
+function extractFrontmatter(text) {
+  const m = /^---\n[\s\S]*?\n---\n?/.exec(text);
+  return m ? m[0].trimEnd() : null;
+}
+
+function bodyAfterFrontmatter(text) {
+  return text.replace(/^---\n[\s\S]*?\n---\n*/, '');
+}
+
+/**
+ * Would this repo receive this `.mdc` rule? Shared by `plan` (which writes) and
+ * `checkTargets` (which gates) for the same reason `desiredRegion` is shared: if
+ * the two disagreed, the gate would demand a file `sync` refuses to produce.
+ */
+function isEligible(rule, signals, optedIn) {
+  if (rule.optIn === true) return optedIn.has(rule.id);
+  if (rule.applies === 'always') return true;
+  return Array.isArray(rule.applies) && rule.applies.some((t) => signals.has(t));
+}
+
+/**
+ * Read the repo's declared substitutions and opt-ins once.
+ *
+ * Both callers used to read and parse `simt-dev.json` separately — and `checkTargets`
+ * did it inside its per-rule loop, so a repo with three projected `.mdc` rules read the
+ * manifest three times to reach the same two values. A helper that answers once is also
+ * the only way to be sure the writer and the gate cannot disagree about what was
+ * declared.
+ */
+async function readDeclared(root) {
+  let parsed = {};
+  try {
+    parsed = JSON.parse(await readFile(join(root, MANIFEST), 'utf8')) ?? {};
+  } catch {
+    parsed = {};
+  }
+  const declarations = parsed[SUBSTITUTIONS_KEY] ?? {};
+  const list = declarations.__optIn;
+  return {
+    values: declarations,
+    optIn: new Set(Array.isArray(list) ? list : []),
+  };
+}
+
+
+
+/**
+ * Render every canonical `.mdc` rule into its own generated region.
+ *
+ * A rule with a defect (no id, no target) is reported and skipped rather than
+ * written somewhere guessed: a rule file that silently stopped being projected
+ * would look exactly like a rule file that had nothing to say.
+ */
+async function mdcTargets(root, sha) {
+  const targets = [];
+  const problems = [];
+  const notes = [];
+  const skipped = [];
+
+  const { stack, facts } = await fingerprint(root);
+  const signals = new Set([...stack, ...facts]);
+
+  const rules = await loadMdcRules();
+  if (rules.length === 0) {
+    notes.push('no canonical .mdc rules shipped in this build');
+    return { targets, problems, notes };
+  }
+
+  const declared = await readDeclared(root);
+
+  for (const rule of rules) {
+    if (rule.error !== null) {
+      problems.push(`${rule.file}: ${rule.error}`);
+      continue;
+    }
+    // Selection mirrors the stack profiles: `applies: always` is unconditional, an
+    // `applies` array intersects the repo's signals, and an opt-in rule waits for
+    // the manifest to name it. A repo that matches nothing gets no `.mdc` rule
+    // rather than a plausible-looking one it cannot act on.
+    if (!isEligible(rule, signals, declared.optIn)) {
+      skipped.push(rule.id);
+      continue;
+    }
+    const values = declared.values[rule.id] ?? {};
+    const { body, problems: renderProblems } = renderMdc(rule, values);
+    for (const p of renderProblems) problems.push(`${rule.file}: ${p}`);
+    if (renderProblems.length > 0) continue;
+
+    const path = join(root, rule.target);
+    let existing = '';
+    let exists = true;
+    try {
+      existing = await readFile(path, 'utf8');
+    } catch {
+      exists = false;
+    }
+
+    // A managed `.mdc` rule is a GENERATED FILE, unlike AGENTS.md. The body after
+    // the frontmatter is the region, full stop: there is no hand-owned prose to
+    // preserve, because any prose that was there is exactly the divergent copy this
+    // mechanism retires. Appending instead would leave two `## Requirements`
+    // sections in one file — the duplication the estate's own review agent is
+    // instructed to block, produced by the tool meant to remove it.
+    //
+    // So the existing frontmatter is kept (the editor reads it before any rule
+    // text) and everything below it is replaced. That is a destructive edit to a
+    // real file, which is why `init` reports it and `--yes` is required.
+    const frontmatter = extractFrontmatter(existing) ?? mdcFrontmatter(rule);
+    const state = exists ? parse(existing) : { status: 'absent' };
+    const composed =
+      state.status === 'ok'
+        ? existing // already a region; inject keeps it idempotent and contained
+        : `${frontmatter}\n`;
+    const result = inject(composed, body, { sha, sources: [rule.source] });
+
+    // Report the prose being retired rather than letting it vanish into a diff the
+    // reader has to notice. Silent deletion is the one thing a reviewer cannot audit.
+    const retired = exists && state.status !== 'ok' ? bodyAfterFrontmatter(existing).trim() : '';
+    if (retired !== '') {
+      notes.push(
+        `${rule.target}: retiring ${Buffer.byteLength(retired)} bytes of divergent hand-written rule text`,
+      );
+    }
+
+    targets.push({
+      file: rule.target,
+      path,
+      exists,
+      action: result.action,
+      reason: result.reason,
+      line: result.line,
+      bytes: Buffer.byteLength(result.text),
+      previousBytes: Buffer.byteLength(existing),
+      sha,
+      body,
+      text: result.text,
+      previous: existing,
+    });
+  }
+
+  if (skipped.length > 0) {
+    notes.push(`no .mdc rule projected for ${skipped.join(', ')}; opt in with substitutions.__optIn`);
+  }
+  return { targets, problems, notes };
 }
 
 /**
@@ -272,7 +441,98 @@ async function targetFor(root, body, meta) {
 
 /** Check one repo without writing. Returns findings rather than an exit code,
  *  so commands/check decides severity and commands/sync decides whether to act. */
+export async function checkTargets(root) {
+  const findings = [];
+  const primary = await checkPrimary(root);
+  findings.push(primary);
+
+  // A `.mdc` rule with a defect is a gate failure even when its file happens to be
+  // correct, because the next `sync` will not reproduce it.
+  // Selection must match `plan` exactly, or the gate reports a rule absent that
+  // `sync` was never going to write — a permanently red check nothing can fix.
+  const all = await loadMdcRules();
+  const { stack, facts } = await fingerprint(root);
+  const declared = await readDeclared(root);
+  const rules = all.filter((r) => isEligible(r, new Set([...stack, ...facts]), declared.optIn));
+
+  for (const rule of rules) {
+    if (rule.error !== null) {
+      findings.push({
+        file: `rules/mdc/${rule.file}`,
+        status: 'invalid',
+        detail: rule.error,
+      });
+      continue;
+    }
+    const path = join(root, rule.target);
+    let existing = '';
+    try {
+      existing = await readFile(path, 'utf8');
+    } catch {
+      findings.push({
+        file: rule.target,
+        status: 'absent',
+        detail: 'no canonical .mdc rule here; run: simt sync',
+      });
+      continue;
+    }
+    const state = parse(existing);
+    if (state.status === 'malformed') {
+      findings.push({
+        file: rule.target,
+        status: 'malformed',
+        detail: state.reason,
+        line: state.line,
+      });
+      continue;
+    }
+    if (state.status === 'absent') {
+      findings.push({
+        file: rule.target,
+        status: 'unmanaged',
+        detail: 'no generated region; run: simt sync',
+      });
+      continue;
+    }
+
+    const { body, problems } = renderMdc(rule, declared.values[rule.id] ?? {});
+    if (problems.length > 0) {
+      findings.push({
+        file: rule.target,
+        status: 'invalid',
+        detail: problems[0],
+      });
+      continue;
+    }
+    // Compared against the same reconstruction `plan` writes: frontmatter plus a
+    // single region. Diffing against the raw file would demand the divergent
+    // pre-adoption text still be present, which is the opposite of retiring it.
+    const reference =
+      state.status === 'ok'
+        ? existing
+        : `${extractFrontmatter(existing) ?? mdcFrontmatter(rule)}\n`;
+    const d = diff(reference, body, { sha: await headSha(), sources: [rule.source] });
+    findings.push({
+      file: rule.target,
+      status: d.action === 'unchanged' ? 'current' : 'drift',
+      detail: d.action === 'unchanged' ? undefined : `region is ${d.action}; run: simt sync`,
+      recordedSha: state.sha ?? null,
+    });
+  }
+
+  return findings;
+}
+
+/** One repo's primary target only, for callers that report a repo as a single row
+ *  (`compare`). The `.mdc` findings are reachable through `checkTargets`, which is
+ *  what the gate uses — a dashboard row cannot represent four files, and the gate
+ *  must not inherit the dashboard's coarser view. */
 export async function checkTarget(root) {
+  const findings = await checkPrimary(root);
+  return findings;
+}
+
+async function checkPrimary(root) {
   const { body, meta } = await desiredRegion(root);
   const path = join(root, PRIMARY_TARGET);
   let existing = '';

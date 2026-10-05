@@ -1,0 +1,53 @@
+---
+id: preview-postflight
+target: .cursor/rules/preview-postflight.mdc
+description: Authenticated remote postflight uses dedicated preview Workers
+alwaysApply: true
+# Opt-in, not stack-detected. This rule names specific preview Workers, a specific
+# env var and a specific credential secret, so `applies: [cloudflare-workers]` would
+# hand it to simt-space and simt-goto — Workers repos that have no preview Workers and
+# no Social identity. Detection cannot tell a Workers repo that has this problem from
+# one that does not, so the repo declares it. See ADR-016 section 3.
+applies: []
+optIn: true
+substitutions:
+  - key: previewWorkers
+    default: the dedicated preview Workers
+    describe: the preview Worker names this family deploys
+  - key: previewUrlHost
+    default: https://<preview-worker>.<account>.workers.dev
+    describe: the preview URL shape authenticated checks must target
+  - key: productionDomains
+    default: the repo's production domains
+    describe: domains authenticated postflight must never target
+  - key: productionDomainNote
+    default: ""
+    describe: one clause naming this repo's own production domain binding
+---
+
+# Preview-Only Authenticated Postflight
+
+Authenticated remote postflight and release checks use only {{previewWorkers}}, deployed
+with `AUTH_PROVIDER_POLICY=preview_postflight_password` and a secret-bound Firebase password
+identity (`POSTFLIGHT_PASSWORD_UID`).
+
+## Requirements
+
+- Authenticated checks must target preview URLs (`{{previewUrlHost}}`).
+- Production and public browser flows remain Google-only.
+- Point the preview build at the preview API Worker: set `SOCIAL_API_BASE_URL` in the
+  Cloudflare Workers Builds preview environment to the preview API Worker URL.
+- Postflight credentials live in the operator keychain only; never in source, chat, D1, or
+  logs.
+{{productionDomainNote}}
+
+## Forbidden
+
+- Authenticated postflight against production domains ({{productionDomains}}).
+- Using real Social Google accounts for feature slice verification.
+- Demanding, pasting, or storing production Google OAuth tokens in chat or tickets.
+
+## Allowed Without Account
+
+- Unauthenticated production probes (`/health`, `/openapi.json`, a fail-closed `401`),
+  Cloudflare API inventory, D1 migration verification, and Worker deployment status.

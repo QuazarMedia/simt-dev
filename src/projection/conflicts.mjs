@@ -12,8 +12,51 @@
 // restating. So every match is checked for prohibition context first.
 
 /** Files whose text is a hand-written rule surface. Scanned for conflicts only;
- *  generated regions are excluded at read time by the caller. */
+ *  generated regions are excluded at read time by the caller.
+ *
+ *  `.cursor/rules/*.mdc` was NOT here for the whole life of the tool, and that is
+ *  worth recording: the estate's three always-on `.mdc` families were the single
+ *  worst-drifted content in it, and `simt init` reported `CONFLICTS none detected`
+ *  on the repo holding them. A conflict detector that only looks at the filenames
+ *  it was written for will quietly miss a whole rule surface added later. */
 export const RULE_FILES = ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md'];
+
+/** Rule files discovered by glob rather than by name. */
+export const RULE_GLOBS = ['.cursor/rules/*.mdc', '.github/instructions/*.md'];
+
+/** Every hand-written rule path in a repo, named or globbed.
+ *
+ *  The glob is split at its LAST `*`, and the two halves are used for what they
+ *  actually mean: the part before it is the directory, the part after it is either
+ *  a name prefix (`dir/*name.md`) or, when it starts with `.`, a file extension
+ *  (`dir/*.mdc`). Matching a name prefix where an extension was meant finds
+ *  nothing and reports no conflict — a detector that silently matches zero files
+ *  is indistinguishable from a repo with no rules, which is exactly the failure
+ *  this function exists to end. */
+export async function rulePaths(root) {
+  const { readdir } = await import('node:fs/promises');
+  const { join } = await import('node:path');
+  const out = RULE_FILES.map((f) => join(root, f));
+  for (const glob of RULE_GLOBS) {
+    const star = glob.lastIndexOf('*');
+    const dir = join(root, glob.slice(0, star));
+    const tail = glob.slice(star + 1);
+    const suffix = tail.startsWith('.') ? tail : null;
+    const prefix = suffix === null ? tail : '';
+    let names;
+    try {
+      names = await readdir(dir);
+    } catch {
+      continue;
+    }
+    for (const name of names.sort()) {
+      if (suffix !== null ? name.endsWith(suffix) : name.startsWith(prefix) && name.endsWith('.md')) {
+        out.push(join(dir, name));
+      }
+    }
+  }
+  return out;
+}
 
 const PROHIBITION = /\b(do not|do n't|don't|never|must not|mustn't|avoid|forbidden|prohibited|refuse)\b/i;
 
@@ -35,7 +78,15 @@ const PROBES = [
     canonical: 'commit locally, report the SHA, push only on explicit approval',
     detail:
       'asks for a push the agent performs without approval; the remote may be a production deploy',
-    re: /committed?\s+and\s+pushed\b/gi,
+    // The suffix is optional on both words: garmin's DoD says "Committed and
+    // pushed", a different author wrote "Always commit and pushed", and an
+    // anchored pattern that only matched the first form reported a real
+    // autonomous-push rule as clean. `commit` also matches "commits" and
+    // "committed" because `commit?` only absorbs one `t`, not `ted`.
+    re: /\bcommit(?:te[ds]?|ting)?\s+and\s+push(?:e[ds]?|ing)?\b/gi,
+    // `push` with no suffix must match too: the group is optional, because an
+    // earlier version made it required and therefore only ever matched "pushed",
+    // reporting "commit and push without asking" as clean.
   },
   {
     id: 'file-length-hard-split',

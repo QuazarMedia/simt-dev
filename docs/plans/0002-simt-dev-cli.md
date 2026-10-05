@@ -347,21 +347,25 @@ validator is ~150 lines, and dropping `dependencies` is what makes `npx` instant
 
 ## 11. Implementation sequence
 
-| Step | Deliverable | Done when |
-|---|---|---|
-| 1 | Package skeleton, argv dispatch, exit codes, output layer | `simt --help` and `simt nope` both behave |
-| 2 | `graph/skills.graph.json` covering all 46 existing entries | `simt graph lint` clean, no orphans |
-| 3 | `fingerprint` + detector tests | all 16 repos classify correctly from marker files alone |
-| 4 | `skills index` / `find` / `show` | index under 6 KB for the full registry |
-| 5 | `skills brief` + `why` | `eval` corpus passes; every selection traceable |
-| 6 | Projection engine + `simt check` | drift detected in a deliberately stale repo |
-| 7 | `init` with conflict reporting | dry-run adoption produces a reviewable diff on all 3 pilots |
-| 8 | `hooks` dispatcher | one pre-commit works across all 3 pilot stacks |
-| 9 | `compare` | replaces the hand audit |
-| 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA |
+| Step | Deliverable | Done when | State |
+|---|---|---|---|
+| 1 | Package skeleton, argv dispatch, exit codes, output layer | `simt --help` and `simt nope` both behave | done |
+| 2 | `graph/skills.graph.json` covering all 38 unique names | `simt graph lint` clean, no orphans | done |
+| 3 | `fingerprint` + detector tests | all 16 repos classify correctly from marker files alone | done |
+| 4 | `skills index` / `find` / `show` | index under 6 KB for the full registry | done (5 663 bytes for 38 skills) |
+| 5 | `skills brief` + `why` | `eval` corpus passes; every selection traceable | done |
+| 6 | Projection engine + `simt check` | drift detected in a deliberately stale repo | done |
+| 7 | `init` with conflict reporting | dry-run adoption produces a reviewable diff on all 3 pilots | next |
+| 8 | `hooks` dispatcher | one pre-commit works across all 3 pilot stacks | pending |
+| 9 | `compare` | replaces the hand audit | pending |
+| 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA | pending |
 
-Steps 1-5 are useful with zero content migration and should land first, because they deliver
-the token win (tier 0/1/2 discovery) before any repo has changed.
+Steps 1-5 are useful with zero content migration and land first, because they deliver the
+token win (tier 0/1/2 discovery) before any repo has changed. Step 6 then proved the
+distribution mechanism against a scratch copy of a real repo: an unmanaged file, a body edit,
+a stale-SHA-only edit and a malformed region each fail the gate with a distinct remedy, a
+second `sync` is a byte-for-byte no-op, and hand-written content outside the markers survives
+a round trip identically.
 
 ## 12. Rulings on the open questions
 

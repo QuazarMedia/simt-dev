@@ -25,6 +25,7 @@ const BOOL_FLAGS = new Set([
   'help',
   'version',
   'accept-conflicts',
+  'list',
 ]);
 
 const VALUE_FLAGS = new Set([

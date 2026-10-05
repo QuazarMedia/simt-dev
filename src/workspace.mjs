@@ -255,3 +255,30 @@ export async function workspaceOrNull(flags = {}, options = {}) {
   const { root, error } = await resolveWorkspace(flags, options);
   return error ? null : root;
 }
+
+/**
+ * The path a multi-repo command should work on: `--root` or the first positional if
+ * given, else the resolved workspace, else the current directory.
+ *
+ * This lives here rather than in each command because precedence is a user-visible
+ * contract: `compare`, `upgrade` and any future workspace-wide command must agree on
+ * which source named the directory, or a reader who set `SIMT_DEV_WORKSPACE` gets
+ * three different answers from three commands.
+ *
+ * `--root` is returned verbatim as the source even though it names a repository; whether
+ * that repository is the only thing that counts is the caller's question, and `discover`
+ * answers it from the filesystem rather than from a guess.
+ */
+export async function targetRoot(flags = {}, positional = []) {
+  const explicit = flags.root ?? positional[0];
+  if (explicit) {
+    return { root: absolute(explicit), source: 'flag', detail: explicit, ws: null };
+  }
+  const ws = await resolveWorkspace(flags);
+  return {
+    root: absolute(ws.root ?? process.cwd()),
+    source: ws.source,
+    detail: ws.detail,
+    ws,
+  };
+}

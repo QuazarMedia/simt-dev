@@ -20,6 +20,8 @@ import { syncCommand, checkCommand } from './sync.mjs';
 import { initCommand } from './init.mjs';
 import { hooksCommand } from './hooks.mjs';
 import { compareCommand } from './compare.mjs';
+import { upgradeCommand } from './upgrade.mjs';
+import { mcpCommand } from './mcp.mjs';
 import { installCommand } from './skillsinstall.mjs';
 import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
 import { parse } from '../argv.mjs';
@@ -27,10 +29,11 @@ import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 
 /** command path -> implementation sequence step (plan 0002 section 11). */
-const STEPS = new Map([
-  ['upgrade', 10],
-  ['mcp', 10],
-]);
+// Every command named in plan 0002 section 5 is now implemented, so this map is empty.
+// It stays, rather than being deleted, because the next command should be added here
+// first: a declared-but-unimplemented command must exit UNSUPPORTED with a pointer to
+// its step, never silently succeed with empty output an agent will read as a result.
+const STEPS = new Map([]);
 
 /** groups whose subcommands may be omitted, and the default for each. */
 const GROUPS = new Map([
@@ -88,6 +91,8 @@ export async function dispatch(argv) {
     'hooks status': (args, flags) => hooksCommand('status', args, flags),
     'hooks run': (args, flags) => hooksCommand('run', args, flags),
     compare: compareCommand,
+    upgrade: upgradeCommand,
+    mcp: mcpCommand,
   };
   const run = IMPLEMENTED[path];
   if (run) return run(args, flags);

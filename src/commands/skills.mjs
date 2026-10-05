@@ -24,7 +24,7 @@ import { nearMatches } from '../resolve/near.mjs';
 const DEFAULT_BUDGET = 20480;
 
 /** git status paths, so path signals come from the real diff. */
-async function dirtyPaths(root) {
+export async function dirtyPaths(root) {
   try {
     const { execFile } = await import('node:child_process');
     const { promisify } = await import('node:util');
@@ -40,7 +40,7 @@ async function dirtyPaths(root) {
   }
 }
 
-function parsePathList(value) {
+export function parsePathList(value) {
   return String(value ?? '')
     .split(',')
     .map((s) => s.trim())
@@ -479,7 +479,7 @@ export async function whyCommand(args, flags) {
  * location for a declared source, matched on bytes rather than on hope (ADR-015).
  * The canonical source is still tried first, so a workspace body always wins.
  */
-async function sourcePath(skill, workspaceRoot, root) {
+export async function sourcePath(skill, workspaceRoot, root) {
   const canonical = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
 
   if (canonical) {
@@ -495,7 +495,7 @@ async function sourcePath(skill, workspaceRoot, root) {
   return canonical && workspaceRoot ? join(workspaceRoot, canonical.repo, canonical.path) : null;
 }
 
-async function readBody(skill, workspaceRoot, root) {
+export async function readBody(skill, workspaceRoot, root) {
   const full = await sourcePath(skill, workspaceRoot, root);
   if (!full) {
     return `(body unavailable: this installation has no workspace and ${root ?? 'this directory'} does not hold ${skill.name}; ${WORKSPACE_REMEDY})`;

@@ -1,0 +1,30 @@
+{
+  "name": "@quazarmedia/simt-dev",
+  "version": "0.0.0",
+  "description": "Developer and agent tooling for the SIMT ecosystem: one command to adopt a repo, and token-optimal skill discovery from any repo.",
+  "license": "UNLICENSED",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "simt-dev": "bin/simt-dev.mjs"
+  },
+  "files": [
+    "bin",
+    "src",
+    "graph",
+    "rules",
+    "skills",
+    "agents",
+    "tooling",
+    "hooks"
+  ],
+  "scripts": {
+    "test": "node --test test/",
+    "lint": "node bin/simt-dev.mjs doctor"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}

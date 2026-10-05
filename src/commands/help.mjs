@@ -7,7 +7,9 @@ const COMMANDS = `simt init [path]            adopt or scaffold a repo into the 
 simt doctor                 classify a repo and check config health
 simt check                  the gate: projection drift, manifest validity, policy
 simt sync [--check]         regenerate the projection (idempotent)
-simt upgrade                bump consumers to this simt-dev SHA
+simt upgrade                move every consumer to this simt-dev SHA, as one set
+                           (dry-run unless --yes; moves a pin only - it never
+                           adopts or repairs a repo; never commits or pushes)
 
 simt skills index           tier-0 catalog: every skill, one line each
 simt skills brief --task    tier-1 pre-assembled brief  <- the common case
@@ -25,7 +27,9 @@ simt hooks install|status   install the shared dispatcher; report what it would 
 simt compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)
-simt mcp                    expose the same surface as MCP tools`;
+simt mcp                    the read-only surface as MCP tools over stdio
+                           (--list prints it without reading stdin; init, sync,
+                           upgrade and the installers stay CLI-only by design)`;
 
 const FLAGS = `--json                 structured output
 --max-bytes <n>         hard ceiling on emitted bytes (0 = unlimited, default 0)

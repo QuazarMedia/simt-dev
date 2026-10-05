@@ -26,7 +26,7 @@ import { headSha } from '../projection/project.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { buildRow, summarise } from '../compare/row.mjs';
 import { discover } from '../compare/discover.mjs';
-import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
+import { targetRoot, WORKSPACE_REMEDY } from '../workspace.mjs';
 
 /** Gate kinds, so a row can tell a command gate with no command from a script gate. */
 const GATE_KINDS = new Map(Object.entries(GATES).map(([name, g]) => [name, g.kind]));
@@ -39,9 +39,11 @@ export async function compareCommand(positional, flags) {
   // A path that IS a repository is compared as itself, not scanned for children:
   // naming one repo almost certainly meant that repo. Discovery decides which,
   // rather than this command guessing.
-  const explicit = flags.root ?? positional[0];
-  const ws = explicit ? { root: null, source: 'flag', detail: '--root' } : await resolveWorkspace(flags);
-  const root = resolve(explicit ?? ws.root ?? process.cwd());
+  //
+  // `targetRoot` owns the precedence so `compare` and `upgrade` cannot disagree about
+  // which source named the directory.
+  const target = await targetRoot(flags, positional);
+  const root = resolve(target.root);
   const found = await discover(root);
   if (found.error) {
     return fail(`${root}: ${found.error}`, EXIT.CONFIG, 'pass --root <path>');
@@ -67,7 +69,7 @@ export async function compareCommand(positional, flags) {
   const summary = summarise(rows, {
     root,
     shape: found.shape,
-    source: ws.source,
+    source: target.source,
     expectedSha,
     worktrees: found.worktrees.length,
     directories: found.directories.length,
@@ -109,7 +111,7 @@ export async function compareCommand(positional, flags) {
   emit(render(rows, summary, found), { maxBytes: flags.maxBytes ?? 0 });
   if (summary.shape === 'repo') {
     note('note     one repository compared; pass --root at a workspace directory to compare its siblings');
-  } else if (summary.source === 'none') {
+  } else if (target.source === 'none') {
     note(`note     no workspace configured, so this compared the current directory; ${WORKSPACE_REMEDY}`);
   }
   for (const w of found.worktrees) {

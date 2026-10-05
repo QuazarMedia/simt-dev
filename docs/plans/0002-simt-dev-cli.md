@@ -200,7 +200,9 @@ simt init [path]              adopt or scaffold a repo into the ecosystem
 simt doctor                   env + config health; manifest vs reality; hooks; drift
 simt check                    the gate - projection drift, manifest validity, policy gates
 simt sync [--check]           regenerate the projection (idempotent)
-simt upgrade                  bump every consumer to this simt-dev SHA, as one reviewable set
+simt upgrade                  move every consumer to this simt-dev SHA, as one set
+                             (dry-run unless --yes; moves a pin only, never adopts or
+                             repairs a repo, never commits or pushes)
 
 simt skills index             tier-0 catalog
 simt skills brief --task      tier-1 pre-assembled brief  <- the common case
@@ -213,7 +215,7 @@ simt skills graph [--mermaid] capability/skill graph
 simt rules list|show|why      rules with provenance back to the ADR that settled them
 simt hooks install|status     install the shared dispatcher; report what it would run
 simt compare                  org-wide matrix: every repo x rules SHA, hooks, gates, skills
-simt mcp                      expose everything as MCP tools (optional)
+simt mcp                      the read-only surface as MCP tools over stdio (optional)
 ```
 
 `simt compare` is the org-level dashboard the 2026-10-05 audit had to reconstruct by hand.
@@ -358,7 +360,7 @@ validator is ~150 lines, and dropping `dependencies` is what makes `npx` instant
 | 7 | `init` with conflict reporting | dry-run adoption produces a reviewable diff on all 3 pilots | done |
 | 8 | `hooks` dispatcher | one pre-commit works across all 3 pilot stacks | **done** (141 tests; fail-closed, ADR-004 staged-only, ADR-010 no `npx`) |
 | 9 | `compare` | replaces the hand audit | **done** (org matrix: adoption, region, hooks, gates; worktrees attributed not double-counted; exits non-zero only on defects, not on non-adoption) |
-| 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA | next | pending |
+| 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA | **done** (`upgrade` moves a pin and nothing else; `mcp` is a read-only stdio surface over the same modules; 307 tests) |
 | 11 | Genericity: emitted facts + repo-local profiles | a repo can adopt an unknown ecosystem with no engine change | **done** (ADR-013; 20 facts, `KNOWN_TAGS` one vocabulary, local profiles, `container` profile on `has-dockerfile`) |
 | 12 | Workspace as configuration; single repo is first class | a published install works with no workspace, and one repo is a supported shape | **done** (ADR-014; `--workspace` / env / config file / verified heuristic, `off` sentinel, degraded mode, 32 consumer-shaped tests) |
 | 13 | A source is content; the repo is a location | a single-repo clone can install and show with no workspace | **done** (ADR-015; byte-verified lookup at the workspace location and the repo location, `sourceHeldLocally` as a resolution signal, contradiction refused / ambiguity decided) |
@@ -670,3 +672,97 @@ this repo" is true and sends the reader to the wrong place.
 `skills install` prints a matching `read` line. Install still **fails** when it cannot read a body
 while `show` still answers, because a catalogue plus a pointer is useful with no workspace and a
 half-installed skill is not.
+
+## 17. Step 10 — moving a pin, and a second front door
+
+### 17.1 `simt upgrade` moves a pin and nothing else
+
+One simt-dev commit changes the **rules**, not the mechanism, so every consumer is behind at
+once. Plan 0001 named the risk ("simt-dev churn cascades into 16 repos") and answered it with
+`upgrade --all`: one operation, one reviewable diff, instead of 16 commands and 16 reviews.
+
+A pin lives in **two** places that must agree, so `upgrade` moves both: the
+`<!-- simt-dev:sha=… -->` stamp inside the generated region, and `projection.simtDevSha` in
+`simt-dev.json`. The region is written **first**, because the reverse order leaves a window in
+which the manifest names a simt-dev whose rules are not on disk yet — and `check` would report
+`CURRENT` against a stamp that does not describe the bytes next to it.
+
+The narrowness is the design. `upgrade` does not adopt a repo, does not repair one, and does not
+add a region to a repo that never had one:
+
+| state | action | remedy it prints |
+|---|---|---|
+| no `simt-dev.json` | skip | `simt init` |
+| unparseable `simt-dev.json` | skip | fix the JSON, or `simt init` |
+| malformed region | skip | fix the markers at `AGENTS.md:<line>`, then `simt sync` |
+| manifest but no region | skip | `run: simt sync` |
+| pin behind | **update** | — |
+| rules changed, pin current | **update** | — |
+
+Those four skips are `FAULT_STATES`; only they fail the run. An unadopted repo is the expected
+mid-migration state, and the same doctrine `compare` already applies: a command that goes red
+for it teaches people to ignore its exit code, and the signal that matters is lost. The exit
+code reports whether **this run** was correct, not how far the migration has got.
+
+Two other things it deliberately does not write:
+
+- **`projection.syncedAt`.** Plan 0002 §5.1 shows it in the manifest. It is not written: a
+  timestamp in a file that is reviewed as a diff turns an upgrade that changed nothing into one
+  that shows a one-line change, and git already records when a file was modified — strictly
+  better than a timestamp inside the file.
+- **Commits and pushes.** ADR-001 applies to the tool that enforces it. The diff is left
+  uncommitted in each repo, for a human to review and message.
+
+`--root` names one repo (or one workspace); `--all` claims the whole workspace and therefore
+**fails** when there is none, because "all of nothing" is a contradiction and defaulting it to
+the current directory would make the flag mean nothing. Worktrees are reported and never stamped:
+a worktree is its parent's HEAD elsewhere, so writing a pin into it forks one repo's drift across
+two directories.
+
+`targetRoot()` in `src/workspace.mjs` now owns the `--root` → workspace → cwd precedence, so
+`compare` and `upgrade` cannot disagree about which source named the directory.
+
+### 17.2 `simt mcp` is a transport, not a second implementation
+
+Optional in §5 and it stays optional: the CLI works in CI, in a hook and in a bare shell, and
+MCP adds a route to the same answers rather than new ones. Newline-delimited JSON-RPC 2.0 on
+stdio, `PROTOCOL_VERSION = 2025-06-18`, hand-rolled to keep the zero-dependency requirement.
+
+Three decisions, each a place the obvious implementation is wrong:
+
+- **stdout is the protocol channel.** Every tool returns a value; nothing writes to the process
+  streams. One byte of prose on stdout corrupts the stream, and the client then shows nothing
+  and reports no error — because from its side the stream is merely malformed.
+- **A tool failure is a result, not a protocol error.** "This repo has no region" is a
+  successful call whose answer says the region is unmanaged. An MCP client renders an exception
+  as an error dialog and never shows the answer, and the answer is the useful part. Only a
+  malformed request and an unknown method are JSON-RPC errors.
+- **No mutating tool is exposed.** `init`, `sync`, `upgrade`, `hooks install` and
+  `skills install` are absent on purpose: each is meant to be read as a diff by a human before it
+  touches anything (ADR-001, ADR-004), and a model can call a tool but cannot review a diff it
+  never showed you. `test/mcp.test.mjs` enforces this by name, so a future tool cannot drift in.
+
+The ten exposed tools are `doctor`, `skills_index`, `skills_brief`, `skills_show`,
+`skills_find`, `skills_why`, `rules_list`, `rules_why`, `check`, `compare`. They build their own
+payloads from the same modules the commands use rather than calling the command functions: the
+commands render for terminals, these return JSON for a model, and forcing one renderer through a
+transport it was not written for is how a clean abstraction starts lying about bytes. What is
+shared is the **logic** — fingerprint, registry, resolver, region planner — because two
+resolvers would be two answers to one question.
+
+`skills_brief` never inlines a body: tier 1 is a set of pointers and reasons, and the body is a
+separate `skills_show` call. A 384 KB reference inlined into a tool result is exactly the failure
+progressive disclosure exists to prevent, and a transport makes it easier to cause by accident
+because the caller cannot see the size until it has paid for it.
+
+`--list` prints the surface and exits without reading stdin, because an editor that has
+misconfigured the command must be able to ask what it exposes without hanging on a pipe nobody
+is writing to.
+
+### 17.3 The acceptance criterion
+
+"Round-trips simt-dev's own SHA" is met in both directions. `upgrade --root <simt-dev>` reports
+simt-dev as `not-adopted` and writes nothing — the repo that produces pins is not a consumer of
+them. And a repo pinned at an old SHA has both halves moved, `check` returns `CURRENT`, and a
+second run is a byte-for-byte no-op. `test/upgrade.test.mjs` asserts all of it against real
+repositories adopted by the real `init`.

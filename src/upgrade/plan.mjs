@@ -1,3 +1,4 @@
+import { MANIFEST_COMMENT } from '../projection/manifest.mjs';
 // Classify one repository's upgrade state. Pure: no filesystem, no git.
 //
 // The line this module draws is narrow on purpose. `upgrade` moves a PIN. It does not
@@ -84,14 +85,24 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   // immediately after a successful `upgrade`.
   const regionBehind = list.some((t) => t.action !== 'unchanged');
   const pinBehind = base.pinnedSha !== sha;
-  if (!regionBehind && !pinBehind) {
+  // A generated field of the manifest can alone be stale. `$comment` is written by
+  // simt-dev and describes this file's provenance, so an adopted repo whose regions
+  // and pin are all current can still be carrying an older version's wording -
+  // and because `sync` does not own the manifest, nothing else would ever correct
+  // it. Counting it here is what gives staleness a path back to being correct: a
+  // field nobody checks is a field nobody fixes.
+  const manifestBehind =
+    manifest?.$comment !== undefined && manifest.$comment !== MANIFEST_COMMENT.$comment;
+  if (!regionBehind && !pinBehind && !manifestBehind) {
     return { ...base, state: 'current', action: 'unchanged', detail: 'already at this simt-dev' };
   }
 
-  // Why it moved is worth stating, and the two causes are different problems even though
-  // one command fixes both: content drift means the RULES changed, a pin-only move means
-  // the region was already correct and only its stamp was stale. The transition itself is
-  // printed on its own `pin` line, so `detail` names the cause without repeating it.
+  // Why it moved is worth stating, and the causes are different problems even though
+  // one command fixes all of them: content drift means the RULES changed, a pin-only
+  // move means the region was already correct and only its stamp was stale, and a
+  // generated-field move means nothing about the repo changed and this tool's own
+  // wording did. The transition itself is printed on its own `pin` line, so `detail`
+  // names the cause without repeating it.
   return {
     ...base,
     state: 'behind',
@@ -100,7 +111,9 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       ? regionBehind
         ? 'pin moved and region restamped (the rules changed)'
         : 'pin moved; the region was already current'
-      : 'region restamped; the pin was already current (the rules changed)',
+      : regionBehind
+        ? 'region restamped; the pin was already current (the rules changed)'
+        : 'manifest metadata refreshed; the rules and the pin were already current',
   };
 }
 

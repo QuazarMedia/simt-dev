@@ -15,6 +15,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { planUpgrade, summariseUpgrade } from '../src/upgrade/plan.mjs';
+import { initCommand } from '../src/commands/init.mjs';
+import { upgradeCommand } from '../src/commands/upgrade.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
@@ -387,4 +389,30 @@ test('upgrade: a malformed AGENTS.md is a fault, while a malformed .mdc rule is 
   assert.match(payload.plans[0].remedy, /AGENTS\.md/);
   assert.equal((await readJson(join(a, 'simt-dev.json'))).projection.simtDevSha, 'aaaaaaa');
   assert.equal(await readFile(mdc, 'utf8'), mdcBefore, 'one fault must not be repaired while the rest is left alone');
+});
+
+// A field simt-dev generates must be refreshed by every writer of the manifest,
+// not only by the writer that created it. `$comment` is generated, describes
+// provenance, and nothing else rewrites the file — so `upgrade` carrying the
+// previous copy forward left a stale and once-false description in place
+// permanently. This is staleness, not leakage: it can only be caught by running
+// the command against a manifest an earlier version wrote.
+test('upgrade refreshes the generated comment, not only the sha', async () => {
+  const root = await repo(join(await mkdtemp(join(tmpdir(), 'simt-upg-')), 'repo'), {});
+  const adopt = await initCommand([root], { yes: true, acceptConflicts: true });
+  assert.equal(adopt, 0);
+
+  // Stand in for a manifest written by an earlier version: same shape, stale comment.
+  const file = join(root, 'simt-dev.json');
+  const manifest = JSON.parse(await readFile(file, 'utf8'));
+  manifest.$comment = 'Rulings live in docs/decisions/ - each value cites its ADR.';
+  await writeFile(file, JSON.stringify(manifest, null, 2) + '\n');
+
+  assert.equal(await upgradeCommand([root], { yes: true }), 0);
+
+  const after = JSON.parse(await readFile(file, 'utf8'));
+  assert.ok(!after.$comment.includes('docs/decisions/'), after.$comment);
+  assert.match(after.$comment, /simt-dev/, after.$comment);
+  // The repo's own choices survive the refresh.
+  assert.equal(after.id, manifest.id);
 });

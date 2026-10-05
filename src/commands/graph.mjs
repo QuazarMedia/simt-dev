@@ -11,7 +11,7 @@ import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
 
 export async function lintCommand(positional, flags) {
   const path = positional[0] ?? REGISTRY_PATH;
-  const { ok, registry, errors, warnings } = await loadRegistry(path);
+  const { ok, registry, errors, warnings, verified, workspace } = await loadRegistry(path, flags);
 
   if (isJson(flags)) {
     emit(
@@ -21,6 +21,13 @@ export async function lintCommand(positional, flags) {
           registry: path,
           capabilities: registry?.capabilities?.length ?? 0,
           skills: registry?.skills?.length ?? 0,
+          // `verified: false` means the byte counts in the registry were NOT
+          // checked against files on disk. It is not a failure - it is the difference
+          // between "the registry is right" and "the registry could not be checked",
+          // and an agent that cannot see the difference will trust a number nobody
+          // measured (ADR-014).
+          verified,
+          workspace,
           errors,
           warnings,
         },
@@ -37,8 +44,9 @@ export async function lintCommand(positional, flags) {
   }
 
   const lines = [
-    `registry ${path}`,
+    `registry  ${path}`,
     `nodes     ${registry.skills.length} skills, ${registry.capabilities.length} capabilities`,
+    `verified  ${verified ? 'byte counts checked against disk' : 'NOT checked - see WARN below'}`,
   ];
 
   const deferred = registry.skills.filter((s) => s.deferred);
@@ -59,7 +67,7 @@ export async function lintCommand(positional, flags) {
     return EXIT.REGISTRY;
   }
 
-  lines.push('', 'OK no findings');
+  lines.push('', verified ? 'OK no findings' : 'OK structural checks only');
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
 }

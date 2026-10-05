@@ -21,6 +21,7 @@ record's status line — never by editing the ruling in place.
 | [011](ADR-011-windows-support.md) | Windows is supported from v1 for the CLI | **superseded by 012** |
 | [012](ADR-012-drop-windows-support.md) | Windows support dropped; POSIX only | accepted |
 | [013](ADR-013-genericity-by-facts-and-local-profiles.md) | Genericity comes from emitted facts and repo-local profiles | accepted |
+| [014](ADR-014-workspace-is-configuration.md) | The workspace is configuration; a single repo is a first-class case | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -30,6 +31,9 @@ supersession rule above: 011 was accepted, 012 reversed it the same day, and 011
 kept rather than rewritten because the cost table it contains is the evidence 012 relies on.
 ADR-013 is the same rule applied to the tool rather than to the repos: the mechanism carries
 no product taxonomy, and adding an ecosystem is a profile file rather than a code change.
+ADR-014 completes it on the filesystem, where ADR-013 did not reach: the tool's own directory
+layout turned out to be part of its interface, and every test that ran from the checkout could
+not see that it only worked from the checkout.
 
 ## The rule these records enforce
 

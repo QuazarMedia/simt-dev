@@ -128,21 +128,56 @@ export async function classify(dir) {
 }
 
 /**
- * Scan the immediate children of `root` and classify each.
+ * Scan `root` and classify what is there.
  *
- * Only one level deep, on purpose. The estate is flat siblings; a recursive walk
- * would descend into node_modules and every build output, which is unbounded work
- * for a dashboard. A monorepo names its members explicitly (ADR ruling #2).
+ * Two shapes are both valid, and which one you have is a FACT of the filesystem rather
+ * than something the caller has to configure (ADR-014):
  *
- * @returns {Promise<{root:string, repos:string[], worktrees:object[],
- *                    directories:string[], error:string|null}>}
+ *   - `root` IS a repository -> it is the single repo to report on. This is the
+ *     common case outside a multi-repo workspace, and treating it as an error
+ *     ("contains no git repositories") would mean the tool only works for people
+ *     who happen to keep several repos together.
+ *   - `root` CONTAINS repositories -> its immediate children are the estate.
+ *
+ * Only the second shape scans one level deep, on purpose. The estate is flat
+ * siblings; a recursive walk would descend into node_modules and every build output,
+ * which is unbounded work for a dashboard. A monorepo names its members explicitly
+ * (ADR ruling #2).
+ *
+ * @returns {Promise<{root:string, shape:'repo'|'workspace', repos:string[],
+ *                    worktrees:object[], directories:string[], error:string|null}>}
  */
 export async function discover(root) {
+  const self = await classify(root);
+  if (self.kind === 'repo') {
+    return { root, shape: 'repo', repos: [root], worktrees: [], directories: [], error: null };
+  }
+  if (self.kind === 'worktree') {
+    // A worktree passed directly is attributed, never counted: its files are its
+    // parent's HEAD checked out elsewhere, so reporting it as a consumer would
+    // double-count one repo's drift.
+    return {
+      root,
+      shape: 'repo',
+      repos: [],
+      worktrees: [{ path: root, name: basename(root), ...self }],
+      directories: [],
+      error: null,
+    };
+  }
+
   let entries;
   try {
     entries = await readdir(root, { withFileTypes: true });
   } catch (error) {
-    return { root, repos: [], worktrees: [], directories: [], error: error.code ?? String(error) };
+    return {
+      root,
+      shape: 'workspace',
+      repos: [],
+      worktrees: [],
+      directories: [],
+      error: error.code ?? String(error),
+    };
   }
 
   const repos = [];
@@ -165,9 +200,10 @@ export async function discover(root) {
   // A stable order makes two runs diffable, which is the whole point of a
   // dashboard: an agent comparing yesterday's output to today's must not be
   // reading reordering as change.
-  const byName = (a, b) => a.split('/').pop().localeCompare(b.split('/').pop());
+  const byName = (a, b) => basename(a).localeCompare(basename(b));
   return {
     root,
+    shape: 'workspace',
     repos: repos.sort(byName),
     worktrees: worktrees.sort((a, b) => a.name.localeCompare(b.name)),
     directories: directories.sort(byName),

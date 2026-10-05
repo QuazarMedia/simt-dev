@@ -21,9 +21,20 @@ import { buildRow, summarise } from '../src/compare/row.mjs';
 import { readHooksState } from '../src/compare/hooksstate.mjs';
 import { GATES } from '../src/hooks/gates.mjs';
 import { dispatch } from '../src/commands/index.mjs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
 
 const exec = promisify(execFile);
 const made = [];
+
+/** Run a command for its --json payload. */
+async function json(args) {
+  const { stdout } = await exec('node', [BIN, ...args, '--json'], { maxBuffer: 16 << 20 });
+  return JSON.parse(stdout);
+}
 
 /**
  * A git repo with a real HEAD, because every command under test shells out to git.
@@ -410,12 +421,29 @@ test('compare against a workspace with no repos fails with a remedy', async () =
   assert.equal(code, 3); // EXIT.CONFIG
 });
 
-test('compare --root on a repo path (not the workspace) is a usage failure, not an empty table', async () => {
-  // A user naming one repo almost certainly meant the workspace. Reporting an
-  // empty estate would read as "nothing to fix".
+test('compare --root on a single repo compares that repo, not its children', async () => {
+  // ADR-014: a single repository is a first-class case, not a usage error. The old
+  // behaviour scanned the CHILDREN of the given path, so naming one repo reported
+  // "contains no git repositories" and exit 3 - a false statement about the estate.
   const root = await gitRepo('lonely');
+  await mkdir(join(root, 'simt-dev'), { recursive: true });
   const code = await dispatch(['compare', '--root', root]);
-  assert.equal(code, 3);
+  assert.equal(code, 0);
+
+  const payload = await json(['compare', '--root', root]);
+  assert.equal(payload.shape, 'repo');
+  assert.equal(payload.root, root);
+  assert.equal(payload.rows.length, 1);
+  assert.equal(payload.rows[0].name, 'lonely');
+});
+
+test('compare --root on a workspace directory still reports the workspace shape', async () => {
+  const root = await scratch();
+  await gitRepo('one', { 'README.md': 'x' }, root);
+  await gitRepo('two', { 'README.md': 'x' }, root);
+  const payload = await json(['compare', '--root', root]);
+  assert.equal(payload.shape, 'workspace');
+  assert.deepEqual(payload.rows.map((r) => r.name).sort(), ['one', 'two']);
 });
 
 test('compare is not registered as unimplemented any more', async () => {

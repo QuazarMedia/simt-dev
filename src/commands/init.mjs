@@ -23,7 +23,8 @@ import { dirname, join } from 'node:path';
 import { EXIT, emit, fail, isJson, note } from '../output/index.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs';
-import { MANIFEST, buildManifest, readManifest, writeManifest } from '../projection/manifest.mjs';
+import { MANIFEST, buildManifest, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
+import { readCapability } from '../hooks/capability.mjs';
 import { plan, headSha, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 
@@ -47,7 +48,13 @@ export async function initCommand(positional, flags) {
     return fail(`${join(root, MANIFEST)}: ${error}`, EXIT.CONFIG, `fix the JSON in ${MANIFEST}`);
   }
 
-  const manifest = buildManifest({ root, stack: detected.stack, sha, existing: current });
+  // What this repo can demonstrably run, not what its stack suggests. Without this the
+  // stack table proposes gates the repo has no way to execute — the adoption of
+  // simt-social-media declared five and could run two, which would have blocked every
+  // commit once hooks were installed.
+  const capability = await readCapability(root);
+  const { dropped } = planGates(detected.stack, capability);
+  const manifest = buildManifest({ root, stack: detected.stack, sha, existing: current, capability });
   const findings = await scanRepo(root);
   const summary = summarise(findings);
   const projected = await plan(root);
@@ -71,6 +78,10 @@ export async function initCommand(positional, flags) {
     profiles: projected.profiles,
     fallback: projected.fallback,
     notes: projected.notes,
+    // Gates the stack suggested and this repo cannot run. Only meaningful on a fresh
+    // adoption: an existing manifest keeps its gates on purpose, so its drops would
+    // describe proposals that were never made.
+    droppedGates: exists ? [] : dropped,
     adoption,
     manifest: { file: MANIFEST, action: manifestAction, path: manifestPath },
     region: region && {
@@ -298,6 +309,14 @@ function render(payload, manifest) {
       `coverage=${manifest.limits.coverage ?? 'undeclared (ADR-006)'} ` +
       `fileLines=${manifest.limits.fileLines.warn}/${manifest.limits.fileLines.error} (ADR-005)`,
   );
+  // Every gate the stack suggested and this repo cannot run is named, with the reason.
+  // A silently shorter gate list reads as "this repo needs no formatting check", when
+  // the truth is "declaring one would block every commit". The remedy is stated because
+  // the fix is a real choice: install the tool, add the script, or declare the command.
+  for (const d of payload.droppedGates ?? []) {
+    lines.push(`  ${'dropped'.padEnd(9)} gate ${d.gate}: ${d.why}`);
+    lines.push(`            remedy: ${d.remedy}`);
+  }
   lines.push(
     `  ${'profiles'.padEnd(9)} ${LOCAL_PROFILE_DIR}/*.md  ` +
       `repo-local profiles are selected by the same matcher (ADR-013)`,

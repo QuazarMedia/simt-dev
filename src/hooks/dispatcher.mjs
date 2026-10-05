@@ -46,11 +46,20 @@ export async function runGates(event, { root, manifest }) {
 
   const declared = manifest?.gates?.[key];
   if (!Array.isArray(declared) || declared.length === 0) {
+    // An array, not a string. This field sat next to `gates` as a bare string while
+    // the caller iterated it, so an empty gate list printed one note line per
+    // character — 180 lines of noise in a hook whose only job is to be readable.
+    // Only reachable on a repo that has no formatter and no linter, so the one path
+    // where an author's patience is already spent.
     return {
       event,
       gates: [],
       failed: false,
-      note: `simt-dev.json declares no gates.${key}; nothing to run. That is allowed - a repo may run its checks in CI instead - but declare the intent rather than leaving it empty by accident.`,
+      notes: [
+        `nothing runs on ${event}: simt-dev.json declares no gates.${key}. That is a valid ` +
+          `answer when the repo has no tool for any of them - \`simt-dev check\` reports each ` +
+          `gate it could not run and why - but it is also what an unfiltered default looks like.`,
+      ],
     };
   }
 

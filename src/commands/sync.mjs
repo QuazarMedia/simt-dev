@@ -20,6 +20,8 @@ import { writeFile } from 'node:fs/promises';
 
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
 import { plan, checkTargets, checkTarget, loadRules, select } from '../projection/project.mjs';
+import { readManifest, unrunnableGates } from '../projection/manifest.mjs';
+import { readCapability } from '../hooks/capability.mjs';
 
 export async function syncCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
@@ -139,6 +141,14 @@ export async function checkCommand(positional, flags) {
     }
   }
 
+  // A declared gate this repo cannot run fails closed on every commit once hooks are
+  // installed. Reported here rather than left to `hooks status`, so the repo is red
+  // before anyone installs anything rather than after.
+  const { manifest } = await readManifest(root);
+  if (manifest) {
+    findings.push(...unrunnableGates(manifest, await readCapability(root)));
+  }
+
   const bad = findings.filter((f) => f.status !== 'current');
   const payload = {
     ok: bad.length === 0,
@@ -152,9 +162,14 @@ export async function checkCommand(positional, flags) {
     return bad.length === 0 ? EXIT.OK : EXIT.FAIL;
   }
 
+  // Every finding that carries a remedy prints it. A finding with a fix the reader
+  // has to guess at is a finding that gets skipped.
   emit(
     findings
-      .map((f) => `${f.status.toUpperCase().padEnd(9)} ${f.file}${f.detail ? `  ${f.detail}` : ''}`)
+      .flatMap((f) => {
+        const head = `${f.status.toUpperCase().padEnd(10)} ${f.file}${f.detail ? `  ${f.detail}` : ''}`;
+        return f.remedy ? [head, `${' '.repeat(11)}remedy: ${f.remedy}`] : [head];
+      })
       .join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );

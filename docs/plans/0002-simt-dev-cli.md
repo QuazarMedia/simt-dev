@@ -357,8 +357,8 @@ validator is ~150 lines, and dropping `dependencies` is what makes `npx` instant
 | 6 | Projection engine + `simt check` | drift detected in a deliberately stale repo | done |
 | 7 | `init` with conflict reporting | dry-run adoption produces a reviewable diff on all 3 pilots | done |
 | 8 | `hooks` dispatcher | one pre-commit works across all 3 pilot stacks | **done** (141 tests; fail-closed, ADR-004 staged-only, ADR-010 no `npx`) |
-| 9 | `compare` | replaces the hand audit | next | pending |
-| 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA | pending |
+| 9 | `compare` | replaces the hand audit | **done** (org matrix: adoption, region, hooks, gates; worktrees attributed not double-counted; exits non-zero only on defects, not on non-adoption) |
+| 10 | `mcp`, `upgrade`, `upgrade --all` | round-trips simt-dev's own SHA | next | pending |
 | 11 | Genericity: emitted facts + repo-local profiles | a repo can adopt an unknown ecosystem with no engine change | **done** (ADR-013; 20 facts, `KNOWN_TAGS` one vocabulary, local profiles, `container` profile on `has-dockerfile`) |
 
 Steps 1-5 are useful with zero content migration and land first, because they deliver the
@@ -372,6 +372,35 @@ Step 11 was pulled **ahead of step 9** deliberately. It changes the tag vocabula
 later step reads, so `compare` and `mcp` are both cheaper once it is settled. Its scope and
 ruling are [ADR-013](../decisions/ADR-013-genericity-by-facts-and-local-profiles.md); the
 design is §14.
+
+Step 9 then made the estate's state readable in one command instead of by hand. Three of its
+decisions are worth stating, because each one is a place where the obvious implementation
+would have been quietly wrong:
+
+- **A git worktree is attributed, not counted.** `.git` may be a directory (a repo) or a file
+  (a worktree). A scan that only looked for directories omits every worktree, and an agent
+  reads absence as "nothing there". A worktree is also not an independent consumer - its
+  files are its parent's HEAD checked out elsewhere - so reporting it would double-count one
+  repo's drift.
+- **A non-repo directory is counted, not dropped.** `simt-space-review` is 25 PNGs. Hiding it
+  would hide the fact that a workspace member is unmanaged, which is the class of finding this
+  command exists to surface.
+- **Non-adoption is not a defect.** The exit code is non-zero when something is *wrong* (drift,
+  a malformed region, a gate the dispatcher cannot run) and zero when repos are merely not
+  adopted yet. On day one of a migration 16 of 16 repos are unadopted; a command that went red
+  for that would train everyone to ignore it, and the signal that matters would be lost.
+
+Two findings it produces that a per-repo view cannot:
+
+- **Declared stack vs detected stack.** `simt-dev.json` records what the repo claims to be;
+  `fingerprint` records what the files prove. Selection uses detection, so a stale claim does
+  not change what is projected - but it does mean the manifest misdescribes the repo, and a
+  reader of the manifest is misled. Reported rather than silently reconciled, because picking
+  a winner would hide the edit that caused it.
+- **Which drift you have.** A region whose recorded SHA already matches this simt-dev was
+  hand-edited; one whose SHA differs is simply behind. Both are fixed by `simt sync`, but they
+  are different problems, and reporting "projection is X but this simt-dev is X" for a
+  hand-edit sends the reader looking for a version problem that does not exist.
 
 ## 12. Rulings on the open questions
 

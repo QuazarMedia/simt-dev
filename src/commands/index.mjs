@@ -19,13 +19,13 @@ import {
 import { syncCommand, checkCommand } from './sync.mjs';
 import { initCommand } from './init.mjs';
 import { hooksCommand } from './hooks.mjs';
+import { compareCommand } from './compare.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 
 /** command path -> implementation sequence step (plan 0002 section 11). */
 const STEPS = new Map([
   ['upgrade', 10],
-  ['compare', 9],
   ['mcp', 10],
   ['skills install', 5],
   ['rules list', 6],
@@ -84,6 +84,7 @@ export async function dispatch(argv) {
     'hooks install': (args, flags) => hooksCommand('install', args, flags),
     'hooks status': (args, flags) => hooksCommand('status', args, flags),
     'hooks run': (args, flags) => hooksCommand('run', args, flags),
+    compare: compareCommand,
   };
   const run = IMPLEMENTED[path];
   if (run) return run(args, flags);

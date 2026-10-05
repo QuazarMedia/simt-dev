@@ -53,8 +53,34 @@ set -eu
 
 ROOT="${D}(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
+# ${D}SIMT_DEV_BIN must name ONE program: an executable on PATH, or a .mjs entry
+# point to hand to node. It cannot be a command line, because there is no safe way
+# to split one in sh without eval, and a value with a space is refused rather than
+# half-executed - running from a source checkout is normal for anyone working on
+# simt-dev itself, so this path has to work with no install step.
+run_dispatcher() {
+  case "${D}1" in
+    *' '*)
+      echo "simt-dev: ${D}SIMT_DEV_BIN names a command line, not a program." >&2
+      echo "  set it to a single executable or a .mjs path, e.g." >&2
+      echo "    SIMT_DEV_BIN=/path/to/simt-dev/bin/simt-dev.mjs" >&2
+      exit 1
+      ;;
+    *.mjs)
+      # shift first: "${D}@" still holds ${D}1, which would pass the program path to
+      # itself as the first argument.
+      program="${D}1"
+      shift
+      exec node "${D}program" "${D}@"
+      ;;
+    *)
+      exec "${D}1" "${D}@"
+      ;;
+  esac
+}
+
 if [ -n "${D}{SIMT_DEV_BIN:-}" ]; then
-  exec "${D}{SIMT_DEV_BIN}" hooks run ${event} --root "${D}ROOT"
+  run_dispatcher "${D}SIMT_DEV_BIN" hooks run ${event} --root "${D}ROOT"
 fi
 
 if [ -f "${D}ROOT/node_modules/@quazarmedia/simt-dev/bin/simt-dev.mjs" ]; then
@@ -67,7 +93,11 @@ if command -v simt-dev >/dev/null 2>&1; then
 fi
 
 echo "simt-dev: cannot locate the dispatcher." >&2
-echo "  looked for: ${D}SIMT_DEV_BIN, ${D}ROOT/node_modules/@quazarmedia/simt-dev, simt-dev on PATH" >&2
+# Every expansion in these diagnostics must carry a default. Under \`set -eu\` an
+# unbound variable aborts the shell, so an unguarded ${D}SIMT_DEV_BIN here would
+# kill the message that exists to explain the failure - and this block only runs
+# when nothing resolved, which is the one moment the reader needs it.
+echo "  looked for: ${D}{SIMT_DEV_BIN:-<unset>}, ${D}ROOT/node_modules/@quazarmedia/simt-dev, simt-dev on PATH" >&2
 echo "REMEDY run: npm i -D @quazarmedia/simt-dev   (or unset core.hooksPath to opt out)" >&2
 exit 1
 `;

@@ -28,16 +28,16 @@ test('every rule file carries an id', async () => {
   }
 });
 
-test('every rule applies-to tag is one fingerprint can emit', async () => {
+test('every rule applies-to tag is one fingerprint can emit as a tag or a fact', async () => {
   // An unemittable tag silently never matches, which reads as "no rules apply".
-  const { STACK_TAGS } = await import('../src/resolve/fingerprint.mjs');
+  const { KNOWN_TAGS } = await import('../src/resolve/fingerprint.mjs');
   const rules = await loadRules();
   for (const r of rules) {
     if (!Array.isArray(r.applies)) continue;
     for (const tag of r.applies) {
       assert.ok(
-        STACK_TAGS.has(tag),
-        `rules/${r.file} applies to unknown stack tag "${tag}"`,
+        KNOWN_TAGS.has(tag),
+        `rules/${r.file} applies to unknown tag "${tag}"`,
       );
     }
   }
@@ -70,10 +70,10 @@ test('the fallback profile is only chosen when nothing more specific matched', (
   assert.equal(specific.fallback, false, 'fallback must not stack with a specific profile');
 });
 
-test('a repo with no detectable stack still gets the shared rules', () => {
+test('a repo with no detectable signal still gets the shared rules', () => {
   const { selected, notes } = select([{ id: 'core', applies: 'always' }], []);
   assert.deepEqual(selected.map((r) => r.id), ['core']);
-  assert.match(notes.join(' '), /no stack profile/);
+  assert.match(notes.join(' '), /no profile matched/);
 });
 
 test('a backend Workers repo does not receive the React profile', () => {

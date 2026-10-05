@@ -69,6 +69,11 @@ export function buildManifest({ root, stack = [], sha, existing = null }) {
     limits: limitsFinal,
     gates: gatesFinal,
     localSkills: existing?.localSkills ?? [],
+    // ADR-013: profile ids the repo wants, whether they ship centrally or live
+    // in `.simt-dev/profiles/`. Detection already selects the right profiles; this
+    // is the declaration a reviewer reads to see the repo's intent stated rather
+    // than inferred.
+    profiles: existing?.profiles ?? [],
     projection: { simtDevSha: sha ?? null },
   };
 }

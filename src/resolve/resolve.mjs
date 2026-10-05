@@ -121,14 +121,17 @@ export function scoreSkill(skill, context) {
 }
 
 /**
- * Hard gate: a skill whose stack the repo does not have cannot be selected,
+ * Hard gate: a skill whose tags the repo does not have cannot be selected,
  * unless it was forced. This is what stops the Cloudflare reference from being
  * offered to a Kotlin repo, and it is why `d1` lives in keywords rather than
  * stack - a tag fingerprint() cannot emit would gate on nothing.
+ *
+ * `repoSignals` is stack ∪ facts, so a skill may declare a platform tag or an
+ * observable fact and be gated correctly either way (ADR-013).
  */
-export function stackCompatible(skill, repoStack) {
-  if (repoStack.length === 0) return true; // unknown repo: do not exclude
-  const repo = new Set(repoStack);
+export function stackCompatible(skill, repoSignals) {
+  if (repoSignals.length === 0) return true; // unknown repo: do not exclude
+  const repo = new Set(repoSignals);
   return (skill.stack ?? []).some((tag) => repo.has(tag));
 }
 
@@ -138,12 +141,12 @@ export function stackCompatible(skill, repoStack) {
  * agent knows it is standing in that repo, so name the overlapping tag when there
  * is one and say plainly when there is not.
  */
-export function stackReason(skill, repoStack) {
-  if (repoStack.length === 0) return 'repo stack undetected, not excluded';
-  const repo = new Set(repoStack);
+export function stackReason(skill, repoSignals) {
+  if (repoSignals.length === 0) return 'repo signals undetected, not excluded';
+  const repo = new Set(repoSignals);
   const overlap = (skill.stack ?? []).filter((tag) => repo.has(tag));
-  if (overlap.length > 0) return `stack overlap ${overlap.join('+')}`;
-  return `needs one of ${(skill.stack ?? []).slice(0, 3).join('|')}, repo is ${repoStack.slice(0, 3).join('|')}`;
+  if (overlap.length > 0) return `signal overlap ${overlap.join('+')}`;
+  return `needs one of ${(skill.stack ?? []).slice(0, 3).join('|')}, repo is ${repoSignals.slice(0, 3).join('|')}`;
 }
 
 /** Minimal glob matcher: `**` any depth, `*` any run within one segment. */

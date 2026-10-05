@@ -127,6 +127,16 @@ export async function indexCommand(args, flags) {
   return EXIT.OK;
 }
 
+/**
+ * Header label. Platform tags are named; facts are counted, because a repo can
+ * easily carry a dozen of them and the count is what tells the reader the gate
+ * had more to work with than the stack alone (ADR-013).
+ */
+function repoLine(repo) {
+  const stack = repo.stack.length > 0 ? repo.stack.join(',') : 'undetected';
+  return repo.facts.length > 0 ? `${stack} +${repo.facts.length} facts` : stack;
+}
+
 /** `--all` with no other signal: everything this stack can use, deferred excluded. */
 async function emitAll(registry, repoStack, flags) {
   const repo = new Set(repoStack);
@@ -206,7 +216,8 @@ export async function briefCommand(args, flags) {
 
   const root = flags.root ?? process.cwd();
   const repo = await fingerprint(root);
-  const repoStack = repo.stack;
+  // stack ∪ facts: a skill may declare either, so the gate must see both.
+  const repoStack = repo.signals;
   const paths = flags.paths ? parsePathList(flags.paths) : await dirtyPaths(root);
   const taskTokens = tokenize(flags.task ?? '');
   const forced = parsePathList(flags.skill);
@@ -218,9 +229,9 @@ export async function briefCommand(args, flags) {
   if (!flags.task && paths.length === 0 && forced.length === 0) {
     emit(
       [
-        `repo ${root.split('/').pop()} (${repoStack.join(', ') || 'undetected'})`,
+        `repo ${root.split('/').pop()} (${repoLine(repo)})`,
         '',
-        'no --task and no staged files, so selection can only use the repo stack.',
+        'no --task and no staged files, so selection can only use the repo signals.',
         'pass --task "<what you are doing>" or stage files so the diff drives selection,',
         'or pass --all to take everything for this stack.',
       ].join('\n'),
@@ -285,7 +296,7 @@ export async function briefCommand(args, flags) {
   }
 
   lines.push(
-    `RESOLVED ${picked.length} skills, ${kb(used)}${flags.all || used <= budget ? '' : ' (budget capped)'} - repo ${root.split('/').pop()} (${repoStack.join(', ') || 'undetected'})`,
+    `RESOLVED ${picked.length} skills, ${kb(used)}${flags.all || used <= budget ? '' : ' (budget capped)'} - repo ${root.split('/').pop()} (${repoLine(repo)})`,
   );
   lines.push('');
 
@@ -397,8 +408,8 @@ export async function whyCommand(args, flags) {
   const paths = flags.paths ? parsePathList(flags.paths) : await dirtyPaths(root);
   const tokens = tokenize(flags.task ?? '');
 
-  const { score, reasons } = scoreSkill(skill, { repoStack: repo.stack, taskTokens: tokens, paths });
-  const compatible = stackCompatible(skill, repo.stack);
+  const { score, reasons } = scoreSkill(skill, { repoStack: repo.signals, taskTokens: tokens, paths });
+  const compatible = stackCompatible(skill, repo.signals);
 
   const lines = [
     `${skill.name} - score ${score}`,

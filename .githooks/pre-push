@@ -1,0 +1,43 @@
+#!/bin/sh
+# simt-dev's own pre-push. Runs the checks a push would otherwise ship without.
+#
+# Why this exists rather than CI: CI runs after the fact, on someone else's
+# machine, and a failed push that succeeded locally teaches everyone to use
+# --no-verify. It also never pushes anything - this hook can only stop a push.
+#
+# Every check here is one that exists in this repository and can run right now.
+# A hook that names a check this repo cannot run is a hook that blocks forever and
+# teaches the reader to bypass it (ADR-017).
+set -eu
+
+ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$ROOT"
+
+FAILED=""
+
+fail() {
+  printf '%s\n' "FAILED  $1" >&2
+  printf '%s\n' "        $2" >&2
+  FAILED="$FAILED $1"
+}
+
+if [ -d node_modules ]; then
+  printf '%s\n' "simt-dev pre-push: running tests"
+  npm test --silent || fail "tests" "npm test must pass before pushing"
+else
+  printf '%s\n' "simt-dev pre-push: skipped - node_modules is absent; run: npm install"
+fi
+
+printf '%s\n' "simt-dev pre-push: checking the registry"
+node bin/simt-dev.mjs graph lint >/dev/null || fail "graph lint" "the skill registry is inconsistent"
+
+printf '%s\n' "simt-dev pre-push: checking the shipped-content guards"
+node --test test/shipped.test.mjs >/dev/null 2>&1 || fail "shipped content" "shipped text leaks or names a command this package does not install"
+
+if [ -n "$FAILED" ]; then
+  printf '%s\n' "BLOCKED  nothing was pushed:$FAILED" >&2
+  printf '%s\n' "        do not use --no-verify; fix the check above" >&2
+  exit 1
+fi
+
+printf '%s\n' "simt-dev pre-push: all checks passed; this hook does not push"

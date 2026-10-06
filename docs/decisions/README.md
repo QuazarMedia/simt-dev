@@ -28,6 +28,7 @@ record's status line — never by editing the ruling in place.
 | [018](ADR-018-an-unset-hooks-path-is-not-an-absent-hook.md) | An unset hooks path is not an absent hook | accepted |
 | [019](ADR-019-a-declared-command-is-the-runner.md) | A declared command is the runner; the remedy must be one the reader can take | accepted |
 | [020](ADR-020-a-rule-is-written-per-surface-and-pointed-not-copied.md) | A rule is written per surface, and pointed at — never copied | accepted |
+| [021](ADR-021-one-surface-per-repo.md) | One surface per repo, chosen or defaulted to opencode | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

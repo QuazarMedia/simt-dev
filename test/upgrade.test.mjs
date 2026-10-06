@@ -336,7 +336,10 @@ test('upgrade: a current AGENTS.md with stale .mdc rules is still behind', async
   // `check` was red immediately after a successful upgrade.
   const root = await mkdtemp(join(tmpdir(), 'simt-up-mdc-'));
   const a = await repo(join(root, 'a'), { 'wrangler.jsonc': '{"name":"a"}' });
-  const adopted = await run(['init', a, '--yes']);
+  // A second surface is opted into so the repo really does have several generated
+  // files. The default surface folds every rule into AGENTS.md, and one file cannot
+  // prove that `upgrade` restamps all of them.
+  const adopted = await run(['init', a, '--yes', '--surfaces', 'opencode,cursor']);
   assert.equal(adopted.code, 0, adopted.stderr);
   await pin(a, 'aaaaaaa');
 
@@ -369,7 +372,7 @@ test('upgrade: a malformed AGENTS.md is a fault, while a malformed .mdc rule is 
   // fails, and nothing is written anywhere in the repo.
   const root = await mkdtemp(join(tmpdir(), 'simt-up-bad-'));
   const a = await repo(join(root, 'a'), { 'wrangler.jsonc': '{"name":"a"}' });
-  assert.equal((await run(['init', a, '--yes'])).code, 0);
+  assert.equal((await run(['init', a, '--yes', '--surfaces', 'opencode,cursor'])).code, 0);
   await pin(a, 'aaaaaaa');
 
   // A broken .mdc region is repaired by the write, because the whole file is generated.

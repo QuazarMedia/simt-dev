@@ -1,11 +1,17 @@
 # ADR-025 — a baseline is a region in a file the repo owns, and only a file that can hold one
 
-Status: accepted · 2026-10-06
+Status: accepted · 2026-10-06 · rulings 1 and 2 narrowed by ADR-026
 **Affects:** `src/projection/baselines.mjs`, `src/projection/markers.mjs`,
 `src/projection/project.mjs`, `src/commands/init.mjs`, `test/baselines.test.mjs`,
 `test/leaks.mjs`, `test/surfaces.test.mjs`. Settles §3.1 row 5 and row 7 of
 `docs/plans/0001-centralise-agent-rules.md` for the files it names, and leaves the rest ruled
 out by name rather than outstanding.
+
+Rulings 1 and 2 did not survive whole: ADR-026 rules that a config whose grammar cannot
+carry a comment is owned whole rather than not at all, and does so by reusing this record's
+neighbour (ADR-023) rather than by overriding anything here. What rulings 1 and 2 still
+settle is narrower and is not in dispute — a file that **can** hold a region is a region,
+and no comment-capable file is to be taken over whole.
 
 ## Context
 

@@ -27,6 +27,7 @@ import { MANIFEST, buildManifest, readManifest, writeManifest, planGates } from 
 import { readCapability } from '../hooks/capability.mjs';
 import { readHooksState } from '../compare/hooksstate.mjs';
 import { planWorkflow, renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
+import { planDependabot, renderDependabot } from '../ci/dependabot.mjs';
 import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, headSha, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
@@ -92,6 +93,7 @@ export async function initCommand(positional, flags) {
   // in the plan is a file they approve by reading the diff afterwards, which is the
   // one review step this tool exists to make unnecessary.
   const ci = await planWorkflow(root);
+  const dependabot = await planDependabot(root);
 
   const payload = {
     ok: summary.conflicts === 0 || flags.acceptConflicts === true,
@@ -111,6 +113,16 @@ export async function initCommand(positional, flags) {
     pointers: pointerPlan.map((p) => ({ file: p.file, to: p.to, readers: p.readers, state: p.state })),
     pointersBlocked: pointerBlocked,
     ci: { file: ci.file, action: ci.action, bytes: ci.bytes, own: ci.own, reason: ci.reason },
+    dependabot: {
+      file: dependabot.file,
+      action: dependabot.action,
+      bytes: dependabot.bytes,
+      own: dependabot.own,
+      reason: dependabot.reason,
+      ecosystems: dependabot.ecosystems,
+      facts: dependabot.facts,
+      stack: dependabot.stack,
+    },
     adoption,
     manifest: { file: MANIFEST, action: manifestAction, path: manifestPath },
     region: region && {
@@ -230,6 +242,23 @@ export async function initCommand(positional, flags) {
     await mkdir(dirname(join(root, payload.ci.file)), { recursive: true });
     await writeFile(join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own }));
     note(`wrote    ${payload.ci.file} (create; yours to edit from here, simt-dev will not rewrite it)`);
+  }
+  if (payload.dependabot.action === 'create') {
+    await mkdir(dirname(join(root, payload.dependabot.file)), { recursive: true });
+    // Rendered from the plan's facts, not from a fresh detection: the bytes printed
+    // in the plan below are the bytes written here, and re-detecting would make the
+    // printed entry list and the written one disagree the moment a manifest appears
+    // between the two calls.
+    await writeFile(
+      join(root, payload.dependabot.file),
+      renderDependabot(payload.dependabot.facts, {
+        stack: payload.dependabot.stack,
+        own: payload.dependabot.own,
+      }),
+    );
+    note(
+      `wrote    ${payload.dependabot.file} (create; watches ${payload.dependabot.ecosystems.join(', ') || 'github actions'} — yours to edit, simt-dev will not rewrite it)`,
+    );
   }
 
   // Every planned target is written, not just the AGENTS.md region. An adoption that
@@ -462,6 +491,26 @@ function render(payload, manifest) {
     lines.push(`            remedy: simt-dev ci --yes   (init does not write simt-dev's own copy)`);
   } else if (payload.ci.action === 'skip') {
     lines.push(`  ${'skip'.padEnd(9)} ${payload.ci.file}  ${payload.ci.reason}`);
+    lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);
+  }
+
+  // Same three states as the gate, and deliberately the same shape rather than a
+  // second formatting: both files exist for the same reason and a reader comparing
+  // the two plan rows is checking for a difference that means something, not one
+  // produced by two hand-written renderers.
+  const db = payload.dependabot;
+  if (db && db.action === 'create') {
+    lines.push(`  ${'create'.padEnd(9)} ${db.file}  ${renderDependabot(db.facts, { stack: db.stack, own: db.own }).length} bytes`);
+    lines.push(
+      db.own
+        ? `            watches ${db.ecosystems.join(', ')}; simt-dev ci --yes refreshes this copy when the template changes`
+        : `            watches ${db.ecosystems.join(', ') || 'github actions'} - one per manifest this repo has; yours to edit after this`,
+    );
+  } else if (db && db.action === 'refresh') {
+    lines.push(`  ${'refresh'.padEnd(9)} ${db.file}  ${db.reason}`);
+    lines.push(`            remedy: simt-dev ci --yes   (init does not write simt-dev's own copy)`);
+  } else if (db && db.action === 'skip') {
+    lines.push(`  ${'skip'.padEnd(9)} ${db.file}  ${db.reason}`);
     lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);
   }
 

@@ -137,8 +137,14 @@ export function compose(body, { sha, sources = [] } = {}) {
   // are things prettier considers correct, and either one alone makes `check`
   // permanently red on a repo whose own tooling is working correctly. A generated
   // file that a formatter rewrites is a fight the projection loses, so the
-  // projection emits the formatter's shape in the first place.
-  const out = trimmed === '' ? [BEGIN, ...header, END] : [BEGIN, ...header, '', ...trimmed.split('\n'), END];
+  // projection emits the formatter's shape in the first place. The blank line before
+  // END is the same class: prettier treats an HTML comment after a paragraph as a
+  // new block and inserts the separating blank line itself, which made
+  // simt-blog's `format:check` fail on a file whose generated region was correct.
+  const out =
+    trimmed === ''
+      ? [BEGIN, ...header, END]
+      : [BEGIN, ...header, '', ...trimmed.split('\n'), '', END];
   return `${out.join('\n')}\n`;
 }
 

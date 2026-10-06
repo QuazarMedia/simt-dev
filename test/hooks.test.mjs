@@ -10,6 +10,8 @@ import { GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderShim } from '../src/hooks/shim.mjs';
 import { hasScript, knownGates, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
 import { runGates } from '../src/hooks/dispatcher.mjs';
+import { readCapability } from '../src/hooks/capability.mjs';
+import * as gateModule from '../src/projection/manifest.mjs';
 
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
@@ -256,6 +258,58 @@ test('resolve: a command gate uses the manifest command verbatim', async () => {
     root, pkg: null, staged: [], commands: { memory: './bin/memcheck.sh' },
   });
   assert.deepEqual(result.argv, ['./bin/memcheck.sh']);
+});
+
+test('resolve: a declared command wins for a script gate, which is how a Gradle repo gates', async () => {
+  // simt-app is the first adopter with a Gradle runner: no `test` npm script exists and
+  // never will, so the repo declares `test: ./gradlew check`. Before this, the dispatcher
+  // demanded the npm script while `check` and the drop remedy both said to name the
+  // command — three surfaces, one manifest, two different answers.
+  const root = await fixture({});
+  const result = await resolveGate(GATES.test, {
+    root, pkg: { scripts: {} }, staged: [], commands: { test: './gradlew check' },
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.argv, ['./gradlew', 'check']);
+  assert.match(result.detail, /declared command/);
+});
+
+test('resolve: a declared command also overrides a staged formatter', async () => {
+  const root = await fixture({});
+  const result = await resolveGate(GATES.format, {
+    root, pkg: null, staged: ['a.ts'], commands: { format: './gradlew spotlessApply' },
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.argv, ['./gradlew', 'spotlessApply']);
+});
+
+test('resolve: an empty declared command is a failure, not a silent pass', async () => {
+  // An empty command would otherwise resolve to argv `[]` and "run nothing", which is a
+  // gate that reports PASSED while proving nothing.
+  const root = await fixture({});
+  const result = await resolveGate(GATES.test, {
+    root, pkg: { scripts: { test: 'true' } }, staged: [], commands: { test: '   ' },
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.reason, /is empty/);
+});
+
+test('resolve, check and status agree on what a declared command does', async () => {
+  // The defect in one assertion: the dispatcher ran the declared command and passed
+  // while `check` reported the same gate unrunnable, because each read `gates.commands`
+  // differently. One manifest, one answer.
+  const root = await fixture({});
+  await writeFile(join(root, 'simt-dev.json'), JSON.stringify({ gates: { prePush: ['test'], commands: { test: './gradlew check' } } }));
+  const capability = await readCapability(root);
+  assert.equal(capability.commands.test, './gradlew check');
+
+  const resolved = await resolveGate(GATES.test, {
+    root, pkg: { scripts: {} }, staged: [], commands: capability.commands,
+  });
+  assert.equal(resolved.ok, true);
+
+  const declared = { gates: { preCommit: [], prePush: ['test'] } };
+  assert.deepEqual(gateModule.unrunnableGates(declared, capability), []);
 });
 
 test('resolve: formattable extensions include what the estate actually uses', () => {

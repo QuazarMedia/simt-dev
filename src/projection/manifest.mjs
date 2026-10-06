@@ -90,22 +90,44 @@ const TAG_GATES = [
  */
 export function gateRunnable(gate, capability = {}) {
   if (!gate) return { runnable: false, why: 'unknown gate' };
+  // Only a KNOWN non-npm runner changes the wording. A capability that does not report
+  // its runner (a hand-built one, a caller from an older version) is treated as npm,
+  // because claiming a repo has no package.json is a much worse guess than assuming it.
+  const foreign = isForeignRunner(capability.runner);
+
+  // A declared command satisfies the gate whatever its kind, because that is the
+  // dispatcher's own precedence and the two must never disagree about one manifest.
+  const declared = capability.commands?.[gate.name];
+  if (declared) {
+    return declared.trim() === ''
+      ? { runnable: false, why: `gates.commands["${gate.name}"] is empty` }
+      : { runnable: true, why: `runs: ${declared}` };
+  }
+
   if (gate.kind === 'command') {
-    const declared = capability.commands?.[gate.name];
-    return declared
-      ? { runnable: true, why: `runs: ${declared}` }
-      : { runnable: false, why: `no command is declared for it in gates.commands` };
+    return { runnable: false, why: `no command is declared for it in gates.commands` };
   }
   if (gate.kind === 'script') {
     const script = gate.script ?? gate.name;
-    return capability.scripts?.[script]
-      ? { runnable: true, why: `runs: npm run ${script}` }
-      : { runnable: false, why: `no "${script}" script in package.json` };
+    if (capability.scripts?.[script]) return { runnable: true, why: `runs: npm run ${script}` };
+    // Saying "no script in package.json" about a repo with no package.json states a
+    // fact about a file that does not exist and implies a fix that cannot be taken.
+    return {
+      runnable: false,
+      why: foreign
+        ? `this repo runs ${runnerName(capability.runner)}, not npm, so "npm run ${script}" cannot run here`
+        : `no "${script}" script in package.json`,
+    };
   }
   // staged: a formatter must actually be installed
   for (const tool of gate.tools ?? []) {
     if (!(capability.binaries ?? []).includes(tool)) {
-      return { runnable: false, why: `${tool} is not installed in node_modules/.bin` };
+      return {
+        runnable: false,
+        why: foreign
+          ? `${tool} is not installed, and this repo has no node_modules/.bin to install it into`
+          : `${tool} is not installed in node_modules/.bin`,
+      };
     }
   }
   return { runnable: true, why: `formats staged files with ${(gate.tools ?? []).join(', ')}` };
@@ -118,23 +140,59 @@ export function gateRunnable(gate, capability = {}) {
  * undo. Every remedy is one of three real choices — install the tool, add the script,
  * or name the command — because "this repo cannot run format" with no next step reads
  * as simt-dev deciding formatting does not matter here.
+ *
+ * The two npm-shaped remedies only apply where npm is the runner. In a Gradle, Python or
+ * Rust repo the honest undo is the `command` gate: the repo names its own program, which
+ * is the same escape hatch ConnectIQ memory budgets already use.
  */
-function gateRemedy(gate, { existing = false } = {}) {
+function gateRemedy(gate, { existing = false, runner = null } = {}) {
   const name = gate?.name ?? 'the gate';
+  const npmShaped = gate?.kind === 'staged' || gate?.kind === 'script';
+  const foreign = isForeignRunner(runner);
   const fix =
-    gate?.kind === 'staged'
-      ? `install ${gate.tools.join(', ')} as a dev dependency`
-      : gate?.kind === 'script'
-        ? `add a "${gate.script ?? name}" script to package.json`
-        : gate?.kind === 'command'
-          ? `declare the program under "gates.commands" in ${MANIFEST}`
-          : `remove "${name}" from the gates list in ${MANIFEST}`;
+    npmShaped && foreign
+      ? `this repo runs ${runnerName(runner)}, not npm; name the program under "gates.commands" in ${MANIFEST} instead of the npm equivalent`
+      : gate?.kind === 'staged'
+        ? `install ${gate.tools.join(', ')} as a dev dependency`
+        : gate?.kind === 'script'
+          ? `add a "${gate.script ?? name}" script to package.json`
+          : gate?.kind === 'command'
+            ? `declare the program under "gates.commands" in ${MANIFEST}`
+            : `remove "${name}" from the gates list in ${MANIFEST}`;
   // A re-init never re-adds a gate to a manifest that already has one, so "install the
   // tool and re-run init" would send the reader round the loop and back to where they
   // started. On an existing manifest the declaration is the second half of the fix.
-  return existing
-    ? `${fix}, then add "${name}" to gates.preCommit or gates.prePush in ${MANIFEST}`
-    : `${fix}, then re-run: simt-dev init --yes`;
+  const second =
+    npmShaped && foreign
+      ? `, or add "${name}" to gates.preCommit or gates.prePush in ${MANIFEST}`
+      : existing
+        ? `, then add "${name}" to gates.preCommit or gates.prePush in ${MANIFEST}`
+        : `, then re-run: simt-dev init --yes`;
+  return `${fix}${second}`;
+}
+
+/**
+ * Is this runner one where `npm run` is not how a gate is spelled?
+ *
+ * `undefined` means "the caller did not report a runner", and `npm` means the npm
+ * remedy applies. Only a positively identified other ecosystem changes the wording.
+ */
+function isForeignRunner(runner) {
+  return runner != null && runner !== 'npm';
+}
+
+/** How a reader would name the runner in a sentence. */
+function runnerName(runner) {
+  return (
+    {
+      none: 'no recognised runner',
+      gradle: 'Gradle',
+      python: 'Python',
+      bun: 'bun',
+      cargo: 'Cargo',
+      go: 'Go',
+    }[runner] ?? runner
+  );
 }
 
 /**
@@ -164,7 +222,7 @@ export function planGates(stack = [], capability = null) {
       const gate = getGate(name);
       const verdict = gateRunnable(gate, capability);
       if (!verdict.runnable) {
-        dropped.push({ gate: name, why: verdict.why, remedy: gateRemedy(gate) });
+        dropped.push({ gate: name, why: verdict.why, remedy: gateRemedy(gate, { runner: capability.runner }) });
       }
       return verdict.runnable;
     });
@@ -242,7 +300,7 @@ export function unrunnableGates(manifest, capability) {
       status: 'unrunnable',
       gate: name,
       detail: `declares gate "${name}", which this repo cannot run: ${verdict.why}`,
-      remedy: gateRemedy(gate, { existing: true }),
+      remedy: gateRemedy(gate, { existing: true, runner: capability.runner }),
     });
   }
   return findings;

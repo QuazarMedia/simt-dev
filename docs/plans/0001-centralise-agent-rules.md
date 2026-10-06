@@ -195,6 +195,22 @@ Three routes that are genuinely different: **scaffold with nothing to collide wi
 an existing rules layer** (`simt-app`). A mechanism that survives all three has no fourth
 shape to meet in this estate.
 
+**All three are adopted.** `simt-social-media` was adopted first and is not part of this
+trio; it exists because ADR-016 needed a repo that *had* all three `.mdc` families to
+establish that they are unions rather than variants.
+
+The trio produced three findings that no amount of reading would have:
+
+| Finding | Found by | Ruling |
+|---|---|---|
+| `hooks status` read `core.hooksPath` but not what git actually runs, so an **unset** path read as "no hooks" and `install` took over a working 4 KB `pre-commit` with no warning | piloting `simt-space` | ADR-018 |
+| `init` dropped all five gates on `simt-app` and told the reader to add a script to a `package.json` it will never have; once it declared real commands, the dispatcher, `check` and `hooks status` gave **three different answers** about one manifest | piloting `simt-app` | ADR-019 |
+| `core.md` told every repo to read `package.json`, and `test-gate.mdc` taught "name exact commands and test files" using `npm run test:focused` — a filename no non-npm repo has | piloting `simt-app` | a new gate in `test/shipped.test.mjs` |
+
+Each was found by doing to the repo what a person does, not by reading the tool. The pattern
+is now stated where it will be read: `simt-dev/AGENTS.md` says run the tool the way a consumer
+runs it, and `docs/decisions/README.md` names the shared cause.
+
 **What this trio no longer covers, stated rather than hidden.** The earlier draft picked
 `bunnyland-server` for its byte-identical `CLAUDE.md`, the `python` profile and the estate's
 only declared numeric coverage bar (`fail_under = 100`), and `simt-social-media` for having

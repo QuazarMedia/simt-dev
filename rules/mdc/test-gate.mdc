@@ -5,6 +5,9 @@ description: Full-pass tests and test deltas are mandatory before commit or revi
 alwaysApply: true
 applies: always
 substitutions:
+  - key: exampleRunner
+    default: your test runner, through the repository's own script or task
+    describe: how this repo actually runs one named test file
   - key: exampleTestPath
     default: path/to/the.changed.test.ts
     describe: one real test file for this repo, used only as the named example
@@ -23,7 +26,8 @@ exempt from test deltas but require named doc/format checks to pass.
 
 ## Implementer Requirements
 
-1. **Name exact commands and test files**: e.g. `npm run test:focused -- {{exampleTestPath}}`.
+1. **Name exact commands and test files**: {{exampleRunner}}, selecting
+   `{{exampleTestPath}}` on its own.
 2. **100% Pass Required**: the named commands must exit 0 with every test passing. A
    partial pass (e.g. 6/8 passing) is a hard blocker, and so is quoting the passing subset.
 3. **Behavioral Test Deltas**:

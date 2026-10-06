@@ -69,7 +69,7 @@ Two corollaries that are easy to get wrong:
 - **Never claim a check you did not run.** In particular, `npm test` passing is not the same as
   the projected text being correct; for rule content, read the rendered region.
 - **Commit locally and report the SHA. Push only on explicit approval** (ADR-001). Never
-  commit or push on a user's behalf, and never reach for `--no-verify`.
+  push on a user's behalf unless asked for it, and never reach for `--no-verify`.
 - **Do not refactor outside the blast radius** (ADR-002). A second real use inside the change
   extracts, and the extraction is finished; a third copy of the same logic is a defect, and so
   is an abstraction invented for a single caller.

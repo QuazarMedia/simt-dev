@@ -267,9 +267,23 @@ async function adrDirection(adr, rules, decisions, flags) {
   const restates = rules.filter((r) => citations(r.body).includes(d.id));
 
   if (isJson(flags)) {
+    // The machine payload answers the same question as the text one. A caller reading
+    // `adr.summary.ruled` off a superseded record would get the reversal, so the
+    // effective ruling is carried alongside rather than instead: the record asked about
+    // is still named, and what is in force is named separately.
+    const replacement = d.supersededBy ? decisions.find((x) => x.id === d.supersededBy) : null;
     emit(
       `${JSON.stringify(
-        { ok: true, command: 'rules why', adr: d, rules: restates.map((r) => r.id) },
+        {
+          ok: true,
+          command: 'rules why',
+          adr: d,
+          supersededBy: replacement ? { id: replacement.id, title: replacement.title } : null,
+          inForce: replacement
+            ? { id: replacement.id, status: replacement.status, summary: replacement.summary }
+            : { id: d.id, status: d.status, summary: d.summary },
+          rules: restates.map((r) => r.id),
+        },
         null,
         2,
       )}\n`,
@@ -282,14 +296,53 @@ async function adrDirection(adr, rules, decisions, flags) {
     `${d.id} - ${d.title}`,
     '',
     `status    ${d.status}`,
-    // No path here. The record travels inside the installed package, so a relative
-    // path would resolve against the reader's repo and name nothing. The id is the
-    // stable handle: `simt-dev rules why ADR-NNN` prints the whole record anywhere.
-    `read it with  simt-dev rules why ${d.id}`,
     `restates  ${restates.length > 0 ? restates.map((r) => r.id).join(', ') : '(no rule cites it)'}`,
   ];
-  if (d.supersededBy) lines.push('', `SUPERSEDED by ${d.supersededBy} - this record is retained as evidence, not as policy.`);
+  if (d.supersededBy) lines.push(`SUPERSEDED by ${d.supersededBy} - this record is retained as evidence, not as policy.`);
   if (d.supersedes.length > 0) lines.push(`supersedes  ${d.supersedes.join(', ')}`);
+
+  // A superseded record must not print its own ruling. ADR-011 ruled that Windows is
+  // supported; ADR-012 reversed it the same day. Printing "Windows is a supported v1
+  // platform" under a SUPERSEDED banner is a reversed instruction with a warning
+  // attached, and an agent that skims the ruling and not the banner acts on the
+  // reversal. This is the failure the decision index's own header names: a provenance
+  // feature that proves provenance but not currency.
+  const replacement = d.supersededBy ? decisions.find((x) => x.id === d.supersededBy) : null;
+  const effective = replacement ?? d;
+
+  if (replacement) {
+    lines.push(
+      '',
+      `instead     ${replacement.id} - ${replacement.title}`,
+      `            status ${replacement.status}`,
+    );
+  }
+
+  // The reason the ruling is printed at all, and not a pointer to this command: the
+  // reader arrived here from a `(ADR-NNN)` citation in a rule, and the only question
+  // that citation raises is "why am I being told this?". A title and a status answer
+  // "does it exist and is it current", which is the smaller half.
+  //
+  // `## Context` is deliberately absent. It is a survey of what particular
+  // repositories used to say - true, citable, and following none of it from a repo
+  // that owns none of those files.
+  if (effective.summary.ruled.length > 0) {
+    lines.push('', replacement ? 'ruled now' : 'ruled');
+    for (const r of effective.summary.ruled) lines.push(`  - ${r}`);
+  }
+  if (effective.summary.rejected.length > 0) {
+    // The rejected alternatives are the part a reader cannot reconstruct. A ruling is
+    // only legible against the option it refused.
+    lines.push('', 'rejected');
+    for (const r of effective.summary.rejected) lines.push(`  - ${r}`);
+  }
+  if (effective.summary.writtenAgainst.length > 0) {
+    lines.push(
+      '',
+      `written against  ${effective.summary.writtenAgainst.join(', ')}`,
+      `                the ruling above is the part that generalises; those files are not yours.`,
+    );
+  }
 
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   // A superseded record is not a failure; it is the supersession rule working.

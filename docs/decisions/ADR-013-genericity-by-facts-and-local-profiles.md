@@ -51,7 +51,7 @@ usable by an ecosystem nobody has heard of.
 
 ### 2. Profiles are content, and content may live in the repo
 
-`simt init` prints where local profiles live and the manifest gains a `profiles` array
+`simt-dev init` prints where local profiles live and the manifest gains a `profiles` array
 naming profile ids. The directory needs no creation — the first file in it creates it, and
 an empty directory would not survive git anyway. Central profiles ship in `rules/stacks/`; **repo-local profiles are read from
 `.simt-dev/profiles/*.md`**, use the same frontmatter contract (ADR-009), and are selected
@@ -75,7 +75,7 @@ These are different products and must not be conflated.
 | Hosted MCP is useful | yes — discovering profiles, learning an ecosystem, publishing findings | **no** |
 | Non-determinism | tolerable: a human reviews the output | fatal: "did the agent follow the rules?" becomes unanswerable |
 | Offline | irrelevant | required: a hook and a gate must not depend on a network call |
-| Diffable in a PR | partially | required: `simt check` output is the gate's whole product |
+| Diffable in a PR | partially | required: `simt-dev check` output is the gate's whole product |
 | Fails | loudly, at authoring time | must fail **closed** with a remedy |
 
 A hosted resolver would make every gate in the estate depend on a network round trip and a
@@ -90,7 +90,7 @@ profile file.
 ## Consequences
 
 - `fingerprint()` returns `{stack, facts, evidence, manifest, error}`. `evidence` gains the
-  file that proved each fact, so `simt doctor` can answer "why did you think that?" without a
+  file that proved each fact, so `simt-dev doctor` can answer "why did you think that?" without a
   human re-deriving it.
 - Every tag a profile may name is still emitted by the engine. The existing test — *tags used
   by content but not emitted by the engine is the empty set* — now covers facts too, and the

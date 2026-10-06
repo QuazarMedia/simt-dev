@@ -33,10 +33,10 @@ added during adoption.
 ## Consequences
 
 - Every skill becomes addressable by one stable name across all 16 repos, which is a
-  precondition for `simt skills find/show/install` and for `variant-of` edges.
+  precondition for `simt-dev skills find/show/install` and for `variant-of` edges.
 - The registry in `graph/skills.graph.json` becomes the one place resolution metadata lives,
   instead of metadata split across frontmatter, prose and directory size.
-- `simt skills eval` can key on skill names, because every skill has one.
+- `simt-dev skills eval` can key on skill names, because every skill has one.
 
 ## Rejected
 

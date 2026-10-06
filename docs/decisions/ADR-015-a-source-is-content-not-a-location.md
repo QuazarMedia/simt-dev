@@ -14,10 +14,10 @@ Someone who cloned **only `simt-social`** has the `simt-social` body of `slice-c
 `simt-social/.agents/skills/slice-commit` is satisfied by that file. Both commands refused:
 
 ```
-$ simt skills install slice-commit
+$ simt-dev skills install slice-commit
 ERROR 2 slice-commit has 2 variants and none matches this repo (node)
 
-$ simt skills show slice-commit
+$ simt-dev skills show slice-commit
 (body unavailable: this installation has no workspace, so slice-commit has no body to fetch; …)
 ```
 
@@ -77,7 +77,7 @@ Two rules that look similar and are not:
 
 ### 4. A file of the right shape and the wrong body gets its own message
 
-`simt skills install` reports `<path> exists but is not the declared body (5048 bytes declared)`.
+`simt-dev skills install` reports `<path> exists but is not the declared body (5048 bytes declared)`.
 The alternative message — "none of the variants matches this repo" — is true and useless: it sends
 the reader to inspect their stack tags when the actual problem is the file in front of them.
 

@@ -15,10 +15,10 @@ should start asking questions; 1000 is where the file must already have been spl
 
 ## Ruling
 
-Two tiers, both advisory in wording but checkable in `simt check`:
+Two tiers, both advisory in wording but checkable in `simt-dev check`:
 
 - **400 lines — review trigger.** Crossing it requires a stated reason to keep the file whole.
-- **1000 lines — hard ceiling.** `simt check` fails. Extract along the nearest cohesive
+- **1000 lines — hard ceiling.** `simt-dev check` fails. Extract along the nearest cohesive
   boundary.
 - **Generated files are exempt**, declared per repo in `simt-dev.json`. The hook must name the
   generator.

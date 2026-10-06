@@ -45,7 +45,7 @@ the value.
   becomes a declared gate list rather than 12 prose sentences.
 - The three social repos declare no number and keep their evidence discipline verbatim — which
   is now shared rather than independently re-invented in each.
-- A new repo inherits a real policy from `simt init` with no configuration, and can opt into a
+- A new repo inherits a real policy from `simt-dev init` with no configuration, and can opt into a
   number later without changing the rule.
 
 ## Rejected

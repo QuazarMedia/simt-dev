@@ -23,7 +23,10 @@ simt-dev skills install <name>  pin a skill into the repo as a local override
 simt-dev rules list             the rule catalogue (--root marks what applies to a repo)
 simt-dev rules show <id>        one rule body
 simt-dev rules why <id|ADR-NNN> the decision that settled it, and whether it is still in force
-simt-dev hooks install|status   install the shared dispatcher; report what it would run
+ simt-dev hooks install|status   install the shared dispatcher; report what it would run
+ simt-dev ci                     simt-dev's own gate file: create or refresh it
+                            (dry-run unless --yes; refreshes the template's own copy
+                            and no repository else's)
 simt-dev compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)

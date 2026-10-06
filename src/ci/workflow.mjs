@@ -20,13 +20,32 @@
 //     not reach an adopted repo on its own - stated in ADR-023 rather than
 //     discovered later.
 //
+//   - simt-dev's OWN repository is the exception, and the exception has to be the
+//     file's own words. Everywhere else the file is a repo's; here it is a copy of
+//     the thing it is copied from, and a copy that is allowed to rot stops being a
+//     template. A reader who opens this file in this repository and sees a diff has
+//     to be able to tell it apart from a hand edit without reading a decision record,
+//     which is why the header says so in the file rather than in this comment.
+//
+// The own copy also RUNS something different, and that is not a variation for taste.
+// `simt-dev check` is red in this repository by design: AGENTS.md here is written by
+// hand and deliberately never self-adopted (see its own "Why this repository is not
+// self-adopted"), so the check reports it as unmanaged forever. A gate that is red on
+// the day it lands is the one thing worse than no gate - it teaches the reader to
+// ignore it - so the own copy runs what this repository actually declares, which is
+// what `.githooks/pre-push` already runs.
+//
 // The directory decides whether it applies at all: a repo with no
 // `.github/workflows` is not a GitHub Actions repo, and silently creating that
-// directory starts running CI on someone's pull requests they did not ask for.
+// directory starts running CI on someone's pull requests they did not ask for. The
+// own repository is exempt from that too, for the same reason it is exempt from
+// write-once: it is the only repo whose Actions directory this tool is entitled to
+// decide the contents of.
 
 import { readFile, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
+import { PACKAGE_ROOT } from '../workspace.mjs';
 import { PACKAGE_NAME, renderLocator } from '../locate.mjs';
 
 /** Directory whose presence means this repo runs GitHub Actions. */
@@ -36,14 +55,51 @@ export const WORKFLOWS_DIR = '.github/workflows';
 export const WORKFLOW_FILE = `${WORKFLOWS_DIR}/simt-dev-check.yml`;
 
 /**
- * The workflow, as bytes.
+ * Whether this repo is the one this code is running from.
  *
- * @returns {string} YAML, LF-terminated
+ * `resolve` and not `realpath`, deliberately: a repo reached through a symlinked
+ * path fails to match, and that is the safe direction. It would be written once and
+ * never refreshed - the ruling every other repo lives under - where a realpath that
+ * matched a symlink would let an alias of this repo rewrite a file nobody thought of
+ * as managed.
+ *
+ * @param {string} root repo root
+ * @returns {boolean}
  */
-export function renderWorkflow() {
-  const locator = renderLocator('check --root "$ROOT"', {
-    remedy: `REMEDY run: npm i -D ${PACKAGE_NAME}   (the gate runs from the pinned dependency)`,
-  });
+export function isOwnRepo(root) {
+  return resolve(root) === PACKAGE_ROOT;
+}
+
+/**
+ * The header. The only part of the file that says who owns it, and the place the
+ * exception has to live: a reader of this file who has only this repository has to be
+ * able to tell, from these bytes, that simt-dev rewrites it here and nowhere else.
+ *
+ * @param {boolean} own whether this is simt-dev's own repository
+ * @returns {string}
+ */
+function header(own) {
+  if (own) {
+    return `# Written by simt-dev, and refreshed by it. This repository is simt-dev's
+# own, so this file is a copy of the template rather than a repository's own: a diff
+# here means the GATE changed, not that somebody hand-edited their CI. Anywhere else
+# this file is written once by \`simt-dev init\` and never touched again.
+#
+# To change what the gate does, change \`src/ci/workflow.mjs\` in the same commit and
+# run \`simt-dev ci --yes\`. Editing this file by hand works until the next template
+# change overwrites it.
+#
+# The steps below run what this repository declares - its tests and its registry lint,
+# the same two \`.githooks/pre-push\` runs - and NOT \`simt-dev check\`. That check is
+# red here by design: this AGENTS.md is written by hand and deliberately never
+# self-adopted, so the check reports it as unmanaged on every run. A gate that is red
+# the day it lands is worse than no gate.
+#
+# Every step runs from this checkout: this package has zero dependencies, so there is
+# nothing to install and no binary to resolve. Nothing here can pass by skipping - a
+# step that cannot run fails the job.
+`;
+  }
   return `# Written by simt-dev when this repo was adopted. Yours from here: simt-dev
 # creates this file once and never rewrites it, so your own jobs and triggers stay
 # yours.
@@ -54,7 +110,13 @@ export function renderWorkflow() {
 #
 # If simt-dev cannot be found the job FAILS instead of passing. A green tick from a
 # check that never ran is the one outcome worse than a red one.
-name: simt-dev check
+`;
+}
+
+/** The YAML every copy shares, so the two cannot drift on triggers, permissions or
+ *  concurrency. Only `name` and `steps` vary, and only because they have to. */
+function skeleton(name, steps) {
+  return `name: ${name}
 
 on:
   pull_request:
@@ -73,45 +135,104 @@ concurrency:
 
 jobs:
   check:
-    name: simt-dev check
+    name: ${name}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+${steps}`;
+}
+
+/** The floor in this package's \`engines.node\`. A gate that cannot start on the
+ *  version it declares support for is not a gate. The comment ships in the file,
+ *  because the reader deciding whether to bump that version has only the file. */
+const SETUP_NODE = `      - uses: actions/setup-node@v4
         with:
           # The floor in this package's \`engines.node\`. A gate that cannot start on
           # the version it declares support for is not a gate.
-          node-version: '20'
-      - name: install dependencies
-        # \`npm ci\` needs a lockfile; a repo without one is still gated, not skipped.
-        run: npm ci || npm install
-      - name: simt-dev check
-        run: |
-          set -eu
-          ROOT="\${GITHUB_WORKSPACE}"
-${locator.split('\n').map((l) => (l === '' ? '' : `          ${l}`)).join('\n')}
-`;
+          node-version: '20'`;
+
+/** Indent a rendered shell block so it sits inside a YAML block scalar. Blank lines
+ *  stay blank: a line of trailing whitespace inside a scalar is a diff nobody meant. */
+function indent(text, spaces) {
+  return text
+    .split('\n')
+    .map((l) => (l === '' ? '' : `${' '.repeat(spaces)}${l}`))
+    .join('\n');
 }
 
 /**
- * Whether this repo already runs GitHub Actions, and whether the gate file is there.
+ * The workflow, as bytes.
+ *
+ * Two renderings, and the argument is which repository this one is for. `own` is the
+ * copy that lives in simt-dev's own repository; it is refreshed rather than left alone,
+ * and it runs this repository's own gate rather than the adopting repository's.
+ *
+ * @param {{own?: boolean}} [options]
+ * @returns {string} YAML, LF-terminated
+ */
+export function renderWorkflow({ own = false } = {}) {
+  if (own) {
+    return `${header(true)}${skeleton(
+      'simt-dev own gate',
+      [
+        '      - uses: actions/checkout@v4',
+        SETUP_NODE,
+        // The two checks `.githooks/pre-push` runs, named here rather than discovered,
+        // because a reader of this file has to be able to answer "what stops a merge"
+        // without opening a shell script in another directory.
+        '      - name: tests',
+        '        run: npm test',
+        '      - name: skill registry lint',
+        '        run: node bin/simt-dev.mjs graph lint',
+        '      - name: the gate copy in this repo is current',
+        // The drift this exception exists to prevent, checked where it would be caught.
+        // Without it a template change lands with the copy still describing the old
+        // gate, and the next person to read the diff cannot tell which one is right.
+        '        run: node bin/simt-dev.mjs ci',
+      ].join('\n'),
+    )}\n`;
+  }
+
+  const locator = renderLocator('check --root "$ROOT"', {
+    remedy: `REMEDY run: npm i -D ${PACKAGE_NAME}   (the gate runs from the pinned dependency)`,
+  });
+  return `${header(false)}${skeleton(
+    'simt-dev check',
+    [
+      '      - uses: actions/checkout@v4',
+      SETUP_NODE,
+      '      - name: install dependencies',
+      '        # \`npm ci\` needs a lockfile; a repo without one is still gated, not skipped.',
+      '        run: npm ci || npm install',
+      '      - name: simt-dev check',
+      '        run: |',
+      indent(`set -eu\nROOT="\${GITHUB_WORKSPACE}"\n${locator}`, 10),
+    ].join('\n'),
+  )}\n`;
+}
+
+/**
+ * What this repo's gate file should be, and what should happen to it.
+ *
+ * The one place that knows about the write-once rule, so `init`, `check` and `ci`
+ * cannot disagree about which repo owns its file.
  *
  * @param {string} root repo root
- * @returns {Promise<{file:string, path:string, action:'create'|'unchanged'|'skip',
- *                    exists:boolean, bytes:number, workflows:boolean, reason:string|null}>}
+ * @returns {Promise<{file:string, path:string, action:'create'|'refresh'|'unchanged'|'skip',
+ *                    own:boolean, exists:boolean, bytes:number, current:boolean,
+ *                    workflows:boolean, reason:string|null}>}
  */
 export async function planWorkflow(root) {
   const path = join(root, WORKFLOW_FILE);
-  let exists = false;
-  let bytes = 0;
+  const own = isOwnRepo(root);
+  let text = null;
   try {
-    const text = await readFile(path, 'utf8');
-    exists = true;
-    bytes = Buffer.byteLength(text);
+    text = await readFile(path, 'utf8');
   } catch {
-    exists = false;
+    text = null;
   }
+  const exists = text !== null;
+  const bytes = exists ? Buffer.byteLength(text) : 0;
 
   // An unreadable path is not an absent one. ENOENT is absence; anything else means
   // the file is there and this tool cannot see it, and reporting that as "create"
@@ -124,15 +245,37 @@ export async function planWorkflow(root) {
   }
 
   if (exists) {
-    return { file: WORKFLOW_FILE, path, action: 'unchanged', exists, bytes, workflows, reason: null };
+    // Content is only ever compared in simt-dev's own repository. Everywhere else
+    // that comparison is the thing ADR-023 ruled out: a repo's file is the repo's
+    // file, and the only question is whether one is there.
+    const current = own ? text === renderWorkflow({ own: true }) : true;
+    return {
+      file: WORKFLOW_FILE,
+      path,
+      action: current ? 'unchanged' : 'refresh',
+      own,
+      exists,
+      bytes,
+      current,
+      workflows,
+      reason: current ? null : `this repository is simt-dev's own, and the gate template has changed since this copy was written`,
+    };
   }
   return {
     file: WORKFLOW_FILE,
     path,
-    action: workflows ? 'create' : 'skip',
+    // The own repository creates the directory. It is the one repo whose Actions
+    // surface this tool is entitled to populate, and the rule that stopped it from
+    // inventing CI on somebody's pull requests does not apply to CI on its own.
+    action: workflows || own ? 'create' : 'skip',
+    own,
     exists,
     bytes,
+    current: false,
     workflows,
-    reason: workflows ? null : `no ${WORKFLOWS_DIR} directory, so this repo does not run GitHub Actions yet`,
+    reason:
+      workflows || own
+        ? null
+        : `no ${WORKFLOWS_DIR} directory, so this repo does not run GitHub Actions yet`,
   };
 }

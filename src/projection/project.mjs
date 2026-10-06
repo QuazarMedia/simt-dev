@@ -123,6 +123,17 @@ export async function checkTargets(root, flags = {}) {
       detail: 'this repo runs GitHub Actions but nothing gates it',
       remedy: 'simt-dev init --yes',
     });
+  } else if (ci.action === 'refresh') {
+    // Only reachable in simt-dev's own repository, and only because `planWorkflow`
+    // compares content there and nowhere else. A copy of the template that is allowed
+    // to drift stops being the template, so the drift is reported here rather than
+    // left for whoever next changes the gate to notice by reading a diff.
+    findings.push({
+      file: WORKFLOW_FILE,
+      status: 'drift',
+      detail: ci.reason,
+      remedy: 'simt-dev ci --yes',
+    });
   }
 
   // A rule with a defect is a gate failure even when its files happen to be

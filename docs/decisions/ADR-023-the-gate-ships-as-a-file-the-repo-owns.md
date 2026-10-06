@@ -1,6 +1,9 @@
 # ADR-023 — The gate ships as a file the repo owns
 
-Status: accepted · 2026-10-08
+Status: accepted · 2026-10-06 · ruling 2 superseded by
+[ADR-024](ADR-024-simt-dev-overwrites-its-own-gate-file.md), which carves out this
+repository's own copy; rulings 3 and 4 narrowed by the same record to every repository
+except this one. The text below is left as it was accepted.
 **Affects:** `src/ci/workflow.mjs`, `src/locate.mjs`, `src/hooks/shim.mjs`, `src/commands/init.mjs`, `src/projection/project.mjs`, `test/ci.test.mjs`, `test/leaks.mjs`. Settles plan 1 §6 phase 3 ("Reusable workflow live").
 
 ## Context

@@ -21,9 +21,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { renderWorkflow, planWorkflow, WORKFLOW_FILE, WORKFLOWS_DIR } from '../src/ci/workflow.mjs';
+import { renderWorkflow, planWorkflow, isOwnRepo, WORKFLOW_FILE, WORKFLOWS_DIR } from '../src/ci/workflow.mjs';
 import { renderShim, EVENTS } from '../src/hooks/shim.mjs';
 import { PACKAGE_NAME, renderLocator } from '../src/locate.mjs';
+import { PACKAGE_ROOT } from '../src/workspace.mjs';
 import { assertClean } from './leaks.mjs';
 
 const exec = promisify(execFile);
@@ -262,6 +263,7 @@ test('the gate never inspects the contents of a workflow it did not write', asyn
   // The repo is red here for its missing AGENTS.md, which this file has nothing to do
   // with. Only the workflow's absence from the output is the claim under test.
   assert.doesNotMatch(found.stdout, /simt-dev-check\.yml/);
+  assert.equal((await planWorkflow(root)).action, 'unchanged');
 });
 
 test('a repo with no .github is not told to have a workflow', async () => {
@@ -270,4 +272,178 @@ test('a repo with no .github is not told to have a workflow', async () => {
     (e) => e,
   );
   assert.doesNotMatch(stdout, /simt-dev-check\.yml/);
+});
+
+// ------------------------------------------------------- the one exception
+
+test('a repository that adopted simt-dev is not mistaken for simt-dev', async () => {
+  // The whole exception is one comparison, and the failure it must not have is the
+  // catastrophic one: an adopting repo recognised as the template's own repo, whose
+  // CI this tool then rewrites. A fresh temp repo has to be "not ours", and so does a
+  // path inside this repository's parent - which is a different repository.
+  assert.equal(isOwnRepo(PACKAGE_ROOT), true);
+  assert.equal(isOwnRepo(await plainRepo()), false);
+  assert.equal(isOwnRepo(await actionsRepo()), false);
+  assert.equal(isOwnRepo(join(PACKAGE_ROOT, '..')), false);
+  assert.equal(isOwnRepo(`${PACKAGE_ROOT}/rules`), false);
+});
+
+test('simt-dev\'s own repository refreshes its copy; every other one never does', async () => {
+  const stale = renderWorkflow().replace('node-version', 'node-version-was');
+  assert.notEqual(stale, renderWorkflow(), 'the fixture must actually differ');
+
+  // The template's own repo: a copy that no longer matches is drift, and it is
+  // reported as such rather than left for the next person to notice in a diff.
+  const own = await planWorkflow(PACKAGE_ROOT);
+  assert.equal(own.own, true);
+
+  // Everyone else: same bytes, same verdict - `unchanged`. This is the ruling the
+  // exception narrows, and the assertion that it still holds for every adopting repo
+  // is the reason the exception is allowed to exist at all.
+  const consumer = await actionsRepo({ [WORKFLOW_FILE]: stale });
+  const plan = await planWorkflow(consumer);
+  assert.equal(plan.own, false);
+  assert.equal(plan.action, 'unchanged');
+  assert.equal(plan.reason, null);
+});
+
+test('simt-dev\'s own copy is current on disk, and check says so', async () => {
+  // The guard that makes the refresh real: this file is committed, and the whole point
+  // of the exception is that a template change must not land with a copy still
+  // describing the old gate. Nothing else in the tool can catch that - a consumer's
+  // workflow is deliberately never compared - so this is the one place it is checked.
+  const onDisk = await readFile(join(PACKAGE_ROOT, WORKFLOW_FILE), 'utf8');
+  assert.equal(
+    onDisk,
+    renderWorkflow({ own: true }),
+    'the committed copy in simt-dev\'s own repo is not what the renderer produces; run: simt-dev ci --yes',
+  );
+  const plan = await planWorkflow(PACKAGE_ROOT);
+  assert.equal(plan.action, 'unchanged');
+  assert.equal(plan.reason, null);
+
+  // And `check`, run from a scratch cwd with this repo as the target, must not report
+  // it. A drift finding here would be the one finding nothing could fix.
+  const found = await exec('node', [BIN, 'check', '--root', PACKAGE_ROOT], {
+    cwd: PACKAGE_ROOT,
+    env: { ...process.env, NO_COLOR: '1' },
+  }).catch((e) => e);
+  assert.doesNotMatch(found.stdout, /simt-dev-check\.yml/);
+});
+
+test('the own copy explains the exception in its own bytes', async () => {
+  // A reader of this file in this repository has to be able to tell what a diff means
+  // without opening a decision record. That is the whole reason the header exists, so
+  // the claims it makes are asserted rather than assumed.
+  const own = renderWorkflow({ own: true });
+  assert.match(own, /refreshed by it/);
+  assert.match(own, /a diff\n# here means the GATE changed/);
+  assert.match(own, /simt-dev ci --yes/);
+  // ...and must not claim the adopting repo's promise, which does not hold here.
+  assert.doesNotMatch(own, /never rewrites it/);
+
+  const theirs = renderWorkflow();
+  assert.match(theirs, /never rewrites it/);
+  assert.doesNotMatch(theirs, /refreshed by it/);
+});
+
+test('the own copy runs a gate this repository can actually pass', async () => {
+  // `simt-dev check` is red here by design: this AGENTS.md is hand-written and never
+  // self-adopted, so the check reports it as unmanaged on every run. A CI job that is
+  // red the day it lands is worse than no job, because it teaches the reader to ignore
+  // the thing they added in order to stop ignoring things.
+  const own = renderWorkflow({ own: true });
+  assert.doesNotMatch(own, /run: \|/);
+  assert.match(own, /run: npm test/);
+  assert.match(own, /run: node bin\/simt-dev\.mjs graph lint/);
+  // Every command it names has to exist in this repository, and that is checkable:
+  // the two are the same checks `.githooks/pre-push` already runs before a push.
+  const hook = await readFile(join(PACKAGE_ROOT, '.githooks', 'pre-push'), 'utf8');
+  assert.match(hook, /npm test/);
+  assert.match(hook, /graph lint/);
+  for (const script of ['test', 'lint']) {
+    assert.match(await readFile(join(PACKAGE_ROOT, 'package.json'), 'utf8'), new RegExp(`"${script}":`));
+  }
+});
+
+test('the own copy ships nothing a reader outside this repository cannot act on', async () => {
+  // Deliberately NOT `assertClean`: the own copy names `src/ci/workflow.mjs` on
+  // purpose, because it lives in the one repository where that path resolves for its
+  // reader. What it must not carry is this estate's repository names, which is the
+  // half of `assertClean` that applies to every copy.
+  const { LEAKS, AUTHOR_ADDRESSED } = await import('./leaks.mjs');
+  const own = renderWorkflow({ own: true });
+  for (const { re, what } of [...LEAKS, ...AUTHOR_ADDRESSED]) {
+    const m = re.exec(own);
+    assert.equal(m, null, `simt-dev's own gate copy ships ${what}: ${JSON.stringify(m?.[0])}`);
+  }
+});
+
+test('a stale copy in simt-dev\'s own repository is reported, with the fix named', async () => {
+  // This is the only test in the suite that writes to the repository it runs in, and
+  // the reason is that the behaviour has no fixture. The drift finding is reachable
+  // only when `isOwnRepo` is true, and the only directory that satisfies that is the
+  // package root itself - so a temp repo cannot produce this case at all. The restore
+  // is in a `finally` for the same reason: a thrown assertion must not leave a tracked
+  // file different from the commit it came from.
+  //
+  // Without this, the exception would be a claim about a code path nothing exercises:
+  // the copy could stop matching the renderer and `check` would stay quiet, which is
+  // the exact drift the exception exists to prevent.
+  const path = join(PACKAGE_ROOT, WORKFLOW_FILE);
+  const before = await readFile(path, 'utf8');
+  try {
+    await writeFile(path, before.replace('runs-on: ubuntu-latest', 'runs-on: ubuntu-latest # ours'));
+    const plan = await planWorkflow(PACKAGE_ROOT);
+    assert.equal(plan.action, 'refresh');
+    assert.match(plan.reason, /gate template has changed/);
+
+    const red = await exec('node', [BIN, 'check', '--root', PACKAGE_ROOT], {
+      cwd: PACKAGE_ROOT,
+      env: { ...process.env, NO_COLOR: '1' },
+    }).catch((e) => e);
+    assert.match(red.stdout, /DRIFT\s+\.github\/workflows\/simt-dev-check\.yml/);
+    assert.match(red.stdout, /remedy: simt-dev ci --yes/);
+
+    // And the fix is the thing that clears it. `--yes` because `ci` writes like every
+    // other writer in this tool: shown first, changed only when told.
+    await exec('node', [BIN, 'ci', '--yes'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } });
+    assert.equal(await readFile(path, 'utf8'), renderWorkflow({ own: true }));
+    assert.equal((await planWorkflow(PACKAGE_ROOT)).action, 'unchanged');
+  } finally {
+    await writeFile(path, before);
+  }
+});
+
+test('ci writes the own copy, is dry-run by default, and says when it is current', async () => {
+  const { stdout } = await exec('node', [BIN, 'ci'], {
+    cwd: PACKAGE_ROOT,
+    env: { ...process.env, NO_COLOR: '1' },
+  });
+  assert.match(stdout, /current\s+\.github\/workflows\/simt-dev-check\.yml/);
+
+  // The plan is shown before anything changes, and nothing changes without --yes. The
+  // file it would write is the same file, so this asserts the shape of the promise
+  // rather than re-doing a write that would dirty the tree.
+  const json = JSON.parse(
+    (await exec('node', [BIN, 'ci', '--json'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } })).stdout,
+  );
+  assert.equal(json.ok, true);
+  assert.equal(json.action, 'unchanged');
+  assert.equal(json.written, false);
+});
+
+test('ci refuses a repository that adopted simt-dev, and names the command that owns it', async () => {
+  // A reader who runs this in an adopting repo has almost certainly been told to run
+  // it by a remedy somewhere. The useful answer is which command does exist there -
+  // and the refusal must not be an error, because nothing is wrong.
+  const root = await actionsRepo();
+  const { stdout, stderr } = await exec('node', [BIN, 'ci', '--yes'], {
+    cwd: root,
+    env: { ...process.env, NO_COLOR: '1' },
+  });
+  assert.match(stdout, /owner\s+this repository, not simt-dev/);
+  assert.match(stderr, /remedy:\s+simt-dev init --yes/);
+  // Above all: it wrote nothing, in a repo that had no gate file at all.
+  await assert.rejects(readFile(join(root, WORKFLOW_FILE), 'utf8'));
 });

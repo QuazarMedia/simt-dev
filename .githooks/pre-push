@@ -21,12 +21,12 @@ fail() {
   FAILED="$FAILED $1"
 }
 
-if [ -d node_modules ]; then
-  printf '%s\n' "simt-dev pre-push: running tests"
-  npm test --silent || fail "tests" "npm test must pass before pushing"
-else
-  printf '%s\n' "simt-dev pre-push: skipped - node_modules is absent; run: npm install"
-fi
+# Unconditional. This package has zero runtime and dev dependencies, so node_modules
+# never exists here and gating on it skipped the most important check - which is the
+# exact shape ADR-017 warns about: a gate that quietly stops running is
+# indistinguishable from one that was never installed.
+printf '%s\n' "simt-dev pre-push: running tests"
+npm test --silent >/dev/null || fail "tests" "npm test must pass before pushing"
 
 printf '%s\n' "simt-dev pre-push: checking the registry"
 node bin/simt-dev.mjs graph lint >/dev/null || fail "graph lint" "the skill registry is inconsistent"

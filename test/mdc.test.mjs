@@ -20,6 +20,25 @@ test('every canonical rule is present, named, and states where pushing stops', a
     assert.equal(rule.alwaysApply, true);
     assert.ok(rule.description && rule.description.length > 10);
     assert.match(rule.target, /^\.cursor\/rules\/[^/]+\.mdc$/, rule.target);
+
+    // A rule is reachable or it is not, and an unreachable rule is silent: it can be
+    // authored, committed, tested for its presence on disk, and projected into no repo
+    // at all. `slice-commit` shipped that way — `applies` was simply absent, and the
+    // only symptom was a note in `init` output nobody reads.
+    //
+    // So every rule must declare exactly one of: `applies: always`, a non-empty
+    // `applies` list, or `optIn: true`. Anything else is a defect.
+    const always = rule.applies === 'always';
+    const listed = Array.isArray(rule.applies) && rule.applies.length > 0;
+    const optIn = rule.optIn === true;
+    assert.ok(
+      always || listed || optIn,
+      `${rule.id} is unreachable: declare applies: always, a non-empty applies list, or optIn: true`,
+    );
+    assert.ok(
+      !(always && optIn),
+      `${rule.id} declares both applies: always and optIn: true; a rule cannot be both unconditional and declared`,
+    );
   }
 
   // The commit rule has to say the one thing a commit cannot imply: that pushing is a

@@ -62,17 +62,32 @@
  */
 export const SURFACES = [
   {
-    id: 'agents',
-    label: 'AGENTS.md (the de facto standard)',
-    readers: 'Codex, opencode, Claude Code (as fallback), Cursor, Copilot CLI, Antigravity, DeepSeek harness',
+    // THE STANDARD SURFACE. One repo, one editor, one file — unless the agent or the
+    // repo's owner names another. This row exists because "write a file for every IDE
+    // we know" is not support: it gives a repo that lives in opencode three rule
+    // directories and two symlinks it will never open, and it means every rule change
+    // lands in four places instead of one. ADR-020 wrote all four; ADR-021 writes one
+    // and asks.
+    id: 'opencode',
+    label: 'opencode (AGENTS.md + .agents/skills)',
+    readers:
+      'opencode, and AGENTS.md is also read natively by Codex, Cursor, Windsurf, Zed, Amp, Jules, Copilot CLI and the DeepSeek harness; Claude Code falls back to it, Antigravity and Gemini CLI accept GEMINI.md as an equal name',
     primary: 'AGENTS.md',
     kind: 'region',
-    // No `rule` path: this surface is the primary document, not a per-rule
-    // directory, and the region lives inside it once.
+    // opencode documents NO per-rule directory: it reads AGENTS.md (walking up to the
+    // git worktree), CLAUDE.md only as a fallback, and .opencode/AGENTS.md in
+    // addition. So `foldRules` — this surface carries every rule inside the one
+    // generated region, and the other rows are how a rule reaches an editor that
+    // cannot read AGENTS.md. Writing .opencode/rules/*.md would be a guess, and a
+    // guessed path is the failure this table exists to prevent.
     rule: null,
-    verified: 'agents.md convention, read across the vendor docs listed on each row below',
+    foldRules: true,
+    skills: '.agents/skills',
+    documentedSkillsPaths: ['.opencode/skills', '.claude/skills', '.agents/skills'],
+    verified:
+      'opencode docs, "Rules" and "Agent Skills" (read 2026-10-07) — AGENTS.md walked up from cwd to the git worktree; CLAUDE.md used only if no AGENTS.md exists; .opencode/AGENTS.md additionally; skills at .opencode/skills/, .claude/skills/ and .agents/skills/<name>/SKILL.md; skill frontmatter recognises only name, description, license, compatibility, metadata',
     note:
-      'Every other surface is either a second copy of this one or a per-rule file derived from the same canonical rule.',
+      '.agents/skills is one of the three skill locations opencode documents, so the same directory serves the standard surface without a symlink.',
   },
   {
     id: 'cursor',
@@ -175,17 +190,42 @@ export const POINTERS = [
 /**
  * The global standard: what a repo gets when it has not chosen.
  *
- * This is a list, not a rule. "Support every known IDE" cannot be satisfied by
- * always writing everything — a repo that deliberately uses one tool should not
- * acquire three rule directories and two symlinks it will never read. It also
- * cannot be satisfied by writing nothing, which is what happens today.
+ * ONE surface, not all of them. ADR-020 made the default the union of every
+ * verified surface, on the reasoning that writing nothing leaves editors
+ * unsupported. It over-corrected: a repo that lives in one editor acquired four
+ * rule directories and two symlinks, and every rule change landed four times.
+ * "Support every known editor" is satisfied by *knowing how to* write each one and
+ * writing the one that was asked for.
  *
- * So the default is the union of what was verified against a vendor document, and
- * a repo narrows it by declaring `"surfaces"` in simt-dev.json. The manifest is
- * the choice; this is the answer when there has not been one. Declaring an empty
- * list is a real choice and means AGENTS.md only.
+ * The standard is opencode, because it is the agent simt-dev is developed against
+ * and its paths (`AGENTS.md`, `.agents/skills/`) are the ones this workspace already
+ * uses. `AGENTS.md` is the widest-reaching filename in the table: seven of the eight
+ * readers listed on that row read it natively, so the default is not a private
+ * choice — it is the file most editors already read.
+ *
+ * A repo narrows or changes it by declaring `"surfaces"` in simt-dev.json, and the
+ * agent can be asked for a specific one with `--surfaces`. Declaring an empty list is
+ * a real choice and means AGENTS.md with no per-rule files and no pointers.
  */
-export const DEFAULT_SURFACES = SURFACES.filter((s) => s.id !== 'agents').map((s) => s.id);
+export const DEFAULT_SURFACES = ['opencode'];
+
+/**
+ * True when every selected surface carries its rules inside the primary region
+ * rather than in per-rule files.
+ *
+ * ANY selected surface that folds is enough. Asking "does the whole set fold?" would
+ * be wrong the moment a repo adds a second surface: opencode's only channel is
+ * AGENTS.md, so a reader in opencode still needs the rules in the region even when a
+ * Cursor reader gets them as `.mdc`. Folding and per-rule files therefore coexist,
+ * and `ruleTargets` already skips a surface that has no rule path.
+ *
+ * Asked in exactly two places that must agree: `desiredRegion` folds the bodies in,
+ * and `mdcTargets` writes the files. Asking it twice is how ADR-020's fold decision
+ * could drift between the writer and the gate, which is the step-6 failure.
+ */
+export function foldsRules(resolved) {
+  return resolved.surfaces.some((s) => s.foldRules === true);
+}
 
 export const SURFACE_IDS = SURFACES.map((s) => s.id);
 

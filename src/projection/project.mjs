@@ -48,7 +48,7 @@ export const PRIMARY_TARGET = 'AGENTS.md';
  *                    rules:object[], targets:object[], notes:string[]}>}
  */
 export async function plan(root, flags = {}) {
-  const desired = await desiredRegion(root);
+  const desired = await desiredRegion(root, flags);
   const { stack, facts, profiles, fallback, notes, body, meta, all, manifest } = desired;
   const target = await targetFor(root, body, meta);
 
@@ -107,7 +107,7 @@ async function targetFor(root, body, meta) {
  *  so commands/check decides severity and commands/sync decides whether to act. */
 export async function checkTargets(root, flags = {}) {
   const findings = [];
-  const primary = await checkPrimary(root);
+  const primary = await checkPrimary(root, flags);
   findings.push(primary);
 
   // A rule with a defect is a gate failure even when its files happen to be
@@ -115,7 +115,7 @@ export async function checkTargets(root, flags = {}) {
   // Selection must match `plan` exactly, or the gate reports a rule absent that
   // `sync` was never going to write — a permanently red check nothing can fix.
   const all = await loadMdcRules();
-  const { stack, facts, manifest } = await desiredRegion(root);
+  const { stack, facts, manifest } = await desiredRegion(root, flags);
   const declared = await readDeclared(root);
   const resolved = resolveSurfaces(manifest, flags);
   for (const p of resolved.problems) {
@@ -222,13 +222,13 @@ export async function checkTargets(root, flags = {}) {
   return findings;
 }
 
-export async function checkTarget(root) {
-  const findings = await checkPrimary(root);
+export async function checkTarget(root, flags = {}) {
+  const findings = await checkPrimary(root, flags);
   return findings;
 }
 
-async function checkPrimary(root) {
-  const { body, meta } = await desiredRegion(root);
+async function checkPrimary(root, flags = {}) {
+  const { body, meta } = await desiredRegion(root, flags);
   const path = join(root, PRIMARY_TARGET);
   let existing = '';
   try {

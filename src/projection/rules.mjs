@@ -28,7 +28,7 @@ import { dirname, join, resolve } from 'node:path';
 
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
-import { frontmatterBlock, resolveSurfaces } from './surfaces.mjs';
+import { foldsRules, frontmatterBlock, resolveSurfaces } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
 import { MANIFEST } from './manifest.mjs';
 
@@ -104,9 +104,46 @@ export async function readDeclared(root) {
  */
 export async function mdcTargets(root, sha, manifest, flags) {
   const targets = [];
+
+  const { resolved, bodies, problems, notes, skipped } = await ruleBodies(root, manifest, flags);
+
+  // A surface that folds its rules into the primary document contributes no file;
+  // `ruleTargets` skips it. Folding itself is `desiredRegion`'s job, and it reads the
+  // same `bodies` from the same call, so the region and the files cannot disagree.
+  if (foldsRules(resolved) && !resolved.surfaces.some((s) => s.rule)) {
+    if (bodies.length > 0) {
+      notes.push(
+        `every rule is folded into ${resolved.surfaces[0].primary}; add a surface with its own rule path for a file per rule`,
+      );
+    }
+    return { targets, problems, notes };
+  }
+
+  for (const { rule, body } of bodies) {
+    const built = await ruleTargets(root, rule, body, sha, resolved, notes);
+    targets.push(...built.targets);
+  }
+
+  if (skipped.length > 0) {
+    notes.push(`no .mdc rule projected for ${skipped.join(', ')}; opt in with substitutions.__optIn`);
+  }
+  return { targets, problems, notes };
+}
+
+/**
+ * Select the per-rule canonical rules and render each one, once.
+ *
+ * Extracted from `mdcTargets` because ADR-021 needs the SAME bodies for two
+ * different destinations: folded into the primary region when the selected surface
+ * has no per-rule path, and written as one file per surface when it does. Two
+ * selection passes would be two answers to "which rules apply", which is the defect
+ * that produced eight divergent `.mdc` files in the first place.
+ */
+async function ruleBodies(root, manifest, flags) {
   const problems = [];
   const notes = [];
   const skipped = [];
+  const bodies = [];
 
   const { stack, facts } = await fingerprint(root);
   const signals = new Set([...stack, ...facts]);
@@ -114,7 +151,8 @@ export async function mdcTargets(root, sha, manifest, flags) {
   const rules = await loadMdcRules();
   if (rules.length === 0) {
     notes.push('no canonical .mdc rules shipped in this build');
-    return { targets, problems, notes };
+    const resolved = resolveSurfaces(manifest, flags ?? {});
+    return { resolved, bodies, problems, notes, skipped };
   }
 
   const declared = await readDeclared(root);
@@ -166,14 +204,10 @@ export async function mdcTargets(root, sha, manifest, flags) {
     // differs. Without this loop a repo in a Claude Code session receives
     // AGENTS.md and none of the always-on process rules, because those lived only
     // in a directory only Cursor reads.
-    const built = await ruleTargets(root, rule, body, sha, resolved, notes);
-    targets.push(...built.targets);
+    bodies.push({ rule, body });
   }
 
-  if (skipped.length > 0) {
-    notes.push(`no .mdc rule projected for ${skipped.join(', ')}; opt in with substitutions.__optIn`);
-  }
-  return { targets, problems, notes };
+  return { resolved, bodies, problems, notes, skipped };
 }
 
 /**
@@ -182,14 +216,36 @@ export async function mdcTargets(root, sha, manifest, flags) {
  * about what the region should contain — a divergence here would report drift
  * where none exists, and CI would flake on a clean tree.
  */
-export async function desiredRegion(root) {
+export async function desiredRegion(root, flags) {
   const { stack, facts, manifest } = await fingerprint(root);
   const all = await loadRules(root);
   const { selected, fallback, notes } = select(all, stack, facts);
-  const body = render(selected);
+
+  let body = render(selected);
+  let sources = selected.map((r) => r.source);
+  const folded = [];
+
+  // When every selected surface carries its rules inside the primary document, the
+  // per-rule bodies belong in the region too — otherwise a repo on the standard
+  // surface receives AGENTS.md and none of the always-on process rules, because
+  // those had nowhere else to live. One file, one region, one place a reader opens.
+  const { resolved, bodies, problems, notes: ruleNotes } = await ruleBodies(
+    root,
+    manifest,
+    flags ?? {},
+  );
+  notes.push(...ruleNotes);
+  if (foldsRules(resolved)) {
+    for (const { rule, body: ruleBody } of bodies) {
+      body += `\n\n### ${rule.id}\n\n${ruleBody}`;
+      sources.push(rule.source);
+      folded.push(rule.id);
+    }
+  }
+
   const meta = {
     sha: await headSha(),
-    sources: selected.map((r) => r.source),
+    sources,
   };
   return {
     stack,
@@ -197,6 +253,10 @@ export async function desiredRegion(root) {
     manifest,
     all,
     profiles: selected.map((r) => r.id),
+    folded,
+    surfaces: resolved.ids,
+    surfaceSource: resolved.source,
+    problems,
     fallback,
     notes,
     body,

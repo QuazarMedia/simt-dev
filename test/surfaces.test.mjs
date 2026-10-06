@@ -25,6 +25,7 @@ import {
   POINTERS,
   SURFACES,
   SURFACE_IDS,
+  foldsRules,
   resolveSurfaces,
   rulePath,
   surface,
@@ -102,15 +103,49 @@ test('every emitted trigger and applyTo value is one the vendor lists', () => {
   assert.deepEqual(lines('claude', RULE), []);
 });
 
-test('the primary surface is not in the per-rule default, and every other surface is', () => {
-  // `agents` is the document the others derive from. Listing it as a per-rule
-  // surface would try to write `.mdc` files into nowhere.
-  assert.equal(surface('agents').rule, null);
-  assert.ok(!DEFAULT_SURFACES.includes('agents'));
+test('the default is exactly one surface, and it is the one with no per-rule path', () => {
+  // ADR-021: writing a file for every known IDE is not support. A repo that lives in
+  // one editor should acquire one editor's layout, and the rest are opt-in.
+  assert.deepEqual(DEFAULT_SURFACES, ['opencode']);
+  assert.equal(foldsRules(resolveSurfaces(null, {})), true);
+
+  // Every other surface must still be reachable, or "one by default" would be a
+  // deletion rather than a default.
   for (const s of SURFACES) {
-    if (s.id === 'agents') continue;
-    assert.ok(DEFAULT_SURFACES.includes(s.id), `${s.id} is verified but not in the default`);
+    if (s.id === 'opencode') continue;
+    const on = resolveSurfaces(null, { surfaces: s.id });
+    assert.deepEqual(on.ids, [s.id], `${s.id} must be selectable on its own`);
+    assert.equal(foldsRules(on), false, `${s.id} has its own rule path, so it must not fold`);
+    assert.equal(foldsRules(resolveSurfaces(null, { surfaces: `opencode,${s.id}` })), true, 'the standard surface folds even alongside a file surface');
   }
+  // Standard plus a file surface: the region still carries the rules for the
+  // opencode reader, and cursor gets the files. Folding and files coexist.
+  assert.equal(foldsRules(resolveSurfaces({ surfaces: ['opencode', 'cursor'] }, {})), true);
+});
+
+test('one surface, several, or the default are all reachable and are distinguishable', () => {
+  // The three answers a repo can have, and they must never be confused: a reader who
+  // sees a set and its source must be able to tell a choice from the default.
+  const one = resolveSurfaces(null, { surfaces: 'cursor' });
+  assert.deepEqual(one.ids, ['cursor']);
+  assert.equal(one.source, 'flag');
+
+  const many = resolveSurfaces(null, { surfaces: 'cursor, copilot ,claude' });
+  assert.deepEqual(many.ids, ['cursor', 'copilot', 'claude']);
+  assert.equal(many.source, 'flag');
+  assert.deepEqual(many.problems, []);
+
+  const declared = resolveSurfaces({ surfaces: ['antigravity'] }, {});
+  assert.deepEqual(declared.ids, ['antigravity']);
+  assert.equal(declared.source, 'manifest');
+
+  const byDefault = resolveSurfaces(null, {});
+  assert.deepEqual(byDefault.ids, ['opencode']);
+  assert.equal(byDefault.source, 'default');
+
+  // Empty is a real choice: the primary document and nothing else.
+  const none = resolveSurfaces({ surfaces: [] }, {});
+  assert.deepEqual(none.ids, [], 'an empty list selects no per-rule surface at all');
 });
 
 test('rulePath builds the documented location, and returns null for a surface without one', () => {
@@ -118,7 +153,7 @@ test('rulePath builds the documented location, and returns null for a surface wi
   assert.equal(rulePath('claude', 'test-gate'), '.claude/rules/test-gate.md');
   assert.equal(rulePath('antigravity', 'test-gate'), '.agents/rules/test-gate.md');
   assert.equal(rulePath('copilot', 'test-gate'), '.github/instructions/test-gate.instructions.md');
-  assert.equal(rulePath('agents', 'test-gate'), null);
+  assert.equal(rulePath('opencode', 'test-gate'), null);
   assert.equal(rulePath('nope', 'test-gate'), null);
 });
 
@@ -154,7 +189,7 @@ test('an unknown surface id is a problem, not a skip', () => {
   assert.deepEqual(r.ids, ['cursor']);
   assert.equal(r.problems.length, 1);
   assert.match(r.problems[0], /unknown surface "copilto"/);
-  assert.match(r.problems[0], /agents, cursor, claude, antigravity, copilot/);
+  assert.match(r.problems[0], /opencode, cursor, claude, antigravity, copilot/);
 });
 
 test('the flag accepts a comma-separated list and tolerates whitespace', () => {
@@ -163,26 +198,46 @@ test('the flag accepts a comma-separated list and tolerates whitespace', () => {
 });
 
 test('the one line a reader checks says what and why', () => {
-  assert.equal(surfacesLine(resolveSurfaces(null, {})), 'surfaces    cursor, claude, antigravity, copilot  (global standard)');
+  assert.equal(surfacesLine(resolveSurfaces(null, {})), 'surfaces    opencode  (global standard)');
   assert.equal(surfacesLine(resolveSurfaces({ surfaces: [] }, {}), 10), 'surfaces  (AGENTS.md only)  (manifest)');
   assert.equal(surfacesLine(resolveSurfaces(null, { surfaces: 'cursor' }), 10), 'surfaces  cursor  (flag)');
 });
 
 // ----------------------------------------------------------------- one rule, four files
 
-test('one rule reaches every selected surface with its own path and its own frontmatter', async () => {
+test('the default surface folds every rule into AGENTS.md and writes one file', async () => {
+  // ADR-021. One editor chosen, one file written, and the always-on process rules
+  // present - which is the defect ADR-020 fixed by scattering them across four
+  // directories. Folding is what keeps them.
   const root = await scratch();
   await mkdir(join(root, '.git'), { recursive: true });
   await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
   await writeFile(join(root, 'AGENTS.md'), '# x\n');
   const p = await plan(root, {});
-  const rule = (await loadMdcRules()).find((r) => r.id === 'test-gate');
+  assert.equal(p.surfaceSource, 'default');
+
+  const ruleFiles = p.targets.filter((t) => t.surface);
+  assert.deepEqual(ruleFiles, [], 'the default surface must not write per-rule files');
+  assert.deepEqual(p.targets.map((t) => t.file), ['AGENTS.md']);
+
+  const region = p.targets[0].body;
+  for (const id of ['test-gate', 'intake-questions']) {
+    assert.match(region, new RegExp(`### ${id}\\n`), `${id} must be folded into the region`);
+  }
+});
+
+test('one rule reaches every selected surface with its own path and its own frontmatter', async () => {
+  const root = await scratch();
+  await mkdir(join(root, '.git'), { recursive: true });
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  await writeFile(join(root, 'AGENTS.md'), '# x\n');
+  const p = await plan(root, { surfaces: 'cursor,claude,antigravity,copilot' });
   const files = p.targets.filter((t) => t.surface).map((t) => t.file);
   assert.ok(files.includes('.cursor/rules/test-gate.mdc'));
   assert.ok(files.includes('.claude/rules/test-gate.md'));
   assert.ok(files.includes('.agents/rules/test-gate.md'));
   assert.ok(files.includes('.github/instructions/test-gate.instructions.md'));
-  assert.equal(p.surfaceSource, 'default');
+  assert.equal(p.surfaceSource, 'flag');
 
   const bySurface = new Map(p.targets.filter((t) => t.surface).map((t) => [t.surface, t]));
   assert.match(bySurface.get('cursor').text, /^---\ndescription: /);
@@ -195,7 +250,22 @@ test('one rule reaches every selected surface with its own path and its own fron
   // others are not.
   const bodies = [...bySurface.values()].map((t) => t.body);
   assert.equal(new Set(bodies).size, 1);
-  assert.equal(rule.id, 'test-gate');
+});
+
+test('opting into a rule surface alongside the default is one file plus the requested ones', async () => {
+  const root = await scratch();
+  await mkdir(join(root, '.git'), { recursive: true });
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  const p = await plan(root, { surfaces: 'opencode,cursor' });
+  // The primary region is still written; opencode adds no file of its own; cursor does.
+  assert.deepEqual(p.targets.map((t) => t.file).sort(), [
+    '.cursor/rules/intake-questions.mdc',
+    '.cursor/rules/test-gate.mdc',
+    'AGENTS.md',
+  ]);
+  // ...and the rule is in BOTH: folded for the reader who has only AGENTS.md, and as
+  // a file for the editor that cannot read it. One canonical source, two destinations.
+  assert.match(p.targets.find((t) => t.file === 'AGENTS.md').body, /### test-gate/);
 });
 
 test('narrowing the surfaces narrows the files, and AGENTS.md is always there', async () => {
@@ -318,15 +388,17 @@ test('sync creates the directories every surface writes into', async () => {
   await exec('git', ['init', '-q'], { cwd: root });
   await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
 
-  const r = await capture(['sync', '--root', root, '--yes']);
+  const r = await capture(['sync', '--root', root, '--yes', '--surfaces', 'cursor,claude,antigravity,copilot']);
   assert.equal(r.code, 0, r.stderr);
   for (const dir of ['.cursor/rules', '.claude/rules', '.agents/rules', '.github/instructions']) {
     const st = await stat(join(root, dir)).catch(() => null);
     assert.ok(st?.isDirectory(), `sync did not create ${dir}`);
   }
   // And the gate agrees, which is the only proof the files landed rather than just the
-  // directories existing.
-  const c = await capture(['check', '--root', root]);
+  // directories existing. It is given the same surfaces: check folds rules into the
+  // region for the opencode surface and writes one file per rule otherwise, so asking
+  // it about a different surface than sync was given asks a different question.
+  const c = await capture(['check', '--root', root, '--surfaces', 'cursor,claude,antigravity,copilot']);
   assert.equal(c.code, 0, `${c.stdout}\n${c.stderr}`);
   assert.doesNotMatch(c.stdout, /ABSENT|DRIFT|MALFORMED/);
 });
@@ -334,11 +406,13 @@ test('sync creates the directories every surface writes into', async () => {
 test('the CLI names the surfaces it chose and where the choice came from', async () => {
   const root = await scratch();
   const r = await capture(['sync', '--root', root, '--dry-run']);
-  assert.match(r.stdout, /surfaces\s+cursor, claude, antigravity, copilot\s+\(global standard\)/);
-  assert.match(r.stdout, /\.github\/instructions\/test-gate\.instructions\.md/);
+  assert.match(r.stdout, /surfaces\s+opencode\s+\(global standard\)/);
+  assert.doesNotMatch(r.stdout, /\.github\/instructions/);
   const narrowed = await capture(['sync', '--root', root, '--dry-run', '--surfaces', 'copilot']);
   assert.match(narrowed.stdout, /surfaces\s+copilot\s+\(flag\)/);
+  const many = await capture(['sync', '--root', root, '--dry-run', '--surfaces', 'cursor,copilot']);
+  assert.match(many.stdout, /surfaces\s+cursor, copilot\s+\(flag\)/);
   const json = JSON.parse((await capture(['sync', '--root', root, '--dry-run', '--json'])).stdout);
-  assert.deepEqual(json.surfaces, ['cursor', 'claude', 'antigravity', 'copilot']);
+  assert.deepEqual(json.surfaces, ['opencode']);
   assert.equal(json.surfaceSource, 'default');
 });

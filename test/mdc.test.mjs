@@ -9,16 +9,27 @@ import { inject } from '../src/projection/markers.mjs';
 
 const scratch = () => mkdtemp(join(tmpdir(), 'simt-mdc-'));
 
-test('the three canonical rules are present and complete', async () => {
+test('every canonical rule is present, named, and states where pushing stops', async () => {
   const rules = await loadMdcRules();
-  assert.equal(rules.length, 3);
-  assert.deepEqual(rules.map((r) => r.id), ['intake-questions', 'preview-postflight', 'test-gate']);
+  assert.deepEqual(
+    rules.map((r) => r.id),
+    ['intake-questions', 'preview-postflight', 'slice-commit', 'test-gate'],
+  );
   for (const rule of rules) {
     assert.equal(rule.error, null, `${rule.id}: ${rule.error}`);
     assert.equal(rule.alwaysApply, true);
     assert.ok(rule.description && rule.description.length > 10);
     assert.match(rule.target, /^\.cursor\/rules\/[^/]+\.mdc$/, rule.target);
   }
+
+  // The commit rule has to say the one thing a commit cannot imply: that pushing is a
+  // separate decision. A procedure that ends at `git commit` reads as a licence to
+  // continue to `git push`.
+  const slice = rules.find((r) => r.id === 'slice-commit');
+  assert.match(slice.body, /Never push because the work is finished/);
+  assert.match(slice.body, /approval to commit is not approval to push/i);
+  assert.match(slice.body, /--no-verify/);
+  assert.doesNotMatch(slice.body, /simt (?!-dev)/, 'names the tool the reader has installed');
 });
 
 test('a rule missing id or target is a defect, not a default', () => {

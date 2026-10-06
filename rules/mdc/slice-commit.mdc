@@ -1,0 +1,48 @@
+---
+id: slice-commit
+target: .cursor/rules/slice-commit.mdc
+description: How a completed change becomes one commit, and what happens before anything is pushed
+alwaysApply: true
+---
+# Slice Commit
+
+A slice is the smallest change that is independently valuable on its own. Committing
+one is a mechanical procedure with a fixed order, because every step after it depends
+on the one before: you cannot review a diff you have not staged, and you cannot claim
+evidence for a test you have not run.
+
+## Order
+
+1. **Run the focused test the change needs**, through the repository's own runner,
+   naming the exact command and the exact file — see `test-gate`. A full suite is
+   for a named trigger, not for progress.
+2. **Stage only what the slice touched.** `git status` first, and leave unrelated work
+   alone. Report what you left alone; silence about it reads as "I reverted it".
+3. **Read the staged diff.** Not the working tree — the diff. It is what will be
+   committed, and it is the last chance to notice a file that does not belong.
+4. **Write the message.** Conventional Commits, imperative subject, no trailing period:
+   `fix(gates): declare only gates a repo can run, and report the ones it cannot`.
+   The subject says what changed; the body says why, and what was deliberately not
+   changed.
+5. **Commit.** `git commit`, non-interactive. Report the SHA.
+6. **Stop.**
+
+## Pushing is a separate decision
+
+**Never push because the work is finished.** Push is a separate act with its own
+approval, and pushing a production branch in this ecosystem also deploys it.
+
+Before asking for approval, state what the push will do: which branch, how many
+commits, and whether it triggers a deployment, a migration, or any other remote
+mutation. Then wait. Approval to commit is not approval to push.
+
+Never use `--no-verify`. A hook that fails is telling you something about the change;
+skipping it turns a gate into a suggestion and the next person has no way to know it
+was skipped.
+
+## What never belongs in a commit
+
+- Failing, partial, or unrun work. A commit is a claim; a partial one is a false one.
+- Secrets, tokens, or generated artefacts that drift.
+- Work nobody asked for. Unrelated changes in a slice commit are invisible in review
+  and impossible to revert on their own.

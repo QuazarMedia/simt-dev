@@ -26,6 +26,7 @@ import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs'
 import { MANIFEST, buildManifest, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { readHooksState } from '../compare/hooksstate.mjs';
+import { planWorkflow, renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
 import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, headSha, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
@@ -87,6 +88,10 @@ export async function initCommand(positional, flags) {
 
   const manifestAction = exists ? 'update' : 'create';
   const manifestPath = join(root, MANIFEST);
+  // Planned here, written below with everything else. A file the reader was not shown
+  // in the plan is a file they approve by reading the diff afterwards, which is the
+  // one review step this tool exists to make unnecessary.
+  const ci = await planWorkflow(root);
 
   const payload = {
     ok: summary.conflicts === 0 || flags.acceptConflicts === true,
@@ -105,6 +110,7 @@ export async function initCommand(positional, flags) {
     surfaceSource: projected.surfaceSource,
     pointers: pointerPlan.map((p) => ({ file: p.file, to: p.to, readers: p.readers, state: p.state })),
     pointersBlocked: pointerBlocked,
+    ci: { file: ci.file, action: ci.action, bytes: ci.bytes, reason: ci.reason },
     adoption,
     manifest: { file: MANIFEST, action: manifestAction, path: manifestPath },
     region: region && {
@@ -204,6 +210,16 @@ export async function initCommand(positional, flags) {
 
   await writeManifest(root, manifest);
   note(`wrote    ${MANIFEST} (${manifestAction})`);
+
+  // Written after the manifest so the gate exists in the same adoption that declares
+  // what the gates are. Skipped with its reason printed rather than silently: a repo
+  // with no `.github/workflows` has no CI surface to attach to, and inventing one
+  // starts running jobs on pull requests nobody asked for.
+  if (payload.ci.action === 'create') {
+    await mkdir(dirname(join(root, payload.ci.file)), { recursive: true });
+    await writeFile(join(root, payload.ci.file), renderWorkflow());
+    note(`wrote    ${payload.ci.file} (create; yours to edit from here, simt-dev will not rewrite it)`);
+  }
 
   // Every planned target is written, not just the AGENTS.md region. An adoption that
   // scaffolds the manifest and one region but leaves the `.mdc` rules for a later
@@ -410,6 +426,18 @@ function render(payload, manifest) {
   for (const p of payload.pointersBlocked ?? []) {
     lines.push(`  ${'blocked'.padEnd(9)} ${p.file}  ${p.detail} (${p.bytes} bytes), left as it is`);
     lines.push(`            remedy: move it aside, or delete it and rerun init`);
+  }
+
+  // The CI gate is listed as its own kind because it is the one plan entry whose
+  // absence is a decision rather than a default. Skipped states its reason inline so
+  // a reader can tell "this repo does not use GitHub Actions" from "this repo was
+  // not offered the gate".
+  if (payload.ci.action === 'create') {
+    lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow().length} bytes`);
+    lines.push(`            runs simt-dev check where a pull request is merged; yours to edit after this`);
+  } else if (payload.ci.action === 'skip') {
+    lines.push(`  ${'skip'.padEnd(9)} ${payload.ci.file}  ${payload.ci.reason}`);
+    lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);
   }
 
   const { findings, summary } = payload;

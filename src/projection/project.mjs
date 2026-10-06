@@ -19,6 +19,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { planWorkflow, WORKFLOW_FILE } from '../ci/workflow.mjs';
 import { diff, parse, inject, BEGIN, END } from './markers.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { resolveSurfaces, SURFACE_IDS } from './surfaces.mjs';
@@ -109,6 +110,20 @@ export async function checkTargets(root, flags = {}) {
   const findings = [];
   const primary = await checkPrimary(root, flags);
   findings.push(primary);
+
+  // The gate has to run where the merge happens, not only on the machine of whoever
+  // remembers to run it. A repo that already runs GitHub Actions and has no simt-dev
+  // job is ungated at its front door, and that is the one finding here that no amount
+  // of reading the local rules would surface.
+  const ci = await planWorkflow(root);
+  if (ci.action === 'create') {
+    findings.push({
+      file: WORKFLOW_FILE,
+      status: 'absent',
+      detail: 'this repo runs GitHub Actions but nothing gates it',
+      remedy: 'simt-dev init --yes',
+    });
+  }
 
   // A rule with a defect is a gate failure even when its files happen to be
   // correct, because the next `sync` will not reproduce it.

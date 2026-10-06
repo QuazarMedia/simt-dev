@@ -325,7 +325,9 @@ test('check reports a foreign pointer as blocking and a mispointed one as not', 
   const root = await scratch();
   await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
   await writeFile(join(root, 'CLAUDE.md'), '# mine\n');
-  const blocked = (await checkTargets(root, {})).find((f) => f.status === 'pointer-blocked');
+  const blocked = (await checkTargets(root, { surfaces: 'opencode,claude' })).find(
+    (f) => f.status === 'pointer-blocked',
+  );
   assert.ok(blocked, 'a regular file at CLAUDE.md must be reported');
   assert.match(blocked.detail, /simt-dev will not replace it/);
   assert.ok(blocked.remedy, 'a blocking finding must carry a remedy');
@@ -333,7 +335,9 @@ test('check reports a foreign pointer as blocking and a mispointed one as not', 
   const root2 = await scratch();
   await writeFile(join(root2, 'package.json'), '{"name":"x"}\n');
   await symlink('elsewhere.md', join(root2, 'GEMINI.md'));
-  const drift = (await checkTargets(root2, {})).find((f) => f.status === 'pointer-drift');
+  const drift = (await checkTargets(root2, { surfaces: 'opencode,antigravity' })).find(
+    (f) => f.status === 'pointer-drift',
+  );
   assert.ok(drift);
   assert.match(drift.detail, /should point at AGENTS\.md/);
 });
@@ -366,17 +370,39 @@ test('a pointer written for real is a symlink, and re-init is idempotent', async
   const root = await scratch();
   await exec('git', ['init', '-q'], { cwd: root });
   await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
-  const first = await capture(['init', '--root', root, '--yes']);
+  const first = await capture(['init', '--root', root, '--yes', '--surfaces', 'opencode,claude']);
   assert.equal(first.code, 0, first.stderr);
   const st = await lstat(join(root, 'CLAUDE.md'));
   assert.ok(st.isSymbolicLink(), 'CLAUDE.md must be a symlink, not a copy');
   const written = await readFile(join(root, 'CLAUDE.md'), 'utf8');
   assert.match(written, /simt-dev:begin/, 'the link must resolve to the projected document');
 
-  const second = await capture(['init', '--root', root, '--yes']);
+  const second = await capture(['init', '--root', root, '--yes', '--surfaces', 'opencode,claude']);
   assert.equal(second.code, 0, second.stderr);
   assert.ok(!/EEXIST/i.test(second.stderr), `re-init must not collide: ${second.stderr}`);
   assert.match(second.stdout, /link\s+CLAUDE\.md -> AGENTS\.md\s+current/);
+});
+
+test('the default surface writes no pointer at all', async () => {
+  // The ruling this exists for: ADR-020 wrote CLAUDE.md and GEMINI.md into every
+  // repo, and narrowing the surface set under ADR-021 still left them behind because
+  // the pointer list ignored which surface was chosen. A pointer belongs to the
+  // editor that needs it, so one surface means one file.
+  const root = await scratch();
+  await exec('git', ['init', '-q'], { cwd: root });
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  const r = await capture(['init', '--root', root, '--yes']);
+  assert.equal(r.code, 0, r.stderr);
+  for (const p of ['CLAUDE.md', 'GEMINI.md']) {
+    const st = await lstat(join(root, p)).catch(() => null);
+    assert.equal(st, null, `${p} must not be written when no surface asked for it`);
+  }
+  assert.ok(
+    !/link\s+CLAUDE/.test(r.stdout),
+    'the plan must not advertise a pointer it will not write',
+  );
+  const drift = (await checkTargets(root, {})).filter((f) => f.status.startsWith('pointer'));
+  assert.deepEqual(drift, [], 'a surface that wants no pointer must raise no pointer finding');
 });
 
 test('sync creates the directories every surface writes into', async () => {

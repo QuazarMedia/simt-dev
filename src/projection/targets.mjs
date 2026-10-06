@@ -98,10 +98,18 @@ export async function ruleTargets(root, rule, body, sha, resolved, notes) {
  * is the corpus's only byte-identical duplicate, and overwriting it silently is
  * the one outcome nobody would forgive.
  */
-export function pointerTargets(root) {
-  return POINTERS.map((p) => ({
+export function pointerTargets(root, resolved = null) {
+  // Only the pointers whose surface was selected. `resolved` accepts the surface
+  // objects `plan` returns or a bare id list; `null` means every surface, which is
+  // what an unadopted caller means and what the unit tests pass.
+  const ids =
+    resolved === null
+      ? null
+      : new Set(resolved.map((s) => (typeof s === 'string' ? s : s.id)));
+  return POINTERS.filter((p) => ids === null || ids.has(p.surface)).map((p) => ({
     file: p.path,
     surface: p.id,
+    owner: p.surface,
     kind: 'pointer',
     path: join(root, p.path),
     to: p.to,

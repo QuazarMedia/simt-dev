@@ -90,7 +90,7 @@ export async function syncCommand(positional, flags) {
   // exist yet is a broken symlink, and a broken symlink reads to Claude Code as a
   // missing CLAUDE.md with an error nobody sees.
   const pointerPlan = [];
-  for (const p of pointerTargets(root)) {
+  for (const p of pointerTargets(root, result.surfaces)) {
     const st = await pointerState(root, p);
     if (st.state === 'foreign') {
       note(

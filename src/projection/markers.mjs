@@ -157,8 +157,15 @@ export function inject(text, body, meta) {
   if (state.status === 'absent') {
     const base = text.endsWith('\n') || text === '' ? text : `${text}\n`;
     const needsLeadingBlank = base !== '' && !base.endsWith('\n\n');
+    // No trailing newline here, and that is load-bearing. `compose` already
+    // terminates the region with one; adding a second left every adopted file
+    // ending in a blank line. Nothing in this tool noticed, because `check`
+    // compares region bodies and the byte after END is not part of the region —
+    // but bunnyland-server's own `git diff --check` gate did, and it is a gate
+    // that repo runs before every commit. The `updated` branch below has always
+    // been correct for exactly this reason.
     return {
-      text: `${base}${needsLeadingBlank ? '\n' : ''}${region}\n`,
+      text: `${base}${needsLeadingBlank ? '\n' : ''}${region}`,
       action: 'added',
     };
   }

@@ -20,7 +20,8 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { baselineTargets, misplaced } from './baselines.mjs';
-import { planWorkflow, WORKFLOW_FILE } from '../ci/workflow.mjs';
+import { planWorkflow } from '../ci/workflow.mjs';
+import { planDependabot } from '../ci/dependabot.mjs';
 import { diff, parse, inject, BEGIN, END } from './markers.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { resolveSurfaces, SURFACE_IDS } from './surfaces.mjs';
@@ -122,25 +123,33 @@ export async function checkTargets(root, flags = {}) {
   // remembers to run it. A repo that already runs GitHub Actions and has no simt-dev
   // job is ungated at its front door, and that is the one finding here that no amount
   // of reading the local rules would surface.
-  const ci = await planWorkflow(root);
-  if (ci.action === 'create') {
-    findings.push({
-      file: WORKFLOW_FILE,
-      status: 'absent',
-      detail: 'this repo runs GitHub Actions but nothing gates it',
-      remedy: 'simt-dev init --yes',
-    });
-  } else if (ci.action === 'refresh') {
-    // Only reachable in simt-dev's own repository, and only because `planWorkflow`
-    // compares content there and nowhere else. A copy of the template that is allowed
-    // to drift stops being the template, so the drift is reported here rather than
-    // left for whoever next changes the gate to notice by reading a diff.
-    findings.push({
-      file: WORKFLOW_FILE,
-      status: 'drift',
-      detail: ci.reason,
-      remedy: 'simt-dev ci --yes',
-    });
+  // Two `.github` files, one ownership rule, so one loop over both. The gate and the
+  // dependency-updates config fail for the same reason and are fixed the same way,
+  // and listing them separately is how the second copy of this rule gets written.
+  for (const [plan, what] of [
+    [await planWorkflow(root), 'nothing gates it'],
+    [await planDependabot(root), 'nothing watches its dependencies'],
+  ]) {
+    if (plan.action === 'create') {
+      findings.push({
+        file: plan.file,
+        status: 'absent',
+        detail: `this repo runs GitHub Actions but ${what}`,
+        remedy: 'simt-dev init --yes',
+      });
+    } else if (plan.action === 'refresh') {
+      // Only reachable in simt-dev's own repository, and only because these plans
+      // compare content there and nowhere else. A copy of the template that is
+      // allowed to drift stops being the template, so the drift is reported here
+      // rather than left for whoever next changes the template to notice by reading
+      // a diff.
+      findings.push({
+        file: plan.file,
+        status: 'drift',
+        detail: plan.reason,
+        remedy: 'simt-dev ci --yes',
+      });
+    }
   }
 
   // A rule with a defect is a gate failure even when its files happen to be

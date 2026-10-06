@@ -32,7 +32,8 @@ record's status line — never by editing the ruling in place.
 | [022](ADR-022-a-key-simt-dev-reads-is-prefixed.md) | A key simt-dev reads is prefixed `simt-`; an editor's key is not | accepted |
 | [023](ADR-023-the-gate-ships-as-a-file-the-repo-owns.md) | The gate ships as bytes the repo owns, written once where Actions already runs | accepted · ruling 2 superseded by 024 |
 | [024](ADR-024-simt-dev-overwrites-its-own-gate-file.md) | simt-dev overwrites its own gate file, and no repository else's | accepted |
-| [025](ADR-025-a-baseline-is-a-region-in-a-file-the-repo-owns.md) | A baseline is a region in a file the repo owns, and only a file that can hold one | accepted |
+| [025](ADR-025-a-baseline-is-a-region-in-a-file-the-repo-owns.md) | A baseline is a region in a file the repo owns, and only a file that can hold one | accepted · rulings 1 and 2 narrowed by 026 |
+| [026](ADR-026-a-config-without-a-region-is-a-file-the-repo-owns.md) | A config whose grammar cannot hold a region is a file the repo owns | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -124,3 +125,15 @@ answer. `.editorconfig` can, so it is the baseline, and it goes in first so the 
 settings keep winning underneath it. `end_of_line` is left out on purpose: it is a claim
 about line endings, which is `.gitattributes`' claim to make, and a repository that wanted
 CRLF could only opt out by deleting the indentation settings with it.
+
+A tenth supplies the counterexample the ninth predicted, and it arrives as a file that was
+already owed: no repository in the estate had a Dependabot config, and the plan named that
+as missing before any of this existed. The ninth said a config whose grammar cannot hold a
+comment is ruled out as a baseline, and left its consequences promising that the next such
+file would need a different mechanism. This is that mechanism, and it is not a new idea —
+it is the gate's own ownership rule, unchanged, pointed at a file whose `updates:` is a YAML
+list and therefore has nowhere to put a region. The lesson is narrow and worth stating
+plainly: partial ownership was never the reason the gate file is write-once, and a rule read
+as depending on mergeability will predict the wrong answer here. What detection buys is
+different — an entry per manifest the repo actually has, so the config never names an
+ecosystem that would sit there opening no pull requests.

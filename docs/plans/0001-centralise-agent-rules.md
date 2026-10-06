@@ -195,9 +195,11 @@ live — DONE, but not as a `uses:` reference. ADR-023 copies the gate into each
 exists. Row 8 below is the version this plan wrote before that ruling; the reference it
 promised would have pointed every reader at bytes they do not have.
 
-**Phase 4 — Pilot, 3 repos: one web, one API, one mobile.** One per consumer surface, so the
+**Phase 4 — DONE — Pilot, 3 repos: one web, one API, one mobile.** One per consumer surface, so the
 pilot proves the three shapes the estate actually ships rather than three shapes that happen
-to be easy to find.
+to be easy to find. It was run, all three repos adopted, and it is the phase that produced
+ADR-018 and ADR-019; re-running it is an `upgrade`, not a step. See the note under the table
+for where the trio stands now.
 
 | Repo | Surface | Why this one |
 |---|---|---|
@@ -213,6 +215,16 @@ shape to meet in this estate.
 **All three are adopted.** `simt-social-media` was adopted first and is not part of this
 trio; it exists because ADR-016 needed a repo that *had* all three `.mdc` families to
 establish that they are unions rather than variants.
+
+*Verified 2026-10-06, after the question was asked whether this phase was still outstanding.*
+All three still exist and still carry the tool: each has a `simt-dev.json` on its default
+branch and its top commit is `merge: adopt simt-dev agent rules`. All three pin
+`simt-dev@09c596d`, which is ten commits behind `a831794`. Two of those commits changed what
+a repo receives — `slice-commit.mdc` gained a rule, and the registry lost the `coverage-hunt`
+skill — and the rest changed nothing a receiving repo can see, because ADR-022's key rename
+happens in frontmatter that `stripFrontmatter` removes. So the trio is stale, not wrong, and
+closing that gap is `simt-dev upgrade` run in three repositories: a deliberate choice, since
+each is a production repository and ADR-001 applies to all of them.
 
 The trio produced three findings that no amount of reading would have:
 

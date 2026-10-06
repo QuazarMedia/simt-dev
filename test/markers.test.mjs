@@ -176,3 +176,15 @@ test('the added and updated paths agree on the bytes around the region', () => {
   assert.ok(updated.endsWith(`${END}\n`), 'an update must leave the region terminated');
   assert.ok(!updated.endsWith('\n\n'), 'an update must not introduce a trailing blank line');
 });
+
+// simt-blog's `format:check` failed on a correct generated region: prettier treats
+// an HTML comment after a paragraph as a new block and inserts the separating
+// blank line itself. The region must already be in that shape, or a repo whose
+// formatter works correctly is permanently red on a file the tool owns.
+test('the region carries a blank line on both sides of the body', () => {
+  const { text } = inject('prose\n', 'BODY', { sha: 'abc1234' });
+  const bodyStart = text.indexOf('BODY');
+  assert.ok(text.slice(bodyStart - 2, bodyStart) === '\n\n', 'no blank line before the body');
+  assert.ok(text.slice(bodyStart + 4, bodyStart + 6) === '\n\n', 'no blank line before END');
+  assert.ok(text.endsWith(`${END}\n`), 'region must still terminate exactly once');
+});

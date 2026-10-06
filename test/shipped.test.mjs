@@ -100,6 +100,89 @@ test('every profile is covered by the leak check', async () => {
   }
 });
 
+// A rule that applies to every stack cannot name one ecosystem's files. `./gradlew`
+// is right in jvm-android and wrong in core; "the runner manifest" is right in both.
+// Found when simt-app, the first non-npm adopter, received a core rule telling it to
+// read package.json — a file it has never had and never will.
+// Grouped by ecosystem, because naming several is the rule working and naming one is
+// the rule assuming. `core` lists npm, Gradle and Python as examples of "your own
+// runner" and that is correct for a repository on any of the three.
+const ECOSYSTEMS = [
+  { name: 'npm', files: ['package.json', 'npm run'] },
+  { name: 'gradle', files: ['gradlew', 'spotless'] },
+  { name: 'python', files: ['pyproject.toml', 'uv run', 'requirements.txt', 'pytest', 'ruff'] },
+  { name: 'rust', files: ['Cargo.toml', 'cargo'] },
+  { name: 'go', files: ['go.mod', 'golangci'] },
+  { name: 'bun', files: ['bun.lockb'] },
+];
+
+/** Does this `applies` value mean "every repository"? `'always'` and `[]` both do. */
+function isStackAgnostic(applies) {
+  return applies === 'always' || (Array.isArray(applies) && applies.length === 0);
+}
+
+/**
+ * The one ecosystem this sentence speaks in, or null.
+ *
+ * Naming several ecosystems is the rule working — "npm run, uv run -m, ./gradlew" is a
+ * list of examples, not a claim about npm. Naming exactly one, alone, is the claim.
+ */
+function singleEcosystem(sentence) {
+  const named = ECOSYSTEMS.filter((e) => e.files.some((f) => sentence.includes(f)));
+  return named.length === 1 ? named[0].name : null;
+}
+
+/** Bullets and headings are units; hard-wrapped continuation lines are not sentences. */
+function sentences(text) {
+  return text
+    .split(/\n(?=\s*(?:[-*]|#|\d+\.)\s)/)
+    .flatMap((block) => block.replace(/\s*\n\s*/g, ' '))
+    .flatMap((line) => line.split(/(?<=[.;])\s+/))
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+test('a stack-agnostic rule does not single out one ecosystem as the runner', async () => {
+  const rules = await loadRules();
+  // Per SENTENCE, not per body. A body that lists npm, Gradle and Python as examples is
+  // the rule working, and it masks a neighbouring sentence that asserts package.json is
+  // *the* runner manifest — which is how this check passed a mutation restoring the very
+  // sentence it was written for.
+  //
+  // Wrapped lines are joined first. These rules are hard-wrapped at 90 columns, so
+  // splitting on newlines cuts a sentence in half and blames whichever half happens to
+  // name fewer ecosystems than the whole.
+  for (const rule of rules) {
+    if (!isStackAgnostic(rule.applies)) continue;
+    for (const sentence of sentences(rule.body)) {
+      const named = singleEcosystem(sentence);
+      assert.ok(
+        named === null,
+        `rules/${rule.file} applies to every repo, and this sentence speaks only in ${named}'s terms: "${sentence}". Say what the thing is (the runner manifest, the build task) and let the stack profile name the file — or list the runners side by side.`,
+      );
+    }
+  }
+});
+
+// The same rule applies to the canonical `.mdc` files, which land in `.cursor/rules/`
+// and are read without any of the prose around them. `test-gate` taught "name exact
+// commands and test files" using `npm run test:focused`, a filename no Gradle, Python
+// or Rust repo has — and it is the rule every other rule about evidence defers to.
+test('a stack-agnostic .mdc rule does not single out one ecosystem either', async () => {
+  const mdc = await loadMdcRules();
+  assert.ok(mdc.length >= 3, 'expected the .mdc rule set to be non-trivial');
+  for (const rule of mdc) {
+    if (!isStackAgnostic(rule.applies)) continue;
+    for (const sentence of sentences(rule.body)) {
+      const named = singleEcosystem(sentence);
+      assert.ok(
+        named === null,
+        `rules/mdc/${rule.file} applies to every repo, and this sentence speaks only in ${named}'s terms: "${sentence}". Make the runner a substitution, as intake-questions already does for the plan glob.`,
+      );
+    }
+  }
+});
+
 // --- 2. What a rule projects to, for a repo that gets it -----------------------------
 
 test('a rendered projection is clean for every stack that selects it', async () => {

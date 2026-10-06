@@ -16,8 +16,9 @@ commands belongs in this repository, not here.
 
 - Never claim a test you did not run, a check you did not execute, or a deploy you did not
   perform.
-- Read the real runner manifest before running anything. A command absent from `package.json`
-  is not a command.
+- Read the real runner manifest before running anything. A command absent from it is not a
+  command. (Which file that is depends on the stack: `package.json` scripts, Gradle tasks,
+  `pyproject.toml` entry points.)
 - Report what you left alone: unrelated dirty files, skipped checks, unreviewed scope.
 
 ## Git

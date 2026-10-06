@@ -276,7 +276,16 @@ async function hooksStatus(root, flags) {
     for (const key of ['preCommit', 'prePush']) {
       for (const name of manifest?.gates?.[key] ?? []) {
         const known = GATES[name];
-        lines.push(`  ${key.padEnd(10)} ${name.padEnd(20)} ${known ? `run ${known.kind}  [${known.adr}]` : 'UNKNOWN GATE - this hook will fail'}`);
+        // A declared command wins for every kind, so the status must say so too —
+        // printing "run script" for a gate the dispatcher will shell out to `./gradlew`
+        // for is the same one-question-two-answers defect ADR-018 was written about.
+        const declared = typeof commands[name] === 'string' && commands[name].trim() !== '';
+        const shape = !known
+          ? 'UNKNOWN GATE - this hook will fail'
+          : declared
+            ? `run ${commands[name]}`
+            : `run ${known.kind}`;
+        lines.push(`  ${key.padEnd(10)} ${name.padEnd(20)} ${shape}${known ? `  [${known.adr}]` : ''}`);
       }
     }
     const undeclared = [...Object.keys(commands)].filter(

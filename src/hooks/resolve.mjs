@@ -86,6 +86,33 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
   const name = gate.name;
   const declared = commands?.[name];
 
+  // A declared command wins for EVERY kind, not just `command` gates.
+  //
+  // This is what makes `gates.commands` the ecosystem escape hatch it is advertised as.
+  // A Gradle repo has no `test` npm script and never will, so `test` is declared as
+  // `command` kind instead — but the repo also has no `npm run lint` for a gate named
+  // `lint`, or a prettier for `format`. In each case the reader is told, by this tool's
+  // own remedy, to "name the program under gates.commands"; a dispatcher that then
+  // ignored that declaration would contradict the remedy, and so would `check`.
+  if (declared) {
+    const argv = declared.trim().split(/\s+/).filter(Boolean);
+    if (argv.length === 0) {
+      return {
+        ok: false,
+        gate: name,
+        kind: gate.kind,
+        reason: `gates.commands["${name}"] is empty`,
+        remedy: `set gates.commands["${name}"] to the command that proves it, or remove "${name}" from simt-dev.json gates`,
+      };
+    }
+    return {
+      ok: true,
+      kind: gate.kind,
+      argv,
+      detail: `declared command: ${declared}`,
+    };
+  }
+
   if (gate.kind === 'staged') {
     const tool = await resolveStagedTool(root, gate);
     if (tool.path === null) {
@@ -143,13 +170,6 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
         remedy: `set gates.commands["${name}"] to the command that proves it, or remove "${name}" from simt-dev.json gates`,
       };
     }
-    const argv = declared.trim().split(/\s+/).filter(Boolean);
-    return {
-      ok: true,
-      kind: gate.kind,
-      argv,
-      detail: `declared command: ${declared}`,
-    };
   }
 
   return {

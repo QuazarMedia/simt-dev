@@ -26,6 +26,7 @@ record's status line — never by editing the ruling in place.
 | [016](ADR-016-a-divergent-rule-is-retired-not-merged.md) | A divergent rule is retired by a union, not merged by a variant | accepted |
 | [017](ADR-017-a-declared-gate-must-be-runnable.md) | A declared gate must be one the repo can actually run | accepted |
 | [018](ADR-018-an-unset-hooks-path-is-not-an-absent-hook.md) | An unset hooks path is not an absent hook | accepted |
+| [019](ADR-019-a-declared-command-is-the-runner.md) | A declared command is the runner; the remedy must be one the reader can take | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -64,3 +65,10 @@ what the function was asked, in a location it never looked, or on a surface the 
 carried. Two of the three were also cases of the same question being answered in two places:
 ADR-018's guard could not see the default hooks directory because it looked only at a config
 key, and `hooks status` carried its own copy of the read logic the shared module already had.
+
+A fourth joins them. ADR-019 is the same shape one layer over: `simt init` dropped all
+five gates on `simt-app` and told the reader to add a script to a `package.json` the
+repository will never have. The facts were right, the remedy was not followable, and once
+the repository declared what it does have, the dispatcher, `check` and `hooks status`
+gave three different answers about one manifest. Every one of these shipped green because
+the verification stopped at the tool's own gate.

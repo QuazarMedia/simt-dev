@@ -337,6 +337,7 @@ test('capability: a repo with no package.json has no npm capability, and that is
   assert.equal(capability.error, null);
   assert.deepEqual(capability.scripts, {});
   assert.deepEqual(capability.binaries, []);
+  assert.equal(capability.runner, 'none');
 });
 
 test('capability: an unparseable package.json IS reported', async () => {
@@ -355,6 +356,63 @@ test('capability: binaries come from node_modules/.bin, not from dependencies', 
   await writeFile(join(root, 'node_modules', '.bin', 'prettier'), '');
   await writeFile(join(root, 'node_modules', '.bin', '.package-lock'), '');
   assert.deepEqual((await readCapability(root)).binaries, ['prettier']);
+});
+
+test('capability: the runner is npm when there is a package.json', async () => {
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }));
+  assert.equal((await readCapability(root)).runner, 'npm');
+});
+
+test('capability: a non-npm runner is identified from a FILE, not a directory', async () => {
+  // The first cut of this used `readdir` to test existence, which answers "no" for
+  // every file (ENOTDIR) and so classified every Gradle repo as having no runner. A
+  // wrong answer from an evidence reader is worse than no answer.
+  const root = await scratch();
+  await writeFile(join(root, 'gradlew'), '#!/bin/sh\n');
+  assert.equal((await readCapability(root)).runner, 'gradle');
+
+  const py = await scratch();
+  await writeFile(join(py, 'pyproject.toml'), '[project]\n');
+  assert.equal((await readCapability(py)).runner, 'python');
+
+  const cargo = await scratch();
+  await writeFile(join(cargo, 'Cargo.toml'), '[package]\n');
+  assert.equal((await readCapability(cargo)).runner, 'cargo');
+});
+
+test('capability: npm wins over a stray non-npm marker', async () => {
+  // simt-app carries .py tooling scripts and a Gradle wrapper; a repo with package.json
+  // is an npm repo, whatever else is lying around in it.
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), JSON.stringify({ scripts: {} }));
+  await writeFile(join(root, 'gradlew'), '#!/bin/sh\n');
+  assert.equal((await readCapability(root)).runner, 'npm');
+});
+
+test('a dropped npm-shaped gate explains itself in the repo\'s own ecosystem', async () => {
+  // The defect this closes: on a Gradle repo the remedy read "add a \"test\" script to
+  // package.json" — a file that repo will never have, so the undo was impossible.
+  const gradle = { runner: 'gradle', scripts: {}, binaries: [], commands: {} };
+  const { dropped } = gateModule.planGates(['gradle'], gradle);
+  const test = dropped.find((d) => d.gate === 'test');
+  assert.match(test.why, /Gradle, not npm/);
+  assert.match(test.remedy, /Gradle, not npm/);
+  assert.match(test.remedy, /gates\.commands/);
+  assert.doesNotMatch(test.remedy, /package\.json/);
+});
+
+test('an npm repo keeps the npm remedy, and a capability that reports no runner is assumed npm', async () => {
+  // A caller that builds a capability by hand may leave `runner` unset. Claiming such a
+  // repo has no package.json is a far worse guess than assuming it does.
+  const npm = { runner: 'npm', scripts: {}, binaries: [], commands: {} };
+  const blind = { scripts: {}, binaries: [], commands: {} };
+  for (const capability of [npm, blind]) {
+    const { dropped } = gateModule.planGates(['node'], capability);
+    const lint = dropped.find((d) => d.gate === 'lint');
+    assert.match(lint.remedy, /add a "lint" script to package\.json/);
+    assert.doesNotMatch(lint.remedy, /not npm/);
+  }
 });
 
 test('capability: declaredCommands reads gates.commands and tolerates its absence', () => {

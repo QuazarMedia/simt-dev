@@ -1,11 +1,28 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { fingerprint, STACK_TAGS, FACT_TAGS, KNOWN_TAGS } from '../src/resolve/fingerprint.mjs';
 import { plan, loadRules, select, checkTarget, LOCAL_PROFILE_DIR } from '../src/projection/project.mjs';
+
+const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt-dev.mjs');
+const exec = promisify(execFile);
+
+// The shipped binary, not this module graph: a guard that only fires because of how
+// the tool is wired inside its own checkout is not a guard.
+async function run(args) {
+  try {
+    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+    return { code: 0, text: stdout + stderr };
+  } catch (error) {
+    return { code: error.code ?? 1, text: `${error.stdout ?? ''}${error.stderr ?? ''}` };
+  }
+}
 
 async function fixture(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-generic-'));
@@ -19,7 +36,7 @@ async function fixture(files = {}) {
 }
 
 const PROFILE = (id, applies, body) =>
-  `---\nid: ${id}\ntitle: ${id}\napplies: [${applies}]\n---\n\n## ${id}\n\n${body}\n`;
+  `---\nsimt-id: ${id}\nsimt-title: ${id}\nsimt-applies: [${applies}]\n---\n\n## ${id}\n\n${body}\n`;
 
 // --- facts: the observable half of detection -------------------------------
 
@@ -197,11 +214,36 @@ test('plan and check agree when a local profile is in play', async () => {
 test('a profile with no id in a repo is reported, not silently projected', async () => {
   const root = await fixture({
     'pyproject.toml': '[project]\n',
-    [`${LOCAL_PROFILE_DIR}/broken.md`]: '---\ntitle: no id\napplies: [has-pyproject]\n---\n\nBody.\n',
+    [`${LOCAL_PROFILE_DIR}/broken.md`]: '---\nsimt-title: no id\nsimt-applies: [has-pyproject]\n---\n\nBody.\n',
   });
   const local = (await loadRules(root)).filter((r) => r.origin === 'local');
   assert.equal(local[0].id, null);
-  assert.equal(local[0].error, 'missing id in frontmatter');
+  assert.equal(local[0].error, 'missing simt-id in frontmatter');
+});
+
+test('the gate fails a repo-local profile that uses the unprefixed spelling', async () => {
+  // The rule that an unrecognised key is a defect only means something if the command
+  // a repo runs reaches it. `check` used to read rules for the tool, not for the repo
+  // being checked, so the one file in this whole mechanism that a repo owns — its own
+  // profile — was the one file it could not fail on.
+  const bare = '---\nsimt-id: house\napplies: [has-pyproject]\n---\n\nHouse rule one.\n';
+  const root = await fixture({
+    'pyproject.toml': '[project]\n',
+    'AGENTS.md': '# Service\n',
+    [`${LOCAL_PROFILE_DIR}/house.md`]: bare,
+  });
+
+  const failed = await run(['check', '--root', root]);
+  assert.notEqual(failed.code, 0, `check passed a profile it cannot read:\n${failed.text}`);
+  assert.match(failed.text, /INVALID\s+\.simt-dev\/profiles\/house\.md/);
+  assert.match(failed.text, /key "applies" is this tool's own.*spelled "simt-applies"/);
+
+  // Prefixed, the same profile is not a defect. The gate may still report drift —
+  // nothing here has been synced — but this finding must be gone, and with it the
+  // reason a bare-keyed profile was indistinguishable from a well-formed one.
+  await writeFile(join(root, `${LOCAL_PROFILE_DIR}/house.md`), PROFILE('house', 'has-pyproject', 'House rule one.'));
+  const fixed = await run(['check', '--root', root]);
+  assert.doesNotMatch(fixed.text, /house\.md.*spelled "simt-applies"/);
 });
 
 test('content before and after the markers survives a local-profile round trip', async () => {

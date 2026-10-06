@@ -17,8 +17,9 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { readdir } from 'node:fs/promises';
-import { loadRules, select } from '../src/projection/project.mjs';
+import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { loadRules, select, LOCAL_PROFILE_DIR } from '../src/projection/project.mjs';
 import { DECISIONS_DIR } from '../src/decisions/index.mjs';
 import { loadMdcRules, renderMdc, ruleName } from '../src/projection/mdc.mjs';
 import { SURFACES, rulePath, surface, undocumentedKeys } from '../src/projection/surfaces.mjs';
@@ -465,6 +466,96 @@ test('a decision record names the repositories it was written about, so the read
     assert.ok(Array.isArray(d.summary.writtenAgainst));
     assert.deepEqual([...d.summary.writtenAgainst].sort(), d.summary.writtenAgainst);
   }
+});
+
+// --- 10. Who owns a key ---------------------------------------------------------------
+//
+// A canonical rule file holds two vocabularies in one frontmatter block: this tool's
+// own instructions, and the keys an editor reads before any rule text. They looked
+// alike — `alwaysApply: true` sat four lines from `applies: always`, both of them
+// about always — so the file could not say which reader owned which. ADR-022 gives
+// every key this tool reads a `simt-` prefix. The cost of the prefix is that a file
+// which forgets it now selects nothing, silently, which is the defect ADR-016 found
+// once already; these tests are what make that loud.
+
+/** Keys a reader owns, per file kind, with the surface row that documents each one. */
+const READER_KEYS = {
+  '.mdc': new Set(['description', 'alwaysApply']),
+  '.md': new Set(),
+};
+
+function frontmatterKeys(text) {
+  const m = /^---\n([\s\S]*?)\n---/.exec(text);
+  if (!m) return [];
+  return m[1]
+    .split('\n')
+    .map((line) => /^([a-zA-Z][a-zA-Z0-9_-]*):/.exec(line.trim()))
+    .filter(Boolean)
+    .map((kv) => kv[1])
+    .filter((k) => !['key', 'default', 'describe'].includes(k));
+}
+
+test('every key a shipped rule declares is prefixed, or is a key its reader owns', async () => {
+  const files = [
+    ...(await readdir(join(ROOT, 'rules'))).filter((n) => n.endsWith('.md')).map((n) => `rules/${n}`),
+    ...(await readdir(join(ROOT, 'rules', 'stacks'))).filter((n) => n.endsWith('.md')).map((n) => `rules/stacks/${n}`),
+    ...(await readdir(join(ROOT, 'rules', 'mdc'))).filter((n) => n.endsWith('.mdc')).map((n) => `rules/mdc/${n}`),
+  ];
+  assert.ok(files.length >= 10, `expected the shipped rule set, found ${files.length} files`);
+
+  for (const rel of files) {
+    const ext = rel.endsWith('.mdc') ? '.mdc' : '.md';
+    const keys = frontmatterKeys(await readFile(join(ROOT, rel), 'utf8'));
+    assert.ok(keys.length > 0, `${rel} has no frontmatter to check`);
+    for (const key of keys) {
+      assert.ok(
+        key.startsWith('simt-') || READER_KEYS[ext].has(key),
+        `${rel} declares "${key}", which is neither this tool's own (simt-*) nor a key ${ext === '.mdc' ? 'Cursor' : 'a reader'} reads`,
+      );
+    }
+  }
+});
+
+test('no shipped rule carries a bare key, and the loader says which spelling to use', async () => {
+  // Not vacuous: this is the file as it was written before ADR-022, and the message is
+  // the whole point - a reader who typed the old spelling must be told the new one
+  // rather than left to guess.
+  const old = '---\nid: x\ntarget: .cursor/rules/x.mdc\napplies: always\n---\n\n# X\n\nBody.\n';
+  const parsed = frontmatterKeys(old);
+  assert.deepEqual(parsed, ['id', 'target', 'applies']);
+  for (const key of parsed) {
+    assert.equal(key.startsWith('simt-'), false, `${key} would have passed the guard`);
+  }
+
+  const { loadMdcRules } = await import('../src/projection/mdc.mjs');
+  const rules = await loadMdcRules();
+  for (const rule of rules) {
+    assert.equal(rule.error, null, `rules/mdc/${rule.file}: ${rule.error}`);
+  }
+});
+
+test('a bare key in a rule file is reported with the prefixed spelling, not ignored', async () => {
+  // Not a hypothetical. ADR-016 records a rule that shipped, was tested for its presence
+  // on disk, and reached no repository, because its selection key was missing. A repo's
+  // own profile is written by hand and can carry the old spelling, so the loader has to
+  // name the new one rather than treat the key as absent.
+  const root = await mkdtemp(join(tmpdir(), 'simt-prefix-'));
+  await mkdir(join(root, LOCAL_PROFILE_DIR), { recursive: true });
+  for (const [name, fm] of [
+    ['applies.md', 'simt-id: a\napplies: [node]\n'],
+    ['fallback.md', 'simt-id: b\nsimt-applies: [node]\nfallback: true\n'],
+    ['invented.md', 'simt-id: c\nsimt-applies: [node]\npriority: high\n'],
+  ]) {
+    await writeFile(join(root, LOCAL_PROFILE_DIR, name), `---\n${fm}---\n\nBody.\n`);
+  }
+
+  const local = (await loadRules(root)).filter((r) => r.origin === 'local');
+  const byFile = new Map(local.map((r) => [r.file, r.error]));
+  assert.match(byFile.get('applies.md'), /"applies".*spelled "simt-applies"/);
+  // The camelCase spelling is the branch worth asserting: `fallback` is one keystroke
+  // from `simt-fallback` and nothing else tells the reader which half is missing.
+  assert.match(byFile.get('fallback.md'), /"fallback".*spelled "simt-fallback"/);
+  assert.match(byFile.get('invented.md'), /unrecognised frontmatter key "priority"/);
 });
 
 async function adrFiles() {

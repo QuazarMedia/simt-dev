@@ -1,8 +1,8 @@
 ---
-id: container
-title: Containers
-applies: [has-dockerfile]
-fallback: false
+simt-id: container
+simt-title: Containers
+simt-applies: [has-dockerfile]
+simt-fallback: false
 ---
 
 ## Containers

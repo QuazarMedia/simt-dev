@@ -37,12 +37,40 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const MDC_DIR = join(ROOT, 'rules', 'mdc');
 
 /**
+ * The keys a canonical `.mdc` may declare: ours prefixed, the editor's as documented
+ * (ADR-022).
+ *
+ * The allowlist earns its place twice. It is what tells a reader of the file which
+ * reader owns a key, and it is what turns an unprefixed simt key into a reported
+ * defect — which is the failure ADR-016 shipped once, a rule that reached no repo
+ * because `applies` was absent, silently and with a test green.
+ */
+const KNOWN_KEYS = new Set([
+  'simt-id',
+  'simt-target',
+  'simt-title',
+  'simt-applies',
+  'simt-opt-in',
+  'simt-substitutions',
+  'description',
+  'alwaysApply',
+]);
+
+/** A bare key beside a prefixed one is the typo this rule exists to catch. */
+function unknownKey(key) {
+  const prefixed = `simt-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+  return KNOWN_KEYS.has(prefixed)
+    ? `key "${key}" is this tool's own, not the editor's; it is spelled "${prefixed}"`
+    : `unrecognised frontmatter key "${key}"; simt-dev's own keys are simt-id, simt-target, simt-title, simt-applies, simt-opt-in, simt-substitutions`;
+}
+
+/**
  * Read every canonical `.mdc` rule with its frontmatter parsed.
  *
- * A rule without `id` or `target` is a defect rather than a default: `id` is what
- * a manifest keys its substitutions on, and `target` is the only thing saying
- * where the projected file goes. A rule that silently wrote nowhere would look
- * like a successful sync.
+ * A rule without `simt-id` or `simt-target` is a defect rather than a default:
+ * `simt-id` is what a manifest keys its substitutions on, and `simt-target` is the
+ * only thing saying where the projected file goes. A rule that silently wrote nowhere
+ * would look like a successful sync.
  */
 export async function loadMdcRules() {
   let names;
@@ -56,50 +84,58 @@ export async function loadMdcRules() {
   for (const file of names) {
     const text = await readFile(join(MDC_DIR, file), 'utf8');
     const meta = parseFrontmatter(text);
-    // `substitutions:` is a YAML list of maps, which the shared line-based
+    // `simt-substitutions:` is a YAML list of maps, which the shared line-based
     // frontmatter parser cannot express, so it is parsed separately and strictly.
     const subs = parseSubstitutions(text);
+    const unknown = Object.keys(meta).filter((k) => !KNOWN_KEYS.has(k));
     out.push({
       file,
       source: `rules/mdc/${file}`,
-      id: meta.id ?? null,
-      target: meta.target ?? null,
-      title: meta.title ?? null,
+      id: meta['simt-id'] ?? null,
+      target: meta['simt-target'] ?? null,
+      title: meta['simt-title'] ?? null,
       description: meta.description ?? null,
       alwaysApply: meta.alwaysApply === true,
-      // `applies` is 'always' or a tag array; `optIn` means the repo must name this
-      // rule in its manifest rather than matching on a detected signal. A rule that
+      // `simt-applies` is 'always' or a tag array; `simt-opt-in` means the repo must name
+      // this rule in its manifest rather than matching on a detected signal. A rule that
       // names one product's Workers and secrets cannot be selected by stack, because
       // detection cannot distinguish a Workers repo that has that problem from one
       // that does not.
-      applies: meta.applies === 'always' ? 'always' : Array.isArray(meta.applies) ? meta.applies : [],
-      optIn: meta.optIn === true,
-      // A rule with no `substitutions:` block has no placeholders, so an empty list
-      // is the correct answer. (This was `substitutions` — an undefined binding that
-      // would only have fired on a future rule without the block, which is exactly
-      // the kind of latent crash a new rule is most likely to trigger.)
+      applies:
+        meta['simt-applies'] === 'always'
+          ? 'always'
+          : Array.isArray(meta['simt-applies'])
+            ? meta['simt-applies']
+            : [],
+      optIn: meta['simt-opt-in'] === true,
+      // A rule with no `simt-substitutions:` block has no placeholders, so an empty
+      // list is the correct answer. (This was `substitutions` — an undefined binding
+      // that would only have fired on a future rule without the block, which is
+      // exactly the kind of latent crash a new rule is most likely to trigger.)
       substitutions: subs,
       bytes: Buffer.byteLength(text),
       body: stripFrontmatter(text),
       error:
-        meta.id === null
-          ? 'missing id in frontmatter'
-          : meta.target === null
-            ? 'missing target in frontmatter'
-            : null,
+        meta['simt-id'] === null
+          ? 'missing simt-id in frontmatter'
+          : meta['simt-target'] === null
+            ? 'missing simt-target in frontmatter'
+            : unknown.length > 0
+              ? unknownKey(unknown[0])
+              : null,
     });
   }
   return out;
 }
 
-/** `substitutions:` is a list of `- key: x` blocks. Any deviation is reported
+/** `simt-substitutions:` is a list of `- key: x` blocks. Any deviation is reported
  *  rather than skipped, because a silently-dropped substitution projects a rule
  *  containing a literal `{{placeholder}}`. */
 function parseSubstitutions(text) {
   const m = /^---\n([\s\S]*?)\n---/.exec(text);
   if (!m) return [];
   const block = m[1];
-  if (!/^substitutions:/m.test(block)) return [];
+  if (!/^simt-substitutions:/m.test(block)) return [];
 
   const out = [];
   const re = /^\s*-\s*key:\s*(\S+)\s*$/gm;
@@ -125,7 +161,7 @@ function parseFrontmatter(text) {
   if (!m) return {};
   const out = {};
   for (const line of m[1].split('\n')) {
-    // `substitutions:` opens a nested block that this parser cannot represent, so
+    // `simt-substitutions:` opens a nested block this parser cannot represent, so
     // it and its list items are skipped here and read by parseSubstitutions.
     if (/^\s*-\s/.test(line)) continue;
     const kv = /^([a-zA-Z-]+):\s*(.*)$/.exec(line);
@@ -277,7 +313,7 @@ export function mdcFrontmatter(rule) {
 /**
  * The rule's bare name, taken from the path it declares.
  *
- * `target` is the canonical declaration and predates the surface table; deriving
+ * `simt-target` is the canonical declaration and predates the surface table; deriving
  * every other surface's path from its basename means a rule names itself once and
  * a rename moves every editor's file with it, instead of four paths that can
  * disagree about which rule a file holds.

@@ -1,10 +1,10 @@
 ---
-id: intake-questions
-target: .cursor/rules/intake-questions.mdc
+simt-id: intake-questions
+simt-target: .cursor/rules/intake-questions.mdc
 description: Ask only unresolved business/technical decisions before work
 alwaysApply: true
-applies: always
-substitutions:
+simt-applies: always
+simt-substitutions:
   - key: plansGlob
     default: docs/plans/*
     describe: glob for this repo's active plan tracker tables

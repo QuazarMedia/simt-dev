@@ -1,14 +1,14 @@
 ---
-id: preview-postflight
-target: .cursor/rules/preview-postflight.mdc
+simt-id: preview-postflight
+simt-target: .cursor/rules/preview-postflight.mdc
 description: Authenticated remote postflight uses dedicated preview Workers
 alwaysApply: true
 # Opt-in, not stack-detected. Detection cannot tell a Workers repo that deploys
   # preview Workers from one that does not, so a stack tag would hand this rule to the
   # latter. The repo declares it instead. See ADR-016 section 3.
-applies: []
-optIn: true
-substitutions:
+simt-applies: []
+simt-opt-in: true
+simt-substitutions:
   - key: previewWorkers
     default: the dedicated preview Workers
     describe: the preview Worker names this family deploys

@@ -1,10 +1,10 @@
 ---
-id: test-gate
-target: .cursor/rules/test-gate.mdc
+simt-id: test-gate
+simt-target: .cursor/rules/test-gate.mdc
 description: Full-pass tests and test deltas are mandatory before commit or reviewer approval
 alwaysApply: true
-applies: always
-substitutions:
+simt-applies: always
+simt-substitutions:
   - key: exampleRunner
     default: your test runner, through the repository's own script or task
     describe: how this repo actually runs one named test file

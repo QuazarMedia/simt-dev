@@ -181,13 +181,18 @@ export async function syncCommand(positional, flags) {
 export async function checkCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
   const findings = await checkTargets(root, flags);
-  const rules = await loadRules();
+  const rules = await loadRules(root);
 
   // A rule file with no id would be projected without a traceable source, so it
   // is a gate failure rather than a warning: `rules why` could not resolve it.
+  //
+  // Read for `root` and named by `source`, because the rule most likely to be
+  // broken is the one nobody in this source tree can see: with no root this loop
+  // read central rules only, so a repo-local profile could carry a misspelled key,
+  // project nothing at all, and still leave the gate green.
   for (const r of rules) {
     if (r.error) {
-      findings.push({ file: `rules/${r.file}`, status: 'invalid', detail: r.error });
+      findings.push({ file: r.source, status: 'invalid', detail: r.error });
     }
   }
 

@@ -1,7 +1,7 @@
 ---
-id: jvm-android
-title: JVM / Android / Compose
-applies: [gradle, kotlin, wear-os]
+simt-id: jvm-android
+simt-title: JVM / Android / Compose
+simt-applies: [gradle, kotlin, wear-os]
 ---
 
 # Stack profile: JVM / Android / Compose

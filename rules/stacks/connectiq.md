@@ -1,7 +1,7 @@
 ---
-id: connectiq
-title: Connect IQ (Monkey C)
-applies: [connectiq]
+simt-id: connectiq
+simt-title: Connect IQ (Monkey C)
+simt-applies: [connectiq]
 ---
 
 # Stack profile: Connect IQ (Monkey C)

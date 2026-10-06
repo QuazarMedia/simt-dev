@@ -29,6 +29,7 @@ record's status line — never by editing the ruling in place.
 | [019](ADR-019-a-declared-command-is-the-runner.md) | A declared command is the runner; the remedy must be one the reader can take | accepted |
 | [020](ADR-020-a-rule-is-written-per-surface-and-pointed-not-copied.md) | A rule is written per surface, and pointed at — never copied | accepted |
 | [021](ADR-021-one-surface-per-repo.md) | One surface per repo, chosen or defaulted to opencode | accepted |
+| [022](ADR-022-a-key-simt-dev-reads-is-prefixed.md) | A key simt-dev reads is prefixed `simt-`; an editor's key is not | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -84,3 +85,12 @@ was verified against, and the test suite fails if that row emits a frontmatter k
 does not document. The failure it would have caught is quiet in both directions — an editor
 that ignores an unknown key, and an editor that discards a rule whose `trigger` it does not
 recognise, which is what Antigravity documents.
+
+A sixth is about a key rather than a byte, and it came from a question asked about this
+repository's own rule files rather than from a command anyone ran. A canonical `.mdc`
+frontmatter block holds Cursor's keys and simt-dev's in one list, and `alwaysApply: true`
+sat four lines away from `applies: always` with nothing to say which reader owned which.
+ADR-022 gives every key this tool reads a `simt-` prefix, leaves the vendors' spellings
+alone, and makes an unrecognised key a reported defect — because the mistake it looks like
+is the one ADR-016 already shipped: a rule that reaches no repository because its
+selection key was missing.

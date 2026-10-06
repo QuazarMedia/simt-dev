@@ -12,6 +12,7 @@ import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderShim } from '../hooks/shim.mjs';
+import { foreignHooks, resolveHooksDir } from '../hooks/where.mjs';
 
 const exec = promisify(execFile);
 
@@ -55,21 +56,42 @@ export async function describeShim(path) {
 
 /**
  * @param {string} root
+ * @param {{declaresGate?: (event:string)=>boolean}} [options] a missing shim is
+ *   only a problem when the repo has a gate that shim would enforce.
  * @returns {Promise<{current:string|null, routed:boolean, complete:boolean,
- *                    installed:object[], problems:string[]}>}
+ *                    installed:object[], foreign:object[], liveDir:string|null,
+ *                    problems:string[]}>}
  */
-export async function readHooksState(root) {
+export async function readHooksState(root, options = {}) {
+  const declaresGate = options.declaresGate ?? (() => true);
   const current = await readHooksPath(root);
   const installed = [];
   for (const event of EVENTS) {
     installed.push({ event, ...(await describeShim(join(root, fileFor(event)))) });
   }
 
+  // What git runs right now, which is not the same question as "is a simt-dev
+  // shim installed". Before this existed the tool read an unset core.hooksPath
+  // as "no hooks" and reported a live hand-written hook as not installed.
+  const where = await resolveHooksDir(root);
+  const live = where.how === 'not-a-repo' ? [] : await foreignHooks(root);
+  // A shim is also called `pre-commit`, so the name cannot tell ours from a
+  // hand-written one. Only the bytes can.
+  const foreign = [];
+  for (const hook of live) {
+    if (EVENTS.includes(hook.event) && !(await describeShim(hook.path)).stale) continue;
+    foreign.push(hook);
+  }
+
   const problems = [];
   for (const i of installed) {
+    if (!declaresGate(i.event)) continue;
     if (!i.present) problems.push(`${i.event} not installed`);
     else if (!i.executable) problems.push(`${i.event} is not executable`);
     else if (i.stale) problems.push(`${i.event} differs from this simt-dev; reinstall`);
+  }
+  for (const f of foreign) {
+    problems.push(`git runs ${f.event} at ${f.path} (${f.bytes} bytes), which is not a simt-dev shim`);
   }
 
   return {
@@ -79,6 +101,8 @@ export async function readHooksState(root) {
     // can route correctly while a shim is missing, which looks installed and is not.
     complete: current === HOOKS_DIR && problems.length === 0,
     installed,
+    foreign,
+    liveDir: where.dir,
     problems,
   };
 }

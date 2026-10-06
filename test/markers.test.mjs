@@ -157,3 +157,22 @@ test('markers: compose is already in the shape a formatter would write it', () =
   const bodyAt = lines.indexOf('body line');
   assert.equal(lines[bodyAt - 1], '', 'a blank line separates the header comment from the body');
 });
+// Added after bunnyland-server's `git diff --check` gate reported
+// `AGENTS.md:573: new blank line at EOF` on a freshly adopted file. The suite was
+// green through the defect because every assertion compared the region BODY, and
+// the stray byte sat after END where no comparison looked.
+test('adding a region leaves exactly one newline at end of file', () => {
+  for (const prefix of ['', 'line one', 'line one\n', 'a\n\n']) {
+    const { text } = inject(prefix, 'BODY', { sha: 'abc1234' });
+    assert.ok(!text.endsWith('\n\n'), `blank line at EOF for ${JSON.stringify(prefix)}`);
+    assert.ok(text.endsWith(`${END}\n`), `region not terminated once for ${JSON.stringify(prefix)}`);
+  }
+});
+
+test('the added and updated paths agree on the bytes around the region', () => {
+  const meta = { sha: 'abc1234' };
+  const added = inject('intro\n', 'BODY', meta).text;
+  const updated = inject(added, 'BODY2', meta).text;
+  assert.ok(updated.endsWith(`${END}\n`), 'an update must leave the region terminated');
+  assert.ok(!updated.endsWith('\n\n'), 'an update must not introduce a trailing blank line');
+});

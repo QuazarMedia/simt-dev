@@ -46,8 +46,24 @@ writing the one that was asked for. It is not satisfied by writing them all.
    set stops new files appearing; `sync` never deletes a file it once generated,
    because a deletion is not something a projection should do silently. Removing them
    is a human decision with a visible diff.
+7. **A pointer belongs to the surface that needs it.** ADR-020 wrote `CLAUDE.md` and
+   `GEMINI.md` unconditionally, so narrowing the surface set left both behind — the
+   same over-writing ruling 1 exists to stop, one file down. Each pointer now names the
+   surface that requires it (`claude-md` → `claude`, `gemini-md` → `antigravity`) and
+   is planned only when that surface was selected. On the default surface simt-dev
+   writes exactly one file.
+
+   *Added after ADR-021 was first implemented: this was found by running the command
+   against the four adopted repos rather than by reading it, which is the third time
+   that has been the only way to find anything.*
 
 ## Consequences
+
+- **Which surface a repo already has is the strongest signal of which it wants.**
+  Measured across the four pilot repos: three track `.cursor/rules/*.mdc` (3, 3 and 12
+  files) and one tracks no rules layer at all. Those three adopt `opencode,cursor`
+  because they already use Cursor; the fourth takes the bare default. A repo's own
+  tracked files answer this better than any default could.
 
 - `simt-dev init` on a fresh repo writes one file: `AGENTS.md`.
 - `check` and `sync` must be given the same surfaces or they ask different questions.

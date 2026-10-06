@@ -198,7 +198,7 @@ export async function checkTargets(root, flags = {}) {
   // already read AGENTS.md, and the pointer is a convenience. Reporting it as a
   // finding would train people to ignore findings, which is the failure mode the
   // whole gate exists to prevent.
-  for (const pointer of pointerTargets(root)) {
+  for (const pointer of pointerTargets(root, resolved.surfaces)) {
     const st = await pointerState(root, pointer);
     if (st.state === 'foreign') {
       findings.push({

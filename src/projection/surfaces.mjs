@@ -168,6 +168,11 @@ export const SURFACES = [
 export const POINTERS = [
   {
     id: 'claude-md',
+    // A pointer belongs to the surface that needs it, never to every repo.
+    // ADR-020 wrote both of these unconditionally, which meant that narrowing to
+    // one surface under ADR-021 still created a CLAUDE.md nobody asked for — the
+    // same over-writing that ruling set out to stop, one file down.
+    surface: 'claude',
     path: 'CLAUDE.md',
     to: 'AGENTS.md',
     readers: 'Claude Code',
@@ -178,6 +183,7 @@ export const POINTERS = [
   },
   {
     id: 'gemini-md',
+    surface: 'antigravity',
     path: 'GEMINI.md',
     to: 'AGENTS.md',
     readers: 'Gemini CLI, Antigravity',

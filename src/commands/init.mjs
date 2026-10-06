@@ -70,7 +70,7 @@ export async function initCommand(positional, flags) {
   // configuration is one nobody can debug (the same ruling as ADR-014).
   const pointerPlan = [];
   const pointerBlocked = [];
-  for (const p of pointerTargets(root)) {
+  for (const p of pointerTargets(root, projected.surfaces)) {
     const st = await pointerState(root, p);
     if (st.state === 'foreign') pointerBlocked.push(st);
     // An already-current pointer is still reported. It is the file the reader will

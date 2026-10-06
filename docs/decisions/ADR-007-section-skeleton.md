@@ -12,7 +12,8 @@ Six `AGENTS.md` files use the same conceptual sections under three different hea
 | `simt-garmin`, `simt-social` | "Authority and scope" | "Non-negotiable invariants" |
 | `simt-social-api` | "Authority and **ownership**" | "Non-negotiable invariants" |
 
-`bunnyland-server` uses a numbered 12-part layout with no equivalent sections at all.
+At least one repo outside this estate uses a numbered 12-part layout with no equivalent
+sections at all.
 
 The deeper difference is in what "non-negotiable" means. Garmin's are **platform physics**
 ("breaking any of these produces a product that is wrong, crashes, or cannot be shipped"); the
@@ -31,8 +32,8 @@ One canonical skeleton, sentence case:
 ## Workflow and validation
 ```
 
-Repos may add sections after these; they may not rename them. `bunnyland-server` keeps its
-numbered layout during adoption and maps each part onto a canonical section in
+Repos may add sections after these; they may not rename them. A repo that arrives with its
+own numbered layout keeps it during adoption and maps each part onto a canonical section in
 `simt-dev.json`, so both structures remain navigable while it migrates.
 
 Each invariant states **which kind of claim it is** — platform, policy, or data — so a reader
@@ -49,5 +50,5 @@ knows immediately what breaking it costs and who may change it.
 
 - **Standardise on Title Case** (`simt-api`'s variant). Capitalisation in headings is noise;
   three repos already use sentence case.
-- **Normalise bunnyland to the skeleton immediately.** Its layout is 12 numbered parts of a
-  Python ECS server; a mechanical conversion would produce a worse document than a mapping.
+- **Normalise a differently-shaped layout immediately.** A mechanical conversion of 12
+  numbered parts would produce a worse document than a mapping.

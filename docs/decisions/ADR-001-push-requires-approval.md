@@ -4,9 +4,9 @@ Status: **accepted** · 2026-10-05 · affects all repos
 
 ## Context
 
-Five repos state a commit/push policy. They disagree on whether an agent may push.
+The repos state a commit/push policy. They disagree on whether an agent may push.
 
-- `bunnyland-server/AGENTS.md` §9: "always create a focused Git commit… skip the commit only
+- A repo outside this estate: "always create a focused Git commit… skip the commit only
   when the user explicitly asks not to commit." Silent on push.
 - `simt-garmin/AGENTS.md` DoD #8: "**Committed and pushed** with a conventional message."
 - `simt-social` and `simt-social-api`: "create a non-interactive Conventional Commit. Report
@@ -38,5 +38,5 @@ This is the single outlier, and the 4:1 majority is also the safe direction.
 
 - **Autonomous push (garmin's current rule).** Removes the only checkpoint between "the agent
   thinks it is done" and "production changed".
-- **Push on completion, as bunnyland's loop implies.** Same objection; CONTRIBUTING's PR step
-  does not require an agent to open the PR unattended.
+- **Push on completion, as a commit-always contributor loop implies.** Same objection; its
+  PR step does not require an agent to open the PR unattended.

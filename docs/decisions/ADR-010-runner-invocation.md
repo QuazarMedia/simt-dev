@@ -9,9 +9,9 @@ Four repos independently arrived at the same rule, in two ecosystems, with the s
 - `simt-social` / `simt-social-api`: "Run tests and quality checks through repository `npm run
   ...` scripts… **Do not invoke local package binaries through `npx` or `npm exec`** unless no
   repository script supports the required operation."
-- `bunnyland-server/AGENTS.md` §7: "**Do not use `uv run pytest`**; the console entrypoint can
-  miss the `uv` import path and fail to import dependencies such as `relics`."
-- `bunnyland-server/CONTRIBUTING.md`, same rule, different failure description: it "can
+- A Python repo outside this estate, in the same form: "**Do not use `uv run pytest`**; the
+  console entrypoint can miss the `uv` import path and fail to import dependencies." Its
+  contributor guide states the same rule with a stronger failure description: it "can
   **silently** run against the wrong environment."
 
 The failure mode is identical: a package runner resolves a binary outside the project's

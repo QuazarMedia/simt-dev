@@ -19,11 +19,10 @@ work:
 4. npm's generated bin shim must be relied on rather than a hand-written launcher.
 5. CI must carry a permanent `windows-latest` job.
 
-Against that: **no Windows developer appears anywhere in the 16 repos**, and no repo's own
-toolchain is Windows-ready either — `bunnyland-server` drives `uv`/`xdist`,
-`simt-garmin` drives the Monkey C toolchain, and `simt-app`/`wakt-app`/`app-ui` drive Gradle
-and Android tooling. So the CLI would have been the *only* Windows-ready artefact in the
-estate, serving nobody.
+Against that: **no Windows developer appears anywhere in the repos**, and no repo's own
+toolchain is Windows-ready either — `simt-garmin` drives the Monkey C toolchain, and
+`simt-app`/`wakt-app`/`app-ui` drive Gradle and Android tooling. So the CLI would have been the
+*only* Windows-ready artefact in the estate, serving nobody.
 
 The deciding argument is not the cost, it is the shape: obligations 1–3 are correctness
 constraints that every contributor must keep satisfying forever. Adopting them to serve a

@@ -8,7 +8,7 @@ The coverage bar is the one concept that is mutually incompatible *in kind* acro
 
 | Repo | Bar |
 |---|---|
-| `bunnyland-server` | Quantitative. `fail_under = 100`, branch coverage, "a behavioural coverage gate, not a line-count scoreboard" |
+| Repos with a declared numeric bar (outside this estate) | Quantitative. `fail_under = 100`, branch coverage, "a behavioural coverage gate, not a line-count scoreboard" |
 | `simt-garmin` | Quantitative, but a different quantity. Memory: 64 KB app / 24 KB Glance against a 32 KB ceiling, plus 12 named lint scripts |
 | `simt-social`, `simt-social-api`, `simt-social-media` | Qualitative. No number anywhere. Evidence discipline: named commands, 100 % pass, no unjustified skips, behavioural test delta |
 | `simt-api` | Neither. Three verification commands. |
@@ -40,7 +40,8 @@ the value.
 
 ## Consequences
 
-- bunnyland keeps `coverage: 100` and its "untested paths are typed holes" framing intact.
+- A repo that declares `coverage: 100` keeps it and its "untested paths are typed holes"
+  framing intact; the ruling constrains only what a new repo declares.
 - garmin declares its memory budgets in the same slot, and its "layer-conditional 5a–5m matrix"
   becomes a declared gate list rather than 12 prose sentences.
 - The three social repos declare no number and keep their evidence discipline verbatim — which
@@ -52,7 +53,7 @@ the value.
 
 - **Hard 100 % coverage org-wide.** Unreachable in Kotlin/Compose and meaningless for Monkey C;
   would push repos to delete the rule rather than meet it.
-- **No number anywhere.** Leaves bunnyland's genuinely strong gate unenforced org-wide and
-  invites every new repo to skip the question.
+- **No number anywhere.** Leaves a genuinely strong gate unenforced org-wide and invites
+  every new repo to skip the question.
 - **One number for coverage and a separate slot for memory.** Two slots invite a repo to declare
   only the one it likes.

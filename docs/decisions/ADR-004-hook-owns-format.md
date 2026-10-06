@@ -8,8 +8,8 @@ Status: **accepted** · 2026-10-05 · affects all repos
   manually.**"
 - `simt-social`: "the local pre-push hook republishes opportunistically when a token happens to
   be present." Never says the hook is the gate; instructs agents to run static checks directly.
-- `bunnyland-server`: tells agents to run `uv run ruff check src tests` and `git diff --check`
-  by hand, and CONTRIBUTING repeats it.
+- A repo outside this estate: tells agents to run its linter and `git diff --check` by hand,
+  and its contributor guide repeats it.
 - `simt-api`, and 11 repos with no hooks at all: silent.
 
 The audit also found the estate's hook reality: 4 incompatible conventions, and

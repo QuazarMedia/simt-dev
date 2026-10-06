@@ -36,7 +36,7 @@ An audit (2026-10-05, read-only, all 16 repos) found:
   repo and the whole static-site group.
 
 The estate already contains the right pattern — committed symlink fan-out from a canonical
-`.agents/` directory (simt-social, simt-social-api, simt-app, bunnyland-server) and one git
+`.agents/` directory (simt-social, simt-social-api, simt-app) and one git
 submodule (app-ui). It has simply never been pointed at a central repo.
 
 ## 2. Decision
@@ -106,14 +106,14 @@ authored.
 | # | Conflict | Ruling |
 |---|---|---|
 | 1 | garmin **autopushes** (DoD #8 "Committed and pushed") vs social pair **forbids** push | Commit locally, report the SHA, **push only on explicit approval**. garmin's DoD #8 is the single outlier and changes. 4:1 majority, and it is also the safe direction. |
-| 2 | social: "extract at 2nd use, a 3rd copy is a defect" vs bunnyland §2: "do not refactor neighbouring code" | **Synthesis.** Never refactor code outside the current change's blast radius. Within it, a second real use extracts, and the extraction is finished — no orphaned imports, exports, styles or files. A third copy is a defect; a single-caller abstraction is a defect. Both halves survive verbatim. |
-| 3 | social pair: "running a full suite is a defect, not diligence" vs bunnyland: `fail_under=100` + full gate pre-push | **Synthesis.** Focused is the default. The full suite is a *trigger*, not a sin. Triggers: phase exit, release, cross-system behaviour, a repo-declared numeric gate, explicit request, pre-push on a protected branch. Re-running it as a progress meter is a defect (bunnyland already says exactly this). |
-| 4 | social-api: "lint/format are enforced by the pre-commit hook — do not run them manually" vs bunnyland: run ruff + `git diff --check` by hand | **Synthesis.** The hook owns format and lint for staged files — do not re-run what the hook just ran. Manual runs are correct when the hook is not installed, when something failed, or when the check is not hook-covered. |
+| 2 | social: "extract at 2nd use, a 3rd copy is a defect" vs an out-of-scope repo §2: "do not refactor neighbouring code" | **Synthesis.** Never refactor code outside the current change's blast radius. Within it, a second real use extracts, and the extraction is finished — no orphaned imports, exports, styles or files. A third copy is a defect; a single-caller abstraction is a defect. Both halves survive verbatim. |
+| 3 | social pair: "running a full suite is a defect, not diligence" vs an out-of-scope repo: `fail_under=100` + full gate pre-push | **Synthesis.** Focused is the default. The full suite is a *trigger*, not a sin. Triggers: phase exit, release, cross-system behaviour, a repo-declared numeric gate, explicit request, pre-push on a protected branch. Re-running it as a progress meter is a defect. |
+| 4 | social-api: "lint/format are enforced by the pre-commit hook — do not run them manually" vs an out-of-scope repo: run its linter + `git diff --check` by hand | **Synthesis.** The hook owns format and lint for staged files — do not re-run what the hook just ran. Manual runs are correct when the hook is not installed, when something failed, or when the check is not hook-covered. |
 | 5 | 1000-line hard split vs 400-line "smell threshold, not a hard gate" | **Tier both.** 400 = review trigger. 1000 = hard ceiling. Generated files exempt. Nothing is lost. |
 | 6 | `fail_under=100` vs garmin memory budgets vs *no number at all* | **Evidence discipline is central; the number is declared per repo.** Central mandates the qualitative bar — 100 % pass, no unjustified skips, behavioural test delta, named commands. The numeric threshold is a repo-declared constant. The central file specifies *how to declare it*, never the value. |
 | 7 | 3 capitalisation variants of section headings | One canonical skeleton. Mechanical. |
 | 8 | `BLOCK` only vs `APPROVE / APPROVE WITH RESIDUAL RISK / BLOCK` | Adopt the 3-value vocabulary everywhere; update the `.mdc` files to match. |
-| 9 | `<name>/SKILL.md` vs flat `.md` missing `name:` | Central mandates `<name>/SKILL.md`. Wrap bunnyland's `coverage-hunt.md`. |
+| 9 | `<name>/SKILL.md` vs flat `.md` missing `name:` | Central mandates `<name>/SKILL.md`. Wrap any flat `.md` entry found at adoption. |
 | 10 | "no `npx`/`npm exec`" vs "no `uv run pytest`" | Already agrees — same rule, two ecosystems, same rationale (console entrypoint loses the import path). Pure promotion. |
 
 ## 5. Target layout
@@ -224,14 +224,17 @@ is now stated where it will be read: `simt-dev/AGENTS.md` says run the tool the 
 runs it, and `docs/decisions/README.md` names the shared cause.
 
 **What this trio no longer covers, stated rather than hidden.** The earlier draft picked
-`bunnyland-server` for its byte-identical `CLAUDE.md`, the `python` profile and the estate's
+a repo outside this estate for its byte-identical `CLAUDE.md`, the `python` profile and the
 only declared numeric coverage bar (`fail_under = 100`), and `simt-social-media` for having
 the worst `.mdc` drift. Swapping to one-web/one-API/one-mobile drops both, which means:
 
-- `rules/stacks/python.md` and `rules/stacks/container.md` are **not** exercised in the
-  pilot. `bunnyland-server` is the sole Python repo and the only Dockerfile holder besides
-  `simt-goto`; both adopt in Phase 5, and both profiles are already verified by `simt init`
-  dry-run today.
+- `rules/stacks/container.md` is **not** exercised in the pilot; it is selected by
+  `simt-goto`'s `Dockerfile`, which adopts in Phase 5.
+- `rules/stacks/python.md` has **zero adopters**: this estate has no Python repo, and the
+  wider audit's one has left scope. The profile is kept deliberately — ADR-013 makes profiles
+  content, and a profile for an ecosystem with no current member is content waiting for its
+  first repo, not a defect. It is recorded here so "unexercised" is a decision on the record
+  rather than an oversight.
 - The duplicate-`CLAUDE.md` repair stays in Phase 6, where it already had a line.
 - `simt-social-media`'s missing `intake-questions.mdc` and its 3-trigger `test-gate.mdc` are
   **unmeasured by the pilot**. That is the largest remaining risk in this swap: media is a
@@ -246,14 +249,12 @@ this trade is worth stating rather than arguing.
 
 **Phase 5 — Roll out the remaining 13**, grouped by stack so one set of decisions covers a
 group: Workers/TS (social, social-media, api, goto, jobs) · static/LESS (blog, landing,
-social-landing) · JVM (garmin, wakt-app) · Python (bunnyland-server) · bare (app-ui,
-space-review). `simt-app`, `simt-social-api` and `simt-space` are the Phase 4 pilots and are
+social-landing) · JVM (garmin, wakt-app, app-ui) · bare (space). `simt-app`, `simt-social-api` and `simt-space` are the Phase 4 pilots and are
 not repeated here; `simt-dev` is the tool and never adopts itself.
 
 **Phase 6 — Retire the duplication.** Delete the 13 tracked `git.config` copies (keep
-simt-space's local fallback — it already works and is proven). Replace bunnyland's
-byte-identical `CLAUDE.md` with a pointer. Collapse the 7 drifted Social skill twins to
-canonical + stub. Add `git.config` and `graphify-out/` to `.prettierignore`.
+simt-space's local fallback — it already works and is proven). Collapse the 7 drifted Social
+skill twins to canonical + stub. Add `git.config` and `graphify-out/` to `.prettierignore`.
 
 The 8 divergent `.mdc` copies are retired by `sync`, not by hand: a managed `.mdc` is a generated
 file whose frontmatter is preserved and whose body is replaced, with the retirement reported as

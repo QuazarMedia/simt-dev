@@ -226,11 +226,11 @@ value.
 
 ```json
 {
-  "id": "bunnyland-server",
-  "stack": ["python", "uv", "ecss"],
+  "id": "example-repo",
+  "stack": ["python", "uv"],
   "limits": { "coverage": 100, "fileLines": { "warn": 400, "error": 1000 } },
   "gates": { "preCommit": ["format", "lint", "i18n"], "prePush": ["coverage"] },
-  "localSkills": ["coverage-hunt"],
+  "localSkills": ["project-specific-skill"],
   "projection": { "simtDevSha": "<pinned>", "syncedAt": "<iso>" }
 }
 ```
@@ -552,8 +552,8 @@ applies: [has-dockerfile]
 ---
 ```
 
-It reaches exactly two of the sixteen repos — `bunnyland-server` and `simt-goto`, the two that
-have a `Dockerfile` — and no others. That is the whole claim: a portable profile written
+It reaches exactly one of the repos in scope — `simt-goto`, the one that has a `Dockerfile` —
+and no others. That is the whole claim: a portable profile written
 against an observable fact, selected with no engine change, no release, and no central table
 entry. Written the other way round, as a `stack` entry keyed on "this repo is a Docker
 project", it would have needed a code change and would have gone stale the day a repo switched
@@ -798,7 +798,7 @@ After the fix, `compare` reports what each repository runs today:
 | `simt-social-api` | `scripts/git-hooks` | `pre-commit` (1444 B), `pre-push` (3824 B) |
 | `simt-landing` | `.githooks` | `pre-push` (617 B) |
 | `.wt-wear-redesign` | `hooks` | the five above plus `pre-push` (350 B, `git-lfs`) |
-| `bunnyland-server`, `simt-social-media`, and the rest | unset / absent | none |
+| `simt-social-media`, and the rest | unset / absent | none |
 
 Six consumers would have been taken over without a word. The `.wt-wear-redesign` entry is the one
 that most rewards the fix: that `git-lfs` `pre-push` is the hook the phase-4 notes recorded as

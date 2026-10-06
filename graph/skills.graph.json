@@ -586,38 +586,6 @@
       ]
     },
     {
-      "name": "coverage-hunt",
-      "summary": "Drive modules toward full coverage by fanning review agents over uncovered lines",
-      "capabilities": [
-        "testing"
-      ],
-      "stack": [
-        "python"
-      ],
-      "paths": [
-        "src/**",
-        "tests/**",
-        "pyproject.toml"
-      ],
-      "keywords": [
-        "coverage",
-        "uncovered",
-        "fan out",
-        "review agents",
-        "module"
-      ],
-      "bytes": 7266,
-      "sources": [
-        {
-          "repo": "bunnyland-server",
-          "path": ".agents/skills/coverage-hunt.md",
-          "bytes": 7266,
-          "role": "canonical",
-          "note": "FLAT .md with no directory and no name: frontmatter key; ADR-009 requires wrapping it as coverage-hunt/SKILL.md"
-        }
-      ]
-    },
-    {
       "name": "create-blog-guide",
       "summary": "Author, validate and publish a SIMT Blog guide from structured JSON",
       "capabilities": [

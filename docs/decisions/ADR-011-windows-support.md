@@ -31,8 +31,8 @@ Windows is a supported v1 platform for the `simt-dev` CLI itself. `package.json`
 `os` restriction, and CI verifies on `windows-latest`.
 
 Scope is deliberately limited: this covers the CLI running *on* Windows. It does not imply that
-any repo's own toolchain is Windows-ready — `bunnyland-server`'s `uv`/`xdist` flow, Monkey C,
-and Android Gradle builds are governed by their own repos.
+any repo's own toolchain is Windows-ready — Python packaging, Monkey C, and Android Gradle
+builds are governed by their own repos.
 
 ## Consequences
 

@@ -6,13 +6,14 @@ Status: **accepted** · 2026-10-05 · affects all repos
 
 - `simt-social` / `simt-social-api`: "Focused tests are the default gate, and full suites are
   the exception… **absent a named trigger, running a full suite is a defect, not diligence.**"
-- `bunnyland-server`: `fail_under = 100` plus `scripts/test-all` as the pre-push default, and
-  CONTRIBUTING's loop says "run the full gate locally (lint + tests + coverage)."
+- A repo outside this estate: `fail_under = 100` plus a full-suite script as the pre-push
+  default, and a contributor loop that says "run the full gate locally (lint + tests +
+  coverage)."
 - `simt-garmin`: reframes the axis entirely as a layer-conditional 5a–5m matrix.
 - `simt-social-media`: no policy — it just lists `npm run test:unit && npm run test:e2e`.
 
-The Social pair make a full suite a sin. media presents it as unremarkable. bunnyland makes it
-mandatory. These cannot all be org rules as stated.
+The Social pair make a full suite a sin. media presents it as unremarkable. The hard-gate
+repo makes it mandatory. These cannot all be org rules as stated.
 
 ## Ruling
 
@@ -26,14 +27,14 @@ named trigger:
 5. Explicit user or caller instruction.
 6. Pre-push on a protected branch, in a repo that declares this trigger in `simt-dev.json`.
 
-Re-running a full suite as a progress meter is a defect. bunnyland already says exactly this
-("do not run the full gate repeatedly as a progress meter") — that sentence is adopted as
-canonical.
+Re-running a full suite as a progress meter is a defect. Repos outside this estate already
+say exactly this ("do not run the full gate repeatedly as a progress meter"); the principle is
+adopted as canonical.
 
 ## Consequences
 
-- Each repo's `simt-dev.json` declares which of the six triggers are active for it. bunnyland
-  activates 4 and 6; the Social repos activate 1, 2 and 3.
+- Each repo's `simt-dev.json` declares which of the six triggers are active for it. A repo
+  with a declared numeric gate activates 4 and 6; the Social repos activate 1, 2 and 3.
 - A reviewer can ask "which trigger?" and get a number, not an opinion.
 - media gains an explicit policy instead of an implicit one that contradicts its siblings.
 

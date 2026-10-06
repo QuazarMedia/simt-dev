@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -297,7 +297,11 @@ test('CLI: without a workspace the catalogue still lists every skill, with one l
   const { code, stdout } = await run(['skills', 'index', '--root', app], { SIMT_DEV_WORKSPACE: 'off' });
   assert.equal(code, 0, stdout);
   assert.match(stdout, /workspace none configured/);
-  assert.match(stdout, /38 skills/);
+  // Derived from the registry, not hardcoded: a hardcoded skill count is a
+  // second place to update every time a node is added or removed, and the one
+  // time it mattered it silently failed instead of saying why.
+  const registry = JSON.parse(await readFile(resolve(HERE, '..', 'graph', 'skills.graph.json'), 'utf8'));
+  assert.match(stdout, new RegExp(`${registry.skills.length} skills`));
   // One line about the workspace, not one ENOENT per skill.
   const noise = stdout.split('\n').filter((l) => l.includes('ENOENT'));
   assert.deepEqual(noise, [], `degraded mode must not emit ENOENTs: ${noise.join('\n')}`);
@@ -331,7 +335,7 @@ test('CLI: skills install without a workspace refuses rather than half-installin
   // The opposite of show: installing a body it cannot read is a failed install,
   // not a degraded mode.
   const app = await scratch({ 'package.json': '{"name":"lonely"}' });
-  const { code, stderr } = await run(['skills', 'install', 'coverage-hunt', '--root', app, '--yes'], {
+  const { code, stderr } = await run(['skills', 'install', 'd1-safe-change', '--root', app, '--yes'], {
     SIMT_DEV_WORKSPACE: 'off',
   });
   assert.notEqual(code, 0);

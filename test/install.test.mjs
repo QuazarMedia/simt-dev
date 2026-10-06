@@ -9,7 +9,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadRegistry, REGISTRY_PATH, measureSkill } from '../src/graph/load.mjs';
-import { skillsDir } from '../src/commands/skillsinstall.mjs';
+import { skillsDir, wrapFlat } from '../src/commands/skillsinstall.mjs';
 import { readManifest, MANIFEST } from '../src/projection/manifest.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -71,8 +71,8 @@ test('measureSkill: a directory with reference .md files is not a flat skill', a
 });
 
 test('measureSkill: a flat .md file is still reported as flat', async () => {
-  const dir = await scratch({ 'coverage-hunt.md': '---\ndescription: d\n---\n\nbody\n' });
-  const measured = await measureSkill(join(dir, 'coverage-hunt.md'));
+  const dir = await scratch({ 'flat-skill.md': '---\ndescription: d\n---\n\nbody\n' });
+  const measured = await measureSkill(join(dir, 'flat-skill.md'));
   assert.equal(measured.flat, true, 'the ADR-009 defect must remain visible, not be normalised away');
 });
 
@@ -86,9 +86,9 @@ test('skillsDir: respects the layout a repo already uses instead of imposing one
 
 test('skills install: writes into the layout the repo already has', async () => {
   const root = await scratch({ '.cursor/keep.md': 'x\n', 'pyproject.toml': '[project]\n' });
-  const { code } = await run(['skills', 'install', 'coverage-hunt', '--root', root, '--yes']);
+  const { code } = await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
   assert.equal(code, 0);
-  assert.ok(existsSync(join(root, '.cursor/skills/coverage-hunt/SKILL.md')));
+  assert.ok(existsSync(join(root, '.cursor/skills/d1-safe-change/SKILL.md')));
 });
 
 // --- the three refusals -------------------------------------------------------
@@ -143,7 +143,7 @@ test('skills install: --from must name a declared source of that skill', async (
 
 test('skills install: writes nothing without --yes', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  const { code, stderr } = await run(['skills', 'install', 'coverage-hunt', '--root', root]);
+  const { code, stderr } = await run(['skills', 'install', 'd1-safe-change', '--root', root]);
   assert.equal(code, 0);
   assert.match(stderr, /dry-run {2}nothing written/);
   assert.ok(!existsSync(join(root, '.agents')), 'the destination directory must not even be created');
@@ -151,24 +151,32 @@ test('skills install: writes nothing without --yes', async () => {
 
 test('skills install: --json is a dry run regardless of --yes, and is structured', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  const { stdout } = await run(['skills', 'install', 'coverage-hunt', '--root', root, '--json']);
+  const { stdout } = await run(['skills', 'install', 'd1-safe-change', '--root', root, '--json']);
   const payload = JSON.parse(stdout);
   assert.equal(payload.action, 'added');
   assert.equal(payload.written, false);
-  assert.equal(payload.dest, '.agents/skills/coverage-hunt');
+  assert.equal(payload.dest, '.agents/skills/d1-safe-change');
   assert.ok(!existsSync(join(root, '.agents')));
 });
 
 // --- what gets written ---------------------------------------------------------
 
-test('skills install: a flat .md is wrapped into <name>/SKILL.md and gains the name key', async () => {
+test('skills install: writes a normal skill verbatim, frontmatter and body', async () => {
+  // ADR-009 still rules that a flat `<name>.md` is wrapped into
+  // `<name>/SKILL.md` with a `name` key added, but this estate holds no flat
+  // skill any more, so the wrap path is exercised through `wrapFlat` below
+  // rather than through a registry entry. What this test guards instead is
+  // the ordinary case: a `<name>/SKILL.md` source is copied byte-for-byte, so
+  // a formatter-stable source stays formatter-stable in the consumer.
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  const { code } = await run(['skills', 'install', 'coverage-hunt', '--root', root, '--yes']);
+  const { code } = await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
   assert.equal(code, 0);
-  const body = await readFile(join(root, '.agents/skills/coverage-hunt/SKILL.md'), 'utf8');
-  assert.match(body, /^---\nname: coverage-hunt\n/, 'ADR-009 requires the name key; the source omits it');
-  assert.match(body, /^description: /m, 'the existing frontmatter must survive the wrap');
-  assert.ok(body.includes('# Coverage hunt'), 'the body must survive the wrap');
+  const body = await readFile(join(root, '.agents/skills/d1-safe-change/SKILL.md'), 'utf8');
+  const src = await readFile(
+    join(dirname(dirname(fileURLToPath(import.meta.url))), '..', 'simt-social-api/.agents/skills/d1-safe-change/SKILL.md'),
+    'utf8',
+  );
+  assert.equal(body, src, 'a directory skill is copied verbatim');
 });
 
 test('skills install: reference files come with the skill', async () => {
@@ -187,23 +195,23 @@ test('skills install: reference files come with the skill', async () => {
 
 test('skills install: rerunning is idempotent, including the wrapped form', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'coverage-hunt', '--root', root, '--yes']);
-  const before = await readFile(join(root, '.agents/skills/coverage-hunt/SKILL.md'), 'utf8');
-  const { stdout } = await run(['skills', 'install', 'coverage-hunt', '--root', root]);
+  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
+  const before = await readFile(join(root, '.agents/skills/d1-safe-change/SKILL.md'), 'utf8');
+  const { stdout } = await run(['skills', 'install', 'd1-safe-change', '--root', root]);
   assert.match(stdout, /status {3}unchanged/);
   assert.equal(
-    await readFile(join(root, '.agents/skills/coverage-hunt/SKILL.md'), 'utf8'),
+    await readFile(join(root, '.agents/skills/d1-safe-change/SKILL.md'), 'utf8'),
     before,
   );
 });
 
 test('skills install: a local edit is reported as updated, never silently overwritten', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'coverage-hunt', '--root', root, '--yes']);
-  const path = join(root, '.agents/skills/coverage-hunt/SKILL.md');
+  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
+  const path = join(root, '.agents/skills/d1-safe-change/SKILL.md');
   const edited = `${await readFile(path, 'utf8')}\n<!-- local note -->\n`;
   await writeFile(path, edited);
-  const { stdout } = await run(['skills', 'install', 'coverage-hunt', '--root', root]);
+  const { stdout } = await run(['skills', 'install', 'd1-safe-change', '--root', root]);
   assert.match(stdout, /status {3}updated/);
   assert.equal(await readFile(path, 'utf8'), edited, 'a dry run must not touch the file');
 });
@@ -212,14 +220,14 @@ test('skills install: a local edit is reported as updated, never silently overwr
 
 test('skills install: records provenance in simt-dev.json localSkills', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'coverage-hunt', '--root', root, '--yes']);
+  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   assert.equal(manifest.localSkills.length, 1);
   const [entry] = manifest.localSkills;
-  assert.equal(entry.name, 'coverage-hunt');
-  assert.equal(entry.from, 'bunnyland-server/.agents/skills/coverage-hunt.md');
+  assert.equal(entry.name, 'd1-safe-change');
+  assert.equal(entry.from, 'simt-social-api/.agents/skills/d1-safe-change');
   assert.match(entry.sha, /^[0-9a-f]{12}$/, 'the pin records which bytes were installed');
-  assert.equal(entry.bytes, 7266);
+  assert.equal(entry.bytes, 3534);
 });
 
 test('skills install: a repo with no manifest gets the full canonical shape, not a stub', async () => {
@@ -227,7 +235,7 @@ test('skills install: a repo with no manifest gets the full canonical shape, not
   // which is the field the hook dispatcher runs from - so a repo whose manifest
   // came from `skills install` would install hooks with nothing to enforce.
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'coverage-hunt', '--root', root, '--yes']);
+  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   for (const key of ['id', 'stack', 'limits', 'gates', 'localSkills', 'projection']) {
     assert.ok(key in manifest, `manifest is missing ${key}`);
@@ -249,16 +257,16 @@ test('skills install: keeps a hand-written string entry and adds the new record'
     'pyproject.toml': '[project]\n',
     [MANIFEST]: JSON.stringify({ id: 'x', localSkills: ['hand-written'] }, null, 2),
   });
-  await run(['skills', 'install', 'coverage-hunt', '--root', root, '--yes']);
+  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   const names = manifest.localSkills.map((e) => (typeof e === 'string' ? e : e.name));
-  assert.deepEqual(names, ['hand-written', 'coverage-hunt']);
+  assert.deepEqual(names, ['hand-written', 'd1-safe-change']);
 });
 
 test('skills install: reinstalling replaces the record rather than duplicating it', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'coverage-hunt', '--root', root, '--yes']);
-  await run(['skills', 'install', 'coverage-hunt', '--root', root, '--yes']);
+  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
+  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   assert.equal(manifest.localSkills.length, 1);
 });
@@ -273,7 +281,7 @@ test('skills install: an existing manifest keeps its id, stack, limits and gates
     projection: { simtDevSha: 'aaaaaaa' },
   };
   const root = await scratch({ 'pyproject.toml': '[project]\n', [MANIFEST]: JSON.stringify(before, null, 2) });
-  await run(['skills', 'install', 'coverage-hunt', '--root', root, '--yes']);
+  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   assert.equal(manifest.id, 'chosen-by-hand');
   assert.equal(manifest.limits.coverage, 100);
@@ -415,4 +423,23 @@ test('skills show: reads the body a single-repo clone already holds', async () =
   assert.equal(code, 0);
   assert.match(stdout, /^body\s+repo\s+/m);
   assert.ok(!stdout.includes('body unavailable'), 'the body was on disk all along');
+});
+
+// --- ADR-009's flat-file wrap, tested directly --------------------------------
+
+test('wrapFlat: ADR-009 - a flat .md gains a name key and keeps its frontmatter and body', async () => {
+  const dir = await scratch({
+    'flat.md': '---\ndescription: keep me\nargument-hint: "hint"\n---\n\n# Body\n\ntext\n',
+    'no-frontmatter.md': '# Body only\n',
+  });
+
+  const wrapped = await wrapFlat(join(dir, 'flat.md'), 'flat');
+  assert.match(wrapped, /^---\nname: flat\n/, 'the name key ADR-009 requires is added');
+  assert.match(wrapped, /^description: keep me$/m, 'existing frontmatter survives');
+  assert.match(wrapped, /^argument-hint: "hint"$/m, 'every existing key survives');
+  assert.ok(wrapped.includes('# Body') && wrapped.includes('text'), 'the body survives');
+  assert.ok(wrapped.endsWith('\n'), 'the result is a well-formed file');
+
+  const bare = await wrapFlat(join(dir, 'no-frontmatter.md'), 'bare');
+  assert.equal(bare, '---\nname: bare\n---\n\n# Body only\n', 'a file with no frontmatter still gets a valid header');
 });

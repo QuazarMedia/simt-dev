@@ -8,7 +8,7 @@ Status: **accepted** · 2026-10-05 · affects all repos
   along the nearest cohesive boundary instead of growing the file further."
 - `simt-garmin`: "**File length: 400 lines is a smell threshold, not a hard gate.**" Generated
   `.mc` files are exempt, with a named exception for a 408-line template.
-- `bunnyland-server`: absent.
+- Several repos: no file-length rule stated at all.
 
 The two numbers are not in conflict — they measure different things. 400 is where a human
 should start asking questions; 1000 is where the file must already have been split.

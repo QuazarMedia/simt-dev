@@ -428,8 +428,14 @@ async function dirEntries(root) {
   }
 }
 
-/** Flat `.md` skills become `<name>/SKILL.md`, and gain the `name:` ADR-009 requires. */
-async function wrapFlat(src, name) {
+/**
+ * Flat `.md` skills become `<name>/SKILL.md`, and gain the `name:` ADR-009 requires.
+ *
+ * Exported because the registry no longer holds a flat skill to exercise this
+ * through, and an untested rule mechanism is a rule that silently stops
+ * working. The path is still live for any repo that adopts with a flat entry.
+ */
+export async function wrapFlat(src, name) {
   const text = await readFile(src, 'utf8');
   const fm = /^---\n([\s\S]*?)\n---\n?/.exec(text);
   if (!fm) return `---\nname: ${name}\n---\n\n${text.trim()}\n`;

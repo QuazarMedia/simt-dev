@@ -4,13 +4,14 @@ Status: **accepted** · 2026-10-05 · affects all repos
 
 ## Context
 
-45 of the 46 skill entries in the estate already use `<name>/SKILL.md`. One does not:
-`bunnyland-server/.agents/skills/coverage-hunt.md` is a flat 7 266-byte file that also omits the
-`name` frontmatter key — the only skill in the workspace with no name.
+All 37 skill entries in the estate use `<name>/SKILL.md`. A wider audit that included repos
+now out of scope found exactly one entry that did not: a flat 7 266-byte file that also omitted
+the `name` frontmatter key. The layout ruling exists because that defect class is real, not
+because this estate still has it.
 
-Frontmatter field usage across all 46 entries: `name` 45, `description` 46, `argument-hint` 14,
-`disable-model-invocation` 2, `references` 1, `compatibility` 1, and **`globs` zero**. No skill
-in any repo scopes itself by file pattern.
+Frontmatter field usage across the wider audit's 46 entries: `name` 45, `description` 46,
+`argument-hint` 14, `disable-model-invocation` 2, `references` 1, `compatibility` 1, and
+**`globs` zero**. No skill in any audited repo scopes itself by file pattern.
 
 That last point matters for discovery. A skill that could declare `globs: "migrations/**"`
 would let the resolver select it from the diff alone. Since none do, path-based resolution has
@@ -27,8 +28,8 @@ to come from the graph registry instead — which is why `paths` lives in
 - Body size and reference-file count are declared in `graph/skills.graph.json`, not in
   frontmatter, so the registry stays the single source of truth for resolution metadata.
 
-`bunnyland-server/coverage-hunt.md` is wrapped into `coverage-hunt/SKILL.md` with its `name`
-added during adoption.
+The one flat file found in the wider audit was wrapped into `coverage-hunt/SKILL.md` with
+its `name` added. This estate has no such entry left to migrate.
 
 ## Consequences
 

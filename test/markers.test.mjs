@@ -137,7 +137,23 @@ test('markers: a changed sha alone counts as drift', () => {
 test('markers: compose emits begin before end and carries the header inside', () => {
   const region = compose('x', { sha: 'abc1234', sources: ['a', 'b'] });
   assert.ok(region.startsWith(BEGIN));
-  assert.ok(region.endsWith(END));
   assert.ok(region.indexOf(BEGIN) < region.indexOf('simt-dev:sha'));
   assert.ok(region.indexOf('simt-dev:sha') < region.indexOf(END));
+});
+
+test('markers: compose is already in the shape a formatter would write it', () => {
+  // The regression, and it was found by committing to a real repo: simt-space has a
+  // prettier pre-commit hook. It rewrote the freshly generated region on the very
+  // first commit - a blank line after the header comment, plus the trailing newline -
+  // and `check` reported drift on a repo whose own tooling was working correctly. A
+  // projection that emits text a formatter will change is a fight it loses, so it
+  // emits the formatter's shape from the start.
+  const region = compose('body line', { sha: 'abc1234' });
+  assert.ok(region.endsWith('\n'), 'the region must end with a newline');
+  const lines = region.replace(/\n$/, '').split('\n');
+  assert.equal(lines.at(-1), END, 'the last line is the end marker, with nothing after it');
+  const header = lines.findIndex((l) => l.startsWith('<!-- Generated content. Do not edit by hand'));
+  assert.ok(header > 0, 'the do-not-edit comment must be inside the region');
+  const bodyAt = lines.indexOf('body line');
+  assert.equal(lines[bodyAt - 1], '', 'a blank line separates the header comment from the body');
 });

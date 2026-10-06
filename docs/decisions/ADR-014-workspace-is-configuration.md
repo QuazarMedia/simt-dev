@@ -21,7 +21,7 @@ about, by running the tool from a throwaway repo outside `/code/simt` and from a
    | `…/node_modules/@quazarmedia/simt-dev/src/graph` | `…/node_modules/@quazarmedia` — wrong |
 
    The symptom is `ENOENT` for all 38 sources. The *remedy* printed is
-   `run: simt graph lint`, which is itself wrong, because the reader has no workspace to lint.
+   `run: simt-dev graph lint`, which is itself wrong, because the reader has no workspace to lint.
 
 2. **`rules why` cannot work in the published package.** `package.json` `files` lists
    `bin src graph rules skills agents tooling hooks` and not `docs`. `npm pack` produces 39 files
@@ -39,10 +39,10 @@ general lesson and it is the reason this record exists: **a tool's own layout is
 interface, and a test suite that only runs the tool from its source tree cannot detect that the
 tool only works from its source tree.**
 
-The related question — how does `simt upgrade` know which repos to bump? — has the same root
+The related question — how does `simt-dev upgrade` know which repos to bump? — has the same root
 cause. There is no consumer registry on disk. The only thing aware of sibling repos is
 `compare`'s one-level-deep scan, rooted at `..` of the *current checkout*. That is why
-`compare` already prints `run: simt upgrade` for every drifted repo: the detection half exists and
+`compare` already prints `run: simt-dev upgrade` for every drifted repo: the detection half exists and
 the remedy is a dangling reference.
 
 ## Ruling
@@ -59,7 +59,7 @@ Precedence, highest first:
    all, and it is a **heuristic, not a rule**: it is consulted last and it is only accepted when
    it verifies.
 
-**Every command that consults the workspace reports where it came from.** `simt doctor` prints
+**Every command that consults the workspace reports where it came from.** `simt-dev doctor` prints
 the resolved root and its source. An invisible configuration is a configuration nobody can debug,
 and a silent fallback to a wrong directory is the worst outcome available: every answer is then
 confidently wrong.
@@ -189,7 +189,7 @@ dependency explicitly cannot detect that the default for that dependency is wron
 - The skill catalogue — which is SIMT content — degrades to a single warning outside the SIMT
   workspace, while the *rules* engine stays fully functional, because `rules/` ships in the
   package and `rules/*.md` has no external sources.
-- `simt upgrade` gets a real answer for consumer discovery: the resolved workspace, plus an
+- `simt-dev upgrade` gets a real answer for consumer discovery: the resolved workspace, plus an
   explicit `--root` for a single repo. No consumer list needs to be maintained in simt-dev,
   because a repo that has not adopted cannot be listed by the thing it has not adopted.
 

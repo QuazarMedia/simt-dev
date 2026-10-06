@@ -11,16 +11,23 @@ import { readCapability, declaredCommands } from '../src/hooks/capability.mjs';
 const buildManifest = gateModule.buildManifest;
 
 async function capture(run) {
-  const chunks = [];
-  const real = process.stdout.write.bind(process.stdout);
-  process.stdout.write = (c) => { chunks.push(String(c)); return true; };
+  // Both streams. A trailing `next`/`hooks` line goes to stderr on purpose: it is
+  // advice about what to do after this command, and a caller piping stdout to a file
+  // should not find it there.
+  const out = [];
+  const err = [];
+  const realOut = process.stdout.write.bind(process.stdout);
+  const realErr = process.stderr.write.bind(process.stderr);
+  process.stdout.write = (c) => { out.push(String(c)); return true; };
+  process.stderr.write = (c) => { err.push(String(c)); return true; };
   let code;
   try {
     code = await run();
   } finally {
-    process.stdout.write = real;
+    process.stdout.write = realOut;
+    process.stderr.write = realErr;
   }
-  return { code, text: chunks.join('') };
+  return { code, text: `${out.join('')}${err.join('')}` };
 }
 
 async function scratch() {
@@ -424,4 +431,34 @@ test('init PRINTS each dropped gate with its remedy; a re-init reports none', as
   const second = await capture(() => initCommand([], { root, yes: true }));
   assert.equal(second.code, 0);
   assert.ok(!/dropped +gate/.test(second.text), 're-init reported drops for gates it did not propose');
+});
+
+// The manifest declares what the repo promises to enforce, and nothing enforces it
+// until the dispatcher is installed. `init` used to finish without saying so, so a
+// fully adopted, check-green repo could enforce nothing at all - the exact state the
+// first adoption reached.
+test('init says out loud that declared gates are not yet enforced', async () => {
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x', scripts: { test: 'vitest run' } }));
+  await mkdir(join(root, 'node_modules', '.bin'), { recursive: true });
+  await writeFile(join(root, 'node_modules', '.bin', 'vitest'), '');
+
+  const first = await capture(() => initCommand([], { root, yes: true }));
+  assert.equal(first.code, 0);
+  assert.match(first.text, /NOT ENFORCED yet - test is declared but no hook runs them/);
+  assert.match(first.text, /simt-dev hooks install/);
+
+});
+
+test('init says there is nothing to install when the repo can run no gate', async () => {
+  // An empty gate list is a valid manifest - a repo with no formatter and no linter.
+  // It must not be reported as an outstanding step.
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x' }));
+  const run = await capture(() => initCommand([], { root, yes: true }));
+  assert.equal(run.code, 0);
+  assert.match(run.text, /declares no gate it can run, so there is nothing to install/);
+  assert.ok(!/NOT ENFORCED/.test(run.text), 'an empty gate list must not read as an outstanding step');
 });

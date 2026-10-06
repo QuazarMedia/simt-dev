@@ -17,7 +17,9 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { readdir } from 'node:fs/promises';
 import { loadRules, select } from '../src/projection/project.mjs';
+import { DECISIONS_DIR } from '../src/decisions/index.mjs';
 import { loadMdcRules, renderMdc } from '../src/projection/mdc.mjs';
 import { compose } from '../src/projection/markers.mjs';
 import { buildManifest } from '../src/projection/manifest.mjs';
@@ -233,3 +235,77 @@ test('the check is not vacuous: a known leak is actually caught', async () => {
     assert.ok(threw, `the guard failed to catch: ${JSON.stringify(sample)}`);
   }
 });
+
+// --- 9. The decision records ---------------------------------------------------------
+//
+// ADR records were written for this organisation and ship in the package. They were
+// exempt from every check here because nothing delivered them to a reader - until a
+// rule's inline `(ADR-NNN)` citation made `simt-dev rules why` reachable, and that
+// command was printing a title and a status and nothing else. The citation was
+// decoration; it is now a working reference, and the records it opens are subject to
+// the same rule as everything else the tool says.
+
+test('no shipped decision record names a command this package does not install', async () => {
+  // Found by reading a `rules why` answer: ADR-005 told the reader to run `simt check`,
+  // which is not a command. Twenty-one occurrences across eight records, all invisible
+  // to a check that only looked at rule bodies.
+  for (const file of await adrFiles()) {
+    const text = await readFile(join(DECISIONS_DIR, file), 'utf8');
+    const m = /\bsimt (?!-dev\b)(?:sync|check|init|doctor|skills|rules|hooks|compare|upgrade|mcp|graph)\b/.exec(text);
+    assert.equal(m, null, `${file} tells the reader to run a command that does not exist: ${m?.[0]}`);
+  }
+});
+
+test('every decision record yields a ruling, so a citation can never dead-end', async () => {
+  // The whole value of a citation is that following it answers something. A record
+  // whose ruling cannot be extracted prints a title and a status, which answers only
+  // the smaller half of the question.
+  const { loadDecisions } = await import('../src/decisions/index.mjs');
+  const { ok, decisions, errors } = await loadDecisions();
+  assert.equal(ok, true, errors.join('; '));
+  assert.ok(decisions.length >= 10);
+  for (const d of decisions) {
+    assert.ok(d.summary.ruled.length > 0, `${d.id} has no extractable ruling`);
+    for (const line of d.summary.ruled) {
+      // A lead-in ending in a colon has no predicate. It was what ADR-005's summary
+      // opened with: "Two tiers, both advisory in wording but checkable in `simt check`:"
+      // followed by nothing.
+      assert.ok(!line.endsWith(':'), `${d.id} ruling ends in a colon with nothing after it`);
+      assert.ok(line.length > 40, `${d.id} ruling is too short to be an answer: ${JSON.stringify(line)}`);
+    }
+  }
+});
+
+test('a superseded record answers with what replaced it, not with the reversal', async () => {
+  // ADR-011 ruled that Windows is supported; ADR-012 reversed it the same day.
+  // Printing the old ruling under a SUPERSEDED banner is a reversed instruction with
+  // a warning attached.
+  const { loadDecisions } = await import('../src/decisions/index.mjs');
+  const { decisions } = await loadDecisions();
+  const superseded = decisions.filter((d) => d.supersededBy);
+  assert.ok(superseded.length > 0, 'no superseded record to check; the estate has one');
+  for (const d of superseded) {
+    const replacement = decisions.find((x) => x.id === d.supersededBy);
+    assert.ok(replacement, `${d.id} names a replacement that does not exist`);
+    assert.ok(replacement.summary.ruled.length > 0, `${replacement.id} has no extractable ruling`);
+  }
+});
+
+test('a decision record names the repositories it was written about, so the reader knows what to discount', async () => {
+  // The records are evidence: they say which repositories used to hold which rule, and
+  // that is why they are worth keeping. Stripping it would make a record claim to be
+  // about a rule nobody ever held. Reporting it is the honest middle - the reader
+  // learns which parts are not about them, without the prose being mangled.
+  const { loadDecisions } = await import('../src/decisions/index.mjs');
+  const { decisions } = await loadDecisions();
+  const withEstate = decisions.filter((d) => d.summary.writtenAgainst.length > 0);
+  assert.ok(withEstate.length > 0, 'no record names the estate it was written about');
+  for (const d of withEstate) {
+    assert.ok(Array.isArray(d.summary.writtenAgainst));
+    assert.deepEqual([...d.summary.writtenAgainst].sort(), d.summary.writtenAgainst);
+  }
+});
+
+async function adrFiles() {
+  return (await readdir(DECISIONS_DIR)).filter((n) => /^ADR-\d{3}-.*\.md$/.test(n)).sort();
+}

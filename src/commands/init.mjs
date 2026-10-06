@@ -25,6 +25,7 @@ import { fingerprint } from '../resolve/fingerprint.mjs';
 import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs';
 import { MANIFEST, buildManifest, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
 import { readCapability } from '../hooks/capability.mjs';
+import { readHooksState } from '../compare/hooksstate.mjs';
 import { plan, headSha, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 
@@ -211,7 +212,25 @@ export async function initCommand(positional, flags) {
   if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
 
   note('');
-  note('next     simt-dev sync, then simt-dev check in CI. Commit when you are happy with the diff.');
+  note(`next     simt-dev sync, then simt-dev check in CI. Commit when you are happy with the diff.`);
+  // The manifest declares what the repo promises to enforce. Nothing enforces it until
+  // the dispatcher is installed, and `init` used to finish without saying so — so a
+  // fully adopted, `check`-green repo could enforce nothing at all, which is the state
+  // the first adoption reached.
+  const gates = [...(manifest.gates.preCommit ?? []), ...(manifest.gates.prePush ?? [])];
+  if (gates.length === 0) {
+    note('hooks    this repo declares no gate it can run, so there is nothing to install. Run it in CI instead.');
+  } else {
+    const state = await readHooksState(root);
+    // Singular and plural, because "test are declared" is the kind of small wrongness
+    // that makes a reader stop trusting the rest of the line.
+    const verb = gates.length === 1 ? 'is declared' : 'are declared';
+    note(
+      state.complete
+        ? `hooks    installed and current: ${gates.join(', ')}`
+        : `hooks    NOT ENFORCED yet - ${gates.join(', ')} ${verb} but no hook runs them. Install with: simt-dev hooks install --root ${root}`,
+    );
+  }
   return EXIT.OK;
 }
 

@@ -66,7 +66,7 @@ Two further facts made it survivable for as long as it was:
 
 ## Consequences
 
-- `simt init` needs to read the repo before it writes the manifest, so `init` now depends on
+- `simt-dev init` needs to read the repo before it writes the manifest, so `init` now depends on
   the hooks subsystem. The dependency runs one way: `gates.mjs` imports nothing.
 - `check` is no longer only about the generated rules. It is the gate over what the manifest
   promises, which is what a gate is for.

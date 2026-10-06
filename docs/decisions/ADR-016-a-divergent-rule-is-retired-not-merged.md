@@ -120,7 +120,7 @@ Silent deletion is the one thing a reviewer cannot audit.
 ### 5. The conflict scanner must reach every rule surface, including ones added later
 
 `RULE_FILES` named only `AGENTS.md`, `CLAUDE.md` and `CONTRIBUTING.md` for the whole life of
-the tool. `simt init` therefore reported **`CONFLICTS none detected`** on
+the tool. `simt-dev init` therefore reported **`CONFLICTS none detected`** on
 `simt-social-api` — the repo holding the worst-drifted content in the estate — because it
 never looked at the `.mdc` files at all.
 
@@ -150,7 +150,7 @@ the estate's real text, not against text written to match the probe.**
   Eight files in three repos become generated output.
 - `simt-dev.json` gains a `substitutions` object, and the manifest generator seeds it empty
   rather than leaving the key absent, so the shape is visible before anything needs it.
-- `simt sync` and `simt check` handle four targets, not one. A malformed region in any target
+- `simt-dev sync` and `simt-dev check` handle four targets, not one. A malformed region in any target
   refuses the whole run **before the first write** — writing the good three and skipping the
   broken one would leave a repo half-adopted with no record of which half.
 - `compare` continues to report one row per repo using `AGENTS.md` only, because a dashboard
@@ -166,7 +166,7 @@ the estate's real text, not against text written to match the probe.**
   bullet that social-api has. Choosing one per family would have discarded a real rule.
 - **Deleting the 8 files outright** rather than generating over them. A repo with no
   `intake-questions.mdc` and one with a generated one must behave identically to an agent, and
-  only the second is verifiable by `simt check`.
+  only the second is verifiable by `simt-dev check`.
 - **Making `preview-postflight` apply to `cloudflare-workers`.** Hands an un-actionable rule
   to two repos, and is the same bug `react-web.md` had.
 - **Leaving `RULE_FILES` as a fixed list** on the grounds that the three families are the only

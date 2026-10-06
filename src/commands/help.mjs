@@ -39,6 +39,9 @@ const FLAGS = `--json                 structured output
 --task "<text>"         the task text used for capability resolution
 --paths <globs>         comma-separated path globs used for path resolution
 --root <path>           repository root (default: cwd)
+--surfaces <ids>        comma-separated editors to write rule files for;
+                         "" means AGENTS.md only (default: every surface,
+                         or the "surfaces" list in simt-dev.json)
 --workspace <path>      where the skill sources live; "off" declines it
                         (default: SIMT_DEV_WORKSPACE, then the user config
                         file, then the sibling heuristic if it verifies)

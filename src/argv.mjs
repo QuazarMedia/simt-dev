@@ -40,6 +40,7 @@ const VALUE_FLAGS = new Set([
   // bytes alone do not identify one.
   'variant',
   'from',
+  'surfaces',
 ]);
 
 /**

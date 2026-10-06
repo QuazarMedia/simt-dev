@@ -17,7 +17,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { EXIT, emit, fail, isJson, note } from '../output/index.mjs';
@@ -26,6 +26,8 @@ import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs'
 import { MANIFEST, buildManifest, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { readHooksState } from '../compare/hooksstate.mjs';
+import { pointerState, pointerTargets } from '../projection/project.mjs';
+import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, headSha, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 
@@ -58,9 +60,25 @@ export async function initCommand(positional, flags) {
   const manifest = buildManifest({ root, stack: detected.stack, sha, existing: current, capability });
   const findings = await scanRepo(root);
   const summary = summarise(findings);
-  const projected = await plan(root);
+  const projected = await plan(root, flags);
   const region = projected.targets[0];
   const mdcProblems = projected.mdcProblems ?? [];
+
+  // Which editors this repo's rules reach. `--surfaces` wins for this run and is
+  // recorded in the manifest so the choice survives; with nothing declared the
+  // global standard applies, and the choice is printed because an invisible
+  // configuration is one nobody can debug (the same ruling as ADR-014).
+  const pointerPlan = [];
+  const pointerBlocked = [];
+  for (const p of pointerTargets(root)) {
+    const st = await pointerState(root, p);
+    if (st.state === 'foreign') pointerBlocked.push(st);
+    // An already-current pointer is still reported. It is the file the reader will
+    // open in a Claude Code session, so "already right" is an answer they are owed,
+    // not a line to save.
+    else pointerPlan.push({ ...p, state: st.state });
+  }
+  manifest.surfaces = projected.surfaces;
 
   const adoption = exists || Boolean(region?.exists);
   const dryRun = flags.dryRun === true;
@@ -83,6 +101,10 @@ export async function initCommand(positional, flags) {
     // adoption: an existing manifest keeps its gates on purpose, so its drops would
     // describe proposals that were never made.
     droppedGates: exists ? [] : dropped,
+    surfaces: projected.surfaces,
+    surfaceSource: projected.surfaceSource,
+    pointers: pointerPlan.map((p) => ({ file: p.file, to: p.to, readers: p.readers, state: p.state })),
+    pointersBlocked: pointerBlocked,
     adoption,
     manifest: { file: MANIFEST, action: manifestAction, path: manifestPath },
     region: region && {
@@ -200,12 +222,33 @@ export async function initCommand(positional, flags) {
         `fix the markers at ${target.file}:${target.line}, then rerun: simt-dev init --yes`,
       );
     }
-    // A `.mdc` target lives in `.cursor/rules/`, which a repo that had no Cursor
-    // configuration at all will not have. Creating the directory is part of
-    // adopting, not a detail of writing the file.
+    // A per-rule target lives in `.cursor/rules/`, `.claude/rules/`,
+    // `.agents/rules/` or `.github/instructions/` — four directories a repo that had
+    // no such configuration at all will not have. Creating them is part of adopting,
+    // not a detail of writing the file.
     await mkdir(dirname(target.path), { recursive: true });
     await writeFile(target.path, target.text);
     note(`wrote    ${target.file} (${target.action})`);
+  }
+
+  // Pointers, after the file they point at exists. A regular file already at one of
+  // these paths is reported and left alone: `CLAUDE.md` is exactly the path the
+  // estate's one byte-identical duplicate lives at, and replacing it silently during
+  // an adoption would destroy hand-written prose in a file the user was not shown.
+  for (const p of pointerPlan) {
+    // `pointerPlan` carries current pointers too, for the report. Only the ones that
+    // are actually missing get a link written; calling `symlink` on a link that
+    // already exists is EEXIST, which is what a re-init hit the first time the report
+    // and the writer were reading the same list.
+    if (p.state === 'current') {
+      note(`pointer  ${p.file} -> ${p.to}  already correct`);
+      continue;
+    }
+    await symlink(p.to, p.path);
+    note(`linked   ${p.file} -> ${p.to}`);
+  }
+  for (const p of pointerBlocked) {
+    note(`BLOCKED ${p.file}: ${p.detail} (${p.bytes} bytes); left as it is`);
   }
   payload.written = true;
 
@@ -315,6 +358,7 @@ function render(payload, manifest) {
     `facts       ${payload.facts.length > 0 ? payload.facts.join(' ') : '(none)'}`,
     `profiles    ${payload.profiles.join(', ')}${payload.fallback ? ' (fallback)' : ''}`,
     `mode        ${payload.adoption ? 'adopt existing repo' : 'scaffold new repo'}`,
+    surfacesLine({ ids: payload.surfaces, source: payload.surfaceSource }),
     `sha         ${manifest.projection.simtDevSha}`,
   ];
   for (const n of payload.notes) lines.push(`note        ${n}`);
@@ -354,6 +398,18 @@ function render(payload, manifest) {
           ? '  hand-written content outside the markers is never modified'
           : '  generated file: frontmatter kept, body replaced (ADR-016)'),
     );
+  }
+
+  // Pointers are printed as their own kind because they are the one target that
+  // carries no content, and a reader who sees a file listed with no byte count
+  // cannot tell whether it is a copy, a stub or a link.
+  for (const p of payload.pointers ?? []) {
+    lines.push(`  ${'link'.padEnd(9)} ${p.file} -> ${p.to}  ${p.state ?? 'absent'}`);
+    lines.push(`            readers: ${p.readers}; carries no content of its own (ADR-020)`);
+  }
+  for (const p of payload.pointersBlocked ?? []) {
+    lines.push(`  ${'blocked'.padEnd(9)} ${p.file}  ${p.detail} (${p.bytes} bytes), left as it is`);
+    lines.push(`            remedy: move it aside, or delete it and rerun init`);
   }
 
   const { findings, summary } = payload;

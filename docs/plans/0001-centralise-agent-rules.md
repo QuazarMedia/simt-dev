@@ -177,6 +177,18 @@ on `simt-social-api` — the repo holding the worst-drifted content in the estat
 looked at the `.mdc` files. Discovery is now by name **and** by glob, and generated regions are
 stripped before scanning so quoting a ruling is never mistaken for contradicting it.
 
+**Phase 2c — DONE (one surface per editor, `src/projection/surfaces.mjs`, ADR-020).** The rules
+were being written to two places — the `AGENTS.md` region and `.cursor/rules/*.mdc` — so the three
+always-on rules reached **Cursor and nobody else**. Claude Code reads `CLAUDE.md` and only falls
+back to `AGENTS.md`; Copilot reads `.github/copilot-instructions.md` and
+`.github/instructions/*.instructions.md`, which the projector wrote nowhere while the conflict
+scanner already read them. Each editor is now a row carrying its readers, its path template, its
+frontmatter, and **the vendor document it was verified against**; each rule is written per surface
+with a byte-identical body, `CLAUDE.md` and `GEMINI.md` are symlinks rather than copies, and the
+default is every surface unless the repo narrows it in `simt-dev.json`. The test suite fails if a
+row emits a frontmatter key its own vendor does not document — the quiet failure mode, since
+Antigravity discards a rule whose `trigger` it does not recognise.
+
 **Phase 3 — Prove the engine.** `sync.mjs --check` exits non-zero on drift. Reusable workflow
 live.
 

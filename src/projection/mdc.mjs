@@ -23,6 +23,8 @@
 //      and the defaults are visible rather than guessed at render time.
 
 import { readFile, readdir } from 'node:fs/promises';
+
+import { frontmatterBlock } from './surfaces.mjs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -265,11 +267,25 @@ function dropOrReplace(text, key, value) {
 /** The frontmatter a projected `.mdc` keeps. `alwaysApply` and `description` are
  *  read by the editor before any rule text, so they belong outside the region. */
 export function mdcFrontmatter(rule) {
-  const lines = ['---'];
-  lines.push(`description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`);
-  lines.push(`alwaysApply: ${rule.alwaysApply ? 'true' : 'false'}`);
-  lines.push('---');
-  return lines.join('\n');
+  return frontmatterBlock([
+    `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
+    `alwaysApply: ${rule.alwaysApply ? 'true' : 'false'}`,
+  ]);
+}
+
+
+/**
+ * The rule's bare name, taken from the path it declares.
+ *
+ * `target` is the canonical declaration and predates the surface table; deriving
+ * every other surface's path from its basename means a rule names itself once and
+ * a rename moves every editor's file with it, instead of four paths that can
+ * disagree about which rule a file holds.
+ */
+export function ruleName(rule) {
+  if (typeof rule.target !== 'string' || rule.target === '') return null;
+  const base = rule.target.slice(rule.target.lastIndexOf('/') + 1);
+  return base.replace(/\.mdc$/, '');
 }
 
 export { MDC_DIR, parse as parseRegion };

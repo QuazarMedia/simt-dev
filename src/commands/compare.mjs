@@ -83,6 +83,11 @@ export async function compareCommand(positional, flags) {
       shape: summary.shape,
       source: summary.source,
       expectedSha: summary.expectedSha,
+      // Spread, not a hand-listed copy. A copy is a second place to forget: a field
+      // added to `summarise` renders in the text output and silently vanishes from
+      // `--json`, which is the combination automation trusts most. That is not
+      // hypothetical — `withOwnHooks` and `staleRuleFiles` both did it, and both
+      // were caught only because a test asserts the two shapes agree.
       summary: {
         repos: summary.repos,
         adopted: summary.adopted,
@@ -92,6 +97,7 @@ export async function compareCommand(positional, flags) {
         current: summary.current,
         noRegion: summary.noRegion,
         malformed: summary.malformed,
+        staleRuleFiles: summary.staleRuleFiles,
         hooksRouted: summary.hooksRouted,
         withProblems: summary.withProblems,
         withOwnHooks: summary.withOwnHooks,
@@ -148,6 +154,7 @@ function render(rows, summary, found) {
     `simt-dev  ${summary.expectedSha}`,
     `repos     ${summary.repos} (${summary.adopted} adopted, ${summary.unmanaged} unmanaged${summary.broken > 0 ? `, ${summary.broken} broken` : ''})`,
     `region    ${summary.current} current, ${summary.drifted} drifted, ${summary.noRegion} with no region, ${summary.malformed} malformed`,
+    `rules     ${summary.staleRuleFiles === 0 ? 'every rule file current' : `${summary.staleRuleFiles} rule file${summary.staleRuleFiles === 1 ? '' : 's'} not current`}`,
     `hooks     ${summary.hooksRouted}/${summary.adopted} adopted repos route the shared dispatcher`,
     `          ${summary.withOwnHooks} repo${summary.withOwnHooks === 1 ? '' : 's'} run their own hooks; adopting replaces them (a note, not a problem)`,
     `problems  ${summary.withProblems} repo${summary.withProblems === 1 ? '' : 's'}`,
@@ -161,6 +168,10 @@ function render(rows, summary, found) {
     lines.push(`          stack   ${r.stack.length > 0 ? r.stack.join(', ') : '(none)'}${r.declaredStack.length > 0 ? ` (manifest declares ${r.declaredStack.join(', ')})` : ''}`);
     if (r.facts.length > 0) lines.push(`          facts   ${r.facts.join(', ')}`);
     lines.push(`          region  ${r.region}${r.regionDetail ? ` (${r.regionDetail})` : ''}`);
+    // The rule files are the answer to "does every editor see the same rule?".
+    lines.push(
+      `          rules   ${r.ruleFiles.total === 0 ? '(none)' : `${r.ruleFiles.current}/${r.ruleFiles.total} current`}${r.ruleFiles.stale.length > 0 ? ` - ${r.ruleFiles.stale.join(', ')}` : ''}`,
+    );
     lines.push(`          sha     pinned ${r.pinnedSha ?? '(none)'} region ${r.recordedSha ?? '(none)'}`);
     lines.push(
       `          hooks   ${r.hooksRouted ? 'shared dispatcher' : r.adoption === 'adopted' ? 'NOT ROUTED' : '(n/a)'}${r.hooksRouted && !r.hooksComplete ? ' (incomplete)' : ''}`,

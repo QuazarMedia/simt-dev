@@ -826,3 +826,60 @@ that goes red on the day it is introduced is a dashboard everybody stops reading
 A repository that declares no `preCommit` gates has no reason to want a `pre-commit` shim, and its
 absence is the correct end state. A repository with no manifest is a different case: we do not know
 what it wants, so we cannot rule the shim out. Absence of knowledge is not a decision.
+
+## 19. Which editors get the rule, and which get a pointer to it
+
+### 19.1 The question that was answered wrong
+
+`simt init` wrote two files: the `AGENTS.md` region and `.cursor/rules/*.mdc`. That is not two
+surfaces of support, it is **one surface of support and one accident**. Codex, opencode, Cursor,
+the DeepSeek harness, Windsurf, Zed, Amp and Jules read `AGENTS.md`, so they were served by the
+accident. Claude Code reads `CLAUDE.md` and only falls back to `AGENTS.md` when no `CLAUDE.md`
+exists anywhere above the working directory. Copilot's editor and code-review surfaces read
+`.github/copilot-instructions.md` and `.github/instructions/*.instructions.md`. Antigravity's
+native surface is `.agents/rules/*.md` with a required `trigger:` key it **silently discards** if
+it does not recognise.
+
+So the three always-on process rules — the ones a reader most needs — existed for Cursor, and
+everybody else received only what happened to be in the `AGENTS.md` region. The rule's own
+conflict scanner had been reading `.github/instructions/` for a whole release, because a detector
+that reads a surface is half a promise to write it.
+
+### 19.2 The table
+
+`src/projection/surfaces.mjs` is the whole answer, and each row names the document it rests on:
+
+| Surface | Rule file | Frontmatter emitted | Pointers | Readers |
+|---|---|---|---|---|
+| `agents` | — (the region) | — | — | Codex, opencode, Cursor, DeepSeek, Windsurf, Zed, Amp, Jules, Copilot CLI |
+| `cursor` | `.cursor/rules/{name}.mdc` | `description`, `alwaysApply` | — | Cursor |
+| `claude` | `.claude/rules/{name}.md` | *none* | `CLAUDE.md -> AGENTS.md` | Claude Code |
+| `antigravity` | `.agents/rules/{name}.md` | `trigger: always_on`, `description` | `GEMINI.md -> AGENTS.md` | Antigravity, Gemini CLI |
+| `copilot` | `.github/instructions/{name}.instructions.md` | `applyTo: "**"` | — | Copilot editor and code review |
+
+Four decisions in that table are not obvious:
+
+- **A pointer is not a copy.** Both vendors document the symlink, POSIX-only is already in scope
+  (ADR-012), and DeepSeek's harness documents the opposite failure: byte-identical candidates
+  collapse, so a symlink renders once — while **a real copy that has drifted loads in full
+  alongside** `AGENTS.md`. A copy is not a second copy of the rule; it is a second rule.
+- **Rule files are generated, not linked.** Symlink support is documented only for
+  `.claude/rules/`; writing one into `.agents/rules/` would be a guess with a mode bit. A
+  machine-written file derived from one canonical source and verified by `check` is a build
+  output, and nobody can hand-edit one and survive a sync.
+- **An always-on rule emits no scoping frontmatter.** Claude documents that a rule with no
+  `paths:` loads eagerly, and carries a published parser defect where quoted values and YAML
+  sequences in `paths:` silently fail to lazy-load. Emitting a scope we do not need, on an editor
+  where a malformed scope fails silently, buys nothing.
+- **The default is every surface**, narrowed per repo with `"surfaces"` in `simt-dev.json`.
+  `--surfaces` wins over the manifest; an empty list is a real choice meaning `AGENTS.md` only.
+  Every command prints the set and **where it came from** — ADR-014's ruling, applied again.
+
+### 19.3 What `compare` now reports
+
+One row per repository cannot show four files, so it shows a count: `rules 6/6 current`, and the
+stale filenames when they disagree. It is a defect only in an **adopted** repository — an
+unadopted one has no rule files at all, and reporting them as "not current" would redden the whole
+estate at the normal mid-migration state, which is ADR-018's mistake repeated one layer over. A
+missing pointer is likewise not failing; a pointer simt-dev did not write **is** reported, because
+overwriting a human's `CLAUDE.md` silently would destroy prose nobody backed up.

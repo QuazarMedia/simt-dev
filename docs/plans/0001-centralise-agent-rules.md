@@ -84,7 +84,7 @@ half-applied sync is detectable rather than invisible.
 | 5 | Tooling baselines | Prettier, `.editorconfig`, `tsconfig.base.json`, shared 6-rule ESLint block + `eslint-config-prettier`, `packageManager`/`engines`, `.nvmrc`, `.gitattributes`, commitlint | Resolves: the `singleQuote` contradiction; the 10 repos with no editorconfig; simt-goto's 7 missing strictness flags; 3 disagreeing nvmrc; no `packageManager`; eslint/prettier fighting in 3 of 5 configs. |
 | 6 | Shared hook library | 4 incompatible conventions | A dispatcher + per-repo check list. Gives the 11 hook-less repos a pre-commit, and delivers the dead `simt-app/hooks/pre-push` fix for free. |
 | 7 | `simt-dev init <repo>` | — | Scaffolds AGENTS.md, editorconfig, tsconfig.base, commitlint, hooks, CI check, dependabot. Repo #17 must be one command, not a rewrite. |
-| 8 | Reusable CI workflow | — | `QuazarMedia/simt-dev/.github/workflows/sync-check.yml`, referenced by every consumer. Also the home for the missing npm Dependabot config. |
+| 8 | Reusable CI workflow | — | As written here: `QuazarMedia/simt-dev/.github/workflows/sync-check.yml`, referenced by every consumer. **Ruled otherwise by ADR-023** — the gate is copied into each repo's `.github/workflows/simt-dev-check.yml` instead, so it is reviewable where it lands. The Dependabot config this row also wanted is still missing and is not part of that ruling. |
 
 `graphify` (40 KB, byte-identical in 2 repos) also becomes a synced vendored copy. All other
 vendored third-party skills (`cloudflare`, `wrangler`, `firebase-*`) stay where used.
@@ -190,7 +190,10 @@ row emits a frontmatter key its own vendor does not document — the quiet failu
 Antigravity discards a rule whose `trigger` it does not recognise.
 
 **Phase 3 — Prove the engine.** `sync.mjs --check` exits non-zero on drift. Reusable workflow
-live.
+live — DONE, but not as a `uses:` reference. ADR-023 copies the gate into each repo's own
+`.github/workflows/`, written once and never rewritten, and only where that directory already
+exists. Row 8 below is the version this plan wrote before that ruling; the reference it
+promised would have pointed every reader at bytes they do not have.
 
 **Phase 4 — Pilot, 3 repos: one web, one API, one mobile.** One per consumer surface, so the
 pilot proves the three shapes the estate actually ships rather than three shapes that happen

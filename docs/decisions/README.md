@@ -30,6 +30,7 @@ record's status line — never by editing the ruling in place.
 | [020](ADR-020-a-rule-is-written-per-surface-and-pointed-not-copied.md) | A rule is written per surface, and pointed at — never copied | accepted |
 | [021](ADR-021-one-surface-per-repo.md) | One surface per repo, chosen or defaulted to opencode | accepted |
 | [022](ADR-022-a-key-simt-dev-reads-is-prefixed.md) | A key simt-dev reads is prefixed `simt-`; an editor's key is not | accepted |
+| [023](ADR-023-the-gate-ships-as-a-file-the-repo-owns.md) | The gate ships as bytes the repo owns, written once where Actions already runs | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -94,3 +95,12 @@ ADR-022 gives every key this tool reads a `simt-` prefix, leaves the vendors' sp
 alone, and makes an unrecognised key a reported defect — because the mistake it looks like
 is the one ADR-016 already shipped: a rule that reaches no repository because its
 selection key was missing.
+
+A seventh is about the gate itself. Plan 1 promised a reusable workflow referenced by
+every consumer, and nothing in this repository had a `.github/` directory. A `uses:`
+line satisfies the promise by pointing every reader at bytes they do not have — the exact
+defect the rule at the top of this file exists to prevent — so ADR-023 copies the gate
+into `.github/workflows/` instead, writes it once, never rewrites it, and skips it
+entirely for a repo that does not run GitHub Actions. The record also states what the
+choice costs: a template improvement does not reach a repo that already has the file, so
+that limitation is written down rather than left for someone to rediscover as a bug.

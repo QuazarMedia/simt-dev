@@ -19,8 +19,9 @@
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
-import { plan, checkTargets, checkTarget, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
-import { readManifest, unrunnableGates } from '../projection/manifest.mjs';
+import { plan, checkTargets, checkTarget, headSha, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
+import { fingerprint } from '../resolve/fingerprint.mjs';
+import { manifestDrift, readManifest, unrunnableGates } from '../projection/manifest.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 
@@ -196,6 +197,13 @@ export async function checkCommand(positional, flags) {
   const { manifest } = await readManifest(root);
   if (manifest) {
     findings.push(...unrunnableGates(manifest, await readCapability(root)));
+    // A manifest a formatter has rewritten is not wrong, and not editable-away by
+    // hand either: the next `init` puts simt-dev's own bytes back and the formatter
+    // takes them away again. Reporting it here is what stops that being a surprise
+    // discovered at upgrade time.
+    const { stack } = await fingerprint(root);
+    const drift = await manifestDrift(root, stack, await headSha());
+    if (drift) findings.push(drift);
   }
 
   const bad = findings.filter((f) => f.status !== 'current' && !NON_BLOCKING.has(f.status));

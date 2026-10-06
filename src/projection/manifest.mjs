@@ -359,6 +359,68 @@ function defaultId(root) {
   return name === '' || name === '.' ? 'unnamed-repo' : name;
 }
 
+/**
+ * Is a generated field of this manifest wrong, or has a formatter taken its bytes?
+ *
+ * Two distinct defects, one shape of answer, because they share a cause: a generated
+ * file with no path back to being correct.
+ *
+ * 1. A STALE GENERATED FIELD. `buildManifest` emits `$comment` and
+ *    `projection.simtDevSha`; the repo owns everything else. `upgrade` spreads the
+ *    existing manifest and refreshes only the SHA, so a field added to the writer
+ *    after a repo was adopted never appears — simt-space had been projecting for
+ *    several versions with no `surfaces` key, and nothing said so. Every parse-based
+ *    comparison passes, because the file is valid and the values in it are all true.
+ *
+ * 2. REFORMATTED BYTES. A repo with a prettier hook rewrites the manifest on the
+ *    first commit: prettier collapses short arrays onto one line,
+ *    `JSON.stringify(m, null, 2)` always expands them. The content is identical, so
+ *    the next `init` puts simt-dev's bytes back and the formatter takes them away
+ *    again. `upgrade` reported `current` the whole time, which is correct: the pin
+ *    was current. The bytes were not.
+ *
+ * Content the repo chose is never compared. A repo that edited `limits.coverage` on
+ * purpose is not being told to revert it.
+ *
+ * @returns {{file: string, status: string, detail: string, remedy: string}|null}
+ */
+export async function manifestDrift(root, stack, sha) {
+  const { manifest, exists, error } = await readManifest(root);
+  if (!exists || error !== null || manifest === null) return null;
+
+  const expected = buildManifest({ root, stack, sha, existing: manifest });
+  const stale = [];
+  for (const key of Object.keys(expected)) {
+    const generated =
+      key === '$comment' ||
+      (key === 'projection' && JSON.stringify(expected.projection) !== JSON.stringify(manifest.projection ?? null));
+    if (generated && JSON.stringify(manifest[key]) !== JSON.stringify(expected[key])) stale.push(key);
+  }
+  if (stale.length > 0) {
+    return {
+      file: MANIFEST,
+      status: 'stale-generated-field',
+      detail: `generated field(s) ${stale.join(', ')} do not match what this simt-dev writes`,
+      remedy: `run: simt-dev init --yes   (it refreshes the stamp without touching values this repo set)`,
+    };
+  }
+
+  // Form is compared by re-serialising the file's OWN parsed content in our shape,
+  // not by rebuilding the manifest from defaults. Rebuilding would also report a
+  // repo for an optional key it predates (`surfaces`), which is not an error: absent
+  // and null both mean "the global standard applies". Comparing content-to-content
+  // isolates the one question — does another tool own this file's formatting.
+  const onDisk = (await readFile(join(root, MANIFEST), 'utf8')).trim();
+  const ours = JSON.stringify(manifest, null, 2).trim();
+  if (onDisk === ours) return null;
+  return {
+    file: MANIFEST,
+    status: 'reformatted',
+    detail: 'content is what simt-dev would write, but the bytes differ - another formatter owns this file',
+    remedy: `add ${MANIFEST} to .prettierignore (a generated file is not prose), then: simt-dev init --yes`,
+  };
+}
+
 /** @returns {{manifest: object|null, exists: boolean, error: string|null}} */
 export async function readManifest(root) {
   const path = join(root, MANIFEST);

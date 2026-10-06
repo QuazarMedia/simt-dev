@@ -130,7 +130,16 @@ export function compose(body, { sha, sources = [] } = {}) {
     '     Run `simt-dev sync` to regenerate, or `simt-dev check` to see what is stale. -->',
   );
   const trimmed = body.replace(/\n+$/, '');
-  return [BEGIN, ...header, ...(trimmed === '' ? [] : trimmed.split('\n')), END].join('\n');
+  // Two lines here exist only because a real repo proved they are needed. A
+  // formatter that runs on commit - simt-space has one, and three of the estate's
+  // other repos do too - rewrote the region on the very first commit: it inserted a
+  // blank line after the header comment and added the trailing newline. Both edits
+  // are things prettier considers correct, and either one alone makes `check`
+  // permanently red on a repo whose own tooling is working correctly. A generated
+  // file that a formatter rewrites is a fight the projection loses, so the
+  // projection emits the formatter's shape in the first place.
+  const out = trimmed === '' ? [BEGIN, ...header, END] : [BEGIN, ...header, '', ...trimmed.split('\n'), END];
+  return `${out.join('\n')}\n`;
 }
 
 /**

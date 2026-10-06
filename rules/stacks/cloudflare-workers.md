@@ -1,7 +1,7 @@
 ---
-id: cloudflare-workers
-title: Cloudflare Workers (TypeScript)
-applies: [cloudflare-workers, hono, typescript]
+simt-id: cloudflare-workers
+simt-title: Cloudflare Workers (TypeScript)
+simt-applies: [cloudflare-workers, hono, typescript]
 ---
 
 # Stack profile: Cloudflare Workers (TypeScript)

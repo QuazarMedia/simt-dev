@@ -1,7 +1,7 @@
 ---
-id: core
-title: Shared rules
-applies: always
+simt-id: core
+simt-title: Shared rules
+simt-applies: always
 ---
 
 # Shared rules

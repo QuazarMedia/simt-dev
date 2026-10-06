@@ -1,8 +1,8 @@
 ---
-id: node
-title: Node (general)
-applies: [node]
-fallback: true
+simt-id: node
+simt-title: Node (general)
+simt-applies: [node]
+simt-fallback: true
 ---
 
 # Stack profile: Node (general)

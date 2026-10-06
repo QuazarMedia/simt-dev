@@ -1,12 +1,12 @@
 ---
-id: slice-commit
-target: .cursor/rules/slice-commit.mdc
+simt-id: slice-commit
+simt-target: .cursor/rules/slice-commit.mdc
 description: How a completed change becomes one commit, and what happens before anything is pushed
 alwaysApply: true
-# `applies: always` is what makes a rule reachable at all. Without it this rule was
+# `simt-applies: always` is what makes a rule reachable at all. Without it this rule was
 # authored, shipped, tested for its presence on disk -- and projected into no repo,
 # silently. Reached by running `init` against a real repo, not by reading the file.
-applies: always
+simt-applies: always
 ---
 # Slice Commit
 

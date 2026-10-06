@@ -1,7 +1,7 @@
 ---
-id: python
-title: Python
-applies: [python]
+simt-id: python
+simt-title: Python
+simt-applies: [python]
 ---
 
 # Stack profile: Python

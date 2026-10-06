@@ -1,10 +1,10 @@
 ---
-id: react-web
-title: React web
+simt-id: react-web
+simt-title: React web
 # Only browser-specific tags. typescript, vitest, node-web and less appear in
 # backend and static repos too, so listing them here made every Workers repo
 # receive the React profile. The node fallback covers plain TS/JS.
-applies: [react, react-router, maplibre, firebase]
+simt-applies: [react, react-router, maplibre, firebase]
 ---
 
 # Stack profile: React web

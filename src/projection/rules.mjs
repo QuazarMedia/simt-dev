@@ -52,6 +52,24 @@ export async function headSha() {
 /** Repo-local profile directory, relative to a repo root (ADR-013 section 2). */
 export const LOCAL_PROFILE_DIR = '.simt-dev/profiles';
 
+/** Every key a stack profile or core rule may declare is this tool's own, so every
+ *  one carries the `simt-` prefix (ADR-022). A profile carrying a bare key would read
+ *  as an editor's instruction — Cursor, Copilot and Antigravity all parse a
+ *  frontmatter block the same way — and would be silently inert. */
+const PROFILE_KEYS = new Set(['simt-id', 'simt-title', 'simt-applies', 'simt-fallback']);
+
+/** Report the first thing wrong with a profile's frontmatter, in the order a reader
+ *  fixes it: no id to select it by, then a key that will not be read. */
+function describeDefect(meta) {
+  if (meta['simt-id'] === undefined) return 'missing simt-id in frontmatter';
+  const unknown = Object.keys(meta).find((k) => !PROFILE_KEYS.has(k));
+  if (unknown === undefined) return null;
+  const prefixed = `simt-${unknown.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+  return PROFILE_KEYS.has(prefixed)
+    ? `key "${unknown}" is this tool's own, not the editor's; it is spelled "${prefixed}"`
+    : `unrecognised frontmatter key "${unknown}"; simt-dev's own keys are simt-id, simt-title, simt-applies, simt-fallback`;
+}
+
 /**
  * Manifest key holding per-rule substitution values, keyed by rule id.
  *
@@ -186,8 +204,8 @@ async function ruleBodies(root, manifest, flags) {
       problems.push(`${rule.file}: ${rule.error}`);
       continue;
     }
-    // Selection mirrors the stack profiles: `applies: always` is unconditional, an
-    // `applies` array intersects the repo's signals, and an opt-in rule waits for
+    // Selection mirrors the stack profiles: `simt-applies: always` is unconditional,
+    // a `simt-applies` array intersects the repo's signals, and an opt-in rule waits for
     // the manifest to name it. A repo that matches nothing gets no `.mdc` rule
     // rather than a plausible-looking one it cannot act on.
     if (!isEligible(rule, signals, declared.optIn)) {
@@ -268,7 +286,7 @@ export async function desiredRegion(root, flags) {
  * Read every rule file once, with its frontmatter parsed, plus any repo-local
  * profile under `.simt-dev/profiles/`.
  *
- * A rule without an `id` is a defect, not a default: ids are what `rules why`
+ * A rule without a `simt-id` is a defect, not a default: ids are what `rules why`
  * and the generated region's source list refer to.
  *
  * A local profile with the same id as a central one SHADOWS it — replaces it
@@ -317,13 +335,13 @@ export async function loadRules(root = null) {
       file: item.file,
       origin: item.origin,
       source: item.source,
-      id: meta.id ?? null,
-      title: meta.title ?? null,
-      applies: meta.applies ?? [],
-      fallback: meta.fallback === true,
+      id: meta['simt-id'] ?? null,
+      title: meta['simt-title'] ?? null,
+      applies: meta['simt-applies'] ?? [],
+      fallback: meta['simt-fallback'] === true,
       bytes: Buffer.byteLength(text),
       body: stripFrontmatter(text),
-      error: meta.id ? null : 'missing id in frontmatter',
+      error: describeDefect(meta),
     });
   }
   return out;
@@ -331,7 +349,7 @@ export async function loadRules(root = null) {
 
 /**
  * Selection is pure set intersection: core always, then every profile whose
- * `applies` intersects the repo's signals. `node` is the fallback, so it is only
+ * `simt-applies` intersects the repo's signals. `node` is the fallback, so it is only
  * chosen when nothing more specific matched — otherwise every JS repo would
  * receive both node and react-web.
  *

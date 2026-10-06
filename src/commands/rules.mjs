@@ -22,7 +22,7 @@ import { nearMatches } from '../resolve/near.mjs';
 
 const kb = (bytes) => `${(bytes / 1000).toFixed(1)}k`;
 
-/** `applies` is the string "always" for core and an array for profiles. */
+/** `simt-applies` is the string "always" for core and an array for profiles. */
 function appliesLabel(rule) {
   if (rule.applies === 'always') return 'always';
   if (Array.isArray(rule.applies)) return rule.applies.join(',') || '-';
@@ -83,7 +83,7 @@ export async function listCommand(args, flags) {
   const local = rules.filter((r) => r.origin === 'local').length;
   const rows = sorted(rules);
 
-  // Column widths are measured from the data rather than hardcoded. `applies` is a
+  // Column widths are measured from the data rather than hardcoded. `simt-applies` is a
   // list of signals whose length is the whole point of the column, so a fixed pad
   // silently pushed the title out of alignment for exactly the profiles a reader
   // most wants to compare. Measured widths are still deterministic for a given

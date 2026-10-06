@@ -25,6 +25,7 @@ record's status line — never by editing the ruling in place.
 | [015](ADR-015-a-source-is-content-not-a-location.md) | A source is identified by its content; the repo is a location, not a precondition | accepted |
 | [016](ADR-016-a-divergent-rule-is-retired-not-merged.md) | A divergent rule is retired by a union, not merged by a variant | accepted |
 | [017](ADR-017-a-declared-gate-must-be-runnable.md) | A declared gate must be one the repo can actually run | accepted |
+| [018](ADR-018-an-unset-hooks-path-is-not-an-absent-hook.md) | An unset hooks path is not an absent hook | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -55,3 +56,11 @@ prose and redundant examples are **review blockers**, not style nits.
 
 This ruling came out of the estate's own review agent, which already carries it as a checklist
 item — in exactly one file, aimed at exactly the duplication the audit found.
+
+ADR-017, ADR-018 and the one before them share a cause worth naming. Each was found by
+running the tool the way a consumer runs it — against a real repository, doing the thing a
+person would do — and not by a unit test. A test exercises the function; the defect lived in
+what the function was asked, in a location it never looked, or on a surface the JSON never
+carried. Two of the three were also cases of the same question being answered in two places:
+ADR-018's guard could not see the default hooks directory because it looked only at a config
+key, and `hooks status` carried its own copy of the read logic the shared module already had.

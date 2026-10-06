@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -491,4 +491,187 @@ test('hooks run: the empty-gate note explains the two readings, not just one', a
   assert.match(notes[0], /valid answer/);
   assert.match(notes[0], /no tool/);
   assert.ok(!/accident/i.test(notes[0]), 'the old wording implied the empty list was a mistake');
+});
+
+// ------------------------------------------------- foreign hooks (where.mjs)
+// simt-space keeps 4 KB of real logic in .git/hooks/pre-commit with
+// core.hooksPath UNSET. Unset means "git uses its default", not "git runs
+// nothing", and reading it the other way made `hooks status` report a live hook
+// as not installed and let `install` replace it without a word.
+
+test('where: an unset core.hooksPath resolves to the git default, not to nothing', async () => {
+  const { resolveHooksDir } = await import('../src/hooks/where.mjs');
+  const root = await fixture({});
+  const where = await resolveHooksDir(root);
+  assert.equal(where.how, 'default');
+  // git reports the top level through /private/var, mkdtemp hands back /var.
+  assert.equal(where.dir, join(await realpath(root), '.git', 'hooks'));
+});
+
+test('where: a relative core.hooksPath resolves against the top of the working tree', async () => {
+  // simt-app sets exactly this, and it works because git resolves a relative
+  // hooks path against the worktree top, not against the git dir.
+  const { resolveHooksDir } = await import('../src/hooks/where.mjs');
+  const root = await fixture({ files: { 'hooks/pre-commit': '#!/bin/sh\nexit 0\n' } });
+  await chmod(join(root, 'hooks', 'pre-commit'), 0o755);
+  await exec('git', ['config', HOOKS_PATH_KEY, 'hooks'], { cwd: root });
+  const where = await resolveHooksDir(root);
+  assert.equal(where.how, 'configured');
+  assert.equal(where.dir, join(await realpath(root), 'hooks'));
+});
+
+test('where: a linked worktree shares its parent hooks directory', async () => {
+  // The worktree's git dir is not the parent repo's .git, and its own .git is a
+  // FILE. `--git-path hooks` returns "./" here, which would enumerate the whole
+  // repository as if every file in it were a hook.
+  const { resolveHooksDir, foreignHooks } = await import('../src/hooks/where.mjs');
+  const main = await fixture({});
+  await exec('git', ['config', 'user.email', 't@example.com'], { cwd: main });
+  await exec('git', ['config', 'user.name', 't'], { cwd: main });
+  await writeFile(join(main, 'a.txt'), 'a\n');
+  await exec('git', ['add', '.'], { cwd: main });
+  await exec('git', ['commit', '-qm', 'seed'], { cwd: main });
+
+  const links = await mkdtemp(join(tmpdir(), 'simt-wt-'));
+  temps.push(links);
+  const wt = join(links, 'wt');
+  await exec('git', ['worktree', 'add', '-q', wt], { cwd: main });
+
+  const where = await resolveHooksDir(wt);
+  assert.equal(where.how, 'default');
+  assert.equal(where.dir, join(await realpath(main), '.git', 'hooks'));
+
+  // A hook installed in the parent is a hook the worktree runs, and simt-dev
+  // has to be able to see it.
+  await writeFile(join(main, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
+  await chmod(join(main, '.git', 'hooks', 'pre-commit'), 0o755);
+  const live = await foreignHooks(wt);
+  assert.equal(live.length, 1);
+  assert.equal(live[0].event, 'pre-commit');
+  assert.equal(live[0].path, join(await realpath(main), '.git', 'hooks', 'pre-commit'));
+});
+
+test('where: git sample templates are not hooks', async () => {
+  const { foreignHooks } = await import('../src/hooks/where.mjs');
+  const root = await fixture({});
+  const gitHooks = join(root, '.git', 'hooks');
+  for (const name of ['pre-commit.sample', 'pre-push.sample', 'update.sample']) {
+    await writeFile(join(gitHooks, name), '#!/bin/sh\nexit 0\n');
+    await chmod(join(gitHooks, name), 0o755);
+  }
+  assert.deepEqual(await foreignHooks(root), []);
+});
+
+test('hooks status: reports a hand-written hook git is running as foreign', async () => {
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+    files: { '.git/hooks/pre-commit': '#!/bin/sh\n# 4088 bytes of real logic in the real world\necho hand-written\n' },
+  });
+  await chmod(join(root, '.git', 'hooks', 'pre-commit'), 0o755);
+  // A foreign hook is a problem, so status exits non-zero and exec rejects.
+  const { stdout } = await simt(['hooks', 'status', '--root', root], root).catch((e) => e);
+  assert.match(stdout, /git runs these, and simt-dev did not write them/);
+  assert.match(stdout, /pre-commit\s+.*\.git\/hooks\/pre-commit/);
+  assert.match(stdout, /which is not a simt-dev shim/);
+  // The header must not claim there are no hooks while listing one.
+  assert.doesNotMatch(stdout, /\(none\)/);
+  assert.match(stdout, /git default: .*\.git\/hooks/);
+});
+
+test('hooks install: refuses to replace a hand-written hook and writes nothing', async () => {
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+    files: { '.git/hooks/pre-commit': '#!/bin/sh\necho hand-written\n' },
+  });
+  await chmod(join(root, '.git', 'hooks', 'pre-commit'), 0o755);
+  await assert.rejects(
+    () => simt(['hooks', 'install', '--root', root], root),
+    (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stdout, /BLOCKED .* already runs git hooks that simt-dev did not write/);
+      assert.match(error.stdout, /git runs pre-commit at/);
+      return true;
+    },
+  );
+  const { stdout } = await exec('git', ['config', '--get', HOOKS_PATH_KEY], { cwd: root }).catch(() => ({ stdout: '' }));
+  assert.equal(stdout.trim(), '', 'core.hooksPath must still be unset');
+  // And the hook git runs is untouched.
+  assert.match(await readFile(join(root, '.git', 'hooks', 'pre-commit'), 'utf8'), /hand-written/);
+});
+
+test('hooks install --yes: replaces it and says which hook stopped running', async () => {
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+    files: { '.git/hooks/pre-commit': '#!/bin/sh\necho hand-written\n' },
+  });
+  await chmod(join(root, '.git', 'hooks', 'pre-commit'), 0o755);
+  const { stderr } = await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  assert.match(stderr, /stopped running pre-commit at .*\.git\/hooks\/pre-commit \(\d+ bytes\)/);
+  assert.match(stderr, /still on disk, untouched/);
+});
+
+test('hooks install: refuses to install shims for a repo that declares no runnable gate', async () => {
+  // A shim with an empty gate list enforces nothing, yet its mere existence
+  // replaces whatever git was running. Installing one over a working hook is a
+  // downgrade, and `init` already says there is nothing to install.
+  const root = await fixture({ manifest: { gates: { preCommit: [], prePush: [] }, commands: {} } });
+  await assert.rejects(
+    () => simt(['hooks', 'install', '--root', root], root),
+    (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stdout, /declares no gate it can run, so there is nothing to enforce/);
+      return true;
+    },
+  );
+  await assert.rejects(() => readFile(join(root, HOOKS_DIR, 'pre-commit'), 'utf8'));
+});
+
+test('hooks install: a missing shim is not a problem when no gate needs it', async () => {
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+  });
+  await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  const { stdout } = await simt(['hooks', 'status', '--root', root], root);
+  assert.doesNotMatch(stdout, /pre-push not installed/);
+  assert.equal((stdout.match(/^problems:/m) ?? []).length, 0, stdout);
+});
+
+test('hooks install: with no manifest at all, a missing shim is still reported', async () => {
+  // Absence of knowledge is not a decision: without a manifest we cannot tell
+  // that the repo meant to have no gates.
+  const root = await fixture({});
+  const { stdout } = await simt(['hooks', 'status', '--root', root], root).catch((e) => e);
+  assert.match(stdout, /pre-commit not installed/);
+});
+
+test('hooks status: simt-dev shims are not reported as foreign', async () => {
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+  });
+  await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  const { stdout } = await simt(['hooks', 'status', '--root', root], root);
+  assert.doesNotMatch(stdout, /not a simt-dev shim/);
+});
+
+test('hooks status --json: carries the foreign hooks, not just prose about them', async () => {
+  // An agent reading the JSON never sees the text block. A fact that exists only
+  // in prose is a fact the tool did not actually report - which is how this very
+  // bug hid during development.
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+    files: { '.git/hooks/pre-commit': '#!/bin/sh\necho hand-written\n' },
+  });
+  await chmod(join(root, '.git', 'hooks', 'pre-commit'), 0o755);
+  const { stdout } = await simt(['hooks', 'status', '--root', root, '--json'], root).catch((e) => e);
+  const payload = JSON.parse(stdout);
+  assert.equal(payload.foreign.length, 1);
+  assert.equal(payload.foreign[0].event, 'pre-commit');
+  assert.equal(payload.foreign[0].bytes, Buffer.byteLength('#!/bin/sh\necho hand-written\n'));
+  assert.match(payload.hooksDir, /\.git\/hooks$/);
 });

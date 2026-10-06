@@ -39,7 +39,8 @@ import { readHooksState } from './hooksstate.mjs';
  * @property {boolean} hooksComplete every event installed, executable, not stale
  * @property {string[]} gatesDeclared
  * @property {string[]} gateProblems
- * @property {string[]} problems     everything wrong, one line each
+ * @property {string[]} problems     everything wrong, one line each; drives the exit code
+ * @property {string[]} notes        worth knowing, but not wrong; does NOT drive the exit code
  */
 
 /**
@@ -54,6 +55,7 @@ import { readHooksState } from './hooksstate.mjs';
 export async function buildRow(path, context) {
   const name = path.split('/').filter(Boolean).pop() ?? path;
   const problems = [];
+  const notes = [];
 
   const [manifest, fp, hooks, region] = await Promise.all([
     readManifest(path),
@@ -79,7 +81,9 @@ export async function buildRow(path, context) {
     hooksComplete: hooks.complete,
     gatesDeclared: declaredGates(manifest.manifest),
     gateProblems: [],
+    foreignHooks: [],
     problems,
+    notes,
   };
 
   if (manifest.error) {
@@ -157,6 +161,16 @@ export async function buildRow(path, context) {
   }
 
   // --- hooks ---------------------------------------------------------------
+  // A repo running its own hooks is a fact about today, independent of whether
+  // simt-dev has been adopted. It is a NOTE, not a problem: adopting this repo is
+  // the normal mid-migration state, and a dashboard that goes red for it teaches
+  // everyone to ignore the dashboard. What it costs is only visible at install
+  // time, which is where the takeover guard asks for consent.
+  row.foreignHooks = hooks.foreign.map((h) => ({ event: h.event, bytes: h.bytes }));
+  for (const h of hooks.foreign) {
+    notes.push(`runs its own ${h.event} (${h.bytes} bytes); hooks install will replace it and asks first`);
+  }
+
   if (row.adoption === 'adopted') {
     if (!hooks.routed) {
       problems.push(
@@ -225,6 +239,7 @@ export function summarise(rows, extra = {}) {
     malformed: count((r) => r.region === 'malformed'),
     hooksRouted: count((r) => r.hooksRouted),
     withProblems: count((r) => r.problems.length > 0),
+    withOwnHooks: count((r) => (r.foreignHooks ?? []).length > 0),
     shas: [...shas.entries()].sort((a, b) => (a[0] === '(none)' ? 1 : b[0] === '(none)' ? -1 : b[1] - a[1])),
     ...extra,
   };

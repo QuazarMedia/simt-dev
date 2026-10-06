@@ -94,6 +94,7 @@ export async function compareCommand(positional, flags) {
         malformed: summary.malformed,
         hooksRouted: summary.hooksRouted,
         withProblems: summary.withProblems,
+        withOwnHooks: summary.withOwnHooks,
         shas: summary.shas,
       },
       rows,
@@ -148,6 +149,7 @@ function render(rows, summary, found) {
     `repos     ${summary.repos} (${summary.adopted} adopted, ${summary.unmanaged} unmanaged${summary.broken > 0 ? `, ${summary.broken} broken` : ''})`,
     `region    ${summary.current} current, ${summary.drifted} drifted, ${summary.noRegion} with no region, ${summary.malformed} malformed`,
     `hooks     ${summary.hooksRouted}/${summary.adopted} adopted repos route the shared dispatcher`,
+    `          ${summary.withOwnHooks} repo${summary.withOwnHooks === 1 ? '' : 's'} run their own hooks; adopting replaces them (a note, not a problem)`,
     `problems  ${summary.withProblems} repo${summary.withProblems === 1 ? '' : 's'}`,
     `pinned    ${summary.shas.map(([sha, n]) => `${sha} x${n}`).join(', ')}`,
     '',
@@ -169,6 +171,9 @@ function render(rows, summary, found) {
     if (r.problems.length > 0) {
       lines.push('          PROBLEMS');
       for (const p of r.problems) lines.push(`            ${p}`);
+    }
+    if (r.notes.length > 0) {
+      for (const n of r.notes) lines.push(`          note ${n}`);
     }
     lines.push('');
   }

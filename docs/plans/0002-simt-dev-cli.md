@@ -766,3 +766,63 @@ simt-dev as `not-adopted` and writes nothing — the repo that produces pins is 
 them. And a repo pinned at an old SHA has both halves moved, `check` returns `CURRENT`, and a
 second run is a byte-for-byte no-op. `test/upgrade.test.mjs` asserts all of it against real
 repositories adopted by the real `init`.
+
+## 18. Where hooks actually are, and what installing one costs
+
+ADR-018's ruling in full; this section is the operational version, and it exists because the
+defect it describes was found by running `hooks install` against a real repository rather than by
+running anything at all in the earlier phases.
+
+### 18.1 The two rules, and why git's own answer is not usable
+
+`core.hooksPath` set → that directory, with a relative value resolved against the top of the
+working tree. `core.hooksPath` unset → `<git-common-dir>/hooks`. The second rule is the one that
+matters, because unset is the default and the default is not empty.
+
+`git rev-parse --git-path hooks` answers this in one call and answers it wrong: it returns
+`.git/hooks` in a normal repository, `hooks` in a linked worktree, and `./` in a linked worktree
+with the setting unset — because a worktree's `.git` is a file. Trusting it would enumerate a
+worktree's entire root as its hooks directory and report every file in the repository as a hook.
+Measured on `.wt-wear-redesign`, the difference is between five real hooks and every file in the
+repository.
+
+### 18.2 What the estate actually runs
+
+After the fix, `compare` reports what each repository runs today:
+
+| Repository | `core.hooksPath` | Hooks simt-dev did not write |
+|---|---|---|
+| `simt-space` | unset | `pre-commit` (4088 B, `.git/hooks`) |
+| `simt-app` | `hooks` | `pre-commit`, `post-checkout`, `post-commit`, `post-merge` |
+| `simt-social` | `scripts/git-hooks` | `pre-commit` (2961 B), `pre-push` (542 B) |
+| `simt-social-api` | `scripts/git-hooks` | `pre-commit` (1444 B), `pre-push` (3824 B) |
+| `simt-landing` | `.githooks` | `pre-push` (617 B) |
+| `.wt-wear-redesign` | `hooks` | the five above plus `pre-push` (350 B, `git-lfs`) |
+| `bunnyland-server`, `simt-social-media`, and the rest | unset / absent | none |
+
+Six consumers would have been taken over without a word. The `.wt-wear-redesign` entry is the one
+that most rewards the fix: that `git-lfs` `pre-push` is the hook the phase-4 notes recorded as
+orphaned, and it is a worktree's hook, which is the only case where `--git-path` is actively
+misleading rather than merely awkward.
+
+### 18.3 What each command now does with that knowledge
+
+`hooks status` names the foreign hooks in text and in JSON (`foreign[]`, `hooksDir`), and the
+header says `git default: <path>` rather than `(none)`.
+
+`hooks install` refuses without `--yes` when a foreign hook would stop running, naming the file and
+its size, and writes nothing. With `--yes` it reports each hook it stopped running and notes that
+the file is still on disk.
+
+`hooks install` refuses when no event declares a runnable gate, because a shim with an empty gate
+list enforces nothing while still displacing what was there.
+
+`compare` reports foreign hooks as a **note**, never a problem. Six of sixteen repositories run
+their own hooks and all six are unadopted, which is the normal state of a migration; a dashboard
+that goes red on the day it is introduced is a dashboard everybody stops reading.
+
+### 18.4 A missing shim is only a defect when a gate needs it
+
+A repository that declares no `preCommit` gates has no reason to want a `pre-commit` shim, and its
+absence is the correct end state. A repository with no manifest is a different case: we do not know
+what it wants, so we cannot rule the shim out. Absence of knowledge is not a decision.

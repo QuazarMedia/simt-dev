@@ -8,7 +8,7 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -57,6 +57,18 @@ async function gitRepo(name, files = {}, into = null) {
     await exec('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'seed'], { cwd: root });
   }
   return root;
+}
+
+/** Rebuild a minimal row so summarise() can be compared against the JSON shape. */
+function rowsOf(payload) {
+  return payload.rows.map((r) => ({
+    adoption: r.adoption,
+    region: r.region,
+    pinnedSha: r.pinnedSha,
+    hooksRouted: r.hooksRouted,
+    foreignHooks: r.foreignHooks,
+    problems: r.problems,
+  }));
 }
 
 async function scratch() {
@@ -453,4 +465,72 @@ test('compare is not registered as unimplemented any more', async () => {
   await gitRepo('ok', { 'README.md': 'x' });
   const code = await dispatch(['compare', '--root', root]);
   assert.notEqual(code, 5);
+});
+// --- repos that run their own hooks ---------------------------------------
+// The takeover guard asks for consent at install time. `compare` is where a
+// rollout actually reads the estate, so it has to say what adoption will cost -
+// as a note, because "not adopted yet" is the normal state and a dashboard that
+// goes red for it is a dashboard everyone ignores.
+
+test('compare: a repo running its own hooks is a note, not a problem', async () => {
+  const ws = await scratch();
+  const quiet = await gitRepo('quiet', { 'README.md': 'x\n' }, ws);
+  const own = await gitRepo('own-hooks', { 'README.md': 'x\n' }, ws);
+  await writeFile(join(own, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
+  await chmod(join(own, '.git', 'hooks', 'pre-commit'), 0o755);
+
+  const payload = await json(['compare', '--root', ws]);
+  const row = payload.rows.find((r) => r.name === 'own-hooks');
+  assert.deepEqual(row.foreignHooks.map((h) => h.event), ['pre-commit']);
+  assert.equal(row.problems.length, 0, 'an unadopted repo with its own hooks is not broken');
+  assert.equal(row.notes.length, 1);
+  assert.match(row.notes[0], /runs its own pre-commit \(\d+ bytes\)/);
+  assert.match(row.notes[0], /hooks install will replace it and asks first/);
+  assert.equal(payload.summary.withOwnHooks, 1);
+  assert.ok(quiet);
+});
+
+test('compare: notes never change the exit code', async () => {
+  const ws = await scratch();
+  const own = await gitRepo('own-hooks', { 'README.md': 'x\n' }, ws);
+  await writeFile(join(own, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
+  await chmod(join(own, '.git', 'hooks', 'pre-commit'), 0o755);
+  // exec rejects on a non-zero exit, so a successful call IS the assertion.
+  const { stdout } = await exec('node', [BIN, 'compare', '--root', ws], { maxBuffer: 16 << 20 });
+  assert.match(stdout, /run their own hooks; adopting replaces them \(a note, not a problem\)/);
+});
+
+test('summarise: counts repos with their own hooks, and tolerates a partial row', async () => {
+  const summary = summarise([
+    { adoption: 'adopted', region: 'current', pinnedSha: 'aaa', hooksRouted: true, foreignHooks: [], problems: [] },
+    { adoption: 'unmanaged', region: 'absent', pinnedSha: null, hooksRouted: false, foreignHooks: [{ event: 'pre-commit', bytes: 10 }], problems: [] },
+    { adoption: 'unmanaged', region: 'absent', pinnedSha: null, hooksRouted: false, problems: [] },
+  ]);
+  assert.equal(summary.withOwnHooks, 1);
+  assert.equal(summary.withProblems, 0);
+});
+
+test('compare --json: the summary block carries every field summarise computes', async () => {
+  // The JSON summary was a hand-listed copy of summarise()'s output, which is
+  // why `withOwnHooks` reached the text render and vanished from the machine
+  // surface. A copied list of names is a list that rots; assert the two agree.
+  const ws = await scratch();
+  await gitRepo('one', { 'README.md': 'x\n' }, ws);
+  const payload = await json(['compare', '--root', ws]);
+  const fromSummarise = summarise(rowsOf(payload));
+  for (const key of Object.keys(fromSummarise)) {
+    if (['root', 'shape', 'source', 'expectedSha'].includes(key)) continue;
+    assert.ok(key in payload.summary, `compare --json summary is missing "${key}"`);
+  }
+});
+
+test('compare --json: every row carries notes and foreignHooks, even when empty', async () => {
+  // A field present only when non-empty is a field an agent has to guess about.
+  const ws = await scratch();
+  await gitRepo('one', { 'README.md': 'x\n' }, ws);
+  const payload = await json(['compare', '--root', ws]);
+  for (const row of payload.rows) {
+    assert.ok(Array.isArray(row.notes), `${row.name} has no notes array`);
+    assert.ok(Array.isArray(row.foreignHooks), `${row.name} has no foreignHooks array`);
+  }
 });

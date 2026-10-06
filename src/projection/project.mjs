@@ -19,6 +19,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { baselineTargets, misplaced } from './baselines.mjs';
 import { planWorkflow, WORKFLOW_FILE } from '../ci/workflow.mjs';
 import { diff, parse, inject, BEGIN, END } from './markers.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
@@ -61,6 +62,12 @@ export async function plan(root, flags = {}) {
 
   const surfaces = resolveSurfaces(manifest, flags);
 
+  // The baselines are the same list shape as every other target, so `sync` writes
+  // them and reports them in the same plan it prints for AGENTS.md and the rule
+  // files. A file the reader was not shown is a file they approve by reading the diff
+  // afterwards, which is the one review step this tool exists to make unnecessary.
+  const baselines = await baselineTargets(root, meta.sha);
+
   return {
     root,
     stack,
@@ -71,7 +78,7 @@ export async function plan(root, flags = {}) {
     surfaceSource: surfaces.source,
     surfaceProblems: surfaces.problems,
     rules: all,
-    targets: [target, ...mdc.targets],
+    targets: [target, ...mdc.targets, ...baselines.targets],
     mdcProblems: mdc.problems,
     notes: [...notes, ...mdc.notes],
   };
@@ -217,6 +224,43 @@ export async function checkTargets(root, flags = {}) {
         recordedSha: state.sha ?? null,
       });
     }
+  }
+
+  // Baselines are checked against the same construction `sync` writes from, and they
+  // block for the same reason the rule files block: an adopting repo whose baseline was
+  // deleted or reverted is a repo whose editors have quietly stopped agreeing.
+  for (const t of (await baselineTargets(root, await headSha())).targets) {
+    if (t.action === 'malformed') {
+      findings.push({ file: t.file, status: 'malformed', detail: t.reason, line: t.line });
+      continue;
+    }
+    if (!t.exists) {
+      findings.push({
+        file: t.file,
+        status: 'absent',
+        detail: 'no baseline file; run: simt-dev sync',
+        remedy: 'simt-dev sync',
+      });
+      continue;
+    }
+    const state = parse(t.previous, t.style);
+    if (state.status === 'absent') {
+      findings.push({
+        file: t.file,
+        status: 'unmanaged',
+        detail: 'the file exists with no simt-dev region; run: simt-dev sync',
+        remedy: 'simt-dev sync',
+      });
+      continue;
+    }
+    findings.push({
+      file: t.file,
+      status: t.action === 'unchanged' ? 'current' : 'drift',
+      detail: t.action === 'unchanged' ? undefined : `region is ${t.action}; run: simt-dev sync`,
+      recordedSha: state.sha ?? null,
+    });
+    const off = misplaced(state, t.style);
+    if (off) findings.push({ file: t.file, status: 'misplaced', ...off });
   }
 
   // Pointers are checked last and never block. A missing or misaimed `CLAUDE.md`

@@ -32,6 +32,7 @@ record's status line — never by editing the ruling in place.
 | [022](ADR-022-a-key-simt-dev-reads-is-prefixed.md) | A key simt-dev reads is prefixed `simt-`; an editor's key is not | accepted |
 | [023](ADR-023-the-gate-ships-as-a-file-the-repo-owns.md) | The gate ships as bytes the repo owns, written once where Actions already runs | accepted · ruling 2 superseded by 024 |
 | [024](ADR-024-simt-dev-overwrites-its-own-gate-file.md) | simt-dev overwrites its own gate file, and no repository else's | accepted |
+| [025](ADR-025-a-baseline-is-a-region-in-a-file-the-repo-owns.md) | A baseline is a region in a file the repo owns, and only a file that can hold one | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -114,3 +115,12 @@ gap. ADR-024 gives the exception exactly one boundary — a path, not a flag, be
 is a spelling for the wrong answer — and refuses `simt-dev ci` everywhere else. Both copies
 say which world they are in, in their own header, because the reader of a diff in this
 repository should not have to guess who changed their CI.
+
+A ninth is about a file rather than a byte. The plan's tooling row asks for eight
+baselines and the same plan, eight sections earlier, already said how they should work:
+a generated region, so local content is never clobbered. Six of the eight are JSON or bare
+strings and cannot hold a region, which is not a reason to ship them anyway — it is the
+answer. `.editorconfig` can, so it is the baseline, and it goes in first so the repo's own
+settings keep winning underneath it. `end_of_line` is left out on purpose: it is a claim
+about line endings, which is `.gitattributes`' claim to make, and a repository that wanted
+CRLF could only opt out by deleting the indentation settings with it.

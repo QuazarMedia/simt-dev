@@ -238,7 +238,7 @@ export function planGates(stack = [], capability = null) {
  * make, and quietly disarming a gate somebody declared on purpose is a worse surprise
  * than a visible one.
  */
-export function buildManifest({ root, stack = [], sha, existing = null, capability = null }) {
+export function buildManifest({ root, stack = [], sha, existing = null, capability = null, surfaces = undefined }) {
   const gates = defaultGates(stack);
   const limits = defaultLimits(stack);
 
@@ -267,6 +267,13 @@ export function buildManifest({ root, stack = [], sha, existing = null, capabili
     // substitution value: it lists the rules this repo declares it has a problem
     // with, which is something detection cannot infer.
     substitutions: existing?.substitutions ?? {},
+    // ADR-020: which editors this repo's rules are projected into. Absent means the
+    // global standard applies; an explicit empty list is a real choice meaning
+    // AGENTS.md only. Recorded rather than inferred, because "which IDE does this repo
+    // support" is a decision a reviewer should be able to read in one line — and
+    // because a typo here silently reduces the estate to AGENTS.md, which looks
+    // exactly like a working setup.
+    surfaces: surfaces ?? existing?.surfaces ?? null,
     projection: { simtDevSha: sha ?? null },
   };
 }

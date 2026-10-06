@@ -16,7 +16,7 @@
 // fact per line in a stable field order so two runs diff cleanly; a row that
 // reordered its columns would make every comparison between two runs unreadable.
 
-import { checkTarget } from '../projection/project.mjs';
+import { checkTargets, PRIMARY_TARGET } from '../projection/project.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
@@ -57,12 +57,20 @@ export async function buildRow(path, context) {
   const problems = [];
   const notes = [];
 
-  const [manifest, fp, hooks, region] = await Promise.all([
+  const [manifest, fp, hooks, findings] = await Promise.all([
     readManifest(path),
     fingerprint(path),
     readHooksState(path),
-    checkTarget(path),
+    checkTargets(path),
   ]);
+
+  // The row's `region` stays the AGENTS.md finding, because that is what a reader
+  // recognises. The rule files and pointers are summarised beside it, because a repo
+  // can have a current AGENTS.md and three stale rule files - which is exactly the
+  // state a rule written to four surfaces can drift into.
+  const region = findings.find((f) => f.file === PRIMARY_TARGET) ?? { status: 'absent' };
+  const ruleFindings = findings.filter((f) => f.surface !== undefined);
+  const pointers = findings.filter((f) => f.status?.startsWith('pointer'));
 
   const row = {
     name,
@@ -77,6 +85,13 @@ export async function buildRow(path, context) {
     recordedSha: region.recordedSha ?? null,
     region: region.status,
     regionDetail: region.detail ?? null,
+    surfaces: manifest.manifest?.surfaces ?? null,
+    ruleFiles: {
+      total: ruleFindings.length,
+      current: ruleFindings.filter((f) => f.status === 'current').length,
+      stale: ruleFindings.filter((f) => f.status !== 'current').map((f) => f.file),
+    },
+    pointers: pointers.map((p) => ({ file: p.file, state: p.status })),
     hooksRouted: hooks.routed,
     hooksComplete: hooks.complete,
     gatesDeclared: declaredGates(manifest.manifest),
@@ -85,6 +100,20 @@ export async function buildRow(path, context) {
     problems,
     notes,
   };
+
+  // A rule file on any surface that is not current is a defect the row would
+  // otherwise hide. It names the files, because "something is stale" is not
+  // actionable and this command exists to be acted on.
+  //
+  // Gated on adoption, and that gate is the whole point. A repo that has never been
+  // adopted has no rule files at all, and reporting them as "not current" turns the
+  // normal mid-migration state into a red estate — the same mistake ADR-018 records
+  // for hooks, where an unadopted repo's own hooks are a note rather than a problem.
+  if (row.adoption === 'adopted' && row.ruleFiles.stale.length > 0) {
+    problems.push(
+      `${row.ruleFiles.stale.length} of ${row.ruleFiles.total} rule files are not current (${row.ruleFiles.stale.join(', ')}); run: simt-dev sync`,
+    );
+  }
 
   if (manifest.error) {
     problems.push(`simt-dev.json ${manifest.error}`);
@@ -238,6 +267,7 @@ export function summarise(rows, extra = {}) {
     noRegion: count((r) => r.region === 'unmanaged' || r.region === 'absent'),
     malformed: count((r) => r.region === 'malformed'),
     hooksRouted: count((r) => r.hooksRouted),
+    staleRuleFiles: rows.reduce((n, r) => n + (r.ruleFiles?.stale?.length ?? 0), 0),
     withProblems: count((r) => r.problems.length > 0),
     withOwnHooks: count((r) => (r.foreignHooks ?? []).length > 0),
     shas: [...shas.entries()].sort((a, b) => (a[0] === '(none)' ? 1 : b[0] === '(none)' ? -1 : b[1] - a[1])),

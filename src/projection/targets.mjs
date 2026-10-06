@@ -1,0 +1,172 @@
+// Where a rule actually lands: one body, many surfaces, plus the pointer files.
+//
+// Split out of project.mjs, which had grown past the 400-line review trigger in
+// ADR-005 because this concern arrived with surface support (ADR-020) and had
+// nowhere else to live. The split is by question, not by convenience: project.mjs
+// answers *which rules apply*, this module answers *what files that produces*.
+// Neither imports the other's decision, so neither can quietly change it.
+//
+// The load-bearing rule in here is that this is the SINGLE place a rule file is
+// turned into bytes. `plan` writes what these functions return and `checkTargets`
+// compares against the same construction. The step-6 defect was two places
+// computing the desired region and the gate then reporting drift on a clean tree,
+// which is the failure mode a PR cannot review because both places look right.
+
+import { readFile, readlink } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { diff, parse, inject } from './markers.mjs';
+import { ruleName } from './mdc.mjs';
+import { frontmatterBlock, POINTERS, rulePath, SURFACES } from './surfaces.mjs';
+
+/**
+ * A managed rule file is a GENERATED FILE, unlike AGENTS.md.
+ *
+ * The body after the frontmatter is the region, full stop: there is no hand-owned
+ * prose to preserve, because any prose there is exactly the divergent copy this
+ * mechanism retires. Appending instead would leave two `## Requirements` sections
+ * in one file — the duplication the estate's own review agent is instructed to
+ * block, produced by the tool meant to remove it. So the existing frontmatter is
+ * kept (the editor reads it before any rule text) and everything below it is
+ * replaced.
+ */
+export async function ruleTargets(root, rule, body, sha, resolved, notes) {
+  const targets = [];
+  const name = ruleName(rule);
+
+  for (const s of resolved.surfaces) {
+    if (!s.rule) continue;
+    const rel = rulePath(s.id, name);
+    if (!rel) continue;
+    const path = join(root, rel);
+
+    let existing = '';
+    let exists = true;
+    try {
+      existing = await readFile(path, 'utf8');
+    } catch {
+      exists = false;
+    }
+
+    const mine = s.ruleFrontmatter(rule);
+    const frontmatter = extractFrontmatter(existing) ?? frontmatterBlock(mine);
+    const state = exists ? parse(existing) : { status: 'absent' };
+    // A surface that wants no frontmatter must not get a blank line where the
+    // frontmatter would have been: Claude's rule files opened with two empty lines
+    // before the marker, which is untidy in a file the reader will open, and a
+    // difference between surfaces that no check reported.
+    const composed =
+      state.status === 'ok' ? existing : frontmatter === '' ? '' : `${frontmatter}\n`;
+    const result = inject(composed, body, { sha, sources: [rule.source] });
+
+    // Report the prose being retired rather than letting it vanish into a diff the
+    // reader has to notice. Silent deletion is the one thing a reviewer cannot audit.
+    const retired = exists && state.status !== 'ok' ? bodyAfterFrontmatter(existing).trim() : '';
+    if (retired !== '') {
+      notes.push(
+        `${rel}: retiring ${Buffer.byteLength(retired)} bytes of divergent hand-written rule text`,
+      );
+    }
+
+    targets.push({
+      file: rel,
+      surface: s.id,
+      path,
+      exists,
+      action: result.action,
+      reason: result.reason,
+      line: result.line,
+      bytes: Buffer.byteLength(result.text),
+      previousBytes: Buffer.byteLength(existing),
+      sha,
+      body,
+      text: result.text,
+      previous: existing,
+    });
+  }
+  return { targets };
+}
+
+
+/**
+ * Pointer targets: `CLAUDE.md` and `GEMINI.md` as symlinks to `AGENTS.md`.
+ *
+ * A pointer target carries `kind: 'pointer'` and no `text`. The writer makes the
+ * link; the checker compares the link's target. Nothing else may write these two
+ * paths, and an existing regular file at either path is reported as a conflict
+ * rather than replaced, because both are files people wrote by hand — one of them
+ * is the corpus's only byte-identical duplicate, and overwriting it silently is
+ * the one outcome nobody would forgive.
+ */
+export function pointerTargets(root) {
+  return POINTERS.map((p) => ({
+    file: p.path,
+    surface: p.id,
+    kind: 'pointer',
+    path: join(root, p.path),
+    to: p.to,
+    readers: p.readers,
+    verified: p.verified,
+  }));
+}
+
+/**
+ * Read the current state of one pointer, for both the writer and the gate.
+ *
+ * Three answers, not two: absent, already pointing where it should, or something
+ * else entirely. "Something else" carries the byte count of a regular file so the
+ * refusal names what it would have destroyed.
+ */
+export async function pointerState(root, pointer) {
+  // `pointer.path` is already root-joined by `pointerTargets`. Re-joining it here
+  // would look in `<root><root>/CLAUDE.md` and report every live pointer as absent
+  // — which is what happened the first time this ran, and which a unit test that
+  // passes the root twice would never catch.
+  const path = pointer.path;
+  let link = null;
+  try {
+    link = await readlink(path);
+  } catch (e) {
+    // EINVAL, not ENOENT, is what readlink returns for a path that exists and is not
+    // a symlink. Treating only ENOENT as "not a symlink" made every hand-written
+    // CLAUDE.md report `unreadable` instead of `foreign` — which is precisely the
+    // file this function exists to protect, and the one the corpus actually
+    // contains. Both codes mean "no link here"; anything else is a real fault.
+    if (e.code !== 'ENOENT' && e.code !== 'EINVAL') {
+      return { file: pointer.file, state: 'unreadable', detail: e.code };
+    }
+    // Not a symlink. Either nothing is there, or a regular file is.
+    try {
+      const text = await readFile(path, 'utf8');
+      return {
+        file: pointer.file,
+        state: 'foreign',
+        bytes: Buffer.byteLength(text),
+        detail: 'a file, not a pointer',
+      };
+    } catch {
+      return { file: pointer.file, state: 'absent' };
+    }
+  }
+  if (link === pointer.to) return { file: pointer.file, state: 'current', link };
+  return { file: pointer.file, state: 'mispointed', link, detail: `points at ${link}` };
+}
+
+export function surfaceFrontmatter(surfaceId, rule) {
+  const s = SURFACES.find((x) => x.id === surfaceId);
+  return s && s.ruleFrontmatter ? s.ruleFrontmatter(rule) : [];
+}
+
+// The per-surface path lives in surfaces.mjs next to the row that justifies it;
+// re-exported so a caller building a target never has to know which module owns
+// path construction as opposed to frontmatter construction.
+export { rulePath };
+
+export function extractFrontmatter(text) {
+  const m = /^---\n[\s\S]*?\n---\n?/.exec(text);
+  return m ? m[0].trimEnd() : null;
+}
+
+function bodyAfterFrontmatter(text) {
+  return text.replace(/^---\n[\s\S]*?\n---\n*/, '');
+}

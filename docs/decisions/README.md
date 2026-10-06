@@ -27,6 +27,7 @@ record's status line — never by editing the ruling in place.
 | [017](ADR-017-a-declared-gate-must-be-runnable.md) | A declared gate must be one the repo can actually run | accepted |
 | [018](ADR-018-an-unset-hooks-path-is-not-an-absent-hook.md) | An unset hooks path is not an absent hook | accepted |
 | [019](ADR-019-a-declared-command-is-the-runner.md) | A declared command is the runner; the remedy must be one the reader can take | accepted |
+| [020](ADR-020-a-rule-is-written-per-surface-and-pointed-not-copied.md) | A rule is written per surface, and pointed at — never copied | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -72,3 +73,13 @@ repository will never have. The facts were right, the remedy was not followable,
 the repository declared what it does have, the dispatcher, `check` and `hooks status`
 gave three different answers about one manifest. Every one of these shipped green because
 the verification stopped at the tool's own gate.
+
+A fifth joins them, and it is the first about *where* the rules land rather than what they
+say. ADR-020 found that the tool's own conflict scanner read `.github/instructions/` while
+the projector wrote nothing there, so three of the four editors that read this repository's
+rules never received the always-on process rules at all — Cursor did. The fix was not a
+missing branch but a missing table: every editor is now a named row carrying the document it
+was verified against, and the test suite fails if that row emits a frontmatter key the vendor
+does not document. The failure it would have caught is quiet in both directions — an editor
+that ignores an unknown key, and an editor that discards a rule whose `trigger` it does not
+recognise, which is what Antigravity documents.

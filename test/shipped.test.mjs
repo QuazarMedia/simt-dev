@@ -20,7 +20,8 @@ import { fileURLToPath } from 'node:url';
 import { readdir } from 'node:fs/promises';
 import { loadRules, select } from '../src/projection/project.mjs';
 import { DECISIONS_DIR } from '../src/decisions/index.mjs';
-import { loadMdcRules, renderMdc } from '../src/projection/mdc.mjs';
+import { loadMdcRules, renderMdc, ruleName } from '../src/projection/mdc.mjs';
+import { SURFACES, rulePath, surface, undocumentedKeys } from '../src/projection/surfaces.mjs';
 import { compose } from '../src/projection/markers.mjs';
 import { buildManifest } from '../src/projection/manifest.mjs';
 import { PACKAGE_ROOT } from '../src/workspace.mjs';
@@ -317,6 +318,83 @@ test('the check is not vacuous: a known leak is actually caught', async () => {
     }
     assert.ok(threw, `the guard failed to catch: ${JSON.stringify(sample)}`);
   }
+});
+
+// --- 8. Every surface a rule is written to --------------------------------------------
+//
+// A rule is no longer written to one place. It is written to up to four, each read by a
+// different editor, and the cost of getting that wrong is asymmetric: a key an editor
+// ignores is invisible, and a value it does not recognise can make it discard the rule
+// with no error at all (Antigravity documents exactly that for `.agents/rules/*.md`).
+// So the frontmatter is checked against what each vendor's own document says.
+
+test('every frontmatter key a surface emits is one its vendor documents', () => {
+  assert.deepEqual(undocumentedKeys(), []);
+});
+
+test('no surface emits a rule file without a path or a documented way to load it', () => {
+  for (const s of SURFACES) {
+    assert.ok(s.label && s.readers.length > 0, `${s.id} does not name who reads it`);
+    assert.ok(
+      typeof s.verified === 'string' && s.verified.length > 0,
+      `${s.id} does not name the document it was verified against`,
+    );
+    if (s.rule === null) {
+      assert.equal(s.ruleFrontmatter, undefined, `${s.id} has no rule files but declares frontmatter`);
+      continue;
+    }
+    assert.equal(typeof s.ruleFrontmatter, 'function', `${s.id} writes rule files but no frontmatter`);
+    // A path template must be a relative repo path. An absolute one is a path that
+    // resolves only inside this repository - the LEAKS class, in a filename.
+    assert.doesNotMatch(
+      s.rule,
+      /^\//,
+      `${s.id} writes rule files to an absolute path: ${s.rule}`,
+    );
+    assert.equal(
+      s.rule.includes('{name}'),
+      true,
+      `${s.id} has no per-rule file name, so two rules would collide: ${s.rule}`,
+    );
+  }
+});
+
+test('a rule rendered for every surface is clean on every surface', async () => {
+  for (const rule of await loadMdcRules()) {
+    const { body } = renderMdc(rule, {});
+    const name = ruleName(rule);
+    let written = 0;
+    for (const s of SURFACES) {
+      if (s.rule === null) continue;
+      const rel = rulePath(s.id, name);
+      assert.ok(rel, `${s.id} has no path for rule ${rule.id}`);
+      assertClean(`${rel} (frontmatter)`, s.ruleFrontmatter(rule).join('\n'));
+      assertClean(`${rel} (body)`, body);
+      // The same body everywhere: a surface must not get a shorter or paraphrased copy,
+      // or the four files are four rules again and only one of them is auditable.
+      assert.ok(body.length > 0, `${rel} would be an empty rule`);
+      written += 1;
+    }
+    assert.ok(written >= 4, `rule ${rule.id} reaches ${written} surfaces, expected at least 4`);
+  }
+});
+
+test('the surface gate is not vacuous: an invented key and an invented path both fail', () => {
+  const invented = [
+    {
+      ...surface('antigravity'),
+      ruleFrontmatter: (r) => ['trigger: always_on', `priority: ${r.id}`],
+    },
+  ];
+  const keys = undocumentedKeys(invented);
+  assert.equal(keys.length, 1, 'an undocumented frontmatter key was not reported');
+  assert.match(keys[0], /antigravity emits frontmatter key "priority"/);
+
+  const badPath = [{ ...surface('cursor'), rule: 'rules/{name}.mdc' }];
+  for (const s of badPath) {
+    assert.doesNotMatch(s.rule, /^\//);
+  }
+  assert.ok(surface('cursor').rule.includes('{name}'), 'the {name} placeholder is load-bearing');
 });
 
 // --- 9. The decision records ---------------------------------------------------------

@@ -520,3 +520,80 @@ test('init says there is nothing to install when the repo can run no gate', asyn
   assert.match(run.text, /declares no gate it can run, so there is nothing to install/);
   assert.ok(!/NOT ENFORCED/.test(run.text), 'an empty gate list must not read as an outstanding step');
 });
+
+// A generated file that another tool reformats is not wrong, and it is not
+// fixable by hand either: the next `init` writes simt-dev's bytes and the
+// formatter takes them away. simt-space held a prettier-collapsed manifest and
+// `upgrade` reported `current` for the whole time, because the pin really was
+// current. Only the bytes were wrong, and nothing looked at them.
+test('a manifest a formatter rewrote is reported, and a hand-edited one is not', async () => {
+  const { MANIFEST_COMMENT, manifestDrift } = await import('../src/projection/manifest.mjs');
+  const root = await scratch();
+  const stack = ['node'];
+  const sha = 'abc1234';
+  const write = async (m) => writeFile(join(root, 'simt-dev.json'), `${JSON.stringify(m, null, 2)}\n`);
+  const canonical = {
+    ...MANIFEST_COMMENT,
+    id: 'r',
+    stack,
+    limits: { coverage: null, fileLines: { warn: 400, error: 1000 } },
+    gates: { preCommit: [], prePush: [] },
+    localSkills: [], profiles: [], substitutions: {}, surfaces: null,
+    projection: { simtDevSha: sha },
+  };
+
+  await write(canonical);
+  assert.equal(await manifestDrift(root, stack, sha), null, 'canonical bytes must not be reported');
+
+  // Prettier's JSON style: objects expanded, short arrays collapsed onto one line.
+  // Every generated field stays correct; only the byte form differs.
+  await writeFile(
+    join(root, 'simt-dev.json'),
+    [
+      '{',
+      `  "$comment": ${JSON.stringify(MANIFEST_COMMENT.$comment)},`,
+      '  "id": "r",',
+      '  "stack": ["node"],',
+      '  "limits": {"coverage": null, "fileLines": {"warn": 400, "error": 1000}},',
+      '  "gates": {"preCommit": [], "prePush": []},',
+      '  "localSkills": [],',
+      '  "profiles": [],',
+      '  "substitutions": {},',
+      '  "surfaces": null,',
+      `  "projection": {"simtDevSha": "${sha}"}`,
+      '}',
+      '',
+    ].join('\n'),
+  );
+  const reformatted = await manifestDrift(root, stack, sha);
+  assert.equal(reformatted?.status, 'reformatted');
+  assert.match(reformatted.remedy, /\.prettierignore/);
+
+  // A value the REPO chose is never compared. simt-app removed its gradle pre-push
+  // gate by hand and that edit must survive `check`.
+  await write({ ...canonical, limits: { coverage: 100, fileLines: { warn: 400, error: 1000 } } });
+  assert.equal(await manifestDrift(root, stack, sha), null, "a hand-set limit is the repo's own choice");
+
+  // A generated field the writer has moved on from IS reported - this is the defect
+  // that shipped in c607d0a's fix for the $comment and never covered the general case.
+  await write({ ...canonical, $comment: 'an older header' });
+  const stale = await manifestDrift(root, stack, sha);
+  assert.equal(stale?.status, 'stale-generated-field');
+  assert.match(stale.detail, /\$comment/);
+});
+
+test('check is red when the manifest bytes are not what simt-dev writes', async () => {
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const { checkCommand } = await import('../src/commands/sync.mjs');
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x' }));
+  await capture(() => initCommand([], { root, yes: true }));
+  assert.equal((await capture(() => checkCommand([], { root }))).code, 0);
+
+  const path = join(root, 'simt-dev.json');
+  const m = JSON.parse(await readFile(path, 'utf8'));
+  await writeFile(path, `${JSON.stringify(m, null, 4)}\n`);
+  const after = await capture(() => checkCommand([], { root }));
+  assert.equal(after.code, 1);
+  assert.match(after.text, /REFORMATTED simt-dev\.json/);
+});

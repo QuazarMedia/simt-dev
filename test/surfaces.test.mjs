@@ -260,6 +260,7 @@ test('opting into a rule surface alongside the default is one file plus the requ
   // The primary region is still written; opencode adds no file of its own; cursor does.
   assert.deepEqual(p.targets.map((t) => t.file).sort(), [
     '.cursor/rules/intake-questions.mdc',
+    '.cursor/rules/slice-commit.mdc',
     '.cursor/rules/test-gate.mdc',
     'AGENTS.md',
   ]);

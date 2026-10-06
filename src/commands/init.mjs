@@ -110,7 +110,7 @@ export async function initCommand(positional, flags) {
     surfaceSource: projected.surfaceSource,
     pointers: pointerPlan.map((p) => ({ file: p.file, to: p.to, readers: p.readers, state: p.state })),
     pointersBlocked: pointerBlocked,
-    ci: { file: ci.file, action: ci.action, bytes: ci.bytes, reason: ci.reason },
+    ci: { file: ci.file, action: ci.action, bytes: ci.bytes, own: ci.own, reason: ci.reason },
     adoption,
     manifest: { file: MANIFEST, action: manifestAction, path: manifestPath },
     region: region && {
@@ -215,9 +215,14 @@ export async function initCommand(positional, flags) {
   // what the gates are. Skipped with its reason printed rather than silently: a repo
   // with no `.github/workflows` has no CI surface to attach to, and inventing one
   // starts running jobs on pull requests nobody asked for.
+  //
+  // `own` is passed through because the two kinds of repository get different bytes:
+  // simt-dev's own copy says so in its own header, and writing the adopting repo's
+  // text into the template's own repository would be the one place a reader is
+  // guaranteed to be misled.
   if (payload.ci.action === 'create') {
     await mkdir(dirname(join(root, payload.ci.file)), { recursive: true });
-    await writeFile(join(root, payload.ci.file), renderWorkflow());
+    await writeFile(join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own }));
     note(`wrote    ${payload.ci.file} (create; yours to edit from here, simt-dev will not rewrite it)`);
   }
 
@@ -433,8 +438,17 @@ function render(payload, manifest) {
   // a reader can tell "this repo does not use GitHub Actions" from "this repo was
   // not offered the gate".
   if (payload.ci.action === 'create') {
-    lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow().length} bytes`);
-    lines.push(`            runs simt-dev check where a pull request is merged; yours to edit after this`);
+    lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow({ own: payload.ci.own }).length} bytes`);
+    lines.push(
+      payload.ci.own
+        ? `            this repository is simt-dev's own; simt-dev ci --yes refreshes this copy when the gate changes`
+        : `            runs simt-dev check where a pull request is merged; yours to edit after this`,
+    );
+  } else if (payload.ci.action === 'refresh') {
+    // init does not write it. `simt-dev ci` owns the template's own copy, and a
+    // second writer would be a second answer to who owns it.
+    lines.push(`  ${'refresh'.padEnd(9)} ${payload.ci.file}  ${payload.ci.reason}`);
+    lines.push(`            remedy: simt-dev ci --yes   (init does not write simt-dev's own copy)`);
   } else if (payload.ci.action === 'skip') {
     lines.push(`  ${'skip'.padEnd(9)} ${payload.ci.file}  ${payload.ci.reason}`);
     lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);

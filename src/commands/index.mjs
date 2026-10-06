@@ -18,6 +18,7 @@ import {
 } from './skills.mjs';
 import { syncCommand, checkCommand } from './sync.mjs';
 import { initCommand } from './init.mjs';
+import { ciCommand } from './ci.mjs';
 import { hooksCommand } from './hooks.mjs';
 import { compareCommand } from './compare.mjs';
 import { upgradeCommand } from './upgrade.mjs';
@@ -90,6 +91,7 @@ export async function dispatch(argv) {
     sync: syncCommand,
     check: checkCommand,
     init: initCommand,
+    ci: ciCommand,
     'hooks install': (args, flags) => hooksCommand('install', args, flags),
     'hooks status': (args, flags) => hooksCommand('status', args, flags),
     'hooks run': (args, flags) => hooksCommand('run', args, flags),

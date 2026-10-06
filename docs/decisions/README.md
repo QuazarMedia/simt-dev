@@ -30,7 +30,8 @@ record's status line — never by editing the ruling in place.
 | [020](ADR-020-a-rule-is-written-per-surface-and-pointed-not-copied.md) | A rule is written per surface, and pointed at — never copied | accepted |
 | [021](ADR-021-one-surface-per-repo.md) | One surface per repo, chosen or defaulted to opencode | accepted |
 | [022](ADR-022-a-key-simt-dev-reads-is-prefixed.md) | A key simt-dev reads is prefixed `simt-`; an editor's key is not | accepted |
-| [023](ADR-023-the-gate-ships-as-a-file-the-repo-owns.md) | The gate ships as bytes the repo owns, written once where Actions already runs | accepted |
+| [023](ADR-023-the-gate-ships-as-a-file-the-repo-owns.md) | The gate ships as bytes the repo owns, written once where Actions already runs | accepted · ruling 2 superseded by 024 |
+| [024](ADR-024-simt-dev-overwrites-its-own-gate-file.md) | simt-dev overwrites its own gate file, and no repository else's | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -104,3 +105,12 @@ into `.github/workflows/` instead, writes it once, never rewrites it, and skips 
 entirely for a repo that does not run GitHub Actions. The record also states what the
 choice costs: a template improvement does not reach a repo that already has the file, so
 that limitation is written down rather than left for someone to rediscover as a bug.
+
+An eighth narrows it, and the reason it was needed is the shape of ADR-023's own cost.
+Write-once is right for a repo whose file may contain their deployment job, and wrong for
+the one repository that owns the template: a gate file that is a frozen copy of the gate is
+a second gate nobody maintains, and ADR-023 ruling 4 means nothing would ever report the
+gap. ADR-024 gives the exception exactly one boundary — a path, not a flag, because a flag
+is a spelling for the wrong answer — and refuses `simt-dev ci` everywhere else. Both copies
+say which world they are in, in their own header, because the reader of a diff in this
+repository should not have to guess who changed their CI.

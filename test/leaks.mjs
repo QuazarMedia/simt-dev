@@ -41,8 +41,14 @@ export const AUTHOR_ADDRESSED = [
  * HTML comment an agent never reads, and is the one thing that tells a maintainer
  * which files produced a region. It is tool metadata, not prose addressed to the
  * reader - so it is exempt from the path check and nothing else.
+ *
+ * The `#` arm is the same line in a file whose comment character is not `<`. A
+ * baseline cannot use HTML comments without becoming invalid in its own format, so
+ * the exemption has to follow the syntax or the guard would flag the tool's own
+ * provenance as a leak - which trains people to ignore the guard.
  */
-export const NAMESPACED_PROVENANCE = /^\s*<!--\s*simt-dev:[^>]*-->\s*$/gm;
+export const NAMESPACED_PROVENANCE =
+  /^\s*(?:<!--\s*simt-dev:[^>]*-->|#\s*simt-dev:.*)\s*$/gm;
 
 export function assertClean(where, text) {
   // Author-addressed text is checked everywhere, including comments: the old header

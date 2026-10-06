@@ -16,12 +16,48 @@
 //                silently appended to, which is how a projection engine quietly
 //                duplicates a rule
 
-export const BEGIN = '<!-- simt-dev:begin -->';
-export const END = '<!-- simt-dev:end -->';
+// The comment syntax a managed file speaks, and where in it the region goes.
+//
+// A marker has to be invisible to the tool that reads the file the region lives in,
+// so the syntax is a property of the FILE, not of this module. Markdown and every
+// `.mdc` are HTML comments; `.editorconfig` is INI, where `#` is the comment
+// character and an HTML comment would be parsed as a malformed key and make every
+// editor fall back to its own defaults - the file would be worse than absent.
+//
+// `where: 'top'` exists for the same reason. In a file whose semantics are
+// last-definition-wins, a shared block appended below the repo's own settings
+// silently overrules them. No byte is removed, so nothing looks clobbered, and the
+// repo's setting simply stops taking effect. Putting the shared block first means
+// the repo always wins, and `check` reports a region that has been moved down.
+export const STYLES = {
+  html: {
+    begin: '<!-- simt-dev:begin -->',
+    end: '<!-- simt-dev:end -->',
+    line: (s) => `<!-- ${s} -->`,
+    note: (first, second) => `<!-- ${first}\n     ${second} -->`,
+    sha: /<!--\s*simt-dev:sha=([0-9a-f]{7,40})\s*-->/,
+    beginRe: /^<!--\s*simt-dev:begin\s*-->$/i,
+    endRe: /^<!--\s*simt-dev:end\s*-->$/i,
+    where: 'bottom',
+  },
+  hash: {
+    begin: '# simt-dev:begin',
+    end: '# simt-dev:end',
+    line: (s) => `# ${s}`,
+    note: (first, second) => `# ${first}\n# ${second}`,
+    sha: /^#\s*simt-dev:sha=([0-9a-f]{7,40})\s*$/m,
+    beginRe: /^#\s*simt-dev:begin\s*$/i,
+    endRe: /^#\s*simt-dev:end\s*$/i,
+    where: 'top',
+  },
+};
 
-/** Marker styles accepted on input, normalised on output. */
-const BEGIN_PATTERNS = [/^<!--\s*simt-dev:begin\s*-->$/i];
-const END_PATTERNS = [/^<!--\s*simt-dev:end\s*-->$/i];
+export const BEGIN = STYLES.html.begin;
+export const END = STYLES.html.end;
+
+function styleOf(style) {
+  return typeof style === 'string' ? (STYLES[style] ?? STYLES.html) : (style ?? STYLES.html);
+}
 
 const FENCE = /^\s*(`{3,}|~{3,})/;
 
@@ -29,10 +65,12 @@ const FENCE = /^\s*(`{3,}|~{3,})/;
  * Split a document into the parts around the generated region.
  *
  * @param {string} text
+ * @param {string|object} [style] a key of `STYLES`, or a style row
  * @returns {{status: 'absent'|'ok'|'malformed', before: string, body: string,
  *            after: string, reason?: string, sha?: string}}
  */
-export function parse(text) {
+export function parse(text, style) {
+  const s = styleOf(style);
   const lines = text.split('\n');
   const absent = { status: 'absent', before: text, body: '', after: '' };
 
@@ -50,8 +88,8 @@ export function parse(text) {
       continue;
     }
     if (fence !== null) continue;
-    if (BEGIN_PATTERNS.some((p) => p.test(line))) markers.push({ kind: 'begin', i });
-    else if (END_PATTERNS.some((p) => p.test(line))) markers.push({ kind: 'end', i });
+    if (s.beginRe.test(line)) markers.push({ kind: 'begin', i });
+    else if (s.endRe.test(line)) markers.push({ kind: 'end', i });
   }
 
   if (markers.length === 0) return absent;
@@ -79,7 +117,7 @@ export function parse(text) {
   }
 
   const body = lines.slice(first.i + 1, last.i).join('\n');
-  const sha = readSha(body);
+  const sha = readSha(body, s);
   return {
     status: 'ok',
     before: lines.slice(0, first.i).join('\n'),
@@ -102,8 +140,8 @@ function malformed(lines, from, at, reason) {
 }
 
 /** Pull the recorded source SHA out of the region's provenance header. */
-function readSha(body) {
-  const m = /<!--\s*simt-dev:sha=([0-9a-f]{7,40})\s*-->/.exec(body);
+function readSha(body, style) {
+  const m = style.sha.exec(body);
   return m ? m[1] : undefined;
 }
 
@@ -112,13 +150,14 @@ function readSha(body) {
  * The header lives *inside* the region so it regenerates with the body and can
  * never drift independently of it.
  */
-export function compose(body, { sha, sources = [] } = {}) {
+export function compose(body, { sha, sources = [] } = {}, style) {
+  const s = styleOf(style);
   const header = [
-    '<!-- simt-dev:generated -->',
-    sha ? `<!-- simt-dev:sha=${sha} -->` : '<!-- simt-dev:sha=unknown -->',
+    s.line('simt-dev:generated'),
+    sha ? s.line(`simt-dev:sha=${sha}`) : s.line('simt-dev:sha=unknown'),
   ];
   if (sources.length > 0) {
-    header.push(`<!-- simt-dev:sources=${sources.join(',')} -->`);
+    header.push(s.line(`simt-dev:sources=${sources.join(',')}`));
   }
   // Addressed to whoever reads this repo, not to whoever owns the rules upstream.
   // "Edit the source in simt-dev" was the wrong instruction twice over: a consumer
@@ -126,8 +165,10 @@ export function compose(body, { sha, sources = [] } = {}) {
   // no business editing the region it was told not to edit. The only two actions
   // available to a reader are: don't edit it, or regenerate it.
   header.push(
-    '<!-- Generated content. Do not edit by hand - your changes are overwritten.',
-    '     Run `simt-dev sync` to regenerate, or `simt-dev check` to see what is stale. -->',
+    s.note(
+      'Generated content. Do not edit by hand - your changes are overwritten.',
+      'Run `simt-dev sync` to regenerate, or `simt-dev check` to see what is stale.',
+    ),
   );
   const trimmed = body.replace(/\n+$/, '');
   // Two lines here exist only because a real repo proved they are needed. A
@@ -143,24 +184,51 @@ export function compose(body, { sha, sources = [] } = {}) {
   // simt-blog's `format:check` fail on a file whose generated region was correct.
   const out =
     trimmed === ''
-      ? [BEGIN, ...header, END]
-      : [BEGIN, ...header, '', ...trimmed.split('\n'), '', END];
+      ? [s.begin, ...header, s.end]
+      : [s.begin, ...header, '', ...trimmed.split('\n'), '', s.end];
   return `${out.join('\n')}\n`;
+}
+
+/**
+ * Put the region back into the parts either side of it.
+ *
+ * `where` decides which side is authoritative. It is a style property rather than
+ * a caller argument because the correct answer is a fact about the file's syntax,
+ * and a caller who has to remember it is a caller who will get it wrong once.
+ */
+function splice(state, region, where) {
+  if (where === 'top') {
+    const rest = `${state.before}${state.before === '' ? '' : '\n'}${state.after}`
+      .replace(/^\n+/, '')
+      .replace(/\n+$/, '');
+    if (rest === '') return region;
+    return `${region}\n${rest}\n`;
+  }
+  const before = state.before.endsWith('\n') || state.before === '' ? state.before : `${state.before}\n`;
+  const after = state.after.startsWith('\n') ? state.after : state.after === '' ? '' : `\n${state.after}`;
+  return `${before}${region}${after}`;
 }
 
 /**
  * Insert or replace the region in `text`, preserving everything outside it.
  *
+ * @param {object} [opts] `style` overrides the syntax; `where` overrides placement.
  * @returns {{text: string, action: 'added'|'updated'|'unchanged'|'malformed', reason?: string}}
  */
-export function inject(text, body, meta) {
-  const state = parse(text);
+export function inject(text, body, meta, opts = {}) {
+  const s = styleOf(opts.style);
+  const where = opts.where ?? s.where;
+  const state = parse(text, s);
   if (state.status === 'malformed') {
     return { text, action: 'malformed', reason: state.reason, line: state.line };
   }
-  const region = compose(body, meta);
+  const region = compose(body, meta, s);
 
   if (state.status === 'absent') {
+    if (where === 'top') {
+      const rest = text.replace(/^\n+/, '').replace(/\n+$/, '');
+      return { text: rest === '' ? region : `${region}\n${rest}\n`, action: 'added' };
+    }
     const base = text.endsWith('\n') || text === '' ? text : `${text}\n`;
     const needsLeadingBlank = base !== '' && !base.endsWith('\n\n');
     // No trailing newline here, and that is load-bearing. `compose` already
@@ -179,14 +247,12 @@ export function inject(text, body, meta) {
   // Compare ignoring only the trailing newline the region may pick up from the
   // document; any other byte difference is real drift worth rewriting.
   const current = state.body.replace(/^\n+/, '').replace(/\n+$/, '');
-  const next = region.slice(BEGIN.length + 1, region.length - END.length - 1);
+  const next = region.slice(s.begin.length + 1, region.length - s.end.length - 1);
   const unchanged = current === next.replace(/^\n+/, '').replace(/\n+$/, '');
 
   if (unchanged) return { text, action: 'unchanged' };
 
-  const before = state.before.endsWith('\n') || state.before === '' ? state.before : `${state.before}\n`;
-  const after = state.after.startsWith('\n') ? state.after : state.after === '' ? '' : `\n${state.after}`;
-  return { text: `${before}${region}${after}`, action: 'updated' };
+  return { text: splice(state, region, where), action: 'updated' };
 }
 
 /**
@@ -196,12 +262,12 @@ export function inject(text, body, meta) {
  *
  * @returns {{action: 'added'|'updated'|'unchanged'|'malformed', reason?: string, line?: number}}
  */
-export function diff(text, body, meta) {
-  const state = parse(text);
+export function diff(text, body, meta, opts = {}) {
+  const state = parse(text, styleOf(opts.style));
   if (state.status === 'malformed') {
     return { action: 'malformed', reason: state.reason, line: state.line };
   }
   if (state.status === 'absent') return { action: 'added' };
-  const probe = inject(text, body, meta);
+  const probe = inject(text, body, meta, opts);
   return { action: probe.action };
 }

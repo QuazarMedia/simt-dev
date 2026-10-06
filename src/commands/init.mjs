@@ -124,6 +124,12 @@ export async function initCommand(positional, flags) {
     // written, so a dry run and a real run describe the same set of files.
     targets: projected.targets.map((t) => ({
       file: t.file,
+      // `kind` and `surface` are carried so the plan can say what edit each file is
+      // about to receive. A reader approving "frontmatter kept, body replaced" for a
+      // file that keeps everything outside a region has been told the wrong thing,
+      // and this is the one place they would learn it.
+      kind: t.kind,
+      surface: t.surface,
       action: t.action,
       previousBytes: t.previousBytes,
       bytes: t.bytes,
@@ -409,15 +415,20 @@ function render(payload, manifest) {
   // will write is the same defect as writing only the first target: the reader is told
   // about one file and four change.
   for (const target of payload.targets) {
-    // The containment guarantee is a property of AGENTS.md ONLY. A managed `.mdc` is
-    // a generated file: its frontmatter survives, its body is replaced, and printing
-    // the containment caveat on it would understate the edit the reader is approving.
-    const isPrimary = target.file === PRIMARY_TARGET;
+    // The containment guarantee is a property of a region inside a file the repo owns,
+    // and NOT of a managed `.mdc`. A managed rule file is a generated file: its
+    // frontmatter survives, its body is replaced, and printing the containment caveat
+    // on it would understate the edit the reader is approving. A baseline is the
+    // opposite case to AGENTS.md in the one way that matters here — it is placed FIRST,
+    // so the repo's own settings below it keep winning (ADR-025).
+    const caption =
+      target.file === PRIMARY_TARGET
+        ? 'hand-written content outside the markers is never modified'
+        : target.kind === 'baseline'
+          ? 'a region placed first, so your own settings below it still win (ADR-025)'
+          : 'generated file: frontmatter kept, body replaced (ADR-016)';
     lines.push(
-      `  ${target.action.padEnd(9)} ${target.file}  ${target.previousBytes} -> ${target.bytes} bytes` +
-        (isPrimary
-          ? '  hand-written content outside the markers is never modified'
-          : '  generated file: frontmatter kept, body replaced (ADR-016)'),
+      `  ${target.action.padEnd(9)} ${target.file}  ${target.previousBytes} -> ${target.bytes} bytes  ${caption}`,
     );
   }
 

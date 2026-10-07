@@ -87,6 +87,8 @@ Two corollaries that are easy to get wrong:
 | `rules/mdc/*.mdc` | Canonical Cursor rule files, projected with per-repo substitutions |
 | `graph/skills.graph.json` | The skill registry: capabilities, variants, byte sizes |
 | `src/projection/` | Generated-region markers, rule selection, manifest, conflict scanning |
+| `src/ci/` | The two `.github` files simt-dev ships: the gate and the Dependabot config |
+| `src/tsconfig.mjs` | The TypeScript base file, its floor, and the checks it cannot replace |
 | `src/hooks/` | Gate definitions, the POSIX shim generator, the dispatcher |
 | `src/mcp/` | A read-only JSON-RPC surface over the same logic the commands use |
 | `docs/decisions/` | Numbered rulings. Read these before changing what the tool believes |

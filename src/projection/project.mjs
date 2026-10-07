@@ -22,6 +22,7 @@ import { join } from 'node:path';
 import { baselineTargets, misplaced } from './baselines.mjs';
 import { planWorkflow } from '../ci/workflow.mjs';
 import { planDependabot } from '../ci/dependabot.mjs';
+import { checkTsconfig } from '../tsconfig.mjs';
 import { diff, parse, inject, BEGIN, END } from './markers.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { resolveSurfaces, SURFACE_IDS } from './surfaces.mjs';
@@ -151,6 +152,12 @@ export async function checkTargets(root, flags = {}) {
       });
     }
   }
+
+  // TypeScript is the one baseline whose content a base file cannot enforce, because
+  // `extends` lets a child override every key it sets. So absence is reported from the
+  // plan like the `.github` files, and the two things a base file structurally cannot
+  // fix come from `checkTsconfig` with their own remedies.
+  findings.push(...(await checkTsconfig(root)));
 
   // A rule with a defect is a gate failure even when its files happen to be
   // correct, because the next `sync` will not reproduce it.

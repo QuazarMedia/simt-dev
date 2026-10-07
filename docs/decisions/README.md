@@ -35,6 +35,7 @@ record's status line — never by editing the ruling in place.
 | [025](ADR-025-a-baseline-is-a-region-in-a-file-the-repo-owns.md) | A baseline is a region in a file the repo owns, and only a file that can hold one | accepted · rulings 1 and 2 narrowed by 026 |
 | [026](ADR-026-a-config-without-a-region-is-a-file-the-repo-owns.md) | A config whose grammar cannot hold a region is a file the repo owns | accepted |
 | [027](ADR-027-the-one-gitattributes-line-that-is-neither-dangerous-nor-empty.md) | The one gitattributes line that is neither dangerous nor empty | accepted |
+| [028](ADR-028-a-base-file-is-a-floor-so-the-disagreement-it-cannot-repair-becomes-a-check.md) | A base file is a floor, so the disagreement it cannot repair becomes a check | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -149,3 +150,14 @@ is one line, and its safety is a single word: `text=auto` detects rather than in
 the shared region refuses to use. Line endings were left unruled in the ninth because a
 repository wanting CRLF could only opt out by deleting the region; here it opts out with one
 line beneath it, which is what last-match-wins is for.
+
+A twelfth turns out to be about a limit rather than a mechanism, and the limit is the
+record. Row 5 named two tsconfig problems and they look like one: seven strictness flags
+missing from a repository, and one option spelled `Bundler` in three repos and `bundler` in
+a fourth. `tsconfig.base.json` fixes the first. It cannot touch the second, and no amount of
+thinking about it will make it able to — a child overrides every key its parent sets, so a
+base file is a floor for what is *missing* and is inert for what is *spelled differently*.
+Writing that limit down is what turned the second problem into a check, which is the only
+form of it a reader can act on. It also decided what the floor may contain: `noEmit` is
+inheritable and two of these repositories bundle elsewhere, so shipping it would have
+silenced the emit in a repository nobody had looked at.

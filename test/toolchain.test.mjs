@@ -121,6 +121,20 @@ test('no engines.node is reported as a floor nobody enforces', async () => {
   assert.match(finding.remedy, /^node --version/);
 });
 
+test('a missing floor points at the pin the repo already has, not at this machine', async () => {
+  // Found by running the remedies end to end: a developer whose node is newer than the
+  // repo's .nvmrc would take `node --version`, floor above their own pin, and be handed a
+  // contradiction for obeying the remedy. The pin is the version the repo already decided.
+  const root = await repo({
+    pkg: { packageManager: 'npm@10.9.1' },
+    nvmrc: '22.19.0\n',
+  });
+  const [finding] = await checkToolchain(root);
+  assert.equal(finding.status, 'unfloored');
+  assert.match(finding.remedy, /22\.19\.0/);
+  assert.match(finding.remedy, /not to this machine/);
+});
+
 test('a .nvmrc the declared floor forbids is the one contradiction reported', async () => {
   const root = await repo({
     pkg: { packageManager: 'npm@10.9.1', engines: { node: '>=24' } },

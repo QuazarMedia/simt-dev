@@ -166,12 +166,19 @@ export async function checkToolchain(root) {
   }
 
   if (pin.engines === null) {
+    // The remedy prefers the version the repository already pins over the one this machine
+    // happens to run. Taking the local one is what turns a single missing floor into two
+    // findings: a developer on a newer node than the repo's `.nvmrc` would floor above their
+    // own pin and be handed a contradiction the moment they acted on it.
+    const floor = pin.nvmrc !== null
+      ? `   (${NVMRC_FILE} already pins ${pin.nvmrc}; floor to that version, not to this machine's)`
+      : '   (run it here; it fills in the version this machine has)';
     report(
       PKG_FILE,
       'unfloored',
       `this repo commits ${pin.lockfile} and declares no "engines": {"node": ...}, so the floor ` +
         'is a comment and the version is whatever CI happens to be running',
-      'node --version   (then add "engines": {"node": ">=<that version>"} to package.json)',
+      `node --version   (then add "engines": {"node": ">=<that version>"} to package.json)${floor}`,
     );
   }
 

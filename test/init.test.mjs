@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import * as gateModule from '../src/projection/manifest.mjs';
 import * as gateTable from '../src/hooks/gates.mjs';
 import { readCapability, declaredCommands } from '../src/hooks/capability.mjs';
+import { git } from './fixture.mjs';
 
 const buildManifest = gateModule.buildManifest;
 
@@ -174,9 +175,7 @@ test('init: never commits', async () => {
   await run('git', ['init', '-q'], { cwd: root });
   await writeFile(join(root, 'monkey.jungle'), '');
   await run('git', ['add', '-A'], { cwd: root });
-  await run('git', ['-c', 'user.email=t@e.st', '-c', 'user.name=T', 'commit', '-qm', 'base'], {
-    cwd: root,
-  });
+  await git(['commit', '-qm', 'base'], { cwd: root });
 
   await initCommand([], { root, yes: true });
 

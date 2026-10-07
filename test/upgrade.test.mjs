@@ -17,6 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { planUpgrade, summariseUpgrade } from '../src/upgrade/plan.mjs';
 import { initCommand } from '../src/commands/init.mjs';
 import { upgradeCommand } from '../src/commands/upgrade.mjs';
+import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
@@ -307,7 +308,7 @@ test('upgrade: a worktree is reported but never stamped', async () => {
   await repo(join(ws, 'alpha'), { 'requirements.txt': 'flask\n' });
   await run(['init', '--root', join(ws, 'alpha'), '--yes']);
   await pin(join(ws, 'alpha'), '0000000');
-  await exec('git', ['-C', join(ws, 'alpha'), 'commit', '-q', '--allow-empty', '-m', 'init']);
+  await git(['-C', join(ws, 'alpha'), 'commit', '-q', '--allow-empty', '-m', 'init']);
 
   await exec('git', ['-C', join(ws, 'alpha'), 'worktree', 'add', '-q', join(ws, 'wt'), '-b', 'wt']);
   const { payload } = await runJson(['upgrade', '--workspace', ws, '--yes']);

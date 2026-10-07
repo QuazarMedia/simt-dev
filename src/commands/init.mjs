@@ -28,6 +28,7 @@ import { readCapability } from '../hooks/capability.mjs';
 import { readHooksState } from '../compare/hooksstate.mjs';
 import { planWorkflow, renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
 import { planDependabot, renderDependabot } from '../ci/dependabot.mjs';
+import { planTsconfigBase, renderTsconfigBase, TSCONFIG_BASE_FILE } from '../tsconfig.mjs';
 import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, headSha, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
@@ -94,6 +95,7 @@ export async function initCommand(positional, flags) {
   // one review step this tool exists to make unnecessary.
   const ci = await planWorkflow(root);
   const dependabot = await planDependabot(root);
+  const tsconfigBase = await planTsconfigBase(root);
 
   const payload = {
     ok: summary.conflicts === 0 || flags.acceptConflicts === true,
@@ -122,6 +124,12 @@ export async function initCommand(positional, flags) {
       ecosystems: dependabot.ecosystems,
       facts: dependabot.facts,
       stack: dependabot.stack,
+    },
+    tsconfigBase: {
+      file: tsconfigBase.file,
+      action: tsconfigBase.action,
+      bytes: tsconfigBase.bytes,
+      reason: tsconfigBase.reason,
     },
     adoption,
     manifest: { file: MANIFEST, action: manifestAction, path: manifestPath },
@@ -258,6 +266,12 @@ export async function initCommand(positional, flags) {
     );
     note(
       `wrote    ${payload.dependabot.file} (create; watches ${payload.dependabot.ecosystems.join(', ') || 'github actions'} — yours to edit, simt-dev will not rewrite it)`,
+    );
+  }
+  if (payload.tsconfigBase.action === 'create') {
+    await writeFile(join(root, payload.tsconfigBase.file), renderTsconfigBase());
+    note(
+      `wrote    ${payload.tsconfigBase.file} (create; ${TSCONFIG_BASE_FILE} is JSON, so it cannot say this itself — add "extends": "./${TSCONFIG_BASE_FILE}" to your tsconfig.json or nothing reads it)`,
     );
   }
 
@@ -512,6 +526,19 @@ function render(payload, manifest) {
   } else if (db && db.action === 'skip') {
     lines.push(`  ${'skip'.padEnd(9)} ${db.file}  ${db.reason}`);
     lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);
+  }
+
+  // Two states rather than three: there is no refresh, because `init` writes this file once
+  // and there is no repository in this estate that owns the template. A third state here
+  // would be a mechanism for keeping a copy current that nobody has asked for.
+  const tb = payload.tsconfigBase;
+  if (tb && tb.action === 'create') {
+    lines.push(`  ${'create'.padEnd(9)} ${tb.file}  ${renderTsconfigBase().length} bytes`);
+    lines.push(
+      `            the strictness flags these repositories already agree on; add "extends": "./${tb.file}" to your tsconfig.json to use it`,
+    );
+  } else if (tb && tb.action === 'skip') {
+    lines.push(`  ${'skip'.padEnd(9)} ${tb.file}  ${tb.reason}`);
   }
 
   const { findings, summary } = payload;

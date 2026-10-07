@@ -22,7 +22,7 @@
 import { basename, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
-import { headSha } from '../projection/project.mjs';
+import { provenanceDigest } from '../projection/project.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { buildRow, summarise } from '../compare/row.mjs';
 import { discover } from '../compare/discover.mjs';
@@ -56,7 +56,7 @@ export async function compareCommand(positional, flags) {
     );
   }
 
-  const expectedSha = await headSha();
+  const expectedSha = await provenanceDigest();
   const context = { expectedSha, gates: new Set(Object.keys(GATES)), gateKinds: GATE_KINDS };
 
   // Sequential on purpose. 16 fingerprint+region computations each spawn a git

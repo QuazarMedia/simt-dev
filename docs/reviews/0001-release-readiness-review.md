@@ -74,10 +74,16 @@ then S12 once its decision is made. S18 comes last because it depends on S01 and
 
 ### S01 — Provenance stamp comes from the consumer's git, not simt-dev (P0)
 
-**Finding.** `headSha()` runs `git rev-parse --short=7 HEAD` with `cwd` set to the package
+**Finding.** `headSha()` ran `git rev-parse --short=7 HEAD` with `cwd` set to the package
 root (`src/projection/rules.mjs:43-50`). In a checkout that is simt-dev's HEAD. When the tool
 is installed under a consumer's `node_modules`, git walks up and answers with the
 **consumer's own HEAD**.
+
+> **Resolved by ADR-032.** The stamp is now `provenanceDigest()`, a SHA-256 digest over
+> `rules/` and `graph/`. `headSha` no longer exists; the finding below is kept as it was
+> written, because the reproduction is what the record is for. The suggested fix below was
+> not adopted as written — the version is not stamped at all, because `0.0.0` cannot
+> distinguish two working trees that project differently.
 
 Reproduced from a packed tarball:
 

@@ -31,7 +31,7 @@ import { planDependabot, renderDependabot } from '../ci/dependabot.mjs';
 import { planTsconfigBase, renderTsconfigBase, TSCONFIG_BASE_FILE } from '../tsconfig.mjs';
 import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
-import { plan, headSha, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
+import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 
 const run = promisify(execFile);
@@ -47,7 +47,7 @@ export async function initCommand(positional, flags) {
     return fail(`${root}: ${detected.error}`, EXIT.CONFIG, 'run: simt-dev init <path>');
   }
 
-  const sha = await headSha();
+  const sha = await provenanceDigest();
   const existing = await readManifest(root);
   const { manifest: current, exists, error } = existing;
   if (error) {

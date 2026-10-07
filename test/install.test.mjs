@@ -247,7 +247,9 @@ test('skills install: a repo with no manifest gets the full canonical shape, not
     assert.ok(key in manifest, `manifest is missing ${key}`);
   }
   assert.ok(manifest.gates.preCommit.length > 0 && manifest.gates.prePush.length > 0);
-  assert.match(manifest.projection.simtDevSha, /^[0-9a-f]{7}$|^unknown$/);
+  // The pin is a content digest, so it is present with or without a `.git` and there is
+  // no sentinel to allow. `unknown` was the old fallback and it compared as a version.
+  assert.match(manifest.projection.simtDevSha, /^[0-9a-f]{40}$/);
 });
 
 test('skills install: records the variant that was actually installed', async () => {

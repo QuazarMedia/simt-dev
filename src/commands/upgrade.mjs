@@ -27,7 +27,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { basename, dirname, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
-import { headSha, plan } from '../projection/project.mjs';
+import { provenanceDigest, plan } from '../projection/project.mjs';
 import { MANIFEST, MANIFEST_COMMENT, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { FAULT_STATES, planUpgrade, summariseUpgrade } from '../upgrade/plan.mjs';
 import { discover } from '../compare/discover.mjs';
@@ -64,7 +64,7 @@ export async function upgradeCommand(positional, flags) {
     );
   }
 
-  const sha = await headSha();
+  const sha = await provenanceDigest();
   const plans = [];
   for (const repo of found.repos) {
     const { manifest, exists, error } = await readManifest(repo);

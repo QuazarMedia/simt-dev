@@ -28,7 +28,7 @@ import { EXIT, emit, fail, isJson, note } from '../output/index.mjs';
 import { loadRegistry, REGISTRY_PATH, measureSkill } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { MANIFEST, buildManifest, readManifest, writeManifest } from '../projection/manifest.mjs';
-import { headSha } from '../projection/project.mjs';
+import { provenanceDigest } from '../projection/project.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
@@ -470,7 +470,7 @@ async function recordLocal(root, record, name, repo) {
   if (error) return { written: false, reason: error };
 
   const base =
-    manifest ?? (await buildManifest({ root, stack: repo.stack, sha: await headSha() }));
+    manifest ?? (await buildManifest({ root, stack: repo.stack, sha: await provenanceDigest() }));
   const existing = Array.isArray(base.localSkills) ? base.localSkills : [];
   const kept = existing.filter((e) => (typeof e === 'string' ? e : e?.name) !== name);
   await writeManifest(root, { ...base, localSkills: [...kept, record] });

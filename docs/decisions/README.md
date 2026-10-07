@@ -39,6 +39,7 @@ record's status line — never by editing the ruling in place.
 | [029](ADR-029-the-pins-a-repository-declares-are-its-own.md) | The pins a repository declares are its own, so a check reports them and never writes them | accepted |
 | [030](ADR-030-what-a-plan-does-not-ship-is-a-decision-with-a-record.md) | What a plan does not ship is a decision with a record, not a silence | accepted |
 | [031](ADR-031-the-suite-stages-the-environment-it-needs.md) | The suite stages the environment it needs, because a test that inherits the author's directory is not evidence | accepted |
+| [032](ADR-032-provenance-is-a-content-digest-not-a-commit.md) | Provenance is a digest of the content that leaves this package, not a commit id | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -70,6 +71,17 @@ passed for a reason that had nothing to do with the code, because the checkout's
 happened to be named `simt-dev`. Those failed on nobody's machine and would have failed for
 anyone who cloned the repository under a different name. A green test that asserts a folder's
 name is worse than a red one, because it looks like evidence.
+
+ADR-032 is that lesson inside the tool rather than around it. The provenance stamp was read
+with `git rev-parse HEAD`, run in the package root — and for anyone who installed the package
+into a repository, which is the entire audience, git walks *up* out of `node_modules` and
+answers with the **consumer's** HEAD. It succeeded, so no fallback could catch it. Every
+commit a consumer made moved the stamp, including commits touching nothing the tool projects,
+so `check` reported drift on all three generated files and exited 1 after an unrelated commit,
+and `upgrade` named a cause that was false. Where git could not answer at all the answer was
+`unknown`, which the marker grammar cannot read back and `upgrade` compared against a real pin
+as though the two were versions. The stamp now identifies the content that leaves the package,
+which is the one thing every install can compute.
 
 ## The rule these records enforce
 

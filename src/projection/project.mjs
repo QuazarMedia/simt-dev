@@ -23,6 +23,7 @@ import { baselineTargets, misplaced } from './baselines.mjs';
 import { planWorkflow } from '../ci/workflow.mjs';
 import { planDependabot } from '../ci/dependabot.mjs';
 import { checkTsconfig } from '../tsconfig.mjs';
+import { checkToolchain } from '../toolchain.mjs';
 import { diff, parse, inject, BEGIN, END } from './markers.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { resolveSurfaces, SURFACE_IDS } from './surfaces.mjs';
@@ -158,6 +159,11 @@ export async function checkTargets(root, flags = {}) {
   // plan like the `.github` files, and the two things a base file structurally cannot
   // fix come from `checkTsconfig` with their own remedies.
   findings.push(...(await checkTsconfig(root)));
+
+  // What the repository pins, read and never written: the version floor, the package
+  // manager and the `.nvmrc` are the repository's decisions, so every finding here names
+  // the command that records one rather than a value this tool would have had to invent.
+  findings.push(...(await checkToolchain(root)));
 
   // A rule with a defect is a gate failure even when its files happen to be
   // correct, because the next `sync` will not reproduce it.

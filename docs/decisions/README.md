@@ -37,6 +37,7 @@ record's status line — never by editing the ruling in place.
 | [027](ADR-027-the-one-gitattributes-line-that-is-neither-dangerous-nor-empty.md) | The one gitattributes line that is neither dangerous nor empty | accepted |
 | [028](ADR-028-a-base-file-is-a-floor-so-the-disagreement-it-cannot-repair-becomes-a-check.md) | A base file is a floor, so the disagreement it cannot repair becomes a check | accepted |
 | [029](ADR-029-the-pins-a-repository-declares-are-its-own.md) | The pins a repository declares are its own, so a check reports them and never writes them | accepted |
+| [030](ADR-030-what-a-plan-does-not-ship-is-a-decision-with-a-record.md) | What a plan does not ship is a decision with a record, not a silence | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -173,3 +174,15 @@ with no correct value to write: the npm version is not in `package-lock.json`, a
 floor is as many answers as the team has reasons for. So this one ships no file at all. It
 reports, and every remedy is a command run where the answer exists, which is the only shape
 available when the tool can name the field and the manager but not the version.
+
+A fourteenth ships nothing at all, and that is the point of it. The first six baselines each
+hit a mechanism question — a region or a whole file, a floor or a check, a value to write or
+no value to derive — and each answer was waiting for somebody to find out what the format
+permits. The two items still open in the plan have no such question, because nobody has
+decided whether they should exist: commitlint is named by the plan and by no rule file and
+by no `package.json` in the estate, and the ESLint "block" cannot describe two of the four
+configurations because they have no TypeScript in them at all. Writing that down in the rows
+that asked for them costs less than shipping either one would, and it is the difference
+between a row that says "unfinished" and one that says "undecided". It also corrected two
+counts the plan got wrong, which is only possible because somebody read the estate rather
+than the plan.

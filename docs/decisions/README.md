@@ -34,6 +34,7 @@ record's status line — never by editing the ruling in place.
 | [024](ADR-024-simt-dev-overwrites-its-own-gate-file.md) | simt-dev overwrites its own gate file, and no repository else's | accepted |
 | [025](ADR-025-a-baseline-is-a-region-in-a-file-the-repo-owns.md) | A baseline is a region in a file the repo owns, and only a file that can hold one | accepted · rulings 1 and 2 narrowed by 026 |
 | [026](ADR-026-a-config-without-a-region-is-a-file-the-repo-owns.md) | A config whose grammar cannot hold a region is a file the repo owns | accepted |
+| [027](ADR-027-the-one-gitattributes-line-that-is-neither-dangerous-nor-empty.md) | The one gitattributes line that is neither dangerous nor empty | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -137,3 +138,14 @@ plainly: partial ownership was never the reason the gate file is write-once, and
 as depending on mergeability will predict the wrong answer here. What detection buys is
 different — an entry per manifest the repo actually has, so the config never names an
 ecosystem that would sit there opening no pull requests.
+
+An eleventh goes back to a deferral and finds it was one line too broad. The ninth refused
+`.gitattributes` because every line that earns its place in a shared region changes what git
+does to the working tree, and concluded the region would be "either dangerous or empty" —
+which is true of every attribute worth sharing and false of the file. Thirteen of sixteen
+repositories had none at all; the three that did agreed about almost nothing. What survives
+is one line, and its safety is a single word: `text=auto` detects rather than instructs, so
+`* text eol=lf` — the usual way a repository quietly corrupts its own binaries — is the form
+the shared region refuses to use. Line endings were left unruled in the ninth because a
+repository wanting CRLF could only opt out by deleting the region; here it opts out with one
+line beneath it, which is what last-match-wins is for.

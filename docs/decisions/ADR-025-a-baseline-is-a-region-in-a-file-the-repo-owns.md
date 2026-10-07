@@ -100,6 +100,13 @@ character is `#`, and therefore a file that can hold a region.
    stack-specific, which §3.2 keeps local. A shared `.gitattributes` region today is either
    dangerous or empty. It needs its own record, and this is not it.
 
+   **Ruling 9 is superseded by ADR-027**, which is the record this ruling asked for. The
+   deferral was sound and the conclusion was one line too broad: the shared region is neither
+   dangerous nor empty, it is exactly one line — `* text=auto eol=lf` — and the `auto` is
+   what makes it safe. The rest of this ruling stands, including ruling 7's refusal to
+   claim line endings from `.editorconfig`: they are claimed here instead, where a repository
+   can overrule the claim on one line without losing anything else.
+
 ## Consequences
 
 - `.editorconfig` is the only baseline. `BASELINES` is a list, so the next one is a row, and

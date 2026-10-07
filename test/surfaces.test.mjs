@@ -220,7 +220,11 @@ test('the default surface folds every rule into AGENTS.md and writes one file', 
   assert.deepEqual(ruleFiles, [], 'the default surface must not write per-rule files');
   // The baseline is not a surface and writes no rule file; it is a repo-level
   // setting, present whatever the editor.
-  assert.deepEqual(p.targets.map((t) => t.file), ['AGENTS.md', '.editorconfig']);
+  // The baselines are not surfaces and write no rule file; they are repo-level
+  // settings, present whatever the editor. `.gitattributes` is the second one because
+  // it, like `.editorconfig`, is a file git and every editor read without a parser,
+  // and it takes the last pattern that matches so the region goes first.
+  assert.deepEqual(p.targets.map((t) => t.file), ['AGENTS.md', '.editorconfig', '.gitattributes']);
 
   const region = p.targets[0].body;
   for (const id of ['test-gate', 'intake-questions']) {
@@ -265,6 +269,7 @@ test('opting into a rule surface alongside the default is one file plus the requ
     '.cursor/rules/slice-commit.mdc',
     '.cursor/rules/test-gate.mdc',
     '.editorconfig',
+    '.gitattributes',
     'AGENTS.md',
   ]);
   // ...and the rule is in BOTH: folded for the reader who has only AGENTS.md, and as

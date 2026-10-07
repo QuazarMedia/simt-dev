@@ -8,17 +8,21 @@
 // The restriction is not caution, it is grammar. A region is delimited by comments,
 // so it can only live in a file that has them and whose comment character the
 // reading tool ignores. `.editorconfig` qualifies: `#` is a comment in INI and every
-// editorconfig parser honours it. `tsconfig.base.json` and `.prettierrc.json` do not
-// — JSON has no comment syntax — and `.nvmrc` is a bare version string. Those three
-// are ruled out by ADR-025, not deferred by accident; a managed region in a JSON file
-// would have to be a string literal that prettier and tsc both choke on.
+// editorconfig parser honours it. `.gitattributes` qualifies for the same reason and
+// for a stronger one: `#` is a comment to git, and gitattributes is last-match-wins,
+// so the shared claim goes first and every repo's own patterns still win beneath it.
+// `tsconfig.base.json` and `.prettierrc.json` do not — JSON has no comment syntax — and
+// `.nvmrc` is a bare version string. Those three are ruled out by ADR-025 and ADR-026,
+// not deferred by accident; a managed region in a JSON file would have to be a string
+// literal that prettier and tsc both choke on.
 //
-// One value is deliberately absent: `end_of_line`. It reads like an editor setting and
-// is not one. It decides whether a save rewrites every line of every file, which is a
-// claim about what belongs in the repository, and that claim is made in
-// `.gitattributes` where git reads it. Setting it here would change every checkout of
-// every repo on the day it landed, and the repo that wanted CRLF could only opt out by
-// deleting the region — losing the indentation baseline with it.
+// One value is deliberately absent from `.editorconfig`: `end_of_line`. It reads like an
+// editor setting and is not one. It decides whether a save rewrites every line of every
+// file, which is a claim about what belongs in the repository, and that claim is made in
+// `.gitattributes` where git reads it — which is why the second baseline exists. Setting
+// it in the editorconfig would have changed every checkout of every repo on the day it
+// landed, and the repo that wanted CRLF could only have opted out by deleting the
+// indentation baseline with it.
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -76,12 +80,37 @@ indent_style = tab
 singleQuote = true`;
 
 /**
+ * The shared `.gitattributes` block.
+ *
+ * `text=auto` and not `text`. This is the whole content of the region, so it is worth
+ * saying why it is the cautious half of the choice: `* text eol=lf` forces git to treat
+ * every path as text and is the single most common way to corrupt a binary in a
+ * repository, because nothing tells git it is wrong. `auto` makes git decide per path
+ * from its own content sniffing, so a `.tif`, a `.zip` and a `.mc` file are left exactly
+ * as they are and only files that genuinely are text get normalised. simt-garmin
+ * already worked this out on its own, which is the strongest evidence available that
+ * the conservative form is the one the estate would have picked.
+ *
+ * `eol=lf` is the claim ADR-025 deliberately refused to make from `.editorconfig`, and
+ * it is made here because this is where git reads it. The effect is on the working tree
+ * rather than on the editor, which is what makes it safe to share: a repo that has
+ * already committed CRLF gets LF on its next checkout, and nothing rewrites a file the
+ * moment the region lands.
+ *
+ * No `-text` on generated or vendored paths, no LFS filters, and no `linguist` or
+ * `diff` driver. Those are per-repo claims about what a file IS; a shared file that
+ * asserted them would be wrong in 13 of 16 repositories, and a wrong attribute is
+ * silently obeyed.
+ */
+export const GITATTRIBUTES_BODY = `* text=auto eol=lf`;
+
+/**
  * Every baseline, as a row.
  *
- * `where` and `style` are the file's properties, not the caller's: `.editorconfig`
- * is last-definition-wins and speaks `#`, so the shared block goes first and a
- * reader's own settings below it keep winning. `check` reports a region that has
- * been moved down, because after the move it stops being true.
+ * `where` and `style` are the file's properties, not the caller's: both files here are
+ * last-definition-wins and both speak `#`, so the shared block goes first and a reader's
+ * own settings below it keep winning. `check` reports a region that has been moved down,
+ * because after the move it stops being true.
  *
  * @typedef {{file: string, style: string, body: () => string, why: string, adr: string}} Baseline
  * @type {Baseline[]}
@@ -93,6 +122,13 @@ export const BASELINES = [
     body: () => EDITORCONFIG_BODY,
     why: 'ten repos in the estate have no editorconfig at all, so two people opening the same file see two different files',
     adr: 'ADR-025',
+  },
+  {
+    file: '.gitattributes',
+    style: 'hash',
+    body: () => GITATTRIBUTES_BODY,
+    why: 'line endings are the estate\'s to normalise and only git can normalise them; thirteen repos have no file that says so, and one asks for the forcing form that corrupts binaries',
+    adr: 'ADR-027',
   },
 ];
 

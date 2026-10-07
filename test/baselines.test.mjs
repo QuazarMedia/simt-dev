@@ -8,7 +8,7 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rename, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,7 +16,7 @@ import { promisify } from 'node:util';
 import test from 'node:test';
 
 import { assertClean } from './leaks.mjs';
-import { BASELINES, EDITORCONFIG_BODY, baselineTargets, misplaced } from '../src/projection/baselines.mjs';
+import { BASELINES, EDITORCONFIG_BODY, GITATTRIBUTES_BODY, baselineTargets, misplaced } from '../src/projection/baselines.mjs';
 import { inject, parse, STYLES } from '../src/projection/markers.mjs';
 import { checkTargets, plan } from '../src/projection/project.mjs';
 
@@ -223,8 +223,14 @@ test('the JSON baselines are absent for a reason that is written down, not a gap
   // 3.1 row 5. None can carry a region: JSON has no comment syntax and .nvmrc is a
   // bare version string. Asserting the list keeps a future baseline from being added
   // without noticing that the file it lands in has to be able to hold a comment.
+  //
+  // `.gitattributes` is here and not in that group, and the distinction is the whole
+  // reason it is a region rather than a file simt-dev owns: git reads `#` as a comment
+  // and takes the LAST pattern that matches, so the shared line goes at the top and a
+  // repo's own LFS filters and binary declarations keep winning below it. Asserting the
+  // list is what makes that difference checkable rather than remembered.
   const files = BASELINES.map((b) => b.file);
-  assert.deepEqual(files, ['.editorconfig']);
+  assert.deepEqual(files, ['.editorconfig', '.gitattributes']);
   for (const b of BASELINES) {
     assert.ok(STYLES[b.style], `${b.file} has no comment style, so a region in it would be a syntax error`);
     assert.ok(b.why && b.adr, `${b.file} must say why it exists and which record rules on it`);
@@ -239,4 +245,175 @@ test('every baseline is loaded into the same target list as AGENTS.md', async ()
   const p = await plan(root, {});
   const fromPlan = p.targets.filter((t) => !t.surface).map((t) => t.file);
   assert.deepEqual(fromPlan, ['AGENTS.md', ...BASELINES.map((b) => b.file)]);
+});
+// ---------------------------------------------------------------- .gitattributes
+
+test('the shared gitattributes line normalises text without claiming anything is text', async () => {
+  // The two halves of one line, and both matter. `text=auto` lets git decide per path,
+  // so a binary is left alone; `text` alone would force every path to be text, which is
+  // the most common way a repository corrupts an asset. `eol=lf` is the claim ADR-025
+  // refused to make from .editorconfig, made here because this is where git reads it.
+  const root = await scratch();
+  const { targets } = await baselineTargets(root, SHA);
+  const ga = targets.find((t) => t.file === '.gitattributes');
+  assert.ok(ga, 'the region is missing from the target list');
+  assert.match(ga.text, /^\* text=auto eol=lf$/m);
+  // Assert the absence of the forcing form by name, so a later "simplification" to
+  // `* text eol=lf` fails a test rather than quietly shipping a binary-corrupting line.
+  assert.doesNotMatch(ga.text, /^\* text eol=lf$/m);
+});
+
+test('the shared line is not a claim about what any individual file IS', async () => {
+  // Every one of these belongs to a repo, not to the estate. A shared `.gitattributes`
+  // that declared them would be wrong in thirteen of sixteen repositories, and a wrong
+  // attribute is silently obeyed rather than refused.
+  const root = await scratch();
+  const { targets } = await baselineTargets(root, SHA);
+  const body = targets.find((t) => t.file === '.gitattributes').text;
+  for (const claim of ['filter=lfs', 'binary', '-text', 'linguist', 'diff=', 'merge=']) {
+    assert.ok(!body.includes(claim), `${claim} is a per-repo claim and must not be shared`);
+  }
+});
+
+test('a repo with no gitattributes is offered one, and sync writes it', async () => {
+  // Thirteen repos are in this state, so it is the common case and not an edge one.
+  const root = await repo();
+  const { targets } = await baselineTargets(root, SHA);
+  const ga = targets.find((t) => t.file === '.gitattributes');
+  assert.equal(ga.exists, false);
+  assert.equal(ga.action, 'added');
+  // Planning is not writing: asserting the file existed here would be asserting the
+  // wrong half of the contract, and `sync` is what has to actually put the bytes down.
+  await simt(['sync', '--yes'], root);
+  assert.match(await readFile(join(root, '.gitattributes'), 'utf8'), /^\* text=auto eol=lf$/m);
+});
+
+test('a repo that already has LFS filters and binary declarations keeps all of them', async () => {
+  // simt-app's real file, which is what "the repo's own patterns must survive" means in
+  // practice: it has no `text` line at all, and a region that replaced the file would
+  // quietly un-LFS a 40 MB map.
+  const root = await scratch();
+  const mine = [
+    'res/data/map/*.tif filter=lfs diff=lfs merge=lfs -text',
+    '*.zip filter=lfs diff=lfs merge=lfs -text',
+  ].join('\n');
+  await writeFile(join(root, '.gitattributes'), `${mine}\n`);
+  const result = inject(mine, GITATTRIBUTES_BODY, { sha: SHA }, { style: 'hash' });
+  for (const line of mine.split('\n')) {
+    assert.ok(result.text.includes(line), `lost a line the repo wrote: ${line}`);
+  }
+});
+
+test('the region goes ABOVE the repo patterns, because git takes the last match', async () => {
+  // This is the `.gitattributes` half of the misplaced finding, and the reason it is a
+  // region at all rather than a file simt-dev owns. A region below the repo's patterns
+  // would still be a correct set of bytes, and it would silently reverse their intent
+  // for every path both lines match.
+  const root = await scratch();
+  const existing = '* text eol=lf\n*.iq binary\n';
+  const result = inject(existing, GITATTRIBUTES_BODY, { sha: SHA }, { style: 'hash' });
+  const regionAt = result.text.indexOf(STYLES.hash.begin);
+  const repoLineAt = result.text.indexOf('*.iq binary');
+  assert.ok(regionAt > -1, 'no region was written');
+  assert.ok(regionAt < repoLineAt, 'the shared line must come first so the repo keeps the last word');
+  assert.equal(misplaced(parse(existing, 'hash'), 'hash'), null, 'nothing to be misplaced yet');
+});
+
+test('a region that has been moved below the repo patterns is reported, not trusted', async () => {
+  const begin = STYLES.hash.begin;
+  const end = STYLES.hash.end;
+  // The repo's line comes FIRST here, which is the mistake. `misplaced` ignores a
+  // region at the top of a file, so a fixture with the region at line 0 would report
+  // nothing and pass for the wrong reason - which is how this test failed once already.
+  const moved = [
+    '*.iq binary',
+    begin,
+    '# simt-dev:generated',
+    `# simt-dev:sha=${SHA}`,
+    '',
+    GITATTRIBUTES_BODY,
+    '',
+    end,
+  ].join('\n');
+  assert.equal(misplaced(parse('', 'hash'), 'hash'), null, 'an empty file has nothing misplaced');
+  const finding = misplaced(parse(moved, 'hash'), 'hash');
+  assert.ok(finding, 'a region below the repo patterns must be reported');
+  assert.match(finding.remedy, /move/);
+  assert.match(finding.detail, /last definition/);
+});
+
+test('the shipped gitattributes region carries no path that only exists in this repository', async () => {
+  // Same guard as the gate's own file, for the same reason: this text lands in sixteen
+  // repositories and is read by agents that have never seen this tree.
+  assertClean(GITATTRIBUTES_BODY, 'the .gitattributes region');
+});
+
+test('git itself accepts the shipped region, and honours the repo lines beneath it', async () => {
+  // The check that cannot be faked by reading the string back: `git check-attr` asks
+  // git what it decided, in a real repository, for a real path. A region that parsed as
+  // a comment and did nothing would pass every assertion above and fail here.
+  const root = await scratch();
+  const exec = async (args, cwd) => (await run('git', args, { cwd })).stdout;
+  await exec(['init', '-q', '-b', 'main', '.'], root);
+  await exec(['config', 'user.email', 't@example.com'], root);
+  await exec(['config', 'user.name', 't'], root);
+  const { targets } = await baselineTargets(root, SHA);
+  await writeFile(join(root, '.gitattributes'), targets.find((t) => t.file === '.gitattributes').text);
+  await writeFile(join(root, '.iq'), 'binary\n');
+  await writeFile(join(root, 'main.mc'), 'void main() {}\n');
+  await exec(['add', '-A'], root);
+
+  // The shared line applies to both: text auto-detected on disk, LF in the working tree.
+  assert.match(await exec(['check-attr', 'text', '--', 'main.mc'], root), /main\.mc: text: auto/);
+  assert.match(await exec(['check-attr', 'eol', '--', 'main.mc'], root), /main\.mc: eol: lf/);
+  // The repo's own binary declaration still applies, and still wins. `git check-attr`
+  // says "unspecified" for an attribute nothing set, which is how `binary` shows up
+  // here: `.iq` gets no diff driver, not a text one.
+  assert.match(await exec(['check-attr', 'diff', '--', 'main.iq'], root), /main\.iq: diff: unspecified/);
+  // And a text file the repo has NOT declared keeps the shared line, which is the
+  // point of the file existing at all.
+  assert.match(await exec(['check-attr', 'eol', '--', 'main.mc'], root), /main\.mc: eol: lf/);
+  // Nothing may have leaked into the working tree as CRLF.
+  const bytes = await readFile(join(root, 'main.mc'));
+  assert.ok(!bytes.includes(Buffer.from('\r\n')), 'a CRLF in the working tree defeats the baseline');
+});
+
+test('a deleted gitattributes is a blocking finding with a command, not a note', async () => {
+  // Same treatment the editorconfig gets: adopting a repo means running sync, so a
+  // baseline that has been removed is drift. And a finding nothing can act on is the
+  // failure this gate exists to stop, so the remedy is a command.
+  const root = await repo();
+  await simt(['sync', '--yes'], root);
+  await rm(join(root, '.gitattributes'));
+  const checked = await simt(['check'], root);
+  assert.equal(checked.code, 1);
+  assert.match(checked.out, /\.gitattributes/);
+  assert.match(checked.out, /simt-dev sync/);
+});
+
+test('a gitattributes with no region is reported, not silently left alone', async () => {
+  // Thirteen repos in the estate have no file at all; this one has a file that simply
+  // does not say what the estate says. Leaving it alone would be indistinguishable from
+  // a repo that has chosen otherwise, and the whole point is that nobody chose.
+  const root = await repo();
+  await writeFile(join(root, '.gitattributes'), '*.iq binary\n');
+  const checked = await simt(['check'], root);
+  assert.equal(checked.code, 1);
+  assert.match(checked.out, /\.gitattributes/);
+});
+
+test('this repository adopts neither baseline for itself', async () => {
+  // Written because it was done once while adding the gitattributes row, and a mistake
+  // made once while writing the guard is worth more than any comment. The region marker
+  // records the simt-dev SHA, so a copy committed here names a commit that is no longer
+  // HEAD by the time it lands; `check` would then be red here for a reason no commit can
+  // fix, which is the state ADR-024's gate exists to avoid.
+  const here = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  for (const row of BASELINES) {
+    const path = join(here, row.file);
+    const text = await readFile(path, 'utf8').catch(() => null);
+    assert.equal(text, null, `${row.file} exists in this repository; it must stay hand-written (ADR-027)`);
+  }
+  const agents = await readFile(join(here, 'AGENTS.md'), 'utf8');
+  assert.doesNotMatch(agents, /simt-dev:begin/);
 });

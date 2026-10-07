@@ -19,7 +19,7 @@
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
-import { plan, checkTargets, checkTarget, headSha, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
+import { plan, checkTargets, checkTarget, provenanceDigest, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { manifestDrift, readManifest, unrunnableGates } from '../projection/manifest.mjs';
 import { readCapability } from '../hooks/capability.mjs';
@@ -207,7 +207,7 @@ export async function checkCommand(positional, flags) {
     // takes them away again. Reporting it here is what stops that being a surprise
     // discovered at upgrade time.
     const { stack } = await fingerprint(root);
-    const drift = await manifestDrift(root, stack, await headSha());
+    const drift = await manifestDrift(root, stack, await provenanceDigest());
     if (drift) findings.push(drift);
   }
 

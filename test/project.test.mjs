@@ -138,7 +138,7 @@ test('check reports current, drift, unmanaged and absent distinctly', async () =
   const src = [...first.targets[0].text.matchAll(/simt-dev:sources=([^\s]+)/g)].map((m) => m[1]);
   const sources = src.length === 1 ? src[0].split(',') : [];
   assert.equal(diff(first.targets[0].text, first.targets[0].body, { sha: first.targets[0].sha, sources }).action, 'unchanged');
-  assert.equal(diff(first.targets[0].text, first.targets[0].body, { sha: 'other99', sources }).action, 'updated');
+  assert.equal(diff(first.targets[0].text, first.targets[0].body, { sha: 'beefcafe', sources }).action, 'updated');
 
   const unmanaged = await fixture({ 'pyproject.toml': '', 'AGENTS.md': '# Mine only\n' });
   assert.equal((await checkTarget(unmanaged)).status, 'unmanaged');
@@ -170,7 +170,12 @@ test('plan writes nothing', async () => {
 test('the region records the simt-dev sha so drift is diagnosable', async () => {
   const root = await fixture({ 'pyproject.toml': '' });
   const result = await plan(root);
-  assert.match(result.targets[0].text, /simt-dev:sha=[0-9a-f]{7,40}|simt-dev:sha=unknown/);
+  // The alternation with `sha=unknown` used to be here, and it was the assertion that
+  // let the sentinel survive: a stamp the tool cannot read back still satisfied it.
+  // `compose` now throws on anything the marker grammar rejects, so there is no second
+  // value to allow (ADR-032).
+  assert.match(result.targets[0].text, /simt-dev:sha=[0-9a-f]{7,40}/);
+  assert.doesNotMatch(result.targets[0].text, /simt-dev:sha=unknown/);
   const state = parse(result.targets[0].text);
   assert.equal(state.status, 'ok');
   assert.equal(state.sha, result.targets[0].sha);

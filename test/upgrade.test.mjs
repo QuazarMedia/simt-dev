@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, cp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -23,17 +23,22 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
 const exec = promisify(execFile);
 
-async function run(args, env = {}) {
+// The third argument exists for one test: running the tool out of a package nested
+// INSIDE the repository being tested, which is the npm layout. That is the only way to
+// reproduce a stamp that borrows the consumer's own git — from this checkout the stamp
+// would come from simt-dev's repository, which is the right answer for the wrong reason,
+// and the test would pass against the very defect it exists to catch.
+async function run(args, env = {}, bin = BIN) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 32 << 20, env: { ...process.env, ...env } });
+    const { stdout, stderr } = await exec('node', [bin, ...args], { maxBuffer: 32 << 20, env: { ...process.env, ...env } });
     return { code: 0, stdout, stderr };
   } catch (error) {
     return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
   }
 }
 
-async function runJson(args, env = {}) {
-  const { code, stdout } = await run([...args, '--json'], env);
+async function runJson(args, env = {}, bin = BIN) {
+  const { code, stdout } = await run([...args, '--json'], env, bin);
   return { code, payload: JSON.parse(stdout) };
 }
 
@@ -59,6 +64,12 @@ async function pin(path, sha) {
   manifest.projection.simtDevSha = sha;
   await writeFile(full, `${JSON.stringify(manifest, null, 2)}\n`);
   return manifest;
+}
+
+/** The short sha a commit in `path` produced, read back from git rather than assumed. */
+async function consumerHead(path) {
+  const { stdout } = await exec('git', ['rev-parse', '--short=7', 'HEAD'], { cwd: path });
+  return stdout.trim();
 }
 
 // --- the classifier (pure) ------------------------------------------------------
@@ -263,18 +274,72 @@ test('upgrade: an unadopted repo in the set is skipped, not adopted', async () =
 test('upgrade: simt-dev itself is not a consumer and round-trips as a no-op', async () => {
   // The acceptance criterion in plan 0002 section 11. simt-dev has no manifest, so the
   // command must report that rather than stamp a pin into the repo that produces pins.
-  const { code, payload } = await runJson(['upgrade', '--root', resolve(HERE, '..')]);
-  assert.equal(code, 0, 'an unadopted repo is expected, not a fault');
-  const { repos, updated, skipped, faults, skippedStates } = payload.summary;
-  assert.deepEqual({ repos, updated, skipped, faults, skippedStates }, {
-    repos: 1,
-    updated: 0,
-    skipped: 1,
-    faults: 0,
-    skippedStates: ['not-adopted'],
-  });
-  assert.deepEqual(payload.summary.applied, []);
-  await assert.rejects(readFile(resolve(HERE, '..', 'simt-dev.json')));
+  //
+  // The invariant is "simt-dev is not a consumer of itself", and it is asserted here
+  // as "no simt-dev.json appears" rather than as a particular summary. Asserting the
+  // summary meant asserting a `repos: 1`, and `repos: 1` is only reachable when this
+  // checkout happens to BE a git repo: a `.git`-less copy (a tarball, `git archive`,
+  // the published package itself) is a directory holding no repositories, which
+  // `discover` refuses with exit 3 and a remedy. Both answers are correct, so the
+  // test asserted a property of the author's directory and failed for anyone whose
+  // clone is not a repo. ADR-031 is the same defect one level up.
+  const root = resolve(HERE, '..');
+  await assert.rejects(readFile(join(root, 'simt-dev.json')), 'simt-dev must not be its own consumer');
+  const { code } = await run(['upgrade', '--root', root, '--yes']);
+  assert.ok(code === 0 || code === 3, `expected a no-op or a refusal, got exit ${code}`);
+  await assert.rejects(readFile(join(root, 'simt-dev.json')), 'upgrade stamped a pin into simt-dev');
+});
+
+test('upgrade: a commit in the CONSUMER repo does not move the stamp', async () => {
+  // The defect review 0002 recorded as probe #2, and the one the suite could not see:
+  // `git rev-parse` run inside `node_modules/` walks UP to the consumer's own `.git`, so
+  // the stamp recorded the consumer's HEAD. Git succeeded, so no fallback could catch it.
+  // A consumer's HEAD moves on every commit they make — including commits that touch
+  // nothing this tool projects — so `check` reported DRIFT on all three generated files
+  // and exited 1 after an unrelated commit, and `upgrade` reported a pin move and named
+  // "the rules changed", which was false.
+  //
+  // Running the tool out of this checkout cannot reproduce it: here `git rev-parse` finds
+  // simt-dev's own HEAD, which is the correct answer for the wrong reason. So the test
+  // stages the npm layout — the package nested INSIDE the consumer's repository — because
+  // that arrangement is the entire audience for a published package.
+  const ws = await mkdtemp(join(tmpdir(), 'simt-consumer-'));
+  const consumer = join(ws, 'repo');
+  const pkg = join(consumer, 'node_modules', '@acme', 'simt-dev');
+  await mkdir(pkg, { recursive: true });
+  for (const name of ['bin', 'src', 'rules', 'graph']) {
+    await cp(join(resolve(HERE, '..'), name), join(pkg, name), { recursive: true });
+  }
+  await cp(join(resolve(HERE, '..'), 'package.json'), join(pkg, 'package.json'));
+
+  await repo(consumer, { 'requirements.txt': 'flask\n' });
+  await git(['add', '-A'], { cwd: consumer });
+  await git(['commit', '-m', 'the repo before adopting'], { cwd: consumer });
+  const nested = join(pkg, 'bin', 'simt-dev.mjs');
+  const adopted = await run(['init', '--root', consumer, '--yes'], {}, nested);
+  assert.equal(adopted.code, 0, adopted.stderr);
+  const consumersHead = await consumerHead(consumer);
+  const stamp = /simt-dev:sha=([0-9a-f]{7,40})/.exec(await readFile(join(consumer, 'AGENTS.md'), 'utf8'))[1];
+  assert.notEqual(
+    stamp,
+    consumersHead,
+    'the stamp recorded the consumer\'s HEAD, which is the walk-up defect',
+  );
+
+  // A commit that changes nothing this tool projects.
+  await writeFile(join(consumer, 'NOTES.md'), '# an unrelated note\n');
+  await git(['add', '-A'], { cwd: consumer });
+  await git(['commit', '-m', 'an unrelated note'], { cwd: consumer });
+  assert.notEqual(await consumerHead(consumer), consumersHead, 'the fixture commit did not happen');
+
+  const gated = await run(['check', '--root', consumer], {}, nested);
+  assert.equal(gated.code, 0, `an unrelated consumer commit turned the gate red:\n${gated.stdout}`);
+
+  // And the pin holds, rather than reporting a move it never made.
+  const { code, payload } = await runJson(['upgrade', '--root', consumer], {}, nested);
+  assert.equal(code, 0, 'upgrade refused a repo it had just adopted');
+  assert.equal(payload.summary.updated, 0, JSON.stringify(payload.summary));
+  assert.deepEqual(payload.summary.skippedStates, [], JSON.stringify(payload.summary));
 });
 
 test('upgrade: --root on one repo upgrades that repo, not its siblings', async () => {

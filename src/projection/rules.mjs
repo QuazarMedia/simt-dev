@@ -21,8 +21,7 @@
 // change and no release.
 
 import { readFile, readdir } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
@@ -35,18 +34,59 @@ import { MANIFEST } from './manifest.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const ROOT = resolve(HERE, '..', '..');
 const RULES_DIR = join(ROOT, 'rules');
-const exec = promisify(execFile);
 
-/** The simt-dev SHA recorded in generated regions. Falls back to a sentinel when
- *  git cannot answer, because a region stamped with an honest "unknown" is
- *  visibly unverified while one stamped with a wrong answer is not. */
-export async function headSha() {
-  try {
-    const { stdout } = await exec('git', ['rev-parse', '--short=7', 'HEAD'], { cwd: ROOT });
-    return stdout.trim();
-  } catch {
-    return 'unknown';
+/**
+ * The identity recorded in generated regions and in the manifest pin.
+ *
+ * This is a digest of the CONTENT that leaves this package, not a commit id, and the
+ * distinction is not cosmetic. `git rev-parse` run inside `node_modules/` walks *up*
+ * until it finds a `.git`, so for anyone who installed this package into a repository -
+ * the whole audience for it - the stamp recorded the CONSUMER's HEAD. Git succeeded, so
+ * no fallback could catch it. A consumer's HEAD moves on every commit they make,
+ * including commits that touch nothing this tool projects, so `check` reported DRIFT on
+ * all three generated files after an unrelated commit and exited 1, and `upgrade` named
+ * a cause ("the rules changed") that was false.
+ *
+ * Where git could not answer at all - a published tarball has no `.git` (`files` in
+ * package.json does not include one and npm never packs it) - the old code returned the
+ * string `unknown`, and that was treated as a value: since the marker grammar reads
+ * `[0-9a-f]{7,40}` the tool could not read back its own stamp, and `upgrade` compared
+ * `unknown` against a real pin as though they were two versions, reporting "the rules
+ * changed" when they had not and overwriting a good pin with `unknown` on `--yes`,
+ * unrecoverably. That is the failure this replaces (ADR-032).
+ *
+ * The digest covers `rules/` and `graph/` because that is the set of bytes whose
+ * change moves a consumer's projection: the rule bodies, the per-ecosystem profiles,
+ * the Cursor rule files, and the skill registry. It deliberately excludes `src/` -
+ * a refactor that changes no rule and no registry entry produces byte-identical
+ * regions, and stamping those consumers would report drift where there is none.
+ *
+ * Sorted path-then-bytes, so the value depends on content and not on readdir order,
+ * and length-prefixed so no rename can be crafted to collide with a rename that did
+ * not happen (the reason to hash a structured encoding rather than joined text).
+ */
+export async function provenanceDigest() {
+  const hash = createHash('sha256');
+  for (const dir of ['rules', 'graph']) {
+    const entries = await walk(join(ROOT, dir));
+    for (const rel of entries) {
+      const bytes = await readFile(join(ROOT, dir, rel));
+      hash.update(`${dir}/${rel}:${bytes.length}:`);
+      hash.update(bytes);
+    }
   }
+  return hash.digest('hex').slice(0, 40);
+}
+
+/** @returns {Promise<string[]>} repo-relative paths, sorted, directories omitted. */
+async function walk(dir, prefix = '') {
+  const out = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
+    if (entry.isDirectory()) out.push(...(await walk(join(dir, entry.name), rel)));
+    else if (entry.isFile()) out.push(rel);
+  }
+  return out.sort();
 }
 
 /** Repo-local profile directory, relative to a repo root (ADR-013 section 2). */
@@ -262,7 +302,7 @@ export async function desiredRegion(root, flags) {
   }
 
   const meta = {
-    sha: await headSha(),
+    sha: await provenanceDigest(),
     sources,
   };
   return {

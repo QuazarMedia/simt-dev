@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { compose, diff, inject, parse, BEGIN, END } from '../src/projection/markers.mjs';
+import { provenanceDigest } from '../src/projection/rules.mjs';
 
 const HAND = ['# My Project', '', 'Hand-written guidance that must survive.', ''].join('\n');
 
@@ -132,6 +133,35 @@ test('markers: a changed sha alone counts as drift', () => {
   assert.equal(diff(old, 'body', same).action, 'unchanged');
   assert.equal(diff(old, 'body', newer).action, 'updated');
   assert.equal(parse(old).sha, 'aaaaaaa');
+});
+
+test('markers: compose refuses to write a stamp it could not read back', () => {
+  // The failure this prevents: `headSha()` used to fall back to the string `unknown`,
+  // the marker grammar reads `[0-9a-f]{7,40}`, so the tool wrote a stamp its own parser
+  // rejected — and then compared that stamp against a real pin as though the two were
+  // versions. Every npm install got one, because the published tarball has no `.git`.
+  // A writer that cannot emit an unreadable value is what makes that unrepresentable.
+  for (const bad of [undefined, null, '', 'unknown', 'not-a-sha', 'ABC1234', 'abc123', 42, {}]) {
+    assert.throws(() => compose('body', { sha: bad }), /compose: sha/, `accepted ${JSON.stringify(bad)}`);
+  }
+  // And what it does accept is exactly what the reader accepts, in both surfaces.
+  const region = compose('body', { sha: 'abc1234' });
+  assert.equal(parse(region).sha, 'abc1234');
+  assert.equal(parse(compose('body', { sha: 'abc1234' }, 'hash'), 'hash').sha, 'abc1234');
+  assert.equal(parse(compose('body', { sha: 'a'.repeat(40) })).sha, 'a'.repeat(40));
+});
+
+test('markers: a content digest is a stamp the grammar accepts', async () => {
+  // The stamp is now a digest of `rules/` and `graph/` rather than a commit id, so it
+  // is 40 hex characters. This asserts the real value is readable by the real parser,
+  // which is the property that failed: writing and reading must share one grammar.
+  const digest = await provenanceDigest();
+  assert.match(digest, /^[0-9a-f]{40}$/);
+  const state = parse(compose('body', { sha: digest }));
+  assert.equal(state.sha, digest);
+  // Stable across calls: a stamp that changed when nothing changed would report drift
+  // on every run, which is the estate's own rule that a report must be a fact.
+  assert.equal(await provenanceDigest(), digest);
 });
 
 test('markers: compose emits begin before end and carries the header inside', () => {

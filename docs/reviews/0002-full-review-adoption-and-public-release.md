@@ -110,7 +110,7 @@ record is written.
 
 | ID | Slice | Sev | Grp | Area | Needs ADR | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| S01 | Provenance stamp comes from the consumer's git, not simt-dev | P0 | F | projection | yes (P1) | — | Queued | §1.2 #2–4 |
+| S01 | Provenance stamp came from the consumer's git, not simt-dev | P0 | F | projection | yes (P1) | — | Complete | ADR-032; `provenanceDigest()` |
 | S02 | Leading `**/` path globs never match | P0 | F | resolve | no | S47 (optional) | Queued | re-verified |
 | S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | no | — | Queued | #14 |
 | S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | yes | S02, S03 | Queued | #14 |

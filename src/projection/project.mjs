@@ -30,7 +30,7 @@ import { resolveSurfaces, SURFACE_IDS } from './surfaces.mjs';
 import { pointerState, pointerTargets, ruleTargets } from './targets.mjs';
 import {
   desiredRegion,
-  headSha,
+  provenanceDigest,
   isEligible,
   loadRules,
   LOCAL_PROFILE_DIR,
@@ -178,7 +178,7 @@ export async function checkTargets(root, flags = {}) {
   }
   const rules = all.filter((r) => isEligible(r, new Set([...stack, ...facts]), declared.optIn));
 
-  const sha = await headSha();
+  const sha = await provenanceDigest();
   const notes = [];
 
   for (const rule of rules) {
@@ -251,7 +251,7 @@ export async function checkTargets(root, flags = {}) {
   // Baselines are checked against the same construction `sync` writes from, and they
   // block for the same reason the rule files block: an adopting repo whose baseline was
   // deleted or reverted is a repo whose editors have quietly stopped agreeing.
-  for (const t of (await baselineTargets(root, await headSha())).targets) {
+  for (const t of (await baselineTargets(root, await provenanceDigest())).targets) {
     if (t.action === 'malformed') {
       findings.push({ file: t.file, status: 'malformed', detail: t.reason, line: t.line });
       continue;
@@ -360,4 +360,4 @@ export { BEGIN, END };
 // Re-exported so callers import the projection surface from one place; the pointer
 // helpers now live in targets.mjs and two commands already reach for them here.
 export { pointerTargets, pointerState };
-export { headSha, LOCAL_PROFILE_DIR, loadRules, render, select, SUBSTITUTIONS_KEY };
+export { provenanceDigest, LOCAL_PROFILE_DIR, loadRules, render, select, SUBSTITUTIONS_KEY };

@@ -152,10 +152,15 @@ function readSha(body, style) {
  */
 export function compose(body, { sha, sources = [] } = {}, style) {
   const s = styleOf(style);
-  const header = [
-    s.line('simt-dev:generated'),
-    sha ? s.line(`simt-dev:sha=${sha}`) : s.line('simt-dev:sha=unknown'),
-  ];
+  // A stamp this tool cannot read back is worse than no stamp: `parse` matches
+  // `[0-9a-f]{7,40}`, so the old `unknown` fallback produced a region that reported
+  // no provenance at all, while `upgrade` still compared it against real pins as a
+  // version (ADR-032). Identity is now a content digest and is always present, so the
+  // fallback is gone rather than fixed - but the asymmetry it created is worth naming.
+  if (typeof sha !== 'string' || !/^[0-9a-f]{7,40}$/.test(sha)) {
+    throw new Error(`compose: sha must match [0-9a-f]{7,40}, got ${JSON.stringify(sha)}`);
+  }
+  const header = [s.line('simt-dev:generated'), s.line(`simt-dev:sha=${sha}`)];
   if (sources.length > 0) {
     header.push(s.line(`simt-dev:sources=${sources.join(',')}`));
   }

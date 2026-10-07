@@ -21,7 +21,7 @@
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
 import { tokenize, rankSkills, closure, scoreSkill, stackCompatible } from '../resolve/resolve.mjs';
-import { loadRules, select, checkTargets, headSha } from '../projection/project.mjs';
+import { loadRules, select, checkTargets, provenanceDigest } from '../projection/project.mjs';
 import { loadDecisions, byId, citations } from '../decisions/index.mjs';
 import { discover } from '../compare/discover.mjs';
 import { buildRow, summarise } from '../compare/row.mjs';
@@ -283,7 +283,7 @@ export const TOOLS = [
         : { selected: [], notes: [] };
       const chosen = new Set(selected.map((r) => r.id));
       return {
-        sha: await headSha(),
+        sha: await provenanceDigest(),
         notes,
         rules: [...rules]
           .sort((a, b) => String(a.id).localeCompare(String(b.id)))
@@ -388,7 +388,7 @@ export const TOOLS = [
       const root = args?.root ?? args?.workspace ?? (await resolveWorkspace(args ?? {})).root ?? process.cwd();
       const found = await discover(root);
       if (found.error) throw Object.assign(new Error(`${root}: ${found.error}`), { remedy: 'pass root' });
-      const expectedSha = await headSha();
+      const expectedSha = await provenanceDigest();
       const context = { expectedSha, gates: new Set(Object.keys(GATES)), gateKinds: GATE_KINDS };
       const rows = [];
       for (const repo of found.repos) rows.push(await buildRow(repo, context));

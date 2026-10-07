@@ -40,6 +40,7 @@ record's status line — never by editing the ruling in place.
 | [030](ADR-030-what-a-plan-does-not-ship-is-a-decision-with-a-record.md) | What a plan does not ship is a decision with a record, not a silence | accepted |
 | [031](ADR-031-the-suite-stages-the-environment-it-needs.md) | The suite stages the environment it needs, because a test that inherits the author's directory is not evidence | accepted |
 | [032](ADR-032-provenance-is-a-content-digest-not-a-commit.md) | Provenance is a digest of the content that leaves this package, not a commit id | accepted |
+| [033](ADR-033-three-plan-rows-closed-by-decision-not-by-authoring.md) | Three plan rows are closed by ruling on them, not by authoring what they asked for | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -82,6 +83,13 @@ and `upgrade` named a cause that was false. Where git could not answer at all th
 `unknown`, which the marker grammar cannot read back and `upgrade` compared against a real pin
 as though the two were versions. The stamp now identifies the content that leaves the package,
 which is the one thing every install can compute.
+
+ADR-033 is the same instinct applied to a plan instead of a tool. Closing plan 0001 meant auditing
+each row against the tree, and three rows asked for things that had never been decided: seven agent
+policies with no surviving source anywhere in the estate, a skill-collapse step that a mechanism
+landed two hours after the plan was written already answered, and two `local.properties` files that
+were committed on purpose. Each is closed by saying so, because the failure the plan's own text
+invites is a reader concluding a mechanism is outstanding and going to build it.
 
 ## The rule these records enforce
 

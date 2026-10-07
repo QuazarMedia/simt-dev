@@ -38,6 +38,7 @@ record's status line — never by editing the ruling in place.
 | [028](ADR-028-a-base-file-is-a-floor-so-the-disagreement-it-cannot-repair-becomes-a-check.md) | A base file is a floor, so the disagreement it cannot repair becomes a check | accepted |
 | [029](ADR-029-the-pins-a-repository-declares-are-its-own.md) | The pins a repository declares are its own, so a check reports them and never writes them | accepted |
 | [030](ADR-030-what-a-plan-does-not-ship-is-a-decision-with-a-record.md) | What a plan does not ship is a decision with a record, not a silence | accepted |
+| [031](ADR-031-the-suite-stages-the-environment-it-needs.md) | The suite stages the environment it needs, because a test that inherits the author's directory is not evidence | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -59,6 +60,16 @@ existed in eight copies, none byte-identical, the worst pair differing by one by
 three semantic losses. The canonical body is therefore the **union** of what every copy needed —
 not a per-stack variant, because two of the differences were rules each repo was missing rather
 than a choice either repo made.
+
+ADR-031 is the same lesson arriving from the other end. ADR-014 and ADR-015 fixed the tool's
+dependence on the checkout; ADR-031 fixes the **suite's**, which had quietly reintroduced it —
+nineteen tests read skill bodies out of sibling repositories and passed only on a machine that
+had them. The gate had been red on every push since the first baseline record landed. What makes
+this one worth a paragraph rather than a table row is the third cause it found: two tests that
+passed for a reason that had nothing to do with the code, because the checkout's directory
+happened to be named `simt-dev`. Those failed on nobody's machine and would have failed for
+anyone who cloned the repository under a different name. A green test that asserts a folder's
+name is worse than a red one, because it looks like evidence.
 
 ## The rule these records enforce
 

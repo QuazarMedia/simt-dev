@@ -12,6 +12,7 @@ import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,6 +25,7 @@ import {
   readUserConfig,
   resolveWorkspace,
 } from '../src/workspace.mjs';
+import { skillWorkspace, workspaceEnv } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
@@ -73,9 +75,13 @@ async function workspaceWithRepo(name = 'acme') {
 
 test('PACKAGE_ROOT is the package directory, not its parent', () => {
   // Getting this wrong by one level shifts the sibling heuristic by a whole
-  // directory, which produces a confidently wrong answer rather than an error.
-  assert.ok(PACKAGE_ROOT.endsWith('/simt-dev'), PACKAGE_ROOT);
-  assert.ok(!PACKAGE_ROOT.endsWith('/simt'), 'must be the package, not the workspace');
+  // directory, which produces a confidently wrong answer rather than an error. The
+  // check is structural: this used to assert the directory is named `simt-dev`,
+  // which says nothing about the bug and fails for anyone who cloned the repo
+  // under a different name.
+  assert.ok(existsSync(join(PACKAGE_ROOT, 'package.json')), PACKAGE_ROOT);
+  assert.ok(existsSync(join(PACKAGE_ROOT, 'bin', 'simt-dev.mjs')), PACKAGE_ROOT);
+  assert.ok(!existsSync(join(PACKAGE_ROOT, '..', 'bin', 'simt-dev.mjs')), 'must be the package, not the workspace');
 });
 
 // --- configPaths --------------------------------------------------------------
@@ -316,7 +322,11 @@ test('CLI: graph lint without a workspace warns and still lints the registry', a
 });
 
 test('CLI: graph lint with a real workspace verifies bodies on disk', async () => {
-  const { code, json } = await runJson(['graph', 'lint']);
+  // A workspace the suite staged, not one that happens to be checked out next to
+  // it. "Real" here means bodies the registry can be checked against, and which
+  // ones those are must not depend on the machine running the suite.
+  const { root } = await skillWorkspace();
+  const { code, json } = await runJson(['graph', 'lint'], workspaceEnv(root));
   assert.equal(code, 0);
   assert.equal(json.verified, true);
 });
@@ -344,9 +354,16 @@ test('CLI: skills install without a workspace refuses rather than half-installin
 
 test('CLI: doctor reports which source answered', async () => {
   const app = await scratch({ 'package.json': '{"name":"lonely"}' });
-  const { code, stdout } = await run(['doctor', '--root', app]);
+  // Config is emptied and the workspace is switched off, so the answer cannot come
+  // from the machine running the suite. What is left is a location-independent one,
+  // which is what lets this assert a source rather than merely assert that some
+  // source was printed: the sibling heuristic fires or does not depending on where
+  // this checkout lives, and a test that hardcoded its label would have been
+  // testing the checkout's directory name.
+  const env = { XDG_CONFIG_HOME: await scratch({}), HOME: await scratch({}), SIMT_DEV_WORKSPACE: 'off' };
+  const { code, stdout } = await run(['doctor', '--root', app], env);
   assert.equal(code, 0);
-  assert.match(stdout, /^workspace\s+\S+.*\(heuristic: sibling of this package\)$/m);
+  assert.match(stdout, /^workspace\s+\(none\)\s+\(disabled: SIMT_DEV_WORKSPACE=off/m);
 });
 
 test('CLI: an unparseable config makes doctor fail rather than fall through silently', async () => {

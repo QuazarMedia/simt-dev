@@ -23,6 +23,7 @@ import { GATES } from '../src/hooks/gates.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
@@ -54,7 +55,7 @@ async function gitRepo(name, files = {}, into = null) {
   }
   if (Object.keys(files).length > 0) {
     await exec('git', ['add', '-A'], { cwd: root });
-    await exec('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'seed'], { cwd: root });
+    await git(['commit', '-qm', 'seed'], { cwd: root });
   }
   return root;
 }

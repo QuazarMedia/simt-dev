@@ -63,9 +63,14 @@ Two corollaries that are easy to get wrong:
 
 - **Run the tool the way a consumer runs it.** A test suite that only exercises the tool from
   its own source tree cannot detect that the tool only works from its own source tree. That
-  failure has happened twice: workspace resolution that only worked in the checkout, and
-  content lookup that only worked with a workspace. When you change anything user-facing, run
-  the built binary from a scratch directory outside this tree.
+  failure has happened three times: workspace resolution that only worked in the checkout,
+  content lookup that only worked with a workspace, and — after both were ruled on — the suite
+  itself reading skill bodies out of sibling repositories, which kept the gate red on every
+  push to `main` while passing on the author's machine (ADR-031). `test/fixture.mjs` is what
+  makes that structural: it stages the workspace and the git identity, and nothing in `test/`
+  reaches outside the checkout. **Run the suite from a copy at a path with no siblings before
+  you believe it.** That is how ADR-031 found two more tests asserting the checkout's directory
+  name — which passed on every machine, for a reason that had nothing to do with the code.
 - **Never claim a check you did not run.** In particular, `npm test` passing is not the same as
   the projected text being correct; for rule content, read the rendered region.
 - **Commit locally and report the SHA. Push only on explicit approval** (ADR-001). Never
@@ -92,6 +97,7 @@ Two corollaries that are easy to get wrong:
 | `src/toolchain.mjs` | The node, package-manager and `.nvmrc` pins, and the agreement between them |
 | `src/hooks/` | Gate definitions, the POSIX shim generator, the dispatcher |
 | `src/mcp/` | A read-only JSON-RPC surface over the same logic the commands use |
+| `test/fixture.mjs` | The staged workspace and the identity-carrying `git`. Nothing in `test/` reads outside this checkout (ADR-031) |
 | `docs/decisions/` | Numbered rulings. Read these before changing what the tool believes |
 | `docs/plans/` | The two plans this was built from, with a state column per step |
 

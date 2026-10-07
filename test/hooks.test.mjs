@@ -12,6 +12,7 @@ import { hasScript, knownGates, resolveGate, resolveStagedTool } from '../src/ho
 import { runGates } from '../src/hooks/dispatcher.mjs';
 import { readCapability } from '../src/hooks/capability.mjs';
 import * as gateModule from '../src/projection/manifest.mjs';
+import { git } from './fixture.mjs';
 
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
@@ -499,7 +500,7 @@ test('a real git commit is blocked by a gate that cannot run', async () => {
   // so the assertion below could not distinguish "blocked" from "never ran".
   await writeFile(join(root, 'seed.txt'), 'seed\n');
   await exec('git', ['add', '-A'], { cwd: root });
-  await exec('git', ['commit', '-q', '-m', 'seed', '--no-verify'], { cwd: root });
+  await git(['commit', '-q', '-m', 'seed', '--no-verify'], { cwd: root });
   await simt(['init', '--root', root, '--yes'], root).catch(() => {});
   await simt(['hooks', 'install', '--root', root, '--yes'], root);
   await mkdir(join(root, 'node_modules', '@quazarmedia'), { recursive: true });
@@ -509,7 +510,7 @@ test('a real git commit is blocked by a gate that cannot run', async () => {
   await exec('git', ['add', '-A'], { cwd: root });
 
   await assert.rejects(
-    () => exec('git', ['commit', '-m', 'should be blocked'], { cwd: root }),
+    () => git(['commit', '-m', 'should be blocked'], { cwd: root }),
     (error) => {
       const out = `${error.stdout}${error.stderr}`;
       assert.match(out, /no formatter binary in node_modules\/\.bin/);
@@ -580,11 +581,9 @@ test('where: a linked worktree shares its parent hooks directory', async () => {
   // repository as if every file in it were a hook.
   const { resolveHooksDir, foreignHooks } = await import('../src/hooks/where.mjs');
   const main = await fixture({});
-  await exec('git', ['config', 'user.email', 't@example.com'], { cwd: main });
-  await exec('git', ['config', 'user.name', 't'], { cwd: main });
   await writeFile(join(main, 'a.txt'), 'a\n');
   await exec('git', ['add', '.'], { cwd: main });
-  await exec('git', ['commit', '-qm', 'seed'], { cwd: main });
+  await git(['commit', '-qm', 'seed'], { cwd: main });
 
   const links = await mkdtemp(join(tmpdir(), 'simt-wt-'));
   temps.push(links);

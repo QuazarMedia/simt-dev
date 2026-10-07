@@ -11,11 +11,18 @@ import { fileURLToPath } from 'node:url';
 import { loadRegistry, REGISTRY_PATH, measureSkill } from '../src/graph/load.mjs';
 import { skillsDir, wrapFlat } from '../src/commands/skillsinstall.mjs';
 import { readManifest, MANIFEST } from '../src/projection/manifest.mjs';
+import { skillWorkspace, workspaceEnv } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
-const WORKSPACE = resolve(HERE, '..', '..');
 const exec = promisify(execFile);
+
+// The bodies these tests install live here, staged from the registry by the suite
+// itself. They used to be read out of sibling repositories, which meant the suite
+// passed on a machine that had them and failed on a runner that did not - the third
+// time this repository made this mistake about a workspace, and the first time it
+// kept the gate red on every push (ADR-031).
+const { root: WORKSPACE } = await skillWorkspace();
 
 const temps = [];
 
@@ -34,9 +41,11 @@ async function run(args, env = {}) {
   try {
     const { stdout, stderr } = await exec('node', [BIN, ...args], {
       maxBuffer: 32 << 20,
-      // A test that inherits the developer's workspace cannot detect behaviour
-      // that depends on one being absent, so the single-repo cases say so.
-      env: { ...process.env, ...env },
+      // Every case runs against the staged workspace, and a case that needs no
+      // workspace says `SIMT_DEV_WORKSPACE: 'off'` itself. Inheriting the
+      // developer's own workspace would hide exactly the behaviour the
+      // single-repo cases exist to check.
+      env: { ...process.env, ...workspaceEnv(WORKSPACE), ...env },
     });
     return { code: 0, stdout, stderr };
   } catch (error) {
@@ -172,10 +181,7 @@ test('skills install: writes a normal skill verbatim, frontmatter and body', asy
   const { code } = await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
   assert.equal(code, 0);
   const body = await readFile(join(root, '.agents/skills/d1-safe-change/SKILL.md'), 'utf8');
-  const src = await readFile(
-    join(dirname(dirname(fileURLToPath(import.meta.url))), '..', 'simt-social-api/.agents/skills/d1-safe-change/SKILL.md'),
-    'utf8',
-  );
+  const src = await readFile(join(WORKSPACE, 'simt-social-api/.agents/skills/d1-safe-change/SKILL.md'), 'utf8');
   assert.equal(body, src, 'a directory skill is copied verbatim');
 });
 
@@ -292,9 +298,9 @@ test('skills install: an existing manifest keeps its id, stack, limits and gates
 // --- in-place ------------------------------------------------------------------
 
 test('skills install: installing a skill into the repo that already holds it does nothing', async () => {
-  // Both social repos resolve .agents/skills through a symlink, so the "installed
-  // copy" and the registry source are the same bytes. `cp` of a directory onto
-  // itself fails, and the correct action is nothing.
+  // The repo being installed into IS the declared source for this variant, so the
+  // "installed copy" and the registry source are the same bytes. `cp` of a directory
+  // onto itself fails, and the correct action is nothing.
   const { code, stdout, stderr } = await run([
     'skills', 'install', 'slice-commit', '--root', join(WORKSPACE, 'simt-social-api'), '--yes',
   ]);

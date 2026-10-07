@@ -1,23 +1,30 @@
 # Plan 0001 — Centralise agent rules, skills and tooling in simt-dev
 
-Status: **implemented in part** · created 2026-10-05 · state read at `04ae9e9`
-Scope: the sibling repos under the estate root. The estate is 15 repos, not the 16 named
-below — `bunnyland-server` was removed at `86093e1`, which also took `coverage-hunt` out of
-the registry (38 skills → 37, ADR-006 and ADR-009 amended in the same commit).
+Status: **implemented** · created 2026-10-05 · state read at `4aaa441`
+Scope: the sibling repos under the estate root. The estate holds 16 consumers today and this
+plan named 16, but they are not the same 16: `simt-api` and `simt-space-review` have appeared
+since, and `bunnyland-server`'s skill was removed from the registry at `86093e1` (38 skills → 37,
+ADR-006 and ADR-009 amended in the same commit) although the repo itself is back on disk. 14 of
+the 16 have adopted; `bunnyland-server` and `simt-space-review` have not, which is why this plan
+is `implemented` rather than `complete`.
 Supersedes: nothing. Feeds into: `0002-simt-dev-cli.md`
 
-Row state, checked against the tree at `04ae9e9` rather than against this table's own prose:
+Row state, checked against the tree at `4aaa441` rather than against this table's own prose:
 
 | Row | Delivered | Evidence |
 | --- | --- | --- |
 | 1 always-on rules | **done** | `rules/core.md` (the `simt-core` of this row) and three `.mdc` rules: `intake-questions`, `test-gate`, `preview-postflight`. `slice-commit.mdc` is a fourth file, from row 2 |
 | 2 process skills | **done** | `slice-commit`, `bug-commit`, `complete-testing`, `parallel-feature-team` all in `graph/skills.graph.json` |
-| 3 agent policies | **partial** | one line of the minimum-viable-team policy is in `rules/core.md`; the other seven were never authored as separate files. Not a record — see ADR-030's reasoning on an unmade decision |
-| 4 stack profiles | **6 of 8, renamed** | 7 files. `jvm-android.md` carries this row's Kotlin/Gradle/Compose *and* JVM; `react-web.md` carries React/RTL/WCAG *and* LESS/CSS; `node.md` is this row's TypeScript-strict. `container.md` is a seventh that this row did not ask for — ADR-013's `has-dockerfile` fact |
-| 5 tooling baselines | **partial** | `.editorconfig` (ADR-025), `.gitattributes` (ADR-027), `tsconfig.base.json` (ADR-028), Dependabot (ADR-026); `packageManager`/`engines`/`.nvmrc` ship as three checks and no file (ADR-029). Prettier, commitlint and the ESLint block are unmade decisions |
+| 3 agent policies | **done, 4 of 8** | `rules/core.md` carries the minimum viable team, never weakening a security control, anti-overclaim with report-what-you-left-alone, and the stated agent budget that never converts a failure into an approval. The other four — the 70/30 split, the 12-state coverage list, the matrix-trigger heuristic and strict review budget — are recorded unmade in ADR-033; there is no source for them anywhere in the estate, and writing them would put invented doctrine in front of every adopted repo |
+| 4 stack profiles | **done, 7 files for 8 ecosystems** | `jvm-android.md` carries this row's Kotlin/Gradle/Compose *and* JVM; `react-web.md` carries React/RTL/WCAG *and* LESS/CSS; `node.md` is this row's TypeScript-strict. `container.md` is a seventh this row did not ask for — ADR-013's `has-dockerfile` fact. No ecosystem in the row is unserved |
+| 5 tooling baselines | **done** | `.editorconfig` (ADR-025), `.gitattributes` (ADR-027), `tsconfig.base.json` (ADR-028), Dependabot (ADR-026), `packageManager`/`engines`/`.nvmrc` as three checks and no file (ADR-029). Commitlint and the shared ESLint block are refused by ADR-030; the shared Prettier config is half-settled (ADR-025's `singleQuote`), with `printWidth` unruled |
 | 6 shared hook library | **done** | `src/hooks/` — dispatcher, per-repo gate list, POSIX shim generator — with 59 tests |
-| 7 `init` | **partial** | AGENTS.md, hooks, CI check, Dependabot and the four baseline regions. Missing commitlint and the ESLint block, both because the decision has not been made (ADR-030) |
+| 7 `init` | **done** | AGENTS.md, hooks, CI check, Dependabot and the four baseline regions. The two omissions row 7 names are ADR-030's refusals, not unwritten code |
 | 8 CI workflow | **ruled otherwise** | ADR-023 — the gate is copied into each repo rather than referenced. The Dependabot file this row also wanted shipped by ADR-026 |
+
+Every row is now either delivered or ruled. Nothing is outstanding, and where a row is closed by a
+decision rather than by code the decision is named so the next reader is not left hunting for a file
+that was never going to be written.
 
 ---
 
@@ -82,8 +89,9 @@ projection; the human and generator surface is canonical.
 ```
 
 Same for `.editorconfig`, `.prettierrc`, `.gitattributes`. Local content is never clobbered;
-shared content can never drift silently. The marker also records the source SHA, so a
-half-applied sync is detectable rather than invisible.
+shared content can never drift silently. The marker also records the source identity, so a
+half-applied sync is detectable rather than invisible. That identity is a content digest rather than
+a commit SHA (ADR-032), so it is computable from an installed package with no git present.
 
 ## 3. What moves, what stays
 
@@ -276,28 +284,71 @@ the worst `.mdc` drift. Swapping to one-web/one-API/one-mobile drops both, which
 Three web repos against one Python repo is the shape the estate actually has, which is why
 this trade is worth stating rather than arguing.
 
-**Phase 5 — Roll out the remaining 13**, grouped by stack so one set of decisions covers a
+**Phase 5 — DONE — Roll out the remaining 13**, grouped by stack so one set of decisions covers a
 group: Workers/TS (social, social-media, api, goto, jobs) · static/LESS (blog, landing,
 social-landing) · JVM (garmin, wakt-app, app-ui) · bare (space). `simt-app`, `simt-social-api` and `simt-space` are the Phase 4 pilots and are
 not repeated here; `simt-dev` is the tool and never adopts itself.
 
-**Phase 6 — Retire the duplication.** Delete the 13 tracked `git.config` copies (keep
-simt-space's local fallback — it already works and is proven). Collapse the 7 drifted Social
-skill twins to canonical + stub. Add `git.config` and `graphify-out/` to `.prettierignore`.
+**Measured at `4aaa441`: 14 of the 16 consumers carry `simt-dev.json`.** The 13 named here plus
+`simt-api`, which appeared after this plan was written. `bunnyland-server` and `simt-space-review`
+have not adopted and are not expected to — the first was removed from the registry at `86093e1`
+and the second has no stack for the tool to detect. Every adopted repo also pins the ADR-032 content
+digest, so a pin is now a statement about the bytes that left this package rather than about a
+commit that may no longer exist.
+
+**Phase 6 — DONE.** The tracked `git.config` copies are gone: there were 11, not the 13 this
+phase expects, all byte-identical and all a personal author identity rather than a hook shim.
+`simt-space`'s is the only one its own `.git/config` still includes, so that one stays, and
+`simt-dev`'s is the one every other repo includes. Every one of the 11 resolves the same identity,
+so deleting 10 changed nothing but the tree. `simt-garmin/README.md` carried a line claiming the
+copy was in use; it now points at the canonical one.
+
+The skill twins are **superseded, not collapsed** (ADR-033). This phase's instruction predates
+`graph/skills.graph.json`'s `sources.role` vocabulary, which landed at `a9983c8` two hours after
+this plan was written. All three resolvers install only the `canonical` source, so a `duplicate` or
+`variant` copy is a declared state that resolution never reads. `add-country-galaxy` — the one pair
+that genuinely had to become a stub — already is one in `simt-social`, pointing at the API repo.
 
 The 8 divergent `.mdc` copies are retired by `sync`, not by hand: a managed `.mdc` is a generated
 file whose frontmatter is preserved and whose body is replaced, with the retirement reported as
 `retiring N bytes of divergent hand-written rule text` so the deletion is auditable. Phase 6 only
 has to *confirm* the result and delete the per-repo `substitutions` values that are no longer
-needed. `simt-social-media` gains an `intake-questions.mdc` it never had.
+needed — **confirmed**: all 14 adopted manifests declare zero substitution keys. `simt-social-media`
+gained an `intake-questions.mdc` it never had.
 
-**Phase 7 — Defect sweep.** Independent of centralisation, do it while the context is fresh:
-garmin's malformed ```bash fence, broken DoD numbering and permanently-red `memcheck` gate
-· simt-app's orphaned git-lfs `scripts/hooks/pre-push`, unreferenced since `hooks/pre-push`
-was deleted in `ca0e803b4` · simt-space's dead prettier install (no script invokes it) ·
-the 8 dangling references (`web-perf`, `pages/`, `workers-ai/`, 5 firebase files) ·
-`app-ui-submodule.mdc`'s hardcoded `/Users/said.elimam/...` absolute path · npm Dependabot ·
-`packageManager` · the 3 `.nvmrc` files.
+`.prettierignore` needed no edit: `graphify-out/` is already gitignored in both Social repos and
+`prettier --check` does not walk it, verified by running it against the directory directly.
+
+**Phase 7 — DONE, and two of its items were already closed before the sweep.** The hardcoded
+`/Users/said.elimam/...` sweep found 17 tracked files, not the 6 implied here. Six were fixed:
+`app-ui-submodule.mdc` (three absolute paths, to a directory that does not exist, now `../app-ui`),
+two migration docs, a dead script constant in `simt-landing`, and `simt-goto`'s Claude launch
+config. The remaining matches are verbatim captured build output, generated Connect IQ and ProGuard
+artifacts that would be rewritten on the next build, and two `local.properties` files that are
+committed deliberately and stay that way (ADR-033).
+
+simt-app's orphaned git-lfs `pre-push` is **fixed, and this phase named it wrong**: it was the
+tracked `hooks/pre-push` deleted at `ca0e803b4`, not the fuller `scripts/hooks/pre-push`, which was
+never dead but never installed. LFS objects are tracked and nothing was checking for them.
+`scripts/hooks/pre-push` is now the tracked `hooks/pre-push`, so git runs it.
+
+garmin's malformed ```bash fence and red `memcheck` gate were already fixed, and its broken DoD
+numbering was never real — both apparent breaks are a table of contents followed by a list that
+restarts, and a version string matched as a list item. simt-space's prettier install is not dead:
+its pre-commit hook is installed and invokes it.
+
+The "8 dangling references" were 53. `web-perf` does not exist in any repo and is not in the
+registry; the two files citing it now name `production-quality-review`, which holds the browser
+matrix and the performance budget itself. In `simt-social-api`'s Cloudflare skill, 47 of 67 product
+rows named a `references/` directory that was never written and are now marked `not written`, with
+the decision tree's arrows annotated the same way and the frontmatter's `references` list trimmed to
+the three that resolve. Firebase references are legitimate prose. Both byte counts moved with the
+bodies, which moved the provenance digest, which is why every adopted repo was re-stamped after.
+
+npm Dependabot ships (ADR-026) in the seven repos that run GitHub Actions; the other three have no
+`.github/workflows` and `init` correctly declines to create one. `packageManager` is missing in
+every repo with a `package.json`, and that is intended: ADR-029 settled these three as checks with
+no file behind them, so the finding stands until a floor is decided (review 0002 proposal P8).
 
 ## 7. Risks
 
@@ -306,7 +357,7 @@ the 8 dangling references (`web-perf`, `pages/`, `workers-ai/`, 5 firebase files
 | Marker parsing corrupts a hand-edited `AGENTS.md` | Markers are idempotent; `--check` diffs before writing; every repo gets a branch + `backup-before-simt-dev` tag before its first sync |
 | Teams bypass the gate | The reusable workflow is required-status-check-able; the pre-commit hook runs `sync --check` too |
 | Canonical files grow a lowest-common-denominator that fits nobody | Stack profiles are separate files, never inlined into `simt-core.mdc`; core stays ~200 lines and stack-agnostic |
-| simt-dev churn cascades into 16 repos | The marker stores the source SHA, so a broken sync is *detected*, not silently half-applied. `simt-dev upgrade --all` raises all pins as one reviewable operation |
+| simt-dev churn cascades into 16 repos | The marker stores the source identity (ADR-032: a content digest, not a commit), so a broken sync is *detected*, not silently half-applied. `simt-dev upgrade --all` raises all pins as one reviewable operation |
 | Everything at once | Phases 4–6 are per-repo, independently revertable |
 
 ## 8. Optional thin layer (layer 0)

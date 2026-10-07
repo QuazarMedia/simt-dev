@@ -470,16 +470,16 @@
         "wrangler",
         "workers ai"
       ],
-      "bytes": 384277,
+      "bytes": 384869,
       "deferred": true,
       "vendored": true,
       "sources": [
         {
           "repo": "simt-social-api",
           "path": ".agents/skills/cloudflare",
-          "bytes": 384277,
+          "bytes": 384869,
           "role": "canonical",
-          "note": "81 reference files; frontmatter declares references/pages and references/workers-ai which do not exist"
+          "note": "81 reference files across 16 directories; the product index names 67 Cloudflare products and the 47 with no directory written are marked 'not written' rather than linked"
         }
       ],
       "note": "Largest body in the estate at 384 KB. Always deferred; never inlined by skills brief."
@@ -1267,14 +1267,14 @@
         "blocker",
         "lighthouse"
       ],
-      "bytes": 5869,
+      "bytes": 5904,
       "sources": [
         {
           "repo": "simt-social",
           "path": ".agents/skills/production-quality-review",
-          "bytes": 5869,
+          "bytes": 5904,
           "role": "canonical",
-          "note": "Cites a skill named web-perf, which exists in no repo"
+          "note": "Holds the browser matrix and the performance budget itself, so there is no separate performance skill for another to defer to"
         }
       ]
     },

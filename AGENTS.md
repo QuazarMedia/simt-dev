@@ -89,6 +89,7 @@ Two corollaries that are easy to get wrong:
 | `src/projection/` | Generated-region markers, rule selection, manifest, conflict scanning |
 | `src/ci/` | The two `.github` files simt-dev ships: the gate and the Dependabot config |
 | `src/tsconfig.mjs` | The TypeScript base file, its floor, and the checks it cannot replace |
+| `src/toolchain.mjs` | The node, package-manager and `.nvmrc` pins, and the agreement between them |
 | `src/hooks/` | Gate definitions, the POSIX shim generator, the dispatcher |
 | `src/mcp/` | A read-only JSON-RPC surface over the same logic the commands use |
 | `docs/decisions/` | Numbered rulings. Read these before changing what the tool believes |

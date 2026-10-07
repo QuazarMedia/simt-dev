@@ -36,6 +36,7 @@ record's status line — never by editing the ruling in place.
 | [026](ADR-026-a-config-without-a-region-is-a-file-the-repo-owns.md) | A config whose grammar cannot hold a region is a file the repo owns | accepted |
 | [027](ADR-027-the-one-gitattributes-line-that-is-neither-dangerous-nor-empty.md) | The one gitattributes line that is neither dangerous nor empty | accepted |
 | [028](ADR-028-a-base-file-is-a-floor-so-the-disagreement-it-cannot-repair-becomes-a-check.md) | A base file is a floor, so the disagreement it cannot repair becomes a check | accepted |
+| [029](ADR-029-the-pins-a-repository-declares-are-its-own.md) | The pins a repository declares are its own, so a check reports them and never writes them | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -161,3 +162,14 @@ Writing that limit down is what turned the second problem into a check, which is
 form of it a reader can act on. It also decided what the floor may contain: `noEmit` is
 inheritable and two of these repositories bundle elsewhere, so shipping it would have
 silenced the emit in a repository nobody had looked at.
+
+A thirteenth is the first one that finds the plan wrong. Row 5 offered to resolve "three
+disagreeing `.nvmrc` files", and reading them showed each one agrees perfectly with its own
+`engines`; what differs is three repositories choosing different node majors, which is a
+decision each has a reason for. There was no defect to resolve, and the useful half of the
+work was ruling out the check that would have reported it — with a test, so completeness
+does not put it back. What is left is one real defect, and it is the first shipped baseline
+with no correct value to write: the npm version is not in `package-lock.json`, and a node
+floor is as many answers as the team has reasons for. So this one ships no file at all. It
+reports, and every remedy is a command run where the answer exists, which is the only shape
+available when the tool can name the field and the manager but not the version.

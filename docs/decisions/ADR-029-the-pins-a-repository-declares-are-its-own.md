@@ -96,7 +96,9 @@ What this settles and what it does not: `packageManager`, `engines.node` and `.n
 gated for **agreement**, not normalised. A shared value for any of them was never derivable
 and is not attempted. What remains unwritten in row 5 is commitlint — which no rule file
 mentions and no package in the estate installs — and the ESLint block, whose four
-configurations are not variants of one configuration.
+configurations are not variants of one configuration. This paragraph named those two and
+stopped. ADR-030 answers what they are: not mechanisms awaiting code, but policy questions
+nobody has been asked, and it is the record to read next for either.
 
 ## Rejected
 

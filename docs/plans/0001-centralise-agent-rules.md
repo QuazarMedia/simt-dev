@@ -1,9 +1,23 @@
 # Plan 0001 — Centralise agent rules, skills and tooling in simt-dev
 
-Status: **proposed**
-Created: 2026-10-05
-Scope: all 16 sibling repos under `/Users/said.elimam/code/simt`
+Status: **implemented in part** · created 2026-10-05 · state read at `04ae9e9`
+Scope: the sibling repos under the estate root. The estate is 15 repos, not the 16 named
+below — `bunnyland-server` was removed at `86093e1`, which also took `coverage-hunt` out of
+the registry (38 skills → 37, ADR-006 and ADR-009 amended in the same commit).
 Supersedes: nothing. Feeds into: `0002-simt-dev-cli.md`
+
+Row state, checked against the tree at `04ae9e9` rather than against this table's own prose:
+
+| Row | Delivered | Evidence |
+| --- | --- | --- |
+| 1 always-on rules | **done** | `rules/core.md` (the `simt-core` of this row) and three `.mdc` rules: `intake-questions`, `test-gate`, `preview-postflight`. `slice-commit.mdc` is a fourth file, from row 2 |
+| 2 process skills | **done** | `slice-commit`, `bug-commit`, `complete-testing`, `parallel-feature-team` all in `graph/skills.graph.json` |
+| 3 agent policies | **partial** | one line of the minimum-viable-team policy is in `rules/core.md`; the other seven were never authored as separate files. Not a record — see ADR-030's reasoning on an unmade decision |
+| 4 stack profiles | **6 of 8, renamed** | 7 files. `jvm-android.md` carries this row's Kotlin/Gradle/Compose *and* JVM; `react-web.md` carries React/RTL/WCAG *and* LESS/CSS; `node.md` is this row's TypeScript-strict. `container.md` is a seventh that this row did not ask for — ADR-013's `has-dockerfile` fact |
+| 5 tooling baselines | **partial** | `.editorconfig` (ADR-025), `.gitattributes` (ADR-027), `tsconfig.base.json` (ADR-028), Dependabot (ADR-026); `packageManager`/`engines`/`.nvmrc` ship as three checks and no file (ADR-029). Prettier, commitlint and the ESLint block are unmade decisions |
+| 6 shared hook library | **done** | `src/hooks/` — dispatcher, per-repo gate list, POSIX shim generator — with 59 tests |
+| 7 `init` | **partial** | AGENTS.md, hooks, CI check, Dependabot and the four baseline regions. Missing commitlint and the ESLint block, both because the decision has not been made (ADR-030) |
+| 8 CI workflow | **ruled otherwise** | ADR-023 — the gate is copied into each repo rather than referenced. The Dependabot file this row also wanted shipped by ADR-026 |
 
 ---
 

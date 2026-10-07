@@ -1,8 +1,13 @@
 # Plan 0003 — simt-dev as an intelligence amplifier: research and development plan
 
-Status: **proposed** · 2026-10-06
+Status: **proposed — no slice started** · created 2026-10-06 · state read at `04ae9e9`
 Depends on: review 0002 Waves 0–1 (`docs/reviews/0002-full-review-adoption-and-public-release.md`),
 plan 0002
+Blocked by: every slice here is Queued, and R01 and R02 — the task miner and the agent runner
+that everything else measures against — sit in review 0002's Wave 0, which is itself Queued.
+This plan has no Phase 0 result to build on, so it cannot start before review 0002 Wave 0
+lands. That ordering is a fact about the dependencies, not a judgement about the work.
+
 Constraint carried from ADR-012 and this repo's `AGENTS.md`: the core stays zero-dependency,
 POSIX-only and deterministic. Anything that needs a model, a parser grammar, a database beyond
 `node:sqlite`, or the network is an **optional adapter**. An adapter is installed separately, is
@@ -309,7 +314,7 @@ redundant, and `simt-garmin` beyond Codex's limit. It runs in under 1 s.
 
 ## 6. Phase 1 — Lean context compiler
 
-### R07 — Kernel and commentary split (M, ADR-038)
+### R07 — Kernel and commentary split (M, D3)
 
 **Design.**
 
@@ -328,7 +333,7 @@ redundant, and `simt-garmin` beyond Codex's limit. It runs in under 1 s.
 
 **Design.**
 
-- `projection.budget.bytes` sets a budget per surface; ADR-033 sets the default.
+- `projection.budget.bytes` sets a budget per surface; review 0002's P7 sets the default.
 - The compiler packs kernel lines by priority class (hard constraint, then command, then
   convention, then style), with ties broken by rule id.
 - `check` reports `BUDGET-CUT` (non-blocking) and the command that shows each cut line
@@ -364,7 +369,7 @@ which test a given `{file}` maps to.
 
 **Accept.** On 10 ecosystem fixtures, every command on the card exits 0 on a clean fixture.
 
-### R11 — Workspace dedupe (M, within ADR-033)
+### R11 — Workspace dedupe (M, within review 0002 P7)
 
 **Design.**
 
@@ -419,7 +424,7 @@ repo.
 
 ## 7. Phase 2 — Enforce instead of instruct
 
-### R15 — Agent-time hooks from one policy table (L, ADR-039)
+### R15 — Agent-time hooks from one policy table (L, D4)
 
 **Design.**
 
@@ -465,7 +470,7 @@ The pre-commit hook, the Stop hook (R15) and agents call it directly. Output is 
 **Accept.** In simt-dev, changing `src/resolve/resolve.mjs` selects exactly the test files that
 import it directly or transitively, checked against a hand-built list, in under 5 s.
 
-### R17 — Evidence ledger and claim check (M, ADR-040)
+### R17 — Evidence ledger and claim check (M, D5)
 
 **Design.**
 
@@ -507,7 +512,7 @@ bytes, and probe compliance is equal or better.
 
 ## 8. Phase 3 — Repository intelligence
 
-### R20 — Index store (M, ADR-041)
+### R20 — Index store (M, D6)
 
 **Design.**
 
@@ -656,7 +661,7 @@ points.
 **Accept.** A per-skill trigger report exists, and every body over 5k tokens is flagged with a
 split plan.
 
-### R31 — Plan and tracker index (S, ADR-044)
+### R31 — Plan and tracker index (S, D9)
 
 **Goal.** Let an agent resume a 1,000-line plan by reading about 1 KB.
 
@@ -727,7 +732,7 @@ most-failing and slowest gates, and rules with no measured value. The output is 
 
 ## 11. Phase 6 — Local models (optional, off by default)
 
-### R37 — Local model adapter (S, ADR-037)
+### R37 — Local model adapter (S, D2)
 
 **Design.** A zero-dependency OpenAI-compatible client (`fetch` to
 `http://127.0.0.1:<port>/v1/...`) for Ollama, llama.cpp `llama-server`, LM Studio and MLX
@@ -795,7 +800,7 @@ Cursor bundle (rules, hooks and MCP), all generated from the same tables.
 
 **Accept.** Each package installs into a clean profile and passes R15's fixture tests.
 
-### R44 — Single-file binary (M, ADR-043)
+### R44 — Single-file binary (M, D8)
 
 **Design.** Build with Node's single-executable-application support, and evaluate Bun or Deno
 compile as alternatives. Publish to GitHub Releases with checksums and provenance, plus a
@@ -835,50 +840,50 @@ Size: S is up to 2 days, M up to a week, L more.
 
 | ID | Slice | Phase | Depends on | Size | Needs ADR | Success metric | State |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| R01 | Task miner | 0 | review 0002 Wave 0 | M | 036 | ≥ 20 valid tasks; deterministic | Queued |
-| R02 | Agent runner and arms | 0 | R01 | L | 036 | gold 100%, noop 0%; reproducible grades | Queued |
+| R01 | Task miner | 0 | review 0002 Wave 0 | M | D1 | ≥ 20 valid tasks; deterministic | Queued |
+| R02 | Agent runner and arms | 0 | R01 | L | D1 | gold 100%, noop 0%; reproducible grades | Queued |
 | R03 | Cost model and report | 0 | R02 | S | — | matches hand computation | Queued |
 | R04 | Ablation | 0 | R03 | M | — | value per KB for every section | Queued |
 | R05 | Compliance probes | 0 | R02, R17 | M | — | 12 probes with graders | Queued |
-| R06 | Context meter | 0 | R14 | S | 042 | reproduces 90,042 B / 72% | Queued |
-| R07 | Kernel and commentary split | 1 | R02, R06 | M | 038 | kernel ≤ 1.5 KB; ΔR ≥ −2, ΔC < 0 | Queued |
-| R08 | Budgeted compilation | 1 | R07 | S | 033 | budget exact; byte-identical | Queued |
+| R06 | Context meter | 0 | R14 | S | D7 | reproduces 90,042 B / 72% | Queued |
+| R07 | Kernel and commentary split | 1 | R02, R06 | M | D3 | kernel ≤ 1.5 KB; ΔR ≥ −2, ΔC < 0 | Queued |
+| R08 | Budgeted compilation | 1 | R07 | S | 0002 P7 | budget exact; byte-identical | Queued |
 | R09 | Inferability filter | 1 | R07 | S | — | expected removals with reasons | Queued |
 | R10 | Command card | 1 | — | S | — | every card command runs on 10 fixtures | Queued |
-| R11 | Workspace dedupe | 1 | R07, R14 | M | 033 | estate ≤ 30 KB, no R loss | Queued |
-| R12 | Scoped loading and disclosure index | 1 | review 0002 S41, S50 | M | 033 | scoped content absent at start | Queued |
-| R13 | Cache-stable rendering and lockfile | 1 | review 0002 S01 | S | 027 | byte-identical across machines | Queued |
+| R11 | Workspace dedupe | 1 | R07, R14 | M | 0002 P7 | estate ≤ 30 KB, no R loss | Queued |
+| R12 | Scoped loading and disclosure index | 1 | review 0002 S41, S50 | M | 0002 P7 | scoped content absent at start | Queued |
+| R13 | Cache-stable rendering and lockfile | 1 | review 0002 S01 | S | 0002 P1 | byte-identical across machines | Queued |
 | R14 | Harness loader table | 1 | — | S | — | provenance on every row | Queued |
-| R15 | Agent-time hooks from one policy | 2 | R14, R17 | L | 039 | decisions correct per harness; p95 < 100 ms | Queued |
+| R15 | Agent-time hooks from one policy | 2 | R14, R17 | L | D4 | decisions correct per harness; p95 < 100 ms | Queued |
 | R16 | Diff-aware gates | 2 | R24 | M | — | focused selection < 5 s | Queued |
-| R17 | Evidence ledger and claim check | 2 | — | M | 040 | evidence invalidated by any edit | Queued |
+| R17 | Evidence ledger and claim check | 2 | — | M | D5 | evidence invalidated by any edit | Queued |
 | R18 | Safe compaction of own gate output | 2 | R16 | S | — | every failure line survives | Queued |
 | R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | — | kernel shrinks; compliance not lower | Queued |
-| R20 | Index store | 3 | review 0002 S47 | M | 041 | reindex < 300 ms; deterministic | Queued |
-| R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | 037 | ≥ 90% symbol recall | Queued |
+| R20 | Index store | 3 | review 0002 S47 | M | D6 | reindex < 300 ms; deterministic | Queued |
+| R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 | ≥ 90% symbol recall | Queued |
 | R22 | Ranked repo map | 3 | R21 | M | — | recall@10 ≥ 60% of gold files | Queued |
 | R23 | Impact analysis | 3 | R21, R25 | M | — | importers, tests, cross-repo consumer | Queued |
 | R24 | Test mapping | 3 | R21 | M | — | precision ≥ 0.8 | Queued |
 | R25 | Governance graph, `why` | 3 | R20 | S | — | matches `Affects:` exactly | Queued |
 | R26 | Federation with external MCP | 3 | R27 | S | — | fixture cited as source | Queued |
 | R27 | Brief v2 | 4 | R10, R22, R24, R25 | M | — | turns −20%, C −15%, ΔR ≥ 0 | Queued |
-| R28 | Hybrid retrieval (+ optional embeddings) | 4 | R20, R37 | M | 037 | +10 pts recall or stays off | Queued |
-| R29 | Delivery: pull and push | 4 | R15, R27 | S | 039 | ≤ 2 KB in < 300 ms | Queued |
+| R28 | Hybrid retrieval (+ optional embeddings) | 4 | R20, R37 | M | D2 | +10 pts recall or stays off | Queued |
+| R29 | Delivery: pull and push | 4 | R15, R27 | S | D4 | ≤ 2 KB in < 300 ms | Queued |
 | R30 | Skill compiler and trigger report | 4 | R02, review 0002 S44 | M | — | per-skill trigger report | Queued |
-| R31 | Plan and tracker index | 4 | — | S | 044 | `plan next` and `plan done` exact | Queued |
+| R31 | Plan and tracker index | 4 | — | S | D9 | `plan next` and `plan done` exact | Queued |
 | R32 | Lessons ledger | 5 | R17 | M | — | one candidate per fail-then-fix | Queued |
 | R33 | Lesson recall | 5 | R32, R15 | S | — | fewer turns on recurrences | Queued |
 | R34 | Decision assistant | 5 | review 0002 S31 | S | — | structured supersession | Queued |
-| R35 | Variant selection | 5 | R04 | M | 036 | lockfile records evidence | Queued |
+| R35 | Variant selection | 5 | R04 | M | D1 | lockfile records evidence | Queued |
 | R36 | Estate learning | 5 | R17, R32 | S | — | deterministic report | Queued |
-| R37 | Local model adapter | 6 | — | S | 037, 042 | no socket when unset | Queued |
-| R38 | Distiller | 6 | R37, R02 | M | 037 | parity at lower C, or experimental | Queued |
-| R39 | Local critic | 6 | R37, R25 | M | 037 | precision ≥ 0.8 to gate | Queued |
+| R37 | Local model adapter | 6 | — | S | D2, D7 | no socket when unset | Queued |
+| R38 | Distiller | 6 | R37, R02 | M | D2 | parity at lower C, or experimental | Queued |
+| R39 | Local critic | 6 | R37, R25 | M | D2 | precision ≥ 0.8 to gate | Queued |
 | R40 | Model and effort advice | 6 | R03 | M | — | C −25% at ΔR ≥ −2 | Queued |
 | R41 | MCP 2026-07-28 | 7 | review 0002 S43 | M | — | 3 versions; `tools/list` ≤ 2 KB | Queued |
 | R42 | Harness adapters as data | 7 | R14, R15 | M | — | provenance; detection on fixtures | Queued |
 | R43 | Plugin packaging | 7 | R42 | M | — | installs and passes R15 fixtures | Queued |
-| R44 | Single-file binary | 7 | review 0002 S35 | M | 043 | runs without Node on PATH | Queued |
+| R44 | Single-file binary | 7 | review 0002 S35 | M | D8 | runs without Node on PATH | Queued |
 | R45 | Packs, measured | 7 | review 0002 S39, R03 | S | — | pack states its ΔR | Queued |
 | R46 | `explain <CODE>` | 8 | — | S | — | every code documented | Queued |
 | R47 | `doctor --fix` | 8 | R49 | S | — | fixes exactly the safe set | Queued |
@@ -918,21 +923,28 @@ Size: S is up to 2 days, M up to a week, L more.
    those three.
 6. R31, the plan index. It is cheap and pays back on this repository's own trackers.
 
-Phase 1's defaults (ADR-033, ADR-038) are decided from the numbers these steps produce.
+Phase 1's defaults (review 0002 P7, D3) are decided from the numbers these steps produce.
 
 ## 17. Decisions this plan needs
 
-| Proposed | Ruling |
+These are numbered `D1`…`D9` by position, not by record number, because a proposal that does
+not exist yet has no number to cite. An earlier draft carried the block `ADR-0[36–44]`, which
+assumed review 0002's proposals would be written first and in order; the first five numbers of
+that block had already gone to unrelated records. A number is assigned when the record is
+written, and `D` is free here because `P1`…`P6` are this plan's own principles. `P`-numbers in
+this plan's tracker are review 0002's, written `0002 P7`.
+
+| Proposal | Ruling |
 | --- | --- |
-| ADR-036 | A change to what agents read is measured before it ships, or labelled unmeasured in its ADR |
-| ADR-037 | Optional adapters are separate packages, off by default, and propose rather than write |
-| ADR-038 | Rules have a kernel and a commentary; the `simt-kernel` key |
-| ADR-039 | Agent-time hooks are a projected surface, with one policy table for every harness |
-| ADR-040 | The evidence ledger, and what counts as a claim |
-| ADR-041 | The local index is `node:sqlite`, gitignored and always rebuildable |
-| ADR-042 | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default |
-| ADR-043 | Distribution as a single-file binary alongside npm |
-| ADR-044 | Tracker tables are a parsed format with fixed columns |
+| D1 | A change to what agents read is measured before it ships, or labelled unmeasured in its record |
+| D2 | Optional adapters are separate packages, off by default, and propose rather than write |
+| D3 | Rules have a kernel and a commentary; the `simt-kernel` key |
+| D4 | Agent-time hooks are a projected surface, with one policy table for every harness |
+| D5 | The evidence ledger, and what counts as a claim |
+| D6 | The local index is `node:sqlite`, gitignored and always rebuildable |
+| D7 | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default |
+| D8 | Distribution as a single-file binary alongside npm |
+| D9 | Tracker tables are a parsed format with fixed columns |
 
 ## 18. What this plan deliberately does not do
 

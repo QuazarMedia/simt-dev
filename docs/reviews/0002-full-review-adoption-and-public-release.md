@@ -110,7 +110,7 @@ record is written.
 
 | ID | Slice | Sev | Grp | Area | Needs ADR | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| S01 | Provenance stamp comes from the consumer's git, not simt-dev | P0 | F | projection | yes (027) | — | Queued | §1.2 #2–4 |
+| S01 | Provenance stamp comes from the consumer's git, not simt-dev | P0 | F | projection | yes (P1) | — | Queued | §1.2 #2–4 |
 | S02 | Leading `**/` path globs never match | P0 | F | resolve | no | S47 (optional) | Queued | re-verified |
 | S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | no | — | Queued | #14 |
 | S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | yes | S02, S03 | Queued | #14 |
@@ -119,47 +119,47 @@ record is written.
 | S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Queued | #6 |
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | F | hooks | no | — | Queued | #8 |
 | S09 | `sync`/`init` crash on a mispointed pointer, and `check` passes it | P1 | F | projection | only if pointer drift blocks | — | Queued | #9 |
-| S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | via 028 | — | Queued | #10, #11 |
+| S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | via P2 | — | Queued | #10, #11 |
 | S11 | `slice-commit` rule can never be projected | P1 | F | rules | no | — | **Complete** | `5c079cd` |
-| S12 | Folding + per-rule surfaces load every process rule twice | P1 | F | surfaces | yes (033, supersedes ADR-021 §3) | — | Queued | 5 estate repos, #17 |
+| S12 | Folding + per-rule surfaces load every process rule twice | P1 | F | surfaces | yes (P7, supersedes ADR-021 §3) | — | Queued | 5 estate repos, #17 |
 | S13 | `rules list/show/why` cannot see the `.mdc` rules | P2 | F | rules | no | — | Queued | re-verified |
 | S14 | Shipped text that fails "readable from the receiving repo" | P1 | F | content | no | — | Queued | re-verified, +1 |
 | S15 | Help text and flags do not match the CLI | P2 | F | cli | no | S10 | Queued | re-verified |
 | S16 | Generated rule-file frontmatter never regenerates | P2 | F | projection | no | — | Queued | re-verified |
 | S17 | Declared gate commands split on whitespace | P2 | F | hooks | amend ADR-019 | — | Queued | re-verified |
-| S18 | Public-release packaging | P0 | R | package | yes (030) | S01, S14, S39 | Queued | re-verified, +3 |
+| S18 | Public-release packaging | P0 | R | package | yes (P4) | S01, S14, S39 | Queued | re-verified, +3 |
 | S19 | Docs and ADR consistency | P2 | F | docs | no | — | Queued | 1 item done in `fd37ab5` |
 | S20 | Test gaps that let S01–S11 ship green | P1 | F | tests | no | lands with each slice | Queued | re-verified |
 | S21 | Dead code, duplicate parsers, stale comments | P3 | E | hygiene | no | — | Queued | re-verified |
 | S22 | Robustness at the edges | P3 | E | various | no | — | Queued | re-verified |
 | S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | no | S10 | Queued | #11, #12 |
-| S24 | `sync` writes without `--yes` | P1 | F | cli | yes (028) | S10 | Queued | §1.3 |
+| S24 | `sync` writes without `--yes` | P1 | F | cli | yes (P2) | S10 | Queued | §1.3 |
 | S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | no | — | Queued | #3 |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | no | — | Queued | #13 |
-| S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (029) | S07 | Queued | #5, #6 |
+| S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (P3) | S07 | Queued | #5, #6 |
 | S29 | An appended region fails `prettier --check` | P1 | F | projection | no | — | Queued | #7 |
-| S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (035, amends ADR-025) | — | Queued | #7 |
+| S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (P9, amends ADR-025) | — | Queued | #7 |
 | S31 | Partial supersession is lost by the decision index | P2 | F | decisions | no | S19 | Queued | #16 |
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Queued | #6 |
 | S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Queued | #14 |
 | S34 | Folded rules break the heading hierarchy | P2 | F | projection | no | — | Queued | rendered regions |
-| S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (031) | S18 | Queued | #20 |
+| S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (P5) | S18 | Queued | #20 |
 | S36 | Estate roll-out: from 14 drifted to 14 enforced | P1 | A | adoption | amend ADR-018 | S01, S08, S10, S24, S35 | Queued | #3 |
 | S37 | A region past a harness's read limit is invisible to it | P1 | A | projection | no | — | Queued | #18 |
-| S38 | Workspace token cost: 90 KB per turn, 72% repeated | P1 | A | projection | yes (033) | S12 | Queued | #17 |
-| S39 | Estate policy belongs in an estate pack | P1 | A | rules, package | yes (030) | S28 | Queued | profiles |
+| S38 | Workspace token cost: 90 KB per turn, 72% repeated | P1 | A | projection | yes (P7) | S12 | Queued | #17 |
+| S39 | Estate policy belongs in an estate pack | P1 | A | rules, package | yes (P4) | S28 | Queued | profiles |
 | S40 | Eight common ecosystems get only the core rules | P1 | R | fingerprint, rules | no (data, ADR-013) | S28 | Queued | #6 |
-| S41 | A monorepo gets one root projection | P1 | R | projection | yes (032) | S28 | Queued | #6 |
+| S41 | A monorepo gets one root projection | P1 | R | projection | yes (P6) | S28 | Queued | #6 |
 | S42 | Harness coverage stops at five surfaces | P1 | R | surfaces | no (rows are data) | S12 | Queued | research |
 | S43 | MCP server is two spec revisions behind and returns text only | P2 | R | mcp | no | S05, S06 | Queued | #15 |
 | S44 | Agent Skills conformance is not linted | P2 | R | skills | no | — | Queued | 37/37 names conform |
 | S45 | Core and process rules speak one language and one harness | P2 | R | rules | no | S14 | Queued | rendered regions |
 | S46 | The POSIX-only stance reaches an installer as `EBADPLATFORM` | P3 | R | docs | no (ADR-012 stands) | S18 | Queued | — |
-| S47 | The Node floor is end-of-life | P2 | E | runtime | yes (034) | — | Queued | release schedule |
+| S47 | The Node floor is end-of-life | P2 | E | runtime | yes (P8) | — | Queued | release schedule |
 | S48 | Workflow templates: tag-pinned actions, Node 20, an install that needs npm | P2 | E | ci | no | S35, S47 | Queued | `workflow.mjs` |
 | S49 | Dependabot misses Gradle, submodules and seven more ecosystems | P2 | E | ci | no | — | Queued | `dependabot.mjs` |
-| S50 | Rule files load eagerly where a surface could scope them | P2 | E | surfaces | yes (033) | S12 | Queued | `surfaces.mjs` |
+| S50 | Rule files load eagerly where a surface could scope them | P2 | E | surfaces | yes (P7) | S12 | Queued | `surfaces.mjs` |
 | S51 | JSON output has no schema version and no compact form | P3 | E | output | no | S10 | Queued | `output/index.mjs:68` |
 
 ## 4. Review 0001 at `4c27514`
@@ -192,7 +192,7 @@ record is written.
 ### 4.1 Fixes that change since review 0001
 
 **S01.** 0001's fix stands: stamp the package `version` plus a content digest, compare only the
-region body, and record the change in an ADR (proposed ADR-027, "a projection is identified by
+region body, and record the change in an ADR (proposal P1, "a projection is identified by
 its content"). Add three things:
 
 1. `sync` must rewrite `projection` in `simt-dev.json` in the same write as the regions. Today it
@@ -242,7 +242,7 @@ directory is `foreign`.
 **S12.** The estate scale is now measured. Five repos use `opencode,cursor`: `simt-app`,
 `simt-blog`, `simt-social`, `simt-social-api` and `simt-social-media`. Their 17 managed `.mdc`
 files repeat text already folded into `AGENTS.md`, and in this session `simt-app`'s three
-files alone are 6,530 B loaded twice. The decision moves into ADR-033 (S38), so that one record
+files alone are 6,530 B loaded twice. The decision moves into P7 (S38), so that one record
 settles every context-budget question.
 
 **S14.** `test/leaks.mjs` matches `simt-(app|space|goto|social|blog|landing|garmin|jobs|media|wearable)`,
@@ -303,7 +303,7 @@ through `writeMode` (S10). `failOutside` returns `EXIT.UNSUPPORTED` with `ok: fa
 `skills install` and `ci` all preview first. An agent that pattern-matches on the other five
 previews by running `sync` and writes instead. That is what happened in §1.3.
 
-**Fix.** Proposed ADR-028, "every writer previews unless told to write", as follows:
+**Fix.** Proposal P2, "every writer previews unless told to write", as follows:
 
 - `sync` without `--yes` prints the plan. It exits 0 when nothing would change and 1 when
   something would, so plain `sync` also works as a check.
@@ -378,7 +378,7 @@ what a repo is written in, not what it runs on:
 Two smaller ones: `hono` runs on Node, Bun and Deno, so it is not evidence of Workers, and
 Wrangler also accepts `wrangler.json`, which `MARKERS` misses (`fingerprint.mjs:26`).
 
-**Fix.** Proposed ADR-029, "a profile selects on what a repository runs on":
+**Fix.** Proposal P3, "a profile selects on what a repository runs on":
 
 - `cloudflare-workers` applies on `cloudflare-workers` only (a wrangler marker, or the
   `wrangler` dependency).
@@ -392,7 +392,7 @@ Wrangler also accepts `wrangler.json`, which `MARKERS` misses (`fingerprint.mjs:
 - Split `python` into a generic `python.md` plus a `uv.md` selected on `has-uv-lock`.
 
 All of this is data plus `has-*` facts, as ADR-013 requires. Removing a selection changes what
-existing repos receive. ADR-029 lists the expected per-repo diff, computed with `compare`
+existing repos receive. P3 lists the expected per-repo diff, computed with `compare`
 before and after.
 
 **Accept.** Each row of the table above is a fingerprint fixture with an asserted profile set.
@@ -428,7 +428,7 @@ Measured with Prettier 3.8.3: `[prettier] singleQuote = true` leaves `"x"` uncha
 This is the "decoration that misdescribes the artefact" failure that this repo's own
 `AGENTS.md` lists.
 
-**Fix.** Proposed ADR-035 amends ADR-025's context and baseline content:
+**Fix.** Proposal P9 amends ADR-025's context and baseline content:
 
 1. **Now:** delete the `[prettier]` block and its comment. That changes no behaviour, because
    the block was inert.
@@ -530,7 +530,7 @@ Today no repository meets 1, 2, 3, 4 or 8.
   the binary. In `simt-app`, `app-ui`, `wakt-app`, `simt-garmin` and `simt-jobs` that can never
   produce one.
 
-**Fix.** Proposed ADR-031, "how a repository without npm obtains simt-dev":
+**Fix.** Proposal P5, "how a repository without npm obtains simt-dev":
 
 1. **Publish** under the name chosen in S18, from CI, with `npm publish --provenance`. JS repos
    pin it as a devDependency; the shim already finds it in `node_modules`.
@@ -653,7 +653,7 @@ Prompt caching softens the price of a stable prefix but not the context the mode
 past. The ICLR 2026 `AGENTS.md` study measured more than 20% higher cost with no success gain
 from context files.
 
-**Fix.** Proposed ADR-033, "context has a budget", decided with plan 0003's measurements:
+**Fix.** Proposal P7, "context has a budget", decided with plan 0003's measurements:
 
 1. **S12 now:** skip per-rule files for readers that also read the primary file (6.5 KB here).
 2. **Process rules on demand.** `intake-questions`, `slice-commit` and `test-gate` are
@@ -686,7 +686,7 @@ the number.
 Repo-local profiles exist (`.simt-dev/profiles/*.md`, `LOCAL_PROFILE_DIR`). What is missing is a
 way to share one set across fourteen repositories.
 
-**Fix.** Proposed ADR-030, "estate policy ships as a pack, not as the product":
+**Fix.** Proposal P4, "estate policy ships as a pack, not as the product":
 
 - `simt-dev.json` gains `packs: [{ source, version, digest }]`.
 - A pack has this repository's layout: `rules/stacks/*.md`, `rules/mdc/*.mdc`,
@@ -737,7 +737,7 @@ gates. A missing tool yields a dropped gate with a remedy, never a declared one.
 workspaces fixture (`apps/web` with React, `apps/api` with Workers) received the node fallback
 only.
 
-**Fix.** Proposed ADR-032, "a package in a monorepo is a projection root":
+**Fix.** Proposal P6, "a package in a monorepo is a projection root":
 
 - Detect workspace roots from `pnpm-workspace.yaml`, `package.json` `workspaces`, `turbo.json`,
   `nx.json`, the Cargo `[workspace]` table, `go.work` and Gradle `include(...)`.
@@ -861,7 +861,7 @@ the floor unlocks built-ins that replace hand-written code:
 - `node:sqlite` with FTS5, a release candidate since 24.15, is the store plan 0003 builds on.
   Verified working on 26.10.
 
-**Fix.** Proposed ADR-034: floor `>=22.20.0`. CI runs 22, 24 and 26. Workflow templates use 24
+**Fix.** Proposal P8: floor `>=22.20.0`. CI runs 22, 24 and 26. Workflow templates use 24
 (S48).
 
 **Accept.** `engines`, both workflow templates and the README agree. S02's fix uses
@@ -907,7 +907,7 @@ rules without `paths`. Four surfaces document scoping keys: Cursor `globs`, Clau
 Stack profiles, 2–3 KB each, could load only when matching files are in play. Today profiles
 can only be folded into `AGENTS.md`.
 
-**Fix.** Within ADR-033:
+**Fix.** Within P7:
 
 - Let a profile declare `simt-scope: ["wrangler.jsonc", "src/**/*.ts"]`.
 - Surfaces that can scope get one scoped file per profile.
@@ -947,19 +947,31 @@ lands with S01.
 
 ## 10. Decisions this review needs
 
-| Proposed | Ruling | Slices | Supersedes or amends |
+These rulings are numbered by position here (`P1`…`P9`), not by a record number. An earlier
+draft of this section carried a block of record numbers, `ADR-0[27–35]`; by the time it was
+written, the first five of them had been issued to unrelated records, and the next plan's
+block would have collided with the renumbering. A proposal that does not exist yet has no
+number — the number is assigned when the record is written, which is the only moment it is
+knowable. Every `ADR-` reference in this review therefore names a record you can read in
+`docs/decisions/`, and `test/decisions.test.mjs` fails if one does not.
+
+| Proposal | Ruling | Slices | Supersedes or amends |
 | --- | --- | --- | --- |
-| ADR-027 | A projection is identified by its content, not by a commit | S01 | the stamp described in plan 0002 §9 |
-| ADR-028 | Every writer previews unless told to write; `--dry-run` always wins; `--json` changes format only | S24, S10 | — |
-| ADR-029 | A profile selects on what a repository runs on | S28 | refines ADR-013 |
-| ADR-030 | Estate policy ships as a pack; the product ships generic profiles and an example registry | S39, S18 | — |
-| ADR-031 | How a repository without npm obtains simt-dev | S35 | clarifies ADR-010 |
-| ADR-032 | A package in a monorepo is a projection root | S41 | — |
-| ADR-033 | Context has a budget: one copy per reader, scoped where a reader can scope | S38, S12, S50 | ADR-021 §3 |
-| ADR-034 | Node floor `>=22.20.0` | S47 | plan 0002 "Runtime" line |
-| ADR-035 | The editorconfig baseline carries only keys a reader honours | S30 | ADR-025 context and baseline content |
+| P1 | A projection is identified by its content, not by a commit | S01 | the stamp described in plan 0002 §9 |
+| P2 | Every writer previews unless told to write; `--dry-run` always wins; `--json` changes format only | S24, S10 | — |
+| P3 | A profile selects on what a repository runs on | S28 | refines ADR-013 |
+| P4 | Estate policy ships as a pack; the product ships generic profiles and an example registry | S39, S18 | — |
+| P5 | How a repository without npm obtains simt-dev | S35 | clarifies ADR-010 |
+| P6 | A package in a monorepo is a projection root | S41 | — |
+| P7 | Context has a budget: one copy per reader, scoped where a reader can scope | S38, S12, S50 | ADR-021 §3 |
+| P8 | Node floor `>=22.20.0` | S47 | plan 0002 "Runtime" line |
+| P9 | The editorconfig baseline carries only keys a reader honours | S30 | ADR-025 context and baseline content |
 | amend ADR-018 | A foreign hook for an event simt-dev does not gate is chained, not replaced | S36 | ADR-018 |
 | amend ADR-019 | A declared command runs as `sh -c` | S17 (0001) | ADR-019 |
+
+The two amendments are different in kind: they name a record that already exists, so the
+number is known and the reference is checkable. A new record has neither property until it is
+written.
 
 ## 11. What is solid and should be kept
 

@@ -2,12 +2,12 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { citations, byId, loadDecisions } from '../src/decisions/index.mjs';
+import { citations, byId, DECISIONS_DIR, loadDecisions } from '../src/decisions/index.mjs';
 import { loadRules, select } from '../src/projection/project.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
 
@@ -231,6 +231,37 @@ test('rules why: without an argument it fails rather than guessing a rule', asyn
   const { code, stderr } = await run(['rules', 'why']);
   assert.equal(code, 2);
   assert.match(stderr, /usage: simt-dev rules why/);
+});
+
+test('every ADR cited in docs/ is a record that exists', async () => {
+  // Plans and reviews used to carry pre-allocated numbers, which is how review
+  // 0002 came to cite ADR-027 through ADR-031 for rulings that had nothing to do
+  // with the five records those numbers now hold. A citation that resolves is
+  // the only property that keeps a review honest as records are written.
+  const { decisions } = await loadDecisions();
+  const known = new Set(decisions.map((d) => d.id));
+  for (const dir of ['plans', 'reviews']) {
+    for (const name of await readdir(resolve(HERE, '..', 'docs', dir))) {
+      if (!name.endsWith('.md')) continue;
+      const path = join(DECISIONS_DIR, '..', dir, name);
+      for (const id of citations(await readFile(path, 'utf8'))) {
+        assert.ok(known.has(id), `${dir}/${name} cites ${id}, which is not a record`);
+      }
+    }
+  }
+});
+
+test('the doc reference sweep is not vacuous', async () => {
+  // A sweep that matched nothing would pass forever. docs/plans and docs/reviews
+  // are the two directories that cite records; both must cite some.
+  let cited = 0;
+  for (const dir of ['plans', 'reviews']) {
+    for (const name of await readdir(resolve(HERE, '..', 'docs', dir))) {
+      if (!name.endsWith('.md')) continue;
+      cited += citations(await readFile(join(DECISIONS_DIR, '..', dir, name), 'utf8')).length;
+    }
+  }
+  assert.ok(cited > 0, 'no document cites a record; the sweep above proves nothing');
 });
 
 // --- the invariant that matters: selection and provenance agree ---------------

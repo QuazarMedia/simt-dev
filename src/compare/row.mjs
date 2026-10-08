@@ -111,7 +111,7 @@ export async function buildRow(path, context) {
   // for hooks, where an unadopted repo's own hooks are a note rather than a problem.
   if (row.adoption === 'adopted' && row.ruleFiles.stale.length > 0) {
     problems.push(
-      `${row.ruleFiles.stale.length} of ${row.ruleFiles.total} rule files are not current (${row.ruleFiles.stale.join(', ')}); run: simt-dev sync`,
+      `${row.ruleFiles.stale.length} of ${row.ruleFiles.total} rule files are not current (${row.ruleFiles.stale.join(', ')}); run: simt-dev sync --yes`,
     );
   }
 
@@ -139,22 +139,22 @@ export async function buildRow(path, context) {
     if (region.status === 'drift') {
       // A drift has two causes with different fixes, and the SHA says which. When
       // the recorded SHA matches this simt-dev, the region was hand-edited and
-      // `simt-dev sync` is right; when it does not, the repo is simply behind and the
+      // `simt-dev sync --yes` is right; when it does not, the repo is simply behind and the
       // same command is also right - but the message must not claim a version
       // mismatch when the versions are identical, because that sends the reader
       // looking for a pin that is already correct.
       const sameSha = region.recordedSha === context.expectedSha;
       problems.push(
         sameSha
-          ? 'the generated region was hand-edited; restore it with: simt-dev sync'
-          : `projection is ${region.recordedSha ?? '(no sha)'} but this simt-dev is ${context.expectedSha}; run: simt-dev sync`,
+          ? 'the generated region was hand-edited; restore it with: simt-dev sync --yes'
+          : `projection is ${region.recordedSha ?? '(no sha)'} but this simt-dev is ${context.expectedSha}; run: simt-dev sync --yes`,
       );
     } else if (region.status === 'malformed') {
-      problems.push(`generated region is malformed: ${region.detail}; run: simt-dev sync`);
+      problems.push(`generated region is malformed: ${region.detail}; run: simt-dev sync --yes`);
     } else if (region.status === 'unmanaged') {
-      problems.push('adopted but AGENTS.md has no generated region; run: simt-dev sync');
+      problems.push('adopted but AGENTS.md has no generated region; run: simt-dev sync --yes');
     } else if (region.status === 'absent') {
-      problems.push('adopted but AGENTS.md does not exist; run: simt-dev sync');
+      problems.push('adopted but AGENTS.md does not exist; run: simt-dev sync --yes');
     } else if (region.status === 'current' && row.pinnedSha && row.pinnedSha !== context.expectedSha) {
       // The region matches this simt-dev but the manifest pins an older one. The
       // next sync would stamp the newer SHA silently, so the pin is the thing

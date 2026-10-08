@@ -55,7 +55,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       state: 'malformed-region',
       action: 'skip',
       detail: `${malformed.file} region is malformed (${malformed.reason})`,
-      remedy: `fix the markers at ${malformed.file}:${malformed.line}, then: simt-dev sync`,
+      remedy: `fix the markers at ${malformed.file}:${malformed.line}, then: simt-dev sync --yes`,
     };
   }
   if (primary === null) {
@@ -76,7 +76,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       state: 'no-region',
       action: 'skip',
       detail: 'simt-dev.json exists but AGENTS.md has no generated region',
-      remedy: 'run: simt-dev sync',
+      remedy: 'run: simt-dev sync --yes',
     };
   }
 

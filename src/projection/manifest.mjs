@@ -38,7 +38,7 @@ export const MANIFEST = 'simt-dev.json';
  */
 export const MANIFEST_COMMENT = {
   $comment:
-    'Written and maintained by simt-dev. Edit by hand only if you intend to take ownership of this file: `simt-dev sync` regenerates the projected rules, and re-running `simt-dev init` refreshes the SHA without weakening a value you set here.',
+    'Written and maintained by simt-dev. Edit by hand only if you intend to take ownership of this file: `simt-dev sync --yes` regenerates the projected rules, and re-running `simt-dev init` refreshes the SHA without weakening a value you set here.',
 };
 
 /**

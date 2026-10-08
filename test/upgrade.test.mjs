@@ -149,7 +149,10 @@ test('upgrade plan: a manifest with no region is a repair, not a version bump', 
     sha: 'aaaaaaa',
   });
   assert.equal(p.action, 'skip');
-  assert.equal(p.remedy, 'run: simt-dev sync');
+  // The remedy has to carry `--yes`. `sync` previews unless told to write, so a
+  // remedy naming the bare command would tell the reader to run it and watch
+  // nothing happen — the instruction survives the change that made it false.
+  assert.equal(p.remedy, 'run: simt-dev sync --yes');
 });
 
 test('upgrade plan: an unparseable manifest is skipped, not overwritten', () => {

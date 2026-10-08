@@ -172,7 +172,7 @@ export function compose(body, { sha, sources = [] } = {}, style) {
   header.push(
     s.note(
       'Generated content. Do not edit by hand - your changes are overwritten.',
-      'Run `simt-dev sync` to regenerate, or `simt-dev check` to see what is stale.',
+      'Run `simt-dev sync --yes` to regenerate, or `simt-dev check` to see what is stale.',
     ),
   );
   const trimmed = body.replace(/\n+$/, '');

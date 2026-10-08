@@ -160,9 +160,38 @@ test('a rendered .mdc is clean, with no repo substitutions supplied', async () =
 test('the generated-region header names only actions a reader can take', () => {
   const text = compose('Body.', { sha: 'abc1234', sources: ['rules/core.md'] });
   assertClean('generated-region header', text);
-  // The command it tells them to run must exist under the shipped name.
-  assert.match(text, /simt-dev sync/, text);
+  // The command it tells them to run must exist under the shipped name. This line
+  // ships into every consumer's AGENTS.md, so it is the one instruction with no
+  // second chance: a reader has only this repo to go on. `sync` previews unless
+  // told to write (ADR-035), so the bare spelling would tell them to run it and
+  // watch nothing happen — an instruction that was correct when written and false
+  // the moment the preview became the default.
+  assert.match(text, /simt-dev sync --yes/, text);
+  assert.doesNotMatch(text, /simt-dev sync`/, text);
   assert.match(text, /Do not edit/i, text);
+});
+
+test('every remedy names a command that does what the remedy claims', async () => {
+  // A remedy is read by someone who has no other context, and the whole promise of
+  // a remedy is that running it fixes the thing it names. `sync` used to write by
+  // default, so a remedy naming the bare command was true; after ADR-035 it is a
+  // preview, and every remedy in the tree silently became a no-op instruction. The
+  // assertion has to name the flag, or it passes on both sides of that change.
+  const offenders = [];
+  for (const file of await collect(join(ROOT, 'src'), '.mjs')) {
+    const text = await readFile(file, 'utf8');
+    // The occurrence, not the string containing it. A remedy is usually one clause
+    // inside a longer template literal, and matching the literal would report a
+    // whole help block as an offender and hide the clause that is actually wrong.
+    // `[--yes]` in a usage synopsis is the help convention for an optional flag,
+    // so it is allowed; what is not allowed is a bare `simt-dev sync` that reads
+    // as an instruction to run it.
+    for (const match of text.matchAll(/simt-dev sync(?! \[?(?:--yes|--check)\b)/g)) {
+      const line = text.slice(0, match.index).split('\n').length;
+      offenders.push(`${file.slice(ROOT.length + 1)}:${line}: simt-dev sync`);
+    }
+  }
+  assert.deepEqual(offenders, [], `remedies name sync without a flag:\n${offenders.join('\n')}`);
 });
 
 test('the manifest comment describes the manifest', async () => {
@@ -511,4 +540,15 @@ test('a bare key in a rule file is reported with the prefixed spelling, not igno
 
 async function adrFiles() {
   return (await readdir(DECISIONS_DIR)).filter((n) => /^ADR-\d{3}-.*\.md$/.test(n)).sort();
+}
+
+/** Every file under `dir` with the given extension, sorted, so a failure names a path. */
+async function collect(dir, ext) {
+  const out = [];
+  for (const entry of await readdir(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...(await collect(full, ext)));
+    else if (entry.name.endsWith(ext)) out.push(full);
+  }
+  return out.sort();
 }

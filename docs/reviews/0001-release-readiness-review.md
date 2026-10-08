@@ -1,8 +1,16 @@
 # Review 0001 — simt-dev CLI, structure and docs: release readiness
 
-Status: open · 2026-10-06
+Status: **reference** · reviewed 2026-10-06 · the work is tracked in review 0002
 Reviewed at: `09c596d` (clean worktree)
 Verdict: **BLOCK** for public release and for wider estate rollout (ADR-008 vocabulary)
+
+> **One tracker, and it is not this one.** This review found twenty-two slices. Review 0002
+> re-verified every one of them at `4c27514`, carried them into its own §3 table beside the
+> twenty-nine slices it added, and that table is the only one that changes state — which is why
+> this review keeps no table of its own. Two trackers is how a slice ends up Complete in one and
+> Queued in the other, and then nobody knows which one to read. The sections below are the
+> evidence: what was found, where, and why it mattered. Read `## Slice details` for that, and
+> `0002-full-review-adoption-and-public-release.md` §3 for whether a slice is done.
 
 ## Scope and method
 
@@ -36,37 +44,19 @@ taken from the real registry, and partial staging.
 
 ## Tracker
 
-State vocabulary: **Queued**, **In progress**, **Complete**, **Accepted**. Record the commit
-SHA and the test command in the row when a slice changes state.
+There isn't one, deliberately. The twenty-two slices this review found are rows S01–S22 of
+[`0002-full-review-adoption-and-public-release.md`](0002-full-review-adoption-and-public-release.md)
+§3, alongside the twenty-nine that review added, and that single table is the one that changes
+state. Keeping a copy here was duplicating the whole thing: every state change had to be made
+twice, and it was already three rows out of date where it had not been — S11 shipped at
+`5c079cd` and was still marked Queued here.
 
-| ID | Slice | Sev | Area | Needs ADR | Depends on | State | SHA / evidence |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| S01 | Provenance stamp comes from the consumer's git, not simt-dev | P0 | projection | yes | — | Complete | ADR-032; `provenanceDigest()` |
-| S02 | Leading `**/` path globs never match | P0 | resolve | no | — | Queued | |
-| S03 | Multi-word and short keywords/aliases are unreachable | P1 | resolve, registry | no | — | Queued | |
-| S04 | Stack overlap alone selects a skill | P1 | resolve | yes | S02, S03 | Queued | |
-| S05 | MCP `rules_why` crashes on every call | P0 | mcp | no | — | Complete | `1791a95` — `loadRules` returns an array; `rules_why` destructured `{ rules }`. All three call shapes failed, not two |
-| S06 | MCP and CLI disagree (`check`, `skills_brief`, memoised workspace) | P1 | mcp | no | S05 | Queued | |
-| S07 | Directory facts with a `/` in the path are never detected | P1 | fingerprint | no | — | Queued | |
-| S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | hooks | no | — | Queued | |
-| S09 | `sync`/`init` crash on a mispointed pointer after partial writes | P1 | projection | no | — | Queued | |
-| S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent across commands | P1 | cli | no | — | Queued | |
-| S11 | `slice-commit` rule can never be projected; opt-in note is false | P1 | rules | no | — | Queued | |
-| S12 | Folding + per-rule surfaces load every process rule twice | P1 | surfaces | yes (supersedes ADR-021 §3) | — | Queued | |
-| S13 | `rules list/show/why` cannot see the `.mdc` rules | P2 | rules | no | S11 | Queued | |
-| S14 | Shipped text that fails "readable from the receiving repo" | P1 | content | no | — | Queued | |
-| S15 | Help text and flags do not match the CLI | P2 | cli | no | S10 | Queued | |
-| S16 | Generated rule-file frontmatter never regenerates | P2 | projection | no | — | Queued | |
-| S17 | Declared gate commands split on whitespace | P2 | hooks | amend ADR-019 | — | Queued | |
-| S18 | Public-release packaging | P0 | package | yes (registry scope) | S01, S14 | Queued | |
-| S19 | Docs and ADR consistency | P2 | docs | no | — | Queued | |
-| S20 | Test gaps that let S01–S11 ship green | P1 | tests | no | lands with each slice | Queued | |
-| S21 | Dead code, duplicate parsers, stale comments | P3 | hygiene | no | — | Queued | |
-| S22 | Robustness at the edges | P3 | various | no | — | Queued | |
-
-Suggested order: S01, S05, S08 and S02 first. Each is small and blocks a different surface
-(the gate, MCP, hooks, resolution). Then S07, S09, S10 and S11, then S03 and S04 together,
-then S12 once its decision is made. S18 comes last because it depends on S01 and S14.
+The slice details below are unchanged and are the record of *what* each slice is. The
+severities agree between the two reviews on all twenty-two; where `0002`'s `Needs ADR` and
+`Depends on` cells are more specific than the ones that were here (S09, S10, S18 gained
+decisions, S02 gained an optional dependency, S13's dependency on S11 lapsed when S11
+shipped), `0002` is the authority, because it re-checked each slice against the tree rather
+than against this file.
 
 ---
 

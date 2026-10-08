@@ -167,7 +167,7 @@ record is written.
 | S49 | Dependabot misses Gradle, submodules and seven more ecosystems | P2 | E | ci | no | — | Queued | `dependabot.mjs` |
 | S50 | Rule files load eagerly where a surface could scope them | P2 | E | surfaces | yes (P7) | S12 | Queued | `surfaces.mjs` |
 | S51 | JSON output has no schema version and no compact form | P3 | E | output | no | S10 | Queued | `output/index.mjs:68` |
-| S52 | `hooks install` writes without `--yes` | P1 | F | hooks | **yes (ADR-040)** | S10 | Complete | found while probing §9's exit criterion for S20; see the resolution below |
+| S52 | `hooks install` writes without `--yes` | P1 | F | hooks | **yes (ADR-040)** | S10 | Complete | `8569cf0` |
 
 ## 4. Review 0001 at `4c27514`
 

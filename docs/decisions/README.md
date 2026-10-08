@@ -46,6 +46,7 @@ record's status line — never by editing the ruling in place.
 | [036](ADR-036-a-writer-that-writes-says-so-and-the-instructions-naming-it-move-with-it.md) | A command that writes says so, and every instruction that names it moves with it | accepted |
 | [037](ADR-037-unchanged-means-writing-would-not-change-a-byte.md) | `unchanged` means writing would not change a byte, not that the body matches | accepted |
 | [038](ADR-038-the-gate-filter-belongs-to-every-manifest-writer.md) | The gate filter belongs to every writer of a manifest, not to `init` | accepted |
+| [039](ADR-039-a-ci-step-runs-a-form-that-can-fail.md) | A gate a CI step runs must have a form that can fail, and a refusal is a failure | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -152,6 +153,17 @@ all four, and a pre-commit hook that blocked the first commit it was installed i
 Nothing about the rule was wrong; only the sentence that carried it. That is what the
 `Affects:` line on a record is for, and this record amends one in place of editing it —
 because a reader who finds the record and trusts it has to be able to trust the whole of it.
+
+ADR-039 is the same shape turned on the tool's own controls, and it is the only one of these
+whose subject is a gate that was enforcing a gate. This repository's workflow carries a step
+named "the gate copy in this repo is current", commented as the place the drift would be
+caught, running `simt-dev ci`. With a hand edit in that copy, `ci` printed the drift and
+exited 0 — so the step read the thing it was written to catch, said it out loud, and passed.
+Every other record here is about a check that reports pass and does not; this one is about
+the check on the checks. The same slice found two smaller instances of the same habit in the
+same command: `--json --dry-run` printed no document at all, because the mode guard was in
+the wrong place, and a refusal in a repository that adopted simt-dev printed a paragraph
+saying it was refused directly above `ok: true` and exited 0.
 
 ## The rule these records enforce
 

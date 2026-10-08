@@ -218,7 +218,11 @@ export async function planDependabot(root) {
   const detection = { facts, stack };
 
   if (exists) {
-    const current = own ? text === renderDependabot(facts, { stack, own: true }) : true;
+    // Both sides of the comparison, for the same reason as the workflow plan: a reader
+    // told the file differs can be shown how, and re-rendering for a diff would let
+    // the two answers disagree.
+    const desired = renderDependabot(facts, { stack, own: true });
+    const current = own ? text === desired : true;
     return {
       file: DEPENDABOT_FILE,
       path,
@@ -227,6 +231,7 @@ export async function planDependabot(root) {
       exists,
       bytes,
       current,
+      source: { text, desired },
       workflows,
       ecosystems: watched,
       ...detection,

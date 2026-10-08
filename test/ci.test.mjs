@@ -26,11 +26,33 @@ import { renderDependabot, planDependabot, DEPENDABOT_FILE } from '../src/ci/dep
 import { renderShim, EVENTS } from '../src/hooks/shim.mjs';
 import { PACKAGE_NAME, renderLocator } from '../src/locate.mjs';
 import { PACKAGE_ROOT } from '../src/workspace.mjs';
+import { EXIT } from '../src/output/index.mjs';
 import { assertClean } from './leaks.mjs';
 
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
 const temps = [];
+
+/**
+ * Run the binary and report the outcome, exit code included.
+ *
+ * `promisify(execFile)` rejects on a non-zero exit, which is the right default for a
+ * helper that is asserting a command succeeded — and the wrong one for every test
+ * about a command that must fail. Without this, a test for a refusal can only read
+ * stdout if it catches the rejection, and the code it was supposed to check is the
+ * code in the error.
+ */
+async function run(args, opts = {}) {
+  try {
+    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+      ...opts,
+      env: { ...process.env, NO_COLOR: '1', ...opts.env },
+    });
+    return { code: 0, stdout, stderr };
+  } catch (error) {
+    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
+  }
+}
 
 after(async () => {
   for (const t of temps) await exec('rm', ['-rf', t]);
@@ -416,6 +438,98 @@ test('a stale copy in simt-dev\'s own repository is reported, with the fix named
   }
 });
 
+test('the own gate\'s own copy is checked with a command that can fail', async () => {
+  // The step this guards is the one whose comment says the drift would otherwise land
+  // unnoticed, and it ran `ci` — which previews and exits 0. So the step printed the
+  // drift it exists to catch and passed. A check that cannot fail is not a check, and
+  // this is the only place in the tool where that shape is load-bearing.
+  const yaml = renderWorkflow({ own: true });
+  assert.match(
+    yaml,
+    /run: node bin\/simt-dev\.mjs ci --check/,
+    'the own gate must run the form that can fail, or the step is decoration',
+  );
+  // And not both spellings: a bare `ci` left in the file would be the same step
+  // described twice, one of which still passes on drift.
+  assert.doesNotMatch(yaml, /run: node bin\/simt-dev\.mjs ci$/m);
+});
+
+test('`ci --check` exits non-zero on a stale copy and shows what changed', async () => {
+  // Same constraint as the test above: the case is only reachable when `isOwnRepo` is
+  // true, and the only directory that satisfies that is the package root. Same `finally`,
+  // same reason — a thrown assertion must not leave a tracked file changed.
+  const path = join(PACKAGE_ROOT, WORKFLOW_FILE);
+  const before = await readFile(path, 'utf8');
+  try {
+    // A current copy first: `--check` on a clean tree must be silent, or the step would
+    // fail every push and be turned off, which is how a real gate gets deleted.
+    const clean = await run(['ci', '--check'], { cwd: PACKAGE_ROOT });
+    assert.equal(clean.code, 0, clean.stdout + clean.stderr);
+    assert.match(clean.stdout, /current\s+\.github\/workflows/);
+
+    await writeFile(path, `${before}\n# a hand edit that drifts the copy\n`);
+    const stale = await run(['ci', '--check'], { cwd: PACKAGE_ROOT });
+    assert.equal(stale.code, EXIT.FAIL, 'a stale copy must fail the step that exists to catch it');
+    assert.match(stale.stdout, /a hand edit that drifts the copy/);
+    // The diff is the reason `--check` is worth more than an exit code: the reader is
+    // the author of the template change, and the question is what they changed.
+    assert.match(stale.stdout, /^--- a\/\.github\/workflows\/simt-dev-check\.yml$/m);
+    assert.match(stale.stdout, /^\+\+\+ b\/\.github\/workflows\/simt-dev-check\.yml$/m);
+    assert.match(stale.stdout, /^-\# a hand edit that drifts the copy$/m);
+    assert.match(stale.stdout, /apply with: simt-dev ci --yes/);
+
+    // And `--json --check` says the same thing, so a caller is not left reading prose.
+    const asJson = await run(['ci', '--check', '--json'], { cwd: PACKAGE_ROOT });
+    assert.equal(asJson.code, EXIT.FAIL);
+    const doc = JSON.parse(asJson.stdout);
+    assert.equal(doc.ok, false, 'ok must agree with the exit code (ADR-035)');
+    assert.match(doc.remedy, /simt-dev ci --yes/);
+    // The plan carries both sides of the comparison so the verdict and the diff cannot
+    // disagree; a JSON payload is not the place for two copies of a workflow file.
+    assert.equal(doc.files.some((f) => 'source' in f || 'text' in f), false);
+
+    // `--check` never writes, whatever else it is given. A check that repairs is a
+    // second writer, and ADR-036 is why a command does not get to be one by accident.
+    const stillStale = await readFile(path, 'utf8');
+    assert.match(stillStale, /a hand edit that drifts the copy/);
+  } finally {
+    await writeFile(path, before);
+  }
+});
+
+test('`ci --json` emits exactly one document in every mode, including --dry-run', async () => {
+  // `--json --dry-run` used to print nothing: the JSON branch was guarded by
+  // `yes !== true && dryRun !== true`, so the one combination a script reaches for was
+  // the one combination with no document. ADR-035 requires one document under `--json`.
+  //
+  // Run in this repository, on a stale copy, and not in a fixture. A temp repo cannot
+  // reach this code: `isOwnRepo` is false there, so every mode takes the refusal path
+  // and prints a perfectly good document — which is how a test about the plan printed
+  // a document for the wrong reason and passed with the guard restored.
+  const path = join(PACKAGE_ROOT, WORKFLOW_FILE);
+  const before = await readFile(path, 'utf8');
+  try {
+    await writeFile(path, `${before}\n# a hand edit that drifts the copy\n`);
+    for (const args of [
+      ['ci', '--json'],
+      ['ci', '--json', '--dry-run'],
+      ['ci', '--json', '--check'],
+      ['ci', '--json', '--yes', '--dry-run'],
+    ]) {
+      const got = await run(args, { cwd: PACKAGE_ROOT });
+      const label = args.join(' ');
+      assert.ok(got.stdout.trimStart().startsWith('{'), `${label} printed no document. Got: ${got.stdout.slice(0, 120)}`);
+      let doc;
+      assert.doesNotThrow(() => (doc = JSON.parse(got.stdout)), `${label} printed an unparseable document`);
+      assert.equal(doc.written, false, `${label} must not write`);
+      // `ok` agrees with the exit code, or one of the two is a lie (ADR-035).
+      assert.equal(doc.ok, got.code === 0, `${label}: ok and the exit code disagree`);
+    }
+  } finally {
+    await writeFile(path, before);
+  }
+});
+
 test('ci writes the own copy, is dry-run by default, and says when it is current', async () => {
   const { stdout } = await exec('node', [BIN, 'ci'], {
     cwd: PACKAGE_ROOT,
@@ -436,17 +550,31 @@ test('ci writes the own copy, is dry-run by default, and says when it is current
 
 test('ci refuses a repository that adopted simt-dev, and names the command that owns it', async () => {
   // A reader who runs this in an adopting repo has almost certainly been told to run
-  // it by a remedy somewhere. The useful answer is which command does exist there -
-  // and the refusal must not be an error, because nothing is wrong.
+  // it by a remedy somewhere. The useful answer is which command does exist there.
+  //
+  // It is also an error, which this test used to say it was not. A refusal reported
+  // as `ok: true` and exit 0 is a document asserting that the request succeeded while
+  // the text beside it says it was refused — and a caller reading `ok` had no way to
+  // know which one the writer meant. `EXIT.UNSUPPORTED` is the code for "cannot be
+  // satisfied in this repository", which is exactly the situation, and it is the same
+  // code ADR-035 requires `ok` to agree with.
   const root = await actionsRepo();
-  const { stdout, stderr } = await exec('node', [BIN, 'ci', '--yes'], {
-    cwd: root,
-    env: { ...process.env, NO_COLOR: '1' },
-  });
-  assert.match(stdout, /owner\s+this repository, not simt-dev/);
-  assert.match(stderr, /remedy:\s+simt-dev init --yes/);
+  const refused = await run(['ci', '--yes'], { cwd: root });
+  assert.equal(refused.code, EXIT.UNSUPPORTED, refused.stderr);
+  assert.match(refused.stdout, /owner\s+this repository, not simt-dev/);
+  assert.match(refused.stderr, /remedy:\s+simt-dev init --yes/);
   // Above all: it wrote nothing, in a repo that had no gate file at all.
   await assert.rejects(readFile(join(root, WORKFLOW_FILE), 'utf8'));
+
+  // And the JSON document says the same thing as the exit code, which is the half of
+  // the invariant that a text assertion cannot reach.
+  const asJson = await run(['ci', '--json'], { cwd: root });
+  assert.equal(asJson.code, EXIT.UNSUPPORTED);
+  const doc = JSON.parse(asJson.stdout);
+  assert.equal(doc.ok, false, 'a refusal reported as ok:true is a lie a caller cannot detect');
+  assert.equal(doc.own, false);
+  assert.match(doc.error, /belongs to this repository/);
+  assert.match(doc.remedy, /simt-dev init --yes/);
 });
 
 // ------------------------------------------------- the dependency-updates config

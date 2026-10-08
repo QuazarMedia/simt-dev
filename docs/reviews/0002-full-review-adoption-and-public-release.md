@@ -138,7 +138,7 @@ record is written.
 | S20 | Test gaps that let S01–S11 ship green | P1 | F | tests | no | lands with each slice | Queued | re-verified |
 | S21 | Dead code, duplicate parsers, stale comments | P3 | E | hygiene | no | — | Queued | re-verified |
 | S22 | Robustness at the edges | P3 | E | various | no | — | Queued | re-verified |
-| S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | no | S10 | Queued | #11, #12 |
+| S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | **yes (ADR-039)** | S10 | Complete | `pending` |
 | S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `f5a626c` |
 | S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | no | — | Queued | #3 |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
@@ -303,6 +303,35 @@ through `writeMode` (S10). `failOutside` returns `EXIT.UNSUPPORTED` with `ok: fa
 
 **Accept.** A stale copy makes `ci --check` exit 1 and a current copy exits 0.
 `ci --json --dry-run` emits exactly one JSON document. Run in a consumer, `ci` exits 5.
+
+> **Resolved by ADR-039**, all three acceptance points implemented. The line numbers in the
+> finding had drifted — the command has changed since — but all three behaviours reproduced
+> exactly as described, so only the references were wrong.
+>
+> The own gate now runs `node bin/simt-dev.mjs ci --check`, and `--check` never writes
+> whatever else it is given: a check that repairs is a second writer, which is ADR-036's
+> subject. It prints a unified diff of the two files, because the reader is the author of
+> the template change and the question they have is *what did I change*; the plan now
+> carries both sides of the comparison so the verdict and the diff cannot disagree, and
+> both are stripped from the JSON payload. Context is elided to three lines a side — fifty
+> lines of workflow around one changed step buries the only reason the step beats an exit
+> code.
+>
+> The refusal is `EXIT.UNSUPPORTED` with `ok: false`. Not because something is wrong, but
+> because the request cannot be satisfied *in this repository*, which is what that code
+> means (`output/index.mjs:16`). It was also contradicting ADR-035 directly: `ok: true` and
+> exit 0, one line below a paragraph saying it was refused. The existing test asserted exit 0
+> and carried the reasoning *"the refusal must not be an error, because nothing is wrong"* —
+> that is this record's third ruling overturned, so the comment now says why the opposite
+> holds.
+>
+> The `--check` and `--json` tests run **in this repository against a stale copy**, with a
+> `finally` that restores the file, because `isOwnRepo` compares against the package root
+> and no temp repo reaches this code at all. The first version of the JSON test used a
+> fixture and **passed with the guard restored**: the fixture was not the own repository, so
+> every mode took the refusal path and printed a perfectly good document for the wrong
+> reason. A mutation found it. Four mutations were applied and reverted, each caught by its
+> own test.
 
 ### S24 — `sync` writes without `--yes` (P1, decision)
 

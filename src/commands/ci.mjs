@@ -18,10 +18,10 @@
 // commands owns which file would be learning about ownership twice to learn nothing
 // new, and the next .github file would arrive with a third command to remember.
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
-import { EXIT, emit, emitJson, isJson, note } from '../output/index.mjs';
+import { EXIT, emit, emitJson, isJson, note, writeMode } from '../output/index.mjs';
 import { planWorkflow, renderWorkflow, WORKFLOW_FILE } from '../ci/workflow.mjs';
 import { planDependabot, renderDependabot, DEPENDABOT_FILE } from '../ci/dependabot.mjs';
 
@@ -41,6 +41,8 @@ function targets() {
 
 export async function ciCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
+  const mode = writeMode(flags);
+  const checkOnly = flags.check === true;
 
   const plans = [];
   for (const { key, file, plan } of targets()) {
@@ -87,18 +89,46 @@ export async function ciCommand(positional, flags) {
       `why       ${p.reason ?? (p.action === 'create' ? `this repository is simt-dev's own` : '')}`,
     );
     if (p.ecosystems) lines.push(`watching  ${p.ecosystems.join(', ') || '(github actions only)'}`);
-  }
-  if (isJson(flags)) {
-    if (flags.yes !== true && flags.dryRun !== true) {
-      emitJson({ ok: true, command: 'ci', root, files: todo, written: false }, {});
+    // A check that names the drift without showing it makes the reader open two files
+    // to answer a question this command already knows the answer to.
+    if (checkOnly && p.source) {
+      const d = unified(p.file, p.source.text, p.source.desired);
+      if (d !== '') lines.push(d);
     }
+  }
+
+  // `ci --check` is the form the own workflow runs, and the whole point of it is the
+  // exit code. It printed the plan and returned 0, so the step whose own comment says
+  // it exists to catch this drift let through exactly the drift it was written for.
+  if (checkOnly) {
+    if (isJson(flags)) {
+      emitJson(
+        {
+          ok: false,
+          command: 'ci --check',
+          root,
+          files: todo.map(publicPlan),
+          written: false,
+          error: `${todo.length} of ${plans.length} .github file(s) in this repo are stale`,
+          remedy: 'run: simt-dev ci --yes',
+        },
+        {},
+      );
+    } else {
+      emit(lines.join('\n'));
+    }
+    return EXIT.FAIL;
+  }
+
+  if (isJson(flags)) {
+    emitJson({ ok: true, command: 'ci', root, files: todo.map(publicPlan), written: false, dryRun: !mode.apply }, {});
   } else {
     emit(lines.join('\n'));
   }
 
-  if (flags.yes !== true || flags.dryRun === true) {
+  if (!mode.apply) {
     note('');
-    note(flags.dryRun === true ? 'dry-run  nothing written' : 'dry-run  nothing written; apply with: simt-dev ci --yes');
+    note(mode.dryRun ? 'dry-run  nothing written' : 'dry-run  nothing written; apply with: simt-dev ci --yes');
     return EXIT.OK;
   }
 
@@ -135,7 +165,26 @@ export async function ciCommand(positional, flags) {
 function failOutside(root, plan, flags) {
   const remedy = `simt-dev init --yes   (a repository's .github files are written once, by init, and then left alone)`;
   if (isJson(flags)) {
-    emitJson({ ok: true, command: 'ci', root, file: plan.file, action: plan.action, own: false, remedy, written: false }, {});
+    emitJson(
+      {
+        // `ok: true` with a refusal in it was the shape this whole command had: the
+        // document said the request succeeded while the text said it was refused, and
+        // a caller reading `ok` had no way to know which one the writer meant. It is
+        // also `EXIT.UNSUPPORTED` rather than 0 for the same reason — the request
+        // cannot be satisfied in this repository, and that is a fact about the
+        // repository, not a successful no-op.
+        ok: false,
+        command: 'ci',
+        root,
+        file: plan.file,
+        action: plan.action,
+        own: false,
+        error: `simt-dev refreshes its own .github files; ${plan.file} belongs to this repository`,
+        remedy,
+        written: false,
+      },
+      {},
+    );
   } else {
     emit(
       [
@@ -151,5 +200,85 @@ function failOutside(root, plan, flags) {
     note('');
     note(`remedy:   ${remedy}`);
   }
-  return EXIT.OK;
+  return EXIT.UNSUPPORTED;
+}
+
+/**
+ * A plan without the file bodies. Both sides of the comparison travel on the plan so
+ * the verdict and the diff cannot disagree, and a JSON payload is not the place for
+ * two copies of a workflow file.
+ */
+function publicPlan({ source, ...plan }) {
+  return plan;
+}
+
+/**
+ * A unified diff of the two, or `''` when they are identical.
+ *
+ * Small on purpose: the reader is the author of the template change that made the
+ * copy stale, and the question is "what did I change". Line-level LCS rather than a
+ * character diff, because a workflow's drift is a moved step, not a typo — and a
+ * table over tens of lines is smaller to read and harder to get wrong than a Myers
+ * scan. No dependency, per ADR-012.
+ */
+function unified(file, current, desired) {
+  const a = (current ?? '').split('\n');
+  const b = (desired ?? '').split('\n');
+  const table = Array.from({ length: a.length + 1 }, () => new Uint32Array(b.length + 1));
+  for (let i = a.length - 1; i >= 0; i -= 1) {
+    for (let j = b.length - 1; j >= 0; j -= 1) {
+      table[i][j] = a[i] === b[j] ? table[i + 1][j + 1] + 1 : Math.max(table[i + 1][j], table[i][j + 1]);
+    }
+  }
+  const rows = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) {
+    if (i < a.length && j < b.length && a[i] === b[j]) {
+      rows.push({ mark: ' ', line: a[i] });
+      i += 1;
+      j += 1;
+    } else if (j < b.length && (i === a.length || table[i][j + 1] >= table[i + 1][j])) {
+      rows.push({ mark: '+', line: b[j] });
+      j += 1;
+    } else {
+      rows.push({ mark: '-', line: a[i] });
+      i += 1;
+    }
+  }
+  // A diff of nothing is not a diff. Returning '' is what lets the caller decide,
+  // rather than printing a header over an empty body.
+  if (rows.every((r) => r.mark === ' ')) return '';
+
+  // Three lines of context, then `...` for whatever was elided. Printing all fifty
+  // lines of a workflow to report one changed step buries the answer in context, and
+  // the answer is the only reason this exists.
+  const CONTEXT = 3;
+  const keep = new Array(rows.length).fill(false);
+  rows.forEach((r, at) => {
+    if (r.mark === ' ') return;
+    for (let k = Math.max(0, at - CONTEXT); k <= Math.min(rows.length - 1, at + CONTEXT); k += 1) {
+      keep[k] = true;
+    }
+  });
+  const out = [];
+  let elided = 0;
+  for (const [at, r] of rows.entries()) {
+    if (!keep[at]) {
+      elided += 1;
+      continue;
+    }
+    if (elided > 0) {
+      out.push(`@@ ${elided} unchanged line(s) elided`);
+      elided = 0;
+    }
+    out.push(`${r.mark}${r.line}`);
+  }
+  const changed = rows.filter((r) => r.mark !== ' ').length;
+  return [
+    `--- a/${file}`,
+    `+++ b/${file}`,
+    `@@ ${changed} changed line(s); apply with: simt-dev ci --yes @@`,
+    ...out,
+  ].join('\n');
 }

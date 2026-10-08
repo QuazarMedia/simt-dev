@@ -188,7 +188,10 @@ export function renderWorkflow({ own = false } = {}) {
         // The drift this exception exists to prevent, checked where it would be caught.
         // Without it a template change lands with the copy still describing the old
         // gate, and the next person to read the diff cannot tell which one is right.
-        '        run: node bin/simt-dev.mjs ci',
+        //
+        // `--check`, and not the bare command: `ci` previews by default and exits 0,
+        // so this step used to print the drift it exists to catch and pass anyway.
+        '        run: node bin/simt-dev.mjs ci --check',
       ].join('\n'),
     )}\n`;
   }
@@ -248,7 +251,8 @@ export async function planWorkflow(root) {
     // Content is only ever compared in simt-dev's own repository. Everywhere else
     // that comparison is the thing ADR-023 ruled out: a repo's file is the repo's
     // file, and the only question is whether one is there.
-    const current = own ? text === renderWorkflow({ own: true }) : true;
+    const desired = renderWorkflow({ own: true });
+    const current = own ? text === desired : true;
     return {
       file: WORKFLOW_FILE,
       path,
@@ -257,6 +261,10 @@ export async function planWorkflow(root) {
       exists,
       bytes,
       current,
+      // Both sides, so a reader told the file differs can be shown how. Rendering a
+      // second time for a diff would risk a second answer, and the two call sites
+      // must not be able to disagree about what "refresh" means.
+      source: { text, desired },
       workflows,
       reason: current ? null : `this repository is simt-dev's own, and the gate template has changed since this copy was written`,
     };

@@ -50,4 +50,4 @@ jobs:
       - name: skill registry lint
         run: node bin/simt-dev.mjs graph lint
       - name: the gate copy in this repo is current
-        run: node bin/simt-dev.mjs ci
+        run: node bin/simt-dev.mjs ci --check

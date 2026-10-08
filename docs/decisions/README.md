@@ -47,6 +47,7 @@ record's status line — never by editing the ruling in place.
 | [037](ADR-037-unchanged-means-writing-would-not-change-a-byte.md) | `unchanged` means writing would not change a byte, not that the body matches | accepted |
 | [038](ADR-038-the-gate-filter-belongs-to-every-manifest-writer.md) | The gate filter belongs to every writer of a manifest, not to `init` | accepted |
 | [039](ADR-039-a-ci-step-runs-a-form-that-can-fail.md) | A gate a CI step runs must have a form that can fail, and a refusal is a failure | accepted |
+| [040](ADR-040-the-last-writer-that-wrote-by-default-was-not-the-one-named.md) | The last writer writing by default was not the one the finding named | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -164,6 +165,20 @@ the check on the checks. The same slice found two smaller instances of the same 
 same command: `--json --dry-run` printed no document at all, because the mode guard was in
 the wrong place, and a refusal in a repository that adopted simt-dev printed a paragraph
 saying it was refused directly above `ok: true` and exited 0.
+
+ADR-040 is the only one here that says a previous record's *premise* was wrong, and it is worth
+reading for the shape rather than the command. Review 0002 opened Wave 0 with "`sync` is the only
+writer that writes by default" and named five siblings that "all preview first". Four were. The
+fifth, `hooks install`, read `flags.yes` and `flags.dryRun` directly, imported no write decision
+at all, and wrote the shims and repointed `core.hooksPath` whenever neither flag said otherwise —
+in the ordinary case, where ADR-018's takeover consent never fired. Three strings that ship into
+adopting repositories assumed the preview, one of them inside the shim being installed, and 586
+tests passed. What makes it a rule rather than a fix is that the same commit had to amend a
+comment written the day before, which called `hooks install` a previewing writer; a comment that
+enumerates which commands follow a rule is a claim about code its file does not own, and the next
+reader has no cheap way to check it. So the writers are a set, the set is checked by a table, and
+the table asserts the exit code as well as the bytes — because a command that *refuses* also
+changes nothing, and "wrote nothing" is the one claim a refusal satisfies for free.
 
 ## The rule these records enforce
 

@@ -25,7 +25,9 @@ simt-dev skills install <name>  pin a skill into the repo as a local override
 simt-dev rules list             the rule catalogue (--root marks what applies to a repo)
 simt-dev rules show <id>        one rule body
 simt-dev rules why <id|ADR-NNN> the decision that settled it, and whether it is still in force
-simt-dev hooks install|status   install the shared dispatcher; report what it would run
+simt-dev hooks install [--yes]   install the shared dispatcher; report what it would run
+                           (dry-run unless --yes; refuses to take over routing git
+                            already uses, and --yes is that consent)
 simt-dev ci                     simt-dev's own .github files: create or refresh them
                            (dry-run unless --yes; refreshes the templates' own copies
                             and no repository else's)

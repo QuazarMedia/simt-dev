@@ -4,20 +4,20 @@
 // core.hooksPath at them; `status` reports what is installed and what would
 // run; `run` is the entry point the shim itself execs.
 //
-// Installing is the only mutating command, it is idempotent, and it refuses to
-// clobber an existing core.hooksPath without --yes. The estate has four
-// incompatible conventions and one of them (simt-app) points at a directory
-// whose pre-push is 0 bytes, so overwriting silently would be the worst
-// available outcome. simt-space keeps its hook in the DEFAULT location, which
-// core.hooksPath being unset does not reveal, so a foreign hook is found by
-// asking git rather than by reading config.
+// Installing is the only mutating command, it is idempotent, it previews unless
+// told to write, and it refuses to clobber an existing core.hooksPath without
+// --yes. The estate has four incompatible conventions and one of them (simt-app)
+// points at a directory whose pre-push is 0 bytes, so overwriting silently would
+// be the worst available outcome. simt-space keeps its hook in the DEFAULT
+// location, which core.hooksPath being unset does not reveal, so a foreign hook
+// is found by asking git rather than by reading config.
 
 import { execFile } from 'node:child_process';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { MANIFEST, readManifest } from '../projection/manifest.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderShim } from '../hooks/shim.mjs';
 import { readHooksPath, readHooksState } from '../compare/hooksstate.mjs';
@@ -98,6 +98,15 @@ async function installHooks(root, flags) {
   const current = state.current;
   const wants = HOOKS_DIR;
 
+  // Read through `writeMode` like every other writer, and only now: this command
+  // used to consult `flags.yes` and `flags.dryRun` directly and write when neither
+  // said otherwise, which made it the last writer still writing by default after
+  // ADR-035 and ADR-036 had settled that none of them may. Review 0002's S24
+  // listed it among the writers that "all preview first"; that was wrong, and the
+  // migration script in the same review tells an operator to run `hooks install`
+  // for a plan and then `--yes` - advice that printed a plan and wrote anyway.
+  const mode = writeMode(flags);
+
   // Only install a shim for an event that declares at least one gate. A shim with
   // an empty gate list enforces nothing, yet merely existing it REPLACES whatever
   // git was running - so installing one over a working hand-written hook is a
@@ -166,12 +175,25 @@ async function installHooks(root, flags) {
     return EXIT.FAIL;
   }
 
-  if (flags.dryRun) {
+  if (!mode.apply) {
     if (isJson(flags)) {
       emitJson({ ok: true, command: 'hooks install', root, dryRun: true, currentHooksPath: current, wouldSet: wants, plan, filesWritten: false });
       return EXIT.OK;
     }
-    emit(renderPlan(root, current, wants, pathAction, plan, 'DRY-RUN  no files written', manifest), { maxBytes: flags.maxBytes ?? 0 });
+    emit(
+      renderPlan(
+        root,
+        current,
+        wants,
+        pathAction,
+        plan,
+        mode.dryRun
+          ? 'DRY-RUN  no files written'
+          : `PLAN     nothing written; apply with: simt-dev hooks install --root ${root} --yes`,
+        manifest,
+      ),
+      { maxBytes: flags.maxBytes ?? 0 },
+    );
     return EXIT.OK;
   }
 

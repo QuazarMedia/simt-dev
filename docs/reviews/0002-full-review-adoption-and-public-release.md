@@ -125,7 +125,7 @@ record is written.
 | S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Queued | #6 |
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | F | hooks | **yes (ADR-034)** | — | Complete | `e3566dc` |
 | S09 | `sync`/`init` crash on a mispointed pointer, and `check` passes it | P1 | F | projection | only if pointer drift blocks | — | Queued | #9 |
-| S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | **yes (ADR-035)** | — | Complete | `14fcd5b` |
+| S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | **yes (ADR-035)** | — | Complete | `14fcd5b`; **amended by ADR-040**, which found a sixth writer still writing by default |
 | S11 | `slice-commit` rule can never be projected | P1 | F | rules | no | — | **Complete** | `5c079cd` |
 | S12 | Folding + per-rule surfaces load every process rule twice | P1 | F | surfaces | yes (P7, supersedes ADR-021 §3) | — | Queued | 5 estate repos, #17 |
 | S13 | `rules list/show/why` cannot see the `.mdc` rules | P2 | F | rules | no | — | Queued | re-verified |
@@ -139,7 +139,7 @@ record is written.
 | S21 | Dead code, duplicate parsers, stale comments | P3 | E | hygiene | no | — | Queued | re-verified |
 | S22 | Robustness at the edges | P3 | E | various | no | — | Queued | re-verified |
 | S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | **yes (ADR-039)** | S10 | Complete | `97f8da7` |
-| S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `f5a626c` |
+| S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `f5a626c` — **its premise named the wrong command**: `hooks install` also wrote by default, and is ADR-040 |
 | S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | no | — | Queued | #3 |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `4c73025` |
@@ -167,6 +167,7 @@ record is written.
 | S49 | Dependabot misses Gradle, submodules and seven more ecosystems | P2 | E | ci | no | — | Queued | `dependabot.mjs` |
 | S50 | Rule files load eagerly where a surface could scope them | P2 | E | surfaces | yes (P7) | S12 | Queued | `surfaces.mjs` |
 | S51 | JSON output has no schema version and no compact form | P3 | E | output | no | S10 | Queued | `output/index.mjs:68` |
+| S52 | `hooks install` writes without `--yes` | P1 | F | hooks | **yes (ADR-040)** | S10 | Complete | found while probing §9's exit criterion for S20; see the resolution below |
 
 ## 4. Review 0001 at `4c27514`
 
@@ -333,12 +334,69 @@ through `writeMode` (S10). `failOutside` returns `EXIT.UNSUPPORTED` with `ok: fa
 > reason. A mutation found it. Four mutations were applied and reverted, each caught by its
 > own test.
 
+### S52 — `hooks install` writes without `--yes` (P1, decision)
+
+**Finding.** Not in this review. Found while probing §9's exit criterion — "a packed install
+survives `init`, two commits, `check`, `upgrade`, `hooks install` and a real commit, **with every
+writer previewing by default**" — by running the criterion by hand against a packed install
+before writing the test that would assert it. In a fresh repo declaring `lint` and `test`,
+`simt-dev hooks install --root .` printed `WROTE    shims and set core.hooksPath` and exited 0.
+
+`hooks.mjs` read `flags.yes` (line 146) and `flags.dryRun` (line 169) directly and imported no
+write decision at all. ADR-035's ruling already named that pattern as a defect; S24 then took
+`sync` out of the set and, in doing so, asserted that the rest of the set was clean. **Four of the
+five commands S24 named as previewing were. The fifth was not.**
+
+This is S24's premise, corrected. The other four sources agreeing it is a defect are: ADR-035's
+ruling ("a command that consults `flags.yes` directly is a defect whether or not its arithmetic
+happens to agree today"); the code being that pattern; §7's migration script telling an operator to
+run `hooks install` "for a plan" and then `--yes`; the four shipped strings that assumed a
+preview, one of them the `Reinstall with:` comment inside the shim that gets installed into every
+adopting repository; and `contract.test.mjs`'s `WRITERS` table, which covered `upgrade`, `sync`
+and `skills install` and never `hooks install` — which is why 586 tests passed.
+
+The comment `sync.mjs` gained under ADR-036 is part of the evidence and had to be amended: it
+called `hooks install` one of the writers that "all preview unless told otherwise", one commit
+after it was written.
+
+**Fix.** ADR-040. `hooks install` reads `writeMode(flags)`; `--yes` writes; the preview exits 0
+and names the command that applies it. Four shipped strings move with it — `init`'s remedy, both
+`compare` remedies, the shim's `Reinstall with:`, and the help synopsis.
+
+**Accept.** The `WRITERS` row, plus an exit-code assertion that the row could not have passed
+without.
+
+> **Resolved by ADR-040**, and the interesting part is the test rather than the fix. The first
+> `WRITERS` row would have been **vacuous**: pointed at the table's existing python fixture,
+> `hooks install` is *refused* (correctly — a shim with an empty gate list enforces nothing yet
+> still replaces whatever git was running), a refusal changes nothing, and "wrote nothing without
+> `--yes`" holds. The row carried `stack: 'node'` and the table grew an assertion on the exit
+> code of every unauthorised run — 0 for a rehearsal, non-zero only for `sync`, which is also a
+> check. That assertion was **itself wrong first**: it also covered the rehearsed form, and
+> `sync --yes --dry-run` reports the work it found exactly as the unauthorised form does
+> (ADR-036), so the whole table failed. Both were caught by mutations, and both are the same
+> shape as S29's and S23's first drafts this batch.
+>
+> The row's `verify` fingerprints **both** things the command writes — the shim and
+> `core.hooksPath` inside `.git/config`. A preview that set the config without writing the shims
+> would leave a repo whose commits are gated by a hook git does not run; that mutation is caught
+> by the fingerprint and **passes** with the config probe removed. Six mutations, each caught by
+> its own test, and a seventh recorded because it was **not**: `hooks install --yes` that never
+> sets the config passes `contract.test.mjs` entirely, because the row only exercises
+> unauthorised and rehearsed runs. Six tests in `hooks.test.mjs` catch that one.
+
 ### S24 — `sync` writes without `--yes` (P1, decision)
 
 **Finding.** `sync` is the only writer that writes by default (`sync.mjs:119`,
 `if (checkOnly !== true && flags.dryRun !== true)`). `init`, `upgrade`, `hooks install`,
 `skills install` and `ci` all preview first. An agent that pattern-matches on the other five
 previews by running `sync` and writes instead. That is what happened in §1.3.
+
+> **The finding is wrong about one of the five.** `hooks install` did not preview first; it
+> wrote the shims and repointed `core.hooksPath` whenever neither `--yes` nor `--dry-run` was
+> passed. The rest of the finding stands and the fix is unchanged, but the claim that made it
+> urgent — that `sync` was the odd one out among six — was one of five rather than one of six.
+> See **S52** and ADR-040.
 
 **Fix.** Proposal P2, "every writer previews unless told to write", as follows:
 

@@ -41,6 +41,24 @@ export function isJson(flags) {
   return flags.json === true;
 }
 
+/**
+ * Whether this invocation may change the filesystem, and whether it is a rehearsal.
+ *
+ * This is the only place that decides, because there was a third copy of the same
+ * arithmetic in the commands and they did not agree: `upgrade` consulted `--yes`
+ * and ignored `--dry-run`, so `--yes --dry-run` wrote; `skills install` read
+ * neither. A flag pair that means the same thing to a person must mean the same
+ * thing to every command, or `--dry-run` stops being a promise.
+ *
+ * `dryRun` is reported separately from `apply` because a run that was not
+ * authorised is a dry run in effect even when nobody asked for one, and the report
+ * has to say which happened rather than echoing the flags back.
+ */
+export function writeMode(flags) {
+  const dryRun = flags.dryRun === true;
+  return { dryRun, apply: flags.yes === true && !dryRun };
+}
+
 export function isTty() {
   return process.stdout.isTTY === true && !process.env.NO_COLOR;
 }

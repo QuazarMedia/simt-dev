@@ -13,7 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
-import { EXIT, emit, fail, isJson, note as emitNote } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, note as emitNote } from '../output/index.mjs';
 import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
@@ -143,7 +143,7 @@ function repoLine(repo) {
 }
 
 /** `--all` with no other signal: everything this stack can use, deferred excluded. */
-async function emitAll(registry, repoStack, flags) {
+async function emitAll(registry, repoStack, flags, warning) {
   const repo = new Set(repoStack);
   const usable = registry.skills.filter((s) => stackCompatible(s, repoStack));
   const deferred = usable.filter((s) => s.deferred);
@@ -152,7 +152,14 @@ async function emitAll(registry, repoStack, flags) {
   if (isJson(flags)) {
     emit(
       `${JSON.stringify(
-        { ok: true, all: true, repoStack, inline: inline.map((s) => s.name), deferred: deferred.map((s) => s.name) },
+        {
+          ok: true,
+          all: true,
+          repoStack,
+          inline: inline.map((s) => s.name),
+          deferred: deferred.map((s) => s.name),
+          ...(warning ? { warning } : {}),
+        },
         null,
         2,
       )}\n`,
@@ -167,6 +174,7 @@ async function emitAll(registry, repoStack, flags) {
     '',
     ...inline.map((s) => `${s.name.padEnd(26)} ${kb(s.bytes).padStart(7)}  ${s.stack.join('+')}`),
   ];
+  if (warning) lines.push('', warning);
   if (deferred.length > 0) {
     lines.push('', `DEFERRED ${deferred.length}: ${deferred.map((s) => s.name).join(', ')}`);
   }
@@ -234,18 +242,50 @@ export async function briefCommand(args, flags) {
   // A brief with no task and no paths resolves on stack alone, which produces a
   // plausible-looking list the agent may act on. It is the most likely way this
   // tool gets misused, so it warns rather than silently answering.
+  //
+  // Under `--json` the warning is a FIELD, not prose on stdout. It used to be
+  // emitted as text with no `isJson` check, so `brief --json` printed a paragraph
+  // and then nothing a caller could parse - and with `--all` the text came first
+  // and a second document followed, so stdout was neither one document nor none.
   if (!flags.task && paths.length === 0 && forced.length === 0) {
+    const warning =
+      'no --task and no staged files, so selection can only use the repo signals. ' +
+      'pass --task "<what you are doing>" or stage files so the diff drives selection, ' +
+      'or pass --all to take everything for this stack.';
+    if (isJson(flags)) {
+      // `ok: true` because the command did what was asked; the answer being weak
+      // is what `warning` carries. Failing here would tell a caller the tool
+      // broke when in fact it is telling them their query was.
+      if (flags.all) return emitAll(registry, repoStack, flags, warning);
+      emit(
+        `${JSON.stringify(
+          {
+            ok: true,
+            repo: { root, stack: repoStack },
+            workspace,
+            task: null,
+            budget,
+            resolved: [],
+            deferred: [],
+            excluded: [],
+            warning,
+          },
+          null,
+          2,
+        )}\n`,
+        { maxBytes: flags.maxBytes ?? 0 },
+      );
+      return EXIT.OK;
+    }
     emit(
       [
         `repo ${root.split('/').pop()} (${repoLine(repo)})`,
         '',
-        'no --task and no staged files, so selection can only use the repo signals.',
-        'pass --task "<what you are doing>" or stage files so the diff drives selection,',
-        'or pass --all to take everything for this stack.',
+        warning,
       ].join('\n'),
       { maxBytes: flags.maxBytes ?? 0 },
     );
-    if (flags.all) return emitAll(registry, repoStack, flags);
+    if (flags.all) return emitAll(registry, repoStack, flags, warning);
     return EXIT.OK;
   }
 
@@ -436,6 +476,34 @@ export async function whyCommand(args, flags) {
 
   const { score, reasons } = scoreSkill(skill, { repoStack: repo.signals, taskTokens: tokens, paths });
   const compatible = stackCompatible(skill, repo.signals);
+
+  // Every other command honours `--json`; this one built its answer as text and
+  // emitted it, so `--json` was silently ignored and a caller got prose it could
+  // not parse. The doc carries the same facts as the text below, and `gate` is
+  // the field that makes it machine-readable rather than something a reader has
+  // to scrape: a skill that can never be selected in this repo is a decision, not
+  // a line of output.
+  if (isJson(flags)) {
+    const workspace = await resolveWorkspace(flags);
+    emitJson({
+      ok: true,
+      command: 'skills why',
+      skill: skill.name,
+      score,
+      compatible,
+      gate: compatible ? 'pass' : 'fail',
+      repo: { root, stack: repo.stack, facts: repo.facts, evidence: repo.evidence },
+      workspace: { root: workspace.root ?? null, source: workspace.source, detail: workspace.detail },
+      paths: paths.slice(0, 8),
+      taskTokens: tokens,
+      signals: reasons,
+      variants: (skill.variants ?? []).map((v) => ({ id: v.id, stack: v.stack, bytes: v.bytes })),
+      aliasOf: skill.aliasOf ?? null,
+      variantOf: skill.variantOf ?? null,
+      requires: skill.requires ?? [],
+    }, { maxBytes: flags.maxBytes ?? 0 });
+    return EXIT.OK;
+  }
 
   const lines = [
     `${skill.name} - score ${score}`,

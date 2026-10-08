@@ -42,6 +42,7 @@ record's status line — never by editing the ruling in place.
 | [032](ADR-032-provenance-is-a-content-digest-not-a-commit.md) | Provenance is a digest of the content that leaves this package, not a commit id | accepted |
 | [033](ADR-033-three-plan-rows-closed-by-decision-not-by-authoring.md) | Three plan rows are closed by ruling on them, not by authoring what they asked for | accepted |
 | [034](ADR-034-a-staged-tool-refuses-a-partially-staged-file.md) | A staged tool refuses a partially staged file rather than staging around it | accepted |
+| [035](ADR-035-one-write-decision-and-one-json-document.md) | One place decides whether a run may write, and one document says whether it did | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -101,6 +102,16 @@ hunk replaced, not merely committed, and the gate said nothing. The same loop al
 staged deletions to `git add`, whose failure was swallowed, so a commit holding a deletion and
 a formattable file recorded unformatted bytes silently. Both are the shape this estate's rules
 keep warning about: a control that appears to hold, reports pass, and does not.
+
+ADR-035 is the same thing measured across a whole command surface instead of one control.
+Six commands disagreed about what `--yes`, `--dry-run` and `--json` mean: `upgrade` read
+`--yes` and ignored `--dry-run`, `skills install` read neither and printed "nothing written"
+on the path that wrote, and `doctor --json` and `hooks status --json` both reported `ok: true`
+while the same commands in a terminal exited non-zero. Two of those are the shape above
+again — a check that appears to hold and reports pass. The difference is where the fix goes:
+one function decides whether a run may write, and one table asserts the JSON contract for
+every command at once, because a contract checked one command at a time is checked by
+whoever remembers.
 
 ## The rule these records enforce
 

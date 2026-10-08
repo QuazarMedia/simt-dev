@@ -125,7 +125,7 @@ record is written.
 | S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Queued | #6 |
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | F | hooks | **yes (ADR-034)** | — | Complete | `e3566dc` |
 | S09 | `sync`/`init` crash on a mispointed pointer, and `check` passes it | P1 | F | projection | only if pointer drift blocks | — | Queued | #9 |
-| S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | via P2 | — | Queued | #10, #11 |
+| S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | **yes (ADR-035)** | — | Complete | pending |
 | S11 | `slice-commit` rule can never be projected | P1 | F | rules | no | — | **Complete** | `5c079cd` |
 | S12 | Folding + per-rule surfaces load every process rule twice | P1 | F | surfaces | yes (P7, supersedes ADR-021 §3) | — | Queued | 5 estate repos, #17 |
 | S13 | `rules list/show/why` cannot see the `.mdc` rules | P2 | F | rules | no | — | Queued | re-verified |
@@ -181,7 +181,7 @@ record is written.
 | S07 | open | a fixture with all six slash-path facts emits only `has-tests-dir` (`fingerprint.mjs:168-173`) |
 | S08 | open, reproduced | ADR-034: the gate now refuses a partially staged file; restage covers only the formatter's own targets and reports only files whose blob moved |
 | S09 | open, extended | `check` passes the mispointed pointer (below) |
-| S10 | open, extended | `ci` and `sync` join the table (S23, S24) |
+| S10 | open, extended | **now Complete** — ADR-035: one `writeMode()` decides whether a run may write, and `test/contract.test.mjs` asserts the JSON contract for 19 commands at once. Six of the eight claimed defects were real and reproduced; the error-path row was **backwards** (`sync --json` emits its errors correctly), the `--all` row was not reproducible, and `skills why --json` — which printed prose and had no `isJson` branch at all — was a defect the table missed. `init --json` is **not** a defect: `init` never consults the workspace, so both modes agree. `sync` requiring `--yes` stays S24. |
 | S11 | **Complete** | `5c079cd` gave `slice-commit.mdc` `simt-applies: always`; its estate sentence is tracked in S14 |
 | S12 | open | 5 estate repos run `opencode,cursor` (below) |
 | S13 | open | `commands/rules.mjs` still reads `loadRules` only |

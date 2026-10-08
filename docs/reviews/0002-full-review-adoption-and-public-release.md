@@ -172,7 +172,7 @@ record is written.
 
 | ID | At `4c27514` | What changed since `09c596d` |
 | --- | --- | --- |
-| S01 | open, and visible estate-wide | 14/14 adopted repos drift on the stamp alone; `sync` now restamps regions without the manifest |
+| S01 | open, and visible estate-wide | **now Complete** — ADR-032 replaced the git stamp with `provenanceDigest()`; the `sync` half below still stands |
 | S02 | open | `**/*.md`, `src/a?.ts`, `src/{a,b}.ts` still fail; a stable built-in now exists (below) |
 | S03 | open | `tokenize("Fix the UI CI job in Go: add a DB migration for i18n, ar/RTL, café, تحويل")` → `fix, the, job, add, migration, for, i18n, rtl, caf` |
 | S04 | open, extended | a stopword selects (below) |

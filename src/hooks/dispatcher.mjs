@@ -65,8 +65,11 @@ export async function runGates(event, { root, manifest }) {
 
   const pkg = await readPkg(root);
   const staged = event === 'pre-commit' ? await stagedFiles(root) : [];
+  const unstaged = event === 'pre-commit' ? await unstagedFiles(root) : new Set();
   const commands = manifest?.gates?.commands;
   const results = [];
+  // What the format gate rewrote, so restage touches those files and nothing else.
+  let formatted = [];
 
   for (const name of declared) {
     const gate = GATES[name];
@@ -97,6 +100,35 @@ export async function runGates(event, { root, manifest }) {
       continue;
     }
 
+    // A formatter rewrites the WORKING TREE copy of the files it is given, so
+    // handing it a file that also has unstaged changes destroys work the author
+    // staged around deliberately. `git add -p` exists so a commit can carry part
+    // of a file; formatting first and re-adding the whole thing silently throws
+    // the rest away, which is ADR-004's exact prohibition on the one path that
+    // runs on every commit. Refuse rather than stash: a hook that guesses what the
+    // author meant is worse than a hook that says so.
+    if (gate.kind === 'staged') {
+      // The resolved staged tool is handed an explicit file list, so the targets are
+      // known. A `gates.commands` declaration is an arbitrary command line - it may
+      // take a directory or a glob rather than paths - so every staged file with
+      // unstaged changes is treated as at risk, because nothing here can tell.
+      const targets = resolution.declared === true ? staged : resolution.argv.slice(2);
+      const conflicts = targets.filter((f) => unstaged.has(f));
+      if (conflicts.length > 0) {
+        results.push({
+          name,
+          status: 'failed',
+          detail: `${conflicts.length} staged file(s) also have unstaged changes: ${conflicts.join(', ')}`,
+          remedy:
+            `stage the whole file (git add ${conflicts[0]}) so the formatter sees all of it, ` +
+            `or run the formatter yourself and stage the result`,
+          adr: gate.adr,
+        });
+        continue;
+      }
+      formatted = targets;
+    }
+
     const outcome = await run(resolution.argv, root);
     results.push({
       name,
@@ -111,9 +143,33 @@ export async function runGates(event, { root, manifest }) {
   // A formatter that rewrote staged files must re-stage them, or the commit
   // records the unformatted bytes while the working tree holds the formatted
   // ones. This is the one case where the hook mutates the index on purpose.
+  //
+  // Only the files the formatter was actually given, and only when their staged
+  // bytes really moved. This used to `git add` every staged path from
+  // `--name-only` with no `--diff-filter`, so a commit containing a deletion made
+  // the add fail, the catch swallowed it, and the hook reported success while the
+  // commit recorded unformatted bytes. It also claimed to have re-staged files
+  // whenever anything was staged, formatted or not.
   if (results.some((r) => r.name === 'format' && r.status === 'passed')) {
-    const changed = await restage(root);
-    if (changed) results.push({ name: 'restage', status: 'passed', detail: 're-staged files the formatter rewrote', adr: null, exitCode: 0 });
+    const outcome = await restage(root, formatted);
+    if (outcome.error) {
+      results.push({
+        name: 'restage',
+        status: 'failed',
+        detail: `the formatter passed but its output could not be staged: ${outcome.error}`,
+        remedy: 'stage the formatted files yourself and commit again',
+        adr: null,
+        exitCode: null,
+      });
+    } else if (outcome.restaged.length > 0) {
+      results.push({
+        name: 'restage',
+        status: 'passed',
+        detail: `re-staged ${outcome.restaged.length} file(s) the formatter rewrote: ${outcome.restaged.join(', ')}`,
+        adr: null,
+        exitCode: 0,
+      });
+    }
   }
 
   return { event, gates: results, failed: results.some((r) => r.status === 'failed') };
@@ -146,16 +202,59 @@ export async function stagedFiles(root) {
   }
 }
 
-async function restage(root) {
+/**
+ * Paths whose working-tree copy differs from the index - the ones a partial stage
+ * leaves behind. Read as a Set because every stage check is a membership test over
+ * the same staged list, and this is asked once per run.
+ *
+ * A path staged as DELETED is not here: the index and the working tree agree that
+ * it is gone, so there is no unstaged work to protect and no reason to refuse.
+ */
+export async function unstagedFiles(root) {
   try {
-    const { stdout: before } = await exec('git', ['diff', '--cached', '--name-only'], { cwd: root });
-    const files = before.split('\n').map((s) => s.trim()).filter(Boolean);
-    if (files.length === 0) return false;
-    await exec('git', ['add', '--', ...files], { cwd: root });
-    return true;
+    const { stdout } = await exec('git', ['diff', '--name-only'], { cwd: root });
+    return new Set(stdout.split('\n').map((s) => s.trim()).filter(Boolean));
   } catch {
-    return false;
+    return new Set();
   }
+}
+
+/** The staged blob hash for each path, or an empty map if git cannot answer. */
+async function stagedBlobs(root, files) {
+  if (files.length === 0) return new Map();
+  try {
+    const { stdout } = await exec('git', ['ls-files', '-s', '--', ...files], { cwd: root });
+    const blobs = new Map();
+    for (const line of stdout.split('\n')) {
+      const [meta, ...rest] = line.split('\t');
+      if (rest.length === 0) continue;
+      const [, sha] = meta.trim().split(/\s+/);
+      blobs.set(rest.join('\t'), sha ?? null);
+    }
+    return blobs;
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * Stage the formatter's output, and report which paths actually moved.
+ *
+ * The before/after blob comparison is the whole point: a formatter that rewrote
+ * nothing is a pass with nothing to report, and a hook that claims otherwise has
+ * trained its readers to distrust the lines that matter.
+ */
+async function restage(root, files) {
+  if (files.length === 0) return { restaged: [], error: null };
+  const before = await stagedBlobs(root, files);
+  try {
+    await exec('git', ['add', '--', ...files], { cwd: root });
+  } catch (error) {
+    return { restaged: [], error: String(error.stderr ?? error.message ?? error).trim() };
+  }
+  const after = await stagedBlobs(root, files);
+  const restaged = files.filter((f) => before.get(f) !== after.get(f));
+  return { restaged, error: null };
 }
 
 /** Last few lines of output, for a failure a human or agent has to act on. */

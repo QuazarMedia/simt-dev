@@ -239,6 +239,13 @@ runs `git add` on **every** path in `git diff --cached --name-only`. Two defects
 Separately, `restage` reports "re-staged files the formatter rewrote" whenever anything is
 staged, whether or not the formatter changed a byte.
 
+> **Resolved by ADR-034.** Both defects were measured against the shipped dispatcher before
+> the fix, and both were worse as found than as described. A partial stage came back with its
+> unstaged hunk **replaced** rather than committed — the index and the working tree both ended
+> up as the formatter's output — and the gate reported success. A staged deletion printed no
+> restage line at all. The ruling chooses failing over stashing, restages only the files the
+> formatter was given, and reports a file only when its staged blob actually moved.
+
 **Suggested fix.** Restage only the files the formatter was given (`resolution.argv` already
 holds them). Before formatting, detect files that also have unstaged changes
 (`git diff --name-only` ∩ staged). Either fail the gate for those with a remedy ("stage the

@@ -21,7 +21,7 @@
 // passed.
 
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
@@ -29,11 +29,24 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { git } from './fixture.mjs';
+import { git, skillWorkspace, workspaceEnv } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
 const exec = promisify(execFile);
+
+// One row installs a skill body, and a body lives in the estate. Without a staged
+// workspace `skills install` is REFUSED — which changes nothing, so the row
+// asserted "wrote nothing without --yes" and passed, having tested the refusal.
+// That row was green in this checkout and green in a `.git`-less copy for two
+// different reasons, and only the copy was wrong. ADR-031 is about the suite
+// assuming the estate; this is the other side of it, a suite whose assertions are
+// satisfied by an absent world.
+const { root: WORKSPACE } = await skillWorkspace();
+after(() => rm(WORKSPACE, { recursive: true, force: true }));
+
+/** Every row but the install one runs with no estate in sight, and says so. */
+const NO_WORKSPACE = { SIMT_DEV_WORKSPACE: 'off' };
 
 /** Run the shipped binary. Never throws: the exit code is the thing under test. */
 async function run(args, env = {}) {
@@ -51,12 +64,26 @@ async function run(args, env = {}) {
 /**
  * A consumer repo: a git work tree, committed, with a python stack so `init`
  * detects a profile, and a stale pin so `upgrade` has something to do.
+ *
+ * `stack: 'node'` stages a repo with `lint` and `test` scripts instead, because
+ * `hooks install` refuses to write a shim for a repo that declares no gate it can
+ * run - and a python repo declares none. That refusal is correct (a shim with an
+ * empty gate list enforces nothing yet still replaces whatever git was running),
+ * so a row pointed at the wrong fixture would have been asserting a BLOCKED
+ * refusal while claiming to test the write.
  */
-async function consumer() {
+async function consumer({ stack = 'python' } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-contract-'));
   await git(['init', '-q', '.'], { cwd: root });
-  await writeFile(join(root, 'requirements.txt'), 'flask\n');
-  await writeFile(join(root, 'pkg.py'), 'print("hi")\n');
+  if (stack === 'node') {
+    await writeFile(
+      join(root, 'package.json'),
+      `${JSON.stringify({ name: 'consumer', private: true, scripts: { lint: 'node -e 0', test: 'node --test' } }, null, 2)}\n`,
+    );
+  } else {
+    await writeFile(join(root, 'requirements.txt'), 'flask\n');
+    await writeFile(join(root, 'pkg.py'), 'print("hi")\n');
+  }
   await git(['add', '-A'], { cwd: root });
   await git(['commit', '-qm', 'init'], { cwd: root });
   const adopted = await run(['init', '--root', root, '--yes']);
@@ -225,6 +252,11 @@ const WRITERS = [
     name: 'sync',
     authorise: ['--yes'],
     needsStaleRegion: true,
+    // `sync` without flags is also a check, so a preview that found work exits
+    // non-zero (ADR-036). Every other row here is a rehearsal, and a rehearsal is
+    // not a failure - which is what makes the distinction worth stating in the
+    // table rather than in an `if` below.
+    previewFindsWork: true,
     verify: async (root) => readFile(join(root, 'AGENTS.md'), 'utf8'),
   },
   {
@@ -239,6 +271,27 @@ const WRITERS = [
       }
     },
   },
+  {
+    // `hooks install` is the row that was missing while it wrote by default
+    // (ADR-040). It is here for the same reason `sync` is: it is the writer whose
+    // absence from this table is why 586 tests did not notice.
+    name: 'hooks install',
+    authorise: ['--yes'],
+    stack: 'node',
+    // Two things are written and neither is a file in the usual sense: the shim
+    // under `.simt-hooks/`, and `core.hooksPath` inside `.git/config`. Probing
+    // only the shim would pass on an install that wrote a hook git does not run -
+    // the exact downgrade the command exists to avoid - so both are in the
+    // fingerprint, and `git config --get` exits non-zero when unset, which is why
+    // the unset answer is caught rather than awaited.
+    verify: async (root) => {
+      const hooksPath = await git(['config', '--get', 'core.hooksPath'], { cwd: root })
+        .then(({ stdout }) => stdout.trim())
+        .catch(() => '(unset)');
+      const shim = await readFile(join(root, '.simt-hooks/pre-commit'), 'utf8').catch(() => '(absent)');
+      return `${hooksPath}\n${shim}`;
+    },
+  },
 ];
 
 for (const writer of WRITERS) {
@@ -246,7 +299,7 @@ for (const writer of WRITERS) {
     const install = writer.source ? ['skills', 'install', 'graphify', '--from', writer.source] : [writer.name];
 
     for (const mode of ['unauthorised', 'dry-run']) {
-      const root = await consumer();
+      const root = await consumer({ stack: writer.stack });
       t.after(() => rm(root, { recursive: true, force: true }));
       if (writer.needsStalePin) await stalePin(root);
       if (writer.needsStaleRegion) await staleRegion(root);
@@ -263,7 +316,11 @@ for (const writer of WRITERS) {
       );
       const args = [...install, '--root', root, ...(mode === 'dry-run' ? [...writer.authorise, '--dry-run'] : [])];
 
-      const { code, stderr } = await run(args);
+      // Which world this row runs in is stated per row rather than inherited. Left to
+      // the environment it was the estate for a developer at a checkout and absent
+      // for everyone else, and one of those two answers satisfied the row by
+      // refusing.
+      const { code, stderr } = await run(args, writer.source ? workspaceEnv(WORKSPACE) : NO_WORKSPACE);
       const after = await writer.verify(root);
 
       assert.equal(
@@ -272,18 +329,34 @@ for (const writer of WRITERS) {
         `${writer.name} changed the filesystem in ${mode} mode (exit ${code}). ` +
           `A rehearsal and an unauthorised run are both no-write. ${stderr.slice(0, 200)}`,
       );
-      // An unauthorised preview that found work is not a success. `sync` with no
-      // flags is a check that prints the plan, so it reports drift through the
-      // exit code exactly as `sync --check` does. Asserting only the bytes would
-      // pass on a `sync` that previewed and returned 0 - which is the same
-      // one-question-two-answers shape ADR-035 rules out, reached from the other
-      // direction.
-      if (writer.name === 'sync' && mode === 'unauthorised') {
-        assert.notEqual(
-          code,
-          0,
-          'sync previewed a real change and exited 0, so a caller would read it as current',
-        );
+      // The bytes alone are not enough, and the direction that costs a whole table is
+      // the one where the command refuses instead of previewing: a refusal changes
+      // nothing, so the equality above still holds. `hooks install` on a repo with
+      // no runnable gate is refused exactly that way (correctly - a shim with an
+      // empty gate list enforces nothing yet still replaces whatever git was
+      // running), so a row pointed at the wrong fixture would have gone green
+      // while testing the refusal. The exit code separates the two, and it is the
+      // same question ADR-035 rules out having two answers.
+      //
+      // Only the unauthorised form is asserted. A rehearsal is not the same
+      // question: `sync --yes --dry-run` reports the work it found exactly as the
+      // unauthorised form does (ADR-036), so requiring 0 here would fail on the
+      // behaviour that record deliberately settled.
+      if (mode === 'unauthorised') {
+        if (writer.previewFindsWork) {
+          assert.notEqual(
+            code,
+            0,
+            `${writer.name} previewed a real change and exited 0, so a caller would read it as current`,
+          );
+        } else {
+          assert.equal(
+            code,
+            0,
+            `${writer.name} exited ${code} instead of previewing. A refusal leaves the ` +
+              'filesystem untouched, so this row would pass while testing the refusal.',
+          );
+        }
       }
     }
   });

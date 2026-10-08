@@ -204,8 +204,8 @@ export async function buildRow(path, context) {
     if (!hooks.routed) {
       problems.push(
         hooks.current === null
-          ? 'no core.hooksPath; commits are ungated. run: simt-dev hooks install'
-          : `core.hooksPath is "${hooks.current}", not the shared dispatcher; run: simt-dev hooks install`,
+          ? 'no core.hooksPath; commits are ungated. run: simt-dev hooks install --yes'
+          : `core.hooksPath is "${hooks.current}", not the shared dispatcher; run: simt-dev hooks install --yes`,
       );
     } else if (!hooks.complete) {
       for (const h of hooks.problems) problems.push(`hooks: ${h}`);

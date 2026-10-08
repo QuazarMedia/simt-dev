@@ -341,7 +341,7 @@ export async function initCommand(positional, flags) {
     note(
       state.complete
         ? `hooks    installed and current: ${gates.join(', ')}`
-        : `hooks    NOT ENFORCED yet - ${gates.join(', ')} ${verb} but no hook runs them. Install with: simt-dev hooks install --root ${root}`,
+        : `hooks    NOT ENFORCED yet - ${gates.join(', ')} ${verb} but no hook runs them. Install with: simt-dev hooks install --root ${root} --yes`,
     );
   }
   return EXIT.OK;

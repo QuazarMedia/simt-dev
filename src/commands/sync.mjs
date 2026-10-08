@@ -124,6 +124,11 @@ export async function syncCommand(positional, flags) {
   // pattern-matched onto `sync` and got a write instead of a plan, so the preview
   // the whole interface is built on was opt-in by command line and opt-out by habit.
   // The rule is one function's, not this file's (ADR-035).
+  //
+  // The list above was itself wrong: `hooks install` was writing by default too,
+  // so it was the sixth writer in name only. Measured, not assumed - see ADR-040.
+  // A comment that enumerates which commands follow a rule is a claim about code
+  // this file does not own, and it was one commit out of date before anyone ran it.
   if (mode.apply) {
     for (const t of changed) {
       // Three of the four rule surfaces live in directories that do not exist yet in a

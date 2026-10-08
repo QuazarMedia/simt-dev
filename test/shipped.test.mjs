@@ -24,6 +24,7 @@ import { DECISIONS_DIR } from '../src/decisions/index.mjs';
 import { loadMdcRules, renderMdc, ruleName } from '../src/projection/mdc.mjs';
 import { SURFACES, rulePath, surface, undocumentedKeys } from '../src/projection/surfaces.mjs';
 import { compose } from '../src/projection/markers.mjs';
+import { renderShim } from '../src/hooks/shim.mjs';
 import { buildManifest } from '../src/projection/manifest.mjs';
 import { PACKAGE_ROOT } from '../src/workspace.mjs';
 import { dispatch } from '../src/commands/index.mjs';
@@ -177,21 +178,53 @@ test('every remedy names a command that does what the remedy claims', async () =
   // default, so a remedy naming the bare command was true; after ADR-035 it is a
   // preview, and every remedy in the tree silently became a no-op instruction. The
   // assertion has to name the flag, or it passes on both sides of that change.
+  //
+  // `hooks install` is the second writer that used to write by default, and it took
+  // a whole commit and a new decision to find (ADR-040). `--yes` means the same
+  // thing there for a second reason: it is also the consent to take over routing git
+  // already uses, so a remedy that omits it is refused rather than applied.
+  const WRITES = /(?:simt-dev sync|simt-dev hooks install)\b/g;
+  const AUTHORISES = /--yes\b|--check\b/;
   const offenders = [];
+
   for (const file of await collect(join(ROOT, 'src'), '.mjs')) {
     const text = await readFile(file, 'utf8');
-    // The occurrence, not the string containing it. A remedy is usually one clause
-    // inside a longer template literal, and matching the literal would report a
-    // whole help block as an offender and hide the clause that is actually wrong.
-    // `[--yes]` in a usage synopsis is the help convention for an optional flag,
-    // so it is allowed; what is not allowed is a bare `simt-dev sync` that reads
-    // as an instruction to run it.
-    for (const match of text.matchAll(/simt-dev sync(?! \[?(?:--yes|--check)\b)/g)) {
-      const line = text.slice(0, match.index).split('\n').length;
-      offenders.push(`${file.slice(ROOT.length + 1)}:${line}: simt-dev sync`);
+    const lines = text.split('\n');
+    for (const [at, line] of lines.entries()) {
+      // Prose about the tool is not an instruction to run it, and `hooks.mjs`'s own
+      // header names the command in its usage line. Skipping the comment forms is
+      // what keeps this a guard on remedies rather than a guard on the word.
+      if (/^\s*(?:\/\/|\*|\/\*)/.test(line)) continue;
+
+      // The occurrence, not the string containing it. A remedy is usually one clause
+      // inside a longer template literal, and matching the literal would report a
+      // whole help block as an offender and hide the clause that is actually wrong.
+      //
+      // The flag is searched for on the rest of the line rather than immediately
+      // after the command, because a remedy may put other flags first -
+      // `simt-dev hooks install --root R --yes` is the shape `init` prints - and a
+      // lookahead would have called that an offender. The search stops at the next
+      // `simt-dev` so a correct remedy earlier on a line cannot vouch for a bare
+      // one later on it. `[--yes]` in a usage synopsis is the help convention for an
+      // optional flag, and matches the same pattern.
+      for (const match of line.matchAll(WRITES)) {
+        const rest = line.slice(match.index + match[0].length).split('simt-dev')[0];
+        if (!AUTHORISES.test(rest)) {
+          offenders.push(`${file.slice(ROOT.length + 1)}:${at + 1}: ${match[0]}`);
+        }
+      }
     }
   }
-  assert.deepEqual(offenders, [], `remedies name sync without a flag:\n${offenders.join('\n')}`);
+  assert.deepEqual(offenders, [], `remedies name a writer without the flag it now needs:\n${offenders.join('\n')}`);
+});
+
+test('the installed shim tells the reader how to reinstall it', async () => {
+  // This file is written into every adopting repository and read by whoever owns
+  // it, so it is the one instruction that travels. It names `hooks install` as the
+  // way back, and a bare command there is a preview - the reader follows the shim's
+  // own instructions, gets no change, and concludes the shim is not reinstallable.
+  const shim = renderShim('pre-commit');
+  assert.match(shim, /simt-dev hooks install --yes/, shim.slice(0, 400));
 });
 
 test('the manifest comment describes the manifest', async () => {

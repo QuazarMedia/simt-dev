@@ -7,9 +7,15 @@ Verdict: **BLOCK** for a public release and for estate-wide enforcement (ADR-008
 Companion: `docs/plans/0003-intelligence-amplifier-research-plan.md`, the R&D plan this review
 feeds
 
-This review does not replace review 0001. It re-verifies every 0001 slice at `4c27514`, carries
-the open ones into a single tracker, and adds S23–S51. Where a 0001 fix still stands, it is
-referenced rather than repeated.
+This review re-verified every review 0001 slice at `4c27514`, carried the open ones into a single
+tracker here, and added S23–S51. Where a 0001 fix still stands, it is referenced rather than
+repeated.
+
+**§3 below is the only tracker of slice state.** Review 0001 used to carry its own copy of
+S01–S22, which is now removed: two tables is how S11 shipped at `5c079cd` while review 0001
+still read Queued. 0001 is kept as reference — what each slice *is*, where it was found, why it
+mattered — under `Status: reference`. If you are here to ask whether something is done, read §3;
+if you are here to ask what a slice means, read 0001's `## Slice details`.
 
 ## Summary
 

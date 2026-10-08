@@ -55,6 +55,26 @@ export const STYLES = {
 export const BEGIN = STYLES.html.begin;
 export const END = STYLES.html.end;
 
+/**
+ * The separator between hand-written text and the region, in the shape a Markdown
+ * formatter insists on.
+ *
+ * Markdown treats an HTML comment that follows a paragraph, a list, a fenced block
+ * or a heading as a new block, and every formatter inserts the blank line separating
+ * the two before writing it back. Measured with Prettier 3.8.1: a region appended
+ * after one newline comes back rewritten, and `--check` exits 1 — on a file the
+ * projection got right and the repository's own gate is simply enforcing. The
+ * projection emits the formatter's shape from the start, for the same reason it
+ * emits the trailing newline `compose` already owns.
+ *
+ * Note the list case is worse than a blank line: without one, Prettier reads the
+ * region as a continuation of the last list item and indents all of it.
+ */
+function seam(before) {
+  if (before === '') return '';
+  return before.endsWith('\n\n') ? before : `${before.replace(/\n+$/, '')}\n\n`;
+}
+
 function styleOf(style) {
   return typeof style === 'string' ? (STYLES[style] ?? STYLES.html) : (style ?? STYLES.html);
 }
@@ -203,13 +223,17 @@ export function compose(body, { sha, sources = [] } = {}, style) {
  */
 function splice(state, region, where) {
   if (where === 'top') {
+    // Top placement is a repair, not a relocation: a region below the file's own
+    // settings is moved back above them, which is the one thing the bytes either
+    // side of the markers are allowed to move for. So the result here is not
+    // byte-comparable with the input even when nothing has changed.
     const rest = `${state.before}${state.before === '' ? '' : '\n'}${state.after}`
       .replace(/^\n+/, '')
       .replace(/\n+$/, '');
     if (rest === '') return region;
     return `${region}\n${rest}\n`;
   }
-  const before = state.before.endsWith('\n') || state.before === '' ? state.before : `${state.before}\n`;
+  const before = seam(state.before);
   const after = state.after.startsWith('\n') ? state.after : state.after === '' ? '' : `\n${state.after}`;
   return `${before}${region}${after}`;
 }
@@ -234,8 +258,7 @@ export function inject(text, body, meta, opts = {}) {
       const rest = text.replace(/^\n+/, '').replace(/\n+$/, '');
       return { text: rest === '' ? region : `${region}\n${rest}\n`, action: 'added' };
     }
-    const base = text.endsWith('\n') || text === '' ? text : `${text}\n`;
-    const needsLeadingBlank = base !== '' && !base.endsWith('\n\n');
+    const base = seam(text);
     // No trailing newline here, and that is load-bearing. `compose` already
     // terminates the region with one; adding a second left every adopted file
     // ending in a blank line. Nothing in this tool noticed, because `check`
@@ -243,8 +266,13 @@ export function inject(text, body, meta, opts = {}) {
     // but bunnyland-server's own `git diff --check` gate did, and it is a gate
     // that repo runs before every commit. The `updated` branch below has always
     // been correct for exactly this reason.
+    //
+    // `seam` replaced a hand-rolled equivalent here. The two agreed, which is why the
+    // seam defect survived a read of this branch: it looks like the place the blank
+    // line is added, and it is — for a document with no region yet. It is not where
+    // the defect was, which is in `splice`.
     return {
-      text: `${base}${needsLeadingBlank ? '\n' : ''}${region}`,
+      text: `${base}${region}`,
       action: 'added',
     };
   }
@@ -254,10 +282,19 @@ export function inject(text, body, meta, opts = {}) {
   const current = state.body.replace(/^\n+/, '').replace(/\n+$/, '');
   const next = region.slice(s.begin.length + 1, region.length - s.end.length - 1);
   const unchanged = current === next.replace(/^\n+/, '').replace(/\n+$/, '');
+  const spliced = splice(state, region, where);
 
-  if (unchanged) return { text, action: 'unchanged' };
+  // Comparing the region BODY is not enough to decide, because the byte between the
+  // hand-written text and the region is part of the file a Markdown formatter reads
+  // too. A body that matches with a seam that does not is red on `format:check`, and
+  // reporting `unchanged` there means `check` finds no drift and `sync` never repairs
+  // it - the repository stays red with no remedy the tool offers. Top placement is
+  // excluded because there the splice is a repair that legitimately moves bytes
+  // outside the markers, so the two files differ for a reason unrelated to the seam.
+  const settled = unchanged && (where === 'top' || spliced === text);
+  if (settled) return { text, action: 'unchanged' };
 
-  return { text: splice(state, region, where), action: 'updated' };
+  return { text: spliced, action: 'updated' };
 }
 
 /**

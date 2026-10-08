@@ -144,7 +144,7 @@ record is written.
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | no | — | Queued | #13 |
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (P3) | S07 | Queued | #5, #6 |
-| S29 | An appended region fails `prettier --check` | P1 | F | projection | no | — | Queued | #7 |
+| S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `pending` |
 | S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (P9, amends ADR-025) | — | Queued | #7 |
 | S31 | Partial supersession is lost by the decision index | P2 | F | decisions | no | S19 | Queued | #16 |
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Queued | #6 |
@@ -437,6 +437,30 @@ Markdown fails on the first adoption.
 **Accept.** A markers test asserts that a blank line precedes the begin marker whenever text
 precedes it. The pack-install test (S20) runs `npm run format:check` in a fixture that has
 Prettier.
+
+> **Resolved by ADR-037**, with the first half of the acceptance implemented and the second
+> deferred to S20, which is the row that stages a packed install. The finding named
+> `markers.mjs:232` — the `absent` branch — and that branch was **already correct**:
+> measured against Prettier 3.8.1, its output passes `--check` unchanged. The blank line
+> was missing from `splice`, the branch that *replaces* a region, so the defect appeared
+> only in a repository that already had one — which is every repository that has been
+> adopted. Six shapes of preceding text were measured (paragraph, heading, list, fenced
+> block, blockquote, and one already correct) and all six came back rewritten; the list
+> case is not a missing newline but a reindent of the entire region, because with no gap
+> the formatter reads it as a continuation of the last list item.
+>
+> The half that made the first worth doing is the one the fix did not mention. `inject`
+> compared the region **body** to decide `unchanged`, so a file with a correct body and a
+> wrong seam reported no drift: `check` found nothing, `sync` had nothing to repair, and the
+> repository stayed red on its own formatter with no remedy this tool offers. `unchanged`
+> now means writing would not change a byte. The `top` style is exempt and the reason is
+> recorded in the code, because there the splice legitimately moves a misplaced region home
+> — an exemption discovered by breaking `baselines.test.mjs` rather than by reasoning.
+>
+> Two mutations, each caught by its own test. One of those tests was itself wrong first: it
+> built its fixture from a hand-written region without the do-not-edit note, so the body
+> genuinely differed and it passed with the byte comparison removed while claiming to police
+> it. It builds the fixture from a composed region and deletes the blank line now.
 
 ### S30 — `.editorconfig` baseline ships an inert section and a false comment (P1, decision)
 

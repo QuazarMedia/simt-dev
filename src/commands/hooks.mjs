@@ -229,9 +229,18 @@ async function hooksStatus(root, flags) {
   const installed = state.installed;
   const commands = exists ? (manifest?.gates?.commands ?? {}) : {};
 
+  // Collected before the JSON branch so both surfaces answer the same question.
+  // This used to be computed only for the text report, and the JSON branch wrote
+  // `ok: true` and returned EXIT.OK regardless: a `--json` caller asking whether
+  // its hooks are wired up was told yes while the same command in a terminal
+  // exited 1. Under `--json` the document IS the report, so a problem that the
+  // text path lists has to be in the document and has to move the exit code.
+  const problems = collectProblems({ exists, current, installed, manifest, foreign: state.foreign });
+  const code = problems.length > 0 ? EXIT.FAIL : EXIT.OK;
+
   if (isJson(flags)) {
     emitJson({
-      ok: true,
+      ok: code === EXIT.OK,
       command: 'hooks status',
       root,
       hooksPath: current,
@@ -250,9 +259,9 @@ async function hooksStatus(root, flags) {
             commands,
           }
         : null,
-      problems: collectProblems({ exists, current, installed, manifest, foreign: state.foreign }),
+      problems,
     });
-    return EXIT.OK;
+    return code;
   }
 
   const lines = [
@@ -300,13 +309,12 @@ async function hooksStatus(root, flags) {
       lines.push(`known gates: ${knownGates().join(', ')}`);
     }
   }
-  const problems = collectProblems({ exists, current, installed, manifest, foreign: state.foreign });
   if (problems.length > 0) {
     lines.push('', 'problems:');
     for (const p of problems) lines.push(`  ${p}`);
   }
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
-  return problems.length > 0 ? EXIT.FAIL : EXIT.OK;
+  return code;
 }
 
 function collectProblems({ exists, current, installed, manifest, foreign = [] }) {

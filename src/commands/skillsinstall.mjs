@@ -24,7 +24,7 @@ import { cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { EXIT, emit, fail, isJson, note } from '../output/index.mjs';
+import { EXIT, emit, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { loadRegistry, REGISTRY_PATH, measureSkill } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { MANIFEST, buildManifest, readManifest, writeManifest } from '../projection/manifest.mjs';
@@ -139,14 +139,19 @@ export async function installCommand(args, flags) {
     written: false,
   };
 
-  if (isJson(flags)) {
-    emit(`${JSON.stringify(payload, null, 2)}\n`, { maxBytes: flags.maxBytes ?? 0 });
-    return EXIT.OK;
-  }
+  // `--json` used to return here, before anything was written, which made
+  // `--yes --json` a command that reported a plan and changed nothing - the one
+  // combination a script writes. The payload is now emitted once, at the end,
+  // after the write it describes.
+  const report = () => {
+    if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`, { maxBytes: flags.maxBytes ?? 0 });
+  };
+  const mode = writeMode(flags);
 
-  emit(
-    [
-      `install ${name}${pick.variant ? ` (variant ${pick.variant})` : ''}`,
+  if (!isJson(flags)) {
+    emit(
+      [
+        `install ${name}${pick.variant ? ` (variant ${pick.variant})` : ''}`,
       `repo     ${root.split('/').pop()} (${repo.stack.join(', ') || 'undetected'})`,
       `workspace ${ws.root ?? '(none)'} (${ws.source}: ${ws.detail})`,
       `source   ${record.from}${pick.reason ? ` - ${pick.reason}` : ''}`,
@@ -161,12 +166,13 @@ export async function installCommand(args, flags) {
       `  from    ${record.from}`,
       `  variant ${record.variant ?? '(none - single body)'}`,
       `  sha     ${record.sha}`,
-      `  bytes   ${record.bytes}`,
-    ]
-      .filter((l) => l !== null)
-      .join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
-  );
+        `  bytes   ${record.bytes}`,
+      ]
+        .filter((l) => l !== null)
+        .join('\n'),
+      { maxBytes: flags.maxBytes ?? 0 },
+    );
+  }
 
   if (pick.note) note(pick.note);
 
@@ -175,17 +181,23 @@ export async function installCommand(args, flags) {
     // "installed copy" and the registry source are the same bytes on disk.
     // `cp` of a directory onto itself fails, and the correct action is nothing.
     note(`note    ${payload.dest} is the registry source itself; nothing to install`);
+    report();
     return EXIT.OK;
   }
 
-  if (action === 'unchanged' && !flags.yes) {
+  if (action === 'unchanged' && !mode.apply) {
     note(`note    ${payload.dest} already matches the source; nothing to write`);
+    report();
     return EXIT.OK;
   }
 
-  note(`note    dry-run  nothing written; apply with: simt-dev skills install ${name} --yes`);
-
-  if (!flags.yes) return EXIT.OK;
+  // The note was printed unconditionally, so a run that was about to write said
+  // "nothing written" and then wrote. It belongs on the path that does not write.
+  if (!mode.apply) {
+    note(`note    dry-run  nothing written; apply with: simt-dev skills install ${name} --yes`);
+    report();
+    return EXIT.OK;
+  }
 
   await mkdir(dirname(join(dest, 'SKILL.md')), { recursive: true });
   try {
@@ -203,6 +215,7 @@ export async function installCommand(args, flags) {
       `run: simt-dev graph lint  (the registry must match the file on disk)`,
     );
   }
+  payload.written = true;
   note(`wrote   ${payload.dest}`);
 
   const recorded = await recordLocal(root, record, skill.name, repo);
@@ -211,6 +224,7 @@ export async function installCommand(args, flags) {
     note('note    this repo had no manifest; simt-dev init still needs to run to project the rules');
   }
   note(`note    ${name} is now repo-local and is excluded from central-drift accounting`);
+  report();
   return EXIT.OK;
 }
 

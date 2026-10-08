@@ -311,6 +311,20 @@ stderr line.
 stdout as exactly one JSON value, and asserts `ok === (exit === 0)`. A second table asserts
 that no mutating command writes under `--dry-run` or without `--yes`.
 
+> **Resolved by ADR-035**, with the acceptance implemented as `test/contract.test.mjs` — 19
+> commands on the JSON contract, two mutating commands on the write contract, and one test
+> asserting an authorised run *does* write so that "refuse everything" cannot pass. The eight
+> rows in the table above did not survive measurement intact: **six were real** and each was
+> reproduced before it was changed. The error-path row was **backwards** (`sync --json` emits
+> its errors correctly; the real error-path lie was `doctor`). The `--all` half of the
+> `skills brief` row was **not reproducible** — `emitAll` already checked `isJson` first. And
+> `skills why --json` turned out to be a **ninth defect the table missed**: it built its
+> output as lines and had no `isJson` branch at all. `init --json` is **not** a defect either,
+> though it looked like one: `init` never consults the workspace, so both modes answer
+> identically and there is nothing for them to disagree about. `sync` requiring `--yes` was
+> deliberately left alone — that is review 0002's S24, and S10 is its prerequisite, not half
+> of it.
+
 ### S11 — `slice-commit` can never be projected; the opt-in note is false (P1)
 
 **Finding.** `rules/mdc/slice-commit.mdc` declares neither `applies:` nor `optIn:`.

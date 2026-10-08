@@ -26,7 +26,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 
 import { basename, dirname, resolve } from 'node:path';
 
-import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { provenanceDigest, plan } from '../projection/project.mjs';
 import { MANIFEST, MANIFEST_COMMENT, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { FAULT_STATES, planUpgrade, summariseUpgrade } from '../upgrade/plan.mjs';
@@ -65,6 +65,7 @@ export async function upgradeCommand(positional, flags) {
   }
 
   const sha = await provenanceDigest();
+  const mode = writeMode(flags);
   const plans = [];
   for (const repo of found.repos) {
     const { manifest, exists, error } = await readManifest(repo);
@@ -83,7 +84,7 @@ export async function upgradeCommand(positional, flags) {
   // The exact files written, collected from the writes themselves. Reconstructing the
   // list afterwards from the plan would be a second source of truth for what happened.
   const writtenFiles = new Set();
-  if (summary.updated > 0 && flags.yes === true) {
+  if (summary.updated > 0 && mode.apply) {
     for (const p of plans) {
       if (p.action !== 'updated') continue;
       try {
@@ -129,7 +130,7 @@ export async function upgradeCommand(positional, flags) {
     shape: found.shape,
     source: target.source,
     sha,
-    dryRun: flags.yes !== true,
+    dryRun: !mode.apply,
     written: applied.length > 0,
     summary: { ...summary, applied, failed },
     plans,

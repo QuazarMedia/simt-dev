@@ -165,9 +165,48 @@ async function runDoctor(positional, flags) {
   // (ADR-014).
   const ws = await resolveWorkspace(flags);
 
+  // Under `--json` the document is the whole report, so it has to carry both
+  // failures the text path reports AND the workspace answer the text path prints.
+  // This branch used to return before either check, with `ok` hardcoded true: a
+  // caller asking whether their config is readable was told yes, and given exit
+  // 0, while the same command in a terminal exited 3 and named the file. A
+  // scripted consumer has only this document to go on, so `ok` is derived from
+  // the exit code rather than written as a constant (S10).
+  const failure = result.error
+    ? { error: `${root}: ${result.error}`, remedy: null }
+    : ws.error
+      ? {
+          error: `workspace config ${ws.detail}: ${ws.error}`,
+          remedy: 'fix the JSON, or remove the file',
+        }
+      : null;
+  const code = failure ? EXIT.CONFIG : EXIT.OK;
+
   if (isJson(flags)) {
-    emit(`${JSON.stringify({ ok: true, command: 'doctor', root, ...result }, null, 2)}\n`);
-    return result.error ? EXIT.CONFIG : EXIT.OK;
+    emit(
+      `${JSON.stringify(
+        {
+          ok: code === EXIT.OK,
+          command: 'doctor',
+          root,
+          ...result,
+          // The workspace answer is a fact about which directory the tool would
+          // act on next (ADR-014). It is printed in the text report; leaving it
+          // out of the JSON meant a machine-readable caller could not see it at
+          // all, which is the one-question-two-answers defect again.
+          workspace: {
+            root: ws.root ?? null,
+            source: ws.source,
+            detail: ws.detail,
+            error: ws.error ?? null,
+          },
+          ...(failure ?? {}),
+        },
+        null,
+        2,
+      )}\n`,
+    );
+    return code;
   }
   if (result.error) {
     return fail(`${root}: ${result.error}`, EXIT.CONFIG);

@@ -135,7 +135,7 @@ record is written.
 | S17 | Declared gate commands split on whitespace | P2 | F | hooks | amend ADR-019 | — | Queued | re-verified |
 | S18 | Public-release packaging | P0 | R | package | yes (P4) | S01, S14, S39 | Queued | re-verified, +3 |
 | S19 | Docs and ADR consistency | P2 | F | docs | no | — | Queued | 1 item done in `fd37ab5` |
-| S20 | Test gaps that let S01–S11 ship green | P1 | F | tests | **yes (ADR-041)** | lands with each slice | Complete | pack-install half done; the Prettier half is blocked, see §4 |
+| S20 | Test gaps that let S01–S11 ship green | P1 | F | tests | **yes (ADR-041)** | lands with each slice | Complete | `732624d` (pack-install half; the Prettier half is blocked, see §4) |
 | S21 | Dead code, duplicate parsers, stale comments | P3 | E | hygiene | no | — | Queued | re-verified |
 | S22 | Robustness at the edges | P3 | E | various | no | — | Queued | re-verified |
 | S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | **yes (ADR-039)** | S10 | Complete | `97f8da7` |

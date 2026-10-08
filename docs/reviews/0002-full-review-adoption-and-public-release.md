@@ -114,7 +114,7 @@ record is written.
 | S02 | Leading `**/` path globs never match | P0 | F | resolve | no | S47 (optional) | Queued | re-verified |
 | S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | no | — | Queued | #14 |
 | S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | yes | S02, S03 | Queued | #14 |
-| S05 | MCP `rules_why` crashes on every call | P0 | F | mcp | no | — | Queued | #15 |
+| S05 | MCP `rules_why` crashes on every call | P0 | F | mcp | no | — | Complete | #15 |
 | S06 | MCP and CLI disagree; the closure ignores the budget | P1 | F | mcp, resolve | no | S05 | Queued | #14, code |
 | S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Queued | #6 |
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | F | hooks | no | — | Queued | #8 |
@@ -191,9 +191,11 @@ record is written.
 
 ### 4.1 Fixes that change since review 0001
 
-**S01.** 0001's fix stands: stamp the package `version` plus a content digest, compare only the
-region body, and record the change in an ADR (proposal P1, "a projection is identified by
-its content"). Add three things:
+**S01.** 0001's fix stands: stamp the content, compare only the region body, and record the change
+in an ADR (proposal P1, "a projection is identified by its content"). It was **not** implemented as
+written: 0001 and this review both propose the package `version` alongside the digest, and ADR-032
+stamps content only — `0.0.0` cannot distinguish two working trees that project differently, and a
+version that looks identical in both is worse than no version at all. Add three things:
 
 1. `sync` must rewrite `projection` in `simt-dev.json` in the same write as the regions. Today it
    restamps the regions and leaves `simtDevSha` behind, so `check` reports
@@ -953,7 +955,7 @@ written, the first five of them had been issued to unrelated records, and the ne
 block would have collided with the renumbering. A proposal that does not exist yet has no
 number — the number is assigned when the record is written, which is the only moment it is
 knowable. Every `ADR-` reference in this review therefore names a record you can read in
-`docs/decisions/`, and `test/decisions.test.mjs` fails if one does not.
+`docs/decisions/`, and `test/rules.test.mjs` fails if one does not.
 
 | Proposal | Ruling | Slices | Supersedes or amends |
 | --- | --- | --- | --- |

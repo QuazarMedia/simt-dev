@@ -313,7 +313,7 @@ export const TOOLS = [
     },
     async run(args) {
       const what = typeof args?.what === 'string' ? args.what : '';
-      const { rules } = await loadRules(null);
+      const rules = await loadRules(null);
       const { decisions } = await loadDecisions();
       const index = byId(decisions);
 

@@ -43,6 +43,7 @@ record's status line — never by editing the ruling in place.
 | [033](ADR-033-three-plan-rows-closed-by-decision-not-by-authoring.md) | Three plan rows are closed by ruling on them, not by authoring what they asked for | accepted |
 | [034](ADR-034-a-staged-tool-refuses-a-partially-staged-file.md) | A staged tool refuses a partially staged file rather than staging around it | accepted |
 | [035](ADR-035-one-write-decision-and-one-json-document.md) | One place decides whether a run may write, and one document says whether it did | accepted |
+| [036](ADR-036-a-writer-that-writes-says-so-and-the-instructions-naming-it-move-with-it.md) | A command that writes says so, and every instruction that names it moves with it | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -112,6 +113,18 @@ again — a check that appears to hold and reports pass. The difference is where
 one function decides whether a run may write, and one table asserts the JSON contract for
 every command at once, because a contract checked one command at a time is checked by
 whoever remembers.
+
+ADR-036 is the deferral that record made, settled. ADR-035 left `sync` writing by default
+because the change belonged to a slice that depended on it, and wrote the reason down
+twice rather than quietly half-applying it. Measured afterwards, `sync` was the only
+writer left that rewrote a file a bare invocation had no permission to touch — and it is
+the command a caller reaches for most, because it is the one that regenerates the text in
+front of them. The second half is the half that would have been easy to skip: the note
+inside every generated region and the comment in every manifest both tell the reader to
+run that command, and both ship into repositories that have no other copy of the
+instruction. A flag that changes what a command does without changing what the tool says
+about it leaves a permanently-false instruction in every repository in the estate, which is
+the same failure as a check that reports pass and does not hold — one layer up.
 
 ## The rule these records enforce
 

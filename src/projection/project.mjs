@@ -207,7 +207,7 @@ export async function checkTargets(root, flags = {}) {
           file: rel,
           surface: target.surface,
           status: 'absent',
-          detail: `no ${target.surface} rule here; run: simt-dev sync`,
+          detail: `no ${target.surface} rule here; run: simt-dev sync --yes`,
         });
         continue;
       }
@@ -227,7 +227,7 @@ export async function checkTargets(root, flags = {}) {
           file: rel,
           surface: target.surface,
           status: 'unmanaged',
-          detail: 'no generated region; run: simt-dev sync',
+          detail: 'no generated region; run: simt-dev sync --yes',
         });
         continue;
       }
@@ -242,7 +242,7 @@ export async function checkTargets(root, flags = {}) {
         file: rel,
         surface: target.surface,
         status: action === 'unchanged' ? 'current' : 'drift',
-        detail: action === 'unchanged' ? undefined : `region is ${action}; run: simt-dev sync`,
+        detail: action === 'unchanged' ? undefined : `region is ${action}; run: simt-dev sync --yes`,
         recordedSha: state.sha ?? null,
       });
     }
@@ -260,8 +260,8 @@ export async function checkTargets(root, flags = {}) {
       findings.push({
         file: t.file,
         status: 'absent',
-        detail: 'no baseline file; run: simt-dev sync',
-        remedy: 'simt-dev sync',
+        detail: 'no baseline file; run: simt-dev sync --yes',
+        remedy: 'simt-dev sync --yes',
       });
       continue;
     }
@@ -270,15 +270,15 @@ export async function checkTargets(root, flags = {}) {
       findings.push({
         file: t.file,
         status: 'unmanaged',
-        detail: 'the file exists with no simt-dev region; run: simt-dev sync',
-        remedy: 'simt-dev sync',
+        detail: 'the file exists with no simt-dev region; run: simt-dev sync --yes',
+        remedy: 'simt-dev sync --yes',
       });
       continue;
     }
     findings.push({
       file: t.file,
       status: t.action === 'unchanged' ? 'current' : 'drift',
-      detail: t.action === 'unchanged' ? undefined : `region is ${t.action}; run: simt-dev sync`,
+      detail: t.action === 'unchanged' ? undefined : `region is ${t.action}; run: simt-dev sync --yes`,
       recordedSha: state.sha ?? null,
     });
     const off = misplaced(state, t.style);
@@ -298,7 +298,7 @@ export async function checkTargets(root, flags = {}) {
         surface: st.surface,
         status: 'pointer-blocked',
         detail: `${st.detail} (${st.bytes} bytes); simt-dev will not replace it`,
-        remedy: 'move it aside, or delete the file and re-run: simt-dev sync',
+        remedy: 'move it aside, or delete the file and re-run: simt-dev sync --yes',
       });
     } else if (st.state === 'mispointed') {
       findings.push({
@@ -306,7 +306,7 @@ export async function checkTargets(root, flags = {}) {
         surface: st.surface,
         status: 'pointer-drift',
         detail: `${st.detail}; should point at ${pointer.to}`,
-        remedy: 'run: simt-dev sync',
+        remedy: 'run: simt-dev sync --yes',
       });
     }
   }
@@ -333,7 +333,7 @@ async function checkPrimary(root, flags = {}) {
     if (e.code !== 'ENOENT') {
       return { file: PRIMARY_TARGET, status: 'unreadable', detail: e.code ?? String(e) };
     }
-    return { file: PRIMARY_TARGET, status: 'absent', detail: 'no AGENTS.md; run: simt-dev sync' };
+    return { file: PRIMARY_TARGET, status: 'absent', detail: 'no AGENTS.md; run: simt-dev sync --yes' };
   }
   const state = parse(existing);
   if (state.status === 'malformed') {
@@ -345,13 +345,13 @@ async function checkPrimary(root, flags = {}) {
     };
   }
   if (state.status === 'absent') {
-    return { file: PRIMARY_TARGET, status: 'unmanaged', detail: 'no generated region; run: simt-dev sync' };
+    return { file: PRIMARY_TARGET, status: 'unmanaged', detail: 'no generated region; run: simt-dev sync --yes' };
   }
   const d = diff(existing, body, meta);
   return {
     file: PRIMARY_TARGET,
     status: d.action === 'unchanged' ? 'current' : 'drift',
-    detail: d.action === 'unchanged' ? undefined : `region is ${d.action}; run: simt-dev sync`,
+    detail: d.action === 'unchanged' ? undefined : `region is ${d.action}; run: simt-dev sync --yes`,
     recordedSha: state.sha ?? null,
     expectedSha: meta.sha,
   };

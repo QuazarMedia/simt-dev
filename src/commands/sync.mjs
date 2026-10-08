@@ -1,4 +1,4 @@
-// simt-dev sync — write the generated regions.
+// simt-dev sync --yes — write the generated regions.
 // simt-dev check — the gate.
 //
 // They share plan/project.mjs so they can never disagree about what the regions
@@ -18,7 +18,7 @@
 
 import { mkdir, symlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { plan, checkTargets, checkTarget, provenanceDigest, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { manifestDrift, readManifest, unrunnableGates } from '../projection/manifest.mjs';
@@ -39,6 +39,7 @@ const NON_BLOCKING = new Set(['pointer-drift']);
 export async function syncCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
   const checkOnly = flags.check === true;
+  const mode = writeMode(flags);
 
   const result = await plan(root, flags);
 
@@ -80,7 +81,7 @@ export async function syncCommand(positional, flags) {
     return fail(
       `${broken.length} file(s) have a malformed generated region (${first.file}: ${first.reason})`,
       EXIT.FAIL,
-      `fix the markers at ${first.file}:${first.line}, then: simt-dev sync`,
+      `fix the markers at ${first.file}:${first.line}, then: simt-dev sync --yes`,
     );
   }
 
@@ -116,7 +117,14 @@ export async function syncCommand(positional, flags) {
   // Writes happen BEFORE output in every mode. An earlier build emitted `--json`
   // first and returned, so `upgrade --yes --json` reported a plan and changed
   // nothing — the exact combination automation reaches for.
-  if (checkOnly !== true && flags.dryRun !== true) {
+  //
+  // `sync` used to be the one writer that wrote by default, which made it the odd
+  // one out among six: `init`, `upgrade`, `ci`, `hooks install` and `skills install`
+  // all preview unless told otherwise. An agent that learned the other five
+  // pattern-matched onto `sync` and got a write instead of a plan, so the preview
+  // the whole interface is built on was opt-in by command line and opt-out by habit.
+  // The rule is one function's, not this file's (ADR-035).
+  if (mode.apply) {
     for (const t of changed) {
       // Three of the four rule surfaces live in directories that do not exist yet in a
       // repository that has only ever been written to by hand. `init` grew its own
@@ -138,7 +146,10 @@ export async function syncCommand(positional, flags) {
   if (isJson(flags)) {
     emitJson(
       {
-        ok: checkOnly ? changed.length === 0 : true,
+        // `ok` follows the exit code, which now reports drift for a previewing run
+        // too. Leaving it `true` here would break the invariant ADR-035 sets for
+        // every command, and the contract table asserts it for this one.
+        ok: changed.length === 0 && pointersAdded.length === 0 ? true : mode.apply,
         command: checkOnly ? 'sync --check' : 'sync',
         root,
         stack: result.stack,
@@ -148,7 +159,8 @@ export async function syncCommand(positional, flags) {
         sha: result.targets[0].sha,
         targets,
         pointers: pointersAdded,
-        written: checkOnly || flags.dryRun === true ? false : changed.length + pointersAdded.length,
+        written: mode.apply ? changed.length + pointersAdded.length : 0,
+        dryRun: !mode.apply,
       },
       {},
     );
@@ -167,13 +179,27 @@ export async function syncCommand(positional, flags) {
     ];
     if (changed.length === 0 && pointerPlan.length === 0) lines.push('already current; nothing written');
     else if (checkOnly) lines.push('would write; rerun without --check');
+    else if (!mode.apply) {
+      // The preview names the command that writes it. A preview that reports what
+      // would change and then exits without saying how to make it happen leaves the
+      // reader to guess between three spellings of the same verb.
+      lines.push(
+        flags.dryRun === true
+          ? 'dry-run; nothing written'
+          : `would write ${changed.length + pointersAdded.length} file(s); apply with: simt-dev sync --yes`,
+      );
+    }
     emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   }
 
   if (checkOnly) return changed.length === 0 && pointerPlan.length === 0 ? EXIT.OK : EXIT.FAIL;
-  if (flags.dryRun === true) {
-    note('dry-run  no files written');
-    return EXIT.OK;
+  // A preview that found work is not a success: `simt-dev sync --yes` with no flags is a
+  // check that also prints the plan, and a check that exits 0 while reporting drift
+  // is the one-question-two-answers shape ADR-035 rules out. This is what lets a
+  // caller run `sync` in place of `sync --check` and get the same verdict.
+  if (!mode.apply) {
+    if (flags.dryRun === true) note('dry-run  no files written');
+    return changed.length === 0 && pointerPlan.length === 0 ? EXIT.OK : EXIT.FAIL;
   }
   return EXIT.OK;
 }

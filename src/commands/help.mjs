@@ -6,7 +6,9 @@ const COMMANDS = `simt-dev init [path]            adopt or scaffold a repo into 
                            --accept-conflicts; never commits or pushes)
 simt-dev doctor                 classify a repo and check config health
 simt-dev check                  the gate: projection drift, manifest validity, policy
-simt-dev sync [--check]         regenerate the projection (idempotent)
+simt-dev sync [--yes]           regenerate the projection (idempotent)
+                           (prints the plan and exits 1 on drift without --yes,
+                           so it also works as a check)
 simt-dev upgrade                move every consumer to this simt-dev SHA, as one set
                            (dry-run unless --yes; moves a pin only - it never
                            adopts or repairs a repo; never commits or pushes)

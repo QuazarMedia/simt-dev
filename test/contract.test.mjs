@@ -81,6 +81,16 @@ async function stalePin(root) {
   await writeFile(file, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
+/** Put a stray line inside the region, so `sync` has work it would otherwise skip. */
+async function staleRegion(root) {
+  const file = join(root, 'AGENTS.md');
+  const text = await readFile(file, 'utf8');
+  await writeFile(
+    file,
+    text.replace('<!-- simt-dev:begin -->', '<!-- simt-dev:begin -->\nSTALE\n'),
+  );
+}
+
 /** A corrupt user config, so a workspace lookup has a real answer to get wrong. */
 async function badConfig() {
   const home = await mkdtemp(join(tmpdir(), 'simt-contract-cfg-'));
@@ -209,6 +219,15 @@ const WRITERS = [
     verify: async (root) => JSON.parse(await readFile(join(root, 'simt-dev.json'), 'utf8')).projection.simtDevSha,
   },
   {
+    // `sync` was the one writer that wrote by default, which is why it is here: it
+    // is the row that would have caught S24's own defect. It needs stale region
+    // bytes rather than a stale pin, because what `sync` writes is the region.
+    name: 'sync',
+    authorise: ['--yes'],
+    needsStaleRegion: true,
+    verify: async (root) => readFile(join(root, 'AGENTS.md'), 'utf8'),
+  },
+  {
     name: 'skills install',
     authorise: ['--yes'],
     source: 'simt-social-api/.agents/skills/graphify',
@@ -230,6 +249,7 @@ for (const writer of WRITERS) {
       const root = await consumer();
       t.after(() => rm(root, { recursive: true, force: true }));
       if (writer.needsStalePin) await stalePin(root);
+      if (writer.needsStaleRegion) await staleRegion(root);
 
       const before = await writer.verify(root);
       // `--root` is not optional here. `skills install` writes to `process.cwd()`
@@ -252,7 +272,19 @@ for (const writer of WRITERS) {
         `${writer.name} changed the filesystem in ${mode} mode (exit ${code}). ` +
           `A rehearsal and an unauthorised run are both no-write. ${stderr.slice(0, 200)}`,
       );
-      assert.notEqual(code, undefined);
+      // An unauthorised preview that found work is not a success. `sync` with no
+      // flags is a check that prints the plan, so it reports drift through the
+      // exit code exactly as `sync --check` does. Asserting only the bytes would
+      // pass on a `sync` that previewed and returned 0 - which is the same
+      // one-question-two-answers shape ADR-035 rules out, reached from the other
+      // direction.
+      if (writer.name === 'sync' && mode === 'unauthorised') {
+        assert.notEqual(
+          code,
+          0,
+          'sync previewed a real change and exited 0, so a caller would read it as current',
+        );
+      }
     }
   });
 }

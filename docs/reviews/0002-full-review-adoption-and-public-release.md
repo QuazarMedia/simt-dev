@@ -139,7 +139,7 @@ record is written.
 | S21 | Dead code, duplicate parsers, stale comments | P3 | E | hygiene | no | — | Queued | re-verified |
 | S22 | Robustness at the edges | P3 | E | various | no | — | Queued | re-verified |
 | S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | no | S10 | Queued | #11, #12 |
-| S24 | `sync` writes without `--yes` | P1 | F | cli | yes (P2) | S10 | Queued | §1.3 |
+| S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `pending` |
 | S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | no | — | Queued | #3 |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | no | — | Queued | #13 |
@@ -322,6 +322,22 @@ previews by running `sync` and writes instead. That is what happened in §1.3.
 This is a breaking CLI change, so state it in the CHANGELOG (S18).
 
 **Accept.** The S10 contract table includes `sync`. No file's mtime changes without `--yes`.
+
+> **Resolved by ADR-036**, with both halves of the acceptance implemented: `sync` is a row in
+> `test/contract.test.mjs`, and its unauthorised run is asserted to exit **non-zero** as well
+> as to leave the bytes alone — the byte assertion alone passes on a preview that reported
+> success. The fix as specified was incomplete in a way worth recording. Twenty-six places in
+> `src/` name `simt-dev sync` in a remedy and **two of them ship**: the note inside every
+> generated region and the manifest's `$comment` both instruct the reader to run the command
+> that regenerates the text they are looking at. Changing the gate without changing them
+> leaves a permanently-false instruction in every consumer repository — the reader with no
+> other copy to check it against. The guard that was supposed to catch this read
+> `/simt-dev sync/`, which passes identically on both sides of the change, so it could not
+> have prevented the defect it appeared to cover; it now asserts `/simt-dev sync --yes/`, and
+> a new test walks `src/` for the bare spelling. Three mutations were applied and reverted,
+> each caught by its own test. The CHANGELOG entry the fix asks for is not actionable yet —
+> there is no CHANGELOG, and S18 is the row that adds one, so it is recorded there as a
+> dependency rather than created here.
 
 ### S25 — `compare` hides stale rule files; `profiles` is never filled (P1)
 

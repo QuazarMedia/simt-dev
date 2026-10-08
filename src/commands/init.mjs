@@ -325,7 +325,7 @@ export async function initCommand(positional, flags) {
   if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
 
   note('');
-  note(`next     simt-dev sync, then simt-dev check in CI. Commit when you are happy with the diff.`);
+  note(`next     simt-dev sync --yes, then simt-dev check in CI. Commit when you are happy with the diff.`);
   // The manifest declares what the repo promises to enforce. Nothing enforces it until
   // the dispatcher is installed, and `init` used to finish without saying so — so a
   // fully adopted, `check`-green repo could enforce nothing at all, which is the state

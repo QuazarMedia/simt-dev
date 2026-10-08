@@ -144,7 +144,7 @@ record is written.
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | no | — | Queued | #13 |
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (P3) | S07 | Queued | #5, #6 |
-| S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `pending` |
+| S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `1bbc36a` |
 | S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (P9, amends ADR-025) | — | Queued | #7 |
 | S31 | Partial supersession is lost by the decision index | P2 | F | decisions | no | S19 | Queued | #16 |
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Queued | #6 |

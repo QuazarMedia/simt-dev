@@ -135,7 +135,7 @@ record is written.
 | S17 | Declared gate commands split on whitespace | P2 | F | hooks | amend ADR-019 | — | Queued | re-verified |
 | S18 | Public-release packaging | P0 | R | package | yes (P4) | S01, S14, S39 | Queued | re-verified, +3 |
 | S19 | Docs and ADR consistency | P2 | F | docs | no | — | Queued | 1 item done in `fd37ab5` |
-| S20 | Test gaps that let S01–S11 ship green | P1 | F | tests | no | lands with each slice | Queued | re-verified |
+| S20 | Test gaps that let S01–S11 ship green | P1 | F | tests | **yes (ADR-041)** | lands with each slice | Complete | pack-install half done; the Prettier half is blocked, see §4 |
 | S21 | Dead code, duplicate parsers, stale comments | P3 | E | hygiene | no | — | Queued | re-verified |
 | S22 | Robustness at the edges | P3 | E | various | no | — | Queued | re-verified |
 | S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | **yes (ADR-039)** | S10 | Complete | `97f8da7` |
@@ -192,7 +192,7 @@ record is written.
 | S17 | open | `hooks/resolve.mjs:98` |
 | S18 | open, +3 | below |
 | S19 | partly done | the `AGENTS.md` contradiction was fixed in `fd37ab5`; the rest stands (below) |
-| S20 | open | no pack-install test; `test/mcp.test.mjs` calls 3 of the 10 tools |
+| S20 | pack-install half done | `test/pack.test.mjs` packs, installs `--offline` and drives the installed binary; the `format:check` half is blocked (ADR-041 ruling four). `test/mcp.test.mjs` still calls 3 of the 10 tools |
 | S21 | open | the same items at `hooks/resolve.mjs:17,24,28,32`, `commands/index.mjs:37,131`, `skills.mjs:21`, `graph/load.mjs:482`, `targets.mjs:163` |
 | S22 | open | `near.mjs` substring match, `conflicts.mjs:22,25` |
 
@@ -280,6 +280,14 @@ derive the list from the workspace registry rather than hand-keeping it.
 
 **S20.** All five 0001 test families are still missing. The pack-install end-to-end test is the
 one that would have caught S01, S27 and S35 before they shipped; land it first, with S01.
+
+> **Resolution.** Four of the five have since landed (the JSON and write-mode contract table with
+> S10, the git-state hook tests with S08, the resolver tests in Wave 1, and the MCP parity work
+> still in progress), and `test/pack.test.mjs` now carries the fifth. It is worth reading what that
+> row was for: it was supposed to be carried by S01, and S01 closed without it, so the row the
+> plan called "the one that would have caught S01, S27 and S35 before they shipped" sat Queued
+> while S01, S27 and two of the writers those families cover all shipped green. `test/pack.test.mjs`
+> reproduces S01's `files` defect and S27's gate defect on demand; see §4.
 
 ## 5. Must fix — new findings
 
@@ -567,6 +575,12 @@ Prettier.
 > block, blockquote, and one already correct) and all six came back rewritten; the list
 > case is not a missing newline but a reindent of the entire region, because with no gap
 > the formatter reads it as a continuation of the last list item.
+>
+> The second acceptance half is **blocked, not delivered**, and the reason is in ADR-041 ruling
+> four. There is no Prettier this suite can reach: `devDependencies` is empty (ADR-012), `test/`
+> may not leave the checkout (ADR-031), and `npm install` would need a network. So
+> `test/pack.test.mjs` asserts the seam structurally and does not claim the formatting half.
+> Prettier 3.8.3 was also the wrong version to name — the one measured was 3.8.1.
 >
 > The half that made the first worth doing is the one the fix did not mention. `inject`
 > compared the region **body** to decide `unchanged`, so a file with a correct body and a
@@ -1110,7 +1124,10 @@ JSON with `schemaVersion`.
 | **3: anyone can adopt it** | S18, S40, S41, S42, S43, S44, S46, S50, S51, S13, S15, S16, S17, S19, S21, S22 | someone outside SIMT installs it from npm and adopts a Rust monorepo under Codex with no estate text in any output |
 
 S20 is not a wave. Each slice lands with its own regression test, and the pack-install test
-lands with S01.
+lands with S01. Wave 0's exit criterion is now asserted in CI by `test/pack.test.mjs`; it took
+two rounds to get there, because probing it by hand is what found `hooks install` (ADR-040) on
+the day it was due. The criterion and the test are the same sentence, which is the only reason
+the probe and the assertion could be compared at all.
 
 ## 10. Decisions this review needs
 
@@ -1135,10 +1152,13 @@ knowable. Every `ADR-` reference in this review therefore names a record you can
 | P9 | The editorconfig baseline carries only keys a reader honours | S30 | ADR-025 context and baseline content |
 | amend ADR-018 | A foreign hook for an event simt-dev does not gate is chained, not replaced | S36 | ADR-018 |
 | amend ADR-019 | A declared command runs as `sh -c` | S17 (0001) | ADR-019 |
+| ADR-041 | The suite installs the package it tests, offline, so the package must install with no network | S20 | — |
 
 The two amendments are different in kind: they name a record that already exists, so the
 number is known and the reference is checkable. A new record has neither property until it is
-written.
+written. The last row is the one exception, and it is here because a ruling that constrains what
+the repository may depend on is worth finding in the table rather than in the record it happens
+to live in.
 
 ## 11. What is solid and should be kept
 

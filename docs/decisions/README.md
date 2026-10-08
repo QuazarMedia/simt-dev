@@ -48,6 +48,7 @@ record's status line — never by editing the ruling in place.
 | [038](ADR-038-the-gate-filter-belongs-to-every-manifest-writer.md) | The gate filter belongs to every writer of a manifest, not to `init` | accepted |
 | [039](ADR-039-a-ci-step-runs-a-form-that-can-fail.md) | A gate a CI step runs must have a form that can fail, and a refusal is a failure | accepted |
 | [040](ADR-040-the-last-writer-that-wrote-by-default-was-not-the-one-named.md) | The last writer writing by default was not the one the finding named | accepted |
+| [041](ADR-041-the-suite-installs-the-package-in-order-to-test-it.md) | The suite installs the package in order to test it | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -179,6 +180,19 @@ enumerates which commands follow a rule is a claim about code its file does not 
 reader has no cheap way to check it. So the writers are a set, the set is checked by a table, and
 the table asserts the exit code as well as the bytes — because a command that *refuses* also
 changes nothing, and "wrote nothing" is the one claim a refusal satisfies for free.
+
+ADR-041 is the one that closes the gap those other records kept falling into. Every test in this
+repository imported from `../src`, which is right for a unit and blind to the artefact: S01 shipped
+a package whose `files` list and whose runtime reads disagreed, with the whole suite green, because
+no test was reading the tarball. The fix is not a better assertion but a different subject — pack
+the working tree, install it with `--offline`, and drive `node_modules/.bin/simt-dev`. `--offline`
+is the load-bearing word, and it is a constraint rather than a setting: the package has no
+dependencies to install, so adding a build-time or test-time tool starts costing a network on a
+cold runner, and a suite that fails there gets skipped, and a skipped test is indistinguishable
+from a passing one. The same constraint is why one thing that test cannot assert is recorded as
+open instead of worked around: there is no formatter to run over the output, so S29's second
+acceptance half stays pending and the seam it would have caught is asserted structurally in
+`markers.test.mjs` instead.
 
 ## The rule these records enforce
 

@@ -246,10 +246,57 @@ test('skills install: a repo with no manifest gets the full canonical shape, not
   for (const key of ['id', 'stack', 'limits', 'gates', 'localSkills', 'projection']) {
     assert.ok(key in manifest, `manifest is missing ${key}`);
   }
-  assert.ok(manifest.gates.preCommit.length > 0 && manifest.gates.prePush.length > 0);
+  // `gates` must be present and it must be *true*. This assertion used to read
+  // `preCommit.length > 0` as the proof of correctness, which is how a manifest
+  // declaring four gates this repo cannot run passed a test about manifests being
+  // right. A `pyproject.toml` and nothing else runs none of them, so the honest
+  // answer is two empty lists, and their emptiness is the point — see the test below.
+  assert.deepEqual(manifest.gates, { preCommit: [], prePush: [] });
   // The pin is a content digest, so it is present with or without a `.git` and there is
   // no sentinel to allow. `unknown` was the old fallback and it compared as a version.
   assert.match(manifest.projection.simtDevSha, /^[0-9a-f]{40}$/);
+});
+
+// The second half of the same defect, and the half with teeth. A manifest written by a
+// command that installs one skill declares what the repo will be blocked on, so every
+// gate in it must be one the repo can actually run — otherwise the moment hooks route
+// through the manifest, which is the whole point of having gates, every commit in that
+// repo is blocked over a promise nobody made.
+test('skills install: every gate a created manifest declares is one the repo can run', async () => {
+  // A repo with nothing installed and nothing declared, which is the state `skills
+  // install` found. Asserting only on this fixture would pass a fix that hardcoded an
+  // empty list, so the same test runs against a repo that CAN run gates and requires
+  // them to be there. Both halves are the same assertion: `check` accepts the manifest.
+  const bare = await scratch({ 'pyproject.toml': '[project]\n' });
+  await run(['skills', 'install', 'd1-safe-change', '--root', bare, '--yes']);
+  const { manifest } = await readManifest(bare);
+  const declared = [...manifest.gates.preCommit, ...manifest.gates.prePush];
+  assert.deepEqual(declared, [], `a repo with no scripts must declare no gates, got ${declared}`);
+
+  // `check` is the reader of this field, so ask the same function `check` asks with the
+  // same probe, rather than re-deriving the rule here. A test that spelled the rule out
+  // itself would pass while `check` rejected the manifest.
+  const { unrunnableGates } = await import('../src/projection/manifest.mjs');
+  const { readCapability } = await import('../src/hooks/capability.mjs');
+  const rejected = unrunnableGates(manifest, await readCapability(bare));
+  assert.deepEqual(rejected, [], `check would reject this manifest: ${JSON.stringify(rejected)}`);
+
+  // A repo with the scripts and the formatter gets its gates, and the probe is the only
+  // difference between the two fixtures.
+  const capable = await scratch({
+    'package.json': JSON.stringify({
+      name: 'r',
+      scripts: { test: 'node -e ""', typecheck: 'tsc' },
+      devDependencies: { prettier: '^3' },
+    }),
+    'node_modules/.bin/prettier': '#!/bin/sh\n',
+  });
+  await run(['skills', 'install', 'd1-safe-change', '--root', capable, '--yes']);
+  const { manifest: withGates } = await readManifest(capable);
+  const got = [...withGates.gates.preCommit, ...withGates.gates.prePush];
+  assert.ok(got.length > 0, 'a repo that can run gates must get them, or the probe is not running');
+  const stillBad = unrunnableGates(withGates, await readCapability(capable));
+  assert.deepEqual(stillBad, [], `check would reject this manifest: ${JSON.stringify(stillBad)}`);
 });
 
 test('skills install: records the variant that was actually installed', async () => {

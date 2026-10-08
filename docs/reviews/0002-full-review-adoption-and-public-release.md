@@ -142,7 +142,7 @@ record is written.
 | S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `f5a626c` |
 | S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | no | — | Queued | #3 |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
-| S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `pending` |
+| S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `4c73025` |
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (P3) | S07 | Queued | #5, #6 |
 | S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `1bbc36a` |
 | S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (P9, amends ADR-025) | — | Queued | #7 |

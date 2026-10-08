@@ -218,3 +218,72 @@ test('the region carries a blank line on both sides of the body', () => {
   assert.ok(text.slice(bodyStart + 4, bodyStart + 6) === '\n\n', 'no blank line before END');
   assert.ok(text.endsWith(`${END}\n`), 'region must still terminate exactly once');
 });
+
+// The seam between hand-written text and the region, measured against Prettier 3.8.1:
+// an HTML comment after a paragraph, a heading, a list or a fenced block starts a new
+// block, so a formatter inserts the separating blank line and `--check` then exits 1.
+// The list case is worse than a missing blank line — with no gap, Prettier reads the
+// region as a continuation of the last item and indents every line of it.
+//
+// Every case here was run through `prettier --check` first, and every one failed. The
+// assertions are about the bytes rather than about prettier, because prettier is not a
+// dependency of this package and cannot be in the suite (ADR-012).
+test('a region is separated from hand-written text by a blank line, whatever precedes it', () => {
+  const REGION = `${BEGIN}\n<!-- simt-dev:generated -->\n<!-- simt-dev:sha=abc1234 -->\nOLD\n\n${END}\n`;
+  const preceding = {
+    paragraph: 'intro para\n',
+    heading: '# Title\n\nintro para\n',
+    list: 'intro para\n\n- one\n- two\n',
+    fence: 'intro para\n\n```js\nconst a = 1;\n```\n',
+    quote: 'intro para\n\n> quoted\n',
+    // Already correct. Must not gain a second blank line — a formatter collapses those
+    // and `check` must not manufacture drift out of a file nobody has touched.
+    'blank already': 'intro para\n\n',
+  };
+  for (const [name, prefix] of Object.entries(preceding)) {
+    const { text } = inject(prefix + REGION, 'NEW', { sha: 'abc1234' });
+    const at = text.indexOf(BEGIN);
+    assert.ok(at > 0, `${name}: no text before the region to separate it from`);
+    assert.ok(text.slice(at - 2, at) === '\n\n', `${name}: the region needs a blank line before it`);
+    assert.equal(
+      text.slice(0, at).match(/\n+$/)[0].length,
+      2,
+      `${name}: exactly one blank line, not a run of them`,
+    );
+    // The old region ran to END and nothing followed it. The rewritten one differs from
+    // `REGION` (it carries the new body and the do-not-edit note), so compare against
+    // where END actually landed rather than against the old length.
+    assert.ok(text.endsWith(`${END}\n`), `${name}: the region must still terminate exactly once`);
+    assert.equal(text.slice(at + text.slice(at).indexOf(END) + END.length), '\n', `${name}: nothing may follow END`);
+  }
+});
+
+// The seam is only one half of the defect. A region whose BODY matches but whose seam
+// does not was reported `unchanged`, because the comparison was on the body alone — so
+// `check` found no drift, `sync` never rewrote it, and the repository stayed red on its
+// own formatter with no remedy the tool offered. This is the second half, and it is the
+// one a formatter-shaped assertion cannot catch on its own.
+test('a matching body behind a wrong seam is drift, because sync has to repair it', () => {
+  // Built from a real composed region rather than a hand-written one, then had its
+  // separating blank line removed. A hand-written region does not carry the do-not-edit
+  // note, so the body would differ and this would have been testing something else —
+  // which is how it passed while the check it was meant to police was removed.
+  const composed = inject('intro para\n', 'BODY', { sha: 'abc1234' }).text;
+  const wrong = composed.replace('intro para\n\n', 'intro para\n');
+  assert.notEqual(wrong, composed, 'the fixture must actually differ from a correct file');
+
+  // First run repairs the seam. Second run must then be quiet, or the repair is not
+  // idempotent and `check` reports drift on a file nobody has touched since.
+  const repaired = inject(wrong, 'BODY', { sha: 'abc1234' });
+  assert.equal(repaired.action, 'updated', 'a body that matches behind a wrong seam is still drift');
+  assert.equal(repaired.text, composed);
+  assert.equal(
+    inject(repaired.text, 'BODY', { sha: 'abc1234' }).action,
+    'unchanged',
+    'the repair must settle, or sync would rewrite the file on every run',
+  );
+  assert.ok(
+    inject(repaired.text, 'BODY', { sha: 'abc1234' }).text === repaired.text,
+    'and it must settle byte for byte',
+  );
+});

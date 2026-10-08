@@ -44,6 +44,7 @@ record's status line — never by editing the ruling in place.
 | [034](ADR-034-a-staged-tool-refuses-a-partially-staged-file.md) | A staged tool refuses a partially staged file rather than staging around it | accepted |
 | [035](ADR-035-one-write-decision-and-one-json-document.md) | One place decides whether a run may write, and one document says whether it did | accepted |
 | [036](ADR-036-a-writer-that-writes-says-so-and-the-instructions-naming-it-move-with-it.md) | A command that writes says so, and every instruction that names it moves with it | accepted |
+| [037](ADR-037-unchanged-means-writing-would-not-change-a-byte.md) | `unchanged` means writing would not change a byte, not that the body matches | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -125,6 +126,20 @@ run that command, and both ship into repositories that have no other copy of the
 instruction. A flag that changes what a command does without changing what the tool says
 about it leaves a permanently-false instruction in every repository in the estate, which is
 the same failure as a check that reports pass and does not hold — one layer up.
+
+ADR-037 is the same failure inside the projection primitive, and the first record here whose
+finding arrived with a line number and turned out to be two branches over. Review 0002's S29
+pointed at the code that appends a region to a document that has none; that branch was
+already correct. The blank line was missing in the code that *replaces* one, so the defect
+only appeared once a repository already had a region — which is every repository that has
+been adopted. The list case is worth reading for what it says about the failure: with no
+separating gap, a Markdown formatter reads the whole region as a continuation of the last
+list item and indents every line of it, so the file comes back changed in a way no amount
+of careful body comparison would notice. The second half is the part that made the first
+worth doing: a body that matched behind a wrong seam was reported `unchanged`, so `check`
+found nothing to report and `sync` had nothing to repair, and the repository was red on its
+own formatter with no remedy on offer. Fixing the seam without that half would have shipped
+a fix that worked once, for the one repository whose rules happened to change next.
 
 ## The rule these records enforce
 

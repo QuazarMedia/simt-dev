@@ -188,6 +188,63 @@ test('mcp: a real session answers on the protocol channel and nothing else', asy
   assert.ok(rules.rules.every((r) => Array.isArray(r.adrs)));
 });
 
+test('mcp: rules_why answers both directions, over a real session', async () => {
+  // review 0001 S05: `rules_why` destructured `{ rules }` from `loadRules`, which returns
+  // an ARRAY. Every call died on the first `.filter`, for every argument shape - a P0 that
+  // stayed open because this file exercised only 3 of the 10 tools, and not this one.
+  // Driven over the protocol rather than through `run()` because the crash was reachable
+  // from a real editor: an isError result that looks like a broken server.
+  const { stdout, stderr } = await converse(
+    [
+      req('initialize', { protocolVersion: PROTOCOL_VERSION }, 1),
+      { jsonrpc: '2.0', method: 'notifications/initialized' },
+      // by decision: which rules rest on it
+      req('tools/call', { name: 'rules_why', arguments: { what: 'ADR-006' } }, 2),
+      // by rule: which decisions settle it
+      req('tools/call', { name: 'rules_why', arguments: { what: 'python' } }, 3),
+      // a rule citing no decision reports that, rather than an empty answer
+      req('tools/call', { name: 'rules_why', arguments: { what: 'container' } }, 4),
+      // and a name that exists nowhere is an error naming the way to find the real ones
+      req('tools/call', { name: 'rules_why', arguments: { what: 'nope' } }, 5),
+      req('tools/call', { name: 'rules_why', arguments: { what: 'ADR-999' } }, 6),
+    ].map((l) => JSON.stringify(l)).join('\n') + '\n',
+  );
+  assert.equal(stderr, '', 'diagnostics belong on stderr, and there should be none here');
+  const messages = stdout.trim().split('\n').map((l) => JSON.parse(l));
+  assert.deepEqual(messages.map((m) => m.id), [1, 2, 3, 4, 5, 6], 'every request must be answered');
+
+  // A thrown Error becomes isError with `remedy: null`. Asserting isError false on all
+  // three real lookups is the assertion that would have caught S05: the crash arrived as
+  // isError, not as a hang or an empty payload, so only an explicit check finds it.
+  for (const id of [2, 3, 4]) {
+    assert.equal(messages[id - 1].result.isError, false, `request ${id} failed: ${messages[id - 1].result.content[0].text}`);
+  }
+
+  const byDecision = JSON.parse(messages[1].result.content[0].text);
+  assert.equal(byDecision.direction, 'decision');
+  assert.equal(byDecision.id, 'ADR-006');
+  assert.ok(byDecision.rules.includes('core'), 'ADR-006 is cited by core');
+  // The record ships inside the package, so the answer must not hand back a path that
+  // resolves against the consuming repo.
+  assert.equal(byDecision.readWith, 'simt-dev rules why ADR-006');
+
+  const byRule = JSON.parse(messages[2].result.content[0].text);
+  assert.equal(byRule.direction, 'rule');
+  assert.equal(byRule.id, 'python');
+  assert.equal(byRule.uncited, false);
+  assert.deepEqual(byRule.decisions.map((d) => d.id), ['ADR-006']);
+  assert.ok(byRule.decisions.every((d) => d.missing === undefined), 'every citation must resolve to a record');
+
+  const uncited = JSON.parse(messages[3].result.content[0].text);
+  assert.equal(uncited.uncited, true, 'a rule citing no decision reports that, not silence');
+
+  for (const [index, wanted] of [[4, /no rule with id/], [5, /no decision record ADR-999/]]) {
+    assert.equal(messages[index].result.isError, true, `request ${index + 1} should be an error`);
+    const payload = JSON.parse(messages[index].result.content[0].text);
+    assert.match(payload.error, wanted);
+  }
+});
+
 test('mcp: invalid JSON is answered, and the session continues', async () => {
   // A parse error must not end the session; a client that sends one bad line should get
   // an error for that line and keep working.

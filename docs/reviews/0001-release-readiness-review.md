@@ -41,11 +41,11 @@ SHA and the test command in the row when a slice changes state.
 
 | ID | Slice | Sev | Area | Needs ADR | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| S01 | Provenance stamp comes from the consumer's git, not simt-dev | P0 | projection | yes | — | Queued | |
+| S01 | Provenance stamp comes from the consumer's git, not simt-dev | P0 | projection | yes | — | Complete | ADR-032; `provenanceDigest()` |
 | S02 | Leading `**/` path globs never match | P0 | resolve | no | — | Queued | |
 | S03 | Multi-word and short keywords/aliases are unreachable | P1 | resolve, registry | no | — | Queued | |
 | S04 | Stack overlap alone selects a skill | P1 | resolve | yes | S02, S03 | Queued | |
-| S05 | MCP `rules_why` crashes on every call | P0 | mcp | no | — | Queued | |
+| S05 | MCP `rules_why` crashes on every call | P0 | mcp | no | — | Complete | `loadRules` returns an array; `rules_why` destructured `{ rules }` |
 | S06 | MCP and CLI disagree (`check`, `skills_brief`, memoised workspace) | P1 | mcp | no | S05 | Queued | |
 | S07 | Directory facts with a `/` in the path are never detected | P1 | fingerprint | no | — | Queued | |
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | hooks | no | — | Queued | |

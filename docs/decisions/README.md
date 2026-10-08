@@ -41,6 +41,7 @@ record's status line — never by editing the ruling in place.
 | [031](ADR-031-the-suite-stages-the-environment-it-needs.md) | The suite stages the environment it needs, because a test that inherits the author's directory is not evidence | accepted |
 | [032](ADR-032-provenance-is-a-content-digest-not-a-commit.md) | Provenance is a digest of the content that leaves this package, not a commit id | accepted |
 | [033](ADR-033-three-plan-rows-closed-by-decision-not-by-authoring.md) | Three plan rows are closed by ruling on them, not by authoring what they asked for | accepted |
+| [034](ADR-034-a-staged-tool-refuses-a-partially-staged-file.md) | A staged tool refuses a partially staged file rather than staging around it | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -90,6 +91,16 @@ policies with no surviving source anywhere in the estate, a skill-collapse step 
 landed two hours after the plan was written already answered, and two `local.properties` files that
 were committed on purpose. Each is closed by saying so, because the failure the plan's own text
 invites is a reader concluding a mechanism is outstanding and going to build it.
+
+ADR-034 is the same instinct in a hook, and the second time the defect was a promise the code
+already made in writing. `src/hooks/gates.mjs` defines a staged gate as one that runs over the
+staged files only, precisely so that "whole-repo formatting from a pre-commit hook" cannot
+"rewrite unstaged work the author did not ask to touch" — and the dispatcher then ran
+`git add` on every staged path. A file staged with `git add -p` came back with its unstaged
+hunk replaced, not merely committed, and the gate said nothing. The same loop also fed
+staged deletions to `git add`, whose failure was swallowed, so a commit holding a deletion and
+a formattable file recorded unformatted bytes silently. Both are the shape this estate's rules
+keep warning about: a control that appears to hold, reports pass, and does not.
 
 ## The rule these records enforce
 

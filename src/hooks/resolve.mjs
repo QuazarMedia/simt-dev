@@ -109,6 +109,10 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
       ok: true,
       kind: gate.kind,
       argv,
+      // The dispatcher has to know whether these argv entries are paths it chose or
+      // words it was handed. Sniffing the detail string meant the safety guard on
+      // partial stages would quietly stop working the day that wording changed.
+      declared: true,
       detail: `declared command: ${declared}`,
     };
   }

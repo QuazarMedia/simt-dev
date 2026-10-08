@@ -22,7 +22,7 @@ after(async () => {
   for (const t of temps) await exec('rm', ['-rf', t]);
 });
 
-async function fixture({ scripts, manifest, files = {}, binaries = [] } = {}) {
+async function fixture({ scripts, manifest, files = {}, binaries = [], formatter = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-hooks-'));
   temps.push(root);
   await exec('git', ['init', '-q', '.'], { cwd: root });
@@ -33,13 +33,39 @@ async function fixture({ scripts, manifest, files = {}, binaries = [] } = {}) {
     await writeFile(path, body);
   }
   if (manifest) await writeFile(join(root, 'simt-dev.json'), JSON.stringify(manifest, null, 2));
+  // `formatter: true` gives prettier a body that rewrites what it is handed, which is
+  // the only shape that can show whether the hook re-staged the formatter's output -
+  // an `exit 0` stub passes every assertion without exercising anything.
+  const body = formatter ? '#!/bin/sh\nfor f in "$@"; do printf "FORMATTED\\n" > "$f"; done\n' : '#!/bin/sh\nexit 0\n';
   for (const b of binaries) {
     const path = join(root, 'node_modules', '.bin', b);
     await mkdir(join(path, '..'), { recursive: true });
-    await writeFile(path, '#!/bin/sh\nexit 0\n');
+    await writeFile(path, body);
     await chmod(path, 0o755);
   }
   return root;
+}
+
+/**
+ * Put a specific blob in the index for `file` while the working tree keeps more,
+ * which is what `git add -p` produces. Written as blob plumbing rather than by
+ * driving `git add -p`, because an interactive prompt split differently on a
+ * different git version would make this helper a second source of truth for what
+ * "partially staged" means.
+ */
+async function stageBlob(root, file, content) {
+  const scratch = join(root, '.stage-scratch');
+  await writeFile(scratch, content);
+  const { stdout } = await exec('git', ['hash-object', '-w', '--', scratch], { cwd: root });
+  // `--add` because a fixture repo has no commit yet, so the path is not in the index
+  // and git refuses to add it without being told this is intentional.
+  await exec('git', ['update-index', '--add', '--cacheinfo', `100644,${stdout.trim()},${file}`], { cwd: root });
+  await exec('rm', ['-f', scratch], { cwd: root });
+}
+
+async function stagedContent(root, file) {
+  const { stdout } = await exec('git', ['show', `:${file}`], { cwd: root });
+  return stdout;
 }
 
 async function simt(args, cwd) {
@@ -374,6 +400,131 @@ test('dispatcher: an unknown event fails rather than passing silently', async ()
   const result = await runGates('post-merge', { root, manifest: { gates: {} } });
   assert.equal(result.failed, true);
   assert.match(result.error, /unknown hook event/);
+});
+
+// ---------------------------------------------------------------- restage (S08)
+//
+// The hook formats the WORKING TREE copy of what it is handed and then re-stages.
+// Two things go wrong if nobody checks, and both are silent:
+//
+//   1. A file staged with `git add -p` also carries unstaged hunks. Formatting it
+//      rewrites those too and the restage commits them - ADR-004's exact
+//      prohibition, on the path that runs on every commit in every adopted repo.
+//   2. A staged deletion makes `git add` fail, and a failed add that is caught and
+//      dropped leaves the commit holding unformatted bytes while the hook says it
+//      passed.
+
+test('dispatcher: a partially staged file is refused, and its unstaged hunk survives', async () => {
+  const manifest = { gates: { preCommit: ['format'], prePush: [] } };
+  const root = await fixture({ manifest, binaries: ['prettier'], formatter: true });
+  await exec('git', ['add', '-A'], { cwd: root });
+  await stageBlob(root, 'a.md', 'one\nSTAGED\n');
+  await writeFile(join(root, 'a.md'), 'one\nSTAGED\nUNSTAGED-WORK\n');
+
+  const result = await runGates('pre-commit', { root, manifest });
+
+  assert.equal(result.failed, true, 'a partial stage must block the commit, not be guessed at');
+  const gate = result.gates.find((g) => g.name === 'format');
+  assert.equal(gate.status, 'failed');
+  assert.match(gate.detail, /unstaged changes/);
+  assert.match(gate.detail, /a\.md/, 'the remedy has to name the file the author must act on');
+  assert.ok(gate.remedy, 'every failure mode carries a remedy (ADR-010)');
+  // The whole point: neither the index nor the working tree lost the author's work.
+  assert.equal(await stagedContent(root, 'a.md'), 'one\nSTAGED\n');
+  assert.equal(await readFile(join(root, 'a.md'), 'utf8'), 'one\nSTAGED\nUNSTAGED-WORK\n');
+});
+
+test('dispatcher: a staged deletion does not break restaging the file that is still there', async () => {
+  const manifest = { gates: { preCommit: ['format'], prePush: [] } };
+  const root = await fixture({
+    manifest,
+    binaries: ['prettier'],
+    formatter: true,
+    files: { 'doomed.md': 'doomed\n', 'keep.md': 'keep\n' },
+  });
+  await exec('git', ['add', '-A'], { cwd: root });
+  await exec('git', ['commit', '-qm', 'base'], { cwd: root });
+  await exec('git', ['rm', '-q', 'doomed.md'], { cwd: root });
+  await writeFile(join(root, 'keep.md'), 'keep\nEXTRA\n');
+  await exec('git', ['add', 'keep.md'], { cwd: root });
+
+  const result = await runGates('pre-commit', { root, manifest });
+
+  assert.equal(result.failed, false);
+  const restage = result.gates.find((g) => g.name === 'restage');
+  assert.ok(restage, 'the commit would otherwise record unformatted bytes and say nothing');
+  assert.equal(restage.status, 'passed');
+  assert.match(restage.detail, /keep\.md/);
+  // The formatted bytes are what the commit records, and the deletion is untouched.
+  assert.equal(await stagedContent(root, 'keep.md'), 'FORMATTED\n');
+  const staged = await exec('git', ['diff', '--cached', '--name-only'], { cwd: root });
+  assert.match(staged.stdout, /doomed\.md/, 'the deletion is still staged');
+});
+
+test('dispatcher: restage says nothing when the formatter changed no bytes', async () => {
+  // A no-op formatter passes every other assertion in this file, so a restage line
+  // printed on its say-so would be a report nobody could trust.
+  const manifest = { gates: { preCommit: ['format'], prePush: [] } };
+  const root = await fixture({ manifest, binaries: ['prettier'], files: { 'a.md': 'one\n' } });
+  await exec('git', ['add', '-A'], { cwd: root });
+  await exec('git', ['commit', '-qm', 'base'], { cwd: root });
+  await writeFile(join(root, 'a.md'), 'dirty\n');
+  await exec('git', ['add', 'a.md'], { cwd: root });
+
+  const result = await runGates('pre-commit', { root, manifest });
+
+  assert.equal(result.failed, false);
+  assert.deepEqual(result.gates.map((g) => g.name), ['format'], 'restage reported a change that did not happen');
+});
+
+test('dispatcher: restage touches only the files the formatter was given', async () => {
+  // Two staged files, but only one is formattable. `git add` on the other would
+  // stage whatever the working tree happened to hold since it was staged.
+  const manifest = { gates: { preCommit: ['format'], prePush: [] } };
+  const root = await fixture({
+    manifest,
+    binaries: ['prettier'],
+    formatter: true,
+    files: { 'a.md': 'one\n', 'blob.bin': 'base\n' },
+  });
+  await exec('git', ['add', '-A'], { cwd: root });
+  await exec('git', ['commit', '-qm', 'base'], { cwd: root });
+  await writeFile(join(root, 'a.md'), 'one\nstaged\n');
+  await writeFile(join(root, 'blob.bin'), 'base\nstaged\n');
+  await exec('git', ['add', '-A'], { cwd: root });
+  // Unstaged edit to the file no gate formats; it must survive the hook untouched.
+  await writeFile(join(root, 'blob.bin'), 'base\nstaged\nworking-only\n');
+
+  const result = await runGates('pre-commit', { root, manifest });
+
+  assert.equal(result.failed, false);
+  assert.equal(await stagedContent(root, 'a.md'), 'FORMATTED\n');
+  assert.equal(
+    await stagedContent(root, 'blob.bin'),
+    'base\nstaged\n',
+    'a file the formatter never saw was re-staged from the working tree',
+  );
+});
+
+test('dispatcher: a declared format command is guarded too, because its targets are unknown', async () => {
+  // `gates.commands.format` is an arbitrary command line. Nothing here can know
+  // which paths it will open, so every staged file with unstaged changes is at risk
+  // and the guard has to hold for all of them rather than assume argv holds paths.
+  const manifest = {
+    gates: { preCommit: ['format'], prePush: [], commands: { format: 'sh -c true' } },
+  };
+  const root = await fixture({ manifest, binaries: ['prettier'], formatter: true });
+  await exec('git', ['add', '-A'], { cwd: root });
+  await stageBlob(root, 'a.md', 'one\nSTAGED\n');
+  await writeFile(join(root, 'a.md'), 'one\nSTAGED\nUNSTAGED-WORK\n');
+
+  const result = await runGates('pre-commit', { root, manifest });
+
+  assert.equal(result.failed, true);
+  const gate = result.gates.find((g) => g.name === 'format');
+  assert.equal(gate.status, 'failed');
+  assert.match(gate.detail, /unstaged changes/);
+  assert.equal(await stagedContent(root, 'a.md'), 'one\nSTAGED\n');
 });
 
 // ---------------------------------------------------------------- install / status

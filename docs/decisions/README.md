@@ -45,6 +45,7 @@ record's status line — never by editing the ruling in place.
 | [035](ADR-035-one-write-decision-and-one-json-document.md) | One place decides whether a run may write, and one document says whether it did | accepted |
 | [036](ADR-036-a-writer-that-writes-says-so-and-the-instructions-naming-it-move-with-it.md) | A command that writes says so, and every instruction that names it moves with it | accepted |
 | [037](ADR-037-unchanged-means-writing-would-not-change-a-byte.md) | `unchanged` means writing would not change a byte, not that the body matches | accepted |
+| [038](ADR-038-the-gate-filter-belongs-to-every-manifest-writer.md) | The gate filter belongs to every writer of a manifest, not to `init` | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -140,6 +141,17 @@ worth doing: a body that matched behind a wrong seam was reported `unchanged`, s
 found nothing to report and `sync` had nothing to repair, and the repository was red on its
 own formatter with no remedy on offer. Fixing the seam without that half would have shipped
 a fix that worked once, for the one repository whose rules happened to change next.
+
+ADR-038 is the same failure once more, and the smallest instance of it so far: a decision
+record that named the right rule and attributed it to the wrong command. ADR-017 ruled that
+a gate is declared only if the repo can run it, and wrote *"`init` filters the stack table's
+proposals"* — so for as long as `init` was the only writer of a manifest, the belief and the
+code agreed. `skills install` also writes one, for a repo that has none, and it did not
+probe. The result was four gates in a repo with no scripts and no formatter, `check` red on
+all four, and a pre-commit hook that blocked the first commit it was installed in front of.
+Nothing about the rule was wrong; only the sentence that carried it. That is what the
+`Affects:` line on a record is for, and this record amends one in place of editing it —
+because a reader who finds the record and trusts it has to be able to trust the whole of it.
 
 ## The rule these records enforce
 

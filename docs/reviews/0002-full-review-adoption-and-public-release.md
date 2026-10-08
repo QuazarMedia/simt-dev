@@ -142,7 +142,7 @@ record is written.
 | S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `f5a626c` |
 | S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | no | — | Queued | #3 |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
-| S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | no | — | Queued | #13 |
+| S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `pending` |
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (P3) | S07 | Queued | #5, #6 |
 | S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `1bbc36a` |
 | S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (P9, amends ADR-025) | — | Queued | #7 |
@@ -386,6 +386,38 @@ keeps only runnable gates, and write `gates: {}` when none are. Separately, move
 "dry-run nothing written" note below the `--yes` check (0001 S10 row 3).
 
 **Accept.** The fixture from probe #13 produces a manifest whose every gate `check` accepts.
+
+> **Resolved by ADR-038**, which amends ADR-017 rather than restating it. The behaviour is
+> the fix as written — `recordLocal` passes the same capability probe `init` uses, so
+> `planGates` keeps only runnable gates — and the second half of the fix (moving line 186's
+> `dry-run nothing written` note below the `--yes` check) shipped with ADR-035 as S10 row 3.
+> The `Needs ADR` column said `no` because the belief looks settled, and it is: **ADR-017
+> ruled that a gate is declared only if the repo can run it.** What had gone wrong was the
+> sentence carrying it. ADR-017 attributes the mechanism to one command — *"`init` filters
+> the stack table's proposals"* — and that attribution stayed true only while `init` was the
+> sole writer of a manifest. `skills install` also writes one, for a repo that has none.
+> Settling a belief and attributing it to a single command are different acts, and only the
+> first one is safe to skip a record for.
+>
+> Measured end to end before changing anything: a bare Node repo ran
+> `skills install api-contract-sync --yes` and was handed four gates it cannot run; `check`
+> reported 4 × UNRUNNABLE and exited 1; after `hooks install`, a real commit ran the
+> pre-commit gate, which failed both staged gates and blocked. The hook's own exit code is
+> not the commit's, so the reader's first evidence is a commit that silently did not happen.
+>
+> The test that should have caught it asserted the opposite of the truth —
+> `assert.ok(manifest.gates.preCommit.length > 0 && …)`, reading non-empty as correct. That
+> is a test about manifests being right passing on a manifest declaring four gates nobody
+> could run, and it is the fourth instance in this repository of presence read as
+> correctness. It now asserts `deepEqual(manifest.gates, { preCommit: [], prePush: [] })`,
+> and a new test runs `unrunnableGates(manifest, await readCapability(root))` — the function
+> `check` runs, with the probe `check` uses — against a bare fixture *and* a capable one, so
+> a fix that hardcoded two empty lists cannot pass either half.
+>
+> Three mutations, each caught by its own test: the `capability` argument removed, a
+> hand-built empty capability substituted for the probe (caught by the capable half, not the
+> bare one), and the capable half's non-empty assertion deleted — which the bare half alone
+> did not notice, confirming both halves earn their place.
 
 ### S28 — Profiles select on language tags, not on platforms (P1, decision)
 

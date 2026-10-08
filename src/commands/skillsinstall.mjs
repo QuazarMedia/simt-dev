@@ -27,6 +27,7 @@ import { dirname, join } from 'node:path';
 import { EXIT, emit, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { loadRegistry, REGISTRY_PATH, measureSkill } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
+import { readCapability } from '../hooks/capability.mjs';
 import { MANIFEST, buildManifest, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
@@ -478,13 +479,33 @@ async function fileSha(path) {
  * would read as authoritative while omitting `gates`, which is the field the hook
  * dispatcher runs from - so a repo whose manifest came from `skills install`
  * would install hooks with nothing to enforce.
+ *
+ * "Full canonical shape" is not the same as "full set of gates", and the difference is
+ * this function's own reasoning rather than a default's. A canonical shape with the
+ * default gates in it is a promise the repo cannot keep, and a command that installs one
+ * skill is not entitled to make it.
  */
 async function recordLocal(root, record, name, repo) {
   const { manifest, error } = await readManifest(root);
   if (error) return { written: false, reason: error };
 
+  // A repo with no manifest gets one here, so this function writes a *promise* on that
+  // repo's behalf: it decides which gates the repo claims to run. Without a capability
+  // probe it wrote `format`, `lint`, `test` and `typecheck` into a repository with no
+  // scripts and no formatter, and `check` then reported four UNRUNNABLE gates. The moment
+  // hooks route through the manifest - which is the entire point of a gate - every commit
+  // in that repo is blocked, over gates nobody declared. ADR-017 exists to prevent exactly
+  // that, and a manifest written by a command that installs one skill was the way round it.
+  // `init` probes for the same reason; a second writer that does not is a defect waiting
+  // for the next command that needs a manifest.
   const base =
-    manifest ?? (await buildManifest({ root, stack: repo.stack, sha: await provenanceDigest() }));
+    manifest ??
+    (await buildManifest({
+      root,
+      stack: repo.stack,
+      sha: await provenanceDigest(),
+      capability: await readCapability(root),
+    }));
   const existing = Array.isArray(base.localSkills) ? base.localSkills : [];
   const kept = existing.filter((e) => (typeof e === 'string' ? e : e?.name) !== name);
   await writeManifest(root, { ...base, localSkills: [...kept, record] });

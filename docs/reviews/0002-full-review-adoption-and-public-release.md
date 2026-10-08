@@ -114,7 +114,7 @@ record is written.
 | S02 | Leading `**/` path globs never match | P0 | F | resolve | no | S47 (optional) | Queued | re-verified |
 | S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | no | — | Queued | #14 |
 | S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | yes | S02, S03 | Queued | #14 |
-| S05 | MCP `rules_why` crashes on every call | P0 | F | mcp | no | — | Complete | #15 |
+| S05 | MCP `rules_why` crashes on every call | P0 | F | mcp | no | — | Complete | `1791a95` (review 0001 #15) |
 | S06 | MCP and CLI disagree; the closure ignores the budget | P1 | F | mcp, resolve | no | S05 | Queued | #14, code |
 | S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Queued | #6 |
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | F | hooks | no | — | Queued | #8 |
@@ -170,7 +170,7 @@ record is written.
 | S02 | open | `**/*.md`, `src/a?.ts`, `src/{a,b}.ts` still fail; a stable built-in now exists (below) |
 | S03 | open | `tokenize("Fix the UI CI job in Go: add a DB migration for i18n, ar/RTL, café, تحويل")` → `fix, the, job, add, migration, for, i18n, rtl, caf` |
 | S04 | open, extended | a stopword selects (below) |
-| S05 | open | both argument shapes still crash (`tools.mjs:316`) |
+| S05 | **Complete** | `1791a95` — all three call shapes crashed, not two; `tools.mjs:316` destructured an array |
 | S06 | open, extended | the closure runs before the budget (below) |
 | S07 | open | a fixture with all six slash-path facts emits only `has-tests-dir` (`fingerprint.mjs:168-173`) |
 | S08 | open, reproduced | `dispatcher.mjs:114-117`, `149-159` unchanged |

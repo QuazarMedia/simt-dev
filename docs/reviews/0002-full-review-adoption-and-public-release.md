@@ -139,7 +139,7 @@ record is written.
 | S21 | Dead code, duplicate parsers, stale comments | P3 | E | hygiene | no | — | Queued | re-verified |
 | S22 | Robustness at the edges | P3 | E | various | no | — | Queued | re-verified |
 | S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | no | S10 | Queued | #11, #12 |
-| S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `pending` |
+| S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `f5a626c` |
 | S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | no | — | Queued | #3 |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | no | — | Queued | #13 |

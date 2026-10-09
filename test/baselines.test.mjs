@@ -60,7 +60,7 @@ test('the baseline names only settings, not tools a reader must install', async 
   assert.doesNotMatch(EDITORCONFIG_BODY, /\b(biome|eslint|prettier --|dprint)\b/);
 });
 
-test('the baseline is parseable editorconfig, and prettier\'s section is the last word', () => {
+test('the baseline is parseable editorconfig, with every section closed', () => {
   // The region's own header lines are comments, so a parser that sees them as keys
   // would make the whole file invalid and every editor would fall back to defaults -
   // a file worse than no file at all. This is the failure that motivated a per-file
@@ -74,6 +74,59 @@ test('the baseline is parseable editorconfig, and prettier\'s section is the las
   // under it is a typo that silently applies to nothing.
   const sections = text.split('\n').filter((l) => l.startsWith('['));
   assert.ok(sections.length >= 5);
+});
+
+test('every section header is a glob over paths, not the name of a tool', () => {
+  // `[prettier]` shipped for a year and applied to nothing: an editorconfig section
+  // header is a filepath glob (spec 0.17.2, "File Format"), so a bare word matches one
+  // file name, and no repository has one called `prettier`. Nothing reported it, because
+  // the line parsed and the region was current.
+  //
+  // A literal is not forbidden - `[Makefile]` is legal and meaningful. It is forbidden
+  // in a file every repository receives, where the only names that may be claimed are
+  // the ones every repository has, and the fix is the brace group the body already uses
+  // for exactly this: `[{*.go,*.proto}]` names the two paths together.
+  const { text } = inject('', EDITORCONFIG_BODY, { sha: SHA }, { style: 'hash' });
+  const sections = text.split('\n').filter((l) => l.startsWith('['));
+  assert.ok(sections.length > 0, 'no sections found, so this test would pass on nothing');
+  for (const header of sections) {
+    assert.match(
+      header.slice(1, -1),
+      /[*?[{]/,
+      `${header} matches one filename, which is a claim about a path rather than a class of them (ADR-048)`,
+    );
+  }
+});
+
+test('every key is one a reader honours, and `singleQuote` is not one', () => {
+  // The nine keys the EditorConfig specification defines, from "Supported Pairs". That
+  // section also decides what an unlisted key does, and it decides it invisibly: cores
+  // "shall accept and report" pairs whose key the spec does not define, while plugins
+  // "shall ignore unrecognized keys". So `singleQuote = true` is not a mistake anyone
+  // is told about; it parses, and nothing happens.
+  //
+  // Asserting against the vocabulary rather than against today's body is what makes
+  // this a guard: `quote_type` fails the same assertion, and the reason it is not here
+  // is in ADR-048 rather than in a deleted line.
+  const SPEC_KEYS = new Set([
+    'root',
+    'indent_style',
+    'indent_size',
+    'tab_width',
+    'end_of_line',
+    'charset',
+    'spelling_language',
+    'trim_trailing_whitespace',
+    'insert_final_newline',
+  ]);
+  const keys = EDITORCONFIG_BODY.split('\n')
+    .map((l) => l.match(/^([\w_]+) = /))
+    .filter(Boolean)
+    .map((m) => m[1]);
+  assert.ok(keys.length > 0, 'no keys found, so this test would pass on nothing');
+  for (const key of keys) {
+    assert.ok(SPEC_KEYS.has(key), `${key} is not an editorconfig property; a reader ignores it (ADR-048)`);
+  }
 });
 
 // ------------------------------------------------------------------------ the mechanism
@@ -345,7 +398,11 @@ test('a region that has been moved below the repo patterns is reported, not trus
 test('the shipped gitattributes region carries no path that only exists in this repository', async () => {
   // Same guard as the gate's own file, for the same reason: this text lands in sixteen
   // repositories and is read by agents that have never seen this tree.
-  assertClean(GITATTRIBUTES_BODY, 'the .gitattributes region');
+  //
+  // The argument order is `where, text`, and it was the other way round here: the guard
+  // was checking the label against the leak patterns and the region against nothing, so
+  // this test passed on a body containing any estate name at all.
+  assertClean('the .gitattributes region', GITATTRIBUTES_BODY);
 });
 
 test('git itself accepts the shipped region, and honours the repo lines beneath it', async () => {

@@ -140,7 +140,7 @@ record is written.
 | S22 | Robustness at the edges | P3 | E | various | no | — | Queued | re-verified |
 | S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | **yes (ADR-039)** | S10 | Complete | `97f8da7` |
 | S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `f5a626c` — **its premise named the wrong command**: `hooks install` also wrote by default, and is ADR-040 |
-| S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | no | — | Queued | #3 |
+| S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | **yes (ADR-045)** — the tracker said `no`, and that was wrong | — | Complete | `PENDING` |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `4c73025` |
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (P3) | S07 | Queued | #5, #6 |
@@ -195,6 +195,7 @@ record is written.
 | S20 | pack-install half done | `test/pack.test.mjs` packs, installs `--offline` and drives the installed binary; the `format:check` half is blocked (ADR-041 ruling four). `test/mcp.test.mjs` still calls 3 of the 10 tools |
 | S21 | open | the same items at `hooks/resolve.mjs:17,24,28,32`, `commands/index.mjs:37,131`, `skills.mjs:21`, `graph/load.mjs:482`, `targets.mjs:163` |
 | S22 | open | `near.mjs` substring match, `conflicts.mjs:22,25` |
+| S25 | **Complete** — ADR-045 | `row.mjs` gated the stale-rule-file problem on `row.adoption` before anything assigned it, so the gate could never fire: 17 stale rule files across five adopted repositories, none of them named. `profiles` was documented, initialised to `[]`, and never assigned |
 
 ### 4.1 Fixes that change since review 0001
 
@@ -500,6 +501,33 @@ that `sync` uses.
 
 **Accept.** Fixture: an adopted repo with one stale `.mdc` lists it in `problems`, and
 `profiles` equals the profile set `sync` renders.
+
+> **Resolution.** Closed as ADR-045, and the tracker row's `Needs ADR: no` was wrong. Both halves
+> reproduced at estate scale before anything changed — `staleRuleFiles: 17` with **zero** of the
+> sixteen repositories naming one, and `simt-app`'s problems list containing the region and the hooks
+> path and nothing else, exactly as this finding says.
+>
+> The first half is a one-line ordering bug with a rule behind it: **a gate that reads a field the
+> line above has not set yet is not a gate.** `adoption` was initialised at line 78 and assigned at
+> 127–131, and the stale-rule-file gate read it at 112. The fix moves the settlement above the
+> problem collection and turns all four adoption gates onto the settled value.
+>
+> The second half needed a decision, not a patch, because ADR-016 had ruled that "`compare`
+> continues to report one row per repo using `AGENTS.md` only, because a dashboard row cannot
+> represent four files. The gate uses the full finding list." That ruling is about the row's
+> **display** and it still stands — the row already carried `ruleFiles.total/current/stale` before
+> this change. What it did not anticipate is that a display permission was being read as a silence
+> permission: the problems list is not a display, it is the exit code, and 17 stale rule files were
+> being counted in the summary and refused as problems. ADR-045 narrows ADR-016 accordingly and
+> marks it as narrowed rather than superseded, since its other rulings stand.
+>
+> Two things worth carrying to the next row. First, the fixture for this test appended a line after
+> the `END` marker, which the containment guarantee says is hand-owned content and correctly not
+> drift — so the test failed, and the fixture was making an edit it claimed was not being made; it
+> now edits inside the region. Second, the drift guard asserts `row.profiles` equals
+> `plan(root).profiles` rather than a fixed expected list, because the mutation that actually
+> recurs is not an empty array but a plausible one computed from the declared stack instead of the
+> detected one, and a value assertion passes that.
 
 ### S26 — `upgrade` adds a region to a repo that has none (P1)
 

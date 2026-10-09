@@ -535,3 +535,94 @@ test('compare --json: every row carries notes and foreignHooks, even when empty'
     assert.ok(Array.isArray(row.foreignHooks), `${row.name} has no foreignHooks array`);
   }
 });
+
+// --- S25: what the row reports is what an agent is told -----------------------
+
+/**
+ * An adopted repo that projects a rule file per surface, as a Cursor repo does.
+ *
+ * `plan()` writes the region only, so the `.mdc` files are written here from the
+ * plan's own target list - a fixture invented independently of the code would pass for
+ * the wrong reason the moment the target shape changed, which is how the seam test in
+ * `test/markers.test.mjs` came to pass while asserting nothing.
+ */
+async function repoWithRuleFiles(name, files = {}) {
+  const root = await gitRepo(name, {
+    'simt-dev.json': JSON.stringify({
+      id: name,
+      stack: ['node'],
+      surfaces: ['opencode', 'cursor'],
+      gates: { preCommit: [], prePush: [] },
+    }),
+    'package.json': JSON.stringify({ name: 'a', private: true }) + '\n',
+    'AGENTS.md': '# mine\n',
+    ...files,
+  });
+  const built = await plan(root);
+  // `plan()` flattens the region, the rule files and the baselines into one list, so
+  // the rule files are picked out by the suffix the `.mdc` contract already fixes.
+  const ruleFiles = built.targets.filter((t) => t.path.endsWith('.mdc'));
+  assert.ok(ruleFiles.length > 0, 'the fixture must project at least one rule file, or it proves nothing');
+  await writeFile(join(root, 'AGENTS.md'), built.targets[0].text);
+  for (const t of ruleFiles) {
+    await mkdir(join(t.path, '..'), { recursive: true });
+    await writeFile(t.path, t.text);
+  }
+  return { root, sha: built.targets[0].sha, ruleFiles };
+}
+
+test('a stale rule file on an adopted repo is a problem, and it is named (S25)', async () => {
+  // The gate read `row.adoption` before anything assigned it, so it compared against
+  // the initialiser's 'unmanaged' and could never fire. The row still SHOWED the stale
+  // file in its `rules` column, which is what made this survive review: the dashboard
+  // looked like it was reporting drift while its problems list - and therefore its
+  // exit code - said nothing.
+  const { root, sha } = await repoWithRuleFiles('stale-rule-file');
+  const before = await buildRow(root, { ...CONTEXT, expectedSha: sha });
+  assert.ok(before.ruleFiles.total > 0, 'the fixture must project a rule file, or it proves nothing');
+  assert.equal(before.ruleFiles.total, before.ruleFiles.current, 'the fixture must start current, or the test proves nothing');
+  assert.equal(before.problems.filter((p) => /rule files are not current/.test(p)).length, 0);
+
+  // Inside the markers. Appending after the END marker is hand-owned content by design
+  // and is correctly not drift - so an appended line makes this test fail, which it did,
+  // and a fixture that asserts nothing is the same defect in a different coat.
+  const victim = join(root, '.cursor/rules/intake-questions.mdc');
+  const text = await readFile(victim, 'utf8');
+  const stamp = /<!-- simt-dev:sha=[0-9a-f]{40} -->/.exec(text);
+  assert.ok(stamp, 'the fixture must contain a generated region to edit');
+  await writeFile(victim, text.replace(stamp[0], `${stamp[0]}\nA HUMAN EDIT INSIDE THE REGION.`));
+
+  const after = await buildRow(root, { ...CONTEXT, expectedSha: sha });
+  assert.deepEqual(after.ruleFiles.stale, ['.cursor/rules/intake-questions.mdc']);
+  const problem = after.problems.find((p) => /rule files are not current/.test(p));
+  assert.ok(problem, `a stale rule file must be a problem; problems were ${JSON.stringify(after.problems)}`);
+  // Named, not summarised: "something is stale" is not actionable and this command
+  // exists to be acted on.
+  assert.match(problem, /\.cursor\/rules\/intake-questions\.mdc/);
+  assert.match(problem, /run: simt-dev sync --yes/);
+});
+
+test('an unmanaged repo with stray rule files is still not a problem (S25)', async () => {
+  // The other half of the gate, and the reason it is gated at all: a repo mid-migration
+  // has its own files and reporting them as "not current" turns the normal state of most
+  // repos on day one into a red estate. Fixing the gate must not turn this on.
+  const root = await gitRepo('unmanaged-strays', {
+    '.cursor/rules/mine.mdc': '---\n---\nnope\n',
+  });
+  const row = await buildRow(root, CONTEXT);
+  assert.equal(row.adoption, 'unmanaged');
+  assert.equal(row.problems.filter((p) => /rule files are not current/.test(p)).length, 0);
+});
+
+test('compare reports the profiles sync would project (S25)', async () => {
+  // `profiles` was documented as "profile ids that would be selected", initialised to
+  // `[]`, and never assigned - so every row in every run of the estate dashboard
+  // reported no profiles. The two values are computed from the same `select()` call on
+  // the same inputs; this asserts they agree rather than trusting that comment, because
+  // the comment was true while the code was not.
+  const { root, sha } = await repoWithRuleFiles('profiles-row');
+  const row = await buildRow(root, { ...CONTEXT, expectedSha: sha });
+  const planned = await plan(root);
+  assert.deepEqual(row.profiles, planned.profiles);
+  assert.ok(row.profiles.length > 0, 'the fixture must select at least one profile, or the field could still be empty and pass');
+});

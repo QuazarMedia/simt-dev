@@ -18,6 +18,7 @@
 
 import { checkTargets, PRIMARY_TARGET } from '../projection/project.mjs';
 import { readManifest } from '../projection/manifest.mjs';
+import { loadRules, select } from '../projection/rules.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { readHooksState } from './hooksstate.mjs';
@@ -72,15 +73,34 @@ export async function buildRow(path, context) {
   const ruleFindings = findings.filter((f) => f.surface !== undefined);
   const pointers = findings.filter((f) => f.status?.startsWith('pointer'));
 
+  // Adoption is settled BEFORE any problem is collected. Every gate below asks
+  // `row.adoption`, and this block used to run after them - so the stale-rule-file gate
+  // below compared against the initialiser's `'unmanaged'` and could never fire. In the
+  // estate that made `simt-app`, with 0 of 3 rule files current, report a problems list
+  // that mentioned neither the rule files nor anything the exit code could see. A gate
+  // that reads a field the line above has not set yet is not a gate.
+  //
+  // An absent manifest is not a defect; it is the pre-adoption state, which is the normal
+  // condition of most repos on day one of a migration. It is counted and reported, never
+  // called a problem.
+  const adoption = !manifest.exists ? 'unmanaged' : manifest.error ? 'broken' : 'adopted';
+
+  // The profile ids this repo's signals select. These are the two calls `desiredRegion`
+  // makes, on the same inputs it uses, so a dashboard cannot disagree with what `sync`
+  // would render. `test/compare.test.mjs` asserts the two agree rather than trusting this
+  // comment: the field sat at its initial value for the whole life of this file, and the
+  // prose above it was still true.
+  const { selected: chosen } = select(await loadRules(path), fp.stack ?? [], fp.facts ?? []);
+
   const row = {
     name,
     path,
-    adoption: 'unmanaged',
+    adoption,
     id: manifest.manifest?.id ?? null,
     stack: fp.stack ?? [],
     declaredStack: manifest.manifest?.stack ?? [],
     facts: fp.facts ?? [],
-    profiles: [],
+    profiles: chosen.map((r) => r.id),
     pinnedSha: manifest.manifest?.projection?.simtDevSha ?? null,
     recordedSha: region.recordedSha ?? null,
     region: region.status,
@@ -109,7 +129,7 @@ export async function buildRow(path, context) {
   // adopted has no rule files at all, and reporting them as "not current" turns the
   // normal mid-migration state into a red estate — the same mistake ADR-018 records
   // for hooks, where an unadopted repo's own hooks are a note rather than a problem.
-  if (row.adoption === 'adopted' && row.ruleFiles.stale.length > 0) {
+  if (adoption === 'adopted' && row.ruleFiles.stale.length > 0) {
     problems.push(
       `${row.ruleFiles.stale.length} of ${row.ruleFiles.total} rule files are not current (${row.ruleFiles.stale.join(', ')}); run: simt-dev sync --yes`,
     );
@@ -119,23 +139,11 @@ export async function buildRow(path, context) {
     problems.push(`simt-dev.json ${manifest.error}`);
   }
 
-  // --- manifest ------------------------------------------------------------
-  // An absent manifest is not a defect; it is the pre-adoption state, which is
-  // the normal condition of most repos on day one of a migration. It is counted
-  // and reported, never called a problem.
-  if (!manifest.exists) {
-    row.adoption = 'unmanaged';
-  } else if (manifest.error) {
-    row.adoption = 'broken';
-  } else {
-    row.adoption = 'adopted';
-  }
-
   // --- region --------------------------------------------------------------
   // Only meaningful for an adopted repo. An unmanaged repo has no manifest, so
   // its `absent` region is a consequence of not having adopted, not a second
   // independent defect - reporting both would double-count one root cause.
-  if (row.adoption === 'adopted') {
+  if (adoption === 'adopted') {
     if (region.status === 'drift') {
       // A drift has two causes with different fixes, and the SHA says which. When
       // the recorded SHA matches this simt-dev, the region was hand-edited and
@@ -176,7 +184,7 @@ export async function buildRow(path, context) {
   // something. That is not pedantry: `init` writes the detected stack, so an empty
   // one means either the repo was adopted before the markers existed or someone
   // emptied it by hand, and in both cases the manifest is wrong.
-  if (row.adoption === 'adopted') {
+  if (adoption === 'adopted') {
     const declared = new Set(row.declaredStack);
     const detected = new Set(row.stack);
     const extra = row.declaredStack.filter((t) => !detected.has(t));
@@ -200,7 +208,7 @@ export async function buildRow(path, context) {
     notes.push(`runs its own ${h.event} (${h.bytes} bytes); hooks install will replace it and asks first`);
   }
 
-  if (row.adoption === 'adopted') {
+  if (adoption === 'adopted') {
     if (!hooks.routed) {
       problems.push(
         hooks.current === null
@@ -216,7 +224,7 @@ export async function buildRow(path, context) {
   // A declared gate the dispatcher does not know is a hard failure at commit
   // time (step 8 fails closed), so it is a defect here. A command-kind gate with
   // no command declared is the same failure one step later.
-  if (row.adoption === 'adopted') {
+  if (adoption === 'adopted') {
     const commands = manifest.manifest?.gates?.commands ?? {};
     const invoked = new Set([...row.gatesDeclared, ...Object.keys(commands)]);
     const unknown = [...invoked].filter((g) => !context.gates.has(g)).sort();

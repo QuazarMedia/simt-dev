@@ -19,7 +19,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
-import { matchesGlob, syntheticPathFor } from '../resolve/resolve.mjs';
+import { matchesGlob, syntheticPathFor, tokenize } from '../resolve/resolve.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -205,6 +205,7 @@ export function lintRegistry(registry) {
 
     checkStack(at, skill.stack, err);
     checkGlobs(at, skill.paths, err);
+    checkKeywords(at, skill.keywords, err);
 
     // `deferred` is derived. A hand-edited `deferred: false` on a 384 KB skill
     // would let the whole Cloudflare reference land in a context window, which is
@@ -268,6 +269,24 @@ export function lintRegistry(registry) {
   }
 
   return { sync: errors, warnings, index };
+}
+
+/**
+ * A declared keyword has to be sayable.
+ *
+ * The existing check on this field is `needs keywords`, which is satisfied by a list of
+ * words no task can produce. A keyword is only reachable if the tokenizer keeps at least
+ * one of its words, so that is what this asks - the same question `checkGlobs` asks of a
+ * path, and for the same reason: 13 of 232 unique keywords were unreachable and nothing
+ * said so. Multi-word keywords are reachable as phrases, so only a keyword whose words
+ * are ALL dropped fails here.
+ */
+function checkKeywords(at, keywords, err) {
+  for (const keyword of keywords ?? []) {
+    if (tokenize(keyword).length === 0) {
+      err(`${at}: keyword "${keyword}" cannot be reached: the tokenizer keeps no word in it`);
+    }
+  }
 }
 
 /**

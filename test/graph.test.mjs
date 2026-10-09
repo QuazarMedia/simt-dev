@@ -103,6 +103,26 @@ test('lint: a reachable glob is not reported, including one with ** in it', () =
   assert.deepEqual(codes(g), []);
 });
 
+test('lint: detects a keyword no task can produce (S03)', () => {
+  // The field already had a check and it asked the wrong question: `needs keywords` is
+  // satisfied by a list of words the tokenizer throws away. This asks whether one is
+  // sayable.
+  const g = clone();
+  g.skills[0].keywords = [...(g.skills[0].keywords ?? []), 'x'];
+  assert.ok(
+    codes(g).some((e) => e.includes('cannot be reached')),
+    'a keyword the tokenizer keeps no word of must be an error',
+  );
+});
+
+test('lint: a multi-word keyword is reachable and must not be reported (S03)', () => {
+  // The other half. Phrases are matched as phrases now, so the longest keyword in the
+  // registry is a legal one, and a check that rejected it would push the fix backwards.
+  const g = clone();
+  g.skills[0].keywords = ['durable object', 'd1 migrations apply', 'ci', 'r2'];
+  assert.deepEqual(codes(g), []);
+});
+
 test('lint: detects an orphan capability', () => {
   const g = clone();
   g.capabilities.push({ id: 'ghost', summary: 'nothing covers this' });

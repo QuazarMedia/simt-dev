@@ -50,6 +50,7 @@ record's status line — never by editing the ruling in place.
 | [040](ADR-040-the-last-writer-that-wrote-by-default-was-not-the-one-named.md) | The last writer writing by default was not the one the finding named | accepted |
 | [041](ADR-041-the-suite-installs-the-package-in-order-to-test-it.md) | The suite installs the package in order to test it | accepted |
 | [042](ADR-042-a-declared-glob-must-match-a-path-built-from-it.md) | A declared glob must match a path built from it | accepted |
+| [043](ADR-043-a-keyword-is-a-phrase-and-two-letters-is-a-word.md) | A keyword is a phrase, and two letters is a word | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -206,6 +207,20 @@ third ruling is the part worth carrying forward: the registry-wide test reads th
 lint rule validates, so narrowing the generator narrows the test in step, and the test passed with
 the generator sabotaged. A check that shares its subject with the thing it checks has to have its own
 assertion about that subject.
+
+ADR-043 is the same failure in the other half of the resolver, and the word that connects them is
+*declared*. A hand-authored field is checked for being present and well-formed, which is a question
+about the file, while the resolver asks whether the value can reach anything — and a value nobody
+executed costs nothing to write. Thirteen globs matched nothing (ADR-042); thirteen keywords could
+never be produced by a task, including `durable object`, declared on three skills and dead on all
+three. Two filters were responsible: a tokenizer that discarded every word of length two, which in
+this domain is where `d1`, `r2`, `kv` and `ci` live, and a keyword comparison that asked whether one
+task token equalled the declaration, which no multi-word keyword can ever satisfy. Both were filters
+on precision applied to a registry whose values were never reachable in the first place — the same
+inversion, in the same file, one field over. It also records what the fix costs, because it does
+cost something: six two-letter stopwords now reach the summary signal, while `the` already selected
+eleven skills before the change. The honest reading is that S04's threshold was too low all along,
+and hiding that by putting the floor back to 3 would make `d1` disappear again.
 
 ## The rule these records enforce
 

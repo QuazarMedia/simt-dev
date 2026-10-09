@@ -310,7 +310,9 @@ export async function desiredRegion(root, flags) {
   notes.push(...ruleNotes);
   if (foldsRules(resolved)) {
     for (const { rule, body: ruleBody } of bodies) {
-      body += `\n\n### ${rule.id}\n\n${ruleBody}`;
+      // `## Process:`, not `### id`. The body already uses `##`, and a third-level
+      // heading in front of a second-level one is the break a reader cannot repair.
+      body += `\n\n${frameSource(rule, ruleBody, 'process')}`;
       sources.push(rule.source);
       folded.push(rule.id);
     }
@@ -485,15 +487,57 @@ export function select(rules, stack, facts = []) {
 }
 
 /** The region body. Stack profiles come after core so the general rule wins a
- *  conflict: a stack profile refines the shared rule, it does not replace it. */
+ *  conflict: a stack profile refines the shared rule, it does not replace it.
+ *
+ *  Each source is one `##` section. The source's own headings drop one level,
+ *  so a profile's `##` cannot sit beside core's and look like the same document
+ *  continuing (S34). */
 export function render(selected) {
   // Strip again here: loadRules already does it, but render is the boundary the
   // region bytes pass through, and a stray frontmatter or duplicated H1 in the
   // output would be projected verbatim.
   return selected
-    .map((r) => stripFrontmatter(r.body).trim())
+    .map((r) => frameSource(r, stripFrontmatter(r.body).trim(), 'profile'))
     .filter(Boolean)
     .join('\n\n');
+}
+
+/**
+ * One source, one `##` heading, then its body with every heading demoted.
+ *
+ * `Applies to` is already the first line of a stack profile once its H1 is gone,
+ * so it lands directly under `## Stack: …` instead of under whatever section the
+ * previous source ended on.
+ */
+export function frameSource(rule, body, kind) {
+  const text = demoteHeadings(body).trim();
+  if (!text) return '';
+  const title = sourceTitle(rule, kind);
+  if (!title) return text;
+  return `## ${title}\n\n${text}`;
+}
+
+function sourceTitle(rule, kind) {
+  if (!rule?.id) return null;
+  if (kind === 'process') return `Process: ${rule.id}`;
+  if (rule.id === 'core') return 'Core';
+  return `Stack: ${rule.id}`;
+}
+
+/** `##` becomes `###`. A fence is left alone: a heading in an example is an example. */
+function demoteHeadings(text) {
+  let fence = false;
+  return text
+    .split('\n')
+    .map((line) => {
+      if (/^(```|~~~)/.test(line)) {
+        fence = !fence;
+        return line;
+      }
+      if (fence) return line;
+      return line.replace(/^(#{1,5})(?=\s)/, '$1#');
+    })
+    .join('\n');
 }
 
 function parseFrontmatter(text) {

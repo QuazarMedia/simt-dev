@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { plan, loadRules, select, render, checkTarget } from '../src/projection/project.mjs';
+import { desiredRegion } from '../src/projection/rules.mjs';
 import { BEGIN, END, compose, inject, parse } from '../src/projection/markers.mjs';
 
 async function fixture(files = {}) {
@@ -90,6 +91,46 @@ test('a backend Workers repo does not receive the React profile', () => {
     false,
   );
 });
+
+test('a rendered region steps headings by one and gives each source one heading', async () => {
+  // S34. A folded rule used to open at `### id` and then continue at `##`, and a
+  // stack profile lost its H1, so "Applies to" read as the last section of core.
+  // The region is embedded under the host document's H1, so H2 is the first level
+  // that belongs to a source; from there a heading may climb by at most one.
+  const root = await fixture({
+    'build.gradle.kts': 'plugins { kotlin("jvm") }\n',
+    'src/main/kotlin/Api.kt': 'class Api\n',
+  });
+  const desired = await desiredRegion(root, {});
+  const region = desired.body;
+  const levels = headingLevels(region);
+  let prev = 1;
+  for (const level of levels) {
+    assert.ok(level <= prev + 1, `heading jumped from ${prev} to ${level} in:\n${region.slice(0, 400)}`);
+    prev = level;
+  }
+  const h2 = region.split('\n').filter((line) => /^## \S/.test(line));
+  assert.equal(h2.length, desired.profiles.length + desired.folded.length, h2.join('\n'));
+  assert.equal(new Set(h2).size, h2.length, 'two sources shared one heading');
+  assert.match(region, /## Core\n/);
+  assert.match(region, /## Stack: jvm\n\nApplies to:/);
+  assert.match(region, /## Process: test-gate\n/);
+});
+
+function headingLevels(markdown) {
+  const levels = [];
+  let fence = false;
+  for (const line of markdown.split('\n')) {
+    if (/^(```|~~~)/.test(line)) {
+      fence = !fence;
+      continue;
+    }
+    if (fence) continue;
+    const match = /^(#{1,6})\s+\S/.exec(line);
+    if (match) levels.push(match[1].length);
+  }
+  return levels;
+}
 
 test('render strips frontmatter and the duplicated H1', () => {
   const body = render([

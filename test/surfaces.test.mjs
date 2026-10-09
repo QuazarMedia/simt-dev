@@ -228,7 +228,7 @@ test('the default surface folds every rule into AGENTS.md and writes one file', 
 
   const region = p.targets[0].body;
   for (const id of ['test-gate', 'intake-questions']) {
-    assert.match(region, new RegExp(`### ${id}\\n`), `${id} must be folded into the region`);
+    assert.match(region, new RegExp(`## Process: ${id}\\n`), `${id} must be folded into the region`);
   }
 });
 
@@ -270,7 +270,7 @@ test('opting into a rule surface alongside the default writes one file, not two 
   assert.deepEqual(p.targets.map((t) => t.file).sort(), ['.editorconfig', '.gitattributes', 'AGENTS.md']);
   // The rule is still present - once. Asserting its ABSENCE from the plan is what makes
   // this meaningful: a change that dropped the rule entirely would pass a file-list check.
-  assert.match(p.targets.find((t) => t.file === 'AGENTS.md').body, /### test-gate/);
+  assert.match(p.targets.find((t) => t.file === 'AGENTS.md').body, /## Process: test-gate/);
   // And the reason is stated rather than silently skipped, because a reader deciding
   // whether to delete a file already on disk is owed the sentence that justifies it.
   assert.ok(p.notes.some((n) => /reads AGENTS.md, where the rule is already folded/.test(n)), p.notes.join(' | '));
@@ -288,7 +288,7 @@ test('a rule surface is written for a reader that does NOT read the primary file
     p.targets.some((t) => t.file.startsWith('.github/instructions/')),
     'copilot must still get per-rule files',
   );
-  assert.match(p.targets.find((t) => t.file === 'AGENTS.md').body, /### test-gate/);
+  assert.match(p.targets.find((t) => t.file === 'AGENTS.md').body, /## Process: test-gate/);
 });
 
 test('cursor alone still gets its own files, because nothing folds (S12)', async () => {

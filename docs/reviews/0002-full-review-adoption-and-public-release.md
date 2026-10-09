@@ -140,7 +140,7 @@ record is written.
 | S22 | Robustness at the edges | P3 | E | various | no | — | Queued | re-verified |
 | S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | **yes (ADR-039)** | S10 | Complete | `97f8da7` |
 | S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `f5a626c` — **its premise named the wrong command**: `hooks install` also wrote by default, and is ADR-040 |
-| S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | **yes (ADR-045)** — the tracker said `no`, and that was wrong | — | Complete | `PENDING` |
+| S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | **yes (ADR-045)** — the tracker said `no`, and that was wrong | — | Complete | `e780713` |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `4c73025` |
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (P3) | S07 | Queued | #5, #6 |

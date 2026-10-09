@@ -160,7 +160,7 @@ record is written.
 | S42 | Harness coverage stops at five surfaces | P1 | R | surfaces | no (rows are data) | S12 | Queued | research |
 | S43 | MCP server is two spec revisions behind and returns text only | P2 | R | mcp | no | S05, S06 | Queued | #15 |
 | S44 | Agent Skills conformance is not linted | P2 | R | skills | no | — | Queued | 37/37 names conform |
-| S45 | Core and process rules speak one language and one harness | P2 | R | rules | no | S14 | Queued | rendered regions |
+| S45 | Core and process rules speak one language and one harness | P2 | R | rules | no | S14 | Complete | `4ef3f21` |
 | S46 | The POSIX-only stance reaches an installer as `EBADPLATFORM` | P3 | R | docs | no (ADR-012 stands) | S18 | Queued | — |
 | S47 | The Node floor is end-of-life | P2 | E | runtime | yes (P8) | — | Queued | release schedule |
 | S48 | Workflow templates: tag-pinned actions, Node 20, an install that needs npm | P2 | E | ci | no | S35, S47 | Queued | `workflow.mjs` |
@@ -1518,8 +1518,8 @@ the probe and the assertion could be compared at all.
 Wave 1's resolver rows (S02, S03, S04) are closed, and their exit criterion is only half of what
 the wave says. `compare` over fixtures and the estate is still untested, and neither "no rule loads
 twice" nor "no profile lands in the wrong ecosystem" has been asserted across the whole wave —
-S32, S33, S34, S14 and S45 are what is left of it. What the closed
-rows did establish is the thing worth carrying into them: the resolver now has a gold corpus, so a
+S32, S33, S34, S14 and S45 are closed in the tracker above. The exit criterion is still untested as a whole. What S02–S04
+established is the thing worth carrying forward: the resolver now has a gold corpus, so a
 change to how it ranks can be argued against measurements instead of examples. S04's own corpus case
 failed on first run against my expectation and the resolver turned out to be right, which is the
 argument for having one.

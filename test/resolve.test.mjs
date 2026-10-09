@@ -253,6 +253,22 @@ test('resolve: ** in each position is anchored the way a path segment is (S02)',
   assert.equal(matchesGlob('src/a.ts', 'src/*.ts'), true);
 });
 
+test('resolve: a trailing ** matches the directory itself (ADR-053)', () => {
+  // path.matchesGlob requires a child, so the directory lint builds from `migrations/**`
+  // would miss. The empty expansion is the case ruling 3 of ADR-042 exists to check.
+  assert.equal(matchesGlob('migrations', 'migrations/**'), true);
+  assert.equal(matchesGlob('build', '**/build/**'), true);
+  assert.equal(matchesGlob('other', 'migrations/**'), false);
+});
+
+test('resolve: ? and braces match nothing, so lint can see them (ADR-042 ruling 4)', () => {
+  // path.matchesGlob reads `?` as one character and braces as alternatives. Ruling 4
+  // refused both: a glob the registry does not use has to fail graph lint, not select
+  // a different path. `src/aq.ts` is the synthetic path lint builds from `src/a?.ts`.
+  assert.equal(matchesGlob('src/aq.ts', 'src/a?.ts'), false);
+  assert.equal(matchesGlob('src/a.ts', 'src/{a,b}.ts'), false);
+});
+
 test('resolve: a double star is expanded both ways, or the check above is a mirror (S02)', () => {
   // The registry-wide test below reads the SAME generator it is checking, so if the
   // generator stops producing the deeper expansion, that test still passes - it just

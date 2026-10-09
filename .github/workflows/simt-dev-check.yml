@@ -37,6 +37,10 @@ jobs:
   check:
     name: simt-dev own gate
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['22.20.0', '24', '26']
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -44,7 +48,7 @@ jobs:
         with:
           # The floor in this package's `engines.node`. A gate that cannot start on
           # the version it declares support for is not a gate.
-          node-version: '20'
+          node-version: '${{ matrix.node }}'
       - name: tests
         run: npm test
       - name: skill registry lint

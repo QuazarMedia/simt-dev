@@ -8,6 +8,7 @@
 // Every selection carries the signal that produced it, so `skills why` is a
 // formatting concern rather than a re-derivation.
 
+import { matchesGlob as pathMatchesGlob } from 'node:path';
 import { STACK_TAGS } from './fingerprint.mjs';
 
 /** Signal weights. Deliberately few, so the ranking is explainable. */
@@ -217,57 +218,25 @@ export function stackReason(skill, repoSignals) {
   return `needs one of ${(skill.stack ?? []).slice(0, 3).join('|')}, repo is ${repoSignals.slice(0, 3).join('|')}`;
 }
 
-// Bounded by the registry's distinct globs, because the only caller of matchesGlob
-// passes `skill.paths`. Compiling per call was the old behaviour and cost one RegExp
-// construction per path per glob per skill.
-const globCache = new Map();
-
-function translateSegment(segment) {
-  // `?` is escaped rather than read as a single-character wildcard: nothing in the
-  // registry uses it, and reading it as a quantifier made `a?.ts` match `.ts`. A glob
-  // the matcher cannot honour now fails `syntheticPathFor` below instead of silently
-  // matching the wrong paths.
-  return segment.replace(/[.+^${}()|[\]\\?]/g, '\\$&').replace(/\*/g, '[^/]*');
-}
-
-/**
- * Translate a glob segment by segment: a leading star-star is any number of leading
- * directories, a middle one is any number of middle ones, a trailing one is anything
- * beneath, and a bare one is everything. (Written without the literal glob, because
- * its slash closes the comment that is describing it.)
+/** Whether `filePath` matches `glob`.
  *
- * This used to rewrite only a TRAILING star-star, so a glob that started with one
- * compiled to an anchored pattern beginning `**` - an invalid regex, swallowed by a
- * `catch` that returned `false`. 13 of the registry's 65 globs start that way, and
- * path is the strongest signal the resolver has (weight 100), so those skills could
- * never be selected by a diff.
- */
-export function compileGlob(glob) {
-  const cached = globCache.get(glob);
-  if (cached) return cached;
-
-  const segments = glob.split('/');
-  let pattern = '';
-  for (const [i, segment] of segments.entries()) {
-    const last = i === segments.length - 1;
-    if (segment !== '**') {
-      if (i > 0 && segments[i - 1] !== '**') pattern += '/';
-      pattern += translateSegment(segment);
-      continue;
-    }
-    // A `**` owns the separators on both sides of itself, so the next segment must
-    // not add one: that is why the `segments[i - 1] !== '**'` test above exists.
-    pattern += i === 0 ? (last ? '.*' : '(?:.*/)?') : last ? '(?:/.*)?' : '(?:.*/)?';
-  }
-
-  const regex = new RegExp(`^${pattern}$`);
-  globCache.set(glob, regex);
-  return regex;
-}
-
-/** Minimal glob matcher: `**` any depth, `*` any run within one segment. */
+ *  `path.matchesGlob` is the implementation (ADR-053). The segment translation lived
+ *  here because that call needs Node `>=22.20.0`, which was above the floor this
+ *  package declared.
+ *
+ *  A trailing double star also matches the directory itself. The built-in requires a
+ *  child, so `migrations` misses `migrations/**`, and that empty expansion is the
+ *  path `graph lint` builds to prove the glob covers anything at all (ADR-042).
+ *
+ *  `?`, `{` and `[` still match nothing. `path.matchesGlob` reads `?` as one character,
+ *  which is how `src/a?.ts` matched `src/aq.ts`, and it reads braces as alternatives.
+ *  The registry uses neither, and a glob the matcher will not honour has to fail
+ *  `graph lint` rather than select the wrong files (ADR-042, ruling 4). */
 export function matchesGlob(filePath, glob) {
-  return compileGlob(glob).test(filePath);
+  if (/[?{[\\]/.test(glob)) return false;
+  if (pathMatchesGlob(filePath, glob)) return true;
+  if (glob.endsWith('/**')) return pathMatchesGlob(`${filePath}/x`, glob);
+  return false;
 }
 
 /**

@@ -122,7 +122,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // Measured before the fix: eight clauses across four records, of which the parser
   // found none. Listed by id rather than by count so a record that stops declaring its
   // supersession is a visible change rather than a smaller number.
-  assert.deepEqual(shapes, ['ADR-016', 'ADR-021', 'ADR-023', 'ADR-025']);
+  assert.deepEqual(shapes, ['ADR-016', 'ADR-021', 'ADR-023', 'ADR-025', 'ADR-042']);
   for (const d of decisions) {
     for (const p of d.partial) {
       assert.ok(['superseded', 'narrowed', 'withdrawn'].includes(p.kind), `${d.id}: unknown kind ${p.kind}`);
@@ -141,6 +141,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // "one ruling narrowed by" names no number, and that is a fact about the record
   // rather than a gap to fill: it is carried as null and reported as unnumbered.
   assert.deepEqual(byId_.get('ADR-016').partial, [{ ruling: null, kind: 'narrowed', by: 'ADR-045' }]);
+  assert.deepEqual(byId_.get('ADR-042').partial, [{ ruling: 1, kind: 'superseded', by: 'ADR-053' }]);
 });
 
 test('a partial supersession never becomes a whole one', async () => {
@@ -155,6 +156,7 @@ test('a partial supersession never becomes a whole one', async () => {
   assert.equal(index.get('ADR-023').supersededBy, null);
   assert.equal(index.get('ADR-021').supersededBy, null);
   assert.equal(index.get('ADR-016').supersededBy, null);
+  assert.equal(index.get('ADR-042').supersededBy, null);
   // And the whole-record case still works, because the rule is anchored at the start
   // of the status rather than dropped.
   assert.equal(index.get('ADR-011').supersededBy, 'ADR-012');

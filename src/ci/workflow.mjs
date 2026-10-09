@@ -42,6 +42,7 @@
 // write-once: it is the only repo whose Actions directory this tool is entitled to
 // decide the contents of.
 
+import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
@@ -114,8 +115,13 @@ function header(own) {
 }
 
 /** The YAML every copy shares, so the two cannot drift on triggers, permissions or
- *  concurrency. Only `name` and `steps` vary, and only because they have to. */
-function skeleton(name, steps) {
+ *  concurrency. Only `name` and `steps` vary, and only because they have to. The
+ *  own gate also varies the Node version, because this package is the one whose
+ *  floor has to be true on more than the minimum. */
+function skeleton(name, steps, { matrix = null } = {}) {
+  const strategy = matrix
+    ? `    strategy:\n      fail-fast: false\n      matrix:\n        node: [${matrix.map((v) => `'${v}'`).join(', ')}]\n`
+    : '';
   return `name: ${name}
 
 on:
@@ -137,19 +143,33 @@ jobs:
   check:
     name: ${name}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+${strategy}    timeout-minutes: 5
     steps:
 ${steps}`;
 }
 
-/** The floor in this package's \`engines.node\`. A gate that cannot start on the
+/** The minimum Node `engines.node` allows, without the range operator. Both
+ *  templates pin setup-node to it, read from package.json so the two cannot name
+ *  a version the package says it does not run on. */
+export function nodeFloor() {
+  const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
+  const range = pkg.engines?.node;
+  const version = typeof range === 'string' ? />=\s*(\d+\.\d+\.\d+)/.exec(range) : null;
+  if (!version) throw new Error(`engines.node must be a >=x.y.z floor, got ${JSON.stringify(range)}`);
+  return version[1];
+}
+
+/** The floor in this package's `engines.node`. A gate that cannot start on the
  *  version it declares support for is not a gate. The comment ships in the file,
- *  because the reader deciding whether to bump that version has only the file. */
-const SETUP_NODE = `      - uses: actions/setup-node@v4
+ *  because the reader deciding whether to bump that version has only the file.
+ *  The own gate passes the matrix expression; every other copy passes the floor. */
+function setupNode(version) {
+  return `      - uses: actions/setup-node@v4
         with:
           # The floor in this package's \`engines.node\`. A gate that cannot start on
           # the version it declares support for is not a gate.
-          node-version: '20'`;
+          node-version: '${version}'`;
+}
 
 /** Indent a rendered shell block so it sits inside a YAML block scalar. Blank lines
  *  stay blank: a line of trailing whitespace inside a scalar is a diff nobody meant. */
@@ -172,11 +192,12 @@ function indent(text, spaces) {
  */
 export function renderWorkflow({ own = false } = {}) {
   if (own) {
+    const floor = nodeFloor();
     return `${header(true)}${skeleton(
       'simt-dev own gate',
       [
         '      - uses: actions/checkout@v4',
-        SETUP_NODE,
+        setupNode('${{ matrix.node }}'),
         // The two checks `.githooks/pre-push` runs, named here rather than discovered,
         // because a reader of this file has to be able to answer "what stops a merge"
         // without opening a shell script in another directory.
@@ -193,6 +214,7 @@ export function renderWorkflow({ own = false } = {}) {
         // so this step used to print the drift it exists to catch and pass anyway.
         '        run: node bin/simt-dev.mjs ci --check',
       ].join('\n'),
+      { matrix: [floor, '24', '26'] },
     )}\n`;
   }
 
@@ -203,7 +225,7 @@ export function renderWorkflow({ own = false } = {}) {
     'simt-dev check',
     [
       '      - uses: actions/checkout@v4',
-      SETUP_NODE,
+      setupNode(nodeFloor()),
       '      - name: install dependencies',
       '        # \`npm ci\` needs a lockfile; a repo without one is still gated, not skipped.',
       '        run: npm ci || npm install',

@@ -6,8 +6,8 @@ simt-applies: always
 
 # Shared rules
 
-Every rule below carries the number of the decision that settled it. Run
-`simt-dev rules why ADR-NNN` to read that decision, including whether it is still in force.
+Where a rule cites a decision, run `simt-dev rules why ADR-NNN` to read it,
+including whether it is still in force.
 
 These rules are stack-agnostic. Whatever is specific to your stack, your product or your
 commands belongs in this repository, not here.

@@ -91,7 +91,7 @@ export async function syncCommand(positional, flags) {
     return fail(
       `${result.mdcProblems.length} canonical .mdc rule(s) cannot be projected (${result.mdcProblems[0]})`,
       EXIT.FAIL,
-      'fix the reported substitution keys in simt-dev.json, or add the key to the rule in rules/mdc/',
+      'fix the reported substitution keys in simt-dev.json',
     );
   }
 

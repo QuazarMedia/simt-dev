@@ -190,7 +190,7 @@ export async function checkTargets(root, flags = {}) {
   for (const rule of rules) {
     if (rule.error !== null) {
       findings.push({
-        file: `rules/mdc/${rule.file}`,
+        file: rule.id ?? rule.file,
         status: 'invalid',
         detail: rule.error,
       });

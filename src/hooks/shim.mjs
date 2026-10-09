@@ -16,7 +16,7 @@
 // has to find the binary by the same rules or the gate passes locally and cannot
 // start in CI. See src/locate.mjs.
 
-import { PACKAGE_NAME, renderLocator } from '../locate.mjs';
+import { renderLocator } from '../locate.mjs';
 
 /** Events the shared dispatcher knows how to run. */
 export const EVENTS = ['pre-commit', 'pre-push'];
@@ -61,6 +61,6 @@ ROOT="${D}(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
 ${renderLocator(`hooks run ${event} --root "${D}ROOT"`, {
     subject: 'the dispatcher',
-    remedy: `REMEDY run: npm i -D ${PACKAGE_NAME}   (or unset ${HOOKS_PATH_KEY} to opt out)`,
+    remedy: `REMEDY set SIMT_DEV_BIN to the simt-dev binary, or unset ${HOOKS_PATH_KEY} to opt out`,
   })}`;
 }

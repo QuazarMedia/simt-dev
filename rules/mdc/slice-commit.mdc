@@ -34,7 +34,7 @@ evidence for a test you have not run.
 ## Pushing is a separate decision
 
 **Never push because the work is finished.** Push is a separate act with its own
-approval, and pushing a production branch in this ecosystem also deploys it.
+approval, and pushing the branch a remote treats as production can deploy it.
 
 Before asking for approval, state what the push will do: which branch, how many
 commits, and whether it triggers a deployment, a migration, or any other remote

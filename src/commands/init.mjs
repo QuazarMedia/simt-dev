@@ -172,7 +172,7 @@ export async function initCommand(positional, flags) {
     return fail(
       `${mdcProblems.length} canonical .mdc rule(s) cannot be projected (${mdcProblems[0]})`,
       EXIT.FAIL,
-      'fix the reported substitution keys in simt-dev.json, or add the key to the rule in rules/mdc/',
+      'fix the reported substitution keys in simt-dev.json',
     );
   }
 

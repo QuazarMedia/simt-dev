@@ -24,5 +24,5 @@ try {
 
   process.exit((await dispatch(argv)) ?? EXIT.OK);
 } catch (error) {
-  process.exit(fail(error?.message ?? String(error), EXIT.FAIL, 'run: simt-dev doctor'));
+  process.exit(fail(error?.message ?? String(error), EXIT.FAIL));
 }

@@ -365,9 +365,27 @@ const section = (name) => {
 }
 
 /**
- * Repositories and stacks the records were written about. Reported to the reader, never
- * removed: they are why the record exists, and deleting them mid-sentence would make it
- * claim to be about a rule nobody ever held.
+ * A repository name from the estate this tool was written in.
+ *
+ * `simt-dev` is the tool, so a reader needs that word. Every other `simt-*` name is a
+ * repository, matched by prefix so a new one cannot pass by being absent from a list.
+ * The skill registry's `source.repo` values are asserted to match this (S14); a name
+ * the registry adds that is not `simt-*` has to be added here or that assertion fails.
+ *
+ * Not global: callers reuse it with `exec`, and a `/g` flag would remember `lastIndex`.
+ */
+export const ESTATE_NAME =
+  /\b(?:simt-(?!dev\b)[\w-]+|bunnyland(?:-server)?|wakt-app|app-ui|garmin|(?:the )?Social repos?)\b/;
+
+/** Replace estate repository names with a phrase a reader who does not have them can use. */
+export function redactEstate(text) {
+  return text.replace(new RegExp(ESTATE_NAME.source, 'g'), 'a repository');
+}
+
+/**
+ * Repositories the records were written about. Kept on the summary so a maintainer can
+ * see which decisions cite which repos. `rules why` redacts them before printing:
+ * the names are not actionable in a repository that does not contain those files.
  */
 const ESTATE =
   /\b(?:app-ui|bunnyland(?:-server)?|wakt-app|simt-[\w-]+|(?:the )?(?:Social|garmin) repos?)\b/gi;

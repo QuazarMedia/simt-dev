@@ -362,7 +362,7 @@ export const TOOLS = [
       const root = rootOf(args);
       const findings = await checkTargets(root);
       for (const r of await loadRules()) {
-        if (r.error) findings.push({ file: `rules/${r.file}`, status: 'invalid', detail: r.error });
+        if (r.error) findings.push({ file: r.id ?? r.file, status: 'invalid', detail: r.error });
       }
       const bad = findings.filter((f) => f.status !== 'current');
       return { root, ok: bad.length === 0, findings };

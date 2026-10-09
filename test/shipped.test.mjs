@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { loadRules, select, LOCAL_PROFILE_DIR } from '../src/projection/project.mjs';
-import { DECISIONS_DIR } from '../src/decisions/index.mjs';
+import { DECISIONS_DIR, ESTATE_NAME } from '../src/decisions/index.mjs';
 import { loadMdcRules, renderMdc, ruleName } from '../src/projection/mdc.mjs';
 import { SURFACES, rulePath, surface, undocumentedKeys } from '../src/projection/surfaces.mjs';
 import { compose } from '../src/projection/markers.mjs';
@@ -289,18 +289,57 @@ test('no remedy or pointer names a path that resolves only inside simt-dev', asy
     'src/commands/help.mjs', 'src/commands/index.mjs', 'src/commands/rules.mjs',
     'src/commands/compare.mjs', 'src/commands/hooks.mjs', 'src/commands/upgrade.mjs',
     'src/commands/skills.mjs', 'src/commands/skillsinstall.mjs', 'src/commands/init.mjs',
+    'src/commands/sync.mjs',
     'src/compare/row.mjs', 'src/compare/discover.mjs', 'src/upgrade/plan.mjs',
-    'src/projection/conflicts.mjs', 'src/projection/manifest.mjs', 'src/output/index.mjs',
+    'src/projection/conflicts.mjs', 'src/projection/manifest.mjs', 'src/projection/project.mjs',
+    'src/output/index.mjs',
     'src/hooks/gates.mjs', 'src/hooks/shim.mjs', 'src/mcp/tools.mjs',
   ];
   // Strip comments so the check is about what a reader sees.
   const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*(\/\/|\*).*$/gm, '');
   for (const file of files) {
     const text = stripComments(await readFile(join(ROOT, file), 'utf8'));
-    for (const path of ['docs/decisions/', 'docs/plans/', 'rules/stacks/']) {
+    for (const path of ['docs/decisions/', 'docs/plans/', 'rules/stacks/', 'rules/mdc/', 'rules/']) {
       assert.ok(!text.includes(path), `${file} prints "${path}", which resolves only inside simt-dev`);
     }
   }
+});
+
+test('core does not claim every rule cites a decision', async () => {
+  const text = await readFile(join(ROOT, 'rules/core.md'), 'utf8');
+  assert.doesNotMatch(text, /Every rule below carries the number/);
+});
+
+test('rules why does not name an estate repository', async () => {
+  const { whyCommand } = await import('../src/commands/rules.mjs');
+  const chunks = [];
+  const real = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (c) => { chunks.push(String(c)); return true; };
+  let code;
+  try {
+    code = await whyCommand(['ADR-001'], {});
+  } finally {
+    process.stdout.write = real;
+  }
+  assert.equal(code, EXIT.OK);
+  const text = chunks.join('');
+  assert.equal(ESTATE_NAME.exec(text), null, `rules why names an estate repository:\n${text}`);
+  assert.match(text, /push only on explicit user approval/);
+});
+
+test('every repository the skill registry names is denied by the leak guard', async () => {
+  const graph = JSON.parse(await readFile(join(ROOT, 'graph/skills.graph.json'), 'utf8'));
+  const repos = new Set(
+    (graph.skills ?? []).flatMap((skill) => (skill.sources ?? []).map((source) => source.repo)),
+  );
+  assert.ok(repos.size > 0, 'the registry named no repositories to derive the guard from');
+  for (const repo of repos) {
+    assert.match(repo, new RegExp(ESTATE_NAME.source), `${repo} is in the registry and would pass the leak guard`);
+  }
+  // Not in the registry today. A prefix match is what keeps the next simt-* name from
+  // needing a hand edit; this is the name the old alternation missed.
+  assert.match('simt-api', new RegExp(ESTATE_NAME.source));
+  assert.doesNotMatch('simt-dev', new RegExp(ESTATE_NAME.source));
 });
 
 test('help does not describe the tool as belonging to one estate', async () => {
@@ -335,6 +374,7 @@ test('the check is not vacuous: a known leak is actually caught', async () => {
     'Settled by an ADR in `docs/decisions/`.',
     'Stack bodies live in `rules/stacks/`.',
     'Unlike simt-app, do this.',
+    'Unlike simt-api, do this.',
     'This file is projected into each repo.',
     'Only what is true in all 16 repos.',
   ]) {

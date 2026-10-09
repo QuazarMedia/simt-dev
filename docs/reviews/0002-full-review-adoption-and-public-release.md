@@ -145,7 +145,7 @@ record is written.
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `4c73025` |
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | **yes (ADR-047)** | S07 (done) | Complete | `0b01806` |
 | S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `1bbc36a` |
-| S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (P9, amends ADR-025) | — | Complete | **ADR-048**; see §5 |
+| S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | **yes (ADR-048, withdraws ADR-025 r8)** | — | Complete | `81bb705` |
 | S31 | Partial supersession is lost by the decision index | P2 | F | decisions | no | S19 | Queued | #16 |
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Queued | #6 |
 | S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Queued | #14 |

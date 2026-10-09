@@ -74,7 +74,19 @@ async function consumerHead(path) {
 
 // --- the classifier (pure) ------------------------------------------------------
 
-const TARGET = { file: 'AGENTS.md', action: 'unchanged', previousBytes: 500, bytes: 500 };
+// `region` and `previousBody` are what the planner reads to tell a region that is absent
+// from one that is small, and a changed body from a changed seam. A fixture that omits
+// them reads as "no region" and "body unchanged" respectively, which is the mistake this
+// test file is about — so they are spelled out here rather than defaulted.
+const TARGET = {
+  file: 'AGENTS.md',
+  action: 'unchanged',
+  previousBytes: 500,
+  bytes: 500,
+  region: 'ok',
+  previousBody: 'the rules as they are',
+  body: 'the rules as they are',
+};
 
 test('upgrade plan: a repo with no manifest is not-adopted, not behind', () => {
   const p = planUpgrade({
@@ -114,11 +126,12 @@ test('upgrade plan: changed rules alone are an update, and says the pin was fine
     manifest: { projection: { simtDevSha: 'aaaaaaa' } },
     manifestExists: true,
     manifestError: null,
-    targets: [{ ...TARGET, action: 'updated' }],
+    targets: [{ ...TARGET, action: 'updated', previousBody: 'the old rules' }],
     sha: 'aaaaaaa',
   });
   assert.equal(p.action, 'updated');
   assert.match(p.detail, /pin was already current/);
+  assert.match(p.detail, /the rules changed/);
 });
 
 test('upgrade plan: a malformed region is skipped, never written over', () => {
@@ -145,14 +158,109 @@ test('upgrade plan: a manifest with no region is a repair, not a version bump', 
     manifest: { projection: { simtDevSha: '0000000' } },
     manifestExists: true,
     manifestError: null,
-    targets: [{ file: 'AGENTS.md', action: 'added', previousBytes: 0, bytes: 500 }],
+    targets: [{ file: 'AGENTS.md', action: 'added', previousBytes: 0, bytes: 500, region: 'absent' }],
     sha: 'aaaaaaa',
   });
   assert.equal(p.action, 'skip');
+  assert.equal(p.state, 'no-region');
   // The remedy has to carry `--yes`. `sync` previews unless told to write, so a
   // remedy naming the bare command would tell the reader to run it and watch
   // nothing happen — the instruction survives the change that made it false.
-  assert.equal(p.remedy, 'run: simt-dev sync --yes');
+  assert.match(p.remedy, /--yes$/);
+});
+
+test('upgrade plan: a hand-written AGENTS.md with no region is not adopted by a bump', () => {
+  // The defect. `AGENTS.md` is 60 bytes of somebody's own prose and no region, so
+  // `previousBytes` is greater than zero and a guard reading bytes decides the file is
+  // substantial, the repository is adopted, and the only thing wrong is the stamp. It
+  // then writes a region into a repository that never asked for one, and reports the
+  // rules as changed.
+  //
+  // The fixture is the whole point: `previousBytes` is nonzero *and* large, because a
+  // hand-written AGENTS.md is never small, and `action` is `added` because adding a
+  // region to a file without one is exactly what it would do.
+  const p = planUpgrade({
+    name: 'handwritten',
+    path: '/hw',
+    manifest: { projection: { simtDevSha: '0000000' } },
+    manifestExists: true,
+    manifestError: null,
+    targets: [
+      {
+        file: 'AGENTS.md',
+        action: 'added',
+        previousBytes: 312,
+        bytes: 9000,
+        region: 'absent',
+        previousBody: '',
+        body: 'the rules',
+      },
+    ],
+    sha: 'aaaaaaa',
+  });
+  assert.equal(p.action, 'skip');
+  assert.equal(p.state, 'no-region');
+  assert.doesNotMatch(p.detail, /rules changed/, 'a repo that never had a region cannot have had a rule change');
+  assert.match(p.remedy, /simt-dev sync --yes/);
+});
+
+test('upgrade plan: baselines keeping their regions does not make a repo adopted', () => {
+  // The shape the estate actually produces: adopt, then replace AGENTS.md with prose.
+  // The baselines still hold regions, so a guard asking whether *every* target lost one
+  // sees two regions and decides the repo is adopted — which is the defect, wearing the
+  // fixture that produces it. The primary document is the whole question.
+  const p = planUpgrade({
+    name: 'x',
+    path: '/x',
+    manifest: { projection: { simtDevSha: '0000000' } },
+    manifestExists: true,
+    manifestError: null,
+    targets: [
+      { file: 'AGENTS.md', action: 'added', previousBytes: 312, region: 'absent', body: 'rules' },
+      { file: '.editorconfig', action: 'unchanged', region: 'ok', previousBytes: 400, body: 'root = true' },
+      { file: '.gitattributes', action: 'unchanged', region: 'ok', previousBytes: 30, body: '* text=auto eol=lf' },
+    ],
+    sha: 'aaaaaaa',
+  });
+  assert.equal(p.action, 'skip');
+  assert.equal(p.state, 'no-region');
+});
+
+test('upgrade plan: a repaired seam is not reported as a change of rules', () => {
+  // ADR-037 made a correct body behind a wrong seam `updated` so `sync` would repair
+  // it. That made `updated` mean two things, and this command reads it to say why a
+  // repository is behind — so a formatting repair was reported as a change of policy,
+  // sending the reader to diff rules that did not move.
+  const p = planUpgrade({
+    name: 'x',
+    path: '/x',
+    manifest: { projection: { simtDevSha: 'aaaaaaa' } },
+    manifestExists: true,
+    manifestError: null,
+    targets: [{ ...TARGET, action: 'updated', previousBody: 'the rules as they are' }],
+    sha: 'bbbbbbb',
+  });
+  assert.equal(p.action, 'updated');
+  assert.match(p.detail, /the rules were already correct/);
+  assert.doesNotMatch(p.detail, /the rules changed/);
+});
+
+test('upgrade plan: a stamp move inside an otherwise current region is not a rule change', () => {
+  // The other half of the same trap. `body` is what this simt-dev wants to write and
+  // `previousBody` is what is on disk; comparing the whole target — bytes, header, all
+  // of it — makes every pin bump claim the rules changed, because the header carries
+  // the stamp by design.
+  const p = planUpgrade({
+    name: 'x',
+    path: '/x',
+    manifest: { projection: { simtDevSha: 'aaaaaaa' } },
+    manifestExists: true,
+    manifestError: null,
+    targets: [{ ...TARGET, action: 'updated', bytes: 501 }],
+    sha: 'bbbbbbb',
+  });
+  assert.equal(p.action, 'updated');
+  assert.match(p.detail, /the rules were already correct/);
 });
 
 test('upgrade plan: an unparseable manifest is skipped, not overwritten', () => {
@@ -272,6 +380,58 @@ test('upgrade: an unadopted repo in the set is skipped, not adopted', async () =
   assert.equal(payload.summary.faults, 0);
   assert.deepEqual(payload.summary.skippedStates, ['not-adopted']);
   await assert.rejects(readFile(join(ws, 'fresh', 'simt-dev.json')), 'upgrade must not adopt a repo');
+});
+
+test('upgrade: a hand-written AGENTS.md is left byte-identical and named in the output', async () => {
+  // The acceptance criterion, end to end, on the shape that broke: a repository with a
+  // manifest and a hundred bytes of its own AGENTS.md and no region in it. It is
+  // skipped, it is named, and not one byte of it moves — while a sibling with a region
+  // is upgraded in the same run, so the assertion is not "nothing happened".
+  const ws = await mkdtemp(join(tmpdir(), 'simt-up-'));
+  await repo(join(ws, 'adopted'), { 'requirements.txt': 'flask\n' });
+  await repo(join(ws, 'handwritten'), { 'package.json': '{"name":"hw"}\n' });
+
+  await run(['init', '--root', join(ws, 'adopted'), '--yes']);
+  await pin(join(ws, 'adopted'), '0000000');
+
+  // Adopted enough to have a manifest, then stripped of the region: a repository that
+  // opted in and whose AGENTS.md is its own. `init` is what creates the state, so the
+  // fixture is built the way the estate built it.
+  await run(['init', '--root', join(ws, 'handwritten'), '--yes']);
+  const prose = '# Notes\n\nHow this repository works, written by hand.\n';
+  await writeFile(join(ws, 'handwritten', 'AGENTS.md'), prose);
+  const manifest = await readJson(join(ws, 'handwritten', 'simt-dev.json'));
+  manifest.projection.simtDevSha = '0000000';
+  await writeFile(join(ws, 'handwritten', 'simt-dev.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+
+  // The run exits non-zero, and that is right: a repository with a manifest and no region
+  // is in a state `check` also refuses (exit 1, `UNMANAGED AGENTS.md`, the same remedy).
+  // `upgrade` reporting success while leaving the repository red would be the ADR-023
+  // failure — a check that names the problem and passes. The exit code is asserted rather
+  // than tolerated so the two commands cannot drift apart on it.
+  const { code, payload } = await runJson(['upgrade', '--workspace', ws, '--yes']);
+  assert.equal(code, 1, 'a repo with a manifest and no region is a fault, and check agrees');
+  assert.equal(payload.summary.updated, 1, 'the adopted sibling still upgrades');
+  assert.equal(payload.summary.faults, 1);
+  assert.deepEqual(payload.summary.skippedStates, ['no-region']);
+
+  // Named. A skip nobody can see is indistinguishable from a repo that was left behind
+  // on purpose, which is the failure `compare` exists to surface.
+  const row = payload.plans.find((r) => r.name === 'handwritten');
+  assert.ok(row, 'the skipped repo must appear in the output');
+  assert.equal(row.state, 'no-region');
+  assert.match(row.detail, /no generated region/);
+  assert.match(row.remedy, /simt-dev sync --yes/);
+
+  // And untouched. This is the whole claim: the command that fixes pins must not
+  // introduce rules into a repository that never asked for them. Asserted on the bytes
+  // and on the list of files the run reports writing, so "skipped" cannot quietly mean
+  // "skipped but rewritten".
+  assert.equal(await readFile(join(ws, 'handwritten', 'AGENTS.md'), 'utf8'), prose);
+  assert.deepEqual(payload.summary.applied, ['adopted'], 'only the adopted repo may be written');
+  for (const f of payload.summary.applied.flatMap((n) => n.files ?? [])) {
+    assert.doesNotMatch(f, /AGENTS\.md/, 'AGENTS.md is only listed when a repo that has one was written');
+  }
 });
 
 test('upgrade: simt-dev itself is not a consumer and round-trips as a no-op', async () => {

@@ -67,15 +67,32 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       remedy: 'run: simt-dev check',
     };
   }
-  // A manifest with no region is a repo mid-adoption or one that lost its region.
-  // `check` already reports it as unmanaged; `upgrade` writing a region into it would
-  // turn a repair into a side effect of a version bump.
-  if (list.every((t) => t.action === 'added' && !t.previousBytes)) {
+  // A manifest with no region is a repo mid-adoption or one that never adopted, and
+  // `upgrade` writing a region into it turns adoption into a side effect of a version
+  // bump. The question is whether the region exists, and `parse` has always answered it —
+//  reading `previousBytes` instead gets a repository whose AGENTS.md is hand-written prose
+//  wrong, which is the shape this guard was written for and the one it let through. A
+//  byte count cannot tell "no region" from "small file", and a hand-written AGENTS.md is
+//  never small.
+//
+// Keyed on the PRIMARY target alone, and that is not a simplification. The estate builds
+// this state by adopting and then replacing AGENTS.md with prose, which leaves the
+// baselines' regions in place: a guard asking whether *every* target lost its region sees
+// two regions, decides the repo is adopted, and writes one — which is the defect. It is
+// also the rule `compare` already applies (ADR-016 ruling on display versus gate: the row's
+// `region` field is the primary document's), so the two commands now agree on which
+// repository counts as adopted.
+  if (primary.region === 'absent') {
     return {
       ...base,
       state: 'no-region',
       action: 'skip',
       detail: 'simt-dev.json exists but AGENTS.md has no generated region',
+      // `sync --yes`, not `init --yes`. The remedy is a command that does the thing the
+      // skip refused to do and nothing else: `sync` writes regions and leaves the rest of
+      // the repository alone, while `init` re-runs adoption. `compare` already names
+      // `sync --yes` for this state, and two commands must not answer the same question
+      // with different instructions.
       remedy: 'run: simt-dev sync --yes',
     };
   }
@@ -84,6 +101,23 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   // stale is behind, and restamping only the first of its files would leave `check` red
   // immediately after a successful `upgrade`.
   const regionBehind = list.some((t) => t.action !== 'unchanged');
+  // "Behind" is not "the rules changed", and the difference is what the message below
+  // has to state. A target is `updated` for two unrelated reasons: its region BODY moved,
+  // which is a change to the rules, or its seam moved, which is this tool's own formatting
+  // around a body that was already correct (ADR-037). Both read as `updated`, so reading
+  // the cause off `action` reports a formatting repair as a change of policy — and this
+  // command's whole purpose is to say why a repository is behind, so a false cause here
+  // sends the reader to diff the rules when the rules did not move.
+  //
+  // The comparison is body to body rather than byte to byte, because the region header
+  // carries the stamp: a stamp-only move is what `pinBehind` already reports separately,
+  // and folding it in here would make every pin bump claim the rules changed.
+  const rulesChanged = list.some((t) => {
+    if (t.action === 'unchanged' || t.action === 'added') return t.action === 'added';
+    const before = (t.previousBody ?? '').replace(/^\n+/, '').replace(/\n+$/, '');
+    const after = (t.body ?? '').replace(/^\n+/, '').replace(/\n+$/, '');
+    return before !== after;
+  });
   const pinBehind = base.pinnedSha !== sha;
   // A generated field of the manifest can alone be stale. `$comment` is written by
   // simt-dev and describes this file's provenance, so an adopted repo whose regions
@@ -98,8 +132,9 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   }
 
   // Why it moved is worth stating, and the causes are different problems even though
-  // one command fixes all of them: content drift means the RULES changed, a pin-only
-  // move means the region was already correct and only its stamp was stale, and a
+  // one command fixes all of them: content drift means the RULES changed, a seam repair
+  // means they did not and only the formatting around them was wrong, a pin-only move
+  // means the region was already correct and only its stamp was stale, and a
   // generated-field move means nothing about the repo changed and this tool's own
   // wording did. The transition itself is printed on its own `pin` line, so `detail`
   // names the cause without repeating it.
@@ -109,10 +144,14 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
     action: 'updated',
     detail: pinBehind
       ? regionBehind
-        ? 'pin moved and region restamped (the rules changed)'
+        ? rulesChanged
+          ? 'pin moved and region restamped (the rules changed)'
+          : 'pin moved and region repaired; the rules were already correct'
         : 'pin moved; the region was already current'
       : regionBehind
-        ? 'region restamped; the pin was already current (the rules changed)'
+        ? rulesChanged
+          ? 'region restamped; the pin was already current (the rules changed)'
+          : 'region repaired; the pin and the rules were already current'
         : 'manifest metadata refreshed; the rules and the pin were already current',
   };
 }

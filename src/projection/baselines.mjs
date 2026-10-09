@@ -169,6 +169,10 @@ export async function baselineTargets(root, sha) {
       path,
       exists,
       action: result.action,
+      // As on the primary target: the state the file was in, for a caller that must
+      // distinguish "no region here" from "this file is small" (ADR-049, S26).
+      region: result.region,
+      previousBody: result.previousBody,
       reason: result.reason,
       line: result.line,
       bytes: Buffer.byteLength(result.text),

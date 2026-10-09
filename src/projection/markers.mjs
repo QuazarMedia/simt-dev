@@ -241,22 +241,32 @@ function splice(state, region, where) {
 /**
  * Insert or replace the region in `text`, preserving everything outside it.
  *
+ * `region` and `previousBody` are the state the document was in, not the action taken on
+ * it. A caller asking "did this repository's *rules* change?" cannot read that off
+ * `action`: a wrong seam with a correct body is `updated` (ADR-037), and so is a changed
+ * body. Reporting "the rules changed" for the first is a false cause, and `upgrade` prints
+ * it to whoever ran the command. Two of them also answer "has this repo ever been
+ * adopted?" — `region: 'absent'` is that answer, and reading it off `previousBytes` gets a
+ * repository with hand-written prose and no region wrong.
+ *
  * @param {object} [opts] `style` overrides the syntax; `where` overrides placement.
- * @returns {{text: string, action: 'added'|'updated'|'unchanged'|'malformed', reason?: string}}
+ * @returns {{text: string, action: 'added'|'updated'|'unchanged'|'malformed', reason?: string,
+ *   region: 'absent'|'ok'|'malformed', previousBody: string}}
  */
 export function inject(text, body, meta, opts = {}) {
   const s = styleOf(opts.style);
   const where = opts.where ?? s.where;
   const state = parse(text, s);
+  const seen = { region: state.status, previousBody: state.body ?? '' };
   if (state.status === 'malformed') {
-    return { text, action: 'malformed', reason: state.reason, line: state.line };
+    return { ...seen, text, action: 'malformed', reason: state.reason, line: state.line };
   }
   const region = compose(body, meta, s);
 
   if (state.status === 'absent') {
     if (where === 'top') {
       const rest = text.replace(/^\n+/, '').replace(/\n+$/, '');
-      return { text: rest === '' ? region : `${region}\n${rest}\n`, action: 'added' };
+      return { ...seen, text: rest === '' ? region : `${region}\n${rest}\n`, action: 'added' };
     }
     const base = seam(text);
     // No trailing newline here, and that is load-bearing. `compose` already
@@ -272,6 +282,7 @@ export function inject(text, body, meta, opts = {}) {
     // line is added, and it is — for a document with no region yet. It is not where
     // the defect was, which is in `splice`.
     return {
+      ...seen,
       text: `${base}${region}`,
       action: 'added',
     };
@@ -292,9 +303,9 @@ export function inject(text, body, meta, opts = {}) {
   // excluded because there the splice is a repair that legitimately moves bytes
   // outside the markers, so the two files differ for a reason unrelated to the seam.
   const settled = unchanged && (where === 'top' || spliced === text);
-  if (settled) return { text, action: 'unchanged' };
+  if (settled) return { ...seen, text, action: 'unchanged' };
 
-  return { text: spliced, action: 'updated' };
+  return { ...seen, text: spliced, action: 'updated' };
 }
 
 /**
@@ -302,14 +313,17 @@ export function inject(text, body, meta, opts = {}) {
  * `meta` must be the same provenance the writer would use, so a region produced
  * by an older simt-dev SHA reads as drift rather than as unchanged.
  *
- * @returns {{action: 'added'|'updated'|'unchanged'|'malformed', reason?: string, line?: number}}
+ * @returns {{action: 'added'|'updated'|'unchanged'|'malformed', reason?: string, line?: number,
+ *   region: 'absent'|'ok'|'malformed', previousBody: string}}
  */
 export function diff(text, body, meta, opts = {}) {
   const state = parse(text, styleOf(opts.style));
   if (state.status === 'malformed') {
-    return { action: 'malformed', reason: state.reason, line: state.line };
+    return { region: 'malformed', previousBody: '', action: 'malformed', reason: state.reason, line: state.line };
   }
-  if (state.status === 'absent') return { action: 'added' };
+  if (state.status === 'absent') {
+    return { region: 'absent', previousBody: '', action: 'added' };
+  }
   const probe = inject(text, body, meta, opts);
-  return { action: probe.action };
+  return { region: probe.region, previousBody: probe.previousBody, action: probe.action };
 }

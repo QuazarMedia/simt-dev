@@ -89,6 +89,9 @@ export async function ruleTargets(root, rule, body, sha, resolved, notes) {
       path,
       exists,
       action: result.action,
+      // As on every other target: the state the file was in, not the action taken on it.
+      region: result.region,
+      previousBody: result.previousBody,
       reason: result.reason,
       line: result.line,
       bytes: Buffer.byteLength(result.text),

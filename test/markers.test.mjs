@@ -117,10 +117,36 @@ test('markers: markers inside a fenced code block are documentation, not control
 test('markers: diff reports without writing', () => {
   const meta = { sha: 'abc1234' };
   const current = inject(HAND, 'v1', meta).text;
-  assert.deepEqual(diff(current, 'v1', meta), { action: 'unchanged' });
-  assert.deepEqual(diff(current, 'v2', meta), { action: 'updated' });
-  assert.deepEqual(diff(HAND, 'v1', meta), { action: 'added' });
+  assert.equal(diff(current, 'v1', meta).action, 'unchanged');
+  assert.equal(diff(current, 'v2', meta).action, 'updated');
+  assert.equal(diff(HAND, 'v1', meta).action, 'added');
   assert.equal(diff(`${BEGIN}\nunclosed\n`, 'v1', meta).action, 'malformed');
+});
+
+test('markers: diff says whether a region was there at all, and what it said', () => {
+  // `action` cannot answer either question. `added` covers both "the file is empty" and
+  // "the file is 300 bytes of somebody's own prose", and `updated` covers both "the rules
+  // moved" and "the seam did" — so a caller that needs either fact reads the wrong one.
+  // `upgrade` reads both, which is why they are reported rather than recomputed.
+  const meta = { sha: 'abc1234' };
+  const current = inject(HAND, 'v1', meta).text;
+
+  const absent = diff(HAND, 'v1', meta);
+  assert.equal(absent.region, 'absent');
+  assert.equal(absent.previousBody, '');
+
+  const ok = diff(current, 'v1', meta);
+  assert.equal(ok.region, 'ok');
+  assert.match(ok.previousBody, /simt-dev:generated/, 'the previous body is the region body, header included');
+
+  // A wrong seam with the correct body: `updated`, and the previous body is still
+  // readable, which is what tells a caller the rules did not change (ADR-037).
+  const badSeam = current.replace('v1', 'v1\n');
+  const seam = diff(badSeam, 'v1', meta);
+  assert.equal(seam.action, 'updated');
+  assert.match(seam.previousBody, /v1/);
+
+  assert.equal(diff(`${BEGIN}\nunclosed\n`, 'v1', meta).region, 'malformed');
 });
 
 test('markers: a changed sha alone counts as drift', () => {

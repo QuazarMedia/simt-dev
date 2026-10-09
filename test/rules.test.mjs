@@ -93,6 +93,192 @@ test('loadDecisions: every supersededBy points at a record that exists', async (
   }
 });
 
+// --- S31: the status is a paragraph, and a partial supersession is a fact ----
+//
+// Every test below is about one thing the parser could not see. Each of them passed on
+// the version that read the status as a single line, because a truncated sentence is
+// still a sentence and a merged ruling is still a ruling.
+
+test('the status is the whole paragraph, not the line it starts on', async () => {
+  // ADR-023's status wraps over three lines and the last two carry the whole claim:
+  // which record superseded ruling 2, and that rulings 3 and 4 were narrowed too.
+  // Read as one line it ended at "ruling 2 superseded by", which is a sentence with no
+  // object - and the reader's only evidence that a ruling had been overturned.
+  const { decisions } = await loadDecisions();
+  const index = byId(decisions);
+  const d = index.get('ADR-023');
+  assert.match(d.status, /superseded by ADR-024, which carves out this/);
+  assert.match(d.status, /rulings 3 and 4 narrowed by the same record/);
+  assert.ok(
+    !d.status.includes('Affects:'),
+    'the paragraph must stop at the next field: Affects is a list of paths and this output is read in a repo that owns none of them',
+  );
+});
+
+test('every partial supersession in the corpus is found, with its kind and its record', async () => {
+  const { decisions } = await loadDecisions();
+  const byId_ = byId(decisions);
+  const shapes = decisions.filter((d) => d.partial.length > 0).map((d) => d.id).sort();
+  // Measured before the fix: eight clauses across four records, of which the parser
+  // found none. Listed by id rather than by count so a record that stops declaring its
+  // supersession is a visible change rather than a smaller number.
+  assert.deepEqual(shapes, ['ADR-016', 'ADR-021', 'ADR-023', 'ADR-025']);
+  for (const d of decisions) {
+    for (const p of d.partial) {
+      assert.ok(['superseded', 'narrowed', 'withdrawn'].includes(p.kind), `${d.id}: unknown kind ${p.kind}`);
+      if (p.by !== null) {
+        assert.ok(byId_.has(p.by), `${d.id} names ${p.by} as superseding a ruling, and there is no such record`);
+      }
+    }
+  }
+  // "the same record" is an anaphor, and ADR-023 uses it for rulings 3 and 4 after
+  // naming ADR-024 for ruling 2. Resolving it to nothing would drop two of the three.
+  assert.deepEqual(byId_.get('ADR-023').partial, [
+    { ruling: 2, kind: 'superseded', by: 'ADR-024' },
+    { ruling: 3, kind: 'narrowed', by: 'ADR-024' },
+    { ruling: 4, kind: 'narrowed', by: 'ADR-024' },
+  ]);
+  // "one ruling narrowed by" names no number, and that is a fact about the record
+  // rather than a gap to fill: it is carried as null and reported as unnumbered.
+  assert.deepEqual(byId_.get('ADR-016').partial, [{ ruling: null, kind: 'narrowed', by: 'ADR-045' }]);
+});
+
+test('a partial supersession never becomes a whole one', async () => {
+  // The regression that a correct-looking `supersededBy` regex invites. ADR-023's
+  // paragraph contains "ruling 2 superseded by [ADR-024](...)", and an unanchored
+  // pattern matches it - after which `rules why` answers the record by printing
+  // ADR-024's rulings and suppressing the five in ADR-023 that still stand. Five
+  // rulings that the status line itself says stand would have been dropped, by the
+  // field that exists to stop exactly that.
+  const { decisions } = await loadDecisions();
+  const index = byId(decisions);
+  assert.equal(index.get('ADR-023').supersededBy, null);
+  assert.equal(index.get('ADR-021').supersededBy, null);
+  assert.equal(index.get('ADR-016').supersededBy, null);
+  // And the whole-record case still works, because the rule is anchored at the start
+  // of the status rather than dropped.
+  assert.equal(index.get('ADR-011').supersededBy, 'ADR-012');
+  assert.deepEqual(index.get('ADR-012').supersedes, ['ADR-011']);
+});
+
+test('accepted is read from the status, not from one record\'s spelling of it', async () => {
+  // ADR-001 to ADR-020 wrote `**accepted**` and ADR-021 onwards wrote `accepted`, and
+  // the check was `status.includes('**accepted**')`. Fourteen accepted records read as
+  // not accepted - the sixth instance in this repository of a check that reads the
+  // author's habits rather than the document.
+  const { decisions } = await loadDecisions();
+  const notAccepted = decisions.filter((d) => !d.accepted).map((d) => d.id);
+  assert.deepEqual(notAccepted, ['ADR-011'], 'only a record whose status starts with "superseded" may read as not accepted');
+});
+
+test('a ruling that was overturned says so where it is printed', async () => {
+  // The reason the annotation exists rather than relying on the status line: an agent
+  // reading a ruling is the one who needs to know it is not in force, and the status
+  // line is a sentence they have to parse. ADR-023 ruling 2 is the case - ADR-024
+  // carved out this repository's own copy, and ruling 2 printed as current is the
+  // reversal this module's own header calls "the failure mode of a provenance feature".
+  //
+  // Asserted on the object rather than on the rendered line: the text between the
+  // ruling and its annotation contains a parenthesis, and a pattern that assumed
+  // otherwise would be testing the absence of a bracket.
+  const { decisions } = await loadDecisions();
+  const index = byId(decisions);
+  assert.match(index.get('ADR-023').summary.ruled[1], /\(superseded by ADR-024\)$/);
+  const twentyFive = index.get('ADR-025').summary.ruled;
+  assert.match(twentyFive[0], /\(narrowed by ADR-026\)$/);
+  assert.match(twentyFive[1], /\(narrowed by ADR-026\)$/);
+  // The rulings that stand carry no annotation, so the marker cannot be mistaken for
+  // decoration on everything.
+  assert.doesNotMatch(index.get('ADR-023').summary.ruled[0], /\(superseded by/);
+
+  const { code, stdout } = await run(['rules', 'why', 'ADR-023']);
+  assert.equal(code, 0);
+  assert.match(stdout, /written once and never rewritten[\s\S]*?\(superseded by ADR-024\)/);
+});
+
+test('a ruling past the printed excerpt is still named, not only annotated', async () => {
+  // Two rulings are printed and a record may have six. ADR-021's overturned ruling is
+  // the third, so the annotation cannot reach it and the status line is all that is
+  // left - which is why the partial set is also printed as a line of its own.
+  const { stdout } = await run(['rules', 'why', 'ADR-021']);
+  assert.match(stdout, /partial\s+ruling 3 superseded by ADR-046/);
+  const { stdout: out } = await run(['rules', 'why', 'ADR-016']);
+  assert.match(out, /partial\s+ruling \(not numbered\) narrowed by ADR-045/);
+});
+
+test('a record yields one ruling per ruling it declares, in every family', async () => {
+  // Five spellings are in use and one was being read. ADR-045 declares six `**One.**`
+  // rulings and printed one merged blob of them; ADR-013 printed the literal text
+  // "### 2." to an agent. A supersession names a ruling by number, so a number that
+  // cannot be located cannot be reported as no longer in force - the annotation above
+  // is only as good as this.
+  const { decisions } = await loadDecisions();
+  const families = [
+    // One row per family, with the numbers it must produce. The numbering is asserted
+    // separately from the text because it is the join between a supersession and the
+    // ruling it moves: dropping the ordinal from `**One.**` changes no text at all and
+    // is caught only here.
+    { id: 'ADR-045', numbers: [1, 2], startsWith: 'One.' },
+    { id: 'ADR-034', numbers: [1, 2], startsWith: '1.' },
+    { id: 'ADR-021', numbers: [1, 2], startsWith: '1.' },
+    { id: 'ADR-013', numbers: [1, 2], startsWith: '1.' },
+    { id: 'ADR-009', numbers: [null, null], startsWith: 'A skill is a directory' },
+  ];
+  for (const f of families) {
+    const d = byId(decisions).get(f.id);
+    assert.ok(d.summary.ruled.length > 0, `${f.id} yields no ruling`);
+    assert.ok(
+      d.summary.ruled[0].startsWith(f.startsWith),
+      `${f.id} ruling 1 does not start with ${f.startsWith}: ${d.summary.ruled[0].slice(0, 60)}`,
+    );
+    assert.deepEqual(d.summary.rulingNumbers, f.numbers, `${f.id} numbers its rulings wrongly`);
+  }
+  // The two that matter are the ones that were merged: six declared, one printed.
+  const fortyFive = byId(decisions).get('ADR-045');
+  assert.match(fortyFive.summary.ruled[1], /^Two\./, 'the second ruling must be the second ruling, not more of the first');
+  // ADR-013's heading marker is structure and must not survive into the text.
+  for (const d of decisions) {
+    for (const r of [...d.summary.ruled, ...d.summary.rejected]) {
+      assert.doesNotMatch(r, /^#{1,6} /, `${d.id} hands the reader a markdown heading as a ruling: ${r.slice(0, 60)}`);
+      assert.doesNotMatch(r, /```/, `${d.id} hands the reader a fence marker as a ruling`);
+    }
+  }
+  // Every record numbers at least one ruling or is one of the prose records that do
+  // not number them at all. A record that suddenly starts numbering is a change in
+  // what a supersession can refer to, so the set is pinned rather than counted.
+  const unnumbered = decisions
+    .filter((d) => d.summary.rulingNumbers.every((n) => n === null))
+    .map((d) => d.id);
+  assert.deepEqual(
+    unnumbered.filter((id) => ['ADR-023', 'ADR-025', 'ADR-021', 'ADR-045'].includes(id)),
+    [],
+    'a partially superseded record must number its rulings, or the annotation cannot be attached',
+  );
+});
+
+test('a section ends at the next heading, but not at one inside a code block', async () => {
+  // ADR-007's ruling is a document skeleton in a fence, and the skeleton has `##`
+  // headings in it. Truncated at the first of them, the record kept only a lead-in -
+  // which was still long enough to pass the length check, so the test that asks whether
+  // every record yields a ruling passed on a fragment.
+  //
+  // The fence is below the sentence budget, so the assertion is on the block rather than
+  // on the printed excerpt: what matters is that the extractor saw it.
+  const { decisions } = await loadDecisions();
+  const seven = byId(decisions).get('ADR-007');
+  assert.ok(seven.summary.ruled.length > 0, 'ADR-007 must yield a ruling');
+  assert.match(seven.summary.ruled[0], /canonical skeleton/i);
+  // `## Authority and ownership` is inside the fence, so nothing that is not fence-aware
+  // can have read past it.
+  assert.doesNotMatch(seven.summary.ruled[0], /Authority and ownership/, 'the printed excerpt is budgeted, so this asserts the cut is downstream of the fence');
+  // The lead-in alone is shorter than the excerpt, so the excerpt is more than the
+  // lead-in: the text after the fence is in the ruling too.
+  assert.ok(
+    seven.summary.ruled[0].length > 'One canonical skeleton, sentence case:'.length,
+    'the ruling is only the lead-in, so the fence and what follows it were both dropped',
+  );
+});
+
 // --- catalogue ----------------------------------------------------------------
 
 test('rules list: is sorted by id and shows every rule exactly once', async () => {

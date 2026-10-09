@@ -300,6 +300,18 @@ async function adrDirection(adr, rules, decisions, flags) {
   ];
   if (d.supersededBy) lines.push(`SUPERSEDED by ${d.supersededBy} - this record is retained as evidence, not as policy.`);
   if (d.supersedes.length > 0) lines.push(`supersedes  ${d.supersedes.join(', ')}`);
+  // A partial supersession is named here as well as on the ruling it moved, because the
+  // two print different sets: this prints every ruling the record lost, and the
+  // annotation prints the ones inside the excerpt below. A ruling past the excerpt
+  // exists in the estate but not in this output, and the status line above is the only
+  // other place it appears - which is the sentence the parser used to truncate.
+  if (d.partial.length > 0) {
+    lines.push(
+      `partial    ${d.partial
+        .map((p) => `ruling ${p.ruling ?? '(not numbered)'} ${p.kind} by ${p.by ?? 'an unnamed record'}`)
+        .join('; ')}`,
+    );
+  }
 
   // A superseded record must not print its own ruling. ADR-011 ruled that Windows is
   // supported; ADR-012 reversed it the same day. Printing "Windows is a supported v1

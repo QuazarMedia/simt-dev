@@ -332,6 +332,7 @@ export const TOOLS = [
           readWith: `simt-dev rules why ${d.id}`,
           supersededBy: d.supersededBy,
           supersedes: d.supersedes,
+          partial: d.partial,
           rules: rules.filter((r) => citations(r.body).includes(id)).map((r) => r.id),
         };
       }

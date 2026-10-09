@@ -56,6 +56,7 @@ record's status line — never by editing the ruling in place.
 | [046](ADR-046-one-rule-one-copy.md) | One rule, one copy: a reader that reads AGENTS.md must not also get the file | accepted |
 | [047](ADR-047-a-profile-selects-on-what-a-repository-runs-on.md) | A profile selects on what a repository runs on, not on what it is written in | accepted · refines ADR-013 r1 |
 | [048](ADR-048-a-baseline-carries-only-keys-a-reader-honours.md) | A baseline carries only keys a reader honours | accepted · withdraws ADR-025 r8 |
+| [049](ADR-049-a-ruling-that-a-later-record-moved-says-so-where-it-is-printed.md) | A ruling that a later record moved says so where it is printed | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -292,6 +293,24 @@ two do not, so a shared value reformats every source file in those two on the da
 adopt the tool. The lesson is the narrowest one in this file — a baseline earns its place
 by naming a key a reader honours, and the ability to hold a comment says nothing about
 whether anything reads what is inside.
+
+ADR-049 is the same failure one level down, and it is the reason this index exists: a
+citation has to be resolvable, or it is decoration. `rules why ADR-023` printed the status
+`ruling 2 superseded by` — a sentence with no object, because the status is a paragraph and
+the parser read one line of it — and then printed ruling 2 as a ruling in force, which is
+the reversal the module's own header names as its failure mode. Making the status a
+paragraph is half the fix and the other half is a trap: the obvious pattern for
+whole-record supersession then matches *ruling 2 superseded by ADR-024*, and five rulings in
+that record that the status line itself says stand would have been dropped by the field
+that exists to stop exactly that. Underneath both halves is the thing neither the finding
+nor the fix mentioned — the rulings are numbered in five different ways across the records
+and the extractor read one, so ADR-045 declared six rulings and printed one, and ADR-013
+printed the literal text `### 2.` to an agent. A supersession names a ruling by number, and
+a number that cannot be located cannot be reported as no longer in force. The record's
+ninth ruling is the mutation that earned its keep: dropping the ordinal from `**One.**`
+passes every test in the suite, because no record in the estate has both a word-numbered
+ruling and a partial supersession to catch it — the failure ADR-042 recorded, reproduced
+inside the fix for it.
 
 ## The rule these records enforce
 

@@ -146,7 +146,7 @@ record is written.
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | **yes (ADR-047)** | S07 (done) | Complete | `0b01806` |
 | S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `1bbc36a` |
 | S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | **yes (ADR-048, withdraws ADR-025 r8)** | — | Complete | `81bb705` |
-| S31 | Partial supersession is lost by the decision index | P2 | F | decisions | no | S19 | Queued | #16 |
+| S31 | Partial supersession is lost by the decision index | P2 | F | decisions | **yes (ADR-049)** | S19 (the `**accepted**` half) | Complete | see §5 |
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Queued | #6 |
 | S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Queued | #14 |
 | S34 | Folded rules break the heading hierarchy | P2 | F | projection | no | — | Queued | rendered regions |
@@ -169,6 +169,7 @@ record is written.
 | S51 | JSON output has no schema version and no compact form | P3 | E | output | no | S10 | Queued | `output/index.mjs:68` |
 | S52 | `hooks install` writes without `--yes` | P1 | F | hooks | **yes (ADR-040)** | S10 | Complete | `8569cf0` |
 | S53 | `upgrade` blames the rules for a baseline body change | P2 | F | provenance | yes (amends ADR-032) | — | Queued | ADR-048 consequences |
+| S54 | A status line can name a path, and the summary promises none | P2 | F | decisions | no | — | Queued | ADR-049 consequences; 2 of 48 |
 
 ## 4. Review 0001 at `4c27514`
 
@@ -349,9 +350,12 @@ derive the list from the workspace registry rather than hand-keeping it.
 
 **S19.** Still open:
 
-- ADR-001 to ADR-020 write `**accepted**` and ADR-021 to ADR-026 write plain `accepted`. The
-  loader keys on the bold form (`decisions/index.mjs`, `accepted: status.includes('**accepted**')`),
-  so six accepted records read as not accepted.
+- ~~ADR-001 to ADR-020 write `**accepted**` and ADR-021 to ADR-026 write plain `accepted`.~~
+  **Closed by S31 (ADR-049)**, and not by reformatting the records: the loader reads
+  `/^accepted\b/i` on the status, so both spellings are accepted and the split stops
+  mattering. The measurement was **fourteen** records reading as not accepted, not the six
+  below — ADR-021 *onwards* write the plain form, which is thirty records, and the count here
+  was taken from a partial reading of the set.
 - The dates run out of order: ADR-019 to ADR-021 are 2026-10-07, ADR-022 is 2026-10-08, and
   ADR-023 to ADR-026 are 2026-10-06.
 - `docs/decisions/README.md:76` still says `simt init`, and plan 0002 says `simt graph lint` /
@@ -818,6 +822,57 @@ markers stripped (S19).
 
 **Accept.** `rules why ADR-023` marks ruling 2 superseded, and `rules why ADR-025` marks rulings
 1 and 2 narrowed. Every ADR whose status starts with "accepted" reads `accepted: true`.
+
+> **Resolved by ADR-049**, and the fix as specified could not have worked, for a reason in
+> neither the finding nor the remedy. Annotating a ruling requires knowing where a ruling
+> begins, and the extractor knew in one case out of six. Measured across the records rather
+> than assumed: five numbering families are in use — `1. **bold**` (17 records),
+> `**1. prose**` (8), `**One.**` (7), `### 1. Title` (4), a bare bullet list (1) — and
+> unnumbered prose (11). Reading only the first merged the rest into one block per record:
+> **ADR-045 declares six rulings and printed one**, and ADR-013 printed the literal string
+> `### 2.` to an agent. A supersession says *"ruling 3"*, so a number that cannot be located
+> cannot be reported as no longer in force — the annotation is only as good as the extractor
+> underneath it, which is why the record's seventh ruling is about the extractor.
+>
+> The second half of the fix is a trap rather than a detail. Making `Status:` a paragraph is
+> necessary — four of forty-eight records wrap it, and ADR-023's second and third lines carry
+> the whole claim — but the pattern that finds a *whole-record* supersession then matches
+> *"ruling 2 superseded by [ADR-024](…)"* inside that paragraph, and `supersededBy` is the
+> field that makes the command answer a record by printing its replacement's rulings and
+> suppressing its own. **Five rulings in ADR-023 that the status line itself says stand would
+> have been dropped, by the field that exists to stop precisely that.** The mutation that
+> makes this real is one character — removing `^` — and the test that catches it is named
+> after the failure rather than the fix.
+>
+> All eight partial supersessions in the corpus are now found, including two the finding did
+> not know about: ADR-023's *"rulings 3 and 4 narrowed by **the same record**"*, which is an
+> anaphor resolving to the ADR-024 named one clause earlier, and ADR-016's *"one ruling
+> narrowed by ADR-045"*, which names no number at all. Both are carried as what they are —
+> `ruling: null` is a fact about the record, not a gap to guess at — and the printed output
+> says `ruling (not numbered)` rather than hiding it.
+>
+> The `accepted` half of this row is S19's finding and S19's dependency is discharged here:
+> `/^accepted\b/i` on the flattened paragraph, so fourteen records that read as not accepted
+> because their author wrote `accepted` instead of `**accepted**` now read correctly. The
+> measurement is worse than the review's "six": it is fourteen.
+>
+> Two things worth carrying. A section ended at the next `## `, and ADR-007's ruling is a
+> document skeleton in a fence whose headings are `##` — so the record kept only a lead-in,
+> which was still long enough to pass the length check, and the test that asks whether every
+> record yields a ruling passed on a fragment. And the ninth ruling exists because a mutation
+> slipped through: dropping the ordinal from `**One.**` passes every test in the suite,
+> because no record has both a word-numbered ruling and a partial supersession. That is
+> ADR-042's failure — a declared value nobody executes — reproduced inside the fix for it, so
+> `summary.rulingNumbers` is now exported and asserted for one record per family.
+
+> **Filed as S54**, which is the other half of what this slice found and did not fix. The
+> `summarise` contract says its output "never contains a path, because a record read inside a
+> consumer repo cannot name one" — and the `ruled` half honours that. The `status` half does
+> not, because it is the record's own prose: ADR-042 and ADR-043 both say *"affects
+> `src/resolve/resolve.mjs`"* in the status line, and `rules why` prints that line in every
+> repository that adopts the tool. Two records out of forty-eight, pre-existing, and not
+> touched here because the fix is a decision about what a status line may contain rather than
+> a parser change.
 
 ### S32 — Sources in a standard Gradle layout are never sampled (P2)
 
@@ -1338,7 +1393,7 @@ the probe and the assertion could be compared at all.
 Wave 1's resolver rows (S02, S03, S04) are closed, and their exit criterion is only half of what
 the wave says. `compare` over fixtures and the estate is still untested, and neither "no rule loads
 twice" nor "no profile lands in the wrong ecosystem" has been asserted across the whole wave —
-S31, S26, S09, S06, S32, S33, S34, S14 and S45 are what is left of it. What the closed
+S26, S09, S06, S32, S33, S34, S14 and S45 are what is left of it. What the closed
 rows did establish is the thing worth carrying into them: the resolver now has a gold corpus, so a
 change to how it ranks can be argued against measurements instead of examples. S04's own corpus case
 failed on first run against my expectation and the resolver turned out to be right, which is the

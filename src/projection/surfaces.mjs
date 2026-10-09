@@ -114,6 +114,10 @@ export const SURFACES = [
     // read in worktree agents by default, fixed in 3.9. A reader below that version
     // gets the .mdc copy and a reader above it does not need it.
     readsPrimary: true,
+    // Filled into a substitution only when every selected surface names the same
+    // value. One body is written for all of them, so a Cursor name must not land
+    // in a file Claude Code also reads.
+    substitutions: { askTool: 'Use the interactive `AskQuestion` tool' },
     ruleFrontmatter: (rule) =>
       [
         `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
@@ -136,6 +140,7 @@ export const SURFACES = [
     // and Claude reads CLAUDE.md in preference to AGENTS.md. So the folded region
     // arrives through the pointer and a rule file alongside it is the same text twice.
     readsPrimary: true,
+    substitutions: { askTool: 'Use the interactive `AskUserQuestion` tool' },
     verified: 'Claude Code, "Organize rules with .claude/rules/" — recursive discovery, symlinks supported, no `paths` loads at session start',
     note:
       'CLAUDE.md is a separate pointer surface (see POINTERS). A rule file without frontmatter loads eagerly, which is what an always-on rule wants.',

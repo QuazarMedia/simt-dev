@@ -8,6 +8,9 @@ simt-substitutions:
   - key: plansGlob
     default: docs/plans/*
     describe: glob for this repo's active plan tracker tables
+  - key: askTool
+    default: Ask the user, offering choices with the recommended one first
+    describe: how this repo asks a question; the default names no harness, because one body is written for every selected surface
 ---
 
 # Intake Questions
@@ -34,8 +37,8 @@ migrations, or risk.
 Five is a ceiling, not a quota. Ask fewer when fewer decisions are genuinely open; never pad
 the list to reach it, and never split one decision into several questions to fit under it.
 
-- Use the interactive `AskQuestion` tool with the recommended default first.
-- If unavailable, present numbered choices with `(recommended)` on the first option.
+- {{askTool}}.
+- If that is not available, present numbered choices with `(recommended)` on the first option.
 - Do not ask operational or procedural choices; apply the best documented option.
 
 ## Required First Turn

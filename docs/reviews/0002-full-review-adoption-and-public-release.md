@@ -124,7 +124,7 @@ record is written.
 | S06 | MCP and CLI disagree; the closure ignores the budget | P1 | F | mcp, resolve | no | S05 | Queued | #14, code |
 | S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Complete | `71af872` |
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | F | hooks | **yes (ADR-034)** | — | Complete | `e3566dc` |
-| S09 | `sync`/`init` crash on a mispointed pointer, and `check` passes it | P1 | F | projection | only if pointer drift blocks | — | Queued | #9 |
+| S09 | `sync`/`init` crash on a mispointed pointer, and `check` passes it | P1 | F | projection | **yes (ADR-051)** | S10 | Complete | see §5 |
 | S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | **yes (ADR-035)** | — | Complete | `14fcd5b`; **amended by ADR-040**, which found a sixth writer still writing by default |
 | S11 | `slice-commit` rule can never be projected | P1 | F | rules | no | — | **Complete** | `5c079cd` |
 | S12 | Folding + per-rule surfaces load every process rule twice | P1 | F | surfaces | **yes (ADR-046, supersedes ADR-021 r3)** | — | Complete | `6b99add` |
@@ -296,6 +296,68 @@ was deferred while its dependency `slice-commit` was inlined. 0001's extracted
 
 Proposed fix: pointer drift blocks whenever the pointer belongs to a selected surface, and a
 directory is `foreign`.
+
+> **Resolved by ADR-051**, and the fix as proposed is necessary but not sufficient — the
+> first bullet reproduces exactly, and the second is worse than described.
+>
+> **The non-blocking rule rested on a misreading of what a pointer is.** The comment said *"the
+> editors that matter already read `AGENTS.md`, and the pointer is a convenience"* — and this
+> repository's own pointer table refutes the second half with a quotation from Claude Code's
+> documentation: *"Claude reads CLAUDE.md by default and AGENTS.md only as a fallback."*
+> Measured: pointer moved to `README.md`, `check` exit 0, `compare` reports `problems 0 repos`,
+> and **13 rule citations go unread** by the reader they were written for. This is ADR-018's
+> shape — an unset hooks path is not an absent hook — one file over: the file exists, so the
+> reader is satisfied, and nothing reports that it is reading the wrong bytes.
+>
+> The belief had a real observation behind it, from a **different** surface. The existing test
+> named DeepSeek's loader rendering a drifted *copy* beside its twin. That is true and it is
+> about duplication; a *symlink* aimed elsewhere is not duplication, it is a reader looking at
+> the wrong file. Because the belief was written into a test that asserted the asymmetry, the
+> finding it produced was by construction unable to see it — so that test was **replaced, not
+> amended**, and its comment now records what it got wrong.
+>
+> Blocking is scoped to pointers whose surface the repository selected. That is not a
+> compromise: `pointerTargets` already filters on it, and a repository on `opencode` with a
+> stray `CLAUDE.md` gains nothing from a red gate. The new status is `pointer-unread` — the
+> reader's word for it — and the remedy names the reader, because "run the command" does not
+> say why this matters and a warning that has been learned to skip is worse than none.
+>
+> **The directory is worse than the finding says.** `pointerState` had three answers and a
+> directory matched the third. `check` reported nothing, and `sync` crashed with `EEXIST` on
+> the `symlink()` call **after** writing every other target — a half-migrated repository — and
+> named `simt-dev doctor`, which reports nothing about it either. A directory at `CLAUDE.md` is
+> not hypothetical: it is where Claude Code keeps per-project instructions. It was invisible
+> because the note that would have said so printed `undefined bytes`, and `undefined` in a
+> report reads as nothing at a glance. `stat` now distinguishes it before any read (reading a
+> directory as utf8 throws `EISDIR`, and that catch reported it as *absent*), and the size
+> reported is entries rather than bytes — the same question, asked of what would be lost.
+>
+> One thing the fix does **not** do, and the record says why: `sync` still does not block on a
+> misaimed pointer. The remedy is `sync --yes`, so a `sync` that refused would be a gate whose
+> remedy is the command being run — ADR-025 ruling 6's hazard, and worse than a noisy gate.
+> `check` is where it blocks, because that is where the exit code lives.
+>
+> **The first version of that split got it wrong, and rendering the output is what showed it.**
+> One `NON_BLOCKING` set served both commands, on the reasoning that the writer's rule was the
+> correct one — so `check` exited 0 on the exact repository this row exists to fix, and a test
+> asserting `check` exited 1 **passed**, on a scratch directory that was red for a missing
+> `AGENTS.md`. That is the defect surviving a test written for its fix, and it is why the
+> acceptance in this repository's own `AGENTS.md` — *render it, then read it as the receiving
+> repository's agent* — is a rule and not a formality. Two exported sets now, both asserted,
+> and the relationship asserted too: everything `check` tolerates, `sync` tolerates. Three
+> mutations passed the suite before that; the text output is identical in all three, which is
+> ADR-035's sentence about promises about a *set* of commands, applied to a set of statuses.
+>
+> **The row's headline crash was still there after all that**, and it is the reason the remedy
+> says `sync --yes`. `sync` planned the misaimed pointer and then called `symlink()` at a path
+> that already existed: `EEXIST`, after every other target had been written, naming
+> `simt-dev doctor` — which reports nothing about it. A command whose own remedy crashes on the
+> state it names has no remedy at all. The pointer is this tool's own output and a symlink
+> carries no content, so `sync` now unlinks and re-links it; the repair is keyed on the
+> pointer's *state*, never on the path existing, so a hand-written file or a real directory is
+> still refused untouched. The test asserts that `README.md` survives the unlink, because the
+> repair is a deletion and a test that only checked where the link now points would pass if
+> `unlink` had removed the wrong thing.
 
 **S10.** Add rows: `ci --json --dry-run` emits nothing (S23); `sync` writes by default (S24). The
 `writeMode(flags)` helper from 0001 covers both.
@@ -1427,7 +1489,7 @@ the probe and the assertion could be compared at all.
 Wave 1's resolver rows (S02, S03, S04) are closed, and their exit criterion is only half of what
 the wave says. `compare` over fixtures and the estate is still untested, and neither "no rule loads
 twice" nor "no profile lands in the wrong ecosystem" has been asserted across the whole wave —
-S09, S06, S32, S33, S34, S14 and S45 are what is left of it. What the closed
+S06, S32, S33, S34, S14 and S45 are what is left of it. What the closed
 rows did establish is the thing worth carrying into them: the resolver now has a gold corpus, so a
 change to how it ranks can be argued against measurements instead of examples. S04's own corpus case
 failed on first run against my expectation and the resolver turned out to be right, which is the

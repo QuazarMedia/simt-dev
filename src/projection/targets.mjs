@@ -12,7 +12,7 @@
 // computing the desired region and the gate then reporting drift on a clean tree,
 // which is the failure mode a PR cannot review because both places look right.
 
-import { readFile, readlink } from 'node:fs/promises';
+import { readdir, readFile, readlink, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { diff, parse, inject } from './markers.mjs';
@@ -161,8 +161,31 @@ export async function pointerState(root, pointer) {
     if (e.code !== 'ENOENT' && e.code !== 'EINVAL') {
       return { file: pointer.file, state: 'unreadable', detail: e.code };
     }
-    // Not a symlink. Either nothing is there, or a regular file is.
+    // Not a symlink. Either nothing is there, or a regular file is — or a DIRECTORY,
+    // which is neither. A directory at `CLAUDE.md` is a real thing a repository has: it
+    // is where per-project Claude instructions live, and the corpus contains one. Read
+    // as "absent" it is invisible: `check` reported nothing at all, and `sync` crashed
+    // with `EEXIST` on the `symlink()` call *after* writing every other target, so the
+    // run left a half-migrated repo and named `simt-dev doctor` as the remedy, which
+    // reports nothing about it either. `stat` is what tells a directory from a file, and
+    // it is asked before the read because reading a directory as utf8 throws EISDIR.
     try {
+      const st = await stat(path);
+      if (st.isDirectory()) {
+        let entries = 0;
+        try {
+          entries = (await readdir(path)).length;
+        } catch {
+          entries = 0;
+        }
+        return {
+          file: pointer.file,
+          state: 'foreign',
+          bytes: null,
+          entries,
+          detail: 'a directory, not a pointer',
+        };
+      }
       const text = await readFile(path, 'utf8');
       return {
         file: pointer.file,

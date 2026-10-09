@@ -16,7 +16,7 @@
 //     three `.mdc` rules would let a reader believe a repo is fully current when
 //     only the file they happened to open is.
 
-import { mkdir, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, symlink, unlink, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { plan, checkTargets, checkTarget, provenanceDigest, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
@@ -25,24 +25,47 @@ import { manifestDrift, readManifest, unrunnableGates } from '../projection/mani
 import { readCapability } from '../hooks/capability.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 
-/** Findings that are reported but never fail the gate.
+/** Findings `sync` reports and does not fail on.
  *
- *  A missing `CLAUDE.md` does not mean a broken repo: every editor that matters
- *  already reads `AGENTS.md`, and the pointer is a convenience that saves one
- *  symlink. A gate that goes red for it is a gate people learn to ignore, which
- *  is the failure this whole gate exists to prevent. `pointer-blocked` — a real
- *  file sitting where the pointer wants to be — is reported loudly instead, with
- *  the byte count of what is in the way, because that one is a decision somebody
- *  has to make.
+ *  `pointer-unread` is a misaimed pointer whose reader this repository serves. `sync`
+ *  must not refuse on it: the remedy is `simt-dev sync --yes`, so a `sync` that blocked
+ *  would be a gate whose remedy is the command being run — ADR-025 ruling 6's hazard, and
+ *  worse than a noisy gate. `check` disagrees, and the reason is the whole of ADR-051.
  *
- *  `orphaned` is here for the same reason and a stronger one. A generated rule file
+ *  `orphaned` is here for a stronger version of the same reason. A generated rule file
  *  whose surface now folds the rule into `AGENTS.md` cannot be repaired by any
  *  command: `sync` will not write it again, and ADR-021 ruling 6 forbids deleting
  *  it. Blocking on it would put every commit in every migrated repo behind a file
  *  only a human may remove, which is a gate nothing can satisfy and therefore worse
  *  than a gate that is merely noisy. It is reported, with the delete command in the
- *  remedy, and it does not fail. */
-const NON_BLOCKING = new Set(['pointer-drift', 'orphaned']);
+ *  remedy, and it does not fail.
+ *
+ *  A *missing* pointer is not reported at all: every editor that matters already reads
+ *  `AGENTS.md`, and the pointer saves one symlink. A gate that goes red for it is a gate
+ *  people learn to ignore. A *foreign* one — a real file or a real directory where the
+ *  pointer belongs — is reported loudly with what is in the way, because that one is a
+ *  decision somebody has to make. */
+export const SYNC_NON_BLOCKING = new Set(['pointer-unread', 'orphaned']);
+
+/**
+ * Findings `check` reports and does not fail on.
+ *
+ *  A subset of `SYNC_NON_BLOCKING`, and the difference between the two sets is the whole
+ *  of ADR-051. The same finding answers different questions in the two commands: `sync`
+ *  writes the pointer, so refusing there names the command being run as the cure, while
+ *  `check` is the gate CI runs and the one whose exit code a repository acts on — and a
+ *  repository whose `CLAUDE.md` points at `README.md` has a reader reading nothing.
+ *  Thirteen rule citations unread, `check` green, `compare` clean.
+ *
+ *  One set covering both commands is how the defect survived: the rule was written to
+ *  keep `sync` quiet, and it quietly quieted `check` too — the writer's correct
+ *  non-blocking finding silencing the gate's exit code. The first version of this fix
+ *  reproduced that exactly, and a test asserting `check` exited 1 passed on a
+ *  repository that was red for a missing `AGENTS.md`.
+ *
+ *  `orphaned` stays non-blocking in both. Nothing can satisfy it, in either command.
+ */
+export const CHECK_NON_BLOCKING = new Set(['orphaned']);
 
 export async function syncCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
@@ -103,13 +126,28 @@ export async function syncCommand(positional, flags) {
   for (const p of pointerTargets(root, result.surfaces)) {
     const st = await pointerState(root, p);
     if (st.state === 'foreign') {
-      note(
-        `POINTER ${p.file}: ${st.detail} (${st.bytes} bytes); left untouched, not replaced`,
-      );
+      // The measure is what is in the way, and it differs by kind: a file is destroyed by
+      // the byte, a directory by the entry. Printing `undefined bytes` for the second
+      // is how a directory went unreported for as long as it did.
+      const size =
+        st.entries === undefined
+          ? `${st.bytes} bytes`
+          : `${st.entries} ${st.entries === 1 ? 'entry' : 'entries'}`;
+      note(`POINTER ${p.file}: ${st.detail} (${size}); left untouched, not replaced`);
       continue;
     }
     if (st.state === 'current') continue;
-    pointerPlan.push(p);
+    // A *mispointed* pointer is one this tool wrote and this tool may repair: it is a
+    // symlink, so it has no content, and the remedy printed by `check` for this exact
+    // finding is `simt-dev sync --yes`. Reporting a plan and then calling `symlink()` at
+    // an existing path is `EEXIST` — which is what this did, and the remedy it offered
+    // was `simt-dev doctor`, which reports nothing about it. A command whose own remedy
+    // crashes on the state it names has no remedy at all.
+    //
+    // Only a symlink is replaced. A regular file or a directory is somebody's work and
+    // was `continue`d above, which is why the distinction is `state` and not a test of
+    // existence.
+    pointerPlan.push({ ...p, replace: st.state === 'mispointed' });
   }
 
   const targets = result.targets.map((t) => ({
@@ -151,6 +189,14 @@ export async function syncCommand(positional, flags) {
     }
     for (const p of pointerPlan) {
       await mkdir(dirname(p.path), { recursive: true });
+      // Only a symlink this tool wrote is replaced, and only because it has no content:
+      // `unlink` on a symlink removes the link, never what it pointed at. A regular file
+      // or a directory never reaches here — the loop above `continue`s on both — so this
+      // cannot delete anything a person wrote.
+      if (p.replace) {
+        await unlink(p.path);
+        note(`unlinked ${p.file} (was misaimed)`);
+      }
       await symlink(p.to, p.path);
       note(`linked   ${p.file} -> ${p.to}`);
     }
@@ -250,7 +296,10 @@ export async function checkCommand(positional, flags) {
     if (drift) findings.push(drift);
   }
 
-  const bad = findings.filter((f) => f.status !== 'current' && !NON_BLOCKING.has(f.status));
+  // `CHECK_NON_BLOCKING`, not the union. This is the gate whose exit code a repository
+  // acts on, so a finding it reports and does not fail on is a decision recorded in a
+  // set — not one inherited from the writer that shares this file (ADR-051).
+  const bad = findings.filter((f) => f.status !== 'current' && !CHECK_NON_BLOCKING.has(f.status));
   const payload = {
     ok: bad.length === 0,
     command: 'check',

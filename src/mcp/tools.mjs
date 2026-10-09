@@ -20,7 +20,7 @@
 
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
-import { tokenize, rankSkills, closure, scoreSkill, stackCompatible } from '../resolve/resolve.mjs';
+import { tokenize, rankSkills, closure, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
 import { loadRules, select, checkTargets, provenanceDigest } from '../projection/project.mjs';
 import { loadDecisions, byId, citations } from '../decisions/index.mjs';
 import { discover } from '../compare/discover.mjs';
@@ -225,7 +225,7 @@ export const TOOLS = [
         query,
         results: reg.skills
           .map((skill) => ({ skill, ...scoreSkill(skill, { repoStack: [], taskTokens: tokens, paths: [] }) }))
-          .filter((r) => r.score > 0)
+          .filter((r) => selectionVerdict(r.evidence, r.reasons) === null)
           .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name))
           .map((r) => ({ name: r.skill.name, score: r.score, summary: r.skill.summary, why: r.reasons })),
       };

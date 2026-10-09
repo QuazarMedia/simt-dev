@@ -266,3 +266,76 @@ test('resolve: `skills brief --task "d1 migration"` reports the keyword (S03)', 
   const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'd1 migration', '--root', ROOT]);
   assert.match(stdout, /keyword:d1/);
 });
+// --- S04: stack is compatibility, not evidence ---------------------------------
+//
+// The two acceptance cases in review 0001 §S04 are asserted end to end in
+// `test/eval.test.mjs` against the gold corpus. These are the properties that corpus
+// cannot show on its own, because a corpus case is one context and these are rules.
+
+test('resolve: stack alone never selects, however many tags overlap (S04)', () => {
+  // Three overlapping tags is 45 points, above the minimum of 25. Only a rule that
+  // excludes stack from its own threshold rejects it, which is the whole content of
+  // "stack is a tiebreaker".
+  const skill = {
+    name: 'anything',
+    stack: ['node', 'node-web', 'react'],
+    keywords: ['kubernetes'],
+    summary: 'A summary nobody mentioned',
+    capabilities: ['maps'],
+  };
+  const context = { repoStack: ['node', 'node-web', 'react'], taskTokens: tokenize('the usual'), paths: [] };
+  const { selected, excluded } = rankSkills([skill], context);
+  assert.deepEqual(selected, []);
+  assert.match(excluded[0].reason, /stack alone/);
+});
+
+test('resolve: a weak signal is rejected, and the reason names it (S04)', () => {
+  // The reason is the product here. `NOT SELECTED` is the block an agent uses to
+  // override, so a rejection that cannot be acted on is the same defect as a bad
+  // selection.
+  //
+  // A synthetic skill, not the real registry: measured, no registry skill lands strictly
+  // between 0 and MIN_SCORE, so a test written against the registry would assert a reason
+  // real data never produces and pass for the wrong reason.
+  const weak = {
+    name: 'weak-signal',
+    stack: ['node'],
+    keywords: ['kubernetes'],
+    summary: 'durable dashboards for the fleet',
+    capabilities: ['maps'],
+  };
+  const { selected, excluded } = rankSkills([weak], {
+    repoStack: ['node'],
+    taskTokens: tokenize('tidy the dashboards'),
+    paths: [],
+  });
+  assert.deepEqual(selected, []);
+  assert.match(excluded[0].reason, /summary:dashboards, which scores 8; 25 is the least score that selects/);
+});
+
+test('resolve: a stopword cannot select through the summary signal (S04)', () => {
+  // The measured case: "fix a typo in the README" resolved four skills on `summary:the`
+  // and `summary:in`. The stopword list is the fix, and the threshold is not - a summary
+  // hit is 8, so the threshold would drop it anyway, but not the OTHER direction.
+  const skill = { name: 'anything', stack: ['node'], keywords: ['kubernetes'], summary: 'in the and the', capabilities: ['maps'] };
+  const { score, reasons } = scoreSkill(skill, { repoStack: [], taskTokens: tokenize('fix a typo in the README'), paths: [] });
+  assert.equal(score, 0);
+  assert.deepEqual(reasons, []);
+});
+
+test('resolve: a real summary word still selects (S04)', () => {
+  // The other half of the stopword test, because a stopword list long enough to suppress
+  // everything is a resolver that selects nothing and passes the empty corpus cases.
+  const skill = { name: 'anything', stack: [], keywords: ['kubernetes'], summary: 'observability and slo dashboards', capabilities: ['maps'] };
+  const { reasons } = scoreSkill(skill, { repoStack: [], taskTokens: tokenize('the slo dashboard'), paths: [] });
+  assert.ok(reasons.includes('summary:slo'), `lost the real signal: ${reasons}`);
+});
+
+test('resolve: forcing a skill still overrides the new rule (S04)', () => {
+  // An agent that knows better than the threshold is stuck if the escape hatch is gated
+  // by it too. The new rule must not touch `forced`.
+  const skill = { name: 'anything', stack: ['node'], keywords: ['kubernetes'], summary: 'x', capabilities: ['maps'] };
+  const { selected } = rankSkills([skill], { repoStack: ['node'], taskTokens: [], paths: [] }, { forced: ['anything'] });
+  assert.equal(selected.length, 1);
+  assert.deepEqual(selected[0].reasons, ['forced']);
+});

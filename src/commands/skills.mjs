@@ -18,7 +18,7 @@ import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { tokenize, rankSkills, closure, resolveAlias, scoreSkill, stackCompatible } from '../resolve/resolve.mjs';
+import { tokenize, rankSkills, closure, resolveAlias, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 
 const DEFAULT_BUDGET = 20480;
@@ -195,7 +195,7 @@ export async function findCommand(args, flags) {
   const workspace = await workspaceLine(flags);
   const results = registry.skills
     .map((skill) => ({ skill, ...scoreSkill(skill, { repoStack: [], taskTokens: tokens, paths: [] }) }))
-    .filter((r) => r.score > 0)
+    .filter((r) => selectionVerdict(r.evidence, r.reasons) === null)
     .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name));
 
   if (isJson(flags)) {

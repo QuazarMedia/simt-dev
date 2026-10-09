@@ -57,8 +57,7 @@ commands belongs in this repository, not here.
 
 ## Code and review
 
-- No `any`, no unsafe casts, no non-null boundary bypasses, no floating promises, no
-  `console.*` in application code.
+- No type-system escapes, no unawaited async work, no debug printing in application code.
 - 400 lines is a review trigger; 1000 lines is a hard ceiling. Generated files are exempt
   when the hook names the generator. (ADR-005)
 - Never weaken CSP, CORS, auth, audit, cache or validation controls to silence a test, warning

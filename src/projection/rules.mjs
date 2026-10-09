@@ -212,6 +212,20 @@ export async function mdcTargets(root, sha, manifest, flags) {
  * selection passes would be two answers to "which rules apply", which is the defect
  * that produced eight divergent `.mdc` files in the first place.
  */
+/**
+ * The value every selected surface gives `key`, or null when they do not all give one.
+ *
+ * A missing entry is a disagreement: the surface that has no name for the tool would
+ * otherwise be handed another harness's.
+ */
+function agreedSubstitution(surfaces, key) {
+  if (surfaces.length === 0) return null;
+  const values = surfaces.map((s) => s.substitutions?.[key]);
+  if (values.some((v) => typeof v !== 'string' || v === '')) return null;
+  if (new Set(values).size !== 1) return null;
+  return values[0];
+}
+
 async function ruleBodies(root, manifest, flags) {
   const problems = [];
   const notes = [];
@@ -267,7 +281,15 @@ async function ruleBodies(root, manifest, flags) {
       skipped.push(rule.id);
       continue;
     }
-    const values = declared.values[rule.id] ?? {};
+    const values = { ...(declared.values[rule.id] ?? {}) };
+    // A surface may name a substitution. It is used only when every selected
+    // surface names the same value: the body below is written once and shared,
+    // so one harness's tool name must not be what another harness reads.
+    for (const sub of rule.substitutions) {
+      if (Object.prototype.hasOwnProperty.call(values, sub.key)) continue;
+      const agreed = agreedSubstitution(resolved.surfaces, sub.key);
+      if (agreed !== null) values[sub.key] = agreed;
+    }
     const { body, problems: renderProblems } = renderMdc(rule, values);
     for (const p of renderProblems) problems.push(`${rule.file}: ${p}`);
     if (renderProblems.length > 0) continue;

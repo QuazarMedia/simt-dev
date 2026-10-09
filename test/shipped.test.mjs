@@ -20,6 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { loadRules, select, LOCAL_PROFILE_DIR } from '../src/projection/project.mjs';
+import { desiredRegion, mdcTargets } from '../src/projection/rules.mjs';
 import { DECISIONS_DIR, ESTATE_NAME } from '../src/decisions/index.mjs';
 import { loadMdcRules, renderMdc, ruleName } from '../src/projection/mdc.mjs';
 import { SURFACES, rulePath, surface, undocumentedKeys } from '../src/projection/surfaces.mjs';
@@ -303,6 +304,65 @@ test('no remedy or pointer names a path that resolves only inside simt-dev', asy
       assert.ok(!text.includes(path), `${file} prints "${path}", which resolves only inside simt-dev`);
     }
   }
+});
+
+const HARNESS_OR_LANGUAGE = [
+  { re: /AskQuestion/, what: "Cursor's question tool" },
+  { re: /AskUserQuestion/, what: "Claude Code's question tool" },
+  { re: /`any`/, what: 'a TypeScript escape' },
+  { re: /floating promises/, what: 'TypeScript async vocabulary' },
+  { re: /console\.\*/, what: 'a JavaScript debug call' },
+];
+
+test('core and process rules do not name one language or one harness', async () => {
+  const files = [
+    'rules/core.md',
+    ...(await readdir(join(ROOT, 'rules', 'mdc'))).filter((n) => n.endsWith('.mdc')).map((n) => `rules/mdc/${n}`),
+  ];
+  for (const file of files) {
+    const raw = await readFile(join(ROOT, file), 'utf8');
+    const body = raw.replace(/^---\n[\s\S]*?\n---\n*/, '').replace(/\{\{[a-zA-Z0-9_-]+\}\}/g, '');
+    for (const { re, what } of HARNESS_OR_LANGUAGE) {
+      assert.equal(re.exec(body), null, `${file} names ${what} outside a substitution`);
+    }
+  }
+});
+
+test('a Kotlin repo rendered for Claude Code names neither a TypeScript escape nor a Cursor tool', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'simt-s45-'));
+  await mkdir(join(root, 'src/main/kotlin'), { recursive: true });
+  await writeFile(join(root, 'simt-dev.json'), JSON.stringify({ surfaces: ['claude'] }));
+  await writeFile(join(root, 'build.gradle.kts'), 'plugins { kotlin("jvm") }\n');
+  await writeFile(join(root, 'src/main/kotlin/Api.kt'), 'class Api\n');
+  const desired = await desiredRegion(root, {});
+  assert.ok(desired.profiles.includes('jvm'), desired.profiles.join(','));
+  assert.equal(desired.profiles.includes('typescript'), false);
+  assert.doesNotMatch(desired.body, /`any`/);
+  assert.doesNotMatch(desired.body, /(?<![A-Za-z])AskQuestion/);
+  const { targets } = await mdcTargets(root, desired.meta.sha, desired.manifest, {});
+  const intake = targets.find((t) => t.file.endsWith('intake-questions.md'));
+  assert.ok(intake, targets.map((t) => t.file).join(','));
+  assert.match(intake.body, /AskUserQuestion/);
+  assert.doesNotMatch(intake.body, /(?<![A-Za-z])AskQuestion/);
+  assert.match(intake.body, /offering choices with the recommended one first|AskUserQuestion/);
+});
+
+test('a question tool is named only when every selected surface agrees', async () => {
+  async function intake(surfaces) {
+    const root = await mkdtemp(join(tmpdir(), 'simt-ask-'));
+    await writeFile(join(root, 'simt-dev.json'), JSON.stringify({ surfaces }));
+    const desired = await desiredRegion(root, {});
+    const { targets } = await mdcTargets(root, desired.meta.sha, desired.manifest, {});
+    const file = targets.find((t) => t.file.includes('intake-questions'));
+    const folded = desired.folded.includes('intake-questions') ? desired.body : '';
+    return `${file?.body ?? ''}\n${folded}`;
+  }
+  const cursor = await intake(['cursor']);
+  assert.match(cursor, /(?<![A-Za-z])AskQuestion/);
+  const both = await intake(['cursor', 'claude']);
+  assert.doesNotMatch(both, /(?<![A-Za-z])AskQuestion/);
+  assert.doesNotMatch(both, /AskUserQuestion/);
+  assert.match(both, /Ask the user, offering choices with the recommended one first/);
 });
 
 test('core does not claim every rule cites a decision', async () => {

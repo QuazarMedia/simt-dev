@@ -6,7 +6,17 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { tokenize, scoreSkill, rankSkills, closure, resolveAlias, matchesGlob, stackCompatible, syntheticPathFor } from '../src/resolve/resolve.mjs';
+import {
+  tokenize,
+  scoreSkill,
+  rankSkills,
+  closure,
+  selectWithinBudget,
+  resolveAlias,
+  matchesGlob,
+  stackCompatible,
+  syntheticPathFor,
+} from '../src/resolve/resolve.mjs'; 
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BIN = resolve(ROOT, 'bin', 'simt-dev.mjs');
@@ -118,6 +128,95 @@ test('resolve: closure terminates on the real registry', () => {
 test('resolve: milestone-commit resolves to slice-commit', () => {
   const target = resolveAlias('milestone-commit', skills);
   assert.equal(target.name, 'slice-commit');
+});
+
+test('resolve: a dependency is counted against the budget like anything else', () => {
+  // The defect. Both budget loops tested `entry.via.size > 0` and, if so, inlined the
+  // dependency whatever it weighed — on the reasoning that "a skill that is useless
+  // without its dependency is worse than a large context, because it silently misleads".
+  // The premise is right and the conclusion does not follow: a dependency over budget
+  // still costs bytes, and the honest answer is a deferred skill with a reason.
+  //
+  // Measured against the shipped registry: `--skill parallel-feature-team --budget 2000`
+  // resolved 13,503 bytes of skills — 6.7x the budget, with nothing in the output saying so.
+  const { selected } = rankSkills(
+    skills,
+    { repoStack: ['gradle'], taskTokens: tokenize('commit'), paths: [] },
+    { forced: ['parallel-feature-team'] },
+  );
+  const expanded = closure(selected, skills);
+  const team = expanded.find((e) => e.skill.name === 'parallel-feature-team');
+  assert.ok(team, 'the corpus must contain a skill with a dependency, or this test is vacuous');
+  assert.ok(team.skill.requires.length > 0);
+
+  const { picked, deferred, used } = selectWithinBudget(expanded, { budget: 2000 });
+  assert.ok(used <= 2000, `${used} bytes resolved against a 2000-byte budget`);
+  // The group that does not fit is deferred together rather than partially: a parent
+  // shown without the thing it requires is the misleading state the closure exists to
+  // avoid, and it is now avoided by dropping the parent instead of ignoring the budget.
+  const names = new Set(picked.map((e) => e.skill.name));
+  for (const e of deferred) {
+    for (const parent of e.via) {
+      assert.ok(
+        !names.has(parent),
+        `${parent} was inlined while its dependency ${e.skill.name} was deferred`,
+      );
+    }
+  }
+});
+
+test('resolve: a dependency that does not fit takes its parent', () => {
+  // Rule 2 is directional and the direction is the whole of it. With a budget that fits
+  // the parent and not the child, the answer is neither — and the parent's own bytes
+  // being small is not a reason to show it alone.
+  const shape = [
+    { skill: { name: 'parent', bytes: 100, deferred: false, requires: ['child'] }, via: new Set() },
+    { skill: { name: 'child', bytes: 900, deferred: false, requires: [] }, via: new Set(['parent']) },
+  ];
+  const none = selectWithinBudget(shape, { budget: 500 });
+  assert.deepEqual(none.picked.map((e) => e.skill.name), []);
+  assert.equal(none.used, 0);
+  assert.deepEqual(none.deferred.map((e) => e.skill.name), ['parent', 'child']);
+
+  const all = selectWithinBudget(shape, { budget: 1000 });
+  assert.deepEqual(all.picked.map((e) => e.skill.name), ['parent', 'child']);
+  assert.equal(all.used, 1000);
+});
+
+test('resolve: `deferred` is a pointer, not a budget failure, so it does not move a parent', () => {
+  // Rule 3. `deferred` is derived from `deferredThreshold`, not from the budget, and it
+  // means "fetch this with `skills show`". Under `--all` the parent is still what the
+  // caller asked for, and the pointer to the dependency is what a pointer is for.
+  // Conflating the two is how a 384 KB body would suppress an unrelated small skill.
+  const shape = [
+    { skill: { name: 'parent', bytes: 100, deferred: false, requires: ['huge'] }, via: new Set() },
+    { skill: { name: 'huge', bytes: 400000, deferred: true, requires: [] }, via: new Set(['parent']) },
+  ];
+  const capped = selectWithinBudget(shape, { budget: 1000000 });
+  assert.deepEqual(capped.picked.map((e) => e.skill.name), ['parent']);
+  assert.deepEqual(capped.deferred.map((e) => e.skill.name), ['huge']);
+
+  const all = selectWithinBudget(shape, { budget: 10, all: true });
+  assert.deepEqual(all.picked.map((e) => e.skill.name), ['parent']);
+  assert.deepEqual(all.deferred.map((e) => e.skill.name), ['huge']);
+});
+
+test('resolve: the reported total is the bytes actually paid', () => {
+  // `used` is recomputed from what was picked rather than accumulated during the walk,
+  // because a parent pulled out by rule 2 must stop counting. A total that includes a
+  // dropped skill reports bytes nobody is paying, and the header line prints it.
+  const shape = [
+    { skill: { name: 'kept', bytes: 300, deferred: false, requires: [] }, via: new Set() },
+    { skill: { name: 'dropped', bytes: 800, deferred: false, requires: ['gone'] }, via: new Set() },
+    { skill: { name: 'gone', bytes: 900, deferred: false, requires: [] }, via: new Set(['dropped']) },
+  ];
+  const r = selectWithinBudget(shape, { budget: 1000 });
+  assert.deepEqual(r.picked.map((e) => e.skill.name), ['kept']);
+  assert.equal(r.used, 300, 'a parent deferred by rule 2 must stop counting against the budget');
+  assert.equal(
+    r.picked.reduce((n, e) => n + e.skill.bytes, 0),
+    r.used,
+  );
 });
 
 test('resolve: resolveAlias leaves a real name alone', () => {

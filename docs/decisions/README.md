@@ -59,6 +59,7 @@ record's status line — never by editing the ruling in place.
 | [049](ADR-049-a-ruling-that-a-later-record-moved-says-so-where-it-is-printed.md) | A ruling that a later record moved says so where it is printed | accepted |
 | [050](ADR-050-a-byte-count-is-not-a-region-and-updated-is-not-a-change-of-rules.md) | A byte count is not a region, and `updated` is not a change of rules | accepted |
 | [051](ADR-051-a-pointer-is-the-readers-only-route-so-it-is-not-a-convenience.md) | A pointer is the reader's only route, so it is not a convenience | accepted |
+| [052](ADR-052-a-dependency-is-counted-against-the-budget-and-there-is-one-budget.md) | A dependency is counted against the budget, and there is one budget | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -342,6 +343,21 @@ where Claude Code keeps per-project instructions — was classified as *absent*,
 said nothing and `sync` crashed with `EEXIST` after writing every other target, naming
 `simt-dev doctor`, which reports nothing about it either. The note that would have said so
 printed `undefined bytes`, and `undefined` in a report reads as nothing at a glance.
+
+ADR-052 is the same habit in the resolver, and it is the first record here where the *fix*
+was the second copy of the logic rather than the first. The budget loop existed in `skills
+brief` and in the MCP tool, and both tested `entry.via.size > 0` and inlined a dependency
+whatever it weighed — so `--skill parallel-feature-team --budget 2000` resolved **13,503
+bytes against a 2,000-byte budget**, with nothing in the output saying so. The comment gave
+the reason: *"a skill that is useless without its dependency is worse than a large context,
+because it silently misleads."* The premise is right and the conclusion does not follow: a
+missing dependency is fixed by a line in the output, and an unbounded budget is not a fix
+for anything. The copies had also drifted — one tested `deferred` first and never inlined
+one, the other tested it second and would inline 384 KB — so the same question had two
+answers and neither could see the other. ADR-035's sentence about a promise about a *set*
+of readers holds only while something checks the set; here the check is a test that drives
+both surfaces and compares them, because two copies asserted separately drift and two
+copies asserted against each other do not.
 
 ## The rule these records enforce
 

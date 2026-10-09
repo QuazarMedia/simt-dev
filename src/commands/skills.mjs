@@ -18,7 +18,7 @@ import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { tokenize, rankSkills, closure, resolveAlias, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
+import { tokenize, rankSkills, closure, selectWithinBudget, resolveAlias, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 
 const DEFAULT_BUDGET = 20480;
@@ -299,26 +299,17 @@ export async function briefCommand(args, flags) {
   const order = new Map(expanded.map((e, i) => [e.skill.name, i]));
   expanded.sort((a, b) => (order.get(a.skill.name) - order.get(b.skill.name)));
 
-  // Budget: take by score until full. `requires` members ride along regardless.
-  const picked = [];
-  let used = 0;
-  const deferred = [];
+  // Budget, by one shared function. The loop this replaced existed here and in the MCP
+  // tool, and the copies had already drifted: this one skipped a `deferred` skill before
+  // looking at the budget and the other checked it after, so a deferred dependency was
+  // inlined by one command and not the other. `selectWithinBudget` is the whole
+  // arithmetic, and it is the only place that knows a dependency does not get to exceed
+  // the budget on its own — which is what let a 2,000-byte budget resolve 13,503 bytes.
+  const { picked, deferred, used: bytesUsed } = selectWithinBudget(expanded, {
+    budget,
+    all: flags.all === true,
+  });
   const closureNames = new Set(expanded.map((e) => e.skill.name));
-
-  for (const entry of expanded) {
-    const { skill } = entry;
-    if (skill.deferred) {
-      deferred.push(entry);
-      continue;
-    }
-    const isDep = entry.via.size > 0;
-    if (flags.all || used + skill.bytes <= budget || isDep) {
-      picked.push(entry);
-      used += skill.bytes;
-    } else {
-      deferred.push(entry);
-    }
-  }
 
   const excludedNames = new Set(excluded.map((e) => e.skill.name));
   const lines = [];
@@ -345,7 +336,7 @@ export async function briefCommand(args, flags) {
   }
 
   lines.push(
-    `RESOLVED ${picked.length} skills, ${kb(used)}${flags.all || used <= budget ? '' : ' (budget capped)'} - repo ${root.split('/').pop()} (${repoLine(repo)})`,
+    `RESOLVED ${picked.length} skills, ${kb(bytesUsed)}${flags.all || bytesUsed <= budget ? '' : ' (budget capped)'} - repo ${root.split('/').pop()} (${repoLine(repo)})`,
   );
   lines.push(workspace);
   lines.push('');

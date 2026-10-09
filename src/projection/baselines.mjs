@@ -23,6 +23,23 @@
 // it in the editorconfig would have changed every checkout of every repo on the day it
 // landed, and the repo that wanted CRLF could only have opted out by deleting the
 // indentation baseline with it.
+//
+// Two values are absent for the same class of reason, and the second one is here
+// because it was shipped once and read as settled by two reviews. A formatter's own
+// options are not editorconfig properties: this file shipped `[prettier] singleQuote =
+// true`, and a section header in editorconfig is a glob over paths, so that section
+// matched a file named `prettier` and no key in it is one any reader honours — the
+// specification defines nine and `singleQuote` is not among them, and prettier's own
+// mapping reads six properties, none of them that one. It was decoration describing an
+// artefact that did not exist, and `check` could not see it because the bytes were
+// current.
+//
+// The alternative spelling does exist — prettier reads `quote_type` from a matching
+// glob — and it is deliberately not used. Three of five repositories in this estate
+// already state `singleQuote` and two do not, so a shared `quote_type = single`
+// reformats every source file in those two on the day they adopt the tool. ADR-048
+// carries the survey; the sentence is here because the next person who wants to settle a
+// formatting argument in this file needs to know it was measured, not guessed at.
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -66,18 +83,7 @@ indent_size = 4
 indent_style = tab
 
 [{*.go,*.proto}]
-indent_style = tab
-
-[prettier]
-# Prettier reads this section, and only this section, from .editorconfig. Two repos
-# that disagree about singleQuote disagree about the bytes, not about the code, so
-# the value belongs in the file every repo already has rather than in a second config
-# file per repo. A repo with its own prettier config overrides this, and that is the
-# right order: the nearer file wins.
-#
-# No printWidth. Nobody has ruled on one, and a baseline that picks a number nobody
-# argued about is a number nobody agreed to.
-singleQuote = true`;
+indent_style = tab`;
 
 /**
  * The shared `.gitattributes` block.

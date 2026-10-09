@@ -32,7 +32,7 @@ record's status line — never by editing the ruling in place.
 | [022](ADR-022-a-key-simt-dev-reads-is-prefixed.md) | A key simt-dev reads is prefixed `simt-`; an editor's key is not | accepted |
 | [023](ADR-023-the-gate-ships-as-a-file-the-repo-owns.md) | The gate ships as bytes the repo owns, written once where Actions already runs | accepted · ruling 2 superseded by 024 |
 | [024](ADR-024-simt-dev-overwrites-its-own-gate-file.md) | simt-dev overwrites its own gate file, and no repository else's | accepted |
-| [025](ADR-025-a-baseline-is-a-region-in-a-file-the-repo-owns.md) | A baseline is a region in a file the repo owns, and only a file that can hold one | accepted · rulings 1 and 2 narrowed by 026 |
+| [025](ADR-025-a-baseline-is-a-region-in-a-file-the-repo-owns.md) | A baseline is a region in a file the repo owns, and only a file that can hold one | accepted · rulings 1 and 2 narrowed by 026 · ruling 8 withdrawn by 048 |
 | [026](ADR-026-a-config-without-a-region-is-a-file-the-repo-owns.md) | A config whose grammar cannot hold a region is a file the repo owns | accepted |
 | [027](ADR-027-the-one-gitattributes-line-that-is-neither-dangerous-nor-empty.md) | The one gitattributes line that is neither dangerous nor empty | accepted |
 | [028](ADR-028-a-base-file-is-a-floor-so-the-disagreement-it-cannot-repair-becomes-a-check.md) | A base file is a floor, so the disagreement it cannot repair becomes a check | accepted |
@@ -55,6 +55,7 @@ record's status line — never by editing the ruling in place.
 | [045](ADR-045-a-dashboard-that-counts-a-defect.md) | A dashboard that counts a defect and will not name it is worse than one that does not count it | accepted |
 | [046](ADR-046-one-rule-one-copy.md) | One rule, one copy: a reader that reads AGENTS.md must not also get the file | accepted |
 | [047](ADR-047-a-profile-selects-on-what-a-repository-runs-on.md) | A profile selects on what a repository runs on, not on what it is written in | accepted · refines ADR-013 r1 |
+| [048](ADR-048-a-baseline-carries-only-keys-a-reader-honours.md) | A baseline carries only keys a reader honours | accepted · withdraws ADR-025 r8 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -274,6 +275,23 @@ rules. The defect was invisible in the usual way: the selection was deterministi
 passed, and the profile simply landed in the wrong ecosystem. The fix is data plus `has-*`
 facts, exactly as ADR-013 requires — no engine change — and the one piece that needed a mechanism
 was `has-android-manifest`, a nested path, which is the glob walk S07's dependency closed.
+
+ADR-048 is the first record here to withdraw a value rather than a mechanism, and it
+found it by reading a format's specification instead of its own source. The shared
+`.editorconfig` shipped `[prettier] singleQuote = true` under a comment explaining why
+that section was the right home for the estate's one formatting disagreement. An
+editorconfig section header is a glob over paths, so `[prettier]` matched a file named
+`prettier`; and `singleQuote` is not one of the nine keys the specification defines, nor
+one of the six properties Prettier maps. The specification says what an undefined key
+does — cores accept and report it, plugins ignore it — which is the worst possible
+outcome: a line that parses, in a file that was current, enforcing nothing. Nothing in
+this tool could have seen it, because the gate compares bytes and the bytes agreed with
+the shipped body. The spelling that does work is `quote_type`, and the survey says not to
+use it: three of the five repositories running Prettier already state `singleQuote` and
+two do not, so a shared value reformats every source file in those two on the day they
+adopt the tool. The lesson is the narrowest one in this file — a baseline earns its place
+by naming a key a reader honours, and the ability to hold a comment says nothing about
+whether anything reads what is inside.
 
 ## The rule these records enforce
 

@@ -1,6 +1,6 @@
 # ADR-025 — a baseline is a region in a file the repo owns, and only a file that can hold one
 
-Status: accepted · 2026-10-06 · rulings 1 and 2 narrowed by ADR-026
+Status: accepted · 2026-10-06 · rulings 1 and 2 narrowed by ADR-026 · ruling 8 withdrawn by ADR-048
 **Affects:** `src/projection/baselines.mjs`, `src/projection/markers.mjs`,
 `src/projection/project.mjs`, `src/commands/init.mjs`, `test/baselines.test.mjs`,
 `test/leaks.mjs`, `test/surfaces.test.mjs`. Settles §3.1 row 5 and row 7 of
@@ -35,6 +35,14 @@ exists and not what goes in it.
 The same profile is where the plan's own resolutions point. `singleQuote` is a
 `[prettier]`-section value, which prettier reads from `.editorconfig` — a file whose comment
 character is `#`, and therefore a file that can hold a region.
+
+**This paragraph is what ADR-048 withdraws.** A section header in editorconfig is a glob
+over paths, so `[prettier]` matches a file named `prettier`, and `singleQuote` is not one of
+the nine keys the specification defines — nor one of the six properties Prettier maps. The
+reasoning below is sound and the conclusion does not follow from it: the file *can* hold a
+region, and that is the whole of what makes it the right home for a shared claim. It says
+nothing about whether a given claim is one a reader honours. Ruling 8 is withdrawn for that
+reason and the record is kept, because the reasoning is what makes the withdrawal legible.
 
 ## Rulings
 
@@ -93,6 +101,12 @@ character is `#`, and therefore a file that can hold a region.
    repository that already has `120` would be overruled by a number no one argued about, and a
    baseline that picks a value the estate has not agreed to is not a baseline.
 
+   **The `singleQuote` half of this ruling is withdrawn by ADR-048**: `[prettier]` is a glob
+   that matches a file named `prettier`, and `singleQuote` is not a key the editorconfig
+   specification defines or that Prettier reads, so the block it ruled in applied to nothing.
+   The `printWidth` half stands and was never implemented — nothing has ruled on a number, and
+   that is unchanged.
+
 9. **`.gitattributes` is ruled out for now, for the reason in ruling 7.** It is
    comment-capable and would qualify mechanically, but every line that earns its place in it
    changes what git does to the working tree — `text=auto` rewrites every checkout,
@@ -113,8 +127,9 @@ character is `#`, and therefore a file that can hold a region.
   `test/baselines.test.mjs` asserts the list is exactly `['.editorconfig']` with a real style,
   a reason and a record number on every row — a baseline added without noticing that its file
   cannot hold a comment would fail there rather than in someone's editor.
-- The node profile's shapes now have values behind them for `singleQuote` and for indentation.
-  They still do not for `.nvmrc`, `packageManager` and `moduleResolution`, and the profile
+- The node profile's shapes now have values behind them for indentation. They still do not
+  for `singleQuote` — ADR-048 withdrew the claim that this file supplied one — nor for
+  `.nvmrc`, `packageManager` and `moduleResolution`, and the profile
   still mandates the shapes. That gap is named in the plan's row 5 annotation rather than
   hidden, because the next fix is three more JSON files and therefore a different mechanism.
 - `init`'s plan now prints a third caption, because a reader told "frontmatter kept, body

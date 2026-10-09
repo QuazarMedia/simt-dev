@@ -145,7 +145,7 @@ record is written.
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `4c73025` |
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | **yes (ADR-047)** | S07 (done) | Complete | `0b01806` |
 | S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `1bbc36a` |
-| S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (P9, amends ADR-025) | — | Queued | #7 |
+| S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (P9, amends ADR-025) | — | Complete | **ADR-048**; see §5 |
 | S31 | Partial supersession is lost by the decision index | P2 | F | decisions | no | S19 | Queued | #16 |
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Queued | #6 |
 | S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Queued | #14 |
@@ -168,6 +168,7 @@ record is written.
 | S50 | Rule files load eagerly where a surface could scope them | P2 | E | surfaces | yes (P7) | S12 | Queued | `surfaces.mjs` |
 | S51 | JSON output has no schema version and no compact form | P3 | E | output | no | S10 | Queued | `output/index.mjs:68` |
 | S52 | `hooks install` writes without `--yes` | P1 | F | hooks | **yes (ADR-040)** | S10 | Complete | `8569cf0` |
+| S53 | `upgrade` blames the rules for a baseline body change | P2 | F | provenance | yes (amends ADR-032) | — | Queued | ADR-048 consequences |
 
 ## 4. Review 0001 at `4c27514`
 
@@ -764,6 +765,40 @@ This is the "decoration that misdescribes the artefact" failure that this repo's
 least one real file type. A Prettier-backed fixture in the pack-install test proves the chosen
 quote style applies.
 
+> **Resolved by ADR-048**, and the fix's first half is the review's and the second is its
+> opposite. The `[prettier]` block is deleted — nothing changes, because nothing read it — and
+> `quote_type = single`, which the review proposed for later "with an estate survey", is
+> **not** adopted, because the survey was run and its answer is two repositories. Five of the
+> sixteen run Prettier; three state `singleQuote` and would not move, two do not and would have
+> every source file reformatted on the day they adopt the tool. The measurement is in the
+> record so the next person does not repeat it.
+>
+> The finding's evidence was a Prettier run and is now a citation. This machine's npm registry
+> refuses the fetch, and ADR-041 rules the suite against reaching for a formatter anyway, so the
+> record cites the EditorConfig specification (normative: a section header is a glob, and there
+> are nine keys) and Prettier's own `editorconfig-to-prettier.js` (six properties, `singleQuote`
+> among neither list). That is a stronger pair of sources than a version-pinned run: one of them
+> says what the format is, and the other is the mapping Prettier actually executes.
+>
+> Two things the finding did not know. First, the specification settles what an *undefined* key
+> does, and it settles it invisibly — cores accept and report any syntactically valid pair,
+> plugins ignore keys they do not recognise — so the block was not merely ineffective, it was
+> indistinguishable from a setting. That is why the test asserts the baseline's keys against the
+> specification's vocabulary rather than asserting today's string: `quote_type` fails the same
+> assertion, and the reason it is absent is in the record rather than in a deleted line.
+> Second, a guard two tests over was passing on the wrong argument order — the `.gitattributes`
+> leak test called `assertClean(body, label)`, so it checked the label against the leak patterns
+> and the body against nothing, and would have passed on any estate name in that region. It is
+> the fourth instance in this repository of a guard reading a field that was never the subject,
+> and the mutation that caught it is a one-word estate name in a shipped baseline.
+>
+> The slice also filed **S53**, which is the interesting part of what it found: the provenance
+> digest covers `rules/` and `graph/` and excludes `src/`, and the baseline bodies are content
+> that leaves the package while living in `src/`. So `check` correctly reports the `.editorconfig`
+> as drifted while `upgrade` reports "the rules changed" with the pin unchanged. ADR-032 found
+> this false cause once already, from a different direction; it survives for the bytes that are
+> not in `rules/`, and fixing it is a change to what the stamp means rather than a fix.
+
 ### S31 — Partial supersession is lost by the decision index (P2)
 
 **Finding.** `loadDecisions` reads the status with `/^Status:\s*(.*)$/m`, which takes the first
@@ -824,6 +859,34 @@ lose their H1 as well, so a reader cannot tell where core ends and a profile beg
 
 **Accept.** A test parses the rendered region and asserts that heading levels never increase by
 more than one, and that every source has exactly one `##` heading.
+
+### S53 — `upgrade` blames the rules for a baseline body change (P2, decision)
+
+**Finding.** Not in this review. Found while removing the inert `[prettier]` block (S30),
+because deleting seven lines from a shipped baseline is the first change in this repository
+that moves bytes out of `src/` without moving the provenance digest.
+
+`provenanceDigest()` hashes `rules/` and `graph/` and deliberately excludes `src/`, so a
+baseline body — `EDITORCONFIG_BODY` and `GITATTRIBUTES_BODY` in `src/projection/baselines.mjs` —
+is content that leaves the package and is not in the stamp. ADR-032's stated test for the
+exclusion is that "a change that moves a consumer's projection" must move the stamp, and that
+is exactly what a baseline body is. Measured on a scratch repository: `check` reports
+`DRIFT .editorconfig` (it compares bytes, so it is right), and `upgrade` prints
+
+```
+pin     0cfea39f…6671 (unchanged)
+region restamped; the pin was already current (the rules changed)
+```
+
+with no rule changed anywhere.
+
+**Fix.** Amend ADR-032: the digest covers the *rendered* baseline bodies as content, by ADR-015's
+rule that a source is content rather than a location, rather than by adding `src/` and pulling
+every refactor into the stamp. `upgrade`'s wording is derived from the body diff rather than
+from the stamp, so a stamp that cannot see the change cannot produce a false cause.
+
+**Accept.** With only a baseline body changed, `upgrade` names the baseline and not the rules;
+a change to `src/` that touches no projected byte leaves every stamp where it was.
 
 ## 6. SIMT adoption
 
@@ -1273,9 +1336,9 @@ the day it was due. The criterion and the test are the same sentence, which is t
 the probe and the assertion could be compared at all.
 
 Wave 1's resolver rows (S02, S03, S04) are closed, and their exit criterion is only half of what
-the wave says. `compare` over fixtures and the estate is still untested, and no rule loading twice and
-no profile landing in the wrong ecosystem have not been asserted yet — those are S12, S28, S25, S26,
-S09, S06, S07, S32, S33, S34, S14, S45, and they are the remainder of the wave. What the three closed
+the wave says. `compare` over fixtures and the estate is still untested, and neither "no rule loads
+twice" nor "no profile lands in the wrong ecosystem" has been asserted across the whole wave —
+S31, S26, S09, S06, S32, S33, S34, S14 and S45 are what is left of it. What the closed
 rows did establish is the thing worth carrying into them: the resolver now has a gold corpus, so a
 change to how it ranks can be argued against measurements instead of examples. S04's own corpus case
 failed on first run against my expectation and the resolver turned out to be right, which is the
@@ -1301,7 +1364,7 @@ knowable. Every `ADR-` reference in this review therefore names a record you can
 | P6 | A package in a monorepo is a projection root | S41 | — |
 | P7 | Context has a budget: one copy per reader, scoped where a reader can scope | S38, S50 | **ADR-046** for S12 — one copy per reader, settled on the vendor fact rather than assumed |
 | P8 | Node floor `>=22.20.0` | S47 | plan 0002 "Runtime" line |
-| P9 | The editorconfig baseline carries only keys a reader honours | S30 | ADR-025 context and baseline content |
+| P9 | The editorconfig baseline carries only keys a reader honours | S30 | **ADR-048** for S30 — ruling 8 withdrawn; the survey S30 asked for says the second half is not taken |
 | amend ADR-018 | A foreign hook for an event simt-dev does not gate is chained, not replaced | S36 | ADR-018 |
 | amend ADR-019 | A declared command runs as `sh -c` | S17 (0001) | ADR-019 |
 | ADR-041 | The suite installs the package it tests, offline, so the package must install with no network | S20 | — |

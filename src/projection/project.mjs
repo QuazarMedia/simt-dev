@@ -103,6 +103,12 @@ async function targetFor(root, body, meta) {
     path,
     exists,
     action: result.action,
+    // The state the file was in, rather than the action taken on it. `upgrade` needs to
+    // know whether this repository ever had a region (ADR-049's sibling defect, filed as
+    // S26) and whether the change it is about to make is a change to the *rules* or only
+    // to the seam around them, and neither is readable off `action` or `previousBytes`.
+    region: result.region,
+    previousBody: result.previousBody,
     reason: result.reason,
     line: result.line,
     bytes: Buffer.byteLength(result.text),

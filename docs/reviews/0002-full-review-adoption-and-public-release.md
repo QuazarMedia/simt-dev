@@ -141,7 +141,7 @@ record is written.
 | S23 | simt-dev's own "gate copy is current" CI step cannot fail | P1 | F | ci | **yes (ADR-039)** | S10 | Complete | `97f8da7` |
 | S24 | `sync` writes without `--yes` | P1 | F | cli | **yes (ADR-036)** | S10 | Complete | `f5a626c` — **its premise named the wrong command**: `hooks install` also wrote by default, and is ADR-040 |
 | S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | **yes (ADR-045)** — the tracker said `no`, and that was wrong | — | Complete | `e780713` |
-| S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
+| S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | **yes (ADR-050)** | S10 | Complete | see §5 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `4c73025` |
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | **yes (ADR-047)** | S07 (done) | Complete | `0b01806` |
 | S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `1bbc36a` |
@@ -576,6 +576,40 @@ the body diff (S01): either "rules changed" or "stamp only".
 
 **Accept.** Workspace fixture: `upgrade --yes` leaves a region-less repo byte-identical and
 names it in the output.
+
+> **Resolved by ADR-050**, and the fix as specified does not work — which was visible only
+> after the estate's own version of the state was built rather than described. The remedy was
+> to guard on region state instead of bytes, and asking *"is every region absent?"*
+> reproduces the defect exactly: a repository reaches this state by adopting and then
+> replacing `AGENTS.md` by hand, so `.editorconfig` and `.gitattributes` still hold their
+> regions. A guard that sees two regions concludes the repository is adopted and writes one.
+> The question was never about all the files. It is about the **primary** document — which is
+> the rule `compare` already applies, and which `ADR-016`'s display-versus-gate ruling
+> already separated. Two commands answering "is this repository adopted?" differently is why
+> the defect was easy to write.
+>
+> The finding's second half is the same mistake one field over, and it was live rather than
+> theoretical. `ADR-037` made a correct body behind a wrong seam report as `updated` so that
+> `sync` would repair it — right, and it gave `action` a second meaning. `upgrade`'s entire
+> job is to say **why** a repository is behind, so reading `action !== 'unchanged'` as
+> evidence reports a formatting repair as a change of policy and sends the reader to diff
+> rules that did not move. Measured with the pin already current: a hand-edited body says
+> `the rules changed` and is right; a wrong seam says the same thing and is **false**.
+>
+> Two corrections to the finding, both measured. The remedy is `simt-dev sync --yes`, not
+> `simt-dev init` — `init` re-runs adoption, tags and branches, so the remedy would do more
+> than the command it is the remedy for; `compare` already names `sync --yes` here, and two
+> commands must not answer one question with different instructions. And the run exits
+> **non-zero**: a repository with a manifest and no region is a state `check` already refuses
+> (exit 1, `UNMANAGED AGENTS.md`, same remedy), so exiting 0 would be `ADR-023`'s failure in a
+> new place. The acceptance's byte-identity claim is asserted, and so is the exit code, so
+> the two commands cannot drift apart on it.
+>
+> Six mutations, each caught. Two are the finding and its tempting half-measure — falling
+> back to `previousBytes`, and guarding on every target — and **both pass the whole suite if
+> the fixture's `AGENTS.md` is absent rather than hand-written**. That is the shape the finding
+> describes and not the shape the defect has, which is why the fixture builds the estate's
+> version: adopt, then replace the file by hand.
 
 ### S27 — `skills install` creates a manifest with gates the repo cannot run (P1)
 
@@ -1393,7 +1427,7 @@ the probe and the assertion could be compared at all.
 Wave 1's resolver rows (S02, S03, S04) are closed, and their exit criterion is only half of what
 the wave says. `compare` over fixtures and the estate is still untested, and neither "no rule loads
 twice" nor "no profile lands in the wrong ecosystem" has been asserted across the whole wave —
-S26, S09, S06, S32, S33, S34, S14 and S45 are what is left of it. What the closed
+S09, S06, S32, S33, S34, S14 and S45 are what is left of it. What the closed
 rows did establish is the thing worth carrying into them: the resolver now has a gold corpus, so a
 change to how it ranks can be argued against measurements instead of examples. S04's own corpus case
 failed on first run against my expectation and the resolver turned out to be right, which is the

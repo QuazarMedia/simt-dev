@@ -57,6 +57,7 @@ record's status line — never by editing the ruling in place.
 | [047](ADR-047-a-profile-selects-on-what-a-repository-runs-on.md) | A profile selects on what a repository runs on, not on what it is written in | accepted · refines ADR-013 r1 |
 | [048](ADR-048-a-baseline-carries-only-keys-a-reader-honours.md) | A baseline carries only keys a reader honours | accepted · withdraws ADR-025 r8 |
 | [049](ADR-049-a-ruling-that-a-later-record-moved-says-so-where-it-is-printed.md) | A ruling that a later record moved says so where it is printed | accepted |
+| [050](ADR-050-a-byte-count-is-not-a-region-and-updated-is-not-a-change-of-rules.md) | A byte count is not a region, and `updated` is not a change of rules | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -311,6 +312,20 @@ ninth ruling is the mutation that earned its keep: dropping the ordinal from `**
 passes every test in the suite, because no record in the estate has both a word-numbered
 ruling and a partial supersession to catch it — the failure ADR-042 recorded, reproduced
 inside the fix for it.
+
+ADR-050 is the same habit in a command rather than a reader, and its finding named one line
+of code where the defect was two questions. `upgrade` decided a repository had no region by
+asking whether its `AGENTS.md` was empty, which a hand-written one never is — so a version
+bump wrote nine kilobytes of rules into a repository that had never asked for any. But the
+obvious repair, asking whether every *region* is absent, reproduces it exactly: the estate
+builds this state by adopting and then replacing `AGENTS.md` by hand, which leaves the
+baselines' regions in place, and a guard that sees two regions concludes the repository is
+adopted. The question was never about all the files. The second half is a trap of the same
+shape: ADR-037 made a correct body behind a wrong seam report as `updated` so that `sync`
+would repair it, which gave one field two meanings, and the command whose entire job is to
+say *why* a repository is behind was reporting a formatting repair as a change of policy.
+The reader is told to diff rules that did not move. Both are the same mistake: a field read
+for the thing it was not.
 
 ## The rule these records enforce
 

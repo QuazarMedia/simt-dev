@@ -25,7 +25,7 @@ import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, resolve } from 'node:path';
 
-import { fingerprint } from '../resolve/fingerprint.mjs';
+import { fingerprint, KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, frontmatterBlock, resolveSurfaces } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
@@ -99,15 +99,30 @@ export const LOCAL_PROFILE_DIR = '.simt-dev/profiles';
 const PROFILE_KEYS = new Set(['simt-id', 'simt-title', 'simt-applies', 'simt-fallback']);
 
 /** Report the first thing wrong with a profile's frontmatter, in the order a reader
- *  fixes it: no id to select it by, then a key that will not be read. */
+ *  fixes it: no id to select it by, then a key that will not be read, then a tag the
+ *  detector cannot emit.
+ *
+ *  The third check is the one a repo can get wrong by itself. A profile naming a tag
+ *  no repository emits selects on nothing and fails silently: it loads, it appears in
+ *  the region's source list, and it is never applied. `graph lint` checks the
+ *  registry's skills against the same derived vocabulary (ADR-013, Consequences), and
+ *  nothing checked the profiles until S28 changed six `simt-applies` lists with no
+ *  guard that any of them named a tag the engine could produce. */
 function describeDefect(meta) {
   if (meta['simt-id'] === undefined) return 'missing simt-id in frontmatter';
   const unknown = Object.keys(meta).find((k) => !PROFILE_KEYS.has(k));
-  if (unknown === undefined) return null;
-  const prefixed = `simt-${unknown.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
-  return PROFILE_KEYS.has(prefixed)
-    ? `key "${unknown}" is this tool's own, not the editor's; it is spelled "${prefixed}"`
-    : `unrecognised frontmatter key "${unknown}"; simt-dev's own keys are simt-id, simt-title, simt-applies, simt-fallback`;
+  if (unknown !== undefined) {
+    const prefixed = `simt-${unknown.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
+    return PROFILE_KEYS.has(prefixed)
+      ? `key "${unknown}" is this tool's own, not the editor's; it is spelled "${prefixed}"`
+      : `unrecognised frontmatter key "${unknown}"; simt-dev's own keys are simt-id, simt-title, simt-applies, simt-fallback`;
+  }
+  const applies = meta['simt-applies'];
+  if (!Array.isArray(applies)) return null;
+  const undeclared = applies.find((tag) => !KNOWN_TAGS.has(tag));
+  return undeclared === undefined
+    ? null
+    : `simt-applies names "${undeclared}", which fingerprint() never emits, so this profile could never be selected`;
 }
 
 /**

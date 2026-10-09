@@ -1,12 +1,18 @@
 ---
 simt-id: cloudflare-workers
 simt-title: Cloudflare Workers (TypeScript)
-simt-applies: [cloudflare-workers, hono, typescript]
+# What the repo runs on, not what it is written in. `typescript` was here and put
+# this profile on every TypeScript repository in the estate that had no more
+# specific one; `hono` was here too, and Hono runs on Node, Bun and Deno as
+# happily as on Workers. A wrangler config or the `wrangler` dependency is the
+# only evidence that this is a Worker (S28, ADR-047).
+simt-applies: [cloudflare-workers]
 ---
 
 # Stack profile: Cloudflare Workers (TypeScript)
 
-Applies to: `cloudflare-workers`, `hono`, `typescript`.
+Applies to: `cloudflare-workers` — a `wrangler.json`, `wrangler.jsonc` or
+`wrangler.toml`, or a `wrangler` dependency.
 
 ## Schema and config
 

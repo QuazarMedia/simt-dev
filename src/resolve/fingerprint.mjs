@@ -20,10 +20,15 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { matchesGlob } from './resolve.mjs';
+
 /** tag -> human-readable marker(s) that imply it. First match wins per tag. */
 const MARKERS = [
   ['connectiq', ['monkey.jungle', 'manifest.xml']],
-  ['cloudflare-workers', ['wrangler.jsonc', 'wrangler.toml']],
+  // `wrangler.json` was missing here, so a Worker configured with the plain JSON
+  // config and no `wrangler` dependency had no evidence of Workers at all - the
+  // profile stopped applying to it (S28).
+  ['cloudflare-workers', ['wrangler.json', 'wrangler.jsonc', 'wrangler.toml']],
   ['python', ['pyproject.toml', 'requirements.txt', 'setup.py']],
   ['gradle', ['build.gradle.kts', 'build.gradle', 'settings.gradle.kts']],
   ['node-web', ['vite.config.ts', 'vite.config.js', 'vite.config.mjs']],
@@ -41,6 +46,7 @@ const EXTENSION_TAGS = new Map([
   ['.mc', 'connectiq'],
   ['.kt', 'kotlin'],
   ['.kts', 'gradle'],
+  ['.java', 'java'],
   ['.ts', 'typescript'],
   ['.tsx', 'react'],
   ['.less', 'less'],
@@ -48,11 +54,19 @@ const EXTENSION_TAGS = new Map([
 
 const DEP_TAGS = new Map([
   ['react', 'react'],
-  ['react-dom', 'react'],
+  // `react-dom` is the renderer, so its presence is what says "a browser". Mapping it
+  // onto `react` was what let a React Native app and a React web app arrive with the
+  // same tag and receive the same profile (S28).
+  ['react-dom', 'react-dom'],
+  ['react-native', 'react-native'],
+  ['expo', 'react-native'],
   ['@react-router/dev', 'react-router'],
   ['firebase', 'firebase'],
   ['firebase-admin', 'firebase'],
   ['maplibre-gl', 'maplibre'],
+  // `hono` stays a tag: it is the discriminator between the API and the web half of a
+  // deployment, and nine registry skills name it. It stopped being *evidence of
+  // Workers* - that was a profile's choice, not the detector's (S28, ADR-013 r1).
   ['hono', 'hono'],
   ['wrangler', 'cloudflare-workers'],
   ['typescript', 'typescript'],
@@ -60,6 +74,24 @@ const DEP_TAGS = new Map([
   ['vitest', 'vitest'],
   ['playwright', 'playwright'],
 ]);
+
+/**
+ * How many directory levels below the root a `glob` fact may look, counted in
+ * directories descended.
+ *
+ * Three, and the reason is a convention rather than a preference: the Android Gradle
+ * Plugin puts a module's manifest at `<module>/src/main/AndroidManifest.xml`, and
+ * simt-app's sits at `app/src/main/AndroidManifest.xml`. A bound shallower than the
+ * convention makes `has-android-manifest` the shape S07 found - a fact no repository
+ * could ever have. Deeper would be a scan rather than a probe, and ADR-013's promise
+ * is that adding an ecosystem is data, so a fact must not cost a search.
+ *
+ * The extension sample below walks two, and that stays: it asks "is this repo
+ * written in Kotlin" over a sample, where a missing fourth level costs one more file
+ * at most, whereas a glob fact asserts a specific path exists and is wrong when it
+ * cannot see it.
+ */
+const GLOB_DEPTH = 3;
 
 /**
  * Observable properties of the working tree, named `has-*`.
@@ -71,8 +103,9 @@ const DEP_TAGS = new Map([
  * therefore it is a Django project", it belongs in a profile instead.
  *
  * kind 'file' and 'dir' probe the repository root; 'pkg' reads the parsed
- * manifest. `paths` is alternatives - first match wins and is reported as
- * evidence, so `doctor` can say which file proved the fact.
+ * manifest; `glob` walks at most `GLOB_DEPTH` directory levels looking for a shape.
+ * `paths` is alternatives - first match wins and is reported as evidence, so `doctor`
+ * can say which file proved the fact.
  *
  * A candidate is probed by its declared kind, so a `dir` may name a nested path.
  * A `file` candidate is matched against the root listing, which cannot see past
@@ -81,6 +114,12 @@ const DEP_TAGS = new Map([
  * was probed with `isFile` instead (S07) looked like a fact nobody's repo could
  * have: seven estate repositories have `.github/workflows/` and none of them
  * emitted `has-ci-workflows`.
+ *
+ * A `glob` candidate is the third kind, for the paths neither of the others can
+ * reach: it names a shape at an unknown depth, so it must contain a star-star and
+ * `test/genericity.test.mjs` fails if it does not. Evidence for a `glob` is the
+ * file that matched, never the pattern - `doctor` answers "why did you think
+ * that?", and a shape is not an answer.
  */
 const FACTS = [
   { name: 'has-pyproject', kind: 'file', paths: ['pyproject.toml'] },
@@ -122,6 +161,11 @@ const FACTS = [
   { name: 'has-license', kind: 'file', paths: ['LICENSE', 'LICENSE.md', 'LICENCE', 'COPYING'] },
   { name: 'has-readme', kind: 'file', paths: ['README.md', 'README.rst', 'README'] },
   { name: 'has-node-workspace', kind: 'file', paths: ['pnpm-workspace.yaml'] },
+  // The two facts below are what S28's profile split needs, and both name a shape at
+  // an unknown depth. `has-uv-lock` matches the root `uv.lock` too, because the
+  // star-star stands for zero directories as well as many.
+  { name: 'has-uv-lock', kind: 'glob', paths: ['**/uv.lock'] },
+  { name: 'has-android-manifest', kind: 'glob', paths: ['**/src/main/AndroidManifest.xml'] },
 ];
 
 /** Facts derived from the parsed manifest rather than from the file listing. */
@@ -173,6 +217,15 @@ export async function fingerprint(root) {
   // unparseable manifest yields a fact's absence, not a wrong answer.
   for (const fact of FACTS) {
     for (const candidate of fact.paths) {
+      if (fact.kind === 'glob') {
+        const hit = (await findNested(root, candidate))[0];
+        if (hit) {
+          facts.add(fact.name);
+          factEvidence[fact.name] ??= hit;
+          break;
+        }
+        continue;
+      }
       const present = fact.kind === 'file' ? names.has(candidate) : await isDir(join(root, candidate));
       if (present) {
         facts.add(fact.name);
@@ -263,12 +316,36 @@ async function isDir(path) {
   }
 }
 
-async function isFile(path) {
-  try {
-    return (await stat(path)).isFile();
-  } catch {
-    return false;
-  }
+/**
+ * The paths below `root` that match a shape, in sorted order, to `GLOB_DEPTH`.
+ *
+ * The matcher is the registry's, so a fact's shape and a skill's `path:` are one
+ * language rather than two - and a shape nobody can express as a glob fails here
+ * rather than being special-cased in the probe. Dot-directories and `node_modules`
+ * are skipped for the reason the extension sample skips them: detection is not a
+ * scan of vendored output.
+ */
+async function findNested(root, pattern) {
+  const found = [];
+  const walk = async (dir, prefix, depth) => {
+    let items;
+    try {
+      items = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const item of items) {
+      if (item.name.startsWith('.') || item.name === 'node_modules') continue;
+      const rel = prefix ? `${prefix}/${item.name}` : item.name;
+      if (item.isDirectory()) {
+        if (depth < GLOB_DEPTH) await walk(join(dir, item.name), rel, depth + 1);
+      } else if (matchesGlob(rel, pattern)) {
+        found.push(rel);
+      }
+    }
+  };
+  await walk(root, '', 0);
+  return found.sort();
 }
 
 async function sampleExtensions(root, entries, depth) {

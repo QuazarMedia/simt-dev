@@ -1,16 +1,17 @@
 ---
 simt-id: react-web
 simt-title: React web
-# Only browser-specific tags. typescript, vitest, node-web and less appear in
-# backend and static repos too, so listing them here made every Workers repo
-# receive the React profile. The node fallback covers plain TS/JS.
-simt-applies: [react, react-router, maplibre, firebase]
+# Browser evidence only, and the evidence is the renderer. `react` alone does not
+# distinguish a browser app from React Native or Expo — `react-dom` does — and
+# listing the bare language tags (`typescript`, `vitest`, `node-web`, `less`) put
+# this profile on backend and static repositories that share them (S28, ADR-047).
+simt-applies: [react-dom, react-router, maplibre, firebase]
 ---
 
 # Stack profile: React web
 
-Applies to: `react`, `react-router`, `node-web`, `maplibre`, `firebase`, `less`, `typescript`,
-`vitest`, `playwright`.
+Applies to: `react-dom`, `react-router`, `maplibre`, `firebase` — a repository whose
+UI is rendered in a browser.
 
 ## Types
 

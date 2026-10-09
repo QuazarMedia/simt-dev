@@ -129,7 +129,7 @@ record is written.
 | S11 | `slice-commit` rule can never be projected | P1 | F | rules | no | — | **Complete** | `5c079cd` |
 | S12 | Folding + per-rule surfaces load every process rule twice | P1 | F | surfaces | **yes (ADR-046, supersedes ADR-021 r3)** | — | Complete | `6b99add` |
 | S13 | `rules list/show/why` cannot see the `.mdc` rules | P2 | F | rules | no | — | Queued | re-verified |
-| S14 | Shipped text that fails "readable from the receiving repo" | P1 | F | content | no | — | Queued | re-verified, +1 |
+| S14 | Shipped text that fails "readable from the receiving repo" | P1 | F | content | no | — | Complete | `9b2c8a9` |
 | S15 | Help text and flags do not match the CLI | P2 | F | cli | no | S10 | Queued | re-verified |
 | S16 | Generated rule-file frontmatter never regenerates | P2 | F | projection | no | — | Queued | re-verified |
 | S17 | Declared gate commands split on whitespace | P2 | F | hooks | amend ADR-019 | — | Queued | re-verified |

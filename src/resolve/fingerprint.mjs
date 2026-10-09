@@ -18,6 +18,7 @@
 // returns on any host.
 
 import { readdir, readFile, stat } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 
 import { matchesGlob } from './resolve.mjs';
@@ -86,10 +87,14 @@ const DEP_TAGS = new Map([
  * could ever have. Deeper would be a scan rather than a probe, and ADR-013's promise
  * is that adding an ecosystem is data, so a fact must not cost a search.
  *
- * The extension sample below walks two, and that stays: it asks "is this repo
- * written in Kotlin" over a sample, where a missing fourth level costs one more file
- * at most, whereas a glob fact asserts a specific path exists and is wrong when it
- * cannot see it.
+ * The extension sample below reads tracked paths rather than a bounded number of
+ * directory levels, because depth was never the question. It asks "is this repo written
+ * in Kotlin", and a language's sources sit where its build system puts them —
+ * `app/src/main/kotlin/…` is already past two levels — so a walk bounded to two levels
+ * never reached a standard source set. The bound that replaced it is a count of paths,
+ * not a depth, and it is stated where it is enforced. A `glob` fact is different: it
+ * asserts that a specific path exists, and a fact that cannot see the path is wrong
+ * when the path is there.
  */
 const GLOB_DEPTH = 3;
 
@@ -238,9 +243,9 @@ export async function fingerprint(root) {
     }
   }
 
-  // Extensions: only the repository root and one level deep, so a monorepo with
-  // 4000 files does not turn detection into a scan (ADR: 0002 section 12.2).
-  const sampled = await sampleExtensions(root, entries, 2);
+  // Extensions. The bound, and why it is a count of paths rather than a depth, is
+  // on sampleExtensions.
+  const sampled = await sampleExtensions(root);
   for (const ext of sampled) {
     const tag = EXTENSION_TAGS.get(ext);
     if (tag) {
@@ -348,24 +353,145 @@ async function findNested(root, pattern) {
   return found.sort();
 }
 
-async function sampleExtensions(root, entries, depth) {
+/**
+ * Which extensions this repository is written in.
+ *
+ * Read from `git ls-files` where there is a repository, and by a bounded walk where
+ * there is not.
+ *
+ * The walk used to be two levels deep, on purpose, so a monorepo of thousands of files
+ * would not turn detection into a scan. The bound was the wrong shape. A language's
+ * sources sit where its build system puts them: `app/src/main/kotlin/a/b/C.kt` is six
+ * directories down, and the package segment after the source set has no maximum. A
+ * depth that reaches that file misses the same file one package deeper, which is why
+ * a depth-4 fallback cannot be the bound — the acceptance fixture is already past it.
+ * That is how a Gradle repository came to be tagged `gradle` and not `kotlin`: the
+ * sample stopped before the source set.
+ *
+ * `git ls-files --cached` is the question the sample was asking. It is the index, so an
+ * untracked file and a gitignored one are not evidence; it is every depth, because depth
+ * was never what was being asked; and the listing is sorted, so the first SAMPLE_BOUND
+ * paths are the same list on every machine. The process is stopped at that count.
+ * Buffering the whole listing and then discarding the tail is not a bound — a repository
+ * large enough to overflow the buffer would have been answered by the walk instead,
+ * which sees the files the index was asked about in order to ignore.
+ *
+ * Outside a repository there is no index. The walk is bounded by the same count, visits
+ * each directory's entries in sorted order, and skips the output directories a
+ * `.gitignore` would have skipped, because those are other people's bytes. A count gives
+ * up the tail of a tree past SAMPLE_BOUND files. A depth gives up the file the question
+ * was about.
+ */
+const SAMPLE_BOUND = 5000;
+
+/** Output directories. They are not an answer to "what is this written in". */
+const VENDORED = new Set(['node_modules', 'build', 'dist', 'out', 'target', 'vendor', 'coverage']);
+
+async function sampleExtensions(root) {
+  const fromGit = await extensionsFromGit(root);
+  // An empty index is an answer: `[]` is not `null`. Falling through on an empty list
+  // would count the untracked files the index was consulted in order to exclude.
+  if (fromGit !== null) return fromGit;
+  return extensionsByWalk(root);
+}
+
+/** The suffix that selects a language, or '' when the name has none. A leading dot is not one. */
+function extensionOf(name) {
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? name.slice(dot).toLowerCase() : '';
+}
+
+/**
+ * Extensions of the first SAMPLE_BOUND tracked paths under `root`.
+ * `null` when `root` is not a git work tree — the caller walks instead.
+ * @returns {Promise<string[]|null>}
+ */
+function extensionsFromGit(root) {
+  return new Promise((resolve) => {
+    // `-- .` keeps a fingerprint of a subdirectory from inheriting the rest of the
+    // repository. `--cached` so a file not yet added is not evidence.
+    const child = spawn('git', ['ls-files', '--cached', '-z', '--', '.'], {
+      cwd: root,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    const found = new Set();
+    let seen = 0;
+    let buf = Buffer.alloc(0);
+    let settled = false;
+    let failed = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    // True once the bound is reached, having not recorded the path that crossed it.
+    const consume = (path) => {
+      if (path === '') return false;
+      seen += 1;
+      if (seen > SAMPLE_BOUND) return true;
+      const ext = extensionOf(path.slice(path.lastIndexOf('/') + 1));
+      if (ext) found.add(ext);
+      return false;
+    };
+    child.on('error', () => {
+      failed = true;
+      finish(null);
+    });
+    child.stdout.on('data', (chunk) => {
+      if (settled) return;
+      buf = Buffer.concat([buf, chunk]);
+      let nul;
+      while ((nul = buf.indexOf(0)) !== -1) {
+        const path = buf.subarray(0, nul).toString('utf8');
+        buf = buf.subarray(nul + 1);
+        if (consume(path)) {
+          child.kill();
+          finish([...found]);
+          return;
+        }
+      }
+    });
+    child.on('close', (code) => {
+      if (settled) return;
+      // Non-zero is "not a repository" (or git is absent, which arrives as `error`
+      // first). Either way there is no index, and the walk answers instead.
+      if (failed || code !== 0) finish(null);
+      else finish([...found]);
+    });
+  });
+}
+
+/** The no-index half. Same count as the index, because the question is the same. */
+async function extensionsByWalk(root) {
   const found = new Set();
-  const walk = async (dir, level) => {
+  let seen = 0;
+  const walk = async (dir) => {
+    if (seen >= SAMPLE_BOUND) return;
     let items;
     try {
-      items = await readdir(dir);
+      items = await readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
+    // `readdir` order is the filesystem's. Sorting makes the first SAMPLE_BOUND files
+    // the same files on every machine.
+    items.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
     for (const item of items) {
-      if (item.startsWith('.') || item === 'node_modules') continue;
-      const full = join(dir, item);
-      const dot = item.lastIndexOf('.');
-      if (dot > 0) found.add(item.slice(dot).toLowerCase());
-      if (level < depth && (await isDir(full))) await walk(full, level + 1);
+      if (seen >= SAMPLE_BOUND) return;
+      if (item.name.startsWith('.') || VENDORED.has(item.name)) continue;
+      if (item.isDirectory()) {
+        await walk(join(dir, item.name));
+        continue;
+      }
+      // A symlink is not followed: a link back at an ancestor would otherwise cycle
+      // until the count ran out, and the count would then describe the cycle.
+      if (!item.isFile()) continue;
+      seen += 1;
+      const ext = extensionOf(item.name);
+      if (ext) found.add(ext);
     }
   };
-  await walk(root, 1);
+  await walk(root);
   return [...found];
 }
 
@@ -396,4 +522,4 @@ export const FACT_TAGS = new Set([...FACTS.map((f) => f.name), ...PKG_FACTS.map(
  */
 export const KNOWN_TAGS = new Set([...STACK_TAGS, ...FACT_TAGS]);
 
-export const __internals = { MARKERS, EXTENSION_TAGS, DEP_TAGS, FACTS, PKG_FACTS };
+export const __internals = { MARKERS, EXTENSION_TAGS, DEP_TAGS, FACTS, PKG_FACTS, SAMPLE_BOUND };

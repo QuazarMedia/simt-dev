@@ -216,12 +216,13 @@ const S28_ROWS = [
   {
     row: 'a Spring or Ktor backend on Gradle is a JVM, not Android',
     files: { 'build.gradle.kts': 'plugins { kotlin("jvm") }\n', 'src/main/kotlin/Api.kt': 'class Api\n' },
-    // `kotlin` is not in the expected stack: the extension sample walks two levels and
-    // `src/main/kotlin` is three down, so a Ktor backend is identified here by its
-    // build file. Asserting `kotlin` here would be asserting a sampling bound S28 does
-    // not change, and the row's claim - a Gradle build that is not an Android module -
-    // does not need it.
-    stack: ['gradle'],
+    // `kotlin` IS expected here, and used not to be. The comment this replaces read:
+    // "the extension sample walks two levels and `src/main/kotlin` is three down, so a
+    // Ktor backend is identified here by its build file" — a test that recorded a
+    // detection bound as though it were the correct answer, which is how S32's defect
+    // passed as a designed limitation. The bound is now a count rather than a depth, so
+    // the sample sees the file and this backend is identified by its language as well.
+    stack: ['gradle', 'kotlin'],
     profiles: ['core', 'jvm'],
   },
   {
@@ -288,6 +289,65 @@ test('a profile selects on what the repository runs on, not on what it is writte
       `${entry.row} selected the wrong profiles`,
     );
   }
+});
+
+test('sources in a standard Gradle layout are sampled at any depth', async () => {
+  // S32. `app/src/main/kotlin/a/b/C.kt` is six directories down. The sample used to
+  // stop at two, so this file emitted nothing and a Gradle backend was never `kotlin`.
+  const root = await fixture({ 'app/src/main/kotlin/a/b/C.kt': 'class C\n' });
+  const result = await fingerprint(root);
+  assert.ok(result.stack.includes('kotlin'), result.stack.join(','));
+});
+
+test('tracked sources are read from the index, and ignored or untracked ones are not', async () => {
+  // The walk would see every one of these files. The index is what makes the three
+  // answers different, so a fallback that runs whenever the index is empty would pass
+  // the first assertion and fail the other two — which is the bug the empty-array
+  // check exists to prevent.
+  const tracked = await fixture({ 'app/src/main/kotlin/a/b/C.kt': 'class C\n', 'README': 'x\n' });
+  await exec('git', ['init'], { cwd: tracked });
+  await exec('git', ['add', '-A'], { cwd: tracked });
+  assert.ok((await fingerprint(tracked)).stack.includes('kotlin'));
+
+  const java = join(tracked, 'src/main/java/com/example/App.java');
+  await mkdir(join(java, '..'), { recursive: true });
+  await writeFile(java, 'class App {}\n');
+  const dirty = await fingerprint(tracked);
+  assert.equal(dirty.stack.includes('java'), false, dirty.stack.join(','));
+
+  const ignored = await fixture({
+    'app/src/main/kotlin/a/b/C.kt': 'class C\n',
+    '.gitignore': '*.kt\n',
+    'README': 'x\n',
+  });
+  await exec('git', ['init'], { cwd: ignored });
+  await exec('git', ['add', '-A'], { cwd: ignored });
+  assert.equal((await fingerprint(ignored)).stack.includes('kotlin'), false);
+});
+
+test('the extension sample stops at its path bound', async () => {
+  // One file past the bound, sorted after the fillers, so removing the bound — or
+  // counting only names that have an extension — lets `z.kt` through. Both halves,
+  // because they each have their own loop and a test of one would leave the other free.
+  const bound = __internals.SAMPLE_BOUND;
+  const fillers = async (root) => {
+    const dir = join(root, 'm');
+    await mkdir(dir, { recursive: true });
+    await Promise.all(
+      Array.from({ length: bound }, (_, i) => writeFile(join(dir, `${String(i).padStart(5, '0')}.txt`), '')),
+    );
+    await writeFile(join(root, 'z.kt'), 'class Z\n');
+  };
+
+  const walked = await fixture();
+  await fillers(walked);
+  assert.equal((await fingerprint(walked)).stack.includes('kotlin'), false);
+
+  const indexed = await fixture();
+  await fillers(indexed);
+  await exec('git', ['init'], { cwd: indexed });
+  await exec('git', ['add', '-A'], { cwd: indexed });
+  assert.equal((await fingerprint(indexed)).stack.includes('kotlin'), false);
 });
 
 test('the react-web and react-native rows differ only by the renderer', async () => {

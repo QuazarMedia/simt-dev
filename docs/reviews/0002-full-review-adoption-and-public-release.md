@@ -146,7 +146,7 @@ record is written.
 | S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | **yes (ADR-047)** | S07 (done) | Complete | `0b01806` |
 | S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `1bbc36a` |
 | S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | **yes (ADR-048, withdraws ADR-025 r8)** | — | Complete | `81bb705` |
-| S31 | Partial supersession is lost by the decision index | P2 | F | decisions | **yes (ADR-049)** | S19 (the `**accepted**` half) | Complete | see §5 |
+| S31 | Partial supersession is lost by the decision index | P2 | F | decisions | **yes (ADR-049)** | S19 (the `**accepted**` half) | Complete | `7d9060d` |
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Queued | #6 |
 | S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Queued | #14 |
 | S34 | Folded rules break the heading hierarchy | P2 | F | projection | no | — | Queued | rendered regions |

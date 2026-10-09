@@ -1,7 +1,14 @@
 # ADR-021 — One surface per repo, chosen or defaulted
 
-Status: accepted · 2026-10-07
+Status: accepted · 2026-10-07 · ruling 3 superseded by ADR-046
 **Affects:** `simt-dev init`, `sync`, `check`, `compare`, `skills install`, `src/projection/surfaces.mjs`, `src/projection/rules.mjs`
+
+> **Ruling 3 superseded by ADR-046.** It rested on a factual claim about Cursor — that a Cursor
+> reader getting `.mdc` files "does not serve them", i.e. that Cursor cannot read `AGENTS.md` — and
+> Cursor's own documentation says it can. Five repositories were loading 28,101 bytes of rule text
+> twice. The claim had been sitting on the wrong row of simt-dev's own surface table all along.
+> Every other ruling here stands; ruling 6 in particular is what makes ADR-046's orphan handling a
+> note rather than a deletion.
 
 ## Context
 

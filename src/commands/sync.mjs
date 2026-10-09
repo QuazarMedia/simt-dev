@@ -25,7 +25,7 @@ import { manifestDrift, readManifest, unrunnableGates } from '../projection/mani
 import { readCapability } from '../hooks/capability.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 
-/** Pointer findings are reported but never fail the gate.
+/** Findings that are reported but never fail the gate.
  *
  *  A missing `CLAUDE.md` does not mean a broken repo: every editor that matters
  *  already reads `AGENTS.md`, and the pointer is a convenience that saves one
@@ -33,8 +33,16 @@ import { surfacesLine } from '../projection/surfaces.mjs';
  *  is the failure this whole gate exists to prevent. `pointer-blocked` — a real
  *  file sitting where the pointer wants to be — is reported loudly instead, with
  *  the byte count of what is in the way, because that one is a decision somebody
- *  has to make. */
-const NON_BLOCKING = new Set(['pointer-drift']);
+ *  has to make.
+ *
+ *  `orphaned` is here for the same reason and a stronger one. A generated rule file
+ *  whose surface now folds the rule into `AGENTS.md` cannot be repaired by any
+ *  command: `sync` will not write it again, and ADR-021 ruling 6 forbids deleting
+ *  it. Blocking on it would put every commit in every migrated repo behind a file
+ *  only a human may remove, which is a gate nothing can satisfy and therefore worse
+ *  than a gate that is merely noisy. It is reported, with the delete command in the
+ *  remedy, and it does not fail. */
+const NON_BLOCKING = new Set(['pointer-drift', 'orphaned']);
 
 export async function syncCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();

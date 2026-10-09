@@ -16,7 +16,7 @@
 // same matcher, so supporting an ecosystem nobody here has heard of requires no
 // code change and no release.
 
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { baselineTargets, misplaced } from './baselines.mjs';
@@ -26,7 +26,7 @@ import { checkTsconfig } from '../tsconfig.mjs';
 import { checkToolchain } from '../toolchain.mjs';
 import { diff, parse, inject, BEGIN, END } from './markers.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
-import { resolveSurfaces, SURFACE_IDS } from './surfaces.mjs';
+import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
 import { pointerState, pointerTargets, ruleTargets } from './targets.mjs';
 import {
   desiredRegion,
@@ -285,6 +285,18 @@ export async function checkTargets(root, flags = {}) {
     if (off) findings.push({ file: t.file, status: 'misplaced', ...off });
   }
 
+  // Managed rule files this run would NOT write, found by scanning the rule
+  // directories rather than by planning them. Without this, narrowing a surface's
+  // output makes the files it already wrote invisible: measured on the estate, 17
+  // files across five repos that carry a simt-dev region and were counted as stale
+  // the moment the skip landed. A tool that stops looking at a file it generated has
+  // not cleaned up - it has lost track of it.
+  //
+  // Reported as `orphaned`, never `drift`. ADR-021 ruling 6: `sync` does not delete a
+  // file it once generated, so there is nothing for the reader to repair and a
+  // `run: simt-dev sync --yes` remedy would be a lie. Removal is a human decision.
+  findings.push(...(await orphanedRuleFiles(root, resolved)));
+
   // Pointers are checked last and never block. A missing or misaimed `CLAUDE.md`
   // is a smaller problem than a red gate on every commit: the editors that matter
   // already read AGENTS.md, and the pointer is a convenience. Reporting it as a
@@ -312,6 +324,55 @@ export async function checkTargets(root, flags = {}) {
   }
 
   return findings;
+}
+
+/**
+ * Rule files carrying a simt-dev region that this run would not write.
+ *
+ * "Would not write" rather than "is not wanted": a repo that never adopted these
+ * surfaces has its own hand-written `.mdc` files, and those carry no region, so they
+ * are not ours to report. Only a file simt-dev generated qualifies.
+ */
+async function orphanedRuleFiles(root, resolved) {
+  const out = [];
+  if (!foldsRules(resolved)) return out;
+  const seen = new Set();
+  // Every surface that reads the primary, whether or not it is selected now.
+  // A file becomes orphaned precisely when the repo stops asking for the surface
+  // that used to write it, so restricting this to the SELECTED set finds nothing:
+  // the one repo that needs the note is the one that dropped the surface. Measured,
+  // that was every surface in the estate after the change.
+  for (const s of SURFACES.filter((x) => x.readsPrimary === true && x.rule)) {
+    const dir = s.rule.slice(0, s.rule.lastIndexOf('/'));
+    if (seen.has(dir)) continue;
+    seen.add(dir);
+    let entries;
+    try {
+      entries = await readdir(join(root, dir));
+    } catch {
+      continue;
+    }
+    for (const name of entries.sort()) {
+      const rel = `${dir}/${name}`;
+      let text;
+      try {
+        text = await readFile(join(root, rel), 'utf8');
+      } catch {
+        continue;
+      }
+      // Only a file this tool wrote. `parse` reports `absent` for anything without the
+      // marker, which is precisely the hand-written case that must stay untouched.
+      if (parse(text).status === 'absent') continue;
+      out.push({
+        file: rel,
+        surface: s.id,
+        status: 'orphaned',
+        detail: `${s.label} reads AGENTS.md, where this rule is already folded; this file repeats it`,
+        remedy: `delete ${rel}; simt-dev will not remove a file it wrote`,
+      });
+    }
+  }
+  return out;
 }
 
 export async function checkTarget(root, flags = {}) {

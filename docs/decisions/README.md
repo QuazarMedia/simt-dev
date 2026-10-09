@@ -53,6 +53,7 @@ record's status line — never by editing the ruling in place.
 | [043](ADR-043-a-keyword-is-a-phrase-and-two-letters-is-a-word.md) | A keyword is a phrase, and two letters is a word | accepted |
 | [044](ADR-044-compatibility-is-not-evidence.md) | Compatibility is not evidence, and a resolver nobody measured is merely felt | accepted |
 | [045](ADR-045-a-dashboard-that-counts-a-defect.md) | A dashboard that counts a defect and will not name it is worse than one that does not count it | accepted |
+| [046](ADR-046-one-rule-one-copy.md) | One rule, one copy: a reader that reads AGENTS.md must not also get the file | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -240,6 +241,26 @@ remember: reverting the third of three commands to its own older copy of the rul
 because nothing checked the set. ADR-035 said a promise about a set of commands holds only while
 something checks the set; that sentence was written about seven writers and turned out to be about
 three readers too.
+
+ADR-046 is the third of these records to be settled by running the command against the estate
+rather than by reading the code, and the first to overturn an earlier ruling on a fact about a
+vendor. ADR-021 decided that a Cursor reader could not be reached through `AGENTS.md` — so a repo on
+`opencode,cursor` was given the same three rules twice, once folded and once in `.mdc`, across five
+repositories and 28 KB. Cursor's documentation says plainly that it reads `AGENTS.md`. The claim was
+false when written, and it was false in a way simt-dev's own surface table already contradicted: the
+`readers` line on the opencode row names Cursor as reading `AGENTS.md` natively. A decision that
+depends on a fact should be checked against the file that records facts, and here that file was one
+row away.
+
+Its more useful lesson is the one that cost the most. The first version of the change made the
+estate go *quiet*: `staleRuleFiles` fell from 17 to 0 and every one of those files was still on
+disk, still being read twice. Then the fix for that scanned the wrong set and reported nothing at
+all, because a file becomes orphaned exactly when a repo drops the surface that wrote it. Both were
+found by running `compare` over sixteen repositories, not by reading the code. The flip side is worse:
+three of six mutations passed all 627 tests, including the one that would have made a gate nothing
+can satisfy — a file simt-dev will never write again and may never delete. A feature whose failure
+mode is "the tool silently stops looking at something it wrote" needs a negative control, because
+the broken version returns an empty list and passes every positive test.
 
 ## The rule these records enforce
 

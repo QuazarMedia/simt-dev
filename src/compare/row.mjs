@@ -107,9 +107,14 @@ export async function buildRow(path, context) {
     regionDetail: region.detail ?? null,
     surfaces: manifest.manifest?.surfaces ?? null,
     ruleFiles: {
-      total: ruleFindings.length,
+      total: ruleFindings.filter((f) => f.status !== 'orphaned').length,
       current: ruleFindings.filter((f) => f.status === 'current').length,
-      stale: ruleFindings.filter((f) => f.status !== 'current').map((f) => f.file),
+      stale: ruleFindings.filter((f) => f.status !== 'current' && f.status !== 'orphaned').map((f) => f.file),
+      // Managed rule files this run would not write, counted apart from the rule files.
+      // They are a different kind of thing: `sync` cannot repair them and would never
+      // write them again, so they are a note with a remedy and not a problem
+      // (ADR-021 ruling 6).
+      orphaned: ruleFindings.filter((f) => f.status === 'orphaned').map((f) => f.file),
     },
     pointers: pointers.map((p) => ({ file: p.file, state: p.status })),
     hooksRouted: hooks.routed,
@@ -129,6 +134,12 @@ export async function buildRow(path, context) {
   // adopted has no rule files at all, and reporting them as "not current" turns the
   // normal mid-migration state into a red estate — the same mistake ADR-018 records
   // for hooks, where an unadopted repo's own hooks are a note rather than a problem.
+  if (row.ruleFiles.orphaned.length > 0) {
+    notes.push(
+      `${row.ruleFiles.orphaned.length} generated rule file(s) repeat text already folded into AGENTS.md (${row.ruleFiles.orphaned.join(', ')}); delete them, or the reader loads the rule twice. simt-dev will not remove a file it wrote.`,
+    );
+  }
+
   if (adoption === 'adopted' && row.ruleFiles.stale.length > 0) {
     problems.push(
       `${row.ruleFiles.stale.length} of ${row.ruleFiles.total} rule files are not current (${row.ruleFiles.stale.join(', ')}); run: simt-dev sync --yes`,

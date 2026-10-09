@@ -21,6 +21,39 @@ const W = {
 };
 
 /**
+ * The least score that may select a skill. Set to `capability` on purpose: below that,
+ * the only signals available are `summary` at 8 and `stack` at 15, and neither is
+ * evidence that the skill is about the task. Compatibility is a precondition - the gate
+ * already ran - so a score made only of compatibility is not a weak match, it is no
+ * match, and reporting it as one fills the budget with bodies nobody asked for.
+ */
+export const MIN_SCORE = W.capability;
+
+/**
+ * English function words, which appear in every summary this registry has and identify
+ * none of them.
+ *
+ * Applied to the summary signal ONLY. A keyword is an explicit declaration and a name is
+ * an identity, so suppressing those would hide something a person wrote on purpose;
+ * a summary is prose, and prose is full of words that are there for grammar. Measured:
+ * the task "fix a typo in the README" selected four skills on `summary:the` and
+ * `summary:in` alone. Hand-authored rather than derived, for the same reason the
+ * capability aliases are: a resolver nobody can review is not a resolver.
+ */
+const STOPWORDS = new Set([
+  'about', 'after', 'all', 'also', 'and', 'an', 'any', 'are', 'as', 'at', 'be', 'because',
+  'been', 'before', 'being', 'both', 'but', 'by', 'can', 'could', 'did', 'do', 'does', 'each',
+  'for', 'from', 'had', 'has', 'have', 'he', 'her', 'here', 'his', 'how', 'if', 'in', 'into',
+  'is', 'it', 'its', 'just', 'like', 'make', 'many', 'may', 'me', 'more', 'most', 'must', 'my',
+  'no', 'not', 'now', 'of', 'off', 'on', 'one', 'only', 'onto', 'or', 'other', 'our', 'out',
+  'over', 'own', 'per', 'same', 'see', 'set', 'she', 'should', 'so', 'some', 'such', 'than',
+  'that', 'the', 'their', 'them', 'then', 'there', 'these', 'they', 'this', 'those', 'to', 'too',
+  'two', 'under', 'up', 'us', 'use', 'used', 'using', 'very', 'was', 'way', 'we', 'were', 'what',
+  'when', 'where', 'which', 'while', 'who', 'why', 'will', 'with', 'within', 'without', 'would',
+  'you', 'your',
+]);
+
+/**
  * Split a task string into comparable tokens.
  *
  * Length 2 is kept. The floor used to be 3, and it dropped the most specific words in
@@ -96,12 +129,12 @@ export function scoreSkill(skill, context) {
   const { repoStack = [], taskTokens = [], paths = [] } = context;
   const repo = new Set(repoStack);
   const reasons = [];
-  let score = 0;
+  let evidence = 0;
 
   // --- path signal: strongest, because the diff is ground truth ----------------
   for (const glob of skill.paths ?? []) {
     if (paths.some((p) => matchesGlob(p, glob))) {
-      score += W.path;
+      evidence += W.path;
       reasons.push(`path:${glob}`);
       break;
     }
@@ -116,7 +149,7 @@ export function scoreSkill(skill, context) {
   }
   for (const cap of skill.capabilities ?? []) {
     if (wanted.has(cap)) {
-      score += W.capability;
+      evidence += W.capability;
       reasons.push(`capability:${cap}`);
     }
   }
@@ -130,28 +163,29 @@ export function scoreSkill(skill, context) {
   const nameWords = new Set(tokenize(skill.name));
   for (const keyword of keywords) {
     if (hasPhrase(taskTokens, tokenize(keyword))) {
-      score += W.keyword;
+      evidence += W.keyword;
       reasons.push(`keyword:${keyword}`);
     }
   }
   for (const token of taskTokens) {
     if (nameWords.has(token)) {
-      score += W.name;
+      evidence += W.name;
       reasons.push(`name:${token}`);
-    } else if (summaryWords.has(token)) {
-      score += W.summary;
+    } else if (summaryWords.has(token) && !STOPWORDS.has(token)) {
+      evidence += W.summary;
       reasons.push(`summary:${token}`);
     }
   }
 
   // --- stack signal -----------------------------------------------------------
   const overlap = (skill.stack ?? []).filter((tag) => repo.has(tag));
-  if (overlap.length > 0) {
-    score += W.stack * Math.min(overlap.length, 3);
-    reasons.push(`stack:${overlap.join('+')}`);
-  }
+  const stackScore = overlap.length > 0 ? W.stack * Math.min(overlap.length, 3) : 0;
+  if (stackScore > 0) reasons.push(`stack:${overlap.join('+')}`);
 
-  return { score, reasons };
+  // `evidence` is the score without the stack contribution. Carrying both is what lets
+  // the selection rule exclude stack from its own threshold: with two overlapping tags,
+  // stack alone is 30, which clears a threshold of 25 on a skill the task never named.
+  return { score: evidence + stackScore, evidence, reasons };
 }
 
 /**
@@ -269,6 +303,31 @@ export function syntheticPathFor(glob) {
 }
 
 /**
+ * Whether a score may select, or the reason it may not.
+ *
+ * One place, because three commands answer this question and the S10 contract table
+ * cannot assert a rule that three files each hold a copy of. `null` means select.
+ *
+ * Both halves are needed and neither is sufficient alone. `stack` is 15 per tag, so a
+ * repo matching three of a skill's tags scores 45 with nothing said about the task -
+ * a score threshold alone does not exclude it. Conversely the two-letter tokens S03
+ * restored put stopwords into the summary signal, and a substance rule alone would let
+ * `summary:the` through. Stack is a precondition, not evidence: the gate has already
+ * asked it, and asking twice is how "compatible" came to mean "relevant".
+ */
+export function selectionVerdict(evidence, reasons) {
+  if (reasons.length === 0) return 'no matching signal';
+  const nonStack = reasons.filter((r) => !r.startsWith('stack:'));
+  if (nonStack.length === 0) {
+    return 'matches this repo by stack alone, which is compatibility, not evidence about the task';
+  }
+  if (evidence < MIN_SCORE) {
+    return `only ${nonStack.join(' ')}, which scores ${evidence}; ${MIN_SCORE} is the least score that selects`;
+  }
+  return null;
+}
+
+/**
  * Rank skills for a task. Returns only skills that scored above zero or were
  * forced, sorted by score then name so the order is total and stable.
  *
@@ -286,13 +345,14 @@ export function rankSkills(skills, context, { forced = [] } = {}) {
       excluded.push({ skill, reason: stackReason(skill, context.repoStack) });
       continue;
     }
-    const { score, reasons } = scoreSkill(skill, context);
+    const { score, evidence, reasons } = scoreSkill(skill, context);
     if (isForced) {
       selected.push({ skill, score: Infinity, reasons: ['forced'] });
       continue;
     }
-    if (score === 0) {
-      excluded.push({ skill, reason: 'no matching signal' });
+    const verdict = selectionVerdict(evidence, reasons);
+    if (verdict !== null) {
+      excluded.push({ skill, reason: verdict });
       continue;
     }
     selected.push({ skill, score, reasons });

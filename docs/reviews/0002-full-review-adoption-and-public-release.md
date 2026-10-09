@@ -119,7 +119,7 @@ record is written.
 | S01 | Provenance stamp came from the consumer's git, not simt-dev | P0 | F | projection | yes (P1) | — | Complete | ADR-032; `provenanceDigest()` |
 | S02 | Leading `**/` path globs never match | P0 | F | resolve | **yes (ADR-042)** | S47 (optional) | Complete | `08df13e` |
 | S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | **yes (ADR-043)** | — | Complete | `ba27562` |
-| S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | yes | S02, S03 | Queued | #14 |
+| S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | **yes (ADR-044)** | S02, S03 | Complete | `PENDING` |
 | S05 | MCP `rules_why` crashes on every call | P0 | F | mcp | no | — | Complete | `1791a95` (review 0001 #15) |
 | S06 | MCP and CLI disagree; the closure ignores the budget | P1 | F | mcp, resolve | no | S05 | Queued | #14, code |
 | S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Queued | #6 |
@@ -176,7 +176,7 @@ record is written.
 | S01 | open, and visible estate-wide | **now Complete** — ADR-032 replaced the git stamp with `provenanceDigest()`; the `sync` half below still stands |
 | S02 | **Complete** — ADR-042 | 13 of 65 globs matched nothing and `graph lint` could not see it; fixed by translating segment by segment, and lint now rejects a glob that matches no path built from itself. The brace and `?` forms named below are still unsupported, by decision: the registry declares neither |
 | S03 | **Complete** — ADR-043 | `tokenize` kept length 3, so `d1`, `r2`, `kv` and `ci` were dropped, and keywords matched token by token so `durable object` could never match. Both acceptance commands now print the `keyword:` reason, asserted against the shipped binary |
-| S04 | open, extended | a stopword selects (below) — and it already did before S03: `the` selected 11 skills at the old floor, `and` 29. S03 adds six more offenders, not the problem |
+| S04 | **Complete** — ADR-044 | Stack is 15 a tag and any score above 0 selected, so a repo matching three tags reached 45 having said nothing about the task; `summary` is 8 and cleared a bar of 0. Now: evidence excludes stack, the bar is 25, stopwords are suppressed in the summary signal only, and the gold corpus plan 0002 §9 claims exists |
 | S05 | **Complete** | `1791a95` — all three call shapes crashed, not two; `tools.mjs:316` destructured an array |
 | S06 | open, extended | the closure runs before the budget (below) |
 | S07 | open | a fixture with all six slash-path facts emits only `has-tests-dir` (`fingerprint.mjs:168-173`) |
@@ -191,7 +191,7 @@ record is written.
 | S16 | open | `targets.mjs:52` |
 | S17 | open | `hooks/resolve.mjs:98` |
 | S18 | open, +3 | below |
-| S19 | partly done | the `AGENTS.md` contradiction was fixed in `fd37ab5`; the rest stands (below) |
+| S19 | partly done | the `AGENTS.md` contradiction was fixed in `fd37ab5`; plan 0002 §9 lists `skills eval` and §11 step 5 is marked done — the corpus now exists (`test/fixtures/eval-corpus.json`), the command does not |
 | S20 | pack-install half done | `test/pack.test.mjs` packs, installs `--offline` and drives the installed binary; the `format:check` half is blocked (ADR-041 ruling four). `test/mcp.test.mjs` still calls 3 of the 10 tools |
 | S21 | open | the same items at `hooks/resolve.mjs:17,24,28,32`, `commands/index.mjs:37,131`, `skills.mjs:21`, `graph/load.mjs:482`, `targets.mjs:163` |
 | S22 | open | `near.mjs` substring match, `conflicts.mjs:22,25` |
@@ -253,6 +253,27 @@ tiebreaker".
 > It also settles the order of work: the fix is the stopword list and the minimum score named above.
 > Restoring the tokenizer floor to 3 would silence this row and make `d1` unselectable again, which
 > is the defect S03 was filed to end.
+
+> **Resolution.** Closed as ADR-044, and both halves of the fix above are in it. One of them is
+> missing from the fix as written, and finding it out is most of what the slice was. A threshold of 25
+> does not exclude a stack-only selection, because stack is 15 a tag and a repo matching three of a
+> skill's tags scores 45 on its own. The threshold has to be applied to the score **without** the stack
+> contribution, and the score therefore has to carry both. That is the whole content of "stack is a
+> tiebreaker": not a lower weight, but a signal excluded from its own threshold.
+>
+> The second finding belongs to the plan rather than to this row. Plan 0002 §9 lists
+> `simt skills eval` as a command and §11 step 5 is marked **done** with the note "`eval` corpus
+> passes; every selection traceable". There was no command and no corpus — this slice had nothing to
+> run against but examples, and the two acceptance cases below had never been asserted at all. The
+> corpus is now `test/fixtures/eval-corpus.json`, ten cases over four ecosystems, run by
+> `test/eval.test.mjs`, which computes precision and recall rather than asserting that a chosen list is
+> the chosen list. It deliberately sits under `test/` and not beside the registry: `provenanceDigest()`
+> walks `rules/` and `graph/`, so a corpus file there would stamp every consumer repository.
+>
+> The **command** is still owed and is not built. Plan §9's list is a plan, and a command is a product
+> surface with its own flags, JSON contract and help text; the defect was in the plan's claim, not in
+> the tool's. Whoever builds it should read `test/fixtures/eval-corpus.json` rather than write a second
+> corpus. See also S19, which owns plan accuracy.
 
 **S06.** Both budget loops also inline the `requires` closure of a parent that was itself
 deferred. `closure()` runs before the budget (`skills.mjs:266`, `tools.mjs:127`), and `isDep`
@@ -1156,6 +1177,15 @@ lands with S01. Wave 0's exit criterion is now asserted in CI by `test/pack.test
 two rounds to get there, because probing it by hand is what found `hooks install` (ADR-040) on
 the day it was due. The criterion and the test are the same sentence, which is the only reason
 the probe and the assertion could be compared at all.
+
+Wave 1's resolver rows (S02, S03, S04) are closed, and their exit criterion is only half of what
+the wave says. `compare` over fixtures and the estate is still untested, and no rule loading twice and
+no profile landing in the wrong ecosystem have not been asserted yet — those are S12, S28, S25, S26,
+S09, S06, S07, S32, S33, S34, S14, S45, and they are the remainder of the wave. What the three closed
+rows did establish is the thing worth carrying into them: the resolver now has a gold corpus, so a
+change to how it ranks can be argued against measurements instead of examples. S04's own corpus case
+failed on first run against my expectation and the resolver turned out to be right, which is the
+argument for having one.
 
 ## 10. Decisions this review needs
 

@@ -51,6 +51,7 @@ record's status line — never by editing the ruling in place.
 | [041](ADR-041-the-suite-installs-the-package-in-order-to-test-it.md) | The suite installs the package in order to test it | accepted |
 | [042](ADR-042-a-declared-glob-must-match-a-path-built-from-it.md) | A declared glob must match a path built from it | accepted |
 | [043](ADR-043-a-keyword-is-a-phrase-and-two-letters-is-a-word.md) | A keyword is a phrase, and two letters is a word | accepted |
+| [044](ADR-044-compatibility-is-not-evidence.md) | Compatibility is not evidence, and a resolver nobody measured is merely felt | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -221,6 +222,23 @@ inversion, in the same file, one field over. It also records what the fix costs,
 cost something: six two-letter stopwords now reach the summary signal, while `the` already selected
 eleven skills before the change. The honest reading is that S04's threshold was too low all along,
 and hiding that by putting the floor back to 3 would make `d1` disappear again.
+
+ADR-044 is what came after the two above, and it is the first of the three that is about the shape of
+an argument rather than about a broken value. The resolver asked two questions of a skill — *is this
+compatible with my repo* and *is this about my task* — and scored them into one number. The gate had
+already answered the first, so a skill matching three stack tags reached 45 points having said nothing
+about the task, and any score above zero selected. Meanwhile a shared word of English was worth 8 and
+cleared the bar, so a brief for "fix a typo in the README" filled a 20 KB budget with launch galaxies.
+The rule it lands on is one sentence: compatibility is a precondition, not evidence, and a
+precondition must not be counted twice. It also carries the first gold corpus, because plan 0002 has
+claimed an `eval` corpus since before this file existed and every ranking change until now was argued
+from examples. The corpus immediately earned its keep by failing a case where the resolver was right and
+the author was wrong — two skills written into a rejection list both declare the `contract`
+capability, and a hand-authored gold set is an opinion written down. Its fourth mutation is the one to
+remember: reverting the third of three commands to its own older copy of the rule passed all 621 tests,
+because nothing checked the set. ADR-035 said a promise about a set of commands holds only while
+something checks the set; that sentence was written about seven writers and turned out to be about
+three readers too.
 
 ## The rule these records enforce
 

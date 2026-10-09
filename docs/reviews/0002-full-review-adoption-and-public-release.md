@@ -121,7 +121,7 @@ record is written.
 | S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | **yes (ADR-043)** | — | Complete | `ba27562` |
 | S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | **yes (ADR-044)** | S02, S03 | Complete | `253d819` (the `skills eval` command it implies is still owed, see §4) |
 | S05 | MCP `rules_why` crashes on every call | P0 | F | mcp | no | — | Complete | `1791a95` (review 0001 #15) |
-| S06 | MCP and CLI disagree; the closure ignores the budget | P1 | F | mcp, resolve | **yes (ADR-052)** | S05 | Complete | see §4 |
+| S06 | MCP and CLI disagree; the closure ignores the budget | P1 | F | mcp, resolve | **yes (ADR-052)** | S05 | Complete | `75e93fe` |
 | S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Complete | `71af872` |
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | F | hooks | **yes (ADR-034)** | — | Complete | `e3566dc` |
 | S09 | `sync`/`init` crash on a mispointed pointer, and `check` passes it | P1 | F | projection | **yes (ADR-051)** | S10 | Complete | `9357f10` |

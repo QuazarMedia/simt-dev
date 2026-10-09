@@ -226,6 +226,26 @@ function agreedSubstitution(surfaces, key) {
   return values[0];
 }
 
+/**
+ * The values renderMdc receives for one rule: what the repo declared, plus a
+ * surface-named value used only when every selected surface names the same one.
+ *
+ * The body is written once and shared by every selected surface, so one harness's
+ * tool name must not be what another harness reads. `ruleBodies` (the writer) and
+ * `checkTargets` (the gate) both go through this, so they cannot disagree about what
+ * the body should contain — that divergence made `check` report drift on a tree
+ * `init` had just written, once a surface named a substitution (S45's askTool).
+ */
+export function ruleValues(rule, declared, surfaces) {
+  const values = { ...declared };
+  for (const sub of rule.substitutions) {
+    if (Object.prototype.hasOwnProperty.call(values, sub.key)) continue;
+    const agreed = agreedSubstitution(surfaces, sub.key);
+    if (agreed !== null) values[sub.key] = agreed;
+  }
+  return values;
+}
+
 async function ruleBodies(root, manifest, flags) {
   const problems = [];
   const notes = [];
@@ -281,16 +301,10 @@ async function ruleBodies(root, manifest, flags) {
       skipped.push(rule.id);
       continue;
     }
-    const values = { ...(declared.values[rule.id] ?? {}) };
-    // A surface may name a substitution. It is used only when every selected
-    // surface names the same value: the body below is written once and shared,
-    // so one harness's tool name must not be what another harness reads.
-    for (const sub of rule.substitutions) {
-      if (Object.prototype.hasOwnProperty.call(values, sub.key)) continue;
-      const agreed = agreedSubstitution(resolved.surfaces, sub.key);
-      if (agreed !== null) values[sub.key] = agreed;
-    }
-    const { body, problems: renderProblems } = renderMdc(rule, values);
+    const { body, problems: renderProblems } = renderMdc(
+      rule,
+      ruleValues(rule, declared.values[rule.id] ?? {}, resolved.surfaces),
+    );
     for (const p of renderProblems) problems.push(`${rule.file}: ${p}`);
     if (renderProblems.length > 0) continue;
 

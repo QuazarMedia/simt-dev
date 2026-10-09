@@ -36,6 +36,7 @@ import {
   LOCAL_PROFILE_DIR,
   mdcTargets,
   readDeclared,
+  ruleValues,
   render,
   ROOT,
   select,
@@ -196,7 +197,13 @@ export async function checkTargets(root, flags = {}) {
       });
       continue;
     }
-    const { body, problems } = renderMdc(rule, declared.values[rule.id] ?? {});
+    // The writer's own construction, not a second one: a body rendered without the
+    // surface-agreed substitutions would make `check` report drift on a tree that
+    // `init` just wrote (S45's askTool).
+    const { body, problems } = renderMdc(
+      rule,
+      ruleValues(rule, declared.values[rule.id] ?? {}, resolved.surfaces),
+    );
     if (problems.length > 0) {
       findings.push({
         file: rule.target,

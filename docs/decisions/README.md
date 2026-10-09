@@ -49,6 +49,7 @@ record's status line — never by editing the ruling in place.
 | [039](ADR-039-a-ci-step-runs-a-form-that-can-fail.md) | A gate a CI step runs must have a form that can fail, and a refusal is a failure | accepted |
 | [040](ADR-040-the-last-writer-that-wrote-by-default-was-not-the-one-named.md) | The last writer writing by default was not the one the finding named | accepted |
 | [041](ADR-041-the-suite-installs-the-package-in-order-to-test-it.md) | The suite installs the package in order to test it | accepted |
+| [042](ADR-042-a-declared-glob-must-match-a-path-built-from-it.md) | A declared glob must match a path built from it | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -193,6 +194,18 @@ from a passing one. The same constraint is why one thing that test cannot assert
 open instead of worked around: there is no formatter to run over the output, so S29's second
 acceptance half stays pending and the seam it would have caught is asserted structurally in
 `markers.test.mjs` instead.
+
+ADR-042 is the smallest instance of the same habit: a declared value nobody ever executes. 13 of the
+registry's 65 path globs began with a double star, which compiled to an invalid regex that a `catch`
+turned into `false`, so the heaviest signal the resolver has was silently dropped for every skill
+that used one. The lint rule that keeps the registry honest asked only whether `paths` was *present* —
+the same question, in the same file, that `checkStack` had already answered for stack tags by
+rejecting a tag the detector cannot emit. A glob that matches nothing is that failure under another
+field name, so `graph lint` now requires each declared glob to match a path built from itself. Its
+third ruling is the part worth carrying forward: the registry-wide test reads the same generator the
+lint rule validates, so narrowing the generator narrows the test in step, and the test passed with
+the generator sabotaged. A check that shares its subject with the thing it checks has to have its own
+assertion about that subject.
 
 ## The rule these records enforce
 

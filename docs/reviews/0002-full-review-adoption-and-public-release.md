@@ -117,7 +117,7 @@ record is written.
 | ID | Slice | Sev | Grp | Area | Needs ADR | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | S01 | Provenance stamp came from the consumer's git, not simt-dev | P0 | F | projection | yes (P1) | — | Complete | ADR-032; `provenanceDigest()` |
-| S02 | Leading `**/` path globs never match | P0 | F | resolve | no | S47 (optional) | Queued | re-verified |
+| S02 | Leading `**/` path globs never match | P0 | F | resolve | **yes (ADR-042)** | S47 (optional) | Complete | `PENDING` |
 | S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | no | — | Queued | #14 |
 | S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | yes | S02, S03 | Queued | #14 |
 | S05 | MCP `rules_why` crashes on every call | P0 | F | mcp | no | — | Complete | `1791a95` (review 0001 #15) |
@@ -174,7 +174,7 @@ record is written.
 | ID | At `4c27514` | What changed since `09c596d` |
 | --- | --- | --- |
 | S01 | open, and visible estate-wide | **now Complete** — ADR-032 replaced the git stamp with `provenanceDigest()`; the `sync` half below still stands |
-| S02 | open | `**/*.md`, `src/a?.ts`, `src/{a,b}.ts` still fail; a stable built-in now exists (below) |
+| S02 | **Complete** — ADR-042 | 13 of 65 globs matched nothing and `graph lint` could not see it; fixed by translating segment by segment, and lint now rejects a glob that matches no path built from itself. The brace and `?` forms named below are still unsupported, by decision: the registry declares neither |
 | S03 | open | `tokenize("Fix the UI CI job in Go: add a DB migration for i18n, ar/RTL, café, تحويل")` → `fix, the, job, add, migration, for, i18n, rtl, caf` |
 | S04 | open, extended | a stopword selects (below) |
 | S05 | **Complete** | `1791a95` — all three call shapes crashed, not two; `tools.mjs:316` destructured an array |
@@ -219,6 +219,23 @@ version that looks identical in both is worse than no version at all. Add three 
 `true` for all four failing cases (`a/b/c.ts` and `c.ts` against `**/*.ts`, `src/a.ts` against
 `src/{a,b}.ts`, `src/ab.ts` against `src/a?.ts`). Delete `resolve.mjs:153-167`, and keep the
 `graph lint` compile check.
+
+> **Resolution.** Closed as ADR-042, by the translation rather than the built-in. S47 is still
+> queued and `engines.node` reads `>=20`, so using a call that needs `>=22.20` would have broken the
+> declared runtime range inside a resolver fix. Ruling one becomes `path.matchesGlob` when the floor
+> moves; nothing else in the record has to change.
+>
+> Only **two** of the four cases above were defects in this registry: the two against `**/*.ts`, and
+> the other two are the brace and question-mark forms. The registry declares 49 unique globs and
+> none of them uses either, so ADR-042 rejected extending the glob language to cover them — a rule
+> with no caller to check it against — and escaped `?` instead, because reading it as a quantifier
+> made `src/a?.ts` match `.ts`. Both now fail `graph lint` loudly, which is the honest description of
+> a field the matcher does not implement.
+>
+> The `graph lint` check here said "the check", and the fix turned out to be about a check that does
+> not exist: `checkGlobs` is new. Lint asked whether `paths` was *present* while asking nothing of its
+> contents, and `checkStack` one field over had already answered the parallel question for stack tags
+> by rejecting a tag `fingerprint()` cannot emit. 13 of 65 globs matched nothing.
 
 **S04.** New evidence: for `"fix a typo in the README"`, the single token `the` matched a skill
 summary (weight 8) and selected `add-country-galaxy` in a repository unrelated to the estate.

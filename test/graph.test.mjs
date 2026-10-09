@@ -83,6 +83,26 @@ test('lint: detects a stack tag fingerprint cannot emit', () => {
   assert.ok(codes(g).some((e) => e.includes('is not emitted by fingerprint')));
 });
 
+test('lint: detects a path glob that matches nothing (S02)', () => {
+  // The check that would have caught the 13 dead globs. Every other lint rule asks
+  // whether a value is well-formed; this one asks whether it does anything, which is
+  // the only question the resolver has about a glob.
+  const g = clone();
+  g.skills[0].paths = [...(g.skills[0].paths ?? []), 'src/a?.ts'];
+  assert.ok(
+    codes(g).some((e) => e.includes('does not match')),
+    'a glob that matches nothing it claims must be an error',
+  );
+});
+
+test('lint: a reachable glob is not reported, including one with ** in it', () => {
+  // The other half, because a check that fires on everything is indistinguishable
+  // from one that fires on the right thing.
+  const g = clone();
+  g.skills[0].paths = ['src/**/*.ts', '**/*.kt', 'migrations/**', '**'];
+  assert.deepEqual(codes(g), []);
+});
+
 test('lint: detects an orphan capability', () => {
   const g = clone();
   g.capabilities.push({ id: 'ghost', summary: 'nothing covers this' });

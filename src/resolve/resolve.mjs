@@ -149,21 +149,89 @@ export function stackReason(skill, repoSignals) {
   return `needs one of ${(skill.stack ?? []).slice(0, 3).join('|')}, repo is ${repoSignals.slice(0, 3).join('|')}`;
 }
 
+// Bounded by the registry's distinct globs, because the only caller of matchesGlob
+// passes `skill.paths`. Compiling per call was the old behaviour and cost one RegExp
+// construction per path per glob per skill.
+const globCache = new Map();
+
+function translateSegment(segment) {
+  // `?` is escaped rather than read as a single-character wildcard: nothing in the
+  // registry uses it, and reading it as a quantifier made `a?.ts` match `.ts`. A glob
+  // the matcher cannot honour now fails `syntheticPathFor` below instead of silently
+  // matching the wrong paths.
+  return segment.replace(/[.+^${}()|[\]\\?]/g, '\\$&').replace(/\*/g, '[^/]*');
+}
+
+/**
+ * Translate a glob segment by segment: a leading star-star is any number of leading
+ * directories, a middle one is any number of middle ones, a trailing one is anything
+ * beneath, and a bare one is everything. (Written without the literal glob, because
+ * its slash closes the comment that is describing it.)
+ *
+ * This used to rewrite only a TRAILING star-star, so a glob that started with one
+ * compiled to an anchored pattern beginning `**` - an invalid regex, swallowed by a
+ * `catch` that returned `false`. 13 of the registry's 65 globs start that way, and
+ * path is the strongest signal the resolver has (weight 100), so those skills could
+ * never be selected by a diff.
+ */
+export function compileGlob(glob) {
+  const cached = globCache.get(glob);
+  if (cached) return cached;
+
+  const segments = glob.split('/');
+  let pattern = '';
+  for (const [i, segment] of segments.entries()) {
+    const last = i === segments.length - 1;
+    if (segment !== '**') {
+      if (i > 0 && segments[i - 1] !== '**') pattern += '/';
+      pattern += translateSegment(segment);
+      continue;
+    }
+    // A `**` owns the separators on both sides of itself, so the next segment must
+    // not add one: that is why the `segments[i - 1] !== '**'` test above exists.
+    pattern += i === 0 ? (last ? '.*' : '(?:.*/)?') : last ? '(?:/.*)?' : '(?:.*/)?';
+  }
+
+  const regex = new RegExp(`^${pattern}$`);
+  globCache.set(glob, regex);
+  return regex;
+}
+
 /** Minimal glob matcher: `**` any depth, `*` any run within one segment. */
 export function matchesGlob(filePath, glob) {
-  const pattern = glob
-    .split('/')
-    .map((seg) => {
-      if (seg === '**') return '**';
-      return seg.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '[^/]*');
-    })
-    .join('/')
-    .replace(/\/\*\*/g, '(?:/.*)?');
-  try {
-    return new RegExp(`^${pattern}$`).test(filePath);
-  } catch {
-    return false;
+  return compileGlob(glob).test(filePath);
+}
+
+/**
+ * The paths a glob is required to match, built from the glob itself.
+ *
+ * The registry is hand-authored, so a glob nobody ever compiled is a glob that can
+ * never select anything, and it is invisible: `graph lint` reported the registry
+ * clean while 13 of its globs matched nothing. A declared glob has to be shown the
+ * paths it claims to cover. A star-star is expanded once in each of its two shapes,
+ * because a glob only ever checked against the empty expansion is the exact defect
+ * this exists for.
+ */
+export function syntheticPathFor(glob) {
+  const join = (parts) => parts.filter(Boolean).join('/');
+  const paths = [''];
+  for (const segment of glob.split('/')) {
+    const next = [];
+    for (const prefix of paths) {
+      if (segment === '**') {
+        // Empty segments are dropped rather than joined, so a glob whose star-star
+        // sits at either end yields `migrations` and not `migrations/` - a path that
+        // would match only by accident, through the same optional group the real one
+        // uses.
+        next.push(join([prefix]), join([prefix, 'deep/nested']));
+      } else {
+        next.push(join([prefix, segment.replace(/\*/g, 'sample').replace(/\?/g, 'q')]));
+      }
+    }
+    paths.length = 0;
+    paths.push(...next);
   }
+  return paths.filter((p) => p !== '');
 }
 
 /**

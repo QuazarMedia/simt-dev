@@ -19,6 +19,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
+import { matchesGlob, syntheticPathFor } from '../resolve/resolve.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -203,6 +204,7 @@ export function lintRegistry(registry) {
     }
 
     checkStack(at, skill.stack, err);
+    checkGlobs(at, skill.paths, err);
 
     // `deferred` is derived. A hand-edited `deferred: false` on a 384 KB skill
     // would let the whole Cloudflare reference land in a context window, which is
@@ -266,6 +268,29 @@ export function lintRegistry(registry) {
   }
 
   return { sync: errors, warnings, index };
+}
+
+/**
+ * A declared glob has to match a path built from itself.
+ *
+ * The other per-skill checks ask whether a value is present and well-formed. This one
+ * asks whether it does anything, which is the only question the resolver actually
+ * cares about: a glob that matches no path can never select its skill, and it costs
+ * nothing to declare, so only a check that compiles it catches one. 13 of 65 registry
+ * globs matched nothing until this existed (S02).
+ */
+function checkGlobs(at, paths, err) {
+  for (const glob of paths ?? []) {
+    const candidates = syntheticPathFor(glob);
+    if (candidates.length === 0) {
+      err(`${at}: path glob "${glob}" expands to no path at all`);
+      continue;
+    }
+    const missed = candidates.filter((p) => !matchesGlob(p, glob));
+    if (missed.length > 0) {
+      err(`${at}: path glob "${glob}" does not match ${missed.join(', ')}`);
+    }
+  }
 }
 
 function checkStack(at, stack, err) {

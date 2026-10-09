@@ -3,15 +3,14 @@
 Status: **implemented** · created 2026-10-05 · state read at `04ae9e9`
 Depends on: `0001-centralise-agent-rules.md`
 Package: `@quazarmedia/simt-dev`, binary `simt-dev`
-Runtime: Node >= 20, **zero runtime dependencies**
+Runtime: Node >= 22.20.0, **zero runtime dependencies**
 
 All thirteen steps in §11 are done and are verified by the gate rather than by this line.
 Three numbers in §11 are stale and are left in place as the record of what was true then:
 step 2's "38 unique names" and step 4's "5 663 bytes for 38 skills" both predate `86093e1`,
 which removed `coverage-hunt` and took the registry to 37 skills and the index to 5 604 bytes;
 step 8's "141 tests" and step 10's "307 tests" are counts at the moment each step landed. The
-`Runtime` line above is also live — review 0002's P8 proposes raising it to `>=22.20.0`, and
-`package.json` still says `>=20`.
+`Runtime` line above is live. Review 0002's P8 raised it to `>=22.20.0` (ADR-053).
 
 ---
 

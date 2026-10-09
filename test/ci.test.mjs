@@ -21,7 +21,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { renderWorkflow, planWorkflow, isOwnRepo, WORKFLOW_FILE, WORKFLOWS_DIR } from '../src/ci/workflow.mjs';
+import { renderWorkflow, planWorkflow, isOwnRepo, nodeFloor, WORKFLOW_FILE, WORKFLOWS_DIR } from '../src/ci/workflow.mjs';
 import { renderDependabot, planDependabot, DEPENDABOT_FILE } from '../src/ci/dependabot.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
 import { renderShim, EVENTS } from '../src/hooks/shim.mjs';
@@ -373,6 +373,18 @@ test('the own copy explains the exception in its own bytes', async () => {
   const theirs = renderWorkflow();
   assert.match(theirs, /never rewrites it/);
   assert.doesNotMatch(theirs, /refreshed by it/);
+});
+
+test('the node floor is the same number in engines and both templates (S47)', async () => {
+  const pkg = JSON.parse(await readFile(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+  assert.equal(pkg.engines.node, '>=22.20.0');
+  assert.equal(nodeFloor(), '22.20.0');
+  const consumer = renderWorkflow();
+  const own = renderWorkflow({ own: true });
+  assert.match(consumer, /node-version: '22\.20\.0'/);
+  assert.match(own, /node: \['22\.20\.0', '24', '26'\]/);
+  assert.match(own, /node-version: '\$\{\{ matrix\.node \}\}'/);
+  assert.match(await readFile(join(PACKAGE_ROOT, 'README.md'), 'utf8'), /Node >= 22\.20\.0/);
 });
 
 test('the own copy runs a gate this repository can actually pass', async () => {

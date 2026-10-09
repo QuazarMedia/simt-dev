@@ -13,7 +13,7 @@
 
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mkdtemp, mkdir, readFile, writeFile, symlink, lstat, stat } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile, symlink, lstat, stat } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
@@ -349,11 +349,195 @@ test('pointer state distinguishes absent, current, mispointed and foreign', asyn
   assert.match(foreign.detail, /a file, not a pointer/);
 });
 
-test('check reports a foreign pointer as blocking and a mispointed one as not', async () => {
-  // The asymmetry is deliberate. A hand-written CLAUDE.md is an unresolved decision
-  // the repo must make: DeepSeek's loader renders a drifted copy in full beside its
-  // twin, which is precisely what simt-dev exists to stop. A misaimed pointer is a
-  // stale convenience, and making it red would train people to ignore findings.
+test('check blocks a mispointed pointer, because its reader is reading something else', async () => {
+  // The old asymmetry — foreign blocks, misaimed does not — rested on a misreading of
+  // what a pointer is. It cited DeepSeek's loader rendering a drifted copy, which is a
+  // different surface entirely: a *copy* beside the original is duplication, and a
+  // *symlink* aimed elsewhere is a reader looking at the wrong file. POINTERS[0] records
+  // Claude Code's own documentation for the behaviour that makes it load-bearing — it
+  // reads CLAUDE.md by default and AGENTS.md only as a fallback — so on a repo that
+  // selected `claude`, a misaimed pointer means the rules are invisible to the reader
+  // they were written for.
+  //
+  // Measured before this change: pointer moved to README.md, `check` exited 0, `compare`
+  // reported no problems, and thirteen rule citations went unread.
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  await writeFile(join(root, 'README.md'), '# readme\n');
+  await symlink('README.md', join(root, 'CLAUDE.md'));
+
+  const blocked = (await checkTargets(root, { surfaces: 'opencode,claude' })).find(
+    (f) => f.status === 'pointer-unread',
+  );
+  assert.ok(blocked, 'a pointer aimed away from AGENTS.md must be reported');
+  assert.match(blocked.detail, /should point at AGENTS\.md/);
+  // The remedy names the reader, because "run the command" does not tell someone why
+  // this matters and a warning they have learned to skip is worse than no warning.
+  assert.match(blocked.remedy, /Claude Code reads CLAUDE\.md/);
+
+  // And the whole command exits non-zero, which is the part the reader acts on.
+  // Synced first, so the repository is otherwise current and the only thing that could
+  // redden it is the pointer. The first version of this test skipped that step and
+  // passed on a repository that was red for a missing `AGENTS.md` — which is how the
+  // defect survived a test that asserted against it (ADR-031's shape, one level down).
+  await capture(['sync', '--root', root, '--yes', '--surfaces', 'opencode,claude']);
+  // `sync` created the correct pointer, which is the point: the repository has to be
+  // right before the pointer can be broken on purpose.
+  await rm(join(root, 'CLAUDE.md'));
+  await symlink('README.md', join(root, 'CLAUDE.md'));
+  const { code, stdout, stderr } = await capture(['check', '--root', root, '--surfaces', 'opencode,claude']);
+  const said = `${stdout}${stderr}`;
+  assert.equal(code, 1, `the gate must fail on a pointer its reader is following: ${said}`);
+  assert.match(said, /CLAUDE\.md/);
+});
+
+test('a pointer this repository does not serve stays a note', async () => {
+  // The half of the rule that keeps it a rule rather than a gate that goes red for
+  // everyone. `pointerTargets` filters on the selected surfaces, so a repo on `opencode`
+  // that happens to have a `CLAUDE.md` nobody asked for gains nothing from being told,
+  // and a gate that reddens for it is a gate people learn to ignore.
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  await writeFile(join(root, 'README.md'), '# readme\n');
+  await symlink('README.md', join(root, 'CLAUDE.md'));
+
+  const found = await checkTargets(root, { surfaces: 'opencode' });
+  assert.equal(
+    found.find((f) => f.file === 'CLAUDE.md'),
+    undefined,
+    'the reader this pointer serves is not reading this repository',
+  );
+  // The gate is asserted through a repository that is otherwise current, so the only
+  // thing that could make it red is the pointer. Asserting the exit code on a bare
+  // scratch directory would pass for the wrong reason — it is red for a missing
+  // AGENTS.md — which is ADR-031's shape one level down.
+  await capture(['sync', '--root', root, '--yes', '--surfaces', 'opencode']);
+  const { code, stdout } = await capture(['check', '--root', root, '--surfaces', 'opencode']);
+  assert.equal(code, 0, stdout);
+});
+
+test('a directory where a pointer belongs is reported, and named as a directory', async () => {
+  // Not hypothetical: a directory at CLAUDE.md is where Claude Code keeps per-project
+  // instructions. Read as "absent" it was invisible — `check` said nothing and `sync`
+  // crashed with EEXIST on `symlink()` after writing every other target, naming
+  // `simt-dev doctor`, which reports nothing about it either.
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  await mkdir(join(root, 'CLAUDE.md'), { recursive: true });
+  await writeFile(join(root, 'CLAUDE.md', 'NOTES.md'), 'work\n');
+
+  const findings = await checkTargets(root, { surfaces: 'opencode,claude' });
+  const blocked = findings.find((f) => f.status === 'pointer-blocked');
+  assert.ok(blocked, 'a directory at CLAUDE.md must be reported');
+  assert.match(blocked.detail, /a directory, not a pointer/);
+  // The measure is entries, not bytes — the same question asked of the thing that would
+  // be lost. Printing `undefined bytes` is how this stayed unreported.
+  assert.match(blocked.detail, /1 entry\b/);
+  assert.doesNotMatch(blocked.detail, /undefined/);
+  assert.match(blocked.remedy, /delete the directory/);
+
+  // And nothing is destroyed: the file inside survives, because this tool does not
+  // delete what a person wrote.
+  assert.equal(await readFile(join(root, 'CLAUDE.md', 'NOTES.md'), 'utf8'), 'work\n');
+});
+
+test('sync repairs a misaimed pointer, because that is the remedy it prints', async () => {
+  // The row's headline crash, and the reason the remedy is `sync --yes`: `sync` used to
+  // plan the pointer, call `symlink()` at a path that already existed, and die with
+  // `EEXIST` after writing every other target — naming `simt-dev doctor`, which reports
+  // nothing about it. A command whose own remedy crashes on the state it names has no
+  // remedy at all.
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  await writeFile(join(root, 'README.md'), '# readme\n');
+  await capture(['sync', '--root', root, '--yes', '--surfaces', 'opencode,claude']);
+  assert.equal((await lstat(join(root, 'CLAUDE.md'))).isSymbolicLink(), true);
+  await rm(join(root, 'CLAUDE.md'));
+  await symlink('README.md', join(root, 'CLAUDE.md'));
+
+  const r = await capture(['sync', '--root', root, '--yes', '--surfaces', 'opencode,claude']);
+  const said = `${r.stdout}${r.stderr}`;
+  assert.equal(r.code, 0, said);
+  assert.doesNotMatch(said, /EEXIST/);
+  assert.match(said, /unlinked CLAUDE\.md \(was misaimed\)/);
+
+  // Repaired, and the file the bad link pointed at is untouched: `unlink` on a symlink
+  // removes the link, never its target. Asserted because the repair is a deletion.
+  assert.equal((await lstat(join(root, 'CLAUDE.md'))).isSymbolicLink(), true);
+  assert.equal(await readFile(join(root, 'README.md'), 'utf8'), '# readme\n');
+  assert.equal((await capture(['check', '--root', root, '--surfaces', 'opencode,claude'])).code, 0);
+});
+
+test('sync still refuses a hand-written file, and never unlinks one', async () => {
+  // The other half of the same loop, and the reason the repair is keyed on `state`
+  // rather than on existence. A symlink has no content and is this tool's own; a regular
+  // file is somebody's writing, and nothing here touches it (ADR-021 ruling 6).
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  const mine = '# our house style\n';
+  await writeFile(join(root, 'CLAUDE.md'), mine);
+
+  const r = await capture(['sync', '--root', root, '--yes', '--surfaces', 'opencode,claude']);
+  const said = `${r.stdout}${r.stderr}`;
+  assert.equal(r.code, 0, said);
+  assert.match(said, /left untouched, not replaced/);
+  assert.doesNotMatch(said, /unlinked/);
+  assert.equal(await readFile(join(root, 'CLAUDE.md'), 'utf8'), mine);
+});
+
+test('sync refuses the directory instead of crashing halfway through the write', async () => {
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  await mkdir(join(root, 'CLAUDE.md'), { recursive: true });
+
+  const { code, stdout, stderr } = await capture(['sync', '--root', root, '--yes', '--surfaces', 'opencode,claude']);
+  // Notes go to stderr, so a test that reads only stdout asserts nothing about the
+  // refusal — the one line that proves it happened is a note.
+  const said = `${stdout}${stderr}`;
+  assert.equal(code, 0, said);
+  assert.match(said, /POINTER CLAUDE\.md: a directory, not a pointer/);
+  assert.doesNotMatch(said, /undefined/, 'the size of a directory is its entries, and saying so is the fix');
+  assert.doesNotMatch(said, /EEXIST/, 'a refusal that arrives after the writes is a crash, not a refusal');
+  // The rule files it *could* write still were, and the pointer it could not is named.
+  assert.match(said, /left untouched, not replaced/);
+
+  // `sync` reports the refusal and exits 0. ADR-025 ruling 6 is why, and it is the
+  // reason this is asserted rather than assumed: the remedy for this finding is
+  // `sync --yes`, so a `sync` that refused on it would be a gate whose remedy is the
+  // command being run — a gate nothing can satisfy, which the record calls worse than
+  // a noisy one. `check` is where it blocks.
+  assert.equal(code, 0, 'the refusal is a note; the gate that blocks on it is `check`');
+  const checked = await capture(['check', '--root', root, '--surfaces', 'opencode,claude']);
+  assert.equal(checked.code, 1, `${checked.stdout}${checked.stderr}`);
+});
+
+test('the two non-blocking sets are different, and the difference is the fix', async () => {
+  // The mutation that passed this file twice. One set served both commands, so the rule
+  // written to keep `sync` quiet quietly quieted `check`'s exit code — which is the
+  // defect, unchanged, in a new place. And a `sync` that blocked on it would be a gate
+  // whose remedy is the command being run, ADR-025 ruling 6's hazard.
+  //
+  // Asserted on both sets and on their relationship, because the text output is
+  // identical either way: ADR-035's sentence about promises about a *set* of commands,
+  // applied to a set of statuses.
+  const { SYNC_NON_BLOCKING, CHECK_NON_BLOCKING } = await import('../src/commands/sync.mjs');
+  assert.deepEqual([...SYNC_NON_BLOCKING].sort(), ['orphaned', 'pointer-unread']);
+  assert.deepEqual([...CHECK_NON_BLOCKING].sort(), ['orphaned']);
+  // Everything `check` tolerates, `sync` tolerates: the gate is never the laxer one.
+  for (const status of CHECK_NON_BLOCKING) {
+    assert.ok(SYNC_NON_BLOCKING.has(status), `${status} fails the gate but not the writer`);
+  }
+  // And the specific claim this record exists for.
+  assert.ok(
+    !CHECK_NON_BLOCKING.has('pointer-unread'),
+    'a reader pointed at the wrong file must fail the gate, or ADR-051 did not land',
+  );
+});
+
+test('check reports a foreign pointer as blocking, with what is in the way', async () => {
+  // A hand-written CLAUDE.md is an unresolved decision the repo must make: DeepSeek's
+  // loader renders a drifted copy in full beside its twin, which is precisely what
+  // simt-dev exists to stop.
   const root = await scratch();
   await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
   await writeFile(join(root, 'CLAUDE.md'), '# mine\n');
@@ -363,15 +547,7 @@ test('check reports a foreign pointer as blocking and a mispointed one as not', 
   assert.ok(blocked, 'a regular file at CLAUDE.md must be reported');
   assert.match(blocked.detail, /simt-dev will not replace it/);
   assert.ok(blocked.remedy, 'a blocking finding must carry a remedy');
-
-  const root2 = await scratch();
-  await writeFile(join(root2, 'package.json'), '{"name":"x"}\n');
-  await symlink('elsewhere.md', join(root2, 'GEMINI.md'));
-  const drift = (await checkTargets(root2, { surfaces: 'opencode,antigravity' })).find(
-    (f) => f.status === 'pointer-drift',
-  );
-  assert.ok(drift);
-  assert.match(drift.detail, /should point at AGENTS\.md/);
+  assert.match(blocked.remedy, /delete the file/, 'the remedy names the kind of thing it is');
 });
 
 // --------------------------------------------------------------- the shipped guard

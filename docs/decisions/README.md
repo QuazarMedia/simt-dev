@@ -58,6 +58,7 @@ record's status line — never by editing the ruling in place.
 | [048](ADR-048-a-baseline-carries-only-keys-a-reader-honours.md) | A baseline carries only keys a reader honours | accepted · withdraws ADR-025 r8 |
 | [049](ADR-049-a-ruling-that-a-later-record-moved-says-so-where-it-is-printed.md) | A ruling that a later record moved says so where it is printed | accepted |
 | [050](ADR-050-a-byte-count-is-not-a-region-and-updated-is-not-a-change-of-rules.md) | A byte count is not a region, and `updated` is not a change of rules | accepted |
+| [051](ADR-051-a-pointer-is-the-readers-only-route-so-it-is-not-a-convenience.md) | A pointer is the reader's only route, so it is not a convenience | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -326,6 +327,21 @@ would repair it, which gave one field two meanings, and the command whose entire
 say *why* a repository is behind was reporting a formatting repair as a change of policy.
 The reader is told to diff rules that did not move. Both are the same mistake: a field read
 for the thing it was not.
+
+ADR-051 is the same mistake about a *file*, and it is worth reading for where the belief
+came from. `CLAUDE.md` was classified as a convenience and a misaimed pointer made the gate
+go green, on the reasoning that "the editors that matter already read `AGENTS.md`" — which
+this repository's own pointer table refutes with a quotation from Claude Code's
+documentation: *"Claude reads CLAUDE.md by default and AGENTS.md only as a fallback."* A
+pointer is not a second copy of a file, it is the route to one, and the old test named
+DeepSeek's loader rendering a drifted copy beside its twin. That observation is true and it
+is about duplication; a symlink aimed elsewhere is not duplication, it is a reader looking
+at the wrong file. The belief was written down in a test, so the finding it produced could
+not see it. The second half was worse and quieter: a directory at `CLAUDE.md` — which is
+where Claude Code keeps per-project instructions — was classified as *absent*, so `check`
+said nothing and `sync` crashed with `EEXIST` after writing every other target, naming
+`simt-dev doctor`, which reports nothing about it either. The note that would have said so
+printed `undefined bytes`, and `undefined` in a report reads as nothing at a glance.
 
 ## The rule these records enforce
 

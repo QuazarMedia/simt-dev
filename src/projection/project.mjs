@@ -303,11 +303,21 @@ export async function checkTargets(root, flags = {}) {
   // `run: simt-dev sync --yes` remedy would be a lie. Removal is a human decision.
   findings.push(...(await orphanedRuleFiles(root, resolved)));
 
-  // Pointers are checked last and never block. A missing or misaimed `CLAUDE.md`
-  // is a smaller problem than a red gate on every commit: the editors that matter
-  // already read AGENTS.md, and the pointer is a convenience. Reporting it as a
-  // finding would train people to ignore findings, which is the failure mode the
-  // whole gate exists to prevent.
+  // Pointers are checked last, and whether one blocks depends on who reads it.
+  //
+  // The rule as it stood was "never block", and it was right for the case it was written
+  // for: a repository on `opencode` that happens to have a `CLAUDE.md` nobody asked for
+  // gains nothing from being told about it, and a red gate on every commit trains people
+  // to ignore gates. But the pointer is not decoration for the reader it serves —
+  // `POINTERS[0]` cites Claude Code's own documentation for the behaviour that makes it
+  // load-bearing: **"Claude reads CLAUDE.md by default and AGENTS.md only as a
+  // fallback."** So on a repo that selected the `claude` surface, a `CLAUDE.md` aimed
+  // anywhere else means Claude Code reads that somewhere else. Measured: the pointer
+  // moved to `README.md`, `check` exited 0, `compare` reported no problems, and thirteen
+  // rule citations went unread by the reader they were written for.
+  //
+  // Blocking is therefore scoped to a pointer whose surface this repo selected. An
+  // unselected one stays a note, because the reader it serves is not reading this repo.
   for (const pointer of pointerTargets(root, resolved.surfaces)) {
     const st = await pointerState(root, pointer);
     if (st.state === 'foreign') {
@@ -315,16 +325,32 @@ export async function checkTargets(root, flags = {}) {
         file: st.file,
         surface: st.surface,
         status: 'pointer-blocked',
-        detail: `${st.detail} (${st.bytes} bytes); simt-dev will not replace it`,
-        remedy: 'move it aside, or delete the file and re-run: simt-dev sync --yes',
+        // A file reports its bytes because that is what the refusal would have
+        // destroyed; a directory reports what is inside it, which is the same question
+        // asked of the only thing a reader would lose. Neither is replaced — this tool
+        // does not delete what a person wrote — so both name the same remedy.
+        detail:
+          st.entries === undefined
+            ? `${st.detail} (${st.bytes} bytes); simt-dev will not replace it`
+            : `${st.detail} (${st.entries} ${st.entries === 1 ? 'entry' : 'entries'}); simt-dev will not replace it`,
+        remedy: `move it aside, or delete the ${st.entries === undefined ? 'file' : 'directory'} and re-run: simt-dev sync --yes`,
       });
     } else if (st.state === 'mispointed') {
+      // Whether this blocks is the reader's business, not the file's. `pointer-drift` is
+      // non-blocking because a reader who does not use this pointer gains nothing from a
+      // red gate; a reader who does gains a repository where its rules are one file away
+      // from being invisible, and `check` reporting nothing is what made that invisible.
+      //
+      // Every pointer reaching this loop belongs to a selected surface —
+      // `pointerTargets` filters on it — so the status is chosen from whether the
+      // pointer's own reader is one this repository serves, which `pointerTargets` has
+      // already answered by including it.
       findings.push({
         file: st.file,
         surface: st.surface,
-        status: 'pointer-drift',
+        status: 'pointer-unread',
         detail: `${st.detail}; should point at ${pointer.to}`,
-        remedy: 'run: simt-dev sync --yes',
+        remedy: `run: simt-dev sync --yes (${pointer.readers} reads ${pointer.file}, not ${pointer.to})`,
       });
     }
   }

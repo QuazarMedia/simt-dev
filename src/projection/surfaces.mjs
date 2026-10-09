@@ -101,6 +101,19 @@ export const SURFACES = [
     // inert at best; on Antigravity an unrecognised value silently discards the
     // rule. The guard lives in test/shipped.test.mjs, and this row is its evidence.
     documentedKeys: ['description', 'alwaysApply', 'globs'],
+    // ADR-021 ruled that "a Cursor reader getting .mdc files does not serve them",
+    // because Cursor had no documented channel for AGENTS.md. It does, and has:
+    // cursor.com/docs/context/rules calls AGENTS.md "a simple alternative to
+    // .cursor/rules" and documents support in the project root and subdirectories.
+    // So a folded rule reaches a Cursor reader twice - once inside the region, once
+    // in the .mdc - and the second copy is 28 KB of pure repetition across the five
+    // repos that select both surfaces.
+    //
+    // The caveat belongs here rather than in the ADR body, because it is a fact about
+    // a product and products move: a Cursor bug report records AGENTS.md NOT being
+    // read in worktree agents by default, fixed in 3.9. A reader below that version
+    // gets the .mdc copy and a reader above it does not need it.
+    readsPrimary: true,
     ruleFrontmatter: (rule) =>
       [
         `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
@@ -119,6 +132,10 @@ export const SURFACES = [
     // Intentionally no `paths:`. See decision 3 in the header.
     documentedKeys: ['paths', 'description'],
     ruleFrontmatter: () => [],
+    // The claude-md pointer makes CLAUDE.md a symlink to AGENTS.md (ADR-021 ruling 1),
+    // and Claude reads CLAUDE.md in preference to AGENTS.md. So the folded region
+    // arrives through the pointer and a rule file alongside it is the same text twice.
+    readsPrimary: true,
     verified: 'Claude Code, "Organize rules with .claude/rules/" — recursive discovery, symlinks supported, no `paths` loads at session start',
     note:
       'CLAUDE.md is a separate pointer surface (see POINTERS). A rule file without frontmatter loads eagerly, which is what an always-on rule wants.',
@@ -133,6 +150,12 @@ export const SURFACES = [
     // `trigger` is REQUIRED here and an unrecognised value discards the rule with no
     // message, which is why the value is mapped rather than passed through.
     documentedKeys: ['trigger', 'description', 'globs', 'glob'],
+    // The gemini-md pointer's own `verified` cites the same Antigravity docs: "workspace
+    // rules are AGENTS.md or GEMINI.md in the root or any subdirectory". Either name
+    // reaches the reader, so a .agents/rules file repeats text the region already
+    // carries. Both channels are documented as alternatives to each other, which is
+    // what makes them duplicates rather than a fallback.
+    readsPrimary: true,
     ruleFrontmatter: (rule) => [
       `trigger: ${rule.alwaysApply ? 'always_on' : 'model_decision'}`,
       `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
@@ -152,6 +175,11 @@ export const SURFACES = [
     ruleFrontmatter: () => ['applyTo: "**"'],
     verified:
       'GitHub docs, "Adding repository custom instructions" — .github/instructions/NAME.instructions.md with applyTo globs; `applyTo: "**"` is the documented example',
+    // NOT marked readsPrimary, and this row is the reason the flag is per-surface
+    // rather than global. The reader is split: Copilot CLI reads AGENTS.md, the
+    // editor and code review do not. A per-rule file here is not duplication for two
+    // of the three, and dropping it would remove the process rules from a chat that
+    // had no other channel to them.
     note:
       'Copilot reads AGENTS.md itself through Copilot CLI, but the editor and code review do not; this is the channel they use.',
   },
@@ -231,6 +259,22 @@ export const DEFAULT_SURFACES = ['opencode'];
  */
 export function foldsRules(resolved) {
   return resolved.surfaces.some((s) => s.foldRules === true);
+}
+
+/**
+ * Surfaces whose reader already loads the primary document, so a per-rule file for
+ * them repeats text the region already carries.
+ *
+ * Only meaningful when folding is on: with no folding there is no region to duplicate.
+ * That condition is why this is not a property of the surface alone, and why the
+ * callers ask both questions rather than this function answering both.
+ *
+ * Per-surface rather than global, because Copilot is the counter-example: its CLI reads
+ * AGENTS.md and its editor and code review do not, so a per-rule file there is the only
+ * channel two of its three readers have.
+ */
+export function readsPrimary(resolved) {
+  return foldsRules(resolved) && resolved.surfaces.some((s) => s.readsPrimary === true);
 }
 
 export const SURFACE_IDS = SURFACES.map((s) => s.id);

@@ -127,7 +127,7 @@ record is written.
 | S09 | `sync`/`init` crash on a mispointed pointer, and `check` passes it | P1 | F | projection | only if pointer drift blocks | — | Queued | #9 |
 | S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | **yes (ADR-035)** | — | Complete | `14fcd5b`; **amended by ADR-040**, which found a sixth writer still writing by default |
 | S11 | `slice-commit` rule can never be projected | P1 | F | rules | no | — | **Complete** | `5c079cd` |
-| S12 | Folding + per-rule surfaces load every process rule twice | P1 | F | surfaces | yes (P7, supersedes ADR-021 §3) | — | Queued | 5 estate repos, #17 |
+| S12 | Folding + per-rule surfaces load every process rule twice | P1 | F | surfaces | **yes (ADR-046, supersedes ADR-021 r3)** | — | Complete | `PENDING` |
 | S13 | `rules list/show/why` cannot see the `.mdc` rules | P2 | F | rules | no | — | Queued | re-verified |
 | S14 | Shipped text that fails "readable from the receiving repo" | P1 | F | content | no | — | Queued | re-verified, +1 |
 | S15 | Help text and flags do not match the CLI | P2 | F | cli | no | S10 | Queued | re-verified |
@@ -184,7 +184,7 @@ record is written.
 | S09 | open, extended | `check` passes the mispointed pointer (below) |
 | S10 | open, extended | **now Complete** — ADR-035: one `writeMode()` decides whether a run may write, and `test/contract.test.mjs` asserts the JSON contract for 19 commands at once. Six of the eight claimed defects were real and reproduced; the error-path row was **backwards** (`sync --json` emits its errors correctly), the `--all` row was not reproducible, and `skills why --json` — which printed prose and had no `isJson` branch at all — was a defect the table missed. `init --json` is **not** a defect: `init` never consults the workspace, so both modes agree. `sync` requiring `--yes` stays S24. |
 | S11 | **Complete** | `5c079cd` gave `slice-commit.mdc` `simt-applies: always`; its estate sentence is tracked in S14 |
-| S12 | open | 5 estate repos run `opencode,cursor` (below) |
+| S12 | **Complete** — ADR-046 | 5 estate repos ran `opencode,cursor`: 17 generated `.mdc` files, every one byte-identical to the section already folded into the same repo's `AGENTS.md` — 28,101 bytes read twice per session. ADR-021 r3 rested on "a Cursor reader getting `.mdc` files does not serve them"; Cursor reads `AGENTS.md`, and simt-dev's own surface table already said so |
 | S13 | open | `commands/rules.mjs` still reads `loadRules` only |
 | S14 | open, +1 | remedies moved to `sync.mjs:62`, `init.mjs:167`, `project.mjs:174`; the leak guard misses `simt-api` |
 | S15 | open | `argv.mjs:21-24,35` unread flags; `--skill` keeps the last value; `init --yes` still tags and switches branch |
@@ -303,6 +303,34 @@ directory is `foreign`.
 files repeat text already folded into `AGENTS.md`, and in this session `simt-app`'s three
 files alone are 6,530 B loaded twice. The decision moves into P7 (S38), so that one record
 settles every context-budget question.
+
+> **Resolution.** Settled as **ADR-046**, which supersedes ADR-021 ruling 3 — and the reason it is
+> worth a record is that the decision was wrong on a fact rather than on a principle. Ruling 3 said
+> "a Cursor reader getting `.mdc` files does not serve them", meaning Cursor cannot read `AGENTS.md`.
+> Cursor's documentation says it does: `AGENTS.md` is "a simple alternative to `.cursor/rules`", and
+> "Cursor supports AGENTS.md in the project root and subdirectories". The claim had been false since
+> it was written, and false in a way simt-dev's own surface table contradicted — the `readers` line on
+> the opencode row names Cursor as reading `AGENTS.md` natively. A decision resting on a vendor fact
+> should be checked against the file that records vendor facts.
+>
+> Measured total: **28,101 bytes of rule text read twice per session** across five repositories, every
+> pair byte-identical once the marker lines are stripped from both sides.
+>
+> The flag is `readsPrimary`, **per surface**, because Copilot is the counter-example and its row
+> already said why: the CLI reads `AGENTS.md`, the editor and code review do not. A per-rule file
+> there is the only channel two of its three readers have. The skip also requires folding, so a repo
+> on `cursor` alone — nothing folds, nothing to duplicate — still gets its files.
+>
+> Two things to carry. First, the change initially made the estate go **quiet**: `staleRuleFiles` fell
+> from 17 to 0 with every file still on disk, and the first fix for that scanned the *selected*
+> surfaces, which finds nothing by construction — a file becomes orphaned exactly when a repo drops
+> the surface that wrote it. Both were found by running `compare` over sixteen repositories, not by
+> reading the code. Second, three of six mutations passed all 627 tests, including the one that would
+> have made a gate nothing can satisfy: `sync` will not write the file again and ADR-021 r6 forbids
+> deleting it. It is a note with a delete command, and it does not fail.
+>
+> P7 is therefore narrowed, not closed: this record settles "one copy per reader" for the S12 case, and
+> S38/S50 remain the rows that own the rest of it.
 
 **S14.** `test/leaks.mjs` matches `simt-(app|space|goto|social|blog|landing|garmin|jobs|media|wearable)`,
 which omits `simt-api`. A projected rule that names `simt-api` passes the guard. Add it, and
@@ -1233,7 +1261,7 @@ knowable. Every `ADR-` reference in this review therefore names a record you can
 | P4 | Estate policy ships as a pack; the product ships generic profiles and an example registry | S39, S18 | — |
 | P5 | How a repository without npm obtains simt-dev | S35 | clarifies ADR-010 |
 | P6 | A package in a monorepo is a projection root | S41 | — |
-| P7 | Context has a budget: one copy per reader, scoped where a reader can scope | S38, S12, S50 | ADR-021 §3 |
+| P7 | Context has a budget: one copy per reader, scoped where a reader can scope | S38, S50 | **ADR-046** for S12 — one copy per reader, settled on the vendor fact rather than assumed |
 | P8 | Node floor `>=22.20.0` | S47 | plan 0002 "Runtime" line |
 | P9 | The editorconfig baseline carries only keys a reader honours | S30 | ADR-025 context and baseline content |
 | amend ADR-018 | A foreign hook for an event simt-dev does not gate is chained, not replaced | S36 | ADR-018 |

@@ -258,23 +258,46 @@ test('one rule reaches every selected surface with its own path and its own fron
   assert.equal(new Set(bodies).size, 1);
 });
 
-test('opting into a rule surface alongside the default is one file plus the requested ones', async () => {
+test('opting into a rule surface alongside the default writes one file, not two (S12)', async () => {
   const root = await scratch();
   await mkdir(join(root, '.git'), { recursive: true });
   await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
   const p = await plan(root, { surfaces: 'opencode,cursor' });
-  // The primary region is still written; opencode adds no file of its own; cursor does.
-  assert.deepEqual(p.targets.map((t) => t.file).sort(), [
-    '.cursor/rules/intake-questions.mdc',
-    '.cursor/rules/slice-commit.mdc',
-    '.cursor/rules/test-gate.mdc',
-    '.editorconfig',
-    '.gitattributes',
-    'AGENTS.md',
-  ]);
-  // ...and the rule is in BOTH: folded for the reader who has only AGENTS.md, and as
-  // a file for the editor that cannot read it. One canonical source, two destinations.
+  // This test asserted the OPPOSITE before ADR-046 - three .mdc files beside a folded
+  // region, on the reasoning that "a Cursor reader getting .mdc files does not serve
+  // them". Cursor reads AGENTS.md; cursor.com/docs/context/rules documents it. So the
+  // three files were 28 KB of the same rules a second time in every Cursor session.
+  assert.deepEqual(p.targets.map((t) => t.file).sort(), ['.editorconfig', '.gitattributes', 'AGENTS.md']);
+  // The rule is still present - once. Asserting its ABSENCE from the plan is what makes
+  // this meaningful: a change that dropped the rule entirely would pass a file-list check.
   assert.match(p.targets.find((t) => t.file === 'AGENTS.md').body, /### test-gate/);
+  // And the reason is stated rather than silently skipped, because a reader deciding
+  // whether to delete a file already on disk is owed the sentence that justifies it.
+  assert.ok(p.notes.some((n) => /reads AGENTS.md, where the rule is already folded/.test(n)), p.notes.join(' | '));
+});
+
+test('a rule surface is written for a reader that does NOT read the primary file (S12)', async () => {
+  // The other half, and the one that catches over-correction. Copilot's CLI reads
+  // AGENTS.md; its editor and code review do not. A per-rule file is the only channel
+  // two of its three readers have, so dropping it would silently remove the process
+  // rules from a chat that had nowhere else to get them.
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  const p = await plan(root, { surfaces: 'opencode,copilot' });
+  assert.ok(
+    p.targets.some((t) => t.file.startsWith('.github/instructions/')),
+    'copilot must still get per-rule files',
+  );
+  assert.match(p.targets.find((t) => t.file === 'AGENTS.md').body, /### test-gate/);
+});
+
+test('cursor alone still gets its own files, because nothing folds (S12)', async () => {
+  // `readsPrimary` is only meaningful while something folds. With no folding surface
+  // selected there is no region to duplicate, so the skip must not fire.
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  const p = await plan(root, { surfaces: 'cursor' });
+  assert.ok(p.targets.some((t) => t.file.startsWith('.cursor/rules/')), 'cursor alone has no AGENTS.md reader to rely on');
 });
 
 test('narrowing the surfaces narrows the files, and AGENTS.md is always there', async () => {
@@ -450,4 +473,76 @@ test('the CLI names the surfaces it chose and where the choice came from', async
   const json = JSON.parse((await capture(['sync', '--root', root, '--dry-run', '--json'])).stdout);
   assert.deepEqual(json.surfaces, ['opencode']);
   assert.equal(json.surfaceSource, 'default');
+});
+
+// --- S12: a file the tool wrote must never become invisible ----------------------
+
+/**
+ * A repo that was adopted while cursor still got per-rule files, then re-planned.
+ *
+ * Built by running the tool, not by hand-writing a file that looks generated: the
+ * orphan scan keys on the region marker, and a hand-written approximation of one would
+ * pass for the wrong reason the moment the marker format moved.
+ */
+async function repoWithALeftoverRuleFile() {
+  const root = await scratch();
+  await mkdir(join(root, '.git'), { recursive: true });
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  await exec('node', [BIN, 'init', '--root', root, '--yes', '--surfaces', 'opencode,copilot']);
+  // copilot still gets files, so this one is planned and can be made stale.
+  const copilotRule = join(root, '.github/instructions/test-gate.instructions.md');
+  const text = await readFile(copilotRule, 'utf8');
+  // ...and a cursor-shaped leftover, dropped in from a repo written before ADR-046.
+  await mkdir(join(root, '.cursor/rules'), { recursive: true });
+  await writeFile(join(root, '.cursor/rules/test-gate.mdc'), text.replace(/\.md\b/g, '.mdc'));
+  return { root, copilotRule };
+}
+
+test('a generated rule file the tool no longer writes is reported, not forgotten (S12)', async () => {
+  // The failure this guards: the moment the skip landed, `staleRuleFiles` went from 17
+  // to 0 across the estate and the files were still on disk. A tool that stops looking
+  // at a file it generated has not cleaned up - it has lost track of it.
+  const { root } = await repoWithALeftoverRuleFile();
+  const findings = await checkTargets(root, { surfaces: 'opencode,cursor' });
+  const orphans = findings.filter((f) => f.status === 'orphaned');
+  assert.equal(orphans.length, 1, `expected one orphaned file, got ${JSON.stringify(findings.map((f) => [f.file, f.status]))}`);
+  assert.equal(orphans[0].file, '.cursor/rules/test-gate.mdc');
+  assert.match(orphans[0].detail, /already folded/);
+  // The remedy must name a delete, not `sync`: `sync` will never write this file again,
+  // so a `run: simt-dev sync --yes` here would send the reader in a circle.
+  assert.match(orphans[0].remedy, /delete \.cursor\/rules\/test-gate\.mdc/);
+  assert.doesNotMatch(orphans[0].remedy, /sync/);
+});
+
+test('an orphaned rule file does not fail the gate (S12)', async () => {
+  // ADR-021 ruling 6: simt-dev never deletes a file it wrote, so nothing in the tool
+  // can repair this. A gate that no command can satisfy is worse than a noisy one.
+  const { root } = await repoWithALeftoverRuleFile();
+  const { code, stdout } = await capture(['check', '--root', root, '--surfaces', 'opencode,cursor']);
+  assert.equal(code, 0, `check failed on a file nothing can repair:\n${stdout}`);
+  assert.match(stdout, /ORPHANED\s+\.cursor\/rules\/test-gate\.mdc/);
+});
+
+test("a repo's own rule files are never reported as orphaned (S12)", async () => {
+  // A repo mid-migration has hand-written `.mdc` files of its own. simt-dev did not
+  // write them and must not tell anyone to delete them - that is the one destructive
+  // outcome available to this feature, so it is asserted directly rather than implied.
+  const root = await scratch();
+  await mkdir(join(root, '.git'), { recursive: true });
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  await mkdir(join(root, '.cursor/rules'), { recursive: true });
+  await writeFile(join(root, '.cursor/rules/team-conventions.mdc'), '---\ndescription: ours\nalwaysApply: true\n---\n\nOur own rule.\n');
+  const findings = await checkTargets(root, { surfaces: 'opencode,cursor' });
+  assert.deepEqual(findings.filter((f) => f.status === 'orphaned'), []);
+});
+
+test('the orphan scan reports nothing when nothing was ever left behind (S12)', async () => {
+  // The negative control. Without it, a scan that always returned an empty array would
+  // satisfy every test above, because a repo that never had the file has nothing to find.
+  const root = await scratch();
+  await mkdir(join(root, '.git'), { recursive: true });
+  await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
+  await exec('node', [BIN, 'init', '--root', root, '--yes', '--surfaces', 'opencode,cursor']);
+  const findings = await checkTargets(root, { surfaces: 'opencode,cursor' });
+  assert.deepEqual(findings.filter((f) => f.status === 'orphaned'), []);
 });

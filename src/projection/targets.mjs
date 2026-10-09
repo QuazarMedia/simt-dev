@@ -17,7 +17,7 @@ import { join } from 'node:path';
 
 import { diff, parse, inject } from './markers.mjs';
 import { ruleName } from './mdc.mjs';
-import { frontmatterBlock, POINTERS, rulePath, SURFACES } from './surfaces.mjs';
+import { foldsRules, frontmatterBlock, POINTERS, rulePath, SURFACES } from './surfaces.mjs';
 
 /**
  * A managed rule file is a GENERATED FILE, unlike AGENTS.md.
@@ -34,8 +34,23 @@ export async function ruleTargets(root, rule, body, sha, resolved, notes) {
   const targets = [];
   const name = ruleName(rule);
 
+  const folding = foldsRules(resolved);
+
   for (const s of resolved.surfaces) {
     if (!s.rule) continue;
+    // A reader that already loads AGENTS.md has the rule from the region. Writing the
+    // file as well is the duplication S12 exists to remove: measured across the five
+    // estate repos that select `opencode,cursor`, 17 rule files carrying 28 KB of text
+    // an agent reads twice per session. ADR-021 ruled the opposite on the belief that
+    // Cursor had no channel for AGENTS.md; cursor.com/docs/context/rules documents one.
+    //
+    // Skipped, never deleted. ADR-021 ruling 6: `sync` does not remove a file it once
+    // generated, so `compare` reports the leftover with a remedy and a human removes it.
+    if (folding && s.readsPrimary === true) {
+      const rel = rulePath(s.id, name);
+      if (rel) notes.push(`${rel}: not written; ${s.label} reads AGENTS.md, where the rule is already folded`);
+      continue;
+    }
     const rel = rulePath(s.id, name);
     if (!rel) continue;
     const path = join(root, rel);

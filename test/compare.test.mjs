@@ -551,7 +551,11 @@ async function repoWithRuleFiles(name, files = {}) {
     'simt-dev.json': JSON.stringify({
       id: name,
       stack: ['node'],
-      surfaces: ['opencode', 'cursor'],
+      // copilot, not cursor: its reader does not read AGENTS.md (ADR-046), so it is
+      // still planned a rule file per surface. Choosing cursor here would have made
+      // this fixture project none, and the test would have stopped covering the gate
+      // without failing loudly - which is what happened the first time.
+      surfaces: ['opencode', 'copilot'],
       gates: { preCommit: [], prePush: [] },
     }),
     'package.json': JSON.stringify({ name: 'a', private: true }) + '\n',
@@ -560,8 +564,10 @@ async function repoWithRuleFiles(name, files = {}) {
   });
   const built = await plan(root);
   // `plan()` flattens the region, the rule files and the baselines into one list, so
-  // the rule files are picked out by the suffix the `.mdc` contract already fixes.
-  const ruleFiles = built.targets.filter((t) => t.path.endsWith('.mdc'));
+  // the rule files are picked out by the surface directory rather than by a suffix:
+  // the suffix was `.mdc` when this helper was written, and cursor no longer gets a
+  // file at all, so a suffix would have silently matched nothing.
+  const ruleFiles = built.targets.filter((t) => /\/(rules|instructions)\//.test(t.path));
   assert.ok(ruleFiles.length > 0, 'the fixture must project at least one rule file, or it proves nothing');
   await writeFile(join(root, 'AGENTS.md'), built.targets[0].text);
   for (const t of ruleFiles) {
@@ -586,19 +592,19 @@ test('a stale rule file on an adopted repo is a problem, and it is named (S25)',
   // Inside the markers. Appending after the END marker is hand-owned content by design
   // and is correctly not drift - so an appended line makes this test fail, which it did,
   // and a fixture that asserts nothing is the same defect in a different coat.
-  const victim = join(root, '.cursor/rules/intake-questions.mdc');
+  const victim = join(root, '.github/instructions/intake-questions.instructions.md');
   const text = await readFile(victim, 'utf8');
   const stamp = /<!-- simt-dev:sha=[0-9a-f]{40} -->/.exec(text);
   assert.ok(stamp, 'the fixture must contain a generated region to edit');
   await writeFile(victim, text.replace(stamp[0], `${stamp[0]}\nA HUMAN EDIT INSIDE THE REGION.`));
 
   const after = await buildRow(root, { ...CONTEXT, expectedSha: sha });
-  assert.deepEqual(after.ruleFiles.stale, ['.cursor/rules/intake-questions.mdc']);
+  assert.deepEqual(after.ruleFiles.stale, ['.github/instructions/intake-questions.instructions.md']);
   const problem = after.problems.find((p) => /rule files are not current/.test(p));
   assert.ok(problem, `a stale rule file must be a problem; problems were ${JSON.stringify(after.problems)}`);
   // Named, not summarised: "something is stale" is not actionable and this command
   // exists to be acted on.
-  assert.match(problem, /\.cursor\/rules\/intake-questions\.mdc/);
+  assert.match(problem, /\.github\/instructions\/intake-questions\.instructions\.md/);
   assert.match(problem, /run: simt-dev sync --yes/);
 });
 
@@ -625,4 +631,43 @@ test('compare reports the profiles sync would project (S25)', async () => {
   const planned = await plan(root);
   assert.deepEqual(row.profiles, planned.profiles);
   assert.ok(row.profiles.length > 0, 'the fixture must select at least one profile, or the field could still be empty and pass');
+});
+
+test('compare reports an orphaned rule file as a note, never a problem (S12)', async () => {
+  // ADR-021 ruling 6: simt-dev never deletes a file it once generated. So a generated
+  // rule file whose surface now folds the rule into AGENTS.md cannot be repaired by
+  // any command, and calling it a problem would put a repo permanently red with a
+  // remedy that is a lie. There is a note, naming the file and the delete.
+  const root = await gitRepo('orphaned-rule-file', {
+    'package.json': '{"name":"a","private":true}\n',
+    'simt-dev.json': JSON.stringify({
+      id: 'orphaned-rule-file',
+      stack: ['node'],
+      surfaces: ['opencode', 'copilot'],
+      gates: { preCommit: [], prePush: [] },
+    }),
+    'AGENTS.md': '# mine\n',
+  });
+  const built = await plan(root);
+  await writeFile(join(root, 'AGENTS.md'), built.targets[0].text);
+  for (const t of built.targets.filter((x) => x.path.includes('/instructions/'))) {
+    await mkdir(join(t.path, '..'), { recursive: true });
+    await writeFile(t.path, t.text);
+  }
+  // A cursor-shaped leftover from before ADR-046, planted from a real generated file
+  // so the region marker is the tool's own rather than a hand-written approximation.
+  const src = built.targets.find((x) => x.path.includes('/instructions/'));
+  await mkdir(join(root, '.cursor/rules'), { recursive: true });
+  await writeFile(join(root, '.cursor/rules/test-gate.mdc'), src.text.replace(/\.md\b/g, '.mdc'));
+
+  const row = await buildRow(root, { ...CONTEXT, expectedSha: built.targets[0].sha });
+  assert.deepEqual(row.ruleFiles.orphaned, ['.cursor/rules/test-gate.mdc']);
+  // A note, not a problem: the difference is the exit code, and no remedy can fix it.
+  assert.equal(row.problems.filter((p) => /repeat text already folded/.test(p)).length, 0);
+  const note = row.notes.find((n) => /repeat text already folded/.test(n));
+  assert.ok(note, `expected a note; notes were ${JSON.stringify(row.notes)}`);
+  assert.match(note, /delete them/);
+  assert.match(note, /will not remove a file it wrote/);
+  // ...and it is not counted among the rule files it cannot repair either.
+  assert.deepEqual(row.ruleFiles.stale, []);
 });

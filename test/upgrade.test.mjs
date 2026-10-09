@@ -398,6 +398,11 @@ test('upgrade: never commits or pushes (ADR-001)', async () => {
 });
 // --- upgrade restamps every generated file, not only AGENTS.md -----------------
 
+// These two tests use copilot rather than cursor for the per-rule file, and that is
+// ADR-046: cursor reads AGENTS.md, so it is no longer planned a file at all and a
+// fixture built on it would have nothing to make stale or repair. The property under
+// test is unchanged - a generated rule file is repaired wholesale, a malformed region
+// in a file the repo also hand-writes is a fault that stops the run.
 test('upgrade: a current AGENTS.md with stale .mdc rules is still behind', async () => {
   // The defect this test exists for. `upgrade` planned and wrote `targets[0]` only, so a
   // repo whose AGENTS.md region was current but whose three `.mdc` rules were stale was
@@ -408,12 +413,12 @@ test('upgrade: a current AGENTS.md with stale .mdc rules is still behind', async
   // A second surface is opted into so the repo really does have several generated
   // files. The default surface folds every rule into AGENTS.md, and one file cannot
   // prove that `upgrade` restamps all of them.
-  const adopted = await run(['init', a, '--yes', '--surfaces', 'opencode,cursor']);
+  const adopted = await run(['init', a, '--yes', '--surfaces', 'opencode,copilot']);
   assert.equal(adopted.code, 0, adopted.stderr);
   await pin(a, 'aaaaaaa');
 
   // Rewind only the `.mdc` rules to a stale SHA, leaving AGENTS.md current.
-  const mdc = join(a, '.cursor/rules/test-gate.mdc');
+  const mdc = join(a, '.github/instructions/test-gate.instructions.md');
   const stale = (await readFile(mdc, 'utf8')).replace(/simt-dev:sha=[0-9a-f]+/, 'simt-dev:sha=aaaaaaa');
   await writeFile(mdc, stale);
   const agentsSha = /simt-dev:sha=[0-9a-f]+/.exec(await readFile(join(a, 'AGENTS.md'), 'utf8'))[0];
@@ -441,11 +446,11 @@ test('upgrade: a malformed AGENTS.md is a fault, while a malformed .mdc rule is 
   // fails, and nothing is written anywhere in the repo.
   const root = await mkdtemp(join(tmpdir(), 'simt-up-bad-'));
   const a = await repo(join(root, 'a'), { 'wrangler.jsonc': '{"name":"a"}' });
-  assert.equal((await run(['init', a, '--yes', '--surfaces', 'opencode,cursor'])).code, 0);
+  assert.equal((await run(['init', a, '--yes', '--surfaces', 'opencode,copilot'])).code, 0);
   await pin(a, 'aaaaaaa');
 
   // A broken .mdc region is repaired by the write, because the whole file is generated.
-  const mdc = join(a, '.cursor/rules/test-gate.mdc');
+  const mdc = join(a, '.github/instructions/test-gate.instructions.md');
   await writeFile(mdc, (await readFile(mdc, 'utf8')).replace('<!-- simt-dev:end -->', ''));
   assert.equal((await run(['upgrade', '--root', a, '--yes'])).code, 0);
   assert.equal((await run(['check', '--root', a])).code, 0, 'the broken rule was not repaired');

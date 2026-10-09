@@ -20,12 +20,40 @@ const W = {
   summary: 8, // weak: a word shared with the summary
 };
 
-/** Split a task string into comparable tokens. */
+/**
+ * Split a task string into comparable tokens.
+ *
+ * Length 2 is kept. The floor used to be 3, and it dropped the most specific words in
+ * this domain: `d1`, `r2`, `kv`, `ci` are two-letter vocabulary, not noise, and a task
+ * saying "fix d1 migration" lost the one word that identified the change. The cost is
+ * that six stopwords of two letters (`in on of or an so`) now reach the summary signal,
+ * which is S04's finding and not something this change can resolve on its own - the
+ * remedy there is a stopword list, not a longer minimum.
+ */
 export function tokenize(text) {
   return String(text ?? '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter((t) => t.length > 2);
+    .filter((t) => t.length > 1);
+}
+
+/**
+ * Whether `phrase` occurs in `tokens` as consecutive words.
+ *
+ * Keywords are compared one token at a time, so a multi-word keyword could never
+ * match: "durable object" tokenizes to two tokens, and neither is equal to the keyword
+ * as declared, so the declared keyword was unreachable however the task was phrased.
+ * 13 of the registry's 232 unique keywords were dead that way, including one declared
+ * on four separate skills. Matching as a phrase keeps them checkable and keeps
+ * determinism - there is no model and no similarity, only adjacency.
+ */
+function hasPhrase(tokens, phrase) {
+  if (phrase.length === 0) return false;
+  if (phrase.length === 1) return tokens.includes(phrase[0]);
+  for (let i = 0; i + phrase.length <= tokens.length; i += 1) {
+    if (phrase.every((word, j) => tokens[i + j] === word)) return true;
+  }
+  return false;
 }
 
 /**
@@ -94,14 +122,20 @@ export function scoreSkill(skill, context) {
   }
 
   // --- keyword signal ---------------------------------------------------------
-  const keywords = new Set(skill.keywords ?? []);
+  // A declared keyword is matched as a phrase, so the reason quotes the declaration
+  // rather than a token of it: `keyword:durable object` is what a reader can check
+  // against the registry, and `keyword:durable` would be a keyword nobody declared.
+  const keywords = skill.keywords ?? [];
   const summaryWords = new Set(tokenize(skill.summary));
   const nameWords = new Set(tokenize(skill.name));
-  for (const token of taskTokens) {
-    if (keywords.has(token)) {
+  for (const keyword of keywords) {
+    if (hasPhrase(taskTokens, tokenize(keyword))) {
       score += W.keyword;
-      reasons.push(`keyword:${token}`);
-    } else if (nameWords.has(token)) {
+      reasons.push(`keyword:${keyword}`);
+    }
+  }
+  for (const token of taskTokens) {
+    if (nameWords.has(token)) {
       score += W.name;
       reasons.push(`name:${token}`);
     } else if (summaryWords.has(token)) {

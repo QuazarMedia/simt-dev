@@ -118,7 +118,7 @@ record is written.
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | S01 | Provenance stamp came from the consumer's git, not simt-dev | P0 | F | projection | yes (P1) | — | Complete | ADR-032; `provenanceDigest()` |
 | S02 | Leading `**/` path globs never match | P0 | F | resolve | **yes (ADR-042)** | S47 (optional) | Complete | `08df13e` |
-| S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | no | — | Queued | #14 |
+| S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | **yes (ADR-043)** | — | Complete | `PENDING` |
 | S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | yes | S02, S03 | Queued | #14 |
 | S05 | MCP `rules_why` crashes on every call | P0 | F | mcp | no | — | Complete | `1791a95` (review 0001 #15) |
 | S06 | MCP and CLI disagree; the closure ignores the budget | P1 | F | mcp, resolve | no | S05 | Queued | #14, code |
@@ -175,8 +175,8 @@ record is written.
 | --- | --- | --- |
 | S01 | open, and visible estate-wide | **now Complete** — ADR-032 replaced the git stamp with `provenanceDigest()`; the `sync` half below still stands |
 | S02 | **Complete** — ADR-042 | 13 of 65 globs matched nothing and `graph lint` could not see it; fixed by translating segment by segment, and lint now rejects a glob that matches no path built from itself. The brace and `?` forms named below are still unsupported, by decision: the registry declares neither |
-| S03 | open | `tokenize("Fix the UI CI job in Go: add a DB migration for i18n, ar/RTL, café, تحويل")` → `fix, the, job, add, migration, for, i18n, rtl, caf` |
-| S04 | open, extended | a stopword selects (below) |
+| S03 | **Complete** — ADR-043 | `tokenize` kept length 3, so `d1`, `r2`, `kv` and `ci` were dropped, and keywords matched token by token so `durable object` could never match. Both acceptance commands now print the `keyword:` reason, asserted against the shipped binary |
+| S04 | open, extended | a stopword selects (below) — and it already did before S03: `the` selected 11 skills at the old floor, `and` 29. S03 adds six more offenders, not the problem |
 | S05 | **Complete** | `1791a95` — all three call shapes crashed, not two; `tools.mjs:316` destructured an array |
 | S06 | open, extended | the closure runs before the budget (below) |
 | S07 | open | a fixture with all six slash-path facts emits only `has-tests-dir` (`fingerprint.mjs:168-173`) |
@@ -242,6 +242,17 @@ summary (weight 8) and selected `add-country-galaxy` in a repository unrelated t
 Add a stopword list to summary matching, and a minimum score of 25, so that only a
 capability-strength signal or better selects. This is on top of 0001's "stack is a
 tiebreaker".
+
+> **Evidence from S03.** The single example understates this. Measured across the registry,
+> `the` selects 11 skills and `and` selects 29 — **at the length-3 floor, before S03 landed**. The
+> mechanism is that `summary:` is weight 8 and anything above 0 is selected, so the threshold was
+> never a threshold. S03 lowers the tokenizer floor to 2 and admits six more stopwords (`or` selects
+> 11 on its own), which makes the finding bigger without creating it, and that measurement is
+> recorded in ADR-043 rather than left for whoever picks this row up to discover.
+>
+> It also settles the order of work: the fix is the stopword list and the minimum score named above.
+> Restoring the tokenizer floor to 3 would silence this row and make `d1` unselectable again, which
+> is the defect S03 was filed to end.
 
 **S06.** Both budget loops also inline the `requires` closure of a parent that was itself
 deferred. `closure()` runs before the budget (`skills.mjs:266`, `tools.mjs:127`), and `isDep`

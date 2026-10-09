@@ -1,18 +1,35 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 import { tokenize, scoreSkill, rankSkills, closure, resolveAlias, matchesGlob, stackCompatible, syntheticPathFor } from '../src/resolve/resolve.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const BIN = resolve(ROOT, 'bin', 'simt-dev.mjs');
+const exec = promisify(execFile);
 const registry = JSON.parse(await readFile(resolve(ROOT, 'graph', 'skills.graph.json'), 'utf8'));
 const skills = registry.skills;
 const byName = new Map(skills.map((s) => [s.name, s]));
 
-test('resolve: tokenize drops short words and punctuation', () => {
-  assert.deepEqual(tokenize('Add a Room DB migration!'), ['add', 'room', 'migration']);
+test('resolve: tokenize keeps two-letter words and drops punctuation (S03)', () => {
+  // The floor was 3, which discarded the most specific words in this domain. `db` is
+  // not noise in "Add a Room DB migration", and `d1` is not noise in "fix d1 migration".
+  assert.deepEqual(tokenize('Add a Room DB migration!'), ['add', 'room', 'db', 'migration']);
+  assert.deepEqual(tokenize('Fix the UI CI job'), ['fix', 'the', 'ui', 'ci', 'job']);
+  assert.deepEqual(tokenize('ar/RTL, café'), ['ar', 'rtl', 'caf']);
+});
+
+test('resolve: the two-letter words this registry depends on survive tokenization (S03)', () => {
+  // Not a sample: every alias of two letters in the capability table, which is where
+  // they were silently dead. `d1` lost is a resolver that cannot be told about D1 at
+  // all, and the score it would have carried was the highest a task can offer.
+  for (const word of ['ui', 'r2', 'kv', 'd1', 'ci']) {
+    assert.ok(tokenize(`do the ${word} work`).includes(word), `${word} was dropped`);
+  }
 });
 
 test('resolve: identical inputs produce identical output', () => {
@@ -166,7 +183,35 @@ test('resolve: every glob the registry declares matches a path built from it (S0
   }
 });
 
-test('resolve: a path signal now reaches the skills that declare a leading ** (S02)', () => {
+test('resolve: a multi-word keyword matches as a phrase and names itself (S03)', () => {
+  // Keywords used to be compared one task token at a time, so "durable object" could
+  // never match: neither token equals the declared keyword. It is declared on four
+  // skills, and it was dead on all four.
+  const durable = byName.get('durable-objects');
+  const hit = scoreSkill(durable, { repoStack: [], taskTokens: tokenize('write a durable object store'), paths: [] });
+  assert.ok(hit.reasons.includes('keyword:durable object'), `no phrase reason: ${hit.reasons}`);
+});
+
+test('resolve: a phrase needs its words adjacent, in any order-free run (S03)', () => {
+  // Adjacency is what makes this a phrase rather than a bag of words, and it is the
+  // part that keeps it deterministic - there is no similarity and no model here.
+  const durable = byName.get('durable-objects');
+  const apart = scoreSkill(durable, { repoStack: [], taskTokens: tokenize('durable storage object'), paths: [] });
+  assert.ok(!apart.reasons.includes('keyword:durable object'), 'matched a phrase whose words are not adjacent');
+  const together = scoreSkill(durable, { repoStack: [], taskTokens: tokenize('a durable object'), paths: [] });
+  assert.ok(together.reasons.includes('keyword:durable object'));
+});
+
+test('resolve: every keyword the registry declares is reachable (S03)', () => {
+  // Registry-wide, same shape as the glob check in S02: no keyword may be unsayable.
+  const keywords = [...new Set(skills.flatMap((s) => s.keywords ?? []))];
+  assert.ok(keywords.length > 0, 'the registry declares no keywords, so this would pass for free');
+  for (const keyword of keywords) {
+    assert.ok(tokenize(keyword).length > 0, `"${keyword}" keeps no word the tokenizer keeps`);
+  }
+});
+
+test('resolve: the path signal now reaches the skills that declare a leading ** (S02)', () => {
   // The end of the chain: the matcher being correct is worth nothing if the signal
   // does not arrive. complete-testing declares a leading-star test glob, so a diff
   // that is one test file must select it - which it could not while the glob was dead.
@@ -200,4 +245,24 @@ test('resolve: every skill in the registry can be scored without throwing', () =
     assert.equal(typeof score, 'number');
     assert.ok(Array.isArray(reasons));
   }
+});
+
+// --- the acceptance review 0001 named, run through the shipped binary ------------
+//
+// Both claims below are about what a reader sees, not about a function's return value,
+// so they are asked of the command. A unit test proves the matcher; only this proves the
+// `keyword:` reason an agent is meant to act on is actually printed.
+
+test('resolve: `skills find "durable object"` reports the keyword (S03)', async () => {
+  // Review 0001 §S03, verbatim: this command reported four matches and not one
+  // `keyword:` reason, on a phrase four skills declare.
+  const { stdout } = await exec('node', [BIN, 'skills', 'find', 'durable object']);
+  assert.match(stdout, /keyword:durable object/);
+});
+
+test('resolve: `skills brief --task "d1 migration"` reports the keyword (S03)', async () => {
+  // The same finding's second claim: `d1` tokenized away entirely, so the single most
+  // specific word in the task could not select anything.
+  const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'd1 migration', '--root', ROOT]);
+  assert.match(stdout, /keyword:d1/);
 });

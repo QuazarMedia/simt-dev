@@ -62,8 +62,9 @@ export const DEPENDABOT_FILE = '.github/dependabot.yml';
  * clearest case: `node` is a stack tag in `fingerprint.mjs` and `typescript` is
  * a dependency name, so a repo's package manager is either of those and adding
  * `has-node-manifest` would be a third name for one observation - the exact
- * duplication that table's own header rules out. Every other entry below is a
- * real `has-*` fact, which is why npm reads differently from its neighbours.
+ * duplication that table's own header rules out. `gradle` is the same shape:
+ * the stack tag already names the build file. Every other entry below is a
+ * real `has-*` fact.
  *
  * `has-build-system` is deliberately NOT mapped: Makefile, CMakeLists and
  * meson.build are build files, not dependency manifests, and Dependabot has no
@@ -83,6 +84,15 @@ const ECOSYSTEMS = [
   { fact: 'has-dockerfile', value: 'docker', manifest: 'Dockerfile' },
   { fact: 'has-compose', value: 'docker-compose', manifest: 'compose file' },
   { fact: 'has-terraform', value: 'terraform', manifest: '*.tf' },
+  { stack: 'gradle', value: 'gradle', manifest: 'build.gradle' },
+  { fact: 'has-submodules', value: 'gitsubmodule', manifest: '.gitmodules' },
+  { fact: 'has-nuget', value: 'nuget', manifest: '*.csproj' },
+  { fact: 'has-pubspec', value: 'pub', manifest: 'pubspec.yaml' },
+  { fact: 'has-swift-package', value: 'swift', manifest: 'Package.swift' },
+  { fact: 'has-mix', value: 'mix', manifest: 'mix.exs' },
+  { fact: 'has-uv-lock', value: 'uv', manifest: 'uv.lock' },
+  { fact: 'has-bun-lock', value: 'bun', manifest: 'bun.lock' },
+  { fact: 'has-devcontainer', value: 'devcontainers', manifest: 'devcontainer.json' },
 ];
 
 /**

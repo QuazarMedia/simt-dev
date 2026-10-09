@@ -211,7 +211,10 @@ const S28_ROWS = [
     row: 'any TypeScript library is not a Worker',
     files: { 'package.json': deps({ typescript: '^5' }), 'index.ts': 'export const x = 1;\n' },
     stack: ['node', 'typescript'],
-    profiles: ['core', 'node'],
+    // S45 moved the language spelling out of core into a fallback profile, so a
+    // TypeScript library receives it alongside `node`. The row's claim is unchanged:
+    // `cloudflare-workers` is not among the selected profiles.
+    profiles: ['core', 'node', 'typescript'],
   },
   {
     row: 'a Spring or Ktor backend on Gradle is a JVM, not Android',
@@ -241,7 +244,9 @@ const S28_ROWS = [
     row: 'Hono runs on Node, so it is not evidence of Workers',
     files: { 'package.json': deps({ hono: '^4' }), 'src/index.ts': 'export const app = 1;\n' },
     stack: ['hono', 'node', 'typescript'],
-    profiles: ['core', 'node'],
+    // S45's fallback applies here too: hono has no profile of its own, so nothing
+    // more specific matched. The row's claim is about Workers, not TypeScript.
+    profiles: ['core', 'node', 'typescript'],
   },
   {
     row: 'a plain wrangler.json is evidence of Workers',

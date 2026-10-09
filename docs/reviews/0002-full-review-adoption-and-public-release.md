@@ -152,7 +152,7 @@ record is written.
 | S34 | Folded rules break the heading hierarchy | P2 | F | projection | no | — | Complete | `9a2fb1e` |
 | S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (P5) | S18 | Queued | #20 |
 | S36 | Estate roll-out: from 14 drifted to 14 enforced | P1 | A | adoption | amend ADR-018 | S01, S08, S10, S24, S35 | Queued | #3 |
-| S37 | A region past a harness's read limit is invisible to it | P1 | A | projection | no | — | Queued | #18 |
+| S37 | A region past a harness's read limit is invisible to it | P1 | A | projection | no | — | Complete | `e984d12` |
 | S38 | Workspace token cost: 90 KB per turn, 72% repeated | P1 | A | projection | yes (P7) | S12 | Queued | #17 |
 | S39 | Estate policy belongs in an estate pack | P1 | A | rules, package | yes (P4) | S28 | Queued | profiles |
 | S40 | Eight common ecosystems get only the core rules | P1 | R | fingerprint, rules | no (data, ADR-013) | S28 | Queued | #6 |

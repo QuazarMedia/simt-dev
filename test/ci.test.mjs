@@ -109,7 +109,7 @@ test('the workflow runs the gate, located by the same function the hook uses', (
   const check = renderLocator('check --root "$ROOT"');
   const hook = renderLocator(`hooks run ${EVENTS[0]} --root "$ROOT"`, {
     subject: 'the dispatcher',
-    remedy: 'REMEDY run: npm i -D @quazarmedia/simt-dev   (or unset core.hooksPath to opt out)',
+    remedy: 'REMEDY set SIMT_DEV_BIN to the simt-dev binary, or unset core.hooksPath to opt out',
   });
   const normalise = (text) =>
     text
@@ -137,6 +137,10 @@ test('the workflow runs the gate, located by the same function the hook uses', (
   };
   carries(yaml, check, 'the workflow');
   carries(renderShim(EVENTS[0]), hook, 'the hook shim');
+  // The package is not published, so the shim must not tell a reader to install it.
+  // The workflow's install line is a different surface and stays until that is decided.
+  assert.match(renderShim(EVENTS[0]), /set SIMT_DEV_BIN to the simt-dev binary/);
+  assert.doesNotMatch(renderShim(EVENTS[0]), /npm i -D/);
   assert.match(yaml, /REMEDY run: npm i -D @quazarmedia\/simt-dev/);
 });
 

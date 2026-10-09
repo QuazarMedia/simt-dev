@@ -17,7 +17,7 @@
 import { EXIT, emit, fail, isJson } from '../output/index.mjs';
 import { loadRules, select } from '../projection/project.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { byId, citations, loadDecisions } from '../decisions/index.mjs';
+import { byId, citations, loadDecisions, redactEstate } from '../decisions/index.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 
 const kb = (bytes) => `${(bytes / 1000).toFixed(1)}k`;
@@ -340,19 +340,20 @@ async function adrDirection(adr, rules, decisions, flags) {
   // that owns none of those files.
   if (effective.summary.ruled.length > 0) {
     lines.push('', replacement ? 'ruled now' : 'ruled');
-    for (const r of effective.summary.ruled) lines.push(`  - ${r}`);
+    for (const r of effective.summary.ruled) lines.push(`  - ${redactEstate(r)}`);
   }
   if (effective.summary.rejected.length > 0) {
     // The rejected alternatives are the part a reader cannot reconstruct. A ruling is
-    // only legible against the option it refused.
+    // only legible against the option it refused. Estate names in that option are
+    // redacted: they name files the reader does not have.
     lines.push('', 'rejected');
-    for (const r of effective.summary.rejected) lines.push(`  - ${r}`);
+    for (const r of effective.summary.rejected) lines.push(`  - ${redactEstate(r)}`);
   }
   if (effective.summary.writtenAgainst.length > 0) {
     lines.push(
       '',
-      `written against  ${effective.summary.writtenAgainst.join(', ')}`,
-      `                the ruling above is the part that generalises; those files are not yours.`,
+      'written against  repositories this record surveyed',
+      '                the ruling above is the part that generalises; those files are not yours.',
     );
   }
 

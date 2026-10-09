@@ -8,6 +8,7 @@
 // rule bodies. A third shipped surface gets the import, not a third copy.
 
 import assert from 'node:assert/strict';
+import { ESTATE_NAME } from '../src/decisions/index.mjs';
 
 /**
  * Paths and phrases that only mean something inside simt-dev's own tree.
@@ -22,8 +23,7 @@ export const LEAKS = [
   { re: /rules\/stacks\//, what: 'this repository\'s rule layout' },
   { re: /rules\/core\.md/, what: 'this repository\'s rule layout' },
   { re: /rules\/mdc\//, what: 'this repository\'s rule layout' },
-  { re: /\bsimt-(app|space|goto|social|blog|landing|garmin|jobs|media|wearable)\b/, what: 'a repository from this estate' },
-  { re: /\b(bunnyland|wakt-app|app-ui)\b/, what: 'a repository from this estate' },
+  { re: ESTATE_NAME, what: 'a repository from this estate' },
   { re: /\bthe estate\b|\ball 16 repos\b|\bthis audit\b/i, what: 'an investigation artefact' },
 ];
 

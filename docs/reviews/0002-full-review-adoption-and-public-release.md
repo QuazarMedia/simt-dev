@@ -148,7 +148,7 @@ record is written.
 | S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | **yes (ADR-048, withdraws ADR-025 r8)** | — | Complete | `81bb705` |
 | S31 | Partial supersession is lost by the decision index | P2 | F | decisions | **yes (ADR-049)** | S19 (the `**accepted**` half) | Complete | `7d9060d` |
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Complete | `c5bd2f5` |
-| S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Queued | #14 |
+| S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Complete | `7153ea7` |
 | S34 | Folded rules break the heading hierarchy | P2 | F | projection | no | — | Queued | rendered regions |
 | S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (P5) | S18 | Queued | #20 |
 | S36 | Estate roll-out: from 14 drifted to 14 enforced | P1 | A | adoption | amend ADR-018 | S01, S08, S10, S24, S35 | Queued | #3 |

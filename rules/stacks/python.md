@@ -6,15 +6,17 @@ simt-applies: [python]
 
 # Stack profile: Python
 
-Applies to: `python`.
+Applies to: `python`. The environment rules — how to invoke tools, and which lockfile
+owns them — are in the `uv` profile, which selects on `has-uv-lock`.
 
 ## Invocation
 
-- `uv run -m pytest`, or the repository's own wrapper script. **Never** `uv run pytest`: the
-  console entrypoint can miss the `uv` import path and silently run against the wrong
-  environment, importing a different copy of the package than the one under test.
-- `uv run ruff check src tests` for lint; never a bare `ruff` from a different environment.
-- Do not run `uv sync` unless explicitly asked. It mutates the lockfile mid-task.
+- Run through the repository's own runner: `uv run` where a `uv.lock` is committed,
+  `poetry run` where a `poetry.lock` is, and the repository's documented wrapper
+  otherwise. See the `uv` profile for the form that must not be used.
+- Never invoke a tool from whatever environment the shell happens to have. It will
+  usually be a different copy of the package than the one under test, and the failure
+  it produces looks like a bug in the code.
 
 ## Typing
 
@@ -26,17 +28,17 @@ Applies to: `python`.
 
 ## Tests
 
-- `fail_under` is set per repo in `simt-dev.json` (ADR-006). Where a repo requires 100 %, treat
-  it as a behavioural gate: an uncovered path is either a missing test or dead code, and both
-  are defects.
+- `fail_under` is set per repo in `simt-dev.json` (ADR-006). Where a repo requires
+  100 %, treat it as a behavioural gate: an uncovered path is either a missing test
+  or dead code, and both are defects.
 - No `pytest.skip` without a pre-existing written justification.
-- Test the narrowest layer that proves the behaviour; reach for an integration test only when
-  the behaviour is genuinely cross-system.
+- Test the narrowest layer that proves the behaviour; reach for an integration test
+  only when the behaviour is genuinely cross-system.
 
 ## Diff hygiene
 
-- `git diff --check` before handoff: no whitespace errors, no conflict markers, no stray
-  debug prints.
+- `git diff --check` before handoff: no whitespace errors, no conflict markers, no
+  stray debug prints.
 - Generated artifacts (coverage output, build directories, caches) are not committed.
 
 ## Async

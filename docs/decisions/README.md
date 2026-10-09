@@ -54,6 +54,7 @@ record's status line — never by editing the ruling in place.
 | [044](ADR-044-compatibility-is-not-evidence.md) | Compatibility is not evidence, and a resolver nobody measured is merely felt | accepted |
 | [045](ADR-045-a-dashboard-that-counts-a-defect.md) | A dashboard that counts a defect and will not name it is worse than one that does not count it | accepted |
 | [046](ADR-046-one-rule-one-copy.md) | One rule, one copy: a reader that reads AGENTS.md must not also get the file | accepted |
+| [047](ADR-047-a-profile-selects-on-what-a-repository-runs-on.md) | A profile selects on what a repository runs on, not on what it is written in | accepted · refines ADR-013 r1 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -261,6 +262,18 @@ three of six mutations passed all 627 tests, including the one that would have m
 can satisfy — a file simt-dev will never write again and may never delete. A feature whose failure
 mode is "the tool silently stops looking at something it wrote" needs a negative control, because
 the broken version returns an empty list and passes every positive test.
+
+ADR-047 is the same rule applied to what a profile *selects on*, and it refines ADR-013 ruling 1
+rather than overturning it. ADR-013 promised genericity from emitted facts and repo-local
+profiles, and said detection emits facts and profiles select on facts. But the shipped
+`simt-applies` lists were keyed on language tags — `typescript`, `gradle`, `react` — which name
+what a repo is *written in*, not what it *runs on*. So any TypeScript library received Cloudflare
+Workers rules (D1, Durable Objects, wrangler), a Spring backend on Gradle received Compose and
+Wear OS rules, a React Native app received web CSS rules, and a Poetry project received `uv`
+rules. The defect was invisible in the usual way: the selection was deterministic, every test
+passed, and the profile simply landed in the wrong ecosystem. The fix is data plus `has-*`
+facts, exactly as ADR-013 requires — no engine change — and the one piece that needed a mechanism
+was `has-android-manifest`, a nested path, which is the glob walk S07's dependency closed.
 
 ## The rule these records enforce
 

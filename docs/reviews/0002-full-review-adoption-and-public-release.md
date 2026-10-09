@@ -143,7 +143,7 @@ record is written.
 | S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | **yes (ADR-045)** — the tracker said `no`, and that was wrong | — | Complete | `e780713` |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `4c73025` |
-| S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (P3) | S07 (done) | Queued | #5, #6 |
+| S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | **yes (ADR-047)** | S07 (done) | Complete | `PENDING` |
 | S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `1bbc36a` |
 | S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (P9, amends ADR-025) | — | Queued | #7 |
 | S31 | Partial supersession is lost by the decision index | P2 | F | decisions | no | S19 | Queued | #16 |
@@ -661,9 +661,37 @@ before and after.
 > fact's candidate is matched against the root listing, which stops at the root, so a nested
 > `file` path matches nothing. `**` is worse still — it names a *shape*, and no amount of
 > `isFile` answers that. The mechanism this needs is a bounded glob walk, and it must say what
-> it is bounded by before it is written: `sampleExtensions` already walks two levels deep for
-> the extension signal, and ADR-013's promise is that adding an ecosystem is data, so a walk
-> that is unbounded is a scan, not detection.
+ > it is bounded by before it is written: `sampleExtensions` already walks two levels deep for
+ > the extension signal, and ADR-013's promise is that adding an ecosystem is data, so a walk
+ > that is unbounded is a scan, not detection.
+
+> **Resolved by ADR-047**, which refines ADR-013 ruling 1 rather than restating it. All four
+> rows reproduced at estate scale before anything changed, and the fix is data plus `has-*`
+> facts, exactly as ADR-013 requires: no engine change, one new fact kind.
+>
+> The profile split is the substance: `cloudflare-workers` on the wrangler marker or the
+> `wrangler` dependency only; `jvm-android` into `jvm` (a JVM build) and `android`
+> (`has-android-manifest`, the one path shape that makes a module buildable as Android);
+> `react-web` on the renderer, with `react-native` as its own profile; `python` into the
+> language and `uv` (the lockfile). The review's build-plugin half of `has-android-manifest` is
+> recorded as rejected in the record — two DSL spellings, and a mid-migration repo can carry
+> the plugin without the manifest — not implemented.
+>
+> Two things worth carrying. First, the one mechanism the split needed was the bounded glob
+> walk above, and its bound is the Android Gradle Plugin convention rather than a preference:
+> shallower makes `has-android-manifest` the shape S07 found — a fact no repository could have.
+> Second, the vocabulary check that ADR-013's consequences promised for profiles was never
+> implemented: `graph lint` checked a skill's `stack` array, and nothing checked a profile's
+> `applies`. That is how four wrong selections shipped green. It now fails at load time, for
+> central and local profiles alike.
+>
+> The acceptance said `compare` would show the same profiles as before for every repository,
+> with `simt-app` gaining `android`. The measurement is wider: **4 of 16 repositories move, 12
+> unchanged, and no repository loses coverage** — `app-ui`, `simt-app` and `wakt-app` trade
+> `jvm-android` for `android, jvm`, and `bunnyland-server` gains `uv`, which it already had a
+> lockfile for. The id `jvm-android` no longer exists, which is breaking for any consumer that
+> pinned it; nothing in the estate did. Seven mutations, all caught by the fixture table's
+> exact-set rows.
 
 ### S29 — An appended region fails `prettier --check` (P1)
 
@@ -1267,7 +1295,7 @@ knowable. Every `ADR-` reference in this review therefore names a record you can
 | --- | --- | --- | --- |
 | P1 | A projection is identified by its content, not by a commit | S01 | the stamp described in plan 0002 §9 |
 | P2 | Every writer previews unless told to write; `--dry-run` always wins; `--json` changes format only | S24, S10 | — |
-| P3 | A profile selects on what a repository runs on | S28 | refines ADR-013 |
+| P3 | A profile selects on what a repository runs on | S28 | **ADR-047** for S28 — refines ADR-013 r1, settled on the platform evidence rather than the language |
 | P4 | Estate policy ships as a pack; the product ships generic profiles and an example registry | S39, S18 | — |
 | P5 | How a repository without npm obtains simt-dev | S35 | clarifies ADR-010 |
 | P6 | A package in a monorepo is a projection root | S41 | — |

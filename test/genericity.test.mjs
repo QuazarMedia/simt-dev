@@ -194,6 +194,200 @@ test('facts reach the region through plan, not only through select', async () =>
   assert.ok(result.targets[0].body.includes('never a bare rustc'));
 });
 
+// --- a profile selects on what the repository RUNS ON -------------------------
+
+const deps = (dependencies) => JSON.stringify({ name: 'x', dependencies });
+
+/**
+ * Each row of S28's finding, as a repository that has to reach a profile set.
+ *
+ * `stack` is asserted next to `profiles` on purpose: a row claims what the repository
+ * IS, and a fixture that quietly stopped being a TypeScript library would still prove
+ * the profile is reachable. That is a weaker claim than the row makes, and it is the
+ * one a mutation produces.
+ */
+const S28_ROWS = [
+  {
+    row: 'any TypeScript library is not a Worker',
+    files: { 'package.json': deps({ typescript: '^5' }), 'index.ts': 'export const x = 1;\n' },
+    stack: ['node', 'typescript'],
+    profiles: ['core', 'node'],
+  },
+  {
+    row: 'a Spring or Ktor backend on Gradle is a JVM, not Android',
+    files: { 'build.gradle.kts': 'plugins { kotlin("jvm") }\n', 'src/main/kotlin/Api.kt': 'class Api\n' },
+    // `kotlin` is not in the expected stack: the extension sample walks two levels and
+    // `src/main/kotlin` is three down, so a Ktor backend is identified here by its
+    // build file. Asserting `kotlin` here would be asserting a sampling bound S28 does
+    // not change, and the row's claim - a Gradle build that is not an Android module -
+    // does not need it.
+    stack: ['gradle'],
+    profiles: ['core', 'jvm'],
+  },
+  {
+    row: 'React Native and Expo are not React web',
+    files: { 'package.json': deps({ react: '^18', 'react-native': '^0.74', expo: '^51' }) },
+    stack: ['node', 'react', 'react-native'],
+    profiles: ['core', 'react-native'],
+  },
+  {
+    row: 'a Poetry project is not a uv project',
+    files: { 'pyproject.toml': '[tool.poetry]\nname = "x"\n', 'poetry.lock': '' },
+    stack: ['python'],
+    profiles: ['core', 'python'],
+  },
+  {
+    row: 'Hono runs on Node, so it is not evidence of Workers',
+    files: { 'package.json': deps({ hono: '^4' }), 'src/index.ts': 'export const app = 1;\n' },
+    stack: ['hono', 'node', 'typescript'],
+    profiles: ['core', 'node'],
+  },
+  {
+    row: 'a plain wrangler.json is evidence of Workers',
+    files: { 'package.json': deps({ hono: '^4' }), 'wrangler.json': '{}\n' },
+    stack: ['cloudflare-workers', 'hono', 'node'],
+    profiles: ['core', 'cloudflare-workers'],
+  },
+  {
+    row: 'a browser React app is React web',
+    files: { 'package.json': deps({ react: '^18', 'react-dom': '^18' }) },
+    stack: ['node', 'react', 'react-dom'],
+    profiles: ['core', 'react-web'],
+  },
+  {
+    row: 'an Android module is Android',
+    files: { 'app/src/main/AndroidManifest.xml': '<manifest/>\n', 'app/build.gradle.kts': '\n' },
+    stack: ['gradle'],
+    profiles: ['core', 'android', 'jvm'],
+  },
+  {
+    row: 'a uv project is Python and uv',
+    files: { 'pyproject.toml': '[project]\nname = "x"\n', 'uv.lock': '' },
+    stack: ['python'],
+    profiles: ['core', 'python', 'uv'],
+  },
+];
+
+test('a profile selects on what the repository runs on, not on what it is written in', async () => {
+  const rules = await loadRules();
+  for (const entry of S28_ROWS) {
+    const root = await fixture(entry.files);
+    const fp = await fingerprint(root);
+    assert.deepEqual(
+      fp.stack,
+      entry.stack,
+      `${entry.row}: the fixture no longer is what the row claims`,
+    );
+    const { selected } = select(rules, fp.stack, fp.facts);
+    // Unsorted on purpose: `core` comes first because it applies always, and the rest
+    // follow in the order the profile files are read. Sorting would drop that, and the
+    // order is what a reader of the region's source list sees.
+    assert.deepEqual(
+      selected.map((r) => r.id),
+      entry.profiles,
+      `${entry.row} selected the wrong profiles`,
+    );
+  }
+});
+
+test('the react-web and react-native rows differ only by the renderer', async () => {
+  // The pair the finding turns on. Before S28 both arrived as `node, react`, so no
+  // change to a profile could have separated them; the separation had to come from a
+  // tag that says which platform renders. Asserting the shared half too, because the
+  // two rows are only comparable if they agree on everything else.
+  const web = S28_ROWS.find((r) => r.row === 'a browser React app is React web');
+  const native = S28_ROWS.find((r) => r.row === 'React Native and Expo are not React web');
+  const shared = web.stack.filter((tag) => native.stack.includes(tag));
+  assert.deepEqual(shared, ['node', 'react']);
+  assert.ok(!native.stack.includes('react-dom'));
+  assert.ok(!web.stack.includes('react-native'));
+});
+
+// --- a glob fact, the third kind ---------------------------------------------
+
+test('a glob fact names the file that proved it, not the shape that matched', async () => {
+  // `doctor` answers "why did you think that?", and the pattern is not an answer. A
+  // fact that reported its own pattern would pass this test if it reported nothing at
+  // all, which is why the matched path is asserted rather than the fact's presence.
+  const root = await fixture({ 'app/src/main/AndroidManifest.xml': '<manifest/>\n' });
+  const result = await fingerprint(root);
+  assert.equal(result.factEvidence['has-android-manifest'], 'app/src/main/AndroidManifest.xml');
+  assert.equal(
+    result.factEvidence['has-android-manifest'].includes('**'),
+    false,
+    'evidence must be a path, not the pattern that searched for one',
+  );
+});
+
+test('a glob fact is bounded, and a path past the bound is not a fact', async () => {
+  // The bound is stated in `GLOB_DEPTH`, and the depth a real ecosystem puts its
+  // manifest at is the reason for its value: `app/src/main/AndroidManifest.xml` is
+  // three directories down, so a bound of two would make the fact the shape S07 found
+  // - present in the table, unreachable in every repository that has it.
+  // GLOB_DEPTH counts directories descended, so `app/src/main` is inside it and
+  // `app/core/src/main` is not: three levels below the root is the Android Gradle
+  // plugin's own source-set layout, and one more is a repository nobody described.
+  const inside = await fixture({ 'a/src/main/AndroidManifest.xml': '<m/>\n' });
+  const outside = await fixture({ 'a/b/src/main/AndroidManifest.xml': '<m/>\n' });
+  assert.ok(
+    (await fingerprint(inside)).facts.includes('has-android-manifest'),
+    'the bound must reach the Android Gradle plugin source-set convention',
+  );
+  assert.equal(
+    (await fingerprint(outside)).facts.includes('has-android-manifest'),
+    false,
+    'the bound must not be a scan',
+  );
+});
+
+test('a glob fact ignores vendored and hidden directories', async () => {
+  // The same reason the extension sample skips them: detection reads a repository's
+  // own source, not the copy of someone else's inside it.
+  const root = await fixture({
+    'node_modules/pkg/src/main/AndroidManifest.xml': '<m/>\n',
+    '.gradle/caches/src/main/AndroidManifest.xml': '<m/>\n',
+  });
+  assert.equal((await fingerprint(root)).facts.includes('has-android-manifest'), false);
+});
+
+test('a glob fact is also emitted when the shape is at the root', async () => {
+  // A star-star stands for zero directories as well as many. A walk that only
+  // descended would report `services/api/uv.lock` and miss the plain `uv.lock` that
+  // every single-package uv repository has.
+  const root = await fixture({ 'uv.lock': '' });
+  assert.equal((await fingerprint(root)).factEvidence['has-uv-lock'], 'uv.lock');
+});
+
+test('no glob fact names a shape that is really a path', async () => {
+  // Without a star-star a `glob` candidate is a `file` or `dir` candidate with a walk
+  // attached, which costs a directory traversal to learn something two `stat` calls
+  // already said. The kind is what says which mechanism answers it.
+  for (const fact of __internals.FACTS) {
+    if (fact.kind !== 'glob') continue;
+    for (const candidate of fact.paths) {
+      assert.ok(
+        candidate.includes('**'),
+        `fact ${fact.name} declares kind "glob" but "${candidate}" names no shape`,
+      );
+    }
+  }
+});
+
+test('a local profile naming a tag the detector never emits is reported', async () => {
+  // The same defect class S28's own applies lists are at risk of: a tag the engine
+  // cannot produce selects nothing, and before this check it loaded without complaint.
+  const root = await fixture({
+    'pyproject.toml': '[project]\nname = "x"\n',
+    [`${LOCAL_PROFILE_DIR}/bad.md`]: '---\nsimt-id: bad\nsimt-applies: [pyton]\n---\nbody\n',
+  });
+  const local = (await loadRules(root)).filter((r) => r.origin === 'local');
+  assert.equal(local.length, 1);
+  assert.equal(
+    local[0].error,
+    'simt-applies names "pyton", which fingerprint() never emits, so this profile could never be selected',
+  );
+});
+
 // --- repo-local profiles ----------------------------------------------------
 
 test('a local profile is loaded, selected, and named in the region header', async () => {
@@ -226,8 +420,11 @@ test('a local profile shadows a central profile of the same id instead of stacki
     'the id must appear once',
   );
   assert.ok(result.targets[0].body.includes('Ours, not theirs.'));
+  // `fail_under` rather than a `uv` line: S28 moved the uv invocation rules into
+  // their own profile, so a sentinel taken from the uv section now passes on any
+  // shadowed body at all - the assertion cannot tell a shadow from a coincidence.
   assert.equal(
-    result.targets[0].body.includes('uv run -m pytest'),
+    result.targets[0].body.includes('fail_under'),
     false,
     'the shadowed central body must not survive',
   );

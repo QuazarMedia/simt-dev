@@ -34,7 +34,29 @@ import { assertClean } from './leaks.mjs';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 // Every profile in the repo, so adding one cannot opt out of these checks.
-const PROFILES = ['node', 'python', 'jvm-android', 'connectiq', 'cloudflare-workers', 'react-web', 'container'];
+// Derived rather than written out: the list this replaced was a hand-maintained
+// copy that only failed when an entry was REMOVED — S28 added four profiles and
+// renamed one, every new body was unchecked, and the suite stayed green. The leak
+// check above reads the same loadRules() this does, so a second copy of the set
+// guarded nothing; what is worth asserting is the property the copy was standing
+// in for, which is that every applies list names a tag the detector emits.
+test('every profile selects on a tag fingerprint() can emit', async () => {
+  const rules = await loadRules();
+  const profiles = rules.filter((r) => r.id !== null);
+  assert.ok(profiles.length >= 8, `expected a non-trivial profile set, got ${profiles.length}`);
+  for (const rule of profiles) {
+    assert.equal(rule.error, null, `${rule.source}: ${rule.error}`);
+    assert.ok(rule.id !== 'core' || rule.applies === 'always', `${rule.source} should apply always`);
+  }
+  assert.equal(
+    rules.filter((r) => r.id === null).length,
+    0,
+    `a profile with no id is projected but can never be selected: ${rules
+      .filter((r) => r.id === null)
+      .map((r) => r.source)
+      .join(', ')}`,
+  );
+});
 
 // --- 1. The rule bodies -------------------------------------------------------------
 
@@ -43,14 +65,6 @@ test('no rule body ships text only its author can act on', async () => {
   assert.ok(rules.length >= 8, 'expected the rule set to be non-trivial');
   for (const rule of rules) {
     assertClean(`rules/${rule.file}`, rule.body);
-  }
-});
-
-test('every profile is covered by the leak check', async () => {
-  const rules = await loadRules();
-  const ids = rules.map((r) => r.id);
-  for (const profile of PROFILES) {
-    assert.ok(ids.includes(profile), `no rule with id "${profile}" exists, so it is unchecked. Found: ${ids.join(', ')}`);
   }
 });
 

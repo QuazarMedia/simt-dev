@@ -107,7 +107,8 @@ const GLOB_DEPTH = 3;
  * manifest, a lockfile, a directory convention. If an entry starts encoding "and
  * therefore it is a Django project", it belongs in a profile instead.
  *
- * kind 'file' and 'dir' probe the repository root; 'pkg' reads the parsed
+ * kind 'file' and 'dir' probe the repository root; 'path' stats one nested file
+ * (including under a dot directory a glob walk skips); 'pkg' reads the parsed
  * manifest; `glob` walks at most `GLOB_DEPTH` directory levels looking for a shape.
  * `paths` is alternatives - first match wins and is reported as evidence, so `doctor`
  * can say which file proved the fact.
@@ -171,6 +172,14 @@ const FACTS = [
   // star-star stands for zero directories as well as many.
   { name: 'has-uv-lock', kind: 'glob', paths: ['**/uv.lock'] },
   { name: 'has-android-manifest', kind: 'glob', paths: ['**/src/main/AndroidManifest.xml'] },
+  { name: 'has-submodules', kind: 'file', paths: ['.gitmodules'] },
+  { name: 'has-nuget', kind: 'glob', paths: ['**/*.csproj', '**/*.sln'] },
+  { name: 'has-pubspec', kind: 'file', paths: ['pubspec.yaml'] },
+  { name: 'has-swift-package', kind: 'file', paths: ['Package.swift'] },
+  { name: 'has-mix', kind: 'file', paths: ['mix.exs'] },
+  { name: 'has-bun-lock', kind: 'file', paths: ['bun.lock', 'bun.lockb'] },
+  // A glob walk skips dot directories, and `.devcontainer` is one. Stat the path.
+  { name: 'has-devcontainer', kind: 'path', paths: ['.devcontainer/devcontainer.json'] },
 ];
 
 /** Facts derived from the parsed manifest rather than from the file listing. */
@@ -222,6 +231,16 @@ export async function fingerprint(root) {
   // unparseable manifest yields a fact's absence, not a wrong answer.
   for (const fact of FACTS) {
     for (const candidate of fact.paths) {
+      if (fact.kind === 'path') {
+        try {
+          await stat(join(root, candidate));
+        } catch {
+          continue;
+        }
+        facts.add(fact.name);
+        factEvidence[fact.name] ??= candidate;
+        break;
+      }
       if (fact.kind === 'glob') {
         const hit = (await findNested(root, candidate))[0];
         if (hit) {

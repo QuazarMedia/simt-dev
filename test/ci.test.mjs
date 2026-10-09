@@ -23,6 +23,7 @@ import { promisify } from 'node:util';
 
 import { renderWorkflow, planWorkflow, isOwnRepo, WORKFLOW_FILE, WORKFLOWS_DIR } from '../src/ci/workflow.mjs';
 import { renderDependabot, planDependabot, DEPENDABOT_FILE } from '../src/ci/dependabot.mjs';
+import { fingerprint } from '../src/resolve/fingerprint.mjs';
 import { renderShim, EVENTS } from '../src/hooks/shim.mjs';
 import { PACKAGE_NAME, renderLocator } from '../src/locate.mjs';
 import { PACKAGE_ROOT } from '../src/workspace.mjs';
@@ -596,7 +597,7 @@ test('every ecosystem in the config is one GitHub documents', async () => {
   const KNOWN = new Set([
     'github-actions', 'npm', 'pip', 'gomod', 'cargo', 'bundler', 'composer',
     'maven', 'docker', 'docker-compose', 'terraform', 'gradle', 'mix', 'nuget',
-    'rust-toolchain', 'devcontainers', 'helm', 'elm', 'git submodule',
+    'rust-toolchain', 'devcontainers', 'helm', 'elm', 'gitsubmodule', 'pub', 'swift', 'uv', 'bun',
   ]);
   const yaml = renderDependabot(
     ['has-pyproject', 'has-requirements', 'has-go-mod', 'has-cargo-toml', 'has-gemfile',
@@ -634,6 +635,17 @@ test('two manifests for one ecosystem produce one entry, not two', async () => {
   const yaml = renderDependabot(['has-pyproject', 'has-requirements'], { stack: [] });
   const pips = [...yaml.matchAll(/package-ecosystem: "pip"/g)];
   assert.equal(pips.length, 1);
+});
+
+test('a Gradle repo with a submodule watches gradle and gitsubmodule', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'simt-dep-'));
+  temps.push(root);
+  await writeFile(join(root, 'build.gradle'), 'plugins {}\n');
+  await writeFile(join(root, '.gitmodules'), '[submodule "app-ui"]\n\tpath = app-ui\n');
+  const found = await fingerprint(root);
+  const yaml = renderDependabot(found.facts, { stack: found.stack });
+  assert.match(yaml, /package-ecosystem: "gradle"/);
+  assert.match(yaml, /package-ecosystem: "gitsubmodule"/);
 });
 
 test('a Makefile is not a dependency manifest and is not mapped to an ecosystem', async () => {

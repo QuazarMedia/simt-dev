@@ -443,7 +443,7 @@ test('dispatcher: a staged deletion does not break restaging the file that is st
     files: { 'doomed.md': 'doomed\n', 'keep.md': 'keep\n' },
   });
   await exec('git', ['add', '-A'], { cwd: root });
-  await exec('git', ['commit', '-qm', 'base'], { cwd: root });
+  await git(['commit', '-qm', 'base'], { cwd: root });
   await exec('git', ['rm', '-q', 'doomed.md'], { cwd: root });
   await writeFile(join(root, 'keep.md'), 'keep\nEXTRA\n');
   await exec('git', ['add', 'keep.md'], { cwd: root });
@@ -467,7 +467,7 @@ test('dispatcher: restage says nothing when the formatter changed no bytes', asy
   const manifest = { gates: { preCommit: ['format'], prePush: [] } };
   const root = await fixture({ manifest, binaries: ['prettier'], files: { 'a.md': 'one\n' } });
   await exec('git', ['add', '-A'], { cwd: root });
-  await exec('git', ['commit', '-qm', 'base'], { cwd: root });
+  await git(['commit', '-qm', 'base'], { cwd: root });
   await writeFile(join(root, 'a.md'), 'dirty\n');
   await exec('git', ['add', 'a.md'], { cwd: root });
 
@@ -488,7 +488,7 @@ test('dispatcher: restage touches only the files the formatter was given', async
     files: { 'a.md': 'one\n', 'blob.bin': 'base\n' },
   });
   await exec('git', ['add', '-A'], { cwd: root });
-  await exec('git', ['commit', '-qm', 'base'], { cwd: root });
+  await git(['commit', '-qm', 'base'], { cwd: root });
   await writeFile(join(root, 'a.md'), 'one\nstaged\n');
   await writeFile(join(root, 'blob.bin'), 'base\nstaged\n');
   await exec('git', ['add', '-A'], { cwd: root });

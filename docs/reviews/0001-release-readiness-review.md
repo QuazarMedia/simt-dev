@@ -223,6 +223,30 @@ fact. Any profile or skill gated on these facts silently never applies (ADR-013)
 **Acceptance.** A fixture with `.github/workflows/` and `docs/decisions/` emits both facts,
 with the matching evidence path in `doctor`.
 
+> **Resolved (no ADR).** The line numbers had drifted; the defect was exactly as described.
+> Measured before changing anything: on this repository, which has both `docs/decisions/` and
+> `.github/workflows/`, `doctor` emitted `has-tests-dir` and nothing else. Across the estate,
+> seven repositories carry `.github/workflows/` and **none** of them emitted `has-ci-workflows`;
+> two carry `docs/decisions/` or `docs/adr/` and neither emitted `has-decisions-dir`. Nothing
+> was gated on those facts — `container` is the only profile that selects on a fact at all, and
+> it selects on `has-dockerfile`, a root file — which is the whole reason a detector that could
+> not see half of its own table shipped green under 632 tests.
+>
+> The fix probes by the fact's declared kind. The **other half of the same defect is still
+> latent** and is now the thing the table would let you walk into: a `file` candidate is matched
+> against the root listing, which stops at the root, so a `file` fact naming a nested path would
+> sit there forever matching nothing. `test/genericity.test.mjs` fails if one does, naming the
+> entry, because S28 needs `**/src/main/AndroidManifest.xml` and the answer there is a glob walk,
+> not a table entry.
+>
+> Four tests: the nested fixture with exact evidence paths; a **control** where `docs/decisions`
+> and `schema` are *files*, because probing by presence rather than by kind fails the first test
+> and passes that one — only a kind probe gets both right; the same fixture asserted through the
+> **shipped binary's** `doctor`, since the acceptance is about what a reader sees; and the table
+> guard. Three mutations, each caught: restoring the slash probe fails all three behavioural
+> tests, replacing the kind probe with `names.has` fails the same three, and adding one nested
+> `file` fact fails only the table guard.
+
 ### S08 — Hook restage stages unstaged hunks; deletions break restage (P0)
 
 **Finding.** After a passing `format` gate, `restage` (`src/hooks/dispatcher.mjs:149-159`)

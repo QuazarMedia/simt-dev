@@ -122,7 +122,7 @@ record is written.
 | S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | **yes (ADR-044)** | S02, S03 | Complete | `253d819` (the `skills eval` command it implies is still owed, see §4) |
 | S05 | MCP `rules_why` crashes on every call | P0 | F | mcp | no | — | Complete | `1791a95` (review 0001 #15) |
 | S06 | MCP and CLI disagree; the closure ignores the budget | P1 | F | mcp, resolve | no | S05 | Queued | #14, code |
-| S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Queued | #6 |
+| S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Complete | `PENDING` |
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | F | hooks | **yes (ADR-034)** | — | Complete | `e3566dc` |
 | S09 | `sync`/`init` crash on a mispointed pointer, and `check` passes it | P1 | F | projection | only if pointer drift blocks | — | Queued | #9 |
 | S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | **yes (ADR-035)** | — | Complete | `14fcd5b`; **amended by ADR-040**, which found a sixth writer still writing by default |
@@ -143,7 +143,7 @@ record is written.
 | S25 | `compare` hides stale rule files; `profiles` is never filled | P1 | F | compare | **yes (ADR-045)** — the tracker said `no`, and that was wrong | — | Complete | `e780713` |
 | S26 | `upgrade` adds a region to a repo that has none | P1 | F | upgrade | no | S10 | Queued | #10 |
 | S27 | `skills install` creates a manifest with gates the repo cannot run | P1 | F | skills | **yes (ADR-038, amends ADR-017)** | — | Complete | `4c73025` |
-| S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (P3) | S07 | Queued | #5, #6 |
+| S28 | Profiles select on language tags, not on platforms | P1 | F | rules, fingerprint | yes (P3) | S07 (done) | Queued | #5, #6 |
 | S29 | An appended region fails `prettier --check` | P1 | F | projection | **yes (ADR-037)** | — | Complete | `1bbc36a` |
 | S30 | `.editorconfig` baseline ships an inert section and a false comment | P1 | F | baselines | yes (P9, amends ADR-025) | — | Queued | #7 |
 | S31 | Partial supersession is lost by the decision index | P2 | F | decisions | no | S19 | Queued | #16 |
@@ -179,7 +179,7 @@ record is written.
 | S04 | **Complete** — ADR-044 | Stack is 15 a tag and any score above 0 selected, so a repo matching three tags reached 45 having said nothing about the task; `summary` is 8 and cleared a bar of 0. Now: evidence excludes stack, the bar is 25, stopwords are suppressed in the summary signal only, and the gold corpus plan 0002 §9 claims exists |
 | S05 | **Complete** | `1791a95` — all three call shapes crashed, not two; `tools.mjs:316` destructured an array |
 | S06 | open, extended | the closure runs before the budget (below) |
-| S07 | open | a fixture with all six slash-path facts emits only `has-tests-dir` (`fingerprint.mjs:168-173`) |
+| S07 | **Complete** | a fixture with all six slash-path facts emitted only `has-tests-dir`; on the estate **7 repositories have `.github/workflows/` and not one emitted `has-ci-workflows`**, and the two with `docs/decisions/` or `docs/adr/` emitted no `has-decisions-dir`. `has-schema-dir` has been dead for every repo that keeps a schema in `db/schema`, and `has-migrations-dir` for `db/migrate`. Nothing was gated on them — the only profile that selects on a fact is `container` on `has-dockerfile`, a root file — which is why the whole estate ran green on a detector that could not see half of its own table |
 | S08 | open, reproduced | ADR-034: the gate now refuses a partially staged file; restage covers only the formatter's own targets and reports only files whose blob moved |
 | S09 | open, extended | `check` passes the mispointed pointer (below) |
 | S10 | open, extended | **now Complete** — ADR-035: one `writeMode()` decides whether a run may write, and `test/contract.test.mjs` asserts the JSON contract for 19 commands at once. Six of the eight claimed defects were real and reproduced; the error-path row was **backwards** (`sync --json` emits its errors correctly), the `--all` row was not reproducible, and `skills why --json` — which printed prose and had no `isJson` branch at all — was a defect the table missed. `init --json` is **not** a defect: `init` never consults the workspace, so both modes agree. `sync` requiring `--yes` stays S24. |
@@ -654,6 +654,16 @@ before and after.
 **Accept.** Each row of the table above is a fingerprint fixture with an asserted profile set.
 `compare` over the estate shows the same profiles as before for every SIMT repository, and
 `simt-app` gains `android`.
+
+> **Dependency closed by S07.** Two of the fixes name a nested path —
+> `has-android-manifest` on `**/src/main/AndroidManifest.xml`, and a `has-uv-lock` whose lockfile
+> is nested in a monorepo package. S07 measured what the detector could actually see: a `file`
+> fact's candidate is matched against the root listing, which stops at the root, so a nested
+> `file` path matches nothing. `**` is worse still — it names a *shape*, and no amount of
+> `isFile` answers that. The mechanism this needs is a bounded glob walk, and it must say what
+> it is bounded by before it is written: `sampleExtensions` already walks two levels deep for
+> the extension signal, and ADR-013's promise is that adding an ecosystem is data, so a walk
+> that is unbounded is a scan, not detection.
 
 ### S29 — An appended region fails `prettier --check` (P1)
 

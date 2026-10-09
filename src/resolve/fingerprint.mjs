@@ -73,6 +73,14 @@ const DEP_TAGS = new Map([
  * kind 'file' and 'dir' probe the repository root; 'pkg' reads the parsed
  * manifest. `paths` is alternatives - first match wins and is reported as
  * evidence, so `doctor` can say which file proved the fact.
+ *
+ * A candidate is probed by its declared kind, so a `dir` may name a nested path.
+ * A `file` candidate is matched against the root listing, which cannot see past
+ * the root, so it must not contain a `/` - `test/genericity.test.mjs` fails if one
+ * does, rather than letting it sit there never matching. A `dir` candidate that
+ * was probed with `isFile` instead (S07) looked like a fact nobody's repo could
+ * have: seven estate repositories have `.github/workflows/` and none of them
+ * emitted `has-ci-workflows`.
  */
 const FACTS = [
   { name: 'has-pyproject', kind: 'file', paths: ['pyproject.toml'] },
@@ -165,12 +173,7 @@ export async function fingerprint(root) {
   // unparseable manifest yields a fact's absence, not a wrong answer.
   for (const fact of FACTS) {
     for (const candidate of fact.paths) {
-      const present =
-        fact.kind === 'file'
-          ? names.has(candidate)
-          : candidate.includes('/')
-            ? await isFile(join(root, candidate))
-            : await isDir(join(root, candidate));
+      const present = fact.kind === 'file' ? names.has(candidate) : await isDir(join(root, candidate));
       if (present) {
         facts.add(fact.name);
         factEvidence[fact.name] ??= candidate;

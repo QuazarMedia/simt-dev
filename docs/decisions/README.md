@@ -52,6 +52,7 @@ record's status line — never by editing the ruling in place.
 | [042](ADR-042-a-declared-glob-must-match-a-path-built-from-it.md) | A declared glob must match a path built from it | accepted |
 | [043](ADR-043-a-keyword-is-a-phrase-and-two-letters-is-a-word.md) | A keyword is a phrase, and two letters is a word | accepted |
 | [044](ADR-044-compatibility-is-not-evidence.md) | Compatibility is not evidence, and a resolver nobody measured is merely felt | accepted |
+| [045](ADR-045-a-dashboard-that-counts-a-defect.md) | A dashboard that counts a defect and will not name it is worse than one that does not count it | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

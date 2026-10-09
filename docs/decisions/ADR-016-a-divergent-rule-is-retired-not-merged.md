@@ -1,7 +1,14 @@
 # ADR-016 — A divergent rule is retired, not merged
 
-Status: **accepted** · 2026-10-06
+Status: **accepted** · 2026-10-06 · one ruling narrowed by [ADR-045](ADR-045-a-dashboard-that-counts-a-defect.md)
 Affects: `rules/mdc/*.mdc`, `projection/mdc.mjs`, `projection/project.mjs`, `projection/conflicts.mjs`, `sync`, `check`, `init`
+
+> **Narrowed by ADR-045.** The bullet below that says `compare` reports "using `AGENTS.md`
+> only" still governs the row's **display**, which is where it was aimed. It was read more
+> broadly than it was written, and `compare`'s *problems list* stayed silent about stale rule
+> files as a result: seventeen of them across five adopted repositories, none named. The
+> problems list is not a display — it is the exit code. Every other ruling here stands, which
+> is why this is a narrowing and not a supersession.
 
 ## Context
 

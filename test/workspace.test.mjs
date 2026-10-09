@@ -331,6 +331,41 @@ test('CLI: graph lint with a real workspace verifies bodies on disk', async () =
   assert.equal(json.verified, true);
 });
 
+test('CLI: skills brief without a workspace names the remedy once and lists pointers', async () => {
+  // S33. With no workspace every selected body used to be the same 200-byte
+  // remedy, the brief still called that a selection, and it reported the
+  // catalogue size against the budget. The packet an agent reads is the
+  // pointers, once, and it has to stay under a kilobyte.
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
+  const { code, stdout } = await run(
+    ['skills', 'brief', '--root', app, '--skill', 'api-security-review', '--budget', '100', '--task', 'd1 migration'],
+    { SIMT_DEV_WORKSPACE: 'off' },
+  );
+  assert.equal(code, 0, stdout);
+  assert.ok(Buffer.byteLength(stdout) < 1024, `brief is ${Buffer.byteLength(stdout)} bytes:\n${stdout}`);
+  assert.equal(stdout.split(WORKSPACE_REMEDY).length - 1, 1, stdout);
+  assert.match(stdout, /^pointer {2}api-security-review/m);
+  assert.equal(stdout.includes('body unavailable'), false);
+  assert.equal(stdout.includes('budget capped'), false);
+  assert.equal(stdout.includes('\nBODIES\n'), false);
+  assert.match(stdout, /bodies: not on this machine — /);
+});
+
+test('CLI: skills brief with a workspace still inlines the body', async () => {
+  // The pointer packet is the answer when nothing can be read. A workspace that
+  // holds the body must still inline it, or the brief stops being a brief.
+  const { root } = await skillWorkspace();
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
+  const { code, stdout } = await run(
+    ['skills', 'brief', '--root', app, '--skill', 'slice-commit', '--task', 'commit the slice'],
+    workspaceEnv(root),
+  );
+  assert.equal(code, 0, stdout);
+  assert.match(stdout, /^SKILL slice-commit/m);
+  assert.match(stdout, /\nBODIES\n/);
+  assert.equal(stdout.includes('not on this machine'), false);
+});
+
 test('CLI: skills show without a workspace explains instead of printing a bare path', async () => {
   const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const { code, stdout } = await run(['skills', 'show', 'slice-commit', '--root', app], {

@@ -335,13 +335,55 @@ export async function briefCommand(args, flags) {
     return EXIT.OK;
   }
 
+  // A body the packet cannot paste costs nothing. Charging the catalogue size
+  // is how a brief with no workspace reports "budget capped" and then prints
+  // the same remedy once per skill (S33).
+  const readable = new Set();
+  for (const entry of expanded) {
+    if (await bodyReadable(entry.skill, workspaceRoot, root)) readable.add(entry.skill.name);
+  }
+  const pointerOnly = expanded.length > 0 && readable.size === 0;
+
+  let shown = picked;
+  let shownDeferred = deferred;
+  let shownUsed = bytesUsed;
+  if (pointerOnly) {
+    const priced = expanded.map((e) =>
+      e.skill.deferred ? e : { ...e, skill: { ...e.skill, bytes: 0 } },
+    );
+    const again = selectWithinBudget(priced, { budget, all: flags.all === true });
+    shown = again.picked;
+    shownDeferred = again.deferred;
+    shownUsed = again.used;
+  }
+
   lines.push(
-    `RESOLVED ${picked.length} skills, ${kb(bytesUsed)}${flags.all || bytesUsed <= budget ? '' : ' (budget capped)'} - repo ${root.split('/').pop()} (${repoLine(repo)})`,
+    `RESOLVED ${shown.length} skills, ${kb(shownUsed)}${flags.all || shownUsed <= budget ? '' : ' (budget capped)'} - repo ${root.split('/').pop()} (${repoLine(repo)})`,
   );
+
+  if (pointerOnly) {
+    // One remedy, then a pointer per skill. The exclusion reasons stay available
+    // through `skills why`; printing every one of them is a second copy of the
+    // catalogue, which is what pushed this packet over the budget it was saving.
+    lines.push(`bodies: not on this machine — ${WORKSPACE_REMEDY}`, '');
+    for (const entry of shown) lines.push(pointerLine(entry));
+    if (shownDeferred.length > 0) {
+      lines.push('', `DEFERRED ${shownDeferred.length} (marked deferred)`);
+      for (const entry of shownDeferred) lines.push(pointerLine(entry));
+    }
+    const hidden = excluded.filter((e) => !closureNames.has(e.skill.name));
+    if (hidden.length > 0) {
+      lines.push('', `NOT SELECTED ${hidden.length}`, '', '  notes: simt-dev skills why <name> | simt-dev skills show <name>');
+    }
+    lines.push('', 'OVERRIDE  --skill <name> | --budget <bytes> | --all | --paths <globs>');
+    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    return EXIT.OK;
+  }
+
   lines.push(workspace);
   lines.push('');
 
-  for (const entry of picked) {
+  for (const entry of shown) {
     const why = [...entry.reasons, ...[...entry.via].map((v) => `requires:${v}`)];
     lines.push(
       `SKILL ${entry.skill.name.padEnd(26)} ${kb(entry.skill.bytes).padStart(7)}  ${why.join(' ')}`,
@@ -350,20 +392,20 @@ export async function briefCommand(args, flags) {
 
   if (flags.plan) {
     lines.push('', 'PLAN (fetch each body only when a step needs it)');
-    for (const entry of picked) {
+    for (const entry of shown) {
       lines.push(`  simt-dev skills show ${entry.skill.name}`);
     }
   } else {
     lines.push('', 'BODIES');
-    for (const entry of picked) {
+    for (const entry of shown) {
       lines.push('', `--- ${entry.skill.name} (${entry.skill.summary})`);
       lines.push(await readBody(entry.skill, workspaceRoot, root));
     }
   }
 
-  if (deferred.length > 0) {
-    lines.push('', `DEFERRED ${deferred.length} (over ${kb(budget)} or marked deferred)`);
-    for (const entry of deferred) {
+  if (shownDeferred.length > 0) {
+    lines.push('', `DEFERRED ${shownDeferred.length} (over ${kb(budget)} or marked deferred)`);
+    for (const entry of shownDeferred) {
       const reason = entry.skill.deferred ? 'marked deferred' : 'over budget';
       lines.push(`  ${entry.skill.name.padEnd(26)} ${kb(entry.skill.bytes).padStart(7)}  ${reason}`);
     }
@@ -552,6 +594,18 @@ export async function sourcePath(skill, workspaceRoot, root) {
   // A skill with no canonical source, or one whose bytes match nothing, has no
   // body. Say so rather than printing an empty section.
   return canonical && workspaceRoot ? join(workspaceRoot, canonical.repo, canonical.path) : null;
+}
+
+/** A one-line pointer. The reasons stay, so a brief that cannot inline still says why. */
+function pointerLine(entry) {
+  const why = [...entry.reasons, ...[...entry.via].map((v) => `requires:${v}`)];
+  return `pointer  ${entry.skill.name.padEnd(26)} ${why.join(' ')}`;
+}
+
+/** True when `readBody` would return the skill text rather than an explanation of its absence. */
+async function bodyReadable(skill, workspaceRoot, root) {
+  const full = await sourcePath(skill, workspaceRoot, root);
+  return Boolean(full && existsSync(full));
 }
 
 export async function readBody(skill, workspaceRoot, root) {

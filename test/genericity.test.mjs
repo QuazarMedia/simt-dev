@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { fingerprint, STACK_TAGS, FACT_TAGS, KNOWN_TAGS } from '../src/resolve/fingerprint.mjs';
+import { fingerprint, STACK_TAGS, FACT_TAGS, KNOWN_TAGS, __internals } from '../src/resolve/fingerprint.mjs';
 import { plan, loadRules, select, checkTarget, LOCAL_PROFILE_DIR } from '../src/projection/project.mjs';
 
 const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt-dev.mjs');
@@ -59,6 +59,64 @@ test('a fact names the file that proved it', async () => {
   assert.equal(result.factEvidence['has-migrations-dir'], 'migrations');
   for (const fact of result.facts) {
     assert.ok(result.factEvidence[fact], `fact ${fact} has no evidence`);
+  }
+});
+
+test('a directory fact fires on a path with a slash in it', async () => {
+  // S07. A `dir` candidate holding a slash used to be probed with isFile, which is
+  // never true for a directory, so these four facts could not fire on any repo that
+  // had them. Measured on the estate before the fix: seven repositories have
+  // `.github/workflows/`, and not one of them emitted `has-ci-workflows`.
+  const root = await fixture({
+    '.github/workflows': null,
+    'docs/decisions': null,
+    'db/migrate': null,
+    'db/schema': null,
+  });
+  const result = await fingerprint(root);
+  assert.equal(result.factEvidence['has-ci-workflows'], '.github/workflows');
+  assert.equal(result.factEvidence['has-decisions-dir'], 'docs/decisions');
+  assert.equal(result.factEvidence['has-migrations-dir'], 'db/migrate');
+  assert.equal(result.factEvidence['has-schema-dir'], 'db/schema');
+});
+
+test('a directory fact does not fire on a file that happens to be named after it', async () => {
+  // The control for the test above, because probing by presence rather than by kind
+  // passes both of them: `names.has` is true for the file below and false for every
+  // directory in the fixture above, so a presence probe would fail the first and
+  // pass this one. Only a probe that asks "is it a directory" gets both right.
+  const root = await fixture({ 'docs/decisions': 'not a directory\n', schema: 'not a directory\n' });
+  const result = await fingerprint(root);
+  assert.equal(result.facts.includes('has-decisions-dir'), false);
+  assert.equal(result.facts.includes('has-schema-dir'), false);
+});
+
+test('the same fixture reports its nested evidence through doctor', async () => {
+  // Through the shipped binary: the acceptance is about what a reader of `doctor`
+  // sees, and a guard that only fires inside this checkout is not a guard.
+  const root = await fixture({ '.github/workflows': null, 'docs/decisions': null });
+  const { code, text } = await run(['doctor', '--root', root, '--json']);
+  assert.equal(code, 0, text);
+  const out = JSON.parse(text.slice(text.indexOf('{')));
+  assert.deepEqual(Object.keys(out.factEvidence).sort(), ['has-ci-workflows', 'has-decisions-dir']);
+  assert.equal(out.factEvidence['has-ci-workflows'], '.github/workflows');
+  assert.equal(out.factEvidence['has-decisions-dir'], 'docs/decisions');
+});
+
+test('no file fact names a path the root listing cannot see', () => {
+  // The other half of the same defect, still latent. A `file` candidate is matched
+  // against the root listing, which stops at the root, so a `file` fact naming a
+  // nested path would sit in the table forever matching nothing - the shape S07
+  // found, wearing the other kind. Failing here is how the next person finds out
+  // that a nested file fact needs a different mechanism, not a table entry.
+  for (const fact of __internals.FACTS) {
+    if (fact.kind !== 'file') continue;
+    for (const candidate of fact.paths) {
+      assert.ok(
+        !candidate.includes('/'),
+        `fact ${fact.name} names "${candidate}", which the root listing cannot reach`,
+      );
+    }
   }
 });
 

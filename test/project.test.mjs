@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, mkdir, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { plan, loadRules, select, render, checkTarget } from '../src/projection/project.mjs';
+import { plan, loadRules, select, render, checkTarget, checkTargets } from '../src/projection/project.mjs';
 import { desiredRegion } from '../src/projection/rules.mjs';
 import { BEGIN, END, compose, inject, parse } from '../src/projection/markers.mjs';
 
@@ -131,6 +131,26 @@ function headingLevels(markdown) {
   }
   return levels;
 }
+
+test('a region past a reader limit is reported, and place top clears it', async () => {
+  // S37. Codex stops at 32 KiB. A hand-written prefix longer than that hides the
+  // region, and check used to report the body as current.
+  const region = compose('Body.', { sha: 'abc1234' });
+  const root = await fixture({ 'AGENTS.md': `${'x'.repeat(40000)}\n${region}` });
+  const before = await checkTargets(root);
+  const hit = before.find((f) => f.status === 'beyond-read-limit');
+  assert.ok(hit, before.map((f) => f.status).join(','));
+  assert.match(hit.detail, /BEYOND-READ-LIMIT/);
+  assert.match(hit.detail, /Codex/);
+
+  await writeFile(join(root, 'simt-dev.json'), `${JSON.stringify({ projection: { place: 'top' } })}\n`);
+  const planned = await plan(root);
+  const agents = planned.targets.find((t) => t.file === 'AGENTS.md');
+  await writeFile(agents.path, agents.text);
+  const after = await checkTargets(root);
+  assert.equal(after.find((f) => f.status === 'beyond-read-limit'), undefined);
+  assert.ok(agents.text.indexOf('<!-- simt-dev:begin -->') < 40000);
+});
 
 test('render strips frontmatter and the duplicated H1', () => {
   const body = render([

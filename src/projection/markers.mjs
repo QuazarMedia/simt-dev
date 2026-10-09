@@ -144,6 +144,9 @@ export function parse(text, style) {
     body,
     after: lines.slice(last.i + 1).join('\n'),
     sha,
+    // The last byte of the end marker. A reader that stops at a fixed offset never
+    // sees a region whose end is past that offset, however correct the body is.
+    endByte: Buffer.byteLength(lines.slice(0, last.i + 1).join('\n')),
   };
 }
 

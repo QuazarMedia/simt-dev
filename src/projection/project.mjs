@@ -25,6 +25,7 @@ import { planDependabot } from '../ci/dependabot.mjs';
 import { checkTsconfig } from '../tsconfig.mjs';
 import { checkToolchain } from '../toolchain.mjs';
 import { diff, parse, inject, BEGIN, END } from './markers.mjs';
+import { readManifest } from './manifest.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
 import { pointerState, pointerTargets, ruleTargets } from './targets.mjs';
@@ -98,7 +99,7 @@ async function targetFor(root, body, meta) {
     exists = false;
   }
 
-  const result = inject(existing, body, meta);
+  const result = inject(existing, body, meta, await regionOpts(root));
   return {
     file: PRIMARY_TARGET,
     path,
@@ -127,6 +128,15 @@ export async function checkTargets(root, flags = {}) {
   const findings = [];
   const primary = await checkPrimary(root, flags);
   findings.push(primary);
+  if (primary.status !== 'absent' && primary.status !== 'unreadable' && primary.status !== 'malformed') {
+    let text = '';
+    try {
+      text = await readFile(join(root, PRIMARY_TARGET), 'utf8');
+    } catch {
+      text = '';
+    }
+    findings.push(...readLimitFindings(text, PRIMARY_TARGET));
+  }
 
   // The gate has to run where the merge happens, not only on the machine of whoever
   // remembers to run it. A repo that already runs GitHub Actions and has no simt-dev
@@ -447,7 +457,7 @@ async function checkPrimary(root, flags = {}) {
   if (state.status === 'absent') {
     return { file: PRIMARY_TARGET, status: 'unmanaged', detail: 'no generated region; run: simt-dev sync --yes' };
   }
-  const d = diff(existing, body, meta);
+  const d = diff(existing, body, meta, await regionOpts(root));
   return {
     file: PRIMARY_TARGET,
     status: d.action === 'unchanged' ? 'current' : 'drift',
@@ -456,6 +466,35 @@ async function checkPrimary(root, flags = {}) {
     expectedSha: meta.sha,
   };
 }
+/** `projection.place: "top"` puts the AGENTS.md region above the hand-written prefix. */
+async function regionOpts(root) {
+  const { manifest } = await readManifest(root);
+  return manifest?.projection?.place === 'top' ? { where: 'top' } : {};
+}
+
+/**
+ * A reader that stops at a byte offset never sees a region that ends past it.
+ * The finding names the reader, because "the file is long" does not say who stops.
+ */
+export function readLimitFindings(text, file) {
+  const state = parse(text);
+  if (state.status !== 'ok' || typeof state.endByte !== 'number') return [];
+  const findings = [];
+  for (const surface of SURFACES) {
+    if (surface.primary !== file) continue;
+    for (const limit of surface.readLimits ?? []) {
+      if (state.endByte <= limit.bytes) continue;
+      findings.push({
+        file,
+        status: 'beyond-read-limit',
+        detail: `BEYOND-READ-LIMIT: the region ends at byte ${state.endByte}, past ${limit.reader}'s ${limit.bytes}-byte read of ${file}`,
+        remedy: `set projection.place to "top" in simt-dev.json and run: simt-dev sync --yes, or raise ${limit.reader}'s project_doc_max_bytes`,
+      });
+    }
+  }
+  return findings;
+}
+
 export { BEGIN, END };
 // Re-exported so callers import the projection surface from one place; the pointer
 // helpers now live in targets.mjs and two commands already reach for them here.

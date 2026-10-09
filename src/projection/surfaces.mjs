@@ -84,6 +84,17 @@ export const SURFACES = [
     foldRules: true,
     skills: '.agents/skills',
     documentedSkillsPaths: ['.opencode/skills', '.claude/skills', '.agents/skills'],
+    // Codex concatenates AGENTS.md from the root down and stops at
+    // project_doc_max_bytes. The default is 32 KiB. A region that ends past it is
+    // never read, and nothing else in check notices. Other readers of this file
+    // publish no such limit.
+    readLimits: [
+      {
+        reader: 'Codex',
+        bytes: 32768,
+        verified: 'Codex project_doc_max_bytes defaults to 32 KiB',
+      },
+    ],
     verified:
       'opencode docs, "Rules" and "Agent Skills" (read 2026-10-07) — AGENTS.md walked up from cwd to the git worktree; CLAUDE.md used only if no AGENTS.md exists; .opencode/AGENTS.md additionally; skills at .opencode/skills/, .claude/skills/ and .agents/skills/<name>/SKILL.md; skill frontmatter recognises only name, description, license, compatibility, metadata',
     note:

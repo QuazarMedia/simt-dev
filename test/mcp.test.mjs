@@ -102,6 +102,49 @@ test('mcp: every tool declares a usable schema', () => {
   }
 });
 
+test('mcp: skills_brief and `skills brief` answer the same question identically', async () => {
+  // The row's headline: the budget arithmetic was written twice and the copies had
+  // already drifted. This one checked `deferred` *after* the budget and inlined a
+  // deferred dependency; `skills brief` checked it first and did not. A caller reaching
+  // for the tool and a caller reaching for the command got different answers, and
+  // neither could see the other.
+  //
+  // Both sides run the same resolver over the same registry at the same budget, and the
+  // answer is compared skill for skill. Two budgets, because one of them proves the
+  // budget is doing something: 2,000 for a group of 13,503 and 20,000 for the same one.
+  const brief = TOOLS.find((t) => t.name === 'skills_brief');
+  const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+  for (const budget of [2000, 20000]) {
+    const mcp = await brief.run({ budget, skill: 'parallel-feature-team', root: ROOT });
+    const { stdout } = await exec('node', [
+      resolve(ROOT, 'bin', 'simt-dev.mjs'),
+      'skills', 'brief', '--root', ROOT, '--skill', 'parallel-feature-team',
+      '--budget', String(budget), '--json',
+    ]);
+    const cli = JSON.parse(stdout);
+
+    assert.deepEqual(
+      mcp.selected.map((s) => s.name),
+      cli.resolved.map((r) => r.name),
+      `budget ${budget}: the two surfaces selected different skills`,
+    );
+    assert.deepEqual(
+      mcp.deferred.map((s) => s.name),
+      cli.deferred.map((d) => d.name),
+      `budget ${budget}: the two surfaces deferred different skills`,
+    );
+    assert.equal(
+      mcp.inlineBytes,
+      cli.resolved.reduce((n, r) => n + r.bytes, 0),
+      `budget ${budget}: the two surfaces report different bytes`,
+    );
+    // And the budget is real in both, which is the property the two copies used to share
+    // only by accident.
+    assert.ok(mcp.inlineBytes <= budget, `${mcp.inlineBytes} bytes against a ${budget}-byte budget`);
+  }
+});
+
 test('mcp: no mutating command is exposed as a tool', () => {
   // The load-bearing invariant of this file. Each of these writes, and each is meant to be
   // read as a diff by a human first (ADR-001, ADR-004). A model can call a tool; a model

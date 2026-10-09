@@ -20,7 +20,7 @@
 
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
-import { tokenize, rankSkills, closure, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
+import { tokenize, rankSkills, closure, selectWithinBudget, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
 import { loadRules, select, checkTargets, provenanceDigest } from '../projection/project.mjs';
 import { loadDecisions, byId, citations } from '../decisions/index.mjs';
 import { discover } from '../compare/discover.mjs';
@@ -125,23 +125,19 @@ export const TOOLS = [
       const { selected, excluded } = rankSkills(reg.skills, context, { forced });
       const expanded = closure(selected, reg.skills);
 
-      // The budget decides what is INLINED. No body is ever returned by this tool: a
-      // caller that wants one calls skills_show, which makes the cost visible before it
-      // is paid.
-      const picked = [];
-      const deferred = [];
-      let used = 0;
-      for (const entry of expanded) {
-        const isDep = entry.via.size > 0;
-        if (args?.all === true || used + entry.skill.bytes <= budget || isDep) {
-          if (isDep || !entry.skill.deferred) {
-            picked.push(entry);
-            used += entry.skill.bytes;
-            continue;
-          }
-        }
-        deferred.push(entry);
-      }
+      // The budget decides what is INLINED, and it is the same function the CLI
+      // uses — not a second copy of the same loop. The two copies had drifted: this one
+      // checked `deferred` *after* the budget and inlined a deferred dependency, while
+      // `skills brief` checked it first and did not. A caller reaching for the MCP tool
+      // and a caller reaching for the command got different answers to one question, and
+      // neither could see the other (ADR-035's shape, one level down).
+      //
+      // No body is ever returned by this tool: a caller that wants one calls
+      // skills_show, which makes the cost visible before it is paid.
+      const { picked, deferred, used } = selectWithinBudget(expanded, {
+        budget,
+        all: args?.all === true,
+      });
 
       const closureNames = new Set(expanded.map((e) => e.skill.name));
       return {

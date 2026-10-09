@@ -363,6 +363,93 @@ export function rankSkills(skills, context, { forced = [] } = {}) {
   return { selected, excluded };
 }
 
+/**
+ * What actually gets inlined, given a budget.
+ *
+ * Exists because the arithmetic was written twice — once in `skills brief`, once in the
+ * MCP tool — and the two copies had already drifted, which is ADR-035's shape one level
+ * down: a promise about a *set* of readers holds only while something checks the set, and
+ * here the set was two loops that each read `entry.via.size > 0` and meant something
+ * slightly different by it.
+ *
+ * Three rules, each of which was previously implicit or wrong:
+ *
+ * 1. **Dependencies are counted against the budget.** The old loops let any dependency in
+ *    regardless of size, on the reasoning that "a skill that is useless without its
+ *    dependency is worse than a large context, because it silently misleads". That
+ *    reasoning is right about *silently misleading* and wrong about the conclusion: the
+ *    fix for a missing dependency is a line in the output, not an unbounded budget. For
+ *    `--skill parallel-feature-team --budget 2000` the old arithmetic resolved 13,503
+ *    bytes of skills against a 2,000-byte budget — 6.7× over, with no note.
+ * 2. **A group that does not fit is deferred together.** An entry that is a dependency
+ *    (`via` is non-empty) takes its parent with it: showing the parent without the thing
+ *    it requires is the misleading state rule 1 was written to avoid, and it is now
+ *    avoided by dropping the parent rather than by ignoring the budget.
+ * 3. **A body that is too large to inline is a different thing.** `deferred` is derived
+ *    from `deferredThreshold`, not from the budget, and it means "fetch this with
+ *    `skills show`". It does not propagate: `--all` means take everything, and the
+ *    pointer to a deferred dependency is exactly what a pointer is for. Only *budget*
+ *    pressure moves a parent.
+ *
+ * @param {{skill: {name: string, bytes: number, deferred?: boolean}, via: Set<string>}[]} entries
+ *   the closure, in selection order, parents before their dependencies
+ * @param {{budget: number, all?: boolean}} opts
+ * @returns {{picked: object[], deferred: object[], used: number}}
+ */
+export function selectWithinBudget(entries, { budget, all = false }) {
+  // 'in' | 'out-budget' | 'out-large'. The distinction is rule 3 and it is the reason
+  // this is not one boolean.
+  const verdict = new Map();
+  for (const e of entries) {
+    if (e.skill.deferred) verdict.set(e.skill.name, 'out-large');
+    else if (all) verdict.set(e.skill.name, 'in');
+  }
+
+  // The byte total is accumulated in order, so the budget is spent by score — the same
+  // order the resolver produced, and the reason a later skill cannot take the bytes of an
+  // earlier one. `out-large` is left alone: it is not a budget question.
+  if (!all) {
+    let used = 0;
+    for (const e of entries) {
+      if (verdict.get(e.skill.name) === 'out-large') continue;
+      if (used + e.skill.bytes <= budget) {
+        verdict.set(e.skill.name, 'in');
+        used += e.skill.bytes;
+      } else {
+        verdict.set(e.skill.name, 'out-budget');
+      }
+    }
+  }
+
+  // Rule 2, to a fixpoint: a parent whose dependency did not fit is out too, and that can
+  // itself be a dependency of something further up.
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const e of entries) {
+      if (verdict.get(e.skill.name) !== 'out-budget') continue;
+      for (const parent of e.via) {
+        if (verdict.get(parent) === 'in') {
+          verdict.set(parent, 'out-budget');
+          changed = true;
+        }
+      }
+    }
+  }
+
+  const picked = [];
+  const deferred = [];
+  let used = 0;
+  for (const e of entries) {
+    if (verdict.get(e.skill.name) === 'in') {
+      picked.push(e);
+      used += e.skill.bytes;
+    } else {
+      deferred.push(e);
+    }
+  }
+  return { picked, deferred, used };
+}
+
 /** Expand a selection to its `requires` closure, always including hard deps. */
 export function closure(selected, skills) {
   const byName = new Map(skills.map((s) => [s.name, s]));

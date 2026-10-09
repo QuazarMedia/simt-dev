@@ -121,7 +121,7 @@ record is written.
 | S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | **yes (ADR-043)** | — | Complete | `ba27562` |
 | S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | **yes (ADR-044)** | S02, S03 | Complete | `253d819` (the `skills eval` command it implies is still owed, see §4) |
 | S05 | MCP `rules_why` crashes on every call | P0 | F | mcp | no | — | Complete | `1791a95` (review 0001 #15) |
-| S06 | MCP and CLI disagree; the closure ignores the budget | P1 | F | mcp, resolve | no | S05 | Queued | #14, code |
+| S06 | MCP and CLI disagree; the closure ignores the budget | P1 | F | mcp, resolve | **yes (ADR-052)** | S05 | Complete | see §4 |
 | S07 | Directory facts with a `/` in the path are never detected | P1 | F | fingerprint | no | — | Complete | `71af872` |
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | F | hooks | **yes (ADR-034)** | — | Complete | `e3566dc` |
 | S09 | `sync`/`init` crash on a mispointed pointer, and `check` passes it | P1 | F | projection | **yes (ADR-051)** | S10 | Complete | `9357f10` |
@@ -287,6 +287,35 @@ was deferred while its dependency `slice-commit` was inlined. 0001's extracted
 - take the closure of *inlined* parents only;
 - count dependencies against the budget;
 - defer a parent together with its group when the group does not fit.
+
+> **Resolved by ADR-052**, and the review's probe evidence is stale while the defect is not.
+> Probe #14 measured `summary:the` selecting four estate skills, which stopped being true when
+> ADR-043 and ADR-044 landed — so "a dependency of a *deferred* skill was inlined" is no longer
+> reachable, because no skill in the registry both exceeds `deferredThreshold` and declares
+> `requires`. The bypass itself is untouched by any of that, and measured on a path the review
+> never used: **`--skill parallel-feature-team --budget 2000` resolved 13,503 bytes against a
+> 2,000-byte budget**, with nothing in the output saying so, because the condition enforcing it
+> had already been short-circuited.
+>
+> The comment that wrote the bypass is right about its premise and wrong about its conclusion:
+> *"a skill that is useless without its dependency is worse than a large context, because it
+> silently misleads."* A missing dependency is fixed by a line in the output; an unbounded
+> budget is not a fix for anything. The missing half was 0001's own second bullet — defer the
+> *group*, which is what stops a parent from being shown without the thing it requires, and it
+> had to be added as a fixpoint because the dependency can be a dependency.
+>
+> **The copies had drifted, which is worse than filed.** `skills brief` tested `deferred` first
+> and never inlined one; the MCP tool tested the budget first and carried a nested
+> `if (isDep || !entry.skill.deferred)` that **did** inline a deferred dependency. One command
+> inlines a 384 KB body and the other does not, and neither could see the other. The test is
+> therefore a **parity** test — both surfaces driven at two budgets and compared skill for
+> skill, selected and deferred and bytes — rather than each asserted separately, because two
+> copies asserted separately are exactly what drifted here.
+>
+> One ruling the finding did not ask for and the corpus forced: `deferred` must **not**
+> propagate to parents. It is derived from `deferredThreshold`, not from the budget, and it
+> means "fetch this with `skills show`"; collapsing the two signals is how a 384 KB body would
+> end up suppressing an unrelated 300-byte skill. Only budget pressure moves a parent.
 
 **S09.** Two additions:
 
@@ -1489,7 +1518,7 @@ the probe and the assertion could be compared at all.
 Wave 1's resolver rows (S02, S03, S04) are closed, and their exit criterion is only half of what
 the wave says. `compare` over fixtures and the estate is still untested, and neither "no rule loads
 twice" nor "no profile lands in the wrong ecosystem" has been asserted across the whole wave —
-S06, S32, S33, S34, S14 and S45 are what is left of it. What the closed
+S32, S33, S34, S14 and S45 are what is left of it. What the closed
 rows did establish is the thing worth carrying into them: the resolver now has a gold corpus, so a
 change to how it ranks can be argued against measurements instead of examples. S04's own corpus case
 failed on first run against my expectation and the resolver turned out to be right, which is the

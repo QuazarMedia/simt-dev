@@ -170,7 +170,7 @@ record is written.
 | S52 | `hooks install` writes without `--yes` | P1 | F | hooks | **yes (ADR-040)** | S10 | Complete | `8569cf0` |
 | S53 | `upgrade` blames the rules for a baseline body change | P2 | F | provenance | **yes (ADR-054, amends ADR-032)** | — | Complete | `887214e` |
 | S54 | A status line can name a path, and the summary promises none | P2 | F | decisions | no | — | Queued | ADR-049 consequences; 2 of 48 |
-| S55 | The pack test inherits npm's resolved config, so it reads the developer's home directory | P2 | F | tests | no (ADR-041 stands) | — | Complete | found by the pre-push gate; see §5 |
+| S55 | The pack test inherits npm's resolved config, so it reads the developer's home directory | P2 | F | tests | no (ADR-041 stands) | — | Complete | `030e678` |
 
 ## 4. Review 0001 at `4c27514`
 

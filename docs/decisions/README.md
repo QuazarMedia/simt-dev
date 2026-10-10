@@ -60,6 +60,8 @@ record's status line — never by editing the ruling in place.
 | [050](ADR-050-a-byte-count-is-not-a-region-and-updated-is-not-a-change-of-rules.md) | A byte count is not a region, and `updated` is not a change of rules | accepted |
 | [051](ADR-051-a-pointer-is-the-readers-only-route-so-it-is-not-a-convenience.md) | A pointer is the reader's only route, so it is not a convenience | accepted |
 | [052](ADR-052-a-dependency-is-counted-against-the-budget-and-there-is-one-budget.md) | A dependency is counted against the budget, and there is one budget | accepted |
+| [053](ADR-053-the-node-floor-is-22-20-0.md) | The Node floor is 22.20.0 | accepted |
+| [054](ADR-054-the-digest-covers-every-byte-that-leaves-the-package.md) | The digest covers every byte that leaves the package, and a cause is read off the body | accepted · amends ADR-032 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -358,6 +360,26 @@ answers and neither could see the other. ADR-035's sentence about a promise abou
 of readers holds only while something checks the set; here the check is a test that drives
 both surfaces and compares them, because two copies asserted separately drift and two
 copies asserted against each other do not.
+
+ADR-054 is the same habit found in the stamp itself, and it is worth reading for the order
+the two defects arrived in. ADR-032 ruled that the digest covers `rules/` and `graph/` and
+deliberately excludes `src/`, on reasoning that still holds: a refactor that projects
+byte-identical bytes must not move a consumer's stamp. But the exclusion was drawn around a
+*directory*, and the shared `.editorconfig` and `.gitattributes` blocks are not in one — they
+are two string constants in `src/projection/baselines.mjs`, and every adopting repository
+receives them. By ADR-015's own rule a source is identified by its content rather than by the
+file it lives in, so those bodies were excluded content, not excluded code. What exposed it
+was an unrelated slice: deleting seven inert lines from a shipped baseline was the first
+change here that moved bytes out of `src/` without moving the digest. `check` caught it,
+because the gate compares bytes. `upgrade` did not, and printed a pin that was unchanged
+beside a restamped region, and then named the cause as *the rules changed* — two false
+sentences, one caused by the other. With the stamp silent about a baseline, the only cause
+left to report was the one least likely to be true, and the reader is sent to diff `rules/`
+when the change is in `.editorconfig`. So the fix is two halves that have to land together:
+the digest now covers the rendered baseline bodies and names them by the file they become,
+and `upgrade` reads its cause off the projected body with the two kinds of content counted
+apart. The second half is the one worth keeping, because it is what makes a stamp that
+cannot see a change stop being able to invent one.
 
 ## The rule these records enforce
 

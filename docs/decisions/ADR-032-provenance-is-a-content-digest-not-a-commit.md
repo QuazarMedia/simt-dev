@@ -1,6 +1,6 @@
 # ADR-032 — provenance is a digest of the content that leaves this package, not a commit id
 
-Status: accepted · 2026-10-08
+Status: accepted · 2026-10-08 · ruling 1 narrowed by ADR-054
 **Affects:** `src/projection/rules.mjs`, `src/projection/markers.mjs`, `test/upgrade.test.mjs`,
 `test/install.test.mjs`, `test/project.test.mjs`. **Implements:** proposal P1 in
 `docs/reviews/0002-full-review-adoption-and-public-release.md` §10. **Relates to:**
@@ -59,8 +59,9 @@ suite, written by someone reading a checkout, could not see it.
 
 ## Ruling
 
-**Provenance is a SHA-256 digest of `rules/` and `graph/`, truncated to 40 hex characters. It
-is not a commit id, and there is no fallback.**
+**Provenance is a SHA-256 digest of the content that leaves this package, truncated to 40 hex
+characters. It is not a commit id, and there is no fallback.** (Which content, precisely, was
+narrowed after this record was written — see ADR-054.)
 
 Three consequences, each of which is the point:
 
@@ -82,6 +83,11 @@ Three consequences, each of which is the point:
    `upgrade` now repairs it to the digest — the same path as any other stale pin.
 
 ### What the digest covers, and what it deliberately excludes
+
+> **Superseded by ADR-054.** The exclusion below is drawn around a *directory*, and the
+> shared `.editorconfig` and `.gitattributes` bodies are not in one — they are constants in
+> `src/`, and they are content every adopting repository receives. `src/` as a path is still
+> excluded; the exclusion is now a rule about content rather than about a location.
 
 `rules/` and `graph/` are the bytes whose change moves a consumer's projection: the shared
 rules, the per-ecosystem profiles, the Cursor rule files, and the skill registry. `src/` is

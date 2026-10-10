@@ -134,6 +134,72 @@ test('upgrade plan: changed rules alone are an update, and says the pin was fine
   assert.match(p.detail, /the rules changed/);
 });
 
+// A baseline region is not a rule. `.editorconfig` and `.gitattributes` are settings a
+// repository owns, and the sentence naming the cause is the sentence that tells a reader
+// which file to open — so this one was reached by a body this tool projects moving while
+// no rule did, and it sent the reader to `rules/`.
+const BASELINE = {
+  file: '.editorconfig',
+  kind: 'baseline',
+  action: 'unchanged',
+  previousBytes: 400,
+  bytes: 400,
+  region: 'ok',
+  previousBody: 'root = true',
+  body: 'root = true',
+};
+
+test('upgrade plan: a baseline body change is not reported as a change to the rules (S53)', () => {
+  const moved = { ...BASELINE, action: 'updated', previousBody: 'root = false' };
+  const p = planUpgrade({
+    name: 'x',
+    path: '/x',
+    manifest: { projection: { simtDevSha: 'aaaaaaa' } },
+    manifestExists: true,
+    manifestError: null,
+    targets: [TARGET, moved],
+    sha: 'aaaaaaa',
+  });
+  assert.equal(p.action, 'updated');
+  assert.match(p.detail, /a baseline changed/);
+  assert.doesNotMatch(p.detail, /the rules changed/);
+});
+
+test('upgrade plan: a rules change and a baseline change are named as both (S53)', () => {
+  const p = planUpgrade({
+    name: 'x',
+    path: '/x',
+    manifest: { projection: { simtDevSha: 'aaaaaaa' } },
+    manifestExists: true,
+    manifestError: null,
+    targets: [
+      { ...TARGET, action: 'updated', previousBody: 'the old rules' },
+      { ...BASELINE, action: 'updated', previousBody: 'root = false' },
+    ],
+    sha: 'aaaaaaa',
+  });
+  assert.match(p.detail, /the rules and a baseline changed/);
+});
+
+test('upgrade plan: a baseline seam repair is still not a change to any body (S53)', () => {
+  // The seam is this tool's own formatting around a body that was already correct
+  // (ADR-037), so the cause stays null whichever kind of target it happens on. The
+  // fixture has to spell the body out on BOTH sides: `updated` with an absent
+  // `previousBody` is an ADD in disguise, and would test the wrong case.
+  const p = planUpgrade({
+    name: 'x',
+    path: '/x',
+    manifest: { projection: { simtDevSha: 'aaaaaaa' } },
+    manifestExists: true,
+    manifestError: null,
+    targets: [{ ...BASELINE, action: 'updated', previousBody: 'root = true' }],
+    sha: 'aaaaaaa',
+  });
+  assert.equal(p.action, 'updated');
+  assert.match(p.detail, /region repaired/);
+  assert.doesNotMatch(p.detail, /changed/);
+});
+
 test('upgrade plan: a malformed region is skipped, never written over', () => {
   const p = planUpgrade({
     name: 'x',

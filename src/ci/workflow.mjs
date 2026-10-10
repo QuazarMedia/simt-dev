@@ -114,14 +114,57 @@ function header(own) {
 `;
 }
 
+/**
+ * Actions the templates run, pinned to the commit that runs them.
+ *
+ * A tag is a name that moves. `actions/checkout@v4` resolved to whatever that project
+ * published under the name today, so the bytes executing a gate are not the bytes the
+ * adopting repository reviewed, and a change to them arrives as a force-push or a
+ * compromised token rather than as a diff. The pin is the commit; the comment beside it
+ * is the release a reader recognises, and Dependabot's `github-actions` ecosystem
+ * rewrites the pair together - which is why the pin needs no maintenance here.
+ *
+ * The major version is deliberately the one the templates already used rather than the
+ * newest available. `checkout` v7 and `setup-node` v7 both carry breaking changes, and
+ * a gate whose behaviour changes because somebody re-ran an updater is precisely what
+ * pinning exists to prevent. Moving a major is one reviewed line in this table.
+ */
+export const ACTIONS = {
+  checkout: { repo: 'actions/checkout', commit: '11d5960a326750d5838078e36cf38b85af677262', release: 'v4.4.0' },
+  setupNode: { repo: 'actions/setup-node', commit: '49933ea5288caeca8642d1e84afbd3f7d6820020', release: 'v4.4.0' },
+};
+
+/**
+ * One `- uses:` line, pinned.
+ *
+ * @param {keyof typeof ACTIONS} action
+ * @returns {string}
+ */
+function uses(action) {
+  const { repo, commit, release } = ACTIONS[action];
+  return `      - uses: ${repo}@${commit} # ${release}`;
+}
+
 /** The YAML every copy shares, so the two cannot drift on triggers, permissions or
- *  concurrency. Only `name` and `steps` vary, and only because they have to. The
- *  own gate also varies the Node version, because this package is the one whose
- *  floor has to be true on more than the minimum. */
+ *  concurrency. Only `name`, the runner and `steps` vary, and only because they have
+ *  to. The own gate also varies the platforms and the Node versions, because this
+ *  package is the one whose floor and whose ADR-012 claim have to hold on more than
+ *  the minimum. */
 function skeleton(name, steps, { matrix = null } = {}) {
-  const strategy = matrix
-    ? `    strategy:\n      fail-fast: false\n      matrix:\n        node: [${matrix.map((v) => `'${v}'`).join(', ')}]\n`
+  const axes = matrix
+    ? Object.entries(matrix)
+        .map(([axis, values]) => `        ${axis}: [${values.map((v) => `'${v}'`).join(', ')}]`)
+        .join('\n')
     : '';
+  const strategy = axes === '' ? '' : `    strategy:\n      fail-fast: false\n      matrix:\n${axes}\n`;
+  // The runner and the matrix have to be read together: naming the platforms in the
+  // matrix and leaving `runs-on` on one literal is how a job ends up running six times
+  // on the one runner. One of the two is derived from the other rather than written
+  // twice, so a matrix that grows an axis cannot be half-honoured.
+  // `${{ matrix.os }}` is a template-literal hazard - `${` opens an interpolation - so
+  // it is written escaped, the same way the `concurrency` line below spells its own two.
+  const runner = matrix?.os ? '\${{ matrix.os }}' : 'ubuntu-latest';
+  const job = matrix?.node ? '\${{ matrix.os }} node \${{ matrix.node }}' : name;
   return `name: ${name}
 
 on:
@@ -141,8 +184,8 @@ concurrency:
 
 jobs:
   check:
-    name: ${name}
-    runs-on: ubuntu-latest
+    name: ${job}
+    runs-on: ${runner}
 ${strategy}    timeout-minutes: 5
     steps:
 ${steps}`;
@@ -164,7 +207,7 @@ export function nodeFloor() {
  *  because the reader deciding whether to bump that version has only the file.
  *  The own gate passes the matrix expression; every other copy passes the floor. */
 function setupNode(version) {
-  return `      - uses: actions/setup-node@v4
+  return `${uses('setupNode')}
         with:
           # The floor in this package's \`engines.node\`. A gate that cannot start on
           # the version it declares support for is not a gate.
@@ -196,7 +239,7 @@ export function renderWorkflow({ own = false } = {}) {
     return `${header(true)}${skeleton(
       'simt-dev own gate',
       [
-        '      - uses: actions/checkout@v4',
+        uses('checkout'),
         setupNode('${{ matrix.node }}'),
         // The two checks `.githooks/pre-push` runs, named here rather than discovered,
         // because a reader of this file has to be able to answer "what stops a merge"
@@ -214,7 +257,11 @@ export function renderWorkflow({ own = false } = {}) {
         // so this step used to print the drift it exists to catch and pass anyway.
         '        run: node bin/simt-dev.mjs ci --check',
       ].join('\n'),
-      { matrix: [floor, '24', '26'] },
+      // ADR-012 says CI verifies on macOS and Linux. Until this matrix existed that
+      // sentence was false in the one repository that could have made it true, and no
+      // check read it - the package declares `os` for npm to enforce, and nothing here
+      // ever ran a test on a second platform.
+      { matrix: { os: ['ubuntu-latest', 'macos-latest'], node: [floor, '24', '26'] } },
     )}\n`;
   }
 
@@ -224,7 +271,7 @@ export function renderWorkflow({ own = false } = {}) {
   return `${header(false)}${skeleton(
     'simt-dev check',
     [
-      '      - uses: actions/checkout@v4',
+      uses('checkout'),
       setupNode(nodeFloor()),
       '      - name: install dependencies',
       '        # \`npm ci\` needs a lockfile; a repo without one is still gated, not skipped.',

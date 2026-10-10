@@ -21,7 +21,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { renderWorkflow, planWorkflow, isOwnRepo, nodeFloor, WORKFLOW_FILE, WORKFLOWS_DIR } from '../src/ci/workflow.mjs';
+import {
+  renderWorkflow,
+  planWorkflow,
+  isOwnRepo,
+  nodeFloor,
+  ACTIONS,
+  WORKFLOW_FILE,
+  WORKFLOWS_DIR,
+} from '../src/ci/workflow.mjs';
 import { renderDependabot, planDependabot, DEPENDABOT_FILE } from '../src/ci/dependabot.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
 import { renderShim, EVENTS } from '../src/hooks/shim.mjs';
@@ -387,6 +395,69 @@ test('the node floor is the same number in engines and both templates (S47)', as
   assert.match(await readFile(join(PACKAGE_ROOT, 'README.md'), 'utf8'), /Node >= 22\.20\.0/);
 });
 
+test('every action is pinned to the commit that runs it, with the release beside it (S48)', () => {
+  // A tag is a name that moves: `actions/checkout@v4` is whatever that project
+  // published under the name today, so the bytes executing a gate are not the bytes
+  // the adopting repository reviewed. Both templates, because the adopting copy is the
+  // one nobody in this repository can see after `init`.
+  for (const [label, yaml] of [['own', renderWorkflow({ own: true })], ['adopting', renderWorkflow()]]) {
+    const uses = [...yaml.matchAll(/uses: (\S+)/g)].map((m) => m[1]);
+    assert.ok(uses.length > 0, `${label}: no actions to check`);
+    for (const ref of uses) {
+      assert.match(ref, /^[\w.-]+\/[\w.-]+@[0-9a-f]{40}$/, `${label}: ${ref} is not a commit SHA`);
+    }
+    // The comment is what makes a pinned SHA reviewable - a reader cannot tell what
+    // `11d5960a` is, and an unpinned-looking line invites somebody to "fix" it back.
+    for (const line of yaml.split('\n').filter((l) => /uses: /.test(l))) {
+      assert.match(line, /@[0-9a-f]{40} # v\d+\.\d+\.\d+$/, `${label}: a pin with no release comment: ${line}`);
+    }
+  }
+});
+
+test('the pin and its release name the same commit Dependabot would', () => {
+  // The pairs are stated in the source table, so a reader can check them without a
+  // network call. A SHA and a release that disagree is the failure the comment
+  // invites: the line reads as pinned to v4.4.0 and is not.
+  assert.deepEqual(ACTIONS, {
+    checkout: { repo: 'actions/checkout', commit: '11d5960a326750d5838078e36cf38b85af677262', release: 'v4.4.0' },
+    setupNode: { repo: 'actions/setup-node', commit: '49933ea5288caeca8642d1e84afbd3f7d6820020', release: 'v4.4.0' },
+  });
+  // 40 hex characters is what makes it a commit id at all; the tag form this replaced
+  // was a mutable name of the same length, which is the whole difference.
+  for (const { commit } of Object.values(ACTIONS)) {
+    assert.match(commit, /^[0-9a-f]{40}$/);
+  }
+});
+
+test('the own gate runs on both platforms ADR-012 claims (S48)', () => {
+  // ADR-012 ruled that CI verifies on `macos-latest` and `ubuntu-latest`, and until
+  // this matrix landed that sentence was false in the one repository that could make
+  // it true. Nothing read it: `package.json` declares `os` for npm to enforce, and no
+  // check here ever ran a test on a second platform.
+  const own = renderWorkflow({ own: true });
+  assert.match(own, /os: \['ubuntu-latest', 'macos-latest'\]/);
+  // `runs-on` is derived from the matrix rather than written twice, so a job cannot
+  // expand to six combinations that all run on one of them.
+  assert.match(own, /^ {4}runs-on: \$\{\{ matrix\.os \}\}$/m);
+  assert.doesNotMatch(own, /^ {4}runs-on: ubuntu-latest$/m);
+  // Windows stays out: ADR-012 dropped it, and "add the third runner" is the request
+  // that comes next if nobody writes down why there are two.
+  assert.doesNotMatch(own, /windows/);
+  // And a job that names a matrix has to say which axis it is on, or six runs render
+  // as six identical rows in the checks list.
+  assert.match(own, /^ {4}name: \$\{\{ matrix\.os \}\} node \$\{\{ matrix\.node \}\}$/m);
+});
+
+test('the adopting gate stays on one platform and the floor (S48)', () => {
+  // The macOS claim is about this repository's own gate. An adopting repository's
+  // runner is its own decision, and doubling a stranger's CI bill to satisfy a record
+  // written here would be this tool deciding for them.
+  const yaml = renderWorkflow();
+  assert.match(yaml, /^ {4}runs-on: ubuntu-latest$/m);
+  assert.doesNotMatch(yaml, /matrix:/);
+  assert.match(yaml, /^ {4}name: simt-dev check$/m);
+});
+
 test('the own copy runs a gate this repository can actually pass', async () => {
   // `simt-dev check` is red here by design: this AGENTS.md is hand-written and never
   // self-adopted, so the check reports it as unmanaged on every run. A CI job that is
@@ -433,7 +504,9 @@ test('a stale copy in simt-dev\'s own repository is reported, with the fix named
   const path = join(PACKAGE_ROOT, WORKFLOW_FILE);
   const before = await readFile(path, 'utf8');
   try {
-    await writeFile(path, before.replace('runs-on: ubuntu-latest', 'runs-on: ubuntu-latest # ours'));
+    // A token this template owns, so the edit is a drift rather than a no-op. It used
+    // to be `runs-on: ubuntu-latest`, which the macOS matrix (S48) removed.
+    await writeFile(path, before.replace('timeout-minutes: 5', 'timeout-minutes: 9'));
     const plan = await planWorkflow(PACKAGE_ROOT);
     assert.equal(plan.action, 'refresh');
     assert.match(plan.reason, /gate template has changed/);

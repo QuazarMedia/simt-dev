@@ -163,7 +163,7 @@ record is written.
 | S45 | Core and process rules speak one language and one harness | P2 | R | rules | no | S14 | Complete | `4ef3f21` |
 | S46 | The POSIX-only stance reaches an installer as `EBADPLATFORM` | P3 | R | docs | no (ADR-012 stands) | S18 | Queued | — |
 | S47 | The Node floor is end-of-life | P2 | E | runtime | yes (P8) | — | Complete | `840f7aa` |
-| S48 | Workflow templates: tag-pinned actions, Node 20, an install that needs npm | P2 | E | ci | no | S35, S47 | Queued | `workflow.mjs` |
+| S48 | Workflow templates: tag-pinned actions, Node 20, an install that needs npm | P2 | E | ci | no | S35, S47 | Complete | pins + macOS runner in; the install step stays with S35 |
 | S49 | Dependabot misses Gradle, submodules and seven more ecosystems | P2 | E | ci | no | — | Complete | `b2a3173` |
 | S50 | Rule files load eagerly where a surface could scope them | P2 | E | surfaces | yes (P7) | S12 | Queued | `surfaces.mjs` |
 | S51 | JSON output has no schema version and no compact form | P3 | E | output | no | S10 | Queued | `output/index.mjs:68` |
@@ -436,8 +436,8 @@ derive the list from the workspace registry rather than hand-keeping it.
 - npm returns 404 for both `@quazarmedia/simt-dev` and the unscoped `simt-dev`. Decide the
   public name before anything links to it.
 - The tarball is 244.1 kB packed, 739.4 kB unpacked, 90 files, with no `README` and no
-  `LICENSE`. An own CI workflow now exists, but it runs on `ubuntu-latest` only, so ADR-012's
-  macOS claim is still false (S48).
+  `LICENSE`. An own CI workflow now exists and, since S48, runs on `ubuntu-latest` and
+  `macos-latest`, so ADR-012's macOS claim is finally true rather than asserted.
 
 **S19.** Still open:
 
@@ -1453,6 +1453,27 @@ those.
 
 **Accept.** A template test asserts that every `uses:` is SHA-pinned and that the Node version
 equals the documented one.
+
+> **Resolution.** Two of the four, and the Node line was already S47's. The actions are now
+> pinned to the commit that runs them, with the release in a comment beside it, read from one
+> exported table so the two templates cannot pin different things. The own workflow runs a
+> `macos-latest` / `ubuntu-latest` axis, which is what makes ADR-012's sentence true — it had
+> been false in the one repository that could have made it true, and nothing read it, since
+> `package.json`'s `os` is enforced by npm and no check here had run a test on a second
+> platform. `runs-on` is derived from the matrix rather than written twice, which is the only
+> reason six combinations cannot all run on one runner.
+>
+> The majors stay at v4 deliberately: `checkout` v7 and `setup-node` v7 both carry breaking
+> changes, and a gate that changes behaviour because an updater ran is what pinning exists to
+> prevent. Dependabot's `github-actions` ecosystem rewrites the SHA and the comment together.
+>
+> "Use Node 24" above did not survive S47, and this row records why rather than reverting it:
+> the adopting template pins the floor its own `engines.node` declares, so a template cannot
+> name a version the package says it does not run on (ADR-053 ruling 1). The extra versions
+> are the own gate's coverage, not a second floor.
+>
+> The install step stays with **S35** and the row is not blocked on it: `npm ci` cannot be
+> fixed here, because the thing it installs does not exist on npm yet.
 
 ### S49 — Dependabot misses Gradle, submodules and seven more ecosystems (P2)
 

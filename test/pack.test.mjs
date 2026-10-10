@@ -41,8 +41,26 @@ const PACKAGE_NAME = '@quazarmedia/simt-dev';
  * `SIMT_DEV_WORKSPACE` exported can resolve a different one. Either would make a
  * test pass for a reason that has nothing to do with the tarball, which is the
  * failure ADR-031 records happening three times in this repository.
+ *
+ * The second half is the same rule about a different inheritance, and it was found by
+ * the gate rather than by a test: this file runs `npm install`, and `npm test` exports
+ * npm's own RESOLVED configuration into every child it starts, as `npm_config_*`.
+ * A developer whose `~/.npmrc` sets `allow-scripts` therefore had their child install
+ * die with `EALLOWSCRIPTS` — npm treats a value arriving from the environment as a
+ * command-line flag, and refuses it in a project-scoped install. The install is
+ * perfectly good; the *inherited setting* is what npm will not accept there.
+ *
+ * So every `npm_config_*` variable is dropped. What is left is npm reading the same
+ * config files a CI runner and a fresh shell read, which is the configuration this
+ * test is supposed to be measuring under. Keeping them would make "does the tarball
+ * install" a question about the developer's home directory — the same defect ADR-031
+ * found three times, one level down and wearing a different hat.
  */
-const NO_ESTATE = { ...process.env, SIMT_DEV_WORKSPACE: 'off' };
+const NO_ESTATE = Object.fromEntries(
+  Object.entries({ ...process.env, SIMT_DEV_WORKSPACE: 'off' }).filter(
+    ([name]) => !/^npm_config_/i.test(name),
+  ),
+);
 
 /**
  * execFile that reports rather than throws.

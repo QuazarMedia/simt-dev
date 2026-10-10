@@ -1229,6 +1229,8 @@ Two repositories are unmanaged: `bunnyland-server` (not a SIMT product) and `sim
 design). `simt-space-review` is not a git repository, so `compare` does not list it.
 `simt-social` and `simt-blog` carry an uncommitted pin edit (§1.4).
 
+**Prerequisite, already applied.** The `simt.json` rename and the `simt:` region-marker move are done across all 14 repos, one commit each. They change the markers and the manifest filename only: the body drift, the region note, and the manifest comment still carry the pre-rename values and need the tool's own write (step 2), so S36 stays Queued behind S35.
+
 **Fix: the runbook.** It runs only after Wave 0 (§9) and S35's stopgap.
 
 1. **Release.** Tag simt-dev `v0.1.0`. From then on, a pin is a version (S01).

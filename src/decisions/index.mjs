@@ -18,6 +18,8 @@ import { readFile, readdir } from 'node:fs/promises';
 import { readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MANIFEST_FILE } from '../name.mjs';
+import { CLI } from '../name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DECISIONS_DIR = resolve(HERE, '..', '..', 'docs', 'decisions');
@@ -36,7 +38,7 @@ const PACKAGE_ROOT = resolve(HERE, '..', '..');
  * drifts onto this list stops being redacted and a name that drifts off it starts
  * redacting a file the reader does have.
  */
-const INHERITED = ['AGENTS.md', 'package.json', 'simt-dev.json'];
+const INHERITED = ['AGENTS.md', 'package.json', `${MANIFEST_FILE}`];
 
 /**
  * Matches a location that resolves inside this package and nowhere a reader stands.
@@ -225,7 +227,7 @@ export async function loadDecisions() {
       // by ADR-053", and a ruling number is not a location. What a reader in another
       // repository receives is the status line, so that is what is scrubbed — here, once,
       // rather than at each of the four places that print it.
-      status: redactInternalPaths(status),
+      status: redactInternalPaths(redactCommand(status)),
       // Anchored to the start of the status, and this is the whole of the rule. A record
       // is superseded only when its own status says so first. Unanchored, the clause
       // "ruling 2 superseded by [ADR-024]" inside ADR-023's paragraph matched, and the
@@ -409,7 +411,7 @@ const section = (name) => {
 
   const rejected = units(section('Rejected'))
     .slice(0, 3)
-    .map((p) => sentence(p.text));
+    .map((p) => sentence(redactCommand(p.text)));
 
   // A lead-in ending in a colon introduces what follows it, so on its own it is a
   // sentence with no predicate. Kept only when nothing follows.
@@ -418,7 +420,7 @@ const section = (name) => {
 
   const printed = withLead.slice(0, 2);
   return {
-    ruled: printed.map((p) => mark(sentence(p.text), p.number)),
+    ruled: printed.map((p) => mark(sentence(redactCommand(p.text)), p.number)),
     // The number each printed ruling declares, parallel to `ruled`. It is the join
     // between a supersession and the text it applies to, so it is exported rather than
     // kept inside: a family that stopped numbering its rulings — `**One.**` losing the
@@ -449,6 +451,29 @@ export const ESTATE_NAME =
 /** Replace estate repository names with a phrase a reader who does not have them can use. */
 export function redactEstate(text) {
   return text.replace(new RegExp(ESTATE_NAME.source, 'g'), 'a repository');
+}
+
+/**
+ * Commands that existed when a record was written and that this package no longer installs.
+ *
+ * The binary was `simt-dev` for the whole of this corpus and is `simt` now. The records
+ * quote it verbatim, often quoting the output of the version they were written against:
+ * ADR-036 instructs the reader to `run simt-dev sync --yes`, and a reader who types that
+ * today gets a shell error. Fifty-odd records ship in the package and are opened with
+ * `rules why` from inside an adopting repository.
+ *
+ * The alternative was to rewrite the records, and this repository's rule is that a record
+ * is never edited in place - the quoted command is evidence of what happened, so it stays
+ * in the file and is converted on the way out. Same shape as redactEstate above, for the
+ * same reason: what travels must be actionable, and what lives here must stay true.
+ *
+ * Only a real verb follows, which is what keeps `simt-dev.json`, `simt-dev-check.yml` and
+ * `simt-dev's` untouched - those are the project's artefacts and the project keeps its name.
+ */
+const VERB = '(?:init|doctor|check|sync|upgrade|ci|compare|hooks|mcp|rules|skills|graph|--[a-z-]+)';
+
+export function redactCommand(text) {
+  return String(text ?? '').replace(new RegExp(`\\bsimt-dev (?=${VERB})\\b`, 'g'), `${CLI} `);
 }
 
 /**

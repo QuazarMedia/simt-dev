@@ -1,5 +1,6 @@
 import { MANIFEST_COMMENT } from '../projection/manifest.mjs';
 import { CLI } from '../name.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 // Classify one repository's upgrade state. Pure: no filesystem, no git.
 //
 // The line this module draws is narrow on purpose. `upgrade` moves a PIN. It does not
@@ -32,14 +33,14 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   // for it, and calling this a failure would make the exit code describe the estate's
   // migration progress rather than this run's correctness.
   if (!manifestExists) {
-    return { ...base, state: 'not-adopted', action: 'skip', detail: 'no simt-dev.json', remedy: `${CLI} init` };
+    return { ...base, state: 'not-adopted', action: 'skip', detail: `no ${MANIFEST_FILE}`, remedy: `${CLI} init` };
   }
   if (manifestError) {
     return {
       ...base,
       state: 'broken-manifest',
       action: 'skip',
-      detail: `simt-dev.json is unparseable (${manifestError})`,
+      detail: `${MANIFEST_FILE} is unparseable (${manifestError})`,
       remedy: `fix the JSON, or run: ${CLI} init`,
     };
   }
@@ -88,7 +89,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       ...base,
       state: 'no-region',
       action: 'skip',
-      detail: 'simt-dev.json exists but AGENTS.md has no generated region',
+      detail: `${MANIFEST_FILE} exists but AGENTS.md has no generated region`,
       // `sync --yes`, not `init --yes`. The remedy is a command that does the thing the
       // skip refused to do and nothing else: `sync` writes regions and leaves the rest of
       // the repository alone, while `init` re-runs adoption. `compare` already names

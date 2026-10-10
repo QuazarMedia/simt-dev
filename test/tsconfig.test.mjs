@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { cmd } from './fixture.mjs';
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -8,6 +9,7 @@ import { promisify } from 'node:util';
 import test from 'node:test';
 
 import { assertClean } from './leaks.mjs';
+import { CLI } from '../src/name.mjs';
 import {
   DOCUMENTED_RESOLUTIONS,
   STRICTNESS_FLOOR,
@@ -180,7 +182,7 @@ test('a TypeScript repo with no base file is told so, with a command', async () 
   const absent = findings.find((f) => f.status === 'absent');
   assert.ok(absent, 'absence is the one thing a file cannot report about itself');
   assert.equal(absent.file, TSCONFIG_BASE_FILE);
-  assert.equal(absent.remedy, 'simt-dev init --yes');
+  assert.equal(absent.remedy, `${CLI} init --yes`);
 });
 
 test('a base file nothing extends is reported as inert, naming the line to add', async () => {
@@ -281,7 +283,7 @@ test('deleting the base file is a gate failure', async () => {
   const checked = await simt(['check'], root);
   assert.equal(checked.code, 1);
   assert.match(checked.out, /tsconfig\.base\.json/);
-  assert.match(checked.out, /simt-dev init --yes/);
+  assert.match(checked.out, cmd('{cli} init --yes'));
 });
 
 test('this repository is not given one either', async () => {

@@ -1,3 +1,4 @@
+import { MANIFEST_FILE } from '../name.mjs';
 // Gate definitions for the shared hook dispatcher.
 //
 // A gate has one of three kinds, and the choice is not cosmetic:
@@ -109,28 +110,28 @@ export function unresolved(name, { hasScript, binary, command, stack }) {
     return {
       gate: name,
       reason: `unknown gate; the shared dispatcher knows: ${Object.keys(GATES).sort().join(', ')}`,
-      remedy: `remove "${name}" from simt-dev.json gates`,
+      remedy: `remove "${name}" from ${MANIFEST_FILE} gates`,
     };
   }
   if (gate.kind === 'script' && !hasScript(gate.script)) {
     return {
       gate: name,
       reason: `no "${gate.script}" script in package.json`,
-      remedy: `add the script, or remove "${name}" from simt-dev.json gates`,
+      remedy: `add the script, or remove "${name}" from ${MANIFEST_FILE} gates`,
     };
   }
   if (gate.kind === 'command' && !command) {
     return {
       gate: name,
-      reason: `no command declared for this gate in simt-dev.json`,
-      remedy: `set gates.commands["${name}"] to the command that proves it, or remove "${name}" from simt-dev.json gates`,
+      reason: `no command declared for this gate in ${MANIFEST_FILE}`,
+      remedy: `set gates.commands["${name}"] to the command that proves it, or remove "${name}" from ${MANIFEST_FILE} gates`,
     };
   }
   if (gate.kind === 'staged' && !binary) {
     return {
       gate: name,
       reason: `${gate.tools.join('/')} is not installed in node_modules/.bin`,
-      remedy: 'run the repo install command, or remove "format" from simt-dev.json gates',
+      remedy: `run the repo install command, or remove "format" from ${MANIFEST_FILE} gates`,
     };
   }
   return null;

@@ -4,11 +4,32 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] — 2026-10-10
+## [1.1.0] — 2026-10-10
 
-First published release. Nothing earlier was ever on a registry, so this entry is the
-whole history; the decisions that produced it are readable in the package under
-`docs/decisions/` and from any checkout with `rules why <id>`.
+The first release with real contents in it. `1.0.0` was an empty reservation of the name
+and `0.0.0-stage` was its rehearsal; neither shipped a byte anyone could run, so this entry
+is the whole history. The decisions behind it are readable in the package under
+`docs/decisions/`, and from any checkout with `simt rules why <id>`.
+
+### The command is `simt`
+
+The package is `simt-dev` and the command is `simt`. They are not the same thing and were
+never required to be: the command appears in no file until a reader types it, while the
+package name, the manifest, the `<!-- simt-dev:begin -->` region markers, the `.simt-hooks/`
+directory and the `simt-dev-check.yml` gate already exist in every repository that adopted
+this tool. The markers, the hooks directory and the gate did not move; the manifest did —
+and it is the only one that needed to, because it is the file a reader edits by hand.
+
+### The manifest is `simt.json`
+
+The manifest was called `simt-dev.json`; it is now `simt.json`. The move is a
+read-both/write-new, so nothing in an adopting repository has to be done:
+
+- Every read takes `simt.json` if it exists, else `simt-dev.json`, so a repository that
+  has not written since the upgrade is still seen as adopted.
+- Every write goes to `simt.json`, and a lone `simt-dev.json` is moved, not shadowed.
+- The old name keeps working until the first `init` or manifest write in each repository,
+  and that write closes it. *(ADR-056)*
 
 ### What a first release has to say out loud
 
@@ -21,7 +42,6 @@ without reading the source is not a documented one.
   commits or pushes. *(ADR-035, ADR-036)*
 - **`upgrade` moves a pin and nothing else.** It never adopts a repository, never repairs
   one, and never rewrites a manifest. Every consumer moves to the same version as one set.
-  *(ADR-037)*
 - **A pre-commit hook with no reachable binary fails closed.** The refusal is the correct
   behaviour, not a bug; the remedy it prints is the command that obtains one.
   *(ADR-010, ADR-018)*
@@ -41,5 +61,17 @@ without reading the source is not a documented one.
   and nothing else.
 - The package `description` no longer names an internal ecosystem. It is the first line
   anybody outside the project reads.
+- Unscoped, so the install command is `npm i -D simt-dev` rather than a name under an
+  organisation. The `@simt` and `@quazarmedia` scopes were both free; an unscoped name is
+  the one a reader can guess.
 
-[0.1.0]: https://github.com/quazarmedia/simt-dev/releases/tag/v0.1.0
+### Notes for anyone upgrading a hook
+
+A shim installed by an earlier version looks for `SIMT_DEV_BIN`, then for
+`node_modules/simt-dev/bin/simt-dev.mjs`, then for a program named `simt` on `PATH`. The
+last of those is new, so a machine that installed the package before this release and
+never ran `simt hooks install` again will find nothing until the dependency is refreshed
+and `simt hooks install --yes` is re-run. That is a real upgrade step and it is called out
+here rather than discovered.
+
+[1.1.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v1.1.0

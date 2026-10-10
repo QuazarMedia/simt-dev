@@ -27,7 +27,10 @@ export const PROJECT = 'simt-dev';
  * The manifest an adopting repository owns. LOCKED: fourteen repositories carry a
  * `simt-dev.json`, and `read` would fail rather than migrate in every one of them.
  */
-export const MANIFEST_FILE = `${PROJECT}.json`;
+export const MANIFEST_FILE = 'simt.json';
+
+/** What the manifest file was called, and still is in every adopted repo. */
+export const MANIFEST_LEGACY = 'simt-dev.json';
 
 /** The config directory on the adopting engineer's machine. LOCKED, same argument. */
 export const CONFIG_DIR = PROJECT;
@@ -47,23 +50,34 @@ export const WORKFLOW_FILE_NAME = `${PROJECT}-check.yml`;
 export const BIN_ENV = 'SIMT_DEV_BIN';
 
 /**
- * The command a reader types. This is the name that moves, and it is a separate constant
- * rather than something derived: the project keeps its name across a publish rename, the
- * command does not, and a derivation that silently picks between them would turn a
- * two-line rename into a two-line diff whose meaning depends on a comparison nobody
- * reading it would think to check.
+ * The command a reader types.
+ *
+ * This is the name that moved, and it is deliberately not the project name. The
+ * project keeps `simt-dev` because that name is already on disk in every repository
+ * that adopted the tool - in the manifest, in the region markers, in the hooks
+ * directory - and renaming any of those is a breaking change to files rather than to
+ * a package. The command appears in no file at all until a reader types it, so it is
+ * the cheap name to change, and it is the one worth spending.
+ *
+ * `test/naming.test.mjs` is what stops this from drifting back into a hundred
+ * literals. Without it this constant is a comment with an export.
  */
-export const CLI = PROJECT;
+export const CLI = 'simt';
 
 /**
- * The package a repository installs to obtain the command. Moves with the command.
+ * The package a repository installs to obtain the command.
  *
- * Not derived from CLI or SCOPE. These are three names that happen to agree today, and
- * they will not always: a scope is a namespace on a registry, a package is a name in one
- * namespace, and a command is whatever the package's `bin` map says it is.
+ * Unscoped, and equal to the project name, because that name was reserved on the npm
+ * registry before this package existed and holds only an empty `1.0.0`. Reserving it
+ * and then publishing under a different spelling would leave the one name anyone can
+ * find pointing at nothing.
+ *
+ * Not derived from CLI. The command moved to `simt`; the package did not, and a
+ * derivation that silently picked between them would turn a one-line rename into a
+ * one-line diff whose meaning depends on a comparison nobody reading it would think
+ * to check.
  */
-export const SCOPE = 'quazarmedia';
-export const PACKAGE_NAME = `@${SCOPE}/${PROJECT}`;
+export const PACKAGE_NAME = PROJECT;
 
 /** The entry point, relative to the package root. LOCKED: `bin` in package.json. */
 export const BIN_REL = 'bin/simt-dev.mjs';

@@ -23,7 +23,7 @@ import { dirname, join } from 'node:path';
 import { EXIT, emit, fail, isJson, note } from '../output/index.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs';
-import { MANIFEST, buildManifest, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
+import { MANIFEST, buildManifest, manifestPath, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { readHooksState } from '../compare/hooksstate.mjs';
 import { planWorkflow, renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
@@ -34,6 +34,7 @@ import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { CLI } from '../name.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 
 const run = promisify(execFile);
 
@@ -52,7 +53,7 @@ export async function initCommand(positional, flags) {
   const existing = await readManifest(root);
   const { manifest: current, exists, error } = existing;
   if (error) {
-    return fail(`${join(root, MANIFEST)}: ${error}`, EXIT.CONFIG, `fix the JSON in ${MANIFEST}`);
+    return fail(`${await manifestPath(root)}: ${error}`, EXIT.CONFIG, `fix the JSON in ${MANIFEST_FILE}`);
   }
 
   // What this repo can demonstrably run, not what its stack suggests. Without this the
@@ -90,7 +91,7 @@ export async function initCommand(positional, flags) {
   const apply = approved && !dryRun;
 
   const manifestAction = exists ? 'update' : 'create';
-  const manifestPath = join(root, MANIFEST);
+  const manifestFile = await manifestPath(root);
   // Planned here, written below with everything else. A file the reader was not shown
   // in the plan is a file they approve by reading the diff afterwards, which is the
   // one review step this tool exists to make unnecessary.
@@ -133,7 +134,7 @@ export async function initCommand(positional, flags) {
       reason: tsconfigBase.reason,
     },
     adoption,
-    manifest: { file: MANIFEST, action: manifestAction, path: manifestPath },
+    manifest: { file: MANIFEST, action: manifestAction, path: manifestFile },
     region: region && {
       file: region.file,
       action: region.action,
@@ -173,7 +174,7 @@ export async function initCommand(positional, flags) {
     return fail(
       `${mdcProblems.length} canonical .mdc rule(s) cannot be projected (${mdcProblems[0]})`,
       EXIT.FAIL,
-      'fix the reported substitution keys in simt-dev.json',
+      `fix the reported substitution keys in ${MANIFEST_FILE}`,
     );
   }
 
@@ -236,7 +237,7 @@ export async function initCommand(positional, flags) {
   for (const message of git.notes) note(`note     ${message}`);
 
   await writeManifest(root, manifest);
-  note(`wrote    ${MANIFEST} (${manifestAction})`);
+  note(`wrote    ${MANIFEST_FILE} (${manifestAction})`);
 
   // Written after the manifest so the gate exists in the same adoption that declares
   // what the gates are. Skipped with its reason printed rather than silently: a repo
@@ -435,7 +436,7 @@ function render(payload, manifest) {
   for (const n of payload.notes) lines.push(`note        ${n}`);
 
   lines.push('', 'PLAN');
-  lines.push(`  ${payload.manifest.action.padEnd(9)} ${MANIFEST}`);
+  lines.push(`  ${payload.manifest.action.padEnd(9)} ${MANIFEST_FILE}`);
   lines.push(
     `            id=${manifest.id} stack=${manifest.stack.join(',') || '(none)'} ` +
       `preCommit=${manifest.gates.preCommit.join(',') || '(none)'} ` +

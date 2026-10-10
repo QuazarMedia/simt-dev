@@ -12,6 +12,9 @@
 // a correct default that a naive grep would flag.
 
 import assert from 'node:assert/strict';
+import { cmd } from './fixture.mjs';
+import { CLI, PROJECT } from '../src/name.mjs';
+import { loadDecisions } from '../src/decisions/index.mjs';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
@@ -182,8 +185,8 @@ test('the generated-region header names only actions a reader can take', () => {
   // told to write (ADR-035), so the bare spelling would tell them to run it and
   // watch nothing happen — an instruction that was correct when written and false
   // the moment the preview became the default.
-  assert.match(text, /simt-dev sync --yes/, text);
-  assert.doesNotMatch(text, /simt-dev sync`/, text);
+  assert.match(text, cmd('{cli} sync --yes'), text);
+  assert.doesNotMatch(text, cmd('{cli} sync`'), text);
   assert.match(text, /Do not edit/i, text);
 });
 
@@ -198,7 +201,7 @@ test('every remedy names a command that does what the remedy claims', async () =
   // a whole commit and a new decision to find (ADR-040). `--yes` means the same
   // thing there for a second reason: it is also the consent to take over routing git
   // already uses, so a remedy that omits it is refused rather than applied.
-  const WRITES = /(?:simt-dev sync|simt-dev hooks install)\b/g;
+  const WRITES = new RegExp(`(?:${CLI} sync|${CLI} hooks install)\\b`, 'g');
   const AUTHORISES = /--yes\b|--check\b/;
   const offenders = [];
 
@@ -239,13 +242,13 @@ test('the installed shim tells the reader how to reinstall it', async () => {
   // way back, and a bare command there is a preview - the reader follows the shim's
   // own instructions, gets no change, and concludes the shim is not reinstallable.
   const shim = renderShim('pre-commit');
-  assert.match(shim, /simt-dev hooks install --yes/, shim.slice(0, 400));
+  assert.match(shim, cmd('{cli} hooks install --yes'), shim.slice(0, 400));
 });
 
 test('the manifest comment describes the manifest', async () => {
   const manifest = buildManifest({ root: '/tmp/some-repo', stack: ['node'], sha: 'abc1234' });
   const text = JSON.stringify(manifest, null, 2);
-  assertClean('simt-dev.json', text);
+  assertClean('simt.json (the manifest comment)', text);
   // It must not claim provenance it does not carry. An earlier version said every
   // value cites the ADR that requires it; zero values cited one.
   assert.equal(/\bADR-\d+/.test(text), false, 'the manifest claims ADR provenance it does not carry');
@@ -258,11 +261,15 @@ test('the manifest comment describes the manifest', async () => {
 test('every command name the tool prints is the name this package ships', async () => {
   const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
   const bin = Object.keys(pkg.bin);
-  assert.deepEqual(bin, ['simt-dev'], 'the shipped binary name changed; update the guard');
+  assert.deepEqual(bin, [CLI], 'the shipped binary name changed; update the guard');
 
-  // Any bare `simt <subcommand>` in user-facing source is a command that does not
-  // exist. This caught 102 sites at once, all of them remedy text, all of them
-  // telling a reader to run something unrunnable.
+  // The forbidden string here was, until the rename, `simt <verb>` - the command
+  // with the hyphen missing. It caught 102 sites at once, all of them remedy text,
+  // all of them telling a reader to run something unrunnable. That string is now the
+  // CORRECT command, so the check inverts: what does not exist is the project name in
+  // command position, `simt-dev <verb>`, which is this tool still telling a reader to
+  // run the binary it used to install. Comments are skipped, because several of them
+  // name the project while describing it.
   const files = [
     'src/commands/help.mjs', 'src/commands/index.mjs', 'src/commands/sync.mjs',
     'src/commands/init.mjs', 'src/commands/rules.mjs', 'src/commands/skills.mjs',
@@ -277,8 +284,9 @@ test('every command name the tool prints is the name this package ships', async 
   ];
   for (const file of files) {
     const text = await readFile(join(ROOT, file), 'utf8');
-    const m = /\bsimt (?:init|sync|check|rules|skills|hooks|compare|doctor|upgrade|mcp|graph)\b/.exec(text);
-    assert.equal(m, null, `${file} tells the reader to run "${m?.[0]}", which is not a command. The binary is "simt-dev".`);
+    const code = text.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
+    const m = new RegExp(`\\b${PROJECT} (?:init|sync|check|rules|skills|hooks|compare|doctor|upgrade|mcp|graph)\\b`).exec(code);
+    assert.equal(m, null, `${file} tells the reader to run "${m?.[0]}", and the binary is ${CLI}.`);
   }
 });
 
@@ -538,12 +546,41 @@ test('no shipped decision record names a command this package does not install',
   // Found by reading a `rules why` answer: ADR-005 told the reader to run `simt check`,
   // which is not a command. Twenty-one occurrences across eight records, all invisible
   // to a check that only looked at rule bodies.
-  for (const file of await adrFiles()) {
-    const text = await readFile(join(DECISIONS_DIR, file), 'utf8');
-    const m = /\bsimt (?!-dev\b)(?:sync|check|init|doctor|skills|rules|hooks|compare|upgrade|mcp|graph)\b/.exec(text);
-    assert.equal(m, null, `${file} tells the reader to run a command that does not exist: ${m?.[0]}`);
+  //
+  // This guard has now been wrong twice, both times for the same reason: it asserted a
+  // SPELLING while the rule it protects is about runnable commands. It first forbade
+  // `simt check`, which stopped being a defect the day the command was renamed to `simt`.
+  // Then it forbade `simt-dev check` in the file, which was right about the spelling and
+  // wrong about the surface — fifty records quote the command their own output ran when
+  // the binary was `simt-dev`, and a record is never edited in place, so the quotation
+  // stays in the file as evidence of what happened.
+  //
+  // So this checks what is PRINTED, not what is stored. `loadDecisions` converts the old
+  // command on the way out, and the question worth asking is whether the conversion
+  // reached every field a reader actually sees.
+  const { decisions } = await loadDecisions();
+
+  for (const d of decisions) {
+    for (const field of [d.status, ...d.summary.ruled, ...d.summary.rejected]) {
+      const m = /\bsimt-dev (?:sync|check|init|doctor|skills|rules|hooks|compare|upgrade|mcp|graph)\b/.exec(field);
+      assert.equal(m, null, `${d.id} prints "${m?.[0]}", and the command is ${CLI}`);
+    }
   }
+  // Not vacuous. The pattern above does fire on the raw stored text, so the check is
+  // asserting that the conversion happens rather than that the field is empty.
+  const raw = await readFile(join(DECISIONS_DIR, 'ADR-036-a-writer-that-writes-says-so-and-the-instructions-naming-it-move-with-it.md'), 'utf8');
+  assert.match(raw, /\bsimt-dev sync\b/, 'the stored text no longer quotes the command it quoted, so the redaction cannot be what is failing here');
 });
+
+test('the shipped command is the spelling the records are allowed to use', async () => {
+  // The other direction: the conversion must actually run. A guard that only knows how to
+  // reject is a guard that can be satisfied by deleting its subject.
+  const { decisions } = await loadDecisions();
+  assert.ok(decisions.length > 40, 'the decision index is empty, so nothing above proved anything');
+  const printed = decisions.flatMap((d) => [d.status, ...d.summary.ruled, ...d.summary.rejected]).join('\n');
+  assert.match(printed, new RegExp(`\\b${CLI} (?:sync|check|init|hooks)\\b`), 'no record prints the command this package installs, so the redaction cannot be doing anything');
+});
+
 
 test('every decision record yields a ruling, so a citation can never dead-end', async () => {
   // The whole value of a citation is that following it answers something. A record

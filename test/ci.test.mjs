@@ -14,6 +14,7 @@
 // edit something in a repository they do not have.
 
 import assert from 'node:assert/strict';
+import { cmd } from './fixture.mjs';
 import test, { after } from 'node:test';
 import { execFile } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -33,7 +34,7 @@ import {
 import { renderDependabot, planDependabot, DEPENDABOT_FILE } from '../src/ci/dependabot.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
 import { renderShim, EVENTS } from '../src/hooks/shim.mjs';
-import { PACKAGE_NAME } from '../src/name.mjs';
+import { BIN_ENV, CLI, PACKAGE_NAME } from '../src/name.mjs';
 import { renderLocator } from '../src/locate.mjs';
 import { PACKAGE_ROOT } from '../src/workspace.mjs';
 import { EXIT } from '../src/output/index.mjs';
@@ -149,9 +150,9 @@ test('the workflow runs the gate, located by the same function the hook uses', (
   carries(renderShim(EVENTS[0]), hook, 'the hook shim');
   // The package is not published, so the shim must not tell a reader to install it.
   // The workflow's install line is a different surface and stays until that is decided.
-  assert.match(renderShim(EVENTS[0]), /set SIMT_DEV_BIN to the simt-dev binary/);
+  assert.match(renderShim(EVENTS[0]), new RegExp(`set ${BIN_ENV} to the ${CLI} binary`));
   assert.doesNotMatch(renderShim(EVENTS[0]), /npm i -D/);
-  assert.match(yaml, /REMEDY run: npm i -D @quazarmedia\/simt-dev/);
+  assert.match(yaml, cmd('REMEDY run: npm i -D {cli}'));
 });
 
 test('a job that cannot find the tool fails rather than passes', () => {
@@ -159,7 +160,7 @@ test('a job that cannot find the tool fails rather than passes', () => {
   // Every locator chain ends in a refusal with a non-zero exit, and the file says so,
   // because the next person to read this file is the one who has to believe it.
   const yaml = renderWorkflow();
-  assert.match(yaml, /cannot locate simt-dev/);
+  assert.match(yaml, cmd('cannot locate {cli}'));
   assert.match(yaml, /FAILS instead of passing/);
 });
 
@@ -186,7 +187,7 @@ test('the workflow is shell a POSIX sh will accept, running the gate it says it 
     if (indent < 10) break;
     body.push(line.slice(10));
   }
-  assert.match(body.join('\n'), /simt-dev check|check --root/);
+  assert.match(body.join('\n'), new RegExp(`${CLI} check|check --root`));
 
   const script = join(await mkdtemp(join(tmpdir(), 'simt-ci-sh-')), 'step.sh');
   temps.push(join(script, '..'));
@@ -202,7 +203,10 @@ test('the workflow names a command this package actually installs', () => {
   // `simt sync` did not exist and 102 remedy strings said to run it. The command here
   // is the tool's own, and the package name is the one in package.json.
   assert.match(renderWorkflow(), new RegExp(`npm i -D ${PACKAGE_NAME.replace('/', '\\/')}`));
-  assert.doesNotMatch(renderWorkflow(), /\bsimt (?!-dev\b)\w/);
+  // The command moved and the project name did not, so the old guard - 'the bare word
+  // simt must not appear' - no longer means anything: it would forbid the command itself.
+  // What is worth forbidding is the OLD spelling surviving in the rendered gate.
+  assert.doesNotMatch(renderWorkflow(), /\bsimt-dev (?:check|sync|hooks|ci)\b/, 'the rendered gate still names the old command');
 });
 
 // ---------------------------------------------------------------- when it applies
@@ -282,7 +286,7 @@ test('check gates the merge: an Actions repo with no workflow fails, a repo with
   assert.notEqual(first.code, 0, 'a repo that merges ungated passed the gate');
   assert.match(first.stdout, /ABSENT\s+\.github\/workflows\/simt-dev-check\.yml/);
   // A finding whose fix the reader has to guess at is a finding that gets skipped.
-  assert.match(first.stdout, /remedy: simt-dev init --yes/);
+  assert.match(first.stdout, cmd('remedy: {cli} init --yes'));
 
   await exec('node', [BIN, 'init', '--yes', '--surfaces', 'cursor'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } });
   const gated = await exec('node', [BIN, 'check'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } });
@@ -353,7 +357,7 @@ test('simt-dev\'s own copy is current on disk, and check says so', async () => {
   assert.equal(
     onDisk,
     renderWorkflow({ own: true }),
-    'the committed copy in simt-dev\'s own repo is not what the renderer produces; run: simt-dev ci --yes',
+    `the committed copy in simt-dev\'s own repo is not what the renderer produces; run: ${CLI} ci --yes`,
   );
   const plan = await planWorkflow(PACKAGE_ROOT);
   assert.equal(plan.action, 'unchanged');
@@ -375,7 +379,7 @@ test('the own copy explains the exception in its own bytes', async () => {
   const own = renderWorkflow({ own: true });
   assert.match(own, /refreshed by it/);
   assert.match(own, /a diff\n# here means the GATE changed/);
-  assert.match(own, /simt-dev ci --yes/);
+  assert.match(own, cmd('{cli} ci --yes'));
   // ...and must not claim the adopting repo's promise, which does not hold here.
   assert.doesNotMatch(own, /never rewrites it/);
 
@@ -456,7 +460,7 @@ test('the adopting gate stays on one platform and the floor (S48)', () => {
   const yaml = renderWorkflow();
   assert.match(yaml, /^ {4}runs-on: ubuntu-latest$/m);
   assert.doesNotMatch(yaml, /matrix:/);
-  assert.match(yaml, /^ {4}name: simt-dev check$/m);
+  assert.match(yaml, new RegExp(`^ {4}name: ${CLI} check$`, 'm'));
 });
 
 test('the own copy runs a gate this repository can actually pass', async () => {
@@ -517,7 +521,7 @@ test('a stale copy in simt-dev\'s own repository is reported, with the fix named
       env: { ...process.env, NO_COLOR: '1' },
     }).catch((e) => e);
     assert.match(red.stdout, /DRIFT\s+\.github\/workflows\/simt-dev-check\.yml/);
-    assert.match(red.stdout, /remedy: simt-dev ci --yes/);
+    assert.match(red.stdout, cmd('remedy: {cli} ci --yes'));
 
     // And the fix is the thing that clears it. `--yes` because `ci` writes like every
     // other writer in this tool: shown first, changed only when told.
@@ -567,14 +571,14 @@ test('`ci --check` exits non-zero on a stale copy and shows what changed', async
     assert.match(stale.stdout, /^--- a\/\.github\/workflows\/simt-dev-check\.yml$/m);
     assert.match(stale.stdout, /^\+\+\+ b\/\.github\/workflows\/simt-dev-check\.yml$/m);
     assert.match(stale.stdout, /^-\# a hand edit that drifts the copy$/m);
-    assert.match(stale.stdout, /apply with: simt-dev ci --yes/);
+    assert.match(stale.stdout, cmd('apply with: {cli} ci --yes'));
 
     // And `--json --check` says the same thing, so a caller is not left reading prose.
     const asJson = await run(['ci', '--check', '--json'], { cwd: PACKAGE_ROOT });
     assert.equal(asJson.code, EXIT.FAIL);
     const doc = JSON.parse(asJson.stdout);
     assert.equal(doc.ok, false, 'ok must agree with the exit code (ADR-035)');
-    assert.match(doc.remedy, /simt-dev ci --yes/);
+    assert.match(doc.remedy, cmd('{cli} ci --yes'));
     // The plan carries both sides of the comparison so the verdict and the diff cannot
     // disagree; a JSON payload is not the place for two copies of a workflow file.
     assert.equal(doc.files.some((f) => 'source' in f || 'text' in f), false);
@@ -653,7 +657,7 @@ test('ci refuses a repository that adopted simt-dev, and names the command that 
   const refused = await run(['ci', '--yes'], { cwd: root });
   assert.equal(refused.code, EXIT.UNSUPPORTED, refused.stderr);
   assert.match(refused.stdout, /owner\s+this repository, not simt-dev/);
-  assert.match(refused.stderr, /remedy:\s+simt-dev init --yes/);
+  assert.match(refused.stderr, new RegExp(`remedy: \\s+${CLI} init --yes`));
   // Above all: it wrote nothing, in a repo that had no gate file at all.
   await assert.rejects(readFile(join(root, WORKFLOW_FILE), 'utf8'));
 
@@ -665,7 +669,7 @@ test('ci refuses a repository that adopted simt-dev, and names the command that 
   assert.equal(doc.ok, false, 'a refusal reported as ok:true is a lie a caller cannot detect');
   assert.equal(doc.own, false);
   assert.match(doc.error, /belongs to this repository/);
-  assert.match(doc.remedy, /simt-dev init --yes/);
+  assert.match(doc.remedy, cmd('{cli} init --yes'));
 });
 
 // ------------------------------------------------- the dependency-updates config

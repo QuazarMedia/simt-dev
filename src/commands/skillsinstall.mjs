@@ -34,6 +34,7 @@ import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { CLI } from '../name.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 
 /**
  * Where skills live in this repo. The estate already has a convention - a
@@ -221,7 +222,7 @@ export async function installCommand(args, flags) {
   note(`wrote   ${payload.dest}`);
 
   const recorded = await recordLocal(root, record, skill.name, repo);
-  note(`${recorded.created ? 'created' : 'updated'} ${MANIFEST} localSkills`);
+  note(`${recorded.created ? 'created' : 'updated'} ${MANIFEST_FILE} localSkills`);
   if (recorded.created) {
     note(`note    this repo had no manifest; ${CLI} init still needs to run to project the rules`);
   }

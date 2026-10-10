@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { plan, loadRules, select, render, checkTarget, checkTargets } from '../src/projection/project.mjs';
 import { desiredRegion } from '../src/projection/rules.mjs';
 import { BEGIN, END, compose, inject, parse } from '../src/projection/markers.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 
 async function fixture(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-proj-'));
@@ -143,7 +144,7 @@ test('a region past a reader limit is reported, and place top clears it', async 
   assert.match(hit.detail, /BEYOND-READ-LIMIT/);
   assert.match(hit.detail, /Codex/);
 
-  await writeFile(join(root, 'simt-dev.json'), `${JSON.stringify({ projection: { place: 'top' } })}\n`);
+  await writeFile(join(root, MANIFEST_FILE), `${JSON.stringify({ projection: { place: 'top' } })}\n`);
   const planned = await plan(root);
   const agents = planned.targets.find((t) => t.file === 'AGENTS.md');
   await writeFile(agents.path, agents.text);

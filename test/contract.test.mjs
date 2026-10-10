@@ -30,6 +30,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { git, skillWorkspace, workspaceEnv } from './fixture.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
@@ -102,7 +103,7 @@ async function consumer({ stack = 'python' } = {}) {
 
 /** Make the repo's pin stale, so `upgrade` has work it would otherwise skip. */
 async function stalePin(root) {
-  const file = join(root, 'simt-dev.json');
+  const file = join(root, MANIFEST_FILE);
   const manifest = JSON.parse(await readFile(file, 'utf8'));
   manifest.projection.simtDevSha = 'aaaaaaa';
   await writeFile(file, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -243,7 +244,7 @@ const WRITERS = [
     name: 'upgrade',
     authorise: ['--yes'],
     needsStalePin: true,
-    verify: async (root) => JSON.parse(await readFile(join(root, 'simt-dev.json'), 'utf8')).projection.simtDevSha,
+    verify: async (root) => JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8')).projection.simtDevSha,
   },
   {
     // `sync` was the one writer that wrote by default, which is why it is here: it
@@ -369,10 +370,10 @@ test('a run that is authorised and not a rehearsal does write', async (t) => {
   const root = await consumer();
   t.after(() => rm(root, { recursive: true, force: true }));
   await stalePin(root);
-  const before = JSON.parse(await readFile(join(root, 'simt-dev.json'), 'utf8')).projection.simtDevSha;
+  const before = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8')).projection.simtDevSha;
   const { code } = await run(['upgrade', '--root', root, '--yes']);
   assert.equal(code, 0);
-  const after = JSON.parse(await readFile(join(root, 'simt-dev.json'), 'utf8')).projection.simtDevSha;
+  const after = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8')).projection.simtDevSha;
   assert.notEqual(after, before, 'upgrade --yes no longer moves a pin, so the refusal proves nothing');
   assert.match(after, /^[0-9a-f]{40}$/, 'and the pin it wrote is not a stamp the grammar can read back');
 });

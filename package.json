@@ -1,6 +1,6 @@
 {
-  "name": "@quazarmedia/simt-dev",
-  "version": "0.1.0",
+  "name": "simt-dev",
+  "version": "1.1.0",
   "description": "Shared agent rules, skills and git hooks for a repository: one command adopts a repo, and every gate it declares is probed before it is written.",
   "license": "Apache-2.0",
   "author": "Said Elimam",
@@ -14,7 +14,7 @@
     "linux"
   ],
   "bin": {
-    "simt-dev": "bin/simt-dev.mjs"
+    "simt": "bin/simt-dev.mjs"
   },
   "files": [
     "bin",

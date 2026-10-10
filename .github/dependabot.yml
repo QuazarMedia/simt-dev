@@ -1,14 +1,14 @@
 # Written by simt-dev, and refreshed by it. This repository is simt-dev's
 # own, so this file is a copy of the template rather than a repository's own: a diff
 # here means the TEMPLATE changed, not that somebody hand-edited their updates.
-# Anywhere else this file is written once by `simt-dev init` and never touched again.
+# Anywhere else this file is written once by `simt init` and never touched again.
 #
 # To change which ecosystems are watched, change `src/ci/dependabot.mjs` in the same
-# commit and run `simt-dev ci --yes`. Editing this file by hand works until the
+# commit and run `simt ci --yes`. Editing this file by hand works until the
 # next template change overwrites it.
 #
 # The entries below are the ecosystems this repository has a manifest for. A repo
-# that adds a manifest does not get an entry from this tool: `simt-dev ci` is the
+# that adds a manifest does not get an entry from this tool: `simt ci` is the
 # only writer here, so an entry is added deliberately rather than as a side effect.
 version: 2
 updates:

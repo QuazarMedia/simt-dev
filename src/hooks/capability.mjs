@@ -20,7 +20,7 @@
 
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { MANIFEST } from '../projection/manifest.mjs';
+import { manifestPath } from '../projection/manifest.mjs';
 
 /** Binaries the shared dispatcher shells out to directly, rather than via a script. */
 const BIN_DIR = join('node_modules', '.bin');
@@ -113,7 +113,7 @@ export async function readCapability(root) {
   // so the only evidence that can prove it is the declaration itself. A repo with no
   // manifest simply has no declared commands.
   try {
-    const manifest = JSON.parse(await readFile(join(root, MANIFEST), 'utf8'));
+    const manifest = JSON.parse(await readFile(await manifestPath(root), 'utf8'));
     capability.commands = declaredCommands(manifest);
   } catch {
     capability.commands = {};

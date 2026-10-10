@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { cmd } from './fixture.mjs';
 import test from 'node:test';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -335,7 +336,7 @@ test('a projected rule names no other repository in the estate', async () => {
 test('the provenance header gives the reader the two actions that exist', async () => {
   const text = inject('', 'Body.', { sha: 'abc1234' }).text;
   // What a reader can actually do.
-  assert.match(text, /simt-dev sync/, text);
+  assert.match(text, cmd('{cli} sync'), text);
   assert.match(text, /Do not edit/i, text);
   // What a reader cannot do. This phrasing was correct for the rules' maintainer and
   // wrong for everyone else, which is why it is now asserted absent.

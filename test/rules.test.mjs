@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { cmd } from './fixture.mjs';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -12,6 +13,7 @@ import { citations, byId, DECISIONS_DIR, loadDecisions, redactInternalPaths } fr
 import { initCommand } from '../src/commands/init.mjs';
 import { loadRules, select } from '../src/projection/project.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
@@ -194,7 +196,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
       leaking.push(d.id);
     }
   }
-  assert.deepEqual(leaking, ['ADR-016', 'ADR-023', 'ADR-026', 'ADR-033', 'ADR-035', 'ADR-041', 'ADR-055']);
+  assert.deepEqual(leaking, ['ADR-016', 'ADR-023', 'ADR-026', 'ADR-033', 'ADR-035', 'ADR-041', 'ADR-055', 'ADR-056']);
 });
 
 test('a status line is scrubbed, and a command that travels is not (S54)', () => {
@@ -209,7 +211,7 @@ test('a status line is scrubbed, and a command that travels is not (S54)', () =>
   assert.equal(redactInternalPaths('accepted · run: graph lint'), 'accepted · run: graph lint');
   // Paths the reader HAS are not redacted. A gate that names a file the adopting
   // repository owns is doing its job, and scrubbing it would be the opposite defect.
-  for (const travels of ['.editorconfig', '.github/workflows/simt-dev-check.yml', 'simt-dev.json', 'AGENTS.md', 'package.json']) {
+  for (const travels of ['.editorconfig', '.github/workflows/simt-dev-check.yml', MANIFEST_FILE, 'AGENTS.md', 'package.json']) {
     assert.equal(redactInternalPaths(`accepted · affects ${travels}`), `accepted · affects ${travels}`);
   }
 });
@@ -232,7 +234,7 @@ test('the redaction list is what `init` actually writes, not what a record remem
   // `package.json` and `README.md` were already there; the tool's own additions are the
   // rest, and every one of them must be a name the predicate exempts.
   const added = files.filter((n) => !['package.json', 'README.md'].includes(n));
-  assert.ok(added.includes('AGENTS.md') && added.includes('simt-dev.json'), added.join(', '));
+  assert.ok(added.includes('AGENTS.md') && added.includes(MANIFEST_FILE), added.join(', '));
   for (const name of added) {
     assert.match(redactInternalPaths(`accepted · affects ${name}`), new RegExp(`^accepted · affects ${name.replace('.', '\\.')}$`),
       `${name} is written into every adopting repository and would be redacted as if it were this package's`);
@@ -514,7 +516,7 @@ test('rules why <ADR>: an unknown record exits USAGE', async () => {
 test('rules why: without an argument it fails rather than guessing a rule', async () => {
   const { code, stderr } = await run(['rules', 'why']);
   assert.equal(code, 2);
-  assert.match(stderr, /usage: simt-dev rules why/);
+  assert.match(stderr, cmd('usage: {cli} rules why'));
 });
 
 test('every ADR cited in docs/ is a record that exists', async () => {

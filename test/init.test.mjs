@@ -7,7 +7,8 @@ import { join } from 'node:path';
 import * as gateModule from '../src/projection/manifest.mjs';
 import * as gateTable from '../src/hooks/gates.mjs';
 import { readCapability, declaredCommands } from '../src/hooks/capability.mjs';
-import { git } from './fixture.mjs';
+import { git, cmd } from './fixture.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 
 const buildManifest = gateModule.buildManifest;
 
@@ -113,7 +114,7 @@ test('init: dry-run is the default and writes nothing', async () => {
   const code = await initCommand([], { root, yes: false });
   assert.equal(code, 0);
   // No manifest, because nothing was applied.
-  await assert.rejects(readFile(join(root, 'simt-dev.json'), 'utf8'));
+  await assert.rejects(readFile(join(root, MANIFEST_FILE), 'utf8'));
 });
 
 test('init: a conflicting repo is blocked before any write', async () => {
@@ -123,7 +124,7 @@ test('init: a conflicting repo is blocked before any write', async () => {
   await writeFile(join(root, 'AGENTS.md'), '# Rules\n\n8. Committed and pushed with a conventional message\n');
   const code = await initCommand([], { root, yes: true });
   assert.equal(code, 1, 'a conflict must block even with --yes');
-  await assert.rejects(readFile(join(root, 'simt-dev.json'), 'utf8'));
+  await assert.rejects(readFile(join(root, MANIFEST_FILE), 'utf8'));
 });
 
 test('init: --accept-conflicts proceeds and writes both files', async () => {
@@ -134,7 +135,7 @@ test('init: --accept-conflicts proceeds and writes both files', async () => {
   await writeFile(join(root, 'AGENTS.md'), agents);
   const code = await initCommand([], { root, yes: true, acceptConflicts: true });
   assert.equal(code, 0);
-  const manifest = JSON.parse(await readFile(join(root, 'simt-dev.json'), 'utf8'));
+  const manifest = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8'));
   assert.ok(manifest.projection.simtDevSha);
   const after = await readFile(join(root, 'AGENTS.md'), 'utf8');
   // The hand-written line survives verbatim: init never overwrites prose.
@@ -182,7 +183,7 @@ test('init: never commits', async () => {
   const { stdout: log } = await run('git', ['log', '--oneline'], { cwd: root });
   assert.equal(log.trim().split('\n').length, 1, 'init must not create a commit');
   const { stdout } = await run('git', ['status', '--porcelain'], { cwd: root });
-  assert.match(stdout, /simt-dev\.json/, 'files are left uncommitted for review');
+  assert.match(stdout, cmd('{manifest}'), 'files are left uncommitted for review');
 });
 
 test('init: a repo with no commits is still adoptable', async () => {
@@ -198,7 +199,7 @@ test('init: a repo with no commits is still adoptable', async () => {
   await writeFile(join(root, 'monkey.jungle'), '');
 
   assert.equal(await initCommand([], { root, yes: true }), 0);
-  const manifest = await readFile(join(root, 'simt-dev.json'), 'utf8');
+  const manifest = await readFile(join(root, MANIFEST_FILE), 'utf8');
   assert.match(manifest, /simtDevSha/);
 });
 test('manifest: the default id is the repo name, not unnamed-repo (ADR-016 follow-up)', () => {
@@ -439,7 +440,7 @@ test('check reports a landmine gate left by an older adoption (end to end)', asy
   assert.equal(await checkCommand([], { root }), 0);
 
   // Simulate the older adoption: gates hand-written into the manifest.
-  const path = join(root, 'simt-dev.json');
+  const path = join(root, MANIFEST_FILE);
   const manifest = JSON.parse(await readFile(path, 'utf8'));
   manifest.gates.preCommit = ['format', 'lint', 'i18n-completeness'];
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -504,7 +505,7 @@ test('init says out loud that declared gates are not yet enforced', async () => 
   const first = await capture(() => initCommand([], { root, yes: true }));
   assert.equal(first.code, 0);
   assert.match(first.text, /NOT ENFORCED yet - test is declared but no hook runs them/);
-  assert.match(first.text, /simt-dev hooks install/);
+  assert.match(first.text, cmd('{cli} hooks install'));
 
 });
 
@@ -530,7 +531,7 @@ test('a manifest a formatter rewrote is reported, and a hand-edited one is not',
   const root = await scratch();
   const stack = ['node'];
   const sha = 'abc1234';
-  const write = async (m) => writeFile(join(root, 'simt-dev.json'), `${JSON.stringify(m, null, 2)}\n`);
+  const write = async (m) => writeFile(join(root, MANIFEST_FILE), `${JSON.stringify(m, null, 2)}\n`);
   const canonical = {
     ...MANIFEST_COMMENT,
     id: 'r',
@@ -547,7 +548,7 @@ test('a manifest a formatter rewrote is reported, and a hand-edited one is not',
   // Prettier's JSON style: objects expanded, short arrays collapsed onto one line.
   // Every generated field stays correct; only the byte form differs.
   await writeFile(
-    join(root, 'simt-dev.json'),
+    join(root, MANIFEST_FILE),
     [
       '{',
       `  "$comment": ${JSON.stringify(MANIFEST_COMMENT.$comment)},`,
@@ -589,10 +590,10 @@ test('check is red when the manifest bytes are not what simt-dev writes', async 
   await capture(() => initCommand([], { root, yes: true }));
   assert.equal((await capture(() => checkCommand([], { root }))).code, 0);
 
-  const path = join(root, 'simt-dev.json');
+  const path = join(root, MANIFEST_FILE);
   const m = JSON.parse(await readFile(path, 'utf8'));
   await writeFile(path, `${JSON.stringify(m, null, 4)}\n`);
   const after = await capture(() => checkCommand([], { root }));
   assert.equal(after.code, 1);
-  assert.match(after.text, /REFORMATTED simt-dev\.json/);
+  assert.match(after.text, cmd('REFORMATTED {manifest}'));
 });

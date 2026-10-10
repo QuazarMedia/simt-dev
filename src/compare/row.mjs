@@ -23,6 +23,7 @@ import { knownGates } from '../hooks/resolve.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { readHooksState } from './hooksstate.mjs';
 import { CLI } from '../name.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 
 /**
  * @typedef {object} RepoRow
@@ -148,7 +149,7 @@ export async function buildRow(path, context) {
   }
 
   if (manifest.error) {
-    problems.push(`simt-dev.json ${manifest.error}`);
+    problems.push(`${MANIFEST_FILE} ${manifest.error}`);
   }
 
   // --- region --------------------------------------------------------------

@@ -15,7 +15,8 @@
 // rationale is not duplicated into the JSON (data must stay data); `simt-dev init`
 // prints the reason for each value it writes.
 
-import { readFile, writeFile } from 'node:fs/promises';
+import { readFile, rename, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 // gates.mjs imports nothing, so this direction cannot cycle. It is the gate table
 // this file already selects from; duplicating the runnability rules here would be two
@@ -26,9 +27,32 @@ import { getGate } from '../hooks/gates.mjs';
 // Imported as well as re-exported: a bare `export { X as Y } from` binds nothing here,
 // and the manifest name is used a dozen times below in remedy strings that name this
 // file by name.
-import { MANIFEST_FILE } from '../name.mjs';
+import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { CLI } from '../name.mjs';
 export const MANIFEST = MANIFEST_FILE;
+
+export { MANIFEST_LEGACY };
+
+/**
+ * The manifest a repository has, which is not necessarily the one this tool would write.
+ *
+ * The file was renamed from `simt-dev.json` to `simt.json`. Every read site used to say
+ * `join(root, MANIFEST)` and would have reported an adopted repository as unadopted the
+ * day the constant moved - and "no manifest" means "never adopted", which is the answer
+ * that offers to re-adopt a repo that is already done. Fourteen repositories carry the
+ * old name on disk.
+ *
+ * So the old name is read as a fallback and the new one is written. `writeManifest`
+ * renames rather than creating a second file, which is how the window closes: the first
+ * `simt init` or `simt sync` in an adopted repo retires the old name by moving it.
+ */
+export async function manifestPath(root) {
+  const next = join(root, MANIFEST);
+  if (existsSync(next)) return next;
+  const previous = join(root, MANIFEST_LEGACY);
+  return existsSync(previous) ? previous : next;
+}
+
 
 /**
  * The one definition of the file's own comment, exported because `upgrade` rewrites
@@ -156,22 +180,22 @@ function gateRemedy(gate, { existing = false, runner = null } = {}) {
   const foreign = isForeignRunner(runner);
   const fix =
     npmShaped && foreign
-      ? `this repo runs ${runnerName(runner)}, not npm; name the program under "gates.commands" in ${MANIFEST} instead of the npm equivalent`
+      ? `this repo runs ${runnerName(runner)}, not npm; name the program under "gates.commands" in ${MANIFEST_FILE} instead of the npm equivalent`
       : gate?.kind === 'staged'
         ? `install ${gate.tools.join(', ')} as a dev dependency`
         : gate?.kind === 'script'
           ? `add a "${gate.script ?? name}" script to package.json`
           : gate?.kind === 'command'
-            ? `declare the program under "gates.commands" in ${MANIFEST}`
-            : `remove "${name}" from the gates list in ${MANIFEST}`;
+            ? `declare the program under "gates.commands" in ${MANIFEST_FILE}`
+            : `remove "${name}" from the gates list in ${MANIFEST_FILE}`;
   // A re-init never re-adds a gate to a manifest that already has one, so "install the
   // tool and re-run init" would send the reader round the loop and back to where they
   // started. On an existing manifest the declaration is the second half of the fix.
   const second =
     npmShaped && foreign
-      ? `, or add "${name}" to gates.preCommit or gates.prePush in ${MANIFEST}`
+      ? `, or add "${name}" to gates.preCommit or gates.prePush in ${MANIFEST_FILE}`
       : existing
-        ? `, then add "${name}" to gates.preCommit or gates.prePush in ${MANIFEST}`
+        ? `, then add "${name}" to gates.preCommit or gates.prePush in ${MANIFEST_FILE}`
         : `, then re-run: ${CLI} init --yes`;
   return `${fix}${second}`;
 }
@@ -415,20 +439,20 @@ export async function manifestDrift(root, stack, sha) {
   // repo for an optional key it predates (`surfaces`), which is not an error: absent
   // and null both mean "the global standard applies". Comparing content-to-content
   // isolates the one question — does another tool own this file's formatting.
-  const onDisk = (await readFile(join(root, MANIFEST), 'utf8')).trim();
+  const onDisk = (await readFile(await manifestPath(root), 'utf8')).trim();
   const ours = JSON.stringify(manifest, null, 2).trim();
   if (onDisk === ours) return null;
   return {
     file: MANIFEST,
     status: 'reformatted',
     detail: 'content is what simt-dev would write, but the bytes differ - another formatter owns this file',
-    remedy: `add ${MANIFEST} to .prettierignore (a generated file is not prose), then: ${CLI} init --yes`,
+    remedy: `add ${MANIFEST_FILE} to .prettierignore (a generated file is not prose), then: ${CLI} init --yes`,
   };
 }
 
 /** @returns {{manifest: object|null, exists: boolean, error: string|null}} */
 export async function readManifest(root) {
-  const path = join(root, MANIFEST);
+  const path = await manifestPath(root);
   let text;
   try {
     text = await readFile(path, 'utf8');
@@ -443,7 +467,12 @@ export async function readManifest(root) {
 }
 
 export async function writeManifest(root, manifest) {
-  const path = join(root, MANIFEST);
-  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`);
-  return path;
+  // A repository still holding the old name gets it moved, not shadowed. Two manifests
+  // in one repo is a manifest nobody can reason about, and the second would be the one
+  // that is never read - so the window closes by moving the file, not by leaving both.
+  const previous = join(root, MANIFEST_LEGACY);
+  const fresh = join(root, MANIFEST);
+  if (existsSync(previous) && !existsSync(fresh)) await rename(previous, fresh);
+  await writeFile(fresh, `${JSON.stringify(manifest, null, 2)}\n`);
+  return fresh;
 }

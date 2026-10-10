@@ -15,6 +15,7 @@ import { constants } from 'node:fs';
 import { join } from 'node:path';
 
 import { FORMATTABLE, GATES, GATES as _G } from './gates.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 
 /** Gate names the shared dispatcher knows, sorted. */
 export function knownGates() {
@@ -102,7 +103,7 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
         gate: name,
         kind: gate.kind,
         reason: `gates.commands["${name}"] is empty`,
-        remedy: `set gates.commands["${name}"] to the command that proves it, or remove "${name}" from simt-dev.json gates`,
+        remedy: `set gates.commands["${name}"] to the command that proves it, or remove "${name}" from ${MANIFEST_FILE} gates`,
       };
     }
     return {
@@ -125,7 +126,7 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
         gate: name,
         kind: gate.kind,
         reason: `no formatter binary in node_modules/.bin (looked for ${(gate.tools ?? []).join(', ')})`,
-        remedy: 'run the repo install command, or remove "format" from simt-dev.json gates',
+        remedy: `run the repo install command, or remove "format" from ${MANIFEST_FILE} gates`,
       };
     }
     const files = staged.filter((f) => FORMATTABLE.has(extname(f)));
@@ -153,7 +154,7 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
         gate: name,
         kind: gate.kind,
         reason: `package.json declares no "${script}" script`,
-        remedy: `add "${script}" to scripts, or remove "${name}" from simt-dev.json gates`,
+        remedy: `add "${script}" to scripts, or remove "${name}" from ${MANIFEST_FILE} gates`,
       };
     }
     return {
@@ -170,8 +171,8 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
         ok: false,
         gate: name,
         kind: gate.kind,
-        reason: 'no command declared for this gate in simt-dev.json',
-        remedy: `set gates.commands["${name}"] to the command that proves it, or remove "${name}" from simt-dev.json gates`,
+        reason: `no command declared for this gate in ${MANIFEST_FILE}`,
+        remedy: `set gates.commands["${name}"] to the command that proves it, or remove "${name}" from ${MANIFEST_FILE} gates`,
       };
     }
   }

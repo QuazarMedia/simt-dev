@@ -17,6 +17,31 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { REGISTRY_PATH, loadRegistry } from '../src/graph/load.mjs';
+import { CLI, MANIFEST_FILE } from '../src/name.mjs';
+
+/**
+ * A RegExp matching literal text, with `{cli}` the command and `{manifest}` the manifest
+ * filename.
+ *
+ * The tests assert on what this build prints, so hardcoding the command in them means
+ * the same rename that touches `src/` has to touch every assertion - and an assertion
+ * left behind is a test that passes for the wrong reason. Escaping happens AFTER the
+ * substitution, so a call site can be written like the sentence it matches and still
+ * mean it literally. `/remedy: simt ci --yes/` never matched literally; the `.` was a
+ * wildcard that happened not to matter, which is the kind of thing that matters the
+ * day the text after it changes.
+ *
+ * The two tokens exist because they are not the same name: the manifest file was renamed
+ * away from the project name and the command was not, so a single token would have to
+ * pick one of the two spellings and be wrong about the other.
+ *
+ * @param {string} text
+ * @returns {RegExp}
+ */
+export function cmd(text) {
+  const spelled = text.replaceAll('{manifest}', MANIFEST_FILE).replaceAll('{cli}', CLI);
+  return new RegExp(spelled.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+}
 
 const exec = promisify(execFile);
 

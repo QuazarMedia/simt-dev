@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 import { handle, PROTOCOL_VERSION, RPC } from '../src/mcp/server.mjs';
 import { TOOLS, toolNames } from '../src/mcp/tools.mjs';
+import { CLI } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
@@ -74,7 +75,7 @@ test('mcp: a tool that fails is a RESULT with isError, never a protocol error', 
       description: 'always fails',
       inputSchema: { type: 'object' },
       async run() {
-        throw Object.assign(new Error('no region'), { remedy: 'run: simt-dev sync' });
+        throw Object.assign(new Error('no region'), { remedy: `run: ${CLI} sync` });
       },
     },
   ];
@@ -83,7 +84,7 @@ test('mcp: a tool that fails is a RESULT with isError, never a protocol error', 
   assert.equal(r.result.isError, true);
   const payload = JSON.parse(r.result.content[0].text);
   assert.equal(payload.error, 'no region');
-  assert.equal(payload.remedy, 'run: simt-dev sync');
+  assert.equal(payload.remedy, `run: ${CLI} sync`);
 });
 
 test('mcp: truncation is announced in the text, never silent', async () => {
@@ -269,7 +270,7 @@ test('mcp: rules_why answers both directions, over a real session', async () => 
   assert.ok(byDecision.rules.includes('core'), 'ADR-006 is cited by core');
   // The record ships inside the package, so the answer must not hand back a path that
   // resolves against the consuming repo.
-  assert.equal(byDecision.readWith, 'simt-dev rules why ADR-006');
+  assert.equal(byDecision.readWith, `${CLI} rules why ADR-006`);
 
   const byRule = JSON.parse(messages[2].result.content[0].text);
   assert.equal(byRule.direction, 'rule');

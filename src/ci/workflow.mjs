@@ -86,14 +86,14 @@ function header(own) {
     return `# Written by simt-dev, and refreshed by it. This repository is simt-dev's
 # own, so this file is a copy of the template rather than a repository's own: a diff
 # here means the GATE changed, not that somebody hand-edited their CI. Anywhere else
-# this file is written once by \`simt-dev init\` and never touched again.
+# this file is written once by \`${CLI} init\` and never touched again.
 #
 # To change what the gate does, change \`src/ci/workflow.mjs\` in the same commit and
 # run \`${CLI} ci --yes\`. Editing this file by hand works until the next template
 # change overwrites it.
 #
 # The steps below run what this repository declares - its tests and its registry lint,
-# the same two \`.githooks/pre-push\` runs - and NOT \`simt-dev check\`. That check is
+# the same two \`.githooks/pre-push\` runs - and NOT \`${CLI} check\`. That check is
 # red here by design: this AGENTS.md is written by hand and deliberately never
 # self-adopted, so the check reports it as unmanaged on every run. A gate that is red
 # the day it lands is worse than no gate.
@@ -103,15 +103,15 @@ function header(own) {
 # step that cannot run fails the job.
 `;
   }
-  return `# Written by simt-dev when this repo was adopted. Yours from here: simt-dev
+  return `# Written by simt-dev when this repo was adopted. Yours from here: ${CLI}
 # creates this file once and never rewrites it, so your own jobs and triggers stay
 # yours.
 #
-# It runs one command, \`simt-dev check\` - the same gate the pre-commit hook runs,
+# It runs one command, \`${CLI} check\` - the same gate the pre-commit hook runs,
 # in the place a pull request is actually merged. A hook guards one developer's
 # machine; this guards the merge.
 #
-# If simt-dev cannot be found the job FAILS instead of passing. A green tick from a
+# If ${CLI} cannot be found the job FAILS instead of passing. A green tick from a
 # check that never ran is the one outcome worse than a red one.
 `;
 }

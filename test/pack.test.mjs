@@ -202,7 +202,7 @@ test('a packed install survives the whole adoption, and no writer writes unasked
   // how a test starts asserting on itself.
   const agents = join(root, 'AGENTS.md');
   const original = await readFile(agents, 'utf8');
-  const stale = original.replace(/simt-dev:sha=[0-9a-f]{40}/, `simt-dev:sha=${'0'.repeat(40)}`);
+  const stale = original.replace(/simt:sha=[0-9a-f]{40}/, `simt:sha=${'0'.repeat(40)}`);
   assert.notEqual(stale, original, 'the generated region carries no sha pin to move');
   await writeFile(agents, stale);
 

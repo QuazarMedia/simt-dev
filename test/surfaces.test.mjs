@@ -249,7 +249,7 @@ test('one rule reaches every selected surface with its own path and its own fron
   assert.match(bySurface.get('cursor').text, /^---\ndescription: /);
   assert.match(bySurface.get('cursor').text, /\nalwaysApply: true\n---/);
   // Claude: body first, no frontmatter block at all.
-  assert.ok(bySurface.get('claude').text.startsWith('<!-- simt-dev:begin -->'));
+  assert.ok(bySurface.get('claude').text.startsWith('<!-- simt:begin -->'));
   assert.match(bySurface.get('antigravity').text, /\ntrigger: always_on\n/);
   assert.match(bySurface.get('copilot').text, /\napplyTo: "\*\*"\n---/);
   // Every surface carries the same rule body, so no editor is told something the
@@ -583,7 +583,7 @@ test('a pointer written for real is a symlink, and re-init is idempotent', async
   const st = await lstat(join(root, 'CLAUDE.md'));
   assert.ok(st.isSymbolicLink(), 'CLAUDE.md must be a symlink, not a copy');
   const written = await readFile(join(root, 'CLAUDE.md'), 'utf8');
-  assert.match(written, /simt-dev:begin/, 'the link must resolve to the projected document');
+  assert.match(written, /simt:begin/, 'the link must resolve to the projected document');
 
   const second = await capture(['init', '--root', root, '--yes', '--surfaces', 'opencode,claude']);
   assert.equal(second.code, 0, second.stderr);

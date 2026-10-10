@@ -133,7 +133,7 @@ test('every key is one a reader honours, and `singleQuote` is not one', () => {
 // ------------------------------------------------------------------------ the mechanism
 
 test('the region is a comment in the file it lands in, not an HTML comment', () => {
-  assert.equal(STYLES.hash.begin, '# simt-dev:begin');
+  assert.equal(STYLES.hash.begin, '# simt:begin');
   assert.equal(STYLES.hash.where, 'top', 'last-definition-wins means the repo must come after');
   const { text } = inject('', EDITORCONFIG_BODY, { sha: SHA }, { style: 'hash' });
   assert.doesNotMatch(text, /<!--/);
@@ -159,7 +159,7 @@ test('the repo\'s own settings land BELOW the region, so the repo wins', async (
   // finds the region's line instead and the assertion holds either way.
   const mine = 'root = true\n\n[*]\nindent_size = 4\nmax_line_length = 120\n';
   const { text } = inject(mine, EDITORCONFIG_BODY, { sha: SHA }, { style: 'hash' });
-  const end = text.indexOf('# simt-dev:end');
+  const end = text.indexOf('# simt:end');
   assert.ok(end > 0);
   assert.ok(text.indexOf('max_line_length = 120') > end, 'a setting the region does not carry');
   assert.ok(text.lastIndexOf('indent_size = 4') > end, 'a setting the region also carries');
@@ -184,7 +184,7 @@ test('a region that has been moved below the repo\'s settings is reported, with 
   // and the test would pass while asserting the wrong thing.
   await simt(['sync', '--yes'], root);
   const synced = await readFile(join(root, '.editorconfig'), 'utf8');
-  const region = synced.slice(synced.indexOf('# simt-dev:begin'));
+  const region = synced.slice(synced.indexOf('# simt:begin'));
   const moved = `# their own settings\n\n[*]\nindent_size = 4\n\n${region}`;
   await writeFile(join(root, '.editorconfig'), moved);
 
@@ -221,7 +221,7 @@ test('sync writes the baseline, check reports it current, and both name it', asy
   assert.equal(wrote.code, 0, wrote.out);
 
   const onDisk = await readFile(join(root, '.editorconfig'), 'utf8');
-  assert.match(onDisk, /^# simt-dev:begin\n/, 'the region must be at the top');
+  assert.match(onDisk, /^# simt:begin\n/, 'the region must be at the top');
   assert.match(wrote.out, /\.editorconfig/, 'a file the reader was not shown is one they approve by reading the diff');
 
   const checked = await simt(['check'], root);
@@ -382,8 +382,8 @@ test('a region that has been moved below the repo patterns is reported, not trus
   const moved = [
     '*.iq binary',
     begin,
-    '# simt-dev:generated',
-    `# simt-dev:sha=${SHA}`,
+    '# simt:generated',
+    `# simt:sha=${SHA}`,
     '',
     GITATTRIBUTES_BODY,
     '',
@@ -473,5 +473,5 @@ test('this repository adopts neither baseline for itself', async () => {
     assert.equal(text, null, `${row.file} exists in this repository; it must stay hand-written (ADR-027)`);
   }
   const agents = await readFile(join(here, 'AGENTS.md'), 'utf8');
-  assert.doesNotMatch(agents, /simt-dev:begin/);
+  assert.doesNotMatch(agents, /simt(-dev)?:begin/, 'a region in either spelling would be self-adoption');
 });

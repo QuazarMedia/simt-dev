@@ -150,7 +150,7 @@ test('a region past a reader limit is reported, and place top clears it', async 
   await writeFile(agents.path, agents.text);
   const after = await checkTargets(root);
   assert.equal(after.find((f) => f.status === 'beyond-read-limit'), undefined);
-  assert.ok(agents.text.indexOf('<!-- simt-dev:begin -->') < 40000);
+  assert.ok(agents.text.indexOf('<!-- simt:begin -->') < 40000);
 });
 
 test('render strips frontmatter and the duplicated H1', () => {
@@ -197,7 +197,7 @@ test('check reports current, drift, unmanaged and absent distinctly', async () =
   // The meta must be reproduced exactly, including the sources header that
   // compose() embeds; omitting it would itself look like drift.
   const { diff } = await import('../src/projection/markers.mjs');
-  const src = [...first.targets[0].text.matchAll(/simt-dev:sources=([^\s]+)/g)].map((m) => m[1]);
+  const src = [...first.targets[0].text.matchAll(/simt:sources=([^\s]+)/g)].map((m) => m[1]);
   const sources = src.length === 1 ? src[0].split(',') : [];
   assert.equal(diff(first.targets[0].text, first.targets[0].body, { sha: first.targets[0].sha, sources }).action, 'unchanged');
   assert.equal(diff(first.targets[0].text, first.targets[0].body, { sha: 'beefcafe', sources }).action, 'updated');
@@ -236,8 +236,8 @@ test('the region records the simt-dev sha so drift is diagnosable', async () => 
   // let the sentinel survive: a stamp the tool cannot read back still satisfied it.
   // `compose` now throws on anything the marker grammar rejects, so there is no second
   // value to allow (ADR-032).
-  assert.match(result.targets[0].text, /simt-dev:sha=[0-9a-f]{7,40}/);
-  assert.doesNotMatch(result.targets[0].text, /simt-dev:sha=unknown/);
+  assert.match(result.targets[0].text, /simt:sha=[0-9a-f]{7,40}/);
+  assert.doesNotMatch(result.targets[0].text, /simt:sha=unknown/);
   const state = parse(result.targets[0].text);
   assert.equal(state.status, 'ok');
   assert.equal(state.sha, result.targets[0].sha);

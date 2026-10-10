@@ -392,7 +392,7 @@ test('upgrade: moves the pin and the region together, then check agrees', async 
   for (const name of ['alpha', 'beta']) {
     assert.equal((await readJson(join(ws, name, MANIFEST_FILE))).projection.simtDevSha, sha);
     const agents = await readFile(join(ws, name, 'AGENTS.md'), 'utf8');
-    assert.ok(agents.includes(`simt-dev:sha=${sha}`), `${name} region was not restamped`);
+    assert.ok(agents.includes(`simt:sha=${sha}`), `${name} region was not restamped`);
     assert.equal((await run(['check', '--root', join(ws, name)])).code, 0);
   }
 });
@@ -421,7 +421,7 @@ test('upgrade: a malformed region is reported and the run fails, leaving bytes a
   await run(['init', '--root', join(ws, 'beta'), '--yes']);
   await pin(join(ws, 'beta'), '0000000');
   const agents = join(ws, 'beta', 'AGENTS.md');
-  const broken = (await readFile(agents, 'utf8')).replace('<!-- simt-dev:end -->', '');
+  const broken = (await readFile(agents, 'utf8')).replace('<!-- simt:end -->', '');
   await writeFile(agents, broken);
 
   const { code, payload } = await runJson(['upgrade', '--workspace', ws, '--yes']);
@@ -550,7 +550,7 @@ test('upgrade: a commit in the CONSUMER repo does not move the stamp', async () 
   const adopted = await run(['init', '--root', consumer, '--yes'], {}, nested);
   assert.equal(adopted.code, 0, adopted.stderr);
   const consumersHead = await consumerHead(consumer);
-  const stamp = /simt-dev:sha=([0-9a-f]{7,40})/.exec(await readFile(join(consumer, 'AGENTS.md'), 'utf8'))[1];
+  const stamp = /simt:sha=([0-9a-f]{7,40})/.exec(await readFile(join(consumer, 'AGENTS.md'), 'utf8'))[1];
   assert.notEqual(
     stamp,
     consumersHead,
@@ -647,10 +647,10 @@ test('upgrade: a current AGENTS.md with stale .mdc rules is still behind', async
 
   // Rewind only the `.mdc` rules to a stale SHA, leaving AGENTS.md current.
   const mdc = join(a, '.github/instructions/test-gate.instructions.md');
-  const stale = (await readFile(mdc, 'utf8')).replace(/simt-dev:sha=[0-9a-f]+/, 'simt-dev:sha=aaaaaaa');
+  const stale = (await readFile(mdc, 'utf8')).replace(/simt:sha=[0-9a-f]+/, 'simt:sha=aaaaaaa');
   await writeFile(mdc, stale);
-  const agentsSha = /simt-dev:sha=[0-9a-f]+/.exec(await readFile(join(a, 'AGENTS.md'), 'utf8'))[0];
-  const agentsNow = /simt-dev:sha=[0-9a-f]+/.exec(await readFile(join(a, 'AGENTS.md'), 'utf8'))[0];
+  const agentsSha = /simt:sha=[0-9a-f]+/.exec(await readFile(join(a, 'AGENTS.md'), 'utf8'))[0];
+  const agentsNow = /simt:sha=[0-9a-f]+/.exec(await readFile(join(a, 'AGENTS.md'), 'utf8'))[0];
   assert.equal(agentsSha, agentsNow);
 
   const before = await runJson(['upgrade', '--root', a]);
@@ -660,9 +660,9 @@ test('upgrade: a current AGENTS.md with stale .mdc rules is still behind', async
   assert.equal(applied.code, 0, applied.stderr);
 
   // Every generated file now carries the current SHA, not just AGENTS.md.
-  const head = /simt-dev:sha=[0-9a-f]+/.exec(agentsNow)[0].replace('simt-dev:sha=', '');
-  const afterMdc = /simt-dev:sha=[0-9a-f]+/.exec(await readFile(mdc, 'utf8'))[0];
-  assert.equal(afterMdc, `simt-dev:sha=${head}`, 'the .mdc rule was left behind');
+  const head = /simt:sha=[0-9a-f]+/.exec(agentsNow)[0].replace('simt:sha=', '');
+  const afterMdc = /simt:sha=[0-9a-f]+/.exec(await readFile(mdc, 'utf8'))[0];
+  assert.equal(afterMdc, `simt:sha=${head}`, 'the .mdc rule was left behind');
   assert.equal((await run(['check', '--root', a])).code, 0, 'check is red after a successful upgrade');
 });
 
@@ -679,14 +679,14 @@ test('upgrade: a malformed AGENTS.md is a fault, while a malformed .mdc rule is 
 
   // A broken .mdc region is repaired by the write, because the whole file is generated.
   const mdc = join(a, '.github/instructions/test-gate.instructions.md');
-  await writeFile(mdc, (await readFile(mdc, 'utf8')).replace('<!-- simt-dev:end -->', ''));
+  await writeFile(mdc, (await readFile(mdc, 'utf8')).replace('<!-- simt:end -->', ''));
   assert.equal((await run(['upgrade', '--root', a, '--yes'])).code, 0);
   assert.equal((await run(['check', '--root', a])).code, 0, 'the broken rule was not repaired');
 
   // A broken AGENTS.md region is a fault, and nothing is written.
   await pin(a, 'aaaaaaa');
   const agents = join(a, 'AGENTS.md');
-  await writeFile(agents, (await readFile(agents, 'utf8')).replace('<!-- simt-dev:end -->', ''));
+  await writeFile(agents, (await readFile(agents, 'utf8')).replace('<!-- simt:end -->', ''));
   const mdcBefore = await readFile(mdc, 'utf8');
   const { payload } = await runJson(['upgrade', '--root', a]);
   assert.equal(payload.summary.faults, 1);

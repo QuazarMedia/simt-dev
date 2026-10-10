@@ -18,7 +18,7 @@ test('markers: parse round-trips and recovers the provenance sha', () => {
   const state = parse(`${HAND}\n${region}\n`);
   assert.equal(state.status, 'ok');
   assert.equal(state.sha, 'abc1234');
-  assert.match(state.body, /simt-dev:sources=rules\/core\.md/);
+  assert.match(state.body, /simt:sources=rules\/core\.md/);
   assert.match(state.before, /Hand-written guidance/);
 });
 
@@ -139,7 +139,7 @@ test('markers: diff says whether a region was there at all, and what it said', (
 
   const ok = diff(current, 'v1', meta);
   assert.equal(ok.region, 'ok');
-  assert.match(ok.previousBody, /simt-dev:generated/, 'the previous body is the region body, header included');
+  assert.match(ok.previousBody, /simt:generated/, 'the previous body is the region body, header included');
 
   // A wrong seam with the correct body: `updated`, and the previous body is still
   // readable, which is what tells a caller the rules did not change (ADR-037).
@@ -242,8 +242,8 @@ test('markers: the digest is a function of exactly its inputs, in order (S53)', 
 test('markers: compose emits begin before end and carries the header inside', () => {
   const region = compose('x', { sha: 'abc1234', sources: ['a', 'b'] });
   assert.ok(region.startsWith(BEGIN));
-  assert.ok(region.indexOf(BEGIN) < region.indexOf('simt-dev:sha'));
-  assert.ok(region.indexOf('simt-dev:sha') < region.indexOf(END));
+  assert.ok(region.indexOf(BEGIN) < region.indexOf('simt:sha'));
+  assert.ok(region.indexOf('simt:sha') < region.indexOf(END));
 });
 
 test('markers: compose is already in the shape a formatter would write it', () => {
@@ -304,7 +304,10 @@ test('the region carries a blank line on both sides of the body', () => {
 // assertions are about the bytes rather than about prettier, because prettier is not a
 // dependency of this package and cannot be in the suite (ADR-012).
 test('a region is separated from hand-written text by a blank line, whatever precedes it', () => {
-  const REGION = `${BEGIN}\n<!-- simt-dev:generated -->\n<!-- simt-dev:sha=abc1234 -->\nOLD\n\n${END}\n`;
+  // Spelled with the legacy prefix on purpose: every region in an adopted repository
+  // is, until the first sync after the rename. The seam logic must hold through that
+  // migration, not only on a region the tool just wrote.
+  const REGION = '<!-- simt-dev:begin -->\n<!-- simt-dev:generated -->\n<!-- simt-dev:sha=abc1234 -->\nOLD\n\n<!-- simt-dev:end -->\n';
   const preceding = {
     paragraph: 'intro para\n',
     heading: '# Title\n\nintro para\n',
@@ -361,4 +364,56 @@ test('a matching body behind a wrong seam is drift, because sync has to repair i
     inject(repaired.text, 'BODY', { sha: 'abc1234' }).text === repaired.text,
     'and it must settle byte for byte',
   );
+});
+
+// The rename moved the region namespace from `simt-dev:` to `simt:` (ADR-056), the
+// second on-disk name to move after the manifest. These tests are what make the move
+// safe: a region stamped with the legacy prefix is read, and the first write migrates
+// it in place. Without them, the rename would read every adopted repository as
+// unadopted - the manifest's exact failure, in a file that cannot be renamed.
+const LEGACY_REGION = [
+  '<!-- simt-dev:begin -->',
+  '<!-- simt-dev:generated -->',
+  '<!-- simt-dev:sha=abc1234 -->',
+  '',
+  'OLD',
+  '',
+  '<!-- simt-dev:end -->',
+].join('\n') + '\n';
+
+test('markers: a legacy-spelled region is read, and its provenance recovered', () => {
+  const state = parse(`${HAND}\n${LEGACY_REGION}`);
+  assert.equal(state.status, 'ok', 'a legacy region is a region, not an absence');
+  assert.equal(state.sha, 'abc1234', 'the stamp is recovered from either spelling');
+});
+
+test('markers: the first sync after the rename migrates a legacy region in place', () => {
+  const result = inject(`${HAND}\n${LEGACY_REGION}`, 'OLD', { sha: 'abc1234' });
+  assert.equal(result.action, 'updated', 'a legacy region drifts exactly once');
+  assert.match(result.text, /<!-- simt:begin -->/, 'the markers are rewritten to the new namespace');
+  assert.match(result.text, /simt:generated/, 'the header is rewritten to the new namespace');
+  assert.doesNotMatch(result.text, /simt-dev:/, 'the window closes: the legacy spelling is not re-emitted');
+  assert.match(result.text, /Hand-written guidance/, 'bytes outside the region are untouched');
+  const again = inject(result.text, 'OLD', { sha: 'abc1234' });
+  assert.equal(again.action, 'unchanged', 'and the migrated region is stable');
+});
+
+test('markers: a file holding both spellings is reported malformed, not merged', () => {
+  // Only a hand edit can produce this: the tool writes one region per file and finds it
+  // by either spelling. Guessing which region wins would silently delete the other;
+  // reporting it is what forces a human to look.
+  const text = `${HAND}\n${LEGACY_REGION}${compose('NEW', { sha: 'abc1234' })}`;
+  assert.equal(parse(text).status, 'malformed');
+});
+
+test('markers: the hash dialect reads legacy and writes new', () => {
+  const legacy = ['# simt-dev:begin', '# simt-dev:sha=abc1234', 'OLD', '# simt-dev:end'].join('\n') + '\n';
+  const state = parse(legacy, 'hash');
+  assert.equal(state.status, 'ok');
+  assert.equal(state.sha, 'abc1234');
+  const result = inject(legacy, 'OLD', { sha: 'abc1234' }, { style: 'hash' });
+  assert.equal(result.action, 'updated');
+  assert.match(result.text, /^# simt:begin$/m);
+  assert.doesNotMatch(result.text, /simt-dev:/);
+  assert.equal(inject(result.text, 'OLD', { sha: 'abc1234' }, { style: 'hash' }).action, 'unchanged');
 });

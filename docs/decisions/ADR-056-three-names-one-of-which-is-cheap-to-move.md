@@ -1,6 +1,6 @@
 # ADR-056 — The command, the package and the project are three names, and only one of them is cheap to move
 
-Status: **accepted** · 2026-10-10 · filed as S18 · amends [ADR-023](ADR-023-the-gate-ships-as-a-file-the-repo-owns.md) · affects `src/name.mjs`, `package.json`, `src/projection/manifest.mjs`
+Status: **accepted** · 2026-10-10 · filed as S18 · amends [ADR-023](ADR-023-the-gate-ships-as-a-file-the-repo-owns.md) · affects `src/name.mjs`, `package.json`, `src/projection/manifest.mjs`, `src/projection/markers.mjs`
 
 ## Context
 
@@ -37,11 +37,10 @@ one-line rename into a one-line diff whose meaning depends on a comparison nobod
 it would think to check.
 
 **Two. The command is `simt`; the project and the package keep `simt-dev`.** This is the
-whole ruling, and it rests on the asymmetry in the measurement above. The command is the
-only one of the three that appears in no file until somebody types it, so it is the only
-one that can change without a breaking change to files rather than to a package. Spending
-the rename on the cheap name is what made this a rename instead of a fourteen-repository
-roll-forward.
+whole ruling, and it rests on the asymmetry in the measurement above: the command appears
+only in text the tool itself writes, and that text migrates on the next write, while the
+other two names sit in files the tool cannot rewrite in place. Spending the rename on the
+cheap name is what made this a rename instead of a fourteen-repository roll-forward.
 
 **Three. The manifest follows the command, and its move is a read-both/write-new.** The
 manifest was one of the on-disk names and it is the one that moved: `simt-dev.json` is now
@@ -66,12 +65,41 @@ when both exist, the old name is still read, and a write moves the old file — 
 failure mode is silent: the tool would simply stop seeing a repository it has been
 managing.
 
-**Four. The remaining on-disk names are locked, and the lock is asserted.**
+**Four. The region namespace follows the command, and its move is read-both/write-new
+too.** The second on-disk name to move: the region was stamped `simt-dev:begin` /
+`simt-dev:end`, and so was the provenance header inside it (`simt-dev:generated`,
+`simt-dev:sha=`, `simt-dev:sources=`); all of those lines are now `simt:`. A marker cannot
+be renamed the way a manifest can, because a region cannot be moved — it lives inside a
+file the reader owns. So the fallback lives in the marker grammar itself, one read regex
+per dialect:
+
+- **Read** accepts either spelling in both dialects (HTML comment and `#` comment),
+  because a marker that does not match is simply not a region, and a caller that does not
+  accept the old spelling would silently report an adopted repository as unadopted.
+- **Write** emits only the `simt:` spelling, so the first write to each region migrates it
+  in place: the body comparison in `inject` finds the header prefix drifted and rewrites
+  the region where it stands. The window closes per repository on its first `sync`.
+- **A file holding both spellings is malformed, not merged.** Only a hand edit can produce
+  it — the tool writes one region per file and finds it by either spelling. Guessing which
+  region wins would silently delete the other, so `parse` reports it and a human deletes
+  the old one.
+
+The provenance digest covers `rules/`, `graph/` and `baselines/` — not `src/`, where the
+marker strings live (ADR-032, S53) — so the stamp *value* does not move with this rename;
+only the key's prefix does. No repository needs re-pinning, and `upgrade` sees no version
+change: the migration is marker bytes only.
+
+The fallback is asserted in `test/markers.test.mjs` — a legacy region is read and its
+stamp recovered, the first write migrates it in place, the migrated region is stable, and
+a mixed file is reported malformed — because its failure mode is the manifest's: the tool
+would simply stop seeing a repository it has been managing.
+
+**Five. The remaining on-disk names are locked, and the lock is asserted.**
 `test/naming.test.mjs` pins `simt-dev-check.yml`, `.simt-hooks`, `SIMT_DEV_BIN` and the
 project name as literals, so renaming one is a deliberate edit to a test rather than a
 constant change that looks harmless. A lock nobody can trip is a comment.
 
-**Five. The command name lives in one constant and is executed, not agreed.**
+**Six. The command name lives in one constant and is executed, not agreed.**
 `test/naming.test.mjs` walks `src/` and fails on any command string that *spells* the
 command instead of interpolating it. The pattern matches the real verb list rather than
 "space then a lowercase word", because the looser rule flags the tool naming itself in
@@ -80,19 +108,21 @@ top of the file` are the project talking about itself, and the project keeps its
 The guard was proven with a negative control: one injected spelled command, one failure
 naming the file and line, reverted.
 
-**Six. The package is unscoped.** `@simt` and `@quazarmedia` were both free on npm; an
+**Seven. The package is unscoped.** `@simt` and `@quazarmedia` were both free on npm; an
 unscoped `simt-dev` was already reserved by this project's own account. An unscoped name
 is the one a reader can guess, and the reserved one was the only spelling already pointing
 at something.
 
 ## Consequences
 
-- **No repository has to do anything, including about the manifest.** Every adopted repo
-  keeps its markers, hooks directory and gate, and `check` does not report drift anywhere.
-  The manifest is the one name that did move, and it moved behind the fallback: a
-  repository holding `simt-dev.json` is still read, and on its first write the file moves
-  to `simt.json`. The migration is real, but it runs itself — one repository per write —
-  instead of running as a fourteen-repository roll-forward.
+- **No repository has to do anything by hand, and the migration announces itself.** Every
+  adopted repo keeps its hooks directory and gate. The manifest is read under either name
+  and moves to `simt.json` on its first write; the region is read under either namespace
+  and migrates to `simt:` on its first `sync`. Until each repository has written once,
+  `check` reports the region as drifted — which is the migration making itself visible
+  rather than hiding, and it disappears on the `sync` that performs it. The migration is
+  real, but it runs itself — one repository per write — instead of running as a
+  fourteen-repository roll-forward.
 - **The generated gate file names the command correctly.** `name: simt check`, "If `simt`
   cannot be found the job FAILS", "run `simt ci --yes`". These are shipped bytes into
   every adopting repository, which is why they were checked by rendering them, not by
@@ -101,8 +131,9 @@ at something.
   for `simt-dev` on `PATH`. A machine that installed the package and never re-ran
   `hooks install` finds nothing until the dependency is refreshed and `simt hooks install
   --yes` re-runs. That is in the CHANGELOG rather than left to be discovered.
-- **The other on-disk names can still move, but only deliberately.** They would need the
-  same shape the manifest got — read-both, write-new, an asserted fallback — and S36's
+- **The remaining on-disk names can still move, but only deliberately.** The gate file,
+  the hooks directory and the shim's environment variable would each need the shape the
+  manifest and the markers got — read-both, write-new, an asserted fallback — and S36's
   estate roll-out to execute it.
 
 ## Rejected
@@ -111,10 +142,13 @@ at something.
   This was the shape the slice was originally taken in and it is strictly worse: it turns
   a rename into a fourteen-repository migration, every one of which would see its
   `AGENTS.md` stop being managed on the first `check` after the upgrade. It was rejected
-  for what it would have cost, not for being unclear. The manifest is the exception to this
-  rejection, and it is an exception only because ruling three makes the move safe: the
-  markers and the hooks directory have no read-both fallback to hide behind, because a
-  region marker that does not match is simply not a region.
+  for what it would have cost, not for being unclear. The manifest and the region markers
+  are exceptions to this rejection, and they are exceptions only because rulings three
+  and four make their moves safe: a marker that does not match is simply not a region, so
+  the fallback lives in the marker grammar itself — one read regex per dialect that
+  accepts both spellings — and a file holding two regions is reported malformed rather
+  than merged. The hooks directory and the gate remain fully rejected: they have no
+  second spelling a reader's file could fall back to.
 - **`@quazarmedia/simt-dev` as the package name.** Free, but already named in the shim
   remedy, the review and the workflow install step. Changing it would have edited all
   three for no availability gain, since the unscoped name was already reserved.

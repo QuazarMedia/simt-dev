@@ -140,7 +140,7 @@ test('init: --accept-conflicts proceeds and writes both files', async () => {
   const after = await readFile(join(root, 'AGENTS.md'), 'utf8');
   // The hand-written line survives verbatim: init never overwrites prose.
   assert.ok(after.startsWith(agents.trimEnd()));
-  assert.ok(after.includes('simt-dev:begin'));
+  assert.ok(after.includes('simt:begin'));
 });
 
 test('init: a malformed region blocks rather than duplicating the rules', async () => {
@@ -161,8 +161,8 @@ test('init: scaffolding a repo with no rules creates AGENTS.md', async () => {
   const code = await initCommand([], { root, yes: true });
   assert.equal(code, 0);
   const after = await readFile(join(root, 'AGENTS.md'), 'utf8');
-  assert.ok(after.includes('simt-dev:begin'));
-  assert.ok(after.includes('simt-dev:end'));
+  assert.ok(after.includes('simt:begin'));
+  assert.ok(after.includes('simt:end'));
 });
 
 test('init: never commits', async () => {

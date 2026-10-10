@@ -32,6 +32,16 @@ export const MANIFEST_FILE = 'simt.json';
 /** What the manifest file was called, and still is in every adopted repo. */
 export const MANIFEST_LEGACY = 'simt-dev.json';
 
+/**
+ * The namespace the generated region writes into a repository's files: the begin and end
+ * markers, and the provenance header inside them. It follows the command, like the
+ * manifest: the region is the command's footprint in a file the repo owns.
+ */
+export const MARKER_PREFIX = 'simt';
+
+/** What the region was namespaced under, and still is in every adopted repo. */
+export const MARKER_PREFIX_LEGACY = 'simt-dev';
+
 /** The config directory on the adopting engineer's machine. LOCKED, same argument. */
 export const CONFIG_DIR = PROJECT;
 
@@ -53,11 +63,13 @@ export const BIN_ENV = 'SIMT_DEV_BIN';
  * The command a reader types.
  *
  * This is the name that moved, and it is deliberately not the project name. The
- * project keeps `simt-dev` because that name is already on disk in every repository
- * that adopted the tool - in the manifest, in the region markers, in the hooks
- * directory - and renaming any of those is a breaking change to files rather than to
- * a package. The command appears in no file at all until a reader types it, so it is
- * the cheap name to change, and it is the one worth spending.
+ * project keeps `simt-dev` in the places on disk the tool cannot rewrite in place -
+ * the gate file, the hooks directory, the shim's environment variable, the entry
+ * point - and renaming any of those is a breaking change to files rather than to a
+ * package. The command appears only in text the tool itself writes - remedies, region
+ * headers, the manifest comment - and that text migrates on the next write: read-both
+ * covers the gap in between. That is what makes it the cheap name to change, and the
+ * one worth spending.
  *
  * `test/naming.test.mjs` is what stops this from drifting back into a hundred
  * literals. Without it this constant is a comment with an export.

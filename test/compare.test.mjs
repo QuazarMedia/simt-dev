@@ -595,7 +595,7 @@ test('a stale rule file on an adopted repo is a problem, and it is named (S25)',
   // and a fixture that asserts nothing is the same defect in a different coat.
   const victim = join(root, '.github/instructions/intake-questions.instructions.md');
   const text = await readFile(victim, 'utf8');
-  const stamp = /<!-- simt-dev:sha=[0-9a-f]{40} -->/.exec(text);
+  const stamp = /<!-- simt:sha=[0-9a-f]{40} -->/.exec(text);
   assert.ok(stamp, 'the fixture must contain a generated region to edit');
   await writeFile(victim, text.replace(stamp[0], `${stamp[0]}\nA HUMAN EDIT INSIDE THE REGION.`));
 

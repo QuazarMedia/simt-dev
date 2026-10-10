@@ -14,7 +14,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BIN_ENV, BIN_REL, CLI, CONFIG_DIR, MANIFEST_FILE, MANIFEST_LEGACY, PACKAGE_NAME, PROJECT, WORKFLOW_FILE_NAME } from '../src/name.mjs';
+import { BIN_ENV, BIN_REL, CLI, CONFIG_DIR, MANIFEST_FILE, MANIFEST_LEGACY, MARKER_PREFIX, MARKER_PREFIX_LEGACY, PACKAGE_NAME, PROJECT, WORKFLOW_FILE_NAME } from '../src/name.mjs';
 import { manifestPath, writeManifest } from '../src/projection/manifest.mjs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -75,10 +75,11 @@ test('the names already on an adopting repository do not move', () => {
   // literals precisely so that renaming one is a deliberate edit to this test rather
   // than a constant change that looks harmless.
   //
-  // `MANIFEST_FILE` is the one exception and is tracked separately below: it did move,
-  // and it moved with a fallback. The other five did not, because nothing on their
-  // reader's disk had a second spelling to fall back to.
+  // `MANIFEST_FILE` and `MARKER_PREFIX` are the exceptions, tracked separately below:
+  // they moved, and they moved with a fallback. The other five did not, because nothing
+  // on their reader's disk had a second spelling to fall back to.
   assert.equal(MANIFEST_LEGACY, 'simt-dev.json');
+  assert.equal(MARKER_PREFIX_LEGACY, 'simt-dev');
   assert.equal(WORKFLOW_FILE_NAME, 'simt-dev-check.yml');
   assert.equal(CONFIG_DIR, 'simt-dev');
   assert.equal(BIN_ENV, 'SIMT_DEV_BIN');
@@ -117,6 +118,16 @@ test('the manifest is no longer the project name, and that is asserted', () => {
   // if someone re-derived it.
   assert.notEqual(MANIFEST_FILE, `${PROJECT}.json`);
   assert.equal(MANIFEST_FILE, `${CLI}.json`);
+});
+
+test('the region namespace is the command, and that is asserted', () => {
+  // The marker is the second on-disk name to follow the command (ADR-056). Same argument
+  // as the manifest: a region is the command's footprint in files the repo owns, and a
+  // prefix re-derived from the project would turn the next rename into a silent
+  // migration of every adopted repository. The read-both fallback that makes the move
+  // safe is asserted in test/markers.test.mjs, where the mechanism lives.
+  assert.notEqual(MARKER_PREFIX, PROJECT);
+  assert.equal(MARKER_PREFIX, CLI);
 });
 
 test('the command is not the project name, and the package is not the command', () => {

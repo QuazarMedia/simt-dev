@@ -115,7 +115,7 @@ async function staleRegion(root) {
   const text = await readFile(file, 'utf8');
   await writeFile(
     file,
-    text.replace('<!-- simt-dev:begin -->', '<!-- simt-dev:begin -->\nSTALE\n'),
+    text.replace('<!-- simt:begin -->', '<!-- simt:begin -->\nSTALE\n'),
   );
 }
 

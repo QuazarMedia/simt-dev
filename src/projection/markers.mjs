@@ -29,26 +29,40 @@
 // silently overrules them. No byte is removed, so nothing looks clobbered, and the
 // repo's setting simply stops taking effect. Putting the shared block first means
 // the repo always wins, and `check` reports a region that has been moved down.
-import { CLI } from '../name.mjs';
+import { CLI, MARKER_PREFIX, MARKER_PREFIX_LEGACY } from '../name.mjs';
+
+// The region namespace moved with the command (ADR-056), like the manifest. The read
+// regexes accept both spellings, so a repository still stamped with the legacy prefix
+// is seen rather than reported as unadopted, and the first sync migrates it in place:
+// the composed region carries only the new prefix, so the body comparison in `inject`
+// finds drift and rewrites it. Writing never emits the legacy spelling, so the window
+// closes on every write. A file holding BOTH regions is a state only a hand edit can
+// make; the marker validation below reports it as malformed instead of guessing which
+// region wins, and a human deletes the old one.
+//
+// Both prefixes are pinned to literals in test/naming.test.mjs, so they carry nothing
+// that needs escaping inside the regexes built here.
+const PREFIX = `(?:${MARKER_PREFIX}|${MARKER_PREFIX_LEGACY})`;
+
 export const STYLES = {
   html: {
-    begin: '<!-- simt-dev:begin -->',
-    end: '<!-- simt-dev:end -->',
+    begin: `<!-- ${MARKER_PREFIX}:begin -->`,
+    end: `<!-- ${MARKER_PREFIX}:end -->`,
     line: (s) => `<!-- ${s} -->`,
     note: (first, second) => `<!-- ${first}\n     ${second} -->`,
-    sha: /<!--\s*simt-dev:sha=([0-9a-f]{7,40})\s*-->/,
-    beginRe: /^<!--\s*simt-dev:begin\s*-->$/i,
-    endRe: /^<!--\s*simt-dev:end\s*-->$/i,
+    sha: new RegExp(`<!--\\s*${PREFIX}:sha=([0-9a-f]{7,40})\\s*-->`),
+    beginRe: new RegExp(`^<!--\\s*${PREFIX}:begin\\s*-->$`, 'i'),
+    endRe: new RegExp(`^<!--\\s*${PREFIX}:end\\s*-->$`, 'i'),
     where: 'bottom',
   },
   hash: {
-    begin: '# simt-dev:begin',
-    end: '# simt-dev:end',
+    begin: `# ${MARKER_PREFIX}:begin`,
+    end: `# ${MARKER_PREFIX}:end`,
     line: (s) => `# ${s}`,
     note: (first, second) => `# ${first}\n# ${second}`,
-    sha: /^#\s*simt-dev:sha=([0-9a-f]{7,40})\s*$/m,
-    beginRe: /^#\s*simt-dev:begin\s*$/i,
-    endRe: /^#\s*simt-dev:end\s*$/i,
+    sha: new RegExp(`^#\\s*${PREFIX}:sha=([0-9a-f]{7,40})\\s*$`, 'm'),
+    beginRe: new RegExp(`^#\\s*${PREFIX}:begin\\s*$`, 'i'),
+    endRe: new RegExp(`^#\\s*${PREFIX}:end\\s*$`, 'i'),
     where: 'top',
   },
 };
@@ -184,9 +198,11 @@ export function compose(body, { sha, sources = [] } = {}, style) {
   if (typeof sha !== 'string' || !/^[0-9a-f]{7,40}$/.test(sha)) {
     throw new Error(`compose: sha must match [0-9a-f]{7,40}, got ${JSON.stringify(sha)}`);
   }
-  const header = [s.line('simt-dev:generated'), s.line(`simt-dev:sha=${sha}`)];
+  // Write-new, like the markers: the legacy spelling is read but never emitted, so a
+  // migrated region is stable and a legacy one drifts exactly once.
+  const header = [s.line(`${MARKER_PREFIX}:generated`), s.line(`${MARKER_PREFIX}:sha=${sha}`)];
   if (sources.length > 0) {
-    header.push(s.line(`simt-dev:sources=${sources.join(',')}`));
+    header.push(s.line(`${MARKER_PREFIX}:sources=${sources.join(',')}`));
   }
   // Addressed to whoever reads this repo, not to whoever owns the rules upstream.
   // "Edit the source in simt-dev" was the wrong instruction twice over: a consumer

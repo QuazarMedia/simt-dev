@@ -14,11 +14,10 @@ is the whole history. The decisions behind it are readable in the package under
 ### The command is `simt`
 
 The package is `simt-dev` and the command is `simt`. They are not the same thing and were
-never required to be: the command appears in no file until a reader types it, while the
-package name, the manifest, the `<!-- simt-dev:begin -->` region markers, the `.simt-hooks/`
-directory and the `simt-dev-check.yml` gate already exist in every repository that adopted
-this tool. The markers, the hooks directory and the gate did not move; the manifest did —
-and it is the only one that needed to, because it is the file a reader edits by hand.
+never required to be: the command appears only in text the tool itself writes, and that
+text migrates on the next write. The package name, the `.simt-hooks/` directory and the
+`simt-dev-check.yml` gate already exist in every repository that adopted this tool, and
+they did not move. The manifest and the region markers did — see below.
 
 ### The manifest is `simt.json`
 
@@ -30,6 +29,19 @@ read-both/write-new, so nothing in an adopting repository has to be done:
 - Every write goes to `simt.json`, and a lone `simt-dev.json` is moved, not shadowed.
 - The old name keeps working until the first `init` or manifest write in each repository,
   and that write closes it. *(ADR-056)*
+
+### The region markers are `simt:`
+
+The generated region was stamped `<!-- simt-dev:begin -->` / `<!-- simt-dev:end -->` — and
+so was the provenance header inside it; every one of those lines is now `simt:`. The move
+is the same read-both/write-new as the manifest:
+
+- Every read accepts either spelling, so a repository that has not written since the
+  upgrade is still seen as adopted.
+- Every write emits `simt:` only, so the first `sync` in each repository migrates its
+  regions in place, and that write closes the window.
+- A file holding two regions — one of each spelling — is a state only a hand edit can
+  make, and it is reported malformed rather than merged. *(ADR-056)*
 
 ### What a first release has to say out loud
 

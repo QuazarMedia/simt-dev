@@ -170,6 +170,7 @@ record is written.
 | S52 | `hooks install` writes without `--yes` | P1 | F | hooks | **yes (ADR-040)** | S10 | Complete | `8569cf0` |
 | S53 | `upgrade` blames the rules for a baseline body change | P2 | F | provenance | **yes (ADR-054, amends ADR-032)** | — | Complete | `887214e` |
 | S54 | A status line can name a path, and the summary promises none | P2 | F | decisions | no | — | Queued | ADR-049 consequences; 2 of 48 |
+| S55 | The pack test inherits npm's resolved config, so it reads the developer's home directory | P2 | F | tests | no (ADR-041 stands) | — | Complete | found by the pre-push gate; see §5 |
 
 ## 4. Review 0001 at `4c27514`
 
@@ -998,6 +999,40 @@ markers stripped (S19).
 > repository that adopts the tool. Two records out of forty-eight, pre-existing, and not
 > touched here because the fix is a decision about what a status line may contain rather than
 > a parser change.
+
+### S55 — The pack test inherits npm's resolved config, so it reads the developer's home directory (P2)
+
+**Finding.** Not in this review. Found by the gate refusing a push, which is the only
+instrument in this repository that runs the suite the way a CI runner would.
+
+`test/pack.test.mjs` runs `npm install` to prove the tarball installs (ADR-041). `npm test`
+starts every child with npm's own resolved configuration in the environment, as
+`npm_config_*`. A developer whose `~/.npmrc` sets `allow-scripts` therefore had their child
+install die before it ran anything:
+
+```
+npm error code EALLOWSCRIPTS
+npm error --allow-scripts is not allowed in project-scoped installs.
+```
+
+npm treats a configuration value arriving from the environment as a command-line flag and
+forbids that flag in a project-scoped install, while the identical value in `.npmrc` is
+accepted. The install is fine and the inherited setting is what npm will not have, so the five
+tests in this file fail on that one developer's machine and on nobody else's — including CI's,
+which is the arrangement ADR-031 exists to stop.
+
+That is the same defect one level down and wearing a different hat: a test whose result
+depends on the author's environment rather than on the artefact. The file already scrubs
+`SIMT_DEV_WORKSPACE` for exactly this reason and did not notice that npm hands down a second
+inherited answer. The tell is that the suite is green under `node --test test/` and red under
+`npm test`, and the two differ only in what the parent process passes down.
+
+**Fix.** Drop every `npm_config_*` variable from the environment handed to the child, in the
+one place that builds it. What remains is npm reading the config files a CI runner and a fresh
+shell read, which is the configuration this test is supposed to be measured under.
+
+**Accept.** `npm test` passes on a machine whose `~/.npmrc` sets `allow-scripts`; and the file
+still fails when the tarball is broken, which is the property an env scrub could have cost.
 
 ### S32 — Sources in a standard Gradle layout are never sampled (P2)
 

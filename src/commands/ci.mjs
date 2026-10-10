@@ -24,6 +24,7 @@ import { dirname } from 'node:path';
 import { EXIT, emit, emitJson, isJson, note, writeMode } from '../output/index.mjs';
 import { planWorkflow, renderWorkflow, WORKFLOW_FILE } from '../ci/workflow.mjs';
 import { planDependabot, renderDependabot, DEPENDABOT_FILE } from '../ci/dependabot.mjs';
+import { CLI } from '../name.mjs';
 
 /**
  * The two plans, with the render and the plan-time data each needs kept attached.
@@ -110,7 +111,7 @@ export async function ciCommand(positional, flags) {
           files: todo.map(publicPlan),
           written: false,
           error: `${todo.length} of ${plans.length} .github file(s) in this repo are stale`,
-          remedy: 'run: simt-dev ci --yes',
+          remedy: `run: ${CLI} ci --yes`,
         },
         {},
       );
@@ -128,7 +129,7 @@ export async function ciCommand(positional, flags) {
 
   if (!mode.apply) {
     note('');
-    note(mode.dryRun ? 'dry-run  nothing written' : 'dry-run  nothing written; apply with: simt-dev ci --yes');
+    note(mode.dryRun ? 'dry-run  nothing written' : `dry-run  nothing written; apply with: ${CLI} ci --yes`);
     return EXIT.OK;
   }
 
@@ -163,7 +164,7 @@ export async function ciCommand(positional, flags) {
  * something that does not exist, and the useful answer is which command does exist.
  */
 function failOutside(root, plan, flags) {
-  const remedy = `simt-dev init --yes   (a repository's .github files are written once, by init, and then left alone)`;
+  const remedy = `${CLI} init --yes   (a repository's .github files are written once, by init, and then left alone)`;
   if (isJson(flags)) {
     emitJson(
       {
@@ -278,7 +279,7 @@ function unified(file, current, desired) {
   return [
     `--- a/${file}`,
     `+++ b/${file}`,
-    `@@ ${changed} changed line(s); apply with: simt-dev ci --yes @@`,
+    `@@ ${changed} changed line(s); apply with: ${CLI} ci --yes @@`,
     ...out,
   ].join('\n');
 }

@@ -1,40 +1,41 @@
 import { emit } from '../output/index.mjs';
 import { parse } from '../argv.mjs';
+import { CLI } from '../name.mjs';
 
-const COMMANDS = `simt-dev init [path]            adopt or scaffold a repo into the ecosystem
+const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into the ecosystem
                            (dry-run unless --yes; conflicts block without
                            --accept-conflicts; never commits or pushes)
-simt-dev doctor                 classify a repo and check config health
-simt-dev check                  the gate: projection drift, manifest validity, policy
-simt-dev sync [--yes]           regenerate the projection (idempotent)
+${CLI} doctor                 classify a repo and check config health
+${CLI} check                  the gate: projection drift, manifest validity, policy
+${CLI} sync [--yes]           regenerate the projection (idempotent)
                            (prints the plan and exits 1 on drift without --yes,
                            so it also works as a check)
-simt-dev upgrade                move every consumer to this simt-dev SHA, as one set
+${CLI} upgrade                move every consumer to this simt-dev SHA, as one set
                            (dry-run unless --yes; moves a pin only - it never
                            adopts or repairs a repo; never commits or pushes)
 
-simt-dev skills index           tier-0 catalog: every skill, one line each
-simt-dev skills brief --task    tier-1 pre-assembled brief  <- the common case
-simt-dev skills show <name>     tier-2 body (respects --max-bytes)
-simt-dev skills why <name>      the signal chain that selected it
-simt-dev skills find <query>    search across capability and keyword
-simt-dev skills install <name>  pin a skill into the repo as a local override
+${CLI} skills index           tier-0 catalog: every skill, one line each
+${CLI} skills brief --task    tier-1 pre-assembled brief  <- the common case
+${CLI} skills show <name>     tier-2 body (respects --max-bytes)
+${CLI} skills why <name>      the signal chain that selected it
+${CLI} skills find <query>    search across capability and keyword
+${CLI} skills install <name>  pin a skill into the repo as a local override
                            (dry-run unless --yes; a multi-variant skill needs
                            --variant or --from rather than a guess)
 
-simt-dev rules list             the rule catalogue (--root marks what applies to a repo)
-simt-dev rules show <id>        one rule body
-simt-dev rules why <id|ADR-NNN> the decision that settled it, and whether it is still in force
-simt-dev hooks install [--yes]   install the shared dispatcher; report what it would run
+${CLI} rules list             the rule catalogue (--root marks what applies to a repo)
+${CLI} rules show <id>        one rule body
+${CLI} rules why <id|ADR-NNN> the decision that settled it, and whether it is still in force
+${CLI} hooks install [--yes]   install the shared dispatcher; report what it would run
                            (dry-run unless --yes; refuses to take over routing git
                             already uses, and --yes is that consent)
-simt-dev ci                     simt-dev's own .github files: create or refresh them
+${CLI} ci                     simt-dev's own .github files: create or refresh them
                            (dry-run unless --yes; refreshes the templates' own copies
                             and no repository else's)
-simt-dev compare                org-wide matrix across every sibling repo
+${CLI} compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)
-simt-dev mcp                    the read-only surface as MCP tools over stdio
+${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
 
@@ -90,7 +91,7 @@ export async function help(argv) {
       // The plans ship inside the installed package but have no command that surfaces
       // them, so naming the path would again be advice the reader cannot take. They
       // are an implementation record; the rulings are the part a reader can act on.
-      'rulings  simt-dev rules list   the decisions behind the rules you just read',
+      `rulings  ${CLI} rules list   the decisions behind the rules you just read`,
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );

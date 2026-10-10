@@ -33,6 +33,7 @@ import { provenanceDigest } from '../projection/project.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
+import { CLI } from '../name.mjs';
 
 /**
  * Where skills live in this repo. The estate already has a convention - a
@@ -53,7 +54,7 @@ export async function installCommand(args, flags) {
     return fail(
       'install needs a skill name',
       EXIT.USAGE,
-      'usage: simt-dev skills install <name> [--variant <id>] [--from <repo/path>]',
+      `usage: ${CLI} skills install <name> [--variant <id>] [--from <repo/path>]`,
     );
   }
 
@@ -66,7 +67,7 @@ export async function installCommand(args, flags) {
     return fail(
       `no skill named "${name}"${near.length > 0 ? ` (did you mean ${near.join(', ')}?)` : ''}`,
       EXIT.USAGE,
-      'run: simt-dev skills find <query>',
+      `run: ${CLI} skills find <query>`,
     );
   }
 
@@ -105,7 +106,7 @@ export async function installCommand(args, flags) {
     return fail(
       `${pick.source.repo}/${pick.source.path}: ${error.code ?? error.message}`,
       EXIT.CONFIG,
-      'the registry points at a body that cannot be read; run: simt-dev graph lint',
+      `the registry points at a body that cannot be read; run: ${CLI} graph lint`,
     );
   }
 
@@ -195,7 +196,7 @@ export async function installCommand(args, flags) {
   // The note was printed unconditionally, so a run that was about to write said
   // "nothing written" and then wrote. It belongs on the path that does not write.
   if (!mode.apply) {
-    note(`note    dry-run  nothing written; apply with: simt-dev skills install ${name} --yes`);
+    note(`note    dry-run  nothing written; apply with: ${CLI} skills install ${name} --yes`);
     report();
     return EXIT.OK;
   }
@@ -213,7 +214,7 @@ export async function installCommand(args, flags) {
     return fail(
       `${pick.source.repo}/${pick.source.path}: ${error.code ?? error.message}`,
       EXIT.CONFIG,
-      `run: simt-dev graph lint  (the registry must match the file on disk)`,
+      `run: ${CLI} graph lint  (the registry must match the file on disk)`,
     );
   }
   payload.written = true;
@@ -222,7 +223,7 @@ export async function installCommand(args, flags) {
   const recorded = await recordLocal(root, record, skill.name, repo);
   note(`${recorded.created ? 'created' : 'updated'} ${MANIFEST} localSkills`);
   if (recorded.created) {
-    note('note    this repo had no manifest; simt-dev init still needs to run to project the rules');
+    note(`note    this repo had no manifest; ${CLI} init still needs to run to project the rules`);
   }
   note(`note    ${name} is now repo-local and is excluded from central-drift accounting`);
   report();
@@ -320,7 +321,7 @@ async function chooseSource(skill, signals, flags, { root = null, workspaceRoot 
     if (resolved.ambiguous !== undefined) {
       return {
         error: `variant ${flags.variant} (${skill.variants.find((x) => x.id === flags.variant).bytes} bytes) does not identify exactly one source (${resolved.ambiguous} matched)`,
-        remedy: `choose explicitly: simt-dev skills install ${skill.name} --from <repo/path>`,
+        remedy: `choose explicitly: ${CLI} skills install ${skill.name} --from <repo/path>`,
       };
     }
     return { source: resolved, variant: flags.variant, reason: 'chosen with --variant', note: holdNote };
@@ -335,7 +336,7 @@ async function chooseSource(skill, signals, flags, { root = null, workspaceRoot 
     if (!chosen || chosen.ambiguous !== undefined) {
       return {
         error: `variant ${matched[0].id} does not identify exactly one source (${chosen?.ambiguous ?? 0} matched)`,
-        remedy: `choose explicitly: simt-dev skills install ${skill.name} --from <repo/path>`,
+        remedy: `choose explicitly: ${CLI} skills install ${skill.name} --from <repo/path>`,
       };
     }
     if (held && held.source !== chosen) {
@@ -346,7 +347,7 @@ async function chooseSource(skill, signals, flags, { root = null, workspaceRoot 
         )}) but this repo already holds the ${variantForBytes(skill, held.source)} variant (${label(
           held.source,
         )})`,
-        remedy: `decide which is right: simt-dev skills install ${skill.name} --variant ${variantForBytes(
+        remedy: `decide which is right: ${CLI} skills install ${skill.name} --variant ${variantForBytes(
           skill,
           held.source,
         )}, or --from ${label(chosen)}`,
@@ -374,7 +375,7 @@ async function chooseSource(skill, signals, flags, { root = null, workspaceRoot 
     }
     return {
       error: `${skill.name}: variants ${matched.map((v) => v.id).join(', ')} all match this repo`,
-      remedy: `choose explicitly: simt-dev skills install ${skill.name} --variant <id>`,
+      remedy: `choose explicitly: ${CLI} skills install ${skill.name} --variant <id>`,
     };
   }
 
@@ -398,13 +399,13 @@ async function chooseSource(skill, signals, flags, { root = null, workspaceRoot 
   if (impostor) {
     return {
       error: `${skill.name}: ${root}/${impostor.path} exists but is not the declared body (${impostor.bytes} bytes declared)`,
-      remedy: `run: simt-dev graph lint --workspace <path>  to see what the registry expects, or delete the local copy`,
+      remedy: `run: ${CLI} graph lint --workspace <path>  to see what the registry expects, or delete the local copy`,
     };
   }
 
   return {
     error: `${skill.name} has ${skill.variants.length} variants and none matches this repo (${signals.join(', ') || 'no signals'})`,
-    remedy: `choose explicitly: simt-dev skills install ${skill.name} --variant <${skill.variants.map((v) => v.id).join('|')}>`,
+    remedy: `choose explicitly: ${CLI} skills install ${skill.name} --variant <${skill.variants.map((v) => v.id).join('|')}>`,
   };
 }
 

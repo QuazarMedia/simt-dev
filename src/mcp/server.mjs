@@ -20,6 +20,7 @@
 //      for a reason that does not weaken because the caller is a model.
 
 import { createInterface } from 'node:readline';
+import { CLI } from '../name.mjs';
 
 export const PROTOCOL_VERSION = '2025-06-18';
 
@@ -60,7 +61,7 @@ export async function handle(request, tools, { version } = {}) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: { ...SERVER_INFO, version: version ?? '0.0.0' },
         instructions:
-          'Read-only. Every answer is JSON. `simt-dev skills brief` is the one to call first: it returns the pre-assembled set for a task, plus what it deliberately left out and why.',
+          `Read-only. Every answer is JSON. \`${CLI} skills brief\` is the one to call first: it returns the pre-assembled set for a task, plus what it deliberately left out and why.`,
       });
 
     case 'notifications/initialized':

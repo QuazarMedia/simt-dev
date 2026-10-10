@@ -24,6 +24,7 @@ import { fingerprint } from '../resolve/fingerprint.mjs';
 import { manifestDrift, readManifest, unrunnableGates } from '../projection/manifest.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
+import { CLI } from '../name.mjs';
 
 /** Findings `sync` reports and does not fail on.
  *
@@ -112,7 +113,7 @@ export async function syncCommand(positional, flags) {
     return fail(
       `${broken.length} file(s) have a malformed generated region (${first.file}: ${first.reason})`,
       EXIT.FAIL,
-      `fix the markers at ${first.file}:${first.line}, then: simt-dev sync --yes`,
+      `fix the markers at ${first.file}:${first.line}, then: ${CLI} sync --yes`,
     );
   }
 
@@ -245,7 +246,7 @@ export async function syncCommand(positional, flags) {
       lines.push(
         flags.dryRun === true
           ? 'dry-run; nothing written'
-          : `would write ${changed.length + pointersAdded.length} file(s); apply with: simt-dev sync --yes`,
+          : `would write ${changed.length + pointersAdded.length} file(s); apply with: ${CLI} sync --yes`,
       );
     }
     emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });

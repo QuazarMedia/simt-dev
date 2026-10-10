@@ -24,6 +24,7 @@ import { readHooksPath, readHooksState } from '../compare/hooksstate.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
 import { runGates } from '../hooks/dispatcher.mjs';
+import { CLI } from '../name.mjs';
 
 const exec = promisify(execFile);
 
@@ -32,7 +33,7 @@ export async function hooksCommand(sub, args, flags) {
   if (sub === 'install') return installHooks(root, flags);
   if (sub === 'status') return hooksStatus(root, flags);
   if (sub === 'run') return runHook(args, flags);
-  return fail(`unknown hooks subcommand ${sub}`, EXIT.USAGE, 'run: simt-dev hooks status');
+  return fail(`unknown hooks subcommand ${sub}`, EXIT.USAGE, `run: ${CLI} hooks status`);
 }
 
 /** The shim execs this; the event name is baked into the shim, so it is arg 0. */
@@ -45,7 +46,7 @@ async function runHook(args, flags) {
   const { manifest, exists, error } = await readManifest(root);
   if (error) return fail(`${MANIFEST}: ${error}`, EXIT.CONFIG);
   if (!exists) {
-    return fail(`${root} has no ${MANIFEST}; the hook cannot know its gate list`, EXIT.CONFIG, `run: simt-dev init --root ${root}`);
+    return fail(`${root} has no ${MANIFEST}; the hook cannot know its gate list`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
   }
 
   const result = await runGates(event, { root, manifest });
@@ -91,7 +92,7 @@ async function installHooks(root, flags) {
   const { manifest, exists, error } = await readManifest(root);
   if (error) return fail(`${MANIFEST}: ${error}`, EXIT.CONFIG);
   if (!exists) {
-    return fail(`${root} has no ${MANIFEST}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: simt-dev init --root ${root}`);
+    return fail(`${root} has no ${MANIFEST}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
   }
 
   const state = await readHooksState(root, { declaresGate: (e) => wantsShim(manifest, exists, e) });
@@ -189,7 +190,7 @@ async function installHooks(root, flags) {
         plan,
         mode.dryRun
           ? 'DRY-RUN  no files written'
-          : `PLAN     nothing written; apply with: simt-dev hooks install --root ${root} --yes`,
+          : `PLAN     nothing written; apply with: ${CLI} hooks install --root ${root} --yes`,
         manifest,
       ),
       { maxBytes: flags.maxBytes ?? 0 },
@@ -289,7 +290,7 @@ async function hooksStatus(root, flags) {
   const lines = [
     `repo     ${root}`,
     `hooks    ${current ?? '(unset)'}  ${current === HOOKS_DIR ? '(simt-dev)' : current === null ? `(git default: ${state.liveDir})` : '(another routing)'}`,
-    `manifest ${exists ? `${MANIFEST} present` : `${MANIFEST} MISSING - run: simt-dev init`}`,
+    `manifest ${exists ? `${MANIFEST} present` : `${MANIFEST} MISSING - run: ${CLI} init`}`,
     '',
   ];
   for (const i of installed) {

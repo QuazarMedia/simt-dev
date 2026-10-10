@@ -1,4 +1,5 @@
 import { MANIFEST_COMMENT } from '../projection/manifest.mjs';
+import { CLI } from '../name.mjs';
 // Classify one repository's upgrade state. Pure: no filesystem, no git.
 //
 // The line this module draws is narrow on purpose. `upgrade` moves a PIN. It does not
@@ -31,7 +32,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   // for it, and calling this a failure would make the exit code describe the estate's
   // migration progress rather than this run's correctness.
   if (!manifestExists) {
-    return { ...base, state: 'not-adopted', action: 'skip', detail: 'no simt-dev.json', remedy: 'simt-dev init' };
+    return { ...base, state: 'not-adopted', action: 'skip', detail: 'no simt-dev.json', remedy: `${CLI} init` };
   }
   if (manifestError) {
     return {
@@ -39,7 +40,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       state: 'broken-manifest',
       action: 'skip',
       detail: `simt-dev.json is unparseable (${manifestError})`,
-      remedy: 'fix the JSON, or run: simt-dev init',
+      remedy: `fix the JSON, or run: ${CLI} init`,
     };
   }
   // Only a hand-owned file's malformed region is a fault. A managed `.mdc` rule is a
@@ -55,7 +56,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       state: 'malformed-region',
       action: 'skip',
       detail: `${malformed.file} region is malformed (${malformed.reason})`,
-      remedy: `fix the markers at ${malformed.file}:${malformed.line}, then: simt-dev sync --yes`,
+      remedy: `fix the markers at ${malformed.file}:${malformed.line}, then: ${CLI} sync --yes`,
     };
   }
   if (primary === null) {
@@ -64,7 +65,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       state: 'no-region',
       action: 'skip',
       detail: 'no generated file could be planned for this repo',
-      remedy: 'run: simt-dev check',
+      remedy: `run: ${CLI} check`,
     };
   }
   // A manifest with no region is a repo mid-adoption or one that never adopted, and
@@ -93,7 +94,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       // the repository alone, while `init` re-runs adoption. `compare` already names
       // `sync --yes` for this state, and two commands must not answer the same question
       // with different instructions.
-      remedy: 'run: simt-dev sync --yes',
+      remedy: `run: ${CLI} sync --yes`,
     };
   }
 

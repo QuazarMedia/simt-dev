@@ -27,6 +27,7 @@ import { getGate } from '../hooks/gates.mjs';
 // and the manifest name is used a dozen times below in remedy strings that name this
 // file by name.
 import { MANIFEST_FILE } from '../name.mjs';
+import { CLI } from '../name.mjs';
 export const MANIFEST = MANIFEST_FILE;
 
 /**
@@ -42,7 +43,7 @@ export const MANIFEST = MANIFEST_FILE;
  */
 export const MANIFEST_COMMENT = {
   $comment:
-    'Written and maintained by simt-dev. Edit by hand only if you intend to take ownership of this file: `simt-dev sync --yes` regenerates the projected rules, and re-running `simt-dev init` refreshes the SHA without weakening a value you set here.',
+    `Written and maintained by simt-dev. Edit by hand only if you intend to take ownership of this file: \`${CLI} sync --yes\` regenerates the projected rules, and re-running \`${CLI} init\` refreshes the SHA without weakening a value you set here.`,
 };
 
 /**
@@ -171,7 +172,7 @@ function gateRemedy(gate, { existing = false, runner = null } = {}) {
       ? `, or add "${name}" to gates.preCommit or gates.prePush in ${MANIFEST}`
       : existing
         ? `, then add "${name}" to gates.preCommit or gates.prePush in ${MANIFEST}`
-        : `, then re-run: simt-dev init --yes`;
+        : `, then re-run: ${CLI} init --yes`;
   return `${fix}${second}`;
 }
 
@@ -405,7 +406,7 @@ export async function manifestDrift(root, stack, sha) {
       file: MANIFEST,
       status: 'stale-generated-field',
       detail: `generated field(s) ${stale.join(', ')} do not match what this simt-dev writes`,
-      remedy: `run: simt-dev init --yes   (it refreshes the stamp without touching values this repo set)`,
+      remedy: `run: ${CLI} init --yes   (it refreshes the stamp without touching values this repo set)`,
     };
   }
 
@@ -421,7 +422,7 @@ export async function manifestDrift(root, stack, sha) {
     file: MANIFEST,
     status: 'reformatted',
     detail: 'content is what simt-dev would write, but the bytes differ - another formatter owns this file',
-    remedy: `add ${MANIFEST} to .prettierignore (a generated file is not prose), then: simt-dev init --yes`,
+    remedy: `add ${MANIFEST} to .prettierignore (a generated file is not prose), then: ${CLI} init --yes`,
   };
 }
 

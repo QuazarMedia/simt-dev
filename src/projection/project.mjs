@@ -29,6 +29,7 @@ import { readManifest } from './manifest.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
 import { pointerState, pointerTargets, ruleTargets } from './targets.mjs';
+import { CLI } from '../name.mjs';
 import {
   desiredRegion,
   provenanceDigest,
@@ -154,7 +155,7 @@ export async function checkTargets(root, flags = {}) {
         file: plan.file,
         status: 'absent',
         detail: `this repo runs GitHub Actions but ${what}`,
-        remedy: 'simt-dev init --yes',
+        remedy: `${CLI} init --yes`,
       });
     } else if (plan.action === 'refresh') {
       // Only reachable in simt-dev's own repository, and only because these plans
@@ -166,7 +167,7 @@ export async function checkTargets(root, flags = {}) {
         file: plan.file,
         status: 'drift',
         detail: plan.reason,
-        remedy: 'simt-dev ci --yes',
+        remedy: `${CLI} ci --yes`,
       });
     }
   }
@@ -230,7 +231,7 @@ export async function checkTargets(root, flags = {}) {
           file: rel,
           surface: target.surface,
           status: 'absent',
-          detail: `no ${target.surface} rule here; run: simt-dev sync --yes`,
+          detail: `no ${target.surface} rule here; run: ${CLI} sync --yes`,
         });
         continue;
       }
@@ -250,7 +251,7 @@ export async function checkTargets(root, flags = {}) {
           file: rel,
           surface: target.surface,
           status: 'unmanaged',
-          detail: 'no generated region; run: simt-dev sync --yes',
+          detail: `no generated region; run: ${CLI} sync --yes`,
         });
         continue;
       }
@@ -265,7 +266,7 @@ export async function checkTargets(root, flags = {}) {
         file: rel,
         surface: target.surface,
         status: action === 'unchanged' ? 'current' : 'drift',
-        detail: action === 'unchanged' ? undefined : `region is ${action}; run: simt-dev sync --yes`,
+        detail: action === 'unchanged' ? undefined : `region is ${action}; run: ${CLI} sync --yes`,
         recordedSha: state.sha ?? null,
       });
     }
@@ -283,8 +284,8 @@ export async function checkTargets(root, flags = {}) {
       findings.push({
         file: t.file,
         status: 'absent',
-        detail: 'no baseline file; run: simt-dev sync --yes',
-        remedy: 'simt-dev sync --yes',
+        detail: `no baseline file; run: ${CLI} sync --yes`,
+        remedy: `${CLI} sync --yes`,
       });
       continue;
     }
@@ -293,15 +294,15 @@ export async function checkTargets(root, flags = {}) {
       findings.push({
         file: t.file,
         status: 'unmanaged',
-        detail: 'the file exists with no simt-dev region; run: simt-dev sync --yes',
-        remedy: 'simt-dev sync --yes',
+        detail: `the file exists with no simt-dev region; run: ${CLI} sync --yes`,
+        remedy: `${CLI} sync --yes`,
       });
       continue;
     }
     findings.push({
       file: t.file,
       status: t.action === 'unchanged' ? 'current' : 'drift',
-      detail: t.action === 'unchanged' ? undefined : `region is ${t.action}; run: simt-dev sync --yes`,
+      detail: t.action === 'unchanged' ? undefined : `region is ${t.action}; run: ${CLI} sync --yes`,
       recordedSha: state.sha ?? null,
     });
     const off = misplaced(state, t.style);
@@ -350,7 +351,7 @@ export async function checkTargets(root, flags = {}) {
           st.entries === undefined
             ? `${st.detail} (${st.bytes} bytes); simt-dev will not replace it`
             : `${st.detail} (${st.entries} ${st.entries === 1 ? 'entry' : 'entries'}); simt-dev will not replace it`,
-        remedy: `move it aside, or delete the ${st.entries === undefined ? 'file' : 'directory'} and re-run: simt-dev sync --yes`,
+        remedy: `move it aside, or delete the ${st.entries === undefined ? 'file' : 'directory'} and re-run: ${CLI} sync --yes`,
       });
     } else if (st.state === 'mispointed') {
       // Whether this blocks is the reader's business, not the file's. `pointer-drift` is
@@ -367,7 +368,7 @@ export async function checkTargets(root, flags = {}) {
         surface: st.surface,
         status: 'pointer-unread',
         detail: `${st.detail}; should point at ${pointer.to}`,
-        remedy: `run: simt-dev sync --yes (${pointer.readers} reads ${pointer.file}, not ${pointer.to})`,
+        remedy: `run: ${CLI} sync --yes (${pointer.readers} reads ${pointer.file}, not ${pointer.to})`,
       });
     }
   }
@@ -443,7 +444,7 @@ async function checkPrimary(root, flags = {}) {
     if (e.code !== 'ENOENT') {
       return { file: PRIMARY_TARGET, status: 'unreadable', detail: e.code ?? String(e) };
     }
-    return { file: PRIMARY_TARGET, status: 'absent', detail: 'no AGENTS.md; run: simt-dev sync --yes' };
+    return { file: PRIMARY_TARGET, status: 'absent', detail: `no AGENTS.md; run: ${CLI} sync --yes` };
   }
   const state = parse(existing);
   if (state.status === 'malformed') {
@@ -455,13 +456,13 @@ async function checkPrimary(root, flags = {}) {
     };
   }
   if (state.status === 'absent') {
-    return { file: PRIMARY_TARGET, status: 'unmanaged', detail: 'no generated region; run: simt-dev sync --yes' };
+    return { file: PRIMARY_TARGET, status: 'unmanaged', detail: `no generated region; run: ${CLI} sync --yes` };
   }
   const d = diff(existing, body, meta, await regionOpts(root));
   return {
     file: PRIMARY_TARGET,
     status: d.action === 'unchanged' ? 'current' : 'drift',
-    detail: d.action === 'unchanged' ? undefined : `region is ${d.action}; run: simt-dev sync --yes`,
+    detail: d.action === 'unchanged' ? undefined : `region is ${d.action}; run: ${CLI} sync --yes`,
     recordedSha: state.sha ?? null,
     expectedSha: meta.sha,
   };
@@ -488,7 +489,7 @@ export function readLimitFindings(text, file) {
         file,
         status: 'beyond-read-limit',
         detail: `BEYOND-READ-LIMIT: the region ends at byte ${state.endByte}, past ${limit.reader}'s ${limit.bytes}-byte read of ${file}`,
-        remedy: `set projection.place to "top" in simt-dev.json and run: simt-dev sync --yes, or raise ${limit.reader}'s project_doc_max_bytes`,
+        remedy: `set projection.place to "top" in simt-dev.json and run: ${CLI} sync --yes, or raise ${limit.reader}'s project_doc_max_bytes`,
       });
     }
   }

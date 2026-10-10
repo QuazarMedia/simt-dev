@@ -17,6 +17,7 @@
 // start in CI. See src/locate.mjs.
 
 import { renderLocator } from '../locate.mjs';
+import { CLI } from '../name.mjs';
 
 /** Events the shared dispatcher knows how to run. */
 export const EVENTS = ['pre-commit', 'pre-push'];
@@ -45,7 +46,7 @@ export function renderShim(event) {
 #
 # Every decision this hook makes is declared in simt-dev.json, so a reviewer reads
 # the gate list in a diff instead of reverse-engineering shell. Reinstall with:
-# simt-dev hooks install --yes
+# ${CLI} hooks install --yes
 #
 # This file only locates the dispatcher and hands over. It resolves in order:
 #   1. ${D}SIMT_DEV_BIN    explicit override, for CI images and odd checkouts

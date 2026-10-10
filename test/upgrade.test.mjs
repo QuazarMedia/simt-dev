@@ -17,7 +17,9 @@ import { fileURLToPath } from 'node:url';
 import { planUpgrade, summariseUpgrade } from '../src/upgrade/plan.mjs';
 import { initCommand } from '../src/commands/init.mjs';
 import { upgradeCommand } from '../src/commands/upgrade.mjs';
-import { git } from './fixture.mjs';
+import { git, cmd } from './fixture.mjs';
+import { CLI } from '../src/name.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
@@ -59,7 +61,7 @@ async function readJson(path) {
 }
 
 async function pin(path, sha) {
-  const full = join(path, 'simt-dev.json');
+  const full = join(path, MANIFEST_FILE);
   const manifest = await readJson(full);
   manifest.projection.simtDevSha = sha;
   await writeFile(full, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -102,7 +104,7 @@ test('upgrade plan: a repo with no manifest is not-adopted, not behind', () => {
   assert.equal(p.action, 'skip');
   // The remedy must name the command that actually adopts a repo. "behind" would
   // suggest this command could fix it, and it cannot.
-  assert.equal(p.remedy, 'simt-dev init');
+  assert.equal(p.remedy, `${CLI} init`);
 });
 
 test('upgrade plan: a stale pin alone is an update, and says the region was fine', () => {
@@ -267,7 +269,7 @@ test('upgrade plan: a hand-written AGENTS.md with no region is not adopted by a 
   assert.equal(p.action, 'skip');
   assert.equal(p.state, 'no-region');
   assert.doesNotMatch(p.detail, /rules changed/, 'a repo that never had a region cannot have had a rule change');
-  assert.match(p.remedy, /simt-dev sync --yes/);
+  assert.match(p.remedy, cmd('{cli} sync --yes'));
 });
 
 test('upgrade plan: baselines keeping their regions does not make a repo adopted', () => {
@@ -378,7 +380,7 @@ test('upgrade: moves the pin and the region together, then check agrees', async 
   const dry = await runJson(['upgrade', '--workspace', ws]);
   assert.equal(dry.payload.summary.updated, 2);
   assert.equal(dry.payload.written, false);
-  assert.equal((await readJson(join(ws, 'alpha', 'simt-dev.json'))).projection.simtDevSha, '0000000');
+  assert.equal((await readJson(join(ws, 'alpha', MANIFEST_FILE))).projection.simtDevSha, '0000000');
 
   const sha = dry.payload.sha;
   const done = await runJson(['upgrade', '--workspace', ws, '--yes']);
@@ -388,7 +390,7 @@ test('upgrade: moves the pin and the region together, then check agrees', async 
   // Both halves of the pin moved. A region restamped with a manifest still claiming the
   // old SHA is the state that makes `compare` report a mismatch that is not real.
   for (const name of ['alpha', 'beta']) {
-    assert.equal((await readJson(join(ws, name, 'simt-dev.json'))).projection.simtDevSha, sha);
+    assert.equal((await readJson(join(ws, name, MANIFEST_FILE))).projection.simtDevSha, sha);
     const agents = await readFile(join(ws, name, 'AGENTS.md'), 'utf8');
     assert.ok(agents.includes(`simt-dev:sha=${sha}`), `${name} region was not restamped`);
     assert.equal((await run(['check', '--root', join(ws, name)])).code, 0);
@@ -430,7 +432,7 @@ test('upgrade: a malformed region is reported and the run fails, leaving bytes a
   assert.equal(await readFile(agents, 'utf8'), broken, 'a malformed region must not be rewritten');
   // The manifest is untouched too: writing the pin would make `compare` report a
   // mismatch against a region that does not exist.
-  assert.equal((await readJson(join(ws, 'beta', 'simt-dev.json'))).projection.simtDevSha, '0000000');
+  assert.equal((await readJson(join(ws, 'beta', MANIFEST_FILE))).projection.simtDevSha, '0000000');
 });
 
 test('upgrade: an unadopted repo in the set is skipped, not adopted', async () => {
@@ -445,7 +447,7 @@ test('upgrade: an unadopted repo in the set is skipped, not adopted', async () =
   assert.equal(payload.summary.updated, 1);
   assert.equal(payload.summary.faults, 0);
   assert.deepEqual(payload.summary.skippedStates, ['not-adopted']);
-  await assert.rejects(readFile(join(ws, 'fresh', 'simt-dev.json')), 'upgrade must not adopt a repo');
+  await assert.rejects(readFile(join(ws, 'fresh', MANIFEST_FILE)), 'upgrade must not adopt a repo');
 });
 
 test('upgrade: a hand-written AGENTS.md is left byte-identical and named in the output', async () => {
@@ -466,9 +468,9 @@ test('upgrade: a hand-written AGENTS.md is left byte-identical and named in the 
   await run(['init', '--root', join(ws, 'handwritten'), '--yes']);
   const prose = '# Notes\n\nHow this repository works, written by hand.\n';
   await writeFile(join(ws, 'handwritten', 'AGENTS.md'), prose);
-  const manifest = await readJson(join(ws, 'handwritten', 'simt-dev.json'));
+  const manifest = await readJson(join(ws, 'handwritten', MANIFEST_FILE));
   manifest.projection.simtDevSha = '0000000';
-  await writeFile(join(ws, 'handwritten', 'simt-dev.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeFile(join(ws, 'handwritten', MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`);
 
   // The run exits non-zero, and that is right: a repository with a manifest and no region
   // is in a state `check` also refuses (exit 1, `UNMANAGED AGENTS.md`, the same remedy).
@@ -487,7 +489,7 @@ test('upgrade: a hand-written AGENTS.md is left byte-identical and named in the 
   assert.ok(row, 'the skipped repo must appear in the output');
   assert.equal(row.state, 'no-region');
   assert.match(row.detail, /no generated region/);
-  assert.match(row.remedy, /simt-dev sync --yes/);
+  assert.match(row.remedy, cmd('{cli} sync --yes'));
 
   // And untouched. This is the whole claim: the command that fixes pins must not
   // introduce rules into a repository that never asked for them. Asserted on the bytes
@@ -513,10 +515,10 @@ test('upgrade: simt-dev itself is not a consumer and round-trips as a no-op', as
   // test asserted a property of the author's directory and failed for anyone whose
   // clone is not a repo. ADR-031 is the same defect one level up.
   const root = resolve(HERE, '..');
-  await assert.rejects(readFile(join(root, 'simt-dev.json')), 'simt-dev must not be its own consumer');
+  await assert.rejects(readFile(join(root, MANIFEST_FILE)), 'simt-dev must not be its own consumer');
   const { code } = await run(['upgrade', '--root', root, '--yes']);
   assert.ok(code === 0 || code === 3, `expected a no-op or a refusal, got exit ${code}`);
-  await assert.rejects(readFile(join(root, 'simt-dev.json')), 'upgrade stamped a pin into simt-dev');
+  await assert.rejects(readFile(join(root, MANIFEST_FILE)), 'upgrade stamped a pin into simt-dev');
 });
 
 test('upgrade: a commit in the CONSUMER repo does not move the stamp', async () => {
@@ -584,8 +586,8 @@ test('upgrade: --root on one repo upgrades that repo, not its siblings', async (
   assert.equal(code, 0);
   assert.equal(payload.shape, 'repo');
   assert.equal(payload.summary.repos, 1);
-  assert.notEqual((await readJson(join(ws, 'alpha', 'simt-dev.json'))).projection.simtDevSha, '0000000');
-  assert.equal((await readJson(join(ws, 'beta', 'simt-dev.json'))).projection.simtDevSha, '0000000');
+  assert.notEqual((await readJson(join(ws, 'alpha', MANIFEST_FILE))).projection.simtDevSha, '0000000');
+  assert.equal((await readJson(join(ws, 'beta', MANIFEST_FILE))).projection.simtDevSha, '0000000');
 });
 
 test('upgrade: --all without a workspace fails instead of quietly scoping to one repo', async () => {
@@ -620,7 +622,7 @@ test('upgrade: never commits or pushes (ADR-001)', async () => {
   const after = await exec('git', ['-C', join(ws, 'alpha'), 'rev-list', '--count', 'HEAD']).catch(() => ({ stdout: '0' }));
   assert.equal(String(before.stdout ?? '').trim(), String(after.stdout ?? '').trim());
   const { stdout } = await exec('git', ['-C', join(ws, 'alpha'), 'status', '--porcelain']);
-  assert.match(stdout, /simt-dev\.json/, 'the changes are left uncommitted for the human to review');
+  assert.match(stdout, cmd('{manifest}'), 'the changes are left uncommitted for the human to review');
 });
 // --- upgrade restamps every generated file, not only AGENTS.md -----------------
 
@@ -690,7 +692,7 @@ test('upgrade: a malformed AGENTS.md is a fault, while a malformed .mdc rule is 
   assert.equal(payload.summary.faults, 1);
   assert.deepEqual(payload.summary.skippedStates, ['malformed-region']);
   assert.match(payload.plans[0].remedy, /AGENTS\.md/);
-  assert.equal((await readJson(join(a, 'simt-dev.json'))).projection.simtDevSha, 'aaaaaaa');
+  assert.equal((await readJson(join(a, MANIFEST_FILE))).projection.simtDevSha, 'aaaaaaa');
   assert.equal(await readFile(mdc, 'utf8'), mdcBefore, 'one fault must not be repaired while the rest is left alone');
 });
 
@@ -706,7 +708,7 @@ test('upgrade refreshes the generated comment, not only the sha', async () => {
   assert.equal(adopt, 0);
 
   // Stand in for a manifest written by an earlier version: same shape, stale comment.
-  const file = join(root, 'simt-dev.json');
+  const file = join(root, MANIFEST_FILE);
   const manifest = JSON.parse(await readFile(file, 'utf8'));
   manifest.$comment = 'Rulings live in docs/decisions/ - each value cites its ADR.';
   await writeFile(file, JSON.stringify(manifest, null, 2) + '\n');

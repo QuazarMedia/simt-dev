@@ -7,6 +7,7 @@
 // until somebody's editor disagrees with their colleague's.
 
 import assert from 'node:assert/strict';
+import { cmd } from './fixture.mjs';
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -247,7 +248,7 @@ test('a deleted baseline is a blocking finding with a command, not a note', asyn
   const checked = await simt(['check'], root);
   assert.equal(checked.code, 1);
   assert.match(checked.out, /\.editorconfig/);
-  assert.match(checked.out, /simt-dev sync/);
+  assert.match(checked.out, cmd('{cli} sync'));
 });
 
 test('a repo whose .editorconfig has no region is reported, not silently left alone', async () => {
@@ -445,7 +446,7 @@ test('a deleted gitattributes is a blocking finding with a command, not a note',
   const checked = await simt(['check'], root);
   assert.equal(checked.code, 1);
   assert.match(checked.out, /\.gitattributes/);
-  assert.match(checked.out, /simt-dev sync/);
+  assert.match(checked.out, cmd('{cli} sync'));
 });
 
 test('a gitattributes with no region is reported, not silently left alone', async () => {

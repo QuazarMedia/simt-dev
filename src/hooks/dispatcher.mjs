@@ -25,6 +25,8 @@ import { promisify } from 'node:util';
 
 import { GATES } from './gates.mjs';
 import { resolveGate } from './resolve.mjs';
+import { CLI } from '../name.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 
 const exec = promisify(execFile);
 
@@ -56,8 +58,8 @@ export async function runGates(event, { root, manifest }) {
       gates: [],
       failed: false,
       notes: [
-        `nothing runs on ${event}: simt-dev.json declares no gates.${key}. That is a valid ` +
-          `answer when the repo has no tool for any of them - \`simt-dev check\` reports each ` +
+        `nothing runs on ${event}: ${MANIFEST_FILE} declares no gates.${key}. That is a valid ` +
+          `answer when the repo has no tool for any of them - \`${CLI} check\` reports each ` +
           `gate it could not run and why - but it is also what an unfiltered default looks like.`,
       ],
     };
@@ -78,7 +80,7 @@ export async function runGates(event, { root, manifest }) {
         name,
         status: 'failed',
         detail: `unknown gate; the shared dispatcher knows: ${Object.keys(GATES).sort().join(', ')}`,
-        remedy: `remove "${name}" from simt-dev.json gates.${key}`,
+        remedy: `remove "${name}" from ${MANIFEST_FILE} gates.${key}`,
         adr: null,
       });
       continue;

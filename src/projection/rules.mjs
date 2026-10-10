@@ -29,7 +29,7 @@ import { fingerprint, KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, frontmatterBlock, resolveSurfaces } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
-import { MANIFEST } from './manifest.mjs';
+import { manifestPath } from './manifest.mjs';
 import { BASELINES } from './baselines.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -183,7 +183,7 @@ export function isEligible(rule, signals, optedIn) {
 export async function readDeclared(root) {
   let parsed = {};
   try {
-    parsed = JSON.parse(await readFile(join(root, MANIFEST), 'utf8')) ?? {};
+    parsed = JSON.parse(await readFile(await manifestPath(root), 'utf8')) ?? {};
   } catch {
     parsed = {};
   }

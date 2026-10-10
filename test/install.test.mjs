@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { loadRegistry, REGISTRY_PATH, measureSkill } from '../src/graph/load.mjs';
 import { skillsDir, wrapFlat } from '../src/commands/skillsinstall.mjs';
 import { readManifest, MANIFEST } from '../src/projection/manifest.mjs';
-import { skillWorkspace, workspaceEnv } from './fixture.mjs';
+import { skillWorkspace, workspaceEnv, cmd } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
@@ -105,7 +105,7 @@ test('skills install: writes into the layout the repo already has', async () => 
 test('skills install: without a name it fails with usage', async () => {
   const { code, stderr } = await run(['skills', 'install']);
   assert.equal(code, 2);
-  assert.match(stderr, /usage: simt-dev skills install/);
+  assert.match(stderr, cmd('usage: {cli} skills install'));
 });
 
 test('skills install: an unknown skill exits USAGE and suggests a near match', async () => {
@@ -224,7 +224,7 @@ test('skills install: a local edit is reported as updated, never silently overwr
 
 // --- the manifest record -------------------------------------------------------
 
-test('skills install: records provenance in simt-dev.json localSkills', async () => {
+test('skills install: records provenance in {manifest} localSkills', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
   await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);

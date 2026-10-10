@@ -23,13 +23,13 @@ Requires **Node >= 22.20.0**.
 
 ```sh
 # pinned, per repository - what CI and a teammate both get
-npm i -D @quazarmedia/simt-dev@0.1.0
+npm i -D simt-dev@1.1.0
 
 # or globally, if you would rather not add a dependency
-npm i -g @quazarmedia/simt-dev@0.1.0
+npm i -g simt-dev@1.1.0
 
 # or with no install at all, for a one-off
-npx -y @quazarmedia/simt-dev@0.1.0 check
+npx -y simt-dev@1.1.0 check
 ```
 
 Pin the version. The tool writes a content digest into the files it generates, and an
@@ -38,13 +38,13 @@ unpinned upgrade changes them under you.
 ## Use
 
 ```sh
-simt-dev init            # adopt or scaffold this repository (dry-run; --yes to write)
-simt-dev doctor          # what this repo is, and whether its config is healthy
-simt-dev check           # the gate: projection drift, manifest validity, policy
-simt-dev sync --yes      # regenerate the projection
-simt-dev upgrade --yes   # move every consumer of this tool to this version
-simt-dev rules why ADR-042   # why a rule says what it says, and what was rejected
-simt-dev compare         # what changed across every repository that adopted it
+simt init            # adopt or scaffold this repository (dry-run; --yes to write)
+simt doctor          # what this repo is, and whether its config is healthy
+simt check           # the gate: projection drift, manifest validity, policy
+simt sync --yes      # regenerate the projection
+simt upgrade --yes   # move every consumer of this tool to this version
+simt rules why ADR-042   # why a rule says what it says, and what was rejected
+simt compare         # what changed across every repository that adopted it
 ```
 
 `init` and `sync` print a plan and write nothing without `--yes`. Neither commits or pushes.
@@ -54,7 +54,7 @@ simt-dev compare         # what changed across every repository that adopted it
 | Path | What |
 | --- | --- |
 | `AGENTS.md` | the projection, between `<!-- simt-dev:begin -->` and `<!-- simt-dev:end -->` |
-| `simt-dev.json` | your manifest: which gates to declare, which substitutions to fill |
+| `simt.json` | your manifest: which gates to declare, which substitutions to fill (renamed from `simt-dev.json`; the old name is still read, and moves on the next write) |
 | `.cursor/rules/*.mdc`, `.claude/rules/*.md`, `.agents/rules/*.md`, `.github/instructions/*.instructions.md` | one file per rule, written only for the harnesses that read their own directory |
 | `.editorconfig`, `.gitattributes` | baseline regions |
 | `.simt-hooks/` and `core.hooksPath` | the shared dispatcher, fail-closed |
@@ -85,7 +85,7 @@ agent and no pre-commit hook — better than one with a hook that runs nothing, 
 support, and this README will not pretend otherwise.
 
 Every behaviour that is a choice rather than a detail has a numbered record, and the
-records are readable with `simt-dev rules why <id>`. If the tool ever does something you
+records are readable with `simt rules why <id>`. If the tool ever does something you
 did not expect, that command is the shortest path from the symptom to the reason.
 
 ## Licence

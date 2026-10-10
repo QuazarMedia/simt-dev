@@ -25,6 +25,7 @@ import { GATES } from '../hooks/gates.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
 import { runGates } from '../hooks/dispatcher.mjs';
 import { CLI } from '../name.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 
 const exec = promisify(execFile);
 
@@ -44,9 +45,9 @@ async function runHook(args, flags) {
     return fail(`unknown hook event ${event}`, EXIT.USAGE, `known events: ${EVENTS.join(', ')}`);
   }
   const { manifest, exists, error } = await readManifest(root);
-  if (error) return fail(`${MANIFEST}: ${error}`, EXIT.CONFIG);
+  if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
   if (!exists) {
-    return fail(`${root} has no ${MANIFEST}; the hook cannot know its gate list`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
+    return fail(`${root} has no ${MANIFEST_FILE}; the hook cannot know its gate list`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
   }
 
   const result = await runGates(event, { root, manifest });
@@ -90,9 +91,9 @@ function wantsShim(manifest, exists, event) {
 
 async function installHooks(root, flags) {
   const { manifest, exists, error } = await readManifest(root);
-  if (error) return fail(`${MANIFEST}: ${error}`, EXIT.CONFIG);
+  if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
   if (!exists) {
-    return fail(`${root} has no ${MANIFEST}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
+    return fail(`${root} has no ${MANIFEST_FILE}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
   }
 
   const state = await readHooksState(root, { declaresGate: (e) => wantsShim(manifest, exists, e) });
@@ -126,7 +127,7 @@ async function installHooks(root, flags) {
         `BLOCKED  ${root} declares no gate it can run, so there is nothing to enforce.`,
         '         Installing shims anyway would stop running whatever git runs now',
         '         and replace it with a gate that checks nothing.',
-        'REMEDY  add the gates this repo can actually run to simt-dev.json, then re-run.',
+        `REMEDY  add the gates this repo can actually run to ${MANIFEST_FILE}, then re-run.`,
       ].join('\n'),
       { maxBytes: flags.maxBytes ?? 0 },
     );
@@ -167,7 +168,7 @@ async function installHooks(root, flags) {
         ...detail,
         `plan     would set ${HOOKS_PATH_KEY} = ${wants}`,
         '',
-        `BLOCKED  ${root} already runs git hooks that simt-dev did not write.`,
+        `BLOCKED  ${root} already runs git hooks that ${CLI} did not write.`,
         '         Taking over replaces that routing. Inspect the existing hooks first,',
         '         then re-run with --yes to accept, or set core.hooksPath yourself.',
       ].join('\n'),
@@ -245,7 +246,7 @@ function describeGates(manifest, key) {
 
 async function hooksStatus(root, flags) {
   const { manifest, exists, error } = await readManifest(root);
-  if (error) return fail(`${MANIFEST}: ${error}`, EXIT.CONFIG);
+  if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
 
   const state = await readHooksState(root, { declaresGate: (e) => wantsShim(manifest, exists, e) });
   const current = state.current;
@@ -290,7 +291,7 @@ async function hooksStatus(root, flags) {
   const lines = [
     `repo     ${root}`,
     `hooks    ${current ?? '(unset)'}  ${current === HOOKS_DIR ? '(simt-dev)' : current === null ? `(git default: ${state.liveDir})` : '(another routing)'}`,
-    `manifest ${exists ? `${MANIFEST} present` : `${MANIFEST} MISSING - run: ${CLI} init`}`,
+    `manifest ${exists ? `${MANIFEST_FILE} present` : `${MANIFEST_FILE} MISSING - run: ${CLI} init`}`,
     '',
   ];
   for (const i of installed) {
@@ -342,7 +343,7 @@ async function hooksStatus(root, flags) {
 
 function collectProblems({ exists, current, installed, manifest, foreign = [] }) {
   const problems = [];
-  if (!exists) problems.push(`no ${MANIFEST}; gates are undeclared`);
+  if (!exists) problems.push(`no ${MANIFEST_FILE}; gates are undeclared`);
   if (current !== HOOKS_DIR) problems.push(`core.hooksPath is ${current ?? '(unset)'}, expected ${HOOKS_DIR}`);
   for (const i of installed) {
     // A repo that declares no gate for an event has no reason to want a shim

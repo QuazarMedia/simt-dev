@@ -19,9 +19,10 @@
 
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { matchesGlob } from './resolve.mjs';
+import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 
 /** tag -> human-readable marker(s) that imply it. First match wins per tag. */
 const MARKERS = [
@@ -305,9 +306,17 @@ export async function fingerprint(root) {
     evidence.push('wear/');
   }
 
-  const manifest = names.has('simt-dev.json')
-    ? await readManifest(join(root, 'simt-dev.json'))
-    : null;
+  // Either spelling: a repository that adopted this tool has one of the two on disk,
+  // and a fingerprint that missed the manifest would silently lose the repo's own
+  // declared stack - which is the one input no amount of marker reading can replace.
+  const manifestName = names.has(MANIFEST_FILE)
+    ? MANIFEST_FILE
+    : names.has(MANIFEST_LEGACY)
+      ? MANIFEST_LEGACY
+      : null;
+  const manifest = manifestName === null
+    ? null
+    : await readManifest(join(root, manifestName));
 
   const stackList = [...stack].sort();
   const factList = [...facts].sort();
@@ -328,7 +337,7 @@ async function readManifest(path) {
   try {
     return JSON.parse(await readFile(path, 'utf8'));
   } catch {
-    return { error: 'simt-dev.json unparseable' };
+    return { error: `${basename(path)} unparseable` };
   }
 }
 

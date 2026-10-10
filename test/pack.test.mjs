@@ -27,12 +27,14 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { git } from './fixture.mjs';
+import { git, cmd } from './fixture.mjs';
+import { CLI, PACKAGE_NAME } from '../src/name.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 
 const exec = promisify(execFile);
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PACKAGE_NAME = '@quazarmedia/simt-dev';
+
 
 /**
  * Nothing outside the consumer may answer a question in this file.
@@ -84,7 +86,7 @@ async function run(command, args, options = {}) {
 
 /** Drive the installed binary. The path is the one npm wrote, not this checkout's. */
 function simt(root, args) {
-  return run(join(root, 'node_modules', '.bin', 'simt-dev'), args, { cwd: root, env: NO_ESTATE });
+  return run(join(root, 'node_modules', '.bin', CLI), args, { cwd: root, env: NO_ESTATE });
 }
 
 function installedRegistry(root) {
@@ -206,7 +208,7 @@ test('a packed install survives the whole adoption, and no writer writes unasked
 
   const preview = await simt(root, ['upgrade', '--root', '.']);
   assert.equal(preview.code, 0, preview.out);
-  assert.match(preview.out, /apply with: simt-dev upgrade --yes/);
+  assert.match(preview.out, cmd('apply with: {cli} upgrade --yes'));
   assert.equal(await readFile(agents, 'utf8'), stale, 'upgrade previewed and wrote the pin anyway');
 
   const applied = await simt(root, ['upgrade', '--root', '.', '--yes']);
@@ -248,7 +250,7 @@ test('a repo that cannot run a gate is not told it has one', async () => {
     assert.equal(added.code, 0, added.out);
   });
 
-  const manifest = JSON.parse(await readFile(join(root, 'simt-dev.json'), 'utf8'));
+  const manifest = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8'));
   // The gate is in package.json and the formatter is not installed, so declaring it
   // would hand the reader a `check` failure they cannot act on. Presence is not the
   // assertion here - the exact gate list is, because a manifest that declared

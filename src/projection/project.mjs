@@ -30,6 +30,7 @@ import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
 import { pointerState, pointerTargets, ruleTargets } from './targets.mjs';
 import { CLI } from '../name.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 import {
   desiredRegion,
   provenanceDigest,
@@ -192,7 +193,7 @@ export async function checkTargets(root, flags = {}) {
   const declared = await readDeclared(root);
   const resolved = resolveSurfaces(manifest, flags);
   for (const p of resolved.problems) {
-    findings.push({ file: 'simt-dev.json', status: 'invalid', detail: p, remedy: `known surfaces: ${SURFACE_IDS.join(', ')}` });
+    findings.push({ file: `${MANIFEST_FILE}`, status: 'invalid', detail: p, remedy: `known surfaces: ${SURFACE_IDS.join(', ')}` });
   }
   const rules = all.filter((r) => isEligible(r, new Set([...stack, ...facts]), declared.optIn));
 
@@ -489,7 +490,7 @@ export function readLimitFindings(text, file) {
         file,
         status: 'beyond-read-limit',
         detail: `BEYOND-READ-LIMIT: the region ends at byte ${state.endByte}, past ${limit.reader}'s ${limit.bytes}-byte read of ${file}`,
-        remedy: `set projection.place to "top" in simt-dev.json and run: ${CLI} sync --yes, or raise ${limit.reader}'s project_doc_max_bytes`,
+        remedy: `set projection.place to "top" in ${MANIFEST_FILE} and run: ${CLI} sync --yes, or raise ${limit.reader}'s project_doc_max_bytes`,
       });
     }
   }

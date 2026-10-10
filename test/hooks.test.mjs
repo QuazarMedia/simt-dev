@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
+
+import { PACKAGE_NAME } from '../src/name.mjs';
 import { after, test } from 'node:test';
 
 import { GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
@@ -12,7 +14,9 @@ import { hasScript, knownGates, resolveGate, resolveStagedTool } from '../src/ho
 import { runGates } from '../src/hooks/dispatcher.mjs';
 import { readCapability } from '../src/hooks/capability.mjs';
 import * as gateModule from '../src/projection/manifest.mjs';
-import { git } from './fixture.mjs';
+import { git, cmd } from './fixture.mjs';
+import { CLI } from '../src/name.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
@@ -32,7 +36,7 @@ async function fixture({ scripts, manifest, files = {}, binaries = [], formatter
     await mkdir(join(path, '..'), { recursive: true });
     await writeFile(path, body);
   }
-  if (manifest) await writeFile(join(root, 'simt-dev.json'), JSON.stringify(manifest, null, 2));
+  if (manifest) await writeFile(join(root, MANIFEST_FILE), JSON.stringify(manifest, null, 2));
   // `formatter: true` gives prettier a body that rewrites what it is handed, which is
   // the only shape that can show whether the hook re-staged the formatter's output -
   // an `exit 0` stub passes every assertion without exercising anything.
@@ -130,7 +134,7 @@ test('shim: SIMT_DEV_BIN naming a .mjs entry point is run through node', async (
   // case for anyone working on simt-dev itself.
   const root = await mkdtemp(join(tmpdir(), 'simt-shim-'));
   temps.push(root);
-  await writeFile(join(root, 'simt-dev.json'), JSON.stringify({ gates: { preCommit: [], prePush: [] } }));
+  await writeFile(join(root, MANIFEST_FILE), JSON.stringify({ gates: { preCommit: [], prePush: [] } }));
   await mkdir(join(root, '.git'), { recursive: true });
   await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
 
@@ -326,7 +330,7 @@ test('resolve, check and status agree on what a declared command does', async ()
   // while `check` reported the same gate unrunnable, because each read `gates.commands`
   // differently. One manifest, one answer.
   const root = await fixture({});
-  await writeFile(join(root, 'simt-dev.json'), JSON.stringify({ gates: { prePush: ['test'], commands: { test: './gradlew check' } } }));
+  await writeFile(join(root, MANIFEST_FILE), JSON.stringify({ gates: { prePush: ['test'], commands: { test: './gradlew check' } } }));
   const capability = await readCapability(root);
   assert.equal(capability.commands.test, './gradlew check');
 
@@ -573,7 +577,7 @@ test('hooks install: without --yes it prints the plan and the command that appli
 
   const { stdout } = await simt(['hooks', 'install', '--root', root], root);
   assert.match(stdout, /PLAN\s+nothing written/, stdout);
-  assert.match(stdout, /simt-dev hooks install --root .*--yes/, stdout);
+  assert.match(stdout, new RegExp(`${CLI} hooks install --root .*--yes`), stdout);
   assert.doesNotMatch(stdout, /WROTE/, 'a preview that claims to have written is lying about what it did');
   await assert.rejects(() => readFile(join(root, fileFor('pre-commit')), 'utf8'));
 
@@ -615,7 +619,7 @@ test('hooks status: exits non-zero and names every problem', async () => {
     (error) => {
       assert.equal(error.code, 1);
       const out = error.stdout + error.stderr;
-      assert.match(out, /simt-dev\.json MISSING/);
+      assert.match(out, cmd('{manifest} MISSING'));
       assert.match(out, /core\.hooksPath is \(unset\)/);
       assert.match(out, /pre-commit not installed/);
       return true;
@@ -691,8 +695,11 @@ test('a real git commit is blocked by a gate that cannot run', async () => {
   await git(['commit', '-q', '-m', 'seed', '--no-verify'], { cwd: root });
   await simt(['init', '--root', root, '--yes'], root).catch(() => {});
   await simt(['hooks', 'install', '--root', root, '--yes'], root);
-  await mkdir(join(root, 'node_modules', '@quazarmedia'), { recursive: true });
-  await exec('ln', ['-sfn', new URL('..', import.meta.url).pathname, join(root, 'node_modules', '@quazarmedia', 'simt-dev')]);
+  // Create the PARENT of the installed package, not the package itself: ln -sfn onto
+  // an existing directory nests the link inside it, and the shim then finds nothing.
+  const installed = join(root, 'node_modules', ...PACKAGE_NAME.split('/'));
+  await mkdir(dirname(installed), { recursive: true });
+  await exec('ln', ['-sfn', new URL('..', import.meta.url).pathname, installed]);
   await writeFile(join(root, '.gitignore'), 'node_modules\n');
   await writeFile(join(root, 'a.ts'), 'x\n');
   await exec('git', ['add', '-A'], { cwd: root });
@@ -831,7 +838,7 @@ test('hooks install: refuses to replace a hand-written hook and writes nothing',
     () => simt(['hooks', 'install', '--root', root], root),
     (error) => {
       assert.equal(error.code, 1);
-      assert.match(error.stdout, /BLOCKED .* already runs git hooks that simt-dev did not write/);
+      assert.match(error.stdout, new RegExp(`BLOCKED .* already runs git hooks that ${CLI} did not write`));
       assert.match(error.stdout, /git runs pre-commit at/);
       return true;
     },

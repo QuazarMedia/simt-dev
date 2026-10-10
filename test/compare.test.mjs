@@ -23,7 +23,8 @@ import { GATES } from '../src/hooks/gates.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { git } from './fixture.mjs';
+import { git, cmd } from './fixture.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
@@ -229,16 +230,16 @@ test('an unadopted repo is not also reported as lacking a region', async () => {
 });
 
 test('a broken manifest makes the row broken and names the parse failure', async () => {
-  const root = await gitRepo('broken', { 'simt-dev.json': '{ not json' });
+  const root = await gitRepo('broken', { [MANIFEST_FILE]: '{ not json' });
   const row = await buildRow(root, CONTEXT);
   assert.equal(row.adoption, 'broken');
   assert.equal(row.problems.length, 1);
-  assert.match(row.problems[0], /simt-dev\.json unparseable/);
+  assert.match(row.problems[0], cmd('{manifest} unparseable'));
 });
 
 test('an adopted repo with no region is a problem', async () => {
   const root = await gitRepo('adopted-noregion', {
-    'simt-dev.json': JSON.stringify({ id: 'adopted-noregion', gates: { preCommit: ['format'], prePush: ['test'] } }),
+    [MANIFEST_FILE]: JSON.stringify({ id: 'adopted-noregion', gates: { preCommit: ['format'], prePush: ['test'] } }),
     'AGENTS.md': '# mine\n',
   });
   const row = await buildRow(root, CONTEXT);
@@ -248,7 +249,7 @@ test('an adopted repo with no region is a problem', async () => {
 
 test('an adopted repo that routes hooks nowhere is a problem', async () => {
   const root = await gitRepo('adopted-nohooks', {
-    'simt-dev.json': JSON.stringify({ id: 'adopted-nohooks', gates: { preCommit: ['format'], prePush: ['test'] } }),
+    [MANIFEST_FILE]: JSON.stringify({ id: 'adopted-nohooks', gates: { preCommit: ['format'], prePush: ['test'] } }),
     'AGENTS.md': '# mine\n',
   });
   const row = await buildRow(root, CONTEXT);
@@ -258,7 +259,7 @@ test('an adopted repo that routes hooks nowhere is a problem', async () => {
 
 test('an adopted repo whose core.hooksPath points elsewhere names the existing value', async () => {
   const root = await gitRepo('adopted-otherhooks', {
-    'simt-dev.json': JSON.stringify({ id: 'adopted-otherhooks', gates: { preCommit: ['format'], prePush: ['test'] } }),
+    [MANIFEST_FILE]: JSON.stringify({ id: 'adopted-otherhooks', gates: { preCommit: ['format'], prePush: ['test'] } }),
     'AGENTS.md': '# mine\n',
   });
   await exec('git', ['config', 'core.hooksPath', 'scripts/git-hooks'], { cwd: root });
@@ -268,7 +269,7 @@ test('an adopted repo whose core.hooksPath points elsewhere names the existing v
 
 test('a gate the dispatcher does not know is a problem', async () => {
   const root = await gitRepo('badgate', {
-    'simt-dev.json': JSON.stringify({
+    [MANIFEST_FILE]: JSON.stringify({
       id: 'badgate',
       gates: { preCommit: ['format', 'warp-drive'], prePush: ['test'] },
     }),
@@ -282,7 +283,7 @@ test('a command-kind gate with no declared command is a problem', async () => {
   // The dispatcher fails closed on this at commit time, so compare must see it
   // before a commit does.
   const root = await gitRepo('nocommmand', {
-    'simt-dev.json': JSON.stringify({
+    [MANIFEST_FILE]: JSON.stringify({
       id: 'nocommmand',
       gates: { preCommit: ['codegen-drift'], prePush: ['test'], commands: {} },
     }),
@@ -294,7 +295,7 @@ test('a command-kind gate with no declared command is a problem', async () => {
 
 test('a declared command that no gate invokes is reported, not ignored', async () => {
   const root = await gitRepo('orphancmd', {
-    'simt-dev.json': JSON.stringify({
+    [MANIFEST_FILE]: JSON.stringify({
       id: 'orphancmd',
       gates: { preCommit: ['format'], prePush: ['test'], commands: { memory: 'scripts/memcheck.sh' } },
     }),
@@ -306,7 +307,7 @@ test('a declared command that no gate invokes is reported, not ignored', async (
 
 test('the same gate declared on both hooks is reported once, not twice', async () => {
   const root = await gitRepo('dupe', {
-    'simt-dev.json': JSON.stringify({
+    [MANIFEST_FILE]: JSON.stringify({
       id: 'dupe',
       gates: { preCommit: ['format'], prePush: ['format'] },
     }),
@@ -323,7 +324,7 @@ test('a hand-edited region is not reported as a version mismatch', async () => {
   // matches this simt-dev, telling the reader their pin is stale sends them
   // looking for a version problem that does not exist.
   const root = await gitRepo('hand-edited', {
-    'simt-dev.json': JSON.stringify({ id: 'hand-edited', gates: { preCommit: [], prePush: [] } }),
+    [MANIFEST_FILE]: JSON.stringify({ id: 'hand-edited', gates: { preCommit: [], prePush: [] } }),
     'AGENTS.md': '# mine\n',
   });
   const built = await adopt(root);
@@ -345,7 +346,7 @@ test('content added OUTSIDE the region is not drift', async () => {
   // round trip untouched, so a `compare` that called them drift would be
   // reporting the projection engine's failure as the author's mistake.
   const root = await gitRepo('contained', {
-    'simt-dev.json': JSON.stringify({ id: 'contained', gates: { preCommit: [], prePush: [] } }),
+    [MANIFEST_FILE]: JSON.stringify({ id: 'contained', gates: { preCommit: [], prePush: [] } }),
     'AGENTS.md': '# mine\n',
   });
   const built = await adopt(root);
@@ -356,7 +357,7 @@ test('content added OUTSIDE the region is not drift', async () => {
 
 test('a region from an older simt-dev IS reported as a version mismatch', async () => {
   const root = await gitRepo('behind', {
-    'simt-dev.json': JSON.stringify({ id: 'behind', gates: { preCommit: [], prePush: [] } }),
+    [MANIFEST_FILE]: JSON.stringify({ id: 'behind', gates: { preCommit: [], prePush: [] } }),
     'AGENTS.md': '# mine\n',
   });
   const built = await adopt(root);
@@ -369,7 +370,7 @@ test('a region from an older simt-dev IS reported as a version mismatch', async 
 
 test('a manifest stack that no marker supports is reported, not silently reconciled', async () => {
   const root = await gitRepo('liar', {
-    'simt-dev.json': JSON.stringify({
+    [MANIFEST_FILE]: JSON.stringify({
       id: 'liar',
       stack: ['python'],
       gates: { preCommit: [], prePush: [] },
@@ -385,7 +386,7 @@ test('a manifest stack that no marker supports is reported, not silently reconci
 test('a manifest that omits a detected tag is reported the other way', async () => {
   const root = await gitRepo('omits', {
     'pyproject.toml': '{}',
-    'simt-dev.json': JSON.stringify({ id: 'omits', stack: [], gates: { preCommit: [], prePush: [] } }),
+    [MANIFEST_FILE]: JSON.stringify({ id: 'omits', stack: [], gates: { preCommit: [], prePush: [] } }),
     'AGENTS.md': '# mine\n',
   });
   const row = await buildRow(root, CONTEXT);
@@ -395,7 +396,7 @@ test('a manifest that omits a detected tag is reported the other way', async () 
 test('a manifest that agrees with detection produces no stack problem', async () => {
   const root = await gitRepo('agrees', {
     'pyproject.toml': '{}',
-    'simt-dev.json': JSON.stringify({
+    [MANIFEST_FILE]: JSON.stringify({
       id: 'agrees',
       stack: ['python'],
       gates: { preCommit: [], prePush: [] },
@@ -548,7 +549,7 @@ test('compare --json: every row carries notes and foreignHooks, even when empty'
  */
 async function repoWithRuleFiles(name, files = {}) {
   const root = await gitRepo(name, {
-    'simt-dev.json': JSON.stringify({
+    [MANIFEST_FILE]: JSON.stringify({
       id: name,
       stack: ['node'],
       // copilot, not cursor: its reader does not read AGENTS.md (ADR-046), so it is
@@ -605,7 +606,7 @@ test('a stale rule file on an adopted repo is a problem, and it is named (S25)',
   // Named, not summarised: "something is stale" is not actionable and this command
   // exists to be acted on.
   assert.match(problem, /\.github\/instructions\/intake-questions\.instructions\.md/);
-  assert.match(problem, /run: simt-dev sync --yes/);
+  assert.match(problem, cmd('run: {cli} sync --yes'));
 });
 
 test('an unmanaged repo with stray rule files is still not a problem (S25)', async () => {
@@ -640,7 +641,7 @@ test('compare reports an orphaned rule file as a note, never a problem (S12)', a
   // remedy that is a lie. There is a note, naming the file and the delete.
   const root = await gitRepo('orphaned-rule-file', {
     'package.json': '{"name":"a","private":true}\n',
-    'simt-dev.json': JSON.stringify({
+    [MANIFEST_FILE]: JSON.stringify({
       id: 'orphaned-rule-file',
       stack: ['node'],
       surfaces: ['opencode', 'copilot'],

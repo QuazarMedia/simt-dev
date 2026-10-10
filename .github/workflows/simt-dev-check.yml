@@ -1,14 +1,14 @@
 # Written by simt-dev, and refreshed by it. This repository is simt-dev's
 # own, so this file is a copy of the template rather than a repository's own: a diff
 # here means the GATE changed, not that somebody hand-edited their CI. Anywhere else
-# this file is written once by `simt-dev init` and never touched again.
+# this file is written once by `simt init` and never touched again.
 #
 # To change what the gate does, change `src/ci/workflow.mjs` in the same commit and
-# run `simt-dev ci --yes`. Editing this file by hand works until the next template
+# run `simt ci --yes`. Editing this file by hand works until the next template
 # change overwrites it.
 #
 # The steps below run what this repository declares - its tests and its registry lint,
-# the same two `.githooks/pre-push` runs - and NOT `simt-dev check`. That check is
+# the same two `.githooks/pre-push` runs - and NOT `simt check`. That check is
 # red here by design: this AGENTS.md is written by hand and deliberately never
 # self-adopted, so the check reports it as unmanaged on every run. A gate that is red
 # the day it lands is worse than no gate.

@@ -25,6 +25,7 @@ import { manifestDrift, readManifest, unrunnableGates } from '../projection/mani
 import { readCapability } from '../hooks/capability.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { CLI } from '../name.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 
 /** Findings `sync` reports and does not fail on.
  *
@@ -92,7 +93,7 @@ export async function syncCommand(positional, flags) {
     return fail(
       `${result.mdcProblems.length} canonical .mdc rule(s) cannot be projected (${result.mdcProblems[0]})`,
       EXIT.FAIL,
-      'fix the reported substitution keys in simt-dev.json',
+      `fix the reported substitution keys in ${MANIFEST_FILE}`,
     );
   }
 

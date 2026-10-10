@@ -63,6 +63,7 @@ record's status line — never by editing the ruling in place.
 | [053](ADR-053-the-node-floor-is-22-20-0.md) | The Node floor is 22.20.0 | accepted |
 | [054](ADR-054-the-digest-covers-every-byte-that-leaves-the-package.md) | The digest covers every byte that leaves the package, and a cause is read off the body | accepted · amends ADR-032 |
 | [055](ADR-055-a-status-line-travels-so-it-may-not-name-a-location.md) | A status line travels, so it may not name a location; prose is the record's own argument | accepted |
+| [056](ADR-056-three-names-one-of-which-is-cheap-to-move.md) | The command, the package and the project are three names, and only one of them is cheap to move | accepted · amends ADR-023 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

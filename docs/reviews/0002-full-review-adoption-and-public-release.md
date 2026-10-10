@@ -133,7 +133,7 @@ record is written.
 | S15 | Help text and flags do not match the CLI | P2 | F | cli | no | S10 | Queued | re-verified |
 | S16 | Generated rule-file frontmatter never regenerates | P2 | F | projection | no | — | Queued | re-verified |
 | S17 | Declared gate commands split on whitespace | P2 | F | hooks | amend ADR-019 | — | Queued | re-verified |
-| S18 | Public-release packaging | P0 | R | package | yes (P4) | S01, S14, S39 | Queued | re-verified, +3 |
+| S18 | Public-release packaging | P0 | R | package | yes (P4) | S01, S14, S39 | Complete | `f6dd3de` + `3223d40` — the three additions: `files` and the tarball's README/LICENSE in `f6dd3de`, the public name in `3223d40` (ADR-056: unscoped `simt-dev`, command `simt`) |
 | S19 | Docs and ADR consistency | P2 | F | docs | no | — | Queued | 1 item done in `fd37ab5` |
 | S20 | Test gaps that let S01–S11 ship green | P1 | F | tests | **yes (ADR-041)** | lands with each slice | Complete | `732624d` (pack-install half; the Prettier half is blocked, see §4) |
 | S21 | Dead code, duplicate parsers, stale comments | P3 | E | hygiene | no | — | Queued | re-verified |
@@ -150,7 +150,7 @@ record is written.
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Complete | `c5bd2f5` |
 | S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Complete | `7153ea7` |
 | S34 | Folded rules break the heading hierarchy | P2 | F | projection | no | — | Complete | `9a2fb1e` |
-| S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (P5) | S18 | Queued | #20 |
+| S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (P5) | S18 | Queued | the name is decided (unscoped `simt-dev`, ADR-056); publishing is blocked on npm auth, and the estate roll-out (S36) now also carries the `simt.json` rename |
 | S36 | Estate roll-out: from 14 drifted to 14 enforced | P1 | A | adoption | amend ADR-018 | S01, S08, S10, S24, S35 | Queued | #3 |
 | S37 | A region past a harness's read limit is invisible to it | P1 | A | projection | no | — | Complete | `e984d12` |
 | S38 | Workspace token cost: 90 KB per turn, 72% repeated | P1 | A | projection | yes (P7) | S12 | Queued | #17 |
@@ -161,7 +161,7 @@ record is written.
 | S43 | MCP server is two spec revisions behind and returns text only | P2 | R | mcp | no | S05, S06 | Queued | #15 |
 | S44 | Agent Skills conformance is not linted | P2 | R | skills | no | — | Queued | 37/37 names conform |
 | S45 | Core and process rules speak one language and one harness | P2 | R | rules | no | S14 | Complete | `4ef3f21` |
-| S46 | The POSIX-only stance reaches an installer as `EBADPLATFORM` | P3 | R | docs | no (ADR-012 stands) | S18 | Queued | — |
+| S46 | The POSIX-only stance reaches an installer as `EBADPLATFORM` | P3 | R | docs | no (ADR-012 stands) | S18 | Accepted | `f6dd3de` — the README's platform section is where the stance lives, since npm will not let a package customise the error |
 | S47 | The Node floor is end-of-life | P2 | E | runtime | yes (P8) | — | Complete | `840f7aa` |
 | S48 | Workflow templates: tag-pinned actions, Node 20, an install that needs npm | P2 | E | ci | no | S35, S47 | Complete | `c2a81b2` (pins + macOS runner in; the install step stays with S35) |
 | S49 | Dependabot misses Gradle, submodules and seven more ecosystems | P2 | E | ci | no | — | Complete | `b2a3173` |
@@ -1186,11 +1186,11 @@ Today no repository meets 1, 2, 3, 4 or 8.
 1. **Publish** under the name chosen in S18, from CI, with `npm publish --provenance`. JS repos
    pin it as a devDependency; the shim already finds it in `node_modules`.
 2. **Repositories without npm** install it globally, pinned to the manifest's
-   `projection.version`: `npm i -g @quazarmedia/simt-dev@<version>` on machines and in CI. This
+   `projection.version`: `npm i -g simt-dev@<version>` on machines and in CI. This
    is a pinned install, not a package runner, so ADR-010 is not weakened; the ADR records the
-   distinction. The shim compares `simt-dev --version` with the pin and refuses on a mismatch.
-3. **Remedy strings per repo kind**: `npm i -D …@<v>` where `package.json` exists, otherwise
-   `npm i -g …@<v>` or `export SIMT_DEV_BIN=/path/to/simt-dev`.
+   distinction. The shim compares `simt --version` with the pin and refuses on a mismatch.
+3. **Remedy strings per repo kind**: `npm i -D simt-dev@<v>` where `package.json` exists, otherwise
+   `npm i -g simt-dev@<v>` or `export SIMT_DEV_BIN=/path/to/simt-dev.mjs`.
 4. **The consumer workflow** chooses the install step by repo kind: `npm ci` when the package is
    a declared devDependency, the pinned global install otherwise.
 5. **Estate stopgap until publishing:** on machines,

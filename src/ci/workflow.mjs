@@ -49,6 +49,7 @@ import { join, resolve } from 'node:path';
 import { PACKAGE_ROOT } from '../workspace.mjs';
 import { PACKAGE_NAME, WORKFLOW_FILE_NAME } from '../name.mjs';
 import { renderLocator } from '../locate.mjs';
+import { CLI } from '../name.mjs';
 
 /** Directory whose presence means this repo runs GitHub Actions. */
 export const WORKFLOWS_DIR = '.github/workflows';
@@ -88,7 +89,7 @@ function header(own) {
 # this file is written once by \`simt-dev init\` and never touched again.
 #
 # To change what the gate does, change \`src/ci/workflow.mjs\` in the same commit and
-# run \`simt-dev ci --yes\`. Editing this file by hand works until the next template
+# run \`${CLI} ci --yes\`. Editing this file by hand works until the next template
 # change overwrites it.
 #
 # The steps below run what this repository declares - its tests and its registry lint,
@@ -270,14 +271,14 @@ export function renderWorkflow({ own = false } = {}) {
     remedy: `REMEDY run: npm i -D ${PACKAGE_NAME}   (the gate runs from the pinned dependency)`,
   });
   return `${header(false)}${skeleton(
-    'simt-dev check',
+    `${CLI} check`,
     [
       uses('checkout'),
       setupNode(nodeFloor()),
       '      - name: install dependencies',
       '        # \`npm ci\` needs a lockfile; a repo without one is still gated, not skipped.',
       '        run: npm ci || npm install',
-      '      - name: simt-dev check',
+      `      - name: ${CLI} check`,
       '        run: |',
       indent(`set -eu\nROOT="\${GITHUB_WORKSPACE}"\n${locator}`, 10),
     ].join('\n'),

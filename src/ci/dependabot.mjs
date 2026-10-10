@@ -39,6 +39,7 @@ import { join } from 'node:path';
 
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { isOwnRepo, WORKFLOWS_DIR } from './workflow.mjs';
+import { CLI } from '../name.mjs';
 
 /** The one file this module writes. */
 export const DEPENDABOT_FILE = '.github/dependabot.yml';
@@ -133,7 +134,7 @@ function header(own) {
 # Anywhere else this file is written once by \`simt-dev init\` and never touched again.
 #
 # To change which ecosystems are watched, change \`src/ci/dependabot.mjs\` in the same
-# commit and run \`simt-dev ci --yes\`. Editing this file by hand works until the
+# commit and run \`${CLI} ci --yes\`. Editing this file by hand works until the
 # next template change overwrites it.
 #
 # The entries below are the ecosystems this repository has a manifest for. A repo

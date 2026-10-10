@@ -32,6 +32,7 @@ import { MANIFEST, MANIFEST_COMMENT, readManifest, writeManifest } from '../proj
 import { FAULT_STATES, planUpgrade, summariseUpgrade } from '../upgrade/plan.mjs';
 import { discover } from '../compare/discover.mjs';
 import { resolveWorkspace, targetRoot, WORKSPACE_REMEDY } from '../workspace.mjs';
+import { CLI } from '../name.mjs';
 
 export async function upgradeCommand(positional, flags) {
   const explicit = flags.root ?? positional[0];
@@ -154,7 +155,7 @@ export async function upgradeCommand(positional, flags) {
     note(`wrote    ${applied.length} repo${applied.length === 1 ? '' : 's'}: ${applied.join(', ')}  (${[...writtenFiles].join(', ') || 'nothing'} + ${MANIFEST})`);
     note('next     review the diff, then commit in each repo; simt-dev never commits or pushes (ADR-001)');
   } else if (summary.updated > 0) {
-    note(`dry-run  ${summary.updated} repo${summary.updated === 1 ? '' : 's'} would change; apply with: simt-dev upgrade --yes`);
+    note(`dry-run  ${summary.updated} repo${summary.updated === 1 ? '' : 's'} would change; apply with: ${CLI} upgrade --yes`);
   } else if (summary.skipped > 0) {
     note(`note     nothing to write; ${summary.skipped} repo${summary.skipped === 1 ? '' : 's'} skipped (see above)`);
   } else {

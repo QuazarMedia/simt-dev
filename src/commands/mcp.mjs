@@ -16,6 +16,7 @@ import { dirname, join } from 'node:path';
 import { EXIT, emit, fail, isJson } from '../output/index.mjs';
 import { TOOLS } from '../mcp/tools.mjs';
 import { PROTOCOL_VERSION, serve } from '../mcp/server.mjs';
+import { CLI } from '../name.mjs';
 
 export async function mcpCommand(positional, flags) {
   const { version } = await packageVersion();
@@ -35,7 +36,7 @@ export async function mcpCommand(positional, flags) {
         'No tool here writes. init, sync, hooks install, skills install and upgrade stay in the',
         'CLI, because each is meant to be read as a diff by a human before it touches anything.',
         '',
-        `serve them with: ${positional[0] ?? 'simt-dev mcp'}`,
+        `serve them with: ${positional[0] ?? `${CLI} mcp`}`,
       ].join('\n'),
       { maxBytes: flags.maxBytes ?? 0 },
     );
@@ -45,7 +46,7 @@ export async function mcpCommand(positional, flags) {
   try {
     return await serve(TOOLS, { version });
   } catch (error) {
-    return fail(`mcp transport failed: ${error.message}`, EXIT.FAIL, 'run: simt-dev mcp --list to check the surface loads');
+    return fail(`mcp transport failed: ${error.message}`, EXIT.FAIL, `run: ${CLI} mcp --list to check the surface loads`);
   }
 }
 

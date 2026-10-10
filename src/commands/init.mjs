@@ -33,6 +33,7 @@ import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
+import { CLI } from '../name.mjs';
 
 const run = promisify(execFile);
 
@@ -44,7 +45,7 @@ export async function initCommand(positional, flags) {
 
   const detected = await fingerprint(root);
   if (detected.error) {
-    return fail(`${root}: ${detected.error}`, EXIT.CONFIG, 'run: simt-dev init <path>');
+    return fail(`${root}: ${detected.error}`, EXIT.CONFIG, `run: ${CLI} init <path>`);
   }
 
   const sha = await provenanceDigest();
@@ -194,7 +195,7 @@ export async function initCommand(positional, flags) {
     return fail(
       `${root} contradicts ${summary.byAdr.join(', ')}`,
       EXIT.FAIL,
-      'edit the quoted lines, then rerun: simt-dev init --yes | or accept: simt-dev init --accept-conflicts --yes',
+      `edit the quoted lines, then rerun: ${CLI} init --yes | or accept: ${CLI} init --accept-conflicts --yes`,
     );
   }
 
@@ -210,7 +211,7 @@ export async function initCommand(positional, flags) {
     return fail(
       `${malformed.length} target(s) have a malformed generated region (${malformed[0].file}: ${malformed[0].reason})`,
       EXIT.FAIL,
-      `fix the markers at ${malformed[0].file}:${malformed[0].line}, then rerun: simt-dev init --yes`,
+      `fix the markers at ${malformed[0].file}:${malformed[0].line}, then rerun: ${CLI} init --yes`,
     );
   }
 
@@ -225,7 +226,7 @@ export async function initCommand(positional, flags) {
     note(
       dryRun
         ? 'dry-run  nothing written'
-        : `dry-run  nothing written; apply with: simt-dev init --yes${adoption ? ' (add --accept-conflicts to proceed despite conflicts)' : ''}`,
+        : `dry-run  nothing written; apply with: ${CLI} init --yes${adoption ? ' (add --accept-conflicts to proceed despite conflicts)' : ''}`,
     );
     return EXIT.OK;
   }
@@ -289,7 +290,7 @@ export async function initCommand(positional, flags) {
       return fail(
         `${target.file}: ${target.reason}`,
         EXIT.FAIL,
-        `fix the markers at ${target.file}:${target.line}, then rerun: simt-dev init --yes`,
+        `fix the markers at ${target.file}:${target.line}, then rerun: ${CLI} init --yes`,
       );
     }
     // A per-rule target lives in `.cursor/rules/`, `.claude/rules/`,
@@ -325,7 +326,7 @@ export async function initCommand(positional, flags) {
   if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
 
   note('');
-  note(`next     simt-dev sync --yes, then simt-dev check in CI. Commit when you are happy with the diff.`);
+  note(`next     ${CLI} sync --yes, then ${CLI} check in CI. Commit when you are happy with the diff.`);
   // The manifest declares what the repo promises to enforce. Nothing enforces it until
   // the dispatcher is installed, and `init` used to finish without saying so — so a
   // fully adopted, `check`-green repo could enforce nothing at all, which is the state
@@ -341,7 +342,7 @@ export async function initCommand(positional, flags) {
     note(
       state.complete
         ? `hooks    installed and current: ${gates.join(', ')}`
-        : `hooks    NOT ENFORCED yet - ${gates.join(', ')} ${verb} but no hook runs them. Install with: simt-dev hooks install --root ${root} --yes`,
+        : `hooks    NOT ENFORCED yet - ${gates.join(', ')} ${verb} but no hook runs them. Install with: ${CLI} hooks install --root ${root} --yes`,
     );
   }
   return EXIT.OK;
@@ -495,14 +496,14 @@ function render(payload, manifest) {
     lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow({ own: payload.ci.own }).length} bytes`);
     lines.push(
       payload.ci.own
-        ? `            this repository is simt-dev's own; simt-dev ci --yes refreshes this copy when the gate changes`
-        : `            runs simt-dev check where a pull request is merged; yours to edit after this`,
+        ? `            this repository is simt-dev's own; ${CLI} ci --yes refreshes this copy when the gate changes`
+        : `            runs ${CLI} check where a pull request is merged; yours to edit after this`,
     );
   } else if (payload.ci.action === 'refresh') {
     // init does not write it. `simt-dev ci` owns the template's own copy, and a
     // second writer would be a second answer to who owns it.
     lines.push(`  ${'refresh'.padEnd(9)} ${payload.ci.file}  ${payload.ci.reason}`);
-    lines.push(`            remedy: simt-dev ci --yes   (init does not write simt-dev's own copy)`);
+    lines.push(`            remedy: ${CLI} ci --yes   (init does not write simt-dev's own copy)`);
   } else if (payload.ci.action === 'skip') {
     lines.push(`  ${'skip'.padEnd(9)} ${payload.ci.file}  ${payload.ci.reason}`);
     lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);
@@ -517,12 +518,12 @@ function render(payload, manifest) {
     lines.push(`  ${'create'.padEnd(9)} ${db.file}  ${renderDependabot(db.facts, { stack: db.stack, own: db.own }).length} bytes`);
     lines.push(
       db.own
-        ? `            watches ${db.ecosystems.join(', ')}; simt-dev ci --yes refreshes this copy when the template changes`
+        ? `            watches ${db.ecosystems.join(', ')}; ${CLI} ci --yes refreshes this copy when the template changes`
         : `            watches ${db.ecosystems.join(', ') || 'github actions'} - one per manifest this repo has; yours to edit after this`,
     );
   } else if (db && db.action === 'refresh') {
     lines.push(`  ${'refresh'.padEnd(9)} ${db.file}  ${db.reason}`);
-    lines.push(`            remedy: simt-dev ci --yes   (init does not write simt-dev's own copy)`);
+    lines.push(`            remedy: ${CLI} ci --yes   (init does not write simt-dev's own copy)`);
   } else if (db && db.action === 'skip') {
     lines.push(`  ${'skip'.padEnd(9)} ${db.file}  ${db.reason}`);
     lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);

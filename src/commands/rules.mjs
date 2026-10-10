@@ -19,6 +19,7 @@ import { loadRules, select } from '../projection/project.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { byId, citations, loadDecisions, redactEstate } from '../decisions/index.mjs';
 import { nearMatches } from '../resolve/near.mjs';
+import { CLI } from '../name.mjs';
 
 const kb = (bytes) => `${(bytes / 1000).toFixed(1)}k`;
 
@@ -139,7 +140,7 @@ async function selectionFor(rules, root) {
 
 export async function showCommand(args, flags) {
   const id = args[0];
-  if (!id) return fail('rules show needs a rule id', EXIT.USAGE, 'usage: simt-dev rules show <id>');
+  if (!id) return fail('rules show needs a rule id', EXIT.USAGE, `usage: ${CLI} rules show <id>`);
 
   const { rules, broken } = await load(flags.root ?? null);
   const rule = rules.find((r) => r.id === id);
@@ -178,7 +179,7 @@ export async function showCommand(args, flags) {
  */
 export async function whyCommand(args, flags) {
   const what = args[0];
-  if (!what) return fail('rules why needs a rule id or an ADR id', EXIT.USAGE, 'usage: simt-dev rules why <rule-id|ADR-NNN>');
+  if (!what) return fail('rules why needs a rule id or an ADR id', EXIT.USAGE, `usage: ${CLI} rules why <rule-id|ADR-NNN>`);
 
   const { rules, broken } = await load(flags.root ?? null);
   const { ok, decisions, errors } = await loadDecisions();
@@ -261,7 +262,7 @@ async function adrDirection(adr, rules, decisions, flags) {
     // Was 'list them with: ls docs/decisions/' - a path relative to simt-dev's own
     // tree, which resolves to nothing in the repo the reader is standing in. The
     // remedy must be a command they can run.
-    return fail(`no decision record ${adr}`, EXIT.USAGE, 'list the known decisions with: simt-dev rules list');
+    return fail(`no decision record ${adr}`, EXIT.USAGE, `list the known decisions with: ${CLI} rules list`);
   }
 
   const restates = rules.filter((r) => citations(r.body).includes(d.id));
@@ -368,6 +369,6 @@ function unknown(id, rules) {
   return fail(
     `no rule with id "${id}"${near.length > 0 ? ` (did you mean ${near.join(', ')}?)` : ''}`,
     EXIT.USAGE,
-    'run: simt-dev rules list',
+    `run: ${CLI} rules list`,
   );
 }

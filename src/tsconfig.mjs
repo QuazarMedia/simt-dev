@@ -23,6 +23,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { fingerprint } from './resolve/fingerprint.mjs';
+import { CLI } from './name.mjs';
 
 export const TSCONFIG_BASE_FILE = 'tsconfig.base.json';
 export const TSCONFIG_FILE = 'tsconfig.json';
@@ -257,7 +258,7 @@ export async function checkTsconfig(root) {
       detail:
         'this repo is TypeScript and has no base file, so every strictness flag is whatever ' +
         'one person happened to write',
-      remedy: 'simt-dev init --yes',
+      remedy: `${CLI} init --yes`,
     });
   }
 

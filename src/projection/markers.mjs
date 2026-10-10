@@ -29,6 +29,7 @@
 // silently overrules them. No byte is removed, so nothing looks clobbered, and the
 // repo's setting simply stops taking effect. Putting the shared block first means
 // the repo always wins, and `check` reports a region that has been moved down.
+import { CLI } from '../name.mjs';
 export const STYLES = {
   html: {
     begin: '<!-- simt-dev:begin -->',
@@ -195,7 +196,7 @@ export function compose(body, { sha, sources = [] } = {}, style) {
   header.push(
     s.note(
       'Generated content. Do not edit by hand - your changes are overwritten.',
-      'Run `simt-dev sync --yes` to regenerate, or `simt-dev check` to see what is stale.',
+      `Run \`${CLI} sync --yes\` to regenerate, or \`${CLI} check\` to see what is stale.`,
     ),
   );
   const trimmed = body.replace(/\n+$/, '');

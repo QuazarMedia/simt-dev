@@ -6,6 +6,7 @@
 //
 // See docs/plans/0002-simt-dev-cli.md section 6.
 
+import { CLI } from '../name.mjs';
 /** Stable machine codes. A non-zero exit always carries one of these. */
 export const EXIT = {
   OK: 0,
@@ -18,8 +19,8 @@ export const EXIT = {
 
 const REMEDY = {
   [EXIT.USAGE]: 'run: simt-dev --help',
-  [EXIT.CONFIG]: 'run: simt-dev init',
-  [EXIT.REGISTRY]: 'run: simt-dev graph lint',
+  [EXIT.CONFIG]: `run: ${CLI} init`,
+  [EXIT.REGISTRY]: `run: ${CLI} graph lint`,
 };
 
 /**

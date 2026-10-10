@@ -29,6 +29,7 @@ import { GATES } from '../hooks/gates.mjs';
 import { dirtyPaths, parsePathList, readBody } from '../commands/skills.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { measureSkill } from '../graph/load.mjs';
+import { CLI } from '../name.mjs';
 
 const GATE_KINDS = new Map(Object.entries(GATES).map(([name, g]) => [name, g.kind]));
 
@@ -48,7 +49,7 @@ async function registry(args) {
   const { registry, errors, ok, verified, workspace } = await loadRegistry(REGISTRY_PATH, args ?? {});
   if (!ok) {
     throw Object.assign(new Error(errors[0]), {
-      remedy: 'run: simt-dev graph lint',
+      remedy: `run: ${CLI} graph lint`,
     });
   }
   return { registry, verified, workspace };
@@ -325,7 +326,7 @@ export const TOOLS = [
           // The record travels inside the installed package. A relative path would resolve
           // against the consuming repo and name a file that is not there, which is
           // worse than giving no path at all.
-          readWith: `simt-dev rules why ${d.id}`,
+          readWith: `${CLI} rules why ${d.id}`,
           supersededBy: d.supersededBy,
           supersedes: d.supersedes,
           partial: d.partial,

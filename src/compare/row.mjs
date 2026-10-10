@@ -22,6 +22,7 @@ import { loadRules, select } from '../projection/rules.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { readHooksState } from './hooksstate.mjs';
+import { CLI } from '../name.mjs';
 
 /**
  * @typedef {object} RepoRow
@@ -142,7 +143,7 @@ export async function buildRow(path, context) {
 
   if (adoption === 'adopted' && row.ruleFiles.stale.length > 0) {
     problems.push(
-      `${row.ruleFiles.stale.length} of ${row.ruleFiles.total} rule files are not current (${row.ruleFiles.stale.join(', ')}); run: simt-dev sync --yes`,
+      `${row.ruleFiles.stale.length} of ${row.ruleFiles.total} rule files are not current (${row.ruleFiles.stale.join(', ')}); run: ${CLI} sync --yes`,
     );
   }
 
@@ -165,21 +166,21 @@ export async function buildRow(path, context) {
       const sameSha = region.recordedSha === context.expectedSha;
       problems.push(
         sameSha
-          ? 'the generated region was hand-edited; restore it with: simt-dev sync --yes'
-          : `projection is ${region.recordedSha ?? '(no sha)'} but this simt-dev is ${context.expectedSha}; run: simt-dev sync --yes`,
+          ? `the generated region was hand-edited; restore it with: ${CLI} sync --yes`
+          : `projection is ${region.recordedSha ?? '(no sha)'} but this simt-dev is ${context.expectedSha}; run: ${CLI} sync --yes`,
       );
     } else if (region.status === 'malformed') {
-      problems.push(`generated region is malformed: ${region.detail}; run: simt-dev sync --yes`);
+      problems.push(`generated region is malformed: ${region.detail}; run: ${CLI} sync --yes`);
     } else if (region.status === 'unmanaged') {
-      problems.push('adopted but AGENTS.md has no generated region; run: simt-dev sync --yes');
+      problems.push(`adopted but AGENTS.md has no generated region; run: ${CLI} sync --yes`);
     } else if (region.status === 'absent') {
-      problems.push('adopted but AGENTS.md does not exist; run: simt-dev sync --yes');
+      problems.push(`adopted but AGENTS.md does not exist; run: ${CLI} sync --yes`);
     } else if (region.status === 'current' && row.pinnedSha && row.pinnedSha !== context.expectedSha) {
       // The region matches this simt-dev but the manifest pins an older one. The
       // next sync would stamp the newer SHA silently, so the pin is the thing
       // that is stale - and it is the value `simt-dev upgrade` reads.
       problems.push(
-        `manifest pins simt-dev ${row.pinnedSha}, this is ${context.expectedSha}; run: simt-dev upgrade`,
+        `manifest pins simt-dev ${row.pinnedSha}, this is ${context.expectedSha}; run: ${CLI} upgrade`,
       );
     }
   }
@@ -223,8 +224,8 @@ export async function buildRow(path, context) {
     if (!hooks.routed) {
       problems.push(
         hooks.current === null
-          ? 'no core.hooksPath; commits are ungated. run: simt-dev hooks install --yes'
-          : `core.hooksPath is "${hooks.current}", not the shared dispatcher; run: simt-dev hooks install --yes`,
+          ? `no core.hooksPath; commits are ungated. run: ${CLI} hooks install --yes`
+          : `core.hooksPath is "${hooks.current}", not the shared dispatcher; run: ${CLI} hooks install --yes`,
       );
     } else if (!hooks.complete) {
       for (const h of hooks.problems) problems.push(`hooks: ${h}`);

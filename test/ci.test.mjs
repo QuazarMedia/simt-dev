@@ -33,7 +33,8 @@ import {
 import { renderDependabot, planDependabot, DEPENDABOT_FILE } from '../src/ci/dependabot.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
 import { renderShim, EVENTS } from '../src/hooks/shim.mjs';
-import { PACKAGE_NAME, renderLocator } from '../src/locate.mjs';
+import { PACKAGE_NAME } from '../src/name.mjs';
+import { renderLocator } from '../src/locate.mjs';
 import { PACKAGE_ROOT } from '../src/workspace.mjs';
 import { EXIT } from '../src/output/index.mjs';
 import { assertClean } from './leaks.mjs';

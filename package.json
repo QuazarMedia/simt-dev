@@ -1,9 +1,10 @@
 {
   "name": "@quazarmedia/simt-dev",
-  "version": "0.0.0",
-  "description": "Developer and agent tooling for the SIMT ecosystem: one command to adopt a repo, and token-optimal skill discovery from any repo.",
-  "license": "UNLICENSED",
-  "private": true,
+  "version": "0.1.0",
+  "description": "Shared agent rules, skills and git hooks for a repository: one command adopts a repo, and every gate it declares is probed before it is written.",
+  "license": "Apache-2.0",
+  "author": "Said Elimam",
+  "private": false,
   "type": "module",
   "engines": {
     "node": ">=22.20.0"
@@ -21,11 +22,19 @@
     "graph",
     "rules",
     "docs/decisions",
-    "docs/plans",
-    "skills",
+    "CHANGELOG.md"
+  ],
+  "keywords": [
+    "agent",
     "agents",
-    "tooling",
-    "hooks"
+    "ai",
+    "codex",
+    "cursor",
+    "git-hooks",
+    "lint",
+    "llm",
+    "rules",
+    "skills"
   ],
   "scripts": {
     "test": "node --test test/",

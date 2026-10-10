@@ -34,7 +34,12 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  */
 export const PACKAGE_ROOT = resolve(HERE, '..');
 
-export const CONFIG_DIR = 'simt-dev';
+// Re-exported rather than re-spelled: the literal belongs to src/name.mjs with the
+// other LOCKED on-disk names, and a second copy here is a name that can drift from the
+// list of names that are allowed to move. Imported as well as re-exported, because a
+// bare `export { X } from` does not bind X here and every use below would fail.
+import { CONFIG_DIR } from './name.mjs';
+export { CONFIG_DIR };
 export const CONFIG_FILE = 'config.json';
 
 /**

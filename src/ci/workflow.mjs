@@ -47,13 +47,14 @@ import { readFile, stat } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
 import { PACKAGE_ROOT } from '../workspace.mjs';
-import { PACKAGE_NAME, renderLocator } from '../locate.mjs';
+import { PACKAGE_NAME, WORKFLOW_FILE_NAME } from '../name.mjs';
+import { renderLocator } from '../locate.mjs';
 
 /** Directory whose presence means this repo runs GitHub Actions. */
 export const WORKFLOWS_DIR = '.github/workflows';
 
 /** The one file this module writes. */
-export const WORKFLOW_FILE = `${WORKFLOWS_DIR}/simt-dev-check.yml`;
+export const WORKFLOW_FILE = `${WORKFLOWS_DIR}/${WORKFLOW_FILE_NAME}`;
 
 /**
  * Whether this repo is the one this code is running from.

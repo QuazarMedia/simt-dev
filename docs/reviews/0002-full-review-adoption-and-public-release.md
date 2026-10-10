@@ -163,7 +163,7 @@ record is written.
 | S45 | Core and process rules speak one language and one harness | P2 | R | rules | no | S14 | Complete | `4ef3f21` |
 | S46 | The POSIX-only stance reaches an installer as `EBADPLATFORM` | P3 | R | docs | no (ADR-012 stands) | S18 | Queued | — |
 | S47 | The Node floor is end-of-life | P2 | E | runtime | yes (P8) | — | Complete | `840f7aa` |
-| S48 | Workflow templates: tag-pinned actions, Node 20, an install that needs npm | P2 | E | ci | no | S35, S47 | Complete | pins + macOS runner in; the install step stays with S35 |
+| S48 | Workflow templates: tag-pinned actions, Node 20, an install that needs npm | P2 | E | ci | no | S35, S47 | Complete | `c2a81b2` (pins + macOS runner in; the install step stays with S35) |
 | S49 | Dependabot misses Gradle, submodules and seven more ecosystems | P2 | E | ci | no | — | Complete | `b2a3173` |
 | S50 | Rule files load eagerly where a surface could scope them | P2 | E | surfaces | yes (P7) | S12 | Queued | `surfaces.mjs` |
 | S51 | JSON output has no schema version and no compact form | P3 | E | output | no | S10 | Queued | `output/index.mjs:68` |

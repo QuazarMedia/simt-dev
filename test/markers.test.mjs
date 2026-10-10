@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
 
 import { compose, diff, inject, parse, BEGIN, END } from '../src/projection/markers.mjs';
-import { provenanceDigest } from '../src/projection/rules.mjs';
+import { provenanceDigest, provenanceInputs } from '../src/projection/rules.mjs';
+import { BASELINES } from '../src/projection/baselines.mjs';
 
 const HAND = ['# My Project', '', 'Hand-written guidance that must survive.', ''].join('\n');
 
@@ -178,9 +180,10 @@ test('markers: compose refuses to write a stamp it could not read back', () => {
 });
 
 test('markers: a content digest is a stamp the grammar accepts', async () => {
-  // The stamp is now a digest of `rules/` and `graph/` rather than a commit id, so it
-  // is 40 hex characters. This asserts the real value is readable by the real parser,
-  // which is the property that failed: writing and reading must share one grammar.
+  // The stamp is now a digest of the content that leaves the package rather than a
+  // commit id, so it is 40 hex characters. This asserts the real value is readable by
+  // the real parser, which is the property that failed: writing and reading must share
+  // one grammar.
   const digest = await provenanceDigest();
   assert.match(digest, /^[0-9a-f]{40}$/);
   const state = parse(compose('body', { sha: digest }));
@@ -188,6 +191,52 @@ test('markers: a content digest is a stamp the grammar accepts', async () => {
   // Stable across calls: a stamp that changed when nothing changed would report drift
   // on every run, which is the estate's own rule that a report must be a fact.
   assert.equal(await provenanceDigest(), digest);
+});
+
+test('markers: the digest covers every projected byte, baselines included (S53)', async () => {
+  // The set is the claim, and the set is what was wrong. `provenanceDigest` hashed
+  // `rules/` and `graph/` only, so the shared `.editorconfig` block — a string every
+  // adopting repository receives — changed without moving the stamp. `check` still saw
+  // it, because `check` compares bytes; `upgrade` did not, and reported the pin as
+  // unchanged while restamping a region whose content had moved.
+  //
+  // Both halves are asserted, and the second is the one that would have caught it: every
+  // baseline's rendered body is IN the hashed set, keyed by the file it becomes in the
+  // adopting repository rather than the module it is written in.
+  const inputs = await provenanceInputs();
+  const paths = inputs.map((i) => i.path);
+  for (const b of BASELINES) {
+    const entry = inputs.find((i) => i.path === `baselines/${b.file}`);
+    assert.ok(entry, `${b.file} leaves the package and is not in the digest`);
+    assert.equal(entry.bytes.toString('utf8'), b.body(), `${b.file} is hashed as something other than its body`);
+  }
+  // ...and nothing else from `src/` sneaked in with them. `src/` as a directory stays
+  // excluded: a refactor that projects identical bytes must not move anyone's stamp.
+  assert.equal(paths.some((p) => p.startsWith('src/')), false, paths.filter((p) => p.startsWith('src/')).join(', '));
+  // The two directories are still covered, so the ruling above did not narrow it.
+  assert.ok(paths.some((p) => p.startsWith('rules/')), 'the shared rules are not in the digest');
+  assert.ok(paths.some((p) => p.startsWith('graph/')), 'the skill registry is not in the digest');
+});
+
+test('markers: the digest is a function of exactly its inputs, in order (S53)', async () => {
+  // The negative control the previous test cannot give: a stamp that ignored one of its
+  // own entries would still pass every assertion about the entries. So this rebuilds the
+  // digest from the published list using the documented framing, and then changes one
+  // byte of one entry and requires the value to move.
+  const rehash = (inputs) => {
+    const h = createHash('sha256');
+    for (const { path, bytes } of inputs) {
+      h.update(`${path}:${bytes.length}:`);
+      h.update(bytes);
+    }
+    return h.digest('hex').slice(0, 40);
+  };
+  const inputs = await provenanceInputs();
+  assert.equal(rehash(inputs), await provenanceDigest());
+
+  const editor = inputs.findIndex((i) => i.path === 'baselines/.editorconfig');
+  const changed = inputs.map((i, n) => (n === editor ? { ...i, bytes: Buffer.from(`${i.bytes} `) } : i));
+  assert.notEqual(rehash(changed), await provenanceDigest(), 'a baseline body is in the list but not in the hash');
 });
 
 test('markers: compose emits begin before end and carries the header inside', () => {

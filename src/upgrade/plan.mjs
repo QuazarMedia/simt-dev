@@ -103,21 +103,39 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   const regionBehind = list.some((t) => t.action !== 'unchanged');
   // "Behind" is not "the rules changed", and the difference is what the message below
   // has to state. A target is `updated` for two unrelated reasons: its region BODY moved,
-  // which is a change to the rules, or its seam moved, which is this tool's own formatting
-  // around a body that was already correct (ADR-037). Both read as `updated`, so reading
-  // the cause off `action` reports a formatting repair as a change of policy — and this
-  // command's whole purpose is to say why a repository is behind, so a false cause here
-  // sends the reader to diff the rules when the rules did not move.
+  // which is a change to the content this tool projects, or its seam moved, which is this
+  // tool's own formatting around a body that was already correct (ADR-037). Both read as
+  // `updated`, so reading the cause off `action` reports a formatting repair as a change
+  // of policy — and this command's whole purpose is to say why a repository is behind, so
+  // a false cause here sends the reader to diff the rules when the rules did not move.
   //
   // The comparison is body to body rather than byte to byte, because the region header
   // carries the stamp: a stamp-only move is what `pinBehind` already reports separately,
   // and folding it in here would make every pin bump claim the rules changed.
-  const rulesChanged = list.some((t) => {
+  //
+  // And the two kinds of projected content are counted apart, because they are different
+  // files to diff. A baseline region is not a rule: `.editorconfig` and `.gitattributes`
+  // are settings a repository owns, and telling a reader the RULES changed when only an
+  // indentation setting did sends them to the wrong file (S53). It was reachable because
+  // the stamp could not see a baseline body change at all, so the pin reported unchanged
+  // and the only cause left to report was the one that was least true.
+  const moved = (t) => {
     if (t.action === 'unchanged' || t.action === 'added') return t.action === 'added';
     const before = (t.previousBody ?? '').replace(/^\n+/, '').replace(/\n+$/, '');
     const after = (t.body ?? '').replace(/^\n+/, '').replace(/\n+$/, '');
     return before !== after;
-  });
+  };
+  const rulesChanged = list.some((t) => t.kind !== 'baseline' && moved(t));
+  const baselineChanged = list.some((t) => t.kind === 'baseline' && moved(t));
+  // The cause, as the sentence the reader is sent to act on. Null means no projected body
+  // moved, so whatever is behind this repository is a seam, a stamp or the manifest.
+  const cause = rulesChanged && baselineChanged
+    ? 'the rules and a baseline changed'
+    : rulesChanged
+      ? 'the rules changed'
+      : baselineChanged
+        ? 'a baseline changed'
+        : null;
   const pinBehind = base.pinnedSha !== sha;
   // A generated field of the manifest can alone be stale. `$comment` is written by
   // simt-dev and describes this file's provenance, so an adopted repo whose regions
@@ -132,26 +150,28 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   }
 
   // Why it moved is worth stating, and the causes are different problems even though
-  // one command fixes all of them: content drift means the RULES changed, a seam repair
-  // means they did not and only the formatting around them was wrong, a pin-only move
+  // one command fixes all of them: content drift means a projected BODY changed, a seam
+  // repair means none did and only the formatting around one was wrong, a pin-only move
   // means the region was already correct and only its stamp was stale, and a
   // generated-field move means nothing about the repo changed and this tool's own
   // wording did. The transition itself is printed on its own `pin` line, so `detail`
   // names the cause without repeating it.
+  // `cause` is null on the last branch and can only be: a body that moved is a target
+  // whose action is not `unchanged`, so "no region behind" already implies no cause.
   return {
     ...base,
     state: 'behind',
     action: 'updated',
     detail: pinBehind
       ? regionBehind
-        ? rulesChanged
-          ? 'pin moved and region restamped (the rules changed)'
-          : 'pin moved and region repaired; the rules were already correct'
+        ? cause === null
+          ? 'pin moved and region repaired; the rules were already correct'
+          : `pin moved and region restamped (${cause})`
         : 'pin moved; the region was already current'
       : regionBehind
-        ? rulesChanged
-          ? 'region restamped; the pin was already current (the rules changed)'
-          : 'region repaired; the pin and the rules were already current'
+        ? cause === null
+          ? 'region repaired; the pin and the rules were already current'
+          : `region restamped; the pin was already current (${cause})`
         : 'manifest metadata refreshed; the rules and the pin were already current',
   };
 }

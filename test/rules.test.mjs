@@ -122,7 +122,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // Measured before the fix: eight clauses across four records, of which the parser
   // found none. Listed by id rather than by count so a record that stops declaring its
   // supersession is a visible change rather than a smaller number.
-  assert.deepEqual(shapes, ['ADR-016', 'ADR-021', 'ADR-023', 'ADR-025', 'ADR-042']);
+  assert.deepEqual(shapes, ['ADR-016', 'ADR-021', 'ADR-023', 'ADR-025', 'ADR-032', 'ADR-042']);
   for (const d of decisions) {
     for (const p of d.partial) {
       assert.ok(['superseded', 'narrowed', 'withdrawn'].includes(p.kind), `${d.id}: unknown kind ${p.kind}`);
@@ -142,6 +142,10 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // rather than a gap to fill: it is carried as null and reported as unnumbered.
   assert.deepEqual(byId_.get('ADR-016').partial, [{ ruling: null, kind: 'narrowed', by: 'ADR-045' }]);
   assert.deepEqual(byId_.get('ADR-042').partial, [{ ruling: 1, kind: 'superseded', by: 'ADR-053' }]);
+  // ADR-032's coverage claim was narrowed rather than overturned, and the difference is
+  // the kind of thing a wrong `superseded`/`narrowed` costs a reader: `narrowed` says the
+  // other two rulings still stand, and they are the ones about reading and writing a stamp.
+  assert.deepEqual(byId_.get('ADR-032').partial, [{ ruling: 1, kind: 'narrowed', by: 'ADR-054' }]);
 });
 
 test('a partial supersession never becomes a whole one', async () => {
@@ -157,6 +161,7 @@ test('a partial supersession never becomes a whole one', async () => {
   assert.equal(index.get('ADR-021').supersededBy, null);
   assert.equal(index.get('ADR-016').supersededBy, null);
   assert.equal(index.get('ADR-042').supersededBy, null);
+  assert.equal(index.get('ADR-032').supersededBy, null);
   // And the whole-record case still works, because the rule is anchored at the start
   // of the status rather than dropped.
   assert.equal(index.get('ADR-011').supersededBy, 'ADR-012');

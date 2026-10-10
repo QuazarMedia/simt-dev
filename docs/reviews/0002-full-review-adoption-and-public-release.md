@@ -1068,6 +1068,30 @@ from the stamp, so a stamp that cannot see the change cannot produce a false cau
 **Accept.** With only a baseline body changed, `upgrade` names the baseline and not the rules;
 a change to `src/` that touches no projected byte leaves every stamp where it was.
 
+> **Resolution.** Settled as **ADR-054**, which amends ADR-032 rather than reading it as
+> having been wrong about everything else. Both halves of the finding were real and both had
+> to land together; the second one is the one that would have been forgotten.
+>
+> The digest now covers the rendered baseline bodies alongside `rules/` and `graph/`, keyed by
+> the file each becomes (`.editorconfig`, `.gitattributes`) rather than the module that defines
+> it — a source is its content (ADR-015), and these two are content every adopting repository
+> receives. `src/` stays excluded *as a directory*: the exclusion narrowed from a path to a
+> rule about content, which is a different thing, and the test asserts no `src/` entry appears
+> in the hashed set so it cannot be re-widened by a later import.
+>
+> `provenanceInputs()` is exported and `provenanceDigest()` hashes what it returns, because
+> "covers the right things" is a claim about a set and a set assembled only inside the
+> function that hashes it cannot be asserted from outside — the test would have had to mutate
+> the package to get an answer. Reading the list and hashing it in one place is ADR-042's
+> ruling 3 applied to the stamp.
+>
+> The wording fix is the half that generalises. `upgrade` counts a baseline body move and a
+> rule body move apart and names one, both, or neither, reading `kind: 'baseline'` off the
+> targets `plan` produced rather than recomputing which file is a baseline. "Neither" stays a
+> real answer, because a seam repair, a stamp-only move and a generated-field move are three
+> problems one command fixes and the sentence distinguishing them is the reason the command
+> exists at all.
+
 ## 6. SIMT adoption
 
 What "adopted" must mean, per repository, when this group is done:

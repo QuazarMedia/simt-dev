@@ -30,6 +30,7 @@ import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, frontmatterBlock, resolveSurfaces } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
 import { MANIFEST } from './manifest.mjs';
+import { BASELINES } from './baselines.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const ROOT = resolve(HERE, '..', '..');
@@ -55,11 +56,16 @@ const RULES_DIR = join(ROOT, 'rules');
  * changed" when they had not and overwriting a good pin with `unknown` on `--yes`,
  * unrecoverably. That is the failure this replaces (ADR-032).
  *
- * The digest covers `rules/` and `graph/` because that is the set of bytes whose
- * change moves a consumer's projection: the rule bodies, the per-ecosystem profiles,
- * the Cursor rule files, and the skill registry. It deliberately excludes `src/` -
- * a refactor that changes no rule and no registry entry produces byte-identical
- * regions, and stamping those consumers would report drift where there is none.
+ * The digest covers every byte string that leaves the package, and nothing else. That
+ * set is `rules/` and `graph/` on disk plus the RENDERED baseline bodies: the shared
+ * `.editorconfig` and `.gitattributes` blocks are strings a repository receives, so by
+ * ADR-015's rule a source is identified by its content rather than by the file it
+ * happens to live in, and a body defined in `src/` is a source like any other.
+ *
+ * It deliberately excludes `src/` as a directory. A refactor that changes no rule, no
+ * registry entry and no baseline body produces byte-identical output, and stamping those
+ * consumers would report drift where there is none - which is the estate's own rule that
+ * a report must be a fact.
  *
  * Sorted path-then-bytes, so the value depends on content and not on readdir order,
  * and length-prefixed so no rename can be crafted to collide with a rename that did
@@ -67,15 +73,38 @@ const RULES_DIR = join(ROOT, 'rules');
  */
 export async function provenanceDigest() {
   const hash = createHash('sha256');
-  for (const dir of ['rules', 'graph']) {
-    const entries = await walk(join(ROOT, dir));
-    for (const rel of entries) {
-      const bytes = await readFile(join(ROOT, dir, rel));
-      hash.update(`${dir}/${rel}:${bytes.length}:`);
-      hash.update(bytes);
-    }
+  for (const { path, bytes } of await provenanceInputs()) {
+    hash.update(`${path}:${bytes.length}:`);
+    hash.update(bytes);
   }
   return hash.digest('hex').slice(0, 40);
+}
+
+/**
+ * The exact byte strings `provenanceDigest` hashes, as `{path, bytes}` in hash order.
+ *
+ * Exported because "the digest covers the right things" is a claim about a SET, and a
+ * set that is only ever assembled inside the function that hashes it cannot be
+ * asserted from outside: the test would have to mutate the package to see the answer.
+ * This is the list, so a test can ask what is in it, and the rendering is one function
+ * both the digest and that test read - the arrangement ADR-042's ruling 3 settled on.
+ *
+ * @returns {Promise<{path: string, bytes: Buffer}[]>}
+ */
+export async function provenanceInputs() {
+  const inputs = [];
+  for (const dir of ['rules', 'graph']) {
+    for (const rel of await walk(join(ROOT, dir))) {
+      inputs.push({ path: `${dir}/${rel}`, bytes: await readFile(join(ROOT, dir, rel)) });
+    }
+  }
+  // Last, and keyed by the FILE it becomes in the adopting repository rather than the
+  // module it is written in: the stamp answers what content produced those bytes, and
+  // `.editorconfig` is the name a reader of a generated region recognises.
+  for (const b of BASELINES) {
+    inputs.push({ path: `baselines/${b.file}`, bytes: Buffer.from(b.body()) });
+  }
+  return inputs;
 }
 
 /** @returns {Promise<string[]>} repo-relative paths, sorted, directories omitted. */

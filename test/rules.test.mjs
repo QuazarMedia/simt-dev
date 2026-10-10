@@ -3,11 +3,13 @@ import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdtemp, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { citations, byId, DECISIONS_DIR, loadDecisions } from '../src/decisions/index.mjs';
+import { citations, byId, DECISIONS_DIR, loadDecisions, redactInternalPaths } from '../src/decisions/index.mjs';
+import { initCommand } from '../src/commands/init.mjs';
 import { loadRules, select } from '../src/projection/project.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
 
@@ -146,6 +148,95 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // the kind of thing a wrong `superseded`/`narrowed` costs a reader: `narrowed` says the
   // other two rulings still stand, and they are the ones about reading and writing a stamp.
   assert.deepEqual(byId_.get('ADR-032').partial, [{ ruling: 1, kind: 'narrowed', by: 'ADR-054' }]);
+});
+
+// --- what travels --------------------------------------------------------------
+
+test('no status line names a location that resolves only inside this package (S54)', async () => {
+  // `rules why` output is read inside a repository that owns none of this package's
+  // files, and a path that resolves here resolves nowhere there. The review measured two
+  // records and called it pre-existing; the corpus says five, and three of them were
+  // written after that measurement — so the guard is the corpus, not the count.
+  //
+  // `existsSync` against the package root is the test: it is the definition of "resolves
+  // only here", and it needs no list of directories to go stale.
+  const root = resolve(HERE, '..');
+  const { decisions } = await loadDecisions();
+  for (const d of decisions) {
+    for (const token of new Set(d.status.match(/[\w.@/-]*[\w-]+\/[\w./-]+/g) ?? [])) {
+      assert.equal(
+        existsSync(join(root, token)),
+        false,
+        `${d.id} prints "${token}" in its status, which resolves inside this package and in no repository that adopts it`,
+      );
+    }
+  }
+});
+
+test('the prose locations left in place are counted, so the decision cannot go unnoticed (S54)', async () => {
+  // The ruling covers the STATUS line and deliberately not the record's own argument, and
+  // the reason is written down rather than assumed: `docs/plans/` means this package's
+  // plan in one record and the adopting repository's own plans in another, and redaction
+  // would have to guess. `redactEstate` cuts the other way and redacts prose — the
+  // difference is that an estate name is never the reader's business either, whereas a
+  // path in an argument may legitimately be.
+  //
+  // So the cost of that decision is a number, not a shrug. Asserting it here means a
+  // record that stops quoting a location moves this count, and a record that starts
+  // quoting one is visible in the same diff. ADR-055 is on the list for the same reason
+  // the others are: the record that explains the ruling quotes the collision it turned on.
+  const root = resolve(HERE, '..');
+  const { decisions } = await loadDecisions();
+  const leaking = [];
+  for (const d of decisions) {
+    const prose = [...d.summary.ruled, ...d.summary.rejected].join('\n');
+    if ([...new Set(prose.match(/[\w.@/-]*[\w-]+\/[\w./-]+/g) ?? [])].some((t) => existsSync(join(root, t)))) {
+      leaking.push(d.id);
+    }
+  }
+  assert.deepEqual(leaking, ['ADR-016', 'ADR-023', 'ADR-026', 'ADR-033', 'ADR-035', 'ADR-041', 'ADR-055']);
+});
+
+test('a status line is scrubbed, and a command that travels is not (S54)', () => {
+  // The redaction is a predicate over the STATUS line, where every clause is a statement
+  // about this package by construction. Prose is left alone, because `docs/plans/` means
+  // this package's plan in one record and the reader's own plans in another and no amount
+  // of reading the string separates them.
+  assert.match(redactInternalPaths('accepted · affects src/resolve/resolve.mjs and graph lint'), /a file in this tool/);
+  assert.match(redactInternalPaths('accepted · affects `graph/skills.graph.json`'), /a file in this tool/);
+  // `graph lint` is a command the reader can run, and the separator requirement is the
+  // only reason it survives a directory that happens to share its name.
+  assert.equal(redactInternalPaths('accepted · run: graph lint'), 'accepted · run: graph lint');
+  // Paths the reader HAS are not redacted. A gate that names a file the adopting
+  // repository owns is doing its job, and scrubbing it would be the opposite defect.
+  for (const travels of ['.editorconfig', '.github/workflows/simt-dev-check.yml', 'simt-dev.json', 'AGENTS.md', 'package.json']) {
+    assert.equal(redactInternalPaths(`accepted · affects ${travels}`), `accepted · affects ${travels}`);
+  }
+});
+
+test('the redaction list is what `init` actually writes, not what a record remembers (S54)', async () => {
+  // The predicate exempts three names on the strength of a comment saying they belong to
+  // the adopting repository. That comment is a belief, and a belief in a list is a value
+  // nobody executes — so it is executed here, against a real adoption.
+  //
+  // If `init` starts writing a fourth top-level file, this fails and the fix is to add it
+  // to the list; if a name on the list stops being written, the redaction is costing a
+  // file the reader does have. Either way the list cannot rot silently.
+  const root = await scratch({ 'package.json': '{"name":"fx","private":true}\n', 'README.md': '# fx\n' });
+  await mkdir(join(root, '.github', 'workflows'), { recursive: true });
+  await writeFile(join(root, '.github', 'workflows', 'build.yml'), 'name: build\n');
+  assert.equal(await initCommand([root], { yes: true, acceptConflicts: true }), 0);
+
+  const written = (await readdir(root)).filter((n) => !n.startsWith('.'));
+  const files = written.filter((n) => n.includes('.'));
+  // `package.json` and `README.md` were already there; the tool's own additions are the
+  // rest, and every one of them must be a name the predicate exempts.
+  const added = files.filter((n) => !['package.json', 'README.md'].includes(n));
+  assert.ok(added.includes('AGENTS.md') && added.includes('simt-dev.json'), added.join(', '));
+  for (const name of added) {
+    assert.match(redactInternalPaths(`accepted · affects ${name}`), new RegExp(`^accepted · affects ${name.replace('.', '\\.')}$`),
+      `${name} is written into every adopting repository and would be redacted as if it were this package's`);
+  }
 });
 
 test('a partial supersession never becomes a whole one', async () => {

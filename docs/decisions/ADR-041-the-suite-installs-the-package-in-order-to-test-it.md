@@ -1,6 +1,7 @@
 # ADR-041 — The suite installs the package in order to test it
 
-Status: **accepted** · 2026-10-08 · affects `test/pack.test.mjs` and what the suite may assume about `npm`
+Status: **accepted** · 2026-10-08
+**Affects:** `test/pack.test.mjs` and what the suite may assume about `npm`.
 
 ## Context
 

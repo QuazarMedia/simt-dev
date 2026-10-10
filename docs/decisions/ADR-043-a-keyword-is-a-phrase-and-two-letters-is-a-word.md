@@ -1,6 +1,7 @@
 # ADR-043 — A keyword is a phrase, and two letters is a word
 
-Status: **accepted** · 2026-10-08 · affects `src/resolve/resolve.mjs` and what `graph lint` rejects
+Status: **accepted** · 2026-10-08
+**Affects:** `src/resolve/resolve.mjs` and what `graph lint` rejects.
 
 ## Context
 

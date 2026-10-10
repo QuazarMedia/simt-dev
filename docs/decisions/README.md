@@ -62,6 +62,7 @@ record's status line — never by editing the ruling in place.
 | [052](ADR-052-a-dependency-is-counted-against-the-budget-and-there-is-one-budget.md) | A dependency is counted against the budget, and there is one budget | accepted |
 | [053](ADR-053-the-node-floor-is-22-20-0.md) | The Node floor is 22.20.0 | accepted |
 | [054](ADR-054-the-digest-covers-every-byte-that-leaves-the-package.md) | The digest covers every byte that leaves the package, and a cause is read off the body | accepted · amends ADR-032 |
+| [055](ADR-055-a-status-line-travels-so-it-may-not-name-a-location.md) | A status line travels, so it may not name a location; prose is the record's own argument | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -380,6 +381,23 @@ the digest now covers the rendered baseline bodies and names them by the file th
 and `upgrade` reads its cause off the projected body with the two kinds of content counted
 apart. The second half is the one worth keeping, because it is what makes a stamp that
 cannot see a change stop being able to invent one.
+
+ADR-055 is the same rule applied to the record index, and it is worth reading for a finding
+that grew while it was being fixed. The review filed this as "two records out of
+forty-eight, pre-existing". Re-measuring the corpus said five — three of them written after
+that measurement, including two in this cycle, by the same convention each time: put the
+clause in `Status:`, because `Status:` is the line the tool reads. It is the one line
+guaranteed to travel, into repositories that own none of this package's files, so the path
+arrives there resolving against nothing. `Affects:` is the field for it and is deliberately
+not printed; five records had one available and used the other. What makes the record worth
+keeping is ruling four and its cost: the ruling covers `Status:` and deliberately not the
+record's own argument, because `docs/plans/` means this package's plan in one record and the
+reader's own plans in another, and four records use that exact string for both — so a
+redaction there would corrupt them to protect six. Six prose leaks therefore remain, and a
+test asserts the count and the ids rather than leaving them as an unmeasured shrug. The
+docstring that used to claim the whole output "never contains a path" is withdrawn: it
+asserted a property the function never had, which is the same defect as a citation that
+cannot be resolved — a sentence that reads like evidence and carries none.
 
 ## The rule these records enforce
 

@@ -15,11 +15,67 @@
 // see and exactly what an empty output would hide.
 
 import { readFile, readdir } from 'node:fs/promises';
+import { readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DECISIONS_DIR = resolve(HERE, '..', '..', 'docs', 'decisions');
+const PACKAGE_ROOT = resolve(HERE, '..', '..');
+
+/**
+ * Top-level files this tool writes into a repository that adopts it.
+ *
+ * Read one at a time, because each is somebody else's decision and none of them is
+ * derivable here: `AGENTS.md` is the primary target, `simt-dev.json` the manifest,
+ * `package.json` belongs to the adopting repository rather than to us. Anything at the
+ * top level NOT on this list is this package's own tree and does not exist at the root
+ * of a repository that ran `simt-dev init`.
+ *
+ * The list is asserted against a real `init` in `rules.test.mjs`, because a name that
+ * drifts onto this list stops being redacted and a name that drifts off it starts
+ * redacting a file the reader does have.
+ */
+const INHERITED = ['AGENTS.md', 'package.json', 'simt-dev.json'];
+
+/**
+ * Matches a location that resolves inside this package and nowhere a reader stands.
+ *
+ * Derived from the package root rather than written out, so a directory added tomorrow is
+ * covered by the same rule. Dot-entries are excluded because the tool writes into a
+ * consumer's `.github/` and `.cursor/` and those paths do travel; `INHERITED` is excluded
+ * because those files are the reader's own.
+ */
+let internalPath = null;
+function internalPathPattern() {
+  if (internalPath !== null) return internalPath;
+  const names = readdirSync(PACKAGE_ROOT, { withFileTypes: true })
+    .filter((e) => !e.name.startsWith('.') && !INHERITED.includes(e.name))
+    .map((e) => e.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  // A name with nothing after the slash is not a location, so the separator is required:
+  // that is what keeps `graph lint` — a command the reader can run — from being redacted
+  // by a directory that happens to share its name.
+  internalPath = new RegExp(`\\b(?:${names.join('|')})\\/[\\w./-]+`, 'g');
+  return internalPath;
+}
+
+/**
+ * Name the thing rather than the path, in text that travels.
+ *
+ * `rules why` output is read inside a repository that owns none of this package's files,
+ * and a path that resolves here resolves nowhere there. The judgement this function
+ * refuses to make is the one about PROSE: `docs/plans/` means this package's plan in one
+ * record and the adopting repository's own plans in another, and no amount of reading the
+ * string separates them. So this is not applied to a record's argument — it is applied to
+ * the `Status:` line, where every clause is a statement about THIS package by
+ * construction and there is no benign reading to confuse it with (S54).
+ *
+ * @param {string} text
+ * @returns {string}
+ */
+export function redactInternalPaths(text) {
+  return String(text ?? '').replace(internalPathPattern(), 'a file in this tool');
+}
 
 const ADR_IN_TEXT = /\bADR-(\d{3})\b/g;
 
@@ -164,7 +220,12 @@ export async function loadDecisions() {
       id,
       file,
       title,
-      status,
+      // Everything structural above this line is derived from the record's own prose and
+      // is therefore unredacted: `partial` in particular has to say "ruling 1 superseded
+      // by ADR-053", and a ruling number is not a location. What a reader in another
+      // repository receives is the status line, so that is what is scrubbed — here, once,
+      // rather than at each of the four places that print it.
+      status: redactInternalPaths(status),
       // Anchored to the start of the status, and this is the whole of the rule. A record
       // is superseded only when its own status says so first. Unanchored, the clause
       // "ruling 2 superseded by [ADR-024]" inside ADR-023's paragraph matched, and the
@@ -206,7 +267,15 @@ export function byId(decisions) {
  * already in full, in plain language, in the projected content; the citation exists
  * for the reader who doubts it, and that reader needs the ruling, not the estate.
  *
- * Never contains a path, because a record read inside a consumer repo cannot name one.
+ * The `ruled` and `rejected` halves are the record's own argument and are printed as
+ * written. This comment used to claim they could "never contain a path", which was never
+ * true: measured over the corpus, five records name a location that resolves only inside
+ * this package. The claim was left in place because it is the right aspiration and an
+ * unverifiable one, and an unverifiable promise in a docstring is the same defect ADR-049
+ * is about — a sentence that reads like evidence and carries none. S54 fixed the field
+ * where the promise can be kept (`Status:`, scrubbed at load) and narrowed this one to
+ * the truth: prose is the record's argument, and redaction here would have to guess
+ * whether `docs/plans/` means this package's plan or the reader's.
  *
  * @param {string} text the whole record
  * @param {{ruling: number|null, kind: string, by: string|null}[]} partial the record's

@@ -168,7 +168,7 @@ record is written.
 | S50 | Rule files load eagerly where a surface could scope them | P2 | E | surfaces | yes (P7) | S12 | Queued | `surfaces.mjs` |
 | S51 | JSON output has no schema version and no compact form | P3 | E | output | no | S10 | Queued | `output/index.mjs:68` |
 | S52 | `hooks install` writes without `--yes` | P1 | F | hooks | **yes (ADR-040)** | S10 | Complete | `8569cf0` |
-| S53 | `upgrade` blames the rules for a baseline body change | P2 | F | provenance | yes (amends ADR-032) | — | Queued | ADR-048 consequences |
+| S53 | `upgrade` blames the rules for a baseline body change | P2 | F | provenance | **yes (ADR-054, amends ADR-032)** | — | Complete | `887214e` |
 | S54 | A status line can name a path, and the summary promises none | P2 | F | decisions | no | — | Queued | ADR-049 consequences; 2 of 48 |
 
 ## 4. Review 0001 at `4c27514`

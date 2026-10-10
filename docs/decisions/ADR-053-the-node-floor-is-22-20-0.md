@@ -1,6 +1,7 @@
 # ADR-053 — The Node floor is 22.20.0
 
-Status: **accepted** · 2026-10-10 · affects `package.json`, `src/ci/workflow.mjs`, `src/resolve/resolve.mjs`
+Status: **accepted** · 2026-10-10
+**Affects:** `package.json`, `src/ci/workflow.mjs`, `src/resolve/resolve.mjs`.
 
 ## Context
 

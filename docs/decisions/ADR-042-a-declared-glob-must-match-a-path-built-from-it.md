@@ -1,6 +1,7 @@
 # ADR-042 — A declared glob must match a path built from it
 
-Status: **accepted** · 2026-10-08 · ruling 1 superseded by ADR-053 · affects `src/resolve/resolve.mjs` and `graph lint`
+Status: **accepted** · 2026-10-08 · ruling 1 superseded by ADR-053
+**Affects:** `src/resolve/resolve.mjs` and `graph lint`.
 
 ## Context
 

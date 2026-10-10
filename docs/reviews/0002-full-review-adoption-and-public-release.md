@@ -169,7 +169,7 @@ record is written.
 | S51 | JSON output has no schema version and no compact form | P3 | E | output | no | S10 | Queued | `output/index.mjs:68` |
 | S52 | `hooks install` writes without `--yes` | P1 | F | hooks | **yes (ADR-040)** | S10 | Complete | `8569cf0` |
 | S53 | `upgrade` blames the rules for a baseline body change | P2 | F | provenance | **yes (ADR-054, amends ADR-032)** | — | Complete | `887214e` |
-| S54 | A status line can name a path, and the summary promises none | P2 | F | decisions | no | — | Queued | ADR-049 consequences; 2 of 48 |
+| S54 | A status line can name a path, and the summary promises none | P2 | F | decisions | **yes (ADR-055)** | — | Complete | SHA pending; measured at **five** status lines, not two — six prose leaks left in place on purpose |
 | S55 | The pack test inherits npm's resolved config, so it reads the developer's home directory | P2 | F | tests | no (ADR-041 stands) | — | Complete | `030e678` |
 
 ## 4. Review 0001 at `4c27514`
@@ -999,6 +999,31 @@ markers stripped (S19).
 > repository that adopts the tool. Two records out of forty-eight, pre-existing, and not
 > touched here because the fix is a decision about what a status line may contain rather than
 > a parser change.
+
+> **Resolution.** Settled as **ADR-055**, and the row's measurement was wrong in the useful
+> direction: **five** records carried a location in `Status:`, not two, and three of them were
+> written *after* this note measured it — ADR-041, then ADR-053 and ADR-054 in this cycle.
+> A finding that grows while it is being fixed is a finding whose cause is a convention rather
+> than a typo, and the convention is ADR-038's own: `Affects:` is the field for a location,
+> five records had one available, and `Status:` is the line the tool reads — which is exactly
+> why putting it there was wrong. `Status:` is the one line guaranteed to travel.
+>
+> The ruling covers the status line and **deliberately not the record's argument**, which is
+> the part worth reading. `docs/plans/` means this package's plan in one record and the
+> adopting repository's own plans in another, `test/leaks.mjs` already singles that string out
+> as a substitution default that is correct for the reader, and four records use it for both
+> meanings. Redacting prose would have to guess, and a guessed redaction makes a correct
+> sentence wrong. Six prose leaks therefore remain, and a test asserts their count and ids so
+> the decision is visible rather than an unmeasured shrug — which is how "two of forty-eight"
+> came to describe ten.
+>
+> The `summarise` docstring's promise is withdrawn rather than left standing. It asserted a
+> property of prose the function never had, and an unverifiable promise in a comment is ADR-049
+> one level down: a sentence that reads like evidence and carries none.
+>
+> The exempt list in the redaction — three top-level files plus every dot-entry — is asserted
+> against a real `simt-dev init`, because a claim about a set held in a comment is a value
+> nobody executes.
 
 ### S55 — The pack test inherits npm's resolved config, so it reads the developer's home directory (P2)
 

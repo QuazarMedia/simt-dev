@@ -1,6 +1,7 @@
 # ADR-054 — The digest covers every byte that leaves the package, and a cause is read off the body
 
-Status: **accepted** · 2026-10-10 · amends [ADR-032](ADR-032-provenance-is-a-content-digest-not-a-commit.md) · affects `src/projection/rules.mjs`, `src/upgrade/plan.mjs`
+Status: **accepted** · 2026-10-10 · amends [ADR-032](ADR-032-provenance-is-a-content-digest-not-a-commit.md)
+**Affects:** `src/projection/rules.mjs`, `src/upgrade/plan.mjs`.
 
 ## Context
 

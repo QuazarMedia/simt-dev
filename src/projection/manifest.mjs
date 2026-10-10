@@ -23,7 +23,11 @@ import { basename, join, resolve } from 'node:path';
 // file exists to prevent elsewhere.
 import { getGate } from '../hooks/gates.mjs';
 
-export const MANIFEST = 'simt-dev.json';
+// Imported as well as re-exported: a bare `export { X as Y } from` binds nothing here,
+// and the manifest name is used a dozen times below in remedy strings that name this
+// file by name.
+import { MANIFEST_FILE } from '../name.mjs';
+export const MANIFEST = MANIFEST_FILE;
 
 /**
  * The one definition of the file's own comment, exported because `upgrade` rewrites

@@ -11,33 +11,31 @@
 // the shim derives ROOT from git, the workflow takes it from the runner. That is why
 // this is a block and not a script.
 
-/** The package a repo installs to get the binary, and where its entry point lives. */
-export const PACKAGE_NAME = '@quazarmedia/simt-dev';
-export const BIN_REL = 'bin/simt-dev.mjs';
+import { BIN_ENV, BIN_REL, CLI, PACKAGE_NAME } from './name.mjs';
 
 /**
- * @param {string} command arguments to hand simt-dev, with `$ROOT` spelled as a shell
+ * @param {string} command arguments to hand the tool, with `$ROOT` spelled as a shell
  *   expansion - `hooks run pre-commit --root "$ROOT"`, `check --root "$ROOT"`
  * @param {object} [opts]
  * @param {string} [opts.subject] what it could not find, as the caller names it:
- *   the shim says "the dispatcher", the workflow says "simt-dev"
+ *   the shim says "the dispatcher", the workflow says the command
  * @param {string} [opts.remedy] the last line, which is the only part that differs
  *   between a hook (which can be opted out of) and a CI job (which cannot)
  * @returns {string} POSIX sh source
  */
-export function renderLocator(command, { subject = 'simt-dev', remedy = `REMEDY run: npm i -D ${PACKAGE_NAME}` } = {}) {
+export function renderLocator(command, { subject = CLI, remedy = `REMEDY run: npm i -D ${PACKAGE_NAME}` } = {}) {
   const D = '$';
-  return `# ${D}SIMT_DEV_BIN must name ONE program: an executable on PATH, or a .mjs entry
+  return `# ${D}${BIN_ENV} must name ONE program: an executable on PATH, or a .mjs entry
 # point to hand to node. It cannot be a command line, because there is no safe way
 # to split one in sh without eval, and a value with a space is refused rather than
 # half-executed - running from a source checkout is normal for anyone working on
-# simt-dev itself, so this path has to work with no install step.
+# this project itself, so this path has to work with no install step.
 run_simt_dev() {
   case "${D}1" in
     *' '*)
-      echo "simt-dev: ${D}SIMT_DEV_BIN names a command line, not a program." >&2
+      echo "${CLI}: ${D}${BIN_ENV} names a command line, not a program." >&2
       echo "  set it to a single executable or a .mjs path, e.g." >&2
-      echo "    SIMT_DEV_BIN=/path/to/simt-dev/bin/simt-dev.mjs" >&2
+      echo "    ${BIN_ENV}=/path/to/checkout/${BIN_REL}" >&2
       exit 1
       ;;
     *.mjs)
@@ -53,24 +51,24 @@ run_simt_dev() {
   esac
 }
 
-if [ -n "${D}{SIMT_DEV_BIN:-}" ]; then
-  run_simt_dev "${D}SIMT_DEV_BIN" ${command}
+if [ -n "${D}{${BIN_ENV}:-}" ]; then
+  run_simt_dev "${D}${BIN_ENV}" ${command}
 fi
 
 if [ -f "${D}ROOT/node_modules/${PACKAGE_NAME}/${BIN_REL}" ]; then
   exec node "${D}ROOT/node_modules/${PACKAGE_NAME}/${BIN_REL}" ${command}
 fi
 
-if command -v simt-dev >/dev/null 2>&1; then
-  exec simt-dev ${command}
+if command -v ${CLI} >/dev/null 2>&1; then
+  exec ${CLI} ${command}
 fi
 
-echo "simt-dev: cannot locate ${subject}." >&2
+echo "${CLI}: cannot locate ${subject}." >&2
 # Every expansion in these diagnostics must carry a default. Under \`set -eu\` an
-# unbound variable aborts the shell, so an unguarded ${D}SIMT_DEV_BIN here would
+# unbound variable aborts the shell, so an unguarded ${D}${BIN_ENV} here would
 # kill the message that exists to explain the failure - and this block only runs
 # when nothing resolved, which is the one moment the reader needs it.
-echo "  looked for: ${D}{SIMT_DEV_BIN:-<unset>}, ${D}ROOT/node_modules/${PACKAGE_NAME}, simt-dev on PATH" >&2
+echo "  looked for: ${D}{${BIN_ENV}:-<unset>}, ${D}ROOT/node_modules/${PACKAGE_NAME}, ${CLI} on PATH" >&2
 echo "${remedy}" >&2
 exit 1
 `;

@@ -16,9 +16,9 @@ landed. Not intermittently: 22 of 543 tests failed on runs `37476671363` through
 Three separate causes, none of them recent:
 
 1. **`test/install.test.mjs:17` read the estate off the author's disk.**
-   `const WORKSPACE = resolve(HERE, '..', '..')` is `/Users/said.elimam/code/simt`, and the
-   install tests copied skill bodies out of it — `simt-social-api/.agents/skills/d1-safe-change`,
-   and `singleRepoClone()` out of `simt-social`. On a runner the checkout is
+   `const WORKSPACE = resolve(HERE, '..', '..')` is `/home/developer/code/simt`, and the
+   install tests copied skill bodies out of it — `repo-11/.agents/skills/d1-safe-change`,
+   and `singleRepoClone()` out of `repo-14`. On a runner the checkout is
    `/home/runner/work/simt-dev/simt-dev`, so `../..` is `/home/runner/work/simt-dev`,
    which contains this repository and nothing else. The bodies were not there,
    `skills install` exited 3, and nineteen tests asserted on a refusal they never asked for.

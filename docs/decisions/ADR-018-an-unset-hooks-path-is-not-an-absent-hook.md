@@ -6,14 +6,14 @@ Affects: `simt-dev hooks install`, `simt-dev hooks status`, `simt-dev compare`, 
 
 ## Context
 
-Phase 4 began by piloting `simt-dev init` on `simt-space`. The dry run was
+Phase 4 began by piloting `simt-dev init` on `repo-15`. The dry run was
 unremarkable. The defect appeared when I read what `hooks install` would actually
 do to that repository, which is something I had not done in any of the earlier
 phases.
 
-`simt-space` has a hand-written `.git/hooks/pre-commit` — 4088 bytes, with prose
+`repo-15` has a hand-written `.git/hooks/pre-commit` — 4088 bytes, with prose
 explaining why it deliberately does not run tests. `core.hooksPath` is unset.
-`simt-dev hooks status --root ../simt-space --json` reported:
+`simt-dev hooks status --root ../repo-15 --json` reported:
 
 ```json
 { "hooksPath": null, "installed": [{ "event": "pre-commit", "present": false }],
@@ -64,7 +64,7 @@ question, which is why fixing the shared one changed nothing visible.
 1. **Ask git where hooks are, never infer it from whether config exists.**
    `resolveHooksDir(root)` implements the two rules directly: `core.hooksPath`
    when set (a relative value resolves against the top of the working tree, which
-   is what makes `simt-app`'s `hooks` work), otherwise `<git-common-dir>/hooks`.
+   is what makes `repo-05`'s `hooks` work), otherwise `<git-common-dir>/hooks`.
 
    `git rev-parse --git-path hooks` is the obvious shortcut and is unusable. It
    returns `.git/hooks` in a normal repository, `hooks` in a linked worktree, and
@@ -103,7 +103,7 @@ question, which is why fixing the shared one changed nothing visible.
 7. **A foreign hook for an event this tool does not gate is chained, not stopped.**
    `core.hooksPath` does not scope this tool to the events it cares about and leave
    the rest to git; git reads *every* hook from the named directory and from nowhere
-   else. So the moment routing lands, `simt-app`'s `post-checkout`, `post-commit`
+   else. So the moment routing lands, `repo-05`'s `post-checkout`, `post-commit`
    and `post-merge` — events this tool gates nothing about — stop running. Nothing
    fails, nothing is logged, and the hook is still on disk looking intact: the
    failure is indistinguishable from the hook having passed. Ruling 3's refusal
@@ -128,9 +128,9 @@ question, which is why fixing the shared one changed nothing visible.
    anything the author sees.
 
    "Does this tool gate it" is a fact about the manifest, not about the event vocabulary,
-   and reading it the second way cost `simt-app` its `pre-push`. That hook is git-lfs.
+   and reading it the second way cost `repo-05` its `pre-push`. That hook is git-lfs.
    `pre-push` is an event this tool gates *in general*, so a vocabulary check displaced it
-   — and because `simt-app` declares no `pre-push` gate there is no shim for that event
+   — and because `repo-05` declares no `pre-push` gate there is no shim for that event
    either, so git would have found no `pre-push` hook at all. LFS objects would have
    stopped being uploaded, with nothing to notice it: the same silent failure this ruling
    exists to prevent, reached by fixing the wrong half of it. The test asks the manifest.
@@ -154,8 +154,8 @@ a list that rots, so one test now asserts the two agree and another asserts ever
 row carries `notes` and `foreignHooks` even when empty.
 
 Measured across the estate after the fix, six repositories run hooks simt-dev did
-not write — `simt-space` (4088 B), `simt-app` (four hooks), `simt-social` (two),
-`simt-social-api` (two), `simt-landing` (one), and the `.wt-wear-redesign`
+not write — `repo-15` (4088 B), `repo-05` (four hooks), `repo-14` (two),
+`repo-11` (two), `repo-10` (one), and the `.wt-wear-redesign`
 worktree (five, including the `git-lfs` `pre-push`). Every one of them would have
 been silently taken over.
 

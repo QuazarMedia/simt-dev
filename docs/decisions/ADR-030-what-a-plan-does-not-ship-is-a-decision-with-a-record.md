@@ -56,7 +56,7 @@ correcting at all.
    detectable by reading the file. Corrected in the row.
 
 5. **Two of the four configurations are plain JavaScript with no TypeScript in them,**
-   `simt-api` and `simt-blog`. A "shared 6-rule ESLint block" cannot describe all four,
+   `repo-04` and `repo-06`. A "shared 6-rule ESLint block" cannot describe all four,
    because two of them have no rules to share — they differ in `ignores` and per-file
    `globals`, which are per-repository facts about paths.
 
@@ -67,7 +67,7 @@ correcting at all.
    may make on its own.
 
 7. **The fix for the two conflicts is one dependency each,** and it is not a shared block.
-   Installing `eslint-config-prettier` in `simt-social` and `simt-social-api` and spreading
+   Installing `eslint-config-prettier` in `repo-14` and `repo-11` and spreading
    it last in the config array resolves both. That is a command per repository, run by the
    repositories, and simt-dev has no business writing it.
 

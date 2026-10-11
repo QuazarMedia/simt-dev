@@ -21,7 +21,7 @@ Two facts about this repository make that gap harder to notice than it looks. `t
 reach outside the checkout (ADR-031), and this package has no dependencies (ADR-012). Together
 those mean the suite has no installed copy of itself to test, and the natural workaround —
 borrowing a formatter from a neighbouring checkout — is the one ADR-031 rules out. Prettier 3.8.1
-is sitting in `../simt-blog/node_modules/.bin` and is not available here.
+is sitting in `../repo-06/node_modules/.bin` and is not available here.
 
 ## Ruling
 
@@ -87,6 +87,6 @@ node, git and a POSIX shell; npm is in the same class. A conditional skip conver
 into an unverified one, which is the failure this file was written to stop.
 
 **Copying Prettier out of a sibling checkout.** It exists, it works, and ADR-031 rules it out for
-the same reason it rules out reading skill bodies from `../simt-social`: a suite that passes on
+the same reason it rules out reading skill bodies from `../repo-14`: a suite that passes on
 the author's machine and fails on a runner with only this checkout is evidence about the author's
 directory.

@@ -8,14 +8,14 @@ The repos state a commit/push policy. They disagree on whether an agent may push
 
 - A repo outside this estate: "always create a focused Git commit… skip the commit only
   when the user explicitly asks not to commit." Silent on push.
-- `simt-garmin/AGENTS.md` DoD #8: "**Committed and pushed** with a conventional message."
-- `simt-social` and `simt-social-api`: "create a non-interactive Conventional Commit. Report
+- `repo-07/AGENTS.md` DoD #8: "**Committed and pushed** with a conventional message."
+- `repo-14` and `repo-11`: "create a non-interactive Conventional Commit. Report
   the commit SHA; **do not push**."
-- `simt-api`, `simt-social-media`: silent.
+- `repo-04`, `repo-13`: silent.
 
 The Social pair justify it: a push to the production branch triggers Cloudflare Workers Builds,
 so "an approved push is therefore a production deployment action, not only source publication."
-`simt-garmin` has no such coupling, and its rule asks for an autonomous push.
+`repo-07` has no such coupling, and its rule asks for an autonomous push.
 
 ## Ruling
 
@@ -24,7 +24,7 @@ Commit locally, report the SHA, **push only on explicit user approval**.
 When a repo's push triggers a deployment, a migration, or any remote mutation, say so before
 asking for approval — do not treat approval for the push as approval for the deploy.
 
-`simt-garmin` DoD #8 changes to "committed with a conventional message; pushed on approval."
+`repo-07` DoD #8 changes to "committed with a conventional message; pushed on approval."
 This is the single outlier, and the 4:1 majority is also the safe direction.
 
 ## Consequences

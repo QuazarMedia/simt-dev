@@ -6,7 +6,7 @@ Status: **accepted** · 2026-10-05 · affects all repos
 
 Two repos state opposite philosophies, and both are reasonable in isolation.
 
-- `simt-social` / `simt-social-api`: "When a second real use or a near-duplicate already
+- `repo-14` / `repo-11`: "When a second real use or a near-duplicate already
   exists, refactor the existing code to extract the shared part… A third copy of the same
   logic is a defect, and so is an abstraction invented for a single caller."
 - A repo outside this estate: "Match existing style, naming, and test layout. **Do not

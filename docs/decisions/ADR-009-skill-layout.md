@@ -23,7 +23,7 @@ to come from the graph registry instead — which is why `paths` lives in
 - A skill is a directory `<name>/` containing `SKILL.md`.
 - `name` and `description` are **mandatory** in frontmatter.
 - `argument-hint` is recommended for any skill invoked by hand, and is optional otherwise —
-  simt-app's 7 skills omit it legitimately, since they are task-shaped rather than
+  repo-05's 7 skills omit it legitimately, since they are task-shaped rather than
   user-invoked.
 - Body size and reference-file count are declared in `graph/skills.graph.json`, not in
   frontmatter, so the registry stays the single source of truth for resolution metadata.

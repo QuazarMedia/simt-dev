@@ -63,11 +63,11 @@ it.
 
 | Repository | Prettier config | States `singleQuote` | Adopting `quote_type = single` |
 | --- | --- | --- | --- |
-| `simt-api` | `.prettierrc` | `true` | no change |
-| `simt-blog` | `.prettierrc.json` | `true` | no change |
-| `simt-space` | `.prettierrc.json` | `true` | no change |
-| `simt-social-api` | `.prettierrc.json` | absent | **every source file reformatted** |
-| `simt-social` | `.prettierrc.json` | absent | **every source file reformatted** |
+| `repo-04` | `.prettierrc` | `true` | no change |
+| `repo-06` | `.prettierrc.json` | `true` | no change |
+| `repo-15` | `.prettierrc.json` | `true` | no change |
+| `repo-11` | `.prettierrc.json` | absent | **every source file reformatted** |
+| `repo-14` | `.prettierrc.json` | absent | **every source file reformatted** |
 
 Two repositories would have every source file rewritten on the day they adopted the
 tool, in a commit whose message says it adopted a rules projection. The measurement is

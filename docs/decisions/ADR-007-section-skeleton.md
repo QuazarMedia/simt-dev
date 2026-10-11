@@ -8,9 +8,9 @@ Six `AGENTS.md` files use the same conceptual sections under three different hea
 
 | File | Authority | Invariants |
 |---|---|---|
-| `simt-api`, `simt-social-media` | "Authority and Scope" | "Non-Negotiable Invariants" |
-| `simt-garmin`, `simt-social` | "Authority and scope" | "Non-negotiable invariants" |
-| `simt-social-api` | "Authority and **ownership**" | "Non-negotiable invariants" |
+| `repo-04`, `repo-13` | "Authority and Scope" | "Non-Negotiable Invariants" |
+| `repo-07`, `repo-14` | "Authority and scope" | "Non-negotiable invariants" |
+| `repo-11` | "Authority and **ownership**" | "Non-negotiable invariants" |
 
 At least one repo outside this estate uses a numbered 12-part layout with no equivalent
 sections at all.
@@ -43,12 +43,12 @@ knows immediately what breaking it costs and who may change it.
 
 - Cross-repo reading becomes possible: section N means the same class of thing everywhere.
 - A future grep for "what are the invariants" returns a comparable list across all 16 repos.
-- "Ownership" is kept in the heading because `simt-social-api` earned it by being the only
+- "Ownership" is kept in the heading because `repo-11` earned it by being the only
   file that enumerates ownership explicitly.
 
 ## Rejected
 
-- **Standardise on Title Case** (`simt-api`'s variant). Capitalisation in headings is noise;
+- **Standardise on Title Case** (`repo-04`'s variant). Capitalisation in headings is noise;
   three repos already use sentence case.
 - **Normalise a differently-shaped layout immediately.** A mechanical conversion of 12
   numbered parts would produce a worse document than a mapping.

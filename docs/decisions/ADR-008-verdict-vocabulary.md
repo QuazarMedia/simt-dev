@@ -6,7 +6,7 @@ Status: **accepted** · 2026-10-05 · affects all repos
 
 The estate has two incompatible verdict vocabularies.
 
-`.cursor/rules/test-gate.mdc` — used by all three Social repos — allows one outcome:
+`.cursor/rules/test-gate.mdc` — used by all three one repository — allows one outcome:
 
 > Return `BLOCK` when: any test fails, is skipped without pre-existing justification, or is
 > unrun; the executable diff has no test delta without explicit justification; the coordinator

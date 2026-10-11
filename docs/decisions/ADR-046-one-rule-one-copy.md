@@ -14,11 +14,11 @@ Review 0001 §S12, marked P1 and "decision". Measured across the estate before a
 the five repositories selecting `opencode,cursor`:
 
 ```
-simt-app           folded=3  .mdc=3  0/3 current
-simt-blog          folded=3  .mdc=3  0/3 current
-simt-social        folded=3  .mdc=3  0/3 current
-simt-social-api    folded=4  .mdc=4  0/4 current
-simt-social-media  folded=4  .mdc=4  0/4 current
+repo-05           folded=3  .mdc=3  0/3 current
+repo-06          folded=3  .mdc=3  0/3 current
+repo-14        folded=3  .mdc=3  0/3 current
+repo-11    folded=4  .mdc=4  0/4 current
+repo-13  folded=4  .mdc=4  0/4 current
 ```
 
 Seventeen generated rule files. Every one of them byte-identical to the section already folded into

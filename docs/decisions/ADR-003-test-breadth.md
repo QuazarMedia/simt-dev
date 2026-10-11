@@ -4,13 +4,13 @@ Status: **accepted** · 2026-10-05 · affects all repos
 
 ## Context
 
-- `simt-social` / `simt-social-api`: "Focused tests are the default gate, and full suites are
+- `repo-14` / `repo-11`: "Focused tests are the default gate, and full suites are
   the exception… **absent a named trigger, running a full suite is a defect, not diligence.**"
 - A repo outside this estate: `fail_under = 100` plus a full-suite script as the pre-push
   default, and a contributor loop that says "run the full gate locally (lint + tests +
   coverage)."
-- `simt-garmin`: reframes the axis entirely as a layer-conditional 5a–5m matrix.
-- `simt-social-media`: no policy — it just lists `npm run test:unit && npm run test:e2e`.
+- `repo-07`: reframes the axis entirely as a layer-conditional 5a–5m matrix.
+- `repo-13`: no policy — it just lists `npm run test:unit && npm run test:e2e`.
 
 The Social pair make a full suite a sin. media presents it as unremarkable. The hard-gate
 repo makes it mandatory. These cannot all be org rules as stated.
@@ -34,7 +34,7 @@ adopted as canonical.
 ## Consequences
 
 - Each repo's `simt-dev.json` declares which of the six triggers are active for it. A repo
-  with a declared numeric gate activates 4 and 6; the Social repos activate 1, 2 and 3.
+  with a declared numeric gate activates 4 and 6; one repository activate 1, 2 and 3.
 - A reviewer can ask "which trigger?" and get a number, not an opinion.
 - media gains an explicit policy instead of an implicit one that contradicts its siblings.
 

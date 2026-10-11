@@ -8,21 +8,21 @@ Affects: `simt-dev init`, `simt-dev check`, `simt-dev hooks status`, `simt-dev h
 ## Context
 
 ADR-017 made `simt-dev init` declare only gates a repository can actually run, and it shipped
-green because the first adopter — `simt-social-media` — is a Node repository whose scripts
+green because the first adopter — `repo-13` — is a Node repository whose scripts
 and binaries are exactly what the filter understood. It was verified by running that
 repository's own tests.
 
-`simt-app`, the third pilot, is a Gradle repository. It has **no `package.json` at all**. The
+`repo-05`, the third pilot, is a Gradle repository. It has **no `package.json` at all**. The
 dry run dropped all five proposed gates, and the remedy for each one was an instruction the
 reader cannot follow. The output as it stood, before this record was written:
 
 ```
-$ simt-dev init --root ../simt-app
+$ simt-dev init --root ../repo-05
   dropped   gate test: no "test" script in package.json
             remedy: add a "test" script to package.json, then re-run: simt-dev init --yes
 ```
 
-Ruling 4 changes both lines. `simt-app` will never have a `package.json`. "Install prettier as
+Ruling 4 changes both lines. `repo-05` will never have a `package.json`. "Install prettier as
 a dev dependency" is equally impossible. The filter was right about the facts and wrong about
 what followed from them, and the reader's only honest reaction to that remedy is to stop
 trusting the next one.
@@ -75,10 +75,10 @@ One manifest. Three answers. The one I would have shipped if I had only run `che
 
 ## Consequences
 
-- `simt-app` declares `i18n-completeness: scripts/check_string_translations.sh` on
+- `repo-05` declares `i18n-completeness: scripts/check_string_translations.sh` on
   pre-commit — the gate its own hand-written pre-commit hook already runs — and
   `test: ./gradlew check` on pre-push.
-- The `simt-social-media` and `simt-space` manifests are unaffected: they declare no commands.
+- The `repo-13` and `repo-15` manifests are unaffected: they declare no commands.
 - A Node repository that wants to override a gate now can, without abandoning the gate name it
   shares with every other repository. `gates.commands.format` is a supported thing to write.
 - `readCapability` reads one more file per invocation, and it reads it in a `try` that cannot
@@ -104,7 +104,7 @@ One manifest. Three answers. The one I would have shipped if I had only run `che
 
 ## Evidence
 
-`simt-app` is the first adopter with a non-npm runner and the first to declare a command for a
+`repo-05` is the first adopter with a non-npm runner and the first to declare a command for a
 gate that is not of kind `command`. Every earlier adopter was a Node repository, which is why
 ADR-017's own verification passed. The estate's three runners — npm, Gradle and Python — were
 all in the repository set the whole time; only the pilot order had not reached them.

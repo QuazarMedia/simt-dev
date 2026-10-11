@@ -104,7 +104,7 @@ nobody has been asked, and it is the record to read next for either.
 
 - **A shipped `.nvmrc` or an `engines` value in a shared baseline.** Rejected as
   unrulable: the value is per-repository and the tool can only guess it. Shipping `22` would
-  break `simt-social`, which pins 24.
+  break `repo-14`, which pins 24.
 - **Reporting cross-repository node divergence as a finding.** Rejected by the Context. The
   plan's premise was wrong and the correction is recorded here so it is not re-derived from
   the plan text.

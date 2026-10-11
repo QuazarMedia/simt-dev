@@ -1001,6 +1001,25 @@ test('hooks status: does not report this tool\'s own chained shim as a foreign h
   assert.doesNotMatch(stdout + stderr, /git runs post-commit/);
 });
 
+test('hooks install: chains a foreign hook on a gated event this repo declares no gate for', async () => {
+  // Regression, found by running this against the estate rather than against a fixture:
+  // simt-app's pre-push is git-lfs. pre-push is an event this tool gates *in general*,
+  // so keying the chain on the event vocabulary displaced it - and because the repo
+  // declares no pre-push gate there is no shim for that event either, so git would
+  // find no pre-push hook at all and LFS uploads would stop silently.
+  //
+  // "Does this tool gate it" is a fact about the manifest, not about the vocabulary.
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+    files: { '.git/hooks/pre-push': '#!/bin/sh\nexit 0\n' },
+  });
+  await chmod(join(root, '.git', 'hooks', 'pre-push'), 0o755);
+  const { stderr } = await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  assert.match(stderr, /chained pre-push/);
+  assert.doesNotMatch(stderr, /stopped running pre-push/);
+});
+
 test('hooks install: refuses to install shims for a repo that declares no runnable gate', async () => {
   // A shim with an empty gate list enforces nothing, yet its mere existence
   // replaces whatever git was running. Installing one over a working hook is a

@@ -122,9 +122,19 @@ jobs:
           npm --version
           npm stage --help >/dev/null
 
+      # `--tag latest` is explicit for a reason that is not about staging. This name
+      # still carries the empty 1.0.0 reservation, and npm refuses to apply a dist-tag
+      # implicitly when the new version sorts below the current one:
+      #
+      #   Cannot implicitly apply the "latest" tag because previously published
+      #   version 1.0.0 is higher than the new version 0.1.1
+      #
+      # That is npm refusing to move `latest` backwards on its own initiative. Naming
+      # it says "yes, this is meant to be what a consumer resolves by default", and
+      # only a maintainer's approval actually makes it so.
       - name: stage for a maintainer to approve
         if: env.SKIP == 'false'
-        run: npm stage publish --provenance
+        run: npm stage publish --provenance --tag latest
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

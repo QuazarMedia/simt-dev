@@ -4,6 +4,41 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Publishable from PyPI and Homebrew as well as npm
+
+simt-dev is a *repository* tool, and the people who adopt a repository are not
+all Node developers. Somebody running `simt init` inside a repository with no
+`package.json` has no reason to install a package manager, and a Homebrew user
+has no reason to install Node to install a tool that needs Node.
+
+So it now publishes to three channels, from one version number:
+
+```sh
+npm i -D simt-dev        # a tarball of .mjs files
+pip install simt-dev      # a wheel carrying those same bytes
+brew install QuazarMedia/tap/simt-dev
+```
+
+The wheel is not a wrapper around `npm install`. It carries the tool's own
+source, and `scripts/verify-wheel.mjs` builds both artefacts and hashes every
+file in both — a release fails when a single byte differs between them. That
+check exists because the obvious defect in this arrangement is the wheel and the
+tarball quietly shipping different code.
+
+`simt` is the one command, on every channel. Where node comes from is
+`SIMT_DEV_NODE`, then the bundled node from `pip install "simt-dev[node]"`,
+then `node` on `PATH` — and if none of those resolve you get the remedy rather
+than a placeholder path. There are no required dependencies on any channel.
+*(ADR-058)*
+
+The channels are published in a fixed order rather than in parallel, and the
+reason is not taste: the Homebrew formula downloads the npm tarball at install
+time, so a formula naming a version still sitting in npm's staging area
+installs a 404. Both jobs fail with that stated, and are run again after
+`npm stage approve`.
+
 ## [0.1.1] — 2026-10-11
 
 ### A foreign hook on an event this repo does not gate is chained

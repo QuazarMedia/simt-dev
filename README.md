@@ -19,7 +19,7 @@ that refuses a commit which breaks a gate that repo can genuinely run.
 
 ## Install
 
-Requires **Node >= 22.20.0**.
+Requires **Node >= 22.20.0** (the PyPI install can supply it, see below).
 
 ```sh
 # pinned, per repository - what CI and a teammate both get
@@ -31,6 +31,33 @@ npm i -g simt-dev@0.1.1
 # or with no install at all, for a one-off
 npx -y simt-dev@0.1.1 check
 ```
+
+### From PyPI
+
+The same tool, from the same bytes. The wheel carries the exact contents the npm
+tarball carries — the wheel is not a wrapper around `npm install`, so nothing is
+fetched when you install it.
+
+```sh
+pip install simt-dev
+
+# and if this machine has no node at all
+pip install "simt-dev[node]"
+```
+
+`simt` is the command on both channels. Where node comes from is resolved in
+this order, and the first one that answers wins: `SIMT_DEV_NODE`, the bundled
+node from the `node` extra, then `node` on your `PATH`. If none of them resolve,
+you get a message naming the remedy rather than a placeholder node path.
+
+### From Homebrew
+
+```sh
+brew install QuazarMedia/tap/simt-dev
+```
+
+The formula declares its own `node` dependency, so `brew install` gives you a
+working command on a machine that has never had Node.
 
 Pin the version. The tool writes a content digest into the files it generates, and an
 unpinned upgrade changes them under you.

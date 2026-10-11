@@ -17,7 +17,7 @@ import assert from 'node:assert/strict';
 import { cmd } from './fixture.mjs';
 import test, { after } from 'node:test';
 import { execFile } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -480,6 +480,44 @@ test('the own copy runs a gate this repository can actually pass', async () => {
   for (const script of ['test', 'lint']) {
     assert.match(await readFile(join(PACKAGE_ROOT, 'package.json'), 'utf8'), new RegExp(`"${script}":`));
   }
+});
+
+test('the test script names its files, because the floor cannot run the obvious spelling', async () => {
+  // `node --test test/` is the obvious spelling and it is wrong on two of the three node
+  // versions this repository's own gate runs. 22 and 24 resolve the argument as a module
+  // path and fail with `Cannot find module '.../test'`; only 26 walks the directory. The
+  // suite was therefore green on the author's machine and red on four of the six matrix
+  // legs, and nothing inside the package could tell - so the SHAPE of the script is
+  // asserted here rather than the version that happens to be installed.
+  //
+  // The second half is the one that stops the obvious repair landing. A pattern naming
+  // fewer files than the directory holds drops tests without failing anything, which is
+  // how a suite goes to 700 tests and nobody notices for a month.
+  const pkg = JSON.parse(await readFile(join(PACKAGE_ROOT, 'package.json'), 'utf8'));
+  const patterns = pkg.scripts.test.split(/\s+/).filter((arg) => !arg.startsWith('-'));
+  assert.ok(patterns.length > 0, 'the test script passes nothing to --test');
+
+  for (const pattern of patterns) {
+    assert.doesNotMatch(
+      pattern,
+      /\/$/,
+      `"${pattern}" is a directory: node --test resolves it as a module path below 26`,
+    );
+  }
+
+  const files = (await readdir(join(PACKAGE_ROOT, 'test'))).filter((f) => f.endsWith('.test.mjs'));
+  const matches = (pattern) =>
+    new RegExp(
+      `^${pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\\\*/g, '[^/]*')}$`,
+    );
+  const uncovered = files.filter(
+    (f) => !patterns.some((p) => matches(p).test(`test/${f}`)),
+  );
+  assert.deepEqual(
+    uncovered,
+    [],
+    `the test script does not run ${uncovered.join(', ')}; a narrowing pattern drops tests silently`,
+  );
 });
 
 test('the own copy ships nothing a reader outside this repository cannot act on', async () => {

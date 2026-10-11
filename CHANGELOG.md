@@ -43,6 +43,20 @@ is the same read-both/write-new as the manifest:
 - A file holding two regions — one of each spelling — is a state only a hand edit can
   make, and it is reported malformed rather than merged. *(ADR-056)*
 
+### A hook you already had keeps running
+
+`hooks install` points `core.hooksPath` at `.simt-hooks/`, and git reads **every** hook from
+that one directory — not just the two events this tool gates. So adopting a repository that
+had its own `post-commit`, `post-checkout` or `post-merge` would have quietly stopped them:
+nothing fails, nothing is logged, and the hook is still on disk looking intact.
+
+Those hooks are now **chained**. Install writes a shim for them that runs the repository's
+own hook and forwards git's arguments, so nothing is lost and the reason is in the file. If
+the hook is gone, the shim refuses and names the path instead of passing quietly. A hook on
+an event this tool *does* gate (`pre-commit`, `pre-push`) is deliberately not chained —
+declare it under `gates.commands` so the dispatcher runs it and its verdict appears in the
+gate report. *(ADR-018, as amended)*
+
 ### What a first release has to say out loud
 
 These are the behaviours a reader is most likely to trip over. Each one is deliberate,

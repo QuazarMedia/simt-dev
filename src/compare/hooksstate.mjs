@@ -11,10 +11,43 @@ import { readFile, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderShim } from '../hooks/shim.mjs';
+import { CHAIN_MARKER, EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderShim } from '../hooks/shim.mjs';
 import { foreignHooks, resolveHooksDir } from '../hooks/where.mjs';
 
 const exec = promisify(execFile);
+
+/**
+ * The chained shim at `path`, read back out of the file itself.
+ *
+ * Content, for the reason given on `CHAIN_MARKER`: the file is named after the
+ * repository's hook, so the name is exactly the thing that cannot identify it.
+ *
+ * The target is parsed out of the file rather than remembered from install time
+ * because the only authority on what a shim does is the shim. A re-install has to
+ * render the identical bytes, and rendering them from a remembered target would let
+ * the two drift the moment a repository moved.
+ *
+ * @param {string} path
+ * @returns {Promise<{event:string, target:string}|null>}
+ */
+export async function readChainedShim(path) {
+  let content;
+  try {
+    content = await readFile(path, 'utf8');
+  } catch {
+    return null;
+  }
+  if (!content.includes(CHAIN_MARKER)) return null;
+  const target = /^TARGET='(.+)'$/m.exec(content);
+  const event = /^# simt-dev does not gate (\S+),/m.exec(content);
+  if (!target || !event) return null;
+  return { event: event[1], target: target[1] };
+}
+
+/** Whether this file is a chained shim this tool wrote. */
+async function isChainedShim(path) {
+  return (await readChainedShim(path)) !== null;
+}
 
 /** `core.hooksPath`, or null when unset or the repo is not a git repo. */
 export async function readHooksPath(root) {
@@ -78,8 +111,19 @@ export async function readHooksState(root, options = {}) {
   // A shim is also called `pre-commit`, so the name cannot tell ours from a
   // hand-written one. Only the bytes can.
   const foreign = [];
+  const chained = [];
   for (const hook of live) {
     if (EVENTS.includes(hook.event) && !(await describeShim(hook.path)).stale) continue;
+    // A chained shim is ours too, and its name says nothing: `post-commit` is what the
+    // repository called its own hook, and the shim exists under that name precisely so
+    // git finds it. Reading it as foreign would make every re-install refuse with "this
+    // repo already runs hooks simt did not write" - a shim this tool wrote, refusing
+    // itself. Identity is content, the same rule as the dispatcher shim above.
+    const chain = await readChainedShim(hook.path);
+    if (chain) {
+      chained.push({ ...chain, path: hook.path });
+      continue;
+    }
     foreign.push(hook);
   }
 
@@ -102,6 +146,11 @@ export async function readHooksState(root, options = {}) {
     complete: current === HOOKS_DIR && problems.length === 0,
     installed,
     foreign,
+    // The chained shims this repo is already running, read back off disk. `install`
+    // re-renders them from here so a second run keeps maintaining them rather than
+    // quietly forgetting them; without this field the set of things install maintains
+    // would depend on whether the operator happened to run it twice.
+    chained,
     liveDir: where.dir,
     problems,
   };

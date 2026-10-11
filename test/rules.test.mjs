@@ -187,6 +187,11 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // record that stops quoting a location moves this count, and a record that starts
   // quoting one is visible in the same diff. ADR-055 is on the list for the same reason
   // the others are: the record that explains the ruling quotes the collision it turned on.
+  // ADR-058 joined for the same reason, and its addition is this line. The record is
+  // ABOUT three files - pyproject.toml, the formula and the two release scripts - and
+  // an argument about which file a rule lives in that declines to name any file is not
+  // an argument. The paths resolve here and nowhere else, and the ADR ships, so this
+  // list is the price of writing a record that has to be located to be understood.
   const root = resolve(HERE, '..');
   const { decisions } = await loadDecisions();
   const leaking = [];
@@ -196,7 +201,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
       leaking.push(d.id);
     }
   }
-  assert.deepEqual(leaking, ['ADR-016', 'ADR-023', 'ADR-026', 'ADR-033', 'ADR-035', 'ADR-041', 'ADR-055', 'ADR-056']);
+  assert.deepEqual(leaking, ['ADR-016', 'ADR-023', 'ADR-026', 'ADR-033', 'ADR-035', 'ADR-041', 'ADR-055', 'ADR-056', 'ADR-058']);
 });
 
 test('a status line is scrubbed, and a command that travels is not (S54)', () => {

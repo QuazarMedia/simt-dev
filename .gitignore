@@ -5,3 +5,6 @@
 # it carries whoever is committing into the tree, and a repository has more than
 # one of those. See ADR-057.
 git.config
+
+.pybuild/
+dist/

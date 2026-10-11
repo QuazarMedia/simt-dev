@@ -65,6 +65,7 @@ record's status line — never by editing the ruling in place.
 | [055](ADR-055-a-status-line-travels-so-it-may-not-name-a-location.md) | A status line travels, so it may not name a location; prose is the record's own argument | accepted |
 | [056](ADR-056-three-names-one-of-which-is-cheap-to-move.md) | The command, the package and the project are three names, and only one of them is cheap to move | accepted · amends ADR-023 |
 | [057](ADR-057-an-identity-is-per-developer-and-a-repository-does-not-own-it.md) | An identity is per-developer, and a repository does not own it | accepted |
+| [058](ADR-058-one-tool-three-channels-and-the-order-is-forced.md) | One tool, three channels, and the order is forced | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

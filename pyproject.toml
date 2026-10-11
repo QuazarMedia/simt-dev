@@ -1,0 +1,148 @@
+# The Python distribution: `pip install simt-dev` puts the `simt` command on PATH.
+#
+# The design is one sentence: **the wheel carries the same bytes the npm
+# tarball carries**, and this file is what points a Python installer at them.
+# simt-dev has zero runtime dependencies and no build step, so there is nothing
+# to compile and nothing to fetch - the entire tool is ~1.3 MB of text that can
+# be copied verbatim. Doing so means the two channels cannot ship different
+# code, and `test/packaging.test.mjs` asserts exactly that: the wheel's vendored
+# tree is compared against `npm pack`, byte for byte.
+#
+# Three decisions here are worth defending, because each has an obvious
+# alternative that is worse:
+#
+#   - **`dynamic = ["version"]` reads package.json.** The npm version and the
+#     PyPI version are one number, and a second literal would be a number that
+#     drifts - `pip show simt-dev` claiming 0.1.2 while `simt --version`
+#     reports 0.1.1. Reading it means drift is impossible rather than merely
+#     checked.
+#
+#   - **No required dependencies, not even a node.** This project's npm package
+#     is zero-dependency by ruling (ADR-012) and the same reasoning applies
+#     here: a dependency is a runtime this wheel cannot verify and its owner
+#     cannot patch. See the `node` extra for the reader who does need a node
+#     supplied.
+#
+#   - **`force-include`, not a copy step.** The vendored tree is mapped out of
+#     the repository at build time rather than copied into it by a script. A
+#     copied second copy is a directory that has to be kept in sync by hand,
+#     and the day it is not is the day `pip install` serves stale rules while
+#     `npm install` serves current ones.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "simt-dev"
+dynamic = ["version"]
+description = "Shared agent rules, skills and git hooks for a repository: one command adopts a repo, and every gate it declares is probed before it is written."
+readme = "README.md"
+license = "Apache-2.0"
+# The launcher is stdlib-only, and stdlib-only is the point: a Python floor
+# chosen by which features are needed rather than by what is current. 3.9 is
+# the oldest release that still gets security support in the environments this
+# tool is aimed at, and nothing here needs anything newer.
+requires-python = ">=3.9"
+authors = [
+    { name = "Said Elimam" },
+]
+keywords = [
+    "agent",
+    "agents",
+    "ai",
+    "codex",
+    "cursor",
+    "git-hooks",
+    "llm",
+    "rules",
+    "skills",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+# The command, and only the command. `simt` is the name the npm package
+# installs, so a reader who learns it from either channel types the same word.
+# A second script called `simt-dev` would be a convenience that turns into a
+# fork in the documentation the first time somebody documents one and not the
+# other.
+[project.scripts]
+simt = "simt_dev.cli:main"
+
+# A node, for a machine that does not have one.
+#
+# MIT-licensed, and a real node binary per platform rather than a downloader.
+# Optional and not default, because a machine that has node should keep using
+# the node it uses everywhere else - installing this should add a fallback,
+# not silently switch the runtime underneath a working setup. That is also why
+# the launcher looks for PATH *after* looking for this: see find_node in
+# python/simt_dev/cli.py.
+[project.optional-dependencies]
+node = ["nodejs-wheel-binaries"]
+
+[project.urls]
+Homepage = "https://github.com/QuazarMedia/simt-dev"
+Repository = "https://github.com/QuazarMedia/simt-dev"
+Changelog = "https://github.com/QuazarMedia/simt-dev/blob/main/CHANGELOG.md"
+
+# ---------------------------------------------------------------------------
+# hatchling
+
+# The version comes from the tool's own manifest, read here so the two channels
+# cannot disagree about which release they are.
+[tool.hatch.version]
+path = "package.json"
+pattern = '"version":\s*"(?P<version>[^"]+)"'
+
+# The wheel is the tool itself. Every path below is a path the npm tarball
+# already contains, mapped to the same relative location inside the package -
+# which is what makes "the wheel's contents == the tarball's contents" a
+# comparison a test can make, rather than a promise in a README.
+#
+# `package.json` is in the list for a reason that is not bookkeeping: the tool
+# reads its own `engines.node` to render the CI gate. A wheel without it
+# produces a wheel where `simt ci` fails with an unhelpful error about a
+# missing file, having installed otherwise perfectly.
+[tool.hatch.build.targets.wheel.force-include]
+"python/simt_dev" = "simt_dev"
+"bin" = "simt_dev/vendored/bin"
+"src" = "simt_dev/vendored/src"
+"graph" = "simt_dev/vendored/graph"
+"rules" = "simt_dev/vendored/rules"
+"docs/decisions" = "simt_dev/vendored/docs/decisions"
+"CHANGELOG.md" = "simt_dev/vendored/CHANGELOG.md"
+"package.json" = "simt_dev/vendored/package.json"
+
+# The sdist carries the same files so that the wheel can be built from it
+# without this repository present. Without the explicit list a build from the
+# sdist produces a wheel containing nothing but the launcher, which installs
+# cleanly and then fails on every command - the failure mode that is hardest
+# to notice because it happens after a green install.
+[tool.hatch.build.targets.sdist]
+include = [
+    "/python",
+    "/bin",
+    "/src",
+    "/graph",
+    "/rules",
+    "/docs/decisions",
+    "/CHANGELOG.md",
+    "/package.json",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]

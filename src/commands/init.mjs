@@ -29,6 +29,15 @@ import { readHooksState } from '../compare/hooksstate.mjs';
 import { planWorkflow, renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
 import { planDependabot, renderDependabot } from '../ci/dependabot.mjs';
 import { planTsconfigBase, renderTsconfigBase, TSCONFIG_BASE_FILE } from '../tsconfig.mjs';
+import {
+  IDENTITY_FILE,
+  INCLUDE_KEY,
+  ignoreIdentity,
+  includeOwnIdentity,
+  includesOwnIdentity,
+  renderIdentityFile,
+  resolveIdentity,
+} from '../identity.mjs';
 import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
@@ -98,6 +107,26 @@ export async function initCommand(positional, flags) {
   const ci = await planWorkflow(root);
   const dependabot = await planDependabot(root);
   const tsconfigBase = await planTsconfigBase(root);
+  // Per-developer, and planned with the rest so the operator sees it in the same
+  // preview that lists everything else. `exists` short-circuits the write: a
+  // repository that already has one keeps it exactly as it is.
+  const identity = await resolveIdentity(root);
+  const identityPlan = {
+    file: IDENTITY_FILE,
+    action: identity.exists ? 'unchanged' : identity.from === null ? 'skip' : 'created',
+    from: identity.from,
+    name: identity.name,
+    email: identity.email,
+    reason: identity.exists
+      ? `${IDENTITY_FILE} already exists and is left exactly as it is`
+      : identity.from === null
+        ? 'no identity is configured anywhere, and this tool does not invent one'
+        : null,
+    // Only worth fixing when this repository is the one being routed: an include
+    // pointing at another repository's identity file works here and breaks for the
+    // next person who clones without that sibling checkout.
+    include: await includesOwnIdentity(root),
+  };
 
   const payload = {
     ok: summary.conflicts === 0 || flags.acceptConflicts === true,
@@ -117,6 +146,7 @@ export async function initCommand(positional, flags) {
     pointers: pointerPlan.map((p) => ({ file: p.file, to: p.to, readers: p.readers, state: p.state })),
     pointersBlocked: pointerBlocked,
     ci: { file: ci.file, action: ci.action, bytes: ci.bytes, own: ci.own, reason: ci.reason },
+    identity: identityPlan,
     dependabot: {
       file: dependabot.file,
       action: dependabot.action,
@@ -238,6 +268,30 @@ export async function initCommand(positional, flags) {
 
   await writeManifest(root, manifest);
   note(`wrote    ${MANIFEST_FILE} (${manifestAction})`);
+
+  // Identity last, and for the same reason the gate is written after the manifest:
+  // the things that change what this repository does come first, and the one that
+  // only records who is doing them comes once there is something to be committing.
+  //
+  // Three separate refusals, each of which is the correct answer rather than a
+  // failure to try harder. An existing file is not this tool's to rewrite. An
+  // unconfigured identity is not one to invent - a placeholder is an identity git
+  // would use. And the include is only repointed when it is missing or wrong,
+  // because replacing it when it is already right would be a no-op that reads as
+  // a change.
+  if (payload.identity.action === 'created') {
+    await writeFile(join(root, IDENTITY_FILE), renderIdentityFile(identity));
+    await ignoreIdentity(root);
+    note(`wrote    ${IDENTITY_FILE} (${identity.from === 'last-commit' ? 'from the last commit in this repository' : 'from the identity configured on this machine'}); gitignored, because it is yours and not the repository's`);
+  } else if (payload.identity.action === 'unchanged') {
+    note(`kept     ${IDENTITY_FILE} (${payload.identity.reason})`);
+  } else {
+    note(`skipped  ${IDENTITY_FILE}  ${payload.identity.reason}`);
+  }
+  if (!payload.identity.include) {
+    await includeOwnIdentity(root);
+    note(`set      ${INCLUDE_KEY} = ../${IDENTITY_FILE}  this repository's own identity file`);
+  }
 
   // Written after the manifest so the gate exists in the same adoption that declares
   // what the gates are. Skipped with its reason printed rather than silently: a repo
@@ -444,6 +498,18 @@ function render(payload, manifest) {
       `coverage=${manifest.limits.coverage ?? 'undeclared (ADR-006)'} ` +
       `fileLines=${manifest.limits.fileLines.warn}/${manifest.limits.fileLines.error} (ADR-005)`,
   );
+  // The identity line, with its source named. "Created" is a statement about somebody's
+  // name landing in a file, so where the name came from is not a detail of the line.
+  const id = payload.identity;
+  if (id) {
+    const verb = id.action === 'skip' ? 'skip' : id.action;
+    const detail = id.action === 'unchanged'
+      ? id.reason
+      : id.action === 'skip'
+        ? id.reason
+        : `${id.name} <${id.email}>  from ${id.from === 'last-commit' ? "this repository's last commit" : 'the identity configured on this machine'}`;
+    lines.push(`  ${verb.padEnd(9)} ${id.file}${detail ? `\n            ${detail}` : ''}`);
+  }
   // Every gate the stack suggested and this repo cannot run is named, with the reason.
   // A silently shorter gate list reads as "this repo needs no formatting check", when
   // the truth is "declaring one would block every commit". The remedy is stated because

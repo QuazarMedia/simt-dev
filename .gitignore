@@ -1,3 +1,7 @@
 # Editors and operating systems
 .DS_Store
 .idea/
+# Per-developer git identity, written by `simt init`. Not a file to share:
+# it carries whoever is committing into the tree, and a repository has more than
+# one of those. See ADR-057.
+git.config

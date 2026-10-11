@@ -169,19 +169,33 @@ async function installHooks(root, flags) {
   // stop running - and they stop running silently, which is why they are planned here
   // rather than left to the operator to notice (ADR-018, as amended).
   //
-  // A gate-type foreign hook is deliberately NOT chained: it belongs in the manifest
-  // as a declared command, so the dispatcher runs it and its verdict is visible in the
-  // gate output. Chaining it would run it after a gate passed, outside the report.
+  // "Does not gate" is a fact about THIS repository: `gateCount` asks what its manifest
+  // declares for that event, so an event outside the known vocabulary (post-commit) and
+  // an event the repo simply leaves empty (a pre-push with no gates) are both chained,
+  // while an event the repo does gate is left to the manifest's gates.commands - there
+  // the hook runs as a gate and its verdict appears in the report beside the others,
+  // rather than after the gates passed where an author cannot see it.
+  //
+  // Keying this on the event vocabulary instead of on the manifest cost simt-app its
+  // git-lfs hook: pre-push is a gated event in general, but this repo declares no
+  // pre-push gate, so nothing replaces its hook and routing would have dropped it.
   const chained = [
     // Already chained by an earlier install, read back off disk: re-rendered from the
     // file's own contents so the bytes cannot drift on a second run.
     ...(await Promise.all(
       state.chained.map(async (c) => ({ event: c.event, target: await relativeTarget(root, c.target) })),
     )),
-    // Newly found foreign hooks on events this tool does not gate.
+    // Foreign hooks on events THIS repo has no gate for.
+    //
+    // Per repository, not per event vocabulary - and the difference is not academic.
+    // simt-app declares no pre-push gate, and its pre-push is git-lfs: routing without a
+    // shim for that event means git finds no pre-push hook at all and LFS objects stop
+    // being uploaded, silently, with nothing to notice it. An event this repo gates is
+    // different: the dispatcher replaces the hook there by design, and the hook's real
+    // place is gates.commands.
     ...(await Promise.all(
       state.foreign
-        .filter((f) => !EVENTS.includes(f.event))
+        .filter((f) => gateCount(manifest, f.event) === 0)
         .map(async (f) => ({ event: f.event, target: await relativeTarget(root, f.path) })),
     )),
   ].reduce((all, c) => (all.some((x) => x.event === c.event) ? all : [...all, c]), []);

@@ -121,13 +121,23 @@ question, which is why fixing the shared one changed nothing visible.
    hook is not there at all, the shim refuses and names the path — a hook that
    silently stops running is the exact outcome this ruling exists to prevent.
 
-   A gate-type foreign hook is deliberately **not** chained. `pre-commit` and
-   `pre-push` are events this tool gates, so the hook belongs in the manifest under
-   `gates.commands` and its verdict belongs in the gate report. Chaining it would
-   run it *after* the gates passed, outside anything the author sees. The install
-   note now says which of the two happened, because "stopped running" was wrong
-   about a hook that was carried across and would have pushed an operator to restore
-   a hook that was already running for them.
+   A gate-type foreign hook is deliberately **not** chained — *when this repository
+   declares a gate for that event*. The dispatcher replaces the hook there by design, the
+   hook's real place is `gates.commands`, and its verdict belongs in the gate report next
+   to the others. Chaining it would run it *after* the gates had already passed, outside
+   anything the author sees.
+
+   "Does this tool gate it" is a fact about the manifest, not about the event vocabulary,
+   and reading it the second way cost `simt-app` its `pre-push`. That hook is git-lfs.
+   `pre-push` is an event this tool gates *in general*, so a vocabulary check displaced it
+   — and because `simt-app` declares no `pre-push` gate there is no shim for that event
+   either, so git would have found no `pre-push` hook at all. LFS objects would have
+   stopped being uploaded, with nothing to notice it: the same silent failure this ruling
+   exists to prevent, reached by fixing the wrong half of it. The test asks the manifest.
+
+   The install note says which of the two happened, because "stopped running" was wrong
+   about a carried hook and would have pushed an operator to restore a hook that was
+   already running for them.
 
 ## Consequences
 

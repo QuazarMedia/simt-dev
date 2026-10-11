@@ -1,0 +1,94 @@
+# Publish this package when a version tag is pushed.
+#
+# The tag is the trigger, so the tag is also the version. A tag that disagrees with
+# package.json is refused rather than published: `v0.2.0` on a package.json that says
+# 0.1.0 would put a version on the registry that no file in the repository claims,
+# and nothing would notice until somebody installed it.
+#
+# It publishes to the STAGING dist-tag, never `latest`. What a consumer resolves by
+# default is the one thing in a registry that cannot be taken back once moved, so
+# promotion is a separate, deliberate act:
+#
+#   npm dist-tag add simt-dev@<version> latest
+#
+# That is not ceremony. This account publishes with a token that cannot move the
+# production tag from here, and a rule enforced by a human is worth more than one
+# enforced by a pipeline nobody reads.
+#
+# `--provenance` is not decoration: it is the signature saying these bytes were built
+# by this workflow at this commit, which is the whole reason a gate that other people
+# run is shipped from CI rather than from a laptop. It needs `id-token: write`.
+name: publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+  # Provenance is an attestation signed by this run's OIDC identity. Without this the
+  # publish would ship without one, or fail asking for one.
+  id-token: write
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: publish ${{ github.ref_name }} (staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          # The floor in this package's `engines.node`. The version that publishes is
+          # the version that runs, so it is started on the floor rather than on whatever
+          # the runner happens to ship.
+          node-version: '22.20.0'
+          registry-url: https://registry.npmjs.org
+
+      - name: the tag is this package's version
+        run: |
+          set -eu
+          version="$(node -p "require('./package.json').version")"
+          tagged="${GITHUB_REF_NAME#v}"
+          if [ "$tagged" != "$version" ]; then
+            echo "::error::tag ${GITHUB_REF_NAME} does not match package.json version ${version}"
+            exit 1
+          fi
+          echo "tag ${GITHUB_REF_NAME} matches package.json"
+
+      - name: this version is not already published
+        run: |
+          set -eu
+          version="$(node -p "require('./package.json').version")"
+          name="$(node -p "require('./package.json').name")"
+          # Re-running a workflow is normal; publishing the same version twice is not
+          # possible, and failing the job for it would page somebody for nothing.
+          if npm view "${name}@${version}" version >/dev/null 2>&1; then
+            echo "::notice::${name}@${version} is already on the registry; nothing to publish"
+            echo "SKIP=true" >> "$GITHUB_ENV"
+          else
+            echo "SKIP=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: tests
+        # Publishing is irreversible, so the bytes are checked before they leave rather
+        # than after. A green `main` is not a guarantee about this tag: a tag can point
+        # at any commit, including one that never passed the gate.
+        if: env.SKIP == 'false'
+        run: npm test
+
+      - name: skill registry lint
+        if: env.SKIP == 'false'
+        run: node bin/simt-dev.mjs graph lint
+
+      - name: publish to the staging tag
+        if: env.SKIP == 'false'
+        run: npm publish --provenance --tag staging
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

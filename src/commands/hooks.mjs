@@ -13,13 +13,13 @@
 // is found by asking git rather than by reading config.
 
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { chmod, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { MANIFEST, readManifest } from '../projection/manifest.mjs';
-import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderShim } from '../hooks/shim.mjs';
+import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../hooks/shim.mjs';
 import { readHooksPath, readHooksState } from '../compare/hooksstate.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
@@ -74,6 +74,36 @@ const GATE_KEY = { 'pre-commit': 'preCommit', 'pre-push': 'prePush' };
 
 function gateCount(manifest, event) {
   return (manifest?.gates?.[GATE_KEY[event]] ?? []).length;
+}
+
+/**
+ * The path to write into a chained shim: relative to the repository's top level
+ * wherever the hook lives inside it.
+ *
+ * Absolute is the fallback, not the default. A hook path baked in absolute stops
+ * resolving the first time the repository is cloned or moved somewhere else, and the
+ * failure is silent in the worst way - the shim still runs, still exits non-zero, and
+ * blocks every commit for a reason that reads like a broken gate rather than a moved
+ * checkout. `.git/hooks` is inside the top level in a normal repository, which is the
+ * common case here; a linked worktree shares its parent's `.git` and is the one shape
+ * that has to fall back.
+ *
+ * Both sides are resolved through `realpath` first, which is not a nicety. macOS
+ * hands out `/var/...` and git reports `/private/var/...` for the same directory, so
+ * compared naively a hook inside the repository looks like it lives outside it, and
+ * the first run bakes in an absolute path that the second run cannot reproduce - a
+ * shim rewritten with identical intent on every install, forever. The question being
+ * asked is "same file", not "same spelling".
+ *
+ * @param {string} root repository root
+ * @param {string} target absolute, or relative to `root` when read back off a shim
+ * @returns {Promise<string>} relative to `root` where possible, else absolute
+ */
+async function relativeTarget(root, target) {
+  const real = async (p) => realpath(p).catch(() => p);
+  const resolved = await real(isAbsolute(target) ? target : join(root, target));
+  const rel = relative(await real(root), resolved);
+  return rel === '' || rel.startsWith('..') ? resolved : rel;
 }
 
 /**
@@ -134,6 +164,28 @@ async function installHooks(root, flags) {
     return EXIT.FAIL;
   }
 
+  // Foreign hooks on events this tool does NOT gate. Routing replaces the whole
+  // directory git reads from, so these have to be carried across explicitly or they
+  // stop running - and they stop running silently, which is why they are planned here
+  // rather than left to the operator to notice (ADR-018, as amended).
+  //
+  // A gate-type foreign hook is deliberately NOT chained: it belongs in the manifest
+  // as a declared command, so the dispatcher runs it and its verdict is visible in the
+  // gate output. Chaining it would run it after a gate passed, outside the report.
+  const chained = [
+    // Already chained by an earlier install, read back off disk: re-rendered from the
+    // file's own contents so the bytes cannot drift on a second run.
+    ...(await Promise.all(
+      state.chained.map(async (c) => ({ event: c.event, target: await relativeTarget(root, c.target) })),
+    )),
+    // Newly found foreign hooks on events this tool does not gate.
+    ...(await Promise.all(
+      state.foreign
+        .filter((f) => !EVENTS.includes(f.event))
+        .map(async (f) => ({ event: f.event, target: await relativeTarget(root, f.path) })),
+    )),
+  ].reduce((all, c) => (all.some((x) => x.event === c.event) ? all : [...all, c]), []);
+
   const plan = [];
   for (const event of wanted) {
     const path = join(root, fileFor(event));
@@ -144,6 +196,19 @@ async function installHooks(root, flags) {
     } else {
       plan.push({ file: fileFor(event), action: existing === null ? 'created' : 'updated' });
     }
+  }
+  for (const c of chained) {
+    const path = join(root, fileFor(c.event));
+    const source = renderChainedShim(c.event, c.target);
+    const existing = await readIfExists(path);
+    plan.push({
+      file: fileFor(c.event),
+      action: existing === source ? 'unchanged' : existing === null ? 'created' : 'updated',
+      // Labelled in the plan because a file that merely re-runs a hook and a file that
+      // enforces gates are not the same artefact, and the reader approving this write
+      // is entitled to know which one they are looking at.
+      note: `chained: runs ${c.target}`,
+    });
   }
   const pathAction = current === wants ? 'unchanged' : current === null ? 'created' : 'updated';
 
@@ -205,14 +270,28 @@ async function installHooks(root, flags) {
     await writeFile(path, renderShim(event));
     await chmod(path, 0o755);
   }
+  for (const c of chained) {
+    const path = join(root, fileFor(c.event));
+    await writeFile(path, renderChainedShim(c.event, c.target));
+    await chmod(path, 0o755);
+  }
   await exec('git', ['config', HOOKS_PATH_KEY, wants], { cwd: root });
 
   const notes = [];
-  if (state.foreign.length > 0) {
-    for (const f of state.foreign) {
-      notes.push(`stopped running ${f.event} at ${f.path} (${f.bytes} bytes); the file is still on disk, untouched`);
-    }
-  } else if (takeover) {
+  const chainedEvents = new Set(chained.map((c) => c.event));
+  for (const f of state.foreign) {
+    // Two different facts, and the old note reported only one of them. A hook that was
+    // carried across keeps running and is named here as such; a gate-type hook was not
+    // chained and genuinely stopped running. Saying "stopped running" about both would
+    // be wrong about the first, and it would push an operator to restore a hook that is
+    // already being run for them.
+    notes.push(
+      chainedEvents.has(f.event)
+        ? `chained ${f.event}: ${fileFor(f.event)} runs ${f.path} (${f.bytes} bytes), so it keeps running`
+        : `stopped running ${f.event} at ${f.path} (${f.bytes} bytes); the file is still on disk, untouched - declare it in ${MANIFEST_FILE} gates.commands to have the dispatcher run it`,
+    );
+  }
+  if (state.foreign.length === 0 && takeover) {
     notes.push(`replaced an existing core.${HOOKS_PATH_KEY} (${current}); the old hooks are still on disk, untouched`);
   }
 
@@ -228,7 +307,7 @@ async function installHooks(root, flags) {
 
 function renderPlan(root, current, wants, pathAction, plan, headline, manifest) {
   const lines = [`repo     ${root}`, `${HOOKS_PATH_KEY.padEnd(15)} ${pathAction}  ${current ?? '(unset)'} -> ${wants}`, ''];
-  for (const p of plan) lines.push(`${p.action.toUpperCase().padEnd(9)} ${p.file}`);
+  for (const p of plan) lines.push(`${p.action.toUpperCase().padEnd(9)} ${p.file}${p.note ? `   (${p.note})` : ''}`);
   lines.push('', headline);
   lines.push(`gates    preCommit = ${describeGates(manifest, 'preCommit')}`);
   lines.push(`         prePush   = ${describeGates(manifest, 'prePush')}`);

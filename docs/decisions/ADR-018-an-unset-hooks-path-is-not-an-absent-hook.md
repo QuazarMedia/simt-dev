@@ -2,7 +2,7 @@
 
 Status: **accepted** · 2026-10-06
 
-Affects: `simt-dev hooks install`, `simt-dev hooks status`, `simt-dev compare`, `src/hooks/where.mjs`
+Affects: `simt-dev hooks install`, `simt-dev hooks status`, `simt-dev compare`, `src/hooks/where.mjs`, `src/hooks/shim.mjs`
 
 ## Context
 
@@ -100,6 +100,35 @@ question, which is why fixing the shared one changed nothing visible.
    repository with *no manifest* is a different case: we do not know what it wants,
    so we cannot rule the shim out. Absence of knowledge is not a decision.
 
+7. **A foreign hook for an event this tool does not gate is chained, not stopped.**
+   `core.hooksPath` does not scope this tool to the events it cares about and leave
+   the rest to git; git reads *every* hook from the named directory and from nowhere
+   else. So the moment routing lands, `simt-app`'s `post-checkout`, `post-commit`
+   and `post-merge` — events this tool gates nothing about — stop running. Nothing
+   fails, nothing is logged, and the hook is still on disk looking intact: the
+   failure is indistinguishable from the hook having passed. Ruling 3's refusal
+   names the hook, but a refusal the operator accepts is not a chain.
+
+   `hooks install` therefore writes a second kind of shim for those events, which
+   runs the repository's own hook and forwards git's arguments to it. There is
+   nothing to enforce on an event this tool does not gate, so it does not run the
+   dispatcher at all. Git's arguments *are* forwarded here, unlike in the dispatcher
+   shim, because the program on the other end is the repository's hook and expects
+   them.
+
+   The target is written relative to the repository's top level wherever the hook
+   lives inside it, so a clone or a move does not silently stop resolving it. If the
+   hook is not there at all, the shim refuses and names the path — a hook that
+   silently stops running is the exact outcome this ruling exists to prevent.
+
+   A gate-type foreign hook is deliberately **not** chained. `pre-commit` and
+   `pre-push` are events this tool gates, so the hook belongs in the manifest under
+   `gates.commands` and its verdict belongs in the gate report. Chaining it would
+   run it *after* the gates passed, outside anything the author sees. The install
+   note now says which of the two happened, because "stopped running" was wrong
+   about a hook that was carried across and would have pushed an operator to restore
+   a hook that was already running for them.
+
 ## Consequences
 
 `src/hooks/where.mjs` is new and is the single answer to "where are this repo's
@@ -130,6 +159,13 @@ been silently taken over.
   that cannot see the thing it guards is decoration.
 - **Move a foreign hook aside instead of blocking.** Blocking is right; the file is
   left on disk untouched either way, so the outcome already is "move it aside".
+- **Chain every foreign hook, gate-type ones included.** Rejected when ruling 7 was
+  written, and the reason is the difference between a verdict and a side effect. A
+  `pre-commit` hook chained behind the dispatcher runs *after* the gates have already
+  passed, so its failure is reported by git as a hook failure with no gate output
+  above it — an author cannot tell which of the two things said no. The hook's real
+  place is `gates.commands`, where it runs as a gate and appears in the report next
+  to the others.
 - **Install the shims anyway and warn.** The gate list was empty. Warning about a
   replacement that enforces less than what it replaces is the wrong direction.
 - **Put foreign hooks in `compare`'s `problems`.** Six of sixteen repositories, all

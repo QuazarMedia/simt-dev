@@ -9,7 +9,7 @@ import { PACKAGE_NAME } from '../src/name.mjs';
 import { after, test } from 'node:test';
 
 import { GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
-import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderShim } from '../src/hooks/shim.mjs';
+import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
 import { hasScript, knownGates, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
 import { runGates } from '../src/hooks/dispatcher.mjs';
 import { readCapability } from '../src/hooks/capability.mjs';
@@ -86,6 +86,67 @@ test('shim: bakes the event name in rather than deriving it from $0', () => {
 
 test('shim: refuses an unknown event', () => {
   assert.throws(() => renderShim('post-merge'), /unknown hook event/);
+});
+
+// ---------------------------------------------------------------- chained shim
+
+test('chained shim: runs the repository hook and forwards git arguments', async () => {
+  // The whole point: core.hooksPath makes git read every hook from the shim
+  // directory, so an event this tool does not gate would simply stop running. It
+  // has to run the hook, and it has to forward the arguments - the dispatcher shim
+  // deliberately does not, because pre-push's argv would be misread as command
+  // arguments, but here the program on the other end is the repository's own hook.
+  const root = await mkdtemp(join(tmpdir(), 'simt-chain-'));
+  temps.push(root);
+  const dir = join(root, 'hooks');
+  await mkdir(dir, { recursive: true });
+  const original = join(dir, 'post-commit');
+  await writeFile(original, '#!/bin/sh\necho "ran with: $*"\n', { mode: 0o755 });
+  await exec('git', ['init', '-q'], { cwd: root });
+
+  const shim = join(dir, 'simt-post-commit');
+  await writeFile(shim, renderChainedShim('post-commit', 'hooks/post-commit'), { mode: 0o755 });
+  await exec('sh', ['-n', shim]);
+
+  // `cwd` matters: the shim derives ROOT from git, which is the whole reason the
+  // target is written relative. Run it from the repository it belongs to.
+  const { stdout } = await exec('sh', [shim, 'alpha', 'beta'], { cwd: root });
+  assert.match(stdout, /ran with: alpha beta/);
+});
+
+test('chained shim: a missing hook fails loudly instead of passing', async () => {
+  // The gate this replacement exists to avoid: a hook that silently stops running
+  // looks exactly like a hook that passed. So a chained shim whose target is gone
+  // refuses, naming the file it expected.
+  const root = await mkdtemp(join(tmpdir(), 'simt-chain-'));
+  temps.push(root);
+  await exec('git', ['init', '-q'], { cwd: root });
+
+  const shim = join(root, 'post-commit');
+  await writeFile(shim, renderChainedShim('post-commit', 'hooks/post-commit'), { mode: 0o755 });
+
+  const result = await exec('sh', [shim], { cwd: root }).catch((e) => e);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /is chained to a hook that is not there/);
+});
+
+test('chained shim: is valid POSIX sh for an event this tool does not gate', async () => {
+  // `renderShim` refuses an event outside EVENTS, which is the point of the two
+  // functions being separate: chaining exists precisely for those events.
+  const root = await mkdtemp(join(tmpdir(), 'simt-chain-'));
+  temps.push(root);
+  const path = join(root, 'post-merge');
+  await writeFile(path, renderChainedShim('post-merge', 'hooks/post-merge'));
+  await exec('sh', ['-n', path]);
+});
+
+test('chained shim: a relative target survives the repository moving', async () => {
+  // An absolute path baked in at install time stops resolving the moment anyone
+  // clones or moves the repository, and the symptom is a gate that blocks every
+  // commit for a reason that reads like a broken gate rather than a moved checkout.
+  // The default case must be repo-relative; absolute is the linked-worktree fallback.
+  assert.match(renderChainedShim('post-commit', 'hooks/post-commit'), /TARGET='hooks\/post-commit'/);
+  assert.match(renderChainedShim('post-commit', 'hooks/post-commit'), /ROOT\/\$TARGET/);
 });
 
 test('shim: generated source is valid POSIX sh', async () => {
@@ -859,6 +920,85 @@ test('hooks install --yes: replaces it and says which hook stopped running', asy
   const { stderr } = await simt(['hooks', 'install', '--root', root, '--yes'], root);
   assert.match(stderr, /stopped running pre-commit at .*\.git\/hooks\/pre-commit \(\d+ bytes\)/);
   assert.match(stderr, /still on disk, untouched/);
+});
+
+test('hooks install --yes: chains a foreign hook on an event this tool does not gate', async () => {
+  // The defect this closes, end to end. `core.hooksPath` does not scope routing to
+  // the events this tool gates: git reads every hook from the named directory. So
+  // without chaining, adopting this repository silently stops its `post-commit` -
+  // no error, no log, hook still on disk looking intact.
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+    files: { '.git/hooks/post-commit': '#!/bin/sh\nexit 0\n' },
+  });
+  await chmod(join(root, '.git', 'hooks', 'post-commit'), 0o755);
+
+  const { stderr } = await simt(['hooks', 'install', '--root', root, '--yes'], root);
+
+  // The note has to say it was CHAINED. The old note said "stopped running" about
+  // every foreign hook, which is false here and would send an operator to restore a
+  // hook that install is already running for them.
+  assert.match(stderr, /chained post-commit/);
+  assert.doesNotMatch(stderr, /stopped running post-commit/);
+
+  // And the shim has to exist, run the original hook, and say so in the plan.
+  const shim = await readFile(join(root, HOOKS_DIR, 'post-commit'), 'utf8');
+  assert.match(shim, /post-commit/, 'the chained shim names its event');
+  const { stdout } = await simt(['hooks', 'install', '--root', root], root);
+  assert.match(stdout, /chained: runs \.git\/hooks\/post-commit/);
+});
+
+test('hooks install: a gate-type foreign hook is not chained, it is named as stopped', async () => {
+  // The other half of ruling 7. `pre-commit` is an event this tool gates, so the
+  // hook belongs in `gates.commands` where its verdict appears in the gate report;
+  // chaining it would run it after the gates passed, where an author cannot see it.
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+    files: { '.git/hooks/pre-commit': '#!/bin/sh\nexit 0\n' },
+  });
+  await chmod(join(root, '.git', 'hooks', 'pre-commit'), 0o755);
+  const { stderr } = await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  assert.match(stderr, /stopped running pre-commit/);
+  assert.match(stderr, /gates\.commands/);
+});
+
+test('hooks install: a second run leaves the chained shim unchanged', async () => {
+  // Idempotency, which is where this actually broke. The chain was written on the
+  // first run but read back from disk on the second, and macOS spells the same
+  // directory `/var/...` and `/private/var/...` depending on who asked - so compared
+  // naively the shim looked rewritten on every run and `install` rewrote an identical
+  // file forever. A plan that never settles is indistinguishable from one that is
+  // wrong, and this is the test that says the bytes are stable.
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+    files: { '.git/hooks/post-commit': '#!/bin/sh\nexit 0\n' },
+  });
+  await chmod(join(root, '.git', 'hooks', 'post-commit'), 0o755);
+  await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  const first = await readFile(join(root, HOOKS_DIR, 'post-commit'), 'utf8');
+
+  const { stdout } = await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  assert.match(stdout, /UNCHANGED \.simt-hooks\/post-commit/);
+  assert.equal(await readFile(join(root, HOOKS_DIR, 'post-commit'), 'utf8'), first);
+});
+
+test('hooks status: does not report this tool\'s own chained shim as a foreign hook', async () => {
+  // A shim this tool wrote, refusing itself: the name is the repository's hook name,
+  // so only the bytes can say whose it is. Without the marker check, every re-install
+  // on a chained repo fails with "this repo already runs hooks simt did not write".
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+    files: { '.git/hooks/post-commit': '#!/bin/sh\nexit 0\n' },
+  });
+  await chmod(join(root, '.git', 'hooks', 'post-commit'), 0o755);
+  await simt(['hooks', 'install', '--root', root, '--yes'], root);
+
+  const { stdout, stderr } = await simt(['hooks', 'status', '--root', root], root);
+  assert.doesNotMatch(stdout + stderr, /git runs post-commit/);
 });
 
 test('hooks install: refuses to install shims for a repo that declares no runnable gate', async () => {

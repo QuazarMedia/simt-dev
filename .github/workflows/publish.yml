@@ -20,8 +20,10 @@
 # changes which name resolves to them by default. Staging is a real approval step.
 #
 # `--provenance` is not decoration: it is the signature saying these bytes were built
-# by this workflow at this commit, which is the whole reason a gate that other people
-# run is shipped from CI rather than from a laptop. It needs `id-token: write`.
+# by this workflow at this commit. It needs `id-token: write`, and it needs this
+# repository to be PUBLIC - npm verifies the sigstore bundle against the source and
+# rejects a private one. The step below asks for it only when it can exist, so making
+# this repository public turns attestation on with no edit here.
 name: publish
 
 on:
@@ -134,7 +136,25 @@ jobs:
       # only a maintainer's approval actually makes it so.
       - name: stage for a maintainer to approve
         if: env.SKIP == 'false'
-        run: npm stage publish --provenance --tag latest
+        # Provenance is requested only when it can exist. npm verifies a sigstore
+        # bundle against a PUBLIC source repository and rejects the publish otherwise:
+        #
+        #   Unsupported GitHub Actions source repository visibility: "private".
+        #   Only public source repositories are supported when publishing with provenance.
+        #
+        # This repository is private, so `--provenance` fails the release rather than
+        # attesting it. Rather than switch it off permanently, the flag follows the
+        # repository: make this public and the next release is attested, with no edit
+        # here and nothing to remember.
+        run: |
+          set -eu
+          if [ "${{ github.event.repository.visibility }}" = "public" ]; then
+            echo "repository is public; publishing with provenance"
+            npm stage publish --provenance --tag latest
+          else
+            echo "repository is private; npm provenance requires a public source, staging without it"
+            npm stage publish --tag latest
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

@@ -23,13 +23,13 @@ Requires **Node >= 22.20.0** (the PyPI install can supply it, see below).
 
 ```sh
 # pinned, per repository - what CI and a teammate both get
-npm i -D simt-dev@0.1.1
+npm i -D simt-dev@0.2.0
 
 # or globally, if you would rather not add a dependency
-npm i -g simt-dev@0.1.1
+npm i -g simt-dev@0.2.0
 
 # or with no install at all, for a one-off
-npx -y simt-dev@0.1.1 check
+npx -y simt-dev@0.2.0 check
 ```
 
 ### From PyPI
@@ -53,7 +53,7 @@ you get a message naming the remedy rather than a placeholder node path.
 ### From Homebrew
 
 ```sh
-brew install QuazarMedia/tap/simt-dev
+brew install QuazarMedia/homebrew-tap/simt-dev
 ```
 
 The formula declares its own `node` dependency, so `brew install` gives you a

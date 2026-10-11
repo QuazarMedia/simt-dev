@@ -418,7 +418,7 @@ ADR-018's guard could not see the default hooks directory because it looked only
 key, and `hooks status` carried its own copy of the read logic the shared module already had.
 
 A fourth joins them. ADR-019 is the same shape one layer over: `simt init` dropped all
-five gates on `simt-app` and told the reader to add a script to a `package.json` the
+five gates on `repo-05` and told the reader to add a script to a `package.json` the
 repository will never have. The facts were right, the remedy was not followable, and once
 the repository declared what it does have, the dispatcher, `check` and `hooks status`
 gave three different answers about one manifest. Every one of these shipped green because

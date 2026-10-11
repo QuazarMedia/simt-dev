@@ -478,7 +478,7 @@ async function lintSourcesOnDisk(registry, workspaceRoot) {
 /**
  * SKILL.md plus every file beneath the skill directory.
  * Handles both layouts: a directory containing SKILL.md, and the flat
- * `skills/<name>.md` form bunnyland-server still uses (ADR-009 says that will be
+ * `skills/<name>.md` form one repository still uses (ADR-009 says that will be
  * wrapped, so lint reports it rather than accepting it silently).
  */
 export async function measureSkill(full) {

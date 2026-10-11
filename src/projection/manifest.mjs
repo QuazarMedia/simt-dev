@@ -397,7 +397,7 @@ function defaultId(root) {
  * 1. A STALE GENERATED FIELD. `buildManifest` emits `$comment` and
  *    `projection.simtDevSha`; the repo owns everything else. `upgrade` spreads the
  *    existing manifest and refreshes only the SHA, so a field added to the writer
- *    after a repo was adopted never appears — simt-space had been projecting for
+ *    after a repo was adopted never appears — one repository had been projecting for
  *    several versions with no `surfaces` key, and nothing said so. Every parse-based
  *    comparison passes, because the file is valid and the values in it are all true.
  *

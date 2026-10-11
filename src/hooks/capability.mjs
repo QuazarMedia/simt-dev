@@ -2,7 +2,7 @@
 //
 // This exists because the first real adoption declared five gates and could run two.
 // The stack table proposes a formatter, a linter and an i18n check for any Node repo;
-// simt-social-media has no prettier installed, no `lint` script and no declared command
+// a repository with no prettier installed, no `lint` script and no declared command
 // for the i18n check. Every one of those gates fails closed by design, so installing the
 // dispatcher on that manifest blocks every commit and teaches the team to reach for
 // `--no-verify`. The dispatcher was right; the declaration was wrong.

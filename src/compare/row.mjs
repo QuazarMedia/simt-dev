@@ -78,8 +78,8 @@ export async function buildRow(path, context) {
   // Adoption is settled BEFORE any problem is collected. Every gate below asks
   // `row.adoption`, and this block used to run after them - so the stale-rule-file gate
   // below compared against the initialiser's `'unmanaged'` and could never fire. In the
-  // estate that made `simt-app`, with 0 of 3 rule files current, report a problems list
-  // that mentioned neither the rule files nor anything the exit code could see. A gate
+  // estate, with 0 of 3 rule files current, report a problems list that mentioned
+  // neither the rule files nor anything the exit code could see. A gate
   // that reads a field the line above has not set yet is not a gate.
   //
   // An absent manifest is not a defect; it is the pre-adoption state, which is the normal

@@ -93,7 +93,7 @@ indent_style = tab`;
  * every path as text and is the single most common way to corrupt a binary in a
  * repository, because nothing tells git it is wrong. `auto` makes git decide per path
  * from its own content sniffing, so a `.tif`, a `.zip` and a `.mc` file are left exactly
- * as they are and only files that genuinely are text get normalised. simt-garmin
+ * as they are and only files that genuinely are text get normalised. One
  * already worked this out on its own, which is the strongest evidence available that
  * the conservative form is the one the estate would have picked.
  *

@@ -217,7 +217,7 @@ export function compose(body, { sha, sources = [] } = {}, style) {
   );
   const trimmed = body.replace(/\n+$/, '');
   // Two lines here exist only because a real repo proved they are needed. A
-  // formatter that runs on commit - simt-space has one, and three of the estate's
+  // formatter that runs on commit - several repositories have one, and three of the
   // other repos do too - rewrote the region on the very first commit: it inserted a
   // blank line after the header comment and added the trailing newline. Both edits
   // are things prettier considers correct, and either one alone makes `check`
@@ -226,7 +226,7 @@ export function compose(body, { sha, sources = [] } = {}, style) {
   // projection emits the formatter's shape in the first place. The blank line before
   // END is the same class: prettier treats an HTML comment after a paragraph as a
   // new block and inserts the separating blank line itself, which made
-  // simt-blog's `format:check` fail on a file whose generated region was correct.
+  // a `format:check` fail on a file whose generated region was correct.
   const out =
     trimmed === ''
       ? [s.begin, ...header, s.end]
@@ -293,7 +293,7 @@ export function inject(text, body, meta, opts = {}) {
     // terminates the region with one; adding a second left every adopted file
     // ending in a blank line. Nothing in this tool noticed, because `check`
     // compares region bodies and the byte after END is not part of the region —
-    // but bunnyland-server's own `git diff --check` gate did, and it is a gate
+    // but a repository's own `git diff --check` gate did, and it is a gate
     // that repo runs before every commit. The `updated` branch below has always
     // been correct for exactly this reason.
     //

@@ -32,7 +32,7 @@ export const TSCONFIG_FILE = 'tsconfig.json';
  * The strictness floor.
  *
  * Every key here is already set, and set the same way, by every `tsconfig.json` in the
- * estate that could afford it. `simt-goto` is the outlier and it is not one on purpose: it
+ * estate that could afford it. One repository is the outlier and it is not one on purpose: it
  * is missing the seven flags below that the three social repos share, which is the gap
  * plan section 3.1 row 5 named. Nothing in this object is a value anybody has argued about;
  * it is the intersection of what four repositories independently wrote.

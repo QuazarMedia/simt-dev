@@ -100,7 +100,7 @@ export function getGate(name) {
  * This is the load-bearing decision of the whole dispatcher. A gate that
  * silently does nothing is indistinguishable from a gate that passed, and the
  * documented consequence in this estate is an agent reaching for
- * `--no-verify` - simt-space removed its tests from pre-commit precisely
+ * `--no-verify` - a repository removed its tests from pre-commit precisely
  * because they were slow, and slow-plus-silent is what teaches everyone that
  * hooks are advisory.
  */

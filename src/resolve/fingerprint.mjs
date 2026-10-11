@@ -41,7 +41,7 @@ const MARKERS = [
 /**
  * Extensions are weaker evidence than marker files: a stray script must not
  * define a repo's stack. `python` is deliberately absent here because
- * simt-app carries .py tooling scripts inside a Gradle project - a marker file
+ * a repository carries .py tooling scripts inside a Gradle project - a marker file
  * is required for that tag. `kotlin` has no marker file, so it stays here.
  */
 const EXTENSION_TAGS = new Map([
@@ -83,7 +83,7 @@ const DEP_TAGS = new Map([
  *
  * Three, and the reason is a convention rather than a preference: the Android Gradle
  * Plugin puts a module's manifest at `<module>/src/main/AndroidManifest.xml`, and
- * simt-app's sits at `app/src/main/AndroidManifest.xml`. A bound shallower than the
+ * one common layout sits at `app/src/main/AndroidManifest.xml`. A bound shallower than the
  * convention makes `has-android-manifest` the shape S07 found - a fact no repository
  * could ever have. Deeper would be a scan rather than a probe, and ADR-013's promise
  * is that adding an ecosystem is data, so a fact must not cost a search.
@@ -300,7 +300,7 @@ export async function fingerprint(root) {
     }
   }
 
-  // simt-app and wakt-app both carry a wear/ module; wakt-app is the wearable.
+  // two repositories both carry a wear/ module; only one of them is the wearable.
   if (names.has('wear') && (await isDir(join(root, 'wear')))) {
     stack.add('wear-os');
     evidence.push('wear/');

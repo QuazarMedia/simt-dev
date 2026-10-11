@@ -55,7 +55,7 @@ export async function resolveHooksDir(root) {
   }
 
   // Rule 1: core.hooksPath wins. A relative value resolves against the top level
-  // of the working tree, which is what makes simt-app's `hooks` work.
+  // of the working tree, which is what makes a `hooks` directory work.
   if (configured !== null) {
     return {
       dir: isAbsolute(configured) ? configured : resolve(top, configured),

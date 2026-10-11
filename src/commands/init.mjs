@@ -58,7 +58,7 @@ export async function initCommand(positional, flags) {
 
   // What this repo can demonstrably run, not what its stack suggests. Without this the
   // stack table proposes gates the repo has no way to execute — the adoption of
-  // simt-social-media declared five and could run two, which would have blocked every
+  // a repository declared five and could run two, which would have blocked every
   // commit once hooks were installed.
   const capability = await readCapability(root);
   const { dropped } = planGates(detected.stack, capability);

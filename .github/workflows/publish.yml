@@ -202,6 +202,11 @@ jobs:
     # and PyPI rejects the upload with a message about the publisher rather
     # than the project.
     environment: pypi
+    permissions:
+      contents: read
+      # Trusted publishing exchanges this run's OIDC identity for an upload
+      # session; PyPI rejects the exchange without it.
+      id-token: write
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 

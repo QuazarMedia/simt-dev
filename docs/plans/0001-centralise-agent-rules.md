@@ -320,7 +320,7 @@ gained an `intake-questions.mdc` it never had.
 `prettier --check` does not walk it, verified by running it against the directory directly.
 
 **Phase 7 — DONE, and two of its items were already closed before the sweep.** The hardcoded
-`/Users/said.elimam/...` sweep found 17 tracked files, not the 6 implied here. Six were fixed:
+`/Users/<developer>/...` sweep found 17 tracked files, not the 6 implied here. Six were fixed:
 `app-ui-submodule.mdc` (three absolute paths, to a directory that does not exist, now `../app-ui`),
 two migration docs, a dead script constant in `simt-landing`, and `simt-goto`'s Claude launch
 config. The remaining matches are verbatim captured build output, generated Connect IQ and ProGuard

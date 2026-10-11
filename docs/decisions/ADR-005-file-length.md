@@ -4,9 +4,9 @@ Status: **accepted** · 2026-10-05 · affects all repos
 
 ## Context
 
-- `simt-social` / `simt-social-api`: "**Split any file once it exceeds 1000 lines**; extract
+- `repo-14` / `repo-11`: "**Split any file once it exceeds 1000 lines**; extract
   along the nearest cohesive boundary instead of growing the file further."
-- `simt-garmin`: "**File length: 400 lines is a smell threshold, not a hard gate.**" Generated
+- `repo-07`: "**File length: 400 lines is a smell threshold, not a hard gate.**" Generated
   `.mc` files are exempt, with a named exception for a 408-line template.
 - Several repos: no file-length rule stated at all.
 
@@ -27,10 +27,10 @@ Per-repo overrides are permitted via `limits.fileLines` in `simt-dev.json`.
 
 ## Consequences
 
-- The Social repos' hard 1000 gate and garmin's soft 400 both survive unchanged in force.
+- one repository' hard 1000 gate and garmin's soft 400 both survive unchanged in force.
 - The generated-file exemption that garmin had to state in prose becomes a declared property,
   so the hook can honour it without hardcoding `.mc`.
-- `simt-social`'s pre-commit file-size check (currently inlined as 1000 lines of shell, and
+- `repo-14`'s pre-commit file-size check (currently inlined as 1000 lines of shell, and
   duplicating `scripts/check-file-sizes.ts`) becomes one implementation in the shared
   dispatcher.
 
@@ -38,5 +38,5 @@ Per-repo overrides are permitted via `limits.fileLines` in `simt-dev.json`.
 
 - **One number org-wide.** Either it is too tight for legitimately long declarative files or
   too loose to prompt a human at 400.
-- **No rule.** The Social repos' pre-commit check exists precisely because a rule was missing,
+- **No rule.** one repository' pre-commit check exists precisely because a rule was missing,
   and it is now implemented twice.

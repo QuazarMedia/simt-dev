@@ -16,13 +16,13 @@ Measured over the 16 repositories at `~/code/simt`:
 ```
 staleRuleFiles: 17
 repos naming stale rule files in problems: 0
-simt-app problems:
+repo-05 problems:
   "the generated region was hand-edited; restore it with: simt-dev sync --yes"
   "core.hooksPath is \"hooks\", not the shared dispatcher; run: simt-dev hooks install --yes"
 ```
 
-Five adopted repositories have stale rule files — `simt-app`, `simt-blog` and `simt-social` at 0
-of 3 current, `simt-social-api` and `simt-social-media` at 0 of 4 — and not one of them said so in
+Five adopted repositories have stale rule files — `repo-05`, `repo-06` and `repo-14` at 0
+of 3 current, `repo-11` and `repo-13` at 0 of 4 — and not one of them said so in
 its problems list. The summary already said `staleRuleFiles: 17`, because `summarise` has always
 counted them. So the dashboard was reporting a count of a defect it refused to call a defect.
 

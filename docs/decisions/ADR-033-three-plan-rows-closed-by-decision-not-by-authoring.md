@@ -25,7 +25,7 @@ Phase 6 asked to "collapse the 7 drifted Social skill twins to canonical + stub"
 answers the row directly. All three resolvers select `role === 'canonical'` and nothing else —
 `src/commands/skills.mjs` twice, `src/commands/skillsinstall.mjs:291`, `src/mcp/tools.mjs:192` — so
 a copy declared `duplicate` or `variant` is never installed. The one pair that genuinely had to be
-collapsed, `add-country-galaxy`, is already a stub in `simt-social` pointing at the API repo.
+collapsed, `add-country-galaxy`, is already a stub in `repo-14` pointing at the API repo.
 
 Phase 7 asked for a sweep of hardcoded absolute paths. The sweep found 17 tracked files. Six were
 fixed. The two Android `local.properties` files were not, and were nearly fixed by reflex.
@@ -47,7 +47,7 @@ fixed. The two Android `local.properties` files were not, and were nearly fixed 
    because resolution never read those bytes. Phase 6's twin collapse is therefore closed as
    already answered, at `a9983c8`.
 
-3. **`local.properties` stays tracked.** Both `simt-app` and `wakt-app` commit it, and both
+3. **`local.properties` stays tracked.** Both `repo-05` and `repo-03` commit it, and both
    `.gitignore` files have the conventional `# local.properties` line commented out at lines 22 and
    24 — a deliberate override of Android's own convention, not an oversight. Untracking them would
    be a house-style change made while closing a plan, and a build machine that checks out without
@@ -74,8 +74,8 @@ unmade decision is not a gap to fill by invention.
 
 **Collapsing `graphify` and `parallel-feature-team`.** Both are declared `duplicate` with matching
 byte counts, so they look like the obvious candidates. `graphify` is `vendored: true` — an
-84 534-byte, ten-file, version-pinned tool present in both Social repos on purpose. Deleting
-simt-social's copy would leave nothing to detect the loss, because resolution only ever read the
+84 534-byte, ten-file, version-pinned tool present in both one repository on purpose. Deleting
+repo-14's copy would leave nothing to detect the loss, because resolution only ever read the
 canonical copy.
 
 **Untracking `local.properties`.** An Android SDK path is machine state, and two repos chose to

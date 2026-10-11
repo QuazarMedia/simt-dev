@@ -4,16 +4,16 @@ Status: **accepted** · 2026-10-05 · affects all repos
 
 ## Context
 
-- `simt-social-api`: "lint and format are enforced by the pre-commit hook — **do not run them
+- `repo-11`: "lint and format are enforced by the pre-commit hook — **do not run them
   manually.**"
-- `simt-social`: "the local pre-push hook republishes opportunistically when a token happens to
+- `repo-14`: "the local pre-push hook republishes opportunistically when a token happens to
   be present." Never says the hook is the gate; instructs agents to run static checks directly.
 - A repo outside this estate: tells agents to run its linter and `git diff --check` by hand,
   and its contributor guide repeats it.
-- `simt-api`, and 11 repos with no hooks at all: silent.
+- `repo-04`, and 11 repos with no hooks at all: silent.
 
 The audit also found the estate's hook reality: 4 incompatible conventions, and
-`simt-app/hooks/pre-push` is **0 bytes** while the real git-lfs pre-push sits unused in
+`repo-05/hooks/pre-push` is **0 bytes** while the real git-lfs pre-push sits unused in
 `scripts/hooks/`.
 
 ## Ruling
@@ -33,7 +33,7 @@ skip.
 ## Consequences
 
 - The shared hook dispatcher from plan 0001 lands in every repo that has one, which also
-  delivers the dead `simt-app/hooks/pre-push` fix.
+  delivers the dead `repo-05/hooks/pre-push` fix.
 - `simt-dev doctor` reports hook installation state, so "the hook will cover it" is a
   verifiable claim rather than an assumption.
 - The 11 hook-less repos get a pre-commit on adoption, which ends the silent case entirely.

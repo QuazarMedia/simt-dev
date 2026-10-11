@@ -19,8 +19,8 @@ empty", and deferred it to a record of its own.
 
 The estate confirms the first half and not the conclusion. Thirteen of sixteen repositories
 have no `.gitattributes` at all. The three that do disagree about almost everything:
-`simt-app` declares only LFS filters for `.tif` and `.zip`; `simt-garmin` declares line
-endings plus ConnectIQ binary markers; `simt-social-api` declares exactly one whitespace
+`repo-05` declares only LFS filters for `.tif` and `.zip`; `repo-07` declares line
+endings plus ConnectIQ binary markers; `repo-11` declares exactly one whitespace
 suppression for hash-locked vendored content. There is no divergence here of the kind a
 baseline fixes by being consistent. There is a file missing.
 
@@ -48,7 +48,7 @@ to be the line ruling 7 sent this file to make.
    because nothing in the pattern says those are binary. `text=auto` is a detection: git
    sniffs each path and applies normalisation only to files it concludes are text. This is
    the most common way a repository corrupts its own binaries, and it is invisible until
-   someone diffs an image. `simt-garmin` had independently arrived at `text=auto eol=lf` on
+   someone diffs an image. `repo-07` had independently arrived at `text=auto eol=lf` on
    its first line, which is the strongest available evidence that the estate would pick the
    cautious form if asked — this ruling does not ask, it supplies.
 
@@ -96,8 +96,8 @@ what any file is". A future baseline for a per-stack attribute would have to arr
 different row with its own record, which is what §3.2's keep-it-local rule asks for anyway.
 
 The repositories with an existing `.gitattributes` are the interesting case and they are not
-in conflict: `simt-app`'s LFS filters, `simt-garmin`'s binary markers and
-`simt-social-api`'s whitespace suppression all stay beneath the region and all keep winning,
+in conflict: `repo-05`'s LFS filters, `repo-07`'s binary markers and
+`repo-11`'s whitespace suppression all stay beneath the region and all keep winning,
 because git takes the last match. No repository loses a line it wrote.
 
 This repository adopts neither baseline for itself, and the reason is the same one that keeps

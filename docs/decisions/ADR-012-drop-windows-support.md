@@ -20,8 +20,8 @@ work:
 5. CI must carry a permanent `windows-latest` job.
 
 Against that: **no Windows developer appears anywhere in the repos**, and no repo's own
-toolchain is Windows-ready either — `simt-garmin` drives the Monkey C toolchain, and
-`simt-app`/`wakt-app`/`app-ui` drive Gradle and Android tooling. So the CLI would have been the
+toolchain is Windows-ready either — `repo-07` drives the Monkey C toolchain, and
+`repo-05`/`repo-03`/`repo-01` drive Gradle and Android tooling. So the CLI would have been the
 *only* Windows-ready artefact in the estate, serving nobody.
 
 The deciding argument is not the cost, it is the shape: obligations 1–3 are correctness

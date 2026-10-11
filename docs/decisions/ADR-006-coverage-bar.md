@@ -9,9 +9,9 @@ The coverage bar is the one concept that is mutually incompatible *in kind* acro
 | Repo | Bar |
 |---|---|
 | Repos with a declared numeric bar (outside this estate) | Quantitative. `fail_under = 100`, branch coverage, "a behavioural coverage gate, not a line-count scoreboard" |
-| `simt-garmin` | Quantitative, but a different quantity. Memory: 64 KB app / 24 KB Glance against a 32 KB ceiling, plus 12 named lint scripts |
-| `simt-social`, `simt-social-api`, `simt-social-media` | Qualitative. No number anywhere. Evidence discipline: named commands, 100 % pass, no unjustified skips, behavioural test delta |
-| `simt-api` | Neither. Three verification commands. |
+| `repo-07` | Quantitative, but a different quantity. Memory: 64 KB app / 24 KB Glance against a 32 KB ceiling, plus 12 named lint scripts |
+| `repo-14`, `repo-11`, `repo-13` | Qualitative. No number anywhere. Evidence discipline: named commands, 100 % pass, no unjustified skips, behavioural test delta |
+| `repo-04` | Neither. Three verification commands. |
 
 You cannot average these. 100 % line coverage is unreachable for Kotlin/Compose UI code and for
 Monkey C memory budgets; a memory ceiling is not a coverage proxy; "no number" is not a weaker

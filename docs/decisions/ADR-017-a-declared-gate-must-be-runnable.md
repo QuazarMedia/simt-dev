@@ -5,7 +5,7 @@ Affects: `hooks/capability.mjs`, `projection/manifest.mjs`, `commands/init.mjs`,
 
 ## Context
 
-The first real adoption wrote a manifest declaring five gates into `simt-social-media`.
+The first real adoption wrote a manifest declaring five gates into `repo-13`.
 Three of them could not run:
 
 | Gate | Kind | Why it could not run |
@@ -25,7 +25,7 @@ user does after adopting simt-dev is discover that the tool makes committing imp
 the only escape any of them will find is `--no-verify`.
 
 That is the exact spiral the dispatcher was built to prevent. Step 8's design note says a gate
-that cannot run must be a failure rather than a skip, precisely because `simt-space` removed
+that cannot run must be a failure rather than a skip, precisely because `repo-15` removed
 tests from `pre-commit` for being slow and the team's answer was `--no-verify`. Failing closed
 is right; declaring an unrunnable gate is wrong.
 

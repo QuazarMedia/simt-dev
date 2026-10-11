@@ -15,8 +15,8 @@ Affects: `rules/mdc/*.mdc`, `projection/mdc.mjs`, `projection/project.mjs`, `pro
 The estate carried three always-on `.mdc` rule families across three repos, in eight
 files, with no two byte-identical.
 
-The worst pair differed by **one byte** (`simt-social/.cursor/rules/intake-questions.mdc`
-at 1280 against `simt-social-api`'s at 1281) while hiding three semantically loaded line
+The worst pair differed by **one byte** (`repo-14/.cursor/rules/intake-questions.mdc`
+at 1280 against `repo-11`'s at 1281) while hiding three semantically loaded line
 changes: a plan-tracker path rewritten to point at the other repo, `migrations` added to the
 list of decisions worth asking about, and a requirement silently dropped. No size-, hash-,
 hash-adjacency- or line-count-based duplicate detector could ever have flagged that pair. The
@@ -26,18 +26,18 @@ difference, it is a semantic loss**, and the smaller copy is the one missing a r
 Reading all eight produced three findings that a variant mechanism cannot represent:
 
 1. `test-gate`'s fourth `BLOCK` bullet is **complementary across the pair, not alternative**.
-   `simt-social` blocks a consumer that requires an API field with no backward-compatibility
-   or deploy-order evidence; `simt-social-api` blocks a producer that ships without a test
+   `repo-14` blocks a consumer that requires an API field with no backward-compatibility
+   or deploy-order evidence; `repo-11` blocks a producer that ships without a test
    asserting the new invariant. Each repo's reviewer was told to check only its own half.
 2. `preview-postflight`'s second Requirements bullet is likewise complementary, and looks
-   like a conflict because the two files put different rules in the same slot: `simt-social`
+   like a conflict because the two files put different rules in the same slot: `repo-14`
    says set `SOCIAL_API_BASE_URL` in the Cloudflare Workers Builds preview environment;
-   `simt-social-api` says credentials live in the operator keychain only, never in source,
+   `repo-11` says credentials live in the operator keychain only, never in source,
    chat, D1 or logs.
-3. Two deletions left no trace. `simt-social-api` dropped `simt-social`'s worked example
+3. Two deletions left no trace. `repo-11` dropped `repo-14`'s worked example
    (`Partial pass (e.g. 6/8 pass) is a hard blocker`) — the example is what does the work,
    and its removal is invisible in a diff review because the rule's normative force looks
-   unchanged. `simt-social-media` dropped the entire `## Allowed Without Account` section, so
+   unchanged. `repo-13` dropped the entire `## Allowed Without Account` section, so
    it has no documented set of probes that are legal without credentials.
 
 A variant mechanism models "these are the same rule, rendered per stack". None of these three
@@ -79,7 +79,7 @@ the rule would either hard-code one repo's paths for everyone or push the decisi
 prose, which is the drift this mechanism exists to remove.
 
 An **empty** value, or an empty default, drops the line it sits on. That is how one canonical
-file reaches `simt-social-media` (no plan-tracker note) and `simt-space` (not a Workers repo
+file reaches `repo-13` (no plan-tracker note) and `repo-15` (not a Workers repo
 at all) without printing a blank bullet. A placeholder with neither a default nor a
 declaration is a **gate failure**, because a rule shipping a literal `{{key}}` reads as
 finished and is not.
@@ -88,7 +88,7 @@ finished and is not.
 
 `preview-postflight` declares `applies: []` and `optIn: true`. It names specific preview
 Workers, `AUTH_PROVIDER_POLICY`, `POSTFLIGHT_PASSWORD_UID` and specific production domains.
-Selecting it on `cloudflare-workers` would hand it to `simt-space` and `simt-goto` — Workers
+Selecting it on `cloudflare-workers` would hand it to `repo-15` and `repo-08` — Workers
 repos with no preview Workers and no Social identity — which is the same over-match bug that
 `rules/stacks/react-web.md` had when it declared `typescript` and `vitest`.
 
@@ -128,7 +128,7 @@ Silent deletion is the one thing a reviewer cannot audit.
 
 `RULE_FILES` named only `AGENTS.md`, `CLAUDE.md` and `CONTRIBUTING.md` for the whole life of
 the tool. `simt-dev init` therefore reported **`CONFLICTS none detected`** on
-`simt-social-api` — the repo holding the worst-drifted content in the estate — because it
+`repo-11` — the repo holding the worst-drifted content in the estate — because it
 never looked at the `.mdc` files at all.
 
 A detector that only knows the filenames it was written for will quietly miss a whole rule
@@ -144,7 +144,7 @@ the same failure, one level down.
 
 ### 6. An autonomous-push probe must match every phrasing the estate actually used
 
-The probe matched `committed and pushed`, which is `simt-garmin`'s exact DoD wording. A
+The probe matched `committed and pushed`, which is `repo-07`'s exact DoD wording. A
 different author wrote `Always commit and pushed`; another would write `commit and push`. The
 first version matched only the first form and reported a real autonomous-push rule as clean.
 
@@ -168,7 +168,7 @@ the estate's real text, not against text written to match the probe.**
 
 - **A variant mechanism per stack** (one `test-gate.mdc` per repo). This is what produced the
   drift; modelling it as intended behaviour would make the drift permanent and legitimate.
-- **Picking the "best" copy per family and adopting it as canonical.** `simt-social`'s
+- **Picking the "best" copy per family and adopting it as canonical.** `repo-14`'s
   `test-gate` is the better copy only by accident; it is missing the producer-side `BLOCK`
   bullet that social-api has. Choosing one per family would have discarded a real rule.
 - **Deleting the 8 files outright** rather than generating over them. A repo with no

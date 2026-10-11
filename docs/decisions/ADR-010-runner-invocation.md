@@ -6,7 +6,7 @@ Status: **accepted** · 2026-10-05 · affects all repos
 
 Four repos independently arrived at the same rule, in two ecosystems, with the same rationale.
 
-- `simt-social` / `simt-social-api`: "Run tests and quality checks through repository `npm run
+- `repo-14` / `repo-11`: "Run tests and quality checks through repository `npm run
   ...` scripts… **Do not invoke local package binaries through `npx` or `npm exec`** unless no
   repository script supports the required operation."
 - A Python repo outside this estate, in the same form: "**Do not use `uv run pytest`**; the

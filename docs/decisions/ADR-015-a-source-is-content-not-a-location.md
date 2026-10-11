@@ -9,9 +9,9 @@ Affects: `resolve/source.mjs`, `skills install`, `skills show`, `skills brief`
 single-repo use first class. It fixed resolution, not lookup, and the next defect was found
 immediately by the user who asked for the previous one.
 
-Someone who cloned **only `simt-social`** has the `simt-social` body of `slice-commit` on disk at
+Someone who cloned **only `repo-14`** has the `repo-14` body of `slice-commit` on disk at
 `.agents/skills/slice-commit`. They have no workspace. The registry entry
-`simt-social/.agents/skills/slice-commit` is satisfied by that file. Both commands refused:
+`repo-14/.agents/skills/slice-commit` is satisfied by that file. Both commands refused:
 
 ```
 $ simt-dev skills install slice-commit

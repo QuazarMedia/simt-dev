@@ -14,7 +14,7 @@ the machine of whoever remembers to run it, and a hook is a developer's machine.
 review is somebody else's, and every merge is a machine nobody gated.
 
 The plan called this "a reusable workflow", and named
-`QuazarMedia/simt-dev/.github/workflows/sync-check.yml` as a file "referenced by every
+`the organisation/simt-dev/.github/workflows/sync-check.yml` as a file "referenced by every
 consumer". Nothing in this repository had a `.github/` at all. There were three ways to
 close the gap, and they differ in who the resulting file belongs to:
 
@@ -93,7 +93,7 @@ rules once told readers to edit a source tree they did not have.
 
 ## Rejected
 
-- **`uses: QuazarMedia/simt-dev/.github/workflows/sync-check.yml@main`.** Rejected under
+- **`uses: the organisation/simt-dev/.github/workflows/sync-check.yml@main`.** Rejected under
   ruling 1: it is the plan's own suggestion, and it points every reader at bytes they do
   not have. Worth recording that the plan wrote it, because the next person to read §6
   will find it there.

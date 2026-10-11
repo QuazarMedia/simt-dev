@@ -50,7 +50,7 @@ other `react-native`, and neither receives both.
 **Two.** The Android and uv facts name a path at an unknown depth, which the two existing kinds
 (`file`, `dir`) cannot express. A third kind, `glob`, walks at most `GLOB_DEPTH` directory levels
 below the root. The bound is a convention, not a preference: the Android Gradle Plugin puts a
-module's manifest at `<module>/src/main/AndroidManifest.xml`, and simt-app's sits at
+module's manifest at `<module>/src/main/AndroidManifest.xml`, and repo-05's sits at
 `app/src/main/AndroidManifest.xml`. A shallower bound makes `has-android-manifest` the shape S07
 found — a fact no repository could have. A deeper one is a scan rather than a probe, and
 ADR-013's promise is that adding an ecosystem is data, so a fact must not cost a search.
@@ -78,11 +78,11 @@ repository loses coverage:
 
 | Repo | Before | After |
 | --- | --- | --- |
-| `app-ui`, `simt-app`, `wakt-app` | `core, jvm-android` | `core, android, jvm` |
-| `bunnyland-server` | `container, core, python` | `container, core, python, uv` |
+| `repo-01`, `repo-05`, `repo-03` | `core, jvm-android` | `core, android, jvm` |
+| `repo-02` | `container, core, python` | `container, core, python, uv` |
 
 The three Android repositories gain the profile whose body they actually needed and keep the JVM
-build rules; `simt-app` gaining `android` was the row's acceptance criterion. `bunnyland-server`
+build rules; `repo-05` gaining `android` was the row's acceptance criterion. `repo-02`
 carries a committed `uv.lock`, so its gain is the defect repaired, not a new selection.
 
 The rename is breaking in one narrow way: the id `jvm-android` no longer exists. A consumer that

@@ -10,7 +10,7 @@ a copied byte range. Settles the `tsconfig.base.json` item of §3.1 row 5 and ro
 ## Context
 
 Row 5 promised eight baselines and named two problems among them that are not about a file
-being missing: simt-goto's seven absent strictness flags, and `moduleResolution` spelled
+being missing: repo-08's seven absent strictness flags, and `moduleResolution` spelled
 inconsistently across the workspace. ADR-025 ruled `tsconfig.base.json` out of the region
 mechanism because JSON has no comments, and its consequences promised that "the next fix is
 three more JSON files and therefore a different mechanism". ADR-026 supplied that mechanism
@@ -95,7 +95,7 @@ one an external document uses.
 
 A TypeScript repository now gets twelve flags it did not have, and one of them — the floor
 arriving through `extends` — is a behaviour change that can surface real type errors in
-`simt-goto`, which is the point of the record and also the reason adoption is one commit
+`repo-08`, which is the point of the record and also the reason adoption is one commit
 with a `tsc` run rather than a silent upgrade. A base file is a floor, and a repository
 that had not been standing on one is the case where raising it finds something.
 

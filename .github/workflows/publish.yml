@@ -99,20 +99,28 @@ jobs:
       - name: staged publishing needs an npm that has it
         run: |
           set -eu
-          # `npm stage` landed in npm 11.15.0. Node 22.20.0 - the floor this package
-          # runs on - bundles npm 10, so the version this workflow ships with cannot
-          # stage anything and fails with `Unknown command: "stage"`, which says nothing
-          # about the package and everything about the runner.
+          # `npm stage` landed in npm 11.15.0. The node floor in this package's
+          # engines - 22.20.0 - bundles npm 10, which fails with `Unknown command:
+          # "stage"`: an error that says nothing about the package and everything
+          # about the runner, arriving after the tests passed.
           #
-          # Checked rather than assumed: an unconditional `npm i -g npm@latest` would
-          # fetch a new npm on every release whether or not the one present already
-          # knows how to stage, and the release's bytes would then depend on a registry
-          # fetch the release itself performs.
+          # The major is pinned to 11 for the same reason the floor is. npm 12
+          # requires node ^22.22.2 || ^24.15.0 || >=26, so `npm@latest` cannot be
+          # installed on the very node this package declares it runs on - and
+          # bumping the floor to satisfy the release tool would mean the floor is
+          # set by what npm happens to ship this month rather than by what this
+          # package needs. 11.21.0 is the newest npm whose engine range
+          # (^20.17.0 || >=22.9.0) admits the floor, and it stages.
+          #
+          # Checked rather than assumed: installing unconditionally would fetch an
+          # npm on every release whether or not the one present already stages,
+          # and a release's bytes would depend on a registry fetch it performs.
           if ! npm stage --help >/dev/null 2>&1; then
             echo "npm $(npm --version) cannot stage; installing one that can"
-            npm install -g npm@latest
+            npm install -g npm@11
           fi
           npm --version
+          npm stage --help >/dev/null
 
       - name: stage for a maintainer to approve
         if: env.SKIP == 'false'

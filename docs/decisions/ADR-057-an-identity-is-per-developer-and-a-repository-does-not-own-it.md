@@ -11,8 +11,8 @@ It holds a name and an email address:
 
 ```ini
 [user]
-	name = Said Elimam
-	email = 169009+saidelimam@users.noreply.github.com
+	name = <one developer's name>
+	email = <that developer's email address>
 ```
 
 Both had a local `include.path` pointing at it, and both worked. Both were also
@@ -105,7 +105,7 @@ instance of it.
   here.** This is what the two repositories did, and it is a publication of a
   person's email address with a commit attached.
 - **Take the identity from the OS (the login name, the home directory).** It
-  produces `saidelimam@example.com` and similar: an identity nobody configured,
+  produces `<login-name>@example.com` and similar: an identity nobody configured,
   used for authorship. Ruling 4's refusal covers it.
 - **Overwrite an existing `git.config` when it differs from the derived one.**
   Difference is not error. A file that has been there for years and disagrees with

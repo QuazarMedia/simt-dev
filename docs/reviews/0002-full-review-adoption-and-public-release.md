@@ -1,9 +1,12 @@
 # Review 0002 — simt-dev at `4c27514`: fixes, enhancements, SIMT adoption, public release
 
-Status: open · 2026-10-06
+Status: open · 2026-10-06 · re-verified at `cea633a` on 2026-10-12 (public release unblocked;
+enforcement still blocked)
 Reviewed at: `4c27514` on `main` (clean worktree, level with `origin/main`), 13 commits after
 review 0001 (`09c596d`)
-Verdict: **BLOCK** for a public release and for estate-wide enforcement (ADR-008 vocabulary)
+Verdict: **BLOCK** for estate-wide enforcement only (S36 roll-out + S35's non-npm path); a
+public release is unblocked — `simt-dev@0.2.0` is published and byte-verified on npm, PyPI and
+Homebrew (ADR-008 vocabulary)
 Companion: `docs/plans/0003-intelligence-amplifier-research-plan.md`, the R&D plan this review
 feeds
 
@@ -46,6 +49,14 @@ for five reasons:
 
 None of this needs a redesign. Wave 0 in §9 is eight slices. It makes `check` green and keeps
 it green, and the runbook in S36 then turns the estate from advisory to enforced.
+
+**Re-verified at `cea633a` (2026-10-12).** Of the five reasons, two are now resolved: reason 1
+(drift) by S01/ADR-032 (`provenanceDigest()`), and reason 3 (writers) by S08/S10/S24. Reason 4
+is partial — S28 (platform selection) and S18 (packaging) are done, but the registry still ships
+estate policy (S39). Reasons 2 and 5 remain: the estate roll-out (S36) is at 9/15 repos with S35's
+non-npm path unbuilt, and the token cost (S38) is unmeasured. The publish that blocked reason 2
+is now done — `simt-dev@0.2.0` is live on all three channels — so a public release is unblocked;
+what still blocks is enforcement, which is S36.
 
 ## 1. Scope and method
 
@@ -150,8 +161,8 @@ record is written.
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Complete | `c5bd2f5` |
 | S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Complete | `7153ea7` |
 | S34 | Folded rules break the heading hierarchy | P2 | F | projection | no | — | Complete | `9a2fb1e` |
-| S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (P5) | S18 | Queued | the name is decided (unscoped `simt-dev`, ADR-056); publishing is blocked on npm auth, and the estate roll-out (S36) now also carries the `simt.json` rename and the `simt:` region markers |
-| S36 | Estate roll-out: from 14 drifted to 14 enforced | P1 | A | adoption | amend ADR-018 | S01, S08, S10, S24, S35 | Queued | #3 |
+| S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (P5) | S18 | In progress | name decided (unscoped `simt-dev`, ADR-056); **publish done** — `simt-dev@0.2.0` is live and byte-verified on npm (`latest`=0.2.0), PyPI (wheel + sdist) and Homebrew (tap sha == live tarball). P5 parts 2-5 still open: the locator (`src/locate.mjs:54`) has no version-vs-pin check, one generic `npm i -D simt-dev` remedy (no per-kind branch), and the consumer CI always runs `npm ci \|\| npm install` (`src/ci/workflow.mjs:270`). The estate roll-out (S36) also carries the `simt.json` rename and the `simt:` region markers |
+| S36 | Estate roll-out: from 14 drifted to 14 enforced | P1 | A | adoption | amend ADR-018 | S01, S08, S10, S24, S35 | In progress | #3 — partial at `cea633a`: 9 estate repos route hooks (`.simt-hooks`), 7 have the check workflow (was 0/14 at `4c27514`); acceptance (`compare --workspace`: every repo routed) still unmet |
 | S37 | A region past a harness's read limit is invisible to it | P1 | A | projection | no | — | Complete | `e984d12` |
 | S38 | Workspace token cost: 90 KB per turn, 72% repeated | P1 | A | projection | yes (P7) | S12 | Queued | #17 |
 | S39 | Estate policy belongs in an estate pack | P1 | A | rules, package | yes (P4) | S28 | Queued | profiles |

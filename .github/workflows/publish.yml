@@ -5,15 +5,19 @@
 # 0.1.0 would put a version on the registry that no file in the repository claims,
 # and nothing would notice until somebody installed it.
 #
-# It publishes to the STAGING dist-tag, never `latest`. What a consumer resolves by
-# default is the one thing in a registry that cannot be taken back once moved, so
-# promotion is a separate, deliberate act:
+# It STAGES the release with `npm stage publish`, which submits the tarball to npm's
+# staging area rather than to the live registry. Nothing becomes installable until a
+# maintainer reviews it and runs `npm stage approve` (or clicks Approve on npmjs.com),
+# and that approval is the step that requires 2FA. Staging itself does not - which is
+# the point: the pipeline can submit, and only a person can release.
 #
-#   npm dist-tag add simt-dev@<version> latest
+#   npm stage list                 # what is waiting
+#   npm stage view <stage-id>      # inspect it
+#   npm stage approve <stage-id>   # publish it, with 2FA
 #
-# That is not ceremony. This account publishes with a token that cannot move the
-# production tag from here, and a rule enforced by a human is worth more than one
-# enforced by a pipeline nobody reads.
+# This is deliberately NOT `npm publish --tag <something>`. A dist-tag does not gate
+# anything - the bytes are public the moment they are uploaded, and a dist-tag only
+# changes which name resolves to them by default. Staging is a real approval step.
 #
 # `--provenance` is not decoration: it is the signature saying these bytes were built
 # by this workflow at this commit, which is the whole reason a gate that other people
@@ -37,7 +41,7 @@ concurrency:
 
 jobs:
   publish:
-    name: publish ${{ github.ref_name }} (staging)
+    name: stage ${{ github.ref_name }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -47,7 +51,8 @@ jobs:
         with:
           # The floor in this package's `engines.node`. The version that publishes is
           # the version that runs, so it is started on the floor rather than on whatever
-          # the runner happens to ship.
+          # the runner happens to ship. It is also above the floor staged publishing
+          # needs (Node 22.14.0), which is worth re-checking if this ever moves.
           node-version: '22.20.0'
           registry-url: https://registry.npmjs.org
 
@@ -62,24 +67,28 @@ jobs:
           fi
           echo "tag ${GITHUB_REF_NAME} matches package.json"
 
-      - name: this version is not already published
+      - name: this version is not already on the registry
         run: |
           set -eu
           version="$(node -p "require('./package.json').version")"
           name="$(node -p "require('./package.json').name")"
-          # Re-running a workflow is normal; publishing the same version twice is not
-          # possible, and failing the job for it would page somebody for nothing.
+          # Re-running a workflow is normal; staging the same version twice is not
+          # possible, and failing the job for it would page somebody for nothing. Note
+          # this checks the REGISTRY, not the staging area: a staged version is not
+          # publicly visible, so a re-run after a successful stage still looks
+          # unpublished here. `npm stage list` is the other half of that answer.
           if npm view "${name}@${version}" version >/dev/null 2>&1; then
-            echo "::notice::${name}@${version} is already on the registry; nothing to publish"
+            echo "::notice::${name}@${version} is already published; nothing to stage"
             echo "SKIP=true" >> "$GITHUB_ENV"
           else
             echo "SKIP=false" >> "$GITHUB_ENV"
           fi
 
       - name: tests
-        # Publishing is irreversible, so the bytes are checked before they leave rather
-        # than after. A green `main` is not a guarantee about this tag: a tag can point
-        # at any commit, including one that never passed the gate.
+        # Staging is the reversible half of a release, but the bytes still left the
+        # building, so they are checked before they go rather than after. A green
+        # `main` is no guarantee about this tag: a tag can point at any commit,
+        # including one that never passed the gate.
         if: env.SKIP == 'false'
         run: npm test
 
@@ -87,8 +96,16 @@ jobs:
         if: env.SKIP == 'false'
         run: node bin/simt-dev.mjs graph lint
 
-      - name: publish to the staging tag
+      - name: stage for a maintainer to approve
         if: env.SKIP == 'false'
-        run: npm publish --provenance --tag staging
+        run: npm stage publish --provenance
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: what is now waiting
+        # The stage id is what a maintainer passes to `npm stage approve`, and the job
+        # log is not where anyone looks for it hours later.
+        if: env.SKIP == 'false'
+        run: npm stage list
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

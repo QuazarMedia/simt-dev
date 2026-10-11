@@ -4,6 +4,32 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] — 2026-10-11
+
+### A foreign hook on an event this repo does not gate is chained
+
+`0.1.0` chained the wrong set of hooks and is worth replacing rather than
+recommending. It chained on the event *vocabulary* — anything that was not
+`pre-commit` or `pre-push` — when the question worth asking is whether **this
+repository** declares a gate for that event.
+
+The difference is `simt-app`, whose `pre-push` is `git-lfs`. `pre-push` is an
+event this tool gates in general, so `0.1.0` displaced that hook; and because
+`simt-app` declares no `pre-push` gate there was no shim for the event either, so
+git would have found no `pre-push` hook at all. LFS objects would have stopped
+being uploaded, with nothing to notice it — the exact silent failure chaining
+exists to prevent, reached by fixing the wrong half of it.
+
+`0.1.1` asks the manifest. An event the repo declares a gate for is left to
+`gates.commands`, where the hook runs as a gate and its verdict appears in the
+report; every other foreign hook is chained. That also picks up
+`simt-landing`'s Lighthouse pre-push, which declares no gates at all.
+*(ADR-018, as amended)*
+
+Upgrade with `npm i -D simt-dev@0.1.1`, then `simt hooks install --yes`. Any
+repository already routed with `0.1.0` should re-run it: the shims it writes
+will differ where a gated event was previously displaced.
+
 ## [0.1.0] — 2026-10-11
 
 The first release with real contents in it. `1.0.0` was an empty reservation of the name
@@ -100,4 +126,5 @@ never ran `simt hooks install` again will find nothing until the dependency is r
 and `simt hooks install --yes` is re-run. That is a real upgrade step and it is called out
 here rather than discovered.
 
+[0.1.1]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.1.1
 [0.1.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.1.0

@@ -39,7 +39,7 @@ import { MANIFEST_FILE } from '../name.mjs';
 /**
  * Where skills live in this repo. The estate already has a convention - a
  * canonical directory plus symlink fan-out - and it is not the same directory in
- * every repo (`.agents/skills` in five, `.cursor/skills` in simt-app). So the
+ * every repo (`.agents/skills` in some, `.cursor/skills` in others). So the
  * existing layout is respected and only invented when there is none.
  */
 export function skillsDir(root, entries) {

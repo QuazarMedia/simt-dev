@@ -445,8 +445,29 @@ const section = (name) => {
  *
  * Not global: callers reuse it with `exec`, and a `/g` flag would remember `lastIndex`.
  */
+/**
+ * Identifiers that belong to the repositories this tool was built against, rather than
+ * to anything a reader has.
+ *
+ * This used to be a list of names, and that was the defect: the guard that exists to
+ * keep those names out of shipped text was itself shipped, carrying them. Every
+ * adopting repository could read the portfolio out of `src/`.
+ *
+ * So it matches shapes instead:
+ *
+ *   - `simt-<something>` that is not `simt-dev`, which is most of the estate
+ *   - `repo-NN`, the pseudonyms the decision records now use in place of a name. These
+ *     must not leak either: a label that identifies nothing publicly is still a label
+ *     that joins one record to another, and shipping it into a consumer's repository
+ *     would carry that join with it.
+ *
+ * What this no longer catches, stated plainly: three estate repositories whose names
+ * do not begin `simt-`, which a shape-based rule cannot recognise without enumerating
+ * them - which is what this file used to do. Detection of those now depends on a name
+ * never being written into shipped text, rather than on a check.
+ */
 export const ESTATE_NAME =
-  /\b(?:simt-(?!dev\b)[\w-]+|bunnyland(?:-server)?|wakt-app|app-ui|garmin|(?:the )?Social repos?)\b/;
+  /\b(?:simt-(?!dev\b)[\w-]+|repo-\d{2})\b/;
 
 /** Replace estate repository names with a phrase a reader who does not have them can use. */
 export function redactEstate(text) {
@@ -477,12 +498,15 @@ export function redactCommand(text) {
 }
 
 /**
- * Repositories the records were written about. Kept on the summary so a maintainer can
- * see which decisions cite which repos. `rules why` redacts them before printing:
- * the names are not actionable in a repository that does not contain those files.
+ * Repositories the records were written about, so a maintainer can see which decisions
+ * cite which. `rules why` redacts them before printing: the names are not actionable in
+ * a repository that does not contain those files.
+ *
+ * Same shape rule as {@link ESTATE_NAME} and for the same reason - this shipped too, so
+ * enumerating the names here put the portfolio in every adopting repository. The records
+ * themselves now carry `repo-NN` labels, so that is what this matches in practice.
  */
-const ESTATE =
-  /\b(?:app-ui|bunnyland(?:-server)?|wakt-app|simt-[\w-]+|(?:the )?(?:Social|garmin) repos?)\b/gi;
+const ESTATE = /\b(?:simt-(?!dev\b)[\w-]+|repo-\d{2})\b/gi;
 
 /** Trim to whole sentences within a budget, never leaving a stub fragment. */
 function sentence(text, limit = 260) {

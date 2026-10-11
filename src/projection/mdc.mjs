@@ -201,7 +201,7 @@ function stripFrontmatter(text) {
  *
  * An empty-string default is a deliberate "this repo has nothing to add here"
  * and the line it sits on is DROPPED. That is how `preview-postflight` reaches
- * `simt-social-media` without printing an empty bullet, and how a repo with no
+ * a repository without printing an empty bullet, and how a repo with no
  * production-domain note gets a clean document instead of a blank one.
  *
  * A placeholder with neither a declared nor a default value is a defect: the
@@ -218,7 +218,7 @@ export function renderMdc(rule, declared = {}) {
 
     if (has && provided === '') {
       // A repo declared this key and declared it empty: the line it sits on is
-      // removed. This is how preview-postflight reaches simt-social-media without
+      // removed. This is how preview-postflight reaches a repository without
       // printing a blank bullet.
       body = dropOrReplace(body, sub.key, '');
       continue;

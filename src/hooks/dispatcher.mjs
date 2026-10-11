@@ -3,7 +3,7 @@
 // Design commitments, all of them load-bearing:
 //
 //   Fail closed, never fail open. A gate that cannot run is a failure, not a
-//   skip. simt-space removed tests from pre-commit because they were slow, and
+//   skip. A repository removed tests from pre-commit because they were slow, and
 //   the documented consequence was that authors reached for --no-verify. A
 //   dispatcher that skips what it cannot do reproduces exactly that.
 //

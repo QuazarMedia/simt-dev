@@ -12,7 +12,7 @@
 //      so it must be attributed to its parent or a projection drift gets reported
 //      against the wrong directory.
 //   3. Directories that are not repos are not candidates, but they are still
-//      COUNTED. `simt-space-review` is 25 PNG screenshots; silently dropping it
+//      COUNTED. A directory of 25 PNG screenshots is not a rule source; silently dropping it
 //      hides the fact that a directory in the workspace is unmanaged, which is a
 //      real finding during a migration.
 //

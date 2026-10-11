@@ -17,7 +17,7 @@
 //
 //   1. A POINTER IS NOT A COPY. `CLAUDE.md` and `GEMINI.md` are symlinks to
 //      `AGENTS.md`. A copy is the corpus's one true content duplicate
-//      (bunnyland-server's `CLAUDE.md` is byte-identical to its `AGENTS.md`), and
+//      (one repository's `CLAUDE.md` is byte-identical to its `AGENTS.md`), and
 //      the DeepSeek harness explicitly rejects loading both in one directory
 //      because "repositories in transition commonly duplicate guidance" — and
 //      *its* dedup is content-based, so a symlink collapses to one while a
@@ -32,7 +32,7 @@
 //      mode bit. So those get machine-written copies — and because every byte is
 //      derived from `rules/mdc/*.mdc` and `simt-dev check` compares each against
 //      that same derivation, they are not duplication, they are a build output.
-//      The difference from bunnyland's duplicate is that nobody can hand-edit one
+//      The difference from that duplicate is that nobody can hand-edit one
 //      and have it survive a sync.
 //
 //   3. AN ALWAYS-ON RULE EMITS NO SCOPING FRONTMATTER. Claude Code's `paths:` key

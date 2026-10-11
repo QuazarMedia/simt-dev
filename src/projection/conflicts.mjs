@@ -6,7 +6,7 @@
 // the same rule restated in prose outside a generated region - prohibited by the
 // anti-duplication doctrine, but not a contradiction.
 //
-// The distinction is not academic. bunnyland's AGENTS.md says "Do not use `uv run
+// The distinction is not academic. One AGENTS.md says "Do not use `uv run
 // pytest`" - which contains the forbidden string `uv run pytest` verbatim. A naive
 // substring scan reports that file as violating the very rule it is correctly
 // restating. So every match is checked for prohibition context first.

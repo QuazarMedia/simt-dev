@@ -8,7 +8,7 @@
 //
 // The second location is the one nobody wrote down: **the repository being operated
 // on is itself a location for a declared source**. Someone who cloned only
-// `simt-social` has the `simt-social` body on disk at `.agents/skills/slice-commit`
+// one repository has its body on disk at `.agents/skills/slice-commit`
 // with no workspace anywhere. The registry entry is satisfied by that file.
 //
 // Bytes are what make this safe rather than hopeful. Every source declares its size,

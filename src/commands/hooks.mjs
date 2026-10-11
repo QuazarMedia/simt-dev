@@ -6,11 +6,11 @@
 //
 // Installing is the only mutating command, it is idempotent, it previews unless
 // told to write, and it refuses to clobber an existing core.hooksPath without
-// --yes. The estate has four incompatible conventions and one of them (simt-app)
-// points at a directory whose pre-push is 0 bytes, so overwriting silently would
-// be the worst available outcome. simt-space keeps its hook in the DEFAULT
-// location, which core.hooksPath being unset does not reveal, so a foreign hook
-// is found by asking git rather than by reading config.
+// --yes. Repositories in the wild use incompatible conventions, including a
+// hooksPath pointing at a directory whose pre-push is 0 bytes, so overwriting
+// silently would be the worst available outcome. Others keep their hook in the
+// DEFAULT location, which core.hooksPath being unset does not reveal, so a
+// foreign hook is found by asking git rather than by reading config.
 
 import { execFile } from 'node:child_process';
 import { chmod, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
@@ -176,7 +176,7 @@ async function installHooks(root, flags) {
   // the hook runs as a gate and its verdict appears in the report beside the others,
   // rather than after the gates passed where an author cannot see it.
   //
-  // Keying this on the event vocabulary instead of on the manifest cost simt-app its
+  // Keying this on the event vocabulary instead of on the manifest cost a repository
   // git-lfs hook: pre-push is a gated event in general, but this repo declares no
   // pre-push gate, so nothing replaces its hook and routing would have dropped it.
   const chained = [
@@ -188,7 +188,7 @@ async function installHooks(root, flags) {
     // Foreign hooks on events THIS repo has no gate for.
     //
     // Per repository, not per event vocabulary - and the difference is not academic.
-    // simt-app declares no pre-push gate, and its pre-push is git-lfs: routing without a
+    // declares no pre-push gate, and its pre-push is git-lfs: routing without a
     // shim for that event means git finds no pre-push hook at all and LFS objects stop
     // being uploaded, silently, with nothing to notice it. An event this repo gates is
     // different: the dispatcher replaces the hook there by design, and the hook's real
@@ -228,9 +228,9 @@ async function installHooks(root, flags) {
 
   // Refuse to take over routing git is already using without explicit consent.
   // Two cases, and the second one is the one that bites: core.hooksPath already
-  // pointing elsewhere (simt-app points at a directory whose pre-push is 0 bytes),
-  // and core.hooksPath being unset while a hook sits in the default location
-  // (simt-space, 4 KB of real logic in .git/hooks/pre-commit). Reading unset as
+  // pointing elsewhere (a hooksPath whose pre-push is 0 bytes), and core.hooksPath
+  // being unset while a hook sits in the default location (4 KB of real logic in
+  // .git/hooks/pre-commit). Reading unset as
   // "no hooks" is what let install replace a working gate with no warning.
   const takeover = (current !== null && current !== wants) || state.foreign.length > 0;
   if (takeover && !flags.yes) {

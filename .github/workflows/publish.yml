@@ -96,6 +96,24 @@ jobs:
         if: env.SKIP == 'false'
         run: node bin/simt-dev.mjs graph lint
 
+      - name: staged publishing needs an npm that has it
+        run: |
+          set -eu
+          # `npm stage` landed in npm 11.15.0. Node 22.20.0 - the floor this package
+          # runs on - bundles npm 10, so the version this workflow ships with cannot
+          # stage anything and fails with `Unknown command: "stage"`, which says nothing
+          # about the package and everything about the runner.
+          #
+          # Checked rather than assumed: an unconditional `npm i -g npm@latest` would
+          # fetch a new npm on every release whether or not the one present already
+          # knows how to stage, and the release's bytes would then depend on a registry
+          # fetch the release itself performs.
+          if ! npm stage --help >/dev/null 2>&1; then
+            echo "npm $(npm --version) cannot stage; installing one that can"
+            npm install -g npm@latest
+          fi
+          npm --version
+
       - name: stage for a maintainer to approve
         if: env.SKIP == 'false'
         run: npm stage publish --provenance

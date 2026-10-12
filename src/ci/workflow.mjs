@@ -170,12 +170,16 @@ function skeleton(name, steps, { matrix = null } = {}) {
   const job = matrix?.node ? '\${{ matrix.os }} node \${{ matrix.node }}' : name;
   return `name: ${name}
 
+# Pull requests only, and that is a decision rather than a default.
+#
+# A gate that runs on every push re-runs itself for every commit that pushes a
+# branch forward, including the ones nobody asked it about, and its verdict has to
+# be cleared before the next one lands. \`pull_request\` asks one question — may this
+# merge — and answers it once. \`main\` here is the branch protection list, not a
+# trigger: the gate that has to pass is the one the pull request runs, and the one
+# on \`main\` is whatever CI the repository already has there.
 on:
   pull_request:
-  push:
-    branches:
-      - main
-      - master
 
 # Read-only is enough to check a repo, and a gate job does not need to write to it.
 permissions:

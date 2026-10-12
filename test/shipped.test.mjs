@@ -205,7 +205,7 @@ test('every remedy names a command that does what the remedy claims', async () =
   const AUTHORISES = /--yes\b|--check\b/;
   const offenders = [];
 
-  for (const file of await collect(join(ROOT, 'src'), '.mjs')) {
+  for (const file of await collect(join(ROOT, 'src'), ['.mjs'])) {
     const text = await readFile(file, 'utf8');
     const lines = text.split('\n');
     for (const [at, line] of lines.entries()) {
@@ -727,12 +727,27 @@ async function adrFiles() {
 }
 
 /** Every file under `dir` with the given extension, sorted, so a failure names a path. */
-async function collect(dir, ext) {
+/**
+ * Every file under a published root.
+ *
+ * `.md` and text only, at first — which was right for `docs/decisions` and `rules` and
+ * was never re-examined when `graph` was added to the published set. The registry at
+ * `graph/skills.graph.json` is JSON, so it was published and invisible to the guard
+ * above: 51 strings naming eight private repositories, five of them the `.repo`
+ * property `src/resolve/source.mjs:40` joins to find a skill body. A guard that cannot
+ * see the leak is worse than no guard, because it answers the question the reader
+ * asked rather than the one they meant.
+ *
+ * Text, not binary: the guard is a pattern over source. A `.png` carrying bytes that
+ * happen to spell a repository name is not this tool doing it, and reading one as
+ * text would fail on encoding rather than on a leak.
+ */
+async function collect(dir, exts = TEXT_EXTENSIONS) {
   const out = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     const full = join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...(await collect(full, ext)));
-    else if (entry.name.endsWith(ext)) out.push(full);
+    if (entry.isDirectory()) out.push(...(await collect(full, exts)));
+    else if (exts.some((e) => entry.name.endsWith(e))) out.push(full);
   }
   return out.sort();
 }
@@ -815,6 +830,13 @@ function estateNamesInFile(label, text) {
 const SHIPPED_ROOTS = ['bin', 'src', 'graph', 'rules', 'docs/decisions'];
 const SHIPPED_FILES = ['CHANGELOG.md', 'README.md', 'LICENSE', 'package.json'];
 
+/**
+ * Extensions a pattern over source can run against. Deliberately not everything: a
+ * binary that happens to contain the bytes is not this tool naming anything, and
+ * reading it as text fails on encoding instead of on a leak.
+ */
+const TEXT_EXTENSIONS = ['.md', '.mjs', '.json', '.yml', '.yaml', '.toml', '.sh'];
+
 test('nothing this package publishes names a repository from this estate', async () => {
   // These records ship. `pyproject.toml` force-includes `docs/decisions` into the wheel
   // and the sdist, and `package.json`'s `files` list carries the same directory into the
@@ -829,7 +851,10 @@ test('nothing this package publishes names a repository from this estate', async
 
 
   for (const root of SHIPPED_ROOTS) {
-    for (const file of await collect(join(ROOT, root), '.md')) {
+    // The whole published root, not only its Markdown. See `TEXT_EXTENSIONS`: the
+    // registry at graph/skills.graph.json is JSON, and the version of this guard that
+    // read `.md` only published it to npm with 51 strings naming private repositories.
+    for (const file of await collect(join(ROOT, root))) {
       const label = file.replace(`${ROOT}/`, '');
       offenders.push(...estateNamesInFile(label, await readFile(file, 'utf8')));
     }

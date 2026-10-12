@@ -232,11 +232,6 @@ export async function pointerState(root, pointer) {
   return { file: pointer.file, state: 'mispointed', link, detail: `points at ${link}` };
 }
 
-export function surfaceFrontmatter(surfaceId, rule) {
-  const s = SURFACES.find((x) => x.id === surfaceId);
-  return s && s.ruleFrontmatter ? s.ruleFrontmatter(rule) : [];
-}
-
 // The per-surface path lives in surfaces.mjs next to the row that justifies it;
 // re-exported so a caller building a target never has to know which module owns
 // path construction as opposed to frontmatter construction.

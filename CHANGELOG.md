@@ -53,6 +53,19 @@ subject, which is the spelling that is correct. The two `.github` templates get 
 own assertion, because the fourth of these was not a wrong word in a sentence; it was
 two templates disagreeing with each other in the same position.
 
+### Fixed
+
+- **Dead exports and duplicated frontmatter, with a test that stops them returning (S21).**
+  Eight functions were exported and called by nothing (`gateKind`, `gateWhy`, `gateAdr`,
+  `resetWorkspace`, `tracksIdentity`, `isTty`, `surfaceFrontmatter`, `workspaceOrNull`),
+  three `__internals` testing seams had no importer, and thirteen more bindings were
+  exported while being used only inside their own file — `isExecutable` among them, which
+  a first pass through this list wrongly recorded as dead and which its own callers
+  proved otherwise. `KNOWN_SUBS` was a hand-kept second copy of the dispatch table, and
+  had already drifted: it carried `doctor`, a bare command the group lookup can never
+  reach. `mdcFrontmatter` was a second construction of frontmatter the writer now derives
+  itself, with a test asserting the copy rather than the behaviour.
+
 ## [0.2.0] — 2026-10-11
 
 ### Publishable from PyPI and Homebrew as well as npm

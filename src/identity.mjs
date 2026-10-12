@@ -174,17 +174,6 @@ export async function includeOwnIdentity(root) {
 }
 
 /**
- * Whether the repository tracks the identity file, which it should not.
- *
- * @param {string} root
- * @returns {Promise<boolean>}
- */
-export async function tracksIdentity(root) {
-  const listed = await git(root, ['ls-files', '--error-unmatch', IDENTITY_FILE]);
-  return listed === IDENTITY_FILE;
-}
-
-/**
  * Add the identity file to .gitignore, if it is not already there.
  *
  * Matching on the exact line rather than a substring, because a `.gitignore`

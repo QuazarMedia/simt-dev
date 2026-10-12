@@ -253,15 +253,6 @@ function absolute(p) {
 }
 
 /**
- * The workspace, or null. Callers that can degrade use this and report `source: 'none'`;
- * callers that genuinely cannot proceed should use `resolveWorkspace` and fail with its detail.
- */
-export async function workspaceOrNull(flags = {}, options = {}) {
-  const { root, error } = await resolveWorkspace(flags, options);
-  return error ? null : root;
-}
-
-/**
  * The path a multi-repo command should work on: `--root` or the first positional if
  * given, else the resolved workspace, else the current directory.
  *

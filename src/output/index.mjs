@@ -65,10 +65,6 @@ export function writeMode(flags) {
   return { dryRun, apply: flags.yes === true && !dryRun };
 }
 
-export function isTty() {
-  return process.stdout.isTTY === true && !process.env.NO_COLOR;
-}
-
 /**
  * Emit a block of text under a heading, respecting --max-bytes.
  * Truncation is always announced with an explicit line, never a silent ellipsis:

@@ -210,7 +210,7 @@ export function stackCompatible(skill, repoSignals) {
  * agent knows it is standing in that repo, so name the overlapping tag when there
  * is one and say plainly when there is not.
  */
-export function stackReason(skill, repoSignals) {
+function stackReason(skill, repoSignals) {
   if (repoSignals.length === 0) return 'repo signals undetected, not excluded';
   const repo = new Set(repoSignals);
   const overlap = (skill.stack ?? []).filter((tag) => repo.has(tag));

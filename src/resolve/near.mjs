@@ -10,7 +10,7 @@
 // suggestion that far away is noise: an agent will install the wrong skill.
 
 /** Levenshtein distance, two-row, with an early exit once the bound is passed. */
-export function editDistance(a, b, max = Infinity) {
+function editDistance(a, b, max = Infinity) {
   if (a === b) return 0;
   if (Math.abs(a.length - b.length) > max) return max + 1;
 

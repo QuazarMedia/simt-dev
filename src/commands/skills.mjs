@@ -3,7 +3,7 @@
 // Implementation sequence steps 4 and 5.
 //
 // Output design (plan 0002 section 6): one fact per line, fixed field order, no
-// wrapping, no colour when piped, bounded by --max-bytes with an explicit
+// wrapping, no ANSI on any stream, bounded by --max-bytes with an explicit
 // TRUNCATED line. The NOT SELECTED block is as important as the resolved block -
 // the agent can see what exists and why it was excluded, and override in one
 // token instead of guessing. Suppressing it is how a discovery tool becomes a
@@ -597,7 +597,7 @@ export async function whyCommand(args, flags) {
  * location for a declared source, matched on bytes rather than on hope (ADR-015).
  * The canonical source is still tried first, so a workspace body always wins.
  */
-export async function sourcePath(skill, workspaceRoot, root) {
+async function sourcePath(skill, workspaceRoot, root) {
   const canonical = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
 
   if (canonical) {

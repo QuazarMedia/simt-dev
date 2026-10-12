@@ -14,7 +14,7 @@ import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join } from 'node:path';
 
-import { FORMATTABLE, GATES, GATES as _G } from './gates.mjs';
+import { FORMATTABLE, GATES } from './gates.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 
 /** Gate names the shared dispatcher knows, sorted. */
@@ -22,23 +22,8 @@ export function knownGates() {
   return Object.keys(GATES).sort();
 }
 
-export function gateKind(name) {
-  return GATES[name]?.kind ?? null;
-}
-
-export function gateWhy(name) {
-  return GATES[name]?.why ?? null;
-}
-
-export function gateAdr(name) {
-  return GATES[name]?.adr ?? null;
-}
-
-/**
- * Is this path an executable file?
- * @param {string} path
- */
-export async function isExecutable(path) {
+/** Is this path an executable file? */
+async function isExecutable(path) {
   try {
     await access(path, constants.X_OK);
     return true;
@@ -206,5 +191,3 @@ function extname(path) {
   const dot = path.lastIndexOf('.');
   return dot > 0 ? path.slice(dot).toLowerCase() : '';
 }
-
-export const __internals = { extname, FORMATTABLE };

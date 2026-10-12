@@ -573,8 +573,11 @@ async function lintSourcesOnDisk(registry, workspaceRoot) {
         continue;
       }
       if (typeof source.bytes === 'number' && source.bytes !== measured.bytes) {
+        // The delta is computed here, not in `measureSkill`: that function measures
+        // one path and knows nothing about the declaration it is being compared with.
+        const delta = measured.bytes - source.bytes;
         errors.push(
-          `${at}: declared ${source.bytes} bytes, on disk ${measured.bytes} (${measured.delta > 0 ? '+' : ''}${measured.delta})`,
+          `${at}: declared ${source.bytes} bytes, on disk ${measured.bytes} (${delta > 0 ? '+' : ''}${delta})`,
         );
       }
       if (!source.bytes) warnings.push(`${at}: no declared bytes to compare against`);

@@ -29,6 +29,7 @@ import { getGate } from '../hooks/gates.mjs';
 // file by name.
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { CLI } from '../name.mjs';
+import { packageVersion } from '../package-version.mjs';
 export const MANIFEST = MANIFEST_FILE;
 
 export { MANIFEST_LEGACY };
@@ -267,7 +268,7 @@ export function planGates(stack = [], capability = null) {
  * make, and quietly disarming a gate somebody declared on purpose is a worse surprise
  * than a visible one.
  */
-export function buildManifest({ root, stack = [], sha, existing = null, capability = null, surfaces = undefined }) {
+export function buildManifest({ root, stack = [], sha, version, existing = null, capability = null, surfaces = undefined }) {
   const gates = defaultGates(stack);
   const limits = defaultLimits(stack);
 
@@ -303,7 +304,12 @@ export function buildManifest({ root, stack = [], sha, existing = null, capabili
     // because a typo here silently reduces the estate to AGENTS.md, which looks
     // exactly like a working setup.
     surfaces: surfaces ?? existing?.surfaces ?? null,
-    projection: { simtDevSha: sha ?? null },
+    // simtDevSha is the digest of the rule bytes this projection was rendered from;
+    // version is the simt-dev release that produced it. The gate compares the running
+    // binary to version and refuses on a mismatch, which is how a repository without
+    // npm (a global install, pinned only by this field) is held to the release it
+    // adopted. See src/package-version.mjs.
+    projection: { simtDevSha: sha ?? null, version: version ?? null },
   };
 }
 
@@ -389,6 +395,39 @@ function defaultId(root) {
 }
 
 /**
+ * The fields this tool writes. Everything else in a manifest belongs to the
+ * repository that adopted the tool.
+ *
+ * It is a value rather than an expression inside `manifestDrift` because the question
+ * "is this field ours?" now has two callers that must answer it identically: the gate
+ * that reports one stale, and `sync`, which repairs exactly the fields the gate names.
+ * A second implementation of this set is a repair that fixes a field nothing reports,
+ * or a report about a field nothing repairs - and each half passes its own test,
+ * which is ADR-045's shape reached from the other direction.
+ */
+export const GENERATED_KEYS = new Set(['$comment', 'projection']);
+
+/**
+ * A manifest with this tool's own fields replaced by what this build writes, and
+ * nothing else touched.
+ *
+ * Spread from the repository's manifest rather than from `buildManifest`'s output:
+ * the builder fills a default for every key, so writing its result wholesale would
+ * overwrite `gates` and `limits` in any repository that chose its own. "Content the
+ * repo chose is never compared" is a promise about the repair too, not only about
+ * the report, and a repair is exactly where it would be broken.
+ *
+ * @param {object} manifest the repository's manifest, as parsed
+ * @param {object} expected `buildManifest`'s output, from the call `manifestDrift` made
+ * @returns {object} a new manifest; the argument is not mutated
+ */
+export function withGenerated(manifest, expected) {
+  const patched = { ...manifest };
+  for (const key of GENERATED_KEYS) if (key in expected) patched[key] = expected[key];
+  return patched;
+}
+
+/**
  * Is a generated field of this manifest wrong, or has a formatter taken its bytes?
  *
  * Two distinct defects, one shape of answer, because they share a cause: a generated
@@ -408,6 +447,12 @@ function defaultId(root) {
  *    again. `upgrade` reported `current` the whole time, which is correct: the pin
  *    was current. The bytes were not.
  *
+ *    This one is a consequence of routing, not of adoption. Nothing reformatted the
+ *    manifest until the pre-commit gate started running, so every repository that
+ *    adopts the tool and runs a formatter arrives here on its first commit. The
+ *    remedy is therefore "stop the formatter taking it, then `sync`" — and it was
+ *    `init --yes`, which re-runs adoption to change one file's formatting (ADR-050).
+ *
  * Content the repo chose is never compared. A repo that edited `limits.coverage` on
  * purpose is not being told to revert it.
  *
@@ -417,20 +462,34 @@ export async function manifestDrift(root, stack, sha) {
   const { manifest, exists, error } = await readManifest(root);
   if (!exists || error !== null || manifest === null) return null;
 
-  const expected = buildManifest({ root, stack, sha, existing: manifest });
-  const stale = [];
-  for (const key of Object.keys(expected)) {
-    const generated =
-      key === '$comment' ||
-      (key === 'projection' && JSON.stringify(expected.projection) !== JSON.stringify(manifest.projection ?? null));
-    if (generated && JSON.stringify(manifest[key]) !== JSON.stringify(expected[key])) stale.push(key);
-  }
+  const expected = buildManifest({ root, stack, sha, version: packageVersion(), existing: manifest });
+  // `[...GENERATED_KEYS]`, and not `Object.keys(expected)`: the question is which
+  // fields are ours, and the answer is the set above. Iterating the expected object
+  // asks the same question of a different list and can only agree by coincidence.
+  const stale = [...GENERATED_KEYS].filter(
+    (key) => key in expected && JSON.stringify(manifest[key]) !== JSON.stringify(expected[key]),
+  );
   if (stale.length > 0) {
     return {
       file: MANIFEST,
       status: 'stale-generated-field',
       detail: `generated field(s) ${stale.join(', ')} do not match what this simt-dev writes`,
-      remedy: `run: ${CLI} init --yes   (it refreshes the stamp without touching values this repo set)`,
+      // `sync`, and not `init`. `sync` repairs exactly this field set and nothing
+      // else; `init` re-runs adoption - it tags, it branches, it asks every question
+      // again - and two commands must not answer one question with different
+      // instructions (ADR-050).
+      //
+      // The remedy said `init` because for two releases nothing could repair a stale
+      // field, so the only command that could was the only one named. `sync` having
+      // nothing to repair while `check` refused anyway is the one-question-two-answers
+      // defect this repository exists to end, and it was true in all fourteen adopted
+      // repositories at the same moment: measured, not inferred. `check` exited 1 in
+      // every one of them while `sync` printed "already current; nothing written".
+      //
+      // No trailing parenthetical, because `compare` prints this string verbatim as
+      // the remedy on its own row. A remedy that reads well in one command's output
+      // and badly in another's is two answers wearing one string.
+      remedy: `run: ${CLI} sync --yes`,
     };
   }
 
@@ -446,8 +505,20 @@ export async function manifestDrift(root, stack, sha) {
     file: MANIFEST,
     status: 'reformatted',
     detail: 'content is what simt-dev would write, but the bytes differ - another formatter owns this file',
-    remedy: `add ${MANIFEST_FILE} to .prettierignore (a generated file is not prose), then: ${CLI} init --yes`,
+    remedy: `add ${MANIFEST_FILE} to .prettierignore (a generated file is not prose), then: ${CLI} sync --yes`,
   };
+}
+
+/**
+ * The bytes a manifest is written as.
+ *
+ * Exported because two callers now need them and one of them is a preview: a plan
+ * that reports a byte count it computed with a different serialiser than the writer
+ * used reports a number nothing will ever observe. `writeManifest` is the only place
+ * this format is spelled.
+ */
+export function manifestText(manifest) {
+  return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
 /** @returns {{manifest: object|null, exists: boolean, error: string|null}} */
@@ -473,6 +544,6 @@ export async function writeManifest(root, manifest) {
   const previous = join(root, MANIFEST_LEGACY);
   const fresh = join(root, MANIFEST);
   if (existsSync(previous) && !existsSync(fresh)) await rename(previous, fresh);
-  await writeFile(fresh, `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeFile(fresh, manifestText(manifest));
   return fresh;
 }

@@ -66,6 +66,7 @@ record's status line — never by editing the ruling in place.
 | [056](ADR-056-three-names-one-of-which-is-cheap-to-move.md) | The command, the package and the project are three names, and only one of them is cheap to move | accepted · amends ADR-023 |
 | [057](ADR-057-an-identity-is-per-developer-and-a-repository-does-not-own-it.md) | An identity is per-developer, and a repository does not own it | accepted |
 | [058](ADR-058-one-tool-three-channels-and-the-order-is-forced.md) | One tool, three channels, and the order is forced | accepted |
+| [059](ADR-059-the-version-a-repository-runs-is-the-one-it-pinned.md) | The version a repository runs is the one it pinned, and the gate refuses otherwise | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
@@ -401,6 +402,21 @@ test asserts the count and the ids rather than leaving them as an unmeasured shr
 docstring that used to claim the whole output "never contains a path" is withdrawn: it
 asserted a property the function never had, which is the same defect as a citation that
 cannot be resolved — a sentence that reads like evidence and carries none.
+
+ADR-059 is the first record here whose subject is the version of the tool itself, and it
+exists because a check that runs from the wrong binary is a pass that never happened. ADR-010
+allowed a tool that is not a project dependency to be invoked directly, *provided its version
+is pinned* — and for a repository without npm that "pinned" half had no mechanism. The version
+on `PATH` was whatever the last global install left there, and the gate that ran on commit was
+the one in it: a green tick from a check running a different gate than CI is worse than a red
+build, because it is the failure that looks like evidence. The record rules that the version a
+repository adopted is recorded in the manifest, that the gate refuses when the running binary
+differs, and that the install and the remedy are per kind — so the check CI runs is the one the
+machine remedy names. Its most load-bearing consequence is the one that keeps it from becoming a
+trap: a repository adopted before the field existed has nothing to compare against, so it is
+skipped rather than failed, and reported as drift instead — because a gate that turns red on the
+day a check ships, for a mismatch nobody can resolve until they re-adopt, is a gate no one will
+trust again.
 
 ## The rule these records enforce
 

@@ -17,11 +17,11 @@
 // reordered its columns would make every comparison between two runs unreadable.
 
 import { checkTargets, PRIMARY_TARGET } from '../projection/project.mjs';
-import { readManifest } from '../projection/manifest.mjs';
+import { manifestDrift, readManifest } from '../projection/manifest.mjs';
 import { loadRules, select } from '../projection/rules.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { readHooksState } from './hooksstate.mjs';
+import { readHooksState, wantsShim } from './hooksstate.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 
@@ -60,10 +60,21 @@ export async function buildRow(path, context) {
   const problems = [];
   const notes = [];
 
-  const [manifest, fp, hooks, findings] = await Promise.all([
-    readManifest(path),
+  // The manifest first, and on its own. The predicate below reads it, and a
+  // destructured binding in the same `Promise.all` array is still in its temporal dead
+  // zone when the array is evaluated - so this is the same defect ADR-045 records in
+  // this file one level up: a gate reading a field the line above has not set yet.
+  const manifest = await readManifest(path);
+
+  const [fp, hooks, findings] = await Promise.all([
     fingerprint(path),
-    readHooksState(path),
+    // The same predicate `hooks install` writes by. Without it this row defaulted to
+    // "a shim is wanted for every event", so a repository declaring only `prePush`
+    // gates was reported `hooksComplete: false` for the pre-commit shim it has no
+    // reason to write - and no number of runs of `hooks install` could clear it,
+    // because the command and the dashboard were answering different questions.
+    // Four estate repositories were in that state.
+    readHooksState(path, { declaresGate: (e) => wantsShim(manifest.manifest, manifest.exists, e) }),
     checkTargets(path),
   ]);
 
@@ -150,6 +161,24 @@ export async function buildRow(path, context) {
 
   if (manifest.error) {
     problems.push(`${MANIFEST_FILE} ${manifest.error}`);
+  }
+
+  // A generated field of the manifest is stale, and `check` refuses on it. This row
+  // said the repository was `current` anyway, in all fourteen adopted repositories at
+  // once, so a dashboard that reported `current: 14, problems: 0` was describing a
+  // green estate on which every gate exited 1.
+  //
+  // ADR-045 went the other way: `compare` counted a defect it had been hiding. This is
+  // the same defect from the far side — a refusal the dashboard does not count — and
+  // the acceptance criterion in the review that owns this ("compare reports current:
+  // 14") was satisfiable while `check` exited 1 in every row it covered.
+  //
+  // `drift.remedy` verbatim, for both statuses. The remedy is the repair command, and
+  // two commands answering one question with different instructions is ADR-050's
+  // subject; if `check` changes its mind, this row changes with it for free.
+  if (adoption === 'adopted') {
+    const drift = await manifestDrift(path, row.stack, context.expectedSha);
+    if (drift) problems.push(`${drift.file}: ${drift.detail}; ${drift.remedy}`);
   }
 
   // --- region --------------------------------------------------------------

@@ -16,16 +16,17 @@
 //     three `.mdc` rules would let a reader believe a repo is fully current when
 //     only the file they happened to open is.
 
-import { mkdir, symlink, unlink, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { mkdir, readFile, symlink, unlink, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { plan, checkTargets, checkTarget, provenanceDigest, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { manifestDrift, readManifest, unrunnableGates } from '../projection/manifest.mjs';
+import { manifestDrift, readManifest, unrunnableGates, buildManifest, writeManifest, withGenerated, manifestText } from '../projection/manifest.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { CLI } from '../name.mjs';
-import { MANIFEST_FILE } from '../name.mjs';
+import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
+import { assertVersionPin, packageVersion } from '../package-version.mjs';
 
 /** Findings `sync` reports and does not fail on.
  *
@@ -162,6 +163,40 @@ export async function syncCommand(positional, flags) {
   const changed = result.targets.filter((t) => t.action !== 'unchanged');
   const pointersAdded = pointerPlan.map((p) => p.path);
 
+  // The manifest is the second file this tool writes into a repository it does not own,
+  // and for two releases it was the only generated file with no path back to correct:
+  // `check` refused on a stale generated field and named `init --yes`, while `sync` -
+  // the command whose whole job is regenerating what this tool owns - reported
+  // "already current; nothing written". Both statements were true of the same
+  // repository, and all fourteen adopted repositories were in that state at once.
+  //
+  // One reason and one place, so `check`'s remedy and this plan cannot drift: the
+  // field set is `GENERATED_KEYS`, and the values come from the same `buildManifest`
+  // call `manifestDrift` compares against. A repair built from a second copy of
+  // either would pass its own test and leave the gate still red.
+  //
+  // `reformatted` is repaired too, and only when the repository has said the file is
+  // not prose: `simt.json` listed in `.prettierignore` is the repo stating that no
+  // formatter will take these bytes back.
+  //
+  // Without that condition there are two wrong answers. Repairing unconditionally
+  // means every `format` run rewrites a file the commit just wrote - a permanently
+  // dirty working tree. Never repairing means `init --yes` is the only way to put the
+  // bytes back, and `init` re-runs adoption: it tags, it switches branch, it asks every
+  // question again, to fix one file's formatting (ADR-050). The first repo routed in
+  // the estate roll-out hit this on its first commit, so both answers were live.
+  const manifestPlan = await planManifestRepair(root, result.stack, result.targets[0].sha);
+  if (manifestPlan) {
+    targets.push({
+      file: manifestPlan.file,
+      surface: 'manifest',
+      action: 'updated',
+      bytes: Buffer.byteLength(manifestPlan.text),
+      previousBytes: manifestPlan.previousBytes,
+    });
+  }
+  const manifestChanged = manifestPlan !== null;
+
   // Writes happen BEFORE output in every mode. An earlier build emitted `--json`
   // first and returned, so `upgrade --yes --json` reported a plan and changed
   // nothing — the exact combination automation reaches for.
@@ -178,6 +213,13 @@ export async function syncCommand(positional, flags) {
   // A comment that enumerates which commands follow a rule is a claim about code
   // this file does not own, and it was one commit out of date before anyone ran it.
   if (mode.apply) {
+    // The manifest first, with the rest: a gate that refuses on a stale stamp should
+    // not be able to read a half-finished write, and the manifest is the file every
+    // other write in this run is described by.
+    if (manifestPlan) {
+      await writeManifest(root, manifestPlan.manifest);
+      note(`wrote    ${manifestPlan.file} (generated field(s) ${manifestPlan.stale.join(', ')})`);
+    }
     for (const t of changed) {
       // Three of the four rule surfaces live in directories that do not exist yet in a
       // repository that has only ever been written to by hand. `init` grew its own
@@ -210,7 +252,7 @@ export async function syncCommand(positional, flags) {
         // `ok` follows the exit code, which now reports drift for a previewing run
         // too. Leaving it `true` here would break the invariant ADR-035 sets for
         // every command, and the contract table asserts it for this one.
-        ok: changed.length === 0 && pointersAdded.length === 0 ? true : mode.apply,
+        ok: changed.length === 0 && pointersAdded.length === 0 && !manifestChanged ? true : mode.apply,
         command: checkOnly ? 'sync --check' : 'sync',
         root,
         stack: result.stack,
@@ -220,7 +262,7 @@ export async function syncCommand(positional, flags) {
         sha: result.targets[0].sha,
         targets,
         pointers: pointersAdded,
-        written: mode.apply ? changed.length + pointersAdded.length : 0,
+        written: mode.apply ? changed.length + pointersAdded.length + (manifestChanged ? 1 : 0) : 0,
         dryRun: !mode.apply,
       },
       {},
@@ -233,12 +275,15 @@ export async function syncCommand(positional, flags) {
       surfacesLine({ ids: result.surfaces, source: result.surfaceSource }, 10),
       `sha       ${result.targets[0].sha}`,
       '',
-      ...result.targets.map(
+      // `targets`, not `result.targets`: the plan is the thing being reported, and a
+      // line the JSON payload carries but the text one drops is the reader of the
+      // terminal output finding out from the exit code what they were already told.
+      ...targets.map(
         (t) => `${t.file}  ${t.action}  ${t.previousBytes} -> ${t.bytes} bytes`,
       ),
       ...pointerPlan.map((p) => `${p.file}  added  pointer -> ${p.to}`),
     ];
-    if (changed.length === 0 && pointerPlan.length === 0) lines.push('already current; nothing written');
+    if (changed.length === 0 && pointerPlan.length === 0 && !manifestChanged) lines.push('already current; nothing written');
     else if (checkOnly) lines.push('would write; rerun without --check');
     else if (!mode.apply) {
       // The preview names the command that writes it. A preview that reports what
@@ -247,22 +292,89 @@ export async function syncCommand(positional, flags) {
       lines.push(
         flags.dryRun === true
           ? 'dry-run; nothing written'
-          : `would write ${changed.length + pointersAdded.length} file(s); apply with: ${CLI} sync --yes`,
+          : `would write ${changed.length + pointersAdded.length + (manifestChanged ? 1 : 0)} file(s); apply with: ${CLI} sync --yes`,
       );
     }
     emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   }
 
-  if (checkOnly) return changed.length === 0 && pointerPlan.length === 0 ? EXIT.OK : EXIT.FAIL;
+  const idle = changed.length === 0 && pointerPlan.length === 0 && !manifestChanged;
+  if (checkOnly) return idle ? EXIT.OK : EXIT.FAIL;
   // A preview that found work is not a success: `simt-dev sync --yes` with no flags is a
   // check that also prints the plan, and a check that exits 0 while reporting drift
   // is the one-question-two-answers shape ADR-035 rules out. This is what lets a
   // caller run `sync` in place of `sync --check` and get the same verdict.
   if (!mode.apply) {
     if (flags.dryRun === true) note('dry-run  no files written');
-    return changed.length === 0 && pointerPlan.length === 0 ? EXIT.OK : EXIT.FAIL;
+    return idle ? EXIT.OK : EXIT.FAIL;
   }
   return EXIT.OK;
+}
+
+/**
+ * The manifest repair `sync` would make, or null when there is nothing to repair.
+ *
+ * Returns the parsed manifest to hand to `writeManifest` as well as the bytes, so the
+ * writer keeps owning the legacy-name move and the preview keeps showing the real
+ * count. `sha` is the same digest the regions were rendered from: the stamp and the
+ * text it describes have to agree, or the next `check` finds a region carrying a pin
+ * the manifest does not claim.
+ *
+ * @returns {Promise<{file: string, manifest: object, text: string,
+ *                    stale: string[], previousBytes: number}|null>}
+ */
+async function planManifestRepair(root, stack, sha) {
+  const drift = await manifestDrift(root, stack, sha);
+  if (drift === null) return null;
+  // A `reformatted` manifest is repaired only once the repository has declared that no
+  // formatter will take these bytes back. The declaration is read rather than assumed
+  // because a repo that runs no formatter should not need a `.prettierignore` to repair
+  // a manifest some other tool rewrote, and one that does must be believed only when it
+  // has said so.
+  if (drift.status === 'reformatted' && !(await formatterIgnoresManifest(root))) return null;
+
+  const { manifest } = await readManifest(root);
+  if (manifest === null) return null;
+  const expected = buildManifest({ root, stack, sha, version: packageVersion(), existing: manifest });
+  const patched = withGenerated(manifest, expected);
+  const stale = Object.keys(expected).filter(
+    (key) => JSON.stringify(manifest[key]) !== JSON.stringify(patched[key]),
+  );
+  return {
+    file: MANIFEST_FILE,
+    manifest: patched,
+    text: manifestText(patched),
+    stale,
+    previousBytes: Buffer.byteLength(manifestText(manifest)),
+  };
+}
+
+/**
+ * Whether this repository's `.prettierignore` excludes the manifest.
+ *
+ * Lines, `#` comments and blanks only. A glob is not evaluated: the question this
+ * answers is "did somebody deliberately write this file's name down", and an exact
+ * match is the only reading of that which cannot be wrong. A repository that ignores
+ * `*.json` has said something broader, and the honest answer there is that this tool
+ * cannot tell - so it declines to repair, which is the state that was already correct.
+ */
+async function formatterIgnoresManifest(root) {
+  // ENOENT only. A catch that answers "no" to every error is a catch that turns a
+  // typo in this function into a repository silently keeping its pre-commit gate's
+  // formatting — which is how the first version of it failed: `join` was not imported,
+  // the ReferenceError was swallowed, and every repository read as having declared
+  // nothing. Absence is absence; anything else is a fault worth seeing.
+  let text;
+  try {
+    text = await readFile(join(root, '.prettierignore'), 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return false;
+  }
+  return text
+    .split('\n')
+    .map((line) => line.trim())
+    .some((line) => line !== '' && !line.startsWith('#') && (line === MANIFEST_FILE || line === MANIFEST_LEGACY));
 }
 
 export async function checkCommand(positional, flags) {
@@ -288,6 +400,14 @@ export async function checkCommand(positional, flags) {
   // before anyone installs anything rather than after.
   const { manifest } = await readManifest(root);
   if (manifest) {
+    // The gate runs from whatever binary resolved it. For a repository without npm that
+    // is a global install, and the only thing that knows which version it should be is
+    // the pin the repo recorded at adoption. A stale binary would run a different gate
+    // than CI does, so the mismatch fails the gate rather than warning.
+    const mismatch = assertVersionPin(manifest);
+    if (mismatch) {
+      findings.push({ file: MANIFEST_FILE, status: 'version-mismatch', detail: mismatch, remedy: `run: ${CLI} upgrade --yes` });
+    }
     findings.push(...unrunnableGates(manifest, await readCapability(root)));
     // A manifest a formatter has rewritten is not wrong, and not editable-away by
     // hand either: the next `init` puts simt-dev's own bytes back and the formatter

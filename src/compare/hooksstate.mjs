@@ -11,8 +11,9 @@ import { readFile, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { CHAIN_MARKER, EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderShim } from '../hooks/shim.mjs';
+import { CHAIN_MARKER, EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderShim } from '../hooks/shim.mjs';
 import { foreignHooks, resolveHooksDir } from '../hooks/where.mjs';
+import { packageVersion, hasNpm } from '../package-version.mjs';
 
 const exec = promisify(execFile);
 
@@ -49,6 +50,54 @@ async function isChainedShim(path) {
   return (await readChainedShim(path)) !== null;
 }
 
+/**
+ * Whether this file is a dispatcher shim this tool wrote, whatever version wrote it.
+ *
+ * Content, on the same argument as {@link readChainedShim}: the name is what git calls
+ * it and the path is where this tool happens to put its own, and neither of those is a
+ * statement about authorship. The banner is.
+ */
+async function isOurShim(path) {
+  try {
+    return (await readFile(path, 'utf8')).includes(SHIM_MARKER);
+  } catch {
+    return false;
+  }
+}
+
+/** Git event -> manifest gate list. Exported because the report prints from it too. */
+export const GATE_KEY = { 'pre-commit': 'preCommit', 'pre-push': 'prePush' };
+
+/** Gates this manifest declares for an event. */
+export function gateCount(manifest, event) {
+  return (manifest?.gates?.[GATE_KEY[event]] ?? []).length;
+}
+
+/**
+ * Whether a missing shim for this event is a defect.
+ *
+ * A repo that declares no gate for an event has no reason to want a shim for it, so
+ * its absence is the correct end state. A repo with NO manifest is different: we do
+ * not know what it wants, so we cannot rule the shim out - absence of knowledge is
+ * not a decision.
+ *
+ * It lives here, not in the command that first needed it, because there are two
+ * callers and they were answering differently. `hooks install` asked this question;
+ * `compare` did not ask it at all and defaulted to "yes, a shim is wanted for every
+ * event", so a repository declaring only `prePush` gates was reported as
+ * `hooksComplete: false` for the pre-commit shim it correctly has no reason to write.
+ * Four estate repositories were in that state and no amount of running `hooks install`
+ * could clear it.
+ *
+ * @param {object|null} manifest the repository's manifest
+ * @param {boolean} exists whether a manifest was found at all
+ * @param {string} event
+ */
+export function wantsShim(manifest, exists, event) {
+  if (!exists) return true;
+  return gateCount(manifest, event) > 0;
+}
+
 /** `core.hooksPath`, or null when unset or the repo is not a git repo. */
 export async function readHooksPath(root) {
   try {
@@ -64,8 +113,13 @@ export async function readHooksPath(root) {
  * One shim's state. A shim that differs from what this simt-dev generates is
  * `stale`: the gates it enforces are from another version, so it cannot be
  * assumed to know about a gate added since.
+ *
+ * `root` is the repository the shim belongs to: the remedy a shim prints depends on
+ * the repo's kind (a devDependency where package.json exists, a pinned global install
+ * where there is none), so the comparison must render the shim the way THIS repo got it,
+ * or a non-npm repository would read as stale the moment this tool ships.
  */
-export async function describeShim(path) {
+export async function describeShim(path, root) {
   let content;
   try {
     content = await readFile(path, 'utf8');
@@ -80,7 +134,7 @@ export async function describeShim(path) {
   }
   let stale = true;
   try {
-    stale = content !== renderShim(basename(path));
+    stale = content !== renderShim(basename(path), { npm: await hasNpm(root), version: packageVersion() });
   } catch {
     stale = true;
   }
@@ -100,7 +154,7 @@ export async function readHooksState(root, options = {}) {
   const current = await readHooksPath(root);
   const installed = [];
   for (const event of EVENTS) {
-    installed.push({ event, ...(await describeShim(join(root, fileFor(event)))) });
+    installed.push({ event, ...(await describeShim(join(root, fileFor(event)), root)) });
   }
 
   // What git runs right now, which is not the same question as "is a simt-dev
@@ -112,8 +166,10 @@ export async function readHooksState(root, options = {}) {
   // hand-written one. Only the bytes can.
   const foreign = [];
   const chained = [];
+  const staleOurs = [];
   for (const hook of live) {
-    if (EVENTS.includes(hook.event) && !(await describeShim(hook.path)).stale) continue;
+    const shim = EVENTS.includes(hook.event) ? await describeShim(hook.path, root) : { stale: true };
+    if (!shim.stale) continue;
     // A chained shim is ours too, and its name says nothing: `post-commit` is what the
     // repository called its own hook, and the shim exists under that name precisely so
     // git finds it. Reading it as foreign would make every re-install refuse with "this
@@ -122,6 +178,25 @@ export async function readHooksState(root, options = {}) {
     const chain = await readChainedShim(hook.path);
     if (chain) {
       chained.push({ ...chain, path: hook.path });
+      continue;
+    }
+    // And so is a dispatcher shim from an EARLIER version of this tool, which is the
+    // ordinary state of every repository adopted before the last release.
+    //
+    // Reading it as foreign was wrong twice over. `compare` reported "not a simt-dev
+    // shim" about a file simt-dev wrote, and `hooks install --yes` then printed "stopped
+    // running <event> ... declare it in simt.json gates.commands to have the dispatcher
+    // run it" — advice that, followed, makes the dispatcher run the dispatcher. The file
+    // was also described as "still on disk, untouched" in the same breath as the install
+    // overwrote it. Both statements were false and both pointed a reader at a worse
+    // configuration; nine estate repositories were in exactly this state.
+    //
+    // What it actually needs is refreshing, which `installed` already reports as `stale`
+    // and `compare` already reports as "differs from this simt-dev; reinstall". Keeping
+    // it out of `foreign` also stops the takeover guard asking for consent the
+    // repository has already given: it routed through this tool once.
+    if (await isOurShim(hook.path)) {
+      staleOurs.push(hook);
       continue;
     }
     foreign.push(hook);
@@ -146,6 +221,10 @@ export async function readHooksState(root, options = {}) {
     complete: current === HOOKS_DIR && problems.length === 0,
     installed,
     foreign,
+    // Dispatcher shims this tool wrote in an earlier version. Reported so a reader can
+    // tell an out-of-date shim - which `hooks install` refreshes - from one this tool
+    // has never heard of, which only a human may decide to replace.
+    staleOurs,
     // The chained shims this repo is already running, read back off disk. `install`
     // re-renders them from here so a second run keeps maintaining them rather than
     // quietly forgetting them; without this field the set of things install maintains

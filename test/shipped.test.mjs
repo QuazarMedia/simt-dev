@@ -736,3 +736,124 @@ async function collect(dir, ext) {
   }
   return out.sort();
 }
+
+// The estate's private repository names, read from the published package's own metadata
+// rather than from a list written here. A guard whose list is maintained by hand is a
+// list that stops covering the estate the day a repository is added, which is the same
+// defect ADR-042 records for a declared value nobody executes.
+// The estate's private repository names.
+//
+// This is a list rather than the pattern `ESTATE_NAME` uses, and the difference is the
+// whole guard. That pattern is deliberately loose - it has to catch a name printed in a
+// message to somebody standing in a repository, where any word beginning `simt-` might
+// be one - and it therefore also matches `repo-NN`, which is the label the sweep put
+// there on purpose. A guard built from it would fail on all 28 pseudonymised records and
+// be deleted within a week, which is how a guard stops being a guard.
+//
+// The list is explicit because the estate is a fixed set, adding to it is deliberate, and
+// a list that cannot be derived here is better than a pattern that is wrong. `docs/plans`
+// and `docs/reviews` are NOT in scope and must not be added: they are estate-internal and
+// neither is published, and a review whose subject is fourteen repositories cannot
+// pseudonymise them without becoming a document about `repo-01` that never existed.
+const ESTATE_REPOSITORIES = [
+  'app-ui',
+  'bunnyland-server',
+  'simt-api',
+  'simt-app',
+  'simt-blog',
+  'simt-garmin',
+  'simt-goto',
+  'simt-jobs',
+  'simt-landing',
+  'simt-social',
+  'simt-social-api',
+  'simt-social-landing',
+  'simt-social-media',
+  'simt-space',
+  'simt-space-review',
+  'wakt-app',
+];
+
+// Longest first, so `simt-social-api` is matched as itself and never as a prefix of
+// something longer. Order is the only thing that makes a substring guard correct.
+const ESTATE_RE = new RegExp(`\\b(?:${ESTATE_REPOSITORIES.slice().sort((a, b) => b.length - a.length).join('|')})\\b`, 'g');
+
+const SHIPPED_ROOTS = ['bin', 'src', 'graph', 'rules', 'docs/decisions'];
+const SHIPPED_FILES = ['CHANGELOG.md', 'README.md', 'LICENSE', 'package.json'];
+
+test('nothing this package publishes names a repository from this estate', async () => {
+  // These records ship. `pyproject.toml` force-includes `docs/decisions` into the wheel
+  // and the sdist, and `package.json`'s `files` list carries the same directory into the
+  // npm tarball, so a name written into an ADR is published to three registries. The
+  // sweep that pseudonymised them had to touch 28 records because nothing stopped the
+  // next one.
+  //
+  // `redactEstate` is not this guard, and the sweep's own commit says so: it redacts on
+  // the way *out*, at print time, and the bytes on disk are what get published. A reader
+  // installing the wheel and grepping it finds every name written here.
+  const offenders = [];
+
+  const scan = (label, text) => {
+    for (const [i, line] of text.split('\n').entries()) {
+      ESTATE_RE.lastIndex = 0;
+      const m = ESTATE_RE.exec(line);
+      if (m) offenders.push(`${label}:${i + 1}  ${JSON.stringify(m[0])}`);
+    }
+  };
+
+  for (const root of SHIPPED_ROOTS) {
+    for (const file of await collect(join(ROOT, root), '.md')) {
+      scan(file.replace(`${ROOT}/`, ''), await readFile(file, 'utf8'));
+    }
+  }
+  for (const file of SHIPPED_FILES) {
+    scan(file, await readFile(join(ROOT, file), 'utf8'));
+  }
+
+  assert.deepEqual(
+    offenders,
+    [],
+    `these published files name a private repository. Name it by what it IS - "a Gradle\n` +
+      `module with no wrapper", "a repository with no package.json" - or use the stable\n` +
+      `repo-NN label, and put the real name in the commit message where nothing ships it:\n` +
+      `${offenders.join('\n')}`,
+  );
+});
+
+test('the estate list is not empty and every entry looks like a repository', () => {
+  // A guard whose subject set silently emptied checks nothing and still passes. This is
+  // the check for that, and it is here rather than in the guard above so that emptying
+  // the list fails one test with an obvious name rather than passing one quietly.
+  assert.ok(ESTATE_REPOSITORIES.length >= 10, 'the estate list has shrunk');
+  for (const name of ESTATE_REPOSITORIES) {
+    assert.match(name, /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/, `${name} does not look like a repository name`);
+  }
+  assert.equal(new Set(ESTATE_REPOSITORIES).size, ESTATE_REPOSITORIES.length, 'the estate list has a duplicate');
+});
+
+test('the guard above covers what is actually published', async () => {
+  // A guard scoped to a hand-written list checks that list. This one is scoped to the
+  // published set, so it has to be *equal* to that set in both directions or it is
+  // theatre: adding a directory to `files` without adding it here would leave it
+  // unguarded, and no failure would name the omission.
+  //
+  // Both directions matter and they fail differently. Guarding something unpublished is
+  // a test that can never fail; publishing something unguarded is the leak this exists to
+  // prevent. The first is caught here too, because a guard nobody can fail is one
+  // somebody eventually deletes.
+  const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+  const guarded = new Set([...SHIPPED_ROOTS, ...SHIPPED_FILES]);
+  const shipped = new Set([...pkg.files, ...SHIPPED_FILES]);
+
+  for (const entry of shipped) {
+    assert.ok(guarded.has(entry), `${entry} is published by npm and is not guarded. Add it to SHIPPED_ROOTS or SHIPPED_FILES.`);
+  }
+  for (const entry of guarded) {
+    assert.ok(shipped.has(entry), `${entry} is guarded but is not published by npm, so the guard can never fail on it.`);
+  }
+
+  // And the wheel, which is the channel that carries the records.
+  const pyproject = await readFile(join(ROOT, 'pyproject.toml'), 'utf8');
+  assert.match(pyproject, /"docs\/decisions" = "simt_dev\/vendored\/docs\/decisions"/, 'the wheel no longer ships docs/decisions');
+});
+

@@ -16,6 +16,7 @@
 
 import { EXIT, emit, fail, isJson } from '../output/index.mjs';
 import { loadRules, select } from '../projection/project.mjs';
+import { loadMdcRules } from '../projection/mdc.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { byId, citations, loadDecisions, redactEstate } from '../decisions/index.mjs';
 import { nearMatches } from '../resolve/near.mjs';
@@ -23,9 +24,18 @@ import { CLI } from '../name.mjs';
 
 const kb = (bytes) => `${(bytes / 1000).toFixed(1)}k`;
 
-/** `simt-applies` is the string "always" for core and an array for profiles. */
+/**
+ * `simt-applies` is the string "always" for core and an array for profiles.
+ *
+ * An opt-in rule has an EMPTY array, and `-` is a true reading of that which answers
+ * none of the questions a reader has. `simt-opt-in` is why it is empty — detection cannot
+ * distinguish a repository with the problem from one without it, so the repository
+ * declares it — and that is the fact worth printing. It only became visible when the
+ * per-surface rules entered this catalogue; before that the rule was not listed at all.
+ */
 function appliesLabel(rule) {
   if (rule.applies === 'always') return 'always';
+  if (rule.optIn === true) return 'opt-in (the repo declares it)';
   if (Array.isArray(rule.applies)) return rule.applies.join(',') || '-';
   return '-';
 }
@@ -38,7 +48,37 @@ function sorted(rules) {
 async function load(root) {
   const rules = await loadRules(root ?? null);
   const broken = rules.filter((r) => r.error);
-  return { rules, broken };
+  return { rules: [...rules, ...(await loadPerSurfaceRules())], broken };
+}
+
+/**
+ * The `.mdc` rules, in the shape this file's three commands print.
+ *
+ * `loadRules` reads `rules/*.md` and `rules/stacks/*.md`, which is every rule that is a
+ * *stack profile* — and the four per-surface rules are not that. They are projected by
+ * `ruleBodies` inside `desiredRegion` rather than by `select`, so they were invisible to
+ * `rules list`, `rules show` and `rules why`: a reader could be told by an agent to run
+ * `simt rules why test-gate` and be met with "no rule with that id", for a rule that was
+ * in their own `AGENTS.md` at the time.
+ *
+ * Deliberately NOT added to `loadRules`. That function's result is `select`ed and
+ * `render`ed into the region, so putting these there would project every one of them
+ * twice — once as a profile section and once as `## Process: <id>` — which is the
+ * duplication ADR-046 exists to prevent. The catalogue is the right layer for this: it is
+ * a view, and a view may be wider than what one projection writes.
+ */
+async function loadPerSurfaceRules() {
+  const mdc = await loadMdcRules();
+  return mdc.map((r) => ({
+    ...r,
+    // These have no `simt-title`; their `description` is what a reader sees in the
+    // generated file, so it is the title here rather than a column of blanks.
+    title: r.title ?? r.description ?? null,
+    // `mdc` rather than `central`: the column exists so a reader can tell where a rule
+    // came from, and "central" is true of all of them and useless for this distinction.
+    origin: 'per-surface',
+    fallback: false,
+  }));
 }
 
 // --- list ---------------------------------------------------------------------

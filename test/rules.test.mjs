@@ -427,7 +427,15 @@ test('rules list: --root marks exactly the rules that repo selects', async () =>
   const { code, stdout } = await run(['rules', 'list', '--root', dir]);
   assert.equal(code, 0);
   const marked = [...stdout.matchAll(/^\*(\S+)/gm)].map((m) => m[1]).sort();
-  assert.deepEqual(marked, ['connectiq', 'core']);
+  // The three always-on process rules are marked because they apply to every repository,
+  // and this expected set was written while they were invisible to the catalogue (S13).
+  // It was accurate about `loadRules` and wrong about the answer: these rules were in
+  // this repository's region the whole time, it just could not say so.
+  assert.deepEqual(marked, ['connectiq', 'core', 'intake-questions', 'slice-commit', 'test-gate']);
+  // `preview-postflight` is opt-in, so no signal selects it — which is the whole reason
+  // `simt-opt-in` exists, and the reason the `applies` column now says so.
+  assert.ok(!marked.includes('preview-postflight'), 'an opt-in rule must not be marked on a signal alone');
+  assert.match(stdout, /preview-postflight\s+\S+\s+per-surface\s+opt-in \(the repo declares it\)/);
 });
 
 test('rules list: a repo with no stack still gets core, and says so', async () => {
@@ -577,4 +585,58 @@ test('select: the rules a repo receives are exactly those its own signals name',
   const ids = selected.map((r) => r.id).sort();
   // container keys on has-dockerfile, python on python: a fact and a tag both select.
   assert.deepEqual(ids, ['container', 'core', 'python']);
+});
+test('the catalogue sees the per-surface rules, and says where each came from', async () => {
+  // The defect: `loadRules` reads `rules/*.md` and `rules/stacks/*.md`, which is every
+  // rule that is a *stack profile*. The four per-surface rules are projected by a
+  // different call inside `desiredRegion`, so they were in every repository's AGENTS.md
+  // and invisible to `rules list`, `rules show` and `rules why` — an agent told to run
+  // `simt rules why test-gate` got "no rule with that id" for a rule it was reading.
+  const { stdout: list, code } = await run(['rules', 'list']);
+  assert.equal(code, 0);
+  for (const id of ['intake-questions', 'slice-commit', 'test-gate', 'preview-postflight']) {
+    assert.match(list, new RegExp(`^[ *]${id}\\s`, 'm'), `${id} is missing from the catalogue`);
+  }
+
+  // `why` on one, end to end, through the shipped binary.
+  const { code: whyCode, stdout: why } = await run(['rules', 'why', 'test-gate']);
+  assert.equal(whyCode, 0, 'a rule the repository is reading must be resolvable by name');
+  assert.match(why, /^test-gate/m);
+  assert.match(why, /rules\/mdc\/test-gate\.mdc \(per-surface\)/, 'the source names the file and the kind');
+
+  // And `show` prints a body rather than refusing.
+  const { code: showCode, stdout: show } = await run(['rules', 'show', 'intake-questions']);
+  assert.equal(showCode, 0);
+  assert.ok(show.length > 500, 'a rule body was not printed');
+
+  // The `origin` column distinguishes them from stack profiles. It exists so a reader
+  // can tell where a rule came from, and "central" is true of every rule in the package
+  // and so says nothing about this distinction.
+  assert.match(list, /^[ *]intake-questions\s+\S+\s+per-surface\s/m);
+});
+
+test('a per-surface rule is not projected twice by being in the catalogue', async () => {
+  // The reason this is fixed in the catalogue and not in `loadRules`: `loadRules` feeds
+  // `select`, whose output `desiredRegion` renders into the region, and the per-surface
+  // bodies are added separately by `ruleBodies`. Adding them to `loadRules` would put
+  // every one of them in the region twice — once as a profile section, once as
+  // `## Process:` — which is the duplication ADR-046 exists to prevent.
+  //
+  // So the assertion is on the rendered region, not on the loader: each body appears
+  // exactly once, under the heading the projector gives it.
+  const dir = await scratch({ 'package.json': '{"name":"x","scripts":{"test":"true"}}' });
+  await run(['sync', '--root', dir, '--yes']);
+
+  const agents = await readFile(join(dir, 'AGENTS.md'), 'utf8');
+  const headings = [...agents.matchAll(/^## Process: (.+)$/gm)].map((m) => m[1].trim());
+  assert.deepEqual(headings.filter((h) => h === 'test-gate' || h === 'slice-commit' || h === 'intake-questions'), ['intake-questions', 'slice-commit', 'test-gate']);
+
+  // Each heading once, and no second copy as a profile section.
+  for (const id of ['test-gate', 'slice-commit', 'intake-questions']) {
+    assert.equal(
+      [...agents.matchAll(new RegExp(`^## Process: ${id}$`, 'gm'))].length,
+      1,
+      `${id} appears more than once in the region`,
+    );
+  }
 });

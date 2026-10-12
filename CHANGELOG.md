@@ -6,6 +6,31 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### No published file may name a repository from this estate
+
+The decision records ship in all three channels — npm, the wheel and the sdist — so a
+private repository name written into one is published to three registries. That happened:
+the records were pseudonymised once, across 28 files, and nothing stopped the next one. The
+sweep's own commit says why, and it is the right reason: the redaction it used runs on the
+way *out*, at print time, and the bytes on disk are what get published.
+
+`test/shipped.test.mjs` now fails on an estate name anywhere in a published file, and
+asserts its own scope against `package.json` in **both** directions — a directory added to
+`files` without being guarded fails, and so does one guarded that nothing publishes, because
+a guard nobody can fail is one somebody eventually deletes. It is scoped to the published
+set rather than a hand-written list for the same reason: the sweep took 28 files to undo by
+hand, and the guard should not need undoing at all.
+
+Names are not removed, they are described. The records that use a repository as *evidence* —
+a table of how three repositories answer the same question — carry stable `repo-NN` labels,
+so the comparison survives. Everything else is better off naming what the repository *is*:
+"a Gradle module with no wrapper", "a repository with no package.json". That reads to
+someone outside the estate without a lookup table they do not have.
+
+The one place estate names remain is `docs/reviews/`, which is not published by either
+channel. A review whose subject is fourteen repositories cannot pseudonymise them without
+becoming a document about `repo-01` that never existed.
+
 ### Four shipped strings named a command this package does not install
 
 `0.2.0` installs one binary, `simt`, and `package.json`'s `bin` map says so. Four
@@ -72,17 +97,17 @@ recommending. It chained on the event *vocabulary* — anything that was not
 `pre-commit` or `pre-push` — when the question worth asking is whether **this
 repository** declares a gate for that event.
 
-The difference is `simt-app`, whose `pre-push` is `git-lfs`. `pre-push` is an
+The difference is a repository whose `pre-push` is `git-lfs`. `pre-push` is an
 event this tool gates in general, so `0.1.0` displaced that hook; and because
-`simt-app` declares no `pre-push` gate there was no shim for the event either, so
-git would have found no `pre-push` hook at all. LFS objects would have stopped
-being uploaded, with nothing to notice it — the exact silent failure chaining
-exists to prevent, reached by fixing the wrong half of it.
+that repository declares no `pre-push` gate there was no shim for the event
+either, so git would have found no `pre-push` hook at all. LFS objects would have
+stopped being uploaded, with nothing to notice it — the exact silent failure
+chaining exists to prevent, reached by fixing the wrong half of it.
 
 `0.1.1` asks the manifest. An event the repo declares a gate for is left to
 `gates.commands`, where the hook runs as a gate and its verdict appears in the
-report; every other foreign hook is chained. That also picks up
-`simt-landing`'s Lighthouse pre-push, which declares no gates at all.
+report; every other foreign hook is chained. That also picks up a static
+site's Lighthouse pre-push, which declares no gates at all.
 *(ADR-018, as amended)*
 
 Upgrade with `npm i -D simt-dev@0.1.1`, then `simt hooks install --yes`. Any

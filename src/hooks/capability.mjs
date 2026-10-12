@@ -18,9 +18,10 @@
 // cannot run a `lint` gate, and this reads the manifest rather than the dependency graph
 // so the two can never disagree about what a script does.
 
-import { readdir, readFile, stat } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { access, readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { manifestPath } from '../projection/manifest.mjs';
+import { ECOSYSTEMS, manifestPath } from '../projection/manifest.mjs';
 
 /** Binaries the shared dispatcher shells out to directly, rather than via a script. */
 const BIN_DIR = join('node_modules', '.bin');
@@ -60,13 +61,48 @@ async function fileExists(path) {
 }
 
 /**
+ * Does an EXECUTABLE file exist at this path?
+ *
+ * A wrapper that exists but is not executable is a probe failure, not a success:
+ * declaring it would plant a command that fails closed on every commit — the defect
+ * ADR-017 exists to prevent, reached from the ecosystem table rather than the stack.
+ */
+async function executableFile(path) {
+  try {
+    if (!(await stat(path)).isFile()) return false;
+    await access(path, fsConstants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Can this machine run the ecosystem's program?
+ *
+ * Two kinds of evidence, matching the two kinds of tool in `ECOSYSTEMS`: a binary on
+ * PATH, probed directory by directory the way the shell would find it, and a file the
+ * repository commits (the Maven wrapper), probed in place the way `gradlew` is probed.
+ * Either answer that is not a positive YES is NO: a seed that guesses a toolchain is
+ * a declared gate that cannot run, and the dispatcher fails closed on it.
+ */
+async function probeTool(root, eco) {
+  if (eco.file) return executableFile(join(root, eco.tool));
+  const dirs = (process.env.PATH ?? '').split(':').filter(Boolean);
+  for (const dir of dirs) {
+    if (await executableFile(join(dir, eco.tool))) return true;
+  }
+  return false;
+}
+
+/**
  * Read what this repo can run.
  *
  * @param {string} root
- * @returns {Promise<{scripts: Record<string,string>, binaries: string[], commands: Record<string,string>, runner: string, error: string|null}>}
+ * @returns {Promise<{scripts: Record<string,string>, binaries: string[], commands: Record<string,string>, tools: string[], runner: string, error: string|null}>}
  */
 export async function readCapability(root) {
-  const capability = { scripts: {}, binaries: [], commands: {}, runner: null, error: null };
+  const capability = { scripts: {}, binaries: [], commands: {}, tools: [], runner: null, error: null };
 
   try {
     const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
@@ -102,6 +138,14 @@ export async function readCapability(root) {
     capability.binaries = (await readdir(join(root, BIN_DIR))).filter((n) => !n.includes('.'));
   } catch {
     // No node_modules is the same as no installed binaries.
+  }
+
+  // `tools` answers "can this MACHINE run the ecosystem's program", which the marker
+  // file in the repo cannot: a Cargo.toml without cargo installed is an ecosystem that
+  // is here but whose gates would all fail closed. The probe is per-row, because a row
+  // that marks its tool `file` lives in the repository, not on PATH.
+  for (const eco of ECOSYSTEMS) {
+    if (await probeTool(root, eco)) capability.tools.push(eco.tool);
   }
 
   // `gates.commands` lives in simt-dev.json, NOT package.json, so it has to be read

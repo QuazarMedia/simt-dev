@@ -76,8 +76,12 @@ export async function initCommand(positional, flags) {
   // a repository declared five and could run two, which would have blocked every
   // commit once hooks were installed.
   const capability = await readCapability(root);
-  const { dropped } = planGates(detected.stack, capability);
-  const manifest = buildManifest({ root, stack: detected.stack, sha, version, existing: current, capability });
+  // `facts` carries the ecosystem rows (has-cargo-toml, ...) — the same signal set that
+  // selects this repo's profiles, so one marker file reaches both the region the reader
+  // gets and the gates its commits run. Without it the ecosystem rows never fire here
+  // and a fresh Rust repo is adopted with gates it cannot run.
+  const { dropped, commands } = planGates(detected.stack, capability, detected.facts);
+  const manifest = buildManifest({ root, stack: detected.stack, sha, version, existing: current, capability, facts: detected.facts });
   const findings = await scanRepo(root);
   const summary = summarise(findings);
   const projected = await plan(root, flags);
@@ -147,6 +151,12 @@ export async function initCommand(positional, flags) {
     // adoption: an existing manifest keeps its gates on purpose, so its drops would
     // describe proposals that were never made.
     droppedGates: exists ? [] : dropped,
+    // Commands a FRESH manifest declares under gates.commands. The plan must show them:
+    // a command that lands in the manifest without appearing here is a silent write,
+    // and the reader would approve it by reading the diff afterwards — the review step
+    // this tool exists to make unnecessary. On an existing manifest nothing is seeded
+    // (the repo's declaration owns that field), so the empty list is deliberate.
+    seededCommands: exists ? [] : Object.entries(commands).map(([gate, command]) => ({ gate, command })),
     surfaces: projected.surfaces,
     surfaceSource: projected.surfaceSource,
     pointers: pointerPlan.map((p) => ({ file: p.file, to: p.to, readers: p.readers, state: p.state })),
@@ -563,6 +573,12 @@ function render(payload, manifest, { npm = true, version } = {}) {
   for (const d of payload.droppedGates ?? []) {
     lines.push(`  ${'dropped'.padEnd(9)} gate ${d.gate}: ${d.why}`);
     lines.push(`            remedy: ${d.remedy}`);
+  }
+  // A seed is a write, and the same rule as for dropped gates applies: the reader must
+  // see the line or they approve it from the diff afterwards. Naming the manifest field
+  // keeps the line actionable — this is where the reader edits it if the default is wrong.
+  for (const s of payload.seededCommands ?? []) {
+    lines.push(`  ${'seeded'.padEnd(9)} gates.commands["${s.gate}"] = ${s.command}`);
   }
   lines.push(
     `  ${'profiles'.padEnd(9)} ${LOCAL_PROFILE_DIR}/*.md  ` +

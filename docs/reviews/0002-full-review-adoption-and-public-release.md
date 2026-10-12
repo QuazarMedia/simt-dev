@@ -167,7 +167,7 @@ record is written.
 | S37 | A region past a harness's read limit is invisible to it | P1 | A | projection | no | — | Complete | `e984d12` |
 | S38 | Workspace token cost: 90 KB per turn, 72% repeated | P1 | A | projection | yes (P7) | S12 | Queued | #17 |
 | S39 | Estate policy belongs in an estate pack | P1 | A | rules, package | yes (P4) | S28 | Queued | profiles |
-| S40 | Eight common ecosystems get only the core rules | P1 | R | fingerprint, rules | no (data, ADR-013) | S28 | Queued | #6 |
+| S40 | Eight common ecosystems get only the core rules | P1 | R | fingerprint, rules | **yes (ADR-062)** | S28 | Complete | ADR-062 — eight profiles, each `simt-applies` on its own fact (maven's `jvm` predates it: nine table rows, eight files); a fresh adoption seeds the row's canonical commands into `gates.commands` only where a PATH or in-repo probe found the tool — the marker says the ecosystem is here, the probe says its program can run (ADR-017); a declared command and an npm script both beat a seed; a missing tool drops the gate with a remedy, never declares it. Acceptance: per-ecosystem marker → fact → profile, the seed/drop/npm/declared matrix, and two Rust inits with and without cargo on PATH |
 | S41 | A monorepo gets one root projection | P1 | R | projection | yes (P6) | S28 | Queued | #6 |
 | S42 | Harness coverage stops at five surfaces | P1 | R | surfaces | no (rows are data) | S12 | Queued | research |
 | S43 | MCP server is two spec revisions behind and returns text only | P2 | R | mcp | no | S05, S06 | Queued | #15 |

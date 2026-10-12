@@ -66,6 +66,24 @@ two templates disagreeing with each other in the same position.
   reach. `mdcFrontmatter` was a second construction of frontmatter the writer now derives
   itself, with a test asserting the copy rather than the behaviour.
 
+- **"Did you mean" offered the shortest fragment first, and a misspelt skill was
+  suggested for a correctly spelled one (S22).** `nearMatches` had no test at all.
+  Both directions of substring scored 0 — the same score as an exact match — so the
+  alphabetical tiebreak decided the order, and `skills graphs` suggested `graph`
+  before `graphs`. Worse, the containment test had no length floor, so `test` matched
+  the candidate `e` and the message read `did you mean e, test-writer?`, which an
+  agent has every reason to install. A prefix now scores 1 rather than 0, a fragment
+  counts only when it is at least half the query, and the edit bound scales with the
+  query's length — three edits is a typo in `slice-commmit` and is most of a
+  four-character query.
+
+- **The conflict scanner skipped two of the five rule surfaces, and one pointer file
+  (S22).** `rulePaths` enumerated filenames by hand, so `.claude/rules/` and
+  `.agents/rules/` — added to the surface table after the list was written — were
+  never scanned, and a hand-written rule contradicting a generated one there was
+  invisible. A conflict detector that only looks where it was pointed looks nowhere
+  new. The scan list is now derived from the surface table and the pointer table.
+
 ## [0.2.0] — 2026-10-11
 
 ### Publishable from PyPI and Homebrew as well as npm

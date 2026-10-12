@@ -38,22 +38,41 @@ function editDistance(a, b, max = Infinity) {
 /**
  * Candidates worth suggesting, nearest first.
  *
- * A substring hit is always included: `skill` is a real answer for a query of
- * `slice-commit`, and the distance test alone would rank it below noise.
+ * Two directions of substring, and they are not the same claim about what was typed.
+ *
+ * **The candidate contains the query** — `slice-commit` for `slice-commmit` — is a
+ * hit: the agent typed a prefix. It scores 1, not 0, because zero edits is what an
+ * exact match means and a prefix is not one. Scoring both 0 sorted `graph` ahead of
+ * `graphs` for the query `graphs`, and an agent that installs the first name in a
+ * "did you mean" list installs the wrong one.
+ *
+ * **The candidate sits inside the query** — `coverage` for `coverage-hunt` — is a hit
+ * only when it is at least half the query. Without that, the rule degenerates: `e` is
+ * a substring of `test`, so `nearMatches('test', ['e'])` returned `e` at distance 0
+ * and the message read `did you mean e?`.
+ *
+ * The bound also shrinks with the query, which is the same failure from the other side.
+ * Three edits is a typo in a name; three edits to a four-character query is a
+ * different string, and offering it violates the rule in the header of this file — "a
+ * suggestion that far away is noise: an agent will install the wrong skill". Under
+ * three characters nothing is a typo, so nothing is offered.
  */
 export function nearMatches(needle, candidates, { max = 3, limit = 3 } = {}) {
   if (!needle) return [];
   const lower = needle.toLowerCase();
+  const bound = Math.max(1, Math.min(max, Math.floor(lower.length / 3)));
 
   const scored = [];
   for (const candidate of candidates) {
     const cl = candidate.toLowerCase();
-    if (cl.includes(lower) || lower.includes(cl)) {
+    if (cl === lower) {
       scored.push({ candidate, distance: 0 });
-      continue;
+    } else if (cl.includes(lower) || (lower.includes(cl) && cl.length * 2 >= lower.length)) {
+      scored.push({ candidate, distance: 1 });
+    } else {
+      const distance = editDistance(lower, cl, bound);
+      if (distance <= bound) scored.push({ candidate, distance });
     }
-    const distance = editDistance(lower, cl, max);
-    if (distance <= max) scored.push({ candidate, distance });
   }
 
   scored.sort((a, b) => a.distance - b.distance || a.candidate.localeCompare(b.candidate));

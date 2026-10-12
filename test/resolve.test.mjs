@@ -16,7 +16,9 @@ import {
   matchesGlob,
   stackCompatible,
   syntheticPathFor,
-} from '../src/resolve/resolve.mjs'; 
+} from '../src/resolve/resolve.mjs';
+import { nearMatches } from '../src/resolve/near.mjs';
+
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BIN = resolve(ROOT, 'bin', 'simt-dev.mjs');
@@ -453,4 +455,74 @@ test('resolve: forcing a skill still overrides the new rule (S04)', () => {
   const { selected } = rankSkills([skill], { repoStack: ['node'], taskTokens: [], paths: [] }, { forced: ['anything'] });
   assert.equal(selected.length, 1);
   assert.deepEqual(selected[0].reasons, ['forced']);
+});
+
+// --- nearMatches (S22) --------------------------------------------------------
+
+test('nearMatches: an exact match leads, and a one-character fragment is not a suggestion', () => {
+  // Three defects in one function that had no test at all.
+  //
+  // 1. Substring matches scored 0, the same as an exact match, and the tiebreak is
+  //    alphabetical — so `nearMatches('graphs', ['graph','graphs'])` returned
+  //    `['graph','graphs']` and put the exact match SECOND.
+  // 2. `nearMatches('test', ['e','test-writer','check'])` returned `['e', ...]`. Every
+  //    caller prints this list verbatim as `did you mean e, test-writer?`, and an agent
+  //    reading that installs `e`. The old condition was
+  //    `cl.includes(lower) || lower.includes(cl)` with no length floor, so any fragment
+  //    of the query scored a perfect 0.
+  assert.deepEqual(nearMatches('graphs', ['graph', 'graphs']), ['graphs', 'graph']);
+  assert.deepEqual(nearMatches('test', ['e', 'test-writer', 'check']), ['test-writer']);
+});
+
+test('nearMatches: a fragment counts only when it is half the query or more', () => {
+  // The floor is the difference between "you meant a longer prefix of this" and "you
+  // meant a different word that happens to share three letters". `cov` inside
+  // `coverage-hunt` is the first; `e` inside `test` is the second, and nothing about the
+  // string itself distinguishes them except length.
+  assert.deepEqual(nearMatches('coverage-hunt', ['coverage', 'coverage-hunter']), [
+    'coverage',
+    'coverage-hunter',
+  ]);
+  assert.deepEqual(nearMatches('coverage-hunt', ['cov']), []);
+});
+
+test('nearMatches: the edit bound shrinks with the query, so a short query has no typos', () => {
+  // The file's own header rule: "a suggestion that far away is noise: an agent will
+  // install the wrong skill". Three edits is a typo in `slice-commmit` and is 75% of a
+  // four-character query, which is a different word entirely. The bound was a flat 3,
+  // so `cov` matched `coverage-hunt`.
+  assert.deepEqual(nearMatches('slice-commmit', ['slice-commit', 'skill-list', 'coverage']), [
+    'slice-commit',
+  ]);
+  assert.deepEqual(nearMatches('add-country-galaxy', ['coverage-hunt', 'add-country']), [
+    'add-country',
+  ]);
+  // One character: `y` is one edit from `xy`, and that is the whole word. Nothing is a
+  // typo under three characters, so the floor of 1 applies rather than the real bound.
+  assert.deepEqual(nearMatches('x', ['y', 'xy']), ['xy', 'y']);
+  assert.deepEqual(nearMatches('check', ['check-runner', 'check']), ['check', 'check-runner']);
+});
+
+test('nearMatches: no query, no suggestions', () => {
+  assert.deepEqual(nearMatches('', ['a', 'b']), []);
+  assert.deepEqual(nearMatches(undefined, ['a']), []);
+});
+
+test('nearMatches: limit and max are both honoured', () => {
+  // Three candidates at one edit, so the limit is what decides the length rather than the
+  // bound. The first attempt used transpositions, which are two edits under a plain
+  // Levenshtein distance and were correctly excluded — a fixture that does not contain
+  // what it means to contain cannot test a cap.
+  const many = ['add-xountry', 'adc-country', 'add-counrry'];
+  assert.equal(nearMatches('add-country', many).length, 3, 'the default is three suggestions');
+  assert.equal(nearMatches('add-country', many, { limit: 2 }).length, 2);
+
+  // `max` is a ceiling, not a dial. It is one term of a `Math.min` against the query's
+  // own length, so it can only tighten — it cannot ask for a wider search, and the test
+  // that said otherwise would have been asserting a behaviour that does not exist.
+  // `slice-commmit` is twelve characters, so the length-derived bound is 3 and a
+  // transposition is offered; with `max: 1` it is not, because a transposition is two
+  // edits and one of anything is a different string.
+  assert.deepEqual(nearMatches('slice-commmit', ['slice-comnit']), ['slice-comnit']);
+  assert.deepEqual(nearMatches('slice-commmit', ['slice-comnit'], { max: 1 }), []);
 });

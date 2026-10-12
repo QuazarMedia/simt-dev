@@ -2,6 +2,9 @@ import assert from 'node:assert/strict';
 import { cmd } from './fixture.mjs';
 import test from 'node:test';
 import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname } from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -342,4 +345,91 @@ test('the provenance header gives the reader the two actions that exist', async 
   // wrong for everyone else, which is why it is now asserted absent.
   assert.ok(!/edit the source/i.test(text), text);
   assert.ok(!/edits here are overwritten/i.test(text), text);
+});
+
+const exec = promisify(execFile);
+const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
+
+/** A scratch repository holding the named files, keyed by path relative to its root. */
+async function repoWith(files) {
+  const root = await mkdtemp(join(tmpdir(), 'simt-fm-'));
+  for (const [rel, body] of Object.entries(files)) {
+    const full = join(root, rel);
+    await mkdir(dirname(full), { recursive: true });
+    await writeFile(full, body);
+  }
+  return root;
+}
+
+/** Run the shipped binary, because the claim under test is about what a reader runs. */
+async function simt(args) {
+  const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+  return { stdout, stderr };
+}
+
+test('a rule file frontmatter is re-derived, not inherited from whatever is on disk (S16)', async () => {
+  // The defect: the frontmatter came from `extractFrontmatter(existing) ?? ...`, so the
+  // file's own block won whenever the file already had one. The block is therefore a
+  // snapshot of whatever the surface emitted the first time it saw this tool — forever.
+  //
+  // The consequence is not drift that a gate can see. The gate reads the file, the file
+  // agrees with itself, and no surface change ever reaches a repository that has already
+  // adopted it. Nothing is stale by any comparison the tool makes, because nothing
+  // compares the emitted frontmatter with the written one.
+
+  // A Cursor rule file whose frontmatter is wrong in a way this tool would never write:
+  // `alwaysApply: false` for a rule the registry declares always-on, plus a key that
+  // does not belong to Cursor at all.
+  const dir = await repoWith({
+    'simt.json': JSON.stringify({ id: 'r', stack: [], surfaces: ['cursor'], gates: { preCommit: [], prePush: [] } }, null, 2),
+    '.cursor/rules/test-gate.mdc': [
+      '---',
+      'description: A stale description',
+      'alwaysApply: false',
+      'inventedKey: someone typed this by hand',
+      '---',
+      '<!-- simt:begin -->',
+      '<!-- simt:end -->',
+      '',
+    ].join('\n'),
+  });
+
+  const before = await readFile(join(dir, '.cursor/rules/test-gate.mdc'), 'utf8');
+  assert.match(before, /alwaysApply: false/, 'the fixture must actually be wrong');
+
+  await simt(['sync', '--root', dir, '--yes']);
+
+  const after = await readFile(join(dir, '.cursor/rules/test-gate.mdc'), 'utf8');
+  const block = after.slice(0, after.indexOf('---', 4));
+  assert.match(block, /alwaysApply: true/, 'the emitted frontmatter did not replace the inherited one');
+  assert.match(block, /description: .*test delta/i, 'the description was not re-derived from the rule');
+  assert.doesNotMatch(block, /inventedKey/, 'a key this tool never emits survived in a file it owns');
+
+  // And the body is still there, because the frontmatter is not the whole file.
+  assert.match(after, /<!-- simt:begin -->/);
+  assert.match(after, /<!-- simt:end -->/);
+});
+
+test('a surface that emits no frontmatter leaves an existing one alone', async () => {
+  // The asymmetry, stated as a test because it is the one place this change deletes
+  // something. Where a surface DOES emit frontmatter this tool owns it and replaces it.
+  // Where it emits none it has no opinion, and removing a block it never wrote is a
+  // different operation with no reader asking for it.
+  const dir = await repoWith({
+    'simt.json': JSON.stringify({ id: 'r', stack: [], surfaces: ['cursor'], gates: { preCommit: [], prePush: [] } }, null, 2),
+  });
+  const { rulePath } = await import('../src/projection/surfaces.mjs');
+  const rel = rulePath('claude', 'test-gate');
+  assert.ok(rel, 'the claude surface has a rule path');
+  const path = join(dir, rel);
+  await mkdir(dirname(path), { recursive: true });
+  const handWritten = '---\ntitle: somebody wrote this\n---\n<!-- simt:begin -->\n<!-- simt:end -->\n';
+  await writeFile(path, handWritten);
+
+  await simt(['sync', '--root', dir, '--yes']);
+  assert.match(
+    await readFile(path, 'utf8'),
+    /title: somebody wrote this/,
+    'sync deleted a frontmatter block belonging to a surface that emits none',
+  );
 });

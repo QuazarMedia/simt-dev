@@ -1,12 +1,13 @@
 # Review 0002 — simt-dev at `4c27514`: fixes, enhancements, SIMT adoption, public release
 
-Status: open · 2026-10-06 · re-verified at `cea633a` on 2026-10-12 (public release unblocked;
-enforcement still blocked)
+Status: open · 2026-10-06 · re-verified at `cea633a` and again at `228d6c5` on 2026-10-12
 Reviewed at: `4c27514` on `main` (clean worktree, level with `origin/main`), 13 commits after
 review 0001 (`09c596d`)
-Verdict: **BLOCK** for estate-wide enforcement only (S36 roll-out + S35's non-npm path); a
-public release is unblocked — `simt-dev@0.2.0` is published and byte-verified on npm, PyPI and
-Homebrew (ADR-008 vocabulary)
+Verdict: **BLOCK** for estate-wide enforcement only, and no longer on S35. S36 is the last
+blocking row: 12 of 14 repositories route their hooks and `check` exits 0 in all 14, while the
+three that cannot gate themselves say so in their own commits. A public release is unblocked —
+`simt-dev@0.2.0` is published and byte-verified on npm, PyPI and Homebrew (ADR-008 vocabulary),
+and every repository that adopts it now holds a 0.2.0 binary and pins it.
 Companion: `docs/plans/0003-intelligence-amplifier-research-plan.md`, the R&D plan this review
 feeds
 
@@ -127,7 +128,7 @@ record is written.
 
 | ID | Slice | Sev | Grp | Area | Needs ADR | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| S01 | Provenance stamp came from the consumer's git, not simt-dev | P0 | F | projection | yes (P1) | — | Complete | ADR-032; `provenanceDigest()` |
+| S01 | Provenance stamp came from the consumer's git, not simt-dev | P0 | F | projection | yes (P1) | — | Complete | ADR-032; `provenanceDigest()`; **both halves** — §4.1 bullet 1 (`sync` rewrites `projection` in the same write as the regions) landed in `228d6c5` as `planManifestRepair()` + `GENERATED_KEYS` |
 | S02 | Leading `**/` path globs never match | P0 | F | resolve | **yes (ADR-042)** | S47 (optional) | Complete | `08df13e` |
 | S03 | Multi-word and short keywords/aliases are unreachable | P1 | F | resolve | **yes (ADR-043)** | — | Complete | `ba27562` |
 | S04 | Stack overlap alone selects a skill; a stopword selects too | P1 | F | resolve | **yes (ADR-044)** | S02, S03 | Complete | `253d819` (the `skills eval` command it implies is still owed, see §4) |
@@ -137,7 +138,7 @@ record is written.
 | S08 | Hook restage stages unstaged hunks; deletions break restage | P0 | F | hooks | **yes (ADR-034)** | — | Complete | `e3566dc` |
 | S09 | `sync`/`init` crash on a mispointed pointer, and `check` passes it | P1 | F | projection | **yes (ADR-051)** | S10 | Complete | `9357f10` |
 | S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | **yes (ADR-035)** | — | Complete | `14fcd5b`; **amended by ADR-040**, which found a sixth writer still writing by default |
-| S11 | `slice-commit` rule can never be projected | P1 | F | rules | no | — | **Complete** | `5c079cd` |
+| S11 | `slice-commit` rule can never be projected | P1 | F | rules | no | — | Complete | `5c079cd` |
 | S12 | Folding + per-rule surfaces load every process rule twice | P1 | F | surfaces | **yes (ADR-046, supersedes ADR-021 r3)** | — | Complete | `6b99add` |
 | S13 | `rules list/show/why` cannot see the `.mdc` rules | P2 | F | rules | no | — | Queued | re-verified |
 | S14 | Shipped text that fails "readable from the receiving repo" | P1 | F | content | no | — | Complete | `9b2c8a9` |
@@ -161,8 +162,8 @@ record is written.
 | S32 | Sources in a standard Gradle layout are never sampled | P2 | F | fingerprint | no | — | Complete | `c5bd2f5` |
 | S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Complete | `7153ea7` |
 | S34 | Folded rules break the heading hierarchy | P2 | F | projection | no | — | Complete | `9a2fb1e` |
-| S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (P5) | S18 | In progress | name decided (unscoped `simt-dev`, ADR-056); **publish done** — `simt-dev@0.2.0` is live and byte-verified on npm (`latest`=0.2.0), PyPI (wheel + sdist) and Homebrew (tap sha == live tarball). P5 parts 2-5 still open: the locator (`src/locate.mjs:54`) has no version-vs-pin check, one generic `npm i -D simt-dev` remedy (no per-kind branch), and the consumer CI always runs `npm ci \|\| npm install` (`src/ci/workflow.mjs:270`). The estate roll-out (S36) also carries the `simt.json` rename and the `simt:` region markers |
-| S36 | Estate roll-out: from 14 drifted to 14 enforced | P1 | A | adoption | amend ADR-018 | S01, S08, S10, S24, S35 | In progress | #3 — partial at `cea633a`: 9 estate repos route hooks (`.simt-hooks`), 7 have the check workflow (was 0/14 at `4c27514`); acceptance (`compare --workspace`: every repo routed) still unmet |
+| S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (P5) | S18 | Complete | `228d6c5` (ADR-059) — all five P5 parts. Publish done: `simt-dev@0.2.0` live and byte-verified on npm, PyPI and Homebrew. The version-vs-pin check landed in both `check` and the dispatcher (`assertVersionPin`), so a repository without npm is held to the release it adopted. The per-kind remedy is **wired at the call site** — `hooks.mjs` passes `{ npm, version }`, which is what the earlier note called the last unwired piece — and the consumer CI branches by repo kind. Part 5 (the estate stopgap) is superseded by the publish |
+| S36 | Estate roll-out: from 14 drifted to 14 enforced | P1 | A | adoption | amend ADR-018 | S01, S08, S10, S24, S35 | In progress | #4 — **12 of 14 routed; `check` exits 0 in all 14** (`compare --workspace`: `current: 14, drifted: 0, staleRuleFiles: 0, hooksRouted: 12`). The 3 unrouted are deliberate and recorded in their own commits: `app-ui` (no `gradlew` — it is a submodule that does not own the wrapper — and no npm scripts), `simt-jobs` (no runner at all), `simt-landing` (declares no gate, and its own Lighthouse `pre-push` keeps running in `.githooks/`). Acceptance still asks for `hooksRouted: 14`, which those three cannot reach without a gate they have nothing to run |
 | S37 | A region past a harness's read limit is invisible to it | P1 | A | projection | no | — | Complete | `e984d12` |
 | S38 | Workspace token cost: 90 KB per turn, 72% repeated | P1 | A | projection | yes (P7) | S12 | Queued | #17 |
 | S39 | Estate policy belongs in an estate pack | P1 | A | rules, package | yes (P4) | S28 | Queued | profiles |
@@ -182,6 +183,11 @@ record is written.
 | S53 | `upgrade` blames the rules for a baseline body change | P2 | F | provenance | **yes (ADR-054, amends ADR-032)** | — | Complete | `887214e` |
 | S54 | A status line can name a path, and the summary promises none | P2 | F | decisions | **yes (ADR-055)** | — | Complete | `d607134` — measured at **five** status lines, not two; seven prose leaks left in place on purpose |
 | S55 | The pack test inherits npm's resolved config, so it reads the developer's home directory | P2 | F | tests | no (ADR-041 stands) | — | Complete | `030e678` |
+| S56 | A shim this tool wrote in an earlier version is reported as a foreign hook | P1 | F | hooks, compare | no | — | Complete | `228d6c5` — `SHIM_MARKER` + `isOurShim()`. `compare` said "not a simt-dev shim" about a file simt-dev wrote, and `hooks install --yes` then printed "stopped running <event> … declare it in simt.json gates.commands to have the dispatcher run it" — advice that, followed, makes the dispatcher run the dispatcher. Nine estate repositories were routed by 0.1.0 and in exactly that state |
+| S57 | `compare` asks a different question than `hooks install` about which shims exist | P1 | F | compare, hooks | no | S56 | Complete | `228d6c5` — `wantsShim()` moved to `hooksstate.mjs`, the module both callers already import. `compare` defaulted to "a shim is wanted for every event", so a repository declaring only `prePush` gates was `hooksComplete: false` for a pre-commit shim it correctly has no reason to write, and no number of runs of `hooks install` could clear it. Four repositories |
+| S58 | Routing makes `check` go red wherever Prettier runs | P1 | F | cli, baselines | no | S01 | Complete | `228d6c5` — `formatterIgnoresManifest()` + `manifestText()`. Nothing had ever reformatted `simt.json`, because nothing had ever run a formatter over it; the first gated commit did. `sync` now restores the bytes once the repository declares the file is not prose, and the `reformatted` remedy says `sync --yes` instead of `init --yes` (ADR-050). Two repositories needed `.prettierignore`; four already had it |
+| S59 | Four shipped strings name a command the package does not install | P1 | F | content, naming | no | — | Complete | `b9f6fd7`. The default remedy on every `EXIT.USAGE`, the usage line, `dependabot.yml`’s handover sentence, and the shim’s own resolution list all said `simt-dev` where `package.json` installs only `simt`. `test/naming.test.mjs` existed for this and passed — its rule required a verb after the project name, and none of the four is followed by one |
+| S60 | An unreadable `.prettierignore` read as "the repository declared nothing" | P2 | F | cli | no | S58 | Complete | `228d6c5`. The first version of that read was `catch { return false }`, and a `ReferenceError` from an unimported `join` was swallowed by it — silently, on every repository. ENOENT is the only absence; anything else surfaces. Asserted with a directory at `.prettierignore` |
 
 ## 4. Review 0001 at `4c27514`
 

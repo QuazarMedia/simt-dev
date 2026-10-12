@@ -147,7 +147,7 @@ export async function runGates(event, { root, manifest }) {
       formatted = targets;
     }
 
-    const outcome = await run(resolution.argv, root);
+    const outcome = await runGate(resolution, root);
     results.push({
       name,
       status: outcome.code === 0 ? 'passed' : 'failed',
@@ -200,6 +200,37 @@ async function run(argv, cwd) {
   } catch (error) {
     return { code: typeof error.code === 'number' ? error.code : 1, stdout: error.stdout ?? '', stderr: error.stderr ?? String(error.message ?? error) };
   }
+}
+
+/**
+ * Run a gate's resolution, as a shell line or as an argv.
+ *
+ * A declared command is a line the repository wrote in its own manifest and would type
+ * into its own shell (ADR-019 ruling 8), so it goes through `sh -c` and everything it
+ * wrote survives — quotes, pipes, `&&`, a flag with a space in its value. Everything
+ * this tool resolved itself stays an argv, because that is a path this tool chose out of
+ * `node_modules/.bin` and handing it to a shell would be a change of trust for no gain.
+ *
+ * `sh -c` is not a sandbox and is not meant to be. The trust boundary is the repository:
+ * the line came from its own manifest, which it can read and change, and it runs on the
+ * author's own machine at the author's own request. The only property worth defending is
+ * that the two sources stay distinguishable, which is why this is a separate branch
+ * rather than a flag on `run`.
+ */
+async function runGate(resolution, cwd) {
+  if (resolution.shell === true && typeof resolution.command === 'string') {
+    try {
+      const { stdout, stderr } = await exec('sh', ['-c', resolution.command], { cwd, maxBuffer: 8 * 1024 * 1024 });
+      return { code: 0, stdout, stderr };
+    } catch (error) {
+      return {
+        code: typeof error.code === 'number' ? error.code : 1,
+        stdout: error.stdout ?? '',
+        stderr: error.stderr ?? String(error.message ?? error),
+      };
+    }
+  }
+  return run(resolution.argv, cwd);
 }
 
 async function readPkg(root) {

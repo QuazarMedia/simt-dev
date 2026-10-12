@@ -72,6 +72,33 @@ One manifest. Three answers. The one I would have shipped if I had only run `che
    every file (`ENOTDIR`) and classified every Gradle repository in the estate as having no
    runner at all — a wrong answer from an evidence reader, which is worse than no answer
    because the caller cannot tell them apart.
+8. **A declared command is a shell command line, not an argv.** *(S17, 2026-10-12)*
+
+   It was split on whitespace and handed to `execFile` as an argv. That made a declaration
+   a repository would plausibly write run the wrong thing rather than fail: a flag whose
+   value contains a space became two arguments, and the quotes in a compound line were
+   passed to the program as literal characters. There was no way to express a quoted
+   argument at all, and nothing said so.
+
+   So `gates.commands[name]` is one line, run through `sh -c`, and everything the
+   repository wrote in it survives — quotes, pipes, `&&`, a path with a space. This is the
+   same line the repository would type into its own shell, which is the only definition of
+   "what this repository means by that" that does not require a parser here.
+
+   **The trust boundary is the repository, and it is not a sandbox.** The line comes from
+   the repository's own manifest, which it can read and change, and it runs on its author's
+   own machine when that author commits. `sh -c` adds no privilege: the same person who
+   wrote the line could run it. What `sh -c` must not do is apply to anything this tool
+   resolved itself — a formatter path out of `node_modules/.bin` stays an argv, because
+   handing it to a shell would change who decided its arguments for no gain. The two
+   sources are separate branches in the dispatcher rather than a flag, so the distinction
+   cannot be forgotten by a caller that does not know it exists.
+
+   **Consequence for a repository that relied on the split.** A declaration with no quotes
+   behaves identically, because whitespace-splitting a shell word that needed no quoting
+   is the same thing the shell does. Every use of `gates.commands` in this estate declares
+   a bare path and is unaffected; the change only makes declarations *possible* that were
+   previously impossible rather than making any of them wrong.
 
 ## Consequences
 

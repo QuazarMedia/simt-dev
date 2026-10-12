@@ -96,8 +96,20 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
   // own remedy, to "name the program under gates.commands"; a dispatcher that then
   // ignored that declaration would contradict the remedy, and so would `check`.
   if (declared) {
-    const argv = declared.trim().split(/\s+/).filter(Boolean);
-    if (argv.length === 0) {
+    // The declaration is a SHELL COMMAND LINE, not an argv (ADR-019, ruling 8).
+    //
+    // It was split on whitespace, so every declaration a repository would plausibly
+    // write was wrong: `npm run test -- --watch=false` became seven arguments with the
+    // flag value as a separate one, and `sh -c "a && b"` became eleven, with the quotes
+    // passed to the program. A repository had no way to write a gate with a quoted
+    // argument, and nothing said so — the gate simply ran the wrong thing.
+    //
+    // Splitting is also a parse without an owner. `execFile` takes an argv because it
+    // must not use a shell, which is right for a path this tool chose and wrong for a
+    // line the repository wrote in full view of its own shell. The two cases are now
+    // different types rather than one `argv` field carrying both.
+    const line = declared.trim();
+    if (line === '') {
       return {
         ok: false,
         gate: name,
@@ -109,12 +121,16 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
     return {
       ok: true,
       kind: gate.kind,
-      argv,
+      // Kept alongside `command` because the dispatcher prints and passes it to
+      // `hooks status`, and two representations of one thing is how they drift.
+      argv: line.split(/\s+/).filter(Boolean),
+      command: line,
+      shell: true,
       // The dispatcher has to know whether these argv entries are paths it chose or
       // words it was handed. Sniffing the detail string meant the safety guard on
       // partial stages would quietly stop working the day that wording changed.
       declared: true,
-      detail: `declared command: ${declared}`,
+      detail: `declared command: ${line}`,
     };
   }
 

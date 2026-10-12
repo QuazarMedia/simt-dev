@@ -180,7 +180,7 @@ export function citations(text) {
  *
  * @returns {Promise<{ok: boolean, decisions: object[], errors: string[]}>}
  */
-export async function loadDecisions() {
+export async function loadDecisions({ all = false } = {}) {
   let names;
   try {
     names = (await readdir(DECISIONS_DIR)).filter((n) => /^ADR-\d{3}-.*\.md$/.test(n)).sort();
@@ -240,7 +240,7 @@ export async function loadDecisions() {
         (m) => `ADR-${m[1]}`,
       ),
       partial,
-      summary: summarise(text, partial),
+      summary: summarise(text, partial, { all }),
       bytes: Buffer.byteLength(text),
     });
   }
@@ -283,9 +283,12 @@ export function byId(decisions) {
  * @param {{ruling: number|null, kind: string, by: string|null}[]} partial the record's
  *   partial supersessions, so a ruling that is no longer in force can say so where it is
  *   printed rather than only in the status line above it
- * @returns {{ruled: string[], rulingNumbers: (number|null)[], rejected: string[], writtenAgainst: string[]}}
+ * @param {{all?: boolean}} [options] `all` keeps every ruling instead of the first two.
+ *   The cap exists for the common case, where a rule cites one record and two rulings
+ *   answer "why is this here"; the reader who needs the rest asks.
+ * @returns {{ruled: string[], rulingNumbers: (number|null)[], rulingCount: number, rejected: string[], writtenAgainst: string[]}}
  */
-function summarise(text, partial = []) {
+function summarise(text, partial = [], { all = false } = {}) {
   // A section ends at the next `## ` — but not at one inside a fenced code block.
 // ADR-007's entire ruling is a document skeleton in a fence whose headings are `##`,
 // so the old lookahead ended the section at the first line of the ruling itself. It
@@ -418,9 +421,21 @@ const section = (name) => {
   const ruled = units(section('Ruling') || section('Rulings'));
   const withLead = ruled.filter((p, i) => !p.text.endsWith(':') || i === ruled.length - 1);
 
-  const printed = withLead.slice(0, 2);
+  // Two by default, and every one of them on request. Fifty-five of the sixty records
+  // carry more than two rulings, so the default is an excerpt for almost every record —
+  // which is fine as a budget and wrong as a silence, and the count below says so.
+  //
+  // The full set is kept rather than discarded, because the command that names where the
+  // rest of it is has to be able to produce it. A remedy that cannot be followed is the
+  // defect this whole command exists to prevent, and the first version of this fix
+  // printed "the rest: simt rules show ADR-019", which exits 2: `rules show` takes a rule
+  // id. So `--all` is the command the excerpt points at, and this is what it reads.
+  const printed = all ? withLead : withLead.slice(0, 2);
   return {
     ruled: printed.map((p) => mark(sentence(redactCommand(p.text)), p.number)),
+    // How many rulings the record carries. Parallel to `ruled`: "two of eight" and "two"
+    // are different answers to the same question and only one of them is true.
+    rulingCount: withLead.length,
     // The number each printed ruling declares, parallel to `ruled`. It is the join
     // between a supersession and the text it applies to, so it is exported rather than
     // kept inside: a family that stopped numbering its rulings — `**One.**` losing the

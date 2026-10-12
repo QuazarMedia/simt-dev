@@ -64,14 +64,45 @@ export async function ruleTargets(root, rule, body, sha, resolved, notes) {
     }
 
     const mine = s.ruleFrontmatter(rule);
-    const frontmatter = extractFrontmatter(existing) ?? frontmatterBlock(mine);
+    // The frontmatter is re-derived, never inherited (S16).
+    //
+    // Two things were wrong and only the second was visible. The first was
+    // `extractFrontmatter(existing) ?? frontmatterBlock(mine)`, where the file's own
+    // block won whenever the file already had one. The second was this line's
+    // neighbour: when the existing region parsed cleanly, `composed` was the whole
+    // existing file, so `inject` replaced the region between the markers and left the
+    // frontmatter above them exactly as it found it — whatever this tool emitted the
+    // first time it saw this surface, forever. A surface that adds a key, or whose
+    // `alwaysApply` flips, could never reach a repository that had already adopted it,
+    // and no gate could report it: the file agrees with itself, so nothing is stale by
+    // any comparison the tool makes.
+    //
+    // One asymmetry, deliberately: a surface that emits NO frontmatter leaves whatever
+    // is there alone. This tool owns the block it writes and will replace it; deleting a
+    // block it did not write is a different operation, and a surface with no frontmatter
+    // of its own has no opinion about it.
+    const frontmatter = mine.length > 0 ? frontmatterBlock(mine) : extractFrontmatter(existing) ?? '';
     const state = exists ? parse(existing) : { status: 'absent' };
     // A surface that wants no frontmatter must not get a blank line where the
     // frontmatter would have been: Claude's rule files opened with two empty lines
     // before the marker, which is untidy in a file the reader will open, and a
     // difference between surfaces that no check reported.
+    //
+    // Swapped in place rather than stripped and rejoined. My first attempt here was
+    // `${frontmatter}\n${bodyAfterFrontmatter(existing)}`, which looked equivalent and
+    // was not: that helper's trailing `\n*` swallows the blank line between `---` and
+    // the region, so the reconstruction was one newline short of the file and `inject`
+    // reported `updated` on every run forever while writing identical bytes. The file
+    // was right; the verdict never settled, so `check` reported drift no reader could
+    // see and `sync` rewrote a correct file on every invocation. Anything that rebuilds
+    // a file has to reproduce the bytes it did not mean to touch, and the cheapest way
+    // to guarantee that is not to rebuild them.
     const composed =
-      state.status === 'ok' ? existing : frontmatter === '' ? '' : `${frontmatter}\n`;
+      state.status === 'ok'
+        ? swapFrontmatter(existing, frontmatter)
+        : frontmatter === ''
+          ? ''
+          : `${frontmatter}\n`;
     const result = inject(composed, body, { sha, sources: [rule.source] });
 
     // Report the prose being retired rather than letting it vanish into a diff the
@@ -214,6 +245,26 @@ export { rulePath };
 export function extractFrontmatter(text) {
   const m = /^---\n[\s\S]*?\n---\n?/.exec(text);
   return m ? m[0].trimEnd() : null;
+}
+
+/**
+ * Put `frontmatter` where a frontmatter block already is, and leave every other byte
+ * exactly where it was.
+ *
+ * The block match deliberately stops at the closing `---` and not past it, so the
+ * replacement starts at the newline that follows — the blank line a formatter requires
+ * before an HTML comment survives belongs to the file, not to the block, and consuming
+ * it here is what made `inject` report `updated` forever on files whose bytes never
+ * changed.
+ *
+ * A file with no block gets one above its content. The separator below it is left to
+ * `inject`'s `seam`, which is the one place that knows what the surrounding document
+ * format requires.
+ */
+function swapFrontmatter(text, frontmatter) {
+  if (frontmatter === '') return text;
+  const m = /^---\n[\s\S]*?\n---/.exec(text);
+  return m === null ? `${frontmatter}\n${text}` : `${frontmatter}${text.slice(m[0].length)}`;
 }
 
 function bodyAfterFrontmatter(text) {

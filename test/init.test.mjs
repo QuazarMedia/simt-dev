@@ -777,3 +777,56 @@ test('the remedy for a stale manifest field names the command that repairs it', 
   assert.match(stale.remedy, new RegExp(`^run: ${CLI} sync --yes$`), `unexpected remedy: ${stale.remedy}`);
   assert.doesNotMatch(stale.remedy, /init/, 'init re-runs adoption; it is not the repair for one field');
 });
+
+test('init: the branch and the tag it creates are both reported (S15)', async () => {
+  // Both are deliberate — plan 0002 §8.2 item 3 says "always", and the heading over
+  // that list is "Nothing is silent". Both were reported only under `--json`, so the
+  // default run moved the reader onto a branch they had not chosen and told them
+  // nothing.
+  //
+  // The claim under test is about what a reader SEES, so it is asserted on the printed
+  // output rather than on the returned payload, which already carried both.
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const root = await scratch();
+  await git(['init', '-q'], { cwd: root });
+  await writeFile(join(root, 'notes.txt'), 'x\n');
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-qm', 'init'], { cwd: root });
+
+  // `capture` collects both streams, which is where a reader looks too.
+  const { code, text } = await capture(() => initCommand([], { root, yes: true }));
+  assert.equal(code, 0);
+
+  assert.match(text, /tagged\s+backup-before-simt-dev/, 'the tag it wrote was not reported');
+  assert.match(text, /git reset --hard backup-before-simt-dev/, 'and not how to undo it');
+  assert.match(text, /branch\s+switched to simt-dev\/adopt/, 'the branch it switched to was not reported');
+
+  // And the commands named must be the ones that work. An escape hatch that prints the
+  // wrong way out is worse than one that prints nothing, because it is believed.
+  const { stdout: after } = await git(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root });
+  assert.match(after.trim(), /^simt-dev\/adopt$/, 'the test did not actually switch branches');
+  const { stdout: branches } = await git(['branch', '--format=%(refname:short)'], { cwd: root });
+  assert.match(branches, /\bmaster\b|\bmain\b/, 'the previous branch is gone; the message claims it is untouched');
+
+  // The branch line names the branch it came FROM, and that name must be real.
+  const from = /branch\s+switched to simt-dev\/adopt;\s+(\S+)\s+is untouched/.exec(text);
+  assert.ok(from, 'the branch line does not name the branch it left');
+  assert.ok(
+    branches.split('\n').includes(from[1]),
+    `the branch line names "${from[1]}", which is not a branch in this repository`,
+  );
+});
+
+test('init: a repo that is not a git work tree reports no branch and no tag', async () => {
+  // The escape hatch is best-effort (plan 0002: a repo with no commits must still be
+  // adoptable), so the notes carry the reason. What must not happen is the tool
+  // claiming a tag or a branch it did not create.
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const root = await scratch();
+  await writeFile(join(root, 'monkey.jungle'), '');
+  const { code, text } = await capture(() => initCommand([], { root, yes: true }));
+  assert.equal(code, 0);
+  assert.doesNotMatch(text, /^tagged /m, 'a tag was reported in a repository with no git');
+  assert.doesNotMatch(text, /^branch   switched/m, 'a branch switch was reported in a repository with no git');
+  assert.match(text, /not a git work tree/, 'the reason it created neither was not reported');
+});

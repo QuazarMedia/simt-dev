@@ -30,6 +30,11 @@ ${CLI} rules why <id|ADR-NNN> the decision that settled it, and whether it is st
 ${CLI} hooks install [--yes]   install the shared dispatcher; report what it would run
                            (dry-run unless --yes; refuses to take over routing git
                             already uses, and --yes is that consent)
+${CLI} hooks status            what each git event routes to, and whether it is wired
+${CLI} hooks run <event>       run one event's gates now, as git would
+                           (pre-commit, pre-push, post-merge, ...)
+${CLI} graph lint              check the skill registry against the skills on disk
+                           (byte counts, dangling edges, unresolvable variants)
 ${CLI} ci                     simt-dev's own .github files: create or refresh them
                            (dry-run unless --yes; refreshes the templates' own copies
                             and no repository else's)
@@ -56,9 +61,14 @@ const FLAGS = `--json                 structured output
                         file, then the sibling heuristic if it verifies)
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
+--check                 report drift and write nothing (sync, ci)
 --all                   ignore a cap: every ruling of a record, or the skills budget
 --variant <id>          which body of a multi-variant skill to use
---from <repo/path>      install from a declared source by name`;
+--from <repo/path>      install from a declared source by name
+--list                  print the MCP tool surface without reading stdin (mcp)
+--accept-conflicts      init: adopt rules that collide with hand-written ones
+--help                  this text
+--version               the version, and the SHA it was built from`;
 
 const PRINCIPLES = `design rules:
   deterministic       same repo + same task = same answer, forever

@@ -12,23 +12,33 @@
 
 import { EXIT, fail } from './output/index.mjs';
 
-const BOOL_FLAGS = new Set([
+// `--quiet`, `--semantic` and `--mermaid` were here and were read by nothing (review
+// 0001 filed it; it survived every change to this file since). Each was a plan's
+// intention rather than a feature: `--semantic` was to be an explicitly non-canonical
+// escape hatch, `--mermaid` belonged to a `skills graph` command that was never built,
+// and `--quiet` was to shorten `help`. The plans keep those records; the parser does not
+// need to keep a promise no code makes.
+//
+// An accepted flag that changes nothing is worse than an absent one. `--nonsense` exits
+// 2 and tells the reader the flag does not exist; `--quiet` exits 0 and tells them
+// nothing happened, which is indistinguishable from the output being quiet on purpose.
+// Removing them makes `test/help.test.mjs`'s "every flag is described" assertion able to
+// mean something, which it could not while three accepted flags had no description.
+
+export const BOOL_FLAGS = new Set([
   'json',
   'all',
   'dry-run',
   'yes',
   'check',
-  'quiet',
   'plan',
-  'semantic',
-  'mermaid',
   'help',
   'version',
   'accept-conflicts',
   'list',
 ]);
 
-const VALUE_FLAGS = new Set([
+export const VALUE_FLAGS = new Set([
   'budget',
   'max-bytes',
   'paths',
@@ -42,6 +52,21 @@ const VALUE_FLAGS = new Set([
   'from',
   'surfaces',
 ]);
+
+/**
+ * Flags that accumulate rather than overwrite.
+ *
+ * `--skill` was documented as "(repeatable)" and was not: `flags.skill = value` meant
+ * `--skill a --skill b` resolved to `b`, with `a` silently dropped. No error, no
+ * warning, and a brief that quietly lacked a skill the caller named — which is the one
+ * failure mode a tool whose job is to be explainable cannot have (ADR-009, "the answer
+ * is a function of what was asked").
+ *
+ * Comma separation still works, because the consumer splits on commas either way. This
+ * is a superset of the old behaviour, not a replacement: `--skill a,b` parsed before it
+ * parses now.
+ */
+export const REPEATABLE_FLAGS = new Set(['skill']);
 
 /**
  * @param {string[]} argv raw arguments, excluding node and the script path
@@ -96,7 +121,10 @@ export function parse(argv) {
         }
         flags[camel(raw)] = n;
       } else {
-        flags[camel(raw)] = value;
+        const key = camel(raw);
+        flags[key] = REPEATABLE_FLAGS.has(raw)
+          ? [...(Array.isArray(flags[key]) ? flags[key] : []), value]
+          : value;
       }
       continue;
     }

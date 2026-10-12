@@ -16,7 +16,8 @@ import { existsSync } from 'node:fs';
 import { EXIT, emit, emitJson, fail, isJson, note as emitNote } from '../output/index.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
-import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
+import { unknownSkills, scoreCorpus } from '../resolve/eval.mjs';
+import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { tokenize, rankSkills, closure, selectWithinBudget, resolveAlias, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
 import { nearMatches } from '../resolve/near.mjs';
@@ -579,6 +580,117 @@ export async function whyCommand(args, flags) {
 
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
+}
+
+// --- eval ---------------------------------------------------------------------
+
+/**
+ * The gold corpus when the reader names none. A checkout holds one at this fixed path;
+ * `test/` is not in the published files, so an installed copy does not. That absence is
+ * a fact about where this copy runs, reported as such (ADR-061's tiered resolution is
+ * the same shape: explicit path, then the package's own file, then an honest absence).
+ */
+const DEFAULT_CORPUS = join(PACKAGE_ROOT, 'test', 'fixtures', 'eval-corpus.json');
+
+/**
+ * `simt skills eval [corpus]` - measure the resolver against the gold corpus.
+ *
+ * Plan 0002 section 9: "Reports precision and recall and fails on regression." The
+ * corpus states, per case, which skills must come back (`select`) and which must not
+ * (`reject`); a case that names no selection is exhaustive, and anything it returns is
+ * a miss. The exit code rests on `clean`, because the two ratios can both read 1.0
+ * while an exhaustive case returns a skill neither list named (see src/resolve/eval.mjs).
+ */
+export async function evalCommand(positional, flags) {
+  const corpusPath = positional[0] ?? (existsSync(DEFAULT_CORPUS) ? DEFAULT_CORPUS : null);
+
+  if (corpusPath === null) {
+    return fail(
+      `no eval corpus: ${DEFAULT_CORPUS} is not on this machine (test data does not ship in the package)`,
+      EXIT.FAIL,
+      `run: ${CLI} skills eval <path-to-corpus>  (a file of cases with select and reject lists)`,
+    );
+  }
+
+  let corpus;
+  try {
+    corpus = JSON.parse(await readFile(corpusPath, 'utf8'));
+  } catch (error) {
+    return fail(
+      `${corpusPath}: unreadable or invalid JSON (${error.message})`,
+      EXIT.FAIL,
+      `run: ${CLI} skills eval <path-to-corpus>`,
+    );
+  }
+  if (!Array.isArray(corpus.cases) || corpus.cases.length === 0) {
+    return fail(
+      `${corpusPath}: no cases (a corpus is {"cases": [{"name", "repo", "task", "select", "reject"}]})`,
+      EXIT.FAIL,
+      `run: ${CLI} skills eval <path-to-corpus>`,
+    );
+  }
+
+  // The corpus is measured against the registry it cites, so it needs the same
+  // resolution and the same failure as every other skills command.
+  const { registry, errors, ok, path } = await loadRegistry(null, flags);
+  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
+
+  const unknown = unknownSkills(registry, corpus);
+  const score = scoreCorpus(registry, corpus);
+  const okRun = unknown.length === 0 && score.clean;
+
+  if (isJson(flags)) {
+    emit(
+      `${JSON.stringify(
+        {
+          ok: okRun,
+          command: 'skills eval',
+          corpus: corpusPath,
+          registry: path,
+          cases: score.cases.map((c) => ({
+            name: c.name,
+            selected: c.selected,
+            missing: c.missing,
+            unexpected: c.unexpected,
+          })),
+          unknownSkills: unknown,
+          precision: score.precision,
+          recall: score.recall,
+        },
+        null,
+        2,
+      )}\n`,
+      { maxBytes: flags.maxBytes ?? 0 },
+    );
+    return okRun ? EXIT.OK : EXIT.FAIL;
+  }
+
+  const failed = score.cases.filter((c) => c.missing.length > 0 || c.unexpected.length > 0);
+  const lines = [
+    `corpus    ${corpusPath} (${score.cases.length} cases)`,
+    `registry  ${path}`,
+    `${score.cases.length - failed.length} pass, ${failed.length} fail`,
+    `precision ${score.precision.toFixed(3)}  recall ${score.recall.toFixed(3)}`,
+    '',
+  ];
+
+  for (const c of score.cases) {
+    if (c.missing.length === 0 && c.unexpected.length === 0) {
+      lines.push(`PASS  ${c.name}`);
+      continue;
+    }
+    lines.push(`FAIL  ${c.name}`);
+    for (const name of c.missing) lines.push(`      missed     ${name}`);
+    for (const name of c.unexpected) lines.push(`      unexpected ${name}`);
+  }
+
+  if (unknown.length > 0) {
+    lines.push('', `FAIL  corpus cites skills the registry does not declare: ${unknown.join(', ')}`);
+  }
+
+  lines.push('', okRun ? 'OK the resolver meets the gold corpus' : 'REGRESSION: the resolver no longer meets the gold corpus');
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  return okRun ? EXIT.OK : EXIT.FAIL;
 }
 
 // --- bodies -------------------------------------------------------------------

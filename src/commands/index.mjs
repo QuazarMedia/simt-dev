@@ -15,6 +15,7 @@ import {
   briefCommand as skillsBrief,
   showCommand as skillsShow,
   whyCommand as skillsWhy,
+  evalCommand as skillsEval,
 } from './skills.mjs';
 import { syncCommand, checkCommand } from './sync.mjs';
 import { initCommand } from './init.mjs';
@@ -65,6 +66,7 @@ const IMPLEMENTED = {
   'skills brief': skillsBrief,
   'skills show': skillsShow,
   'skills why': skillsWhy,
+  'skills eval': skillsEval,
   'skills install': installCommand,
   'rules list': rulesList,
   'rules show': rulesShow,

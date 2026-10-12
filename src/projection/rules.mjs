@@ -125,7 +125,8 @@ export const LOCAL_PROFILE_DIR = '.simt-dev/profiles';
  *  one carries the `simt-` prefix (ADR-022). A profile carrying a bare key would read
  *  as an editor's instruction — Cursor, Copilot and Antigravity all parse a
  *  frontmatter block the same way — and would be silently inert. */
-const PROFILE_KEYS = new Set(['simt-id', 'simt-title', 'simt-applies', 'simt-fallback']);
+/** Frontmatter keys a rule profile declares. See {@link KNOWN_KEYS} on why exported. */
+export const PROFILE_KEYS = new Set(['simt-id', 'simt-title', 'simt-applies', 'simt-fallback']);
 
 /** Report the first thing wrong with a profile's frontmatter, in the order a reader
  *  fixes it: no id to select it by, then a key that will not be read, then a tag the

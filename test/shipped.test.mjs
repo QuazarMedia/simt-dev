@@ -21,6 +21,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { loadRules, select, LOCAL_PROFILE_DIR } from '../src/projection/project.mjs';
 import { desiredRegion, mdcTargets } from '../src/projection/rules.mjs';
@@ -36,6 +38,30 @@ import { EXIT } from '../src/output/index.mjs';
 import { assertClean } from './leaks.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+// Runs the real binary in a child process and returns its exit code and output.
+// Tests that assert on command output must use this rather than monkey-patching
+// process.stdout.write: under `node --test` the runner itself streams event frames
+// containing this checkout's own path into stdout, and a patched capture swallows
+// them, so the assertion then passes or fails on the checkout's directory name
+// instead of on what the command printed (ADR-031). A child process has its own
+// stdout, and it is also what a reader actually runs.
+// The promisified form, not the native promise: on Node 26 `await execFile(...)`
+// resolves with the ChildProcess itself (stdout still a stream), not collected strings.
+const execCli = promisify(execFile);
+
+async function runCli(args) {
+  const cwd = await mkdtemp(join(tmpdir(), 'simt-cli-'));
+  try {
+    const { stdout } = await execCli('node', [join(ROOT, 'bin', 'simt-dev.mjs'), ...args], { cwd });
+    return { code: 0, stdout };
+  } catch (failure) {
+    return {
+      code: typeof failure.code === 'number' ? failure.code : 1,
+      stdout: `${failure.stdout ?? ''}\n${failure.stderr ?? ''}`,
+    };
+  }
+}
 
 // Every profile in the repo, so adding one cannot opt out of these checks.
 // Derived rather than written out: the list this replaced was a hand-maintained
@@ -379,20 +405,10 @@ test('core does not claim every rule cites a decision', async () => {
 });
 
 test('rules why does not name an estate repository', async () => {
-  const { whyCommand } = await import('../src/commands/rules.mjs');
-  const chunks = [];
-  const real = process.stdout.write.bind(process.stdout);
-  process.stdout.write = (c) => { chunks.push(String(c)); return true; };
-  let code;
-  try {
-    code = await whyCommand(['ADR-001'], {});
-  } finally {
-    process.stdout.write = real;
-  }
-  assert.equal(code, EXIT.OK);
-  const text = chunks.join('');
-  assert.equal(ESTATE_NAME.exec(text), null, `rules why names an estate repository:\n${text}`);
-  assert.match(text, /push only on explicit user approval/);
+  const { code, stdout } = await runCli(['rules', 'why', 'ADR-001']);
+  assert.equal(code, EXIT.OK, stdout);
+  assert.equal(ESTATE_NAME.exec(stdout), null, `rules why names an estate repository:\n${stdout}`);
+  assert.match(stdout, /push only on explicit user approval/);
 });
 
 test('every repository the skill registry names is denied by the leak guard', async () => {
@@ -411,25 +427,13 @@ test('every repository the skill registry names is denied by the leak guard', as
 });
 
 test('help does not describe the tool as belonging to one estate', async () => {
-  // `help` writes through emit() and returns an exit code, so the text has to be
-  // captured rather than returned.
-  const { help } = await import('../src/commands/help.mjs');
-  const chunks = [];
-  const real = process.stdout.write.bind(process.stdout);
-  process.stdout.write = (c) => { chunks.push(String(c)); return true; };
-  let code;
-  try {
-    code = await help(['help']);
-  } finally {
-    process.stdout.write = real;
-  }
-  assert.equal(code, EXIT.OK);
-  const text = chunks.join('');
-  assert.ok(text.length > 200, 'help produced nothing to check');
-  assertClean('simt-dev help', text);
+  const { code, stdout } = await runCli(['help']);
+  assert.equal(code, EXIT.OK, stdout);
+  assert.ok(stdout.length > 200, 'help produced nothing to check');
+  assertClean('simt-dev help', stdout);
   // It previously said "for the SIMT ecosystem", which is the same assumption as a
   // repository name in a projected rule, one level up.
-  assert.ok(!/\bSIMT\b/.test(text), 'help claims the tool belongs to one estate');
+  assert.ok(!/\bSIMT\b/.test(stdout), 'help claims the tool belongs to one estate');
 });
 
 // --- 5. The failure mode that started all of this ------------------------------------
@@ -827,7 +831,7 @@ function estateNamesInFile(label, text) {
     .flatMap((line, i) => (estateNameIn(line) ? [`${label}:${i + 1}  ${JSON.stringify(estateNameIn(line))}`] : []));
 }
 
-const SHIPPED_ROOTS = ['bin', 'src', 'graph', 'rules', 'docs/decisions'];
+const SHIPPED_ROOTS = ['bin', 'src', 'rules', 'docs/decisions'];
 const SHIPPED_FILES = ['CHANGELOG.md', 'README.md', 'LICENSE', 'package.json'];
 
 /**

@@ -15,15 +15,95 @@
 
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 import { matchesGlob, syntheticPathFor, tokenize } from '../resolve/resolve.mjs';
-import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
+import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-export const REGISTRY_PATH = resolve(HERE, '..', '..', 'graph', 'skills.graph.json');
+/**
+ * The registry is workspace data (ADR-061): it describes which skill bodies a particular
+ * workspace holds, where they are, how big they are, and which tags separate the variants.
+ * It therefore lives in a MEMBER of the workspace, not in the workspace root - the root is
+ * the directory that CONTAINS the member repositories, and it holds no `graph/` of its own.
+ * An explicitly named path always wins over everything below.
+ */
+function defaultRegistryPath() {
+  return join(PACKAGE_ROOT, 'graph', 'skills.graph.json');
+}
+
+/**
+ * The registry to read when the reader names none, in order (ADR-061 ruling 3):
+ *
+ * 1. The package root, when it holds one. In this checkout that is how the tool finds its
+ *    own registry; in an installed package `graph` is not in the published `files`, so it
+ *    never does, and the reader falls through to 2 instead of being handed this workspace's
+ *    catalogue.
+ * 2. A member of the resolved workspace, when exactly one holds one: a tool installed from
+ *    node_modules or a formula resolves its workspace by configuration, and the member that
+ *    holds the registry is usually the tool's own checkout. More than one holding it is
+ *    ambiguity and the reader must pick; none is an honest absence, reported with the
+ *    workspace that was looked in.
+ *
+ * Every step is file existence plus the configured workspace, so the answer can be
+ * explained to whoever asks (determinism). `errors` empty means a path was found.
+ *
+ * @returns {Promise<{where: string|null, errors: string[], workspace: {root: string|null, source: string, detail: string}|null}>}
+ */
+async function defaultRegistry(flags) {
+  const own = defaultRegistryPath();
+  if (existsSync(own)) return { where: own, errors: [], workspace: null };
+
+  const ws = await workspace(flags);
+  const info = { root: ws.root, source: ws.source, detail: ws.detail };
+  const absent = `no skill registry at ${own}; create one there, or name it explicitly`;
+  if (ws.error) {
+    return { where: own, errors: [`${ws.detail}: ${ws.error}`, absent], workspace: info };
+  }
+  if (ws.root === null) {
+    return { where: own, errors: [absent], workspace: info };
+  }
+  if (!existsSync(ws.root)) {
+    return {
+      where: own,
+      errors: [`no skill registry: the configured workspace ${ws.root} (${ws.detail}) does not exist`],
+      workspace: info,
+    };
+  }
+
+  const members = [];
+  let entries;
+  try {
+    entries = await readdir(ws.root, { withFileTypes: true });
+  } catch {
+    entries = null;
+  }
+  for (const entry of entries ?? []) {
+    if (!entry.isDirectory() || entry.name.startsWith('.') || entry.name === 'node_modules') continue;
+    if (existsSync(join(ws.root, entry.name, 'graph', 'skills.graph.json'))) members.push(entry.name);
+  }
+
+  if (members.length === 1) {
+    return { where: join(ws.root, members[0], 'graph', 'skills.graph.json'), errors: [], workspace: info };
+  }
+  if (members.length > 1) {
+    return {
+      where: null,
+      errors: [
+        `ambiguous registry: ${members.length} members of workspace ${ws.root} each hold ` +
+          `graph/skills.graph.json (${members.join(', ')}); name one explicitly`,
+      ],
+      workspace: info,
+    };
+  }
+  return {
+    where: own,
+    errors: [
+      `no skill registry in workspace ${ws.root} (${ws.detail}); create one in a member, or name it explicitly`,
+    ],
+    workspace: info,
+  };
+}
 
 /**
  * Where sibling repos live. Sources are declared as `repo/path`, so resolving one
@@ -58,15 +138,47 @@ const VALID_ROLES = new Set(['canonical', 'variant', 'stub', 'duplicate', 'depre
  * @returns {Promise<{ok: boolean, registry: object|null, errors: string[], warnings: string[],
  *                    verified: boolean, workspace: {root: string|null, source: string, detail: string}>}
  */
-export async function loadRegistry(path = REGISTRY_PATH, flags = {}) {
-  let registry;
-  try {
-    registry = JSON.parse(await readFile(path, 'utf8'));
-  } catch (error) {
+export async function loadRegistry(path = null, flags = {}) {
+  // An explicitly named path wins over the default (ADR-061). When none is given,
+  // `defaultRegistry` looks in the package root and then in the workspace's members; its
+  // errors are facts about ABSENCE - no registry here, or more than one and the reader must
+  // pick - and are reported as such. A named path that is missing is a different fact: the
+  // reader pointed at a file that is not there, and it names that path.
+  let where = path;
+  let resolveErrors = null;
+  let resolvedWorkspace = null;
+  if (path === null) {
+    const found = await defaultRegistry(flags);
+    where = found.where;
+    resolveErrors = found.errors;
+    resolvedWorkspace = found.workspace;
+  }
+
+  if (resolveErrors !== null && resolveErrors.length > 0) {
     return {
       ok: false,
       registry: null,
-      errors: [`${path}: unreadable or invalid JSON (${error.message})`],
+      path: where,
+      errors: resolveErrors,
+      warnings: [],
+      verified: false,
+      workspace: resolvedWorkspace ?? { root: null, source: 'none', detail: 'not resolved' },
+    };
+  }
+
+  let registry;
+  try {
+    registry = JSON.parse(await readFile(where, 'utf8'));
+  } catch (error) {
+    const message =
+      path === null && error.code === 'ENOENT'
+        ? `no skill registry at ${where}; create one there, or name it explicitly`
+        : `${where}: unreadable or invalid JSON (${error.message})`;
+    return {
+      ok: false,
+      registry: null,
+      path: where,
+      errors: [message],
       warnings: [],
       verified: false,
       workspace: { root: null, source: 'none', detail: 'not resolved' },
@@ -122,6 +234,7 @@ export async function loadRegistry(path = REGISTRY_PATH, flags = {}) {
   return {
     ok: errors.length === 0,
     registry,
+    path: where,
     errors,
     warnings,
     verified,

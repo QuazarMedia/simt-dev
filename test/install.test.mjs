@@ -8,7 +8,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadRegistry, REGISTRY_PATH, measureSkill } from '../src/graph/load.mjs';
+import { loadRegistry, measureSkill } from '../src/graph/load.mjs';
 import { skillsDir, wrapFlat } from '../src/commands/skillsinstall.mjs';
 import { readManifest, MANIFEST } from '../src/projection/manifest.mjs';
 import { skillWorkspace, workspaceEnv, cmd } from './fixture.mjs';
@@ -361,7 +361,7 @@ test('skills install: installing a skill into the repo that already holds it doe
 // --- the registry invariant this command depends on ----------------------------
 
 test('every variant-bearing skill resolves to exactly one variant per real repo', async () => {
-  const { registry } = await loadRegistry(REGISTRY_PATH);
+  const { registry } = await loadRegistry();
   const { fingerprint } = await import('../src/resolve/fingerprint.mjs');
   const cases = [
     { repo: 'simt-social', expect: 'web' },

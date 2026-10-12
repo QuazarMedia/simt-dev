@@ -14,7 +14,7 @@ import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
 import { EXIT, emit, emitJson, fail, isJson, note as emitNote } from '../output/index.mjs';
-import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
+import { loadRegistry } from '../graph/load.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
@@ -91,8 +91,8 @@ const kb = (bytes) => `${(bytes / 1000).toFixed(1)}k`;
 // --- tier 0: index ------------------------------------------------------------
 
 export async function indexCommand(args, flags) {
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
-  if (!ok) return fail(errors[0], EXIT.REGISTRY);
+  const { registry, errors, ok } = await loadRegistry(null, flags);
+  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
   const workspace = await workspaceLine(flags);
 
   if (isJson(flags)) {
@@ -205,8 +205,8 @@ export async function findCommand(args, flags) {
   const query = args.join(' ').trim();
   if (!query) return fail('find needs a query', EXIT.USAGE, `usage: ${CLI} skills find <query>`);
 
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
-  if (!ok) return fail(errors[0], EXIT.REGISTRY);
+  const { registry, errors, ok } = await loadRegistry(null, flags);
+  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
 
   const tokens = tokenize(query);
   const workspace = await workspaceLine(flags);
@@ -243,8 +243,8 @@ export async function findCommand(args, flags) {
 // --- brief: tier 1 ------------------------------------------------------------
 
 export async function briefCommand(args, flags) {
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
-  if (!ok) return fail(errors[0], EXIT.REGISTRY);
+  const { registry, errors, ok } = await loadRegistry(null, flags);
+  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
 
   const root = flags.root ?? process.cwd();
   const repo = await fingerprint(root);
@@ -448,8 +448,8 @@ export async function showCommand(args, flags) {
   const name = args[0];
   if (!name) return fail('show needs a skill name', EXIT.USAGE, `usage: ${CLI} skills show <name>`);
 
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
-  if (!ok) return fail(errors[0], EXIT.REGISTRY);
+  const { registry, errors, ok } = await loadRegistry(null, flags);
+  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
 
   const skill = registry.skills.find((s) => s.name === name);
   if (!skill) {
@@ -506,8 +506,8 @@ export async function whyCommand(args, flags) {
   const name = args[0];
   if (!name) return fail('why needs a skill name', EXIT.USAGE, `usage: ${CLI} skills why <name>`);
 
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
-  if (!ok) return fail(errors[0], EXIT.REGISTRY);
+  const { registry, errors, ok } = await loadRegistry(null, flags);
+  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
 
   const skill = registry.skills.find((s) => s.name === name);
   if (!skill) {

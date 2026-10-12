@@ -9,9 +9,10 @@
 // So this file packs the working tree, installs the tarball into a consumer with
 // nothing else in it, and drives `node_modules/.bin/simt-dev`. Everything it
 // asserts is something the reader of this repository would only learn from the
-// published package: the registry resolving from `node_modules`, the decisions
-// being present to read, and a full adoption surviving `init`, a commit, `check`,
-// `upgrade`, `hooks install` and a second real commit.
+// published package: the registry being absent from the published set and the
+// command saying so, the decisions being present to read, and a full adoption
+// surviving `init`, a commit, `check`, `upgrade`, `hooks install` and a second
+// real commit.
 //
 // What it deliberately does not assert is that a file Prettier would reformat. The
 // package has no dependencies (ADR-012), so there is no Prettier to reach for and
@@ -28,7 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { git, cmd } from './fixture.mjs';
-import { CLI, PACKAGE_NAME } from '../src/name.mjs';
+import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
 const exec = promisify(execFile);
@@ -85,12 +86,8 @@ async function run(command, args, options = {}) {
 }
 
 /** Drive the installed binary. The path is the one npm wrote, not this checkout's. */
-function simt(root, args) {
-  return run(join(root, 'node_modules', '.bin', CLI), args, { cwd: root, env: NO_ESTATE });
-}
-
-function installedRegistry(root) {
-  return join(root, 'node_modules', ...PACKAGE_NAME.split('/'), 'graph', 'skills.graph.json');
+function simt(root, args, env = NO_ESTATE) {
+  return run(join(root, 'node_modules', '.bin', CLI), args, { cwd: root, env });
 }
 
 let stage = '';
@@ -164,17 +161,37 @@ async function adopted(mutate) {
   return root;
 }
 
-test('the registry the installed tool reads comes out of node_modules', async () => {
+test('the installed tool ships no registry, and says so instead of reading the author\'s', async () => {
   const root = join(stage, 'seed');
 
   const lint = await simt(root, ['graph', 'lint', '--root', '.']);
+  // ADR-061: the catalogue is workspace data, and the published set has none of it.
+  // The honest answer is a named path and a specific exit code, not a confident
+  // foreign list - the failure the old constant had was answering from this tree.
+  assert.equal(lint.code, 4, lint.out);
+  // Self-containment, stated as the two paths it has to disagree on: it looked where
+  // an install puts the package, and it did not fall back to this checkout.
+  assert.match(lint.out, /no skill registry at \S*node_modules\/.*graph\/skills\.graph\.json/);
+  assert.equal(lint.out.includes(PACKAGE_ROOT), false, 'the installed tool reached into this checkout');
+});
+
+test('the installed tool finds the registry a configured workspace holds', async () => {
+  // The tier the previous test's remedy points at (ADR-061 ruling 3): a tool installed
+  // from node_modules resolves its workspace by configuration, and the registry is found
+  // in the MEMBER that holds it. Without this tier the remedy above would send the reader
+  // to a command that still answers "no registry" - a dead end, which is the failure
+  // this repository's rules forbid.
+  const root = join(stage, 'seed');
+  const ws = join(stage, 'workspace-tier3');
+  const registryPath = join(ws, 'registry-holder', 'graph', 'skills.graph.json');
+  await mkdir(dirname(registryPath), { recursive: true });
+  await cp(join(PACKAGE_ROOT, 'graph', 'skills.graph.json'), registryPath);
+
+  const lint = await simt(root, ['graph', 'lint', '--root', '.'], { ...NO_ESTATE, SIMT_DEV_WORKSPACE: ws });
   assert.equal(lint.code, 0, lint.out);
-  // Self-containment, stated as the two paths it has to disagree on. An assertion
-  // that the registry merely exists would pass against this checkout, which is
-  // exactly what the unit tests already cover.
-  assert.match(lint.out, /registry\s+\S*node_modules\/.*graph\/skills\.graph\.json/);
-  assert.doesNotMatch(lint.out, new RegExp(`registry\\s+${PACKAGE_ROOT}`));
-  assert.equal(lint.out.includes(installedRegistry(root)), true);
+  // It read the member's registry, not the author's: the named path is inside the
+  // configured workspace and nowhere else.
+  assert.match(lint.out, new RegExp(registryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 
 test('the decisions the tool explains itself with are in the tarball', async () => {
@@ -183,10 +200,9 @@ test('the decisions the tool explains itself with are in the tarball', async () 
   const why = await simt(root, ['rules', 'why', 'ADR-001']);
   assert.equal(why.code, 0, why.out);
   assert.match(why.out, /ADR-001/);
-  // `rules/core.md` and the graph are the two things every command reads; the
-  // decisions are the one a reader is told to go and read. A `files` entry that
-  // dropped `docs/decisions` would leave the commands working and the explanation
-  // missing.
+  // `rules/core.md` is what every command reads; the decisions are the one a
+  // reader is told to go and read. A `files` entry that dropped `docs/decisions`
+  // would leave the commands working and the explanation missing.
   assert.match(why.out, /commit|push|local/i);
 });
 

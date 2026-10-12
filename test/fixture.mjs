@@ -16,7 +16,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { REGISTRY_PATH, loadRegistry } from '../src/graph/load.mjs';
+import { loadRegistry } from '../src/graph/load.mjs';
 import { CLI, MANIFEST_FILE } from '../src/name.mjs';
 
 /**
@@ -197,7 +197,7 @@ function stagedFiles(skill, source) {
  */
 export async function skillWorkspace() {
   const root = await mkdtemp(join(tmpdir(), 'simt-workspace-'));
-  const { registry } = await loadRegistry(REGISTRY_PATH);
+  const { registry } = await loadRegistry();
 
   for (const name of new Set(registry.skills.flatMap((s) => (s.sources ?? []).map((src) => src.repo)))) {
     const spec = REPO_PROFILES[name] ?? neutralRepo(name);

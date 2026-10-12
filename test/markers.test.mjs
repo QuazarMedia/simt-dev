@@ -213,9 +213,11 @@ test('markers: the digest covers every projected byte, baselines included (S53)'
   // ...and nothing else from `src/` sneaked in with them. `src/` as a directory stays
   // excluded: a refactor that projects identical bytes must not move anyone's stamp.
   assert.equal(paths.some((p) => p.startsWith('src/')), false, paths.filter((p) => p.startsWith('src/')).join(', '));
-  // The two directories are still covered, so the ruling above did not narrow it.
+  // `rules/` is still covered, so the ruling above did not narrow it. The registry
+  // (`graph/`) is workspace data the package no longer ships (ADR-061), so a set that
+  // hashed it would stamp consumers whose bytes it never wrote.
   assert.ok(paths.some((p) => p.startsWith('rules/')), 'the shared rules are not in the digest');
-  assert.ok(paths.some((p) => p.startsWith('graph/')), 'the skill registry is not in the digest');
+  assert.equal(paths.some((p) => p.startsWith('graph/')), false, 'the registry no longer ships, so it is not a projected byte');
 });
 
 test('markers: the digest is a function of exactly its inputs, in order (S53)', async () => {

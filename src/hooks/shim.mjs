@@ -51,7 +51,7 @@ export function renderShim(event) {
 # This file only locates the dispatcher and hands over. It resolves in order:
 #   1. ${D}SIMT_DEV_BIN    explicit override, for CI images and odd checkouts
 #   2. node_modules/       the pinned project dependency
-#   3. simt-dev on PATH    a global install
+#   3. ${CLI} on PATH       a global install
 # If none resolves it REFUSES rather than exiting 0. A hook that cannot verify
 # anything must never report success - that is what teaches authors to reach for
 # --no-verify.

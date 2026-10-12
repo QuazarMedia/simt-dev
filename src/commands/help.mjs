@@ -78,7 +78,7 @@ export async function help(argv) {
     [
       'simt-dev - shared agent rules, skills and gates for a repo ecosystem',
       '',
-      'usage: simt-dev <command> [args] [flags]',
+      `usage: ${CLI} <command> [args] [flags]`,
       '',
       'commands:',
       COMMANDS,

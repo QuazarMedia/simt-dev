@@ -140,5 +140,3 @@ export function unresolved(name, { hasScript, binary, command, stack }) {
 export function gateNames() {
   return Object.keys(GATES).sort();
 }
-
-export const __internals = { FORMATTABLE, GATES };

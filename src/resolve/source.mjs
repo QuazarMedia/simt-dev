@@ -35,7 +35,7 @@ import { measureSkill } from '../graph/load.mjs';
  *
  * @returns {{path: string, how: 'workspace'|'repo'}[]}
  */
-export function candidateLocations(source, { workspaceRoot = null, root = null } = {}) {
+function candidateLocations(source, { workspaceRoot = null, root = null } = {}) {
   const out = [];
   if (workspaceRoot) out.push({ path: join(workspaceRoot, source.repo, source.path), how: 'workspace' });
   if (root) out.push({ path: join(root, source.path), how: 'repo' });

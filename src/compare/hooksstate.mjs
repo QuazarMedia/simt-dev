@@ -31,7 +31,7 @@ const exec = promisify(execFile);
  * @param {string} path
  * @returns {Promise<{event:string, target:string}|null>}
  */
-export async function readChainedShim(path) {
+async function readChainedShim(path) {
   let content;
   try {
     content = await readFile(path, 'utf8');
@@ -119,7 +119,7 @@ export async function readHooksPath(root) {
  * where there is none), so the comparison must render the shim the way THIS repo got it,
  * or a non-npm repository would read as stale the moment this tool ships.
  */
-export async function describeShim(path, root) {
+async function describeShim(path, root) {
   let content;
   try {
     content = await readFile(path, 'utf8');

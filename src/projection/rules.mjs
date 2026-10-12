@@ -575,7 +575,7 @@ export function render(selected) {
  * so it lands directly under `## Stack: …` instead of under whatever section the
  * previous source ended on.
  */
-export function frameSource(rule, body, kind) {
+function frameSource(rule, body, kind) {
   const text = demoteHeadings(body).trim();
   if (!text) return '';
   const title = sourceTitle(rule, kind);

@@ -22,7 +22,7 @@
 export const RULE_FILES = ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md'];
 
 /** Rule files discovered by glob rather than by name. */
-export const RULE_GLOBS = ['.cursor/rules/*.mdc', '.github/instructions/*.md'];
+const RULE_GLOBS = ['.cursor/rules/*.mdc', '.github/instructions/*.md'];
 
 /** Every hand-written rule path in a repo, named or globbed.
  *

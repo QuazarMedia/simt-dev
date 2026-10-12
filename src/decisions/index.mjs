@@ -508,7 +508,7 @@ export function redactEstate(text) {
  */
 const VERB = '(?:init|doctor|check|sync|upgrade|ci|compare|hooks|mcp|rules|skills|graph|--[a-z-]+)';
 
-export function redactCommand(text) {
+function redactCommand(text) {
   return String(text ?? '').replace(new RegExp(`\\bsimt-dev (?=${VERB})\\b`, 'g'), `${CLI} `);
 }
 

@@ -24,7 +24,6 @@
 
 import { readFile, readdir } from 'node:fs/promises';
 
-import { frontmatterBlock } from './surfaces.mjs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -302,14 +301,6 @@ function dropOrReplace(text, key, value) {
   return kept.join('\n').replace(/\n{3,}/g, '\n\n');
 }
 
-/** The frontmatter a projected `.mdc` keeps. `alwaysApply` and `description` are
- *  read by the editor before any rule text, so they belong outside the region. */
-export function mdcFrontmatter(rule) {
-  return frontmatterBlock([
-    `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
-    `alwaysApply: ${rule.alwaysApply ? 'true' : 'false'}`,
-  ]);
-}
 
 
 /**
@@ -325,5 +316,3 @@ export function ruleName(rule) {
   const base = rule.target.slice(rule.target.lastIndexOf('/') + 1);
   return base.replace(/\.mdc$/, '');
 }
-
-export { MDC_DIR, parse as parseRegion };

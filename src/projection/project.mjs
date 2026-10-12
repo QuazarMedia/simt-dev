@@ -478,7 +478,7 @@ async function regionOpts(root) {
  * A reader that stops at a byte offset never sees a region that ends past it.
  * The finding names the reader, because "the file is long" does not say who stops.
  */
-export function readLimitFindings(text, file) {
+function readLimitFindings(text, file) {
   const state = parse(text);
   if (state.status !== 'ok' || typeof state.endByte !== 'number') return [];
   const findings = [];

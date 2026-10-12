@@ -44,11 +44,6 @@ export function workspace(flags = {}) {
   return workspacePromise;
 }
 
-/** Test seam: forget the memoised workspace so the next call re-resolves. */
-export function resetWorkspace() {
-  workspacePromise = null;
-}
-
 const VALID_ROLES = new Set(['canonical', 'variant', 'stub', 'duplicate', 'deprecated']);
 
 /**

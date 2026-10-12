@@ -137,33 +137,19 @@ function commandPath(first, second) {
   if (second === undefined) return `${first} ${group}`;
   // Reject a second token that is not a subcommand of this group, rather than
   // silently routing `simt-dev skills nonsense` to the default subcommand.
+  //
+  // Read from IMPLEMENTED rather than from a second list. The list existed because
+  // there was no way to enumerate what dispatch could run — `IMPLEMENTED` was an
+  // object literal inside `dispatch()` — and a hand-kept copy of it had already
+  // drifted: it carried `doctor`, which `commandPath` can never match, because
+  // `doctor` is not a group and this branch is only reached when `GROUPS.has(first)`.
+  // Two lists of the same fact is the defect S15 was about in the help text.
   const key = `${first} ${second}`;
-  if (!STEPS.has(key) && !KNOWN_SUBS.has(key)) {
+  if (!STEPS.has(key) && !(key in IMPLEMENTED)) {
     return null;
   }
   return key;
 }
-
-/**
- * Subcommands implemented now, so they must not be rejected as unknown.
- * Implemented paths live here; declared-but-unimplemented ones live in STEPS.
- */
-const KNOWN_SUBS = new Set([
-  'doctor',
-  'graph lint',
-  'skills index',
-  'skills find',
-  'skills brief',
-  'skills show',
-  'skills why',
-  'skills install',
-  'rules list',
-  'rules show',
-  'rules why',
-  'hooks install',
-  'hooks status',
-  'hooks run',
-]);
 
 function parseOrExit(argv) {
   const parsed = parse(argv);

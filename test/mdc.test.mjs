@@ -8,7 +8,7 @@ import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { loadMdcRules, renderMdc, mdcFrontmatter } from '../src/projection/mdc.mjs';
+import { loadMdcRules, renderMdc } from '../src/projection/mdc.mjs';
 import { inject } from '../src/projection/markers.mjs';
 
 const scratch = () => mkdtemp(join(tmpdir(), 'simt-mdc-'));
@@ -145,11 +145,6 @@ test('rendering with no substitutions leaves no placeholder behind', async () =>
   }
 });
 
-test('frontmatter keeps description and alwaysApply outside the region', () => {
-  const rule = { id: 'test-gate', description: 'desc here', alwaysApply: true };
-  const fm = mdcFrontmatter(rule);
-  assert.match(fm, /^---\ndescription: desc here\nalwaysApply: true\n---$/);
-});
 
 test('a projected rule is idempotent through inject', async () => {
   const rules = await loadMdcRules();

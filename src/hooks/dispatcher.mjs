@@ -32,7 +32,7 @@ import { assertVersionPin } from '../package-version.mjs';
 const exec = promisify(execFile);
 
 /** Gates that are known but not required for the event to pass. */
-export const DEFAULT_EVENTS = { 'pre-commit': 'preCommit', 'pre-push': 'prePush' };
+const DEFAULT_EVENTS = { 'pre-commit': 'preCommit', 'pre-push': 'prePush' };
 
 /**
  * @param {string} event 'pre-commit' | 'pre-push'
@@ -259,7 +259,7 @@ export async function stagedFiles(root) {
  * A path staged as DELETED is not here: the index and the working tree agree that
  * it is gone, so there is no unstaged work to protect and no reason to refuse.
  */
-export async function unstagedFiles(root) {
+async function unstagedFiles(root) {
   try {
     const { stdout } = await exec('git', ['diff', '--name-only'], { cwd: root });
     return new Set(stdout.split('\n').map((s) => s.trim()).filter(Boolean));
@@ -311,5 +311,3 @@ function tail(text, lines = 12) {
   const parts = String(text).trimEnd().split('\n');
   return parts.slice(-lines).join('\n');
 }
-
-export const __internals = { tail, basename };

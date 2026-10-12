@@ -25,7 +25,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { EXIT, emit, fail, isJson, note, writeMode } from '../output/index.mjs';
-import { loadRegistry, REGISTRY_PATH, measureSkill } from '../graph/load.mjs';
+import { loadRegistry, measureSkill } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { MANIFEST, buildManifest, readManifest, writeManifest } from '../projection/manifest.mjs';
@@ -59,8 +59,8 @@ export async function installCommand(args, flags) {
     );
   }
 
-  const { registry, errors, ok } = await loadRegistry(REGISTRY_PATH, flags);
-  if (!ok) return fail(errors[0], EXIT.REGISTRY);
+  const { registry, errors, ok } = await loadRegistry(null, flags);
+  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
 
   const skill = registry.skills.find((s) => s.name === name);
   if (!skill) {

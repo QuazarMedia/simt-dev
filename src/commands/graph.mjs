@@ -7,11 +7,17 @@
 // the offending node, the file it disagrees with, and both numbers.
 
 import { EXIT, emit, fail, isJson } from '../output/index.mjs';
-import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
+import { loadRegistry } from '../graph/load.mjs';
+import { CLI } from '../name.mjs';
 
 export async function lintCommand(positional, flags) {
-  const path = positional[0] ?? REGISTRY_PATH;
-  const { ok, registry, errors, warnings, verified, workspace } = await loadRegistry(path, flags);
+  // The resolved path comes back from the loader, because when no positional is given it
+  // falls back to the member that holds the registry in this workspace (ADR-061) - and the
+  // reader should see where it actually looked, not a constant that no longer exists.
+  const { ok, registry, errors, warnings, verified, workspace, path } = await loadRegistry(
+    positional[0] ?? null,
+    flags,
+  );
 
   if (isJson(flags)) {
     emit(
@@ -40,7 +46,10 @@ export async function lintCommand(positional, flags) {
   }
 
   if (!registry) {
-    return fail(errors[0] ?? `${path}: unreadable`, EXIT.REGISTRY);
+    // The default remedy for this exit code is `run: simt-dev graph lint`, which from
+    // inside `graph lint` is circular: the reader just ran it and got this. Name the
+    // argument the command takes, because an explicit path is the way out (ADR-061).
+    return fail(errors[0] ?? `${path}: unreadable`, EXIT.REGISTRY, `run: ${CLI} graph lint <path-to-registry>`);
   }
 
   const lines = [

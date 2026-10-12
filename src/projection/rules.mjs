@@ -57,13 +57,15 @@ const RULES_DIR = join(ROOT, 'rules');
  * unrecoverably. That is the failure this replaces (ADR-032).
  *
  * The digest covers every byte string that leaves the package, and nothing else. That
- * set is `rules/` and `graph/` on disk plus the RENDERED baseline bodies: the shared
+ * set is `rules/` on disk plus the RENDERED baseline bodies: the shared
  * `.editorconfig` and `.gitattributes` blocks are strings a repository receives, so by
  * ADR-015's rule a source is identified by its content rather than by the file it
- * happens to live in, and a body defined in `src/` is a source like any other.
+ * happens to live in, and a body defined in `src/` is a source like any other. The
+ * registry (`graph/`) is workspace data the package no longer ships (ADR-061), so it is
+ * not part of this set even where it exists on disk.
  *
- * It deliberately excludes `src/` as a directory. A refactor that changes no rule, no
- * registry entry and no baseline body produces byte-identical output, and stamping those
+ * It deliberately excludes `src/` as a directory. A refactor that changes no rule and
+ * no baseline body produces byte-identical output, and stamping those
  * consumers would report drift where there is none - which is the estate's own rule that
  * a report must be a fact.
  *
@@ -93,7 +95,7 @@ export async function provenanceDigest() {
  */
 export async function provenanceInputs() {
   const inputs = [];
-  for (const dir of ['rules', 'graph']) {
+  for (const dir of ['rules']) {
     for (const rel of await walk(join(ROOT, dir))) {
       inputs.push({ path: `${dir}/${rel}`, bytes: await readFile(join(ROOT, dir, rel)) });
     }

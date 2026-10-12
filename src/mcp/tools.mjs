@@ -19,7 +19,7 @@
 // cause by accident because the caller cannot see the size until it has paid for it.
 
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { loadRegistry, REGISTRY_PATH } from '../graph/load.mjs';
+import { loadRegistry } from '../graph/load.mjs';
 import { tokenize, rankSkills, closure, selectWithinBudget, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
 import { loadRules, select, checkTargets, provenanceDigest } from '../projection/project.mjs';
 import { loadDecisions, byId, citations } from '../decisions/index.mjs';
@@ -46,7 +46,7 @@ function rootOf(args) {
 }
 
 async function registry(args) {
-  const { registry, errors, ok, verified, workspace } = await loadRegistry(REGISTRY_PATH, args ?? {});
+  const { registry, errors, ok, verified, workspace } = await loadRegistry(null, args ?? {});
   if (!ok) {
     throw Object.assign(new Error(errors[0]), {
       remedy: `run: ${CLI} graph lint`,

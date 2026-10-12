@@ -6,6 +6,35 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### The skill registry is workspace data; the package ships none of it
+
+The npm tarball and the wheel carried `graph/skills.graph.json` — the directory
+of skill sources for one workspace, naming the repositories whose bodies it
+resolves. Every installed copy served that catalogue to readers who have none
+of those skills, and `skills install` pointed at paths that exist only in the
+workspace that wrote them. ADR-061 rules the registry out of the published set:
+it is data about one workspace, not content of the package.
+
+The default registry path now resolves in tiers, and every tier is file
+existence plus configuration — nothing a pull request cannot diff:
+
+1. an explicit path, the positional of `simt graph lint`,
+2. the package's own `graph/skills.graph.json` — present in a source checkout,
+   absent from an installed copy,
+3. the member of a configured workspace that holds one — naming the workspace
+   it came from, and refusing when several members hold one, because picking
+   would be a guess.
+
+An installed copy in a workspace with no registry says so, and names the three
+ways to configure one (`--workspace`, `SIMT_DEV_WORKSPACE`, the user config
+file) instead of failing on a path it does not have. `simt graph lint`'s
+no-registry remedy names the path explicitly, because its default is the
+registry it lints.
+
+The provenance digest stops walking `graph/` for the same reason it no longer
+leaves the package: the digest covers what a published copy ships, and the
+registry is no longer among it.
+
 ### No published file may name a repository from this estate
 
 The decision records ship in all three channels — npm, the wheel and the sdist — so a

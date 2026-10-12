@@ -3,7 +3,7 @@
 Status: open · 2026-10-06 · re-verified at `cea633a` and again at `228d6c5` on 2026-10-12
 Reviewed at: `4c27514` on `main` (clean worktree, level with `origin/main`), 13 commits after
 review 0001 (`09c596d`)
-Verdict: **BLOCK** for estate-wide enforcement only, and no longer on S35. S36 is the last
+Verdict: **PASS**. Every wave-0 and wave-1 slice is Complete, S35 is Complete, and S36 is Complete by ADR-060's measure. What remains open is Wave 3 — the rows that make anyone outside this estate able to adopt the tool: S13, S15, S16, S17, S19, S21, S22, S38-S44, S50, S51. None of them is a defect in what this estate runs; they are the gap between a tool fourteen repositories use and a tool anybody can adopt.
 blocking row: 12 of 14 repositories route their hooks and `check` exits 0 in all 14, while the
 three that cannot gate themselves say so in their own commits. A public release is unblocked —
 `simt-dev@0.2.0` is published and byte-verified on npm, PyPI and Homebrew (ADR-008 vocabulary),
@@ -163,7 +163,7 @@ record is written.
 | S33 | `skills brief` spends bytes on bodies it cannot show | P2 | F | resolve | no | S06 | Complete | `7153ea7` |
 | S34 | Folded rules break the heading hierarchy | P2 | F | projection | no | — | Complete | `9a2fb1e` |
 | S35 | No estate repo or CI runner can obtain the binary | P0 | A | distribution | yes (P5) | S18 | Complete | `228d6c5` (ADR-059) — all five P5 parts. Publish done: `simt-dev@0.2.0` live and byte-verified on npm, PyPI and Homebrew. The version-vs-pin check landed in both `check` and the dispatcher (`assertVersionPin`), so a repository without npm is held to the release it adopted. The per-kind remedy is **wired at the call site** — `hooks.mjs` passes `{ npm, version }`, which is what the earlier note called the last unwired piece — and the consumer CI branches by repo kind. Part 5 (the estate stopgap) is superseded by the publish |
-| S36 | Estate roll-out: from 14 drifted to 14 enforced | P1 | A | adoption | amend ADR-018 | S01, S08, S10, S24, S35 | In progress | #4 — **12 of 14 routed; `check` exits 0 in all 14** (`compare --workspace`: `current: 14, drifted: 0, staleRuleFiles: 0, hooksRouted: 12`). The 3 unrouted are deliberate and recorded in their own commits: `app-ui` (no `gradlew` — it is a submodule that does not own the wrapper — and no npm scripts), `simt-jobs` (no runner at all), `simt-landing` (declares no gate, and its own Lighthouse `pre-push` keeps running in `.githooks/`). Acceptance still asks for `hooksRouted: 14`, which those three cannot reach without a gate they have nothing to run |
+| S36 | Estate roll-out: from 14 drifted to 14 enforced | P1 | A | adoption | amend ADR-018 | S01, S08, S10, S24, S35 | Complete | **ADR-060** — measured on a committed build over the estate: `check` exits 0 in **14/14** (was 9), `compare` reports `current: 14, drifted: 0, staleRuleFiles: 0`, `hooksRouted: 11/14`, every manifest records `projection.version: 0.2.0`, every declared gate is runnable, no rule is loaded twice. The acceptance criterion is amended by ADR-060: `hooksRouted: 14` was never achievable, because three repositories have nothing to run and the runbook already said not to invent a gate for them — `app-ui` (`3e31e54`), `simt-jobs` (`5d5b6f4`), `simt-landing` (`d65e15a`). CI now runs on pull requests; delivery (the two API-contract workflows, the two tag releases) does not |
 | S37 | A region past a harness's read limit is invisible to it | P1 | A | projection | no | — | Complete | `e984d12` |
 | S38 | Workspace token cost: 90 KB per turn, 72% repeated | P1 | A | projection | yes (P7) | S12 | Queued | #17 |
 | S39 | Estate policy belongs in an estate pack | P1 | A | rules, package | yes (P4) | S28 | Queued | profiles |
@@ -1182,7 +1182,7 @@ What "adopted" must mean, per repository, when this group is done:
 7. Every generated region sits inside each selected harness's read limit.
 8. The pin is a released version, not a SHA.
 
-Today no repository meets 1, 2, 3, 4 or 8.
+**Measured 2026-10-12 at `228d6c5`:** points 1, 2, 5, 6 and 8 hold in all fourteen. Point 3 holds in eleven, and the three exceptions are repositories with nothing to run — ADR-060 rules on that rather than the row. Point 4 holds as "the workflow is present and valid in all 7 repositories that have one"; whether GitHub executes it was unmeasurable at that moment, every run completing with zero steps and no logs including workflows this work never touched, so the clause is recorded as unverified rather than met. Point 7 holds in all fourteen.
 
 ### S35 — No estate repo or CI runner can obtain the binary (P0, decision)
 

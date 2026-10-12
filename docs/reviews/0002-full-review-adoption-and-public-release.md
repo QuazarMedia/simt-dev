@@ -140,11 +140,11 @@ record is written.
 | S10 | `--yes` / `--dry-run` / `--json` contract is inconsistent | P1 | F | cli | **yes (ADR-035)** | — | Complete | `14fcd5b`; **amended by ADR-040**, which found a sixth writer still writing by default |
 | S11 | `slice-commit` rule can never be projected | P1 | F | rules | no | — | Complete | `5c079cd` |
 | S12 | Folding + per-rule surfaces load every process rule twice | P1 | F | surfaces | **yes (ADR-046, supersedes ADR-021 r3)** | — | Complete | `6b99add` |
-| S13 | `rules list/show/why` cannot see the `.mdc` rules | P2 | F | rules | no | — | Queued | re-verified |
+| S13 | `rules list/show/why` cannot see the `.mdc` rules | P2 | F | rules | no | — | Complete | `83a3ec9` — fixed in the catalogue, NOT in `loadRules`: `loadRules` feeds `select`, which `desiredRegion` renders, and the per-surface bodies come from `ruleBodies`, so adding them there projects each twice. The mutation that does it is caught |
 | S14 | Shipped text that fails "readable from the receiving repo" | P1 | F | content | no | — | Complete | `9b2c8a9` |
-| S15 | Help text and flags do not match the CLI | P2 | F | cli | no | S10 | Queued | re-verified |
-| S16 | Generated rule-file frontmatter never regenerates | P2 | F | projection | no | — | Queued | re-verified |
-| S17 | Declared gate commands split on whitespace | P2 | F | hooks | amend ADR-019 | — | Queued | re-verified |
+| S15 | Help text and flags do not match the CLI | P2 | F | cli | no | S10 | Complete | `6ec4705` — `graph lint`, `hooks status`, `hooks run` ran and were undocumented; `--skill a --skill b` kept only `b`; `--quiet`/`--semantic`/`--mermaid` were accepted and read by nothing (filed in review 0001, survived to here) and are removed. `test/help.test.mjs` pins both directions |
+| S16 | Generated rule-file frontmatter never regenerates | P2 | F | projection | no | — | Complete | `696a1c8` — `composed` was the whole existing file whenever the region parsed, so `inject` left everything above the markers alone. Zero churn across the estate, so nothing to roll out |
+| S17 | Declared gate commands split on whitespace | P2 | F | hooks | amend ADR-019 | — | Complete | `4535851` — **ADR-019 ruling 8**: a declared command is a shell line run through `sh -c`, and only a declared one (a formatter path this tool resolved stays an argv). The record states the trust boundary. The fix exposed 55 of 60 records printing 2 of their rulings silently |
 | S18 | Public-release packaging | P0 | R | package | yes (P4) | S01, S14, S39 | Complete | `f6dd3de` + `3223d40` — the three additions: `files` and the tarball's README/LICENSE in `f6dd3de`, the public name in `3223d40` (ADR-056: unscoped `simt-dev`, command `simt`) |
 | S19 | Docs and ADR consistency | P2 | F | docs | no | — | Queued | 1 item done in `fd37ab5` |
 | S20 | Test gaps that let S01–S11 ship green | P1 | F | tests | **yes (ADR-041)** | lands with each slice | Complete | `732624d` (pack-install half; the Prettier half is blocked, see §4) |

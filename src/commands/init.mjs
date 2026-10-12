@@ -271,6 +271,24 @@ export async function initCommand(positional, flags) {
   const git = await establishEscapeHatch(root);
   payload.git = git;
   for (const message of git.notes) note(`note     ${message}`);
+  // The two operations that succeeded, not just the ones that failed.
+  //
+  // `init --yes` moves the reader onto a different branch and writes a tag into their
+  // repository. Both are deliberate (plan 0002 §8.2 item 3: "always"), and both were
+  // reported only under `--json`, so the default run — the one almost everybody reads —
+  // did not say that the branch under them had changed. A reader who ran the documented
+  // escape hatch and then committed would be committing to a branch they had not chosen,
+  // and nothing in the output told them that had happened.
+  //
+  // The same section's heading is "Nothing is silent", so this is the plan's own rule
+  // rather than a preference. `notes` carried the failures because a failure is the kind
+  // of thing an operator notices; a success is not.
+  if (git.tag !== null) {
+    note(`tagged   ${git.tag} at the pre-adoption commit; \`git reset --hard ${git.tag}\` returns this repository to what it was`);
+  }
+  if (git.branch !== null && git.from !== null) {
+    note(`branch   switched to ${git.branch}; ${git.from} is untouched and \`git checkout ${git.from}\` returns to it`);
+  }
 
   await writeManifest(root, manifest);
   note(`wrote    ${MANIFEST_FILE} (${manifestAction})`);
@@ -435,7 +453,7 @@ async function scanRepo(root) {
  * to initialise an unborn repo would be worse than proceeding without a backup.
  */
 async function establishEscapeHatch(root) {
-  const result = { branch: null, tag: null, notes: [] };
+  const result = { branch: null, tag: null, from: null, notes: [] };
   const isRepo = await git(root, ['rev-parse', '--is-inside-work-tree']);
   if (!isRepo.ok) {
     result.notes.push('not a git work tree; no backup branch or tag created');
@@ -463,6 +481,10 @@ async function establishEscapeHatch(root) {
 
   const current = await git(root, ['rev-parse', '--abbrev-ref', 'HEAD']);
   if (current.ok && current.stdout.trim() !== ADOPT_BRANCH) {
+    // Recorded rather than re-read by the caller: only this function knows what the
+    // branch was before it moved it, and a second `rev-parse` would answer with the new
+    // value and make every "you were on X" line read as "you were on Y".
+    result.from = current.stdout.trim();
     const branch = await git(root, ['checkout', '-b', ADOPT_BRANCH]);
     if (branch.ok) result.branch = ADOPT_BRANCH;
     else result.notes.push(`could not create branch ${ADOPT_BRANCH}: ${branch.stderr.trim()}`);

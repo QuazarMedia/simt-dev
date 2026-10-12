@@ -44,6 +44,49 @@ const GROUPS = new Map([
   ['hooks', 'status'],
 ]);
 
+/**
+ * Every command this binary dispatches, in one place.
+ *
+ * It was a literal inside `dispatch`, which is why `help` and the CLI could disagree:
+ * nothing could enumerate the real list, so `--help` was a hand-maintained template and
+ * three working commands (`graph lint`, `hooks status`, `hooks run`) were never written
+ * into it. A list that cannot be read cannot be checked, and the reader of `--help` is
+ * an agent choosing a command — the one consumer with no way to discover the omission
+ * except by guessing.
+ *
+ * Module scope so `test/cli.test.mjs` can assert help against it. Module scope is also
+ * just correct: nothing in the map depends on the call.
+ */
+const IMPLEMENTED = {
+  doctor: runDoctor,
+  'graph lint': lintCommand,
+  'skills index': skillsIndex,
+  'skills find': skillsFind,
+  'skills brief': skillsBrief,
+  'skills show': skillsShow,
+  'skills why': skillsWhy,
+  'skills install': installCommand,
+  'rules list': rulesList,
+  'rules show': rulesShow,
+  'rules why': rulesWhy,
+  sync: syncCommand,
+  check: checkCommand,
+  init: initCommand,
+  ci: ciCommand,
+  'hooks install': (args, flags) => hooksCommand('install', args, flags),
+  'hooks status': (args, flags) => hooksCommand('status', args, flags),
+  'hooks run': (args, flags) => hooksCommand('run', args, flags),
+  compare: compareCommand,
+  upgrade: upgradeCommand,
+  mcp: mcpCommand,
+};
+
+/**
+ * The dispatchable command paths, sorted. The authoritative answer to "what can this
+ * binary do", as opposed to the answer `--help` gives.
+ */
+export const COMMANDS = Object.keys(IMPLEMENTED).sort();
+
 export async function dispatch(argv) {
   const { flags, positional } = parseOrExit(argv);
 
@@ -76,29 +119,6 @@ export async function dispatch(argv) {
     );
   }
   const args = positional.slice(offset);
-  const IMPLEMENTED = {
-    doctor: runDoctor,
-    'graph lint': lintCommand,
-    'skills index': skillsIndex,
-    'skills find': skillsFind,
-    'skills brief': skillsBrief,
-    'skills show': skillsShow,
-    'skills why': skillsWhy,
-    'skills install': installCommand,
-    'rules list': rulesList,
-    'rules show': rulesShow,
-    'rules why': rulesWhy,
-    sync: syncCommand,
-    check: checkCommand,
-    init: initCommand,
-    ci: ciCommand,
-    'hooks install': (args, flags) => hooksCommand('install', args, flags),
-    'hooks status': (args, flags) => hooksCommand('status', args, flags),
-    'hooks run': (args, flags) => hooksCommand('run', args, flags),
-    compare: compareCommand,
-    upgrade: upgradeCommand,
-    mcp: mcpCommand,
-  };
   const run = IMPLEMENTED[path];
   if (run) return run(args, flags);
   return fail(`unknown command \`${path}\``, EXIT.USAGE);

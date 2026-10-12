@@ -48,6 +48,22 @@ export function parsePathList(value) {
     .filter(Boolean);
 }
 
+/**
+ * Read a list flag in both the forms this tool ships.
+ *
+ * `--skill` accepts `--skill a --skill b` and `--skill a,b`, and arrives here as an
+ * array in the first case and a string in the second. `String(['a','b'])` happens to
+ * produce `'a,b'`, so the old one-line reader would have kept working by accident — and
+ * would have started throwing the moment a skill name contained the character the
+ * join inserts. Both shapes are handled rather than one being relied upon, because
+ * relying on it is the same class of bug as the one being fixed here.
+ */
+export function listFlag(value) {
+  return (Array.isArray(value) ? value : [value])
+    .flatMap((v) => parsePathList(v))
+    .filter(Boolean);
+}
+
 /** Compact stack label: the tags that actually discriminate, not all of them. */
 function stackLabel(tags = []) {
   const DISCRIMINATING = [
@@ -237,7 +253,7 @@ export async function briefCommand(args, flags) {
   const repoStack = repo.signals;
   const paths = flags.paths ? parsePathList(flags.paths) : await dirtyPaths(root);
   const taskTokens = tokenize(flags.task ?? '');
-  const forced = parsePathList(flags.skill);
+  const forced = listFlag(flags.skill);
   const budget = flags.budget ?? DEFAULT_BUDGET;
 
   // A brief with no task and no paths resolves on stack alone, which produces a

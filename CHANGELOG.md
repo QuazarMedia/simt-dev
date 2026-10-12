@@ -6,6 +6,30 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A fresh adoption seeds the gates it can run — and only those
+
+The eight common ecosystems outside the JavaScript world — Rust, Go, .NET, Swift, Deno,
+Ruby, Dart and Elixir — were recognised by the fingerprint and served by nothing: no
+profile selected them, no gate was proposed for them. A fresh Rust repository received the
+core essay and a manifest that runs nothing, while the ecosystems that emit stack tags got
+the full treatment.
+
+Each now has a profile that selects on its own `has-*` fact, so one marker file reaches
+both the rules the repository reads and the gates its commits run. Maven's profile predates
+this; its row is gates-only, wrapper-first, like `gradlew`.
+
+`simt init` now seeds the canonical commands for a detected ecosystem — `cargo fmt
+--check`, `go vet ./...`, `dotnet test`, and the rest of the table — into the manifest's
+gates, but only where a probe found the tool: a binary on PATH, or a file in the repository
+for the Maven wrapper. A marker says the ecosystem is here; the probe says its program can
+run. A declared gate that cannot run fails closed on every commit, so the seed fires only
+when both are true — and where the probe fails, the gate is dropped with a remedy that
+names the install instead of blocking the first commit.
+
+A seed is a default: a command the repository already declared is never re-seeded, and an
+npm runner keeps its own scripts, because `package.json` is the repository's own answer to
+"how do I test and format". ADR-062 rules the shape of all of it.
+
 ### The resolver is measured against a gold corpus
 
 `simt skills eval` scores the skill resolver against a corpus of real tasks × real

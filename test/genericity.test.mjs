@@ -183,6 +183,38 @@ test('a profile selects on a fact with no matching stack tag at all', () => {
   );
 });
 
+test('each shipped ecosystem profile selects on its own fact (S40)', async () => {
+  // The acceptance row: a fingerprint fixture with an asserted fact and the profile
+  // that fact must reach. One marker file has to select the region a repo reads —
+  // maven is in the table because its profile (jvm) predates it and applies on the
+  // same fact.
+  const rows = [
+    { marker: 'Cargo.toml', fact: 'has-cargo-toml', profile: 'rust' },
+    { marker: 'go.mod', fact: 'has-go-mod', profile: 'go' },
+    { marker: 'App.csproj', fact: 'has-nuget', profile: 'dotnet' },
+    { marker: 'Package.swift', fact: 'has-swift-package', profile: 'swift' },
+    { marker: 'deno.json', fact: 'has-deno-config', profile: 'deno' },
+    { marker: 'Gemfile', fact: 'has-gemfile', profile: 'ruby' },
+    { marker: 'pubspec.yaml', fact: 'has-pubspec', profile: 'dart' },
+    { marker: 'mix.exs', fact: 'has-mix', profile: 'elixir' },
+    { marker: 'pom.xml', fact: 'has-maven-pom', profile: 'jvm' },
+  ];
+  const rules = await loadRules();
+  for (const { marker, fact, profile } of rows) {
+    const root = await fixture({ [marker]: 'x' });
+    const fp = await fingerprint(root);
+    assert.ok(
+      fp.facts.includes(fact),
+      `${marker} did not emit ${fact}: ${fp.facts.join(', ')}`,
+    );
+    const { selected } = select(rules, fp.stack, fp.facts);
+    assert.ok(
+      selected.some((r) => r.id === profile),
+      `${marker} (facts: ${fp.facts.join(', ')}) did not select ${profile}: ${selected.map((r) => r.id).join(', ')}`,
+    );
+  }
+});
+
 test('facts reach the region through plan, not only through select', async () => {
   const root = await fixture({
     'Cargo.toml': '[package]\nname="x"\n',

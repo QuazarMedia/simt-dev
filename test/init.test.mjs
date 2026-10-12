@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -420,6 +420,181 @@ test('capability: declaredCommands reads gates.commands and tolerates its absenc
   assert.deepEqual(declaredCommands({ gates: { commands: { memory: './m.sh' } } }), { memory: './m.sh' });
   assert.deepEqual(declaredCommands({}), {});
   assert.deepEqual(declaredCommands(null), {});
+});
+
+// ---------------------------------------------------------------------------
+// Ecosystem seeding (S40). A marker file says the ecosystem is in the repo;
+// only a probe of THIS machine says its program can run. A fresh adoption
+// declares the canonical command for each proposed gate when both are true,
+// and drops the gate with a remedy when either is false — a declared gate
+// that cannot run blocks every commit, so the seed must not fire on the
+// marker's word alone (ADR-017, reached from the ecosystem table).
+// ---------------------------------------------------------------------------
+
+test('gates: every ecosystem row seeds its canonical commands when the tool can run', () => {
+  for (const eco of gateModule.ECOSYSTEMS) {
+    const { gates, dropped, commands } = gateModule.planGates(
+      [],
+      { runner: 'none', scripts: {}, binaries: [], commands: {}, tools: [eco.tool] },
+      [eco.fact],
+    );
+    assert.deepEqual(commands, eco.commands, `${eco.fact}: ${JSON.stringify(commands)}`);
+    // A seeded gate must be a gate the repo can run: the seed IS its runnability.
+    for (const name of Object.keys(commands)) {
+      assert.ok(
+        !dropped.some((d) => d.gate === name),
+        `${eco.fact}: seeded ${name} but it is also dropped: ${JSON.stringify(dropped)}`,
+      );
+      assert.ok(
+        gates.preCommit.includes(name) || gates.prePush.includes(name),
+        `${eco.fact}: seeded ${name} but it is not in the gate lists`,
+      );
+    }
+  }
+});
+
+test('gates: a marker without the toolchain drops every proposed gate and declares none', () => {
+  for (const eco of gateModule.ECOSYSTEMS) {
+    const { commands, dropped } = gateModule.planGates(
+      [],
+      { runner: 'none', scripts: {}, binaries: [], commands: {}, tools: [] },
+      [eco.fact],
+    );
+    assert.deepEqual(commands, {}, `${eco.fact} must not declare a command it cannot run`);
+    // A row proposes what it has: the Maven row has no preCommit gates.
+    for (const name of new Set([...(eco.preCommit ?? []), ...(eco.prePush ?? [])])) {
+      const d = dropped.find((x) => x.gate === name);
+      assert.ok(d, `${eco.fact}: ${name} must be dropped, not silently absent`);
+      assert.ok(d.why.length > 10, `${eco.fact}: ${name} must say why`);
+      assert.ok(d.remedy.length > 10, `${eco.fact}: ${name} must carry a remedy`);
+    }
+  }
+});
+
+test('gates: an npm runner keeps its own scripts; no seed lands on top of them', () => {
+  // package.json is the repo's own answer to "how do I test and format". A seed
+  // outranks a script only where the repo has not declared a command of its own —
+  // exactly the mixed repos (package.json AND Cargo.toml) where the script is the
+  // deliberate answer. Replacing a choice with a default is what this guard stops.
+  const { commands, dropped } = gateModule.planGates(
+    ['node'],
+    {
+      runner: 'npm',
+      scripts: { test: 'vitest run', lint: 'eslint .', typecheck: 'tsc --noEmit' },
+      binaries: ['prettier'],
+      commands: {},
+      tools: ['cargo'],
+    },
+    ['has-cargo-toml'],
+  );
+  assert.deepEqual(commands, {}, 'a seed must not override an npm repo\'s scripts');
+  assert.deepEqual(dropped, [], 'the scripts answer every proposed gate: ' + JSON.stringify(dropped));
+});
+
+test('gates: a command the repo already declared is not re-seeded', () => {
+  // A seed is a default and a declaration is a choice; the default losing to the
+  // choice is the whole reason `effective` merges declaration last.
+  const { commands } = gateModule.planGates(
+    [],
+    { runner: 'cargo', scripts: {}, binaries: [], commands: { test: 'just my tests' }, tools: ['cargo'] },
+    ['has-cargo-toml'],
+  );
+  assert.deepEqual(commands, { format: 'cargo fmt --check', lint: 'cargo clippy -- -D warnings' });
+});
+
+test('capability: ecosystem tools are probed on PATH, not assumed', async () => {
+  // The probe is deterministic: with a controlled PATH the answer cannot depend on
+  // what happens to be installed on the machine running the suite.
+  const root = await scratch();
+  await writeFile(join(root, 'Cargo.toml'), '[package]\nname="x"\n');
+  const bin = await scratch();
+  await writeFile(join(bin, 'cargo'), '#!/bin/sh\nexit 0\n');
+  await chmod(join(bin, 'cargo'), 0o755);
+
+  const saved = process.env.PATH;
+  try {
+    process.env.PATH = bin;
+    assert.ok((await readCapability(root)).tools.includes('cargo'), 'a tool on PATH is found');
+    const empty = await scratch();
+    process.env.PATH = empty;
+    assert.ok(!(await readCapability(root)).tools.includes('cargo'), 'a tool off PATH is not assumed');
+  } finally {
+    process.env.PATH = saved;
+  }
+});
+
+test('capability: a file tool (the Maven wrapper) is probed in the repo, executable or not', async () => {
+  // A wrapper that exists but is not executable would be declared and then fail on
+  // every commit; the probe must answer no for it.
+  const root = await scratch();
+  await writeFile(join(root, 'pom.xml'), '<project/>\n');
+  await writeFile(join(root, 'mvnw'), '#!/bin/sh\n');
+  const saved = process.env.PATH;
+  try {
+    process.env.PATH = await scratch();
+    assert.ok(!(await readCapability(root)).tools.includes('mvnw'), 'a non-executable wrapper is not a tool');
+    await chmod(join(root, 'mvnw'), 0o755);
+    assert.ok((await readCapability(root)).tools.includes('mvnw'), 'an executable wrapper is a tool');
+  } finally {
+    process.env.PATH = saved;
+  }
+});
+
+test('init: a fresh Rust repo with cargo on PATH gets runnable seeded gates (S40)', async () => {
+  // End to end: marker file, probed tool, manifest that runs. The seeded commands
+  // are the gates\' runnability — a manifest with the gate list and no commands
+  // would be red on the first commit.
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const root = await scratch();
+  await mkdir(join(root, 'src'), { recursive: true });
+  await writeFile(join(root, 'Cargo.toml'), '[package]\nname="x"\n');
+  await writeFile(join(root, 'src', 'main.rs'), 'fn main() {}\n');
+  const bin = await scratch();
+  await writeFile(join(bin, 'cargo'), '#!/bin/sh\nexit 0\n');
+  await chmod(join(bin, 'cargo'), 0o755);
+
+  const saved = process.env.PATH;
+  try {
+    process.env.PATH = bin;
+    const { code, text } = await capture(() => initCommand([], { root, yes: true }));
+    assert.equal(code, 0, text);
+    const manifest = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8'));
+    assert.deepEqual(manifest.gates.commands, {
+      format: 'cargo fmt --check',
+      lint: 'cargo clippy -- -D warnings',
+      test: 'cargo test',
+    });
+    assert.ok(manifest.gates.preCommit.includes('format'));
+    assert.ok(manifest.gates.prePush.includes('test'));
+    // A write the reader was not shown is approved from the diff afterwards; the
+    // plan prints every seeded line.
+    assert.match(text, /seeded +gates\.commands\["test"\] = cargo test/);
+  } finally {
+    process.env.PATH = saved;
+  }
+});
+
+test('init: a fresh Rust repo without cargo declares the gates it cannot run as drops (S40)', async () => {
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const root = await scratch();
+  await mkdir(join(root, 'src'), { recursive: true });
+  await writeFile(join(root, 'Cargo.toml'), '[package]\nname="x"\n');
+  const bin = await scratch();
+
+  const saved = process.env.PATH;
+  try {
+    process.env.PATH = bin;
+    const { code, text } = await capture(() => initCommand([], { root, yes: true }));
+    assert.equal(code, 0, text);
+    const manifest = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8'));
+    assert.equal(manifest.gates.commands, undefined, 'no toolchain means no declared command');
+    // Every proposed gate that cannot run is named, with the undo.
+    assert.match(text, /dropped +gate test: /);
+    assert.match(text, /gates\.commands/);
+    assert.ok(!/seeded/.test(text), 'nothing was seeded: ' + text);
+  } finally {
+    process.env.PATH = saved;
+  }
 });
 
 // The end-to-end shape of the defect that motivated all of the above: a repo adopted

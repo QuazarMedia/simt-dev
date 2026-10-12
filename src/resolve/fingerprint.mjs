@@ -178,6 +178,7 @@ const FACTS = [
   { name: 'has-pubspec', kind: 'file', paths: ['pubspec.yaml'] },
   { name: 'has-swift-package', kind: 'file', paths: ['Package.swift'] },
   { name: 'has-mix', kind: 'file', paths: ['mix.exs'] },
+  { name: 'has-deno-config', kind: 'file', paths: ['deno.json', 'deno.jsonc'] },
   { name: 'has-bun-lock', kind: 'file', paths: ['bun.lock', 'bun.lockb'] },
   // A glob walk skips dot directories, and `.devcontainer` is one. Stat the path.
   { name: 'has-devcontainer', kind: 'path', paths: ['.devcontainer/devcontainer.json'] },

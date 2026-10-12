@@ -4,7 +4,8 @@ import { CLI } from '../name.mjs';
 
 const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into the ecosystem
                            (dry-run unless --yes; conflicts block without
-                           --accept-conflicts; never commits or pushes)
+                           --accept-conflicts; in place unless --backup;
+                           never commits or pushes)
 ${CLI} doctor                 classify a repo and check config health
 ${CLI} check                  the gate: projection drift, manifest validity, policy
 ${CLI} sync [--yes]           regenerate the projection (idempotent)
@@ -71,6 +72,8 @@ const FLAGS = `--json                 structured output
 --from <repo/path>      install from a declared source by name
 --list                  print the MCP tool surface without reading stdin (mcp)
 --accept-conflicts      init: adopt rules that collide with hand-written ones
+--backup                init: tag the pre-adoption commit and branch onto
+                        simt-dev/adopt before writing (the undo path)
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

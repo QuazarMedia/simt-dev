@@ -188,8 +188,10 @@ test('init: never commits', async () => {
 });
 
 test('init: a repo with no commits is still adoptable', async () => {
-  // An unborn repo cannot be tagged, so the escape hatch degrades to a note
-  // rather than blocking. Refusing to initialise would be worse.
+  // The default run creates no git objects at all (ADR-063), so an unborn repo is
+  // adoptable for the trivial reason that there is nothing to tag or branch. With
+  // --backup the escape hatch degrades to a note rather than blocking, because
+  // refusing to initialise would be worse.
   const { initCommand } = await import('../src/commands/init.mjs');
   const { execFile } = await import('node:child_process');
   const { promisify } = await import('node:util');
@@ -953,11 +955,12 @@ test('the remedy for a stale manifest field names the command that repairs it', 
   assert.doesNotMatch(stale.remedy, /init/, 'init re-runs adoption; it is not the repair for one field');
 });
 
-test('init: the branch and the tag it creates are both reported (S15)', async () => {
-  // Both are deliberate — plan 0002 §8.2 item 3 says "always", and the heading over
-  // that list is "Nothing is silent". Both were reported only under `--json`, so the
-  // default run moved the reader onto a branch they had not chosen and told them
-  // nothing.
+test('init --backup: the branch and the tag it creates are both reported (S15)', async () => {
+  // With --backup both operations happen, and the heading over plan 0002 §8.2's list
+  // is "Nothing is silent". Both were once reported only under `--json`, so the run —
+  // the one almost everybody reads — did not say that the branch under them had
+  // changed. (ADR-063 made the pair opt-in; the reporting requirement stands for
+  // whatever a run does to git state.)
   //
   // The claim under test is about what a reader SEES, so it is asserted on the printed
   // output rather than on the returned payload, which already carried both.
@@ -969,8 +972,13 @@ test('init: the branch and the tag it creates are both reported (S15)', async ()
   await git(['commit', '-qm', 'init'], { cwd: root });
 
   // `capture` collects both streams, which is where a reader looks too.
-  const { code, text } = await capture(() => initCommand([], { root, yes: true }));
+  const { code, text } = await capture(() => initCommand([], { root, yes: true, backup: true }));
   assert.equal(code, 0);
+
+  // The in-place note is the other half of "Nothing is silent": without --backup the
+  // run says it did not branch or tag. With --backup there is nothing to excuse, so
+  // the note must not appear.
+  assert.doesNotMatch(text, /in place   no backup tag/, '--backup run must not report in-place');
 
   assert.match(text, /tagged\s+backup-before-simt-dev/, 'the tag it wrote was not reported');
   assert.match(text, /git reset --hard backup-before-simt-dev/, 'and not how to undo it');
@@ -992,14 +1000,48 @@ test('init: the branch and the tag it creates are both reported (S15)', async ()
   );
 });
 
-test('init: a repo that is not a git work tree reports no branch and no tag', async () => {
+test('init without --backup writes in place: no tag, no branch (ADR-063)', async () => {
+  // The default is in place: the adoption lands on the branch the reader already has,
+  // and no git object is created. The in-place note says so, and names the flag that
+  // restores the undo path. A reader who ran the documented flow without choosing an
+  // escape hatch must not find a branch they did not ask for under them.
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const root = await scratch();
+  await git(['init', '-q'], { cwd: root });
+  await writeFile(join(root, 'notes.txt'), 'x\n');
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-qm', 'init'], { cwd: root });
+  const { stdout: before } = await git(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root });
+
+  const { code, text } = await capture(() => initCommand([], { root, yes: true }));
+  assert.equal(code, 0);
+
+  const { stdout: after } = await git(['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: root });
+  assert.equal(after.trim(), before.trim(), 'the reader must stay on the branch they were on');
+  const { stdout: branches } = await git(['branch', '--format=%(refname:short)'], { cwd: root });
+  assert.doesNotMatch(branches, /simt-dev\/adopt/, 'an adopt branch was created without --backup');
+  await assert.rejects(
+    () => git(['rev-parse', '--verify', 'refs/tags/backup-before-simt-dev'], { cwd: root }),
+    'a backup tag was created without --backup',
+  );
+
+  // And the run says what it did instead, with the flag that gives the undo path.
+  assert.match(text, /in place   no backup tag or adopt branch/, 'the in-place behaviour was not reported');
+  assert.match(text, /--backup/, 'and the flag that restores the undo path was not named');
+
+  // The adoption itself still happened, in place.
+  const manifest = await readFile(join(root, MANIFEST_FILE), 'utf8');
+  assert.ok(manifest.length > 0, 'the manifest was not written in place');
+});
+
+test('init --backup: a directory that is not a git work tree reports no branch and no tag', async () => {
   // The escape hatch is best-effort (plan 0002: a repo with no commits must still be
   // adoptable), so the notes carry the reason. What must not happen is the tool
   // claiming a tag or a branch it did not create.
   const { initCommand } = await import('../src/commands/init.mjs');
   const root = await scratch();
   await writeFile(join(root, 'monkey.jungle'), '');
-  const { code, text } = await capture(() => initCommand([], { root, yes: true }));
+  const { code, text } = await capture(() => initCommand([], { root, yes: true, backup: true }));
   assert.equal(code, 0);
   assert.doesNotMatch(text, /^tagged /m, 'a tag was reported in a repository with no git');
   assert.doesNotMatch(text, /^branch   switched/m, 'a branch switch was reported in a repository with no git');

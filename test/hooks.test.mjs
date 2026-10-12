@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -1193,4 +1194,68 @@ test('a shim this tool wrote in an earlier version is stale, never foreign', asy
   await exec('git', ['config', HOOKS_PATH_KEY, HOOKS_DIR], { cwd: hand });
   const ours = await simtAllowingFailure(['hooks', 'status', '--root', hand], hand);
   assert.match(ours.stdout + ours.stderr, /not a simt-dev shim/, 'a hand-written hook must still be reported as foreign');
+});
+
+test('a declared gate command is a shell line, so quotes and operators survive', async () => {
+  // Before S17 the declaration was split on whitespace, so every one of these ran the
+  // wrong thing rather than failing: a flag with a space in its value became two
+  // arguments, and the quotes in a compound line were passed to the program as literal
+  // characters. There was no way to write a gate with a quoted argument and nothing
+  // said so.
+  //
+  // The proof is an argument with a SPACE in it. Under a whitespace split the script
+  // receives "two" as $1 and "words" as $2, writes "two" where it was told, and never
+  // runs the second half of the line - so the assertion reads the file back rather than
+  // trusting a PASSED that a split could also produce.
+  const root = await fixture({
+    manifest: {
+      gates: {
+        preCommit: ['lint'],
+        prePush: [],
+        commands: { lint: './scripts/gate.sh "two words" second-arg.txt && ./scripts/second.sh' },
+      },
+    },
+    scripts: { lint: 'true' },
+    files: {
+      'scripts/gate.sh': '#!/bin/sh\nprintf "%s" "$1" > "$2"\n',
+      'scripts/second.sh': '#!/bin/sh\ntouch second-ran.txt\n',
+    },
+    binaries: [],
+  });
+  await chmod(join(root, 'scripts', 'gate.sh'), 0o755);
+  await chmod(join(root, 'scripts', 'second.sh'), 0o755);
+
+  const { stdout, stderr } = await simt(['hooks', 'run', 'pre-commit', '--root', root], root);
+  const out = stdout + stderr;
+  assert.match(out, /PASSED/, `the gate did not pass:\n${out}`);
+
+  // The argument arrived whole.
+  assert.equal(
+    await readFile(join(root, 'second-arg.txt'), 'utf8'),
+    'two words',
+    'the quoted argument was split, so the gate ran a different command than the one declared',
+  );
+  // And the second half of the line ran, which it cannot do under a split.
+  assert.ok(
+    existsSync(join(root, 'second-ran.txt')),
+    'the && half of the declared command never ran',
+  );
+});
+
+test('a declared command that genuinely fails still fails the gate', async () => {
+  // `sh -c` must not turn a failing declaration into a passing one. The exit status of
+  // the shell is the exit status of the command, and a compound line whose second half
+  // fails has to be reported as the failure it is.
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [], commands: { lint: 'false && true' } } },
+    scripts: { lint: 'true' },
+    binaries: [],
+  });
+  await simt(['hooks', 'run', 'pre-commit', '--root', root], root).then(
+    () => assert.fail('a failing gate must not report success'),
+    (error) => {
+      const out = `${error.stdout ?? ''}${error.stderr ?? ''}`;
+      assert.match(out, /FAILED/, `the gate reported something other than a failure:\n${out}`);
+    },
+  );
 });

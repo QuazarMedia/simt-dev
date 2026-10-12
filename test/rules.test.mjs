@@ -640,3 +640,51 @@ test('a per-surface rule is not projected twice by being in the catalogue', asyn
     );
   }
 });
+
+test('rules why says when it is printing an excerpt rather than the whole record', async () => {
+  // Fifty-five of the sixty records carry more than two rulings, and every one of them
+  // printed exactly two — under a header reading "the ruling above is the part that
+  // generalises", which is a claim about the two shown and reads as a claim about all of
+  // them. A reader looking for a ruling that was never printed concludes it does not
+  // exist, which is the failure this whole command exists to prevent.
+  //
+  // The cap itself is fine; it is a budget, and `--max-bytes` exists. What was wrong is
+  // that it did not say so, so "2 of 8" now travels with the answer and names the
+  // command carrying the rest.
+  const { loadDecisions } = await import('../src/decisions/index.mjs');
+  const { decisions } = await loadDecisions();
+  const excerpted = decisions.filter((d) => (d.summary.rulingCount ?? d.summary.ruled.length) > d.summary.ruled.length);
+  assert.ok(excerpted.length > 20, `expected most records to be excerpted, got ${excerpted.length}`);
+
+  // One of them, end to end through the shipped binary.
+  const { code, stdout } = await run(['rules', 'why', excerpted[0].id]);
+  assert.equal(code, 0);
+  assert.match(stdout, /of \d+ rulings shown/, 'an excerpted record does not say it is one');
+
+  // The pointer names a command that exists, because a remedy that does not run is the
+  // defect this file's own corpus checks for in shipped text.
+  const pointer = /the rest: (\S+) rules why (\S+) --all\)/;
+  const m = pointer.exec(stdout);
+  assert.ok(m, 'the excerpt does not name where the rest is');
+  assert.equal(m[1], 'simt');
+  const shown = await run(['rules', 'why', m[2], '--all']);
+  assert.equal(shown.code, 0, 'the command the excerpt points at does not run');
+  // And it really does contain the rest, which is the whole reason the pointer exists.
+  const total = Number(/of (\d+) rulings shown/.exec(stdout)[1]);
+  // Counted inside the `ruled` block only, and not by its numbering: five records
+  // number their rulings `**One.**`, `**1. prose**` or leave them unnumbered, so a
+  // pattern over the ordinal matches a subset and passes for all.
+  const ruledBlock = (shown.stdout.match(/^ruled$\n([\s\S]*?)\n\n/m) ?? [])[1] ?? '';
+  assert.equal(
+    (ruledBlock.match(/^  - /gm) ?? []).length,
+    total,
+    'the command the excerpt points at does not print the rulings it promised',
+  );
+
+  // A record with exactly two rulings must NOT claim it is an excerpt.
+  const whole = decisions.find((d) => (d.summary.rulingCount ?? 0) === d.summary.ruled.length && d.summary.ruled.length >= 2);
+  if (whole) {
+    const out = await run(['rules', 'why', whole.id]);
+    assert.doesNotMatch(out.stdout, /rulings shown/, 'a complete record must not claim to be an excerpt');
+  }
+});

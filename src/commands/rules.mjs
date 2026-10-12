@@ -222,7 +222,7 @@ export async function whyCommand(args, flags) {
   if (!what) return fail('rules why needs a rule id or an ADR id', EXIT.USAGE, `usage: ${CLI} rules why <rule-id|ADR-NNN>`);
 
   const { rules, broken } = await load(flags.root ?? null);
-  const { ok, decisions, errors } = await loadDecisions();
+  const { ok, decisions, errors } = await loadDecisions({ all: flags.all === true });
   if (!ok) return fail(errors[0], EXIT.CONFIG, 'the decision records must be readable for provenance to work');
 
   return what.match(/^ADR-\d{3}$/i)
@@ -382,6 +382,17 @@ async function adrDirection(adr, rules, decisions, flags) {
   if (effective.summary.ruled.length > 0) {
     lines.push('', replacement ? 'ruled now' : 'ruled');
     for (const r of effective.summary.ruled) lines.push(`  - ${redactEstate(r)}`);
+    // The count, because the excerpt above is two rulings and a record may carry eight.
+    // Without it the header reads as a claim about everything the record settled, which
+    // is how a reader goes looking for a ruling that was never printed and concludes it
+    // does not exist.
+    const shown = effective.summary.ruled.length;
+    const total = effective.summary.rulingCount ?? shown;
+    if (total > shown) {
+      lines.push(
+        `  (${shown} of ${total} rulings shown; the rest: ${CLI} rules why ${effective.id} --all)`,
+      );
+    }
   }
   if (effective.summary.rejected.length > 0) {
     // The rejected alternatives are the part a reader cannot reconstruct. A ruling is

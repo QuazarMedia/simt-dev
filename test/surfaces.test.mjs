@@ -49,6 +49,8 @@ async function capture(args) {
   }
 }
 
+import { MANIFEST_FILE } from '../src/name.mjs';
+
 const RULE = { id: 'x', description: 'A rule', alwaysApply: true, target: '.cursor/rules/x.mdc' };
 
 // ---------------------------------------------------------------- the table itself
@@ -721,4 +723,90 @@ test('the orphan scan reports nothing when nothing was ever left behind (S12)', 
   await exec('node', [BIN, 'init', '--root', root, '--yes', '--surfaces', 'opencode,cursor']);
   const findings = await checkTargets(root, { surfaces: 'opencode,cursor' });
   assert.deepEqual(findings.filter((f) => f.status === 'orphaned'), []);
+});
+
+// ------------------------------------- a surface problem is reported as a surface problem
+
+/**
+ * A scratch repository whose manifest names a surface that does not exist.
+ *
+ * `not-a-surface` rather than a plausible typo, so the assertion that matters — that
+ * the remedy names the `surfaces` list — cannot pass by coincidence on a string that
+ * happens to be a near-miss for one of the real ids.
+ */
+async function repoWithAnUnknownSurface() {
+  const root = await scratch();
+  await writeFile(
+    join(root, MANIFEST_FILE),
+    JSON.stringify({ id: 'x', version: 1, surfaces: ['cursor', 'not-a-surface'], gates: {} }, null, 2),
+  );
+  return root;
+}
+
+test('sync reports an unknown surface as a surface, not as an unprojectable rule', async () => {
+  // The defect, stated as the reader met it. `plan()` has carried `surfaceProblems`
+  // since the surface table gained a validator, and nothing read the field. The problem
+  // was not lost — it arrived through `ruleBodies`, which folded `resolved.problems`
+  // into the array `sync` prints as "canonical .mdc rule(s) cannot be projected", with
+  // the remedy "fix the reported substitution keys in simt.json".
+  //
+  // There are no substitution keys in this manifest. There is one misspelled string.
+  const root = await repoWithAnUnknownSurface();
+  const { code, stdout, stderr } = await capture(['sync', '--root', root, '--yes']);
+  const out = stdout + stderr;
+
+  assert.equal(code, 1);
+  assert.match(out, /unknown surface "not-a-surface"/, 'the problem itself must still be reported');
+  assert.doesNotMatch(out, /\.mdc rule\(s\) cannot be projected/, `reported as a rule problem:\n${out}`);
+  assert.doesNotMatch(out, /substitution keys/, `the remedy named a block that is not involved:\n${out}`);
+  assert.match(out, /"surfaces"/, `the remedy does not name the list to fix:\n${out}`);
+});
+
+test('a rule problem is still reported as a rule problem', async () => {
+  // The other direction, and the one that a fix which only deletes the fold would pass
+  // while losing the reader their only report. A declared substitution key that no
+  // canonical rule defines is a rule defect and keeps the rule wording.
+  const root = await scratch();
+  await writeFile(
+    join(root, MANIFEST_FILE),
+    JSON.stringify(
+      { id: 'x', version: 1, surfaces: ['cursor'], gates: {}, substitutions: { 'test-gate': { noSuchKey: 'v' } } },
+      null,
+      2,
+    ),
+  );
+  const { code, stdout, stderr } = await capture(['sync', '--root', root, '--yes']);
+  const out = stdout + stderr;
+
+  assert.equal(code, 1);
+  assert.match(out, /noSuchKey/, `the substitution key is not named:\n${out}`);
+  assert.match(out, /substitution keys/, `the remedy for a substitution key moved:\n${out}`);
+});
+
+test('init reports an unknown surface as a surface, not as an unprojectable rule', async () => {
+  // `init` reads the same array, and had it removed from that array it would have
+  // reported nothing at all — a silent adoption of a repository whose rules go to
+  // fewer editors than the user asked for. Asserted because that is the failure a
+  // narrow fix here produces.
+  const { code, stdout, stderr } = await capture(['init', '--root', (await scratch()), '--yes', '--surfaces', 'cursor,not-a-surface']);
+  const out = stdout + stderr;
+
+  assert.equal(code, 1);
+  assert.match(out, /unknown surface "not-a-surface"/, `the problem was lost on the init path:\n${out}`);
+  assert.doesNotMatch(out, /\.mdc rule\(s\) cannot be projected/, `reported as a rule problem:\n${out}`);
+  assert.match(out, /--surfaces/, `the remedy does not name the flag that caused it:\n${out}`);
+});
+
+test('check and sync name the same problem the same way', async () => {
+  // Two surfaces, one manifest. `check` reported this correctly from the start, and the
+  // disagreement between the gate and the writer is what made it a defect rather than a
+  // rough edge — a reader's trust in one of them is evidence about the other.
+  const root = await repoWithAnUnknownSurface();
+  const check = await capture(['check', '--root', root]);
+  const sync = await capture(['sync', '--root', root, '--yes']);
+
+  const named = (r) => /unknown surface "not-a-surface"; known: ([^\n]*)/.exec(r.stdout + r.stderr)[1];
+  assert.equal(named(sync), named(check), 'the two surfaces disagree about the known ids');
+  assert.equal(check.code, 1);
+  assert.equal(sync.code, 1);
 });

@@ -242,3 +242,32 @@ test('the region records the simt-dev sha so drift is diagnosable', async () => 
   assert.equal(state.status, 'ok');
   assert.equal(state.sha, result.targets[0].sha);
 });
+test('a surface problem is reported in `surfaceProblems`, not in `mdcProblems`', async () => {
+  // The mislabelling is visible in the payload, not only in the printed line. Both
+  // writers check `surfaceProblems` first and print the right sentence, so the printed
+  // output is correct whether or not the fold below is in place — which means the CLI
+  // tests pass against a `plan()` that still lies.
+  //
+  // `--json` and the MCP surface read these fields directly. A consumer of
+  // `mdcProblems` sees a surface typo described as a rule that cannot be projected, and
+  // no amount of correct prose further down the output corrects the field it read.
+  const root = await fixture({
+    [MANIFEST_FILE]: JSON.stringify(
+      { id: 'x', version: 1, surfaces: ['cursor', 'not-a-surface'], gates: {} },
+      null,
+      2,
+    ),
+  });
+
+  const p = await plan(root, {});
+  assert.equal(p.surfaceProblems.length, 1);
+  assert.match(p.surfaceProblems[0], /unknown surface "not-a-surface"/);
+
+  // Every shipped rule rendered; there is nothing wrong with any of them.
+  assert.equal(p.rules.filter((r) => r.error).length, 0);
+  assert.deepEqual(
+    p.mdcProblems,
+    [],
+    `a surface problem reached mdcProblems, which is reported as "canonical .mdc rule(s) cannot be projected": ${JSON.stringify(p.mdcProblems)}`,
+  );
+});

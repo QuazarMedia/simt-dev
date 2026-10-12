@@ -199,6 +199,24 @@ export async function initCommand(positional, flags) {
     git: null,
   };
 
+  // A surface this build does not know cannot be written to. Checked before the rule
+  // branch, and named for what it is: `init --surfaces` accepts a list, a reader
+  // mistypes one, and the misspelling used to be reported as an unprojectable rule with
+  // a remedy about substitution keys — the one problem on this path that had no
+  // substitution keys anywhere near it.
+  const surfaceProblems = projected.surfaceProblems ?? [];
+  if (surfaceProblems.length > 0) {
+    payload.ok = false;
+    payload.blockedBy = 'surface-problem';
+    for (const p of surfaceProblems) note(`PROBLEM  ${p}`);
+    if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
+    return fail(
+      `${surfaceProblems.length} surface(s) cannot be resolved (${surfaceProblems[0]})`,
+      EXIT.FAIL,
+      `pass a known surface id to --surfaces, or omit it to take the default`,
+    );
+  }
+
   // A `.mdc` rule that cannot render is a defect in this build. Adopting a repo
   // without it would leave the family half-retired, and the user would have no way
   // to tell which half from the diff.

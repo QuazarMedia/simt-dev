@@ -13,7 +13,7 @@
 // foreign hook is found by asking git rather than by reading config.
 
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -108,7 +108,8 @@ async function installHooks(root, flags) {
     return fail(`${root} has no ${MANIFEST_FILE}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
   }
 
-  const state = await readHooksState(root, { declaresGate: (e) => wantsShim(manifest, exists, e) });
+  const declaresGate = (event) => wantsShim(manifest, exists, event);
+  const state = await readHooksState(root, { declaresGate });
   const current = state.current;
   const wants = HOOKS_DIR;
 
@@ -134,24 +135,6 @@ async function installHooks(root, flags) {
   // downgrade dressed as an upgrade. `init` already says this in prose; install
   // has to agree, or the two commands describe different tools.
   const wanted = EVENTS.filter((e) => gateCount(manifest, e) > 0);
-  if (wanted.length === 0) {
-    if (isJson(flags)) {
-      emitJson({ ok: false, command: 'hooks install', root, nothingToEnforce: true, filesWritten: false });
-      return EXIT.FAIL;
-    }
-    emit(
-      [
-        `repo     ${root}`,
-        '',
-        `BLOCKED  ${root} declares no gate it can run, so there is nothing to enforce.`,
-        '         Installing shims anyway would stop running whatever git runs now',
-        '         and replace it with a gate that checks nothing.',
-        `REMEDY  add the gates this repo can actually run to ${MANIFEST_FILE}, then re-run.`,
-      ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
-    );
-    return EXIT.FAIL;
-  }
 
   // Foreign hooks on events this tool does NOT gate. Routing replaces the whole
   // directory git reads from, so these have to be carried across explicitly or they
@@ -168,7 +151,21 @@ async function installHooks(root, flags) {
   // Keying this on the event vocabulary instead of on the manifest cost a repository
   // git-lfs hook: pre-push is a gated event in general, but this repo declares no
   // pre-push gate, so nothing replaces its hook and routing would have dropped it.
-  const chained = [
+  // A chained shim and the hook it chains must be two different files.
+  //
+  // `foreignHooks` lists every executable file in the directory git reads hooks from -
+  // and when that directory is this tool's own, a file a person dropped in there is
+  // listed too. Chaining it means writing a shim at `.simt-hooks/<name>` whose TARGET is
+  // `.simt-hooks/<name>`: the same path. The shim overwrites the hook it was written to
+  // preserve and then runs itself, so the hook stops working and git recurses in a loop
+  // nothing reports. Confirmed at the previous release, which printed
+  // `UPDATED .simt-hooks/mine (chained: runs .simt-hooks/mine)`.
+  //
+  // So such a hook is not chained. It is not stopped either - nothing overwrites it, so
+  // git keeps running it - and it is reported as what it is below.
+  const chainable = (event, target) => target !== fileFor(event);
+
+  const candidates = [
     // Already chained by an earlier install, read back off disk: re-rendered from the
     // file's own contents so the bytes cannot drift on a second run.
     ...(await Promise.all(
@@ -187,7 +184,66 @@ async function installHooks(root, flags) {
         .filter((f) => gateCount(manifest, f.event) === 0)
         .map(async (f) => ({ event: f.event, target: await relativeTarget(root, f.path) })),
     )),
-  ].reduce((all, c) => (all.some((x) => x.event === c.event) ? all : [...all, c]), []);
+  ];
+
+  const chained = candidates
+    .filter((c) => chainable(c.event, c.target))
+    .reduce((all, c) => (all.some((x) => x.event === c.event) ? all : [...all, c]), []);
+
+  // Hooks that keep running untouched because chaining them was impossible. Separate
+  // from `chained` because the notes below say opposite things about the two: one runs
+  // the hook for you, the other leaves it alone and it still runs. Reporting both as
+  // "stopped running" - which is what this did - was false for this one and would push an
+  // operator to restore a hook that is already running.
+  const leftRunning = candidates.filter((c) => !chainable(c.event, c.target));
+
+  // Shims this tool wrote for an event the manifest no longer gates.
+  //
+  // `install` only ever ADDED files, so dropping a gate from the manifest left its shim
+  // on disk: still routed through `core.hooksPath`, still `PRESENT` in `hooks status`,
+  // and enforcing nothing. That is the exact harm the refusal below is written to
+  // prevent - reached by the sanctioned path rather than by the blocked one.
+  //
+  // It was a dead end rather than only a defect. With the LAST gate removed there is
+  // nothing to install, so `install` refused and wrote nothing, leaving the shim, the
+  // routing, and a remedy - "add the gates this repo can actually run" - telling a
+  // reader to undo the change they had just made, for a gate that may be gone because
+  // the script it ran was deleted. The only way out was to re-declare the gate and
+  // delete the file by hand.
+  //
+  // Read from `state.installed`, which describes every shim this install is responsible
+  // for, and not from `state.staleOurs`: that loop skips a shim the moment it matches
+  // what this run would render, so a *current* shim for an ungated event never reaches
+  // it - which is the common case here and the one that matters. `ours` on each entry is
+  // what keeps a file a person wrote in this directory from being deleted on their
+  // behalf; `wanted` and `chained` are what this run writes, so what is left is exactly
+  // the set nothing else here touches.
+  const obsolete = state.installed.filter(
+    (i) => i.present && i.ours && !wanted.includes(i.event) && !chained.some((c) => c.event === i.event),
+  );
+
+  // Nothing to write and nothing to take away is the only refusal. It sits after
+  // `obsolete` because a repository whose last gate just left the manifest has
+  // something to take away, and blocking that one left no way out except undoing
+  // the change by hand - see the note on `obsolete`.
+  if (wanted.length === 0 && obsolete.length === 0) {
+    if (isJson(flags)) {
+      emitJson({ ok: false, command: 'hooks install', root, nothingToEnforce: true, filesWritten: false });
+      return EXIT.FAIL;
+    }
+    emit(
+      [
+        `repo     ${root}`,
+        '',
+        `BLOCKED  ${root} declares no gate it can run, so there is nothing to enforce.`,
+        '         Installing shims anyway would stop running whatever git runs now',
+        '         and replace it with a gate that checks nothing.',
+        `REMEDY  add the gates this repo can actually run to ${MANIFEST_FILE}, then re-run.`,
+      ].join('\n'),
+      { maxBytes: flags.maxBytes ?? 0 },
+    );
+    return EXIT.FAIL;
+  }
 
   const plan = [];
   for (const event of wanted) {
@@ -213,7 +269,26 @@ async function installHooks(root, flags) {
       note: `chained: runs ${c.target}`,
     });
   }
-  const pathAction = current === wants ? 'unchanged' : current === null ? 'created' : 'updated';
+  for (const h of obsolete) {
+    plan.push({
+      file: fileFor(h.event),
+      action: 'removed',
+      // Named in the plan because the reader approving this write is about to lose a
+      // file, and "REMOVED pre-push" does not say why - which is the difference between
+      // agreeing with it and discovering later that a gate had been dropped by accident.
+      note: `no gate for ${h.event} in ${MANIFEST_FILE}; the shim enforced nothing`,
+    });
+  }
+  const routed = wanted.length > 0 || chained.length > 0;
+
+  // The routing this install leaves behind, which is not always `wants`. A repository
+  // that removed its last gate has no shims to route to, and leaving `core.hooksPath`
+  // pointed at the directory would stop its own hooks running - the plan has to say so,
+  // because a plan that prints "core.hooksPath updated .simt-hooks -> .simt-hooks" while
+  // the command unsets it is worse than no plan.
+  const leaves = routed ? wants : null;
+  const pathAction =
+    leaves === current ? 'unchanged' : leaves === null ? 'removed' : current === null ? 'created' : 'updated';
 
   // Refuse to take over routing git is already using without explicit consent.
   // Two cases, and the second one is the one that bites: core.hooksPath already
@@ -227,7 +302,7 @@ async function installHooks(root, flags) {
       ? state.foreign.map((f) => `  git runs ${f.event} at ${f.path} (${f.bytes} bytes)`)
       : [`  existing ${HOOKS_PATH_KEY} = ${current}`];
     if (isJson(flags)) {
-      emitJson({ ok: false, command: 'hooks install', root, currentHooksPath: current, wouldSet: wants, takeover: true, foreign: state.foreign, plan, filesWritten: false });
+      emitJson({ ok: false, command: 'hooks install', root, currentHooksPath: current, wouldSet: leaves, takeover: true, foreign: state.foreign, plan, filesWritten: false });
       return EXIT.FAIL;
     }
     emit(
@@ -247,14 +322,20 @@ async function installHooks(root, flags) {
 
   if (!mode.apply) {
     if (isJson(flags)) {
-      emitJson({ ok: true, command: 'hooks install', root, dryRun: true, currentHooksPath: current, wouldSet: wants, plan, filesWritten: false });
+      // `leaves`, not `wants`. A plan that would remove the last shim also un-routes
+      // git, and a payload promising to set a directory the command is about to unset
+      // is the same lie in a shape a machine reads.
+      emitJson({ ok: true, command: 'hooks install', root, dryRun: true, currentHooksPath: current, wouldSet: leaves, plan, filesWritten: false });
       return EXIT.OK;
     }
     emit(
       renderPlan(
         root,
         current,
-        wants,
+        // `leaves`, for the same reason the `--json` payload uses it: this plan says
+        // REMOVED beside the last shim, and a reader of it is entitled to read that
+        // the routing is going too, rather than being told it is unchanged.
+        leaves,
         pathAction,
         plan,
         mode.dryRun
@@ -278,7 +359,19 @@ async function installHooks(root, flags) {
     await writeFile(path, renderChainedShim(c.event, c.target));
     await chmod(path, 0o755);
   }
-  await exec('git', ['config', HOOKS_PATH_KEY, wants], { cwd: root });
+  for (const h of obsolete) {
+    await rm(join(root, fileFor(h.event)));
+  }
+
+  // `core.hooksPath` tells git to read ONE directory for EVERY event, so leaving it
+  // pointing at a directory of no shims stops the repository's own hooks - the ones in
+  // `.git/hooks` that predate this tool - from running, silently. Unsetting it is the
+  // only way back, and this is the only place that knows the last shim just left.
+  if (routed) {
+    await exec('git', ['config', HOOKS_PATH_KEY, wants], { cwd: root });
+  } else if (current === wants) {
+    await exec('git', ['config', '--unset', HOOKS_PATH_KEY], { cwd: root });
+  }
 
   const notes = [];
   const chainedEvents = new Set(chained.map((c) => c.event));
@@ -288,28 +381,62 @@ async function installHooks(root, flags) {
     // chained and genuinely stopped running. Saying "stopped running" about both would
     // be wrong about the first, and it would push an operator to restore a hook that is
     // already being run for them.
-    notes.push(
-      chainedEvents.has(f.event)
-        ? `chained ${f.event}: ${fileFor(f.event)} runs ${f.path} (${f.bytes} bytes), so it keeps running`
-        : `stopped running ${f.event} at ${f.path} (${f.bytes} bytes); the file is still on disk, untouched - declare it in ${MANIFEST_FILE} gates.commands to have the dispatcher run it`,
-    );
+    if (chainedEvents.has(f.event)) {
+      notes.push(
+        `chained ${f.event}: ${fileFor(f.event)} runs ${f.path} (${f.bytes} bytes), so it keeps running`,
+      );
+    } else if (leftRunning.some((c) => c.event === f.event)) {
+      // A third case, and the one that was misreported: a hook this tool could not chain
+      // because the shim would have had to run itself. Nothing overwrote it, so it still
+      // runs - which is the opposite of what the branch below says.
+      notes.push(
+        `${f.event} at ${f.path} (${f.bytes} bytes) is in this tool's own hooks directory, so it cannot be chained to itself and was left untouched; it keeps running`,
+      );
+    } else {
+      notes.push(
+        `stopped running ${f.event} at ${f.path} (${f.bytes} bytes); the file is still on disk, untouched - declare it in ${MANIFEST_FILE} gates.commands to have the dispatcher run it`,
+      );
+    }
   }
   if (state.foreign.length === 0 && takeover) {
     notes.push(`replaced an existing core.${HOOKS_PATH_KEY} (${current}); the old hooks are still on disk, untouched`);
   }
+  for (const h of obsolete) {
+    notes.push(
+      `removed ${fileFor(h.event)}: ${MANIFEST_FILE} declares no ${h.event} gate, so the shim enforced nothing and still replaced git's own hook`,
+    );
+  }
+  if (leaves === null && current !== null) {
+    notes.push(
+      `unset ${HOOKS_PATH_KEY}; git reads its hooks from .git/hooks again, so the repository's own hooks run`,
+    );
+  }
 
   if (isJson(flags)) {
-    emitJson({ ok: true, command: 'hooks install', root, hooksPath: wants, previousHooksPath: current, plan, filesWritten: true, notes });
+    emitJson({ ok: true, command: 'hooks install', root, hooksPath: leaves, previousHooksPath: current, plan, filesWritten: true, notes });
     return EXIT.OK;
   }
-  emit(renderPlan(root, current, wants, pathAction, plan, 'WROTE    shims and set core.hooksPath', manifest), { maxBytes: flags.maxBytes ?? 0 });
+  emit(
+    renderPlan(
+      root,
+      current,
+      leaves,
+      pathAction,
+      plan,
+      routed ? 'WROTE    shims and set core.hooksPath' : 'WROTE    no shims remain; core.hooksPath unset',
+      manifest,
+    ),
+    { maxBytes: flags.maxBytes ?? 0 },
+  );
   for (const n of notes) note(`note     ${n}`);
   note(`note     never committed or pushed (ADR-001); review, then commit yourself`);
   return EXIT.OK;
 }
 
+// `wants` is null when this install removes the last shim, and "null" is not what a
+  // reader should read in a plan that says REMOVED next to it.
 function renderPlan(root, current, wants, pathAction, plan, headline, manifest) {
-  const lines = [`repo     ${root}`, `${HOOKS_PATH_KEY.padEnd(15)} ${pathAction}  ${current ?? '(unset)'} -> ${wants}`, ''];
+  const lines = [`repo     ${root}`, `${HOOKS_PATH_KEY.padEnd(15)} ${pathAction}  ${current ?? '(unset)'} -> ${wants ?? '(unset)'}`, ''];
   for (const p of plan) lines.push(`${p.action.toUpperCase().padEnd(9)} ${p.file}${p.note ? `   (${p.note})` : ''}`);
   lines.push('', headline);
   lines.push(`gates    preCommit = ${describeGates(manifest, 'preCommit')}`);

@@ -54,6 +54,7 @@ own assertion, because the fourth of these was not a wrong word in a sentence; i
 two templates disagreeing with each other in the same position.
 
 ### Fixed
+- `hooks install` removes a shim whose gate was dropped from the manifest instead of leaving it to run nothing. A repository that removed its last gate was refused outright, with a remedy telling it to put the gate back; only un-routing git was left to the reader. install also no longer chains a hook to itself.
 
 - **Dead exports and duplicated frontmatter, with a test that stops them returning (S21).**
   Eight functions were exported and called by nothing (`gateKind`, `gateWhy`, `gateAdr`,

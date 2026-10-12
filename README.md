@@ -81,7 +81,7 @@ simt compare         # what changed across every repository that adopted it
 | Path | What |
 | --- | --- |
 | `AGENTS.md` | the projection, between `<!-- simt:begin -->` and `<!-- simt:end -->` (renamed from `simt-dev:`; the old markers are still read, and a region migrates on its next write) |
-| `simt.json` | your manifest: which gates to declare, which substitutions to fill (renamed from `simt-dev.json`; the old name is still read, and moves on the next write) |
+| `simt.json` | your manifest: which gates to declare, which substitutions to fill |
 | `.cursor/rules/*.mdc`, `.claude/rules/*.md`, `.agents/rules/*.md`, `.github/instructions/*.instructions.md` | one file per rule, written only for the harnesses that read their own directory |
 | `.editorconfig`, `.gitattributes` | baseline regions |
 | `.simt-hooks/` and `core.hooksPath` | the shared dispatcher, fail-closed |

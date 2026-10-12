@@ -1,5 +1,5 @@
 {
-  "note": "Gold corpus for the resolver. Plan 0002 section 9 lists `simt skills eval` as a command and marks step 5 done; no such command and no corpus existed, so this file is the corpus and `test/eval.test.mjs` runs it. A future `skills eval` command should read this file rather than a second copy.",
+  "note": "Gold corpus for the resolver. `simt skills eval` reads this file (a path argument names a different one) and reports precision and recall against it; `test/eval.test.mjs` runs the same scoring through the shared module in `src/resolve/eval.mjs`. It lives under test/ because test data does not ship in the package: an installed copy says so instead of scoring the author's.",
   "whyFixtureNotRepo": "Each case declares the repository SIGNALS rather than staging a directory, because what is being pinned is the resolver: given these repo facts and this task, these are the right skills. `fingerprint` has its own tests, and a corpus that also exercised it would fail with a resolver bug inside it and send the next reader to the wrong file.",
   "cases": [
     {

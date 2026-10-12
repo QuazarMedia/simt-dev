@@ -1,16 +1,19 @@
 // The gold corpus: real tasks against real repository signals, with the skills that
 // ought to come back.
 //
-// Plan 0002 section 9 lists `simt skills eval` as a command, and its step 5 is marked
-// done with the note "every selection traceable". Neither the command nor the corpus
-// existed. Review 0001 named the absence in S04 ("plan 0002 section 11 step 5 claims an
-// eval corpus that does not exist; see S19") and every ranking change since has been
-// argued from examples rather than measured.
+// Plan 0002 section 9 lists `simt skills eval` as a command that "reports precision
+// and recall and fails on regression". Review 0001 named the absence in S04 ("plan
+// 0002 section 11 step 5 claims an eval corpus that does not exist; see S19") and
+// every ranking change since has been argued from examples rather than measured. The
+// corpus and the command now both exist, and this file is the gate that keeps them
+// honest: it scores the same corpus through the same module the command uses
+// (src/resolve/eval.mjs), so what CI asserts and what a reader is shown cannot drift
+// apart (ADR-002).
 //
-// The corpus lives under `test/` and not under `graph/` on purpose: `provenanceDigest()`
-// walks `rules/` and `graph/`, so a corpus file beside the registry would change the
-// content digest and force every consumer repository to be restamped. That is a much
-// larger change than a test corpus is worth, and it would be invisible.
+// The corpus lives under `test/` on purpose: it is test data, and `test/` is not in
+// the published files. The provenance digest walks `rules/` only (ADR-061), so its
+// location cannot move the content digest, and an installed copy ships no corpus at
+// all - `skills eval` there takes an explicit path to a reader's own gold cases.
 //
 // A case states `select` (must come back) and `reject` (must not). Asserting an exact
 // selection would be brittle in a way that discourages the next person from adding a
@@ -27,7 +30,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { rankSkills, tokenize } from '../src/resolve/resolve.mjs';
+import { unknownSkills, scoreCorpus } from '../src/resolve/eval.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const registry = JSON.parse(await readFile(resolve(ROOT, 'graph', 'skills.graph.json'), 'utf8'));
@@ -36,40 +39,26 @@ const corpus = JSON.parse(await readFile(resolve(ROOT, 'test', 'fixtures', 'eval
 const BIN = resolve(ROOT, 'bin', 'simt-dev.mjs');
 const exec = promisify(execFile);
 
-const NAMES = new Set(registry.skills.map((s) => s.name));
-
-/** Rank one case. `closure` is deliberately not applied: the corpus is about selection. */
-function run({ repo, task }) {
-  const context = {
-    repoStack: repo.stack ?? [],
-    paths: repo.paths ?? [],
-    taskTokens: tokenize(task ?? ''),
-  };
-  const { selected } = rankSkills(registry.skills, context);
-  return selected.map((e) => e.skill.name);
-}
+// Scored once, through the same function `simt skills eval` calls: a second copy of
+// the arithmetic here would be the defect this file is meant to prevent.
+const SCORE = scoreCorpus(registry, corpus);
 
 test('eval: every case names skills the registry actually has', () => {
   // A corpus that cites a renamed skill is a corpus that has quietly stopped running:
   // the case would still pass, because the missing name is in neither list.
-  const named = corpus.cases.flatMap((c) => [...c.select, ...c.reject]);
-  const unknown = [...new Set(named.filter((n) => !NAMES.has(n)))];
+  const unknown = unknownSkills(registry, corpus);
   assert.deepEqual(unknown, [], 'corpus names skills the registry does not declare');
 });
 
 test('eval: every case selects what it expects', () => {
-  for (const c of corpus.cases) {
-    const got = run(c);
-    const missing = c.select.filter((n) => !got.includes(n));
-    assert.deepEqual(missing, [], `${c.name}: expected ${missing.join(', ')} to be selected, got ${got.join(', ') || 'nothing'}`);
+  for (const c of SCORE.cases) {
+    assert.deepEqual(c.missing, [], `${c.name}: expected ${c.missing.join(', ')} to be selected, got ${c.selected.join(', ') || 'nothing'}`);
   }
 });
 
 test('eval: every case rejects what it excludes', () => {
-  for (const c of corpus.cases) {
-    const got = run(c);
-    const present = c.reject.filter((n) => got.includes(n));
-    assert.deepEqual(present, [], `${c.name}: ${present.join(', ')} should not have been selected`);
+  for (const c of SCORE.cases) {
+    assert.deepEqual(c.wronglySelected, [], `${c.name}: ${c.wronglySelected.join(', ')} should not have been selected`);
   }
 });
 
@@ -84,27 +73,16 @@ test('eval: the corpus measures recall and precision, and both are total', () =>
   // So precision is measured two ways and both must hold: every named negative stays
   // unselected, and every case whose truth is "nothing" returns nothing at all - the
   // only place the corpus can claim to be exhaustive.
-  let expected = 0;
-  let missed = 0;
-  let negatives = 0;
-  let wronglySelected = 0;
-  let exhaustive = 0;
-  for (const c of corpus.cases) {
-    const got = new Set(run(c));
-    expected += c.select.length;
-    for (const name of c.select) if (!got.has(name)) missed += 1;
-    negatives += c.reject.length;
-    for (const name of c.reject) if (got.has(name)) wronglySelected += 1;
-    if (c.select.length === 0) {
-      exhaustive += 1;
-      assert.deepEqual([...got], [], `${c.name} expects an empty selection but returned ${[...got].join(', ')}`);
-    }
+  const exhaustive = [];
+  corpus.cases.forEach((c, i) => {
+    if (c.select.length === 0) exhaustive.push(SCORE.cases[i]);
+  });
+  for (const c of exhaustive) {
+    assert.deepEqual(c.unexpected, [], `${c.name} expects an empty selection but returned ${c.selected.join(', ')}`);
   }
-  const recall = expected === 0 ? 1 : (expected - missed) / expected;
-  const precision = negatives === 0 ? 1 : (negatives - wronglySelected) / negatives;
-  assert.equal(precision, 1, `precision ${precision.toFixed(3)}: ${wronglySelected} of ${negatives} named negatives were selected`);
-  assert.equal(recall, 1, `recall ${recall.toFixed(3)}: ${missed} expected selections were missed`);
-  assert.ok(exhaustive >= 2, `only ${exhaustive} cases state an exhaustive answer, so precision rests on named negatives alone`);
+  assert.equal(SCORE.precision, 1, `precision ${SCORE.precision.toFixed(3)}: ${SCORE.wrong} of ${SCORE.negatives} named negatives were selected`);
+  assert.equal(SCORE.recall, 1, `recall ${SCORE.recall.toFixed(3)}: ${SCORE.missed} of ${SCORE.expected} expected selections were missed`);
+  assert.ok(exhaustive.length >= 2, `only ${exhaustive.length} cases state an exhaustive answer, so precision rests on named negatives alone`);
 });
 
 test('eval: the corpus is wide enough to rank against', () => {
@@ -122,6 +100,7 @@ test('eval: the corpus is wide enough to rank against', () => {
     assert.ok(stacks.has(tag), `the corpus never exercises the ${tag} ecosystem`);
   }
 });
+
 test('eval: the brief a reader gets says why, through the shipped binary (S04)', async () => {
   // The corpus calls `rankSkills` directly. A reader runs a command, so the acceptance
   // review 0001 named is asserted of the command: a task of stopwords must select

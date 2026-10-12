@@ -6,6 +6,20 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### The resolver is measured against a gold corpus
+
+`simt skills eval` scores the skill resolver against a corpus of real tasks × real
+repositories, each case carrying a gold list of the skills it should select and a list
+of the ones it must not. It reports precision and recall, prints a PASS/FAIL line per
+case naming the skills it missed or selected that it should not have, and exits
+non-zero on a regression — so it can be run from CI the way the gate is run.
+
+The scoring lives in `src/resolve/eval.mjs`, which the command and
+`test/eval.test.mjs` both call, so a test cannot drift from what the command measures.
+The corpus lives under `test/` because test data does not ship in the package: an
+installed copy names the path it would have read and says so instead of scoring the
+author's.
+
 ### The skill registry is workspace data; the package ships none of it
 
 The npm tarball and the wheel carried `graph/skills.graph.json` — the directory

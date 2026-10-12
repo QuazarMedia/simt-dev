@@ -194,6 +194,19 @@ test('the installed tool finds the registry a configured workspace holds', async
   assert.match(lint.out, new RegExp(registryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 
+test('the installed tool ships no eval corpus, and says so instead of scoring the author\'s', async () => {
+  // The mirror of the registry test above, for the second piece of data `skills eval`
+  // reads: the gold corpus is test data, `test/` is not in the published `files`, and
+  // the honest answer is an explicit path - not a score computed from this checkout's
+  // fixtures, which the reader does not have.
+  const root = join(stage, 'seed');
+
+  const result = await simt(root, ['skills', 'eval']);
+  assert.equal(result.code, 1, result.out);
+  assert.match(result.out, /no eval corpus: \S*node_modules\/.*eval-corpus\.json/);
+  assert.equal(result.out.includes(PACKAGE_ROOT), false, 'the installed tool reached into this checkout');
+});
+
 test('the decisions the tool explains itself with are in the tarball', async () => {
   const root = join(stage, 'seed');
 

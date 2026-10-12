@@ -19,6 +19,10 @@ ${CLI} skills brief --task    tier-1 pre-assembled brief  <- the common case
 ${CLI} skills show <name>     tier-2 body (respects --max-bytes)
 ${CLI} skills why <name>      the signal chain that selected it
 ${CLI} skills find <query>    search across capability and keyword
+${CLI} skills eval [corpus]   measure the resolver against a gold corpus
+                           (reports precision and recall; exits non-zero on
+                            regression; without an argument, the corpus in this
+                            checkout)
 ${CLI} skills install <name>  pin a skill into the repo as a local override
                            (dry-run unless --yes; a multi-variant skill needs
                            --variant or --from rather than a guess)

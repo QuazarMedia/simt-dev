@@ -137,14 +137,14 @@
         "iso",
         "registry"
       ],
-      "bytes": 15604,
+      "bytes": 15921,
       "variants": [
         {
           "id": "api",
           "stack": [
             "hono"
           ],
-          "bytes": 15604
+          "bytes": 15921
         },
         {
           "id": "web",
@@ -159,7 +159,7 @@
         {
           "repo": "simt-social-api",
           "path": ".agents/skills/add-country-galaxy",
-          "bytes": 15604,
+          "bytes": 15921,
           "role": "canonical"
         },
         {

@@ -331,6 +331,38 @@ test('CLI: graph lint with a real workspace verifies bodies on disk', async () =
   assert.equal(json.verified, true);
 });
 
+test('CLI: graph lint reports drift with the signed delta, not a placeholder', async () => {
+  // The drift line is all the reader gets to act on, and its delta used to read
+  // "(undefined)": the measurer returns { bytes, files } and knows nothing about
+  // the declaration it is compared with. The number and its sign ARE the finding.
+  const ws = await scratch();
+  await mkdir(join(ws, 'acme', '.agents', 'skills', 'foo'), { recursive: true });
+  await writeFile(join(ws, 'acme', '.agents', 'skills', 'foo', 'SKILL.md'), 'hello');
+  const registry = {
+    capabilities: [{ id: 'test', summary: 'a capability' }],
+    skills: [
+      {
+        name: 'foo',
+        summary: 'a skill',
+        capabilities: ['test'],
+        stack: ['node'],
+        keywords: ['foo'],
+        bytes: 100,
+        sources: [{ repo: 'acme', path: '.agents/skills/foo', bytes: 100, role: 'canonical' }],
+      },
+    ],
+  };
+  const reg = join(ws, 'registry.json');
+  await writeFile(reg, JSON.stringify(registry));
+  const { code, json } = await runJson(['graph', 'lint', reg, '--workspace', ws]);
+  assert.equal(code, 4, JSON.stringify(json));
+  assert.equal(json.verified, true, 'the drift must be a verified finding, not an unverified warning');
+  assert.ok(
+    json.errors.some((e) => e.includes('declared 100 bytes, on disk 5 (-95)')),
+    `expected the signed drift finding, got ${JSON.stringify(json.errors)}`,
+  );
+});
+
 test('CLI: skills brief without a workspace names the remedy once and lists pointers', async () => {
   // S33. With no workspace every selected body used to be the same 200-byte
   // remedy, the brief still called that a selection, and it reported the

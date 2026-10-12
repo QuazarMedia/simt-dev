@@ -44,6 +44,7 @@ import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../pr
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
+import { packageVersion, hasNpm } from '../package-version.mjs';
 
 const run = promisify(execFile);
 
@@ -59,6 +60,11 @@ export async function initCommand(positional, flags) {
   }
 
   const sha = await provenanceDigest();
+  // The release this adoption records, and the kind of repository it is adopting: the
+  // version goes into the manifest pin and the rendered gate, and the kind decides how
+  // a repository without node_modules obtains the binary in CI.
+  const version = packageVersion();
+  const npm = await hasNpm(root);
   const existing = await readManifest(root);
   const { manifest: current, exists, error } = existing;
   if (error) {
@@ -71,7 +77,7 @@ export async function initCommand(positional, flags) {
   // commit once hooks were installed.
   const capability = await readCapability(root);
   const { dropped } = planGates(detected.stack, capability);
-  const manifest = buildManifest({ root, stack: detected.stack, sha, existing: current, capability });
+  const manifest = buildManifest({ root, stack: detected.stack, sha, version, existing: current, capability });
   const findings = await scanRepo(root);
   const summary = summarise(findings);
   const projected = await plan(root, flags);
@@ -217,7 +223,7 @@ export async function initCommand(positional, flags) {
     if (isJson(flags)) {
       emit(`${JSON.stringify(payload, null, 2)}\n`);
     } else {
-      emit(render(payload, manifest));
+      emit(render(payload, manifest, { npm, version }));
       note('');
       note(
         `blocked  ${summary.conflicts} conflict${summary.conflicts === 1 ? '' : 's'}; nothing written`,
@@ -238,7 +244,7 @@ export async function initCommand(positional, flags) {
     payload.ok = false;
     payload.blockedBy = 'malformed-region';
     if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
-    else emit(render(payload, manifest));
+    else emit(render(payload, manifest, { npm, version }));
     return fail(
       `${malformed.length} target(s) have a malformed generated region (${malformed[0].file}: ${malformed[0].reason})`,
       EXIT.FAIL,
@@ -250,7 +256,7 @@ export async function initCommand(positional, flags) {
   if (isJson(flags)) {
     if (!apply) emit(`${JSON.stringify(payload, null, 2)}\n`);
   } else {
-    emit(render(payload, manifest));
+    emit(render(payload, manifest, { npm, version }));
   }
   if (!apply) {
     note('');
@@ -304,7 +310,7 @@ export async function initCommand(positional, flags) {
   // guaranteed to be misled.
   if (payload.ci.action === 'create') {
     await mkdir(dirname(join(root, payload.ci.file)), { recursive: true });
-    await writeFile(join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own }));
+    await writeFile(join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own, npm, version }));
     note(`wrote    ${payload.ci.file} (create; yours to edit from here, simt-dev will not rewrite it)`);
   }
   if (payload.dependabot.action === 'create') {
@@ -477,7 +483,7 @@ async function git(cwd, args) {
 }
 
 /** Every line is a decision with a reason. Nothing is silent. */
-function render(payload, manifest) {
+function render(payload, manifest, { npm = true, version } = {}) {
   const lines = [
     `repo        ${payload.root}`,
     `stack       ${payload.stack.length > 0 ? payload.stack.join(', ') : '(undetected)'}`,
@@ -560,7 +566,7 @@ function render(payload, manifest) {
   // a reader can tell "this repo does not use GitHub Actions" from "this repo was
   // not offered the gate".
   if (payload.ci.action === 'create') {
-    lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow({ own: payload.ci.own }).length} bytes`);
+    lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow({ own: payload.ci.own, npm, version }).length} bytes`);
     lines.push(
       payload.ci.own
         ? `            this repository is simt-dev's own; ${CLI} ci --yes refreshes this copy when the gate changes`

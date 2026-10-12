@@ -39,6 +39,23 @@ async function json(args) {
 }
 
 /**
+ * The same, for a command that is expected to fail.
+ *
+ * `json` rejects on a non-zero exit, which is right for every other caller here and
+ * useless for the one question this file has to ask: what does the gate say about a
+ * repository whose gate is red. A helper that cannot read a failing command's output
+ * is a helper that can only ever compare two green things.
+ */
+async function failingJson(args) {
+  try {
+    const { stdout } = await exec('node', [BIN, ...args, '--json'], { maxBuffer: 16 << 20 });
+    return { code: 0, payload: JSON.parse(stdout) };
+  } catch (error) {
+    return { code: error.code ?? 1, payload: JSON.parse(error.stdout) };
+  }
+}
+
+/**
  * A git repo with a real HEAD, because every command under test shells out to git.
  * `into` places it inside an existing workspace, which is what the discovery tests
  * need - each repo must be a sibling of the others, not in its own temp root.
@@ -671,4 +688,123 @@ test('compare reports an orphaned rule file as a note, never a problem (S12)', a
   assert.match(note, /will not remove a file it wrote/);
   // ...and it is not counted among the rule files it cannot repair either.
   assert.deepEqual(row.ruleFiles.stale, []);
+});
+
+// A gate that refuses is a fact about the repository, and a dashboard that does not
+// count it is describing a different repository. This row said `current` for all
+// fourteen adopted repositories in the estate while `check` exited 1 in every one of
+// them: the region was current, the manifest was not, and the row only looked at the
+// region.
+//
+// The test is a PARITY test - both surfaces driven at one fixture and compared -
+// rather than two assertions written separately, because that is the shape ADR-052
+// found drifting in the budget loops: two copies of one question, each asserted, each
+// unable to see the other.
+test('every finding check refuses on, this row reports', async () => {
+  const { provenanceDigest } = await import('../src/projection/project.mjs');
+  const { MANIFEST_COMMENT } = await import('../src/projection/manifest.mjs');
+
+  const root = await gitRepo('stale-manifest');
+  const { sha } = await adopt(root);
+  // The estate's own shape: adopted, region current, and a manifest written before
+  // `projection.version` existed. Every value in the file is true.
+  await writeFile(
+    join(root, MANIFEST_FILE),
+    `${JSON.stringify(
+      {
+        ...MANIFEST_COMMENT,
+        id: 'stale-manifest',
+        stack: [],
+        limits: { coverage: null, fileLines: { warn: 400, error: 1000 } },
+        gates: { preCommit: [], prePush: [] },
+        localSkills: [], profiles: [], substitutions: {}, surfaces: null,
+        projection: { simtDevSha: sha },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  assert.equal(await provenanceDigest() !== sha, false, 'the fixture must carry this build\'s own digest');
+
+  // What the gate says. Through the shipped binary, because the claim under test is
+  // about the tool a reader runs rather than about a function in this repository.
+  const checked = await failingJson(['check', '--root', root]);
+  const refused = checked.payload.findings.filter((f) => f.status === 'stale-generated-field');
+
+  // What the dashboard says, about the same bytes, with no write in between.
+  const row = await buildRow(root, { ...CONTEXT, expectedSha: sha });
+  const named = row.problems.filter((p) => p.includes('generated field'));
+
+  assert.equal(refused.length, 1, `the fixture must be refused by check: ${JSON.stringify(refused)}`);
+  assert.equal(
+    named.length,
+    refused.length,
+    `check refuses ${refused.length} manifest finding(s) and this row reports ${named.length}`,
+  );
+  assert.match(named[0], /run: simt check|run: .*sync --yes/);
+
+  // And the repair both of them name actually clears it, so parity is not two
+  // commands agreeing on a defect neither can fix.
+  await exec('node', [BIN, 'sync', '--root', root, '--yes'], { maxBuffer: 16 << 20 });
+  const after = await failingJson(['check', '--root', root]);
+  assert.equal(
+    after.payload.findings.filter((f) => f.status === 'stale-generated-field').length,
+    0,
+    'the named remedy did not clear the finding',
+  );
+});
+
+// `hooksComplete` is the number the estate roll-out is measured on, and it was
+// computed from a predicate `hooks install` did not use: `compare` defaulted to "a
+// shim is wanted for every event". A repository declaring only `prePush` gates was
+// therefore reported incomplete for the pre-commit shim it has no reason to write, and
+// running `hooks install` as many times as you liked could not clear it.
+//
+// Parity again, for the same reason as the manifest finding above: two copies of one
+// question, each asserted, each unable to see the other.
+test('a repo is complete exactly when install has nothing left to write', async () => {
+  const root = await (async () => {
+    const d = await mkdtemp(join(tmpdir(), 'simt-compare-complete-'));
+    made.push(d);
+    await exec('git', ['init', '-q'], { cwd: d });
+    await exec('git', ['config', 'user.email', 't@e.com'], { cwd: d });
+    await exec('git', ['config', 'user.name', 'T'], { cwd: d });
+    await writeFile(join(d, 'package.json'), JSON.stringify({ name: 'r', scripts: { test: 'true' } }));
+    await writeFile(join(d, 'AGENTS.md'), '# r\n');
+    await exec('git', ['add', '-A'], { cwd: d });
+    await exec('git', ['commit', '-qm', 'init'], { cwd: d });
+    return d;
+  })();
+
+  // prePush gates only: no pre-commit gate, so no pre-commit shim is wanted.
+  await writeFile(
+    join(root, MANIFEST_FILE),
+    JSON.stringify({ id: 'r', stack: [], surfaces: null, gates: { preCommit: [], prePush: ['test'] } }, null, 2),
+  );
+
+  await exec('node', [BIN, 'hooks', 'install', '--root', root, '--yes'], { maxBuffer: 16 << 20 });
+  const row = await buildRow(root, CONTEXT);
+
+  assert.equal(row.hooksRouted, true, 'the repository is routed');
+  assert.equal(
+    row.hooksComplete,
+    true,
+    `a repo with no pre-commit gate must not be incomplete for having no pre-commit shim: ${JSON.stringify(row.problems)}`,
+  );
+  assert.deepEqual(row.problems.filter((p) => /not installed/.test(p)), []);
+
+  // And the converse: declare a pre-commit gate it cannot run, and the missing shim
+  // must be a problem again. A predicate that always says "yes" passes the row above
+  // for the wrong reason, exactly as an always-false one would.
+  await writeFile(
+    join(root, MANIFEST_FILE),
+    JSON.stringify({ id: 'r', stack: [], surfaces: null, gates: { preCommit: ['lint'], prePush: ['test'] } }, null, 2),
+  );
+  const after = await buildRow(root, CONTEXT);
+  assert.match(
+    after.problems.join('\n'),
+    /pre-commit not installed/,
+    'a declared gate with no shim is still a defect',
+  );
+  assert.equal(after.hooksComplete, false);
 });

@@ -12,6 +12,7 @@ import { GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
 import { hasScript, knownGates, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
 import { runGates } from '../src/hooks/dispatcher.mjs';
+import { packageVersion } from '../src/package-version.mjs';
 import { readCapability } from '../src/hooks/capability.mjs';
 import * as gateModule from '../src/projection/manifest.mjs';
 import { git, cmd } from './fixture.mjs';
@@ -74,6 +75,21 @@ async function stagedContent(root, file) {
 
 async function simt(args, cwd) {
   return exec('node', [BIN, ...args], { cwd, env: { ...process.env, NO_COLOR: '1' } });
+}
+
+/**
+ * The same, for a command that is expected to report a problem and exit non-zero.
+ *
+ * `hooks status` exits 1 on a stale shim, which is correct behaviour, and `exec`
+ * turns that into a thrown error carrying the very output under test. Reading a
+ * failing command's output is the whole point of the tests below.
+ */
+async function simtAllowingFailure(args, cwd) {
+  try {
+    return await simt(args, cwd);
+  } catch (error) {
+    return { stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
+  }
 }
 
 // ---------------------------------------------------------------- shim
@@ -465,6 +481,48 @@ test('dispatcher: an unknown event fails rather than passing silently', async ()
   const result = await runGates('post-merge', { root, manifest: { gates: {} } });
   assert.equal(result.failed, true);
   assert.match(result.error, /unknown hook event/);
+});
+
+test('dispatcher: a stale pin fails the event with a version gate', async () => {
+  // S35: for a repository without npm the gates run from a global install, whose version
+  // nothing else pins. The pin in the manifest is the only thing that knows which version
+  // it should be, so a mismatch fails the event before any gate runs.
+  const root = await fixture({ manifest: { gates: { preCommit: ['format'], prePush: [] } } });
+  const stale = `${packageVersion()}-x`;
+  const result = await runGates('pre-commit', {
+    root,
+    manifest: { gates: { preCommit: ['format'], prePush: [] }, projection: { version: stale } },
+  });
+  assert.equal(result.failed, true);
+  const gate = result.gates.find((g) => g.name === 'version');
+  assert.equal(gate.status, 'failed');
+  assert.match(gate.detail, /version mismatch/);
+  assert.match(gate.remedy, /upgrade/);
+});
+
+test('dispatcher: a matching pin is not a version gate', async () => {
+  // The guard exists to catch a stale binary, not to re-check one that matches: on a
+  // match the event proceeds to the gates it actually declared.
+  const root = await fixture({ scripts: { lint: 'echo ok' }, manifest: { gates: { preCommit: ['lint'], prePush: [] } } });
+  const result = await runGates('pre-commit', {
+    root,
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, projection: { version: packageVersion() } },
+  });
+  assert.ok(!result.gates.some((g) => g.name === 'version'), 'the version gate is only inserted on a mismatch');
+  assert.equal(result.gates.find((g) => g.name === 'lint').status, 'passed');
+});
+
+test('dispatcher: a stale pin does not block an event that declares no gates', async () => {
+  // The version check is placed after the empty-list check on purpose: a repository that
+  // declares no gates has nothing the version could get wrong, and failing it would block
+  // commits in repos that deliberately declare none.
+  const root = await fixture({ manifest: { gates: { preCommit: [], prePush: [] } } });
+  const result = await runGates('pre-commit', {
+    root,
+    manifest: { gates: { preCommit: [], prePush: [] }, projection: { version: `${packageVersion()}-x` } },
+  });
+  assert.equal(result.failed, false);
+  assert.ok(!result.gates.some((g) => g.name === 'version'));
 });
 
 // ---------------------------------------------------------------- restage (S08)
@@ -1081,4 +1139,58 @@ test('hooks status --json: carries the foreign hooks, not just prose about them'
   assert.equal(payload.foreign[0].event, 'pre-commit');
   assert.equal(payload.foreign[0].bytes, Buffer.byteLength('#!/bin/sh\necho hand-written\n'));
   assert.match(payload.hooksDir, /\.git\/hooks$/);
+});
+
+// A dispatcher shim from an earlier version of this tool is ours, out of date - not a
+// hook belonging to somebody else. Reading it as foreign made `hooks install --yes`
+// print, about a file it had just overwritten:
+//
+//   stopped running pre-commit at .simt-hooks/pre-commit (2565 bytes); the file is
+//   still on disk, untouched - declare it in simt.json gates.commands to have the
+//   dispatcher run it
+//
+// Three false statements in one line: the hook did not stop running, the file was
+// touched, and the remedy - declaring the shim as a gate command - makes the dispatcher
+// run the dispatcher. Nine estate repositories were routed by a previous release and
+// were in exactly this state, so the runbook would have shipped that advice to every
+// one of them.
+test('a shim this tool wrote in an earlier version is stale, never foreign', async () => {
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+  });
+  await simt(['hooks', 'install', '--root', root, '--yes'], root);
+
+  // Age it: the banner is how authorship is established, the rest of the bytes is what
+  // makes it stale. A 0.1.x shim is exactly this - same banner, older locator.
+  const path = join(root, fileFor('pre-commit'));
+  const current = await readFile(path, 'utf8');
+  const aged = current.replace('#   3. simt on PATH', '#   3. simt-dev on PATH');
+  assert.notEqual(aged, current, 'the fixture must actually differ from what this build renders');
+  await writeFile(path, aged);
+  await chmod(path, 0o755);
+
+  const { stdout, stderr } = await simtAllowingFailure(['hooks', 'status', '--root', root], root);
+  const said = stdout + stderr;
+  assert.doesNotMatch(said, /not a simt-dev shim/, `our own shim was reported as somebody else's:\n${said}`);
+  assert.match(said, /differs from this simt-dev/, 'and the honest reason - it is out of date - must still be there');
+
+  // And install must not tell an operator to declare the shim as a gate command.
+  const run = await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  const out = run.stdout + run.stderr;
+  assert.doesNotMatch(out, /gates\.commands/, `the remedy that runs the dispatcher as a gate must not be offered:\n${out}`);
+  assert.doesNotMatch(out, /stopped running/, `a hook that is being refreshed did not stop running:\n${out}`);
+
+  // The genuine case still reads as foreign: a hand-written pre-commit is somebody
+  // else's work and must be named as such.
+  const hand = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+  });
+  await mkdir(join(hand, HOOKS_DIR), { recursive: true });
+  await writeFile(join(hand, fileFor('pre-commit')), '#!/bin/sh\necho mine\n');
+  await chmod(join(hand, fileFor('pre-commit')), 0o755);
+  await exec('git', ['config', HOOKS_PATH_KEY, HOOKS_DIR], { cwd: hand });
+  const ours = await simtAllowingFailure(['hooks', 'status', '--root', hand], hand);
+  assert.match(ours.stdout + ours.stderr, /not a simt-dev shim/, 'a hand-written hook must still be reported as foreign');
 });

@@ -50,6 +50,7 @@ import { PACKAGE_ROOT } from '../workspace.mjs';
 import { PACKAGE_NAME, WORKFLOW_FILE_NAME } from '../name.mjs';
 import { renderLocator } from '../locate.mjs';
 import { CLI } from '../name.mjs';
+import { packageVersion } from '../package-version.mjs';
 
 /** Directory whose presence means this repo runs GitHub Actions. */
 export const WORKFLOWS_DIR = '.github/workflows';
@@ -235,7 +236,7 @@ function indent(text, spaces) {
  * @param {{own?: boolean}} [options]
  * @returns {string} YAML, LF-terminated
  */
-export function renderWorkflow({ own = false } = {}) {
+export function renderWorkflow({ own = false, npm = true, version } = {}) {
   if (own) {
     const floor = nodeFloor();
     return `${header(true)}${skeleton(
@@ -267,17 +268,34 @@ export function renderWorkflow({ own = false } = {}) {
     )}\n`;
   }
 
-  const locator = renderLocator('check --root "$ROOT"', {
-    remedy: `REMEDY run: npm i -D ${PACKAGE_NAME}   (the gate runs from the pinned dependency)`,
-  });
+  const v = version ?? packageVersion();
+  // The install step is the whole of S35's consumer CI: a repository with npm pins
+  // simt-dev as a devDependency and `npm ci` restores it; one without (Gradle,
+  // Connect IQ) has no node_modules to pin in, so CI installs the same pinned global
+  // binary the machine remedy names. The two must agree, or the gate passes in one
+  // place and cannot start in the other.
+  const install = npm
+    ? [
+        '      - name: install dependencies',
+        '        # `npm ci` needs a lockfile; a repo without one is still gated, not skipped.',
+        '        run: npm ci || npm install',
+      ]
+    : [
+        '      - name: install the pinned gate binary',
+        '        # No node_modules to pin in, so a pinned global install: the same bytes',
+        '        # the machine remedy names, so the gate cannot pass locally and fail here.',
+        `        run: npm i -g ${PACKAGE_NAME}@${v}`,
+      ];
+  const remedy = npm
+    ? `REMEDY run: npm i -D ${PACKAGE_NAME}   (the gate runs from the pinned dependency)`
+    : `REMEDY run: npm i -g ${PACKAGE_NAME}@${v}   (the gate runs from a pinned global install)`;
+  const locator = renderLocator('check --root "$ROOT"', { remedy });
   return `${header(false)}${skeleton(
     `${CLI} check`,
     [
       uses('checkout'),
       setupNode(nodeFloor()),
-      '      - name: install dependencies',
-      '        # \`npm ci\` needs a lockfile; a repo without one is still gated, not skipped.',
-      '        run: npm ci || npm install',
+      ...install,
       `      - name: ${CLI} check`,
       '        run: |',
       indent(`set -eu\nROOT="\${GITHUB_WORKSPACE}"\n${locator}`, 10),

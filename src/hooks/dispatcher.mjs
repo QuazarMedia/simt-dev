@@ -27,6 +27,7 @@ import { GATES } from './gates.mjs';
 import { resolveGate } from './resolve.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
+import { assertVersionPin } from '../package-version.mjs';
 
 const exec = promisify(execFile);
 
@@ -62,6 +63,21 @@ export async function runGates(event, { root, manifest }) {
           `answer when the repo has no tool for any of them - \`${CLI} check\` reports each ` +
           `gate it could not run and why - but it is also what an unfiltered default looks like.`,
       ],
+    };
+  }
+
+  // The gates below run from the binary that resolved this shim. For a repository
+  // without npm that is a global install, whose version nothing else pins: if it is not
+  // the one this repo adopted, the gates that run here are not the ones CI runs.
+  // Placed after the empty-list check on purpose - with no gates there is nothing the
+  // version could get wrong, and failing that case would block commits in repos that
+  // deliberately declare none.
+  const mismatch = assertVersionPin(manifest);
+  if (mismatch) {
+    return {
+      event,
+      gates: [{ name: 'version', status: 'failed', detail: mismatch, remedy: `run: ${CLI} upgrade --yes`, adr: null }],
+      failed: true,
     };
   }
 

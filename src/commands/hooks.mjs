@@ -20,12 +20,13 @@ import { promisify } from 'node:util';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { MANIFEST, readManifest } from '../projection/manifest.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../hooks/shim.mjs';
-import { readHooksPath, readHooksState } from '../compare/hooksstate.mjs';
+import { GATE_KEY, gateCount, readHooksPath, readHooksState, wantsShim } from '../compare/hooksstate.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
 import { runGates } from '../hooks/dispatcher.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
+import { packageVersion, hasNpm } from '../package-version.mjs';
 
 const exec = promisify(execFile);
 
@@ -70,12 +71,6 @@ async function runHook(args, flags) {
   return result.failed ? EXIT.FAIL : EXIT.OK;
 }
 
-const GATE_KEY = { 'pre-commit': 'preCommit', 'pre-push': 'prePush' };
-
-function gateCount(manifest, event) {
-  return (manifest?.gates?.[GATE_KEY[event]] ?? []).length;
-}
-
 /**
  * The path to write into a chained shim: relative to the repository's top level
  * wherever the hook lives inside it.
@@ -106,19 +101,6 @@ async function relativeTarget(root, target) {
   return rel === '' || rel.startsWith('..') ? resolved : rel;
 }
 
-/**
- * Whether a missing shim for this event is a defect.
- *
- * A repo that declares no gate for an event has no reason to want a shim for it,
- * so its absence is the correct end state. A repo with NO manifest is different:
- * we do not know what it wants, so we cannot rule the shim out - absence of
- * knowledge is not a decision.
- */
-function wantsShim(manifest, exists, event) {
-  if (!exists) return true;
-  return gateCount(manifest, event) > 0;
-}
-
 async function installHooks(root, flags) {
   const { manifest, exists, error } = await readManifest(root);
   if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
@@ -138,6 +120,13 @@ async function installHooks(root, flags) {
   // migration script in the same review tells an operator to run `hooks install`
   // for a plan and then `--yes` - advice that printed a plan and wrote anyway.
   const mode = writeMode(flags);
+
+  // The release this install renders, and the kind of repository it installs into: the
+  // remedy a shim prints when it cannot find the binary must name the install that
+  // actually works here — a devDependency where package.json exists, a pinned global
+  // install where there is no node_modules to pin in.
+  const version = packageVersion();
+  const npm = await hasNpm(root);
 
   // Only install a shim for an event that declares at least one gate. A shim with
   // an empty gate list enforces nothing, yet merely existing it REPLACES whatever
@@ -203,7 +192,7 @@ async function installHooks(root, flags) {
   const plan = [];
   for (const event of wanted) {
     const path = join(root, fileFor(event));
-    const source = renderShim(event);
+    const source = renderShim(event, { npm, version });
     const existing = await readIfExists(path);
     if (existing === source) {
       plan.push({ file: fileFor(event), action: 'unchanged' });
@@ -281,7 +270,7 @@ async function installHooks(root, flags) {
   await mkdir(join(root, HOOKS_DIR), { recursive: true });
   for (const event of wanted) {
     const path = join(root, fileFor(event));
-    await writeFile(path, renderShim(event));
+    await writeFile(path, renderShim(event, { npm, version }));
     await chmod(path, 0o755);
   }
   for (const c of chained) {

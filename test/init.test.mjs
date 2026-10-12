@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -8,7 +8,8 @@ import * as gateModule from '../src/projection/manifest.mjs';
 import * as gateTable from '../src/hooks/gates.mjs';
 import { readCapability, declaredCommands } from '../src/hooks/capability.mjs';
 import { git, cmd } from './fixture.mjs';
-import { MANIFEST_FILE } from '../src/name.mjs';
+import { CLI, MANIFEST_FILE, MANIFEST_LEGACY } from '../src/name.mjs';
+import { packageVersion } from '../src/package-version.mjs';
 
 const buildManifest = gateModule.buildManifest;
 
@@ -531,6 +532,10 @@ test('a manifest a formatter rewrote is reported, and a hand-edited one is not',
   const root = await scratch();
   const stack = ['node'];
   const sha = 'abc1234';
+  // The pin this build records: manifestDrift computes the expected projection with
+  // packageVersion(), so the bytes the test writes must carry the same value to read
+  // as current rather than stale.
+  const version = packageVersion();
   const write = async (m) => writeFile(join(root, MANIFEST_FILE), `${JSON.stringify(m, null, 2)}\n`);
   const canonical = {
     ...MANIFEST_COMMENT,
@@ -539,7 +544,7 @@ test('a manifest a formatter rewrote is reported, and a hand-edited one is not',
     limits: { coverage: null, fileLines: { warn: 400, error: 1000 } },
     gates: { preCommit: [], prePush: [] },
     localSkills: [], profiles: [], substitutions: {}, surfaces: null,
-    projection: { simtDevSha: sha },
+    projection: { simtDevSha: sha, version },
   };
 
   await write(canonical);
@@ -560,7 +565,7 @@ test('a manifest a formatter rewrote is reported, and a hand-edited one is not',
       '  "profiles": [],',
       '  "substitutions": {},',
       '  "surfaces": null,',
-      `  "projection": {"simtDevSha": "${sha}"}`,
+      `  "projection": {"simtDevSha": "${sha}", "version": "${version}"}`,
       '}',
       '',
     ].join('\n'),
@@ -596,4 +601,179 @@ test('check is red when the manifest bytes are not what simt-dev writes', async 
   const after = await capture(() => checkCommand([], { root }));
   assert.equal(after.code, 1);
   assert.match(after.text, cmd('REFORMATTED {manifest}'));
+});
+
+// The manifest was the second file this tool writes into a repository it does not
+// own, and for two releases it was the only generated file with no path back to
+// correct. `check` refused on a stale generated field and named `init --yes`; `sync`
+// — the command whose entire job is regenerating what this tool owns — reported
+// "already current; nothing written". Both were true of the same repository at once,
+// and in all fourteen adopted repositories at once: `check` exited 1 in every one
+// while `compare` reported `current: 14`. Measured, not inferred.
+test('sync repairs the manifest field check refuses, and previews it first', async () => {
+  const { syncCommand } = await import('../src/commands/sync.mjs');
+  const { MANIFEST_COMMENT, manifestDrift } = await import('../src/projection/manifest.mjs');
+  const { provenanceDigest } = await import('../src/projection/project.mjs');
+  const root = await scratch();
+  const stack = ['node'];
+  // The real digest, because `sync` stamps the one this build computes. A fixture sha
+  // of 'abc1234' makes the field genuinely stale, and then the test below is
+  // measuring the repair rather than the preview.
+  const sha = await provenanceDigest();
+  // A manifest from before `projection.version` existed: every generated field this
+  // build writes is absent or wrong, and every value in the file is true.
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x' }));
+  await writeFile(
+    join(root, MANIFEST_FILE),
+    `${JSON.stringify(
+      {
+        ...MANIFEST_COMMENT,
+        id: 'r',
+        stack,
+        limits: { coverage: null, fileLines: { warn: 400, error: 1000 } },
+        gates: { preCommit: [], prePush: [] },
+        localSkills: [], profiles: [], substitutions: {}, surfaces: null,
+        projection: { simtDevSha: sha },
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  const before = await readFile(join(root, MANIFEST_FILE), 'utf8');
+  const drift = await manifestDrift(root, stack, sha);
+  assert.equal(drift?.status, 'stale-generated-field', 'the fixture must actually be stale');
+
+  // A preview: no bytes move, and the plan says what would.
+  const preview = await capture(() => syncCommand([], { root }));
+  assert.equal(preview.code, 1, 'a preview that found work exits non-zero, so bare sync doubles as a check');
+  assert.match(preview.text, /simt\.json\s+updated/, `the plan must name the manifest:\n${preview.text}`);
+  assert.match(preview.text, new RegExp(`apply with: ${CLI} sync --yes`), 'the preview names the command that writes it');
+  assert.equal(await readFile(join(root, MANIFEST_FILE), 'utf8'), before, 'a preview wrote nothing');
+
+  // The write: this tool's fields replaced, the repository's own left alone.
+  const applied = await capture(() => syncCommand([], { root, yes: true }));
+  assert.equal(applied.code, 0);
+  const after = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8'));
+  assert.deepEqual(after.projection, { simtDevSha: sha, version: packageVersion() });
+  assert.equal(await manifestDrift(root, stack, sha), null, 'the gate must agree the repair worked');
+
+  // The value the repository chose, and the one the tool deliberately does not touch.
+  // A repair built from `buildManifest`'s output rather than a spread would reset
+  // both of these to a default, and the drift check would never have noticed.
+  assert.deepEqual(after.limits, { coverage: null, fileLines: { warn: 400, error: 1000 } });
+  assert.deepEqual(after.gates, { preCommit: [], prePush: [] });
+  assert.equal(after.id, 'r');
+  assert.deepEqual(after.stack, stack);
+
+  // And it converges: a second run finds nothing, which is what stops `sync --yes`
+  // from being a command that always reports work.
+  const again = await capture(() => syncCommand([], { root, yes: true }));
+  assert.equal(again.code, 0);
+  assert.match(again.text, /already current/);
+});
+
+test('sync repairs a reformatted manifest only once the repo ignores it', async () => {
+  const { syncCommand } = await import('../src/commands/sync.mjs');
+  const { manifestDrift, MANIFEST_COMMENT } = await import('../src/projection/manifest.mjs');
+  const { provenanceDigest } = await import('../src/projection/project.mjs');
+  const root = await scratch();
+  const stack = ['node'];
+  // The stamp is this build's own digest, so the ONLY thing wrong with this manifest
+  // is its bytes. A fixture sha of 'abc1234' would also be a stale generated field,
+  // which sync is supposed to repair - so the test would be asserting the other branch.
+  const sha = await provenanceDigest();
+  // Every generated field correct, only the byte form a prettier hook produced.
+  const bytes = [
+    '{',
+    `  "$comment": ${JSON.stringify(MANIFEST_COMMENT.$comment)},`,
+    '  "id": "r",',
+    '  "stack": ["node"],',
+    '  "limits": {"coverage": null, "fileLines": {"warn": 400, "error": 1000}},',
+    '  "gates": {"preCommit": [], "prePush": []},',
+    '  "localSkills": [],',
+    '  "profiles": [],',
+    '  "substitutions": {},',
+    '  "surfaces": null,',
+    `  "projection": {"simtDevSha": "${sha}", "version": "${packageVersion()}"}`,
+    '}',
+    '',
+  ].join('\n');
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x' }));
+  await writeFile(join(root, MANIFEST_FILE), bytes);
+  assert.equal((await manifestDrift(root, stack, sha))?.status, 'reformatted');
+
+  // While a formatter still owns the file, sync leaves it alone. Repairing here would
+  // mean every `format` run rewrites a file the commit just wrote: a working tree that
+  // is never clean.
+  const untouched = await capture(() => syncCommand([], { root, yes: true }));
+  assert.equal(untouched.code, 0);
+  assert.equal(
+    await readFile(join(root, MANIFEST_FILE), 'utf8'),
+    bytes,
+    'sync rewrote a file whose bytes a formatter still owns',
+  );
+
+  // The repository declares the file is not prose. That is the signal, read rather
+  // than assumed - so lines that do not name the manifest must NOT count, including a
+  // comment about generated files, which is the shape an operator writes first.
+  for (const line of ['# generated files are not prose', 'node_modules/', '*.json']) {
+    await writeFile(join(root, '.prettierignore'), `${line}\n`);
+    await writeFile(join(root, MANIFEST_FILE), bytes);
+    const run = await capture(() => syncCommand([], { root, yes: true }));
+    assert.equal(run.code, 0);
+    assert.equal(
+      await readFile(join(root, MANIFEST_FILE), 'utf8'),
+      bytes,
+      `\`${line}\` is not a declaration about this one file, so sync must not rewrite it`,
+    );
+  }
+
+  // Naming it is. Both spellings, because the legacy name is what a repository adopted
+  // before the rename still has on disk.
+  for (const line of [MANIFEST_FILE, MANIFEST_LEGACY]) {
+    await writeFile(join(root, '.prettierignore'), `# generated files\n${line}\n`);
+    await writeFile(join(root, MANIFEST_FILE), bytes);
+    const run = await capture(() => syncCommand([], { root, yes: true }));
+    assert.equal(run.code, 0);
+    assert.notEqual(
+      await readFile(join(root, MANIFEST_FILE), 'utf8'),
+      bytes,
+      `with ${line} in .prettierignore, sync must put simt-dev's bytes back`,
+    );
+    assert.equal(
+      await manifestDrift(root, stack, sha),
+      null,
+      'and the gate must agree the manifest is now correct',
+    );
+  }
+
+  // An unreadable `.prettierignore` is not an absent one. This assertion exists
+  // because the first version of that read was `catch { return false }`, and a
+  // ReferenceError from a missing import was swallowed by it and read as "this
+  // repository has declared nothing" — silently, on every repository, forever. A
+  // directory is the one unreadable shape a fixture can build on purpose; ENOENT is
+  // the only absence, and it is still absence.
+  await rm(join(root, '.prettierignore'), { force: true });
+  await mkdir(join(root, '.prettierignore'), { recursive: true });
+  await writeFile(join(root, MANIFEST_FILE), bytes);
+  await assert.rejects(
+    () => syncCommand([], { root, yes: true }),
+    (error) => error.code === 'EISDIR',
+    'an unreadable .prettierignore must surface, not read as "no declaration"',
+  );
+});
+
+test('the remedy for a stale manifest field names the command that repairs it', async () => {
+  // Two commands must not answer one question with different instructions
+  // (ADR-050). `init` re-runs adoption - it tags, it branches - so naming it as the
+  // remedy for one stale field is naming a command that does more than the reader
+  // asked for, while naming the wrong one is naming a command that cannot help.
+  const { manifestDrift } = await import('../src/projection/manifest.mjs');
+  const root = await scratch();
+  await writeFile(join(root, MANIFEST_FILE), `${JSON.stringify({ projection: { simtDevSha: 'a' } }, null, 2)}\n`);
+  const stale = await manifestDrift(root, ['node'], 'b');
+  assert.equal(stale?.status, 'stale-generated-field');
+  assert.match(stale.remedy, new RegExp(`^run: ${CLI} sync --yes$`), `unexpected remedy: ${stale.remedy}`);
+  assert.doesNotMatch(stale.remedy, /init/, 'init re-runs adoption; it is not the repair for one field');
 });

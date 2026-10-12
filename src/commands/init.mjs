@@ -11,7 +11,7 @@
 //   2. scan for conflicts  does it contradict a ruling
 //   3. block on conflicts  unless --accept-conflicts
 //   4. plan everything     manifest + region, dry
-//   5. branch and tag      a named escape hatch, before the first write
+//   5. branch and tag      an opt-in escape hatch (--backup), before the first write
 //   6. write               only with --yes
 // Never commits, never pushes (ADR-001).
 
@@ -296,21 +296,34 @@ export async function initCommand(positional, flags) {
     return EXIT.OK;
   }
 
-  const git = await establishEscapeHatch(root);
+  // The escape hatch is opt-in (ADR-063): plan 0002 §8.2 item 3 said "always", and the
+  // tool complied, but consumers kept reporting the branch switch as a surprise. The
+  // default now writes in place on the branch the reader already has — `git diff` still
+  // shows the full adoption, and nothing is tagged or branched. `--backup` restores the
+  // tag and the branch for readers who want the named undo path.
+  const git = flags.backup
+    ? await establishEscapeHatch(root)
+    : { branch: null, tag: null, from: null, notes: [] };
   payload.git = git;
   for (const message of git.notes) note(`note     ${message}`);
-  // The two operations that succeeded, not just the ones that failed.
+  if (!flags.backup) {
+    note(
+      'in place   no backup tag or adopt branch created; the adoption is written on your current branch - git diff shows it and git checkout -- . discards it; re-run with --backup for the tag and the branch',
+    );
+  }
+  // The operations that succeeded, not just the ones that failed.
   //
-  // `init --yes` moves the reader onto a different branch and writes a tag into their
-  // repository. Both are deliberate (plan 0002 §8.2 item 3: "always"), and both were
-  // reported only under `--json`, so the default run — the one almost everybody reads —
-  // did not say that the branch under them had changed. A reader who ran the documented
-  // escape hatch and then committed would be committing to a branch they had not chosen,
-  // and nothing in the output told them that had happened.
+  // With --backup, `init` moves the reader onto a different branch and writes a tag
+  // into their repository. Both were once reported only under `--json`, so the run —
+  // the one almost everybody reads — did not say that the branch under them had
+  // changed. A reader who ran the documented escape hatch and then committed would be
+  // committing to a branch they had not chosen, and nothing in the output told them
+  // that had happened.
   //
-  // The same section's heading is "Nothing is silent", so this is the plan's own rule
-  // rather than a preference. `notes` carried the failures because a failure is the kind
-  // of thing an operator notices; a success is not.
+  // The plan's heading is "Nothing is silent", so whatever the run does to git state —
+  // or deliberately does not — the output names it and the command that undoes it.
+  // `notes` carried the failures because a failure is the kind of thing an operator
+  // notices; a success is not.
   if (git.tag !== null) {
     note(`tagged   ${git.tag} at the pre-adoption commit; \`git reset --hard ${git.tag}\` returns this repository to what it was`);
   }
@@ -475,8 +488,9 @@ async function scanRepo(root) {
 }
 
 /**
- * A named escape hatch before the first write, per plan 0001. Both operations are
- * best-effort: a repo that is not a git repo, or has no commits yet, must still be
+ * The opt-in escape hatch before the first write, taken when --backup is passed
+ * (ADR-063 amended plan 0002 §8.2 item 3 from "always" to on request). Both operations
+ * are best-effort: a repo that is not a git repo, or has no commits yet, must still be
  * adoptable. Failure is reported as a note rather than blocking, because refusing
  * to initialise an unborn repo would be worse than proceeding without a backup.
  */

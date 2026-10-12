@@ -35,6 +35,7 @@ export const BOOL_FLAGS = new Set([
   'help',
   'version',
   'accept-conflicts',
+  'backup',
   'list',
 ]);
 

@@ -6,6 +6,21 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### `init` writes in place; the backup tag and adopt branch are opt-in
+
+`simt init --yes` used to always tag the pre-adoption commit and branch onto a dedicated
+adopt branch before writing. The safety argument was sound, but consumers kept reporting
+the branch switch as a surprise — a well-announced surprise is still a surprise.
+
+The default now writes in place on the branch you already have: nothing is tagged, nothing
+is branched, and the run says so in an `in place` line. The reviewable diff survives —
+`git diff` shows the whole adoption, and discarding it is a checkout and a clean.
+
+The old behaviour moves behind `--backup`: `simt init --yes --backup` tags the pre-adoption
+commit and branches as before, for readers who want the named undo path. ADR-063 records
+the decision and the one behaviour it invalidates: consumers who scripted against the old
+default add `--backup`.
+
 ### A fresh adoption seeds the gates it can run — and only those
 
 The eight common ecosystems outside the JavaScript world — Rust, Go, .NET, Swift, Deno,

@@ -67,6 +67,7 @@ record's status line — never by editing the ruling in place.
 | [057](ADR-057-an-identity-is-per-developer-and-a-repository-does-not-own-it.md) | An identity is per-developer, and a repository does not own it | accepted |
 | [058](ADR-058-one-tool-three-channels-and-the-order-is-forced.md) | One tool, three channels, and the order is forced | accepted |
 | [059](ADR-059-the-version-a-repository-runs-is-the-one-it-pinned.md) | The version a repository runs is the one it pinned, and the gate refuses otherwise | accepted |
+| [060](ADR-060-a-repository-with-nothing-to-run-is-adopted-and-says-so.md) | A repository with nothing to run is adopted and says so; a gate is verified where it runs | accepted |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

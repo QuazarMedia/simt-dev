@@ -741,42 +741,76 @@ async function collect(dir, ext) {
 // rather than from a list written here. A guard whose list is maintained by hand is a
 // list that stops covering the estate the day a repository is added, which is the same
 // defect ADR-042 records for a declared value nobody executes.
-// The estate's private repository names.
+// The estate's private repository names, as a *shape* and never as a list.
 //
-// This is a list rather than the pattern `ESTATE_NAME` uses, and the difference is the
-// whole guard. That pattern is deliberately loose - it has to catch a name printed in a
-// message to somebody standing in a repository, where any word beginning `simt-` might
-// be one - and it therefore also matches `repo-NN`, which is the label the sweep put
-// there on purpose. A guard built from it would fail on all 28 pseudonymised records and
-// be deleted within a week, which is how a guard stops being a guard.
+// This tool does not know which repositories use it, and it must not. `ESTATE_NAME`'s
+// own comment records that decision and the reason for it: enumerating the names put the
+// whole portfolio into every adopting repository. A list written here is the same defect
+// in a file that merely happens not to be published today, and becomes published the day
+// somebody adds `test/` to `files`.
 //
-// The list is explicit because the estate is a fixed set, adding to it is deliberate, and
-// a list that cannot be derived here is better than a pattern that is wrong. `docs/plans`
-// and `docs/reviews` are NOT in scope and must not be added: they are estate-internal and
-// neither is published, and a review whose subject is fourteen repositories cannot
-// pseudonymise them without becoming a document about `repo-01` that never existed.
-const ESTATE_REPOSITORIES = [
-  'app-ui',
-  'bunnyland-server',
-  'simt-api',
-  'simt-app',
-  'simt-blog',
-  'simt-garmin',
-  'simt-goto',
-  'simt-jobs',
-  'simt-landing',
-  'simt-social',
-  'simt-social-api',
-  'simt-social-landing',
-  'simt-social-media',
-  'simt-space',
-  'simt-space-review',
-  'wakt-app',
-];
+// So the rule is this tool's own name followed by a suffix — generic over every repository
+// sharing the prefix, naming none of them. The suffix `id`, `title` and the rest are the
+// tool's *own* vocabulary (ADR-022), read from the modules that own it rather than copied
+// here, because a second copy of a set is a copy that drifts and then forgives.
+//
+// The `repo-NN` labels the records carry are a shape — two digits, not a name — and do
+// not match this pattern at all: they are the replacement the sweep made, not a second leak.
+//
+// The honest limit, which this does not fix: a repository whose name does not begin with
+// this tool's name is not detectable by any rule that does not enumerate it. The sweep
+// found those by hand and they remain a review rule. A tool that could catch them
+// mechanically would have to be told them, and being told them is the leak.
+const TOOL_OWN_WORDS = new Set([
+  ...(await import('../src/projection/mdc.mjs')).KNOWN_KEYS,
+  ...(await import('../src/projection/rules.mjs')).PROFILE_KEYS,
+  // The rest of the names this tool owns, which are not frontmatter.
+  'simt-dev',
+  'simt-dev-check',
+  'simt-hooks',
+]);
 
-// Longest first, so `simt-social-api` is matched as itself and never as a prefix of
-// something longer. Order is the only thing that makes a substring guard correct.
-const ESTATE_RE = new RegExp(`\\b(?:${ESTATE_REPOSITORIES.slice().sort((a, b) => b.length - a.length).join('|')})\\b`, 'g');
+/**
+ * Records that argue *about* the prefix and therefore have to spell it.
+ *
+ * Each entry is a file and a reason, never a repository. That is the difference from a
+ * list of names and it is the whole point: an exemption says "this document discusses the
+ * namespace", which is a fact about this tool and carries nothing about whoever uses it.
+ * The rule below catches every repository sharing the prefix, which is the leak; these
+ * two files are where the prefix itself is the subject, and a generic pattern cannot tell
+ * a hypothetical key in an argument from a repository name — `simt-gates` and `simt-api`
+ * are the same shape.
+ *
+ * A stale exemption fails: every entry must still be tripping the rule, so one that stops
+ * being needed is removed rather than kept as a precedent.
+ */
+const PREFIX_ARGUING_RECORDS = {
+  'ADR-022-a-key-simt-dev-reads-is-prefixed.md': 'is the record arguing for the prefix, using hypothetical keys as examples',
+  'ADR-026-a-config-without-a-region-is-a-file-the-repo-owns.md': 'names one prefixed key to record Dependabot rejecting it',
+};
+
+/** `simt-<word>` that is not one of this tool's own names, per line, or null. */
+function estateNameIn(line) {
+  for (const m of line.matchAll(/\bsimt-(?!dev\b)([\w-]+)\b/g)) {
+    if (!TOOL_OWN_WORDS.has(m[0])) return m[0];
+  }
+  return null;
+}
+
+/**
+ * Every estate name in a published file, or null.
+ *
+ * @param {string} label path relative to the package root, which is also the exemption key
+ * @param {string} text
+ * @returns {string[]}
+ */
+function estateNamesInFile(label, text) {
+  const basename = label.split('/').pop();
+  if (label.startsWith('docs/decisions/') && PREFIX_ARGUING_RECORDS[basename]) return [];
+  return text
+    .split('\n')
+    .flatMap((line, i) => (estateNameIn(line) ? [`${label}:${i + 1}  ${JSON.stringify(estateNameIn(line))}`] : []));
+}
 
 const SHIPPED_ROOTS = ['bin', 'src', 'graph', 'rules', 'docs/decisions'];
 const SHIPPED_FILES = ['CHANGELOG.md', 'README.md', 'LICENSE', 'package.json'];
@@ -793,21 +827,15 @@ test('nothing this package publishes names a repository from this estate', async
   // installing the wheel and grepping it finds every name written here.
   const offenders = [];
 
-  const scan = (label, text) => {
-    for (const [i, line] of text.split('\n').entries()) {
-      ESTATE_RE.lastIndex = 0;
-      const m = ESTATE_RE.exec(line);
-      if (m) offenders.push(`${label}:${i + 1}  ${JSON.stringify(m[0])}`);
-    }
-  };
 
   for (const root of SHIPPED_ROOTS) {
     for (const file of await collect(join(ROOT, root), '.md')) {
-      scan(file.replace(`${ROOT}/`, ''), await readFile(file, 'utf8'));
+      const label = file.replace(`${ROOT}/`, '');
+      offenders.push(...estateNamesInFile(label, await readFile(file, 'utf8')));
     }
   }
   for (const file of SHIPPED_FILES) {
-    scan(file, await readFile(join(ROOT, file), 'utf8'));
+    offenders.push(...estateNamesInFile(file, await readFile(join(ROOT, file), 'utf8')));
   }
 
   assert.deepEqual(
@@ -820,16 +848,6 @@ test('nothing this package publishes names a repository from this estate', async
   );
 });
 
-test('the estate list is not empty and every entry looks like a repository', () => {
-  // A guard whose subject set silently emptied checks nothing and still passes. This is
-  // the check for that, and it is here rather than in the guard above so that emptying
-  // the list fails one test with an obvious name rather than passing one quietly.
-  assert.ok(ESTATE_REPOSITORIES.length >= 10, 'the estate list has shrunk');
-  for (const name of ESTATE_REPOSITORIES) {
-    assert.match(name, /^[a-z][a-z0-9]*(-[a-z0-9]+)+$/, `${name} does not look like a repository name`);
-  }
-  assert.equal(new Set(ESTATE_REPOSITORIES).size, ESTATE_REPOSITORIES.length, 'the estate list has a duplicate');
-});
 
 test('the guard above covers what is actually published', async () => {
   // A guard scoped to a hand-written list checks that list. This one is scoped to the
@@ -857,3 +875,31 @@ test('the guard above covers what is actually published', async () => {
   assert.match(pyproject, /"docs\/decisions" = "simt_dev\/vendored\/docs\/decisions"/, 'the wheel no longer ships docs/decisions');
 });
 
+
+test('every exemption from the estate-name rule is still needed, and says why', async () => {
+  // An exemption list is where a guard starts rotting: the file gets rewritten, the
+  // offending line goes away, and the entry survives to cover the next thing written in
+  // it. So each entry is checked twice — that it still trips the rule without the
+  // exemption, and that it carries a reason. A reason is the difference between this and
+  // a silent hole, and it is checked as a non-empty string rather than trusted.
+  for (const [file, reason] of Object.entries(PREFIX_ARGUING_RECORDS)) {
+    assert.ok(typeof reason === 'string' && reason.length > 20, `${file} is exempt with no stated reason`);
+
+    const label = `docs/decisions/${file}`;
+    const text = await readFile(join(ROOT, label), 'utf8');
+    const hits = estateNamesInFile(label, text);
+    assert.deepEqual(hits, [], `${file} is exempt but the exemption no longer matches its path`);
+
+    // With the exemption removed, the file must actually trip the rule — otherwise the
+    // exemption is covering nothing and should be deleted.
+    const real = estateNamesInFile('somewhere/else/file.md', text);
+    assert.ok(real.length > 0, `${file} no longer contains a prefixed name, so its exemption is stale`);
+  }
+
+  // And every exempt file must still exist, so a rename does not leave an entry pointing
+  // at nothing that looks like it is working.
+  const present = new Set(await adrFiles());
+  for (const file of Object.keys(PREFIX_ARGUING_RECORDS)) {
+    assert.ok(present.has(file), `${file} is exempt but no longer exists`);
+  }
+});

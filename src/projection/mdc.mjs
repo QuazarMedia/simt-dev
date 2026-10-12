@@ -45,7 +45,9 @@ const MDC_DIR = join(ROOT, 'rules', 'mdc');
  * defect — which is the failure ADR-016 shipped once, a rule that reached no repo
  * because `applies` was absent, silently and with a test green.
  */
-const KNOWN_KEYS = new Set([
+/** Frontmatter keys this tool reads, ADR-022. Exported so the one authority on the
+ *  tool's own vocabulary is also the one a guard subtracts, rather than a second copy. */
+export const KNOWN_KEYS = new Set([
   'simt-id',
   'simt-target',
   'simt-title',

@@ -77,6 +77,28 @@ export async function syncCommand(positional, flags) {
 
   const result = await plan(root, flags);
 
+  // Before the rule branch, and named for what it is. An unknown surface id is a
+  // misspelling in the manifest's `surfaces` list; reporting it as an unprojectable
+  // `.mdc` rule sent the reader to a `simt-substitutions` block that has nothing to do
+  // with the thing they typed. `check` reported the same problem correctly the whole
+  // time, so this was a writer disagreeing with the gate about the same manifest.
+  if (result.surfaceProblems.length > 0) {
+    if (isJson(flags)) {
+      emitJson({
+        ok: false,
+        command: 'sync',
+        root,
+        error: result.surfaceProblems[0],
+        problems: result.surfaceProblems,
+      });
+    }
+    for (const p of result.surfaceProblems) note(`PROBLEM ${p}`);
+    return fail(
+      `${result.surfaceProblems.length} surface(s) cannot be resolved (${result.surfaceProblems[0]})`,
+      EXIT.FAIL,
+      `fix the surface ids in the "surfaces" list of ${MANIFEST_FILE}, or remove the unknown one`,
+    );
+  }
 
   // A `.mdc` rule that cannot render is a defect in this build, not in the repo,
   // and projecting the rest would leave a family half-retired.

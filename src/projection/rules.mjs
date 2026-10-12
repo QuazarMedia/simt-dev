@@ -294,8 +294,18 @@ async function ruleBodies(root, manifest, flags) {
 
   const declared = await readDeclared(root);
 
+  // Deliberately NOT folded in. This array becomes `mdc.problems`, and `sync` reports it
+  // as "canonical .mdc rule(s) cannot be projected" with the remedy "fix the reported
+  // substitution keys in simt.json". A surface typo is not a rule problem and has no
+  // substitution keys — `surfaces: ["curosr"]` was reported to a reader as though they
+  // had misspelled a key in a block they had never heard of, and the only way to find the
+  // real cause was to run `check`, which already said it plainly. Two surfaces report the
+  // same problem; only one of them names it correctly, and the one that mislabels it is
+  // the one the writer uses.
+  //
+  // Nothing is lost by dropping it here: `plan` returns `surfaceProblems` from this same
+  // `resolveSurfaces` call, and `checkTargets` reads it independently at project.mjs.
   const resolved = resolveSurfaces(manifest, flags ?? {});
-  for (const p of resolved.problems) problems.push(p);
 
   // A manifest key that no shipped rule declares is a typo, or a leftover from a rule
   // that was renamed. Both read as "configured" in the one file a reviewer opens to

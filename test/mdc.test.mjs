@@ -171,7 +171,8 @@ test('the rules are pure content: no absolute path or repo name leaks in', async
 // RULE_FILES named only AGENTS.md/CLAUDE.md/CONTRIBUTING.md. A detector that only
 // looks at the filenames it was written for misses a whole rule surface added later.
 
-import { rulePaths, scanDocument } from '../src/projection/conflicts.mjs';
+import { RULE_FILES, ruleGlobs, rulePaths, scanDocument } from '../src/projection/conflicts.mjs';
+import * as surfacesModule from '../src/projection/surfaces.mjs';
 
 test('rulePaths finds hand-written rules by name and by glob', async () => {
   const dir = await scratch();
@@ -194,10 +195,103 @@ test('rulePaths finds hand-written rules by name and by glob', async () => {
   );
 });
 
-test('rulePaths returns just the named files when no rule dir exists', async () => {
+test('rulePaths returns every pointer and named file when no rule dir exists', async () => {
+  // Expected from the same authority `rulePaths` reads, not hand-copied. A hand-written
+  // list here is the defect this row is about: `GEMINI.md` was missing from it, and from
+  // the scanner, for as long as the Antigravity pointer existed — which is precisely the
+  // failure the comment on `RULE_FILES` predicted before it happened.
+  const { POINTERS, SURFACES } = await import('../src/projection/surfaces.mjs');
+  const expected = [...new Set([...RULE_FILES, ...POINTERS.map((p) => p.path)])].sort();
+
+  // The claim is still worth making: a repository with no rule directory yields only the
+  // named documents, not a scan of every surface.
   const dir = await scratch();
-  const found = await rulePaths(dir);
-  assert.deepEqual(found.map((p) => p.slice(dir.length + 1)), ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md']);
+  const found = (await rulePaths(dir)).map((p) => p.slice(dir.length + 1));
+  assert.deepEqual(found, expected);
+  assert.ok(!found.some((p) => p.startsWith('.')), 'no surface directory should appear when none exists');
+  assert.ok(SURFACES.some((s) => typeof s.rule === 'string'), 'the glob source must not be empty, or this proves nothing');
+});
+
+test('every surface that declares a rule path is scanned, and nothing else is', async () => {
+  // The four surfaces with a `rule` template write into four different directories. A
+  // scanner that names them by hand misses whichever surface was added last, silently:
+  // a hand-written rule contradicting a ruling in a directory nobody scans is reported
+  // as no contradiction at all.
+  const { SURFACES } = await import('../src/projection/surfaces.mjs');
+  const dirs = SURFACES.filter((s) => typeof s.rule === 'string').map((s) => s.rule.split('/').slice(0, -1).join('/'));
+  assert.deepEqual([...new Set(dirs)].sort(), [
+    '.agents/rules',
+    '.claude/rules',
+    '.cursor/rules',
+    '.github/instructions',
+  ]);
+
+  // Each one, with a file that contradicts ADR-001, plus a file in one of those
+  // directories whose extension the surface does not use.
+  const dir = await scratch();
+  // Four files a person wrote, one per surface directory. Plus two that must be
+  // missed: a `.txt` in a rule directory, and a `.md` in the copilot directory.
+  const missed = ['.claude/rules/notes.txt', '.github/instructions/notes.markdown'];
+  const planted = {
+    '.cursor/rules/hand-written.mdc': 'Always commit and pushed with a conventional message.\n',
+    '.claude/rules/hand-written.md': 'Always commit and pushed with a conventional message.\n',
+    '.agents/rules/hand-written.md': 'Always commit and pushed with a conventional message.\n',
+    '.github/instructions/hand-written.instructions.md': 'Always commit and pushed with a conventional message.\n',
+    // `.md`, NOT `.instructions.md` — and it is still scanned. The extension taken
+    // from the template is the final one, so the copilot directory is scanned at
+    // `.md`, which is deliberately broader than the suffix this tool writes: a person
+    // writing `reviewer.md` there is the case this scanner exists for, and matching
+    // the tool's own suffix would report their file as absent.
+    '.github/instructions/hand-written.md': 'Always commit and pushed with a conventional message.\n',
+    ...Object.fromEntries(missed.map((rel) => [rel, 'Always commit and pushed with a conventional message.\n'])),
+  };
+  for (const [rel, body] of Object.entries(planted)) {
+    await mkdir(dirname(join(dir, rel)), { recursive: true });
+    await writeFile(join(dir, rel), body);
+  }
+
+  const found = (await rulePaths(dir)).map((p) => p.slice(dir.length + 1));
+  for (const rel of Object.keys(planted)) {
+    assert.equal(found.includes(rel), !missed.includes(rel), `${rel} ${missed.includes(rel) ? 'should not be' : 'should be'} scanned`);
+  }
+
+  // And the contradiction planted in each of them is actually found, not merely
+  // listed — a scanner that collects a path and never reads it reports the same
+  // answer as one that finds nothing.
+  const hits = found.filter((rel) => planted[rel] !== undefined).map((rel) => scanDocument(planted[rel], rel));
+  assert.equal(hits.length, Object.keys(planted).length - missed.length);
+  for (const [i, findings] of hits.entries()) {
+    assert.equal(
+      findings.filter((f) => f.severity === 'conflict').length,
+      1,
+      `no conflict found in ${Object.keys(planted).filter((r) => !missed.includes(r))[i]}`,
+    );
+  }
+});
+
+test('a surface added later is scanned without anyone editing the scanner', () => {
+  // The structural claim, shown on a surface that does not exist. The whole point of
+  // deriving the scan list is that a surface nobody remembered to add to a second list
+  // is still scanned; the only way to test that is to hand the derivation a surface
+  // this package has never heard of and see what comes out.
+  assert.deepEqual(ruleGlobs([{ id: 'invented', rule: '.invented/rules/{name}.mds' }]), [
+    '.invented/rules/*.mds',
+  ]);
+
+  // A surface with no rule template contributes nothing, rather than a `undefined/*`
+  // glob that matches nothing and reads as coverage.
+  assert.deepEqual(ruleGlobs([{ id: 'pointer-only' }, { id: 'invented', rule: 'x/{name}.md' }]), [
+    'x/*.md',
+  ]);
+
+  // And the default is the real list, so the parameter is not a way to narrow a scan
+  // in production: with no argument it is every shipped surface.
+  const { SURFACES } = surfacesModule;
+  assert.deepEqual(ruleGlobs(), ruleGlobs(SURFACES));
+  assert.equal(
+    ruleGlobs().length,
+    SURFACES.filter((s) => typeof s.rule === 'string').length,
+  );
 });
 
 test('a conflict inside a .mdc rule is detected', async () => {

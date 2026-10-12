@@ -114,6 +114,14 @@ export async function readHooksPath(root) {
  * `stale`: the gates it enforces are from another version, so it cannot be
  * assumed to know about a gate added since.
  *
+ * `ours` is reported rather than inferred from `stale`, because the two answer different
+ * questions and only one is the one `hooks install` has to ask. A shim this tool wrote can be
+ * current (identical bytes), or from an earlier release (stale), or a shell it left behind for
+ * an event with no gates - also stale, and the one thing here that is obsolete rather than out
+ * of date. A file a person wrote by hand is stale too, and it is the one thing install must
+ * never delete. Authorship is only on the file, which is the same argument {@link isOurShim}
+ * already records for the same reason.
+ *
  * `root` is the repository the shim belongs to: the remedy a shim prints depends on
  * the repo's kind (a devDependency where package.json exists, a pinned global install
  * where there is none), so the comparison must render the shim the way THIS repo got it,
@@ -124,13 +132,13 @@ async function describeShim(path, root) {
   try {
     content = await readFile(path, 'utf8');
   } catch {
-    return { present: false, executable: false, stale: false };
+    return { present: false, executable: false, stale: false, ours: false };
   }
   let info;
   try {
     info = await stat(path);
   } catch {
-    return { present: false, executable: false, stale: false };
+    return { present: false, executable: false, stale: false, ours: false };
   }
   let stale = true;
   try {
@@ -138,7 +146,7 @@ async function describeShim(path, root) {
   } catch {
     stale = true;
   }
-  return { present: true, executable: (info.mode & 0o111) !== 0, stale };
+  return { present: true, executable: (info.mode & 0o111) !== 0, stale, ours: content.includes(SHIM_MARKER) };
 }
 
 /**

@@ -11,6 +11,8 @@
 // substring scan reports that file as violating the very rule it is correctly
 // restating. So every match is checked for prohibition context first.
 
+import { POINTERS, SURFACES } from './surfaces.mjs';
+
 /** Files whose text is a hand-written rule surface. Scanned for conflicts only;
  *  generated regions are excluded at read time by the caller.
  *
@@ -18,11 +20,60 @@
  *  worth recording: the estate's three always-on `.mdc` families were the single
  *  worst-drifted content in it, and `simt-dev init` reported `CONFLICTS none detected`
  *  on the repo holding them. A conflict detector that only looks at the filenames
- *  it was written for will quietly miss a whole rule surface added later. */
+ *  it was written for will quietly miss a whole rule surface added later.
+ *
+ *  And then it did. The comment above was written as a lesson and the lesson was not
+ *  taken: the list stayed hand-written, two surfaces were added to `SURFACES`
+ *  afterwards, and `.claude/rules/` and `.agents/rules/` were silently unscanned —
+ *  two of the five surfaces, and both of them read a rule that this tool writes. A
+ *  comment saying "derive this" is not deriving it. So the per-rule directories come
+ *  from `SURFACES` now (see `ruleGlobs`), and this list holds only the files no
+ *  surface declares. */
 export const RULE_FILES = ['AGENTS.md', 'CLAUDE.md', 'CONTRIBUTING.md'];
 
-/** Rule files discovered by glob rather than by name. */
-const RULE_GLOBS = ['.cursor/rules/*.mdc', '.github/instructions/*.md'];
+/** Pointer targets, scanned because this tool writes them and they are rule files.
+ *
+ *  `CLAUDE.md` was named by hand in `RULE_FILES` for the whole life of the tool, and
+ *  `GEMINI.md` — which `POINTERS` creates for a repo on the Antigravity surface — was
+ *  not. So one file this tool writes was scanned and the other was not, with nothing
+ *  in the source saying which was which: the difference was an accident of the order
+ *  the two were added. Derived from `POINTERS` now, so it cannot recur. */
+function pointerFiles() {
+  return POINTERS.map((p) => p.path);
+}
+
+/**
+ * The per-rule directories, read out of `SURFACES` rather than written out here.
+ *
+ * One list of surfaces, read by everything that has to know where a surface keeps its
+ * rules. A surface added to `SURFACES` is now scanned for conflicts the moment it
+ * exists, which is the property the hand-written list kept failing to have — and it
+ * could only fail quietly, because a detector that matches nothing reports the same
+ * answer as a repository with no rules.
+ *
+ * `CLAUDE.md` and `GEMINI.md` are here through `RULE_FILES`/`POINTERS` rather than
+ * through this: they are symlinks to the primary region, so they are scanned as
+ * *files*, and `CONTRIBUTING.md` belongs to no surface at all.
+ *
+ * Takes the list as an argument rather than closing over it so the derivation can be
+ * shown on a surface that does not exist. The default is `SURFACES`, so every caller
+ * still reads the one authority; there is no way to pass anything else in production.
+ *
+ * @param {{rule?: string}[]} [surfaces]
+ */
+export function ruleGlobs(surfaces = SURFACES) {
+  return surfaces.filter((s) => typeof s.rule === 'string').map((s) => {
+    const slash = s.rule.lastIndexOf('/');
+    const extension = s.rule.slice(s.rule.lastIndexOf('.'));
+    // The FINAL extension, not the whole tail after `{name}`. Copilot's template is
+    // `{name}.instructions.md`, and matching that whole suffix would be narrower than
+    // the `.md` this file used to list by hand — which is the difference between seeing
+    // a hand-written `reviewer.md` in that directory and reporting the directory as
+    // empty. A file this tool writes always carries its own suffix; a file a person
+    // wrote in the same directory need not, and the person is who this scanner is for.
+    return `${s.rule.slice(0, slash)}/*${extension}`;
+  });
+}
 
 /** Every hand-written rule path in a repo, named or globbed.
  *
@@ -36,8 +87,8 @@ const RULE_GLOBS = ['.cursor/rules/*.mdc', '.github/instructions/*.md'];
 export async function rulePaths(root) {
   const { readdir } = await import('node:fs/promises');
   const { join } = await import('node:path');
-  const out = RULE_FILES.map((f) => join(root, f));
-  for (const glob of RULE_GLOBS) {
+  const out = [...new Set([...RULE_FILES, ...pointerFiles()])].map((f) => join(root, f));
+  for (const glob of ruleGlobs()) {
     const star = glob.lastIndexOf('*');
     const dir = join(root, glob.slice(0, star));
     const tail = glob.slice(star + 1);

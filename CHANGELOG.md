@@ -4,6 +4,30 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Four shipped strings named a command this package does not install
+
+`0.2.0` installs one binary, `simt`, and `package.json`'s `bin` map says so. Four
+places still said `simt-dev`, which a reader types and is met with `unknown command`:
+
+- the default remedy on every bad invocation, `run: simt-dev --help` — so the advice
+  printed after a bad command could not be followed
+- the usage line, `usage: simt-dev <command>`, sitting above a command list that spelled
+  the same tool `simt`
+- `.github/dependabot.yml`'s header, which said `Yours from here: simt-dev` while the
+  gate beside it said `Yours from here: simt`
+- the hook shim, whose own resolution list said `simt-dev on PATH` directly above the
+  `command -v simt` that does the looking
+
+`test/naming.test.mjs` was supposed to prevent this and did not: its rule required a
+verb after the project name, and none of the four is followed by one. It now also
+catches a flag, a `<placeholder>`, the end of a line, and a program name in a
+resolution list — while still accepting the sentences where the project is the
+subject, which is the spelling that is correct. The two `.github` templates get their
+own assertion, because the fourth of these was not a wrong word in a sentence; it was
+two templates disagreeing with each other in the same position.
+
 ## [0.2.0] — 2026-10-11
 
 ### Publishable from PyPI and Homebrew as well as npm

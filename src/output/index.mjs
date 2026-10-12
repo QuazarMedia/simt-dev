@@ -12,13 +12,18 @@ export const EXIT = {
   OK: 0,
   FAIL: 1, // a gate failed: drift, policy violation, missing evidence
   USAGE: 2, // bad arguments; the remedy is in the message
-  CONFIG: 3, // simt-dev.json missing or invalid
+  CONFIG: 3, // simt.json missing or invalid
   REGISTRY: 4, // skills.graph.json invalid: orphan, dangling edge, cycle
   UNSUPPORTED: 5, // the request cannot be satisfied on this platform or repo
 };
 
 const REMEDY = {
-  [EXIT.USAGE]: 'run: simt-dev --help',
+  // Every default remedy below is `${CLI}` and not the package name, because this
+  // package installs exactly one binary and `package.json`'s `bin` map says which:
+  // `simt`. A remedy naming `simt-dev` is a command the reader types and gets
+  // `unknown command` from, which is the one answer that leaves them with no next
+  // step at all - and it was this default, printed on every bad invocation.
+  [EXIT.USAGE]: `run: ${CLI} --help`,
   [EXIT.CONFIG]: `run: ${CLI} init`,
   [EXIT.REGISTRY]: `run: ${CLI} graph lint`,
 };
@@ -32,7 +37,7 @@ export function fail(message, code = EXIT.FAIL, remedy) {
   // default and it was only ever resolvable from inside simt-dev's own checkout;
   // a reader in a consumer repo got a remedy naming a file that does not exist
   // where they are. Every remedy here is something the reader can run.
-  const resolved = remedy ?? REMEDY[code] ?? 'run: simt-dev --help';
+  const resolved = remedy ?? REMEDY[code] ?? `run: ${CLI} --help`;
   process.stderr.write(`ERROR ${code} ${message}\nREMEDY ${resolved}\n`);
   return code;
 }

@@ -36,7 +36,34 @@ const VERBS = [
   'init', 'doctor', 'check', 'sync', 'upgrade', 'ci', 'compare',
   'hooks', 'mcp', 'rules', 'skills', 'graph',
 ];
-const SPELLED = new RegExp(`\\b${PROJECT} (?=(?:${VERBS.join('|')}|--)[\\s'"\`)}\\]]|$)`);
+
+// What follows the project name when the project name is standing in for a PROGRAM
+// someone would type, rather than for the project talking about itself.
+//
+// The verb list was the original rule, and it was too narrow in a way that let four
+// shipped strings through - all four live: `simt-dev --help` on every bad invocation,
+// `simt-dev <command>` in the usage line, `Yours from here: simt-dev` at the end of a
+// line, and `simt-dev on PATH` in the shim every adopting repository reads. Not one of
+// them is followed by a verb, and that is exactly why the verb list never saw them: it
+// asked one shape of the question and treated every other shape as prose.
+//
+// `on PATH` is here because a resolution list is the one place these artifacts put a
+// program name inside prose. It is narrow on purpose - the alternative is flagging
+// "Written by simt-dev when this repo was adopted" and every other sentence where the
+// project is the subject, which is prose this file already learned not to flag.
+// Narrow and explainable beats broad and noisy, and a guard nobody tolerates is a
+// guard that gets deleted.
+//
+// What is deliberately NOT here is "ends the sentence". `Canonical X rule managed by
+// simt-dev` and `this repository, not simt-dev` are grammatical, and so is `Yours from
+// here: simt-dev` - which means a suffix rule cannot separate the two, and a rule that
+// flags the prose flags a legitimate spelling. The one shipped string in that shape is
+// caught by a different assertion below, and for the reason it actually went wrong:
+// it disagreed with the other template, not because it spelled the project.
+const AFTER_PROGRAM = `(?=(?:${VERBS.join('|')})\\b|--\\S|<|on PATH\\b)`;
+
+/** The project name occupying the position of a command, in source or in a shipped artifact. */
+const SPELLED = new RegExp(`\\b${PROJECT}(?:\\s${AFTER_PROGRAM}|\\s*$)`);
 
 function walk(dir) {
   const out = [];
@@ -136,4 +163,91 @@ test('the command is not the project name, and the package is not the command', 
   // have noticed the rename.
   assert.notEqual(CLI, PROJECT, 'the reader-facing command and the project may differ, and today they do');
   assert.equal(PACKAGE_NAME, PROJECT, 'the package keeps the project name, so a rename does not orphan a reserved name');
+});
+test('the guard above catches the shapes that shipped, and only those shapes', () => {
+  // A guard is a claim about a set, and a set held only in a regex is a value nobody
+  // executes. These three are the ones that shipped inside a sentence a reader could
+  // only read as a command: each was live in 0.2.0, and each named a program the
+  // package does not install, so a reader typing it got `unknown command` - from the
+  // very help that printed it.
+  //
+  // The fourth is not here because SPELLED cannot catch it and should not pretend to;
+  // `Yours from here: simt-dev` is a grammatical sentence about the project. It has
+  // its own test below, on the ground it actually broke.
+  const caught = [
+    `REMEDY run: ${PROJECT} --help`,
+    `usage: ${PROJECT} <command> [args] [flags]`,
+    `#   3. ${PROJECT} on PATH    a global install`,
+  ];
+  for (const line of caught) assert.ok(SPELLED.test(line), `the guard misses its own case: ${line}`);
+
+  // And the prose it must NOT flag, because the project as the subject is the
+  // legitimate spelling. A guard that flags these gets deleted rather than widened.
+  const allowed = [
+    'Written by simt-dev when this repo was adopted. Yours from here:',
+    'simt-dev will not remove a file it wrote',
+    'projection is current but this simt-dev is newer',
+    'whether a simt-dev manifest is present',
+  ];
+  for (const line of allowed) assert.ok(!SPELLED.test(line), `the guard flags prose: ${line}`);
+});
+
+test('no shipped artifact names the package as a program to run', async () => {
+  // The source scan above reads src/ one line at a time. It cannot see a string that
+  // arrives from two places, and it cannot read a rendered artifact as the reader
+  // will. These four bytes go into files an adopting repository keeps and a CI job
+  // executes, so they are checked as the bytes they become.
+  const { renderShim } = await import('../src/hooks/shim.mjs');
+  const { renderWorkflow } = await import('../src/ci/workflow.mjs');
+  const { renderDependabot } = await import('../src/ci/dependabot.mjs');
+  const { help } = await import('../src/commands/help.mjs');
+
+  const artifacts = {
+    'the hook shim': renderShim('pre-commit'),
+    'the adopting gate': renderWorkflow(),
+    'the dependabot file': renderDependabot([], { stack: ['node'] }),
+  };
+
+  // Help goes through the process because it is assembled from argv, and the question
+  // it has to answer is the one a reader answers on a bad invocation: what now?
+  const helpText = await new Promise((resolve_) => {
+    const chunks = [];
+    const original = process.stdout.write;
+    process.stdout.write = (c) => { chunks.push(c); return true; };
+    help(['--help']).then(() => { process.stdout.write = original; resolve_(chunks.join('')); });
+  });
+  artifacts['the help'] = helpText;
+
+  const offenders = Object.entries(artifacts)
+    .filter(([, text]) => SPELLED.test(text))
+    .map(([what]) => what);
+  assert.deepEqual(offenders, [], `these ship the package name as a command:\n${offenders.join('\n')}`);
+});
+
+test('both .github templates hand the same command to the reader', async () => {
+  // The fourth string was not a wrong word in a sentence; it was the two templates
+  // disagreeing. `.github/workflows/simt-dev-check.yml` said "Yours from here: simt"
+  // and `.github/dependabot.yml` said "Yours from here: simt-dev", from the same
+  // commit, in the same position, to the same reader - and the package installs
+  // exactly one of them.
+  //
+  // No spelling rule can separate that from "Canonical X rule managed by simt-dev",
+  // which is correct prose, so the assertion is on the agreement instead: both files
+  // are written into repositories this tool does not own, and a sentence they share
+  // is one contract with two implementations until something executes it.
+  const { renderWorkflow } = await import('../src/ci/workflow.mjs');
+  const { renderDependabot } = await import('../src/ci/dependabot.mjs');
+
+  const handover = (text) => {
+    const match = /Yours from here: (\S+)/.exec(text);
+    assert.ok(match, 'both templates hand the file over to a reader, and this one does not');
+    return match[1];
+  };
+
+  assert.equal(handover(renderWorkflow()), CLI);
+  assert.equal(
+    handover(renderDependabot([], { stack: ['node'] })),
+    CLI,
+    'the dependabot file names a different program than the gate next to it',
+  );
 });

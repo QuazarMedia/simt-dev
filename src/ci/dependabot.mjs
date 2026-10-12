@@ -142,7 +142,7 @@ function header(own) {
 # only writer here, so an entry is added deliberately rather than as a side effect.
 `;
   }
-  return `# Written by simt-dev when this repo was adopted. Yours from here: simt-dev
+  return `# Written by simt-dev when this repo was adopted. Yours from here: ${CLI}
 # creates this file once and never rewrites it, so your own cadence, ignore rules
 # and groups stay yours.
 #

@@ -14,8 +14,9 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { handle, PROTOCOL_VERSION, RPC } from '../src/mcp/server.mjs';
-import { TOOLS, toolNames } from '../src/mcp/tools.mjs';
+import { handle, PROTOCOL_VERSION, RPC, SUPPORTED_VERSIONS, META } from '../src/mcp/server.mjs';
+import { TOOLS, toolNames, ERROR_SHAPE } from '../src/mcp/tools.mjs';
+import { assertValid } from '../src/mcp/schema.mjs';
 import { CLI } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -27,7 +28,7 @@ const req = (method, params, id = 1) => ({ jsonrpc: '2.0', id, method, params })
 // --- protocol ------------------------------------------------------------------
 
 test('mcp: initialize answers with the protocol version and the read-only instruction', async () => {
-  const r = await handle(req('initialize', { protocolVersion: PROTOCOL_VERSION }), TOOLS, { version: '9.9.9' });
+  const r = await handle(req('initialize', { protocolVersion: PROTOCOL_VERSION }), TOOLS, { packageVersion: '9.9.9' });
   assert.equal(r.result.protocolVersion, PROTOCOL_VERSION);
   assert.equal(r.result.serverInfo.version, '9.9.9');
   assert.match(r.result.instructions, /Read-only/);
@@ -38,6 +39,92 @@ test('mcp: an unsupported protocol version gets ours, not an echo of theirs', as
   // feature silently misbehaves.
   const r = await handle(req('initialize', { protocolVersion: '1999-01-01' }), TOOLS);
   assert.equal(r.result.protocolVersion, PROTOCOL_VERSION);
+});
+
+// --- the version matrix -------------------------------------------------------
+
+/** A request that identifies its revision the way that revision does it. */
+const at = (version, method, params = {}, id = 1) =>
+  req(method, { ...params, _meta: { [META.PROTOCOL_VERSION]: version } }, id);
+
+test('mcp: every supported revision completes a handshake', async () => {
+  // The review's acceptance criterion, one revision at a time. A revision that only
+  // works when nobody asks for it is a revision this server does not speak.
+  for (const version of SUPPORTED_VERSIONS) {
+    const legacy = await handle(req('initialize', { protocolVersion: version }), TOOLS, { packageVersion: '1.2.3' });
+    assert.equal(legacy.result.protocolVersion, version, `initialize did not hold ${version}`);
+    assert.equal(legacy.result.serverInfo.version, '1.2.3');
+    assert.ok(legacy.result.capabilities.tools, `${version}: no tools capability`);
+
+    const list = await handle(at(version, 'tools/list'), TOOLS);
+    assert.ok(Array.isArray(list.result.tools), `${version}: tools/list did not answer`);
+    assert.ok(list.result.tools.length > 0, `${version}: an empty tool list is not a handshake`);
+  }
+});
+
+test('mcp: 2026-07-28 is stateless, so a per-request _meta replaces the handshake', async () => {
+  // Two consecutive requests at different revisions, with no initialize between them. A
+  // server that remembered the first would answer the second with the wrong shape.
+  const newest = await handle(at('2026-07-28', 'tools/list'), TOOLS);
+  assert.equal(newest.result.resultType, 'complete');
+  assert.equal(newest.result._meta[META.SERVER_INFO].name, 'simt-dev');
+
+  const oldest = await handle(at('2025-06-18', 'tools/list'), TOOLS);
+  assert.ok(!('resultType' in oldest.result), 'a 2025-06-18 client asked for a pre-2026-07-28 result');
+  assert.ok(!('_meta' in oldest.result));
+});
+
+test('mcp: a per-request version this server does not speak is refused, by name', async () => {
+  // `initialize` answers with its own version because the spec tells it to. A request
+  // that names its version in _meta has no fallback left - there is no handshake to
+  // renegotiate - so an unsupported one is an error at the one place the client checks.
+  const r = await handle(at('2027-01-01', 'tools/list'), TOOLS);
+  assert.equal(r.error.code, RPC.UNSUPPORTED_VERSION);
+  assert.match(r.error.message, /2027-01-01/);
+  for (const v of SUPPORTED_VERSIONS) assert.match(r.error.message, new RegExp(v));
+});
+
+test('mcp: an older client keeps the revision it negotiated, without being asked again', async () => {
+  // The residue of the removed handshake, and the reason `serve` holds state at all: a
+  // 2025-06-18 client negotiates once and then sends bare requests forever after.
+  const state = { version: null };
+  await handle(req('initialize', { protocolVersion: '2025-06-18' }), TOOLS, { state });
+  assert.equal(state.version, '2025-06-18');
+  const later = await handle(req('tools/list'), TOOLS, { state });
+  assert.ok(!('resultType' in later.result), 'a bare request inherited the newest revision');
+});
+
+test('mcp: server/discover advertises the revisions, the capabilities and the identity', async () => {
+  // MUST from 2026-07-28, and the stdio way a client finds out which shape it is talking
+  // to before committing to one.
+  const r = await handle(at('2026-07-28', 'server/discover'), TOOLS, { packageVersion: '1.2.3' });
+  assert.deepEqual(r.result.supportedVersions, SUPPORTED_VERSIONS);
+  assert.equal(r.result._meta[META.SERVER_INFO].version, '1.2.3');
+  assert.ok(r.result.capabilities.tools);
+  assert.match(r.result.instructions, /Read-only/);
+});
+
+test('mcp: list results carry a cache lifetime from 2026-07-28 and nothing before it', async () => {
+  for (const version of ['2026-07-28']) {
+    for (const method of ['tools/list', 'server/discover']) {
+      const r = await handle(at(version, method), TOOLS);
+      assert.ok(Number.isInteger(r.result.ttlMs), `${method} at ${version} has no ttlMs`);
+      assert.ok(['public', 'private'].includes(r.result.cacheScope), `${method} at ${version}`);
+    }
+  }
+  const older = await handle(at('2025-11-25', 'tools/list'), TOOLS);
+  assert.ok(!('ttlMs' in older.result), 'a field the revision does not define was invented for it');
+});
+
+test('mcp: ping answers an older client and is refused to a 2026-07-28 one', async () => {
+  for (const version of ['2025-06-18', '2025-11-25']) {
+    assert.equal((await handle(at(version, 'ping'), TOOLS)).result.resultType, undefined, version);
+  }
+  // Removed in 2026-07-28, so a client that still sends it is told that, rather than
+  // getting a success it would read as support.
+  const gone = await handle(at('2026-07-28', 'ping'), TOOLS);
+  assert.equal(gone.error.code, RPC.METHOD);
+  assert.match(gone.error.message, /removed in 2026-07-28/);
 });
 
 test('mcp: a notification produces no response at all', async () => {
@@ -292,10 +379,66 @@ test('mcp: rules_why answers both directions, over a real session', async () => 
 test('mcp: invalid JSON is answered, and the session continues', async () => {
   // A parse error must not end the session; a client that sends one bad line should get
   // an error for that line and keep working.
-  const { stdout } = await converse('not json\n{"jsonrpc":"2.0","id":9,"method":"ping"}\n');
+  const { stdout } = await converse('not json\n{"jsonrpc":"2.0","id":9,"method":"server/discover"}\n');
   const messages = stdout.trim().split('\n').map((l) => JSON.parse(l));
   assert.equal(messages[0].error.code, RPC.PARSE);
-  assert.deepEqual(messages[1].result, {});
+  // The session survived the bad line and answered the next request, which is the whole
+  // claim. `server/discover` rather than `ping` because the default revision no longer
+  // has the latter.
+  assert.deepEqual(messages[1].result.supportedVersions, SUPPORTED_VERSIONS);
+});
+
+test('mcp: every tool answers, and every answer matches the schema it declared', async () => {
+  // The review's second acceptance criterion, and the one that catches a payload that
+  // grew a field nobody wrote down. Minimal arguments only (S20): a tool that cannot be
+  // called with the least a client would send is a tool whose schema describes a call
+  // no client makes.
+  const state = { version: null };
+  await handle(req('initialize', { protocolVersion: '2025-11-25' }), TOOLS, { state });
+
+  // The arguments a client sends when it knows nothing: the required ones and nothing else.
+  const minimal = {
+    skills_brief: { task: 'write a test' },
+    skills_show: { name: 'nonexistent-skill' },
+    skills_why: { name: 'core' },
+    skills_find: { query: 'test' },
+    rules_why: { what: 'ADR-001' },
+  };
+
+  for (const tool of TOOLS) {
+    const args = minimal[tool.name] ?? {};
+    // The arguments must be the ones the schema requires and no more.
+    for (const key of tool.inputSchema.required ?? []) {
+      assert.ok(key in args, `${tool.name} needs "${key}", and this test cannot guess it`);
+    }
+    assert.ok(tool.outputSchema, `${tool.name} declares no outputSchema, so nothing can check its answer`);
+
+    const r = await handle(req('tools/call', { name: tool.name, arguments: args }, 7), TOOLS, { state });
+    assert.ok(r.result, `${tool.name} returned a protocol error: ${JSON.stringify(r.error)}`);
+    assert.ok('structuredContent' in r.result, `${tool.name} returned text only`);
+    // Both blocks describe one call. A client reading the text and a client reading the
+    // structure must not be able to see two different answers.
+    const text = JSON.parse(r.result.content[0].text.replace(/\\nTRUNCATED .*$/, ''));
+    assert.deepEqual(text, r.result.structuredContent, `${tool.name}: text and structuredContent disagree`);
+
+    if (r.result.isError) {
+      assertValid(r.result.structuredContent, ERROR_SHAPE, `${tool.name} failure`);
+      continue;
+    }
+    assertValid(r.result.structuredContent, tool.outputSchema, `${tool.name} success`);
+  }
+});
+
+test('mcp: the annotations say what the tools are', async () => {
+  // All ten are readers, and the declaration is per tool because the next tool may not
+  // be one. A client that believes a tool is read-only will cache its answer.
+  const state = { version: null };
+  await handle(req('initialize', { protocolVersion: '2025-11-25' }), TOOLS, { state });
+  const list = await handle(req('tools/list'), TOOLS, { state });
+  for (const t of list.result.tools) {
+    assert.equal(t.annotations?.readOnlyHint, true, `${t.name} does not declare itself read-only`);
+    assert.equal(t.annotations?.idempotentHint, true, `${t.name} does not declare itself idempotent`);
+  }
 });
 
 test('mcp: --list answers without reading stdin', async () => {

@@ -35,6 +35,283 @@ const GATE_KINDS = new Map(Object.entries(GATES).map(([name, g]) => [name, g.kin
 
 /** A schema with no required fields still needs the object declared. */
 const noArgs = { type: 'object', properties: {}, required: [] };
+
+/**
+ * Output schemas, one per tool, describing what a SUCCESSFUL call returns.
+ *
+ * Every one of these tools is a reader: none writes, and none writes twice. The
+ * annotations say so, and the schemas say what comes back — because a client that can
+ * validate an answer against a declared shape catches a wrong answer at the boundary,
+ * while one handed a bag of JSON has to trust that the tool meant it.
+ *
+ * Properties are required unless the payload can legitimately omit them: `error` is
+ * absent when there is none, `body` is null when there is none, and a schema that
+ * required the exception would describe a shape that never occurs. `additionalProperties`
+ * is left open, which is what the 2026-07-28 revision permits and what a reader wants:
+ * these payloads are data, and a new field from a future release should not make an
+ * older client's validation fail.
+ */
+/**
+ * The shape of a failure, exported because a client validating an answer needs it and
+ * because the test that checks every tool's answer needs it for the failures. Two
+ * copies of this schema would drift, and the copy that drifted would be the one nobody
+ * validates against - which is exactly how a remedy quietly stops being a string.
+ */
+export const ERROR_SHAPE = {
+  type: 'object',
+  properties: { error: { type: 'string' }, remedy: { type: ['string', 'null'] } },
+  required: ['error'],
+};
+
+const output = {
+  doctor: {
+    type: 'object',
+    properties: {
+      root: { type: 'string' },
+      workspace: {
+        type: 'object',
+        properties: {
+          // Null is the honest value for a repository that is not inside a workspace:
+          // there is no root to name, and naming the repository as one would be a claim
+          // about the reader's directory layout that nothing established.
+          root: { type: ['string', 'null'] },
+          source: { type: ['string', 'null'] },
+          detail: { type: ['string', 'null'] },
+        },
+        required: ['root', 'source'],
+      },
+      stack: { type: 'array', items: { type: 'string' } },
+      facts: { type: 'object', additionalProperties: { type: ['string', 'null'] } },
+      signals: { type: 'array', items: { type: 'string' } },
+      // One entry per signal, naming the file that proved it. The payload is a list of
+      // paths, not of records - `fingerprint` returns evidence as the paths themselves.
+      evidence: { type: 'array', items: { type: 'string' } },
+      manifest: { type: ['object', 'null'] },
+      error: { type: ['string', 'null'] },
+    },
+    required: ['root', 'workspace', 'stack', 'facts', 'signals', 'evidence'],
+  },
+  skills_index: {
+    type: 'object',
+    properties: {
+      skills: { type: 'number' },
+      totalBytes: { type: 'number' },
+      deferred: { type: 'array', items: { type: 'string' } },
+      workspace: { type: 'object' },
+      verified: { type: 'boolean' },
+      entries: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            summary: { type: 'string' },
+            bytes: { type: 'number' },
+            stack: { type: 'array', items: { type: 'string' } },
+            deferred: { type: 'boolean' },
+          },
+          required: ['name', 'bytes'],
+        },
+      },
+    },
+    required: ['skills', 'totalBytes', 'entries'],
+  },
+  skills_brief: {
+    type: 'object',
+    properties: {
+      repo: {
+        type: 'object',
+        properties: {
+          root: { type: 'string' },
+          stack: { type: 'array', items: { type: 'string' } },
+          facts: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['root', 'stack', 'facts'],
+      },
+      task: { type: ['string', 'null'] },
+      budget: { type: 'number' },
+      inlineBytes: { type: 'number' },
+      selected: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            bytes: { type: 'number' },
+            summary: { type: 'string' },
+            why: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['name', 'bytes', 'why'],
+        },
+      },
+      deferred: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { name: { type: 'string' }, bytes: { type: 'number' }, reason: { type: 'string' } },
+          required: ['name', 'reason'],
+        },
+      },
+      notSelected: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { name: { type: 'string' }, reason: { type: 'string' } },
+          required: ['name', 'reason'],
+        },
+      },
+    },
+    required: ['repo', 'budget', 'inlineBytes', 'selected', 'deferred', 'notSelected'],
+  },
+  skills_show: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      summary: { type: 'string' },
+      bytes: { type: 'number' },
+      capabilities: { type: 'array', items: { type: 'string' } },
+      stack: { type: 'array', items: { type: 'string' } },
+      deferred: { type: 'boolean' },
+      source: { type: ['string', 'null'] },
+      readFrom: { type: 'string', enum: ['ok', 'empty', 'unavailable'] },
+      requires: { type: 'array', items: { type: 'string' } },
+      variants: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: { id: { type: 'string' }, stack: { type: 'array', items: { type: 'string' } }, bytes: { type: 'number' } },
+          required: ['id'],
+        },
+      },
+      maxBytes: { type: 'number' },
+      body: { type: ['string', 'null'] },
+    },
+    required: ['name', 'bytes', 'readFrom', 'requires', 'variants'],
+  },
+  skills_find: {
+    type: 'object',
+    properties: {
+      query: { type: 'string' },
+      results: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            score: { type: 'number' },
+            summary: { type: 'string' },
+            why: { type: 'array', items: { type: 'string' } },
+          },
+          required: ['name', 'score', 'why'],
+        },
+      },
+    },
+    required: ['query', 'results'],
+  },
+  skills_why: {
+    type: 'object',
+    properties: {
+      name: { type: 'string' },
+      score: { type: 'number' },
+      compatible: { type: 'boolean' },
+      reasons: { type: 'array', items: { type: 'string' } },
+      repo: {
+        type: 'object',
+        properties: { root: { type: 'string' }, signals: { type: 'array', items: { type: 'string' } } },
+      },
+      task: { type: ['string', 'null'] },
+      pathsSeen: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['name', 'score', 'compatible', 'reasons'],
+  },
+  rules_list: {
+    type: 'object',
+    properties: {
+      sha: { type: 'string' },
+      notes: { type: 'array', items: { type: 'string' } },
+      rules: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: ['string', 'null'] },
+            title: { type: ['string', 'null'] },
+            // A profile may name one signal or several, and the frontmatter keeps both
+            // spellings. Describing only the list would make a conforming rule look
+            // broken.
+            applies: { anyOf: [{ type: 'array', items: { type: 'string' } }, { type: 'string' }] },
+            origin: { type: 'string' },
+            source: { type: 'string' },
+            bytes: { type: 'number' },
+            adrs: { type: 'array', items: { type: 'string' } },
+            error: { type: ['string', 'null'] },
+            selected: { type: 'boolean' },
+          },
+          required: ['source', 'bytes', 'selected'],
+        },
+      },
+    },
+    required: ['sha', 'rules'],
+  },
+  rules_why: {
+    type: 'object',
+    properties: {
+      direction: { type: 'string', enum: ['rule', 'decision'] },
+      id: { type: 'string' },
+      title: { type: ['string', 'null'] },
+      status: { type: 'string' },
+      source: { type: 'string' },
+      origin: { type: 'string' },
+      uncited: { type: 'boolean' },
+      readWith: { type: 'string' },
+      supersededBy: { type: ['string', 'null'] },
+      supersedes: { type: 'array', items: { type: 'string' } },
+      // A decision record may be partially superseded; the record carries the list of
+      // what it replaced, so this is a list and not a flag.
+      partial: { type: ['boolean', 'array'] },
+      decisions: { type: 'array', items: { type: 'object' } },
+      rules: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['direction', 'id'],
+  },
+  check: {
+    type: 'object',
+    properties: {
+      root: { type: 'string' },
+      ok: { type: 'boolean' },
+      findings: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            file: { type: 'string' },
+            status: { type: 'string' },
+            detail: { type: ['string', 'null'] },
+            remedy: { type: ['string', 'null'] },
+          },
+          required: ['file', 'status'],
+        },
+      },
+    },
+    required: ['root', 'ok', 'findings'],
+  },
+  compare: {
+    type: 'object',
+    properties: {
+      root: { type: 'string' },
+      shape: { type: 'string', enum: ['repo', 'workspace'] },
+      expectedSha: { type: 'string' },
+      summary: { type: 'object' },
+      repos: { type: 'array', items: { type: 'object' } },
+      worktrees: { type: 'array', items: { type: 'object' } },
+      directories: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['root', 'shape', 'expectedSha', 'summary', 'repos'],
+  },
+  /** The shape of every tool failure, which is a result and not a protocol error. */
+  error: ERROR_SHAPE,
+};
+
 const rootArg = {
   type: 'object',
   properties: { root: { type: 'string', description: 'repository root; defaults to the editor cwd' } },
@@ -57,6 +334,7 @@ async function registry(args) {
 
 export const TOOLS = [
   {
+    outputSchema: output.doctor,
     name: 'doctor',
     description:
       'Classify a repository: its stack tags, the emitted facts with the file that proved each, and whether a simt-dev manifest is present. Call this first when you do not yet know what a repo is.',
@@ -79,6 +357,7 @@ export const TOOLS = [
   },
 
   {
+    outputSchema: output.skills_index,
     name: 'skills_index',
     description:
       'The full skill catalogue: every skill with its summary, size, stack tags and whether it is deferred. Cheap enough to always afford, and the fallback when brief returns nothing useful.',
@@ -99,6 +378,7 @@ export const TOOLS = [
   },
 
   {
+    outputSchema: output.skills_brief,
     name: 'skills_brief',
     description:
       'THE entry point. Resolve the skill set for a task in a repository. Returns what was selected, why each was selected, what was deferred, and what was NOT selected with the reason - the last part matters, because it is what lets you override the resolver instead of guessing at it.',
@@ -165,6 +445,7 @@ export const TOOLS = [
   },
 
   {
+    outputSchema: output.skills_show,
     name: 'skills_show',
     description: 'One skill body, with the metadata needed to decide whether to trust it: source path, which of the two locations it was read from, and its cited decisions.',
     inputSchema: {
@@ -206,6 +487,7 @@ export const TOOLS = [
   },
 
   {
+    outputSchema: output.skills_find,
     name: 'skills_find',
     description: 'Raw search across capability, keyword and summary. Use when skills_brief has nothing and you suspect a skill exists.',
     inputSchema: {
@@ -230,6 +512,7 @@ export const TOOLS = [
   },
 
   {
+    outputSchema: output.skills_why,
     name: 'skills_why',
     description:
       'The signal chain for one skill in one repository: its score, the reasons behind it, whether the stack gate admits it at all, and what it would take to make it selected.',
@@ -263,6 +546,7 @@ export const TOOLS = [
   },
 
   {
+    outputSchema: output.rules_list,
     name: 'rules_list',
     description:
       'The rule catalogue, and which rules a given repository actually receives. Pass `root` to get the selection rather than just the catalogue.',
@@ -300,9 +584,10 @@ export const TOOLS = [
   },
 
   {
+    outputSchema: output.rules_why,
     name: 'rules_why',
     description:
-      'Why a rule exists. Give a rule id for the decisions that settled it and whether each is still in force, or an ADR id for the rules that decision restsates. A rule citing no decision reports that - it is a finding, not an empty answer.',
+      'Why a rule exists. Give a rule id for the decisions that settled it and whether each is still in force, or an ADR id for the rules that decision repeats. A rule citing no decision reports that - it is a finding, not an empty answer.',
     inputSchema: {
       type: 'object',
       properties: { what: { type: 'string', description: 'a rule id or ADR-NNN' } },
@@ -355,6 +640,7 @@ export const TOOLS = [
   },
 
   {
+    outputSchema: output.check,
     name: 'check',
     description:
       'The gate for one repository: is its generated region current, unmanaged, drifted or malformed, and does any rule file lack an id. Read-only - it never repairs.',
@@ -371,6 +657,7 @@ export const TOOLS = [
   },
 
   {
+    outputSchema: output.compare,
     name: 'compare',
     description:
       'The organisation-wide matrix: every repository under the root, its adoption, region state, pinned simt-dev SHA, hook routing and declared gates, plus the problems found. This is the command that replaces reconstructing the estate by hand.',

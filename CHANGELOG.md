@@ -6,6 +6,22 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### The MCP surface speaks three protocol revisions, and answers in the shape each asks for
+
+The server was pinned to one revision and returned pretty JSON in a text block, so a
+client could read the answer but could not validate it, could not cache it, and could not
+tell a read-only tool from one that writes. All three published revisions were read rather
+than guessed at, and each is answered in its own shape: the newest drops the handshake for
+a version carried on every request, adds a discovery method servers must implement,
+requires a result-type field and a cache lifetime on list results, and deleted the liveness
+method — which older clients still get, and newest clients are told is gone by name.
+
+Every tool now declares what it returns and says it is a reader, and every call returns
+the answer in both shapes: the text block for a client that predates structured content,
+the structured block for one that validates against the declared schema. The byte ceiling
+bounds the text only, so the block a client can check still checks. The schema checker
+that makes this testable lives in the package rather than in a dependency.
+
 ### Which harnesses a repository is set up for is now answerable
 
 `simt-dev harness detect` looks at the configuration directories that exist and says

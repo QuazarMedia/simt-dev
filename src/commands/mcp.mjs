@@ -15,7 +15,7 @@ import { dirname, join } from 'node:path';
 
 import { EXIT, emit, fail, isJson } from '../output/index.mjs';
 import { TOOLS } from '../mcp/tools.mjs';
-import { PROTOCOL_VERSION, serve } from '../mcp/server.mjs';
+import { PROTOCOL_VERSION, SUPPORTED_VERSIONS, serve } from '../mcp/server.mjs';
 import { CLI } from '../name.mjs';
 
 export async function mcpCommand(positional, flags) {
@@ -23,12 +23,12 @@ export async function mcpCommand(positional, flags) {
 
   if (flags.list === true) {
     if (isJson(flags)) {
-      emit(`${JSON.stringify({ ok: true, protocolVersion: PROTOCOL_VERSION, version, tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) }, null, 2)}\n`);
+      emit(`${JSON.stringify({ ok: true, protocolVersion: PROTOCOL_VERSION, protocolVersions: SUPPORTED_VERSIONS, version, tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) }, null, 2)}\n`);
       return EXIT.OK;
     }
     emit(
       [
-        `simt-dev ${version} - MCP surface over stdio (protocol ${PROTOCOL_VERSION})`,
+        `simt-dev ${version} - MCP surface over stdio (protocols ${SUPPORTED_VERSIONS.join(', ')})`,
         '',
         `${TOOLS.length} read-only tools:`,
         ...TOOLS.map((t) => `  ${t.name.padEnd(16)} ${t.description.split('.')[0]}`),
@@ -44,7 +44,7 @@ export async function mcpCommand(positional, flags) {
   }
 
   try {
-    return await serve(TOOLS, { version });
+    return await serve(TOOLS, { packageVersion: version });
   } catch (error) {
     return fail(`mcp transport failed: ${error.message}`, EXIT.FAIL, `run: ${CLI} mcp --list to check the surface loads`);
   }

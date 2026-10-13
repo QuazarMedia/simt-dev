@@ -98,6 +98,8 @@ export async function compareCommand(positional, flags) {
         noRegion: summary.noRegion,
         malformed: summary.malformed,
         staleRuleFiles: summary.staleRuleFiles,
+        packageRegions: summary.packageRegions,
+        stalePackages: summary.stalePackages,
         hooksRouted: summary.hooksRouted,
         withProblems: summary.withProblems,
         withOwnHooks: summary.withOwnHooks,
@@ -155,6 +157,14 @@ function render(rows, summary, found) {
     `repos     ${summary.repos} (${summary.adopted} adopted, ${summary.unmanaged} unmanaged${summary.broken > 0 ? `, ${summary.broken} broken` : ''})`,
     `region    ${summary.current} current, ${summary.drifted} drifted, ${summary.noRegion} with no region, ${summary.malformed} malformed`,
     `rules     ${summary.staleRuleFiles === 0 ? 'every rule file current' : `${summary.staleRuleFiles} rule file${summary.staleRuleFiles === 1 ? '' : 's'} not current`}`,
+    // One line, and only when there is a package region to report. A workspace of
+    // single-repository members is the common case and must not grow a line that
+    // always reads "none".
+    ...(summary.packageRegions > 0
+      ? [
+          `packages  ${summary.stalePackages === 0 ? `every package region current (${summary.packageRegions})` : `${summary.stalePackages} of ${summary.packageRegions} package region${summary.packageRegions === 1 ? '' : 's'} not current`}`,
+        ]
+      : []),
     `hooks     ${summary.hooksRouted}/${summary.adopted} adopted repos route the shared dispatcher`,
     `          ${summary.withOwnHooks} repo${summary.withOwnHooks === 1 ? '' : 's'} run their own hooks; adopting replaces them (a note, not a problem)`,
     `problems  ${summary.withProblems} repo${summary.withProblems === 1 ? '' : 's'}`,
@@ -167,6 +177,11 @@ function render(rows, summary, found) {
     lines.push(`          adoption ${r.adoption}${r.id && r.id !== r.name ? ` (id ${r.id})` : ''}`);
     lines.push(`          stack   ${r.stack.length > 0 ? r.stack.join(', ') : '(none)'}${r.declaredStack.length > 0 ? ` (manifest declares ${r.declaredStack.join(', ')})` : ''}`);
     if (r.facts.length > 0) lines.push(`          facts   ${r.facts.join(', ')}`);
+    // Per package, and only for a repository that has packages: a single-repository
+    // member must not print an empty list of packages on every line of every run.
+    for (const p of r.packages) {
+      lines.push(`          package ${p.path} ${p.status}${p.profiles.length > 0 ? ` (${p.profiles.join(', ')})` : ''}`);
+    }
     lines.push(`          region  ${r.region}${r.regionDetail ? ` (${r.regionDetail})` : ''}`);
     // The rule files are the answer to "does every editor see the same rule?".
     lines.push(

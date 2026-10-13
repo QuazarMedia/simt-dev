@@ -32,6 +32,7 @@ import { ruleTargets } from './targets.mjs';
 import { manifestPath } from './manifest.mjs';
 import { BASELINES } from './baselines.mjs';
 import { PACK_DIR, resolvePacks } from '../packs.mjs';
+import { discoverPackages } from '../monorepo.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const ROOT = resolve(HERE, '..', '..');
@@ -527,6 +528,58 @@ export async function loadRules(root = null) {
     });
   }
   return out;
+}
+
+/**
+ * The regions a monorepo's packages each need, as bodies ready to be written.
+ *
+ * A repository with packages in it is projected twice over: the root carries the
+ * rules every package shares, and each package carries the profiles IT selects and
+ * the root does not. A reader working in `apps/web` opens two files by walking up,
+ * and gets the union; a reader who only reads the root still gets everything that
+ * is not package-specific. Nothing is repeated, so nothing goes stale twice
+ * (ADR-066).
+ *
+ * A package whose delta is empty gets no file. Writing an empty region into every
+ * directory of a large monorepo would be noise the reader has to learn to skip,
+ * and a file with nothing in it is not a projection, it is an absence with a
+ * generated header on it.
+ *
+ * The rule set is the ROOT's - local profiles and packs are the repository's, and
+ * a package that re-read them from its own directory would resolve a different
+ * set in a directory that has no manifest.
+ *
+ * @returns {Promise<{regions: {path: string, ecosystem: string, stack: string[],
+ *   facts: string[], profiles: string[], body: string, meta: {sha: string, sources: string[]}}[],
+ *   notes: string[]}>}
+ */
+export async function packageRegions(root, flags, rootProfiles = null) {
+  const shared = rootProfiles ?? (await desiredRegion(root, flags)).profiles;
+  const { packages, notes } = await discoverPackages(root);
+  if (packages.length === 0) return { regions: [], notes };
+
+  const rules = await loadRules(root);
+  const sha = await provenanceDigest();
+  const regions = [];
+  for (const pkg of packages) {
+    const fp = await fingerprint(join(root, pkg.path));
+    const { selected } = select(rules, fp.stack ?? [], fp.facts ?? []);
+    const delta = selected.filter((r) => !shared.includes(r.id));
+    if (delta.length === 0) continue;
+    regions.push({
+      path: pkg.path,
+      ecosystem: pkg.ecosystem,
+      stack: fp.stack ?? [],
+      facts: fp.facts ?? [],
+      profiles: delta.map((r) => r.id),
+      // One sentence, because the file's whole purpose is to be found by a reader
+      // who does not know it exists: without it, a nested region reads as a
+      // complete set of rules and the shared half looks forgotten.
+      body: `The rules this package selects on its own. Everything the repository shares with its other packages is in the region at the root.\n\n${render(delta)}`,
+      meta: { sha, sources: delta.map((r) => r.source) },
+    });
+  }
+  return { regions, notes };
 }
 
 /**

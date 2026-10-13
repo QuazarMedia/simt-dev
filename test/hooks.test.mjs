@@ -20,6 +20,20 @@ import { git, cmd } from './fixture.mjs';
 import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
+/**
+ * One run of the real binary, both paths. `check` is the only surface that can say a
+ * `gates.cwd` is wrong before a commit, so the test that claims `check` does has to run
+ * `check` - through the binary, as a reader would.
+ */
+async function run(args) {
+  try {
+    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+    return { code: 0, out: stdout + stderr };
+  } catch (error) {
+    return { code: error.code, out: (error.stdout ?? '') + (error.stderr ?? '') };
+  }
+}
+
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
 const temps = [];
@@ -447,6 +461,61 @@ test('dispatcher: an unknown gate blocks rather than being skipped', async () =>
   assert.equal(bad.status, 'failed');
   assert.match(bad.detail, /unknown gate/);
   assert.equal(result.failed, true);
+});
+
+test('dispatcher: gates.cwd runs the gate in the directory it names', async () => {
+  // The monorepo case: the root has no `test` script, the package does, and the gate
+  // must run where the script is. Asserted on the working directory the command sees,
+  // because "the gate passed" is equally true of a run in the wrong place.
+  const manifest = {
+    gates: {
+      preCommit: ['test'],
+      prePush: [],
+      commands: { test: 'pwd > where.txt' },
+      cwd: { test: 'apps/web' },
+    },
+  };
+  const root = await fixture({ scripts: {}, manifest, files: { 'apps/web/.keep': '' } });
+  const result = await runGates('pre-commit', { root, manifest });
+  assert.equal(result.failed, false, JSON.stringify(result.gates));
+  // `pwd` reports the resolved path, and macOS answers `/private/var` for a
+  // `/var` temp dir. Comparing the two through `realpath` asserts the directory and
+  // not the spelling of the path that reached it.
+  assert.equal(
+    (await readFile(join(root, 'apps', 'web', 'where.txt'), 'utf8')).trim(),
+    await realpath(join(root, 'apps', 'web')),
+  );
+});
+
+test('dispatcher: a gates.cwd that does not resolve blocks the event, and says which of two things is wrong', async () => {
+  const base = { gates: { preCommit: ['test'], prePush: [], commands: { test: 'node -e ""' } } };
+  for (const [dir, pattern] of [
+    ['apps/nope', /not a directory in this repository/],
+    ['../elsewhere', /outside the repository/],
+  ]) {
+    const manifest = { gates: { ...base.gates, cwd: { test: dir } } };
+    const root = await fixture({ manifest, files: { 'apps/web/.keep': '' } });
+    const result = await runGates('pre-commit', { root, manifest });
+    assert.equal(result.failed, true, `${dir} must not pass silently`);
+    assert.match(result.gates[0].detail, pattern);
+    assert.ok(result.gates[0].remedy, 'a refusal without a repair is a dead end');
+  }
+});
+
+test('check: a gates.cwd that does not resolve is a finding, and a name no gate declares is too', async () => {
+  const gates = { preCommit: ['test'], prePush: [], commands: { test: 'node -e ""' } };
+  const root = await fixture({ manifest: { gates: { ...gates, cwd: { test: 'apps/nope', lint: 'apps/web' } } } });
+  const out = await run(['check', '--root', root]);
+  assert.equal(out.code, 1, out.out);
+  assert.match(out.out, /GATE-CWD-MISSING/);
+  // A `cwd` for a gate that does not exist is inert, and the reader believes otherwise.
+  assert.match(out.out, /UNKNOWN-GATE-CWD/);
+  const gateModule = await import('../src/projection/manifest.mjs');
+  const findings = gateModule.unrunnableGates(
+    { gates: { ...gates, cwd: { lint: 'apps/web' } } },
+    { scripts: {}, binaries: [], commands: {}, tools: [] },
+  );
+  assert.deepEqual(findings.filter((f) => f.status === 'unknown-gate-cwd').map((f) => f.gate), ['lint']);
 });
 
 test('dispatcher: a failing script gate fails the event and reports the output', async () => {

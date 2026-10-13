@@ -475,6 +475,24 @@ export function unrunnableGates(manifest, capability) {
   ];
   const findings = [];
   const seen = new Set();
+  // `gates.cwd` names a directory a gate runs in, and a name that is not a declared
+  // gate is as much a landmine as one that cannot run: the entry is inert, the reader
+  // believes the gate runs in the package it names, and nothing anywhere says so. Same
+  // shape as the unknown-gate finding in the dispatcher, so both are repaired the same
+  // way.
+  const cwds = manifest?.gates?.cwd;
+  if (cwds && typeof cwds === 'object' && !Array.isArray(cwds)) {
+    for (const name of Object.keys(cwds).sort()) {
+      if (declared.includes(name)) continue;
+      findings.push({
+        file: MANIFEST,
+        status: 'unknown-gate-cwd',
+        gate: name,
+        detail: `gates.cwd names "${name}", which is not declared in gates.preCommit or gates.prePush, so it is never read`,
+        remedy: `declare "${name}" in gates.preCommit or gates.prePush, or remove gates.cwd["${name}"]`,
+      });
+    }
+  }
   for (const name of declared) {
     if (seen.has(name)) continue;
     seen.add(name);

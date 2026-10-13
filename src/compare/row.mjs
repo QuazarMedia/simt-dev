@@ -35,6 +35,10 @@ import { MANIFEST_FILE } from '../name.mjs';
  * @property {string[]} stack
  * @property {string[]} facts
  * @property {string[]} profiles  profile ids that would be selected
+ * @property {{path: string, profiles: string[], status: string, detail: string|null}[]} packages
+ *   one nested region per workspace package, sorted by path
+ * @property {{path: string, profiles: string[], status: string, detail: string|null}[]} packageProblems
+ *   the nested regions that are not `current`; empty for an unadopted repository
  * @property {string|null} pinnedSha
  * @property {string|null} recordedSha
  * @property {'current'|'drift'|'unmanaged'|'absent'|'malformed'} region
@@ -58,8 +62,19 @@ import { MANIFEST_FILE } from '../name.mjs';
  * @param {{expectedSha: string, gates: Set<string>}} context
  * @returns {Promise<RepoRow>}
  */
-export async function buildRow(path, context) {
-  const name = path.split('/').filter(Boolean).pop() ?? path;
+/**
+ * A nested-region finding in the row's own vocabulary.
+ *
+ * `checkTargets` speaks in `file` because a finding is printed with the path it names;
+ * a row field is read by key, and a reader looking for `packages[].path` should not
+ * have to know that the finding underneath calls the same thing `file`. One mapper, so
+ * the two arrays cannot drift into different shapes.
+ */
+function packageEntry(f) {
+  return { path: f.file, profiles: f.profiles ?? [], status: f.status, detail: f.detail ?? null };
+}
+
+export async function buildRow(path, context) {  const name = path.split('/').filter(Boolean).pop() ?? path;
   const problems = [];
   const notes = [];
 
@@ -87,6 +102,12 @@ export async function buildRow(path, context) {
   // state a rule written to four surfaces can drift into.
   const region = findings.find((f) => f.file === PRIMARY_TARGET) ?? { status: 'absent' };
   const ruleFindings = findings.filter((f) => f.surface !== undefined);
+  // A nested region is identified by its path, not by a field: `checkTargets` builds
+  // those findings from `checkRegion`, which knows nothing about monorepos, and the
+  // one thing this row needs from them is "which file, what state".
+  const packageFindings = findings
+    .filter((f) => f.file !== undefined && f.file.endsWith(`/${PRIMARY_TARGET}`))
+    .sort((a, b) => (a.file < b.file ? -1 : 1));
   const pointers = findings.filter((f) => f.status?.startsWith('pointer'));
 
   // Adoption is settled BEFORE any problem is collected. Every gate below asks
@@ -129,6 +150,12 @@ export async function buildRow(path, context) {
     region: region.status,
     regionDetail: region.detail ?? null,
     surfaces: manifest.manifest?.surfaces ?? null,
+    // One entry per nested region, for the same reason `ruleFiles` is its own object:
+    // a monorepo can have a current root region and one stale package region, and a
+    // single `region` field cannot say which. Sorted by path, because `checkTargets`
+    // returns findings in the order the detector found packages and a dashboard that
+    // reorders rows between runs is a dashboard nobody diffs.
+    packages: packageFindings.map(packageEntry),
     ruleFiles: {
       total: ruleFindings.filter((f) => f.status !== 'orphaned').length,
       current: ruleFindings.filter((f) => f.status === 'current').length,
@@ -140,6 +167,12 @@ export async function buildRow(path, context) {
       orphaned: ruleFindings.filter((f) => f.status === 'orphaned').map((f) => f.file),
     },
     pointers: pointers.map((p) => ({ file: p.file, state: p.status })),
+    // A nested region that is not `current` is a problem for the same reason a stale
+    // rule file is: `check` exits 1 on it, and a row that reported the repository as
+    // current anyway is ADR-045's defect one level down. Gated on adoption, like every
+    // other gate here — an unadopted repo has no root region and therefore no nested
+    // findings to report, which is not a second defect for the same missing adoption.
+    packageProblems: adoption === 'adopted' ? packageFindings.filter((f) => f.status !== 'current').map(packageEntry) : [],
     packs: packs.map((p) => ({
       name: p.name,
       source: p.source,
@@ -178,6 +211,12 @@ export async function buildRow(path, context) {
 
   if (manifest.error) {
     problems.push(`${MANIFEST_FILE} ${manifest.error}`);
+  }
+
+  // Stale nested regions, named by path, with the remedy the finding already carries.
+  // A monorepo with four packages and one drifted region must not report `current`.
+  for (const f of row.packageProblems) {
+    problems.push(`${f.path}: ${f.detail ?? 'the package region is not current'}; run: ${CLI} sync --yes`);
   }
 
   // `pack-unpinned` is a note here for the same reason it is non-blocking in
@@ -345,6 +384,11 @@ export function summarise(rows, extra = {}) {
     malformed: count((r) => r.region === 'malformed'),
     hooksRouted: count((r) => r.hooksRouted),
     staleRuleFiles: rows.reduce((n, r) => n + (r.ruleFiles?.stale?.length ?? 0), 0),
+    // Counted here and not derived from `withProblems`: one monorepo with three drifted
+    // packages is one repository with three findings, and a reader asking "how much is
+    // stale" wants 3, not 1. `withProblems` still counts the repository once.
+    stalePackages: rows.reduce((n, r) => n + (r.packageProblems?.length ?? 0), 0),
+    packageRegions: rows.reduce((n, r) => n + (r.packages?.length ?? 0), 0),
     withProblems: count((r) => r.problems.length > 0),
     withOwnHooks: count((r) => (r.foreignHooks ?? []).length > 0),
     shas: [...shas.entries()].sort((a, b) => (a[0] === '(none)' ? 1 : b[0] === '(none)' ? -1 : b[1] - a[1])),

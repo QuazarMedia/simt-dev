@@ -16,8 +16,8 @@
 //     three `.mdc` rules would let a reader believe a repo is fully current when
 //     only the file they happened to open is.
 
-import { mkdir, readFile, symlink, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { mkdir, readFile, stat, symlink, unlink, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve, sep } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { plan, checkTargets, checkTarget, provenanceDigest, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
@@ -406,8 +406,43 @@ async function formatterIgnoresManifest(root) {
     .some((line) => line !== '' && !line.startsWith('#') && (line === MANIFEST_FILE || line === MANIFEST_LEGACY));
 }
 
-export async function checkCommand(positional, flags) {
-  const root = flags.root ?? positional[0] ?? process.cwd();
+/**
+ * `gates.cwd` entries that do not resolve to a directory inside the repository.
+ *
+ * Reported here, not only where the gate runs: the dispatcher fails closed on the same
+ * condition, so a reader finds out on their next commit — after writing a commit, which
+ * is the wrong order. The finding names the gate and the path, and says which of the two
+ * things is wrong, because "no such directory" and "outside the repository" are repaired
+ * by different edits.
+ *
+ * @returns {Promise<{file: string, status: string, gate: string, detail: string, remedy: string}[]>}
+ */
+async function gateCwdFindings(root, manifest) {
+  const cwds = manifest?.gates?.cwd;
+  if (!cwds || typeof cwds !== 'object' || Array.isArray(cwds)) return [];
+  const declared = [...(manifest?.gates?.preCommit ?? []), ...(manifest?.gates?.prePush ?? [])];
+  const findings = [];
+  for (const name of Object.keys(cwds).sort()) {
+    if (!declared.includes(name)) continue;
+    const dir = String(cwds[name]);
+    const resolved = resolve(root, dir);
+    const inside = resolved === root || resolved.startsWith(`${root}${sep}`);
+    const isDir = inside && ((await stat(resolved).catch(() => null))?.isDirectory() ?? false);
+    if (isDir) continue;
+    findings.push({
+      file: MANIFEST_FILE,
+      status: inside ? 'gate-cwd-missing' : 'gate-cwd-outside',
+      gate: name,
+      detail: inside
+        ? `gates.cwd["${name}"] is ${dir}, which is not a directory in this repository`
+        : `gates.cwd["${name}"] is ${dir}, which resolves outside the repository`,
+      remedy: `point gates.cwd["${name}"] at a directory in this repository, or remove it to run the gate at the root`,
+    });
+  }
+  return findings;
+}
+
+export async function checkCommand(positional, flags) {  const root = flags.root ?? positional[0] ?? process.cwd();
   const findings = await checkTargets(root, flags);
   const rules = await loadRules(root);
 
@@ -438,6 +473,7 @@ export async function checkCommand(positional, flags) {
       findings.push({ file: MANIFEST_FILE, status: 'version-mismatch', detail: mismatch, remedy: `run: ${CLI} upgrade --yes` });
     }
     findings.push(...unrunnableGates(manifest, await readCapability(root)));
+    findings.push(...(await gateCwdFindings(root, manifest)));
     // A pack the repository declares but cannot produce is reported here rather
     // than when a rule happens to be missing, because that is the failure mode
     // this guards: the region still renders, it renders SHORT, and `check` would

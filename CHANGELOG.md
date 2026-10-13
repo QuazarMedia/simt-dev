@@ -6,6 +6,28 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A monorepo gets rules for each of its packages
+
+One repository, one projection: every package under the root was given the root's rules,
+so a React application inside a node workspace was handed the node profile and nothing
+else, and the profile that should have applied to it was applied by nobody. The rule that
+package needed was not wrong — it was missing.
+
+Packages are now discovered from the declarations that already list them (npm and pnpm
+workspaces, turbo, Cargo members, `go.work`, Gradle includes) rather than by walking the
+tree, because a declaration states which directories are members and a marker file only
+says there is a build here. The root keeps what every package shares; each package that
+selects something new gets a generated region carrying exactly its own delta, and a
+package that selects nothing new gets no file at all. `check` reports every package
+region and fails on any one of them, and `compare` counts the drifted regions rather than
+the repositories that hold them.
+
+A gate can also name the directory it runs in, which is what a monorepo with no root test
+script needs: `gates.cwd` maps a gate to a directory, a directory that does not exist or
+resolves outside the repository fails the event and is reported by `check` before the
+commit rather than at it, and a directory named for a gate that is not declared is
+reported as the inert entry it is.
+
 ### One rule set, shared by the repositories that agreed on it
 
 Several repositories want the same rules and each kept its own copy, so a policy change

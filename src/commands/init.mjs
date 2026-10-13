@@ -608,8 +608,12 @@ function render(payload, manifest, { npm = true, version } = {}) {
     // on it would understate the edit the reader is approving. A baseline is the
     // opposite case to AGENTS.md in the one way that matters here — it is placed FIRST,
     // so the repo's own settings below it keep winning (ADR-025).
+    // A nested `apps/web/AGENTS.md` is the same kind of target as the root's, so the
+    // test is the suffix and not the exact path: a monorepo's package region holds
+    // hand-written content too, and describing it as a generated rule file would be
+    // the wrong contract for a reader who has prose above the markers.
     const caption =
-      target.file === PRIMARY_TARGET
+      target.file.endsWith(PRIMARY_TARGET)
         ? 'hand-written content outside the markers is never modified'
         : target.kind === 'baseline'
           ? 'a region placed first, so your own settings below it still win (ADR-025)'

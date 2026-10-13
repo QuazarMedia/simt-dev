@@ -36,6 +36,7 @@ import {
   provenanceDigest,
   isEligible,
   loadRules,
+  packageRegions,
   LOCAL_PROFILE_DIR,
   mdcTargets,
   readDeclared,
@@ -75,6 +76,15 @@ export async function plan(root, flags = {}) {
   // afterwards, which is the one review step this tool exists to make unnecessary.
   const baselines = await baselineTargets(root, meta.sha);
 
+  // A monorepo projects once per package as well as once at the root. The nested
+  // regions come after the root's and before the rule files, because the root is
+  // what a reader meets first and a plan that listed a package's region before the
+  // root's would read as though the packages were the repository.
+  const packages = await packageRegions(root, flags, profiles);
+  const nested = await Promise.all(
+    packages.regions.map((r) => targetFor(join(root, r.path), r.body, r.meta, `${r.path}/${PRIMARY_TARGET}`)),
+  );
+
   return {
     root,
     stack,
@@ -85,13 +95,14 @@ export async function plan(root, flags = {}) {
     surfaceSource: surfaces.source,
     surfaceProblems: surfaces.problems,
     rules: all,
-    targets: [target, ...mdc.targets, ...baselines.targets],
+    targets: [target, ...nested, ...mdc.targets, ...baselines.targets],
+    packages: packages.regions.map((r) => ({ path: r.path, profiles: r.profiles })),
     mdcProblems: mdc.problems,
-    notes: [...notes, ...mdc.notes],
+    notes: [...notes, ...mdc.notes, ...packages.notes],
   };
 }
 
-async function targetFor(root, body, meta) {
+async function targetFor(root, body, meta, label = PRIMARY_TARGET) {
   const path = join(root, PRIMARY_TARGET);
   let existing = '';
   let exists = true;
@@ -103,7 +114,10 @@ async function targetFor(root, body, meta) {
 
   const result = inject(existing, body, meta, await regionOpts(root));
   return {
-    file: PRIMARY_TARGET,
+    // The repo-relative path, and not the basename: a monorepo writes the same
+    // document once per package, and a plan that printed `AGENTS.md` twice with no
+    // directory on either line would leave the reader unable to tell which is which.
+    file: label,
     path,
     exists,
     action: result.action,
@@ -138,6 +152,19 @@ export async function checkTargets(root, flags = {}) {
       text = '';
     }
     findings.push(...readLimitFindings(text, PRIMARY_TARGET));
+  }
+
+  // Every package of a monorepo is a projection root in its own right, so the gate
+  // covers it the way it covers the root. A nested region that drifts is as stale as
+  // the root's region, and the reader working in that package reads only that file.
+  //
+  // Gated on the root having a region at all: a monorepo that has not adopted has no
+  // nested regions either, and reporting one as absent would describe a half-adoption
+  // that nobody performed.
+  const { regions: packageBodies } = await packageRegions(root, flags);
+  for (const region of packageBodies) {
+    const file = `${region.path}/${PRIMARY_TARGET}`;
+    findings.push({ ...(await checkRegion(root, join(root, region.path), region.body, region.meta)), file, profiles: region.profiles });
   }
 
   // The gate has to run where the merge happens, not only on the machine of whoever
@@ -433,7 +460,18 @@ export async function checkTarget(root, flags = {}) {
 
 async function checkPrimary(root, flags = {}) {
   const { body, meta } = await desiredRegion(root, flags);
-  const path = join(root, PRIMARY_TARGET);
+  return checkRegion(root, root, body, meta);
+}
+
+/**
+ * One region, compared against what this simt-dev would write for it.
+ *
+ * `dir` is the projection root that owns the document: the repository for the root
+ * region, a package for a nested one. `regionOpts` is read from the repository
+ * either way, because placement is a repository-level decision.
+ */
+async function checkRegion(root, dir, body, meta) {
+  const path = join(dir, PRIMARY_TARGET);
   let existing = '';
   try {
     existing = await readFile(path, 'utf8');

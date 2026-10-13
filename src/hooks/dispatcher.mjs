@@ -19,8 +19,8 @@
 //   its reason, so "passed" can never be mistaken for "only some of it passed".
 
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { readFile, stat } from 'node:fs/promises';
+import { basename, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 
 import { GATES } from './gates.mjs';
@@ -85,6 +85,12 @@ export async function runGates(event, { root, manifest }) {
   const staged = event === 'pre-commit' ? await stagedFiles(root) : [];
   const unstaged = event === 'pre-commit' ? await unstagedFiles(root) : new Set();
   const commands = manifest?.gates?.commands;
+  // `gates.cwd` is a separate map rather than a second shape for `gates.commands`.
+  // A monorepo needs the gate to run inside one package, and the reader declaring it
+  // already knows the gate by name — putting the directory beside the command would
+  // mean re-reading the command string to find out where anything runs, and a manifest
+  // written by an older release would have to be rewritten to gain the capability.
+  const cwds = manifest?.gates?.cwd ?? {};
   const results = [];
   // What the format gate rewrote, so restage touches those files and nothing else.
   let formatted = [];
@@ -147,7 +153,33 @@ export async function runGates(event, { root, manifest }) {
       formatted = targets;
     }
 
-    const outcome = await runGate(resolution, root);
+    // The gate's directory, if it declares one. Resolved against the repo root and
+    // checked for containment: a `cwd` that escaped the repository would run a command
+    // against files this commit cannot see, and the gate would be green about them.
+    // Containment is checked on the RESOLVED path, not the string, because `..` and a
+    // symlink both get past a prefix test on the text.
+    let cwd = root;
+    const declaredCwd = cwds[name];
+    if (declaredCwd !== undefined) {
+      const resolved = resolve(root, declaredCwd);
+      const inside = resolved === root || resolved.startsWith(`${root}${sep}`);
+      const exists = inside && (await stat(resolved).catch(() => null))?.isDirectory();
+      if (!exists) {
+        results.push({
+          name,
+          status: 'failed',
+          detail: inside
+            ? `gates.cwd["${name}"] is ${declaredCwd}, which is not a directory in this repository`
+            : `gates.cwd["${name}"] is ${declaredCwd}, which is outside the repository`,
+          remedy: `point gates.cwd["${name}"] at a directory in this repository, or remove it to run the gate at the root`,
+          adr: gate.adr,
+        });
+        continue;
+      }
+      cwd = resolved;
+    }
+
+    const outcome = await runGate(resolution, cwd);
     results.push({
       name,
       status: outcome.code === 0 ? 'passed' : 'failed',

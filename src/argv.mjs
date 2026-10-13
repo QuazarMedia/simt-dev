@@ -37,6 +37,12 @@ export const BOOL_FLAGS = new Set([
   'accept-conflicts',
   'backup',
   'list',
+  // tokens: measure every repository under the root, not just the one. Plan 0003 R06
+  // names this flag `--workspace`, and that name has been a VALUE flag since plan
+  // 0002 - it is where the skill sources live. One flag with two meanings is the
+  // silent-ignore defect this file's header refuses, so the meter's switch is named
+  // for what it selects.
+  'repos',
 ]);
 
 export const VALUE_FLAGS = new Set([

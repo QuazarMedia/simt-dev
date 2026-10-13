@@ -6,6 +6,29 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### `simt tokens` counts what a reader loads
+
+Review 0002 filed the estate's always-on context at 90 KB per turn, 72% of it a paragraph
+an earlier repository had already loaded — a number produced by reading seven
+repositories by hand, which ages the moment a rule is edited and cannot be re-derived by
+the reader who has to act on it.
+
+`simt tokens` is that reading, as a command. It reports the bytes this tool wrote per
+channel (region, rule files, skill metadata), an approximate token figure, and — with
+`--repos` — the same figure across a workspace, with every repeated paragraph attributed
+to the first root that carries it. A region that ends past a harness's read limit is
+reported with its byte offset, using the same numbers the existing check uses.
+
+Three choices keep the figure honest, and all three are recorded in ADR-064: the meter
+counts what the projection wrote and reports hand-written bytes beside it rather than
+folding them into the budget; a region is the span between its two markers, so the blank
+line a person left above the marker is billed to nobody; and an over-budget repository is
+reported rather than failed, because a meter that went red would train people to ignore
+the number.
+
+S38 stays open — this is the instrument. Whether the estate gets under 30 KB is R07's
+kernel, R08's budget field and R11's dedupe, measured with this.
+
 ## [0.2.1] — 2026-10-13
 
 ### `init` writes in place; the backup tag and adopt branch are opt-in

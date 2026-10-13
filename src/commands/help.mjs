@@ -46,6 +46,10 @@ ${CLI} ci                     simt-dev's own .github files: create or refresh th
 ${CLI} compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)
+${CLI} tokens [--repos]       what a reader loads at session start, in bytes
+                           (read-only; exits 0 whatever it finds, because a
+                           measurement is not a verdict; --repos measures every
+                           repository under the root and what repeats an earlier)
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
@@ -74,6 +78,8 @@ const FLAGS = `--json                 structured output
 --accept-conflicts      init: adopt rules that collide with hand-written ones
 --backup                init: tag the pre-adoption commit and branch onto
                         simt-dev/adopt before writing (the undo path)
+--repos                 tokens: measure every repository under the root, not
+                        just the one, and report what repeats an earlier one
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

@@ -26,6 +26,7 @@ import { upgradeCommand } from './upgrade.mjs';
 import { mcpCommand } from './mcp.mjs';
 import { installCommand } from './skillsinstall.mjs';
 import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
+import { tokensCommand } from './tokens.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -79,6 +80,7 @@ const IMPLEMENTED = {
   'hooks status': (args, flags) => hooksCommand('status', args, flags),
   'hooks run': (args, flags) => hooksCommand('run', args, flags),
   compare: compareCommand,
+  tokens: tokensCommand,
   upgrade: upgradeCommand,
   mcp: mcpCommand,
 };

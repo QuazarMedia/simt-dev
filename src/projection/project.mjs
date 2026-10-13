@@ -478,7 +478,11 @@ async function regionOpts(root) {
  * A reader that stops at a byte offset never sees a region that ends past it.
  * The finding names the reader, because "the file is long" does not say who stops.
  */
-function readLimitFindings(text, file) {
+// Exported for the context meter (`simt-dev tokens`), which answers the same question
+// about a region rather than about a diff. It reads the structured fields instead of
+// re-deriving the limit, because a second implementation of "which reader stops, and
+// where" is a second thing to keep right - and a second thing to quote in a message.
+export function readLimitFindings(text, file) {
   const state = parse(text);
   if (state.status !== 'ok' || typeof state.endByte !== 'number') return [];
   const findings = [];
@@ -489,6 +493,14 @@ function readLimitFindings(text, file) {
       findings.push({
         file,
         status: 'beyond-read-limit',
+        // The numbers, not only the sentence. `check` prints the detail and the context
+        // meter puts the reader, the limit and the offset in its JSON, and a consumer
+        // that has to regex prose to get them is a consumer that breaks when the prose
+        // is edited.
+        reader: limit.reader,
+        limitBytes: limit.bytes,
+        endByte: state.endByte,
+        overBy: state.endByte - limit.bytes,
         detail: `BEYOND-READ-LIMIT: the region ends at byte ${state.endByte}, past ${limit.reader}'s ${limit.bytes}-byte read of ${file}`,
         remedy: `set projection.place to "top" in ${MANIFEST_FILE} and run: ${CLI} sync --yes, or raise ${limit.reader}'s project_doc_max_bytes`,
       });

@@ -6,6 +6,8 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.1] — 2026-10-13
+
 ### `init` writes in place; the backup tag and adopt branch are opt-in
 
 `simt init --yes` used to always tag the pre-adoption commit and branch onto a dedicated

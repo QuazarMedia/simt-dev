@@ -8,9 +8,16 @@
 
 import { EXIT, emit, fail, isJson } from '../output/index.mjs';
 import { loadRegistry } from '../graph/load.mjs';
+import { lintSpec } from '../graph/speccheck.mjs';
+import { SPEC, SPEC_SOURCE } from '../graph/spec.mjs';
 import { CLI } from '../name.mjs';
 
 export async function lintCommand(positional, flags) {
+  const spec = flags.spec ?? null;
+  if (spec !== null && spec !== SPEC) {
+    return fail(`unknown --spec "${spec}"`, EXIT.USAGE, `the one specification this lints is: ${SPEC}`);
+  }
+
   // The resolved path comes back from the loader, because when no positional is given it
   // falls back to the member that holds the registry in this workspace (ADR-061) - and the
   // reader should see where it actually looked, not a constant that no longer exists.
@@ -18,6 +25,17 @@ export async function lintCommand(positional, flags) {
     positional[0] ?? null,
     flags,
   );
+
+  // The conformance pass is separate from the registry pass on purpose. The registry
+  // answers "does the bookkeeping match the files"; the specification answers "would a
+  // client accept these files", and the second question needs no registry at all. A
+  // reader with no registry can still lint a skill directory, so the two are additive
+  // rather than one gating the other.
+  const specReport = registry && workspace?.root
+    ? await lintSpec(registry, workspace.root)
+    : { errors: [], warnings: [], checked: 0 };
+  errors.push(...specReport.errors);
+  warnings.push(...specReport.warnings);
 
   if (isJson(flags)) {
     emit(
@@ -34,6 +52,10 @@ export async function lintCommand(positional, flags) {
           // measured (ADR-014).
           verified,
           workspace,
+          // Present only when asked for, so a reader of the default output is not told
+          // about a pass that never ran. `null` is the honest value; `true` would be a
+          // claim about conformance nobody checked.
+          spec: spec === null ? null : { name: SPEC, source: SPEC_SOURCE, checked: specReport.checked },
           errors,
           warnings,
         },
@@ -57,6 +79,12 @@ export async function lintCommand(positional, flags) {
     `nodes     ${registry.skills.length} skills, ${registry.capabilities.length} capabilities`,
     `verified  ${verified ? 'byte counts checked against disk' : 'NOT checked - see WARN below'}`,
   ];
+  if (spec !== null) {
+    lines.push(
+      `spec      ${specReport.checked} skills checked against ${SPEC_SOURCE}` +
+        `${specReport.checked === 0 ? ' (none had a readable SKILL.md)' : ''}`,
+    );
+  }
 
   const deferred = registry.skills.filter((s) => s.deferred);
   lines.push(

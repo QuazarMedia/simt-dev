@@ -6,6 +6,21 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### `graph lint` now checks skills against the published specification
+
+The Agent Skills specification sets limits nobody here was checking: a name of lowercase
+letters, digits and single hyphens that equals the directory it lives in; a description
+under 1,024 characters; a compatibility note under 500; a body recommended under 5,000
+tokens because an agent loads all of it once the skill activates. `graph lint --spec
+agentskills` checks every skill against those, and the specification was fetched rather
+than recalled — reading it turned up four rules the review that asked for this did not
+list, including the one that breaks installs.
+
+What the specification calls a must fails the exit code; what it calls a recommendation
+warns. A lint that fails on advice is a lint that gets skipped. `skills install` now asks
+the same name rules, since the directory is created from the name and an unaddressable
+skill would be the last thing anyone notices.
+
 ### The MCP surface speaks three protocol revisions, and answers in the shape each asks for
 
 The server was pinned to one revision and returned pretty JSON in a text block, so a

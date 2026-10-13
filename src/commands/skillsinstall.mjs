@@ -35,6 +35,7 @@ import { nearMatches } from '../resolve/near.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
+import { nameProblems } from '../graph/spec.mjs';
 
 /**
  * Where skills live in this repo. The estate already has a convention - a
@@ -112,6 +113,20 @@ export async function installCommand(args, flags) {
   }
 
   const dir = skillsDir(root, await dirEntries(root));
+  // The Agent Skills specification requires `name` to equal the directory it lives in,
+  // and the directory is named after the skill. So a name that breaks the naming rules
+  // cannot be installed at all: the client resolves by name, finds a directory the name
+  // does not match, and never reads the body this command just copied. Refused here,
+  // before anything is written, with the rule broken - because the alternative is a
+  // successful install that no client can load.
+  const broken = nameProblems(name);
+  if (broken !== null) {
+    return fail(
+      `${name}: ${broken}`,
+      EXIT.REGISTRY,
+      `rename it in ${skill.source ?? 'the registry'} to lowercase letters, digits and single hyphens, then install again`,
+    );
+  }
   const dest = join(root, dir, name);
   const inplace = await samePath(src, dest);
   const action = inplace ? 'in-place' : await compare(dest, src, measured.flat, name);

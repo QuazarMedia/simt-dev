@@ -82,6 +82,8 @@ const FLAGS = `--json                 structured output
 --accept-conflicts      init: adopt rules that collide with hand-written ones
 --backup                init: tag the pre-adoption commit and branch onto
                         simt-dev/adopt before writing (the undo path)
+--spec <name>           graph lint: also check every skill against a named
+                        specification (one exists: agentskills)
 --user                  harness detect: also report the directories in your home
 --repos                 tokens: measure every repository under the root, not
                         just the one, and report what repeats an earlier one

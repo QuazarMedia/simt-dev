@@ -63,6 +63,11 @@ export const VALUE_FLAGS = new Set([
   'variant',
   'from',
   'surfaces',
+  // graph lint: which specification to check the skills against. A value rather than a
+  // boolean because "lint against the spec" would not say WHICH spec, and a lint that
+  // silently applied an unnamed set of rules is the decoration this repository exists
+  // to refuse. One is on offer today, so the command rejects any other by name.
+  'spec',
 ]);
 
 /**

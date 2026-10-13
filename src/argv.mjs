@@ -34,6 +34,9 @@ export const BOOL_FLAGS = new Set([
   'plan',
   'help',
   'version',
+  // JSON output: indent it. Off by default because a pipe is not a person, and the
+  // bytes an agent pays for indentation are bytes it never reads.
+  'pretty',
   'accept-conflicts',
   'backup',
   'list',

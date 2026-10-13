@@ -20,7 +20,7 @@ import { promisify } from 'node:util';
 import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-import { EXIT, emit, fail, isJson, note } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs';
 import { MANIFEST, buildManifest, manifestPath, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
@@ -219,7 +219,7 @@ export async function initCommand(positional, flags) {
     payload.ok = false;
     payload.blockedBy = 'surface-problem';
     for (const p of surfaceProblems) note(`PROBLEM  ${p}`);
-    if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
+    if (isJson(flags)) emitJson(payload);
     return fail(
       `${surfaceProblems.length} surface(s) cannot be resolved (${surfaceProblems[0]})`,
       EXIT.FAIL,
@@ -234,7 +234,7 @@ export async function initCommand(positional, flags) {
     payload.ok = false;
     payload.blockedBy = 'mdc-problem';
     for (const p of mdcProblems) note(`PROBLEM  ${p}`);
-    if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
+    if (isJson(flags)) emitJson(payload);
     return fail(
       `${mdcProblems.length} canonical .mdc rule(s) cannot be projected (${mdcProblems[0]})`,
       EXIT.FAIL,
@@ -249,7 +249,7 @@ export async function initCommand(positional, flags) {
     payload.ok = false;
     payload.blockedBy = 'conflict';
     if (isJson(flags)) {
-      emit(`${JSON.stringify(payload, null, 2)}\n`);
+      emitJson(payload);
     } else {
       emit(render(payload, manifest, { npm, version }));
       note('');
@@ -271,7 +271,7 @@ export async function initCommand(positional, flags) {
   if (malformed.length > 0) {
     payload.ok = false;
     payload.blockedBy = 'malformed-region';
-    if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
+    if (isJson(flags)) emitJson(payload);
     else emit(render(payload, manifest, { npm, version }));
     return fail(
       `${malformed.length} target(s) have a malformed generated region (${malformed[0].file}: ${malformed[0].reason})`,
@@ -282,7 +282,7 @@ export async function initCommand(positional, flags) {
 
   // Step 4/5: report everything, then make changes only when told to.
   if (isJson(flags)) {
-    if (!apply) emit(`${JSON.stringify(payload, null, 2)}\n`);
+    if (!apply) emitJson(payload);
   } else {
     emit(render(payload, manifest, { npm, version }));
   }
@@ -443,7 +443,7 @@ export async function initCommand(positional, flags) {
   }
   payload.written = true;
 
-  if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`);
+  if (isJson(flags)) emitJson(payload);
 
   note('');
   note(`next     ${CLI} sync --yes, then ${CLI} check in CI. Commit when you are happy with the diff.`);

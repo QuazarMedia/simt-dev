@@ -97,24 +97,19 @@ export async function indexCommand(args, flags) {
   const workspace = await workspaceLine(flags);
 
   if (isJson(flags)) {
-    emit(
-      `${JSON.stringify(
-        {
-          ok: true,
-          workspace,
-          skills: registry.skills.map((s) => ({
-            name: s.name,
-            summary: s.summary,
-            capabilities: s.capabilities,
-            stack: s.stack,
-            bytes: s.bytes,
-            deferred: Boolean(s.deferred),
-          })),
-        },
-        null,
-        2,
-      )}\n`,
-      { maxBytes: flags.maxBytes ?? 0 },
+    emitJson(
+      {
+                ok: true,
+                workspace,
+                skills: registry.skills.map((s) => ({
+                  name: s.name,
+                  summary: s.summary,
+                  capabilities: s.capabilities,
+                  stack: s.stack,
+                  bytes: s.bytes,
+                  deferred: Boolean(s.deferred),
+                })),
+              },
     );
     return EXIT.OK;
   }
@@ -168,20 +163,15 @@ async function emitAll(registry, repoStack, flags, warning) {
   const inline = usable.filter((s) => !s.deferred);
 
   if (isJson(flags)) {
-    emit(
-      `${JSON.stringify(
-        {
-          ok: true,
-          all: true,
-          repoStack,
-          inline: inline.map((s) => s.name),
-          deferred: deferred.map((s) => s.name),
-          ...(warning ? { warning } : {}),
-        },
-        null,
-        2,
-      )}\n`,
-      { maxBytes: flags.maxBytes ?? 0 },
+    emitJson(
+      {
+                ok: true,
+                all: true,
+                repoStack,
+                inline: inline.map((s) => s.name),
+                deferred: deferred.map((s) => s.name),
+                ...(warning ? { warning } : {}),
+              },
     );
     return EXIT.OK;
   }
@@ -217,7 +207,10 @@ export async function findCommand(args, flags) {
     .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name));
 
   if (isJson(flags)) {
-    emit(`${JSON.stringify({ ok: true, query, workspace, results: results.map((r) => ({ name: r.skill.name, score: r.score, reasons: r.reasons })) }, null, 2)}\n`, { maxBytes: flags.maxBytes ?? 0 });
+    emitJson(
+      { ok: true, query, workspace, results: results.map((r) => ({ name: r.skill.name, score: r.score, reasons: r.reasons })) },
+      { maxBytes: flags.maxBytes ?? 0 },
+    );
     return EXIT.OK;
   }
 
@@ -275,24 +268,19 @@ export async function briefCommand(args, flags) {
       // is what `warning` carries. Failing here would tell a caller the tool
       // broke when in fact it is telling them their query was.
       if (flags.all) return emitAll(registry, repoStack, flags, warning);
-      emit(
-        `${JSON.stringify(
-          {
-            ok: true,
-            repo: { root, stack: repoStack },
-            workspace,
-            task: null,
-            budget,
-            resolved: [],
-            deferred: [],
-            excluded: [],
-            warning,
-          },
-          null,
-          2,
-        )}\n`,
-        { maxBytes: flags.maxBytes ?? 0 },
-      );
+      emitJson(
+        {
+                    ok: true,
+                    repo: { root, stack: repoStack },
+                    workspace,
+                    task: null,
+                    budget,
+                    resolved: [],
+                    deferred: [],
+                    excluded: [],
+                    warning,
+                  },
+    );
       return EXIT.OK;
     }
     emit(
@@ -333,22 +321,17 @@ export async function briefCommand(args, flags) {
   const lines = [];
 
   if (isJson(flags)) {
-    emit(
-      `${JSON.stringify(
-        {
-          ok: true,
-          repo: { root, stack: repoStack },
-          workspace,
-          task: flags.task ?? null,
-          budget,
-          resolved: picked.map((e) => ({ name: e.skill.name, bytes: e.skill.bytes, why: [...e.reasons, ...[...e.via].map((v) => `requires:${v}`)] })),
-          deferred: deferred.map((e) => ({ name: e.skill.name, bytes: e.skill.bytes })),
-          excluded: excluded.filter((e) => !closureNames.has(e.skill.name)).map((e) => ({ name: e.skill.name, reason: e.reason })),
-        },
-        null,
-        2,
-      )}\n`,
-      { maxBytes: flags.maxBytes ?? 0 },
+    emitJson(
+      {
+                ok: true,
+                repo: { root, stack: repoStack },
+                workspace,
+                task: flags.task ?? null,
+                budget,
+                resolved: picked.map((e) => ({ name: e.skill.name, bytes: e.skill.bytes, why: [...e.reasons, ...[...e.via].map((v) => `requires:${v}`)] })),
+                deferred: deferred.map((e) => ({ name: e.skill.name, bytes: e.skill.bytes })),
+                excluded: excluded.filter((e) => !closureNames.has(e.skill.name)).map((e) => ({ name: e.skill.name, reason: e.reason })),
+              },
     );
     return EXIT.OK;
   }
@@ -470,10 +453,7 @@ export async function showCommand(args, flags) {
   const body = await sourcePath(skill, workspaceRoot, root);
   const bodyFrom = body === null ? 'none' : body.startsWith(`${root}/`) ? 'repo' : 'workspace';
   if (isJson(flags)) {
-    emit(
-      `${JSON.stringify({ ok: true, ...skill, workspace, body, bodyFrom }, null, 2)}\n`,
-      { maxBytes: flags.maxBytes ?? 0 },
-    );
+    emitJson({ ok: true, ...skill, workspace, body, bodyFrom }, { maxBytes: flags.maxBytes ?? 0 });
     return EXIT.OK;
   }
   emit(
@@ -640,27 +620,22 @@ export async function evalCommand(positional, flags) {
   const okRun = unknown.length === 0 && score.clean;
 
   if (isJson(flags)) {
-    emit(
-      `${JSON.stringify(
-        {
-          ok: okRun,
-          command: 'skills eval',
-          corpus: corpusPath,
-          registry: path,
-          cases: score.cases.map((c) => ({
-            name: c.name,
-            selected: c.selected,
-            missing: c.missing,
-            unexpected: c.unexpected,
-          })),
-          unknownSkills: unknown,
-          precision: score.precision,
-          recall: score.recall,
-        },
-        null,
-        2,
-      )}\n`,
-      { maxBytes: flags.maxBytes ?? 0 },
+    emitJson(
+      {
+                ok: okRun,
+                command: 'skills eval',
+                corpus: corpusPath,
+                registry: path,
+                cases: score.cases.map((c) => ({
+                  name: c.name,
+                  selected: c.selected,
+                  missing: c.missing,
+                  unexpected: c.unexpected,
+                })),
+                unknownSkills: unknown,
+                precision: score.precision,
+                recall: score.recall,
+              },
     );
     return okRun ? EXIT.OK : EXIT.FAIL;
   }

@@ -6,6 +6,24 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Every `--json` payload says which version it is
+
+An agent that parses `--json` had no way to notice that a field had moved: the parse
+succeeds, the lookup returns `undefined`, and the answer is quietly wrong. Every payload now
+opens with `schemaVersion`, and a version in a comment is not a version, so it travels in
+the document every reader is guaranteed to see.
+
+The same document is now one line rather than four columns of whitespace, because the reader
+of `--json` is a program and it pays for every byte. `--pretty` asks for the other form, and
+a terminal gets it without being asked, because there the reader is a person.
+
+Writing the contract test found two things the review that asked for this missed. Eight
+commands — `doctor`, `mcp --list`, `graph lint`, `rules list`, and the `skills` ones — had a
+private `emit(JSON.stringify(..., null, 2))` instead of the shared helper, so `--json` meant
+something different depending on which command you asked. And a command that *failed* under
+`--json` wrote only to stderr, so a scripted caller got an empty document and a non-zero
+exit and no way to learn what went wrong. It now answers in the shape it was asked in (ADR-070).
+
 ### `graph lint` now checks skills against the published specification
 
 The Agent Skills specification sets limits nobody here was checking: a name of lowercase

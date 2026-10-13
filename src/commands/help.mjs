@@ -58,7 +58,8 @@ ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
 
-const FLAGS = `--json                 structured output
+const FLAGS = `--json                 structured output (compact; one document, one line)
+--pretty                indent --json for a human
 --max-bytes <n>         hard ceiling on emitted bytes (0 = unlimited, default 0)
 --budget <n>            context budget for skills brief (default 20480)
 --plan                  emit a fetch plan instead of inlining skill bodies

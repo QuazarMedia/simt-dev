@@ -6,7 +6,7 @@
 // Output is line-oriented and bounded (plan 0002 section 6). A lint failure names
 // the offending node, the file it disagrees with, and both numbers.
 
-import { EXIT, emit, fail, isJson } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { lintSpec } from '../graph/speccheck.mjs';
 import { SPEC, SPEC_SOURCE } from '../graph/spec.mjs';
@@ -38,30 +38,26 @@ export async function lintCommand(positional, flags) {
   warnings.push(...specReport.warnings);
 
   if (isJson(flags)) {
-    emit(
-      `${JSON.stringify(
-        {
-          ok,
-          registry: path,
-          capabilities: registry?.capabilities?.length ?? 0,
-          skills: registry?.skills?.length ?? 0,
-          // `verified: false` means the byte counts in the registry were NOT
-          // checked against files on disk. It is not a failure - it is the difference
-          // between "the registry is right" and "the registry could not be checked",
-          // and an agent that cannot see the difference will trust a number nobody
-          // measured (ADR-014).
-          verified,
-          workspace,
-          // Present only when asked for, so a reader of the default output is not told
-          // about a pass that never ran. `null` is the honest value; `true` would be a
-          // claim about conformance nobody checked.
-          spec: spec === null ? null : { name: SPEC, source: SPEC_SOURCE, checked: specReport.checked },
-          errors,
-          warnings,
-        },
-        null,
-        2,
-      )}\n`,
+    emitJson(
+      {
+        ok,
+        registry: path,
+        capabilities: registry?.capabilities?.length ?? 0,
+        skills: registry?.skills?.length ?? 0,
+        // `verified: false` means the byte counts in the registry were NOT
+        // checked against files on disk. It is not a failure - it is the difference
+        // between "the registry is right" and "the registry could not be checked",
+        // and an agent that cannot see the difference will trust a number nobody
+        // measured (ADR-014).
+        verified,
+        workspace,
+        // Present only when asked for, so a reader of the default output is not told
+        // about a pass that never ran. `null` is the honest value; `true` would be a
+        // claim about conformance nobody checked.
+        spec: spec === null ? null : { name: SPEC, source: SPEC_SOURCE, checked: specReport.checked },
+        errors,
+        warnings,
+      },
       { maxBytes: flags.maxBytes ?? 0 },
     );
     return ok ? EXIT.OK : EXIT.REGISTRY;

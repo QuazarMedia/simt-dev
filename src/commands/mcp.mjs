@@ -13,7 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { EXIT, emit, fail, isJson } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { TOOLS } from '../mcp/tools.mjs';
 import { PROTOCOL_VERSION, SUPPORTED_VERSIONS, serve } from '../mcp/server.mjs';
 import { CLI } from '../name.mjs';
@@ -23,7 +23,22 @@ export async function mcpCommand(positional, flags) {
 
   if (flags.list === true) {
     if (isJson(flags)) {
-      emit(`${JSON.stringify({ ok: true, protocolVersion: PROTOCOL_VERSION, protocolVersions: SUPPORTED_VERSIONS, version, tools: TOOLS.map(({ name, description, inputSchema }) => ({ name, description, inputSchema })) }, null, 2)}\n`);
+      emitJson({
+        ok: true,
+        protocolVersion: PROTOCOL_VERSION,
+        protocolVersions: SUPPORTED_VERSIONS,
+        version,
+        // The output schema and the read-only annotation travel with the tool here too:
+        // a reader listing the surface should see the same contract a call returns,
+        // rather than discovering the shape by making one.
+        tools: TOOLS.map(({ name, description, inputSchema, outputSchema, annotations }) => ({
+          name,
+          description,
+          inputSchema,
+          ...(outputSchema ? { outputSchema } : {}),
+          annotations,
+        })),
+      });
       return EXIT.OK;
     }
     emit(

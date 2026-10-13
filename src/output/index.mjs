@@ -29,6 +29,24 @@ const REMEDY = {
 };
 
 /**
+ * Whether failures are reported as JSON.
+ *
+ * A failure is a result: the caller asked a question and the answer is "no, and
+ * here is why". Written to stderr only, a caller parsing stdout under `--json`
+ * gets an empty document and has to believe the exit code, which tells it that
+ * something went wrong and nothing about what. So under `--json` the failure is
+ * the result and it goes where results go.
+ *
+ * The default answers "plain text" because that is what every run before the flags
+ * were parsed is, and those runs happen before anybody could have asked.
+ */
+let jsonFailure = false;
+
+export function jsonFailMode(on = false) {
+  jsonFailure = on;
+}
+
+/**
  * Report a failure and return its exit code. Callers `return fail(...)` so the
  * code is impossible to forget.
  */
@@ -38,6 +56,10 @@ export function fail(message, code = EXIT.FAIL, remedy) {
   // a reader in a consumer repo got a remedy naming a file that does not exist
   // where they are. Every remedy here is something the reader can run.
   const resolved = remedy ?? REMEDY[code] ?? `run: ${CLI} --help`;
+  if (jsonFailure) {
+    emitJson({ ok: false, error: message, remedy: resolved, exitCode: code });
+    return code;
+  }
   process.stderr.write(`ERROR ${code} ${message}\nREMEDY ${resolved}\n`);
   return code;
 }
@@ -84,8 +106,62 @@ export function emit(text, { maxBytes = 0, stream = process.stdout } = {}) {
   return true;
 }
 
-export function emitJson(value, { stream = process.stdout } = {}) {
-  stream.write(`${JSON.stringify(value, null, 2)}\n`);
+/**
+ * The shape of every JSON payload, in the payload.
+ *
+ * A reader parsing `--json` from an agent has no other way to detect that a field moved
+ * or was renamed between releases: the parse still succeeds, and the reader's next lookup
+ * returns undefined. The number is in every payload rather than in the documentation
+ * because documentation is the thing that goes stale without failing anything, and the
+ * failure this prevents is silent.
+ *
+ * Bumped when a payload changes in a way a reader would notice. Adding a field is not
+ * that; removing, renaming or retyping one is.
+ */
+export const SCHEMA_VERSION = 1;
+
+/**
+ * Whether the next payload is indented.
+ *
+ * Set once per run from the flags, rather than threaded through every call site: the
+ * alternative is twenty-five call sites each remembering to pass a value they do not
+ * otherwise care about, and the one that forgets is the one a reader pipes somewhere
+ * important. The default answers "is a person reading", which is the right answer
+ * before anybody sets it.
+ */
+let prettyDefault = process.stdout.isTTY === true;
+
+export function jsonIndentDefault(pretty = process.stdout.isTTY === true) {
+  prettyDefault = pretty;
+}
+
+/**
+ * Emit JSON, compact unless a human is reading it.
+ *
+ * Indentation is for a person, and an agent pays for it on every call: the same document
+ * is a third again larger, and the reader is `JSON.parse`, not an eye. So the default is
+ * compact, and `--pretty` asks for the readable form. The one exception is a TTY, where
+ * the only consumer is a person: the compact document saves them nothing and costs them
+ * the diff they were about to read.
+ */
+export function emitJson(value, { stream = process.stdout, pretty = prettyDefault, maxBytes = 0 } = {}) {
+  const payload =
+    value !== null && typeof value === 'object' && !Array.isArray(value) && value.schemaVersion === undefined
+      ? { schemaVersion: SCHEMA_VERSION, ...value }
+      : value;
+  const text = `${pretty ? JSON.stringify(payload, null, 2) : JSON.stringify(payload)}\n`;
+  // The same ceiling and the same announcement `emit` applies: a reader who asked for a
+  // bounded answer gets a bounded answer and is told how much is missing, rather than a
+  // half-parsed document it believes is whole.
+  if (maxBytes > 0 && Buffer.byteLength(text) > maxBytes) {
+    const slice = Buffer.from(text).subarray(0, maxBytes).toString('utf8');
+    const cut = slice.lastIndexOf('\n');
+    stream.write(cut > 0 ? `${slice.slice(0, cut)}\n` : slice);
+    stream.write(`TRUNCATED ${Buffer.byteLength(text) - maxBytes} bytes omitted, raise maxBytes\n`);
+    return false;
+  }
+  stream.write(text);
+  return true;
 }
 
 /**

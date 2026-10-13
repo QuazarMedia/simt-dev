@@ -24,7 +24,7 @@ import { cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { EXIT, emit, fail, isJson, note, writeMode } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { loadRegistry, measureSkill } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { readCapability } from '../hooks/capability.mjs';
@@ -162,7 +162,7 @@ export async function installCommand(args, flags) {
   // combination a script writes. The payload is now emitted once, at the end,
   // after the write it describes.
   const report = () => {
-    if (isJson(flags)) emit(`${JSON.stringify(payload, null, 2)}\n`, { maxBytes: flags.maxBytes ?? 0 });
+    if (isJson(flags)) emitJson(payload);
   };
   const mode = writeMode(flags);
 

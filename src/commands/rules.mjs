@@ -14,7 +14,7 @@
 // one, because "this rule has no decision behind it" is exactly the fact a
 // reviewer needs and exactly the fact an empty output would hide.
 
-import { EXIT, emit, fail, isJson } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { loadRules, select } from '../projection/project.mjs';
 import { loadMdcRules } from '../projection/mdc.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
@@ -92,30 +92,25 @@ export async function listCommand(args, flags) {
   const selection = root ? await selectionFor(rules, root) : null;
 
   if (isJson(flags)) {
-    emit(
-      `${JSON.stringify(
-        {
-          ok: broken.length === 0,
-          command: 'rules list',
-          root,
-          rules: sorted(rules).map((r) => ({
-            id: r.id,
-            title: r.title,
-            origin: r.origin,
-            source: r.source,
-            applies: r.applies,
-            fallback: r.fallback,
-            bytes: r.bytes,
-            error: r.error,
-            adrs: citations(r.body),
-            selected: selection ? selection.selected.has(r.id) : null,
-          })),
-          notes: selection?.notes ?? [],
-        },
-        null,
-        2,
-      )}\n`,
-      { maxBytes: flags.maxBytes ?? 0 },
+    emitJson(
+      {
+                ok: broken.length === 0,
+                command: 'rules list',
+                root,
+                rules: sorted(rules).map((r) => ({
+                  id: r.id,
+                  title: r.title,
+                  origin: r.origin,
+                  source: r.source,
+                  applies: r.applies,
+                  fallback: r.fallback,
+                  bytes: r.bytes,
+                  error: r.error,
+                  adrs: citations(r.body),
+                  selected: selection ? selection.selected.has(r.id) : null,
+                })),
+                notes: selection?.notes ?? [],
+              },
     );
     return broken.length === 0 ? EXIT.OK : EXIT.FAIL;
   }
@@ -188,7 +183,7 @@ export async function showCommand(args, flags) {
 
   const adrs = citations(rule.body);
   if (isJson(flags)) {
-    emit(`${JSON.stringify({ ok: !rule.error, ...rule, adrs }, null, 2)}\n`, { maxBytes: flags.maxBytes ?? 0 });
+    emitJson({ ok: !rule.error, ...rule, adrs }, { maxBytes: flags.maxBytes ?? 0 });
     return rule.error ? EXIT.FAIL : EXIT.OK;
   }
 
@@ -238,21 +233,16 @@ async function ruleDirection(id, rules, decisions, flags, broken) {
   const index = byId(decisions);
 
   if (isJson(flags)) {
-    emit(
-      `${JSON.stringify(
-        {
-          ok: true,
-          command: 'rules why',
-          rule: rule.id,
-          source: rule.source,
-          origin: rule.origin,
-          adrs: cited.map((c) => index.get(c) ?? { id: c, missing: true }),
-          uncited: cited.length === 0,
-        },
-        null,
-        2,
-      )}\n`,
-      { maxBytes: flags.maxBytes ?? 0 },
+    emitJson(
+      {
+                ok: true,
+                command: 'rules why',
+                rule: rule.id,
+                source: rule.source,
+                origin: rule.origin,
+                adrs: cited.map((c) => index.get(c) ?? { id: c, missing: true }),
+                uncited: cited.length === 0,
+              },
     );
     return EXIT.OK;
   }
@@ -313,22 +303,17 @@ async function adrDirection(adr, rules, decisions, flags) {
     // effective ruling is carried alongside rather than instead: the record asked about
     // is still named, and what is in force is named separately.
     const replacement = d.supersededBy ? decisions.find((x) => x.id === d.supersededBy) : null;
-    emit(
-      `${JSON.stringify(
-        {
-          ok: true,
-          command: 'rules why',
-          adr: d,
-          supersededBy: replacement ? { id: replacement.id, title: replacement.title } : null,
-          inForce: replacement
-            ? { id: replacement.id, status: replacement.status, summary: replacement.summary }
-            : { id: d.id, status: d.status, summary: d.summary },
-          rules: restates.map((r) => r.id),
-        },
-        null,
-        2,
-      )}\n`,
-      { maxBytes: flags.maxBytes ?? 0 },
+    emitJson(
+      {
+                ok: true,
+                command: 'rules why',
+                adr: d,
+                supersededBy: replacement ? { id: replacement.id, title: replacement.title } : null,
+                inForce: replacement
+                  ? { id: replacement.id, status: replacement.status, summary: replacement.summary }
+                  : { id: d.id, status: d.status, summary: d.summary },
+                rules: restates.map((r) => r.id),
+              },
     );
     return EXIT.OK;
   }

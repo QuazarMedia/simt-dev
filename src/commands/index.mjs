@@ -6,7 +6,15 @@
 // succeeds. An agent that calls `simt-dev compare` on an unreleased build must get a
 // failure, not an empty result it will read as "no drift".
 
-import { EXIT, emit, fail, isJson } from '../output/index.mjs';
+import {
+  EXIT,
+  emit,
+  emitJson,
+  fail,
+  isJson,
+  jsonFailMode,
+  jsonIndentDefault,
+} from '../output/index.mjs';
 import { help } from './help.mjs';
 import { lintCommand } from './graph.mjs';
 import {
@@ -61,7 +69,7 @@ const GROUPS = new Map([
  * Module scope so `test/cli.test.mjs` can assert help against it. Module scope is also
  * just correct: nothing in the map depends on the call.
  */
-const IMPLEMENTED = {
+export const IMPLEMENTED = {
   doctor: runDoctor,
   'graph lint': lintCommand,
   'skills index': skillsIndex,
@@ -96,6 +104,17 @@ export const COMMANDS = Object.keys(IMPLEMENTED).sort();
 
 export async function dispatch(argv) {
   const { flags, positional } = parseOrExit(argv);
+
+  // The JSON shape is decided once, here, and every command inherits it. Threading a
+  // `--pretty` through twenty-five call sites would mean twenty-five places to forget,
+  // and the one that forgot would be the one a reader pipes into a script.
+  //
+  // Both halves are set before anything can fail, because a command that fails under
+  // `--json` has still produced a result: the reason it failed. Set here, an unknown
+  // command answers in the same shape a working one does, and the caller's parse
+  // never sees an empty document.
+  jsonIndentDefault(flags.pretty === true);
+  jsonFailMode(flags.json === true);
 
   // Help is shown only when explicitly asked for. An unknown command must fail with
   // a usage code, not print 40 lines of prose and exit 0 — an agent that mistyped
@@ -196,29 +215,23 @@ async function runDoctor(positional, flags) {
   const code = failure ? EXIT.CONFIG : EXIT.OK;
 
   if (isJson(flags)) {
-    emit(
-      `${JSON.stringify(
-        {
-          ok: code === EXIT.OK,
-          command: 'doctor',
-          root,
-          ...result,
-          // The workspace answer is a fact about which directory the tool would
-          // act on next (ADR-014). It is printed in the text report; leaving it
-          // out of the JSON meant a machine-readable caller could not see it at
-          // all, which is the one-question-two-answers defect again.
-          workspace: {
-            root: ws.root ?? null,
-            source: ws.source,
-            detail: ws.detail,
-            error: ws.error ?? null,
-          },
-          ...(failure ?? {}),
-        },
-        null,
-        2,
-      )}\n`,
-    );
+    emitJson({
+      ok: code === EXIT.OK,
+      command: 'doctor',
+      root,
+      ...result,
+      // The workspace answer is a fact about which directory the tool would
+      // act on next (ADR-014). It is printed in the text report; leaving it
+      // out of the JSON meant a machine-readable caller could not see it at
+      // all, which is the one-question-two-answers defect again.
+      workspace: {
+        root: ws.root ?? null,
+        source: ws.source,
+        detail: ws.detail,
+        error: ws.error ?? null,
+      },
+      ...(failure ?? {}),
+    });
     return code;
   }
   if (result.error) {

@@ -6,6 +6,26 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### One rule set, shared by the repositories that agreed on it
+
+Several repositories want the same rules and each kept its own copy, so a policy change
+was several edits that could be several-minus-one, and the repository that missed it
+carried instructions nobody there wrote. A pack is that shared set: `packs` in the manifest
+declares it, the bytes live in the repository, and a digest of them is recorded so nobody
+has to trust that the two agree.
+
+A pack's rules are selected by the same matcher as any profile and appear in the region's
+source list under the pack's own directory. Precedence is the repository, then a pack it
+declares, then what the tool ships, and every replacement is reported rather than silent.
+
+A pack that disagrees with its pin still projects — the gate blocks and prints both
+digests, because dropping it would let the repair delete the rules it is reporting. One
+that is missing blocks with a remedy that restores it, and one with no digest is reported
+without failing anything, since its rules render correctly. `compare` lists every pack and
+the digest it is pinned to, so a repository behind a shared change is visible before
+anyone follows stale instructions. Nothing is fetched: the bytes are in the repository,
+which is what makes the rendered region reproducible from what the reader has (ADR-065).
+
 ### `simt tokens` counts what a reader loads
 
 Review 0002 filed the estate's always-on context at 90 KB per turn, 72% of it a paragraph

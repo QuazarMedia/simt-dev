@@ -31,6 +31,7 @@ import { foldsRules, frontmatterBlock, resolveSurfaces } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
 import { manifestPath } from './manifest.mjs';
 import { BASELINES } from './baselines.mjs';
+import { PACK_DIR, resolvePacks } from '../packs.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const ROOT = resolve(HERE, '..', '..');
@@ -122,6 +123,17 @@ async function walk(dir, prefix = '') {
 
 /** Repo-local profile directory, relative to a repo root (ADR-013 section 2). */
 export const LOCAL_PROFILE_DIR = '.simt-dev/profiles';
+
+/**
+ * Which origin outranks which when two profiles claim one `simt-id`.
+ *
+ * A pack is the repository's shared policy and the built-in set is the tool's
+ * opinion, so a repository can replace either and a pack can replace what the
+ * tool ships. Read in one place because the answer to "whose rule is this?" is
+ * asked on every rule of every projection, and a precedence that lives in two
+ * places is a precedence that will disagree with itself.
+ */
+const ORIGIN_RANK = { central: 0, pack: 1, local: 2 };
 
 /** Every key a stack profile or core rule may declare is this tool's own, so every
  *  one carries the `simt-` prefix (ADR-022). A profile carrying a bare key would read
@@ -444,7 +456,42 @@ export async function loadRules(root = null) {
     collected.push({ file, dir: RULES_DIR, origin: 'central', source: `rules/${file}` });
   }
 
+  // Packs go in before the repo's own profiles and after the built-ins, because
+  // that is the order they lose to. The collection order is the tie-break `select`
+  // reads for two profiles of equal rank, so "collected central, then pack, then
+  // local" is the precedence stated once rather than restated in the comparator.
   if (root !== null) {
+    const { packs } = await resolvePacks(root);
+    for (const pack of packs) {
+      // `present`, not `ok`. A pack whose bytes disagree with its pin still projects:
+      // dropping it would let the next `sync` delete the rules it carries, so the
+      // remedy the finding names would cause the damage it exists to report.
+      if (!pack.present) continue;
+      const packRules = join(pack.dir, 'rules');
+      let names = [];
+      try {
+        names = (await readdir(packRules)).filter((n) => n.endsWith('.md')).sort();
+      } catch {
+        names = [];
+      }
+      let stackNames = [];
+      try {
+        stackNames = (await readdir(join(packRules, 'stacks')))
+          .filter((n) => n.endsWith('.md'))
+          .map((n) => `stacks/${n}`);
+      } catch {
+        stackNames.length = 0;
+      }
+      for (const file of [...names, ...stackNames].sort()) {
+        collected.push({
+          file,
+          dir: packRules,
+          origin: 'pack',
+          source: `${PACK_DIR}/${pack.name}/rules/${file}`,
+        });
+      }
+    }
+
     const localDir = join(root, LOCAL_PROFILE_DIR);
     let localNames = [];
     try {
@@ -492,7 +539,7 @@ export async function loadRules(root = null) {
  * fact is the more durable choice because it survives the framework being
  * replaced.
  *
- * `shadowed` lists local profiles that replaced a central one, so a caller can
+ * `shadowed` lists profiles that replaced one they outrank, so a caller can
  * report it rather than silently changing what a repo receives.
  */
 export function select(rules, stack, facts = []) {
@@ -506,9 +553,14 @@ export function select(rules, stack, facts = []) {
       ids.set(rule.id, rule);
       continue;
     }
-    // A local profile is allowed to replace a central one; two of the same
-    // origin are a defect the caller must be able to see.
-    const localWins = rule.origin === 'local' && prior.origin !== 'local';
+    // A profile may replace one it outranks; two of the same origin are a defect
+    // the caller must be able to see.
+    //
+    // Ranked rather than `=== 'local'` because there is now a third origin. The
+    // ordering it encodes - the repository's own profile, then a pack it declares,
+    // then what the tool ships - is the whole precedence rule, in one comparison
+    // that cannot drift from the order the files were collected in.
+    const localWins = ORIGIN_RANK[rule.origin] > ORIGIN_RANK[prior.origin];
     if (localWins) {
       ids.set(rule.id, rule);
       shadowed.push({

@@ -436,6 +436,11 @@ export function buildManifest({ root, stack = [], sha, version, existing = null,
     // substitution value: it lists the rules this repo declares it has a problem
     // with, which is something detection cannot infer.
     substitutions: existing?.substitutions ?? {},
+    // ADR-065: rule sets this repository shares with its siblings, and the digest
+    // of the bytes it has for each. Not a generated field - which packs a repo uses
+    // is the repo's decision, and `check` reports a digest that does not match the
+    // directory rather than a value here that differs from what the tool would pick.
+    packs: existing?.packs ?? [],
     // ADR-020: which editors this repo's rules are projected into. Absent means the
     // global standard applies; an explicit empty list is a real choice meaning
     // AGENTS.md only. Recorded rather than inferred, because "which IDE does this repo

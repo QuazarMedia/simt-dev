@@ -523,8 +523,14 @@ test('the two non-blocking sets are different, and the difference is the fix', a
   // identical either way: ADR-035's sentence about promises about a *set* of commands,
   // applied to a set of statuses.
   const { SYNC_NON_BLOCKING, CHECK_NON_BLOCKING } = await import('../src/commands/sync.mjs');
-  assert.deepEqual([...SYNC_NON_BLOCKING].sort(), ['orphaned', 'pointer-unread']);
-  assert.deepEqual([...CHECK_NON_BLOCKING].sort(), ['orphaned']);
+  // `pack-unpinned` joined both sets for ADR-065: the rules it carries render, and
+  // what is missing is the record of which bytes they were declared at. A pack whose
+  // bytes disagree with its pin is NOT in either - that one blocks.
+  assert.deepEqual([...SYNC_NON_BLOCKING].sort(), ['orphaned', 'pack-unpinned', 'pointer-unread']);
+  assert.deepEqual([...CHECK_NON_BLOCKING].sort(), ['orphaned', 'pack-unpinned']);
+  for (const status of ['pack-digest-mismatch', 'pack-missing']) {
+    assert.ok(!CHECK_NON_BLOCKING.has(status), `${status} must fail the gate`);
+  }
   // Everything `check` tolerates, `sync` tolerates: the gate is never the laxer one.
   for (const status of CHECK_NON_BLOCKING) {
     assert.ok(SYNC_NON_BLOCKING.has(status), `${status} fails the gate but not the writer`);

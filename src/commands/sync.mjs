@@ -27,6 +27,7 @@ import { surfacesLine } from '../projection/surfaces.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { assertVersionPin, packageVersion } from '../package-version.mjs';
+import { resolvePacks } from '../packs.mjs';
 
 /** Findings `sync` reports and does not fail on.
  *
@@ -48,7 +49,7 @@ import { assertVersionPin, packageVersion } from '../package-version.mjs';
  *  people learn to ignore. A *foreign* one — a real file or a real directory where the
  *  pointer belongs — is reported loudly with what is in the way, because that one is a
  *  decision somebody has to make. */
-export const SYNC_NON_BLOCKING = new Set(['pointer-unread', 'orphaned']);
+export const SYNC_NON_BLOCKING = new Set(['pointer-unread', 'orphaned', 'pack-unpinned']);
 
 /**
  * Findings `check` reports and does not fail on.
@@ -68,7 +69,13 @@ export const SYNC_NON_BLOCKING = new Set(['pointer-unread', 'orphaned']);
  *
  *  `orphaned` stays non-blocking in both. Nothing can satisfy it, in either command.
  */
-export const CHECK_NON_BLOCKING = new Set(['orphaned']);
+// `pack-unpinned` is here and `pack-digest-mismatch` is not, which is the whole
+// judgement. An unpinned pack still renders its rules correctly; what is missing
+// is the record of which bytes were declared, and failing a gate over a field the
+// tool does not require would fail every repository that vendored a pack and
+// pinned it later. A pack whose bytes do not match its pin renders a region
+// nobody can account for, so that one blocks.
+export const CHECK_NON_BLOCKING = new Set(['orphaned', 'pack-unpinned']);
 
 export async function syncCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
@@ -431,6 +438,12 @@ export async function checkCommand(positional, flags) {
       findings.push({ file: MANIFEST_FILE, status: 'version-mismatch', detail: mismatch, remedy: `run: ${CLI} upgrade --yes` });
     }
     findings.push(...unrunnableGates(manifest, await readCapability(root)));
+    // A pack the repository declares but cannot produce is reported here rather
+    // than when a rule happens to be missing, because that is the failure mode
+    // this guards: the region still renders, it renders SHORT, and `check` would
+    // pass. A reader whose rules were quietly halved is worse off than one whose
+    // gate is red, so this is a blocking finding, not a note.
+    findings.push(...(await resolvePacks(root)).findings);
     // A manifest a formatter has rewritten is not wrong, and not editable-away by
     // hand either: the next `init` puts simt-dev's own bytes back and the formatter
     // takes them away again. Reporting it here is what stops that being a surprise

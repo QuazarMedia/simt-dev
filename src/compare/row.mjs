@@ -19,6 +19,7 @@
 import { checkTargets, PRIMARY_TARGET } from '../projection/project.mjs';
 import { manifestDrift, readManifest } from '../projection/manifest.mjs';
 import { loadRules, select } from '../projection/rules.mjs';
+import { resolvePacks } from '../packs.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { readHooksState, wantsShim } from './hooksstate.mjs';
@@ -42,6 +43,8 @@ import { MANIFEST_FILE } from '../name.mjs';
  * @property {boolean} hooksComplete every event installed, executable, not stale
  * @property {string[]} gatesDeclared
  * @property {string[]} gateProblems
+* @property {{name: string, source: string|null, version: string|null, digest: string|null, ok: boolean}[]} packs
+*   the shared rule sets this repo declares, with the digest it has pinned for each
  * @property {string[]} problems     everything wrong, one line each; drives the exit code
  * @property {string[]} notes        worth knowing, but not wrong; does NOT drive the exit code
  */
@@ -105,6 +108,13 @@ export async function buildRow(path, context) {
   // prose above it was still true.
   const { selected: chosen } = select(await loadRules(path), fp.stack ?? [], fp.facts ?? []);
 
+  // The packs this repo shares with its siblings, with the digest it has pinned.
+  // A dashboard that reported `current: 14` while half their rules lived in a
+  // directory that was not there described an estate nobody had. The digest is
+  // the per-repo answer to "which bytes were these", which is what P4 asks for and
+  // what a reviewer comparing two repositories actually wants to see.
+  const { packs, findings: packFindings } = await resolvePacks(path);
+
   const row = {
     name,
     path,
@@ -130,6 +140,13 @@ export async function buildRow(path, context) {
       orphaned: ruleFindings.filter((f) => f.status === 'orphaned').map((f) => f.file),
     },
     pointers: pointers.map((p) => ({ file: p.file, state: p.status })),
+    packs: packs.map((p) => ({
+      name: p.name,
+      source: p.source,
+      version: p.version,
+      digest: p.declared || null,
+      ok: p.ok,
+    })),
     hooksRouted: hooks.routed,
     hooksComplete: hooks.complete,
     gatesDeclared: declaredGates(manifest.manifest),
@@ -161,6 +178,16 @@ export async function buildRow(path, context) {
 
   if (manifest.error) {
     problems.push(`${MANIFEST_FILE} ${manifest.error}`);
+  }
+
+  // `pack-unpinned` is a note here for the same reason it is non-blocking in
+  // `check`: the rules render, and only the record of which bytes they were is
+  // absent. A missing or mismatched pack is a problem, because that row would
+  // otherwise report a repository `current` while projecting fewer rules than the
+  // manifest declares - the defect ADR-045 was about, reached a different way.
+  for (const f of packFindings) {
+    if (f.status === 'pack-unpinned') notes.push(`${f.file}: ${f.detail}; ${f.remedy}`);
+    else problems.push(`${f.file}: ${f.detail}; ${f.remedy}`);
   }
 
   // A generated field of the manifest is stale, and `check` refuses on it. This row

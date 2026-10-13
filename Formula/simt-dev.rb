@@ -25,8 +25,8 @@
 class SimtDev < Formula
   desc "Shared agent rules, skills and git hooks, adopted by one command"
   homepage "https://github.com/QuazarMedia/simt-dev"
-  url "https://registry.npmjs.org/simt-dev/-/simt-dev-0.2.0.tgz"
-  sha256 "54e3345935f1c6b2a2bebe29abff11f45096c2de379c934963db3ac55a27ba49"
+  url "https://registry.npmjs.org/simt-dev/-/simt-dev-0.2.1.tgz"
+  sha256 "734e88498a6cbf264623b5ff5281284bea1fa7c75ccbe936d1e418838da46e27"
   license "Apache-2.0"
 
   # The runtime is Node, and it is declared rather than found. Without this the

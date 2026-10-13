@@ -6,6 +6,22 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Which harnesses a repository is set up for is now answerable
+
+`simt-dev harness detect` looks at the configuration directories that exist and says
+which harnesses this repository — and, with `--user`, its reader — is set up for. It
+claims presence and nothing else: a directory found is not a claim about what its owner
+reads, because the tool cannot answer that without a vendor document, and a guess here
+would be the reader's problem the first time it was wrong. A harness that reads
+AGENTS.md is served by the standard surface whatever else it reads, and every surface row
+now records that in three values rather than two, because "reads AGENTS.md" and "is
+covered for this harness" are not the same sentence — Copilot's CLI reads it and its
+editor, code review and cloud agent do not.
+
+No new harness rows ship with it. The candidates are recorded as directory names, which
+claim presence and not coverage; a row still requires the vendor document it cites, and
+one that reads nothing has to be added on purpose.
+
 ### A monorepo gets rules for each of its packages
 
 One repository, one projection: every package under the root was given the root's rules,

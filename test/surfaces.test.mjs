@@ -31,6 +31,7 @@ import {
   surface,
   surfacesLine,
   undocumentedKeys,
+  CANDIDATE_DIRS,
 } from '../src/projection/surfaces.mjs';
 import { loadMdcRules, ruleName } from '../src/projection/mdc.mjs';
 import { plan, checkTargets, pointerTargets, pointerState } from '../src/projection/project.mjs';
@@ -65,6 +66,61 @@ test('every surface row names the document it was verified against', () => {
     if (s.kind === 'file') {
       assert.ok(s.rule.includes('{name}'), `${s.id}: a rule path must interpolate a name`);
     }
+  }
+});
+
+test('a row that claims no reader of the primary file is the row that must carry the channel (S42)', () => {
+  // `readsAgentsMd` is the column that decides whether a new harness needs a row at
+  // all, so it is worth a value on every row and worth a rule about what each value
+  // obliges. A harness nobody has verified against a document gets no row here (S42
+  // filed it: a row whose `verified` cites nothing is decoration that misdescribes the
+  // artefact), which is why nothing below reads the candidate list.
+  for (const s of SURFACES) {
+    assert.ok(
+      ['all', 'some', 'none'].includes(s.readsAgentsMd),
+      `${s.id}: readsAgentsMd is "${s.readsAgentsMd}", which is not one of all|some|none`,
+    );
+    // A note wherever the answer is not "every reader", because the whole reason this
+    // column is three-valued is that "reads AGENTS.md" and "is covered for" are not the
+    // same sentence.
+    if (s.readsAgentsMd !== 'all') {
+      assert.ok(s.readsAgentsMdNote, `${s.id}: ${s.readsAgentsMd} must say which readers`);
+    }
+    if (s.readsAgentsMd === 'none') {
+      assert.ok(s.rule, `${s.id}: nothing reads the primary file, so this row is the only channel and must have one`);
+    }
+  }
+});
+
+test('no two rows would hand the same reader the same rule (S42)', () => {
+  // Two rows claiming one path would write one file twice and load it twice, and two
+  // rows both reading the primary file would fold the same text into two places. Both
+  // are the duplicate-source-of-truth defect, one at the file layer and one at the
+  // reader layer, and neither is visible in a list of ids.
+  const paths = new Map();
+  for (const s of SURFACES) {
+    if (!s.rule) continue;
+    assert.ok(!paths.has(s.rule), `${s.id} and ${paths.get(s.rule)} both project ${s.rule}`);
+    paths.set(s.rule, s.id);
+  }
+  // Two rows claiming one configuration directory would both project into it, and the
+  // second would overwrite the first: the reader would load one rule set and no
+  // `harness detect` could say which row put it there.
+  const dirs = new Map();
+  for (const s of SURFACES) {
+    for (const dir of s.configDirs ?? []) {
+      assert.ok(!dirs.has(dir), `${s.id} and ${dirs.get(dir)} both claim ${dir}`);
+      dirs.set(dir, s.id);
+    }
+  }
+  // And no directory may appear in both tables: a candidate directory is by
+  // definition one no row projects into, so an overlap would make `harness detect`
+  // report the same directory twice with two different answers.
+  for (const dir of dirs.keys()) {
+    assert.ok(
+      !CANDIDATE_DIRS.some((c) => c.dir === dir),
+      `${dir} is both a projected surface directory and a candidate with no channel`,
+    );
   }
 });
 

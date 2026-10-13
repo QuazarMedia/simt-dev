@@ -43,6 +43,11 @@ export const BOOL_FLAGS = new Set([
   // silent-ignore defect this file's header refuses, so the meter's switch is named
   // for what it selects.
   'repos',
+  // harness detect: also report the directories in the user's home. Off by default
+  // because the home directory belongs to the reader rather than the repository, and a
+  // command whose output changes because something was installed elsewhere is one a
+  // reader stops trusting.
+  'user',
 ]);
 
 export const VALUE_FLAGS = new Set([

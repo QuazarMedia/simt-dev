@@ -57,6 +57,22 @@
  *   - `file`    a wholly generated file; hand-written body text is retired
  *   - `pointer` a symlink to the primary target; carries no content of its own
  *
+ * `readsAgentsMd` is a vendor fact, in three values rather than two:
+ *   - `all`   every reader this row names loads AGENTS.md
+ *   - `some`  some of them do, and `readsAgentsMdNote` says which
+ *   - `none`  none does, so the row is the only channel its readers have
+ *
+ * It is not `readsPrimary`, which asks a different question: that one is about
+ * whether a per-rule file would duplicate text the region already carries, and it is
+ * only meaningful while folding is on. This one is about the FILE, and it is what
+ * decides whether a new harness needs a row at all - a harness that reads AGENTS.md
+ * is supported by the standard surface, whatever else it reads.
+ *
+ * `configDirs` are the directories whose presence implies the harness is in use.
+ * Detection reads them and claims nothing else: a directory a harness may create for
+ * other reasons is a presence, not a proof, and the command says "present", never
+ * "installed".
+ *
  * `ruleFrontmatter` returns the keys that editor reads BEFORE any rule text. A
  * surface that needs none returns '' and the projected file starts at the body.
  */
@@ -82,6 +98,8 @@ export const SURFACES = [
     // guessed path is the failure this table exists to prevent.
     rule: null,
     foldRules: true,
+    readsAgentsMd: 'all',
+    configDirs: ['.opencode'],
     skills: '.agents/skills',
     documentedSkillsPaths: ['.opencode/skills', '.claude/skills', '.agents/skills'],
     // Codex concatenates AGENTS.md from the root down and stops at
@@ -107,6 +125,8 @@ export const SURFACES = [
     primary: null,
     kind: 'file',
     rule: '.cursor/rules/{name}.mdc',
+    readsAgentsMd: 'all',
+    configDirs: ['.cursor'],
     // `documentedKeys` is the set the vendor's own docs name for this surface, and
     // `ruleFrontmatter` must emit nothing outside it. A key invented here would be
     // inert at best; on Antigravity an unrecognised value silently discards the
@@ -144,6 +164,16 @@ export const SURFACES = [
     primary: null,
     kind: 'file',
     rule: '.claude/rules/{name}.md',
+    // `some`, not `none`. It reads AGENTS.md - the same docs say CLAUDE.md is used only
+    // when no AGENTS.md exists - but only on that condition, so a repository that has a
+    // hand-written CLAUDE.md is read by neither. That is why this row still needs its
+    // own channel and a pointer: the fallback is not a channel, it is the absence of
+    // one, and a reader who relied on it would be relying on the reader deleting a
+    // file they wrote.
+    readsAgentsMd: 'some',
+    readsAgentsMdNote:
+      'CLAUDE.md is read first; AGENTS.md is read only when there is no CLAUDE.md, which is why the pointer exists',
+    configDirs: ['.claude'],
     // Intentionally no `paths:`. See decision 3 in the header.
     documentedKeys: ['paths', 'description'],
     ruleFrontmatter: () => [],
@@ -163,6 +193,8 @@ export const SURFACES = [
     primary: null,
     kind: 'file',
     rule: '.agents/rules/{name}.md',
+    readsAgentsMd: 'all',
+    configDirs: ['.agents'],
     // `trigger` is REQUIRED here and an unrecognised value discards the rule with no
     // message, which is why the value is mapped rather than passed through.
     documentedKeys: ['trigger', 'description', 'globs', 'glob'],
@@ -187,6 +219,14 @@ export const SURFACES = [
     primary: null,
     kind: 'file',
     rule: '.github/instructions/{name}.instructions.md',
+    // Copilot is why the column is three values and not two. Its CLI reads AGENTS.md
+    // and its editor and code review do not, so the row both needs its own channel and
+    // cannot be described as "reads AGENTS.md" without a reader reading that claim as
+    // "this repo is covered for Copilot", which for two of its three readers it is not.
+    readsAgentsMd: 'some',
+    readsAgentsMdNote:
+      'Copilot CLI reads AGENTS.md; the editor, code review and the cloud agent do not',
+    configDirs: ['.github'],
     documentedKeys: ['applyTo', 'excludeAgent'],
     ruleFrontmatter: () => ['applyTo: "**"'],
     verified:
@@ -294,6 +334,37 @@ export function readsPrimary(resolved) {
 }
 
 export const SURFACE_IDS = SURFACES.map((s) => s.id);
+
+/**
+ * Config directories whose presence implies a harness is in use, for the ones this
+ * tool has no surface row for.
+ *
+ * Deliberately a list of DIRECTORY NAMES and nothing else. It carries no claim about
+ * what any of these readers loads: the review that proposed the command listed these
+ * harnesses as candidates and explicitly did not re-verify each vendor's current
+ * documentation, and a row built from that list would ship a `verified` field citing
+ * nothing — decoration that misdescribes the artefact, which is the failure this whole
+ * repository exists to prevent. A directory here means "a reader may be configured in
+ * this repository", never "this harness is installed" and never "its rules are not
+ * being loaded".
+ *
+ * `.github` is absent even though the Copilot row carries it: `.github` holds workflows
+ * and issues, so its presence says nothing about whether Copilot is used, and the
+ * Copilot row's own detection is not something this command is for.
+ */
+export const CANDIDATE_DIRS = [
+  { dir: '.gemini', harness: 'Gemini CLI' },
+  { dir: '.windsurf', harness: 'Windsurf' },
+  { dir: '.zed', harness: 'Zed' },
+  { dir: '.kiro', harness: 'Kiro' },
+  { dir: '.cline', harness: 'Cline' },
+  { dir: '.roo', harness: 'Roo Code' },
+  { dir: '.junie', harness: 'Junie' },
+  { dir: '.aider', harness: 'Aider' },
+  { dir: '.continue', harness: 'Continue' },
+  { dir: '.amp', harness: 'Amp' },
+  { dir: '.goose', harness: 'Goose' },
+];
 
 /**
  * Frontmatter keys a surface emits that its own vendor does not document.

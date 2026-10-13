@@ -50,6 +50,10 @@ ${CLI} tokens [--repos]       what a reader loads at session start, in bytes
                            (read-only; exits 0 whatever it finds, because a
                            measurement is not a verdict; --repos measures every
                            repository under the root and what repeats an earlier)
+${CLI} harness detect         which harnesses this repo (and, with --user, you)
+                           are set up for, and which have a rule channel here
+                           (presence only: a directory found is not a claim about
+                           what its owner reads; exits 0 whatever it finds)
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
@@ -78,6 +82,7 @@ const FLAGS = `--json                 structured output
 --accept-conflicts      init: adopt rules that collide with hand-written ones
 --backup                init: tag the pre-adoption commit and branch onto
                         simt-dev/adopt before writing (the undo path)
+--user                  harness detect: also report the directories in your home
 --repos                 tokens: measure every repository under the root, not
                         just the one, and report what repeats an earlier one
 --help                  this text

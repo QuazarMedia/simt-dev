@@ -23,13 +23,13 @@ Requires **Node >= 22.20.0** (the PyPI install can supply it, see below).
 
 ```sh
 # pinned, per repository - what CI and a teammate both get
-npm i -D simt-dev@0.2.0
+npm i -D simt-dev@0.2.1
 
 # or globally, if you would rather not add a dependency
-npm i -g simt-dev@0.2.0
+npm i -g simt-dev@0.2.1
 
 # or with no install at all, for a one-off
-npx -y simt-dev@0.2.0 check
+npx -y simt-dev@0.2.1 check
 ```
 
 ### From PyPI

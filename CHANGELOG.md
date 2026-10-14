@@ -6,6 +6,8 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] — 2026-10-14
+
 ### A repository can ask for a smaller projection
 
 `simt tokens` measured the cost and `check` now holds the line the repository draws: `budget.bytes`
@@ -525,6 +527,8 @@ never ran `simt hooks install` again will find nothing until the dependency is r
 and `simt hooks install --yes` is re-run. That is a real upgrade step and it is called out
 here rather than discovered.
 
+[0.2.2]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.2.2
+[0.2.1]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.2.1
 [0.2.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.2.0
 [0.1.1]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.1.1
 [0.1.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.1.0

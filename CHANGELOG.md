@@ -6,6 +6,19 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A repository can declare the always-on bytes it intends to carry
+
+`simt tokens` measured the number; it could not be held to one. A manifest now carries
+`budget.bytes` — a declaration beside `limits` and `gates`, not inside `projection`,
+because that block is regenerated on every upgrade and nothing in the repair would notice
+its budget disappearing. A repository that declares nothing is measured against the
+review's 30 KB and reports `declared: false` rather than looking like it chose it.
+
+Over budget is reported, never enforced, and the report says what was not done: nothing
+was cut, because the projection is still in full mode. Which rules move behind skills is a
+measurement that has not been taken yet, and a budget that quietly dropped rules would be
+enforcing a decision nobody made (ADR-072).
+
 ### A stack profile loads only when a matching file is in play
 
 A stack profile used to be always-on everywhere, because profiles reached a reader through

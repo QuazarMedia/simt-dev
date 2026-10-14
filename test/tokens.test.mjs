@@ -22,7 +22,7 @@ import { execFile } from 'node:child_process';
 import { tokensCommand } from '../src/commands/tokens.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { plan } from '../src/projection/project.mjs';
-import { buildManifest, manifestText } from '../src/projection/manifest.mjs';
+import { buildManifest, manifestText, readManifest } from '../src/projection/manifest.mjs';
 import { compose } from '../src/projection/markers.mjs';
 import { ALWAYS_ON_BUDGET_BYTES } from '../src/measure/context.mjs';
 import { git } from './fixture.mjs';
@@ -273,4 +273,75 @@ test('the command is reachable by name, with the flag it documents', async () =>
   const help = await exec('node', [BIN, 'help']);
   assert.match(help.stdout, /tokens \[--repos\]/);
   assert.match(help.stdout, /--repos\s+tokens: measure every repository/);
+});
+// --- the budget is a repository declaration, not a constant ---------------------
+//
+// R08's accept criterion is a number nobody has to take on trust: the bytes are
+// measured, the budget is declared, and a repository over its own line is told so in
+// the same words the gate would use. These three tests are that sentence.
+
+test('a repository that declares no budget is measured against the review figure', async () => {
+  const root = await repo(await scratch(), 'alpha');
+  await adopt(root);
+  const row = (await json(['tokens', '--root', root])).roots[0];
+  assert.equal(row.budget.bytes, ALWAYS_ON_BUDGET_BYTES);
+  assert.equal(row.budget.declared, false);
+  // The finding is carried, never raised: a measurement that failed on its own reading
+  // would be a gate, and R08 calls the cut non-blocking (ADR-064, ADR-072).
+  assert.equal(row.budget.finding === null, row.generatedBytes <= ALWAYS_ON_BUDGET_BYTES);
+});
+
+test('a declared budget is measured against, not overridden', async () => {
+  const root = await repo(await scratch(), 'alpha');
+  const { manifest } = await adopt(root);
+  // The meter's own number, not the file's byte length: the two differ by the markers
+  // and the frontmatter the editor reads, and a test that derived the budget from one
+  // and compared the other would be asserting that a discrepancy.
+  const measured = (await json(['tokens', '--root', root])).roots[0].generatedBytes;
+
+  // Declared ABOVE the measurement, so the repository is under its own line however
+  // many bytes it generates. A meter that reported the default instead would report a
+  // violation of a line this repository never agreed to.
+  const written = { ...manifest, budget: { bytes: measured + 5_000 } };
+  await writeFile(join(root, 'simt-dev.json'), manifestText(written));
+  const row = (await json(['tokens', '--root', root])).roots[0];
+  assert.equal(row.budget.bytes, measured + 5_000);
+  assert.equal(row.budget.declared, true);
+  assert.equal(row.budget.over, false);
+  assert.equal(row.budget.finding, null);
+
+  // Declared BELOW it, so the finding appears and names the bytes rather than saying
+  // only "over budget" - a reader who cannot see by how much cannot tell whether the
+  // number is worth a commit.
+  const tight = { ...manifest, budget: { bytes: measured - 100 } };
+  await writeFile(join(root, 'simt-dev.json'), manifestText(tight));
+  const over = (await json(['tokens', '--root', root])).roots[0];
+  assert.equal(over.budget.over, true);
+  assert.equal(over.budget.overBy, 100);
+  assert.match(over.budget.finding.detail, new RegExp(`declared ${measured - 100}`));
+  // Nothing was cut, and saying so is the whole point: a reader who sees an over-budget
+  // finding must not conclude the projection is smaller than the manifest says.
+  assert.match(over.budget.finding.detail, /Nothing was cut/);
+});
+
+test('a declared budget survives an upgrade, which would delete a generated one', async () => {
+  const root = await repo(await scratch(), 'alpha');
+  const { manifest } = await adopt(root);
+  const chosen = 27_500;
+  await writeFile(join(root, 'simt-dev.json'), manifestText({ ...manifest, budget: { bytes: chosen } }));
+
+  // `buildManifest` is what an upgrade rebuilds. A budget inside `projection` would be
+  // replaced here, because that key is the tool's own — which is why it does not live
+  // there, and this is the test that holds that reason.
+  const { manifest: onDisk } = await readManifest(root);
+  const rebuilt = buildManifest({ root, stack: [], sha: 'abc1234', version: '0.2.1', existing: onDisk });
+  assert.equal(rebuilt.budget.bytes, chosen);
+
+  // A repository that declared nothing gets no budget key, so `declared: false` stays
+  // honest after an upgrade rather than becoming true by the tool's own hand.
+  const bare = buildManifest({ root, stack: [], sha: 'abc1234', version: '0.2.1' });
+  assert.equal(bare.budget, undefined);
+  // And the generated block carries no budget, which is the whole of the reason: it is
+  // the one key an upgrade is allowed to replace.
+  assert.equal(rebuilt.projection.budget, undefined);
 });

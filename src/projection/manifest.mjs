@@ -441,6 +441,18 @@ export function buildManifest({ root, stack = [], sha, version, existing = null,
     // is the repo's decision, and `check` reports a digest that does not match the
     // directory rather than a value here that differs from what the tool would pick.
     packs: existing?.packs ?? [],
+    // ADR-072: how many bytes of always-on projection this repository has agreed to
+    // carry. A declaration, not a generated field, for the same reason `packs` is not:
+    // the number is the repository's own line in the sand, and `upgrade` must not
+    // rewrite it to whatever the tool happens to project today — a budget that moved by
+    // itself would be a budget nobody is held to.
+    //
+    // Absent when the repository declared nothing, which is the point. Writing the
+    // default here would make every adopted repo look like it had chosen it, and a
+    // reader told "declared: true" about a line nobody wrote is being lied to about the
+    // only thing the number is for. The default belongs to whoever measures, and
+    // `budgetFinding` and `simt tokens` both read it from one place.
+    ...(existing?.budget === undefined ? {} : { budget: existing.budget }),
     // ADR-020: which editors this repo's rules are projected into. Absent means the
     // global standard applies; an explicit empty list is a real choice meaning
     // AGENTS.md only. Recorded rather than inferred, because "which IDE does this repo
@@ -579,6 +591,42 @@ function defaultId(root) {
  * or a report about a field nothing repairs - and each half passes its own test,
  * which is ADR-045's shape reached from the other direction.
  */
+/**
+ * The bytes of always-on projection a repository carries per root before the number is
+ * worth an argument.
+ *
+ * Thirty thousand is S38's figure and not a measurement this tool took: it is the line
+ * the review drew, the one the whole row exists to check. A default nobody would accept
+ * is a default that reports nothing, and a budget only works as a budget when exceeding
+ * it is something a reader can see.
+ */
+export const DEFAULT_BUDGET_BYTES = 30000;
+
+/**
+ * Report a projection that carries more than the repository agreed to carry.
+ *
+ * Non-blocking by design, and that is the honest answer rather than a convenient one:
+ * the plan's own wording is that `check` reports `BUDGET-CUT` and nothing is cut, because
+ * cutting requires a kernel to pack lines into and the kernel does not exist yet
+ * (R07, blocked on the R02 evaluation). A gate that failed here would fail every
+ * repository in the estate on a number this tool has not yet earned the right to enforce.
+ *
+ * The finding names what is over and what is NOT cut, because a reader who is told only
+ * that a budget was exceeded will assume something was removed and stop looking.
+ *
+ * @returns {{file: string, status: string, detail: string, remedy: string}|null}
+ */
+export function budgetFinding(bytes, budget) {
+  const allowed = budget?.bytes ?? DEFAULT_BUDGET_BYTES;
+  if (!Number.isFinite(bytes) || bytes <= allowed) return null;
+  return {
+    file: MANIFEST,
+    status: 'budget',
+    detail: `${bytes} bytes of always-on projection; this repository declared ${allowed}. Nothing was cut: the projection is still in full mode, so every rule is loaded as written`,
+    remedy: `raise budget.bytes to ${bytes} if the projection is meant to be this size, or narrow the rules that carry it`,
+  };
+}
+
 export const GENERATED_KEYS = new Set(['$comment', 'projection']);
 
 /**

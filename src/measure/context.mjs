@@ -26,7 +26,7 @@ import { basename, join } from 'node:path';
 
 import { resolveSurfaces } from '../projection/surfaces.mjs';
 import { parse } from '../projection/markers.mjs';
-import { readManifest } from '../projection/manifest.mjs';
+import { budgetFinding, DEFAULT_BUDGET_BYTES, readManifest } from '../projection/manifest.mjs';
 import { extractFrontmatter } from '../projection/targets.mjs';
 import { readLimitFindings } from '../projection/project.mjs';
 import { TOOLS } from '../mcp/tools.mjs';
@@ -36,10 +36,11 @@ import { TOOLS } from '../mcp/tools.mjs';
  *
  * Read as 30,000 rather than 30 * 1024: it is a ceiling, and the conservative reading
  * of "at most 30 KB" is the one that trips first. Plan 0003 R08 makes the budget a
- * manifest field, and `BUDGET-CUT` is the enforcing form - until then this is reported
- * as a fact and nothing fails.
+ * manifest field, and the manifest's default is the same number - so a repo that
+ * declares nothing is measured against the line the review drew, and a repo that
+ * declares something is measured against its own (ADR-072).
  */
-export const ALWAYS_ON_BUDGET_BYTES = 30_000;
+export const ALWAYS_ON_BUDGET_BYTES = DEFAULT_BUDGET_BYTES;
 
 /** Bytes per token for the approximation. Labelled approximate wherever it is printed. */
 export const BYTES_PER_TOKEN = 4;
@@ -230,6 +231,10 @@ export async function measureRoot(root) {
 
   const generatedBytes = documents.reduce((sum, d) => sum + d.generatedBytes, 0);
   const readerBytes = documents.reduce((sum, d) => sum + d.readerBytes, 0);
+  const budgetBytes =
+    manifest?.budget?.bytes !== undefined && Number.isFinite(manifest.budget.bytes)
+      ? manifest.budget.bytes
+      : ALWAYS_ON_BUDGET_BYTES;
 
   const byChannel = new Map();
   for (const doc of documents) {
@@ -276,10 +281,21 @@ export async function measureRoot(root) {
     // approximation of it and is reported as such wherever it is printed.
     tokens: tokens(readerBytes),
     generatedTokens: tokens(generatedBytes),
+    // The repository's own number, not the constant. The constant is the default a repo
+    // gets if it never declares one, which is the same line the review drew — but a repo
+    // that measures its rules differently has said so, and a measurement that overrode
+    // that would be reporting a violation of a line the repository never agreed to
+    // (ADR-072).
     budget: {
-      bytes: ALWAYS_ON_BUDGET_BYTES,
-      over: generatedBytes > ALWAYS_ON_BUDGET_BYTES,
-      overBy: Math.max(0, generatedBytes - ALWAYS_ON_BUDGET_BYTES),
+      bytes: budgetBytes,
+      declared: manifest?.budget?.bytes !== undefined,
+      over: generatedBytes > budgetBytes,
+      overBy: Math.max(0, generatedBytes - budgetBytes),
+      // The finding the gate would raise, produced by the same function, so the report
+      // and the gate cannot word the same fact two ways. It is carried rather than
+      // raised: R08 calls the cut non-blocking, and this command never fails on a
+      // measurement (ADR-064).
+      finding: budgetFinding(generatedBytes, manifest?.budget),
     },
     channels: [...byChannel.values()],
     readLimits,

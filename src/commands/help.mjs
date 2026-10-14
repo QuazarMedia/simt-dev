@@ -95,7 +95,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --session <path>        tokens: split a local Claude Code or Codex transcript
                         into rules, file reads and tool output
 --reader <id>           harness loaders: report one reader (opencode, claude, codex,
-                         cursor, antigravity, copilot)
+                         cursor, antigravity, copilot, deepseek)
 --table                 harness loaders: print order, caps, imports, skill dirs and
                          the hook and MCP config files, without measuring a repo
 --at <path>             harness loaders: measure as if the agent were working in

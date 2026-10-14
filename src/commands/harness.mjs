@@ -90,7 +90,9 @@ async function scan(root) {
     }
   }
   for (const c of CANDIDATE_DIRS) {
-    if (await present(root, c.dir)) rows.push(row(c.dir, c.harness, {}));
+    if (await present(root, c.dir)) {
+      rows.push(row(c.dir, c.harness, { readsAgentsMd: c.readsAgentsMd ?? null, verified: c.verified ?? null }));
+    }
   }
   rows.sort((a, b) => (a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0));
   return { root, rows };
@@ -122,7 +124,9 @@ function row(dir, label, surface) {
 }
 
 function countUnclaimed(scan) {
-  return scan.rows.filter((r) => r.surface === null).length;
+  // A candidate that cites a document and reads AGENTS.md is covered by the standard
+  // region. One that cites nothing is the case the note exists for (ADR-067).
+  return scan.rows.filter((r) => r.surface === null && r.readsAgentsMd == null).length;
 }
 
 /**
@@ -145,7 +149,14 @@ function render(root, repo, user) {
 function block(scan, pad) {
   if (scan.rows.length === 0) return [`${pad}(none present)`];
   return scan.rows.map((r) => {
-    const through = r.surface === null ? 'no rule channel in this release' : r.channel ? 'projected rule file' : 'AGENTS.md';
+    const through =
+      r.surface === null
+        ? r.readsAgentsMd === 'all'
+          ? 'AGENTS.md'
+          : 'no rule channel in this release'
+        : r.channel
+          ? 'projected rule file'
+          : 'AGENTS.md';
     const agents = r.readsAgentsMd === 'all' ? ' (reads AGENTS.md)' : r.readsAgentsMd === 'some' ? ' (some readers read AGENTS.md)' : '';
     return `${pad}${r.dir.padEnd(12)} ${r.label.padEnd(38)} ${through}${agents}`;
   });
@@ -237,9 +248,11 @@ function renderView(view) {
   for (const file of view.files) {
     const state = file.beyondCap
       ? '  BEYOND CAP - not read'
-      : file.overCap
-        ? `  OVER CAP (${file.countedBytes} B)`
-        : '';
+      : file.truncated
+        ? `  TRUNCATED to ${file.keptBytes} B`
+        : file.overCap
+          ? `  OVER CAP (${file.countedBytes} B)`
+          : '';
     lines.push(`            ${file.file.padEnd(44)} ${String(file.countedBytes).padStart(7)} B${state}`);
   }
   if (view.cap) {
@@ -280,7 +293,9 @@ function loaderTable(row) {
   if (row.cap === null) lines.push(`  cap       none published — ${row.capNote ?? 'checked'}`);
   lines.push(`  skills    ${(row.skills ?? []).join(', ') || 'none documented'}`);
   lines.push(`  hooks     ${row.hooks?.path ?? 'none documented'}${row.hooksNote ? ` — ${row.hooksNote}` : ''}`);
-  lines.push(`  mcp       ${row.mcp?.path ?? 'none documented'}`);
+  lines.push(
+    `  mcp       ${row.mcp?.path ?? (row.mcp?.key ? `profile ${row.mcp.key}` : 'none documented')}`,
+  );
   lines.push(`  source    ${row.verified}`);
   return lines.join('\n');
 }

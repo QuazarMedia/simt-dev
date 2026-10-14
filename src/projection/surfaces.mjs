@@ -91,13 +91,13 @@ export const SURFACES = [
     id: 'opencode',
     label: 'opencode (AGENTS.md + .agents/skills)',
     readers:
-      'opencode, and AGENTS.md is also read natively by Codex, Cursor, Windsurf, Zed, Amp, Jules, Copilot CLI and the DeepSeek harness; Claude Code falls back to it, Antigravity and Gemini CLI accept GEMINI.md as an equal name',
+      'OpenCode v2, and AGENTS.md is also read natively by Codex, Cursor, Windsurf, Zed, Amp, Jules, Copilot CLI and the DeepSeek harness; Claude Code falls back to it, Antigravity and Gemini CLI accept GEMINI.md as an equal name',
     primary: 'AGENTS.md',
     kind: 'region',
-    // opencode documents NO per-rule directory: it reads AGENTS.md (walking up to the
-    // git worktree), CLAUDE.md only as a fallback, and .opencode/AGENTS.md in
-    // addition. So `foldRules` — this surface carries every rule inside the one
-    // generated region, and the other rows are how a rule reaches an editor that
+    // OpenCode v2 documents no per-rule directory. It reads AGENTS.md only — every
+    // file from the workspace up to the project root, combined — and it does not fall
+    // back to CLAUDE.md. So `foldRules`: this surface carries every rule inside the
+    // one generated region, and the other rows are how a rule reaches an editor that
     // cannot read AGENTS.md. Writing .opencode/rules/*.md would be a guess, and a
     // guessed path is the failure this table exists to prevent.
     rule: null,
@@ -118,7 +118,7 @@ export const SURFACES = [
       },
     ],
     verified:
-      'opencode docs, "Rules" and "Agent Skills" (read 2026-10-07) — AGENTS.md walked up from cwd to the git worktree; CLAUDE.md used only if no AGENTS.md exists; .opencode/AGENTS.md additionally; skills at .opencode/skills/, .claude/skills/ and .agents/skills/<name>/SKILL.md; skill frontmatter recognises only name, description, license, compatibility, metadata',
+      'OpenCode v2 instructions and skills docs (opencode.ai/v2/docs, read 2026-10-14) — AGENTS.md only, combined from the workspace up to the project root; CLAUDE.md is not a fallback; skills at .opencode/skills/, .claude/skills/ and .agents/skills/<name>/SKILL.md, with the model shown name and description',
     note:
       '.agents/skills is one of the three skill locations opencode documents, so the same directory serves the standard surface without a symlink.',
   },
@@ -403,6 +403,16 @@ export const CANDIDATE_DIRS = [
   { dir: '.continue', harness: 'Continue' },
   { dir: '.amp', harness: 'Amp' },
   { dir: '.goose', harness: 'Goose' },
+  // Home directory, seen only with `harness detect --user`. DeepSeek keeps user data
+  // under ~/.dsh and reads the repository's AGENTS.md; it has no project config
+  // directory and no per-rule file to project (ADR-067).
+  {
+    dir: '.dsh',
+    harness: 'DeepSeek harness',
+    readsAgentsMd: 'all',
+    verified:
+      'DeepSeek harness agent-instructions docs (read 2026-10-14): user data lives at $DSH_HOME or ~/.dsh, and the project chain is AGENTS.md',
+  },
 ];
 
 /**

@@ -79,6 +79,22 @@ test('the text says the same as the json', async () => {
   assert.match(text.out, /\(reads AGENTS\.md\)|some readers read AGENTS\.md/);
 });
 
+test('a .dsh directory is the DeepSeek harness, covered by AGENTS.md', async () => {
+  const root = await repoWith('.dsh');
+  const out = await run(['harness', 'detect', '--root', root, '--json']);
+  assert.equal(out.code, 0, out.out);
+  const row = JSON.parse(out.out).repo.rows.find((r) => r.dir === '.dsh');
+  assert.ok(row, 'a .dsh directory is the harness home shape');
+  assert.equal(row.surface, null, 'there is no per-rule file to project');
+  assert.equal(row.channel, false);
+  assert.equal(row.readsAgentsMd, 'all');
+  assert.match(row.verified, /read 2026-10-14/);
+
+  const text = await run(['harness', 'detect', '--root', root]);
+  assert.match(text.out, /\.dsh\s+DeepSeek harness\s+AGENTS\.md/);
+  assert.doesNotMatch(text.out, /no rule channel in this release/);
+});
+
 test('a repository with no harness configuration is an answer, not a failure', async () => {
   // A reader running this on a fresh repository must get "none found" and a zero exit.
   // A non-zero exit here would be read as "your repo is wrong", which is the one thing

@@ -53,7 +53,8 @@
  *   path        the path, relative to the repository root; `dir` entries carry the
  *               directory instead and are enumerated by `tree`
  *   tree        `single`  the named path only
- *               `chain`   one file per directory, precedence order, root to cwd
+ *               `chain`   root to cwd; `chainMerge: 'first'` keeps one file per
+ *                         directory, `chainMerge: 'all'` keeps every candidate
  *               `flat`    immediate children of `dir` only
  *               `nested`  recursive under `dir`
  *   atStart     loaded before the first message; `false` costs nothing until a
@@ -67,38 +68,33 @@
 export const LOADERS = [
   {
     id: 'opencode',
-    label: 'opencode',
-    readers: 'opencode',
+    label: 'OpenCode v2',
+    readers: 'OpenCode v2',
     surface: 'opencode',
     start: [
       {
         scope: 'project',
         path: 'AGENTS.md',
-        tree: 'single',
+        tree: 'chain',
         atStart: true,
-        why: 'opencode docs, "Rules": the project AGENTS.md applies when working in that directory or a subdirectory',
-      },
-      {
-        scope: 'project',
-        path: 'CLAUDE.md',
-        tree: 'single',
-        atStart: true,
-        absent: ['AGENTS.md'],
-        why: 'opencode docs, "Rules": the project CLAUDE.md is used only when no AGENTS.md exists',
+        why: 'OpenCode v2 instructions docs: every AGENTS.md from the workspace directory up to the project root is loaded and combined; V2 recognizes AGENTS.md only and does not fall back to CLAUDE.md',
       },
       {
         scope: 'user',
         path: '~/.config/opencode/AGENTS.md',
         tree: 'single',
         atStart: true,
-        why: 'opencode docs, "Rules": global instructions at ~/.config/opencode/AGENTS.md',
+        why: 'OpenCode v2 instructions docs: the global file is loaded first, before the project chain',
       },
       {
-        scope: 'user',
-        path: '~/.claude/CLAUDE.md',
-        tree: 'single',
+        scope: 'project',
+        path: '.claude/skills/{name}/SKILL.md',
+        tree: 'nested',
+        dir: '.claude/skills',
+        suffix: '/SKILL.md',
         atStart: true,
-        why: 'opencode docs, "Rules": the Claude Code global file is read as a lower-precedence fallback and can be disabled',
+        metadata: true,
+        why: 'OpenCode v2 skills docs: .claude/skills is a project compatibility source, registered before .agents/skills',
       },
       {
         scope: 'project',
@@ -111,39 +107,56 @@ export const LOADERS = [
         // body is opened when a reader decides it is relevant, and billing the body to
         // the session-start cost is the error this makes impossible to repeat.
         metadata: true,
-        why: 'opencode docs, "Agent Skills": skills are discovered at .opencode/skills, .claude/skills and .agents/skills',
+        why: 'OpenCode v2 skills docs: .agents/skills is a project compatibility source; the model is shown the id, name and description, not the body',
+      },
+      {
+        scope: 'project',
+        path: '.opencode/skills/{name}/SKILL.md',
+        tree: 'nested',
+        dir: '.opencode/skills',
+        suffix: '/SKILL.md',
+        atStart: true,
+        metadata: true,
+        why: 'OpenCode v2 skills docs: .opencode/skills is the project source and outranks .agents/skills and .claude/skills for the same id',
       },
     ],
     alsoReads: [
       {
+        what: 'AGENTS.md below the workspace',
+        atStart: false,
+        why: 'OpenCode v2 instructions docs: instruction files below the workspace load when the agent reads or lists that area, not at session start',
+      },
+      {
         what: 'opencode.json `instructions` array',
-        atStart: true,
-        why: 'opencode docs, "Rules": entries in `instructions` are combined with the AGENTS.md files; globs and remote URLs, 5 s fetch timeout',
+        atStart: false,
+        why: 'OpenCode v2 instructions docs: the config schema accepts an instructions array, but V2 does not resolve its files, globs or URLs',
       },
     ],
-    order: 'local files traversed up from the working directory, then the global file, then the Claude Code file',
+    order: 'global ~/.config/opencode/AGENTS.md, then project AGENTS.md files from the workspace directory up to the project root (nearest first); files are combined, not overridden',
     cap: null,
     capNote:
-      'no byte cap published for instruction files; the 5 s fetch timeout on remote `instructions` entries is a network limit, not a read limit',
+      'no byte cap published for AGENTS.md; V2 accepts an instructions array and does not load it, so there is no fetch timeout to apply',
     imports: {
       syntax: null,
       depth: 0,
-      why: 'opencode docs, "Rules": "opencode doesn\'t automatically parse file references in AGENTS.md" — an @reference is an instruction to the model to read the file, not an include, so it costs a turn rather than bytes at start',
+      why: 'OpenCode v2 instructions docs: an AGENTS.md reference to another file is not an include; V2 loads AGENTS.md files by discovery, not by @path expansion',
     },
-    nested: 'cumulative — a project AGENTS.md applies to the directory it is in and every subdirectory',
+    nested: 'cumulative up to the project root at session start; files below the workspace load when that area is read',
     skills: ['.agents/skills', '.opencode/skills', '.claude/skills'],
     hooks: {
       path: '.opencode/plugins/',
-      verified: 'opencode docs, "Plugins": project-level plugins at .opencode/plugins/, global at ~/.config/opencode/plugins/, and the `plugin` array in opencode.json',
+      verified:
+        'OpenCode v2 plugins docs: direct .ts and .js files and immediate plugin packages are loaded from every discovered .opencode/plugins/ directory, and the plugins array in opencode.json(c)',
     },
     mcp: {
       path: 'opencode.json',
-      key: 'mcp',
-      verified: 'opencode docs, "MCP servers": servers are defined under `mcp` in the opencode config',
+      key: 'mcp.servers',
+      verified:
+        'OpenCode v2 MCP servers docs: servers are named under mcp.servers; V2 does not place server names directly under mcp',
     },
     verified:
-      'opencode docs, "Rules" and "Agent Skills" (read 2026-10-14) — AGENTS.md in the project root applies to that directory and its subdirectories; CLAUDE.md is read only if no AGENTS.md exists; the global file is ~/.config/opencode/AGENTS.md; precedence is local files traversing up from the working directory, then global, then the Claude Code file; @references in AGENTS.md are not expanded',
-    note: 'No cap is published, so `cap` is null with the reason rather than a guess.',
+      'OpenCode v2 instructions, skills, plugins and MCP docs (opencode.ai/v2/docs, read 2026-10-14) — V2 loads AGENTS.md only, combining the global file with every project AGENTS.md from the workspace up to the project root; CLAUDE.md is not a fallback; the instructions array is accepted and not loaded; skills advertise name and description from .opencode/skills, .claude/skills and .agents/skills',
+    note: 'This row is OpenCode v2. V1 read CLAUDE.md when AGENTS.md was absent and loaded the instructions array; V2 does neither, so a meter that still did would bill bytes this reader does not pay.',
   },
   {
     id: 'claude',
@@ -527,6 +540,110 @@ export const LOADERS = [
     note:
       'Which Copilot reader consumes these differs — the cloud agent and code review are documented as reading repository and path-specific instructions — so the row is one reader with a split, the same split `surfaces.mjs` records on the copilot row.',
   },
+  {
+    id: 'deepseek',
+    label: 'DeepSeek harness',
+    readers: 'DeepSeek harness',
+    // No projection surface. It reads AGENTS.md, so the standard region is its channel
+    // (ADR-067). This row exists because its chain is not Codex's: both AGENTS.md and
+    // CLAUDE.md load unless their trimmed bytes match, and the budget drops the broader
+    // file before it truncates the most specific one.
+    surface: null,
+    chainMerge: 'all',
+    dedupe: 'trim',
+    start: [
+      {
+        scope: 'project',
+        path: 'AGENTS.md',
+        tree: 'chain',
+        atStart: true,
+        why: 'DeepSeek harness agent-instructions docs: AGENTS.md is the first base candidate in each directory from the project root down to the session working directory',
+      },
+      {
+        scope: 'project',
+        path: 'CLAUDE.md',
+        tree: 'chain',
+        atStart: true,
+        why: 'DeepSeek harness agent-instructions docs: CLAUDE.md is the second base candidate and loads beside AGENTS.md unless the two are identical after trimming',
+      },
+      {
+        scope: 'project',
+        path: 'AGENTS.local.md',
+        tree: 'chain',
+        atStart: true,
+        why: 'DeepSeek harness agent-instructions docs: AGENTS.local.md is a local overlay loaded after the base candidates in the same directory',
+      },
+      {
+        scope: 'project',
+        path: 'CLAUDE.local.md',
+        tree: 'chain',
+        atStart: true,
+        why: 'DeepSeek harness agent-instructions docs: CLAUDE.local.md is the second local overlay, under the same per-directory trim dedup',
+      },
+      {
+        scope: 'user',
+        path: '~/.dsh/AGENTS.md',
+        tree: 'single',
+        atStart: true,
+        why: 'DeepSeek harness agent-instructions docs: the user-global file is $DSH_HOME/AGENTS.md, defaulting to ~/.dsh/AGENTS.md',
+      },
+      {
+        scope: 'user',
+        path: '~/.agents/AGENTS.md',
+        tree: 'single',
+        atStart: true,
+        why: 'DeepSeek harness agent-instructions docs: the shared agents root is $DSH_AGENTS_HOME or ~/.agents, and a copy that matches the harness-home file collapses behind it',
+      },
+    ],
+    alsoReads: [
+      {
+        what: 'AGENTS.md below the session working directory',
+        atStart: false,
+        why: 'DeepSeek harness agent-instructions docs: a successful read, write or edit that reaches a deeper directory loads that directory\'s instruction file on the next request; shell navigation does not',
+      },
+    ],
+    order:
+      'user-global ~/.dsh/AGENTS.md, then ~/.agents/AGENTS.md, then every project candidate from the project root down to the working directory, broad to specific; within one directory, base files then local overlays',
+    cap: {
+      bytes: 65536,
+      scope: 'chain',
+      config: 'maxBytes',
+      drop: 'broader',
+      why: 'DeepSeek harness agent-instructions docs: dsh-base sets maxBytes to 65536, and rendering drops whole broader files before truncating the most specific one',
+    },
+    alsoCaps: [
+      {
+        bytes: 1048576,
+        scope: 'file',
+        appliesTo: 'one source file before rendering',
+        config: 'maxSourceBytes',
+        why: 'DeepSeek harness agent-instructions docs: maxSourceBytes defaults to 1048576, and a larger source file is ignored rather than truncated into the chain',
+      },
+    ],
+    imports: {
+      syntax: null,
+      depth: 0,
+      why: 'DeepSeek harness agent-instructions docs: @path imports are not interpreted; a reference inside an instruction file is not an include',
+    },
+    nested:
+      'on touch — the baseline is the root-to-cwd chain; a deeper AGENTS.md loads after a successful read, write or edit in that directory, not because the shell changed directory',
+    skills: [],
+    skillsNote:
+      'the agent-instructions package does not document a project skill directory; shared agent configuration lives at ~/.agents, which is user scope and is not measured here',
+    hooks: null,
+    hooksNote:
+      'DeepSeek harness hooks docs: the Claude Code and Codex bridges take an explicit configPath, and project-local hooks.json discovery is still marked TODO, so no repository path is loaded by default',
+    mcp: {
+      path: null,
+      key: '@deepseek-ai/dsh-mcp-client',
+      verified:
+        'DeepSeek harness MCP docs: a server is a profile plugin row (@deepseek-ai/dsh-mcp-client), not a project file this tool can project',
+    },
+    verified:
+      'DeepSeek harness agent-instructions package (deepseek-ai/deepseek-harness packages/context/agent-instructions/README.md, read 2026-10-14) — the baseline loads ~/.dsh/AGENTS.md, ~/.agents/AGENTS.md, then AGENTS.md and CLAUDE.md plus the local overlays from the project root down to the working directory; trimmed duplicates in one directory collapse; dsh-base caps the rendered baseline at 65536 bytes and ignores a source file over 1048576 bytes',
+    note:
+      'A drifted CLAUDE.md beside AGENTS.md is loaded in full. A symlink or a byte-identical copy is not. That is why this reader does not share Codex\'s one-file-per-directory rule.',
+  },
 ];
 
 export const LOADER_IDS = LOADERS.map((l) => l.id);
@@ -555,6 +672,7 @@ export function caps(row) {
       // different questions and a reader who saw only one of them would misattribute
       // the finding: a chain cap fails on the repository, a file cap fails on the file.
       appliesTo: row.cap.scope === 'chain' ? 'the merged chain' : 'a single file',
+      drop: row.cap.drop ?? null,
       why: row.cap.why,
     });
   }

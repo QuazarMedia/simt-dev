@@ -224,6 +224,64 @@ test('Copilot loads repository instructions and AGENTS.md at start, and leaves p
   );
 });
 
+test('OpenCode v2 loads every AGENTS.md up to the workspace and does not fall back to CLAUDE.md', async () => {
+  const claudeOnly = await repo({ 'CLAUDE.md': 'claude fallback\n' });
+  const skipped = await viewOf(claudeOnly, loader('opencode'));
+  assert.deepEqual(skipped.files.map((f) => f.file), [], 'V2 does not read CLAUDE.md when AGENTS.md is absent');
+
+  const root = await repo({
+    'AGENTS.md': 'root\n',
+    'CLAUDE.md': 'not a fallback\n',
+    'src/AGENTS.md': 'nested\n',
+    'src/deeper/AGENTS.md': 'below the workspace\n',
+  });
+  const view = await viewOf(root, loader('opencode'), { cwd: join(root, 'src') });
+  assert.deepEqual(view.files.map((f) => f.file), ['AGENTS.md', 'src/AGENTS.md']);
+  assert.equal(view.label, 'OpenCode v2');
+});
+
+test('OpenCode v2 counts one skill id, and .opencode/skills outranks an earlier copy', async () => {
+  const body = '---\nname: demo\ndescription: from agents\n---\n' + 'x'.repeat(4_000);
+  const winner = '---\nname: demo\ndescription: from opencode\n---\n' + 'y'.repeat(4_000);
+  const root = await repo({
+    '.agents/skills/demo/SKILL.md': body,
+    '.opencode/skills/demo/SKILL.md': winner,
+  });
+  const view = await viewOf(root, loader('opencode'));
+  const skills = view.files.filter((f) => f.channel === 'skills');
+  assert.equal(skills.length, 1);
+  assert.equal(skills[0].file, '.opencode/skills/demo/SKILL.md');
+  assert.ok(skills[0].countedBytes < 40, `only name and description: ${skills[0].countedBytes}`);
+});
+
+test('DeepSeek loads AGENTS.md and a drifted CLAUDE.md, and collapses a trimmed copy', async () => {
+  const drifted = await repo({ 'AGENTS.md': 'agents\n', 'CLAUDE.md': 'claude\n' });
+  const both = await viewOf(drifted, loader('deepseek'));
+  assert.deepEqual(both.files.map((f) => f.file), ['AGENTS.md', 'CLAUDE.md']);
+
+  const copied = await repo({ 'AGENTS.md': 'same\n', 'CLAUDE.md': '\nsame\n' });
+  const one = await viewOf(copied, loader('deepseek'));
+  assert.deepEqual(one.files.map((f) => f.file), ['AGENTS.md']);
+});
+
+test('DeepSeek drops the broader instruction file before the most specific one', async () => {
+  const root = await repo({
+    'AGENTS.md': `${'a'.repeat(40_000)}\n`,
+    'src/AGENTS.md': `${'b'.repeat(40_000)}\n`,
+  });
+  const view = await viewOf(root, loader('deepseek'), { cwd: join(root, 'src') });
+  assert.equal(view.cap.bytes, 65_536);
+  assert.equal(view.cap.over, true);
+  assert.deepEqual(
+    view.files.map((f) => [f.file, f.beyondCap, f.truncated ?? false]),
+    [
+      ['AGENTS.md', true, false],
+      ['src/AGENTS.md', false, false],
+    ],
+  );
+  assert.equal(view.totalBytes, 40_001);
+});
+
 test('a skill costs its frontmatter, not its body', async () => {
   const root = await repo({
     '.agents/skills/demo/SKILL.md':

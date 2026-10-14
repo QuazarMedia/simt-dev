@@ -209,22 +209,33 @@ export async function viewOf(root, row, options = {}) {
   const parts = cwd === '' || cwd.startsWith('..') ? [] : cwd.split('/').filter(Boolean);
   const dirs = ['', ...parts.map((_, i) => parts.slice(0, i + 1).join('/'))];
   for (const dir of dirs) {
+    // `first` is Codex and Claude: one file per directory, precedence order.
+    // `all` is DeepSeek: every candidate loads, and a later file whose trimmed
+    // text matches an earlier one in the SAME directory is the duplicate the
+    // vendor collapses. The set resets per directory because a nested file that
+    // happens to match the root is a different scope, not a duplicate.
+    const mergeAll = row.chainMerge === 'all';
+    const trimmed = new Set();
     let taken = false;
     for (const entry of chainEntries) {
-      if (taken) break;
+      if (taken && !mergeAll) break;
       const scoped = {
         ...entry,
         path: dir === '' ? entry.path : `${dir}/${entry.path}`,
         absent: entry.absent?.map((p) => join(dir, p)),
       };
       const found = await resolveEntry(root, scoped);
-      if (found.length > 0) {
-        taken = true;
-        files.push(rowFor(found[0], entry, 'documents'));
-        if (row.imports?.syntax === '@path' && row.imports.depth > 0) {
-          for (const imp of await expandClaudeImports(root, found[0].file, found[0].text, row.imports.depth)) {
-            files.push(rowFor(imp, { scope: 'project', why: row.imports.why }, 'imports'));
-          }
+      if (found.length === 0) continue;
+      if (row.dedupe === 'trim') {
+        const key = found[0].text.trim();
+        if (trimmed.has(key)) continue;
+        trimmed.add(key);
+      }
+      if (!mergeAll) taken = true;
+      files.push(rowFor(found[0], entry, 'documents'));
+      if (row.imports?.syntax === '@path' && row.imports.depth > 0) {
+        for (const imp of await expandClaudeImports(root, found[0].file, found[0].text, row.imports.depth)) {
+          files.push(rowFor(imp, { scope: 'project', why: row.imports.why }, 'imports'));
         }
       }
     }
@@ -242,6 +253,23 @@ export async function viewOf(root, row, options = {}) {
     }
   }
 
+  // One skill id is one cost. OpenCode v2 registers .claude, then .agents, then
+  // .opencode, and the later source supplies the skill. Counting every copy would
+  // bill a turn for a body the reader replaced.
+  const skillsById = new Map();
+  const measured = [];
+  for (const file of files) {
+    if (file.channel !== 'skills') {
+      measured.push(file);
+      continue;
+    }
+    const id = file.file.split('/').at(-2) ?? file.file;
+    skillsById.set(id, file);
+  }
+  measured.push(...skillsById.values());
+  files.length = 0;
+  files.push(...measured);
+
   const limits = caps(row);
   const chainCap = limits.find((c) => c.scope === 'chain') ?? null;
   // A token budget is a budget, but it is not a byte count: 20,000 tokens is 80,000
@@ -258,12 +286,40 @@ export async function viewOf(root, row, options = {}) {
   let running = 0;
   for (const file of files) {
     running += file.countedBytes;
-    if (chainCap && running > chainCap.bytes) file.beyondCap = true;
     if (fileCap && file.countedBytes > fileCap.bytes) file.overCap = true;
   }
-  const totalBytes = files
-    .filter((f) => !f.beyondCap && !f.overCap)
-    .reduce((n, f) => n + f.countedBytes, 0);
+  if (chainCap?.drop === 'broader') {
+    // DeepSeek keeps the most specific files. Broader files are omitted whole;
+    // only the most specific file may be cut, and the rendered total stays inside
+    // the cap. A source already over the per-file cap is ignored before this.
+    const eligible = files.filter((f) => f.channel === 'documents' && !f.overCap);
+    let sum = eligible.reduce((n, f) => n + f.countedBytes, 0);
+    for (let i = 0; i < eligible.length && sum > chainCap.bytes; i += 1) {
+      const file = eligible[i];
+      const last = i === eligible.length - 1;
+      if (!last) {
+        file.beyondCap = true;
+        sum -= file.countedBytes;
+        continue;
+      }
+      file.truncated = true;
+      file.keptBytes = chainCap.bytes - (sum - file.countedBytes);
+    }
+  } else if (chainCap) {
+    let chainRunning = 0;
+    for (const file of files) {
+      if (file.overCap) continue;
+      chainRunning += file.countedBytes;
+      if (chainRunning > chainCap.bytes) file.beyondCap = true;
+    }
+  }
+  const contributed = (file) => {
+    if (file.beyondCap) return 0;
+    if (file.truncated) return file.keptBytes ?? 0;
+    if (file.overCap) return file.keptBytes ?? 0;
+    return file.countedBytes;
+  };
+  const totalBytes = files.reduce((n, file) => n + contributed(file), 0);
 
   return {
     reader: row.id,
@@ -274,7 +330,10 @@ export async function viewOf(root, row, options = {}) {
     imports: row.imports,
     files,
     totalBytes,
-    droppedBytes: files.reduce((n, f) => n + (f.beyondCap || f.overCap ? f.countedBytes : 0), 0),
+    droppedBytes: files.reduce((n, f) => {
+      if (!f.beyondCap && !f.overCap && !f.truncated) return n;
+      return n + f.countedBytes - (f.truncated || f.overCap ? (f.keptBytes ?? 0) : 0);
+    }, 0),
     // Reported, not measured: the user's global instructions are the reader's bytes.
     // A per-repository total that included them would change when the reader installed
     // something, which is the reason `--user` is a flag on `harness detect` and not a

@@ -135,9 +135,12 @@ test('mcp: a notification produces no response at all', async () => {
 });
 
 test('mcp: an unknown method is a protocol error, not silence', async () => {
-  const r = await handle(req('resources/list'), TOOLS);
+  // Something this server has never heard of. It used to assert `resources/list` here,
+  // which is the assertion that had to die when resources landed: a method this server
+  // does not implement, not one it does.
+  const r = await handle(req('resources/subscribe', { uri: 'simt://rules/core' }), TOOLS);
   assert.equal(r.error.code, RPC.METHOD);
-  assert.match(r.error.message, /unknown method "resources\/list"/);
+  assert.match(r.error.message, /unknown method "resources\/subscribe"/);
 });
 
 test('mcp: a malformed request is a request error', async () => {
@@ -253,6 +256,122 @@ test('mcp: every command that writes is reachable only from the CLI', async () =
     assert.ok(!names.includes(mutating), `${mutating} is exposed over MCP`);
   }
   assert.ok(names.includes('check') && names.includes('compare'), 'the read commands must be exposed');
+});
+
+// --- resources ------------------------------------------------------------------
+//
+// Every rule and every decision record is readable over `simt://`. The interesting part
+// is not that the URIs work — it is that each revision answers in its OWN shape, because
+// the two specifications disagree about what a missing resource is. That is why these
+// tests run the matrix rather than asserting one behaviour.
+
+test('mcp: the resources capability is declared without subscriptions', async () => {
+  const r = await handle(req('initialize'), TOOLS, { packageVersion: '9.9.9' });
+  // The empty object says "resources, but nothing that changes". A server advertising
+  // subscribe or listChanged here would be promising a stream it cannot produce.
+  assert.deepEqual(r.result.capabilities.resources, {});
+  assert.equal(r.result.capabilities.resources.subscribe, undefined);
+  assert.equal(r.result.capabilities.resources.listChanged, undefined);
+});
+
+test('mcp: every revision lists rules and decisions', async () => {
+  for (const version of SUPPORTED_VERSIONS) {
+    const r = await handle(at(version, 'resources/list'), TOOLS);
+    const { resources } = r.result;
+    assert.ok(resources.length > 20, `${version} listed ${resources.length}`);
+    // Sorted, so a client diffing two listings sees a change rather than a reshuffle.
+    assert.deepEqual(resources.map((x) => x.uri), [...resources.map((x) => x.uri)].sort());
+    for (const entry of resources) {
+      assert.match(entry.uri, /^simt:\/\/(rules|decisions)\//);
+      assert.ok(entry.name && entry.mimeType === 'text/markdown' && Number.isInteger(entry.size));
+    }
+    assert.ok(resources.some((x) => x.uri === 'simt://rules/core'));
+    assert.ok(resources.some((x) => x.uri.startsWith('simt://decisions/')));
+  }
+});
+
+test('mcp: only the newest revision carries the cache fields on a list', async () => {
+  // 2026-07-28 requires ttlMs and cacheScope on results; the two older revisions have
+  // no such field, so sending one is a payload a client of that revision cannot parse
+  // against the schema it knows.
+  const newest = await handle(at('2026-07-28', 'resources/list'), TOOLS);
+  assert.ok(newest.result.ttlMs > 0 && newest.result.cacheScope === 'private');
+  for (const version of ['2025-11-25', '2025-06-18']) {
+    const older = await handle(at(version, 'resources/list'), TOOLS);
+    assert.equal(older.result.ttlMs, undefined, `${version} must not receive ttlMs`);
+    assert.equal(older.result.cacheScope, undefined, `${version} must not receive cacheScope`);
+  }
+});
+
+test('mcp: templates are listed, and they name the two schemes', async () => {
+  for (const version of SUPPORTED_VERSIONS) {
+    const r = await handle(at(version, 'resources/templates/list'), TOOLS);
+    const uris = r.result.resourceTemplates.map((t) => t.uriTemplate);
+    assert.deepEqual(uris.sort(), ['simt://decisions/{adr}', 'simt://rules/{id}']);
+  }
+});
+
+test('mcp: a rule is readable, with its frontmatter reconstructed', async () => {
+  const r = await handle(at('2026-07-28', 'resources/read', { uri: 'simt://rules/core' }), TOOLS);
+  const [content] = r.result.contents;
+  assert.equal(content.uri, 'simt://rules/core');
+  assert.equal(content.mimeType, 'text/markdown');
+  // The file on disk has frontmatter; a resource has none, so it is rebuilt or the
+  // reader loses the identity it just listed. The keys are unprefixed: `simt-` is this
+  // tool's own namespace, and a resource is read by a client that knows nothing about it.
+  assert.match(content.text, /^---\n/);
+  assert.match(content.text, /^id: core$/m);
+  assert.match(content.text, /^priority: hard$/m);
+  // Not the H1: `loadRules` hands back a body that no longer carries it, and the
+  // identity the H1 carried is in the frontmatter above.
+  assert.match(content.text, /^title: Shared rules$/m);
+  assert.match(content.text, /^## Truth$/m);
+});
+
+test('mcp: a decision record is readable and carries no estate name', async () => {
+  const listed = await handle(at('2026-07-28', 'resources/list'), TOOLS);
+  const first = listed.result.resources.find((x) => x.uri.startsWith('simt://decisions/'));
+  const r = await handle(at('2026-07-28', 'resources/read', { uri: first.uri }), TOOLS);
+  const [content] = r.result.contents;
+  assert.equal(content.mimeType, 'text/markdown');
+  assert.match(content.text, /^# ADR-\d{3} /m);
+  assert.match(content.text, /^Status: /m);
+  assert.doesNotMatch(content.text, /docs\/decisions\//, 'a reader outside this estate cannot resolve that path');
+});
+
+test('mcp: a missing resource is the error its revision specifies', async () => {
+  // The whole reason this surface is versioned per revision: 2026-07-28 makes -32602
+  // mandatory and keeps -32002 only for clients that already accept it, while
+  // 2025-06-18 says the opposite.
+  const newest = await handle(at('2026-07-28', 'resources/read', { uri: 'simt://rules/nope' }), TOOLS);
+  assert.equal(newest.error.code, RPC.RESOURCE_NOT_FOUND);
+  const oldest = await handle(at('2025-06-18', 'resources/read', { uri: 'simt://rules/nope' }), TOOLS);
+  assert.equal(oldest.error.code, RPC.RESOURCE_NOT_FOUND_LEGACY);
+  // Never an empty contents array: the newest specification forbids it precisely
+  // because a client cannot tell it from a resource with no content.
+  for (const version of SUPPORTED_VERSIONS) {
+    const r = await handle(at(version, 'resources/read', { uri: 'simt://rules/nope' }), TOOLS);
+    assert.ok(r.error, `${version} returned a result instead of an error`);
+    assert.equal(r.result, undefined);
+  }
+});
+
+test('mcp: a uri that is not ours, or tries to escape, is refused', async () => {
+  // The specification requires a server to validate resource URIs and to sanitise paths
+  // so a client cannot read outside what it listed.
+  for (const uri of [
+    'file:///etc/passwd',
+    'simt://rules/../../etc/passwd',
+    'simt://rules/',
+    'simt://skills/build-system',
+    'simt://rules/a/b',
+    42,
+    null,
+  ]) {
+    const r = await handle(at('2026-07-28', 'resources/read', { uri }), TOOLS);
+    assert.ok(r.error, `refused to refuse ${JSON.stringify(uri)}`);
+    assert.equal(r.error.code, RPC.RESOURCE_NOT_FOUND);
+  }
 });
 
 // --- end to end over a real pipe ------------------------------------------------

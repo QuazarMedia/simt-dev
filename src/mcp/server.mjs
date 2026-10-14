@@ -21,6 +21,7 @@
 
 import { createInterface } from 'node:readline';
 import { CLI } from '../name.mjs';
+import { RESOURCE_TEMPLATES, listResources, readResource } from './resources.mjs';
 
 /**
  * Every protocol revision this server speaks, newest first.
@@ -141,7 +142,7 @@ export async function handle(request, tools, { packageVersion, state } = {}) {
     case 'initialize':
       return reply({
         protocolVersion: v,
-        capabilities: capabilities(tools),
+        capabilities: capabilities(),
         // `serverInfo` stays in the body here even on 2026-07-28: a client that has just
         // called a method the newest revision removed is by definition an older client,
         // and the field is where it looks.
@@ -158,7 +159,7 @@ export async function handle(request, tools, { packageVersion, state } = {}) {
     case 'server/discover':
       return reply({
         supportedVersions: [...SUPPORTED_VERSIONS],
-        capabilities: capabilities(tools),
+        capabilities: capabilities(),
         instructions: INSTRUCTIONS,
         ...(cacheable(v) ? LIST_CACHE : {}),
       });
@@ -207,6 +208,29 @@ export async function handle(request, tools, { packageVersion, state } = {}) {
       }
     }
 
+    case 'resources/list':
+      return reply(
+        cacheable(v) ? { resources: await listResources(), ...LIST_CACHE } : { resources: await listResources() },
+      );
+    case 'resources/templates/list':
+      return reply(
+        cacheable(v)
+          ? { resourceTemplates: RESOURCE_TEMPLATES, ...LIST_CACHE }
+          : { resourceTemplates: RESOURCE_TEMPLATES },
+      );
+    case 'resources/read': {
+      // The code for a resource that is not there CHANGED, and a server that answers
+      // with one code to both revisions is a server that is wrong to whichever half of
+      // the client's world it is not. The newest revision forbids an empty `contents`
+      // array as the answer, so "absent" can only be an error.
+      const code = atLeast(v, '2026-07-28') ? RPC.RESOURCE_NOT_FOUND : RPC.RESOURCE_NOT_FOUND_LEGACY;
+      const uri = request.params?.uri;
+      const found = await readResource(uri);
+      if (found === null) return error(id, code, `no such resource: ${String(uri)}`);
+      return reply(
+        cacheable(v) ? { contents: [found], ...LIST_CACHE } : { contents: [found] },
+      );
+    }
     default:
       return isNotification ? null : error(id, RPC.METHOD, `unknown method "${method}"`);
   }
@@ -219,12 +243,19 @@ function serverInfo(packageVersion) {
   return { ...SERVER_INFO, version: packageVersion ?? '0.0.0' };
 }
 
-function capabilities(tools) {
+function capabilities() {
   return {
     tools: { listChanged: false },
-    // Declared only when there is something to read. A capability with no method behind
-    // it is a promise a client will keep waiting on.
-    ...(tools.resources ? { resources: { listChanged: false, subscribe: false } } : {}),
+    // Unconditional, and that is the point: every rule and every decision record ships
+    // with the package, so there is always something to read. The empty object is the
+    // documented way to say "resources, but no subscriptions and no change
+    // notifications" — both of which this server has no way to honour, and a client
+    // told otherwise would subscribe to a stream that never arrives.
+    //
+    // It used to be conditional on a property hung on the tools array, which nothing
+    // ever set: a capability gated on a flag nobody flips is the same promise a client
+    // waits on forever, only quieter.
+    resources: {},
   };
 }
 

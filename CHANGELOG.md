@@ -6,6 +6,12 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### The rules and the decisions are readable as MCP resources
+
+A client that wants to browse this tool's rules and rulings had no way to: every answer came back from a tool call with an argument in it. They are addressable now, as one URI per rule and one per decision record, with the byte size each will cost stated up front — the one number a client cannot get without spending the read.
+
+Both resource revisions of the specification were read rather than recalled, and they disagree about the behaviour that decides whether a client retries or gives up: a missing resource is `-32602` on the newest revision and `-32002` on the two older ones, and neither lets a server answer with an empty body. A decision record is redacted on the way out, because a resource travels further than the CLI did (ADR-074).
+
 ## [0.2.2] — 2026-10-14
 
 ### A repository can ask for a smaller projection

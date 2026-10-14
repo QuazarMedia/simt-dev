@@ -2,6 +2,7 @@
 simt-id: deno
 simt-title: Deno
 simt-applies: [has-deno-config]
+simt-scope: ["deno.json", "deno.jsonc", "**/*.ts"]
 ---
 
 # Stack profile: Deno

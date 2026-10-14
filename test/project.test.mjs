@@ -110,12 +110,25 @@ test('a rendered region steps headings by one and gives each source one heading'
     assert.ok(level <= prev + 1, `heading jumped from ${prev} to ${level} in:\n${region.slice(0, 400)}`);
     prev = level;
   }
+  // One heading per source that stayed, plus one pointer heading per source that
+  // narrowed out into its own file (S50). Both are named: a profile that moved is
+  // accounted for in the region rather than quietly absent from it.
   const h2 = region.split('\n').filter((line) => /^## \S/.test(line));
-  assert.equal(h2.length, desired.profiles.length + desired.folded.length, h2.join('\n'));
+  const stayed = desired.profiles.length - (desired.scoped ?? []).length;
+  const pointed = desired.scoped?.length === 0 || desired.narrowing !== true ? 0 : 1;
+  assert.equal(h2.length, stayed + desired.folded.length + pointed, h2.join('\n'));
   assert.equal(new Set(h2).size, h2.length, 'two sources shared one heading');
   assert.match(region, /## Core\n/);
-  assert.match(region, /## Stack: jvm\n\nApplies to:/);
+  assert.match(region, /## Core\n/);
   assert.match(region, /## Process: test-gate\n/);
+  // A profile that narrowed out is named where it went, not dropped from the region.
+  for (const rule of desired.scoped ?? []) {
+    if (desired.narrowing !== true) continue; // kept in the region; it has its own heading
+    assert.ok(
+      region.includes(rule.id) && region.includes('loads only when a matching file is in play'),
+      `${rule.id} narrowed out and the region does not say where it went`,
+    );
+  }
 });
 
 function headingLevels(markdown) {

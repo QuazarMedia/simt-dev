@@ -6,6 +6,7 @@ simt-title: JVM backend
 # or Ktor service received rules about Compose, Wear OS application ids and
 # instrumentation tests — advice with nothing to apply it to (S28, ADR-047).
 simt-applies: [gradle, has-maven-pom, kotlin, java]
+simt-scope: ["build.gradle", "build.gradle.kts", "pom.xml", "settings.gradle", "settings.gradle.kts"]
 ---
 
 # Stack profile: JVM backend

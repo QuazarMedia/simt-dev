@@ -28,7 +28,7 @@ import { diff, parse, inject, BEGIN, END } from './markers.mjs';
 import { readManifest } from './manifest.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
-import { pointerState, pointerTargets, ruleTargets } from './targets.mjs';
+import { pointerState, pointerTargets, ruleTargets, scopedTargets } from './targets.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import {
@@ -70,6 +70,16 @@ export async function plan(root, flags = {}) {
 
   const surfaces = resolveSurfaces(manifest, flags);
 
+  // Profiles that narrowed out of the region, written as files for the surfaces whose
+  // scoping key was read in the vendor's own documentation. Only when EVERY selected
+  // surface can scope: a profile that left the region while a reader could not narrow
+  // would be a rule that reader never loads, and `desiredRegion` already kept it in the
+  // region in that case, which is why `narrowing` is the gate here too.
+  const scoped =
+    desired.narrowing === true
+      ? await scopedTargets(root, desired.scoped ?? [], meta.sha, surfaces, notes)
+      : { targets: [] };
+
   // The baselines are the same list shape as every other target, so `sync` writes
   // them and reports them in the same plan it prints for AGENTS.md and the rule
   // files. A file the reader was not shown is a file they approve by reading the diff
@@ -95,7 +105,7 @@ export async function plan(root, flags = {}) {
     surfaceSource: surfaces.source,
     surfaceProblems: surfaces.problems,
     rules: all,
-    targets: [target, ...nested, ...mdc.targets, ...baselines.targets],
+    targets: [target, ...nested, ...mdc.targets, ...scoped.targets, ...baselines.targets],
     packages: packages.regions.map((r) => ({ path: r.path, profiles: r.profiles })),
     mdcProblems: mdc.problems,
     notes: [...notes, ...mdc.notes, ...packages.notes],
@@ -216,7 +226,8 @@ export async function checkTargets(root, flags = {}) {
   // Selection must match `plan` exactly, or the gate reports a rule absent that
   // `sync` was never going to write — a permanently red check nothing can fix.
   const all = await loadMdcRules();
-  const { stack, facts, manifest } = await desiredRegion(root, flags);
+  const desired = await desiredRegion(root, flags);
+  const { stack, facts, manifest } = desired;
   const declared = await readDeclared(root);
   const resolved = resolveSurfaces(manifest, flags);
   for (const p of resolved.problems) {
@@ -226,6 +237,36 @@ export async function checkTargets(root, flags = {}) {
 
   const sha = await provenanceDigest();
   const notes = [];
+
+  // The profiles that left the region, gated through the same construction that wrote
+  // them. Without this loop a scoped file is planned and written but never checked, so a
+  // repository that edits or deletes one shows a clean `check` and a stale reader — the
+  // exact asymmetry the region-versus-file gate exists to prevent.
+  const scopedRules = desired.scoped ?? [];
+  if (desired.narrowing === true) {
+    for (const target of (await scopedTargets(root, scopedRules, sha, resolved, notes)).targets) {
+      if (!target.exists) {
+        findings.push({
+          file: target.file,
+          surface: target.surface,
+          status: 'absent',
+          detail: `no ${target.surface} rule here; run: ${CLI} sync --yes`,
+        });
+        continue;
+      }
+      // The writer's own verdict, from the same inject call `plan` will make. A second
+      // construction here would be a third place computing the same file, which is the
+      // defect this whole function exists to avoid.
+      const action = target.action;
+      findings.push({
+        file: target.file,
+        surface: target.surface,
+        status: action === 'unchanged' ? 'current' : 'drift',
+        detail: action === 'unchanged' ? undefined : `region is ${action}; run: ${CLI} sync --yes`,
+        recordedSha: parse(target.previous).sha ?? null,
+      });
+    }
+  }
 
   for (const rule of rules) {
     if (rule.error !== null) {

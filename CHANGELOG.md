@@ -6,6 +6,30 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A stack profile loads only when a matching file is in play
+
+A stack profile used to be always-on everywhere, because profiles reached a reader through
+the generated region in AGENTS.md and through nothing else. A profile can now declare
+`simt-scope`, and a repository on Cursor, Copilot or Antigravity gets it as a file the
+surface attaches on patterns: `.cursor/rules/python.mdc` with `globs` and
+`alwaysApply: false`, an Antigravity rule with `trigger: glob`, a Copilot
+`.instructions.md` with `applyTo`. AGENTS.md keeps one line naming the profile, the
+patterns and the file it moved to — a profile that vanishes from the region reads as one
+that was deleted.
+
+The narrowing happens only when every selected surface can do it. Claude Code's `paths:`
+key is documented and silently fails to lazy-load for quoted values, and opencode has no
+per-rule channel at all, so a repository carrying either keeps its profiles in the region
+and is told which surface stopped it. A rule that never loads is worse than a rule that
+loads eagerly.
+
+Reading the two vendors' docs changed the shape of this: Antigravity requires patterns
+starting with `*` to be quoted or YAML reads them as an alias anchor and the rule is
+discarded with no message, and it documents a 20,000-token budget for always_on rules past
+which they are demoted to pointers — so eager profiles cost the reader a real budget. A
+`simt-scope` that matches everything is now refused, since that is the same behaviour with
+a narrowing-looking spelling (ADR-071).
+
 ### Every `--json` payload says which version it is
 
 An agent that parses `--json` had no way to notice that a field had moved: the parse

@@ -2,6 +2,7 @@
 simt-id: dart
 simt-title: Dart
 simt-applies: [has-pubspec]
+simt-scope: ["pubspec.yaml", "**/*.dart"]
 ---
 
 # Stack profile: Dart

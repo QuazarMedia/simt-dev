@@ -7,6 +7,7 @@ simt-title: TypeScript
 # repositories are selected for. Two fallbacks both apply when nothing more specific
 # matched.
 simt-applies: [typescript]
+simt-scope: ["tsconfig.json", "*.ts", "*.tsx"]
 simt-fallback: true
 ---
 

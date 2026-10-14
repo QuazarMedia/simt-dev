@@ -2,6 +2,7 @@
 simt-id: node
 simt-title: Node (general)
 simt-applies: [node]
+simt-scope: ["package.json", "tsconfig.json", "jsconfig.json", ".nvmrc"]
 simt-fallback: true
 ---
 

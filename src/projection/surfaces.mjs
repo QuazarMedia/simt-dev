@@ -41,7 +41,11 @@
 //      #19377), and the documented examples are not valid YAML. Every rule
 //      shipped here is always-on, so the key would buy nothing and cost a
 //      silent-failure surface. Absence of frontmatter is documented to load
-//      eagerly, which is exactly what is wanted.
+//      eagerly, which is exactly what is wanted. (S50 ruled on this: a rule
+//      that carries a scope is emitted ONLY for surfaces whose scoping key is
+//      documented and parsed correctly, and Claude is not one of them, which
+//      is why `canScope` below excludes it rather than trusting `documentedKeys`
+//      to carry the reason.)
 //
 //   4. `verified` IS THE POINT OF THE TABLE. A row whose `verified` is null was
 //      not checked against a vendor document, and the row says so where a reader
@@ -149,12 +153,17 @@ export const SURFACES = [
     // value. One body is written for all of them, so a Cursor name must not land
     // in a file Claude Code also reads.
     substitutions: { askTool: 'Use the interactive `AskQuestion` tool' },
-    ruleFrontmatter: (rule) =>
-      [
-        `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
-        `alwaysApply: ${rule.alwaysApply ? 'true' : 'false'}`,
-      ],
-    verified: 'Cursor project rules (.cursor/rules/*.mdc, description + alwaysApply + globs)',
+    ruleFrontmatter: (rule) => [
+      `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
+      // `globs` only appears when the rule declares a scope. Cursor attaches a rule
+      // with no globs on the strength of `alwaysApply` alone, so emitting either
+      // unquoted patterns on an eager rule or no globs at all on a scoped one is
+      // asking for the wrong loading behaviour.
+      ...(rule.scope ? [`globs: ${rule.scope.map((g) => `"${g}"`).join(', ')}`] : []),
+      `alwaysApply: ${rule.alwaysApply ? 'true' : 'false'}`,
+    ],
+    verified:
+      'Cursor project rules (.cursor/rules/*.mdc, description + alwaysApply + globs); alwaysApply: false with globs is "auto-attached when a matching file is in context", and the docs warn that alwaysApply: false with no description is manual @-mention only',
     note: 'The only surface that reads `.mdc`. Every other row here is a plain `.md` or a symlink.',
   },
   {
@@ -205,10 +214,15 @@ export const SURFACES = [
     // what makes them duplicates rather than a fallback.
     readsPrimary: true,
     ruleFrontmatter: (rule) => [
-      `trigger: ${rule.alwaysApply ? 'always_on' : 'model_decision'}`,
+      // `trigger: glob` carries the patterns, and they are quoted because YAML reads a
+      // value starting with `*` as an alias anchor — the Antigravity docs require it, and
+      // an invalid frontmatter block is discarded with no message at all.
+      `trigger: ${rule.scope ? 'glob' : rule.alwaysApply ? 'always_on' : 'model_decision'}`,
+      ...(rule.scope ? [`globs: ${rule.scope.map((g) => `"${g}"`).join(', ')}`] : []),
       `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
     ],
-    verified: 'Google Antigravity docs, "Rules" — .agents/rules/*.md, YAML frontmatter with trigger: always_on | model_decision | glob | manual; missing or invalid frontmatter silently discards the rule',
+    verified:
+      'Google Antigravity docs, "Rules" — .agents/rules/*.md, YAML frontmatter with trigger: always_on | model_decision | glob | manual; missing or invalid frontmatter silently discards the rule; trigger: glob takes comma-separated globs, which the docs require to be quoted so YAML does not read a leading * as an alias anchor; a 24 KB per-file limit and a 20,000-token budget for always_on rules, with automatic demotion to pointers past it',
     note:
       'This is why frontmatter is mandatory here and why the trigger value is not guessed: an unrecognised trigger means the rule is dropped with no message.',
   },
@@ -228,9 +242,9 @@ export const SURFACES = [
       'Copilot CLI reads AGENTS.md; the editor, code review and the cloud agent do not',
     configDirs: ['.github'],
     documentedKeys: ['applyTo', 'excludeAgent'],
-    ruleFrontmatter: () => ['applyTo: "**"'],
+    ruleFrontmatter: (rule) => [`applyTo: ${rule.scope ? `"${rule.scope.join(',')}"` : '"**"'}`],
     verified:
-      'GitHub docs, "Adding repository custom instructions" — .github/instructions/NAME.instructions.md with applyTo globs; `applyTo: "**"` is the documented example',
+      'GitHub docs, "Adding repository custom instructions" — .github/instructions/NAME.instructions.md with applyTo globs; `applyTo: "**"` is the documented example, and a comma-separated pattern list is how more than one is named',
     // NOT marked readsPrimary, and this row is the reason the flag is per-surface
     // rather than global. The reader is split: Copilot CLI reads AGENTS.md, the
     // editor and code review do not. A per-rule file here is not duplication for two
@@ -318,6 +332,27 @@ export function foldsRules(resolved) {
 }
 
 /**
+ * Whether this surface can load a rule only when a matching file is in play.
+ *
+ * Three do, and each for its own documented key: Cursor patterns with `globs` under
+ * `alwaysApply: false`, Copilot with `applyTo`, and Antigravity with `trigger: glob`
+ * plus `globs`. Claude Code does not — its `paths:` key has a documented parser
+ * defect in which quoted values and YAML sequences silently fail to lazy-load — and
+ * opencode cannot, because it has no per-rule file channel at all.
+ *
+ * The question is asked per surface rather than per key because the answer decides
+ * whether a scoped profile may leave the region: a profile written only as a scoped
+ * file would be absent from a reader that cannot scope it, and a rule nobody loads is
+ * worse than a rule that loads eagerly (ADR-071).
+ */
+export function canScope(surface) {
+  return surface.rule !== null && surface.rule !== undefined && SCOPE_KEYS.has(surface.id);
+}
+
+/** Surface ids whose scoping key was read in the vendor's own documentation. */
+const SCOPE_KEYS = new Set(['cursor', 'antigravity', 'copilot']);
+
+/**
  * Surfaces whose reader already loads the primary document, so a per-rule file for
  * them repeats text the region already carries.
  *
@@ -384,10 +419,22 @@ export function undocumentedKeys(surfaceRows = SURFACES) {
   for (const s of surfaceRows) {
     if (!s.ruleFrontmatter) continue;
     const documented = Array.isArray(s.documentedKeys) ? s.documentedKeys : [];
-    for (const line of s.ruleFrontmatter({ id: 'probe', description: 'probe', alwaysApply: true })) {
-      const key = String(line).split(':')[0].trim();
-      if (!documented.includes(key)) {
-        bad.push(`${s.id} emits frontmatter key "${key}"; its vendor documents ${documented.join(', ') || '(nothing)'}`);
+    // Both shapes, because a scoping key is emitted only on the scoped shape: probing
+    // the eager one alone would pass a row that drops `globs` on a scoped rule, and the
+    // rule would then load on nothing.
+    const probes = [
+      { id: 'probe', description: 'probe', alwaysApply: true },
+      { id: 'probe', description: 'probe', alwaysApply: false, scope: ['src/**'] },
+    ];
+    for (const rule of probes) {
+      for (const line of s.ruleFrontmatter(rule)) {
+        const key = String(line).split(':')[0].trim();
+        // One report per key, not per probe: the same invented key appears on both
+        // shapes, and a gate that prints it twice reads as two defects.
+        if (documented.includes(key) || bad.some((b) => b.includes(`key "${key}"`))) continue;
+        bad.push(
+          `${s.id} emits frontmatter key "${key}"; its vendor documents ${documented.join(', ') || '(nothing)'}`,
+        );
       }
     }
   }

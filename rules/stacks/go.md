@@ -2,6 +2,7 @@
 simt-id: go
 simt-title: Go
 simt-applies: [has-go-mod]
+simt-scope: ["go.mod", "**/*.go"]
 ---
 
 # Stack profile: Go

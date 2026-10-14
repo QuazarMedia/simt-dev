@@ -2,6 +2,7 @@
 simt-id: swift
 simt-title: Swift
 simt-applies: [has-swift-package]
+simt-scope: ["Package.swift", "**/*.swift"]
 ---
 
 # Stack profile: Swift

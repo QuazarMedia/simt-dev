@@ -27,7 +27,7 @@ import { dirname, join, resolve } from 'node:path';
 
 import { fingerprint, KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
-import { foldsRules, frontmatterBlock, resolveSurfaces } from './surfaces.mjs';
+import { foldsRules, frontmatterBlock, resolveSurfaces, rulePath, canScope } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
 import { manifestPath } from './manifest.mjs';
 import { BASELINES } from './baselines.mjs';
@@ -141,7 +141,7 @@ const ORIGIN_RANK = { central: 0, pack: 1, local: 2 };
  *  as an editor's instruction — Cursor, Copilot and Antigravity all parse a
  *  frontmatter block the same way — and would be silently inert. */
 /** Frontmatter keys a rule profile declares. See {@link KNOWN_KEYS} on why exported. */
-export const PROFILE_KEYS = new Set(['simt-id', 'simt-title', 'simt-applies', 'simt-fallback']);
+export const PROFILE_KEYS = new Set(['simt-id', 'simt-title', 'simt-applies', 'simt-fallback', 'simt-scope']);
 
 /** Report the first thing wrong with a profile's frontmatter, in the order a reader
  *  fixes it: no id to select it by, then a key that will not be read, then a tag the
@@ -160,14 +160,29 @@ function describeDefect(meta) {
     const prefixed = `simt-${unknown.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
     return PROFILE_KEYS.has(prefixed)
       ? `key "${unknown}" is this tool's own, not the editor's; it is spelled "${prefixed}"`
-      : `unrecognised frontmatter key "${unknown}"; simt-dev's own keys are simt-id, simt-title, simt-applies, simt-fallback`;
+      : `unrecognised frontmatter key "${unknown}"; simt-dev's own keys are simt-id, simt-title, simt-applies, simt-fallback, simt-scope`;
   }
   const applies = meta['simt-applies'];
   if (!Array.isArray(applies)) return null;
   const undeclared = applies.find((tag) => !KNOWN_TAGS.has(tag));
-  return undeclared === undefined
-    ? null
-    : `simt-applies names "${undeclared}", which fingerprint() never emits, so this profile could never be selected`;
+  if (undeclared !== undefined) {
+    return `simt-applies names "${undeclared}", which fingerprint() never emits, so this profile could never be selected`;
+  }
+  const scope = meta['simt-scope'];
+  if (scope === undefined) return null;
+  // A scope that matches the whole repository is the eager profile wearing a costume:
+  // the reader is told the rule narrows, and the rule loads on every file. `**` and
+  // `**/*` are the two spellings of that, and both are the default a surface applies
+  // when it is given no pattern at all.
+  const CATCH_ALL = new Set(['**', '**/*', '*']);
+  if (scope.length === 0) {
+    return 'simt-scope is empty; a profile with no pattern would load as eagerly as one with no simt-scope at all';
+  }
+  const bad = scope.find((glob) => typeof glob !== 'string' || glob === '' || CATCH_ALL.has(glob));
+  if (bad !== undefined) {
+    return `simt-scope needs at least one pattern that narrows; "${bad}" matches every file, so the profile would load exactly as eagerly as one with no simt-scope`;
+  }
+  return null;
 }
 
 /**
@@ -384,21 +399,57 @@ export async function desiredRegion(root, flags) {
   const { stack, facts, manifest } = await fingerprint(root);
   const all = await loadRules(root);
   const { selected, fallback, notes } = select(all, stack, facts);
-
-  let body = render(selected);
-  let sources = selected.map((r) => r.source);
-  const folded = [];
-
-  // When every selected surface carries its rules inside the primary document, the
-  // per-rule bodies belong in the region too — otherwise a repo on the standard
-  // surface receives AGENTS.md and none of the always-on process rules, because
-  // those had nowhere else to live. One file, one region, one place a reader opens.
   const { resolved, bodies, problems, notes: ruleNotes } = await ruleBodies(
     root,
     manifest,
     flags ?? {},
   );
   notes.push(...ruleNotes);
+
+  // A profile that declares a scope leaves the region only when every selected surface
+  // can load it narrowly. The alternative is a profile written only as a scoped file for
+  // a reader whose surface cannot scope — a rule nobody loads, which is worse than one
+  // that loads eagerly (ADR-071). A surface that cannot scope it therefore keeps the
+  // profile in the region and says so, rather than letting the region quietly shrink.
+  const narrowing = resolved.surfaces.every((s) => canScope(s));
+  const scoped = [];
+  const inRegion = [];
+  for (const r of selected) {
+    const declares = Array.isArray(r.scope) && r.scope.length > 0 && r.error === null;
+    if (!declares) {
+      inRegion.push(r);
+      continue;
+    }
+    // A profile only leaves the region when a narrowed file can replace it. When any
+    // selected surface cannot narrow, the file would be the only home for a rule that
+    // reader cannot reach — so it stays, and says why.
+    if (narrowing) {
+      scoped.push(r);
+      continue;
+    }
+    inRegion.push(r);
+    notes.push(
+      `${r.id} declares simt-scope, but ${resolved.source} selects a surface that cannot narrow a rule, so it stays in the region`,
+    );
+  }
+
+  let body = render(inRegion);
+  let sources = inRegion.map((r) => r.source);
+  const folded = [];
+
+  // The pointer. A reader who opens AGENTS.md and does not find a profile they know is
+  // there will look for it, and the honest answer is where it moved: the file a scoping
+  // surface loads it from, and the files it now matches. Without the line the region's
+  // source list is quietly short one entry, which reads as a rule that was deleted.
+  if (scoped.length > 0 && narrowing) {
+    const lines = scoped.map(
+      (r) =>
+        `- ${sourceTitle(r, 'profile')} — loads only when a matching file is in play (${r.scope.join(', ')}): ${scopedPaths(r, resolved).join(', ')}`,
+    );
+    body += `\n\n## Scoped rules\n\n${lines.join('\n')}`;
+    for (const r of scoped) sources.push(r.source);
+  }
+
   if (foldsRules(resolved)) {
     for (const { rule, body: ruleBody } of bodies) {
       // `## Process:`, not `### id`. The body already uses `##`, and a third-level
@@ -420,6 +471,11 @@ export async function desiredRegion(root, flags) {
     all,
     profiles: selected.map((r) => r.id),
     folded,
+    // The profiles that left the region, and the surfaces that accepted them as files.
+    // `plan` writes them and `checkTarget` gates them through this list, so a projected
+    // file and a drifted one are decided by the same computation.
+    scoped,
+    narrowing,
     surfaces: resolved.ids,
     surfaceSource: resolved.source,
     problems,
@@ -428,6 +484,27 @@ export async function desiredRegion(root, flags) {
     body,
     meta,
   };
+}
+
+/**
+ * Every per-rule file a scoped profile is written to, as paths a reader can open.
+ *
+ * Only the surfaces that can scope get one: a Cursor `.mdc` with `globs` and
+ * `alwaysApply: false`, an Antigravity file with `trigger: glob`, a Copilot
+ * `.instructions.md` with `applyTo`. A surface that reads the region already (opencode)
+ * has no file channel at all, and Claude's scoping key is the documented-defect one,
+ * so neither appears here.
+ */
+function scopedPaths(rule, resolved) {
+  const out = [];
+  for (const s of resolved.surfaces) {
+    if (!canScope(s) || !s.rule) continue;
+    // A folded surface already carries the whole region; it is the reason this profile
+    // is only a file when folding is off, which is the caller's question to answer.
+    if (s.foldRules === true && s.readsPrimary === true && foldsRules(resolved)) continue;
+    out.push(rulePath(s.id, rule.id));
+  }
+  return out;
 }
 
 /**
@@ -522,6 +599,7 @@ export async function loadRules(root = null) {
       title: meta['simt-title'] ?? null,
       applies: meta['simt-applies'] ?? [],
       fallback: meta['simt-fallback'] === true,
+      scope: Array.isArray(meta['simt-scope']) ? meta['simt-scope'] : null,
       bytes: Buffer.byteLength(text),
       body: stripFrontmatter(text),
       error: describeDefect(meta),
@@ -739,6 +817,12 @@ function parseFrontmatter(text) {
         .slice(1, raw.lastIndexOf(']'))
         .split(',')
         .map((s) => s.trim())
+        // A quoted item is a quoted item: the glob inside is the value, not the quotes
+        // around it. A profile author quoting `\"src/**/*.ts\"` because their editor
+        // colouring complains about a bare `*` would otherwise project a pattern the
+        // surface matches nothing against.
+        .map((s) => (s.length >= 2 && s.startsWith('"') && s.endsWith('"') ? s.slice(1, -1) : s))
+        .map((s) => (s.length >= 2 && s.startsWith("'") && s.endsWith("'") ? s.slice(1, -1) : s))
         .filter(Boolean);
     } else out[key] = raw.trim();
   }

@@ -2,6 +2,7 @@
 simt-id: ruby
 simt-title: Ruby
 simt-applies: [has-gemfile]
+simt-scope: ["Gemfile", "**/*.rb"]
 ---
 
 # Stack profile: Ruby

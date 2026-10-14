@@ -6,6 +6,7 @@ simt-title: React Native
 # CSS logical properties, a browser matrix, WCAG reflow at 400 % — none of which a
 # native surface has (S28, ADR-047).
 simt-applies: [react-native]
+simt-scope: ["app.json", "metro.config.js", "ios/**", "android/**"]
 ---
 
 # Stack profile: React Native

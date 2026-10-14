@@ -2,6 +2,7 @@
 simt-id: python
 simt-title: Python
 simt-applies: [python]
+simt-scope: ["pyproject.toml", "requirements.txt", "setup.py", "*.py"]
 ---
 
 # Stack profile: Python

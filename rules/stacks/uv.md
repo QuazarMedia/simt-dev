@@ -5,6 +5,7 @@ simt-title: uv
 # `uv.lock` in its body while selecting on any Python marker, so a Poetry project was
 # told to run a tool manager it does not use (S28, ADR-047).
 simt-applies: [has-uv-lock]
+simt-scope: ["uv.lock", "pyproject.toml"]
 ---
 
 # Stack profile: uv

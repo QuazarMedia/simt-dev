@@ -136,6 +136,43 @@ export async function ruleTargets(root, rule, body, sha, resolved, notes) {
   return { targets };
 }
 
+/**
+ * Per-rule files for the profiles that left the region, for the surfaces that can
+ * narrow them.
+ *
+ * A scoped profile is an ordinary rule with a `scope` on it, and that is the whole
+ * reason this is a thin wrapper over {@link ruleTargets} rather than a second
+ * construction: the byte-level concerns — frontmatter re-derived per surface, the
+ * region injected between the markers, the retired-prose note — are already decided
+ * there and must not be decided twice. A second implementation would drift from the
+ * first and the gate would report drift on a clean tree, which is the failure this
+ * module exists to prevent.
+ *
+ * The one thing it adds is the skip: a surface that folds the region carries the whole
+ * region already, so a scoped file is the duplication S12 removed — UNLESS the profile
+ * actually left the region, which is `narrowing`, the caller's answer, and which means
+ * the reader would otherwise get nothing.
+ */
+export async function scopedTargets(root, rules, sha, resolved, notes) {
+  const targets = [];
+  for (const rule of rules) {
+    // `alwaysApply: false` is what asks the surface to attach the file on the patterns
+    // rather than always. Cursor's documented reading of no description plus no globs is
+    // a manual @-mention, so a scoped rule carries its scope and the description it
+    // already had.
+    // `target` is what `ruleName` reads, and a stack profile has none: it is a plain
+    // `python.md`, not an `.mdc` in the rules directory. Without it the file is named
+    // `null.mdc`, which is exactly what the first version of this did.
+    const scoped = {
+      ...rule,
+      target: rule.target ?? `${rule.id}.mdc`,
+      alwaysApply: false,
+      scope: rule.scope,
+    };
+    targets.push(...(await ruleTargets(root, scoped, rule.body, sha, resolved, notes)).targets);
+  }
+  return { targets };
+}
 
 /**
  * Pointer targets: `CLAUDE.md` and `GEMINI.md` as symlinks to `AGENTS.md`.

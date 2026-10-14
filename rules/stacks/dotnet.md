@@ -2,6 +2,7 @@
 simt-id: dotnet
 simt-title: .NET
 simt-applies: [has-nuget]
+simt-scope: ["*.csproj", "*.sln", "*.fsproj"]
 ---
 
 # Stack profile: .NET

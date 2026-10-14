@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "t-4032ddf-01",
+  "base": "2874341ff2d8690e42af2394122bb9142036971e",
+  "sourceCommit": "4032ddf04076b288b1309ff5e983a2d74ecb1468",
+  "prompt": "fix(projection): report a region a reader stops before it reaches (S37)\n\nCodex stops at 32 KiB, so a long hand-written prefix hides the region and\ncheck still called the body current. projection.place \"top\" puts the region\nfirst, which is the placement the editorconfig style already uses.\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+  "testCmd": "node --test test/project.test.mjs",
+  "f2p": [
+    "a region past a reader limit is reported, and place top clears it"
+  ],
+  "p2p": [
+    "a backend Workers repo does not receive the React profile",
+    "a malformed region is refused rather than duplicated",
+    "a rendered region steps headings by one and gives each source one heading",
+    "a repo with no detectable signal still gets the shared rules",
+    "check reports current, drift, unmanaged and absent distinctly",
+    "every rule applies-to tag is one fingerprint can emit as a tag or a fact",
+    "every rule file carries an id",
+    "plan writes nothing",
+    "render strips frontmatter and the duplicated H1",
+    "selection is core plus intersecting profiles, in a stable order",
+    "sync never touches hand-written content outside the markers",
+    "the fallback profile is only chosen when nothing more specific matched",
+    "the projected region is idempotent",
+    "the region records the simt-dev sha so drift is diagnosable"
+  ],
+  "gold": {
+    "files": 3,
+    "linesAdded": 55,
+    "linesRemoved": 2
+  },
+  "vault": "vault/t-4032ddf-01"
+}

@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "id": "t-2bb0b66-01",
+  "base": "9a13152eb060e44f9ecbe71c2520eeef79f4400d",
+  "sourceCommit": "2bb0b66a2180af9c056adadcb4ac33da5198fe15",
+  "prompt": "fix(naming): four shipped strings named a command this package does not install\n\nThe package ships one binary, `simt`, and package.json's bin map says so. Four\nplaces still said `simt-dev`, and a reader who typed what the tool told them to\ntype got `unknown command` back - from the very help that printed it:\n\n  - output/index.mjs   the default remedy on every EXIT.USAGE, `simt-dev --help`\n  - commands/help.mjs  `usage: simt-dev <command>`, above a list that spells `simt`\n  - ci/dependabot.mjs  `Yours from here: simt-dev`, where the gate beside it says\n                       `Yours from here: simt`\n  - hooks/shim.mjs     `simt-dev on PATH`, directly above the `command -v simt`\n                       that does the looking, in the shim every adopted repo reads\n\nThis is the repository's own rule and not a new one: every byte that leaves here\nmust be actionable by someone holding only the receiving repository, and a command\nthat does not exist under the name the package ships is the un-actionable case.\n\ntest/naming.test.mjs existed for exactly this and passed. Its rule was \"the project\nname followed by a verb\", and none of the four is followed by one - the guard asked\none shape of the question and read every other shape as prose. It now also catches\na flag, a <placeholder>, the end of a line, and a program name inside a resolution\nlist, and it still accepts the sentences where the project is the subject\n(\"Canonical X rule managed by simt-dev\"), because that spelling is correct and a\nguard nobody tolerates gets deleted rather than widened.\n\nThe dependabot string is deliberately NOT a spelling rule. \"Yours from here:\nsimt-dev\" is a grammatical sentence about the project, and no suffix rule separates\nit from prose that is right. What it actually did was disagree with the other\ntemplate in the same commit, in the same position, for the same reader - so the\nassertion is on the agreement: both .github templates hand over the same command.\n\nFour mutations, each reverting one string to its shipped form, each caught; three\nby two tests. Suite is 751/751 from a copy at a path with no siblings (ADR-031).",
+  "testCmd": "node --test test/naming.test.mjs",
+  "f2p": [
+    "both .github templates hand the same command to the reader",
+    "no command string spells the command; every one interpolates CLI",
+    "no shipped artifact names the package as a program to run"
+  ],
+  "p2p": [
+    "a renamed manifest is read as both spellings, and the new one is written",
+    "package.json and name.mjs cannot disagree about the command",
+    "the command is not the project name, and the package is not the command",
+    "the guard above catches the shapes that shipped, and only those shapes",
+    "the manifest is no longer the project name, and that is asserted",
+    "the names already on an adopting repository do not move",
+    "the region namespace is the command, and that is asserted"
+  ],
+  "gold": {
+    "files": 5,
+    "linesAdded": 35,
+    "linesRemoved": 6
+  },
+  "vault": "vault/t-2bb0b66-01"
+}

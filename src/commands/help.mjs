@@ -58,6 +58,9 @@ ${CLI} harness loaders        what each reader loads at session start, in bytes,
                             and what its size cap drops
                             (--table prints the vendor facts without measuring;
                             --reader <id> narrows it; every claim cites its source)
+${CLI} bench mine [--yes]     mine verified benchmark tasks from git history
+                            (dry-run unless --yes; validates RED and GOLD twice in
+                            a temp worktree and stores test patches in the vault)
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;

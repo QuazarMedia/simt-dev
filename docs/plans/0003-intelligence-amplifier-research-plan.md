@@ -840,7 +840,7 @@ Size: S is up to 2 days, M up to a week, L more.
 
 | ID | Slice | Phase | Depends on | Size | Needs ADR | Success metric | State |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| R01 | Task miner | 0 | review 0002 Wave 0 | M | D1 | ≥ 20 valid tasks; deterministic | Queued |
+| R01 | Task miner | 0 | review 0002 Wave 0 | M | D1 (ADR-076) | ≥ 20 valid tasks; deterministic | Complete |
 | R02 | Agent runner and arms | 0 | R01 | L | D1 | gold 100%, noop 0%; reproducible grades | Queued |
 | R03 | Cost model and report | 0 | R02 | S | — | matches hand computation | Queued |
 | R04 | Ablation | 0 | R03 | M | — | value per KB for every section | Queued |
@@ -936,7 +936,7 @@ this plan's tracker are review 0002's, written `0002 P7`.
 
 | Proposal | Ruling |
 | --- | --- |
-| D1 | A change to what agents read is measured before it ships, or labelled unmeasured in its record |
+| D1 | A change to what agents read is measured before it ships, or labelled unmeasured in its record (ADR-076) |
 | D2 | Optional adapters are separate packages, off by default, and propose rather than write |
 | D3 | Rules have a kernel and a commentary; the `simt-kernel` key |
 | D4 | Agent-time hooks are a projected surface, with one policy table for every harness |

@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "id": "t-a81afc6-01",
+  "base": "50f7efddd073e740932c8b34e1affabf2ddaf398",
+  "sourceCommit": "a81afc6546d32332b5553fcca9be27d3c015beb9",
+  "prompt": "fix(project): a rule file's frontmatter is re-derived, not inherited (S16)\n\nA generated rule file's frontmatter was whatever this tool emitted the first time it\nsaw that surface, and nothing could change it after that. Not `sync`, not `check`, not\n`upgrade`.\n\nTwo causes, and only the first was the one named. The obvious one was\n`extractFrontmatter(existing) ?? frontmatterBlock(mine)`: the file's own block won\nwhenever the file already had one. But the visible cause was the next line — when the\nexisting region parsed cleanly, `composed` was the *whole existing file*, so `inject`\nreplaced the region between the markers and left everything above them untouched.\n\nThat is why no gate could have reported it. `check` compares region bodies, and the\nbody was correct; the frontmatter is not part of the region. The file agreed with\nitself, so nothing was stale by any comparison the tool makes, while a surface that\nadded a key or whose `alwaysApply` flipped could never reach a repository that had\nalready adopted it.\n\nThe fix swaps the block in place rather than stripping it and rejoining, and the reason\nis a mistake worth recording. My first version rebuilt the file as\n`frontmatter + \"\\n\" + bodyAfterFrontmatter(existing)`; that helper's trailing `\\n*`\nswallows the blank line a formatter requires before an HTML comment, so the\nreconstruction was one newline short of the file. `inject` compares the spliced result\nagainst what it was given, so it reported `updated` on every run, forever, while\nwriting identical bytes — 1948 -> 1948, and again, and again. The file was right; the\nverdict never settled, so `check` reported drift no reader could see and `sync` rewrote\na correct file on every invocation. Rebuilding a file has to reproduce the bytes it did\nnot mean to touch, and the cheapest way to guarantee that is not to rebuild them.\n\nOne asymmetry, stated as a test because it is the only place this deletes something: a\nsurface that emits no frontmatter leaves an existing block alone. This tool owns the\nblock it writes and will replace it; removing a block it did not write is a different\noperation.\n\nFour tests, two mutations: reverting to inheritance fails on its own assertion, and the\nstrip-and-rejoin I actually shipped is caught by the convergence tests. Zero churn\nacross the estate — 14 repositories, no target changes — so nothing to roll out.\n777/777.",
+  "testCmd": "node --test test/mdc.test.mjs",
+  "f2p": [
+    "a rule file frontmatter is re-derived, not inherited from whatever is on disk (S16)"
+  ],
+  "p2p": [
+    "a conflict inside a .mdc rule is detected",
+    "a declared substitution replaces the default",
+    "a default is used when the repo declares nothing",
+    "a projected rule is idempotent through inject",
+    "a projected rule names no other repository in the estate",
+    "a projected rule names no path that only resolves inside simt-dev",
+    "a rule missing id or target is a defect, not a default",
+    "a substitution with neither a default nor a declaration is reported",
+    "a surface that emits no frontmatter leaves an existing one alone",
+    "an empty declaration DROPS its line rather than printing a blank",
+    "an empty substitution drops the whole bullet, not just the token line",
+    "an opt-in rule reaches media with only the clauses media can act on",
+    "autonomous-push is matched in every phrasing the estate actually used",
+    "every canonical rule is present, named, and states where pushing stops",
+    "every shipped rule reports a substitutions array, declared or not",
+    "frontmatter keeps description and alwaysApply outside the region",
+    "intake keeps migrations in the ask-trigger list",
+    "preview-postflight carries BOTH the build-config and credential bullets",
+    "rendering with no substitutions leaves no placeholder behind",
+    "rulePaths finds hand-written rules by name and by glob",
+    "rulePaths returns just the named files when no rule dir exists",
+    "test-gate carries BOTH complementary BLOCK bullets",
+    "the 6/8 partial-pass example survives (it was silently deleted in one copy)",
+    "the Allowed Without Account section is restored (media had deleted it)",
+    "the provenance header gives the reader the two actions that exist",
+    "the rules are pure content: no absolute path or repo name leaks in",
+    "two optional clauses on one line lose one with no diagnostic"
+  ],
+  "gold": {
+    "files": 1,
+    "linesAdded": 53,
+    "linesRemoved": 2
+  },
+  "vault": "vault/t-a81afc6-01"
+}

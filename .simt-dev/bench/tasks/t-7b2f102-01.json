@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "id": "t-7b2f102-01",
+  "base": "9cc33e981cbfd3b516fd3313524383c4e96ecc88",
+  "sourceCommit": "7b2f102f814bc912e7341c53e21b33e9dc95cfce",
+  "prompt": "feat(mcp): answer each protocol revision in the shape it asks for (S43, ADR-068)\n\nThe surface was pinned to one revision and returned pretty JSON in a text\nblock, so a client could read the answer but not validate it, not cache it,\nand not tell a read-only tool from a writing one.\n\nAll three published revisions were fetched and read rather than guessed at,\nwhich changed the shape of the work: 2025-06-18 already had structured tool\noutput, so the gap was never the missing feature but the missing declaration,\nand most of each revision's changes concern HTTP transports a stdio server\nnever had. What is implemented is what a stdio server owes each revision - the\ndiscovery method, the per-request version with the specification's own error\nfor one we do not speak, the result-type field and the cache lifetime on list\nresults, and the liveness method answered to the older revisions and refused\nto the newest by name.\n\nEvery tool now declares the shape of its answer and says it is a reader, and\nevery call returns both the text block and the structured one. The byte\nceiling bounds the text only, so the representation a client can validate\nstill validates - a detail the schema checker proved twice on its first run,\nonce for a payload field the schema had the wrong type for and once for a\nworkspace root that is legitimately null.",
+  "testCmd": "node --test test/mcp.test.mjs",
+  "f2p": [
+    "mcp: --list answers without reading stdin",
+    "mcp: 2026-07-28 is stateless, so a per-request _meta replaces the handshake",
+    "mcp: a malformed request is a request error",
+    "mcp: a notification produces no response at all",
+    "mcp: a per-request version this server does not speak is refused, by name",
+    "mcp: a real session answers on the protocol channel and nothing else",
+    "mcp: a tool that fails is a RESULT with isError, never a protocol error",
+    "mcp: an older client keeps the revision it negotiated, without being asked again",
+    "mcp: an unknown method is a protocol error, not silence",
+    "mcp: an unknown tool is a method error naming the way to discover it",
+    "mcp: an unsupported protocol version gets ours, not an echo of theirs",
+    "mcp: every command that writes is reachable only from the CLI",
+    "mcp: every supported revision completes a handshake",
+    "mcp: every tool answers, and every answer matches the schema it declared",
+    "mcp: every tool declares a usable schema",
+    "mcp: initialize answers with the protocol version and the read-only instruction",
+    "mcp: invalid JSON is answered, and the session continues",
+    "mcp: list results carry a cache lifetime from 2026-07-28 and nothing before it",
+    "mcp: no mutating command is exposed as a tool",
+    "mcp: ping answers an older client and is refused to a 2026-07-28 one",
+    "mcp: rules_why answers both directions, over a real session",
+    "mcp: server/discover advertises the revisions, the capabilities and the identity",
+    "mcp: skills_brief and `skills brief` answer the same question identically",
+    "mcp: the annotations say what the tools are",
+    "mcp: truncation is announced in the text, never silent"
+  ],
+  "p2p": [],
+  "gold": {
+    "files": 7,
+    "linesAdded": 756,
+    "linesRemoved": 26
+  },
+  "vault": "vault/t-7b2f102-01"
+}

@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "id": "t-01410f4-01",
+  "base": "74631f2335c008ddc90ddf8c335a7327bad527af",
+  "sourceCommit": "01410f435b124eb7df7b7638759982a9d6bc0fe1",
+  "prompt": "feat(tokens): measure what a reader loads, counted rather than estimated (S38, ADR-064)\n\nReview 0002 S38 filed the estate's always-on context at 90 KB per turn, 72% of\nit a paragraph an earlier root had already loaded. It arrived as a hand count\nover seven repositories, which ages with the first rule edit and cannot be\nre-derived by the reader who has to act on it. This is that reading, as a\ncommand: bytes per channel, an approximate token figure, and -- across a\nworkspace -- every repeated paragraph attributed to the first root that carries\nit, by the same byte-exact blank-line method the review used, in sorted path\norder so the figure is reproducible.\n\nThree choices keep the number defensible, and each is a ruling rather than a\ndefault: the budget being defended is the projection's, so hand-written bytes\nare reported beside it and not folded in; a region is the span between its two\nmarkers, so the blank line a person left above the marker is billed to nobody;\nand an over-budget repository is reported rather than failed, because a meter\nthat went red would train people to ignore the figure it exists to print.\n\nThe flag is --repos rather than the plan's --workspace, which has been a value\nflag since plan 0002 naming a directory of skill sources. One flag with two\nmeanings is the silent-ignore defect the argument parser refuses.\n\nreadLimitFindings now returns the reader, the limit, the byte offset and the\noverage beside its prose, so the meter and the check that already reported the\nCodex limit read the same numbers instead of each re-deriving them.\n\nS38 stays open: this is the instrument. The 30 KB figure needs R07's kernel,\nR08's per-repository budget field, R11's dedupe and the R01-R05 evaluation of\nmoving process rules behind skills.",
+  "testCmd": "node --test test/tokens.test.mjs",
+  "f2p": [
+    "--repos gives a later repository the paragraphs an earlier one already loaded",
+    "a directory that holds repositories says so and names both ways to measure",
+    "a hand-written prefix is counted as read and never as generated",
+    "a region over the budget is reported and the run still succeeds",
+    "a region past a reader`s read limit is reported with its numbers",
+    "a skill costs its name and its description, not its body",
+    "an unmanaged repository measures zero and is not an error",
+    "the channels of a repository sum to its always-on total",
+    "the command is reachable by name, with the flag it documents"
+  ],
+  "p2p": [],
+  "gold": {
+    "files": 9,
+    "linesAdded": 651,
+    "linesRemoved": 2
+  },
+  "vault": "vault/t-01410f4-01"
+}

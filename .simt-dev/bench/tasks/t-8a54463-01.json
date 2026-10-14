@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "id": "t-8a54463-01",
+  "base": "d93aa35e6410666814ccb0b0ec0ee1b3091899f4",
+  "sourceCommit": "8a54463746ef7d490aea84301b2f14dc01a647bc",
+  "prompt": "chore(src): delete the dead, and add the check that finds them (S21)\n\nAn export is a promise to a caller. This package ships no library — `simt` is the\nwhole surface — so an exported binding nobody imports is a promise to nobody.\n\n**Deleted outright** (verified dead against `git show HEAD`, one occurrence each):\n`gateKind`, `gateWhy`, `gateAdr`, `resetWorkspace`, `tracksIdentity`, `isTty`,\n`surfaceFrontmatter`, `workspaceOrNull`, and the `__internals` seams in\n`hooks/gates.mjs`, `hooks/dispatcher.mjs` and `hooks/resolve.mjs`.\n\n**Unexported, not deleted**: thirteen bindings that were used only inside their own\nfile — `sourcePath`, `readChainedShim`, `describeShim`, `redactCommand`,\n`DEFAULT_EVENTS`, `unstagedFiles`, `RULE_GLOBS`, `readLimitFindings`, `frameSource`,\n`editDistance`, `stackReason`, `candidateLocations`, `isExecutable`. The code is\nlive; only the export was a claim nobody made good on.\n\n**Two duplicates that had already drifted.** `KNOWN_SUBS` was a hand-kept second\ncopy of the dispatch table, and it was wrong: it carried `doctor`, which\n`commandPath` can never reach, because `doctor` is not a group and that branch runs\nonly for group paths. `commandPath` now reads `IMPLEMENTED`. `mdcFrontmatter` was a\nsecond construction of frontmatter that `targets.mjs` now derives from the surface\nrow — and it had a test asserting the copy rather than the behaviour, so it would\nhave kept passing while the written frontmatter came from somewhere else entirely.\n\n**`test/deadcode.test.mjs`**, three tests: no exported binding without a caller, no\n`__internals` seam without an importer, and every `STEPS` entry a path and a number.\nThe last exists because `STEPS` is empty today and a reader has no way to tell an\nempty registry from a deleted one — which would make a declared-but-unimplemented\ncommand succeed with empty output.\n\nTwo mistakes worth recording. An ad-hoc scan of mine reported `isExecutable` as dead;\n`git show HEAD` found its caller in the same file, and six tests failed before I\nchecked. And the `__internals` check first asked only whether the word appeared\nanywhere — which passed for all four seams, because three other files import their\nown. It now matches the import *from that module*, and the mutant that puts a seam\nback in `hooks/gates.mjs` fails. Three mutations, three failures, 789/789.",
+  "testCmd": "node --test test/deadcode.test.mjs test/mdc.test.mjs",
+  "f2p": [
+    "every __internals seam is actually imported",
+    "no exported binding in src/ has no caller"
+  ],
+  "p2p": [
+    "a conflict inside a .mdc rule is detected",
+    "a declared substitution replaces the default",
+    "a default is used when the repo declares nothing",
+    "a projected rule is idempotent through inject",
+    "a projected rule names no other repository in the estate",
+    "a projected rule names no path that only resolves inside simt-dev",
+    "a rule file frontmatter is re-derived, not inherited from whatever is on disk (S16)",
+    "a rule missing id or target is a defect, not a default",
+    "a substitution with neither a default nor a declaration is reported",
+    "a surface that emits no frontmatter leaves an existing one alone",
+    "an empty declaration DROPS its line rather than printing a blank",
+    "an empty substitution drops the whole bullet, not just the token line",
+    "an opt-in rule reaches media with only the clauses media can act on",
+    "autonomous-push is matched in every phrasing the estate actually used",
+    "every canonical rule is present, named, and states where pushing stops",
+    "every declared-but-unimplemented command step is a real number",
+    "every shipped rule reports a substitutions array, declared or not",
+    "intake keeps migrations in the ask-trigger list",
+    "preview-postflight carries BOTH the build-config and credential bullets",
+    "rendering with no substitutions leaves no placeholder behind",
+    "rulePaths finds hand-written rules by name and by glob",
+    "rulePaths returns just the named files when no rule dir exists",
+    "test-gate carries BOTH complementary BLOCK bullets",
+    "the 6/8 partial-pass example survives (it was silently deleted in one copy)",
+    "the Allowed Without Account section is restored (media had deleted it)",
+    "the provenance header gives the reader the two actions that exist",
+    "the rules are pure content: no absolute path or repo name leaks in",
+    "two optional clauses on one line lose one with no diagnostic"
+  ],
+  "gold": {
+    "files": 20,
+    "linesAdded": 39,
+    "linesRemoved": 106
+  },
+  "vault": "vault/t-8a54463-01"
+}

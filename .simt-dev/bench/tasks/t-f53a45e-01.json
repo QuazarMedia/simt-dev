@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "t-f53a45e-01",
+  "base": "2e26620f2948368dc5728ccaeb27865168e0d268",
+  "sourceCommit": "f53a45e4e30d5d41da168bdfedad7c41331f891b",
+  "prompt": "feat(output): carry a schema version in every json payload (S51, ADR-070)\n\nA reader parsing --json had no way to notice that a field had moved: the\nparse succeeds, the lookup returns undefined, and the answer is quietly\nwrong. schemaVersion now travels inside the document, because a version in\na comment is the artefact that goes stale without failing anything.\n\nThe same document is one line instead of four columns of whitespace. The\nreader of --json is a program and it pays for every byte; --pretty asks for\nthe other form, and a terminal gets it without being asked because there\nthe reader is a person.\n\nThe shape is decided once in dispatch rather than at twenty-five call\nsites, so a new command cannot have a private idea of what --json means.\nWriting the contract test found eight commands that already did: they\nhand-rolled emit(JSON.stringify(..., null, 2)) instead of the shared\nhelper, so --json meant something different depending on which command you\nasked. It also found that fail() wrote only to stderr, which meant a\ncommand that failed under --json handed a scripted caller an empty document\nand an exit code and nothing else; a failure is a result and now answers in\nthe shape it was asked in.",
+  "testCmd": "node --test test/jsoncontract.test.mjs",
+  "f2p": [
+    "a reader that asks for pretty gets pretty",
+    "every command that emits json emits one compact document with a version",
+    "the version is the payload's, not the documentation's"
+  ],
+  "p2p": [],
+  "gold": {
+    "files": 13,
+    "linesAdded": 387,
+    "linesRemoved": 214
+  },
+  "vault": "vault/t-f53a45e-01"
+}

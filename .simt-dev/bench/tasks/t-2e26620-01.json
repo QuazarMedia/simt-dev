@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "t-2e26620-01",
+  "base": "7b2f102f814bc912e7341c53e21b33e9dc95cfce",
+  "sourceCommit": "2e26620f2948368dc5728ccaeb27865168e0d268",
+  "prompt": "feat(skills): lint every skill against the published specification (S44, ADR-069)\n\nThe specification was fetched rather than recalled, which changed the work:\nthe review listed three limits and the document has eight rules, including\nthe one that breaks an install - a name must equal the directory it lives\nin, and the directory is created from the name, so an install that ignores\nthat rule deploys a skill no client can address by the name inside it.\n\nWhat the specification calls a must fails the exit code; what it calls a\nrecommendation warns. A lint that fails on advice is a lint that gets\nskipped.  asks the same name rules the lint enforces, from\nthe one place both read them.\n\nThe other thing reading the document caught: most real descriptions are\nwritten as folded block scalars, and a reader that treats the arrow as the\nvalue measured a 200-character description as two characters. The first run\nof this lint said exactly that about five real skills before the reader was\nrewritten.",
+  "testCmd": "node --test test/graphspec.test.mjs",
+  "f2p": [
+    "a body past the recommended size is a warning that says what it costs",
+    "a conforming skill produces nothing",
+    "a description over the specification limit fails, and a short one is a warning",
+    "a description written as a folded block scalar is read as text, not as its arrow",
+    "a name that disagrees with its directory is the rule installs break on",
+    "a name the specification forbids fails with the rule it broke",
+    "compatibility has its own limit, and most skills do not need it",
+    "lintSpec checks the canonical source, and names the skill in every finding",
+    "the flat form is reported, because a client looks for SKILL.md by name",
+    "the specification is named, so a reader can check the claim"
+  ],
+  "p2p": [],
+  "gold": {
+    "files": 9,
+    "linesAdded": 451,
+    "linesRemoved": 1
+  },
+  "vault": "vault/t-2e26620-01"
+}

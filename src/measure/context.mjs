@@ -295,7 +295,7 @@ export async function measureRoot(root) {
       // and the gate cannot word the same fact two ways. It is carried rather than
       // raised: R08 calls the cut non-blocking, and this command never fails on a
       // measurement (ADR-064).
-      finding: budgetFinding(generatedBytes, manifest?.budget),
+      finding: budgetFinding(generatedBytes, manifest?.budget, manifest?.mode),
     },
     channels: [...byChannel.values()],
     readLimits,

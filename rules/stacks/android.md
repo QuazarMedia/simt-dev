@@ -6,6 +6,7 @@ simt-title: Android
 # JVM backend, which is how a Spring or Ktor service used to receive this profile
 # (S28, ADR-047).
 simt-applies: [has-android-manifest]
+simt-priority: convention
 simt-scope: ["AndroidManifest.xml", "**/build.gradle", "**/build.gradle.kts", "**/*.kt"]
 ---
 

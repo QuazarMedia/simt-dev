@@ -6,6 +6,19 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A repository can ask for a smaller projection
+
+`simt tokens` measured the cost and `check` now holds the line the repository draws: `budget.bytes`
+in `simt.json` is how many always-on bytes that repository has agreed to carry, and both the meter and
+the gate report the overflow with the two numbers in them. It sits beside `gates` rather than inside
+`projection`, because that key belongs to this tool and an upgrade replaces it.
+
+`mode: kernel` is the other half. It keeps the rules a reader cannot do without — the ones a hard
+constraint or a command depends on — and defers the rest behind a `## Deferred rules` section that
+names each one and the command that shows it. A Python fixture projects 16% smaller. `full` is still
+the default, because nobody has measured yet whether the smaller projection loses compliance, and a
+tool that made that trade silently would be deciding it on the reader's behalf (ADR-073).
+
 ### A repository can declare how many always-on bytes it is willing to carry
 
 `simt tokens` has reported that number since the meter landed, against a constant nobody

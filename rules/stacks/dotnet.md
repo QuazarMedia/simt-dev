@@ -2,6 +2,7 @@
 simt-id: dotnet
 simt-title: .NET
 simt-applies: [has-nuget]
+simt-priority: convention
 simt-scope: ["*.csproj", "*.sln", "*.fsproj"]
 ---
 

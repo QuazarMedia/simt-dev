@@ -2,6 +2,7 @@
 simt-id: dart
 simt-title: Dart
 simt-applies: [has-pubspec]
+simt-priority: convention
 simt-scope: ["pubspec.yaml", "**/*.dart"]
 ---
 

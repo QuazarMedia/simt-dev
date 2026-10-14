@@ -2,6 +2,7 @@
 simt-id: rust
 simt-title: Rust
 simt-applies: [has-cargo-toml]
+simt-priority: convention
 simt-scope: ["Cargo.toml", "src/**/*.rs"]
 ---
 

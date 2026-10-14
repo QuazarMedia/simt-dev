@@ -712,7 +712,11 @@ test('a bare key in a rule file is reported with the prefixed spelling, not igno
   for (const [name, fm] of [
     ['applies.md', 'simt-id: a\napplies: [node]\n'],
     ['fallback.md', 'simt-id: b\nsimt-applies: [node]\nfallback: true\n'],
-    ['invented.md', 'simt-id: c\nsimt-applies: [node]\npriority: high\n'],
+    ['invented.md', 'simt-id: c\nsimt-applies: [node]\ninvented: yes\n'],
+    // A bare `priority` is no longer an invented key: it is this tool's own, one
+    // `simt-` away (R07's classes), and a loader that called it unrecognised would send
+    // a reader looking for a third spelling that does not exist.
+    ['priority.md', 'simt-id: d\nsimt-applies: [node]\npriority: hard\n'],
   ]) {
     await writeFile(join(root, LOCAL_PROFILE_DIR, name), `---\n${fm}---\n\nBody.\n`);
   }
@@ -723,7 +727,8 @@ test('a bare key in a rule file is reported with the prefixed spelling, not igno
   // The camelCase spelling is the branch worth asserting: `fallback` is one keystroke
   // from `simt-fallback` and nothing else tells the reader which half is missing.
   assert.match(byFile.get('fallback.md'), /"fallback".*spelled "simt-fallback"/);
-  assert.match(byFile.get('invented.md'), /unrecognised frontmatter key "priority"/);
+  assert.match(byFile.get('invented.md'), /unrecognised frontmatter key "invented"/);
+  assert.match(byFile.get('priority.md'), /"priority".*spelled "simt-priority"/);
 });
 
 async function adrFiles() {

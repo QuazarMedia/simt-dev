@@ -2,6 +2,7 @@
 simt-id: deno
 simt-title: Deno
 simt-applies: [has-deno-config]
+simt-priority: convention
 simt-scope: ["deno.json", "deno.jsonc", "**/*.ts"]
 ---
 

@@ -6,6 +6,7 @@ simt-title: React web
 # listing the bare language tags (`typescript`, `vitest`, `node-web`, `less`) put
 # this profile on backend and static repositories that share them (S28, ADR-047).
 simt-applies: [react-dom, react-router, maplibre, firebase]
+simt-priority: convention
 simt-scope: ["src/**/*.{ts,tsx,js,jsx}", "index.html"]
 ---
 

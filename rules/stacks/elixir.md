@@ -2,6 +2,7 @@
 simt-id: elixir
 simt-title: Elixir
 simt-applies: [has-mix]
+simt-priority: convention
 simt-scope: ["mix.exs", "lib/**/*.ex"]
 ---
 

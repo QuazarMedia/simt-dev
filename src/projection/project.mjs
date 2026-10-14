@@ -178,7 +178,7 @@ export async function checkTargets(root, flags = {}) {
   const budgetTotal = await alwaysOnBytes(root);
   if (budgetTotal !== null) {
     const { manifest } = await readManifest(root);
-    const over = budgetFinding(budgetTotal.bytes, manifest?.budget);
+    const over = budgetFinding(budgetTotal.bytes, manifest?.budget, manifest?.mode);
     if (over) findings.push({ ...over, file: MANIFEST_FILE, detail: over.detail });
   }
 

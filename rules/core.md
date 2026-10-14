@@ -2,6 +2,7 @@
 simt-id: core
 simt-title: Shared rules
 simt-applies: always
+simt-priority: hard
 ---
 
 # Shared rules

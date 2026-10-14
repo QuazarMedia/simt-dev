@@ -453,6 +453,12 @@ export function buildManifest({ root, stack = [], sha, version, existing = null,
     // only thing the number is for. The default belongs to whoever measures, and
     // `budgetFinding` and `simt tokens` both read it from one place.
     ...(existing?.budget === undefined ? {} : { budget: existing.budget }),
+    // ADR-073: `full` projects every selected rule; `kernel` projects only the hard
+    // constraints and defers the rest to `rules show`. Absent means `full`, and the
+    // default stays `full` because nobody has yet measured whether a kernel loses
+    // compliance (plan 0003 R02) — a mode chosen by default would be a bet the
+    // repository never made. Declared, not generated, for the same reason as `budget`.
+    ...(existing?.mode === undefined ? {} : { mode: existing.mode }),
     // ADR-020: which editors this repo's rules are projected into. Absent means the
     // global standard applies; an explicit empty list is a real choice meaning
     // AGENTS.md only. Recorded rather than inferred, because "which IDE does this repo
@@ -616,14 +622,25 @@ export const DEFAULT_BUDGET_BYTES = 30000;
  *
  * @returns {{file: string, status: string, detail: string, remedy: string}|null}
  */
-export function budgetFinding(bytes, budget) {
+export function budgetFinding(bytes, budget, mode = 'full') {
   const allowed = budget?.bytes ?? DEFAULT_BUDGET_BYTES;
   if (!Number.isFinite(bytes) || bytes <= allowed) return null;
+  // The two modes answer different questions, and conflating them is the one way this
+  // finding could be actively wrong. In `full` nothing is cut, so a reader told only
+  // "over budget" would look for a removed rule and find none. In `kernel` the packing
+  // already ran and the projection the reader will see is the packed one — so a number
+  // over the line here means the KERNEL is over the line, which is a different remedy
+  // entirely: no amount of raising the number fixes a kernel that is too large on its own.
+  const kernel = mode === 'kernel';
   return {
     file: MANIFEST,
     status: 'budget',
-    detail: `${bytes} bytes of always-on projection; this repository declared ${allowed}. Nothing was cut: the projection is still in full mode, so every rule is loaded as written`,
-    remedy: `raise budget.bytes to ${bytes} if the projection is meant to be this size, or narrow the rules that carry it`,
+    detail: kernel
+      ? `${bytes} bytes of always-on projection in kernel mode; this repository declared ${allowed}. The kernel itself is over the line: only hard and command rules were packed, so this is not a projection waiting to be trimmed`
+      : `${bytes} bytes of always-on projection; this repository declared ${allowed}. Nothing was cut: the projection is still in full mode, so every rule is loaded as written`,
+    remedy: kernel
+      ? `raise budget.bytes to ${bytes}, or move rules out of the hard and command classes into convention or style, which is the only way a kernel shrinks`
+      : `raise budget.bytes to ${bytes} if the projection is meant to be this size, switch mode to kernel to defer the convention and style rules, or narrow the rules that carry it`,
   };
 }
 

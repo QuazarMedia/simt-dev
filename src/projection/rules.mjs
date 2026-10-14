@@ -29,8 +29,9 @@ import { fingerprint, KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, frontmatterBlock, resolveSurfaces, rulePath, canScope } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
-import { manifestPath } from './manifest.mjs';
+import { manifestPath, readManifest } from './manifest.mjs';
 import { BASELINES } from './baselines.mjs';
+import { CLI } from '../name.mjs';
 import { PACK_DIR, resolvePacks } from '../packs.mjs';
 import { discoverPackages } from '../monorepo.mjs';
 
@@ -141,7 +142,21 @@ const ORIGIN_RANK = { central: 0, pack: 1, local: 2 };
  *  as an editor's instruction — Cursor, Copilot and Antigravity all parse a
  *  frontmatter block the same way — and would be silently inert. */
 /** Frontmatter keys a rule profile declares. See {@link KNOWN_KEYS} on why exported. */
-export const PROFILE_KEYS = new Set(['simt-id', 'simt-title', 'simt-applies', 'simt-fallback', 'simt-scope']);
+export const PROFILE_KEYS = new Set(['simt-id', 'simt-title', 'simt-applies', 'simt-fallback', 'simt-scope', 'simt-priority']);
+
+/**
+ * Priority classes, packed in this order (plan 0003 R07).
+ *
+ * A class is not a severity, it is a promise about what a reader loses by not having
+ * the line. A hard constraint is one whose absence produces a defect; a command is one
+ * the reader cannot guess; a convention is right to follow and harmless to miss; a style
+ * is a preference. Anything after `command` is the first thing a kernel drops, and that
+ * ordering is the whole content of the mode — everything else about it is bookkeeping.
+ */
+export const PRIORITY_CLASSES = ['hard', 'command', 'convention', 'style'];
+
+/** The classes a kernel keeps. `full` mode keeps all four and is the default. */
+export const KERNEL_CLASSES = new Set(['hard', 'command']);
 
 /** Report the first thing wrong with a profile's frontmatter, in the order a reader
  *  fixes it: no id to select it by, then a key that will not be read, then a tag the
@@ -167,6 +182,10 @@ function describeDefect(meta) {
   const undeclared = applies.find((tag) => !KNOWN_TAGS.has(tag));
   if (undeclared !== undefined) {
     return `simt-applies names "${undeclared}", which fingerprint() never emits, so this profile could never be selected`;
+  }
+  const priority = meta['simt-priority'];
+  if (priority !== undefined && !PRIORITY_CLASSES.includes(priority)) {
+    return `simt-priority is "${priority}"; the classes are ${PRIORITY_CLASSES.join(', ')}, in the order a kernel packs them`;
   }
   const scope = meta['simt-scope'];
   if (scope === undefined) return null;
@@ -433,8 +452,25 @@ export async function desiredRegion(root, flags) {
     );
   }
 
-  let body = render(inRegion);
-  let sources = inRegion.map((r) => r.source);
+// The kernel. In `kernel` mode only the hard and command classes are packed into the
+  // region and every other rule is deferred to `rules show <id>`, which is what makes
+  // R08's accept criterion reachable at all: a budget cannot be met by a projection that
+  // never tries. `full` is the default and stays it until R02 has measured that a
+  // kernel does not lose compliance, because nobody has measured it yet.
+  //
+  // A rule with no stated class is deferred, not packed. The two mistakes are not
+  // symmetric: packing a line that should have been deferred spends the budget the mode
+  // exists to save, while deferring a line that should have been packed costs a reader
+  // one `rules show`. The mode is a promise about bytes, so it is the bytes that win.
+  const mode = await projectionMode(root);
+  const packed = [];
+  const deferred = [];
+  for (const r of inRegion) {
+    if (mode === 'kernel' && (r.error !== null || !KERNEL_CLASSES.has(r.priority))) deferred.push(r);
+    else packed.push(r);
+  }
+  let body = render(packed);
+  let sources = packed.map((r) => r.source);
   const folded = [];
 
   // The pointer. A reader who opens AGENTS.md and does not find a profile they know is
@@ -448,6 +484,20 @@ export async function desiredRegion(root, flags) {
     );
     body += `\n\n## Scoped rules\n\n${lines.join('\n')}`;
     for (const r of scoped) sources.push(r.source);
+  }
+
+  if (deferred.length > 0) {
+    // The pointer is the same shape as the scoped one above, and for the same reason:
+    // a reader who opens AGENTS.md and does not find a rule they know is there will
+    // look for it. What it costs to find it has to be one command, named per rule.
+    const lines = [...deferred]
+      .sort(byPriorityThenId)
+      .map(
+        (r) =>
+          `- ${sourceTitle(r, 'profile')} — ${r.priority ?? 'unclassified'}, deferred in kernel mode. Show it with: ${CLI} rules show ${r.id}`,
+      );
+    body += `\n\n## Deferred rules\n\n${lines.join('\n')}`;
+    for (const r of deferred) sources.push(r.source);
   }
 
   if (foldsRules(resolved)) {
@@ -471,6 +521,8 @@ export async function desiredRegion(root, flags) {
     all,
     profiles: selected.map((r) => r.id),
     folded,
+    mode,
+    deferred: deferred.map((r) => r.id),
     // The profiles that left the region, and the surfaces that accepted them as files.
     // `plan` writes them and `checkTarget` gates them through this list, so a projected
     // file and a drifted one are decided by the same computation.
@@ -600,6 +652,7 @@ export async function loadRules(root = null) {
       applies: meta['simt-applies'] ?? [],
       fallback: meta['simt-fallback'] === true,
       scope: Array.isArray(meta['simt-scope']) ? meta['simt-scope'] : null,
+      priority: meta['simt-priority'] ?? null,
       bytes: Buffer.byteLength(text),
       body: stripFrontmatter(text),
       error: describeDefect(meta),
@@ -761,6 +814,32 @@ export function render(selected) {
     .map((r) => frameSource(r, stripFrontmatter(r.body).trim(), 'profile'))
     .filter(Boolean)
     .join('\n\n');
+}
+
+/**
+ * The projection mode this repository declared, or `full`.
+ *
+ * Absent means `full`, and `full` is the default rather than a fallback: no measurement
+ * yet says a kernel does not lose compliance (plan 0003 R02), so the mode that changes
+ * what a reader gets cannot be the one nobody chose.
+ */
+async function projectionMode(root) {
+  const { manifest } = await readManifest(root);
+  return manifest?.mode === 'kernel' ? 'kernel' : 'full';
+}
+
+/**
+ * Deterministic kernel order: the class a rule declares, then its id.
+ *
+ * The tie-break is not decoration. Two rules of the same class packed in file order
+ * would move when a file is added to the directory, and a projection that reorders
+ * itself on an unrelated commit is a projection nobody can diff (ADR-013).
+ */
+function byPriorityThenId(a, b) {
+  const classA = PRIORITY_CLASSES.indexOf(a.priority ?? 'style');
+  const classB = PRIORITY_CLASSES.indexOf(b.priority ?? 'style');
+  if (classA !== classB) return classA - classB;
+  return String(a.id).localeCompare(String(b.id));
 }
 
 /**

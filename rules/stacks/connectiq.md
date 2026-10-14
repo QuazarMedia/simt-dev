@@ -2,6 +2,7 @@
 simt-id: connectiq
 simt-title: Connect IQ (Monkey C)
 simt-applies: [connectiq]
+simt-priority: convention
 ---
 
 # Stack profile: Connect IQ (Monkey C)

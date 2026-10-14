@@ -2,6 +2,7 @@
 simt-id: container
 simt-title: Containers
 simt-applies: [has-dockerfile]
+simt-priority: convention
 simt-scope: ["Dockerfile", "*.dockerfile"]
 simt-fallback: false
 ---

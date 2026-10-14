@@ -2,6 +2,7 @@
 simt-id: ruby
 simt-title: Ruby
 simt-applies: [has-gemfile]
+simt-priority: convention
 simt-scope: ["Gemfile", "**/*.rb"]
 ---
 

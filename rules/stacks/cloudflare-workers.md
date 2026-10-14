@@ -7,6 +7,7 @@ simt-title: Cloudflare Workers (TypeScript)
 # happily as on Workers. A wrangler config or the `wrangler` dependency is the
 # only evidence that this is a Worker (S28, ADR-047).
 simt-applies: [cloudflare-workers]
+simt-priority: convention
 simt-scope: ["wrangler.jsonc", "wrangler.toml", "**/worker.ts"]
 ---
 

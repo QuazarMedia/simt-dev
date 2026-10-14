@@ -21,7 +21,7 @@
 //   4. Write anything. `compare` is read-only for the same reason - a measurement
 //      that can change what it measures is not a measurement.
 
-import { readFile, readdir } from 'node:fs/promises';
+import { lstat, readFile, readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 import { resolveSurfaces } from '../projection/surfaces.mjs';
@@ -29,6 +29,8 @@ import { parse } from '../projection/markers.mjs';
 import { budgetFinding, DEFAULT_BUDGET_BYTES, readManifest } from '../projection/manifest.mjs';
 import { extractFrontmatter } from '../projection/targets.mjs';
 import { readLimitFindings } from '../projection/project.mjs';
+import { loader } from '../projection/loaders.mjs';
+import { expandClaudeImports, viewOf } from './loaderView.mjs';
 import { TOOLS } from '../mcp/tools.mjs';
 
 /**
@@ -98,7 +100,7 @@ async function readText(path) {
  * guess about nesting; it is the bound that keeps a stray `node_modules` inside a
  * tool-owned directory from turning a byte count into an unbounded walk.
  */
-async function filesUnder(root, dir, suffix, depth = 0) {
+async function filesUnder(root, dir, suffix, depth = 0, maxDepth = 6) {
   let entries;
   try {
     entries = await readdir(join(root, dir), { withFileTypes: true });
@@ -112,13 +114,53 @@ async function filesUnder(root, dir, suffix, depth = 0) {
     const entry = entries.find((e) => e.name === name);
     const path = `${dir}/${name}`;
     if (entry.isDirectory()) {
-      if (depth >= 6) continue;
-      out.push(...(await filesUnder(root, `${path}`, suffix, depth + 1)));
+      if (depth >= maxDepth) continue;
+      out.push(...(await filesUnder(root, `${path}`, suffix, depth + 1, maxDepth)));
     } else if (entry.isFile() && (!suffix || name.endsWith(suffix))) {
       out.push(path);
     }
   }
   return out;
+}
+
+/** True when `rel` under `root` is a regular file and not a symlink. */
+async function isRegularFile(root, rel) {
+  try {
+    const st = await lstat(join(root, rel));
+    return st.isFile() && !st.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+/** Generated span bytes of a document (0 when the file carries no valid region). */
+function generatedSpanBytes(text) {
+  const state = parse(text);
+  if (state.status !== 'ok') return 0;
+  const open = state.before.length === 0 ? 0 : state.before.length + 1;
+  const close = state.after.length === 0 ? text.length : text.length - state.after.length - 1;
+  return bytes(text.slice(open, close));
+}
+
+/**
+ * Whether a rule file loads unconditionally at session start according to the
+ * reader's loader row (R14).
+ *
+ * A file with no frontmatter block at all is treated as unconditional (e.g. a
+ * `.claude/rules/*.md` file or a bare `.mdc`); a file that declares frontmatter is
+ * filtered against the loader row's `frontmatter` requirement so scoped rules
+ * (`alwaysApply: false`, `trigger: glob`, `trigger: model_decision`, path-specific
+ * `applyTo`, or Claude `paths:`) are not billed to session start.
+ */
+function isAlwaysOnRule(surfaceId, ruleEntry, text) {
+  const block = extractFrontmatter(text);
+  if (!block) return true;
+  const meta = frontmatter(text);
+  if (surfaceId === 'claude' && meta.paths) return false;
+  if (ruleEntry?.frontmatter) {
+    return Object.entries(ruleEntry.frontmatter).every(([k, v]) => meta[k] === v);
+  }
+  return true;
 }
 
 /** Frontmatter keys, as an object. One block, no nesting - which is all a SKILL.md has. */
@@ -176,13 +218,68 @@ async function documentsFor(root, surface) {
     }
   }
 
+  if (surface.id === 'claude') {
+    const claudeLoader = loader('claude');
+    const seenImports = new Set();
+    for (const candidate of ['CLAUDE.md', 'CLAUDE.local.md']) {
+      if (!(await isRegularFile(root, candidate))) continue;
+      const text = await readText(join(root, candidate));
+      if (text === null) continue;
+      seenImports.add(candidate);
+      out.push({
+        channel: 'rules',
+        file: candidate,
+        text,
+        generatedBytes: generatedSpanBytes(text),
+        readerBytes: bytes(text),
+      });
+      const depth = claudeLoader?.imports?.depth ?? 4;
+      for (const imp of await expandClaudeImports(root, candidate, text, depth, seenImports)) {
+        out.push({
+          channel: 'imports',
+          file: imp.file,
+          text: imp.text,
+          generatedBytes: generatedSpanBytes(imp.text),
+          readerBytes: bytes(imp.text),
+        });
+      }
+    }
+  }
+
+  if (surface.id === 'copilot' && (await isRegularFile(root, '.github/copilot-instructions.md'))) {
+    const rel = '.github/copilot-instructions.md';
+    const text = await readText(join(root, rel));
+    if (text !== null) {
+      out.push({
+        channel: 'rules',
+        file: rel,
+        text,
+        generatedBytes: generatedSpanBytes(text),
+        readerBytes: bytes(text),
+      });
+    }
+  }
+
   if (surface.rule) {
     const dir = surface.rule.slice(0, surface.rule.lastIndexOf('/'));
     const suffix = surface.rule.slice(surface.rule.lastIndexOf('.') + 1);
-    for (const file of await filesUnder(root, dir, `.${suffix}`)) {
+    const row = loader(surface.id);
+    const ruleEntry = row?.start.find((e) => e.dir === dir && e.atStart) ?? null;
+    // Antigravity scans `.agents/rules/` flat (`tree: 'flat'`) and ignores nested
+    // directories; Cursor, Claude and Copilot walk subdirectories (`tree: 'nested'`).
+    const maxDepth = ruleEntry?.tree === 'flat' ? 0 : 6;
+    for (const file of await filesUnder(root, dir, `.${suffix}`, 0, maxDepth)) {
       const text = await readText(join(root, file));
       if (text === null) continue;
-      out.push({ channel: 'rules', file, text, generatedBytes: bytes(text), readerBytes: bytes(text) });
+      if (!isAlwaysOnRule(surface.id, ruleEntry, text)) continue;
+      const isGenerated = parse(text).status === 'ok';
+      out.push({
+        channel: 'rules',
+        file,
+        text,
+        generatedBytes: isGenerated ? bytes(text) : 0,
+        readerBytes: bytes(text),
+      });
     }
   }
 
@@ -265,6 +362,52 @@ export async function measureRoot(root) {
         endByte: finding.endByte,
         overBy: finding.overBy,
       });
+    }
+  }
+
+  // R14 chain and per-file caps: Codex's 32 KiB applies to the merged root-to-cwd
+  // chain, so a repository where every individual AGENTS.md sits under 32 KiB can still
+  // drop its deepest file once merged; Antigravity's 24,000 B cap applies per rule file.
+  const codexLoader = loader('codex');
+  if (codexLoader?.cap?.scope === 'chain') {
+    for (const dir of await instructionDirs(root)) {
+      const view = await viewOf(root, codexLoader, { cwd: join(root, dir) });
+      if (!view.cap?.over) continue;
+      // If a single root AGENTS.md already tripped `readLimitFindings` above, do not
+      // report the same 1-file root overflow twice.
+      if (view.files.length === 1 && readLimits.some((r) => r.file === view.files[0].file && r.reader === 'Codex')) {
+        continue;
+      }
+      const chainLabel = view.files.map((f) => f.file).join(' -> ');
+      const overBy = view.cap.totalBytes - view.cap.bytes;
+      readLimits.push({
+        file: chainLabel,
+        reader: 'Codex',
+        limit: view.cap.bytes,
+        endByte: view.cap.totalBytes,
+        overBy,
+      });
+      findings.push(
+        `${chainLabel}: BEYOND-READ-LIMIT — merged chain is ${view.cap.totalBytes} B, ${overBy} B past Codex's ${view.cap.bytes} B (${view.cap.config}) chain limit`,
+      );
+    }
+  }
+
+  const antigravityCap = loader('antigravity')?.cap;
+  if (antigravityCap?.scope === 'file') {
+    for (const doc of documents) {
+      if (!doc.file.startsWith('.agents/rules/') || doc.readerBytes <= antigravityCap.bytes) continue;
+      const overBy = doc.readerBytes - antigravityCap.bytes;
+      readLimits.push({
+        file: doc.file,
+        reader: 'Antigravity',
+        limit: antigravityCap.bytes,
+        endByte: doc.readerBytes,
+        overBy,
+      });
+      findings.push(
+        `${doc.file}: BEYOND-READ-LIMIT — rule file is ${doc.readerBytes} B, ${overBy} B past Antigravity's ${antigravityCap.bytes} B per-file limit`,
+      );
     }
   }
 
@@ -368,4 +511,32 @@ export function totals(rows) {
     repeatBytes,
     overBudget: rows.filter((r) => r.budget.over).map((r) => r.name),
   };
+}
+
+/**
+ * Directories under `root` that carry an `AGENTS.md` or `AGENTS.override.md` beyond
+ * a lone root `AGENTS.md`, sorted for determinism.
+ */
+async function instructionDirs(root, rel = '', depth = 0, out = []) {
+  let entries;
+  try {
+    entries = await readdir(join(root, rel), { withFileTypes: true });
+  } catch {
+    return out;
+  }
+  const names = entries.map((e) => e.name).sort();
+  const hasOverride = names.includes('AGENTS.override.md');
+  const hasAgents = names.includes('AGENTS.md');
+  if ((rel !== '' && (hasAgents || hasOverride)) || (rel === '' && hasOverride)) {
+    out.push(rel);
+  }
+  if (depth >= 4) return out;
+  for (const name of names) {
+    if (name.startsWith('.') || name === 'node_modules' || name === 'dist' || name === 'build') continue;
+    const entry = entries.find((e) => e.name === name);
+    if (entry?.isDirectory()) {
+      await instructionDirs(root, rel === '' ? name : `${rel}/${name}`, depth + 1, out);
+    }
+  }
+  return out;
 }

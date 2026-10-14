@@ -33,6 +33,7 @@ import {
   mcpTools,
   totals,
 } from '../measure/context.mjs';
+import { measureSession } from '../measure/session.mjs';
 
 /** `1234567`, never `1,234,567`. `toLocaleString` output depends on the locale, and
  *  this command exists so two machines produce two numbers a pull request can diff. */
@@ -45,6 +46,36 @@ function files(n) {
 }
 
 export async function tokensCommand(positional, flags) {
+  if (flags.session !== undefined) {
+    const session = await measureSession(flags.session);
+    if (!session.ok) {
+      return fail(session.error, EXIT.CONFIG, session.remedy);
+    }
+    if (isJson(flags)) {
+      emitJson({
+        ok: true,
+        command: 'tokens',
+        mode: 'session',
+        session: session.path,
+        bytesPerToken: BYTES_PER_TOKEN,
+        rules: session.rules,
+        fileReads: session.fileReads,
+        toolOutput: session.toolOutput,
+        total: session.total,
+      });
+      return EXIT.OK;
+    }
+    const lines = [
+      `tokens   ${session.path}  (session)`,
+      `rules       ${plain(session.rules.bytes)} B  ~${plain(session.rules.tokens)} tokens  (${plain(session.rules.share)}%)`,
+      `file reads  ${plain(session.fileReads.bytes)} B  ~${plain(session.fileReads.tokens)} tokens  (${plain(session.fileReads.share)}%)`,
+      `tool output ${plain(session.toolOutput.bytes)} B  ~${plain(session.toolOutput.tokens)} tokens  (${plain(session.toolOutput.share)}%)`,
+      `total       ${plain(session.total.bytes)} B  ~${plain(session.total.tokens)} tokens`,
+    ];
+    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    return EXIT.OK;
+  }
+
   // `targetRoot` owns the precedence, so `tokens`, `compare` and `upgrade` cannot
   // disagree about which directory was named (ADR-014).
   const target = await targetRoot(flags, positional);

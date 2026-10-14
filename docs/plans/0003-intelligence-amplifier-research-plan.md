@@ -845,7 +845,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R03 | Cost model and report | 0 | R02 | S | — | matches hand computation | Queued |
 | R04 | Ablation | 0 | R03 | M | — | value per KB for every section | Queued |
 | R05 | Compliance probes | 0 | R02, R17 | M | — | 12 probes with graders | Queued |
-| R06 | Context meter | 0 | R14 | S | D7 | reproduces 90,042 B / 72% | Queued |
+| R06 | Context meter | 0 | R14 | S | D7 (ADR-075) | reproduces 90,042 B / 72% | Complete |
 | R07 | Kernel and commentary split | 1 | R02, R06 | M | D3 | kernel ≤ 1.5 KB; ΔR ≥ −2, ΔC < 0 | Queued |
 | R08 | Budgeted compilation | 1 | R07 | S | 0002 P7 | budget exact; byte-identical | Queued |
 | R09 | Inferability filter | 1 | R07 | S | — | expected removals with reasons | Queued |
@@ -942,7 +942,7 @@ this plan's tracker are review 0002's, written `0002 P7`.
 | D4 | Agent-time hooks are a projected surface, with one policy table for every harness |
 | D5 | The evidence ledger, and what counts as a claim |
 | D6 | The local index is `node:sqlite`, gitignored and always rebuildable |
-| D7 | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default |
+| D7 | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default (ADR-075) |
 | D8 | Distribution as a single-file binary alongside npm |
 | D9 | Tracker tables are a parsed format with fixed columns |
 

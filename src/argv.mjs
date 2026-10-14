@@ -83,6 +83,9 @@ export const VALUE_FLAGS = new Set([
   // the project root down to the working directory, so this is what makes them mean
   // anything beyond the root document.
   'at',
+  // tokens: split a local Claude Code or Codex session transcript into rules, file
+  // reads and tool output. Local paths only (ADR-075).
+  'session',
 ]);
 
 /**

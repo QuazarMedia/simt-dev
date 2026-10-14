@@ -128,6 +128,40 @@ test('Claude Code reads AGENTS.md only when there is no CLAUDE.md', async () => 
   assert.deepEqual(both.files.map((f) => f.file), ['CLAUDE.md']);
 });
 
+test('Claude Code expands @path imports up to four hops and skips code spans and outside paths', async () => {
+  const root = await repo({
+    'CLAUDE.md': [
+      '# Instructions',
+      'See @docs/one.md and (`@docs/ignored-inline.md`).',
+      '```md',
+      '@docs/ignored-fenced.md',
+      '```',
+      'Quoted "@docs/ignored-quoted.md" and outside @../escape.md are not imported.',
+    ].join('\n'),
+    'docs/one.md': 'First hop @two.md\n',
+    'docs/two.md': 'Second hop @three.md\n',
+    'docs/three.md': 'Third hop @four.md\n',
+    'docs/four.md': 'Fourth hop @five.md\n',
+    'docs/five.md': 'Fifth hop (past depth 4)\n',
+    'docs/ignored-inline.md': 'nope\n',
+    'docs/ignored-fenced.md': 'nope\n',
+    'docs/ignored-quoted.md': 'nope\n',
+  });
+
+  const view = await viewOf(root, loader('claude'));
+  assert.deepEqual(
+    view.files.map((f) => [f.file, f.channel]),
+    [
+      ['CLAUDE.md', 'documents'],
+      ['docs/one.md', 'imports'],
+      ['docs/two.md', 'imports'],
+      ['docs/three.md', 'imports'],
+      ['docs/four.md', 'imports'],
+    ],
+    'four hops are expanded relative to each importing file, and the fifth hop plus code/quoted/outside refs are skipped',
+  );
+});
+
 test('Codex merges the chain in order and stops at project_doc_max_bytes', async () => {
   // Two files, each inside 32 KiB, whose sum is not. This is the case a per-file check
   // cannot see, and it is why `cap.scope` is `chain`.

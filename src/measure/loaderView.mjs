@@ -21,7 +21,7 @@
 //      frontmatter-aware Markdown parser this package does not have (ADR-012).
 
 import { readFile, readdir, stat } from 'node:fs/promises';
-import { join, relative, sep } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { LOADERS, caps } from '../projection/loaders.mjs';
 import { extractFrontmatter } from '../projection/targets.mjs';
@@ -221,6 +221,11 @@ export async function viewOf(root, row, options = {}) {
       if (found.length > 0) {
         taken = true;
         files.push(rowFor(found[0], entry, 'documents'));
+        if (row.imports?.syntax === '@path' && row.imports.depth > 0) {
+          for (const imp of await expandClaudeImports(root, found[0].file, found[0].text, row.imports.depth)) {
+            files.push(rowFor(imp, { scope: 'project', why: row.imports.why }, 'imports'));
+          }
+        }
       }
     }
   }
@@ -228,6 +233,9 @@ export async function viewOf(root, row, options = {}) {
   for (const entry of row.start) {
     if (entry.tree === 'chain') continue;
     for (const found of await resolveEntry(root, entry)) {
+      // Claude Code treats `paths:` in `.claude/rules/*.md` frontmatter as path-scoped,
+      // not session-start.
+      if (row.id === 'claude' && entry.dir === '.claude/rules' && frontmatter(found.text).paths) continue;
       files.push(
         rowFor(found, entry, entry.metadata ? 'skills' : entry.tree === 'single' ? 'documents' : 'rules'),
       );
@@ -317,6 +325,47 @@ function skillHead(text) {
   const description = meta.description ?? '';
   if (description) return `${name}\n${description}`;
   return name;
+}
+
+/**
+ * Expand Claude Code `@path/to/import` directives up to `maxDepth` hops.
+ *
+ * Follows the documented parser rules on `claude.imports`:
+ *   - skips fenced code blocks and inline code spans;
+ *   - skips quoted `@path` tokens and `@[label](path)` links;
+ *   - resolves relative to the importing file's directory;
+ *   - refuses paths outside the repository root (Claude Code prompts for approval
+ *     before reading outside the working directory, so those bytes are not automatic).
+ */
+export async function expandClaudeImports(
+  root,
+  fromRel,
+  text,
+  maxDepth = 4,
+  seen = new Set([fromRel]),
+  depth = 0,
+) {
+  if (depth >= maxDepth) return [];
+  const absRoot = resolve(root);
+  const stripped = text
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/~~~[\s\S]*?~~~/g, '')
+    .replace(/`[^`\n]*`/g, '');
+
+  const out = [];
+  const baseDir = dirname(join(absRoot, fromRel));
+  for (const match of stripped.matchAll(/(?:^|(?<=[\s(]))@([A-Za-z0-9_./-]+\.[A-Za-z0-9]+)(?=$|[\s),.;:!?\])])/gm)) {
+    const rawTarget = match[1];
+    const absTarget = resolve(baseDir, rawTarget);
+    const rel = relative(absRoot, absTarget).split(sep).join('/');
+    if (rel === '' || rel.startsWith('..') || seen.has(rel)) continue;
+    const body = await readText(absTarget);
+    if (body === null) continue;
+    seen.add(rel);
+    out.push({ file: rel, text: body });
+    out.push(...(await expandClaudeImports(absRoot, rel, body, maxDepth, seen, depth + 1)));
+  }
+  return out;
 }
 
 /** Every reader's view of one repository, in table order. */

@@ -174,6 +174,15 @@ export const LOADERS = [
         why: 'Claude Code memory docs: AGENTS.md is read directly, but only when there is no CLAUDE.md or CLAUDE.local.md in the working directory or above it',
       },
       {
+        scope: 'project',
+        path: '.claude/rules/{name}.md',
+        tree: 'nested',
+        dir: '.claude/rules',
+        suffix: '.md',
+        atStart: true,
+        why: 'Claude Code memory docs: project rules under .claude/rules/ are discovered recursively and loaded at session start when unscoped',
+      },
+      {
         scope: 'user',
         path: '~/.claude/rules/*.md',
         tree: 'flat',
@@ -475,8 +484,9 @@ export const LOADERS = [
         tree: 'nested',
         dir: '.github/instructions',
         suffix: '.instructions.md',
-        atStart: false,
-        why: 'GitHub Copilot docs: a path-specific file is applied when a file matching applyTo is in context, and subdirectories are allowed',
+        frontmatter: { applyTo: '**' },
+        atStart: true,
+        why: 'GitHub Copilot docs: a path-specific file is applied when a file matching applyTo is in context, and applyTo: "**" matches every file at session start',
       },
       {
         scope: 'project',

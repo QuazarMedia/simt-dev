@@ -371,6 +371,148 @@ test('check raises the budget finding, and does not fail on it', async () => {
   assert.equal(code, before.code, 'an over-budget finding must not change the gate exit code');
 });
 
+// --- R06: loader-backed measurement and local session breakdown ----------------
+
+test('tokens uses the R14 loader rules: flat Antigravity scan, scoped rules excluded, Claude @path imports included', async () => {
+  const root = await repo(await scratch(), 'alpha');
+  const { manifest } = await adopt(root);
+  await writeFile(
+    join(root, 'simt-dev.json'),
+    manifestText({ ...manifest, surfaces: ['cursor', 'antigravity', 'copilot', 'claude'] }),
+  );
+
+  // Cursor: eager (`alwaysApply: true`) counts; scoped (`alwaysApply: false`) does not.
+  await mkdir(join(root, '.cursor', 'rules'), { recursive: true });
+  const eagerCursor = compose('Eager cursor rule.\n', { sha: 'abc1234' }, 'html');
+  const scopedCursor = compose('Scoped cursor rule.\n', { sha: 'abc1234' }, 'html');
+  await writeFile(
+    join(root, '.cursor', 'rules', 'eager.mdc'),
+    `---\ndescription: eager\nalwaysApply: true\n---\n\n${eagerCursor}`,
+  );
+  await writeFile(
+    join(root, '.cursor', 'rules', 'scoped.mdc'),
+    `---\ndescription: scoped\nalwaysApply: false\nglobs: "*.py"\n---\n\n${scopedCursor}`,
+  );
+
+  // Antigravity: immediate `trigger: always_on` counts; `trigger: glob` and nested
+  // `.agents/rules/nested/deep.md` do not.
+  await mkdir(join(root, '.agents', 'rules', 'nested'), { recursive: true });
+  const alwaysAg = compose('Always-on antigravity rule.\n', { sha: 'abc1234' }, 'html');
+  await writeFile(
+    join(root, '.agents', 'rules', 'always.md'),
+    `---\ntrigger: always_on\ndescription: always\n---\n\n${alwaysAg}`,
+  );
+  await writeFile(
+    join(root, '.agents', 'rules', 'scoped.md'),
+    `---\ntrigger: glob\nglobs: "*.py"\ndescription: scoped\n---\n\n${alwaysAg}`,
+  );
+  await writeFile(
+    join(root, '.agents', 'rules', 'nested', 'deep.md'),
+    `---\ntrigger: always_on\ndescription: nested\n---\n\n${alwaysAg}`,
+  );
+
+  // Copilot: `applyTo: "**"` counts; path-scoped `applyTo: "*.py"` does not.
+  await mkdir(join(root, '.github', 'instructions'), { recursive: true });
+  const copilotBody = compose('Copilot rule.\n', { sha: 'abc1234' }, 'html');
+  await writeFile(
+    join(root, '.github', 'instructions', 'eager.instructions.md'),
+    `---\napplyTo: "**"\n---\n\n${copilotBody}`,
+  );
+  await writeFile(
+    join(root, '.github', 'instructions', 'scoped.instructions.md'),
+    `---\napplyTo: "*.py"\n---\n\n${copilotBody}`,
+  );
+
+  // Claude: regular CLAUDE.md importing `@docs/imported.md`.
+  await mkdir(join(root, 'docs'), { recursive: true });
+  await writeFile(join(root, 'CLAUDE.md'), 'See @docs/imported.md for details.\n');
+  await writeFile(join(root, 'docs', 'imported.md'), 'Imported Claude context.\n');
+
+  const row = (await json(['--root', root])).roots[0];
+  const imports = row.channels.find((c) => c.channel === 'imports');
+  assert.ok(imports, 'Claude @path imports are measured as their own channel');
+  assert.equal(imports.files, 1);
+  assert.equal(imports.readerBytes, Buffer.byteLength('Imported Claude context.\n'));
+
+  const rules = row.channels.find((c) => c.channel === 'rules');
+  // Exactly 4 session-start rule files: eager.mdc, always.md, eager.instructions.md, and CLAUDE.md.
+  // The 4 non-start files (scoped.mdc, scoped.md, nested/deep.md, scoped.instructions.md) are excluded.
+  assert.equal(rules.files, 4);
+});
+
+test('tokens reports a Codex chain read-limit overflow when individual AGENTS.md files are under 32 KiB', async () => {
+  const root = await repo(await scratch(), 'alpha');
+  await adopt(root);
+  // Root AGENTS.md is ~20 KB (< 32 KiB) and packages/api/AGENTS.md is ~20 KB (< 32 KiB),
+  // so no single file trips the 32 KiB limit — only the merged root-to-cwd chain does.
+  await writeFile(join(root, 'AGENTS.md'), `${'a'.repeat(20_000)}\n`);
+  await mkdir(join(root, 'packages', 'api'), { recursive: true });
+  await writeFile(join(root, 'packages', 'api', 'AGENTS.md'), `${'b'.repeat(20_000)}\n`);
+
+  const row = (await json(['--root', root])).roots[0];
+  const chainLimit = row.readLimits.find((r) => r.file === 'AGENTS.md -> packages/api/AGENTS.md');
+  assert.ok(chainLimit, `expected merged chain limit in ${JSON.stringify(row.readLimits)}`);
+  assert.equal(chainLimit.reader, 'Codex');
+  assert.equal(chainLimit.limit, 32_768);
+  assert.equal(chainLimit.endByte, 40_002);
+  assert.equal(chainLimit.overBy, 40_002 - 32_768);
+  assert.ok(row.findings.some((f) => f.includes('AGENTS.md -> packages/api/AGENTS.md') && f.includes('BEYOND-READ-LIMIT')));
+});
+
+test('tokens --session splits a local transcript into rules, file reads and tool output, and refuses remote URLs (ADR-075)', async () => {
+  const dir = await scratch('simt-session-');
+  const transcript = join(dir, 'session.jsonl');
+  const lines = [
+    JSON.stringify({ role: 'system', content: 'System rule text here.' }),
+    JSON.stringify({
+      message: {
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', id: 'call-rule', name: 'Read', input: { file_path: 'AGENTS.md' } },
+          { type: 'tool_use', id: 'call-src', name: 'Read', input: { file_path: 'src/index.mjs' } },
+          { type: 'tool_use', id: 'call-bash', name: 'Bash', input: { command: 'npm test' } },
+        ],
+      },
+    }),
+    JSON.stringify({
+      message: {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'call-rule', content: 'Loaded AGENTS.md body.' },
+          { type: 'tool_result', tool_use_id: 'call-src', content: 'export const x = 1;\n' },
+          { type: 'tool_result', tool_use_id: 'call-bash', content: '12 pass, 0 fail\n' },
+        ],
+      },
+    }),
+  ];
+  await writeFile(transcript, `${lines.join('\n')}\n`);
+
+  const payload = await json(['--session', transcript]);
+  assert.equal(payload.mode, 'session');
+  assert.equal(
+    payload.rules.bytes,
+    Buffer.byteLength('System rule text here.') + Buffer.byteLength('Loaded AGENTS.md body.'),
+  );
+  assert.equal(payload.fileReads.bytes, Buffer.byteLength('export const x = 1;\n'));
+  assert.equal(payload.toolOutput.bytes, Buffer.byteLength('12 pass, 0 fail\n'));
+  assert.equal(
+    payload.total.bytes,
+    payload.rules.bytes + payload.fileReads.bytes + payload.toolOutput.bytes,
+  );
+
+  const textOut = await run(['--session', transcript]);
+  assert.equal(textOut.code, 0);
+  assert.match(textOut.stdout, /rules\s+\d+ B/);
+  assert.match(textOut.stdout, /file reads\s+\d+ B/);
+  assert.match(textOut.stdout, /tool output\s+\d+ B/);
+
+  // ADR-075 (D7): remote URLs are refused before any network access.
+  const remote = await run(['--session', 'https://example.com/session.jsonl']);
+  assert.notEqual(remote.code, 0);
+  assert.match(remote.stderr, /remote URLs are refused/i);
+  assert.match(remote.stderr, /ADR-075/);
+});
+
 /** One `check` run, both streams and the code, because the code is the assertion. */
 async function gate(args) {
   try {

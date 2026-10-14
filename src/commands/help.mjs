@@ -92,6 +92,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --user                  harness detect: also report the directories in your home
 --repos                 tokens: measure every repository under the root, not
                         just the one, and report what repeats an earlier one
+--session <path>        tokens: split a local Claude Code or Codex transcript
+                        into rules, file reads and tool output
 --reader <id>           harness loaders: report one reader (opencode, claude, codex,
                          cursor, antigravity, copilot)
 --table                 harness loaders: print order, caps, imports, skill dirs and

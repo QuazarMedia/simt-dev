@@ -286,8 +286,12 @@ export const POINTERS = [
     to: 'AGENTS.md',
     readers: 'Gemini CLI, Antigravity',
     verified:
-      'Google Antigravity docs, "Rules": workspace rules are AGENTS.md or GEMINI.md in the root or any subdirectory; Copilot CLI also discovers GEMINI.md',
-    note: 'Covers Gemini CLI and gives Antigravity a second, equally-native name for the same file.',
+      'Google Antigravity docs, "Rules": workspace rules are AGENTS.md or GEMINI.md in the root or any subdirectory; Copilot CLI also discovers GEMINI.md. ' +
+      'Gemini CLI, read today: its own docs (core memory index, and the configuration reference) say the memory service loads GEMINI.md hierarchically from the working directory up to the project root and the home directory and also into subdirectories, and that `context.fileName` in settings.json "accepts either a single string or an array of strings" naming the context file(s) to load, default undefined',
+    note:
+      'Covers Gemini CLI and gives Antigravity a second, equally-native name for the same file. ' +
+      'A repository can also point Gemini CLI at AGENTS.md itself with `context.fileName: ["AGENTS.md"]` and need no pointer at all, ' +
+      'which is the reason there is no separate Gemini CLI row here: this pointer and a native row would be two ways to hand one reader the same rule.',
   },
 ];
 

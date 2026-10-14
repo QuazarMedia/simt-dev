@@ -51,6 +51,10 @@ export const BOOL_FLAGS = new Set([
   // command whose output changes because something was installed elsewhere is one a
   // reader stops trusting.
   'user',
+  // harness loaders: print the vendor facts (order, caps, imports, hooks and MCP
+  // config) without measuring a repository. The measurement is the other mode; this is
+  // the one that answers "what does this reader do", which does not depend on the repo.
+  'table',
 ]);
 
 export const VALUE_FLAGS = new Set([
@@ -71,6 +75,14 @@ export const VALUE_FLAGS = new Set([
   // silently applied an unnamed set of rules is the decoration this repository exists
   // to refuse. One is on offer today, so the command rejects any other by name.
   'spec',
+  // harness loaders: which reader to report. A value rather than a boolean because
+  // "--loader" would not say WHICH loader, and a report that silently applied to all
+  // of them would be decoration that misdescribes the artefact.
+  'reader',
+  // harness loaders: measure as if the agent were standing here. The chain rows walk
+  // the project root down to the working directory, so this is what makes them mean
+  // anything beyond the root document.
+  'at',
 ]);
 
 /**

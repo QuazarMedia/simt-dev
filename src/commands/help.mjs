@@ -54,6 +54,10 @@ ${CLI} harness detect         which harnesses this repo (and, with --user, you)
                            are set up for, and which have a rule channel here
                            (presence only: a directory found is not a claim about
                            what its owner reads; exits 0 whatever it finds)
+${CLI} harness loaders        what each reader loads at session start, in bytes,
+                            and what its size cap drops
+                            (--table prints the vendor facts without measuring;
+                            --reader <id> narrows it; every claim cites its source)
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
@@ -88,6 +92,13 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --user                  harness detect: also report the directories in your home
 --repos                 tokens: measure every repository under the root, not
                         just the one, and report what repeats an earlier one
+--reader <id>           harness loaders: report one reader (opencode, claude, codex,
+                         cursor, antigravity, copilot)
+--table                 harness loaders: print order, caps, imports, skill dirs and
+                         the hook and MCP config files, without measuring a repo
+--at <path>             harness loaders: measure as if the agent were working in
+                         this directory (default: the root; readers that merge the
+                         project root down to the working directory cost more here)
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

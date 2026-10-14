@@ -84,6 +84,7 @@ const JSON_COMMANDS = {
   compare: [],
   tokens: { root: 'r' },
   'harness detect': [],
+  'harness loaders': [],
   check: [],
   'rules list': [],
   'hooks run': ['pre-commit'],

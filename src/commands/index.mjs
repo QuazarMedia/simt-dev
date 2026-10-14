@@ -35,7 +35,7 @@ import { mcpCommand } from './mcp.mjs';
 import { installCommand } from './skillsinstall.mjs';
 import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
 import { tokensCommand } from './tokens.mjs';
-import { harnessCommand } from './harness.mjs';
+import { harnessCommand, harnessLoadersCommand } from './harness.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -92,6 +92,7 @@ export const IMPLEMENTED = {
   compare: compareCommand,
   tokens: tokensCommand,
   'harness detect': harnessCommand,
+  'harness loaders': harnessLoadersCommand,
   upgrade: upgradeCommand,
   mcp: mcpCommand,
 };

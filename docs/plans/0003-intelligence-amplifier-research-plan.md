@@ -1,6 +1,6 @@
 # Plan 0003 — simt-dev as an intelligence amplifier: research and development plan
 
-Status: **proposed — no slice started** · created 2026-10-06 · state read at `04ae9e9`
+Status: **in progress — R14 complete** · created 2026-10-06 · state read at `04ae9e9`
 Depends on: review 0002 Waves 0–1 (`docs/reviews/0002-full-review-adoption-and-public-release.md`),
 plan 0002
 Blocked by: every slice here is Queued, and R01 and R02 — the task miner and the agent runner
@@ -853,7 +853,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R11 | Workspace dedupe | 1 | R07, R14 | M | 0002 P7 | estate ≤ 30 KB, no R loss | Queued |
 | R12 | Scoped loading and disclosure index | 1 | review 0002 S41, S50 | M | 0002 P7 | scoped content absent at start | Queued |
 | R13 | Cache-stable rendering and lockfile | 1 | review 0002 S01 | S | 0002 P1 | byte-identical across machines | Queued |
-| R14 | Harness loader table | 1 | — | S | — | provenance on every row | Queued |
+| R14 | Harness loader table | 1 | — | S | — | provenance on every row | Complete |
 | R15 | Agent-time hooks from one policy | 2 | R14, R17 | L | D4 | decisions correct per harness; p95 < 100 ms | Queued |
 | R16 | Diff-aware gates | 2 | R24 | M | — | focused selection < 5 s | Queued |
 | R17 | Evidence ledger and claim check | 2 | — | M | D5 | evidence invalidated by any edit | Queued |

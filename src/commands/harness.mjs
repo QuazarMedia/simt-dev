@@ -16,10 +16,12 @@
 
 import { stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
-import { EXIT, emit, emitJson, isJson, note } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
 import { SURFACES, CANDIDATE_DIRS } from '../projection/surfaces.mjs';
+import { LOADERS, LOADER_IDS, caps, loader } from '../projection/loaders.mjs';
+import { viewAll } from '../measure/loaderView.mjs';
 
 /**
  * `simt-dev harness detect`. The subcommand is validated by dispatch, which rejects a
@@ -147,4 +149,138 @@ function block(scan, pad) {
     const agents = r.readsAgentsMd === 'all' ? ' (reads AGENTS.md)' : r.readsAgentsMd === 'some' ? ' (some readers read AGENTS.md)' : '';
     return `${pad}${r.dir.padEnd(12)} ${r.label.padEnd(38)} ${through}${agents}`;
   });
+}
+
+// `simt harness loaders` - what each reader loads at session start, and the vendor
+// document every claim in that answer came from.
+//
+// It exists because `simt tokens` answers a question about files and this one answers a
+// question about a reader, and the two disagree in ways that matter: Antigravity scans
+// `.agents/rules/` flat and ignores nested files, and Codex stops merging at 32 KiB
+// across the chain rather than per file. A byte count that ignores those is not
+// pessimistic, it is wrong, and it was wrong in the meter this slice unblocked.
+//
+// It exits 0 whatever it finds, for the same reason `harness detect` does: a reader that
+// loads nothing here is a fact about this repository, not a defect in it.
+
+/**
+ * `simt harness loaders [--root <path>] [--reader <id>] [--table]`.
+ *
+ * With no flags it prints one block per reader: what it loads, what the cap leaves out,
+ * and the sentence it was read from. `--reader` narrows it. `--table` prints the
+ * vendor facts without measuring anything, which is the answer to "what does this reader
+ * do" in a repository where the answer is not about bytes.
+ */
+export async function harnessLoadersCommand(positional, flags) {
+  const root = flags.root ?? process.cwd();
+  const wanted = typeof flags.reader === 'string' ? flags.reader : null;
+  const rows = wanted === null ? LOADERS : [loader(wanted)].filter(Boolean);
+
+  if (rows.length === 0) {
+    return fail(
+      `unknown reader "${wanted}"`,
+      EXIT.USAGE,
+      `known readers: ${LOADER_IDS.join(', ')}`,
+    );
+  }
+
+  if (flags.table === true) {
+    const payload = rows.map((row) => ({
+      id: row.id,
+      label: row.label,
+      readers: row.readers,
+      order: row.order,
+      nested: row.nested,
+      start: row.start,
+      alsoReads: row.alsoReads ?? [],
+      imports: row.imports,
+      caps: caps(row),
+      skills: row.skills ?? [],
+      hooks: row.hooks,
+      hooksNote: row.hooksNote ?? null,
+      mcp: row.mcp,
+      verified: row.verified,
+      note: row.note ?? null,
+    }));
+    if (isJson(flags)) {
+      emitJson({ ok: true, command: 'harness loaders', rows: payload });
+      return EXIT.OK;
+    }
+    emit(rows.map((row) => loaderTable(row)).join('\n'));
+    return EXIT.OK;
+  }
+
+  // `--at` asks what a reader loading from a subdirectory would get, which is the only
+  // way the chain rows mean anything: Codex merges the project root down to the working
+  // directory, so the same repository costs a different reader a different total
+  // depending on where that reader is standing.
+  const views = await viewAll(root, rows, flags.at ? { cwd: isAbsolute(flags.at) ? flags.at : join(root, flags.at) } : {});
+  if (isJson(flags)) {
+    emitJson({ ok: true, command: 'harness loaders', root, rows: views });
+    return EXIT.OK;
+  }
+  emit(`${views.map((view) => renderView(view)).join('\n')}`);
+  return EXIT.OK;
+}
+
+/**
+ * One reader's measured view of the repository.
+ *
+ * The dropped rows come first under a heading of their own. A total that quietly
+ * excludes a file past the cap reads as a total, and the reader who is about to lose the
+ * tail of their deepest instruction file to a merge is exactly the person who needs to
+ * see it named.
+ */
+function renderView(view) {
+  const lines = [`${view.reader.padEnd(11)} ${view.label}  ${view.files.length} file(s) at start, ${view.totalBytes} B`];
+  lines.push(`            order     ${view.order}`);
+  for (const file of view.files) {
+    const state = file.beyondCap
+      ? '  BEYOND CAP - not read'
+      : file.overCap
+        ? `  OVER CAP (${file.countedBytes} B)`
+        : '';
+    lines.push(`            ${file.file.padEnd(44)} ${String(file.countedBytes).padStart(7)} B${state}`);
+  }
+  if (view.cap) {
+    lines.push(`            cap       ${view.cap.bytes} B over ${view.cap.appliesTo} (${view.cap.config ?? 'fixed'})`);
+  } else if (!view.perFileCap && !view.budget) {
+    lines.push('            cap       none published');
+  }
+  if (view.perFileCap) {
+    lines.push(`            file cap  ${view.perFileCap.bytes} B per rule file (${view.perFileCap.config ?? 'fixed'})`);
+  }
+  if (view.budget) {
+    lines.push(`            budget    ${view.budget.tokens} tokens (${view.budget.bytes} B approx) over ${view.budget.appliesTo}`);
+  }
+  if (view.imports?.syntax) {
+    lines.push(`            imports   ${view.imports.syntax}, ${view.imports.depth} hop(s)`);
+  }
+  if (view.userScope.length > 0) {
+    lines.push(`            user      ${view.userScope.join(', ')} (not measured: your bytes, not the repo's)`);
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+/** The vendor facts, without a repository — the part of the answer that is not a measurement. */
+function loaderTable(row) {
+  const lines = [`${row.id}  ${row.label}  (${row.readers})`];
+  lines.push(`  order     ${row.order}`);
+  lines.push(`  nested    ${row.nested}`);
+  for (const entry of row.start) {
+    const where = entry.scope === 'user' ? 'user' : 'project';
+    lines.push(`  start     ${where} ${entry.path}${entry.atStart ? '' : ' (on demand)'}`);
+  }
+  for (const extra of row.alsoReads ?? []) {
+    lines.push(`  also      ${extra.what}${extra.atStart ? '' : ' (on demand)'}`);
+  }
+  for (const c of caps(row)) {
+    lines.push(`  cap       ${c.bytes} ${c.scope === 'tokens' ? 'tokens' : 'B'} over ${c.appliesTo ?? c.scope}`);
+  }
+  if (row.cap === null) lines.push(`  cap       none published — ${row.capNote ?? 'checked'}`);
+  lines.push(`  skills    ${(row.skills ?? []).join(', ') || 'none documented'}`);
+  lines.push(`  hooks     ${row.hooks?.path ?? 'none documented'}${row.hooksNote ? ` — ${row.hooksNote}` : ''}`);
+  lines.push(`  mcp       ${row.mcp?.path ?? 'none documented'}`);
+  lines.push(`  source    ${row.verified}`);
+  return lines.join('\n');
 }

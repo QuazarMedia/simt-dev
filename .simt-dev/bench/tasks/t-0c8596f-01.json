@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "id": "t-0c8596f-01",
+  "base": "267710f06877d50c62448c660d7062e0e4a4137c",
+  "sourceCommit": "0c8596f8eab33dc4d017ed22f10e681dc25f84d6",
+  "prompt": "feat(mcp): address the rules and decisions as resources (S43, ADR-074)\n\nA client that wanted to browse what this tool is authoritative about had\nno way to do it: every answer came back from a tool call with an argument\nin it. A rule and a decision record are addressable now, one URI each, with\nthe byte size they will cost stated up front because that is the one number\na client cannot get without spending the read.\n\nBoth revisions of the resource specification were read rather than\nrecalled, and they disagree about the behaviour that decides whether a\nclient retries or gives up: a missing resource is -32602 on 2026-07-28 and\n-32002 on the two older ones, and neither lets a server answer with an empty\ncontents array, which reads as a rule with no body. So the error is the\nrevision's own rather than one code for all three.\n\nThe capability is declared unconditionally as the empty object: every rule\nand every decision ships with the package, so there is always something to\nread, and this server can honour neither subscriptions nor change\nnotifications. It used to be gated on a property of the tools array that\nnothing ever set, which was a promise a client waits on forever, only\nquieter.\n\nEvery URI is validated, so a refusal cannot be told from a miss and used to\nprobe the filesystem, and a decision body is redacted on the way out\nbecause a resource travels further than the CLI was aimed at.",
+  "testCmd": "node --test test/mcp.test.mjs",
+  "f2p": [
+    "mcp: a decision record is readable and carries no estate name",
+    "mcp: a missing resource is the error its revision specifies",
+    "mcp: a rule is readable, with its frontmatter reconstructed",
+    "mcp: a uri that is not ours, or tries to escape, is refused",
+    "mcp: every revision lists rules and decisions",
+    "mcp: only the newest revision carries the cache fields on a list",
+    "mcp: templates are listed, and they name the two schemes",
+    "mcp: the resources capability is declared without subscriptions"
+  ],
+  "p2p": [
+    "mcp: --list answers without reading stdin",
+    "mcp: 2026-07-28 is stateless, so a per-request _meta replaces the handshake",
+    "mcp: a malformed request is a request error",
+    "mcp: a notification produces no response at all",
+    "mcp: a per-request version this server does not speak is refused, by name",
+    "mcp: a real session answers on the protocol channel and nothing else",
+    "mcp: a tool that fails is a RESULT with isError, never a protocol error",
+    "mcp: an older client keeps the revision it negotiated, without being asked again",
+    "mcp: an unknown method is a protocol error, not silence",
+    "mcp: an unknown tool is a method error naming the way to discover it",
+    "mcp: an unsupported protocol version gets ours, not an echo of theirs",
+    "mcp: every command that writes is reachable only from the CLI",
+    "mcp: every supported revision completes a handshake",
+    "mcp: every tool answers, and every answer matches the schema it declared",
+    "mcp: every tool declares a usable schema",
+    "mcp: initialize answers with the protocol version and the read-only instruction",
+    "mcp: invalid JSON is answered, and the session continues",
+    "mcp: list results carry a cache lifetime from 2026-07-28 and nothing before it",
+    "mcp: no mutating command is exposed as a tool",
+    "mcp: ping answers an older client and is refused to a 2026-07-28 one",
+    "mcp: rules_why answers both directions, over a real session",
+    "mcp: server/discover advertises the revisions, the capabilities and the identity",
+    "mcp: skills_brief and `skills brief` answer the same question identically",
+    "mcp: the annotations say what the tools are",
+    "mcp: truncation is announced in the text, never silent"
+  ],
+  "gold": {
+    "files": 5,
+    "linesAdded": 300,
+    "linesRemoved": 7
+  },
+  "vault": "vault/t-0c8596f-01"
+}

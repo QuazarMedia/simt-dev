@@ -36,6 +36,7 @@ import { installCommand } from './skillsinstall.mjs';
 import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
 import { tokensCommand } from './tokens.mjs';
 import { harnessCommand, harnessLoadersCommand } from './harness.mjs';
+import { benchMineCommand } from './bench.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -54,6 +55,7 @@ const GROUPS = new Map([
   ['rules', 'list'],
   ['hooks', 'status'],
   ['harness', 'detect'],
+  ['bench', 'mine'],
 ]);
 
 /**
@@ -93,6 +95,7 @@ export const IMPLEMENTED = {
   tokens: tokensCommand,
   'harness detect': harnessCommand,
   'harness loaders': harnessLoadersCommand,
+  'bench mine': benchMineCommand,
   upgrade: upgradeCommand,
   mcp: mcpCommand,
 };

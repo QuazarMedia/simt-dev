@@ -506,7 +506,7 @@ export function redactEstate(text) {
  * Only a real verb follows, which is what keeps `simt-dev.json`, `simt-dev-check.yml` and
  * `simt-dev's` untouched - those are the project's artefacts and the project keeps its name.
  */
-const VERB = '(?:init|doctor|check|sync|upgrade|ci|compare|hooks|mcp|rules|skills|graph|--[a-z-]+)';
+const VERB = '(?:init|doctor|check|sync|upgrade|ci|compare|hooks|mcp|rules|skills|graph|tokens|harness|bench|--[a-z-]+)';
 
 function redactCommand(text) {
   return String(text ?? '').replace(new RegExp(`\\bsimt-dev (?=${VERB})\\b`, 'g'), `${CLI} `);

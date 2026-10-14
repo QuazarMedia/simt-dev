@@ -1,0 +1,47 @@
+{
+  "schemaVersion": 1,
+  "id": "t-f4c5e76-01",
+  "base": "08eb7264136830102f6aef47c3797ce3443d436c",
+  "sourceCommit": "f4c5e76a925d213c9e0371fbe5ec56b1252d3632",
+  "prompt": "feat(projection): narrow a stack profile to the files it applies to (S50, ADR-071)\n\nA stack profile was always-on everywhere, because profiles reached a\nreader through the generated region in AGENTS.md and through nothing else.\nA profile can now declare simt-scope, and a repository on Cursor, Copilot\nor Antigravity gets it as a file the surface attaches on patterns instead\nof one every agent loads on every request.\n\nThe narrowing happens only when EVERY selected surface can do it. Claude\nCode's paths key is documented and silently fails to lazy-load for quoted\nvalues, and opencode has no per-rule channel at all, so a repository\ncarrying either keeps its profiles in the region and is told which surface\nstopped it. That ruling is the reason decision 3 in surfaces.mjs still\nstands, and this row cross-references it rather than re-opening it: a rule\nthat never loads is worse than one that loads eagerly.\n\nReading the two vendors' own docs changed the design before any code did.\nAntigravity requires patterns starting with * to be quoted, because an\nunquoted one is a YAML alias anchor and the rule is discarded with no\nmessage at all, and it documents a 20,000-token budget for always_on rules\npast which they are demoted to pointers, so an eager profile costs the\nreader a budget rather than merely wasting space. Cursor documents no\ndescription plus no globs as manual mention only, so a scoped rule that\ncarried neither would never attach.\n\nA simt-scope matching everything is refused rather than honoured: ** and *\nare what a surface applies when given no pattern, so the profile would\nbe eager with a narrowing-looking spelling. Scoped files go through the\nexisting ruleTargets construction and are gated by checkTargets, so a file\nthis tool wrote is a file the gate can report drift on.",
+  "testCmd": "node --test test/project.test.mjs test/scoped.test.mjs",
+  "f2p": [
+    "a profile is only narrowed by a surface, never by a bare key the reader would see",
+    "a quoted pattern is read as the pattern, not as the quotes around it",
+    "a scope that matches everything is refused, because it is not narrowing",
+    "a scoped file is gated like any other: drift and absence both fail the check",
+    "a scoped profile leaves the region for the surfaces that can narrow it",
+    "a surface that cannot narrow keeps the profile in the region, and says why",
+    "an eager rule still emits no scoping frontmatter (decision 3)",
+    "an empty scope is refused too",
+    "an unscoped profile behaves exactly as it did before",
+    "every key the scoped shape emits is in the vendor docs, checked on both shapes",
+    "every shipped profile that declares a scope has patterns that narrow",
+    "only surfaces whose scoping key was read in the vendor docs can narrow",
+    "the scoped file carries the patterns the surface was documented to take"
+  ],
+  "p2p": [
+    "a backend Workers repo does not receive the React profile",
+    "a malformed region is refused rather than duplicated",
+    "a region past a reader limit is reported, and place top clears it",
+    "a rendered region steps headings by one and gives each source one heading",
+    "a repo with no detectable signal still gets the shared rules",
+    "a surface problem is reported in `surfaceProblems`, not in `mdcProblems`",
+    "check reports current, drift, unmanaged and absent distinctly",
+    "every rule applies-to tag is one fingerprint can emit as a tag or a fact",
+    "every rule file carries an id",
+    "plan writes nothing",
+    "render strips frontmatter and the duplicated H1",
+    "selection is core plus intersecting profiles, in a stable order",
+    "sync never touches hand-written content outside the markers",
+    "the fallback profile is only chosen when nothing more specific matched",
+    "the projected region is idempotent",
+    "the region records the simt-dev sha so drift is diagnosable"
+  ],
+  "gold": {
+    "files": 25,
+    "linesAdded": 391,
+    "linesRemoved": 34
+  },
+  "vault": "vault/t-f4c5e76-01"
+}

@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "id": "t-044edb4-01",
+  "base": "7282916a79c08d1faa2636299f9da7b9cd24f4dd",
+  "sourceCommit": "044edb4593959ca1835ee2d25d8bfd65c383a0be",
+  "prompt": "feat(harness): enhance AGENTS.md handling and add DeepSeek support\n\nUpdated the harness command to include additional properties for candidate directories, specifically for those that read AGENTS.md. Improved the logic for counting unclaimed rows and refined the rendering of output to reflect the new structure. Added support for the DeepSeek harness, ensuring it correctly identifies its directory and integrates with AGENTS.md. Enhanced tests to validate these changes, including scenarios for OpenCode v2 and DeepSeek behavior.",
+  "testCmd": "node --test test/harness.test.mjs test/loaders.test.mjs",
+  "f2p": [
+    "DeepSeek drops the broader instruction file before the most specific one",
+    "DeepSeek loads AGENTS.md and a drifted CLAUDE.md, and collapses a trimmed copy",
+    "OpenCode v2 counts one skill id, and .opencode/skills outranks an earlier copy",
+    "OpenCode v2 loads every AGENTS.md up to the workspace and does not fall back to CLAUDE.md",
+    "a .dsh directory is the DeepSeek harness, covered by AGENTS.md"
+  ],
+  "p2p": [
+    "--user adds the home block, and only when asked",
+    "Antigravity reads .agents/rules/ flat and ignores nested files",
+    "Claude Code expands @path imports up to four hops and skips code spans and outside paths",
+    "Claude Code reads AGENTS.md only when there is no CLAUDE.md",
+    "Codex merges the chain in order and stops at project_doc_max_bytes",
+    "Codex takes one file per directory, override first",
+    "Copilot loads repository instructions and AGENTS.md at start, and leaves path-specific rules until a file matches",
+    "Cursor loads an always-apply rule and leaves a scoped one until it matches",
+    "a cap is stated with the scope it applies to",
+    "a directory with a channel and one without are reported as different facts",
+    "a repository with no harness configuration is an answer, not a failure",
+    "a skill body is never measured into the start cost, in the command output either",
+    "a skill costs its frontmatter, not its body",
+    "a subcommand that does not exist is a usage failure, not a default",
+    "an unknown reader is a usage error naming the ones that exist",
+    "every loader row cites the document each claim came from",
+    "the command reports the table and the measurement, and both name their source",
+    "the text says the same as the json"
+  ],
+  "gold": {
+    "files": 5,
+    "linesAdded": 259,
+    "linesRemoved": 57
+  },
+  "vault": "vault/t-044edb4-01"
+}

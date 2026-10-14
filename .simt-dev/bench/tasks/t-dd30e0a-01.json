@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "id": "t-dd30e0a-01",
+  "base": "9b905a5b29f6d662f2fe67f95399f0ec42822ee2",
+  "sourceCommit": "dd30e0ab8d84c2fed313c1e1ae8a19a95b3d9f40",
+  "prompt": "sync registry: add-country-galaxy is 15921 bytes, and the drift finding says so\n\nsimt-social-api@210c232 grew the skill's SKILL.md and checklist.md, so the\ndeclared byte counts no longer match the disk. `graph lint` with a workspace\nis the check that names this, and fifteen tests go red on it until the\nregistry catches up.\n\nThe drift delta is computed at the call site: the measurer returns\n{ bytes, files } and knows nothing about the declaration it is compared\nwith, so the finding read \"(undefined)\" for every drift. The signed delta\nis the number a reader acts on; it gets a test.",
+  "testCmd": "node --test test/workspace.test.mjs",
+  "f2p": [
+    "CLI: graph lint reports drift with the signed delta, not a placeholder"
+  ],
+  "p2p": [
+    "CLI: --workspace is honoured end to end",
+    "CLI: a single repo with no workspace adopts and gates normally",
+    "CLI: a workspace that exists but holds none of the repos is named, not exploded",
+    "CLI: a workspace that was configured but has moved is named, not exploded",
+    "CLI: an unparseable config makes doctor fail rather than fall through silently",
+    "CLI: doctor reports which source answered",
+    "CLI: graph lint with a real workspace verifies bodies on disk",
+    "CLI: graph lint without a workspace warns and still lints the registry",
+    "CLI: skills brief with a workspace still inlines the body",
+    "CLI: skills brief without a workspace names the remedy once and lists pointers",
+    "CLI: skills install without a workspace refuses rather than half-installing",
+    "CLI: skills show without a workspace explains instead of printing a bare path",
+    "CLI: without a workspace the catalogue still lists every skill, with one line of context",
+    "PACKAGE_ROOT is the package directory, not its parent",
+    "WORKSPACE_REMEDY names a real path and never \"undefined\"",
+    "configPaths: XDG_CONFIG_HOME wins when set, on any platform",
+    "configPaths: defaults to the real environment, not an empty one",
+    "configPaths: macOS offers the Apple location as a second candidate",
+    "configPaths: never repeats a path",
+    "configPaths: win32 uses APPDATA, and the path is still absolute",
+    "configPaths: without XDG it falls back to $HOME/.config on POSIX",
+    "readUserConfig: a config that exists and does not parse IS an error",
+    "readUserConfig: a config that exists and parses is returned with the path that answered",
+    "readUserConfig: an absent config is \"not configured\", not an error",
+    "readUserConfig: defaults to the real environment too",
+    "readUserConfig: the first existing candidate wins, not the most preferred one",
+    "resolveWorkspace: \"off\" declines the heuristic instead of guessing a directory",
+    "resolveWorkspace: --root is NOT treated as a workspace",
+    "resolveWorkspace: --workspace beats the environment variable",
+    "resolveWorkspace: a relative workspace is resolved, never taken literally",
+    "resolveWorkspace: an explicit workspace is trusted even when it does not exist",
+    "resolveWorkspace: an unparseable config is an error, and it names the file",
+    "resolveWorkspace: the config file beats the sibling heuristic",
+    "resolveWorkspace: the environment variable beats the config file"
+  ],
+  "gold": {
+    "files": 2,
+    "linesAdded": 7,
+    "linesRemoved": 4
+  },
+  "vault": "vault/t-dd30e0a-01"
+}

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "t-d4c2e4a-01",
+  "base": "a81afc6546d32332b5553fcca9be27d3c015beb9",
+  "sourceCommit": "d4c2e4a0f2963cf3dc0593b73dc62f34911c2746",
+  "prompt": "fix(cli): help lists every command the binary dispatches, and --skill keeps what you gave it (S15)\n\nThree things, and the third is the one that stops the first two recurring.\n\n**Three working commands were not in `--help`.** `graph lint`, `hooks status` and\n`hooks run` all ran and exited 0. None appeared anywhere in the help. A reader who\nsees `hooks install` and no `hooks status` concludes there is no way to ask what a repo's\nhooks do without installing them.\n\nThe cause was structural rather than careless, which is why it survived: the dispatch\ntable was an object literal *inside* `dispatch()`. No test could enumerate it, so\n`--help` was a hand-written template compared against the source only by eye. Lifting\nthe table to module scope costs nothing and makes the comparison mechanical.\n\n**`--skill` was documented \"(repeatable)\" and was not.** `flags.skill = value` meant\n`--skill a --skill b` resolved to `b`, with `a` discarded — no error, no warning, and a\nbrief quietly missing a skill the caller named by hand. For a tool whose stated design\nrule is that the answer is a function of what was asked, a flag that discards half its\ninput is a correctness bug. It accumulates now; the comma form still parses, because\nthe consumer handles both shapes explicitly rather than relying on `String(['a','b'])`\nhappening to produce `'a,b'`.\n\n**Three flags were accepted and read by nothing.** `--quiet`, `--semantic` and\n`--mermaid` — review 0001 filed this and it survived every change to the parser since.\nEach was a plan's intention rather than a feature: `--semantic` an explicitly\nnon-canonical escape hatch, `--mermaid` for a `skills graph` command never built,\n`--quiet` to shorten help. The plans keep those records.\n\nAn accepted flag that changes nothing is worse than an absent one: `--nonsense` exits 2\nand says the flag does not exist, while `--quiet` exits 0 and looks like output that was\nquiet on purpose. Removing them also lets \"every flag the parser accepts is documented\"\nmean something, which it could not while three accepted flags had no description. The\nestate passes none of them (the two matches are `git diff --quiet` and `gradlew\n--quiet`), so nothing changes for anyone who had one.\n\n`test/help.test.mjs`, eight tests, in both directions: every dispatchable command is\ndocumented, every documented command actually runs (probed, not compared against the\ntable under suspicion), and every flag the parser accepts is described. Three mutations,\neach caught by the assertion written for it. 785/785.",
+  "testCmd": "node --test test/help.test.mjs",
+  "f2p": [
+    "--help documents nothing the binary will not run",
+    "--skill accumulates instead of overwriting",
+    "--skill still accepts the comma-separated form it always accepted",
+    "a command path whose group is unknown is a usage error, not a silent default",
+    "an absent repeatable flag is an empty list, not a stringified undefined",
+    "every dispatchable command is documented in --help",
+    "every flag the parser accepts is described in --help",
+    "no flag is in more than one of the three flag tables"
+  ],
+  "p2p": [],
+  "gold": {
+    "files": 4,
+    "linesAdded": 105,
+    "linesRemoved": 31
+  },
+  "vault": "vault/t-d4c2e4a-01"
+}

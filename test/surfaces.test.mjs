@@ -582,8 +582,11 @@ test('the two non-blocking sets are different, and the difference is the fix', a
   // `pack-unpinned` joined both sets for ADR-065: the rules it carries render, and
   // what is missing is the record of which bytes they were declared at. A pack whose
   // bytes disagree with its pin is NOT in either - that one blocks.
-  assert.deepEqual([...SYNC_NON_BLOCKING].sort(), ['orphaned', 'pack-unpinned', 'pointer-unread']);
-  assert.deepEqual([...CHECK_NON_BLOCKING].sort(), ['orphaned', 'pack-unpinned']);
+  assert.deepEqual([...SYNC_NON_BLOCKING].sort(), ['budget', 'orphaned', 'pack-unpinned', 'pointer-unread']);
+  // `budget` joined for ADR-072: an over-budget finding says the projection is bigger
+  // than this repository agreed to, and nothing is cut, so a gate that failed there
+  // would fail a repository over a ceiling it wrote down itself.
+  assert.deepEqual([...CHECK_NON_BLOCKING].sort(), ['budget', 'orphaned', 'pack-unpinned']);
   for (const status of ['pack-digest-mismatch', 'pack-missing']) {
     assert.ok(!CHECK_NON_BLOCKING.has(status), `${status} must fail the gate`);
   }

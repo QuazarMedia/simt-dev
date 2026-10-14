@@ -6,6 +6,24 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A repository can declare how many always-on bytes it is willing to carry
+
+`simt tokens` has reported that number since the meter landed, against a constant nobody
+could argue with. A repository can now say what it will carry — `budget: { bytes: N }`
+beside `limits` and `gates` in the manifest — and both `simt tokens` and `simt-dev check`
+measure against that line. One declaration, one meter, one function that words the finding.
+
+The declaration is deliberately *not* inside `projection`, which is the one block this tool
+owns and `upgrade` is allowed to replace: a number written there would be deleted silently
+on the next upgrade and never reported as drift. And a repository that declares nothing is
+reported as declaring nothing, rather than being quietly handed the default as though it
+had chosen it.
+
+Over budget is reported and never fails the gate. Nothing was cut — the projection is
+still full mode, every rule loaded as written — so the honest thing to say is "you are
+over your line", not to fail a repository over a ceiling it wrote down itself. Which rules
+move behind skills stays with the evaluation that has to decide it (ADR-072).
+
 ### A repository can declare the always-on bytes it intends to carry
 
 `simt tokens` measured the number; it could not be held to one. A manifest now carries

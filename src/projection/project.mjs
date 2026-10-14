@@ -25,7 +25,8 @@ import { planDependabot } from '../ci/dependabot.mjs';
 import { checkTsconfig } from '../tsconfig.mjs';
 import { checkToolchain } from '../toolchain.mjs';
 import { diff, parse, inject, BEGIN, END } from './markers.mjs';
-import { readManifest } from './manifest.mjs';
+import { budgetFinding, readManifest } from './manifest.mjs';
+import { measureRoot } from '../measure/context.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
 import { pointerState, pointerTargets, ruleTargets, scopedTargets } from './targets.mjs';
@@ -162,6 +163,23 @@ export async function checkTargets(root, flags = {}) {
       text = '';
     }
     findings.push(...readLimitFindings(text, PRIMARY_TARGET));
+  }
+
+  // The budget: what this repository agreed to carry, against what it carries.
+  //
+  // Measured from the same `desiredRegion` the region above was compared against, plus
+  // the rule files this function went on to compare, because a gate and a meter that
+  // each counted their own set would report two different totals for one repository and
+  // the reader would have no way to tell which was the budget. Both numbers are the
+  // DESIRED ones, so a drifted repo is reported against what it would carry after a
+  // sync rather than what it carries today.
+  //
+  // Non-blocking by design: nothing is cut, because there is nothing to cut yet (ADR-072).
+  const budgetTotal = await alwaysOnBytes(root);
+  if (budgetTotal !== null) {
+    const { manifest } = await readManifest(root);
+    const over = budgetFinding(budgetTotal.bytes, manifest?.budget);
+    if (over) findings.push({ ...over, file: MANIFEST_FILE, detail: over.detail });
   }
 
   // Every package of a monorepo is a projection root in its own right, so the gate
@@ -547,6 +565,28 @@ async function checkRegion(root, dir, body, meta) {
     expectedSha: meta.sha,
   };
 }
+/**
+ * The bytes of always-on projection this repository carries, or null if it has not
+ * adopted at all.
+ *
+ * Delegates to the meter rather than counting here, and that is the whole of the
+ * design. A first version summed the region plus the rule files this function already
+ * compares, which sounds cheaper and is wrong: the meter also counts the managed skills
+ * and the `.mdc` files a reader loads, so the gate and the report came to different
+ * totals for one repository. Two definitions of one budget is the defect ADR-034 was
+ * filed about, rebuilt one layer up. The meter is the definition; the gate quotes it.
+ *
+ * The cost is that `check` now reads the documents the meter reads, which it did not
+ * do before. That is a real cost, paid knowingly: the alternative is a gate that fails
+ * on a number the report does not print, which is worse than a slower gate.
+ */
+async function alwaysOnBytes(root) {
+  const { exists } = await readManifest(root);
+  if (!exists) return null;
+  const measured = await measureRoot(root);
+  return { bytes: measured.generatedBytes };
+}
+
 /** `projection.place: "top"` puts the AGENTS.md region above the hand-written prefix. */
 async function regionOpts(root) {
   const { manifest } = await readManifest(root);

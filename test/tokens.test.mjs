@@ -345,3 +345,38 @@ test('a declared budget survives an upgrade, which would delete a generated one'
   // the one key an upgrade is allowed to replace.
   assert.equal(rebuilt.projection.budget, undefined);
 });
+
+test('check raises the budget finding, and does not fail on it', async () => {
+  // The gate half. A number only `tokens` knows is a number nobody is held to, and a
+  // number only `check` knows is a gate nobody can reproduce by hand — so the two must
+  // report the same total, which is why the gate measures what it already compares.
+  const root = await repo(await scratch(), 'alpha');
+  const { manifest } = await adopt(root);
+  const measured = (await json(['tokens', '--root', root])).roots[0].generatedBytes;
+
+  // Before the budget exists, so the exit code has something to be compared against.
+  // This fixture has other findings of its own (no baselines, gates it cannot run), and
+  // the property under test is that adding the budget does not change the code — not
+  // that a half-adopted fixture happens to be green.
+  const before = await gate(['check', '--root', root]);
+
+  await writeFile(join(root, 'simt-dev.json'), manifestText({ ...manifest, budget: { bytes: measured - 250 } }));
+  const { code, out } = await gate(['check', '--root', root]);
+  assert.match(out, /BUDGET/);
+  assert.match(out, new RegExp(`declared ${measured - 250}`));
+
+  // Non-blocking, and the exit code is the assertion that matters: a gate that failed
+  // here would fail a repository for exceeding a ceiling it wrote down itself, with no
+  // way out except lowering its own number (ADR-072).
+  assert.equal(code, before.code, 'an over-budget finding must not change the gate exit code');
+});
+
+/** One `check` run, both streams and the code, because the code is the assertion. */
+async function gate(args) {
+  try {
+    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+    return { code: 0, out: `${stdout}${stderr}` };
+  } catch (error) {
+    return { code: error.code, out: `${error.stdout ?? ''}${error.stderr ?? ''}` };
+  }
+}

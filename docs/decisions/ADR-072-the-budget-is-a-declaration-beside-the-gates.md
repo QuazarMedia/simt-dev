@@ -1,8 +1,9 @@
 # ADR-072 — The budget is a declaration beside the gates, not a number inside the projection
 
 Status: **accepted** · 2026-10-14 · filed as S38
-**Affects:** `src/projection/manifest.mjs`, `src/measure/context.mjs`, `simt tokens`,
-`test/tokens.test.mjs`
+**Affects:** `src/projection/manifest.mjs`, `src/measure/context.mjs`,
+`src/projection/project.mjs`, `src/commands/sync.mjs`, `simt tokens`, `simt-dev check`,
+`test/tokens.test.mjs`, `test/surfaces.test.mjs`
 
 ## Context
 
@@ -59,6 +60,24 @@ does not.
 6. **The rows themselves are unchanged.** Which rules move behind skills is R01–R05's
    finding, not this record's, and a budget that silently dropped rules would be enforcing
    a decision nobody has made.
+
+7. **The meter is the definition of the number, and the gate quotes it.**
+   `simt-dev check` calls the same `measureRoot` the meter does rather than summing the
+   bytes of the targets it happens to compare. That was the other way round first, and it
+   was wrong: the meter also counts managed skills and `.mdc` files, so one repository had
+   two budgets and two different numbers for the same declaration. Two definitions of one
+   ceiling is the same defect as two projections of one fact, one layer up.
+
+8. **The gate raises the finding and does not block on it.** `budget` is in both
+   non-blocking sets, `check` and `sync` alike. Nothing was cut, so the projection is
+   exactly what the repository agreed to project; failing the run over a ceiling it wrote
+   down itself would train people to raise the ceiling. R08 says non-blocking for the same
+   reason, and this record agrees with it now that the finding has a shape to be.
+
+9. **The cost of ruling 7 is accepted rather than avoided.** `check` now reads what the
+   meter reads — the projected region, the rule files, the skills — on every run, where it
+   previously compared bytes it had already read. A cheaper gate would have to keep its own
+   notion of what counts, and this is the one place where the two are not allowed to differ.
 
 ## Consequences
 

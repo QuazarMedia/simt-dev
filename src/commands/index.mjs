@@ -36,7 +36,7 @@ import { installCommand } from './skillsinstall.mjs';
 import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
 import { tokensCommand } from './tokens.mjs';
 import { harnessCommand, harnessLoadersCommand } from './harness.mjs';
-import { benchMineCommand, benchRunCommand, benchReportCommand } from './bench.mjs';
+import { benchMineCommand, benchRunCommand, benchReportCommand, benchAblateCommand } from './bench.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -98,6 +98,7 @@ export const IMPLEMENTED = {
   'bench mine': benchMineCommand,
   'bench run': benchRunCommand,
   'bench report': benchReportCommand,
+  'bench ablate': benchAblateCommand,
   upgrade: upgradeCommand,
   mcp: mcpCommand,
 };

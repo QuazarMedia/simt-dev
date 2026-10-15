@@ -48,6 +48,22 @@ import {
   mcnemarTest,
   wilcoxonSignedRank,
 } from '../src/bench/report.mjs';
+import {
+  CANARY_ALPHA,
+  DEFAULT_CANARY_SIZE,
+  DEL_R_TOLERANCE,
+  ablateBench,
+  ablateSectionInWorkspace,
+  formatAblationMarkdown,
+  isDeletionCandidate,
+  listAblationSections,
+  parseAblationArmName,
+  parseCoreSections,
+  removeCoreSectionFromBody,
+  removeTopSectionFromBody,
+  shouldEscalateCanary,
+  slugifyHeading,
+} from '../src/bench/ablate.mjs';
 import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1097,5 +1113,253 @@ test('bench report (R03): cost model, quality Q, CPI, cache-hit ratio, McNemar, 
   assert.equal(jsonPayload.command, 'bench report');
   assert.equal(jsonPayload.comparison.wilcoxon.pValue, 0.03125);
 });
+
+test('bench ablate (R04): leave-one-out section removal, 10-task canary with escalation, value-per-KB ranking and deletion candidates', async () => {
+  assert.equal(DEFAULT_CANARY_SIZE, 10);
+  assert.equal(CANARY_ALPHA, 0.05);
+  assert.equal(DEL_R_TOLERANCE, 0.01);
+  assert.equal(slugifyHeading('Code and review'), 'code-and-review');
+
+  // 1. Parse core sections and list ablatable sections in a node repository.
+  const repo = await scratch('simt-ablate-repo-');
+  await writeFile(
+    join(repo, 'package.json'),
+    JSON.stringify({ name: 'ablate-repo', version: '1.0.0', scripts: { test: 'node --test' } }, null, 2),
+  );
+  await git(['init', '-q', '.'], { cwd: repo });
+
+  const sections = await listAblationSections(repo);
+  const sectionIds = sections.map((s) => s.id);
+  assert.ok(sectionIds.includes('core:truth'));
+  assert.ok(sectionIds.includes('core:git'));
+  assert.ok(sectionIds.includes('core:refactoring'));
+  assert.ok(sectionIds.includes('core:validation'));
+  assert.ok(sectionIds.includes('core:code-and-review'));
+  assert.ok(sectionIds.includes('core:scope-of-these-rules'));
+  assert.ok(sectionIds.includes('profile:node'));
+  assert.ok(sectionIds.includes('process:intake-questions'));
+  assert.ok(sectionIds.includes('process:slice-commit'));
+  assert.ok(sectionIds.includes('process:test-gate'));
+  for (const s of sections) {
+    assert.ok(s.bytes > 0 && s.kb > 0, `section ${s.id} must have positive size`);
+  }
+
+  const coreParsed = parseCoreSections('Intro\n\n## Truth\n\n- A\n\n## Git\n\n- B\n');
+  assert.equal(coreParsed.length, 2);
+  assert.equal(
+    removeCoreSectionFromBody('## Core\n\nIntro\n\n### Truth\n\n- A\n\n### Git\n\n- B\n', 'truth'),
+    '## Core\n\nIntro\n\n### Git\n\n- B',
+  );
+  assert.equal(
+    removeTopSectionFromBody('## Core\n\n- A\n\n## Stack: node\n\n- B\n\n## Process: slice-commit\n\n- C\n', 'Stack', 'node'),
+    '## Core\n\n- A\n\n## Process: slice-commit\n\n- C',
+  );
+
+  // 2. Verify parseAblationArmName, parseArmSpec and materialiseArm remove the targeted section cleanly.
+  assert.deepEqual(parseAblationArmName('no-core-git'), {
+    name: 'no-core-git',
+    kind: 'ablate',
+    base: 'current',
+    ablate: { kind: 'core', targetId: 'git', sectionId: 'core:git' },
+  });
+  assert.deepEqual(parseAblationArmName('no-profile-node'), {
+    name: 'no-profile-node',
+    kind: 'ablate',
+    base: 'current',
+    ablate: { kind: 'profile', targetId: 'node', sectionId: 'profile:node' },
+  });
+  assert.deepEqual(parseAblationArmName('no-process-slice-commit'), {
+    name: 'no-process-slice-commit',
+    kind: 'ablate',
+    base: 'current',
+    ablate: { kind: 'process', targetId: 'slice-commit', sectionId: 'process:slice-commit' },
+  });
+  assert.equal(parseAblationArmName('current'), null);
+
+  const workCore = await scratch('simt-ablate-work-core-');
+  await writeFile(join(workCore, 'package.json'), JSON.stringify({ name: 'w', version: '1.0.0' }));
+  await materialiseArm(workCore, await parseArmSpec('no-core-git'));
+  const agentsNoGit = await readFile(join(workCore, 'AGENTS.md'), 'utf8');
+  assert.ok(!agentsNoGit.includes('### Git'), 'no-core-git must remove ### Git from AGENTS.md');
+  assert.ok(agentsNoGit.includes('### Truth'), 'no-core-git must preserve other core sections');
+
+  const workProfile = await scratch('simt-ablate-work-profile-');
+  await writeFile(join(workProfile, 'package.json'), JSON.stringify({ name: 'w', version: '1.0.0' }));
+  await ablateSectionInWorkspace(workProfile, { kind: 'profile', targetId: 'node', sectionId: 'profile:node' });
+  const agentsNoNode = await readFile(join(workProfile, 'AGENTS.md'), 'utf8');
+  assert.ok(!agentsNoNode.includes('## Stack: node'), 'no-profile-node must remove ## Stack: node from AGENTS.md');
+  assert.equal(existsSync(join(workProfile, '.cursor', 'rules', 'simt-stack-node.mdc')), false);
+
+  const workProcess = await scratch('simt-ablate-work-proc-');
+  await writeFile(join(workProcess, 'package.json'), JSON.stringify({ name: 'w', version: '1.0.0' }));
+  await ablateSectionInWorkspace(workProcess, {
+    kind: 'process',
+    targetId: 'slice-commit',
+    sectionId: 'process:slice-commit',
+  });
+  const agentsNoSlice = await readFile(join(workProcess, 'AGENTS.md'), 'utf8');
+  assert.ok(!agentsNoSlice.includes('## Process: slice-commit'), 'no-process-slice-commit must remove section from AGENTS.md');
+  assert.equal(existsSync(join(workProcess, '.cursor', 'rules', 'slice-commit.mdc')), false);
+
+  // 3. Canary escalation and deletion-candidate rules.
+  assert.equal(isDeletionCandidate({ measured: true, dR: 0, dC: 0.05 }), true);
+  assert.equal(isDeletionCandidate({ measured: true, dR: -0.05, dC: 0.02 }), true);
+  assert.equal(isDeletionCandidate({ measured: true, dR: 0.2, dC: 0.05 }), false);
+  assert.equal(isDeletionCandidate({ measured: false, dR: 0, dC: 0.05 }), false);
+
+  // 4. Synthetic 12-task ablation suite (10 canary + 2 remaining tasks):
+  //    - `core:truth` has a large positive ΔR on the 10 canary tasks (current resolves 10/10,
+  //      no-core-truth resolves 2/10 -> McNemar b=0, c=8, p = 2/256 = 0.0078125 < 0.10),
+  //      so it escalates to all 12 tasks and ranks #1 in value-per-KB.
+  //    - `core:scope-of-these-rules` has ΔR = 0 (both resolve 10/10 on canary) and ΔC > 0
+  //      (keeping the section costs more tokens than removing it), with non-significant canary
+  //      delta so it stays at 10 tasks (`escalated: false`) and is flagged in `deletionCandidates`.
+  const tasksDir = join(repo, '.simt-dev', 'bench', 'tasks');
+  await mkdir(tasksDir, { recursive: true });
+  await writeFile(
+    join(repo, '.simt-dev', 'bench', 'prices.json'),
+    JSON.stringify({ in: 3.0, cache_write: 3.75, cache_read: 0.3, out: 15.0 }, null, 2),
+  );
+
+  const taskIds = [];
+  for (let i = 1; i <= 12; i += 1) {
+    const id = `t-${String(i).padStart(7, '0')}-01`;
+    taskIds.push(id);
+    await writeFile(
+      join(tasksDir, `${id}.json`),
+      JSON.stringify({
+        schemaVersion: 1,
+        id,
+        repo: 'ablate-repo',
+        base: '0'.repeat(40),
+        fix: '1'.repeat(40),
+        category: 'bugfix',
+        prompt: `Task ${i}`,
+        testCmd: ['node', '--test'],
+        testFiles: ['test/math.test.mjs'],
+        failToPass: ['math'],
+        passToPass: [],
+        blastRadius: { files: 1, lines: 4 },
+      }),
+    );
+  }
+
+  const writeArmRun = async (arm, taskId, { resolved, input, output }) => {
+    const dir = join(repo, '.simt-dev', 'bench', 'runs', `claude-${arm}-r1`);
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      join(dir, `${taskId}.json`),
+      JSON.stringify({
+        schemaVersion: 1,
+        task: taskId,
+        arm,
+        harness: 'claude',
+        model: 'sonnet',
+        rep: 1,
+        resolved,
+        gatesPassed: true,
+        usage: { input, cacheWrite: 0, cacheRead: 100_000, output, turns: 4, toolCalls: 5 },
+        costUsd: 0,
+        diff: { files: 1, outsideBlastRadius: 0 },
+        probe: null,
+      }),
+    );
+  };
+
+  // Populate stored runs for `current` (all 12 tasks), `no-core-truth` (12 tasks),
+  // and `no-core-scope-of-these-rules` (10 canary tasks).
+  for (let i = 0; i < 12; i += 1) {
+    const id = taskIds[i];
+    // `current` resolves all 12 tasks, input = 100_000, output = 10_000.
+    await writeArmRun('current', id, { resolved: true, input: 100_000, output: 10_000 });
+    // `no-core-truth` resolves only the first 2 tasks (ΔR = +10/12 = +0.8333) and uses more output tokens when failing.
+    await writeArmRun('no-core-truth', id, {
+      resolved: i < 2,
+      input: 100_000,
+      output: i < 2 ? 10_000 : 25_000,
+    });
+  }
+  for (let i = 0; i < 10; i += 1) {
+    const id = taskIds[i];
+    // Removing `core:scope-of-these-rules` still resolves 10/10 (ΔR = 0), and uses slightly
+    // fewer input tokens (98_000 vs 100_000) so keeping the section has ΔC > 0 ($+0.006/task),
+    // with small noise so Wilcoxon on canary is non-significant (does not escalate).
+    await writeArmRun('no-core-scope-of-these-rules', id, {
+      resolved: true,
+      input: i % 2 === 0 ? 95_000 : 103_000,
+      output: 10_000,
+    });
+  }
+
+  const ablate1 = await ablateBench(repo, {
+    apply: false,
+    sections: sections.filter((s) => s.id === 'core:truth' || s.id === 'core:scope-of-these-rules'),
+  });
+  const ablate2 = await ablateBench(repo, {
+    apply: false,
+    sections: sections.filter((s) => s.id === 'core:truth' || s.id === 'core:scope-of-these-rules'),
+  });
+
+  // Reproducibility: running `ablateBench` twice produces identical rankings and CIs.
+  assert.deepEqual(ablate1.ranking, ablate2.ranking);
+  assert.deepEqual(ablate1.sections, ablate2.sections);
+  assert.deepEqual(ablate1.deletionCandidates, ablate2.deletionCandidates);
+
+  const truthEntry = ablate1.sections.find((s) => s.id === 'core:truth');
+  const scopeEntry = ablate1.sections.find((s) => s.id === 'core:scope-of-these-rules');
+  assert.ok(truthEntry && scopeEntry);
+
+  assert.equal(truthEntry.escalated, true, 'significant canary delta on core:truth must escalate to full suite');
+  assert.equal(truthEntry.tasks, 12);
+  assert.ok(Math.abs(truthEntry.dR - 10 / 12) < 1e-12);
+  assert.ok(truthEntry.valuePerKb > 0);
+  assert.equal(Array.isArray(truthEntry.ci95.dR), true);
+  assert.equal(truthEntry.ci95.dR.length, 2);
+  assert.equal(truthEntry.deletionCandidate, false);
+
+  assert.equal(shouldEscalateCanary({ pairedTasks: 0 }), false);
+  assert.equal(scopeEntry.escalated, false, 'non-significant canary delta must stop at 10-task canary');
+  assert.equal(scopeEntry.tasks, 10);
+  assert.equal(scopeEntry.dR, 0);
+  assert.ok(scopeEntry.dC > 0, 'keeping core:scope-of-these-rules costs net positive tokens');
+  assert.equal(scopeEntry.deletionCandidate, true);
+  assert.deepEqual(ablate1.deletionCandidates, ['core:scope-of-these-rules']);
+  assert.equal(ablate1.ranking[0].id, 'core:truth');
+
+  const md = formatAblationMarkdown(ablate1);
+  assert.match(md, /\| 1 \| core:truth \|/);
+  assert.match(md, /DELETE CANDIDATE/);
+  assert.match(md, /core:scope-of-these-rules/);
+
+  // Verify apply: true invokes the canary runner on 10 tasks first and escalates only significant arms to the remaining 2 tasks.
+  const runnerCalls = [];
+  const appliedAblate = await ablateBench(repo, {
+    apply: true,
+    harness: 'claude',
+    sections: sections.filter((s) => s.id === 'core:truth' || s.id === 'core:scope-of-these-rules'),
+    runner: async (_root, opts) => {
+      runnerCalls.push({ arms: opts.arms, tasks: opts.tasks });
+    },
+  });
+  assert.equal(appliedAblate.applied, true);
+  assert.equal(runnerCalls.length, 2);
+  assert.equal(runnerCalls[0].tasks.length, 10);
+  assert.deepEqual(runnerCalls[0].arms, ['current', 'no-core-truth', 'no-core-scope-of-these-rules']);
+  assert.equal(runnerCalls[1].tasks.length, 2);
+  assert.deepEqual(runnerCalls[1].arms, ['current', 'no-core-truth']);
+  assert.equal(existsSync(join(repo, '.simt-dev', 'bench', 'ablation.json')), true);
+
+  // 5. CLI `simt bench ablate` preview and `--json` output.
+  const cliJson = await runCli(['bench', 'ablate', '--root', repo, '--json']);
+  assert.equal(cliJson.code, 0, cliJson.stderr);
+  const payload = JSON.parse(cliJson.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.command, 'bench ablate');
+  assert.equal(payload.canaryTasks, 10);
+  assert.equal(payload.totalTasks, 12);
+  assert.ok(payload.deletionCandidates.includes('core:scope-of-these-rules'));
+  assert.equal(payload.ranking[0].id, 'core:truth');
+});
+
 
 

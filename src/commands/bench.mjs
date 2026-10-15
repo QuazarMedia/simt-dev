@@ -12,6 +12,7 @@ import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.m
 import { DEFAULT_MINE_TARGET, mineTasks } from '../bench/mine.mjs';
 import { regradeRun, runBench } from '../bench/run.mjs';
 import { buildBenchReport } from '../bench/report.mjs';
+import { ablateBench } from '../bench/ablate.mjs';
 import { listFlag } from './skills.mjs';
 
 export async function benchMineCommand(positional, flags) {
@@ -237,4 +238,64 @@ export async function benchReportCommand(positional, flags) {
   emit(report.markdown, { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
 }
+
+export async function benchAblateCommand(positional, flags) {
+  const root = resolve(flags.root ?? positional[0] ?? process.cwd());
+  const { dryRun, apply } = writeMode(flags);
+  const harness = flags.harness ?? 'gold';
+  const model = flags.model;
+  const reps = flags.reps ?? 1;
+
+  let result;
+  try {
+    result = await ablateBench(root, {
+      apply,
+      harness,
+      model,
+      reps,
+      includeAll: flags.all === true,
+    });
+  } catch (error) {
+    return fail(
+      `${root}: ${error.message ?? error}`,
+      EXIT.CONFIG,
+      `mine tasks first with \`${CLI} bench mine --yes\` and rerun \`${CLI} bench ablate --yes\``,
+    );
+  }
+
+  if (isJson(flags)) {
+    emitJson({
+      ok: true,
+      command: 'bench ablate',
+      root: result.root,
+      dryRun,
+      applied: result.applied,
+      pricesLoaded: result.pricesLoaded,
+      canarySize: result.canarySize,
+      canaryTasks: result.canaryTasks,
+      totalTasks: result.totalTasks,
+      sections: result.sections,
+      ranking: result.ranking,
+      deletionCandidates: result.deletionCandidates,
+    });
+    return EXIT.OK;
+  }
+
+  const lines = [
+    `bench    ablate  ${result.root}`,
+    `mode     ${result.applied ? 'applied' : dryRun ? 'dry-run (writes nothing)' : 'preview / stored runs (pass --yes to execute canary and escalate)'}`,
+    `sections ${result.sections.length}  (canary: ${result.canaryTasks}/${result.totalTasks} tasks)`,
+    `delete   ${result.deletionCandidates.length > 0 ? result.deletionCandidates.join(', ') : '(none)'}`,
+    '',
+    result.markdown,
+  ];
+  if (!result.applied) {
+    lines.push('');
+    lines.push(`remedy   run: ${CLI} bench ablate --yes`);
+  }
+
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  return EXIT.OK;
+}
+
 

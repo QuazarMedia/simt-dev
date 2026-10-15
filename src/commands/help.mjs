@@ -61,6 +61,9 @@ ${CLI} harness loaders        what each reader loads at session start, in bytes,
 ${CLI} bench mine [--yes]     mine verified benchmark tasks from git history
                             (dry-run unless --yes; validates RED and GOLD twice in
                             a temp worktree and stores test patches in the vault)
+${CLI} bench run [--yes]      run benchmark tasks across arms in isolated one-commit exports
+                            (dry-run unless --yes; grades against vault test patches
+                            and declared gates; --regrade <run> verifies stored runs)
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
@@ -104,6 +107,13 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --at <path>             harness loaders: measure as if the agent were working in
                          this directory (default: the root; readers that merge the
                          project root down to the working directory cost more here)
+--arm <spec>            bench run: arm to evaluate (bare, current, kernel, brief,
+                         or name=path/to/arm.json; repeatable)
+--harness <id>          bench run: adapter to invoke (claude, codex, gemini, opencode,
+                         cursor, aider, gold, noop; default: gold)
+--model <id>            bench run: model identifier recorded and passed to the adapter
+--reps <n>              bench run: repetitions per task and arm (default: 3)
+--regrade <run>         bench run: re-grade a stored run from its archived agent patch
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

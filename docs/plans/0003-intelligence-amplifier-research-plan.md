@@ -841,7 +841,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | ID | Slice | Phase | Depends on | Size | Needs ADR | Success metric | State |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | R01 | Task miner | 0 | review 0002 Wave 0 | M | D1 (ADR-076) | ≥ 20 valid tasks; deterministic | Complete |
-| R02 | Agent runner and arms | 0 | R01 | L | D1 | gold 100%, noop 0%; reproducible grades | Queued |
+| R02 | Agent runner and arms | 0 | R01 | L | D1 (ADR-076) | gold 100%, noop 0%; reproducible grades | Complete |
 | R03 | Cost model and report | 0 | R02 | S | — | matches hand computation | Queued |
 | R04 | Ablation | 0 | R03 | M | — | value per KB for every section | Queued |
 | R05 | Compliance probes | 0 | R02, R17 | M | — | 12 probes with graders | Queued |

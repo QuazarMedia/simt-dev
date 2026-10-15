@@ -86,6 +86,7 @@ const JSON_COMMANDS = {
   'harness detect': [],
   'harness loaders': [],
   'bench mine': { root: 'r' },
+  'bench run': { root: 'r' },
   check: [],
   'rules list': [],
   'hooks run': ['pre-commit'],

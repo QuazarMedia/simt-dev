@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "adapters": {
+    "claude": {
+      "id": "claude",
+      "label": "Claude Code",
+      "kind": "cli",
+      "bin": "claude",
+      "template": "claude -p \"{prompt}\" --output-format json --max-turns {turns}",
+      "args": ["-p", "{prompt}", "--output-format", "json", "--max-turns", "{turns}"],
+      "modelArgs": ["--model", "{model}"],
+      "format": "json",
+      "usageSource": "usage.*, total_cost_usd, num_turns",
+      "fields": {
+        "input": ["usage.input_tokens", "usage.input"],
+        "cacheWrite": ["usage.cache_creation_input_tokens", "usage.cacheWrite"],
+        "cacheRead": ["usage.cache_read_input_tokens", "usage.cacheRead"],
+        "output": ["usage.output_tokens", "usage.output"],
+        "turns": ["num_turns", "usage.turns"],
+        "toolCalls": ["num_tool_calls", "tool_calls", "usage.toolCalls"],
+        "costUsd": ["total_cost_usd", "cost_usd", "costUsd"]
+      }
+    },
+    "codex": {
+      "id": "codex",
+      "label": "Codex",
+      "kind": "cli",
+      "bin": "codex",
+      "template": "codex exec --json \"{prompt}\"",
+      "args": ["exec", "--json", "{prompt}"],
+      "modelArgs": ["--model", "{model}"],
+      "format": "jsonl",
+      "usageSource": "token events in JSONL",
+      "fields": {
+        "input": ["usage.input_tokens", "input_tokens", "usage.input"],
+        "cacheWrite": ["usage.cache_creation_input_tokens", "usage.cache_write_input_tokens", "cache_write_input_tokens"],
+        "cacheRead": ["usage.cached_input_tokens", "usage.cache_read_input_tokens", "cached_input_tokens"],
+        "output": ["usage.output_tokens", "output_tokens", "usage.output"],
+        "turns": ["turns", "num_turns"],
+        "toolCalls": ["tool_calls", "num_tool_calls"],
+        "costUsd": ["total_cost_usd", "cost_usd", "cost"]
+      }
+    },
+    "gemini": {
+      "id": "gemini",
+      "label": "Gemini CLI",
+      "kind": "cli",
+      "bin": "gemini",
+      "template": "gemini -p \"{prompt}\" --output-format json",
+      "args": ["-p", "{prompt}", "--output-format", "json"],
+      "modelArgs": ["--model", "{model}"],
+      "format": "json",
+      "usageSource": "stats block",
+      "fields": {
+        "input": ["stats.inputTokens", "stats.tokens.prompt", "stats.prompt_tokens", "usage.input_tokens"],
+        "cacheWrite": ["stats.cacheWriteTokens", "stats.tokens.cacheWrite", "usage.cache_creation_input_tokens"],
+        "cacheRead": ["stats.cachedTokens", "stats.tokens.cached", "usage.cache_read_input_tokens"],
+        "output": ["stats.outputTokens", "stats.tokens.candidates", "stats.completion_tokens", "usage.output_tokens"],
+        "turns": ["stats.turns", "stats.totalTurns", "num_turns"],
+        "toolCalls": ["stats.toolCalls", "stats.tools.totalCalls", "num_tool_calls"],
+        "costUsd": ["stats.totalCostUsd", "stats.costUsd", "total_cost_usd"]
+      }
+    },
+    "opencode": {
+      "id": "opencode",
+      "label": "opencode",
+      "kind": "cli",
+      "bin": "opencode",
+      "template": "opencode run \"{prompt}\"",
+      "args": ["run", "--format", "json", "{prompt}"],
+      "modelArgs": ["--model", "{model}"],
+      "format": "jsonl",
+      "usageSource": "session export",
+      "fields": {
+        "input": ["tokens.input", "usage.input_tokens", "part.tokens.input"],
+        "cacheWrite": ["tokens.cache.write", "usage.cache_creation_input_tokens", "part.tokens.cache.write"],
+        "cacheRead": ["tokens.cache.read", "usage.cache_read_input_tokens", "part.tokens.cache.read"],
+        "output": ["tokens.output", "usage.output_tokens", "part.tokens.output"],
+        "turns": ["turns", "num_turns"],
+        "toolCalls": ["toolCalls", "num_tool_calls"],
+        "costUsd": ["cost", "part.cost", "total_cost_usd"]
+      }
+    },
+    "cursor": {
+      "id": "cursor",
+      "label": "Cursor CLI",
+      "kind": "cli",
+      "bin": "cursor-agent",
+      "template": "cursor-agent -p \"{prompt}\" --output-format json",
+      "args": ["-p", "{prompt}", "--output-format", "json"],
+      "modelArgs": ["--model", "{model}"],
+      "format": "json",
+      "usageSource": "result JSON",
+      "fields": {
+        "input": ["usage.input_tokens", "usage.input", "stats.inputTokens"],
+        "cacheWrite": ["usage.cache_creation_input_tokens", "usage.cacheWrite", "stats.cacheWriteTokens"],
+        "cacheRead": ["usage.cache_read_input_tokens", "usage.cacheRead", "stats.cachedTokens"],
+        "output": ["usage.output_tokens", "usage.output", "stats.outputTokens"],
+        "turns": ["num_turns", "turns", "usage.turns"],
+        "toolCalls": ["num_tool_calls", "tool_calls", "usage.toolCalls", "toolCalls"],
+        "costUsd": ["total_cost_usd", "costUsd", "cost_usd"]
+      }
+    },
+    "aider": {
+      "id": "aider",
+      "label": "Aider",
+      "kind": "cli",
+      "bin": "aider",
+      "template": "aider --message \"{prompt}\" --yes-always",
+      "args": ["--message", "{prompt}", "--yes-always", "--analytics-log", "{analyticsLog}"],
+      "modelArgs": ["--model", "{model}"],
+      "format": "analytics-log",
+      "usageSource": "--analytics-log file",
+      "fields": {
+        "input": ["prompt_tokens", "properties.prompt_tokens", "usage.input_tokens"],
+        "cacheWrite": ["cache_creation_input_tokens", "properties.cache_write_tokens"],
+        "cacheRead": ["cache_read_input_tokens", "properties.cache_read_tokens"],
+        "output": ["completion_tokens", "properties.completion_tokens", "usage.output_tokens"],
+        "turns": ["turns", "properties.turns"],
+        "toolCalls": ["tool_calls", "properties.tool_calls"],
+        "costUsd": ["cost", "total_cost", "properties.cost", "properties.total_cost"]
+      }
+    },
+    "gold": {
+      "id": "gold",
+      "label": "Gold Oracle",
+      "kind": "builtin",
+      "bin": null,
+      "template": null,
+      "args": [],
+      "modelArgs": [],
+      "format": "builtin",
+      "usageSource": "vault gold.patch",
+      "fields": {}
+    },
+    "noop": {
+      "id": "noop",
+      "label": "No-op Baseline",
+      "kind": "builtin",
+      "bin": null,
+      "template": null,
+      "args": [],
+      "modelArgs": [],
+      "format": "builtin",
+      "usageSource": "none",
+      "fields": {}
+    }
+  }
+}

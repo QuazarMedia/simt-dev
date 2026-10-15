@@ -21,6 +21,17 @@ import {
   patchStats,
   resolveVaultDir,
 } from '../src/bench/mine.mjs';
+import { extractPatchFiles, gradeWorkspace } from '../src/bench/grade.mjs';
+import {
+  BUILTIN_ARMS,
+  loadAdapters,
+  materialiseArm,
+  parseAdapterUsage,
+  parseArmSpec,
+  prepareIsolatedWorkspace,
+  regradeRun,
+  runBench,
+} from '../src/bench/run.mjs';
 import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -411,3 +422,387 @@ test('CLI `simt bench mine` previews without --yes and supports --json', async (
   assert.equal(payload.applied, false);
   assert.ok(payload.candidates >= 20);
 });
+
+test('loadAdapters and parseAdapterUsage map usage across claude, codex, gemini, opencode, cursor and aider', async () => {
+  const adapters = await loadAdapters();
+  for (const id of ['claude', 'codex', 'gemini', 'opencode', 'cursor', 'aider', 'gold', 'noop']) {
+    assert.ok(adapters[id], `missing adapter definition for ${id}`);
+  }
+
+  const claudeOut = JSON.stringify({
+    usage: {
+      input_tokens: 1200,
+      cache_creation_input_tokens: 400,
+      cache_read_input_tokens: 3000,
+      output_tokens: 350,
+    },
+    num_turns: 4,
+    num_tool_calls: 6,
+    total_cost_usd: 0.0425,
+  });
+  assert.deepEqual(parseAdapterUsage(adapters.claude, claudeOut), {
+    usage: { input: 1200, cacheWrite: 400, cacheRead: 3000, output: 350, turns: 4, toolCalls: 6 },
+    costUsd: 0.0425,
+  });
+
+  const codexOut = [
+    JSON.stringify({ type: 'item.completed', item: { type: 'command_execution' } }),
+    JSON.stringify({
+      type: 'turn.completed',
+      usage: { input_tokens: 800, cached_input_tokens: 500, output_tokens: 150 },
+    }),
+    JSON.stringify({ type: 'item.completed', item: { type: 'tool_call' } }),
+    JSON.stringify({
+      type: 'turn.completed',
+      usage: { input_tokens: 900, cache_write_input_tokens: 100, cached_input_tokens: 700, output_tokens: 200 },
+      cost_usd: 0.015,
+    }),
+  ].join('\n');
+  assert.deepEqual(parseAdapterUsage(adapters.codex, codexOut), {
+    usage: { input: 1700, cacheWrite: 100, cacheRead: 1200, output: 350, turns: 2, toolCalls: 2 },
+    costUsd: 0.015,
+  });
+
+  const geminiOut = JSON.stringify({
+    stats: {
+      models: {
+        'gemini-2.5-pro': { tokens: { prompt: 2100, cached: 900, candidates: 410 } },
+      },
+      turns: 3,
+      tools: { totalCalls: 5 },
+      totalCostUsd: 0.019,
+    },
+  });
+  assert.deepEqual(parseAdapterUsage(adapters.gemini, geminiOut), {
+    usage: { input: 2100, cacheWrite: 0, cacheRead: 900, output: 410, turns: 3, toolCalls: 5 },
+    costUsd: 0.019,
+  });
+
+  const opencodeOut = [
+    JSON.stringify({
+      type: 'step_finish',
+      part: { tokens: { input: 600, output: 120, cache: { read: 300, write: 50 } }, cost: 0.008 },
+    }),
+    JSON.stringify({ type: 'tool_use' }),
+  ].join('\n');
+  assert.deepEqual(parseAdapterUsage(adapters.opencode, opencodeOut), {
+    usage: { input: 600, cacheWrite: 50, cacheRead: 300, output: 120, turns: 1, toolCalls: 1 },
+    costUsd: 0.008,
+  });
+
+  const cursorOut = JSON.stringify({
+    usage: { input: 1500, cacheWrite: 200, cacheRead: 1000, output: 250 },
+    turns: 2,
+    toolCalls: 3,
+    costUsd: 0.021,
+  });
+  assert.deepEqual(parseAdapterUsage(adapters.cursor, cursorOut), {
+    usage: { input: 1500, cacheWrite: 200, cacheRead: 1000, output: 250, turns: 2, toolCalls: 3 },
+    costUsd: 0.021,
+  });
+
+  const aiderAnalytics = [
+    JSON.stringify({ event: 'message_send', properties: { prompt_tokens: 1100, completion_tokens: 220, cost: 0.012 } }),
+    JSON.stringify({ event: 'message_send', properties: { prompt_tokens: 900, completion_tokens: 180, cost: 0.009 } }),
+  ].join('\n');
+  assert.deepEqual(parseAdapterUsage(adapters.aider, '', aiderAnalytics), {
+    usage: { input: 2000, cacheWrite: 0, cacheRead: 0, output: 400, turns: 2, toolCalls: 0 },
+    costUsd: 0.021,
+  });
+});
+
+test('prepareIsolatedWorkspace creates a one-commit git export and materialiseArm handles bare, current, kernel, brief and custom arms', async () => {
+  assert.deepEqual([...BUILTIN_ARMS].sort(), ['bare', 'brief', 'current', 'kernel']);
+
+  const repo = await scratch('simt-arm-repo-');
+  await git(['init', '-q', '.'], { cwd: repo });
+  await writeFile(join(repo, 'package.json'), '{"name":"arm-test","type":"module"}\n');
+  await writeFile(
+    join(repo, 'AGENTS.md'),
+    [
+      '# Hand Header',
+      '',
+      '<!-- simt:begin -->',
+      '<!-- simt:generated -->',
+      '## Core',
+      '- generated rule',
+      '<!-- simt:end -->',
+      '',
+    ].join('\n'),
+  );
+  await mkdir(join(repo, '.githooks'), { recursive: true });
+  await writeFile(join(repo, '.githooks', 'pre-commit'), '#!/bin/sh\n');
+  await writeFile(join(repo, '.mcp.json'), '{"mcpServers":{}}\n');
+  await git(['add', '-A'], { cwd: repo });
+  await git(['commit', '-qm', 'base commit'], { cwd: repo });
+  const baseSha = (await git(['rev-parse', 'HEAD'], { cwd: repo })).stdout.trim();
+
+  // Add a second commit in `repo` so we can verify `git rev-list --all` in the export does NOT see it.
+  await writeFile(join(repo, 'SECRET_FUTURE.txt'), 'future gold patch\n');
+  await git(['add', '-A'], { cwd: repo });
+  await git(['commit', '-qm', 'future commit'], { cwd: repo });
+  const futureSha = (await git(['rev-parse', 'HEAD'], { cwd: repo })).stdout.trim();
+
+  // 1. Bare arm strips regions, removes .githooks and .mcp.json, and has 1 commit in rev-list --all.
+  const bareSpec = await parseArmSpec('bare');
+  const bareWs = await prepareIsolatedWorkspace(repo, baseSha, bareSpec, { id: 't-1', prompt: 'test prompt' });
+  tempDirs.push(bareWs.slotDir);
+
+  const revList = (await git(['rev-list', '--all'], { cwd: bareWs.workDir })).stdout
+    .trim()
+    .split('\n')
+    .filter(Boolean);
+  assert.equal(revList.length, 1, 'isolated workspace must have exactly one commit in git rev-list --all');
+  assert.equal(revList[0], bareWs.initialHead);
+
+  // Attempting to inspect futureSha in the isolated workspace fails because object stores are not shared.
+  await assert.rejects(() => git(['cat-file', '-e', futureSha], { cwd: bareWs.workDir }));
+
+  const strippedAgents = await readFile(join(bareWs.workDir, 'AGENTS.md'), 'utf8');
+  assert.equal(strippedAgents.includes('simt:begin'), false);
+  assert.match(strippedAgents, /# Hand Header/);
+  assert.equal(existsSync(join(bareWs.workDir, '.githooks')), false);
+  assert.equal(existsSync(join(bareWs.workDir, '.mcp.json')), false);
+
+  // 2. Kernel arm projects kernel rules with Deferred rules index.
+  const kernelSpec = await parseArmSpec('kernel');
+  const kernelWs = await prepareIsolatedWorkspace(repo, baseSha, kernelSpec, { id: 't-1', prompt: 'test prompt' });
+  tempDirs.push(kernelWs.slotDir);
+  const kernelAgents = await readFile(join(kernelWs.workDir, 'AGENTS.md'), 'utf8');
+  assert.match(kernelAgents, /## Deferred rules/);
+
+  // 3. Brief arm writes .simt-dev/brief.md.
+  const briefSpec = await parseArmSpec('brief');
+  const briefWs = await prepareIsolatedWorkspace(repo, baseSha, briefSpec, {
+    id: 't-1',
+    prompt: 'validate slice commit and run focused tests',
+  });
+  tempDirs.push(briefWs.slotDir);
+  assert.equal(existsSync(join(briefWs.workDir, '.simt-dev', 'brief.md')), true);
+
+  // 4. Custom arm file (--arm name=path/to/arm.json) writes/removes files and sets env.
+  const armFile = join(repo, 'custom-arm.json');
+  await writeFile(
+    armFile,
+    JSON.stringify({
+      base: 'bare',
+      write: { 'CUSTOM_RULE.md': '# Custom Arm\n' },
+      remove: ['AGENTS.md'],
+      env: { BENCH_CUSTOM_FLAG: 'enabled' },
+    }),
+  );
+  const customSpec = await parseArmSpec(`my-arm=${armFile}`, repo);
+  assert.equal(customSpec.name, 'my-arm');
+  const customWs = await prepareIsolatedWorkspace(repo, baseSha, customSpec, { id: 't-1', prompt: 'p' });
+  tempDirs.push(customWs.slotDir);
+  assert.equal(existsSync(join(customWs.workDir, 'AGENTS.md')), false);
+  assert.equal(await readFile(join(customWs.workDir, 'CUSTOM_RULE.md'), 'utf8'), '# Custom Arm\n');
+  assert.equal(customWs.env.BENCH_CUSTOM_FLAG, 'enabled');
+
+  // Direct materialiseArm call for coverage of in-place materialisation.
+  const directDir = await scratch('simt-direct-arm-');
+  await materialiseArm(directDir, customSpec, { id: 't-direct', prompt: 'p' });
+  assert.equal(await readFile(join(directDir, 'CUSTOM_RULE.md'), 'utf8'), '# Custom Arm\n');
+});
+
+test('bench run: gold adapter resolves 100%, noop resolves 0%, and re-grading reproduces the stored grade exactly', async () => {
+  const repo = await scratch('simt-run-repo-');
+  const vaultEnv = await scratch('simt-run-vault-');
+  const env = { ...process.env, SIMT_DEV_VAULT_DIR: vaultEnv };
+
+  await git(['init', '-q', '.'], { cwd: repo });
+  await writeFile(
+    join(repo, 'package.json'),
+    `${JSON.stringify({ name: 'run-fixture', type: 'module' }, null, 2)}\n`,
+  );
+  await mkdir(join(repo, 'src'), { recursive: true });
+  await mkdir(join(repo, 'test'), { recursive: true });
+  await writeFile(
+    join(repo, 'src', 'math.mjs'),
+    [
+      'export function square(x) {',
+      '  return x * x;',
+      '}',
+      '',
+      'export function cube(_x) {',
+      '  return 0;',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  await writeFile(
+    join(repo, 'test', 'math.test.mjs'),
+    [
+      "import { test } from 'node:test';",
+      "import assert from 'node:assert/strict';",
+      "import { square } from '../src/math.mjs';",
+      '',
+      "test('math: square', () => {",
+      '  assert.equal(square(3), 9);',
+      '});',
+      '',
+    ].join('\n'),
+  );
+  await git(['add', '-A'], { cwd: repo });
+  await git(['commit', '-qm', 'chore: base math'], { cwd: repo });
+
+  await writeFile(
+    join(repo, 'src', 'math.mjs'),
+    [
+      'export function square(x) {',
+      '  return x * x;',
+      '}',
+      '',
+      'export function cube(x) {',
+      '  return x * x * x;',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  await writeFile(
+    join(repo, 'test', 'math.test.mjs'),
+    [
+      "import { test } from 'node:test';",
+      "import assert from 'node:assert/strict';",
+      "import { square, cube } from '../src/math.mjs';",
+      '',
+      "test('math: square', () => {",
+      '  assert.equal(square(3), 9);',
+      '});',
+      '',
+      "test('math: cube', () => {",
+      '  assert.equal(cube(3), 27);',
+      '});',
+      '',
+    ].join('\n'),
+  );
+  await git(['add', '-A'], { cwd: repo });
+  await git(['commit', '-qm', 'feat(math): implement cube'], { cwd: repo });
+
+  const mined = await mineTasks(repo, { apply: true, env });
+  assert.equal(mined.ok, true);
+  assert.equal(mined.tasks.length, 1);
+  const vaultRoot = mined.vaultRoot;
+  const [task] = mined.tasks;
+
+  assert.deepEqual(extractPatchFiles('diff --git a/src/math.mjs b/src/math.mjs\n'), ['src/math.mjs']);
+
+  // 1. Gold adapter resolves 100% (resolved: true, gatesPassed: true, outsideBlastRadius: 0).
+  const goldResult = await runBench(repo, {
+    apply: true,
+    arms: ['bare', 'current'],
+    harness: 'gold',
+    reps: 1,
+    vaultRoot,
+  });
+  assert.equal(goldResult.applied, true);
+  assert.equal(goldResult.runs.length, 2);
+  for (const run of goldResult.runs) {
+    assert.equal(run.schemaVersion, 1);
+    assert.equal(run.task, task.id);
+    assert.equal(run.resolved, true, `gold adapter must resolve 100% (arm=${run.arm})`);
+    assert.equal(run.gatesPassed, true);
+    assert.deepEqual(run.diff, { files: 1, outsideBlastRadius: 0 });
+    assert.equal(run.probe, null);
+  }
+
+  // 2. Noop adapter resolves 0% (resolved: false, gatesPassed: false, files: 0).
+  const noopResult = await runBench(repo, {
+    apply: true,
+    arms: ['current'],
+    harness: 'noop',
+    reps: 1,
+    vaultRoot,
+  });
+  assert.equal(noopResult.applied, true);
+  assert.equal(noopResult.runs.length, 1);
+  assert.equal(noopResult.runs[0].resolved, false, 'noop adapter must resolve 0%');
+  assert.equal(noopResult.runs[0].gatesPassed, false);
+  assert.deepEqual(noopResult.runs[0].diff, { files: 0, outsideBlastRadius: 0 });
+
+  // 3. Re-grading stored gold and noop runs reproduces their grades identically.
+  const regradedAll = await regradeRun(repo, 'all', { apply: true, vaultRoot });
+  assert.equal(regradedAll.regraded, 3);
+  assert.equal(regradedAll.reproducedCount, 3);
+  assert.equal(regradedAll.allReproduced, true);
+
+  // 4. Direct gradeWorkspace check: an agent that edits an unrelated file and tampers with
+  //    the test file has its test file reset to initialHead and outsideBlastRadius = 1.
+  const ws = await prepareIsolatedWorkspace(repo, task.base, await parseArmSpec('bare'), task);
+  tempDirs.push(ws.slotDir);
+  await writeFile(join(ws.workDir, 'UNRELATED.txt'), 'extra file outside blast radius\n');
+  await writeFile(join(ws.workDir, 'test', 'math.test.mjs'), '// agent tried to erase tests\n');
+  const tamperedGrade = await gradeWorkspace(ws.workDir, task, {
+    vaultRoot,
+    initialHead: ws.initialHead,
+  });
+  assert.equal(tamperedGrade.resolved, false);
+  assert.deepEqual(tamperedGrade.diff, { files: 2, outsideBlastRadius: 2 });
+
+  // 5. CLI `simt bench run` preview on simt-dev's mined tasks, plus execute (--yes) and --regrade on `repo`.
+  const simtTasks = (await readdir(join(ROOT, '.simt-dev', 'bench', 'tasks')))
+    .filter((f) => f.endsWith('.json'))
+    .sort();
+  const sampleTaskId = simtTasks[0].replace(/\.json$/, '');
+
+  const cliPreview = await runCli([
+    'bench',
+    'run',
+    '--root',
+    ROOT,
+    '--task',
+    sampleTaskId,
+    '--harness',
+    'gold',
+    '--reps',
+    '1',
+    '--json',
+  ]);
+  assert.equal(cliPreview.code, 0);
+  const previewPayload = JSON.parse(cliPreview.stdout);
+  assert.equal(previewPayload.ok, true);
+  assert.equal(previewPayload.applied, false);
+  assert.equal(previewPayload.runs.length, 1);
+
+  const cliGold = await runCli(
+    [
+      'bench',
+      'run',
+      '--root',
+      repo,
+      '--task',
+      task.id,
+      '--harness',
+      'gold',
+      '--arm',
+      'current',
+      '--reps',
+      '1',
+      '--yes',
+      '--json',
+    ],
+    { SIMT_DEV_VAULT_DIR: vaultEnv },
+  );
+  assert.equal(cliGold.code, 0, cliGold.stderr);
+  const goldPayload = JSON.parse(cliGold.stdout);
+  assert.equal(goldPayload.ok, true);
+  assert.equal(goldPayload.applied, true);
+  assert.equal(goldPayload.runs[0].resolved, true);
+
+  const cliRegrade = await runCli(
+    [
+      'bench',
+      'run',
+      '--root',
+      repo,
+      '--regrade',
+      'gold-current-r1',
+      '--json',
+    ],
+    { SIMT_DEV_VAULT_DIR: vaultEnv },
+  );
+  assert.equal(cliRegrade.code, 0, cliRegrade.stderr);
+  const regradePayload = JSON.parse(cliRegrade.stdout);
+  assert.equal(regradePayload.allReproduced, true);
+});
+

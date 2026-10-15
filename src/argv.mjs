@@ -86,6 +86,12 @@ export const VALUE_FLAGS = new Set([
   // tokens: split a local Claude Code or Codex session transcript into rules, file
   // reads and tool output. Local paths only (ADR-075).
   'session',
+  // bench run: arms, harness adapter, model id, repetition count and regrade target.
+  'arm',
+  'harness',
+  'model',
+  'reps',
+  'regrade',
 ]);
 
 /**
@@ -101,7 +107,7 @@ export const VALUE_FLAGS = new Set([
  * is a superset of the old behaviour, not a replacement: `--skill a,b` parsed before it
  * parses now.
  */
-export const REPEATABLE_FLAGS = new Set(['skill']);
+export const REPEATABLE_FLAGS = new Set(['skill', 'arm']);
 
 /**
  * @param {string[]} argv raw arguments, excluding node and the script path
@@ -155,6 +161,12 @@ export function parse(argv) {
           return { ok: false, code: usage(`--${raw} must be a non-negative integer, received ${value}`) };
         }
         flags[camel(raw)] = n;
+      } else if (raw === 'reps') {
+        const n = Number(value);
+        if (!Number.isInteger(n) || n < 1) {
+          return { ok: false, code: usage(`--reps must be a positive integer, received ${value}`) };
+        }
+        flags.reps = n;
       } else {
         const key = camel(raw);
         flags[key] = REPEATABLE_FLAGS.has(raw)

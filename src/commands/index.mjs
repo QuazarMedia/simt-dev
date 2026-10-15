@@ -36,7 +36,7 @@ import { installCommand } from './skillsinstall.mjs';
 import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
 import { tokensCommand } from './tokens.mjs';
 import { harnessCommand, harnessLoadersCommand } from './harness.mjs';
-import { benchMineCommand } from './bench.mjs';
+import { benchMineCommand, benchRunCommand } from './bench.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -96,6 +96,7 @@ export const IMPLEMENTED = {
   'harness detect': harnessCommand,
   'harness loaders': harnessLoadersCommand,
   'bench mine': benchMineCommand,
+  'bench run': benchRunCommand,
   upgrade: upgradeCommand,
   mcp: mcpCommand,
 };

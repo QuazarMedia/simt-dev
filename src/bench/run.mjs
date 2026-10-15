@@ -14,6 +14,7 @@ import { fingerprint } from '../resolve/fingerprint.mjs';
 import { rankSkills, tokenize } from '../resolve/resolve.mjs';
 import { gradeWorkspace } from './grade.mjs';
 import { resolveVaultDir } from './mine.mjs';
+import { ablateSectionInWorkspace, parseAblationArmName } from './ablate.mjs';
 
 const STATE_DIR = `.${CONFIG_DIR}`;
 
@@ -278,6 +279,15 @@ export async function parseArmSpec(rawSpec, cwd = process.cwd()) {
 
   const eq = spec.indexOf('=');
   if (eq === -1) {
+    const ablateSpec = parseAblationArmName(spec);
+    if (ablateSpec) {
+      return {
+        ...ablateSpec,
+        write: {},
+        remove: [],
+        env: {},
+      };
+    }
     if (!BUILTIN_ARMS.has(spec)) {
       throw new Error(
         `unknown arm "${spec}"; built-in arms are: ${[...BUILTIN_ARMS].join(', ')} (or pass --arm name=path/to/arm.json)`,
@@ -486,8 +496,11 @@ async function writeTaskBrief(workDir, task) {
  * @returns {Promise<{env: Record<string, string>}>}
  */
 export async function materialiseArm(workDir, armSpec, task = {}) {
+  const ablate = armSpec.ablate ?? parseAblationArmName(armSpec.name)?.ablate ?? null;
   const base = armSpec.base ?? (BUILTIN_ARMS.has(armSpec.name) ? armSpec.name : null);
-  if (base === 'bare') {
+  if (ablate) {
+    await ablateSectionInWorkspace(workDir, ablate);
+  } else if (base === 'bare') {
     await stripBareArm(workDir);
   } else if (base === 'current') {
     await applyProjectionMode(workDir, 'full');

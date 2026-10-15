@@ -67,6 +67,9 @@ ${CLI} bench run [--yes]      run benchmark tasks across arms in isolated one-co
 ${CLI} bench report           statistical report across benchmark arms (R, Q, C, CPI, cache)
                             (read-only; paired bootstrap 95% CIs; --compare <a> <b>
                             prints deltas with McNemar and Wilcoxon p-values)
+${CLI} bench ablate [--yes]    leave-one-out ablation across core, profile and process sections
+                            (dry-run unless --yes; 10-task canary with escalation,
+                            value-per-KB ranking and deletion candidates)
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;

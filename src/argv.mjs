@@ -86,12 +86,13 @@ export const VALUE_FLAGS = new Set([
   // tokens: split a local Claude Code or Codex session transcript into rules, file
   // reads and tool output. Local paths only (ADR-075).
   'session',
-  // bench run: arms, harness adapter, model id, repetition count and regrade target.
+  // bench run / report: arms, harness adapter, model id, repetition count, regrade target and arm comparison.
   'arm',
   'harness',
   'model',
   'reps',
   'regrade',
+  'compare',
 ]);
 
 /**
@@ -107,7 +108,7 @@ export const VALUE_FLAGS = new Set([
  * is a superset of the old behaviour, not a replacement: `--skill a,b` parsed before it
  * parses now.
  */
-export const REPEATABLE_FLAGS = new Set(['skill', 'arm']);
+export const REPEATABLE_FLAGS = new Set(['skill', 'arm', 'compare']);
 
 /**
  * @param {string[]} argv raw arguments, excluding node and the script path

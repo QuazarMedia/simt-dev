@@ -178,6 +178,7 @@ const JSON_COMMANDS = [
   { name: 'harness loaders', args: (root) => ['harness', 'loaders', '--root', root], env: async () => ({}) },
   { name: 'bench mine', args: (root) => ['bench', 'mine', '--root', root], env: async () => ({}) },
   { name: 'bench run', args: (root) => ['bench', 'run', '--root', root], env: async () => ({}) },
+  { name: 'bench report', args: (root) => ['bench', 'report', '--root', root], env: async () => ({}) },
 ];
 
 test('--json is one document, and ok agrees with the exit code, for every command', async (t) => {

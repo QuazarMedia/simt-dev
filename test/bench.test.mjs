@@ -32,6 +32,22 @@ import {
   regradeRun,
   runBench,
 } from '../src/bench/run.mjs';
+import {
+  DEFAULT_BOOTSTRAP_SAMPLES,
+  DEFAULT_BOOTSTRAP_SEED,
+  bootstrapArmCi,
+  buildBenchReport,
+  compareArms,
+  computeRunCost,
+  computeRunQuality,
+  evaluateRunRecord,
+  formatReportMarkdown,
+  isRunResolved,
+  loadPrices,
+  loadRunRecords,
+  mcnemarTest,
+  wilcoxonSignedRank,
+} from '../src/bench/report.mjs';
 import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -805,4 +821,281 @@ test('bench run: gold adapter resolves 100%, noop resolves 0%, and re-grading re
   const regradePayload = JSON.parse(cliRegrade.stdout);
   assert.equal(regradePayload.allReproduced, true);
 });
+
+test('bench report (R03): cost model, quality Q, CPI, cache-hit ratio, McNemar, Wilcoxon and bootstrap CIs match hand computations', async () => {
+  assert.equal(DEFAULT_BOOTSTRAP_SAMPLES, 1000);
+  assert.equal(DEFAULT_BOOTSTRAP_SEED, 0x51772026);
+
+  // 1. Hand computation of token cost from prices.json ({in, cache_write, cache_read, out} per 1M tokens).
+  const prices = { in: 3.0, cache_write: 3.75, cache_read: 0.3, out: 15.0 };
+  const sampleRun = {
+    task: 't-1',
+    arm: 'kernel',
+    harness: 'claude',
+    model: 'claude-sonnet-4-5',
+    rep: 1,
+    resolved: true,
+    gatesPassed: true,
+    usage: {
+      input: 100_000,      // 0.1M * 3.00 = 0.30
+      cacheWrite: 40_000,  // 0.04M * 3.75 = 0.15
+      cacheRead: 300_000,  // 0.3M * 0.30 = 0.09
+      output: 10_000,      // 0.01M * 15.00 = 0.15
+      turns: 4,
+      toolCalls: 7,
+    },
+    costUsd: 9.99, // ignored when prices table is supplied
+    diff: { files: 2, outsideBlastRadius: 0 },
+    probe: null,
+  };
+  // Expected C = 0.30 + 0.15 + 0.09 + 0.15 = 0.69
+  const cost = computeRunCost(sampleRun, prices);
+  assert.ok(Math.abs(cost - 0.69) < 1e-12, `expected 0.69, got ${cost}`);
+  // Without prices.json, falls back to run.costUsd.
+  assert.equal(computeRunCost(sampleRun, null), 9.99);
+
+  // 2. Hand computation of R, Q and cacheHitRatio.
+  assert.equal(isRunResolved(sampleRun), true);
+  assert.equal(isRunResolved({ resolved: true, gatesPassed: false }), false);
+  assert.equal(computeRunQuality(sampleRun), 1.0);
+
+  // Partial quality: resolved=true (0.5), gatesPassed=false (0), probe=false (0), diff: 1 of 4 outside (0.1 * 0.75 = 0.075) -> 0.575.
+  const partialQ = computeRunQuality({
+    resolved: true,
+    gatesPassed: false,
+    probe: false,
+    diff: { files: 4, outsideBlastRadius: 1 },
+  });
+  assert.ok(Math.abs(partialQ - 0.575) < 1e-12, `expected 0.575, got ${partialQ}`);
+
+  const ev = evaluateRunRecord(sampleRun, prices);
+  assert.equal(ev.R, 1);
+  assert.equal(ev.Q, 1.0);
+  assert.ok(Math.abs(ev.C - 0.69) < 1e-12);
+  // cache_read / (input + cache_read) = 300_000 / (100_000 + 300_000) = 0.75
+  assert.equal(ev.cacheHitRatio, 0.75);
+
+  // 3. Hand computation of McNemar's test on 8 paired tasks:
+  //    n11 = 2, n10 (b) = 0, n01 (c) = 6, n00 = 0.
+  //    chi2 = (0 - 6)^2 / 6 = 6.0; exact two-sided binomial p = 2 * (0.5)^6 = 2/64 = 0.03125.
+  const mcnemar = mcnemarTest([
+    [1, 1],
+    [1, 1],
+    [0, 1],
+    [0, 1],
+    [0, 1],
+    [0, 1],
+    [0, 1],
+    [0, 1],
+  ]);
+  assert.equal(mcnemar.n11, 2);
+  assert.equal(mcnemar.b, 0);
+  assert.equal(mcnemar.c, 6);
+  assert.equal(mcnemar.n00, 0);
+  assert.equal(mcnemar.statistic, 6.0);
+  assert.equal(mcnemar.pValue, 0.03125);
+
+  // 4. Hand computation of Wilcoxon signed-rank test:
+  //    Case A: 6 pairs where candidate is strictly cheaper on every task.
+  //    Ranks 1..6 all negative -> wPlus = 0, wMinus = 21, statistic = 0, exact p = 2 / 64 = 0.03125.
+  const wilcoxonAllNeg = wilcoxonSignedRank([
+    [1.0, 0.9],
+    [1.0, 0.8],
+    [1.0, 0.7],
+    [1.0, 0.6],
+    [1.0, 0.5],
+    [1.0, 0.4],
+  ]);
+  assert.equal(wilcoxonAllNeg.nonZero, 6);
+  assert.equal(wilcoxonAllNeg.wPlus, 0);
+  assert.equal(wilcoxonAllNeg.wMinus, 21);
+  assert.equal(wilcoxonAllNeg.statistic, 0);
+  assert.equal(wilcoxonAllNeg.pValue, 0.03125);
+
+  //    Case B: 5 non-zero pairs with a tie: diffs = [-0.1, -0.1, +0.2, -0.3, -0.4].
+  //    Ranks: 1.5, 1.5, 3, 4, 5 -> wPlus = 3, wMinus = 12, statistic = 3.
+  //    Subsets of {1.5, 1.5, 3, 4, 5} with sum <= 3: {}, {1.5}, {1.5}, {1.5, 1.5}, {3} -> 5 of 32.
+  //    Two-sided exact p = 2 * 5 / 32 = 0.3125.
+  const wilcoxonTies = wilcoxonSignedRank([
+    [1.0, 0.9],
+    [1.0, 0.9],
+    [1.0, 1.2],
+    [1.0, 0.7],
+    [1.0, 0.6],
+  ]);
+  assert.equal(wilcoxonTies.nonZero, 5);
+  assert.equal(wilcoxonTies.wPlus, 3);
+  assert.equal(wilcoxonTies.wMinus, 12);
+  assert.equal(wilcoxonTies.statistic, 3);
+  assert.equal(wilcoxonTies.pValue, 0.3125);
+
+  // 5. End-to-end synthetic repository with .simt-dev/bench/prices.json and 6 paired tasks across bare & kernel.
+  const repo = await scratch('simt-report-repo-');
+  const benchDir = join(repo, '.simt-dev', 'bench');
+  const bareDir = join(benchDir, 'runs', 'claude-bare-r1');
+  const kernelDir = join(benchDir, 'runs', 'claude-kernel-r1');
+  await mkdir(bareDir, { recursive: true });
+  await mkdir(kernelDir, { recursive: true });
+
+  await writeFile(
+    join(benchDir, 'prices.json'),
+    JSON.stringify({ in: 2.0, cache_write: 2.5, cache_read: 0.2, out: 10.0 }, null, 2),
+  );
+  const loadedPrices = await loadPrices(repo);
+  assert.equal(loadedPrices.kind, 'flat');
+
+  // 6 tasks:
+  // - bare resolves 2 of 6 (t-1, t-2); kernel resolves all 6 (t-1..t-6).
+  // - bare per-task usage: input=100_000 ($0.20), cacheWrite=0, cacheRead=100_000 ($0.02), output=(10_000 + i*1_000).
+  // - kernel per-task usage: input=50_000 ($0.10), cacheWrite=0, cacheRead=150_000 ($0.03), output=(5_000 + i*500).
+  for (let i = 1; i <= 6; i += 1) {
+    const taskId = `t-000000${i}-01`;
+    const bareResolved = i <= 2;
+    await writeFile(
+      join(bareDir, `${taskId}.json`),
+      JSON.stringify({
+        schemaVersion: 1,
+        task: taskId,
+        arm: 'bare',
+        harness: 'claude',
+        model: 'sonnet',
+        rep: 1,
+        resolved: bareResolved,
+        gatesPassed: true,
+        usage: {
+          input: 100_000,
+          cacheWrite: 0,
+          cacheRead: 100_000,
+          output: 10_000 * i,
+          turns: 6,
+          toolCalls: 10,
+        },
+        costUsd: 0,
+        diff: { files: 1, outsideBlastRadius: 0 },
+        probe: null,
+      }),
+    );
+
+    await writeFile(
+      join(kernelDir, `${taskId}.json`),
+      JSON.stringify({
+        schemaVersion: 1,
+        task: taskId,
+        arm: 'kernel',
+        harness: 'claude',
+        model: 'sonnet',
+        rep: 1,
+        resolved: true,
+        gatesPassed: true,
+        usage: {
+          input: 50_000,
+          cacheWrite: 0,
+          cacheRead: 150_000,
+          output: 5_000 * i,
+          turns: 4,
+          toolCalls: 6,
+        },
+        costUsd: 0,
+        diff: { files: 1, outsideBlastRadius: 0 },
+        probe: null,
+      }),
+    );
+  }
+
+  const rawRecords = await loadRunRecords(repo);
+  assert.equal(rawRecords.length, 12);
+
+  const report = await buildBenchReport(repo, { compare: ['bare', 'kernel'] });
+  assert.equal(report.pricesLoaded, true);
+  assert.equal(report.runCount, 12);
+  assert.equal(report.arms.length, 2);
+
+  const bareArm = report.arms.find((a) => a.arm === 'bare');
+  const kernelArm = report.arms.find((a) => a.arm === 'kernel');
+
+  // Hand-computed bare arm:
+  // R = 2/6 = 1/3
+  // Q: 2 tasks have Q=1.0, 4 tasks have Q=0.5 (gates=0.2 + probe=0.2 + hygiene=0.1) -> mean Q = (2*1.0 + 4*0.5)/6 = 4/6 = 2/3
+  // C: input($0.20) + cacheRead($0.02) + mean output(35_000 * $10 / 1e6 = $0.35) = $0.57
+  // CPI: C / (R * Q) = 0.57 / ((1/3) * (2/3)) = 0.57 / (2/9) = 2.565
+  // cacheHitRatio: 600_000 / (600_000 + 600_000) = 0.5
+  assert.ok(Math.abs(bareArm.R - 1 / 3) < 1e-12);
+  assert.ok(Math.abs(bareArm.Q - 2 / 3) < 1e-12);
+  assert.ok(Math.abs(bareArm.C - 0.57) < 1e-12);
+  assert.ok(Math.abs(bareArm.CPI - 2.565) < 1e-12);
+  assert.equal(bareArm.turns, 6);
+  assert.equal(bareArm.toolCalls, 10);
+  assert.equal(bareArm.cacheHitRatio, 0.5);
+
+  // Hand-computed kernel arm:
+  // R = 6/6 = 1.0
+  // Q = 1.0
+  // C: input($0.10) + cacheRead($0.03) + mean output(17_500 * $10 / 1e6 = $0.175) = $0.305
+  // CPI: 0.305 / (1.0 * 1.0) = 0.305
+  // cacheHitRatio: 900_000 / (300_000 + 900_000) = 0.75
+  assert.equal(kernelArm.R, 1.0);
+  assert.equal(kernelArm.Q, 1.0);
+  assert.ok(Math.abs(kernelArm.C - 0.305) < 1e-12);
+  assert.ok(Math.abs(kernelArm.CPI - 0.305) < 1e-12);
+  assert.equal(kernelArm.turns, 4);
+  assert.equal(kernelArm.toolCalls, 6);
+  assert.equal(kernelArm.cacheHitRatio, 0.75);
+
+  // Hand-computed comparison (kernel - bare):
+  // dR = +2/3, dQ = +1/3, dC = -0.265, dCPI = 0.305 - 2.565 = -2.26, dTurns = -2, dToolCalls = -4, dCache = +0.25
+  // McNemar: b=0, c=4 -> statistic = 4.0, pValue = 2 * (0.5)^4 = 2/16 = 0.125
+  // Wilcoxon: all 6 tasks have kernel cheaper -> wPlus = 0, wMinus = 21, statistic = 0, pValue = 0.03125
+  const cmp = report.comparison;
+  assert.ok(cmp);
+  assert.ok(Math.abs(cmp.deltas.R - 2 / 3) < 1e-12);
+  assert.ok(Math.abs(cmp.deltas.Q - 1 / 3) < 1e-12);
+  assert.ok(Math.abs(cmp.deltas.C - -0.265) < 1e-12);
+  assert.ok(Math.abs(cmp.deltas.CPI - -2.26) < 1e-12);
+  assert.equal(cmp.deltas.turns, -2);
+  assert.equal(cmp.deltas.toolCalls, -4);
+  assert.equal(cmp.deltas.cacheHitRatio, 0.25);
+  assert.equal(cmp.mcnemar.statistic, 4.0);
+  assert.equal(cmp.mcnemar.pValue, 0.125);
+  assert.equal(cmp.wilcoxon.statistic, 0);
+  assert.equal(cmp.wilcoxon.pValue, 0.03125);
+
+  // Direct bootstrapArmCi and compareArms determinism check.
+  const ciDirect = bootstrapArmCi([{ R: 1, Q: 1, C: 0.5, turns: 3, toolCalls: 4, input: 100, cacheRead: 300, cacheHitRatio: 0.75 }]);
+  assert.deepEqual(ciDirect.R, [1, 1]);
+  const cmpDirect = compareArms(
+    'bare',
+    rawRecords.filter((r) => r.arm === 'bare').map((r) => evaluateRunRecord(r, loadedPrices)),
+    'kernel',
+    rawRecords.filter((r) => r.arm === 'kernel').map((r) => evaluateRunRecord(r, loadedPrices)),
+  );
+  assert.deepEqual(cmpDirect.ci95, cmp.ci95);
+  const md = formatReportMarkdown(report);
+  assert.match(md, /\| bare \| 6 \| 6 \| 33\.3% \|/);
+  assert.match(md, /\| kernel \| 6 \| 6 \| 100\.0% \|/);
+  assert.match(md, /### Comparison: `kernel` vs `bare`/);
+  assert.match(md, /\| McNemar \| 4\.0000 \| 0\.1250 \|/);
+  assert.match(md, /\| Wilcoxon \| 0\.0000 \| 0\.0313 \|/);
+
+  // 6. CLI `simt bench report --compare bare kernel` (two space-separated args and --json).
+  const cliMd = await runCli(['bench', 'report', '--root', repo, '--compare', 'bare', 'kernel']);
+  assert.equal(cliMd.code, 0, cliMd.stderr);
+  assert.match(cliMd.stdout, /### Comparison: `kernel` vs `bare`/);
+
+  const cliJson = await runCli([
+    'bench',
+    'report',
+    '--root',
+    repo,
+    '--compare',
+    'bare',
+    'kernel',
+    '--json',
+  ]);
+  assert.equal(cliJson.code, 0, cliJson.stderr);
+  const jsonPayload = JSON.parse(cliJson.stdout);
+  assert.equal(jsonPayload.ok, true);
+  assert.equal(jsonPayload.command, 'bench report');
+  assert.equal(jsonPayload.comparison.wilcoxon.pValue, 0.03125);
+});
+
 

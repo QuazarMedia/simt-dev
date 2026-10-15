@@ -1,8 +1,9 @@
-// `simt bench` - benchmark task mining (`bench mine`, R01) and runner (`bench run`, R02).
+// `simt bench` - benchmark task mining (`bench mine`, R01), runner (`bench run`, R02)
+// and statistical report (`bench report`, R03).
 //
 // Like every writer in this CLI, `bench mine` and `bench run` are previews by
 // default and write artifacts to `.simt-dev/bench/` only when authorised with
-// `--yes` (and not `--dry-run`).
+// `--yes` (and not `--dry-run`). `bench report` is read-only.
 
 import { resolve } from 'node:path';
 
@@ -10,6 +11,7 @@ import { CLI } from '../name.mjs';
 import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
 import { DEFAULT_MINE_TARGET, mineTasks } from '../bench/mine.mjs';
 import { regradeRun, runBench } from '../bench/run.mjs';
+import { buildBenchReport } from '../bench/report.mjs';
 import { listFlag } from './skills.mjs';
 
 export async function benchMineCommand(positional, flags) {
@@ -185,3 +187,54 @@ export async function benchRunCommand(positional, flags) {
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
 }
+
+export async function benchReportCommand(positional, flags) {
+  const compareItems = listFlag(flags.compare);
+  const pos = [...positional];
+  if (compareItems.length === 1 && pos.length >= 1) {
+    compareItems.push(pos.shift());
+  }
+  if (flags.compare !== undefined && compareItems.length !== 2) {
+    return fail(
+      '--compare requires two arm names: --compare <arm-a> <arm-b>',
+      EXIT.USAGE,
+      `pass two arms to compare: ${CLI} bench report --compare bare current`,
+    );
+  }
+
+  const root = resolve(flags.root ?? pos[0] ?? process.cwd());
+  const arms = listFlag(flags.arm);
+
+  let report;
+  try {
+    report = await buildBenchReport(root, {
+      arms,
+      harness: flags.harness,
+      model: flags.model,
+      compare: compareItems.length === 2 ? compareItems : null,
+    });
+  } catch (error) {
+    return fail(
+      `${root}: ${error.message ?? error}`,
+      EXIT.CONFIG,
+      `run benchmark arms first with \`${CLI} bench run --yes\` or fix .simt-dev/bench/prices.json`,
+    );
+  }
+
+  if (isJson(flags)) {
+    emitJson({
+      ok: true,
+      command: 'bench report',
+      root: report.root,
+      pricesLoaded: report.pricesLoaded,
+      runCount: report.runCount,
+      arms: report.arms,
+      comparison: report.comparison,
+    });
+    return EXIT.OK;
+  }
+
+  emit(report.markdown, { maxBytes: flags.maxBytes ?? 0 });
+  return EXIT.OK;
+}
+

@@ -64,6 +64,9 @@ ${CLI} bench mine [--yes]     mine verified benchmark tasks from git history
 ${CLI} bench run [--yes]      run benchmark tasks across arms in isolated one-commit exports
                             (dry-run unless --yes; grades against vault test patches
                             and declared gates; --regrade <run> verifies stored runs)
+${CLI} bench report           statistical report across benchmark arms (R, Q, C, CPI, cache)
+                            (read-only; paired bootstrap 95% CIs; --compare <a> <b>
+                            prints deltas with McNemar and Wilcoxon p-values)
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
@@ -114,6 +117,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --model <id>            bench run: model identifier recorded and passed to the adapter
 --reps <n>              bench run: repetitions per task and arm (default: 3)
 --regrade <run>         bench run: re-grade a stored run from its archived agent patch
+--compare <a> <b>       bench report: compare two arms with deltas and p-values
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

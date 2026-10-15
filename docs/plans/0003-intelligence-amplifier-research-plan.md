@@ -844,7 +844,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R02 | Agent runner and arms | 0 | R01 | L | D1 (ADR-076) | gold 100%, noop 0%; reproducible grades | Complete |
 | R03 | Cost model and report | 0 | R02 | S | — | matches hand computation | Complete |
 | R04 | Ablation | 0 | R03 | M | — | value per KB for every section | Complete |
-| R05 | Compliance probes | 0 | R02, R17 | M | — | 12 probes with graders | Queued |
+| R05 | Compliance probes | 0 | R02, R17 | M | — | 12 probes with graders | Complete |
 | R06 | Context meter | 0 | R14 | S | D7 (ADR-075) | reproduces 90,042 B / 72% | Complete |
 | R07 | Kernel and commentary split | 1 | R02, R06 | M | D3 | kernel ≤ 1.5 KB; ΔR ≥ −2, ΔC < 0 | Queued |
 | R08 | Budgeted compilation | 1 | R07 | S | 0002 P7 | budget exact; byte-identical | Queued |

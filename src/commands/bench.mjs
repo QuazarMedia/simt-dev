@@ -13,6 +13,7 @@ import { DEFAULT_MINE_TARGET, mineTasks } from '../bench/mine.mjs';
 import { regradeRun, runBench } from '../bench/run.mjs';
 import { buildBenchReport } from '../bench/report.mjs';
 import { ablateBench } from '../bench/ablate.mjs';
+import { runBenchProbes } from '../bench/probes.mjs';
 import { listFlag } from './skills.mjs';
 
 export async function benchMineCommand(positional, flags) {
@@ -297,5 +298,62 @@ export async function benchAblateCommand(positional, flags) {
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
 }
+
+export async function benchProbesCommand(positional, flags) {
+  const root = resolve(flags.root ?? positional[0] ?? process.cwd());
+  const { dryRun, apply } = writeMode(flags);
+  const arms = listFlag(flags.arm);
+  const probes = listFlag(flags.task);
+  const harness = flags.harness ?? 'gold';
+  const reps = flags.reps ?? 1;
+
+  let result;
+  try {
+    result = await runBenchProbes(root, {
+      apply,
+      arms: arms.length > 0 ? arms : ['bare', 'current'],
+      probes,
+      harness,
+      reps,
+    });
+  } catch (error) {
+    return fail(
+      `${root}: ${error.message ?? error}`,
+      EXIT.CONFIG,
+      `check --arm and --harness flags and rerun \`${CLI} bench probes --yes\``,
+    );
+  }
+
+  if (isJson(flags)) {
+    emitJson({
+      ok: true,
+      command: 'bench probes',
+      root: result.root,
+      dryRun,
+      applied: result.applied,
+      probeCount: result.probeCount,
+      probes: result.probes,
+      arms: result.arms,
+      runs: result.runs,
+    });
+    return EXIT.OK;
+  }
+
+  const lines = [
+    `bench    probes  ${result.root}`,
+    `mode     ${result.applied ? 'applied' : dryRun ? 'dry-run (writes nothing)' : 'preview / stored runs (pass --yes to execute probes)'}`,
+    `probes   ${result.probeCount}`,
+    '',
+    result.markdown,
+  ];
+  if (!result.applied) {
+    lines.push('');
+    lines.push(`remedy   run: ${CLI} bench probes --yes`);
+  }
+
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  return EXIT.OK;
+}
+
 
 

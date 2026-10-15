@@ -64,6 +64,17 @@ import {
   shouldEscalateCanary,
   slugifyHeading,
 } from '../src/bench/ablate.mjs';
+import {
+  PROBES,
+  appendLedgerEntry,
+  extractTranscriptCommands,
+  formatProbesMarkdown,
+  gradeProbe,
+  loadProbeRecords,
+  prepareProbeWorkspace,
+  readLedgerEntries,
+  runBenchProbes,
+} from '../src/bench/probes.mjs';
 import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -1360,6 +1371,116 @@ test('bench ablate (R04): leave-one-out section removal, 10-task canary with esc
   assert.ok(payload.deletionCandidates.includes('core:scope-of-these-rules'));
   assert.equal(payload.ranking[0].id, 'core:truth');
 });
+
+test('bench probes (R05): 12 synthetic compliance probes each pass on compliance, fail on violation, and report compliance per arm', async () => {
+  assert.equal(PROBES.length, 12, 'R05 requires exactly 12 compliance probes');
+
+  // 1. Verify each of the 12 probes has a deterministic grader that passes on comply() and fails on violate().
+  for (const probe of PROBES) {
+    // Compliant run
+    const wsComply = await prepareProbeWorkspace(probe);
+    tempDirs.push(wsComply.slotDir);
+    const complyOut = await probe.comply(wsComply.workDir, wsComply);
+    const complyGrade = await gradeProbe(probe.id, {
+      workDir: wsComply.workDir,
+      slotDir: wsComply.slotDir,
+      initialHead: wsComply.initialHead,
+      commands: complyOut.commands,
+      stdout: complyOut.stdout,
+    });
+    assert.equal(
+      complyGrade.passed,
+      true,
+      `probe ${probe.id} must pass on compliant action (${complyGrade.reason})`,
+    );
+
+    // Violating run
+    const wsViolate = await prepareProbeWorkspace(probe);
+    tempDirs.push(wsViolate.slotDir);
+    const violateOut = await probe.violate(wsViolate.workDir, wsViolate);
+    const violateGrade = await gradeProbe(probe.id, {
+      workDir: wsViolate.workDir,
+      slotDir: wsViolate.slotDir,
+      initialHead: wsViolate.initialHead,
+      commands: violateOut.commands,
+      stdout: violateOut.stdout,
+    });
+    assert.equal(
+      violateGrade.passed,
+      false,
+      `probe ${probe.id} must fail on rule violation`,
+    );
+    assert.ok(violateGrade.reason.length > 0, `probe ${probe.id} must state a failure reason`);
+  }
+
+  // 2. Verify ledger helper and transcript command extraction directly.
+  const ledgerScratch = await scratch('simt-probe-ledger-');
+  await git(['init', '-q', '.'], { cwd: ledgerScratch });
+  await writeFile(join(ledgerScratch, 'README.md'), '# test\n');
+  await git(['add', 'README.md'], { cwd: ledgerScratch });
+  await appendLedgerEntry(ledgerScratch, { cmd: 'node --test test/a.test.mjs', exit: 0 });
+  const ledgerEntries = await readLedgerEntries(ledgerScratch);
+  assert.equal(ledgerEntries.length, 1);
+  assert.equal(ledgerEntries[0].cmd, 'node --test test/a.test.mjs');
+  const cmds = extractTranscriptCommands({
+    commands: ['git status'],
+    stdout: '$ npm run lint\nall good',
+    ledger: ledgerEntries,
+  });
+  assert.deepEqual(cmds, ['git status', 'node --test test/a.test.mjs', 'npm run lint']);
+
+  // 3. Run probes across two arms (`bare` with `violator` and `current` with `gold`) and verify per-arm compliance.
+  const repo = await scratch('simt-probes-repo-');
+  await writeFile(join(repo, 'package.json'), JSON.stringify({ name: 'probes-repo', version: '1.0.0' }));
+  await git(['init', '-q', '.'], { cwd: repo });
+
+  await runBenchProbes(repo, {
+    apply: true,
+    arms: ['bare'],
+    harness: 'violator',
+    reps: 1,
+  });
+  await runBenchProbes(repo, {
+    apply: true,
+    arms: ['current'],
+    harness: 'gold',
+    reps: 1,
+  });
+
+  const stored = await loadProbeRecords(repo);
+  assert.equal(stored.length, 24);
+
+  const summary = await runBenchProbes(repo, {
+    apply: false,
+    arms: ['bare', 'current'],
+  });
+  assert.equal(summary.probeCount, 12);
+  assert.equal(summary.arms.length, 2);
+
+  const bareSummary = summary.arms.find((a) => a.arm === 'bare');
+  const currentSummary = summary.arms.find((a) => a.arm === 'current');
+  assert.equal(bareSummary.total, 12);
+  assert.equal(bareSummary.passed, 0);
+  assert.equal(bareSummary.complianceRate, 0);
+  assert.equal(currentSummary.total, 12);
+  assert.equal(currentSummary.passed, 12);
+  assert.equal(currentSummary.complianceRate, 1.0);
+
+  const md = formatProbesMarkdown(summary);
+  assert.match(md, /\| bare \| 12 \| 0 \| 0\.0% \|/);
+  assert.match(md, /\| current \| 12 \| 12 \| 100\.0% \|/);
+  assert.match(md, /\| p01-unrelated-failing-test \| Validation \| ADR-006 \|/);
+
+  // 4. CLI `simt bench probes` preview and `--json`.
+  const cliJson = await runCli(['bench', 'probes', '--root', repo, '--json']);
+  assert.equal(cliJson.code, 0, cliJson.stderr);
+  const payload = JSON.parse(cliJson.stdout);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.command, 'bench probes');
+  assert.equal(payload.probeCount, 12);
+  assert.equal(payload.arms.length, 2);
+});
+
 
 
 

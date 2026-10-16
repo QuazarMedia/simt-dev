@@ -1,6 +1,6 @@
 # Plan 0003 — simt-dev as an intelligence amplifier: research and development plan
 
-Status: **in progress — R01–R06, R09, R10, R14 complete** · created 2026-10-06 · state read at `d5678f3`
+Status: **in progress — R01–R07, R09, R10, R14 complete** · created 2026-10-06 · state read at `590911f`
 Depends on: review 0002 Waves 0–1 (`docs/reviews/0002-full-review-adoption-and-public-release.md`),
 plan 0002
 Blocked by: every slice here is Queued, and R01 and R02 — the task miner and the agent runner
@@ -315,6 +315,11 @@ redundant, and `simt-garmin` beyond Codex's limit. It runs in under 1 s.
 ## 6. Phase 1 — Lean context compiler
 
 ### R07 — Kernel and commentary split (M, D3)
+
+**Superseded by ADR-073.** The kernel is a mode over the rules a repository already has — `mode`
+in its manifest, and the class each rule states in its own frontmatter — rather than a
+`simt-kernel:` list of extracted lines under `projection.mode`. What that leaves of the accept
+criterion is in the tracker's note for this row.
 
 **Design.**
 
@@ -846,7 +851,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R04 | Ablation | 0 | R03 | M | — | value per KB for every section | Complete |
 | R05 | Compliance probes | 0 | R02, R17 | M | — | 12 probes with graders | Complete |
 | R06 | Context meter | 0 | R14 | S | D7 (ADR-075) | reproduces 90,042 B / 72% | Complete |
-| R07 | Kernel and commentary split | 1 | R02, R06 | M | D3 | kernel ≤ 1.5 KB; ΔR ≥ −2, ΔC < 0 | Queued |
+| R07 | Kernel and commentary split | 1 | R02, R06 | M | D3 (ADR-073) | kernel ≤ 1.5 KB; ΔR ≥ −2, ΔC < 0 | Complete |
 | R08 | Budgeted compilation | 1 | R07 | S | 0002 P7 | budget exact; byte-identical | Queued |
 | R09 | Inferability filter | 1 | R07 | S | — (ADR-078) | expected removals with reasons | Complete |
 | R10 | Command card | 1 | — | S | — (ADR-077) | every card command runs on 10 fixtures | Complete |
@@ -896,6 +901,15 @@ Size: S is up to 2 days, M up to a week, L more.
 | R54 | File leases for parallel agents | 8 | R15 | S | — | two-session fixture | Queued |
 | R55 | `pr-body` | 8 | R17 | S | — | fixture snapshot | Queued |
 
+**R07 — Complete, not Accepted** (the remaining note ADR-073 points at). The mode shipped: `mode`
+is the repository's own declaration, a rule states its class in its own frontmatter, and every
+deferred rule is named in the region with the command that fetches it. Two things in the row's
+metric are not done. The A/B that would justify making `kernel` the default has not been run —
+§16 step 4 is where it goes, after R07 and R10. And the 1.5 KB target belongs to the design
+ADR-073 rejected, a kernel of extracted imperative lines rather than of whole rules: as shipped,
+the kernel is the shared core plus the `hard` and `command` classes, 9,224 B on a python fixture
+against 10,978 B for `full`, and the workspace dedupe that would take it lower is R11.
+
 ## 15. Risks and how determinism survives
 
 | Risk | Mitigation |
@@ -938,7 +952,7 @@ this plan's tracker are review 0002's, written `0002 P7`.
 | --- | --- |
 | D1 | A change to what agents read is measured before it ships, or labelled unmeasured in its record (ADR-076) |
 | D2 | Optional adapters are separate packages, off by default, and propose rather than write |
-| D3 | Rules have a kernel and a commentary; the `simt-kernel` key |
+| D3 | Rules have a kernel and a commentary, and the class is the rule's own declaration (ADR-073) |
 | D4 | Agent-time hooks are a projected surface, with one policy table for every harness |
 | D5 | The evidence ledger, and what counts as a claim |
 | D6 | The local index is `node:sqlite`, gitignored and always rebuildable |

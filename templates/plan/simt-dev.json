@@ -1,0 +1,36 @@
+{
+  "$comment": "Default tracker format, delivered with the tool. A repository replaces any section by writing simt-plan.json beside its other files; a section it omits stays as written here. directories are the only places read, and each word is what a dependency uses to name that place (\"review 0002 S41\"). Headers are tried in the order written. Only a state marked satisfies unblocks a slice that depends on it. ready is the state plan next returns. dependency.group matches a wave of rows; wave names that table's columns.",
+  "name": "simt-dev",
+  "directories": [
+    { "kind": "plans", "word": "plan", "path": "docs/plans" },
+    { "kind": "reviews", "word": "review", "path": "docs/reviews" }
+  ],
+  "id": {
+    "pattern": "^[A-Za-z]{0,4}[- ]?[0-9]{1,4}$",
+    "headers": ["id", "#", "step", "item", "slice", "task"]
+  },
+  "columns": {
+    "state": ["state", "status", "done when"],
+    "depends": ["depends on", "depends", "dependency", "dependencies", "deps", "needs"],
+    "title": ["slice", "deliverable", "title", "summary", "description", "content"],
+    "evidence": ["sha / evidence", "sha/evidence", "evidence", "sha", "notes", "note"]
+  },
+  "states": [
+    { "id": "queued", "write": "Queued", "read": ["queued"] },
+    { "id": "in-progress", "write": "In progress", "read": ["in progress", "in-progress"] },
+    { "id": "complete", "write": "Complete", "read": ["complete", "completed", "done"], "satisfies": true },
+    { "id": "accepted", "write": "Accepted", "read": ["accepted"] }
+  ],
+  "ready": "queued",
+  "dependency": {
+    "empty": ["none", "null", "n/a", "n.a.", "na", "—", "-", "–"],
+    "separators": ",;",
+    "notes": true,
+    "group": "^waves?\\s+(.+)$"
+  },
+  "wave": {
+    "label": ["wave"],
+    "members": ["slices"]
+  },
+  "section": { "depth": 3 }
+}

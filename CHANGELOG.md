@@ -12,6 +12,10 @@ A client that wants to browse this tool's rules and rulings had no way to: every
 
 Both resource revisions of the specification were read rather than recalled, and they disagree about the behaviour that decides whether a client retries or gives up: a missing resource is `-32602` on the newest revision and `-32002` on the two older ones, and neither lets a server answer with an empty body. A decision record is redacted on the way out, because a resource travels further than the CLI did (ADR-074).
 
+### A plan is resumed one slice at a time
+
+`simt plan next` returns the next ready slice and only its section. `simt plan done` rewrites that one row, and previews the change unless `--yes` is given. The directories and the table format come from `simt-plan.json` when a repository has one; otherwise the simt-dev template delivered with the tool is used, which reads `docs/plans` and `docs/reviews` (ADR-081).
+
 ## [0.2.2] — 2026-10-14
 
 ### A repository can ask for a smaller projection

@@ -1,6 +1,7 @@
 import { emit } from '../output/index.mjs';
 import { parse } from '../argv.mjs';
 import { CLI } from '../name.mjs';
+import { DEFAULT_DIRECTORIES, DEFAULT_TEMPLATE, USER_PLAN_FILE } from '../plan/template.mjs';
 
 const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into the ecosystem
                            (dry-run unless --yes; conflicts block without
@@ -46,6 +47,12 @@ ${CLI} agent-hooks install     write this repo's policies into the harnesses tha
                            (dry-run unless --yes; merges into the file, keeps every
                             key it does not own; Codex needs the hook trusted)
 ${CLI} agent-hooks status      what each harness will run, and what is not trusted yet
+${CLI} plan status             count tracker rows
+                           (${USER_PLAN_FILE} when the repository has one,
+                           otherwise the ${DEFAULT_TEMPLATE} template:
+                           ${DEFAULT_DIRECTORIES.join(' and ')})
+${CLI} plan next [<id>]        one ready slice's section, or the one named; ~1 KB
+${CLI} plan done <id> [<sha>]  mark one row; dry-run unless --yes
 ${CLI} graph lint              check the skill registry against the skills on disk
                            (byte counts, dangling edges, unresolvable variants)
 ${CLI} ci                     simt-dev's own .github files: create or refresh them
@@ -136,6 +143,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --reps <n>              bench run: repetitions per task and arm (default: 3)
 --regrade <run>         bench run: re-grade a stored run from its archived agent patch
 --compare <a> <b>       bench report: compare two arms with deltas and p-values
+--test <cmd>            plan done: the test command that closes the row
+--state <name>          plan done: target state (default: Complete)
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

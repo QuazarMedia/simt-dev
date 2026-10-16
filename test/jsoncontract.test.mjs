@@ -97,6 +97,9 @@ const JSON_COMMANDS = {
   // Without `--list` this command serves on stdio and waits for it, which is why the
   // entry says what it says and why the runner above ignores stdin.
   mcp: ['--list'],
+  'plan status': [],
+  'plan next': [],
+  'plan done': ['no-such-slice'],
 };
 
 test('every command that emits json emits one compact document with a version', async () => {

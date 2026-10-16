@@ -44,6 +44,7 @@ import {
   benchAblateCommand,
   benchProbesCommand,
 } from './bench.mjs';
+import { planCommand } from './plan.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -61,6 +62,7 @@ const GROUPS = new Map([
   ['graph', 'lint'],
   ['rules', 'list'],
   ['hooks', 'status'],
+  ['plan', 'status'],
   ['agent-hooks', 'status'],
   ['harness', 'detect'],
   ['bench', 'mine'],
@@ -94,6 +96,9 @@ export const IMPLEMENTED = {
   'rules why': rulesWhy,
   sync: syncCommand,
   check: checkCommand,
+  'plan status': (args, flags) => planCommand('status', args, flags),
+  'plan next': (args, flags) => planCommand('next', args, flags),
+  'plan done': (args, flags) => planCommand('done', args, flags),
   init: initCommand,
   ci: ciCommand,
   'hooks install': (args, flags) => hooksCommand('install', args, flags),

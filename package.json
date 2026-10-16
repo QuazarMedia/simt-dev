@@ -20,6 +20,7 @@
     "bin",
     "src",
     "rules",
+    "templates",
     "docs/decisions",
     "CHANGELOG.md"
   ],

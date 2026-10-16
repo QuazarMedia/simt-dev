@@ -788,7 +788,11 @@ async function collect(dir, exts = TEXT_EXTENSIONS) {
 const TOOL_OWN_WORDS = new Set([
   ...(await import('../src/projection/mdc.mjs')).KNOWN_KEYS,
   ...(await import('../src/projection/rules.mjs')).PROFILE_KEYS,
-  // The rest of the names this tool owns, which are not frontmatter.
+  // The rest of the names this tool owns, which are not frontmatter. The inferability
+  // marker is one of them: it is a name a rule author types, not a repository that
+  // happens to share the prefix, and the allowlist is where this file already says which
+  // of the prefixed names are the tool's own (ADR-078).
+  (await import('../src/kernel/inferability.mjs')).INFERABLE_MARKER,
   'simt-dev',
   'simt-dev-check',
   'simt-hooks',

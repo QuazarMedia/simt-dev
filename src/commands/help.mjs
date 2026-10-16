@@ -95,6 +95,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
 --check                 report drift and write nothing (sync, ci)
+--explain               sync: name each line dropped as already inferable, with
+                        the fact behind it
 --all                   ignore a cap: every ruling of a record, or the skills budget
 --variant <id>          which body of a multi-variant skill to use
 --from <repo/path>      install from a declared source by name

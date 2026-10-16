@@ -201,7 +201,21 @@ test('the prose locations left in place are counted, so the decision cannot go u
       leaking.push(d.id);
     }
   }
-  assert.deepEqual(leaking, ['ADR-016', 'ADR-023', 'ADR-026', 'ADR-033', 'ADR-035', 'ADR-041', 'ADR-055', 'ADR-056', 'ADR-058']);
+  // ADR-080 joined for the same reason as ADR-058 and its addition is this line: the
+  // record is ABOUT the vocabulary and has to name the modules that own it, so the paths
+  // are its evidence rather than decoration.
+  assert.deepEqual(leaking, [
+    'ADR-016',
+    'ADR-023',
+    'ADR-026',
+    'ADR-033',
+    'ADR-035',
+    'ADR-041',
+    'ADR-055',
+    'ADR-056',
+    'ADR-058',
+    'ADR-080',
+  ]);
 });
 
 test('a status line is scrubbed, and a command that travels is not (S54)', () => {
@@ -687,4 +701,62 @@ test('rules why says when it is printing an excerpt rather than the whole record
     const out = await run(['rules', 'why', whole.id]);
     assert.doesNotMatch(out.stdout, /rulings shown/, 'a complete record must not claim to be an excerpt');
   }
+});
+
+// --- What a record is said to have been written against -------------------------------
+//
+// The reader of a citation is in a repository that owns none of the files the record
+// cites, and the one field that answers "is any of this about me?" is `writtenAgainst`.
+// It was wrong in a way that shipped: `ESTATE_NAME` matched every `simt-` word that was
+// not the tool's own name, so the tool's own vocabulary was reported as surveyed
+// repositories and redacted into "a repository" in the prose (ADR-080).
+
+test("a name the tool owns is not a repository, and no record names one (ADR-080)", async () => {
+  const { loadDecisions } = await import('../src/decisions/index.mjs');
+  const { TOOL_WORDS, PREFIX_ARGUING } = await import('../src/toolwords.mjs');
+  const { decisions } = await loadDecisions();
+
+  // The vocabulary is derived from the modules that own each name, so it is asserted
+  // against those rather than against a copy of them here.
+  for (const word of ['simt-id', 'simt-priority', 'simt-inferable-when', 'simt-hooks']) {
+    assert.ok(TOOL_WORDS.has(word), `${word} is a name this tool owns and was not in the vocabulary`);
+  }
+  assert.equal(TOOL_WORDS.has('simt-example'), false, 'a shape that only looks like this tool is a repository');
+
+  const named = [];
+  for (const d of decisions) {
+    for (const word of d.summary.writtenAgainst) {
+      if (word.startsWith('simt-')) named.push(`${d.id} names ${word}`);
+    }
+  }
+  assert.deepEqual(named, [], 'a record reports a name of this tool as a repository it was written against');
+
+  // And the field still does its job: the records that cite the estate cite it by label.
+  const estate = decisions.filter((d) => d.summary.writtenAgainst.length > 0);
+  assert.ok(estate.length > 0, 'no record names the estate it was written about');
+  for (const d of estate) {
+    for (const label of d.summary.writtenAgainst) {
+      assert.match(label, /^repo-\d{2}$/, `${d.id} names ${label}, which is neither a label nor a name of this tool's`);
+    }
+  }
+
+  // The two records whose subject is the prefix cite no repository, because the prefixed
+  // names in them are the argument. This is the exemption the guard shares, and it is
+  // asserted here so a record that stops being about the prefix stops being exempt.
+  for (const file of PREFIX_ARGUING.keys()) {
+    const d = decisions.find((x) => x.file === file);
+    assert.ok(d, `${file} is exempt from the estate rule and is not a record`);
+    assert.deepEqual(d.summary.writtenAgainst, [], `${d.id} is exempt as prefix-arguing and still names repositories`);
+  }
+});
+
+test('redaction removes the estate and keeps the tool (ADR-080)', async () => {
+  const { redactEstate } = await import('../src/decisions/index.mjs');
+  // Kept: the reader has this word, it is a key they type, and removing it left the
+  // ruling about it as "`a repository: hard | command | convention | style`".
+  assert.equal(redactEstate('`simt-priority: hard`'), '`simt-priority: hard`');
+  assert.equal(redactEstate('the simt-hooks directory'), 'the simt-hooks directory');
+  // Removed: a repository the reader cannot open, in a record they can read.
+  assert.equal(redactEstate('measured in simt-example'), 'measured in a repository');
+  assert.equal(redactEstate('simt-example and repo-14'), 'a repository and a repository');
 });

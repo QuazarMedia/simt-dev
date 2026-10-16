@@ -20,6 +20,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MANIFEST_FILE } from '../name.mjs';
 import { CLI } from '../name.mjs';
+import { PREFIX_ARGUING, TOOL_WORDS } from '../toolwords.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DECISIONS_DIR = resolve(HERE, '..', '..', 'docs', 'decisions');
@@ -240,7 +241,7 @@ export async function loadDecisions({ all = false } = {}) {
         (m) => `ADR-${m[1]}`,
       ),
       partial,
-      summary: summarise(text, partial, { all }),
+      summary: summarise(text, partial, { all, file }),
       bytes: Buffer.byteLength(text),
     });
   }
@@ -288,7 +289,7 @@ export function byId(decisions) {
  *   answer "why is this here"; the reader who needs the rest asks.
  * @returns {{ruled: string[], rulingNumbers: (number|null)[], rulingCount: number, rejected: string[], writtenAgainst: string[]}}
  */
-function summarise(text, partial = [], { all = false } = {}) {
+function summarise(text, partial = [], { all = false, file = null } = {}) {
   // A section ends at the next `## ` — but not at one inside a fenced code block.
 // ADR-007's entire ruling is a document skeleton in a fence whose headings are `##`,
 // so the old lookahead ended the section at the first line of the ruling itself. It
@@ -446,7 +447,15 @@ const section = (name) => {
     // Named rather than stripped. A record that cites this org's repositories is still
     // the record; silently deleting the citation would hide which decisions were made in
     // response to what, and would mangle sentences mid-clause.
-    writtenAgainst: [...new Set(text.match(ESTATE) ?? [])].sort(),
+    //
+    // What is named is a repository, and the shape was wrong about that: every
+    // `simt-<word>` that was not `simt-dev` was reported as one, so the tool's own
+    // `simt-priority` was listed as a surveyed repository and the record that settled the
+    // kernel read as if it had been decided by looking at some other repository (ADR-080).
+    // A record whose subject is the prefix is arguing rather than citing, so it names none.
+    writtenAgainst: PREFIX_ARGUING.has(file)
+      ? []
+      : [...new Set((text.match(ESTATE) ?? []).filter((name) => !TOOL_WORDS.has(name)))].sort(),
   };
 }
 
@@ -457,6 +466,10 @@ const section = (name) => {
  * repository, matched by prefix so a new one cannot pass by being absent from a list.
  * The skill registry's `source.repo` values are asserted to match this (S14); a name
  * the registry adds that is not `simt-*` has to be added here or that assertion fails.
+ *
+ * The shape is not the whole answer, and treating it as one is what ADR-080 settles: a
+ * `simt-` name this tool owns is not a repository, and neither reader can tell that from
+ * the shape. `src/toolwords.mjs` is the list both of them share.
  *
  * Not global: callers reuse it with `exec`, and a `/g` flag would remember `lastIndex`.
  */
@@ -486,7 +499,12 @@ export const ESTATE_NAME =
 
 /** Replace estate repository names with a phrase a reader who does not have them can use. */
 export function redactEstate(text) {
-  return text.replace(new RegExp(ESTATE_NAME.source, 'g'), 'a repository');
+  return String(text ?? '').replace(new RegExp(ESTATE_NAME.source, 'g'), (name) =>
+    // The tool's own names are left where they are. Redacting them turned a ruling about
+    // `simt-priority` into a sentence about `a repository`, which is how a reader learned
+    // that the record had surveyed something and not what it said (ADR-080).
+    TOOL_WORDS.has(name) ? name : 'a repository',
+  );
 }
 
 /**

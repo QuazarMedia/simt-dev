@@ -139,6 +139,7 @@ const JSON_COMMANDS = [
   { name: 'doctor', args: (root) => ['doctor', '--root', root], env: async () => ({}) },
   { name: 'doctor (broken config)', args: (root) => ['doctor', '--root', root], env: badConfig },
   { name: 'hooks status', args: (root) => ['hooks', 'status', '--root', root], env: async () => ({}) },
+  { name: 'agent-hooks status', args: (root) => ['agent-hooks', 'status', '--root', root], env: async () => ({}) },
   {
     name: 'skills brief',
     args: (root) => ['skills', 'brief', '--root', root, '--task', 'a test'],

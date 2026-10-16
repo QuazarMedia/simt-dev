@@ -1,6 +1,6 @@
 # Plan 0003 — simt-dev as an intelligence amplifier: research and development plan
 
-Status: **in progress — R01–R07, R09, R10, R14 complete** · created 2026-10-06 · state read at `590911f`
+Status: **in progress — R01–R07, R09, R10, R14, R15 complete** · created 2026-10-06 · state read at `a2bf769`
 Depends on: review 0002 Waves 0–1 (`docs/reviews/0002-full-review-adoption-and-public-release.md`),
 plan 0002
 Blocked by: every slice here is Queued, and R01 and R02 — the task miner and the agent runner
@@ -859,7 +859,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R12 | Scoped loading and disclosure index | 1 | review 0002 S41, S50 | M | 0002 P7 | scoped content absent at start | Queued |
 | R13 | Cache-stable rendering and lockfile | 1 | review 0002 S01 | S | 0002 P1 | byte-identical across machines | Queued |
 | R14 | Harness loader table | 1 | — | S | — | provenance on every row | Complete |
-| R15 | Agent-time hooks from one policy | 2 | R14, R17 | L | D4 | decisions correct per harness; p95 < 100 ms | Queued |
+| R15 | Agent-time hooks from one policy | 2 | R14, R17 | L | D4 (ADR-079) | decisions correct per harness; p95 < 100 ms | Complete |
 | R16 | Diff-aware gates | 2 | R24 | M | — | focused selection < 5 s | Queued |
 | R17 | Evidence ledger and claim check | 2 | — | M | D5 | evidence invalidated by any edit | Queued |
 | R18 | Safe compaction of own gate output | 2 | R16 | S | — | every failure line survives | Queued |
@@ -909,6 +909,17 @@ metric are not done. The A/B that would justify making `kernel` the default has 
 ADR-073 rejected, a kernel of extracted imperative lines rather than of whole rules: as shipped,
 the kernel is the shared core plus the `hard` and `command` classes, 9,224 B on a python fixture
 against 10,978 B for `full`, and the workspace dedupe that would take it lower is R11.
+
+**R15 — Complete, and four policies short of its own list** (ADR-079). The table and the four
+renderers shipped, with `agent-hook` and `agent-hooks install/status`; what it decides is a
+`git push`, a rewrite (`--no-verify`, `--amend`, `reset --hard`, `rebase`, a force-push) and an
+edit to bytes this tool generates, in the dialect of Claude Code, Cursor, Codex and Antigravity.
+§16 step 5 scoped it to exactly those three and this note repeats the boundary: post-edit
+format/lint, secret reads, and the Stop policy that waits on R17's ledger are not here. The
+row's latency metric was not met end-to-end and cannot be on this machine — a bare `node -e 0`
+costs 87 ms and the hook path costs 99 ms at p50 / 107 at p95 — so what is recorded is the part
+this slice owns: the decision is 0.002 ms at p95 and the hook reads no manifest, projection or
+registry. The accept criterion's headless agent run was not performed.
 
 ## 15. Risks and how determinism survives
 

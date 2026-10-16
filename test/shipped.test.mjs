@@ -36,6 +36,7 @@ import { PACKAGE_ROOT } from '../src/workspace.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { EXIT } from '../src/output/index.mjs';
 import { assertClean } from './leaks.mjs';
+import { PREFIX_ARGUING, TOOL_WORDS } from '../src/toolwords.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -786,18 +787,11 @@ async function collect(dir, exts = TEXT_EXTENSIONS) {
 // this tool's name is not detectable by any rule that does not enumerate it. The sweep
 // found those by hand and they remain a review rule. A tool that could catch them
 // mechanically would have to be told them, and being told them is the leak.
-const TOOL_OWN_WORDS = new Set([
-  ...(await import('../src/projection/mdc.mjs')).KNOWN_KEYS,
-  ...(await import('../src/projection/rules.mjs')).PROFILE_KEYS,
-  // The rest of the names this tool owns, which are not frontmatter. The inferability
-  // marker is one of them: it is a name a rule author types, not a repository that
-  // happens to share the prefix, and the allowlist is where this file already says which
-  // of the prefixed names are the tool's own (ADR-078).
-  (await import('../src/kernel/inferability.mjs')).INFERABLE_MARKER,
-  'simt-dev',
-  'simt-dev-check',
-  'simt-hooks',
-]);
+// Read from `src/` rather than derived here, because the decision reader needs the same
+// answer and two readers answering one question separately is how one of them came to
+// report the tool's own `simt-priority` as a surveyed repository (ADR-080). The
+// derivation from the modules that own each name lives there, unchanged.
+const TOOL_OWN_WORDS = TOOL_WORDS;
 
 /**
  * Records that argue *about* the prefix and therefore have to spell it.
@@ -813,10 +807,9 @@ const TOOL_OWN_WORDS = new Set([
  * A stale exemption fails: every entry must still be tripping the rule, so one that stops
  * being needed is removed rather than kept as a precedent.
  */
-const PREFIX_ARGUING_RECORDS = {
-  'ADR-022-a-key-simt-dev-reads-is-prefixed.md': 'is the record arguing for the prefix, using hypothetical keys as examples',
-  'ADR-026-a-config-without-a-region-is-a-file-the-repo-owns.md': 'names one prefixed key to record Dependabot rejecting it',
-};
+// The same map the decision reader exempts by, for the same reason: a vocabulary cannot
+// settle these two, because the prefixed names in them are the argument.
+const PREFIX_ARGUING_RECORDS = Object.fromEntries(PREFIX_ARGUING);
 
 /** `simt-<word>` that is not one of this tool's own names, per line, or null. */
 function estateNameIn(line) {

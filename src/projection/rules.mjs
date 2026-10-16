@@ -30,6 +30,7 @@ import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, frontmatterBlock, resolveSurfaces, rulePath, canScope } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
 import { manifestPath, readManifest } from './manifest.mjs';
+import { commandCard, CARD_LIMIT_BYTES } from '../kernel/card.mjs';
 import { BASELINES } from './baselines.mjs';
 import { CLI } from '../name.mjs';
 import { PACK_DIR, resolvePacks } from '../packs.mjs';
@@ -469,7 +470,20 @@ export async function desiredRegion(root, flags) {
     if (mode === 'kernel' && (r.error !== null || !KERNEL_CLASSES.has(r.priority))) deferred.push(r);
     else packed.push(r);
   }
-  let body = render(packed);
+  // The command card leads the region. The exact commands for this repository are the
+  // bytes a reader cannot infer from rules that are identical everywhere (plan 0003 R10),
+  // so they go first — above even the core rules. It is derived from committed evidence
+  // only, in one place, so `plan` and `checkTarget` cannot disagree about it and two
+  // machines render it byte-identically.
+  const card = await commandCard({ root, manifest, stack, facts });
+  if (card.dropped.length > 0) {
+    // Reported where every other projection note is reported. A card that lost a command
+    // in silence is a card a reader cannot tell is incomplete.
+    notes.push(
+      `command card: dropped ${card.dropped.join(', ')} to stay within ${CARD_LIMIT_BYTES} bytes`,
+    );
+  }
+  let body = card.text ? `${card.text}\n\n${render(packed)}` : render(packed);
   let sources = packed.map((r) => r.source);
   const folded = [];
 

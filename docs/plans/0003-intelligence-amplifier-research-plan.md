@@ -1,6 +1,6 @@
 # Plan 0003 — simt-dev as an intelligence amplifier: research and development plan
 
-Status: **in progress — R14 complete** · created 2026-10-06 · state read at `04ae9e9`
+Status: **in progress — R01–R06, R10, R14 complete** · created 2026-10-06 · state read at `d5678f3`
 Depends on: review 0002 Waves 0–1 (`docs/reviews/0002-full-review-adoption-and-public-release.md`),
 plan 0002
 Blocked by: every slice here is Queued, and R01 and R02 — the task miner and the agent runner
@@ -849,7 +849,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R07 | Kernel and commentary split | 1 | R02, R06 | M | D3 | kernel ≤ 1.5 KB; ΔR ≥ −2, ΔC < 0 | Queued |
 | R08 | Budgeted compilation | 1 | R07 | S | 0002 P7 | budget exact; byte-identical | Queued |
 | R09 | Inferability filter | 1 | R07 | S | — | expected removals with reasons | Queued |
-| R10 | Command card | 1 | — | S | — | every card command runs on 10 fixtures | Queued |
+| R10 | Command card | 1 | — | S | — (ADR-077) | every card command runs on 10 fixtures | Complete |
 | R11 | Workspace dedupe | 1 | R07, R14 | M | 0002 P7 | estate ≤ 30 KB, no R loss | Queued |
 | R12 | Scoped loading and disclosure index | 1 | review 0002 S41, S50 | M | 0002 P7 | scoped content absent at start | Queued |
 | R13 | Cache-stable rendering and lockfile | 1 | review 0002 S01 | S | 0002 P1 | byte-identical across machines | Queued |

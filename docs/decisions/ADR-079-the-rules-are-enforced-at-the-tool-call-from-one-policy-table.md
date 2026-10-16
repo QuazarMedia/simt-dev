@@ -37,14 +37,20 @@ shipped already carries the correction — the Antigravity page documents
 is also the source of the four config paths here: a second list of the same paths is the copy
 ADR-035 exists to prevent.
 
-Measured on this machine (node v26, each figure including the fork the harness pays for):
-`node -e 0` costs **86.9 ms** at p50, importing the command registry costs **108.2 ms**, and
-`bin/simt-dev.mjs --version` costs **127.7 ms**. The hook path was **127.6 ms p50 / 139.0 ms
-p95** before and **99.3 / 107.4** after `bin/` dispatches `agent-hook` without loading the
-registry. The plan's acceptance criterion of a p95 under 100 ms is therefore not reachable
-end-to-end on this machine: the runtime's own start is most of the budget. What this slice
-owns is everything above it — the decision itself is **0.0023 ms at p95**, and the hook path
-reads no manifest, no projection and no registry.
+Measured on this machine (node v26, twenty runs each, every figure from a node parent that
+pays the same fork the harness pays): `node -e 0` costs **85.4 ms** at p50 and **91.9 ms** at
+p95, so the runtime's own start is 92% of the plan's budget before a line of this tool runs.
+Loading the reader table adds 2.8 ms at p50 and the region detector 4.9 ms; the whole hook
+path is **97.4 ms p50 / 101.6 ms p95**, down from 127.6 / 139.0 before `bin/` dispatched
+`agent-hook` without loading the registry.
+
+So the plan's criterion of a p95 under 100 ms is **not met end to end**, and a sample of
+twenty straddling the line is a claim about this machine rather than about the tool. What
+this slice owns is the part above the runtime, and that part is stated exactly: the decision
+is **0.0023 ms** at p95, and the entry point loads no manifest, no fingerprint, no workspace
+and no command registry — the two modules it takes from `src/projection/` (`markers.mjs` to
+ask whether a file already holds a region, `loaders.mjs` for the reader table's paths) are
+leaves that read nothing at import.
 
 ## Rulings
 
@@ -91,10 +97,14 @@ one it must not write into, in either surface.
 called it — no `ok`, no `schemaVersion`. It is the one command whose contract is four
 documents instead of one, and the reason a JSON contract test does not enumerate it.
 
-**9. The entry point loads neither the registry nor the projection.** `bin/simt-dev.mjs`
+**9. The entry point loads neither the registry nor anything that reads the repository.** `bin/simt-dev.mjs`
 dispatches the exact spelling the renderers write, and only that: `--help` still imports the
-registry, so help remains the single list of commands. A hook that imported the projection would
-walk the tree on every tool call.
+registry, so help remains the single list of commands. Nothing above the decision resolves a
+manifest, fingerprints a tree or walks a workspace, because all three would put the cost of
+answering "what is this repository" on every tool call. The two modules the path does take
+from `src/projection/` are leaves that read nothing at import, and the test asserts the
+modules that would read the repository are absent from the import list rather than asserting
+a duration.
 
 **10. Install merges, and identifies its own entry by the command it wrote.** Every other key
 and every foreign handler survives; the entry is found by the command string, because JSON has
@@ -115,10 +125,13 @@ R17, the evidence ledger. Plan section 16 step 5 scopes this slice to exactly th
 shipped. A policy that cannot name its evidence cannot name its remedy, which is why the
 ledger one waits.
 
-**The acceptance criterion's headless run has not been run.** R15's accept says a headless
-Claude Code session on probe R05 shows the block. The probes and their graders exist and the
-decision was verified per harness against fixtures; a headless agent run was not performed here,
-so this record does not claim it.
+**The acceptance criterion's headless run has not been run, and cannot be from here.** R15's
+accept says a headless Claude Code session on probe R05 shows the block. The probes and their
+graders exist and the decision was verified per harness against fixtures; the run itself needs
+a harness, and none is installed on this machine (`claude`, `codex`, `cursor-agent`, `gemini`
+and `aider` are all absent from `PATH`, which is the check that says so rather than a memory of
+one). So this record does not claim it, and the plan's note for the row names it as the one
+piece of R15's accept that is outstanding.
 
 **One field was inferred rather than read.** Cursor's page was read to line 1087 of 1490, which
 does not include its write tool's input key, so its adapter reads `file_path ?? path`. If Cursor

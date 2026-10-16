@@ -324,11 +324,12 @@ test('no remedy or pointer names a path that resolves only inside simt-dev', asy
     'src/commands/help.mjs', 'src/commands/index.mjs', 'src/commands/rules.mjs',
     'src/commands/compare.mjs', 'src/commands/hooks.mjs', 'src/commands/upgrade.mjs',
     'src/commands/skills.mjs', 'src/commands/skillsinstall.mjs', 'src/commands/init.mjs',
-    'src/commands/sync.mjs',
+    'src/commands/sync.mjs', 'src/commands/agenthook.mjs',
     'src/compare/row.mjs', 'src/compare/discover.mjs', 'src/upgrade/plan.mjs',
     'src/projection/conflicts.mjs', 'src/projection/manifest.mjs', 'src/projection/project.mjs',
     'src/output/index.mjs',
     'src/hooks/gates.mjs', 'src/hooks/shim.mjs', 'src/mcp/tools.mjs',
+    'src/agenthooks/render.mjs',
   ];
   // Strip comments so the check is about what a reader sees.
   const stripComments = (t) => t.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*(\/\/|\*).*$/gm, '');

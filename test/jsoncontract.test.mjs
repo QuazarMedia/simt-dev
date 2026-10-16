@@ -93,6 +93,7 @@ const JSON_COMMANDS = {
   check: [],
   'rules list': [],
   'hooks run': ['pre-commit'],
+  'agent-hooks status': [],
   // Without `--list` this command serves on stdio and waits for it, which is why the
   // entry says what it says and why the runner above ignores stdin.
   mcp: ['--list'],

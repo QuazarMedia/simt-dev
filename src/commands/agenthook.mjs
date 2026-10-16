@@ -1,0 +1,282 @@
+// simt-dev agent-hook <event> | agent-hooks install | agent-hooks status
+//
+// Three commands, one subject: the rules the tool projects, enforced while the agent is
+// working rather than when git is committing. `agent-hook` is the entry point a harness
+// calls; it reads one JSON payload on stdin and answers in that harness's dialect.
+// `install` writes the entry into each harness's own config, and `status` reports what
+// each harness will do and what still has to be trusted by hand.
+//
+// The entry point is on a hot path — it runs before every shell command an agent wants
+// to run — so it imports the policy module, the decision, the renderer and nothing that
+// walks the repository. A hook that measured the tree before answering would be exactly
+// the latency the plan's acceptance criterion exists to prevent.
+//
+// A denial exits 2, which is what every harness in the table reads as "block". A mistake
+// in the hook's own invocation must NOT exit 2: a typo in a config would then block every
+// tool call. Failures of this command exit 1, which a harness reports as a failed hook,
+// and that is the right blast radius for a hook that is broken rather than refusing.
+
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
+import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
+import { CLI } from '../name.mjs';
+import { ALLOW_ENV, EVENTS, POLICY_IDS } from '../agenthooks/policy.mjs';
+import { decide, factsFor } from '../agenthooks/decide.mjs';
+import {
+  adapter,
+  adapters,
+  decisionJson,
+  factsFrom,
+  hookPath,
+  hookRows,
+  installedIn,
+  rendered,
+} from '../agenthooks/render.mjs';
+
+export async function agentHookCommand(args, flags) {
+  const event = args[0];
+  if (!EVENTS.includes(event)) {
+    return fail(`unknown agent event \`${event ?? ''}\``, EXIT.FAIL, `known events: ${EVENTS.join(', ')}`);
+  }
+
+  const id = flags.harness ?? args[1];
+  const row = id ? adapter(id) : null;
+  if (row === null) {
+    return fail(
+      id === undefined ? `agent-hook needs --harness` : `unknown harness \`${id}\``,
+      EXIT.FAIL,
+      `--harness <id>, one of: ${adapters().map((a) => a.id).join(', ')}`,
+    );
+  }
+
+  const { payload, empty, error } = await readPayload();
+  if (empty || error) {
+    // Nothing to check is not a violation. A harness that calls the hook with nothing on
+    // stdin, or with a payload we cannot parse, has not told us that anything is wrong;
+    // blocking there would stop real work on no evidence, which is how a hook gets
+    // uninstalled the same afternoon it was installed.
+    note(`note     ${id}: ${empty ? 'no payload on stdin' : `payload is not JSON (${error})`}; nothing to check`);
+    return EXIT.OK;
+  }
+
+  const { root, command, writes } = factsFrom(row, payload);
+  const facts = await factsFor(root, { command, writes });
+  const decision = decide({ event, facts, env: process.env });
+
+  // Both notes are about a conclusion the author is about to draw: a lift that did
+  // nothing because of a typo, and a lift that is the reason the command they expected to
+  // be stopped was not.
+  if (decision.unknown.length > 0) {
+    note(`note     ${ALLOW_ENV} names no policy: ${decision.unknown.join(', ')}; known: ${POLICY_IDS.join(', ')}`);
+  }
+  if (decision.lifted.length > 0) {
+    note(`note     allowed by ${ALLOW_ENV}: ${decision.lifted.join(', ')}`);
+  }
+
+  const json = decisionJson(row, decision);
+  if (json === null) return EXIT.OK;
+
+  emit(JSON.stringify(json));
+  for (const message of decision.messages) note(`blocked  ${message}`);
+  return row.denyExit;
+}
+
+export async function agentHooksCommand(sub, args, flags) {
+  const root = flags.root ?? args[0] ?? process.cwd();
+  if (sub === 'install') return installHooks(root, flags);
+  if (sub === 'status') return hooksStatus(root, flags);
+  return fail(`unknown agent-hooks subcommand ${sub}`, EXIT.USAGE, `run: ${CLI} agent-hooks status`);
+}
+
+async function installHooks(root, flags) {
+  const mode = writeMode(flags);
+  const plan = [];
+  for (const row of adapters()) {
+    const path = hookPath(row.id);
+    const existing = await readIfExists(join(root, path));
+    const result = rendered(row, existing);
+    plan.push({ id: row.id, path, action: result.error ? 'refused' : result.action, error: result.error, text: result.text });
+  }
+
+  // The readers this tool does not write an entry for, reported rather than skipped in
+  // silence: a command that writes four files and says nothing about the fifth harness
+  // in the repository reads as "that one is covered too".
+  const others = [];
+  for (const r of hookRows()) {
+    if (r.path === null) others.push({ id: r.id, path: null, state: 'none', note: r.note });
+    else if (adapter(r.id) === null) others.push({ id: r.id, path: r.path, state: 'other', note: r.note });
+  }
+
+  const refused = plan.filter((p) => p.error);
+
+  if (!mode.apply) {
+    if (isJson(flags)) {
+      emitJson({
+        ok: refused.length === 0,
+        command: 'agent-hooks install',
+        root,
+        dryRun: true,
+        plan: plan.map(({ text, ...rest }) => rest),
+        notWritten: others,
+        filesWritten: false,
+      });
+      return refused.length > 0 ? EXIT.FAIL : EXIT.OK;
+    }
+    emit(
+      [
+        `repo     ${root}`,
+        ...plan.map((p) => `${p.action.toUpperCase().padEnd(9)} ${p.id.padEnd(12)} ${p.path}${p.error ? `  (${p.error})` : ''}`),
+        ...others.map((o) => `${o.state === 'none' ? 'NO FILE ' : 'NOT OURS'} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
+        '',
+        refused.length > 0
+          ? `REFUSED  ${refused.length} config file(s) could not be read; nothing written`
+          : `PLAN     nothing written; apply with: ${CLI} agent-hooks install --yes`,
+      ].join('\n'),
+      { maxBytes: flags.maxBytes ?? 0 },
+    );
+    return refused.length > 0 ? EXIT.FAIL : EXIT.OK;
+  }
+
+  // Refused beats partial: a config this tool cannot parse is one it must not rewrite,
+  // and writing the other three while one is unreadable leaves the repository in a state
+  // where the report it just printed is no longer true.
+  if (refused.length > 0) {
+    return fail(`refused to write ${refused.map((p) => `${p.path} (${p.error})`).join('; ')}`, EXIT.FAIL);
+  }
+
+  const written = [];
+  for (const p of plan.filter((x) => x.action !== 'unchanged')) {
+    await mkdir(join(root, dirname(p.path)), { recursive: true });
+    await writeFile(join(root, p.path), p.text);
+    written.push(p);
+  }
+
+  const notes = [];
+  for (const p of written) {
+    const trust = adapter(p.id).trust;
+    if (trust) notes.push(`${p.id}: ${trust}`);
+  }
+  if (written.length === 0) notes.push('every documented hooks file already carried this tool’s entry');
+
+  if (isJson(flags)) {
+    emitJson({
+      ok: true,
+      command: 'agent-hooks install',
+      root,
+      plan: plan.map(({ text, ...rest }) => rest),
+      notWritten: others,
+      written: written.map((p) => p.path),
+      filesWritten: true,
+      notes,
+    });
+    return EXIT.OK;
+  }
+  emit(
+    [
+      `repo     ${root}`,
+      ...plan.map((p) => `${p.action.toUpperCase().padEnd(9)} ${p.id.padEnd(12)} ${p.path}`),
+      ...others.map((o) => `${o.state === 'none' ? 'NO FILE ' : 'NOT OURS'} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
+      '',
+      `WROTE    ${written.length} hooks file(s); each one runs ${CLI} agent-hook before the tool call`,
+    ].join('\n'),
+    { maxBytes: flags.maxBytes ?? 0 },
+  );
+  for (const o of others) note(`note     ${o.id}: not written - ${o.note}`);
+  for (const n of notes) note(`note     ${n}`);
+  note(`note     never committed or pushed (ADR-001); review, then commit yourself`);
+  return EXIT.OK;
+}
+
+async function hooksStatus(root, flags) {
+  const rows = [];
+  const problems = [];
+
+  for (const row of adapters()) {
+    const path = hookPath(row.id);
+    const existing = await readIfExists(join(root, path));
+    if (existing === null) {
+      rows.push({ id: row.id, path, state: 'absent', entries: 0, note: null });
+      continue;
+    }
+    let config;
+    try {
+      config = JSON.parse(existing);
+    } catch (e) {
+      rows.push({ id: row.id, path, state: 'unreadable', entries: 0, note: e.message });
+      problems.push(`${path} is not valid JSON: ${e.message}`);
+      continue;
+    }
+    // A file that parses but is not an object cannot hold a hooks table, and `install`
+    // refuses to write into one. Status has to agree with it, or one question gets two
+    // answers and the quiet one is the one a reader acts on.
+    if (config === null || typeof config !== 'object' || Array.isArray(config)) {
+      rows.push({ id: row.id, path, state: 'unreadable', entries: 0, note: 'not a JSON object' });
+      problems.push(`${path} is not a JSON object, so this tool will not write into it`);
+      continue;
+    }
+    const found = installedIn(row, config).length;
+    rows.push({
+      id: row.id,
+      path,
+      state: found > 0 ? 'present' : 'absent',
+      entries: found,
+      note: found > 0 ? (row.trust ?? null) : null,
+    });
+  }
+
+  // The readers whose hooks are not a file this tool can write — plugins, or a vendor
+  // page that documents none — are reported from the same table that documents them,
+  // rather than from a second list of the harnesses this command happens to know.
+  for (const r of hookRows()) {
+    if (r.path === null) rows.push({ id: r.id, path: null, state: 'none', entries: 0, note: r.note });
+    else if (adapter(r.id) === null) rows.push({ id: r.id, path: r.path, state: 'other', entries: 0, note: r.note });
+  }
+
+  if (isJson(flags)) {
+    emitJson({ ok: problems.length === 0, command: 'agent-hooks status', root, harnesses: rows, problems });
+    return problems.length === 0 ? EXIT.OK : EXIT.FAIL;
+  }
+
+  const lines = [`repo     ${root}`];
+  for (const r of rows) {
+    const state = { present: 'PRESENT ', absent: 'ABSENT  ', unreadable: 'INVALID ', none: 'NO FILE ', other: 'NOT OURS' }[r.state];
+    lines.push(`${state} ${r.id.padEnd(12)} ${r.path ?? '(no hooks file is documented)'}`);
+    if (r.state === 'absent') lines.push(`          ${' '.repeat(12)} install: ${CLI} agent-hooks install --yes`);
+    if (r.note) lines.push(`          ${' '.repeat(12)} ${r.note}`);
+  }
+  if (problems.length > 0) {
+    lines.push('', 'problems:');
+    for (const p of problems) lines.push(`  ${p}`);
+  }
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  return problems.length === 0 ? EXIT.OK : EXIT.FAIL;
+}
+
+async function readIfExists(path) {
+  try {
+    return await readFile(path, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Read the one payload the harness has already written to stdin.
+ *
+ * A terminal on stdin means a person ran this by hand, and reading would hang until they
+ * pressed Ctrl-D — so the isTTY check is the difference between a diagnostic and a
+ * command that looks like it has frozen.
+ */
+async function readPayload() {
+  if (process.stdin.isTTY) return { payload: {}, empty: true };
+  const chunks = [];
+  for await (const chunk of process.stdin) chunks.push(chunk);
+  const text = Buffer.concat(chunks).toString('utf8').trim();
+  if (text === '') return { payload: {}, empty: true };
+  try {
+    return { payload: JSON.parse(text) };
+  } catch (e) {
+    return { payload: {}, error: e.message };
+  }
+}

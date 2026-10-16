@@ -38,6 +38,14 @@ ${CLI} hooks install [--yes]   install the shared dispatcher; report what it wou
 ${CLI} hooks status            what each git event routes to, and whether it is wired
 ${CLI} hooks run <event>       run one event's gates now, as git would
                            (pre-commit, pre-push, post-merge, ...)
+${CLI} agent-hook <event>      the entry point a harness calls before a tool call
+                           (reads one JSON payload on stdin and answers in that
+                            harness's dialect; exit 2 blocks; needs --harness)
+${CLI} agent-hooks install     write this repo's policies into the harnesses that
+                            read a hooks file
+                           (dry-run unless --yes; merges into the file, keeps every
+                            key it does not own; Codex needs the hook trusted)
+${CLI} agent-hooks status      what each harness will run, and what is not trusted yet
 ${CLI} graph lint              check the skill registry against the skills on disk
                            (byte counts, dangling edges, unresolvable variants)
 ${CLI} ci                     simt-dev's own .github files: create or refresh them
@@ -121,7 +129,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --arm <spec>            bench run: arm to evaluate (bare, current, kernel, brief,
                          or name=path/to/arm.json; repeatable)
 --harness <id>          bench run: adapter to invoke (claude, codex, gemini, opencode,
-                         cursor, aider, gold, noop; default: gold)
+                         cursor, aider, gold, noop; default: gold);
+                         agent-hook: which dialect to answer in (claude, cursor,
+                         codex, antigravity)
 --model <id>            bench run: model identifier recorded and passed to the adapter
 --reps <n>              bench run: repetitions per task and arm (default: 3)
 --regrade <run>         bench run: re-grade a stored run from its archived agent patch

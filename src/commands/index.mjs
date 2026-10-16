@@ -29,6 +29,7 @@ import { syncCommand, checkCommand } from './sync.mjs';
 import { initCommand } from './init.mjs';
 import { ciCommand } from './ci.mjs';
 import { hooksCommand } from './hooks.mjs';
+import { agentHookCommand, agentHooksCommand } from './agenthook.mjs';
 import { compareCommand } from './compare.mjs';
 import { upgradeCommand } from './upgrade.mjs';
 import { mcpCommand } from './mcp.mjs';
@@ -60,6 +61,7 @@ const GROUPS = new Map([
   ['graph', 'lint'],
   ['rules', 'list'],
   ['hooks', 'status'],
+  ['agent-hooks', 'status'],
   ['harness', 'detect'],
   ['bench', 'mine'],
 ]);
@@ -97,6 +99,9 @@ export const IMPLEMENTED = {
   'hooks install': (args, flags) => hooksCommand('install', args, flags),
   'hooks status': (args, flags) => hooksCommand('status', args, flags),
   'hooks run': (args, flags) => hooksCommand('run', args, flags),
+  'agent-hook': agentHookCommand,
+  'agent-hooks install': (args, flags) => agentHooksCommand('install', args, flags),
+  'agent-hooks status': (args, flags) => agentHooksCommand('status', args, flags),
   compare: compareCommand,
   tokens: tokensCommand,
   'harness detect': harnessCommand,

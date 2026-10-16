@@ -122,6 +122,7 @@ pattern = '"version":\s*"(?P<version>[^"]+)"'
 "bin" = "simt_dev/vendored/bin"
 "src" = "simt_dev/vendored/src"
 "rules" = "simt_dev/vendored/rules"
+"templates" = "simt_dev/vendored/templates"
 "docs/decisions" = "simt_dev/vendored/docs/decisions"
 "CHANGELOG.md" = "simt_dev/vendored/CHANGELOG.md"
 "package.json" = "simt_dev/vendored/package.json"
@@ -137,6 +138,7 @@ include = [
     "/bin",
     "/src",
     "/rules",
+    "/templates",
     "/docs/decisions",
     "/CHANGELOG.md",
     "/package.json",

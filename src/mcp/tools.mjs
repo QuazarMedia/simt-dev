@@ -27,6 +27,7 @@ import { discover } from '../compare/discover.mjs';
 import { buildRow, summarise } from '../compare/row.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { dirtyPaths, parsePathList, readBody } from '../commands/skills.mjs';
+import { planNext, planDone } from '../plan/index.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { measureSkill } from '../graph/load.mjs';
 import { CLI } from '../name.mjs';
@@ -307,6 +308,30 @@ const output = {
       directories: { type: 'array', items: { type: 'string' } },
     },
     required: ['root', 'shape', 'expectedSha', 'summary', 'repos'],
+  },
+  plan_next: {
+    type: 'object',
+    properties: {
+      root: { type: 'string' },
+      next: { type: ['object', 'null'] },
+      reason: { type: ['string', 'null'] },
+    },
+    required: ['root', 'next', 'reason'],
+  },
+  plan_done: {
+    type: 'object',
+    properties: {
+      root: { type: 'string' },
+      id: { type: 'string' },
+      doc: { type: 'string' },
+      line: { type: 'number' },
+      from: { type: 'string' },
+      to: { type: 'string' },
+      wouldChange: { type: 'boolean' },
+      dryRun: { type: 'boolean' },
+      remedy: { type: ['string', 'null'] },
+    },
+    required: ['root', 'id', 'wouldChange', 'dryRun'],
   },
   /** The shape of every tool failure, which is a result and not a protocol error. */
   error: ERROR_SHAPE,
@@ -685,6 +710,65 @@ export const TOOLS = [
         repos: rows,
         worktrees: found.worktrees.map((w) => ({ name: w.name, owner: w.ownerName })),
         directories: found.directories,
+      };
+    },
+  },
+  {
+    outputSchema: output.plan_next,
+    name: 'plan_next',
+    description: 'The next queued slice whose dependencies are complete, and only that slice\'s section. Pass id to read one slice whether or not it is ready.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: { type: 'string', description: 'repository root; defaults to the editor cwd' },
+        id: { type: 'string', description: 'slice id; when given, return that slice' },
+      },
+      required: [],
+    },
+    async run(args) {
+      const root = rootOf(args);
+      const id = typeof args?.id === 'string' && args.id.length > 0 ? args.id : null;
+      const result = await planNext(root, id);
+      if (result.error) throw Object.assign(new Error(result.error), { remedy: result.remedy ?? null });
+      return { root: result.root, next: result.next, reason: result.reason };
+    },
+  },
+  {
+    outputSchema: output.plan_done,
+    name: 'plan_done',
+    // Same function as the command, and deliberately a preview. This surface does
+    // not write: the row change is a diff, and the command applies it behind --yes.
+    description: 'Preview the one-row rewrite for a slice. The write stays on the plan done command, behind --yes.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: { type: 'string', description: 'repository root; defaults to the editor cwd' },
+        id: { type: 'string', description: 'slice id' },
+        sha: { type: 'string', description: 'commit sha that closed the slice' },
+        test: { type: 'string', description: 'test command that closed it' },
+        state: { type: 'string', description: 'target state; omitted means the completed state of the repository template (Complete for simt-dev)' },
+      },
+      required: ['id'],
+    },
+    async run(args) {
+      const root = rootOf(args);
+      const result = await planDone(root, args?.id, {
+        sha: args?.sha ?? null,
+        test: args?.test ?? null,
+        state: args?.state ?? null,
+        dryRun: true,
+      });
+      if (result.error) throw Object.assign(new Error(result.error), { remedy: result.remedy ?? null });
+      return {
+        root: result.root,
+        id: result.id,
+        doc: result.doc,
+        line: result.line,
+        from: result.from,
+        to: result.to,
+        wouldChange: result.wouldChange,
+        dryRun: true,
+        remedy: result.remedy,
       };
     },
   },

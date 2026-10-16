@@ -670,11 +670,14 @@ split plan.
 
 **Goal.** Let an agent resume a 1,000-line plan by reading about 1 KB.
 
-**Design.** Parse the tracker tables in `docs/plans/*.md` and `docs/reviews/*.md` (an ID column,
-a `State` column and a `Depends on` column) into structured data. A dependency may name another
+**Design.** Parse the tracker tables the repository's plan template names. The template
+delivered with the tool reads `docs/plans/*.md` and `docs/reviews/*.md` and binds an ID
+column, a `State` column and a `Depends on` column by header name. A repository writes
+`simt-plan.json` to move those directories or to replace the columns, the state words and
+the way a dependency names another document (ADR-081). A dependency may name another
 document's slice, as in `review 0002 S41`, and resolves through that document's tracker.
 
-- `simt-dev plan status` summarises the state.
+- `simt plan status` summarises the state.
 - `plan next` returns the next Queued slice whose dependencies are Complete: only its section
   (finding, fix, acceptance).
 - `plan done <ID> <sha> --test "<cmd>"` rewrites exactly that row.
@@ -875,7 +878,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R28 | Hybrid retrieval (+ optional embeddings) | 4 | R20, R37 | M | D2 | +10 pts recall or stays off | Queued |
 | R29 | Delivery: pull and push | 4 | R15, R27 | S | D4 | ≤ 2 KB in < 300 ms | Queued |
 | R30 | Skill compiler and trigger report | 4 | R02, review 0002 S44 | M | — | per-skill trigger report | Queued |
-| R31 | Plan and tracker index | 4 | — | S | D9 | `plan next` and `plan done` exact | Queued |
+| R31 | Plan and tracker index | 4 | — | S | D9 | `plan next` and `plan done` exact | Complete |
 | R32 | Lessons ledger | 5 | R17 | M | — | one candidate per fail-then-fix | Queued |
 | R33 | Lesson recall | 5 | R32, R15 | S | — | fewer turns on recurrences | Queued |
 | R34 | Decision assistant | 5 | review 0002 S31 | S | — | structured supersession | Queued |
@@ -973,7 +976,7 @@ this plan's tracker are review 0002's, written `0002 P7`.
 | D6 | The local index is `node:sqlite`, gitignored and always rebuildable |
 | D7 | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default (ADR-075) |
 | D8 | Distribution as a single-file binary alongside npm |
-| D9 | Tracker tables are a parsed format with fixed columns |
+| D9 | Tracker tables are a parsed format; the columns and directories are the delivered template unless the repository names another (ADR-081) |
 
 ## 18. What this plan deliberately does not do
 

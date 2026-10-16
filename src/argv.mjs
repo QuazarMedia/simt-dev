@@ -97,6 +97,9 @@ export const VALUE_FLAGS = new Set([
   'reps',
   'regrade',
   'compare',
+  // plan done: the test command that proves the slice. Plan 0003 R31.
+  'test',
+  'state',
 ]);
 
 /**

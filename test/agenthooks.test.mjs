@@ -344,22 +344,42 @@ test('the command in the config is the command the reader types', async () => {
   assert.equal(JSON.parse(text).version, 1, "cursor's example carries its version");
 });
 
-test('the hook path does not import the projection, and the entry point does not load the registry', async () => {
+test('nothing on the hook path reads the repository, and the entry point does not load the registry', async () => {
   // The plan's acceptance criterion for this slice is a latency, and a latency test on a
-  // shared machine measures the machine. What is asserted instead is the structural
-  // commitment that produces it: the hook imports the policy, the decision and the
-  // renderer, and nothing that walks the repository; and `bin/` keeps the registry out of
-  // the path so the hot command does not pay for twenty-four commands it is not running.
+  // shared machine measures the machine — twenty runs put this path at 97 ms p50 against
+  // 85 ms for `node -e 0`, so a threshold here would assert the weather. What is asserted
+  // instead is the structural commitment that produces it: the hot path imports the policy,
+  // the decision and the renderer, and nothing whose job is to find out what a repository
+  // contains; and `bin/` keeps the registry out of it, so the hot command does not pay for
+  // twenty-four commands it is not running.
+  //
+  // `projection/markers.mjs` and `projection/loaders.mjs` are on the path and are not in
+  // the list below on purpose: the first answers whether a file already holds a region, the
+  // second is the reader table's paths, and neither reads anything at import. The modules
+  // forbidden here are the ones that take a root and go looking.
   const hookFiles = [
     'src/agenthooks/policy.mjs',
     'src/agenthooks/decide.mjs',
     'src/agenthooks/render.mjs',
     'src/commands/agenthook.mjs',
   ];
+  const forbidden = [
+    '../resolve/',
+    '../compare/',
+    '../bench/',
+    '../graph/',
+    '../upgrade/',
+    '../mcp/',
+    '../workspace.mjs',
+    '../projection/manifest.mjs',
+    '../projection/project.mjs',
+    '../projection/rules.mjs',
+    '../commands/index.mjs',
+  ];
   for (const file of hookFiles) {
     const text = await readFile(join(ROOT, file), 'utf8');
-    for (const heavy of ['../resolve/', '../compare/', '../bench/', '../graph/', '../upgrade/', '../mcp/', '../workspace.mjs']) {
-      assert.equal(text.includes(`'${heavy}`), false, `${file} imports ${heavy}, which walks the repository`);
+    for (const heavy of forbidden) {
+      assert.equal(text.includes(`'${heavy}`), false, `${file} imports ${heavy}, which reads the repository`);
     }
   }
   const bin = await readFile(join(ROOT, 'bin', 'simt-dev.mjs'), 'utf8');

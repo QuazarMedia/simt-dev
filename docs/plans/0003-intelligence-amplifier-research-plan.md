@@ -917,9 +917,13 @@ edit to bytes this tool generates, in the dialect of Claude Code, Cursor, Codex 
 §16 step 5 scoped it to exactly those three and this note repeats the boundary: post-edit
 format/lint, secret reads, and the Stop policy that waits on R17's ledger are not here. The
 row's latency metric was not met end-to-end and cannot be on this machine — a bare `node -e 0`
-costs 87 ms and the hook path costs 99 ms at p50 / 107 at p95 — so what is recorded is the part
-this slice owns: the decision is 0.002 ms at p95 and the hook reads no manifest, projection or
-registry. The accept criterion's headless agent run was not performed.
+costs 84 ms at p50 / 92 at p95, which is 92% of the 100 ms budget before the tool runs, and the
+hook path costs 97 ms p50 / 102 at p95 — so what is recorded is the part this slice owns: the
+decision is 0.002 ms at p95, and nothing on the path resolves a manifest, fingerprints a tree
+or loads the command registry. The accept criterion's headless agent run was not performed and
+cannot be from here: no harness is installed on this machine (`claude`, `codex`, `cursor-agent`,
+`gemini`, `aider` are all absent from `PATH`). That is the one piece of this row's accept that
+is outstanding; ADR-079 records it as not run rather than letting a fixture stand in for it.
 
 ## 15. Risks and how determinism survives
 

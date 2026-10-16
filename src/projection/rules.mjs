@@ -31,6 +31,7 @@ import { foldsRules, frontmatterBlock, resolveSurfaces, rulePath, canScope } fro
 import { ruleTargets } from './targets.mjs';
 import { manifestPath, readManifest } from './manifest.mjs';
 import { commandCard, CARD_LIMIT_BYTES } from '../kernel/card.mjs';
+import { filterInferable, inferableDefect, inferableProofs } from '../kernel/inferability.mjs';
 import { BASELINES } from './baselines.mjs';
 import { CLI } from '../name.mjs';
 import { PACK_DIR, resolvePacks } from '../packs.mjs';
@@ -410,6 +411,19 @@ async function ruleBodies(root, manifest, flags) {
 }
 
 /**
+ * The command card for a repository and the evidence its markers may be proved by.
+ *
+ * Both the region and the package regions need the proofs, and they must be the same set:
+ * a rule dropped at the root and kept in a package would be one rule treated as two. The
+ * card comes back alongside because the caller that needs the proofs also needs the card's
+ * bytes, and building it twice would read the manifest twice for no second answer.
+ */
+async function inferableEvidence(root, { stack, facts, manifest }) {
+  const card = await commandCard({ root, manifest, stack, facts });
+  return { card, proofs: inferableProofs({ facts, stack, card, manifest }) };
+}
+
+/**
  * The one place the desired region is computed. `plan` (which writes) and
  * `checkTarget` (which gates) both go through this, so they cannot disagree
  * about what the region should contain — a divergence here would report drift
@@ -475,7 +489,7 @@ export async function desiredRegion(root, flags) {
   // so they go first — above even the core rules. It is derived from committed evidence
   // only, in one place, so `plan` and `checkTarget` cannot disagree about it and two
   // machines render it byte-identically.
-  const card = await commandCard({ root, manifest, stack, facts });
+  const { card, proofs } = await inferableEvidence(root, { stack, facts, manifest });
   if (card.dropped.length > 0) {
     // Reported where every other projection note is reported. A card that lost a command
     // in silence is a card a reader cannot tell is incomplete.
@@ -483,8 +497,37 @@ export async function desiredRegion(root, flags) {
       `command card: dropped ${card.dropped.join(', ')} to stay within ${CARD_LIMIT_BYTES} bytes`,
     );
   }
-  let body = card.text ? `${card.text}\n\n${render(packed)}` : render(packed);
-  let sources = packed.map((r) => r.source);
+  // Inferability (R09). A marked line leaves when the repository proves the evidence it
+  // names. `shipped` is a separate list from `packed` because they are separate decisions:
+  // the kernel is about which classes cost a reader nothing to skip, and this is about
+  // which lines the reader already knows.
+  const inferable = [];
+  const shipped = [];
+  for (const r of packed) {
+    const filtered = filterInferable(r.body, proofs);
+    if (!filtered.changed) {
+      shipped.push(r);
+      continue;
+    }
+    for (const x of filtered.removed) inferable.push({ rule: r.id, text: x.text, expr: x.expr });
+    shipped.push({ ...r, body: filtered.body });
+  }
+  let body = card.text ? `${card.text}\n\n${render(shipped)}` : render(shipped);
+  let sources = shipped.map((r) => r.source);
+  if (inferable.length > 0) {
+    // Never silent, and never a heading. A line that left with no trace repeats the
+    // mistake ADR-073 rejected for deferred rules, and a `## Dropped` section spends region
+    // bytes on lines the reader is being told not to read. A count they can act on, plus —
+    // with `--explain` — the evidence behind each one, is the third option.
+    notes.push(
+      `inferability: dropped ${inferable.length} line(s) this repository already proves; ${CLI} sync --explain names each one and the evidence behind it`,
+    );
+    if (flags?.explain === true) {
+      for (const x of inferable) {
+        notes.push(`inferable: ${x.rule} dropped "${x.text}" — proved by ${x.expr}`);
+      }
+    }
+  }
   const folded = [];
 
   // The pointer. A reader who opens AGENTS.md and does not find a profile they know is
@@ -537,6 +580,10 @@ export async function desiredRegion(root, flags) {
     folded,
     mode,
     deferred: deferred.map((r) => r.id),
+    // The marked lines that left, each with the evidence that dropped it. The region is
+    // written without them; `--explain` is what reads this list, so a removal is reportable
+    // without spending region bytes and without a second computation to find it.
+    inferable,
     // The profiles that left the region, and the surfaces that accepted them as files.
     // `plan` writes them and `checkTarget` gates them through this list, so a projected
     // file and a drifted one are decided by the same computation.
@@ -657,6 +704,7 @@ export async function loadRules(root = null) {
   for (const item of collected) {
     const text = await readFile(join(item.dir, item.file), 'utf8');
     const meta = parseFrontmatter(text);
+    const body = stripFrontmatter(text);
     out.push({
       file: item.file,
       origin: item.origin,
@@ -668,8 +716,12 @@ export async function loadRules(root = null) {
       scope: Array.isArray(meta['simt-scope']) ? meta['simt-scope'] : null,
       priority: meta['simt-priority'] ?? null,
       bytes: Buffer.byteLength(text),
-      body: stripFrontmatter(text),
-      error: describeDefect(meta),
+      body,
+      // A marker naming evidence the tool cannot check is a broken rule like any other, so
+      // it travels the field that already reaches `check` and `rules list`. The
+      // frontmatter defect wins, because a rule that cannot say what it applies to cannot
+      // be reasoned about at all.
+      error: describeDefect(meta) ?? inferableDefect(body),
     });
   }
   return out;
@@ -705,12 +757,21 @@ export async function packageRegions(root, flags, rootProfiles = null) {
 
   const rules = await loadRules(root);
   const sha = await provenanceDigest();
+  // The ROOT's proofs, not the package's. The rule set is the root's, so which lines it
+  // already proves is a fact about the repository rather than about the directory a file
+  // lands in — filtering a package by the package's own facts would keep a rule here and
+  // drop it one directory up, which is the same rule treated as two.
+  const { proofs } = await inferableEvidence(root, await fingerprint(root));
   const regions = [];
   for (const pkg of packages) {
     const fp = await fingerprint(join(root, pkg.path));
     const { selected } = select(rules, fp.stack ?? [], fp.facts ?? []);
     const delta = selected.filter((r) => !shared.includes(r.id));
     if (delta.length === 0) continue;
+    const shipped = delta.map((r) => {
+      const filtered = filterInferable(r.body, proofs);
+      return filtered.changed ? { ...r, body: filtered.body } : r;
+    });
     regions.push({
       path: pkg.path,
       ecosystem: pkg.ecosystem,
@@ -720,7 +781,7 @@ export async function packageRegions(root, flags, rootProfiles = null) {
       // One sentence, because the file's whole purpose is to be found by a reader
       // who does not know it exists: without it, a nested region reads as a
       // complete set of rules and the shared half looks forgotten.
-      body: `The rules this package selects on its own. Everything the repository shares with its other packages is in the region at the root.\n\n${render(delta)}`,
+      body: `The rules this package selects on its own. Everything the repository shares with its other packages is in the region at the root.\n\n${render(shipped)}`,
       meta: { sha, sources: delta.map((r) => r.source) },
     });
   }

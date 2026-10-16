@@ -55,6 +55,10 @@ export const BOOL_FLAGS = new Set([
   // config) without measuring a repository. The measurement is the other mode; this is
   // the one that answers "what does this reader do", which does not depend on the repo.
   'table',
+  // sync: name every line the inferability filter dropped and the evidence behind it
+  // (plan 0003 R09). Off by default because a count is enough to act on; the per-line
+  // detail is what an author needs, and a reader is not an author.
+  'explain',
 ]);
 
 export const VALUE_FLAGS = new Set([

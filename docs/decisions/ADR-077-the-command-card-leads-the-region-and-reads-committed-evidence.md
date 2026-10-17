@@ -1,6 +1,6 @@
 # ADR-077 — The command card leads the region, and is derived from committed evidence only
 
-Status: **accepted** · 2026-10-16 · filed as R10 (plan 0003)
+Status: **accepted** · 2026-10-16 · filed as R10 (plan 0003) · ruling 1 narrowed by ADR-086
 **Affects:** `src/kernel/card.mjs`, `src/projection/rules.mjs`, `rules/core.md` (indirectly, as
 the region's first bytes), `test/card.test.mjs`
 

@@ -59,6 +59,10 @@ export const BOOL_FLAGS = new Set([
   // (plan 0003 R09). Off by default because a count is enough to act on; the per-line
   // detail is what an author needs, and a reader is not an author.
   'explain',
+  // check: the lock must match. Off by default because a repository that has not
+  // written one yet is not drift, and a gate that failed for the absence would be
+  // red on every repository this package already adopted.
+  'frozen',
 ]);
 
 export const VALUE_FLAGS = new Set([

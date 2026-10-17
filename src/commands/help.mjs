@@ -118,6 +118,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
 --check                 report drift and write nothing (sync, ci)
+--frozen                check: the lock must match this projection; an output
+                        change no input change explains fails the gate
 --explain               sync: name each line dropped as already inferable, with
                         the fact behind it
 --all                   ignore a cap: every ruling of a record, or the skills budget

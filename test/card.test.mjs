@@ -241,13 +241,13 @@ test('every command on a clean Node card exits 0', async () => {
 
 // ------------------------------------------------------------------ the card leads the region
 
-test('the card is the first bytes of the region', async () => {
+test('the card follows the shipped rules and leads everything this repository added', async () => {
   const root = await fixture({ 'Cargo.toml': '[package]\nname = "x"\n' });
   const desired = await desiredRegion(root, {});
-  assert.ok(
-    desired.body.startsWith('Commands for this repository:\n'),
-    `the card does not lead the region:\n${desired.body.slice(0, 120)}`,
-  );
+  const coreAt = desired.body.indexOf('## Core');
+  const cardAt = desired.body.indexOf('Commands for this repository:\n');
+  assert.ok(coreAt === 0, `the stable prefix is not first:\n${desired.body.slice(0, 80)}`);
+  assert.ok(cardAt > coreAt, 'the card is repo-specific, so it follows the shipped rules');
   assert.match(desired.body, /- build: `cargo build`/);
 });
 
@@ -258,8 +258,9 @@ test('kernel mode keeps the card, because the mode defers rules and not commands
 
   const desired = await desiredRegion(root, {});
   assert.equal(desired.mode, 'kernel');
-  assert.ok(
-    desired.body.startsWith('Commands for this repository:\n'),
+  assert.match(
+    desired.body,
+    /## Core[\s\S]*Commands for this repository:\n/,
     'a kernel that dropped the card would withhold the one command a reader most needs',
   );
   assert.match(desired.body, /- test: `pytest`/);

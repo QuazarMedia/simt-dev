@@ -28,6 +28,7 @@ import { CLI } from '../name.mjs';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { assertVersionPin, packageVersion } from '../package-version.mjs';
 import { resolvePacks } from '../packs.mjs';
+import { computeLock, readLock, LOCK_FILE } from '../projection/lock.mjs';
 
 /** Findings `sync` reports and does not fail on.
  *
@@ -277,6 +278,18 @@ export async function syncCommand(positional, flags) {
       await writeFile(t.path, t.text);
       note(`wrote    ${t.file}`);
     }
+    const lock = await computeLock(root, flags);
+    const lockText = `${JSON.stringify(lock, null, 2)}\n`;
+    let previousLock = null;
+    try {
+      previousLock = await readFile(join(root, LOCK_FILE), 'utf8');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (previousLock !== lockText) {
+      await writeFile(join(root, LOCK_FILE), lockText);
+      note(`wrote    ${LOCK_FILE}`);
+    }
     for (const p of pointerPlan) {
       await mkdir(dirname(p.path), { recursive: true });
       // Only a symlink this tool wrote is replaced, and only because it has no content:
@@ -505,6 +518,7 @@ export async function checkCommand(positional, flags) {  const root = flags.root
     const drift = await manifestDrift(root, stack, await provenanceDigest());
     if (drift) findings.push(drift);
   }
+  if (flags.frozen) findings.push(...(await frozenFindings(root, flags)));
 
   // `CHECK_NON_BLOCKING`, not the union. This is the gate whose exit code a repository
   // acts on, so a finding it reports and does not fail on is a decision recorded in a
@@ -536,4 +550,41 @@ export async function checkCommand(positional, flags) {  const root = flags.root
   return bad.length === 0 ? EXIT.OK : EXIT.FAIL;
 }
 
-export { plan, checkTargets, checkTarget, select };
+/**
+ * What `--frozen` adds to the gate. Nothing, when the lock matches. One finding
+ * otherwise, and the wording says which of the two failures it was (ADR-086).
+ */
+async function frozenFindings(root, flags) {
+  const { lock, error } = await readLock(root);
+  if (error) {
+    return [{ file: LOCK_FILE, status: 'lock-unreadable', detail: error, remedy: `run: ${CLI} sync --yes` }];
+  }
+  if (lock === null) {
+    return [{
+      file: LOCK_FILE,
+      status: 'lock-absent',
+      detail: 'no lock is recorded',
+      remedy: `run: ${CLI} sync --yes`,
+    }];
+  }
+  const next = await computeLock(root, flags);
+  if (next.inputs !== lock.inputs) {
+    return [{
+      file: LOCK_FILE,
+      status: 'lock-stale',
+      detail: 'the inputs changed and the lock was not rewritten',
+      remedy: `run: ${CLI} sync --yes`,
+    }];
+  }
+  if (next.outputs !== lock.outputs) {
+    return [{
+      file: LOCK_FILE,
+      status: 'lock-unexplained',
+      detail: 'the projection changed and the inputs did not',
+      remedy: `run: ${CLI} sync --yes`,
+    }];
+  }
+  return [];
+}
+
+export { plan, checkTargets, checkTarget, select, frozenFindings };

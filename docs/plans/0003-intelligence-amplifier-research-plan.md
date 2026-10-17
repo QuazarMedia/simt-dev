@@ -493,7 +493,8 @@ import it directly or transitively, checked against a hand-built list, in under 
   ("tests pass", "verified") with no ledger entry for the committed tree.
 
 **Accept.** Editing any file after a green run invalidates the evidence, because the tree id
-changes.
+changes. Shipped as `simt evidence` and `simt evidence check`, with the commit-msg shim
+written only when `gates.evidence` is `warn` or `block` (ADR-087).
 
 **Basis.** This makes the core rule "never claim a test you did not run" checkable.
 
@@ -871,7 +872,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R14 | Harness loader table | 1 | — | S | — | provenance on every row | Complete |
 | R15 | Agent-time hooks from one policy | 2 | R14, R17 | L | D4 (ADR-079) | decisions correct per harness; p95 < 100 ms | Complete |
 | R16 | Diff-aware gates | 2 | R24 | M | — | focused selection < 5 s | Queued |
-| R17 | Evidence ledger and claim check | 2 | — | M | D5 | evidence invalidated by any edit | Queued |
+| R17 | Evidence ledger and claim check | 2 | — | M | D5 (ADR-087) | evidence invalidated by any edit | Complete |
 | R18 | Safe compaction of own gate output | 2 | R16 | S | — | every failure line survives | Queued |
 | R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | — | kernel shrinks; compliance not lower | Queued |
 | R20 | Index store | 3 | review 0002 S47 | M | D6 | reindex < 300 ms; deterministic | Queued |

@@ -14,6 +14,10 @@ All notable changes to this package are recorded here. The format follows
 
 The generated region ends with a `## Disclosure` section: one line per scoped profile, with the patterns and the files it moved to, and one line per installed skill, with its name and the description that says when to open it. The skill body stays in its file. A surface that cannot narrow a profile still carries that profile in the region (ADR-085).
 
+### The stable prefix comes first
+
+Shipped rules lead the region, and the command card follows them, so an edit this repository makes changes only the tail. `simt sync --yes` writes `simt-dev.lock.json` with an input digest and an output digest. `simt check --frozen` fails when the output moves and the inputs did not, and names a stale lock separately (ADR-086).
+
 ## [0.3.0] — 2026-10-17
 
 ### The rules and the decisions are readable as MCP resources

@@ -418,7 +418,10 @@ it loads on a match, and a surface that cannot keeps the body. The harness is no
   output change that no input change explains.
 
 **Accept.** Two machines render byte-identical output. Editing a repo-specific line changes only
-the tail bytes.
+the tail bytes. Shipped as ADR-086. One process renders a repository twice and gets the same
+bytes; the cross-machine half is the inputs, which do not include the clock or the home
+directory. A repository profile edit leaves the prefix identical. `check --frozen` names a
+stale lock and an unexplained output as different failures.
 
 ### R14 — Harness loader table (S)
 
@@ -864,7 +867,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R10 | Command card | 1 | — | S | — (ADR-077) | every card command runs on 10 fixtures | Complete |
 | R11 | Workspace dedupe | 1 | R07, R14 | M | 0002 P7 (ADR-084) | estate ≤ 30 KB, no R loss (unmeasured) | Complete |
 | R12 | Scoped loading and disclosure index | 1 | review 0002 S41, S50 | M | 0002 P7 (ADR-085) | scoped content absent at start | Complete |
-| R13 | Cache-stable rendering and lockfile | 1 | review 0002 S01 | S | 0002 P1 | byte-identical across machines | Queued |
+| R13 | Cache-stable rendering and lockfile | 1 | review 0002 S01 | S | 0002 P1 (ADR-086) | byte-identical across machines | Complete |
 | R14 | Harness loader table | 1 | — | S | — | provenance on every row | Complete |
 | R15 | Agent-time hooks from one policy | 2 | R14, R17 | L | D4 (ADR-079) | decisions correct per harness; p95 < 100 ms | Complete |
 | R16 | Diff-aware gates | 2 | R24 | M | — | focused selection < 5 s | Queued |

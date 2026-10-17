@@ -649,8 +649,19 @@ export async function desiredRegion(root, flags) {
     // name all three reasons — which is the only reason the section exists: a reader who
     // opens AGENTS.md and does not find a rule they know is there will look for it.
     const kept = shipped.filter((r) => !cut.has(r.id) && !carriedIds.has(r.id));
-    let text = card.text ? `${card.text}\n\n${render(kept)}` : render(kept);
-    const sources = kept.map((r) => r.source);
+    // Stable bytes first (ADR-086). Core, then the profiles this package ships, then
+    // everything this repository added — the card, its own profiles, the process
+    // bodies. A line the repository edits then changes only the tail, and the prefix
+    // a reader has cached stays byte-identical. The card used to lead (ADR-077 ruling
+    // 1); it now leads the tail, because a command this repository owns is the thing
+    // an edit is most likely to move.
+    const stable = kept.filter((r) => toolRule(r)).sort(stableOrder);
+    const repoRules = kept.filter((r) => !toolRule(r)).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    let text = render(stable);
+    if (card.text) text += `${text === '' ? '' : '\n\n'}${card.text}`;
+    const repoText = render(repoRules);
+    if (repoText) text += `\n\n${repoText}`;
+    const sources = [...stable, ...repoRules].map((r) => r.source);
 
     // Every reason a rule is missing lands in this one section, and each line says which
     // it was. A rule deferred by its class, a rule cut to reach a byte count and a rule
@@ -1215,6 +1226,14 @@ async function projectionMode(root) {
  * would move when a file is added to the directory, and a projection that reorders
  * itself on an unrelated commit is a projection nobody can diff (ADR-013).
  */
+/** Core, then the remaining shipped profiles by id. Id, not load order: a directory
+ *  listing is not a fact about the rules, and two machines must not disagree about it. */
+function stableOrder(a, b) {
+  if (a.id === 'core') return b.id === 'core' ? 0 : -1;
+  if (b.id === 'core') return 1;
+  return String(a.id).localeCompare(String(b.id));
+}
+
 export function byPriorityThenId(a, b) {
   const classA = PRIORITY_CLASSES.indexOf(a.priority ?? 'style');
   const classB = PRIORITY_CLASSES.indexOf(b.priority ?? 'style');

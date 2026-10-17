@@ -134,6 +134,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-032',
     'ADR-042',
     'ADR-073',
+    'ADR-077',
     'ADR-081',
     'ADR-083',
   ]);

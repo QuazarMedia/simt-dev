@@ -164,7 +164,7 @@ export function checkSkill({ directoryName, fileName = 'SKILL.md', text, at }) {
  * characters. That is the whole failure this file exists to prevent, one level down - a
  * lint that is confidently wrong about a conforming file.
  */
-function readFrontmatter(text) {
+export function readFrontmatter(text) {
   const meta = {};
   const present = [];
   const body = text.replace(/^﻿/, '');

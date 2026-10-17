@@ -47,7 +47,7 @@ test('a scoped profile leaves the region for the surfaces that can narrow it', a
   assert.ok(desired.scoped.some((r) => r.id === 'local-python'), desired.scoped.map((r) => r.id).join(' '));
   assert.ok(!desired.body.includes('Do the scoped thing'), 'the profile text left the region');
   // The pointer is not decoration: without it the source list is quietly one short.
-  assert.match(desired.body, /## Scoped rules/);
+  assert.match(desired.body, /## Disclosure/);
   assert.ok(desired.body.includes('local-python'), 'the pointer names the profile by id');
   assert.match(desired.body, /pyproject\.toml/);
   assert.ok(desired.meta.sources.some((s) => s.includes('local-python')), 'the source list still names it');
@@ -66,6 +66,27 @@ test('a surface that cannot narrow keeps the profile in the region, and says why
     desired.notes.some((n) => /cannot narrow|simt-scope/.test(n)),
     `a narrowed profile that stayed must say so: ${JSON.stringify(desired.notes)}`,
   );
+  await rm(root, { recursive: true, force: true });
+});
+
+test('every surface either keeps the profile at session start or writes the file it loads on a match', async () => {
+  // The accept is per surface, and the three that can narrow were previously checked
+  // together. A surface that cannot narrow must keep the body: writing only the scoped
+  // file would be a rule that reader never loads.
+  const root = await scopedRepo();
+  for (const surface of SURFACES) {
+    const desired = await desiredRegion(root, { surfaces: surface.id });
+    if (canScope(surface)) {
+      assert.equal(desired.narrowing, true, surface.id);
+      assert.equal(desired.body.includes('Do the scoped thing'), false, `${surface.id} still carries the profile`);
+      assert.match(desired.body, /## Disclosure/);
+      const planned = await plan(root, { surfaces: surface.id });
+      const file = planned.targets.find((t) => t.text?.includes('Do the scoped thing') && t.file?.includes('local-python'));
+      assert.ok(file, `${surface.id} wrote no file a matching path can load`);
+    } else {
+      assert.equal(desired.body.includes('Do the scoped thing'), true, `${surface.id} dropped a profile it cannot load any other way`);
+    }
+  }
   await rm(root, { recursive: true, force: true });
 });
 

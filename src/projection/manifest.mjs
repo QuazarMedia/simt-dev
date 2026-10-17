@@ -67,8 +67,12 @@ export async function manifestPath(root) {
  * real is the recorded SHA under `projection`.
  */
 export const MANIFEST_COMMENT = {
-  $comment:
-    `Written and maintained by simt-dev. Edit by hand only if you intend to take ownership of this file: \`${CLI} sync --yes\` regenerates the projected rules, and re-running \`${CLI} init\` refreshes the SHA without weakening a value you set here.`,
+  $comment: [
+    `Written and maintained by simt-dev. \`${CLI} sync --yes\` regenerates the projected rules.`,
+    `\`${CLI} init\` refreshes the SHA and keeps every key it does not write, so a value you add here survives a re-init.`,
+    `\`plans\` is such a key: it selects the tracker template and the directories \`${CLI} plan\` reads.`,
+    'Omit it and the tracker template applies, which reads docs/plans and docs/reviews.',
+  ].join(' '),
 };
 
 /**
@@ -418,7 +422,7 @@ export function buildManifest({ root, stack = [], sha, version, existing = null,
       ? { ...planned.gates, commands: planned.commands }
       : planned.gates;
 
-  return {
+  const owned = {
     ...MANIFEST_COMMENT,
     id: existing?.id ?? defaultId(root),
     stack: existing?.stack?.length ? existing.stack : stack,
@@ -473,6 +477,25 @@ export function buildManifest({ root, stack = [], sha, version, existing = null,
     // adopted. See src/package-version.mjs.
     projection: { simtDevSha: sha ?? null, version: version ?? null },
   };
+  return withRepoKeys(existing, owned);
+}
+
+/**
+ * Keys this writer does not recognise belong to the repository.
+ *
+ * A re-init used to return only the object above, so anything else in the file
+ * disappeared. `plans` is the tracker overlay, and it is not the only key a
+ * repository might have added. Owned keys stay in the order the writer emits
+ * them; an unknown key is copied after them, in the order the file had it.
+ */
+function withRepoKeys(existing, owned) {
+  if (!existing || typeof existing !== 'object' || Array.isArray(existing)) return owned;
+  const kept = {};
+  for (const key of Object.keys(existing)) {
+    if (Object.hasOwn(owned, key)) continue;
+    kept[key] = existing[key];
+  }
+  return { ...owned, ...kept };
 }
 
 /**

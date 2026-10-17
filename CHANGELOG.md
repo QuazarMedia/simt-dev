@@ -14,7 +14,7 @@ Both resource revisions of the specification were read rather than recalled, and
 
 ### A plan is resumed one slice at a time
 
-`simt plan next` returns the next ready slice and only its section. `simt plan done` rewrites that one row, and previews the change unless `--yes` is given. The directories and the table format come from `simt-plan.json` when a repository has one; otherwise the simt-dev template delivered with the tool is used, which reads `docs/plans` and `docs/reviews` (ADR-081).
+`simt plan next` returns the next ready slice and only its section. `simt plan done` rewrites that one row, and previews the change unless `--yes` is given. The directories and the table format come from the `plans` key in `simt.json` when a repository sets one; otherwise the tracker template delivered with the tool is used, which reads `docs/plans` and `docs/reviews` (ADR-081, ADR-082). `init` keeps a manifest key it does not write, which is what lets `plans` survive a re-init.
 
 ## [0.2.2] — 2026-10-14
 

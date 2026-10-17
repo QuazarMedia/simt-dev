@@ -62,4 +62,8 @@ export const PREFIX_ARGUING = new Map([
     'ADR-080-the-tools-own-names-are-not-repositories-and-neither-reader-decides-by-shape.md',
     'quotes the prefixed names it measured, which are its evidence rather than a citation',
   ],
+  [
+    'ADR-081-a-tracker-is-read-through-the-repositorys-template.md',
+    'names the plan overlay file the next record withdraws, and that filename has the shape of a repository',
+  ],
 ]);

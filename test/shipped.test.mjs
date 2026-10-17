@@ -799,10 +799,10 @@ const TOOL_OWN_WORDS = TOOL_WORDS;
  * Each entry is a file and a reason, never a repository. That is the difference from a
  * list of names and it is the whole point: an exemption says "this document discusses the
  * namespace", which is a fact about this tool and carries nothing about whoever uses it.
- * The rule below catches every repository sharing the prefix, which is the leak; these
- * two files are where the prefix itself is the subject, and a generic pattern cannot tell
- * a hypothetical key in an argument from a repository name — `simt-gates` and `simt-api`
- * are the same shape.
+ * The rule below catches every repository sharing the prefix, which is the leak; the
+ * files listed here are where a prefixed name is the subject, and a generic pattern
+ * cannot tell a hypothetical key in an argument from a repository name — `simt-gates`
+ * and `simt-api` are the same shape.
  *
  * A stale exemption fails: every entry must still be tripping the rule, so one that stops
  * being needed is removed rather than kept as a precedent.

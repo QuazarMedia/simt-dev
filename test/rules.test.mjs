@@ -126,7 +126,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // Measured before the fix: eight clauses across four records, of which the parser
   // found none. Listed by id rather than by count so a record that stops declaring its
   // supersession is a visible change rather than a smaller number.
-  assert.deepEqual(shapes, ['ADR-016', 'ADR-021', 'ADR-023', 'ADR-025', 'ADR-032', 'ADR-042']);
+  assert.deepEqual(shapes, ['ADR-016', 'ADR-021', 'ADR-023', 'ADR-025', 'ADR-032', 'ADR-042', 'ADR-081']);
   for (const d of decisions) {
     for (const p of d.partial) {
       assert.ok(['superseded', 'narrowed', 'withdrawn'].includes(p.kind), `${d.id}: unknown kind ${p.kind}`);
@@ -203,7 +203,9 @@ test('the prose locations left in place are counted, so the decision cannot go u
   }
   // ADR-080 joined for the same reason as ADR-058 and its addition is this line: the
   // record is ABOUT the vocabulary and has to name the modules that own it, so the paths
-  // are its evidence rather than decoration.
+  // are its evidence rather than decoration. ADR-081 and ADR-082 name the directories
+  // and the template file the tracker reads, which exist in this package and in the
+  // repository that adopts it; the count moves because the records have to name them.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -215,6 +217,8 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-056',
     'ADR-058',
     'ADR-080',
+    'ADR-081',
+    'ADR-082',
   ]);
 });
 
@@ -740,9 +744,10 @@ test("a name the tool owns is not a repository, and no record names one (ADR-080
     }
   }
 
-  // The two records whose subject is the prefix cite no repository, because the prefixed
-  // names in them are the argument. This is the exemption the guard shares, and it is
-  // asserted here so a record that stops being about the prefix stops being exempt.
+  // Each record whose subject is the prefix, or a filename of that shape, cites no
+  // repository: the prefixed names in it are the argument. This is the exemption the
+  // guard shares, and it is asserted here so a record that stops being about that
+  // stops being exempt.
   for (const file of PREFIX_ARGUING.keys()) {
     const d = decisions.find((x) => x.file === file);
     assert.ok(d, `${file} is exempt from the estate rule and is not a record`);

@@ -671,11 +671,12 @@ split plan.
 **Goal.** Let an agent resume a 1,000-line plan by reading about 1 KB.
 
 **Design.** Parse the tracker tables the repository's plan template names. The template
-delivered with the tool reads `docs/plans/*.md` and `docs/reviews/*.md` and binds an ID
-column, a `State` column and a `Depends on` column by header name. A repository writes
-`simt-plan.json` to move those directories or to replace the columns, the state words and
-the way a dependency names another document (ADR-081). A dependency may name another
-document's slice, as in `review 0002 S41`, and resolves through that document's tracker.
+delivered with the tool is `tracker`: it reads `docs/plans/*.md` and `docs/reviews/*.md`
+and binds an ID column, a `State` column and a `Depends on` column by header name. A
+repository sets the `plans` key in `simt.json` to move those directories or to replace
+the columns, the state words and the way a dependency names another document (ADR-082).
+`init` keeps that key. A dependency may name another document's slice, as in
+`review 0002 S41`, and resolves through that document's tracker.
 
 - `simt plan status` summarises the state.
 - `plan next` returns the next Queued slice whose dependencies are Complete: only its section
@@ -976,7 +977,7 @@ this plan's tracker are review 0002's, written `0002 P7`.
 | D6 | The local index is `node:sqlite`, gitignored and always rebuildable |
 | D7 | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default (ADR-075) |
 | D8 | Distribution as a single-file binary alongside npm |
-| D9 | Tracker tables are a parsed format; the columns and directories are the delivered template unless the repository names another (ADR-081) |
+| D9 | Tracker tables are a parsed format; the columns and directories are the tracker template unless `plans` in the manifest names another (ADR-081, ADR-082) |
 
 ## 18. What this plan deliberately does not do
 

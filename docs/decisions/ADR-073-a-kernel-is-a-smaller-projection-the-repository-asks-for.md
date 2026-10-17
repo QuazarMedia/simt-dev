@@ -1,6 +1,6 @@
 # ADR-073 — A kernel is a smaller projection the repository asks for, not one it is given
 
-Status: **accepted** · 2026-10-14 · filed as S38 (R07)
+Status: **accepted** · 2026-10-14 · filed as S38 (R07) · ruling 6 narrowed by ADR-084
 **Affects:** `src/projection/manifest.mjs`, `src/projection/rules.mjs`, `src/measure/context.mjs`,
 `rules/core.md`, `rules/stacks/*.md`, `test/kernel.test.mjs`
 

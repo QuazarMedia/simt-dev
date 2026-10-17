@@ -1,6 +1,6 @@
 # ADR-083 — A budget is met by cutting the kernel, and the hard constraints are the floor
 
-Status: **accepted** · 2026-10-17 · filed as R08 (plan 0003)
+Status: **accepted** · 2026-10-17 · filed as R08 (plan 0003) · ruling 7 narrowed by ADR-084
 
 **Affects:** `src/kernel/budget.mjs`, `src/projection/rules.mjs`, `src/projection/manifest.mjs`,
 `src/measure/context.mjs`, `src/projection/project.mjs`, `src/commands/sync.mjs`,

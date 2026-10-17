@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A workspace carries its repeated rules once
+
+`simt shared plan` names the rules every repository in a workspace renders with the same bytes, and where each harness would load that copy. `simt shared install --yes` writes the copy into the user-level file the harness actually reads, and records the ids on each repository's manifest under `shared`. The next `simt sync` drops those rules from the region and names them, with the command that shows each one. `simt doctor` says when the copy is missing or stale, and does not fail the repository for it. The 30 KB estate bar and the bench comparison are unmeasured (ADR-084).
+
 ## [0.3.0] — 2026-10-17
 
 ### The rules and the decisions are readable as MCP resources

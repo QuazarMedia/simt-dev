@@ -34,6 +34,7 @@ import {
   totals,
 } from '../measure/context.mjs';
 import { measureSession } from '../measure/session.mjs';
+import { sharedTotals } from '../projection/shared.mjs';
 
 /** `1234567`, never `1,234,567`. `toLocaleString` output depends on the locale, and
  *  this command exists so two machines produce two numbers a pull request can diff. */
@@ -109,7 +110,17 @@ export async function tokensCommand(positional, flags) {
   for (const path of roots) rows.push(await measureRoot(path));
   annotate(rows);
 
-  const summary = totals(rows);
+  const measured = totals(rows);
+  // The workspace copy, counted once (ADR-084). A figure that measured the regions and
+  // ignored the file the rules moved into would show a saving the reader's context never
+  // saw, so it is in the total from the first run rather than as an afterthought.
+  const shared = await sharedTotals(rows);
+  const summary = {
+    ...measured,
+    sharedBytes: shared.bytes,
+    estateBytes: measured.generatedBytes + shared.bytes,
+    sharedFiles: shared.files,
+  };
   const mcp = mcpTools();
 
   if (isJson(flags)) {
@@ -142,6 +153,15 @@ export async function tokensCommand(positional, flags) {
     lines.push(
       `totals   generated ${plain(summary.generatedBytes)} B  duplicate ${plain(summary.duplicateBytes)} B (${plain(share)}% of generated)  unique ${plain(summary.uniqueBytes)} B  repeat ${plain(summary.repeatBytes)} B  ~${plain(summary.tokens)} tokens`,
     );
+    // Only when there is a copy to count. The line a reader sees most is the one that
+    // says what their whole estate loads, and adding a second number to it that is
+    // usually zero is how a report stops being read.
+    if (summary.sharedBytes > 0) {
+      lines.push(
+        `shared   ${plain(summary.sharedBytes)} B carried once in ${plain(summary.sharedFiles.length)} user-level file(s)  estate total ${plain(summary.estateBytes)} B`,
+      );
+      for (const f of summary.sharedFiles) lines.push(`  ${f.path}  ${plain(f.bytes)} B  ${plain(f.rules)} rule(s)`);
+    }
   } else {
     const row = rows[0];
     lines.push(`tokens   ${row.path}`);
@@ -155,6 +175,15 @@ export async function tokensCommand(positional, flags) {
     lines.push(
       `always-on ${plain(row.generatedBytes)} B generated  ~${plain(row.generatedTokens)} tokens  budget ${plain(row.budget.bytes)} B  ${verdict}`,
     );
+    // The same reason as the `--repos` line, and it matters more here: measuring one
+    // repository is the default, so a reader who owns the workspace copy and never saw it
+    // counted would read a saving their own session does not get.
+    if (summary.sharedBytes > 0) {
+      lines.push(
+        `shared   ${plain(summary.sharedBytes)} B carried once in ${plain(summary.sharedFiles.length)} user-level file(s)  always-on for you: ${plain(summary.estateBytes)} B`,
+      );
+      for (const f of summary.sharedFiles) lines.push(`  ${f.path}  ${plain(f.bytes)} B  ${plain(f.rules)} rule(s)`);
+    }
     lines.push(
       `redundant ${plain(row.redundancy.duplicateBytes)} B repeats an earlier repository  ${plain(row.redundancy.repeatBytes)} B repeats an earlier document here  ${plain(row.redundancy.uniqueBytes)} B unique of ${plain(row.redundancy.blockBytes)} B counted in blocks`,
     );

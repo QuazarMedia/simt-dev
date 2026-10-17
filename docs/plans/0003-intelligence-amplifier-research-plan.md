@@ -389,7 +389,8 @@ which test a given `{file}` maps to.
    a teammate without the user file loses nothing in review.
 
 **Accept.** Always-on bytes for the 7-root estate workspace are at most 30 KB (review 0002 S38),
-with no R loss in bench.
+with no R loss in bench. Shipped as ADR-084. The paths and the manifest key moved; the 30 KB
+bar and the bench comparison are unmeasured.
 
 ### R12 — Scoped loading (M)
 
@@ -859,7 +860,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R08 | Budgeted compilation | 1 | R07 | S | 0002 P7 | budget exact; byte-identical | Complete |
 | R09 | Inferability filter | 1 | R07 | S | — (ADR-078) | expected removals with reasons | Complete |
 | R10 | Command card | 1 | — | S | — (ADR-077) | every card command runs on 10 fixtures | Complete |
-| R11 | Workspace dedupe | 1 | R07, R14 | M | 0002 P7 | estate ≤ 30 KB, no R loss | Queued |
+| R11 | Workspace dedupe | 1 | R07, R14 | M | 0002 P7 (ADR-084) | estate ≤ 30 KB, no R loss (unmeasured) | Complete |
 | R12 | Scoped loading and disclosure index | 1 | review 0002 S41, S50 | M | 0002 P7 | scoped content absent at start | Queued |
 | R13 | Cache-stable rendering and lockfile | 1 | review 0002 S01 | S | 0002 P1 | byte-identical across machines | Queued |
 | R14 | Harness loader table | 1 | — | S | — | provenance on every row | Complete |

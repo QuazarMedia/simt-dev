@@ -607,12 +607,12 @@ test('prepareIsolatedWorkspace creates a one-commit git export and materialiseAr
   assert.equal(existsSync(join(bareWs.workDir, '.githooks')), false);
   assert.equal(existsSync(join(bareWs.workDir, '.mcp.json')), false);
 
-  // 2. Kernel arm projects kernel rules with Deferred rules index.
+  // 2. Kernel arm projects kernel rules and names the ones the region does not carry.
   const kernelSpec = await parseArmSpec('kernel');
   const kernelWs = await prepareIsolatedWorkspace(repo, baseSha, kernelSpec, { id: 't-1', prompt: 'test prompt' });
   tempDirs.push(kernelWs.slotDir);
   const kernelAgents = await readFile(join(kernelWs.workDir, 'AGENTS.md'), 'utf8');
-  assert.match(kernelAgents, /## Deferred rules/);
+  assert.match(kernelAgents, /## Rules not in this region/);
 
   // 3. Brief arm writes .simt-dev/brief.md.
   const briefSpec = await parseArmSpec('brief');

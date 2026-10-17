@@ -55,7 +55,7 @@ test('a repository that declares no mode gets the whole projection', async () =>
   // said nothing gets every rule it had before the mode existed.
   assert.equal(desired.mode, 'full');
   assert.deepEqual(desired.deferred, []);
-  assert.doesNotMatch(desired.body, /## Deferred rules/);
+  assert.doesNotMatch(desired.body, /## Rules not in this region/);
   assert.match(desired.body, /Body for house-style, line 0\./, 'a style-classed rule is still in the region');
   assert.match(desired.body, /Body for house-rule, line 0\./, 'and so is a hard-classed one');
 });
@@ -89,7 +89,7 @@ test('kernel mode packs the hard and command classes and defers the rest', async
 
   // The shipped python profile declares `convention`, so it leaves too — and the region
   // has to say so, by name and by the command that shows it.
-  assert.match(body, /## Deferred rules/);
+  assert.match(body, /## Rules not in this region/);
   assert.match(body, /house-style/);
   assert.match(body, /rules show house-style/, 'a deferred rule that is not named is a rule lost');
   for (const id of desired.deferred) {

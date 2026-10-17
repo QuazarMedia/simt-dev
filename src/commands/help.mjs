@@ -61,6 +61,14 @@ ${CLI} ci                     simt-dev's own .github files: create or refresh th
 ${CLI} compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)
+${CLI} shared plan            what a workspace's repeated rules cost to carry
+                           once: the shared set, its bytes, and every path that would be written
+                           (read-only; touches nothing, not even your home directory)
+${CLI} shared install [--yes] carry those rules once per reader, at user level,
+                           and declare the delta in each repo's manifest (dry-run unless
+                           --yes; copies land in files the vendors' own docs name, and a reader
+                           with no such file gets the block printed to paste; ${CLI} doctor
+                           reports a copy that is missing or stale)
 ${CLI} tokens [--repos]       what a reader loads at session start, in bytes
                            (read-only; exits 0 whatever it finds, because a
                            measurement is not a verdict; --repos measures every

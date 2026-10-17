@@ -189,6 +189,57 @@ function readSha(body, style) {
  * never drift independently of it.
  */
 export function compose(body, { sha, sources = [] } = {}, style) {
+  return render(body, { sha, sources }, style, (s, sha, sources) =>
+    [
+      s.line(`${MARKER_PREFIX}:generated`),
+      s.line(`${MARKER_PREFIX}:sha=${sha}`),
+      ...(sources.length > 0 ? [s.line(`${MARKER_PREFIX}:sources=${sources.join(',')}`)] : []),
+      // Addressed to whoever reads this repo, not to whoever owns the rules upstream.
+      // "Edit the source in simt-dev" was the wrong instruction twice over: a consumer
+      // of the published package has no such tree, and an agent reading this repo has
+      // no business editing the region it was told not to edit. The only two actions
+      // available to a reader are: don't edit it, or regenerate it.
+      s.note(
+        'Generated content. Do not edit by hand - your changes are overwritten.',
+        `Run \`${CLI} sync --yes\` to regenerate, or \`${CLI} check\` to see what is stale.`,
+      ),
+    ],
+  );
+}
+
+/**
+ * The user-level shared region (ADR-084).
+ *
+ * A different note from `compose`, and the difference is the whole point of having two
+ * functions. `compose`'s remedy is `simt sync --yes`, and that remedy is wrong for a file
+ * in the reader's home directory: `sync` acts on a repository, so a reader who follows
+ * the instruction inside `~/.config/opencode/AGENTS.md` runs a command that will not
+ * repair it and concludes the projection is broken. The stamp and the marker grammar are
+ * shared, so `parse`, `inject` and `diff` read this region exactly as they read a
+ * repository's own — only the two sentences a reader acts on differ.
+ */
+export function composeShared(body, { sha, sources = [] } = {}, style) {
+  return render(body, { sha, sources }, style, (s, sha, sources) =>
+    [
+      s.line(`${MARKER_PREFIX}:generated`),
+      s.line(`${MARKER_PREFIX}:sha=${sha}`),
+      ...(sources.length > 0 ? [s.line(`${MARKER_PREFIX}:sources=${sources.join(',')}`)] : []),
+      s.note(
+        'Generated content shared by every repository in this workspace. Do not edit it by hand - your changes are overwritten.',
+        `Run \`${CLI} shared install --yes\` to regenerate it, or \`${CLI} doctor\` to see whether this copy is stale.`,
+      ),
+    ],
+  );
+}
+
+/**
+ * A region, markers and provenance header included, with a header this module chose.
+ *
+ * Split out because two headers now exist and the trailing-newline and empty-body cases
+ * below are load-bearing twice over — the formatter fight the header shape prevents does
+ * not care which of the two files it is happening in.
+ */
+function render(body, { sha, sources = [] }, style, headerLines) {
   const s = styleOf(style);
   // A stamp this tool cannot read back is worse than no stamp: `parse` matches
   // `[0-9a-f]{7,40}`, so the old `unknown` fallback produced a region that reported
@@ -200,21 +251,7 @@ export function compose(body, { sha, sources = [] } = {}, style) {
   }
   // Write-new, like the markers: the legacy spelling is read but never emitted, so a
   // migrated region is stable and a legacy one drifts exactly once.
-  const header = [s.line(`${MARKER_PREFIX}:generated`), s.line(`${MARKER_PREFIX}:sha=${sha}`)];
-  if (sources.length > 0) {
-    header.push(s.line(`${MARKER_PREFIX}:sources=${sources.join(',')}`));
-  }
-  // Addressed to whoever reads this repo, not to whoever owns the rules upstream.
-  // "Edit the source in simt-dev" was the wrong instruction twice over: a consumer
-  // of the published package has no such tree, and an agent reading this repo has
-  // no business editing the region it was told not to edit. The only two actions
-  // available to a reader are: don't edit it, or regenerate it.
-  header.push(
-    s.note(
-      'Generated content. Do not edit by hand - your changes are overwritten.',
-      `Run \`${CLI} sync --yes\` to regenerate, or \`${CLI} check\` to see what is stale.`,
-    ),
-  );
+  const header = headerLines(s, sha, sources);
   const trimmed = body.replace(/\n+$/, '');
   // Two lines here exist only because a real repo proved they are needed. A
   // formatter that runs on commit - several repositories have one, and three of the
@@ -269,7 +306,9 @@ function splice(state, region, where) {
  * adopted?" — `region: 'absent'` is that answer, and reading it off `previousBytes` gets a
  * repository with hand-written prose and no region wrong.
  *
- * @param {object} [opts] `style` overrides the syntax; `where` overrides placement.
+ * @param {object} [opts] `style` overrides the syntax; `where` overrides placement;
+ *   `compose` overrides which header the region carries (`composeShared` for the
+ *   user-level file, whose remedy is not `sync`).
  * @returns {{text: string, action: 'added'|'updated'|'unchanged'|'malformed', reason?: string,
  *   region: 'absent'|'ok'|'malformed', previousBody: string}}
  */
@@ -281,7 +320,7 @@ export function inject(text, body, meta, opts = {}) {
   if (state.status === 'malformed') {
     return { ...seen, text, action: 'malformed', reason: state.reason, line: state.line };
   }
-  const region = compose(body, meta, s);
+  const region = (opts.compose ?? compose)(body, meta, s);
 
   if (state.status === 'absent') {
     if (where === 'top') {

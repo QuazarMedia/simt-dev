@@ -30,7 +30,7 @@ import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, frontmatterBlock, resolveSurfaces, rulePath, canScope } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
 import { compose } from './markers.mjs';
-import { declaredBudget, manifestPath, readManifest } from './manifest.mjs';
+import { declaredBudget, declaredShared, manifestPath, readManifest } from './manifest.mjs';
 import { commandCard, CARD_LIMIT_BYTES } from '../kernel/card.mjs';
 import { packToBudget } from '../kernel/budget.mjs';
 import { filterInferable, inferableDefect, inferableProofs } from '../kernel/inferability.mjs';
@@ -431,6 +431,20 @@ async function inferableEvidence(root, { stack, facts, manifest }) {
  * about what the region should contain — a divergence here would report drift
  * where none exists, and CI would flake on a clean tree.
  */
+/**
+ * Is this rule one this package ships, rather than one the repository added?
+ *
+ * Two lists, because two sources are read: profiles carry the `origin` they were loaded
+ * from (`central` for `rules/`, `pack`, `local`), while the canonical `.mdc` rules are read
+ * out of the package and have no origin at all — only a `rules/mdc/…` source. Asking
+ * `origin === 'central'` of both silently drops every process rule from the workspace's
+ * shared file, which is how the first version of this predicate lost three of five rules
+ * in a two-repository measurement without failing anything.
+ */
+function toolRule(rule) {
+  return rule.origin !== undefined ? rule.origin === 'central' : rule.source.startsWith('rules/');
+}
+
 export async function desiredRegion(root, flags) {
   const { stack, facts, manifest } = await fingerprint(root);
   const all = await loadRules(root);
@@ -530,6 +544,75 @@ export async function desiredRegion(root, flags) {
   }
   const folded = foldsRules(resolved) ? bodies.map(({ rule }) => rule.id) : [];
 
+  // The workspace-shared rules this repository declared (ADR-084).
+  //
+  // Read from the manifest and never from the reader's home directory, because this
+  // function is what `sync` and `check` both call: a region that depended on what
+  // somebody had installed would render differently on a machine where they had not,
+  // and CI would report drift on a tree `sync` had just written. The ids travel in the
+  // manifest so the answer to "what leaves this region" is a fact about the repository.
+  const declared = declaredShared(manifest);
+  const carriedIds = new Set(declared.level === null ? [] : [...declared.rules]);
+
+  // Every rule the workspace carries, as the rule objects the index below names. Both
+  // lists, because a surface that folds its rules into the primary document carries the
+  // canonical process bodies in that document too — and a reader who cannot find
+  // `slice-commit` anywhere near their repository will look for it in AGENTS.md.
+  const carried = [
+    ...shipped.filter((r) => carriedIds.has(r.id)).map((rule) => ({ rule, kind: 'profile' })),
+    ...bodies.filter(({ rule }) => carriedIds.has(rule.id)).map(({ rule }) => ({ rule, kind: 'process' })),
+  ];
+
+  // The rules this root would carry in its region, with the bytes it would carry them
+  // in — the input ADR-084's workspace intersection compares.
+  //
+  // Computed from `shipped` rather than from what the region ends up carrying, and that
+  // is the whole reason it is computed at all: a rule already declared shared must still
+  // appear here, or a second `shared install` would intersect against a list that no
+  // longer contained it and shrink the shared file every time anybody ran the command.
+  // The declaration is an input to the region; it is not an input to what is shareable.
+  const shareable = [
+    // Only the rules this package ships. A repository's own profile, or a pack it
+    // installed, is policy somebody chose to write: carrying it into a shared home file
+    // would mean editing that file to change a repository's rules, and the copy would
+    // reach every other repository in the estate that declared the same id. A rule
+    // somebody can override must stay somewhere they own.
+    ...shipped
+      .filter((r) => r.error === null && toolRule(r) && typeof r.id === 'string' && r.id !== '')
+      .map((r) => ({
+        id: r.id,
+        source: r.source,
+        priority: r.priority ?? null,
+        rendered: frameSource(r, stripFrontmatter(r.body).trim(), 'profile'),
+      })),
+    // The folded process bodies, and only while they are folded. A surface that writes
+    // one file per rule expects that file at a path inside the repository, so a
+    // user-level copy cannot stand in for it — but when the surface folds the whole region
+    // into the primary document, those bytes are as repeated across a workspace as the
+    // profiles are, and `tokens --repos` named them as the last duplicate block in a
+    // two-repository measurement.
+    ...bodies
+      .filter(({ rule }) => folded.includes(rule.id) && toolRule(rule))
+      .map(({ rule, body }) => ({
+        id: rule.id,
+        source: rule.source,
+        priority: rule.priority ?? null,
+        rendered: frameSource(rule, body, 'process'),
+      })),
+  ].filter((r) => r.rendered !== '');
+
+  // The selected rules that are not shareable, with the reason. `shared plan` reporting
+  // only what it carries would imply every profile in the workspace had been accounted
+  // for, and a reader whose own house rule is missing from the list would conclude it
+  // moved — so the names it did not take, and why, are data rather than an omission.
+  const shareableIds = new Set(shareable.map((r) => r.id));
+  const excluded = selected
+    .filter((r) => typeof r.id === 'string' && r.id !== '' && !shareableIds.has(r.id))
+    .map((r) => ({
+      id: r.id,
+      why: r.error !== null ? 'error' : toolRule(r) ? 'empty' : 'policy',
+    }));
+
   // The budget, and the bytes held back for what loads beside the region.
   //
   // Read from the manifest rather than from the plan's spelling of it. Plan 0003 R08
@@ -557,7 +640,11 @@ export async function desiredRegion(root, flags) {
    * scoping into it would make the ceiling depend on a surface this repository selected.
    */
   const assemble = (cut) => {
-    const kept = shipped.filter((r) => !cut.has(r.id));
+    // A rule the workspace carries once leaves the region, and so does a rule the packer
+    // could not afford. Both are exclusions from the same list, so the section below can
+    // name all three reasons — which is the only reason the section exists: a reader who
+    // opens AGENTS.md and does not find a rule they know is there will look for it.
+    const kept = shipped.filter((r) => !cut.has(r.id) && !carriedIds.has(r.id));
     let text = card.text ? `${card.text}\n\n${render(kept)}` : render(kept);
     const sources = kept.map((r) => r.source);
 
@@ -574,23 +661,35 @@ export async function desiredRegion(root, flags) {
       for (const r of scoped) sources.push(r.source);
     }
 
-    // Both reasons a rule is missing land in this one section. A rule deferred by its class
-    // and a rule cut to reach a byte count are different decisions, but they are the same
-    // fact to a reader — it is not in the file — and splitting them into two sections
-    // would spend region bytes on a heading nobody can act on. The line says which it was,
-    // because a rule cut for a budget is not evidence that the kernel was ever asked to
-    // leave it out.
+    // Every reason a rule is missing lands in this one section, and each line says which
+    // it was. A rule deferred by its class, a rule cut to reach a byte count and a rule
+    // the workspace carries once are three different decisions, but they are the same fact
+    // to a reader — it is not in this file — and three headings would spend region bytes
+    // on structure nobody can act on. The line names the command that shows the rule,
+    // because for all three the remedy is the same single read.
+    //
+    // The label is the rule's own frame title, which is why each entry carries the kind it
+    // is rendered as: a canonical rule that the surface folds in is `Process: <id>` in the
+    // shared file, and an index that calls it `Stack:` sends the reader looking for the
+    // wrong thing.
     const omitted = [
-      ...deferred.map((r) => ({
-        rule: r,
-        why: `${r.priority ?? 'unclassified'}, deferred in kernel mode`,
-      })),
+      ...deferred.map((r) => ({ rule: r, kind: 'profile', why: `${r.priority ?? 'unclassified'}, deferred in kernel mode` })),
       ...shipped
         .filter((r) => cut.has(r.id))
         .map((r) => ({
           rule: r,
+          kind: 'profile',
           why: `${r.priority ?? 'unclassified'}, cut to fit the declared budget of ${budget} bytes`,
         })),
+      ...carried.map(({ rule, kind }) => ({
+        rule,
+        kind,
+        // No path here, deliberately. This text is rendered by `sync` in CI, where the
+        // reader's home directory is somebody else's, and a path is the one thing in a
+        // remedy that cannot be true on both. The remedy is a command that works on the
+        // machine the reader is on.
+        why: `${rule.priority ?? 'unclassified'}, carried once per workspace in your reader's user-level rules file instead; if your reader has no copy, run: ${CLI} shared install`,
+      })),
     ];
     if (omitted.length > 0) {
       // The pointer is the same shape as the scoped one above, and for the same reason:
@@ -599,15 +698,24 @@ export async function desiredRegion(root, flags) {
       const lines = omitted
         .sort((a, b) => byPriorityThenId(a.rule, b.rule))
         .map(
-          ({ rule, why }) =>
-            `- ${sourceTitle(rule, 'profile')} — ${why}. Show it with: ${CLI} rules show ${rule.id}`,
+          ({ rule, kind, why }) =>
+            `- ${sourceTitle(rule, kind)} — ${why}. Show it with: ${CLI} rules show ${rule.id}`,
         );
-      text += `\n\n## Deferred rules\n\n${lines.join('\n')}`;
+      // `## Rules not in this region`, not `## Deferred rules`. The heading was written
+      // when there was one reason to be here (ADR-073) and it is region text a reader
+      // reads, so a heading that names one of three reasons misdescribes the two others
+      // (ADR-084).
+      text += `\n\n## Rules not in this region\n\n${lines.join('\n')}`;
       for (const { rule } of omitted) sources.push(rule.source);
     }
 
     if (folded.length > 0) {
       for (const { rule, body: ruleBody } of bodies) {
+        // A body the workspace carries once is not folded in here either. The heading is
+        // about how the surface loads the region, so it stays; the rule under it does not,
+        // and a region that carried the same bytes twice is the redundancy ADR-084 exists
+        // to remove — reintroduced by the feature that removes it.
+        if (carriedIds.has(rule.id)) continue;
         // `## Process:`, not `### id`. The body already uses `##`, and a third-level
         // heading in front of a second-level one is the break a reader cannot repair.
         text += `\n\n${frameSource(rule, ruleBody, 'process')}`;
@@ -633,7 +741,14 @@ export async function desiredRegion(root, flags) {
       // Least valuable first: the comparator the deferred section already uses, reversed.
       // Class decides and the id breaks the tie, so the cut order is a fact about the
       // repository rather than about the order the filesystem listed files in.
-      candidates: [...shipped].sort((a, b) => -byPriorityThenId(a, b)),
+      //
+      // The workspace-shared rules are not candidates, and that is not a rounding: cutting
+      // one cannot make the region smaller by more than the index line it adds to the
+      // section below, because the rule is carried once per workspace whatever this region
+      // does. A packer that spent its budget on them would report a saving it did not make.
+      candidates: shipped
+        .filter((r) => !carriedIds.has(r.id))
+        .sort((a, b) => -byPriorityThenId(a, b)),
       ceiling: budget - reserve,
       costs: (cut) => regionBytes(assemble(cut)),
     });
@@ -679,6 +794,18 @@ export async function desiredRegion(root, flags) {
     folded,
     mode,
     deferred: deferred.map((r) => r.id),
+    // What the workspace carries once per reader instead of here (ADR-084), as ids. The
+    // declaration is what `check` and `sync` both read to decide the region, so the ids
+    // that actually left are reported for the same reason the budget's cuts are: a rule
+    // that disappeared needs a name in the output, or a reader looks for it in vain.
+    carried: carried.map(({ rule }) => rule.id),
+    // What this root could contribute to a workspace's shared file, with the bytes it
+    // would contribute. Read by `simt shared`, never by the projection — which is why
+    // computing it costs a frame per rule and buys nothing on `sync`.
+    shareable,
+    // What it selected and cannot contribute, with the reason. Reported so that a rule
+    // staying in the region is always a decision somebody can see rather than an absence.
+    excluded,
     // What the budget cost this projection (ADR-083), or null in `full` mode where no
     // ceiling is applied because nothing is cut. The finding and `simt tokens` both read
     // this rather than re-deriving it, so a cut cannot be reported one way and measured
@@ -1072,7 +1199,7 @@ async function projectionMode(root) {
  * would move when a file is added to the directory, and a projection that reorders
  * itself on an unrelated commit is a projection nobody can diff (ADR-013).
  */
-function byPriorityThenId(a, b) {
+export function byPriorityThenId(a, b) {
   const classA = PRIORITY_CLASSES.indexOf(a.priority ?? 'style');
   const classB = PRIORITY_CLASSES.indexOf(b.priority ?? 'style');
   if (classA !== classB) return classA - classB;

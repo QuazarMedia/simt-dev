@@ -463,6 +463,15 @@ export function buildManifest({ root, stack = [], sha, version, existing = null,
     // compliance (plan 0003 R02) — a mode chosen by default would be a bet the
     // repository never made. Declared, not generated, for the same reason as `budget`.
     ...(existing?.mode === undefined ? {} : { mode: existing.mode }),
+    // ADR-084: the rules this repository hands to the workspace's user-level copy, and
+    // the level that copy lives at. Declared, not generated, for the same reason as
+    // `budget` and `mode`: `shared install` writes the list once, but the bytes that land
+    // in a repository's region depend on it on every `sync` — so if `upgrade` rewrote it
+    // from its own opinion of what a workspace shares, a repository's region would change
+    // without anybody asking, which is the failure `budget` moving by itself was.
+    // Absent means "no repository in this workspace shares anything", which is the state
+    // every repository is in until somebody runs `shared install`.
+    ...(existing?.shared === undefined ? {} : { shared: existing.shared }),
     // ADR-020: which editors this repo's rules are projected into. Absent means the
     // global standard applies; an explicit empty list is a real choice meaning
     // AGENTS.md only. Recorded rather than inferred, because "which IDE does this repo
@@ -683,6 +692,31 @@ export function budgetFinding(bytes, budget, mode = 'full') {
       ? `raise budget.bytes to ${bytes}, or move rules out of the hard and command classes into convention or style, which is the only way a kernel shrinks`
       : `raise budget.bytes to ${bytes} if the projection is meant to be this size, switch mode to kernel to defer the convention and style rules, or narrow the rules that carry it`,
   };
+}
+
+/**
+ * The workspace-shared rules this repository declared, as a set of ids.
+ *
+ * One reader, because the region, `doctor` and `shared` all need the same answer and a
+ * projection that renders a delta the meter cannot see is the one-question-two-answers
+ * defect this repository exists to end.
+ *
+ * `level` is read and validated rather than assumed, because `user` is the only level any
+ * reader loads from outside a repository and a hand-edited manifest is exactly where a
+ * second value turns up. A list that is not a list of strings yields an empty set: the
+ * repository then projects everything it selects, which is the state it was in before
+ * anybody ran `shared install`, and is never a state that loses a rule.
+ */
+export function declaredShared(manifest) {
+  const shared = manifest?.shared;
+  if (shared === undefined || shared === null) return { level: null, rules: new Set() };
+  const level = shared.level === 'user' ? 'user' : null;
+  const rules = new Set(Array.isArray(shared.rules) ? shared.rules.filter((id) => typeof id === 'string') : []);
+  // A level of `user` with nothing in it is a declaration that changes nothing, and a
+  // level that is not `user` names a place this tool cannot write — so neither is a
+  // reason to drop rules out of a region.
+  if (level === null || rules.size === 0) return { level: null, rules: new Set() };
+  return { level, rules };
 }
 
 export const GENERATED_KEYS = new Set(['$comment', 'projection']);

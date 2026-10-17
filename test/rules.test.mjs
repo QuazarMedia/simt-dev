@@ -126,7 +126,17 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // Measured before the fix: eight clauses across four records, of which the parser
   // found none. Listed by id rather than by count so a record that stops declaring its
   // supersession is a visible change rather than a smaller number.
-  assert.deepEqual(shapes, ['ADR-016', 'ADR-021', 'ADR-023', 'ADR-025', 'ADR-032', 'ADR-042', 'ADR-081']);
+  assert.deepEqual(shapes, [
+    'ADR-016',
+    'ADR-021',
+    'ADR-023',
+    'ADR-025',
+    'ADR-032',
+    'ADR-042',
+    'ADR-073',
+    'ADR-081',
+    'ADR-083',
+  ]);
   for (const d of decisions) {
     for (const p of d.partial) {
       assert.ok(['superseded', 'narrowed', 'withdrawn'].includes(p.kind), `${d.id}: unknown kind ${p.kind}`);

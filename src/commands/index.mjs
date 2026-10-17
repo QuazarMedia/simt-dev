@@ -45,6 +45,7 @@ import {
   benchProbesCommand,
 } from './bench.mjs';
 import { planCommand } from './plan.mjs';
+import { sharedPlanCommand, sharedInstallCommand, sharedWarning } from './shared.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -66,6 +67,11 @@ const GROUPS = new Map([
   ['agent-hooks', 'status'],
   ['harness', 'detect'],
   ['bench', 'mine'],
+  // ADR-084. `shared` is the one group whose default writes nothing, and it is `plan` for
+  // the same reason `skills`'s is `index`: the read answers "what would this do, and
+  // where", and `install` — the subcommand that touches a reader's home directory — is the
+  // one that needs `--yes` before it does anything.
+  ['shared', 'plan'],
 ]);
 
 /**
@@ -99,6 +105,8 @@ export const IMPLEMENTED = {
   'plan status': (args, flags) => planCommand('status', args, flags),
   'plan next': (args, flags) => planCommand('next', args, flags),
   'plan done': (args, flags) => planCommand('done', args, flags),
+  'shared plan': sharedPlanCommand,
+  'shared install': sharedInstallCommand,
   init: initCommand,
   ci: ciCommand,
   'hooks install': (args, flags) => hooksCommand('install', args, flags),
@@ -220,6 +228,13 @@ async function runDoctor(positional, flags) {
   // answer confidently wrong, so the answer is reported rather than inferred
   // (ADR-014).
   const ws = await resolveWorkspace(flags);
+  // The shared file this repository hands rules to (ADR-084). Asked here and nowhere else
+  // because it is the one thing about a repository that is true of the reader's machine
+  // rather than of the tree: `check` must not read `$HOME`, so `doctor` is the only command
+  // that can notice a region that dropped rules into a file nobody has. Reported, never
+  // blocking — a stale copy costs a reader some of their rules, which is worth knowing and
+  // is not this repository's gate failing.
+  const shared = await sharedWarning(root, result.manifest ?? null, flags);
 
   // Under `--json` the document is the whole report, so it has to carry both
   // failures the text path reports AND the workspace answer the text path prints.
@@ -254,6 +269,7 @@ async function runDoctor(positional, flags) {
         detail: ws.detail,
         error: ws.error ?? null,
       },
+      shared,
       ...(failure ?? {}),
     });
     return code;
@@ -276,6 +292,10 @@ async function runDoctor(positional, flags) {
       }`,
       `manifest ${result.manifest ? (result.manifest.error ?? result.manifest.id ?? 'present') : '(absent)'}`,
       `workspace ${ws.root ?? '(none)'}  (${ws.source}: ${ws.detail})`,
+      // Printed only when this repository handed rules to a workspace copy: a line in
+      // every `doctor` is a line in every reader's terminal, and the reader who has
+      // nothing to install is not served by one (ADR-084).
+      ...(shared.declared ? [`shared    ${shared.state}  ${shared.detail}`] : []),
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );

@@ -105,8 +105,7 @@ async function walk(dir) {
  * of what `files` names, which is the content the tool itself reads, plus
  * `package.json`, which the tool reads `engines.node` out of.
  *
- * `files` names DIRECTORIES, not files - `bin`, `src`, `graph`, `rules`,
- * `docs/decisions` - and npm includes a directory recursively. Comparing the
+ * `files` names directories, and npm includes a directory recursively. Comparing the
  * directory names against the wheel's file paths made every one of them report
  * as missing from both, so the expansion happens here rather than at the
  * comparison.

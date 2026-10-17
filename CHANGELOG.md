@@ -6,6 +6,8 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-17
+
 ### The rules and the decisions are readable as MCP resources
 
 A client that wants to browse this tool's rules and rulings had no way to: every answer came back from a tool call with an argument in it. They are addressable now, as one URI per rule and one per decision record, with the byte size each will cost stated up front — the one number a client cannot get without spending the read.
@@ -15,6 +17,30 @@ Both resource revisions of the specification were read rather than recalled, and
 ### A plan is resumed one slice at a time
 
 `simt plan next` returns the next ready slice and only its section. `simt plan done` rewrites that one row, and previews the change unless `--yes` is given. The directories and the table format come from the `plans` key in `simt.json` when a repository sets one; otherwise the tracker template delivered with the tool is used, which reads `docs/plans` and `docs/reviews` (ADR-081, ADR-082). `init` keeps a manifest key it does not write, which is what lets `plans` survive a re-init.
+
+### The rules are enforced at the tool call
+
+Three rules that text does not hold — a `git push`, a `--no-verify`, an edit inside a generated region — are now a decision before the tool call. `simt agent-hooks install` writes one policy into the harnesses that read a hooks file, and keeps every key it does not own. `simt agent-hook` is the entry point those harnesses call (ADR-079).
+
+### A line the repository already proves does not ship
+
+A rule line may say when the repository already proves it. `simt sync` drops that line, and `--explain` names the line and the fact, so a removal is visible rather than silent (ADR-078).
+
+### The region leads with this repository's commands
+
+The projected region opens with the commands this repository actually runs, derived from its committed gates and runner, in both the full projection and kernel mode (ADR-077).
+
+### A change to what an agent reads can be measured
+
+`simt bench mine`, `run`, `report`, `ablate` and `probes` measure a change to projected context against tasks taken from this repository's own history. A change that cannot be run says `unmeasured` in its record rather than implying a result (ADR-076).
+
+### What each reader loads, and a transcript split
+
+`simt harness loaders` reports what each reader loads at session start, in bytes, and what its size cap drops. DeepSeek is one of those readers. `simt tokens --session` splits a local Claude Code or Codex transcript into rules, file reads and tool output.
+
+### A name this tool owns is not reported as a repository
+
+`simt rules why` keeps this tool's own names (`simt-priority`, `simt-hooks`, and the rest) and still redacts a repository the reader cannot open (ADR-080).
 
 ## [0.2.2] — 2026-10-14
 
@@ -537,6 +563,7 @@ never ran `simt hooks install` again will find nothing until the dependency is r
 and `simt hooks install --yes` is re-run. That is a real upgrade step and it is called out
 here rather than discovered.
 
+[0.3.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.3.0
 [0.2.2]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.2.2
 [0.2.1]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.2.1
 [0.2.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.2.0

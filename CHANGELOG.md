@@ -10,6 +10,10 @@ All notable changes to this package are recorded here. The format follows
 
 `simt shared plan` names the rules every repository in a workspace renders with the same bytes, and where each harness would load that copy. `simt shared install --yes` writes the copy into the user-level file the harness actually reads, and records the ids on each repository's manifest under `shared`. The next `simt sync` drops those rules from the region and names them, with the command that shows each one. `simt doctor` says when the copy is missing or stale, and does not fail the repository for it. The 30 KB estate bar and the bench comparison are unmeasured (ADR-084).
 
+### The region ends with the names of what it kept out
+
+The generated region ends with a `## Disclosure` section: one line per scoped profile, with the patterns and the files it moved to, and one line per installed skill, with its name and the description that says when to open it. The skill body stays in its file. A surface that cannot narrow a profile still carries that profile in the region (ADR-085).
+
 ## [0.3.0] — 2026-10-17
 
 ### The rules and the decisions are readable as MCP resources

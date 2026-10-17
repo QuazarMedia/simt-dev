@@ -400,7 +400,9 @@ per scoped rule and per skill (name and trigger), so the agent knows what exists
 loading it.
 
 **Accept.** Scoped content is absent at session start and present once a matching file is
-touched, verified per surface on fixtures.
+touched, verified per surface on fixtures. Shipped as ADR-085. The fixture renders each
+surface: a surface that can narrow leaves the body out of the region and writes the file
+it loads on a match, and a surface that cannot keeps the body. The harness is not driven.
 
 ### R13 — Cache-stable rendering (S)
 
@@ -861,7 +863,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R09 | Inferability filter | 1 | R07 | S | — (ADR-078) | expected removals with reasons | Complete |
 | R10 | Command card | 1 | — | S | — (ADR-077) | every card command runs on 10 fixtures | Complete |
 | R11 | Workspace dedupe | 1 | R07, R14 | M | 0002 P7 (ADR-084) | estate ≤ 30 KB, no R loss (unmeasured) | Complete |
-| R12 | Scoped loading and disclosure index | 1 | review 0002 S41, S50 | M | 0002 P7 | scoped content absent at start | Queued |
+| R12 | Scoped loading and disclosure index | 1 | review 0002 S41, S50 | M | 0002 P7 (ADR-085) | scoped content absent at start | Complete |
 | R13 | Cache-stable rendering and lockfile | 1 | review 0002 S01 | S | 0002 P1 | byte-identical across machines | Queued |
 | R14 | Harness loader table | 1 | — | S | — | provenance on every row | Complete |
 | R15 | Agent-time hooks from one policy | 2 | R14, R17 | L | D4 (ADR-079) | decisions correct per harness; p95 < 100 ms | Complete |

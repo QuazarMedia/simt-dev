@@ -36,6 +36,7 @@ import { packToBudget } from '../kernel/budget.mjs';
 import { filterInferable, inferableDefect, inferableProofs } from '../kernel/inferability.mjs';
 import { BASELINES } from './baselines.mjs';
 import { CLI } from '../name.mjs';
+import { installedSkills } from './disclosure.mjs';
 import { PACK_DIR, resolvePacks } from '../packs.mjs';
 import { discoverPackages } from '../monorepo.mjs';
 
@@ -622,6 +623,10 @@ export async function desiredRegion(root, flags) {
   // plan is not edited: the key it names is wrong, and a ruling that supersedes it is
   // the record of why.
   const budget = declaredBudget(manifest);
+  // Names and triggers only. Read once, outside the packer, because a skill does not
+  // change as rules are cut and reading its body here would put the cost back into the
+  // region the index exists to keep it out of (ADR-085).
+  const skills = await installedSkills(root);
 
   // The digest is needed before the region can be weighed rather than after, because the
   // provenance header is part of what lands in the file. `provenanceDigest` is a pure
@@ -634,10 +639,9 @@ export async function desiredRegion(root, flags) {
    *
    * One function, called once for the whole projection and again for each attempt the
    * packer makes, so a cut region and an uncut one are the same document by construction
-   * rather than by two functions agreeing. Everything that is NOT about the kernel's
-   * contents lives outside it — the card, the inferability notes, the scoped pointers, the
-   * folded process bodies — because a budget is a decision about rules, and folding or
-   * scoping into it would make the ceiling depend on a surface this repository selected.
+   * rather than by two functions agreeing. The card, the inferability notes, the folded
+   * process bodies and the disclosure index are not candidates for a cut: a budget is a
+   * decision about rules, and dropping the index would hide the rules the cut removed.
    */
   const assemble = (cut) => {
     // A rule the workspace carries once leaves the region, and so does a rule the packer
@@ -647,19 +651,6 @@ export async function desiredRegion(root, flags) {
     const kept = shipped.filter((r) => !cut.has(r.id) && !carriedIds.has(r.id));
     let text = card.text ? `${card.text}\n\n${render(kept)}` : render(kept);
     const sources = kept.map((r) => r.source);
-
-    // The pointer. A reader who opens AGENTS.md and does not find a profile they know is
-    // there will look for it, and the honest answer is where it moved: the file a scoping
-    // surface loads it from, and the files it now matches. Without the line the region's
-    // source list is quietly short one entry, which reads as a rule that was deleted.
-    if (scoped.length > 0 && narrowing) {
-      const lines = scoped.map(
-        (r) =>
-          `- ${sourceTitle(r, 'profile')} — loads only when a matching file is in play (${r.scope.join(', ')}): ${scopedPaths(r, resolved).join(', ')}`,
-      );
-      text += `\n\n## Scoped rules\n\n${lines.join('\n')}`;
-      for (const r of scoped) sources.push(r.source);
-    }
 
     // Every reason a rule is missing lands in this one section, and each line says which
     // it was. A rule deferred by its class, a rule cut to reach a byte count and a rule
@@ -722,6 +713,31 @@ export async function desiredRegion(root, flags) {
         sources.push(rule.source);
       }
     }
+
+    // Last, because this is the index of what the file deliberately does not contain
+    // (ADR-085). A scoped profile keeps the pointer ADR-071 requires — its patterns and
+    // the files it moved to — and a skill keeps its name and the description that says
+    // when to open it. The body of either is the thing that was moved out.
+    const disclosure = [];
+    if (scoped.length > 0 && narrowing) {
+      for (const r of scoped) {
+        disclosure.push(
+          `- ${sourceTitle(r, 'profile')} — loads only when a matching file is in play (${r.scope.join(', ')}): ${scopedPaths(r, resolved).join(', ')}`,
+        );
+        sources.push(r.source);
+      }
+    }
+    const skillNames = new Map();
+    for (const skill of skills) skillNames.set(skill.name, (skillNames.get(skill.name) ?? 0) + 1);
+    for (const skill of skills) {
+      const label = skillNames.get(skill.name) > 1 ? `${skill.name} (${skill.dir})` : skill.name;
+      disclosure.push(
+        skill.trigger === ''
+          ? `- ${label} — no description, so nothing says when to open it. Show it with: ${CLI} skills show ${skill.name}`
+          : `- ${label} — ${skill.trigger}`,
+      );
+    }
+    if (disclosure.length > 0) text += `\n\n## Disclosure\n\n${disclosure.join('\n')}`;
 
     return { body: text, sources };
   };

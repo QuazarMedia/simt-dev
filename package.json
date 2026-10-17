@@ -1,6 +1,6 @@
 {
   "name": "simt-dev",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "Shared agent rules, skills and git hooks for a repository: one command adopts a repo, and every gate it declares is probed before it is written.",
   "license": "Apache-2.0",
   "author": "Said Elimam",

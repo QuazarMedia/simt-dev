@@ -29,8 +29,10 @@ import { fingerprint, KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, frontmatterBlock, resolveSurfaces, rulePath, canScope } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
-import { manifestPath, readManifest } from './manifest.mjs';
+import { compose } from './markers.mjs';
+import { declaredBudget, manifestPath, readManifest } from './manifest.mjs';
 import { commandCard, CARD_LIMIT_BYTES } from '../kernel/card.mjs';
+import { packToBudget } from '../kernel/budget.mjs';
 import { filterInferable, inferableDefect, inferableProofs } from '../kernel/inferability.mjs';
 import { BASELINES } from './baselines.mjs';
 import { CLI } from '../name.mjs';
@@ -512,8 +514,6 @@ export async function desiredRegion(root, flags) {
     for (const x of filtered.removed) inferable.push({ rule: r.id, text: x.text, expr: x.expr });
     shipped.push({ ...r, body: filtered.body });
   }
-  let body = card.text ? `${card.text}\n\n${render(shipped)}` : render(shipped);
-  let sources = shipped.map((r) => r.source);
   if (inferable.length > 0) {
     // Never silent, and never a heading. A line that left with no trace repeats the
     // mistake ADR-073 rejected for deferred rules, and a `## Dropped` section spends region
@@ -528,48 +528,147 @@ export async function desiredRegion(root, flags) {
       }
     }
   }
-  const folded = [];
+  const folded = foldsRules(resolved) ? bodies.map(({ rule }) => rule.id) : [];
 
-  // The pointer. A reader who opens AGENTS.md and does not find a profile they know is
-  // there will look for it, and the honest answer is where it moved: the file a scoping
-  // surface loads it from, and the files it now matches. Without the line the region's
-  // source list is quietly short one entry, which reads as a rule that was deleted.
-  if (scoped.length > 0 && narrowing) {
-    const lines = scoped.map(
-      (r) =>
-        `- ${sourceTitle(r, 'profile')} — loads only when a matching file is in play (${r.scope.join(', ')}): ${scopedPaths(r, resolved).join(', ')}`,
-    );
-    body += `\n\n## Scoped rules\n\n${lines.join('\n')}`;
-    for (const r of scoped) sources.push(r.source);
-  }
+  // The budget, and the bytes held back for what loads beside the region.
+  //
+  // Read from the manifest rather than from the plan's spelling of it. Plan 0003 R08
+  // wrote `projection.budget.bytes`, and ADR-072 moved the key to the top level because
+  // `projection` is a generated key `upgrade` replaces wholesale - a budget that reset
+  // itself on upgrade would reset the reader's context size without anyone asking. The
+  // plan is not edited: the key it names is wrong, and a ruling that supersedes it is
+  // the record of why.
+  const budget = declaredBudget(manifest);
 
-  if (deferred.length > 0) {
-    // The pointer is the same shape as the scoped one above, and for the same reason:
-    // a reader who opens AGENTS.md and does not find a rule they know is there will
-    // look for it. What it costs to find it has to be one command, named per rule.
-    const lines = [...deferred]
-      .sort(byPriorityThenId)
-      .map(
+  // The digest is needed before the region can be weighed rather than after, because the
+  // provenance header is part of what lands in the file. `provenanceDigest` is a pure
+  // function of the bytes this package ships, so computing it once and passing it down is
+  // the same value the tail of this function was getting on its own.
+  const sha = await provenanceDigest();
+
+  /**
+   * The region, assembled from whatever survived the budget (ADR-083).
+   *
+   * One function, called once for the whole projection and again for each attempt the
+   * packer makes, so a cut region and an uncut one are the same document by construction
+   * rather than by two functions agreeing. Everything that is NOT about the kernel's
+   * contents lives outside it — the card, the inferability notes, the scoped pointers, the
+   * folded process bodies — because a budget is a decision about rules, and folding or
+   * scoping into it would make the ceiling depend on a surface this repository selected.
+   */
+  const assemble = (cut) => {
+    const kept = shipped.filter((r) => !cut.has(r.id));
+    let text = card.text ? `${card.text}\n\n${render(kept)}` : render(kept);
+    const sources = kept.map((r) => r.source);
+
+    // The pointer. A reader who opens AGENTS.md and does not find a profile they know is
+    // there will look for it, and the honest answer is where it moved: the file a scoping
+    // surface loads it from, and the files it now matches. Without the line the region's
+    // source list is quietly short one entry, which reads as a rule that was deleted.
+    if (scoped.length > 0 && narrowing) {
+      const lines = scoped.map(
         (r) =>
-          `- ${sourceTitle(r, 'profile')} — ${r.priority ?? 'unclassified'}, deferred in kernel mode. Show it with: ${CLI} rules show ${r.id}`,
+          `- ${sourceTitle(r, 'profile')} — loads only when a matching file is in play (${r.scope.join(', ')}): ${scopedPaths(r, resolved).join(', ')}`,
       );
-    body += `\n\n## Deferred rules\n\n${lines.join('\n')}`;
-    for (const r of deferred) sources.push(r.source);
-  }
+      text += `\n\n## Scoped rules\n\n${lines.join('\n')}`;
+      for (const r of scoped) sources.push(r.source);
+    }
 
-  if (foldsRules(resolved)) {
-    for (const { rule, body: ruleBody } of bodies) {
-      // `## Process:`, not `### id`. The body already uses `##`, and a third-level
-      // heading in front of a second-level one is the break a reader cannot repair.
-      body += `\n\n${frameSource(rule, ruleBody, 'process')}`;
-      sources.push(rule.source);
-      folded.push(rule.id);
+    // Both reasons a rule is missing land in this one section. A rule deferred by its class
+    // and a rule cut to reach a byte count are different decisions, but they are the same
+    // fact to a reader — it is not in the file — and splitting them into two sections
+    // would spend region bytes on a heading nobody can act on. The line says which it was,
+    // because a rule cut for a budget is not evidence that the kernel was ever asked to
+    // leave it out.
+    const omitted = [
+      ...deferred.map((r) => ({
+        rule: r,
+        why: `${r.priority ?? 'unclassified'}, deferred in kernel mode`,
+      })),
+      ...shipped
+        .filter((r) => cut.has(r.id))
+        .map((r) => ({
+          rule: r,
+          why: `${r.priority ?? 'unclassified'}, cut to fit the declared budget of ${budget} bytes`,
+        })),
+    ];
+    if (omitted.length > 0) {
+      // The pointer is the same shape as the scoped one above, and for the same reason:
+      // a reader who opens AGENTS.md and does not find a rule they know is there will
+      // look for it. What it costs to find it has to be one command, named per rule.
+      const lines = omitted
+        .sort((a, b) => byPriorityThenId(a.rule, b.rule))
+        .map(
+          ({ rule, why }) =>
+            `- ${sourceTitle(rule, 'profile')} — ${why}. Show it with: ${CLI} rules show ${rule.id}`,
+        );
+      text += `\n\n## Deferred rules\n\n${lines.join('\n')}`;
+      for (const { rule } of omitted) sources.push(rule.source);
+    }
+
+    if (folded.length > 0) {
+      for (const { rule, body: ruleBody } of bodies) {
+        // `## Process:`, not `### id`. The body already uses `##`, and a third-level
+        // heading in front of a second-level one is the break a reader cannot repair.
+        text += `\n\n${frameSource(rule, ruleBody, 'process')}`;
+        sources.push(rule.source);
+      }
+    }
+
+    return { body: text, sources };
+  };
+
+  // What the region will weigh in the file it lands in, measured the way the meter
+  // measures it: the composed region text, markers and provenance header included. One
+  // byte conservative, because the file's own trailing newline falls outside the span —
+  // and conservative in that direction is the only direction a ceiling can afford.
+  const regionBytes = (assembled) =>
+    Buffer.byteLength(compose(assembled.body, { sha, sources: assembled.sources }));
+
+  let assembled = assemble(new Set());
+  let packing = null;
+  if (mode === 'kernel') {
+    const reserve = await budgetReserve(root, resolved, bodies, sha);
+    const result = packToBudget({
+      // Least valuable first: the comparator the deferred section already uses, reversed.
+      // Class decides and the id breaks the tie, so the cut order is a fact about the
+      // repository rather than about the order the filesystem listed files in.
+      candidates: [...shipped].sort((a, b) => -byPriorityThenId(a, b)),
+      ceiling: budget - reserve,
+      costs: (cut) => regionBytes(assemble(cut)),
+    });
+    packing = { ...result, bytes: budget, ceiling: budget - reserve, reserve };
+    if (result.cut.length > 0) assembled = assemble(new Set(result.cut));
+    if (result.cut.length > 0) {
+      notes.push(
+        `budget: cut ${result.cut.length} kernel rule(s) — ${result.cut.join(', ')} — from ${result.before} to ${result.after} bytes against a declared budget of ${budget}, with ${reserve} reserved for the generated files that load beside the region`,
+      );
+    }
+    if (result.floorHeld) {
+      // The one case the packer cannot fix, said where the reader will see it. `hard` is
+      // the floor, so the bytes still over the line are this repository's own hard
+      // constraints and the only levers left are its own: a larger budget, or a rule that
+      // is not as hard as it is declared. ADR-072's kernel finding says both; this says
+      // they were tried first.
+      notes.push(
+        `budget: still ${result.after} bytes after every rule outside the hard class was cut, against a ceiling of ${budget - reserve}; a hard constraint is not cut to reach a byte count, so the kernel itself is over the line`,
+      );
+    }
+    if (result.floorHeld && reserve >= budget) {
+      // A ceiling of zero or less is arithmetically true and useless to read: it says the
+      // region is allowed no bytes, without saying that the files loading beside it have
+      // already spent the whole budget. One number in that manifest is the only lever, and
+      // a reader left to infer it from a subtraction is a reader who will demote a hard
+      // rule to fix a budget that was set below the files it covers.
+      notes.push(
+        `budget: the ${reserve} bytes reserved for the generated files that load beside the region already reach the ${budget} declared, so no cut order meets this budget and the region is cut as far as the hard class allows`,
+      );
     }
   }
 
   const meta = {
-    sha: await provenanceDigest(),
-    sources,
+    sha,
+    sources: assembled.sources,
   };
   return {
     stack,
@@ -580,6 +679,23 @@ export async function desiredRegion(root, flags) {
     folded,
     mode,
     deferred: deferred.map((r) => r.id),
+    // What the budget cost this projection (ADR-083), or null in `full` mode where no
+    // ceiling is applied because nothing is cut. The finding and `simt tokens` both read
+    // this rather than re-deriving it, so a cut cannot be reported one way and measured
+    // another.
+    budget: packing === null
+      ? null
+      : {
+          bytes: packing.bytes,
+          ceiling: packing.ceiling,
+          reserve: packing.reserve,
+          before: packing.before,
+          after: packing.after,
+          floorHeld: packing.floorHeld,
+          cuts: shipped
+            .filter((r) => packing.cut.includes(r.id))
+            .map((r) => ({ id: r.id, priority: r.priority ?? 'unclassified' })),
+        },
     // The marked lines that left, each with the evidence that dropped it. The region is
     // written without them; `--explain` is what reads this list, so a removal is reportable
     // without spending region bytes and without a second computation to find it.
@@ -594,9 +710,55 @@ export async function desiredRegion(root, flags) {
     problems,
     fallback,
     notes,
-    body,
+    body: assembled.body,
     meta,
   };
+}
+
+/**
+ * The bytes held back from the region's own ceiling for the always-on files that load
+ * beside it.
+ *
+ * The budget is one number for a repository, not for one file, so packing the region
+ * against the whole number would ship a projection that fits on its own and pushes the
+ * total over the line the moment its rule files are written. Both terms below are lower
+ * bounds on what that costs, and the larger is taken because the failure each one covers
+ * is the one that must not happen: under-reserving reports compliance for a projection
+ * that is over budget.
+ *
+ * The region's own span is deliberately not in either. It is the one number that moves
+ * when this projection is packed, and a ceiling that depended on the thing it governs
+ * would rewrite the region on the next run and report drift on a tree `sync` had just
+ * written - the step-6 defect, rebuilt one layer up.
+ *
+ * @param {string} root
+ * @param {object} resolved the surfaces this projection writes for
+ * @param {{rule: object, body: string}[]} bodies the rule bodies being projected
+ * @param {string} sha the provenance digest those files will be stamped with
+ * @returns {Promise<number>}
+ */
+async function budgetReserve(root, resolved, bodies, sha) {
+  // Imported here rather than at the top of the module: `measure/context.mjs` reaches back
+  // into `projection/project.mjs` for the read-limit findings, so a static import from
+  // `rules.mjs` closes a loop through three modules that all have to survive being loaded
+  // in any order. The loop between the other two already exists and is load-bearing in
+  // neither direction; this one is walked only when a kernel is being packed.
+  const { measureRoot } = await import('../measure/context.mjs');
+  const measured = await measureRoot(root);
+  const region = measured.documents.find((d) => d.channel === 'region');
+  const installed = Math.max(0, measured.generatedBytes - (region?.generatedBytes ?? 0));
+
+  // What this projection is about to write, for a repository that has not written it yet.
+  // `ruleTargets` is the one place a rule file is turned into bytes, so the number comes
+  // from there rather than from a second measurement of the same file — and its notes go
+  // nowhere, because `mdcTargets` reports the same ones for the same files in the same run.
+  let planned = 0;
+  for (const { rule, body } of bodies) {
+    for (const target of (await ruleTargets(root, rule, body, sha, resolved, [])).targets) {
+      planned += target.bytes;
+    }
+  }
+  return Math.max(installed, planned);
 }
 
 /**

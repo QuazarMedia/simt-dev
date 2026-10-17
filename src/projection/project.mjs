@@ -26,6 +26,7 @@ import { checkTsconfig } from '../tsconfig.mjs';
 import { checkToolchain } from '../toolchain.mjs';
 import { diff, parse, inject, BEGIN, END } from './markers.mjs';
 import { budgetFinding, readManifest } from './manifest.mjs';
+import { budgetCutFinding } from '../kernel/budget.mjs';
 import { measureRoot } from '../measure/context.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
@@ -165,23 +166,6 @@ export async function checkTargets(root, flags = {}) {
     findings.push(...readLimitFindings(text, PRIMARY_TARGET));
   }
 
-  // The budget: what this repository agreed to carry, against what it carries.
-  //
-  // Measured from the same `desiredRegion` the region above was compared against, plus
-  // the rule files this function went on to compare, because a gate and a meter that
-  // each counted their own set would report two different totals for one repository and
-  // the reader would have no way to tell which was the budget. Both numbers are the
-  // DESIRED ones, so a drifted repo is reported against what it would carry after a
-  // sync rather than what it carries today.
-  //
-  // Non-blocking by design: nothing is cut, because there is nothing to cut yet (ADR-072).
-  const budgetTotal = await alwaysOnBytes(root);
-  if (budgetTotal !== null) {
-    const { manifest } = await readManifest(root);
-    const over = budgetFinding(budgetTotal.bytes, manifest?.budget, manifest?.mode);
-    if (over) findings.push({ ...over, file: MANIFEST_FILE, detail: over.detail });
-  }
-
   // Every package of a monorepo is a projection root in its own right, so the gate
   // covers it the way it covers the root. A nested region that drifts is as stale as
   // the root's region, and the reader working in that package reads only that file.
@@ -246,6 +230,29 @@ export async function checkTargets(root, flags = {}) {
   const all = await loadMdcRules();
   const desired = await desiredRegion(root, flags);
   const { stack, facts, manifest } = desired;
+
+  // The budget, both halves of it, and in that order: what this repository agreed to
+  // carry against what it carries, then what was cut to get there.
+  //
+  // The total comes from the meter rather than from a sum this file could do itself,
+  // because a gate and a meter that each counted their own set would report two different
+  // numbers for one repository and the reader would have no way to tell which was the
+  // budget (ADR-072). The cut comes from the projection itself for the same reason — the
+  // packer wrote it, so the packer's own record of it is the one that cannot disagree with
+  // what `sync` would write.
+  //
+  // Both are non-blocking, for the reason ADR-072 gave for the first and ADR-083 for the
+  // second: the remedy is a decision about the number, not a missing file.
+  const budgetTotal = await alwaysOnBytes(root);
+  if (budgetTotal !== null) {
+    const over = budgetFinding(budgetTotal.bytes, manifest?.budget, manifest?.mode);
+    if (over) findings.push({ ...over, file: MANIFEST_FILE, detail: over.detail });
+  }
+  const packed = desired.budget;
+  if (packed !== null && packed.cuts.length > 0) {
+    findings.push(budgetCutFinding({ file: PRIMARY_TARGET, ...packed }));
+  }
+
   const declared = await readDeclared(root);
   const resolved = resolveSurfaces(manifest, flags);
   for (const p of resolved.problems) {

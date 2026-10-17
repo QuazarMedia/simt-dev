@@ -371,6 +371,129 @@ test('check raises the budget finding, and does not fail on it', async () => {
   assert.equal(code, before.code, 'an over-budget finding must not change the gate exit code');
 });
 
+// --- R08: a budget the projection meets, measured by the meter ------------------
+//
+// The three tests above establish that a budget is declared, measured and reported.
+// None of them establishes that it is ever MET, which is the half of R08 that has to be
+// true before the number means anything: a ceiling nothing acts on is a comment in a
+// JSON file. Both tests below drive the binary end to end - declare, sync, measure - and
+// judge the result with `tokens`' own number rather than the packer's, because a second
+// definition of one ceiling is the defect this arrangement exists to prevent.
+
+/** A python repository whose own profiles give a kernel something worth cutting. */
+async function cuttable() {
+  const root = await repo(await scratch(), 'alpha');
+  await writeFile(join(root, 'pyproject.toml'), '[project]\nname = "alpha"\n');
+  await mkdir(join(root, '.simt-dev', 'profiles'), { recursive: true });
+  for (const id of ['house-alpha', 'house-beta']) {
+    // Fat, for the reason kernel.test.mjs's fixture is: naming a cut rule costs the
+    // region a line in its deferred section, so a one-line rule costs more to cut than
+    // it saves and no budget could ever be met.
+    const body = Array.from(
+      { length: 60 },
+      (_, i) => `A generated sentence ${i} in ${id}, long enough to cost a reader real context bytes.\n\n`,
+    ).join('');
+    await writeFile(
+      join(root, '.simt-dev', 'profiles', `${id}.md`),
+      `---\nsimt-id: ${id}\nsimt-title: ${id}\nsimt-applies: [python]\nsimt-priority: command\n---\n\n# ${id}\n\n${body}`,
+    );
+  }
+  const manifest = buildManifest({ root, stack: ['python'], sha: 'abc1234', version: '0.2.1' });
+  await writeFile(join(root, 'simt.json'), manifestText({ ...manifest, mode: 'kernel' }));
+  return root;
+}
+
+test('a kernel that declares a budget under it is cut, and the meter agrees it fits', async () => {
+  const root = await cuttable();
+  await gate(['sync', '--yes', '--root', root]);
+  const uncut = (await json(['--root', root])).roots[0];
+  const whole = await readFile(join(root, 'AGENTS.md'), 'utf8');
+  assert.match(whole, /A generated sentence 0 in house-alpha/, 'the fixture starts over any budget we would pick');
+  // Captured before the budget exists, so the exit code has something to be compared
+  // against. This fixture has findings of its own; the property is that cutting does not
+  // change the code, not that a half-adopted fixture is green.
+  const before = await gate(['check', '--root', root]);
+
+  // Every droppable byte of slack, so the cut cannot be a coincidence of how the rules
+  // happen to weigh today.
+  const chosen = uncut.generatedBytes - 1_000;
+  const { manifest } = await readManifest(root);
+  await writeFile(join(root, 'simt.json'), manifestText({ ...manifest, budget: { bytes: chosen } }));
+  const second = await gate(['sync', '--yes', '--root', root]);
+
+  // Said out loud, because a projection that quietly got smaller is indistinguishable
+  // from one that quietly lost a rule (ADR-073 ruling 6). One rule and not two: the
+  // packer drops the least valuable until the line is met, and this budget needs one
+  // drop. Cutting `house-alpha` as well would have cost a reader a rule for nothing.
+  assert.match(second.out, /note budget: cut 1 kernel rule\(s\) — house-beta — from \d+ to \d+ bytes/, second.out);
+
+  const row = (await json(['--root', root])).roots[0];
+  assert.equal(row.budget.bytes, chosen, 'the declared number is the one it is measured against');
+  assert.equal(row.budget.declared, true);
+  assert.ok(row.generatedBytes < uncut.generatedBytes, 'and it is smaller, so something was cut');
+  // R08's accept criterion, in the meter's words: not "the packer believes it fits" but
+  // "the bytes a reader pays are inside the line the repository drew".
+  assert.equal(row.budget.over, false, `${row.generatedBytes} B over a ${chosen} B budget`);
+  assert.equal(row.budget.finding, null, 'so the budget finding has nothing left to report');
+
+  // The cut rule is named in the file a reader will actually open, with the command that
+  // brings it back, and says which of the two reasons it is missing it is - which is the
+  // one sentence a reader cannot get from anywhere else.
+  const after_ = await readFile(join(root, 'AGENTS.md'), 'utf8');
+  assert.doesNotMatch(after_, /A generated sentence \d+ in house-beta/);
+  assert.match(after_, new RegExp(`house-beta — command, cut to fit the declared budget of ${chosen} bytes`));
+  assert.match(after_, /rules show house-beta/);
+  assert.match(after_, /A generated sentence 0 in house-alpha/, 'the rule that was not needed is untouched');
+
+  // Non-blocking, and the exit code is the assertion: a gate that failed here would fail
+  // a repository for shipping a smaller projection (ADR-072's argument, ADR-083 ruling 6).
+  const gate_ = await gate(['check', '--root', root]);
+  assert.equal(gate_.code, before.code, 'a cut must not change the gate exit code');
+  assert.match(gate_.out, /BUDGET-CUT/, 'and the cut is reported even though it does not block');
+  assert.match(gate_.out, new RegExp(`cut from ${uncut.generatedBytes} to ${row.generatedBytes} bytes`));
+});
+
+test('a budget covers the rule files that load beside the region, not the region alone', async () => {
+  // The reserve, end to end. One number is for the whole always-on load: a repository
+  // whose rules live in per-rule files has paid for those files whether or not the
+  // region fits. Packing the region against the whole number would ship a projection
+  // that fits on its own and is over the moment its rule files are written.
+  const root = await cuttable();
+  // A surface with its own rule path, which is what puts generated files beside the
+  // region. `opencode` reads AGENTS.md and nothing else, so its reserve is zero and this
+  // test could not tell a working reserve from an absent one.
+  const { manifest } = await readManifest(root);
+  await writeFile(join(root, 'simt.json'), manifestText({ ...manifest, surfaces: ['cursor'] }));
+  await gate(['sync', '--yes', '--root', root]);
+
+  const uncut = (await json(['--root', root])).roots[0];
+  const rules = uncut.channels.find((c) => c.channel === 'rules').generatedBytes;
+  assert.ok(rules > 0, 'the fixture has to write rule files, or it tests nothing');
+  const region = Buffer.byteLength(await readFile(join(root, 'AGENTS.md'), 'utf8'));
+
+  // Region + rule files, less a thousand bytes. The region alone is comfortably inside
+  // this, so a cut here can only have been decided by the reserve.
+  const chosen = region + rules - 1_000;
+  const { manifest: written } = await readManifest(root);
+  await writeFile(join(root, 'simt.json'), manifestText({ ...written, budget: { bytes: chosen } }));
+  await gate(['sync', '--yes', '--root', root]);
+
+  const after_ = await readFile(join(root, 'AGENTS.md'), 'utf8');
+  assert.ok(
+    Buffer.byteLength(after_) < region,
+    'the region was cut even though it fitted on its own, which only the reserve explains',
+  );
+  assert.match(after_, /— command, cut to fit the declared budget of \d+ bytes/, 'and the cut says so in the file');
+  // The whole always-on load, not the region: the file as it sits on disk plus the rule
+  // files the meter bills, inside the number the repository declared.
+  const billed = (await json(['--root', root])).roots[0];
+  assert.ok(
+    Buffer.byteLength(after_) + billed.channels.find((c) => c.channel === 'rules').generatedBytes <= chosen,
+    `${Buffer.byteLength(after_) + rules} B over a ${chosen} B budget`,
+  );
+  assert.equal(billed.budget.over, false);
+});
+
 // --- R06: loader-backed measurement and local session breakdown ----------------
 
 test('tokens uses the R14 loader rules: flat Antigravity scan, scoped rules excluded, Claude @path imports included', async () => {

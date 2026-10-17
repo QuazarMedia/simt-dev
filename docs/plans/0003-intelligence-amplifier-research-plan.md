@@ -1,6 +1,6 @@
 # Plan 0003 — simt-dev as an intelligence amplifier: research and development plan
 
-Status: **in progress — R01–R07, R09, R10, R14, R15 complete** · created 2026-10-06 · state read at `a2bf769`
+Status: **in progress — R01–R10, R14, R15 complete** · created 2026-10-06 · state read at `ddb9022`
 Depends on: review 0002 Waves 0–1 (`docs/reviews/0002-full-review-adoption-and-public-release.md`),
 plan 0002
 Blocked by: every slice here is Queued, and R01 and R02 — the task miner and the agent runner
@@ -856,7 +856,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R05 | Compliance probes | 0 | R02, R17 | M | — | 12 probes with graders | Complete |
 | R06 | Context meter | 0 | R14 | S | D7 (ADR-075) | reproduces 90,042 B / 72% | Complete |
 | R07 | Kernel and commentary split | 1 | R02, R06 | M | D3 (ADR-073) | kernel ≤ 1.5 KB; ΔR ≥ −2, ΔC < 0 | Complete |
-| R08 | Budgeted compilation | 1 | R07 | S | 0002 P7 | budget exact; byte-identical | Queued |
+| R08 | Budgeted compilation | 1 | R07 | S | 0002 P7 | budget exact; byte-identical | Complete |
 | R09 | Inferability filter | 1 | R07 | S | — (ADR-078) | expected removals with reasons | Complete |
 | R10 | Command card | 1 | — | S | — (ADR-077) | every card command runs on 10 fixtures | Complete |
 | R11 | Workspace dedupe | 1 | R07, R14 | M | 0002 P7 | estate ≤ 30 KB, no R loss | Queued |
@@ -928,6 +928,26 @@ or loads the command registry. The accept criterion's headless agent run was not
 cannot be from here: no harness is installed on this machine (`claude`, `codex`, `cursor-agent`,
 `gemini`, `aider` are all absent from `PATH`). That is the one piece of this row's accept that
 is outstanding; ADR-079 records it as not run rather than letting a fixture stand in for it.
+
+**R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
+What shipped: the projection reads the declared budget through one reader, packs only in kernel
+mode, cuts least-valuable-first (class, then rule id) until the composed region fits
+`budget.bytes` minus a reserve for the generated files that load beside it, names every cut rule
+in the existing `## Deferred rules` section with `simt rules show <id>` and the reason it is
+missing, and reports `BUDGET-CUT` from `check` and `sync` — non-blocking in both. The row's two
+metrics come out unevenly, so both are recorded as they stand. *Budget exact* is demonstrated end
+to end and judged by the meter rather than by the packer: a fixture declares a line a thousand
+bytes under its own projection, syncs, and `simt tokens` reports `over: false` against that
+declared line; a second fixture, whose `.mdc` rule files are billed beside the region, is cut
+further than the region alone would have needed, which is the only way the reserve can be seen to
+do anything. Two limits are stated in the record rather than left for a reader to discover:
+nothing is cut in `full` mode, because ADR-072's finding already says so and a full projection
+that quietly lost a rule would make the tool lie about itself; and `hard` is the floor, so a
+repository whose hard constraints alone exceed its budget is told exactly that and left alone —
+a byte count is not a reader. *Byte-identical* is structural rather than executed: the packer is
+handed its cost function, reads no clock, no network and no PATH, and the test that renders one
+repository twice catches the failure a test can catch, which is state leaking between calls. Two
+machines is the claim this row makes and no test in this repository can execute it.
 
 ## 15. Risks and how determinism survives
 

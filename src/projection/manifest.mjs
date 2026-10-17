@@ -632,6 +632,24 @@ function defaultId(root) {
 export const DEFAULT_BUDGET_BYTES = 30000;
 
 /**
+ * The budget a repository declared, or the default it gets for declaring nothing.
+ *
+ * One reader for one number, and it exists because two callers need it and a third
+ * already had its own: the packer that cuts a kernel to fit (ADR-083) and the meter that
+ * reports what it carries, against a ceiling each would otherwise spell differently. The
+ * byte they disagree about is the byte the repository wrote down.
+ *
+ * `0` is honoured — "this repository wants an empty projection" is a decision somebody can
+ * make. `null`, a string and `NaN` are not budgets at all, and a hand-edited manifest is
+ * exactly where one turns up; the default stands in rather than the ceiling becoming a
+ * string that every comparison against it silently passes.
+ */
+export function declaredBudget(manifest) {
+  const declared = manifest?.budget?.bytes;
+  return Number.isFinite(declared) && declared >= 0 ? declared : DEFAULT_BUDGET_BYTES;
+}
+
+/**
  * Report a projection that carries more than the repository agreed to carry.
  *
  * Non-blocking by design, and that is the honest answer rather than a convenient one:

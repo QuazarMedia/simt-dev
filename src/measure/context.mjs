@@ -26,7 +26,12 @@ import { basename, join } from 'node:path';
 
 import { resolveSurfaces } from '../projection/surfaces.mjs';
 import { parse } from '../projection/markers.mjs';
-import { budgetFinding, DEFAULT_BUDGET_BYTES, readManifest } from '../projection/manifest.mjs';
+import {
+  budgetFinding,
+  declaredBudget,
+  DEFAULT_BUDGET_BYTES,
+  readManifest,
+} from '../projection/manifest.mjs';
 import { extractFrontmatter } from '../projection/targets.mjs';
 import { readLimitFindings } from '../projection/project.mjs';
 import { loader } from '../projection/loaders.mjs';
@@ -328,10 +333,7 @@ export async function measureRoot(root) {
 
   const generatedBytes = documents.reduce((sum, d) => sum + d.generatedBytes, 0);
   const readerBytes = documents.reduce((sum, d) => sum + d.readerBytes, 0);
-  const budgetBytes =
-    manifest?.budget?.bytes !== undefined && Number.isFinite(manifest.budget.bytes)
-      ? manifest.budget.bytes
-      : ALWAYS_ON_BUDGET_BYTES;
+  const budgetBytes = declaredBudget(manifest);
 
   const byChannel = new Map();
   for (const doc of documents) {

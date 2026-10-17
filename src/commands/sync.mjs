@@ -49,7 +49,13 @@ import { resolvePacks } from '../packs.mjs';
  *  people learn to ignore. A *foreign* one — a real file or a real directory where the
  *  pointer belongs — is reported loudly with what is in the way, because that one is a
  *  decision somebody has to make. */
-export const SYNC_NON_BLOCKING = new Set(['pointer-unread', 'orphaned', 'pack-unpinned', 'budget']);
+export const SYNC_NON_BLOCKING = new Set([
+  'pointer-unread',
+  'orphaned',
+  'pack-unpinned',
+  'budget',
+  'budget-cut',
+]);
 
 /**
  * Findings `check` reports and does not fail on.
@@ -82,7 +88,11 @@ export const SYNC_NON_BLOCKING = new Set(['pointer-unread', 'orphaned', 'pack-un
 // missing file. Nothing is cut: the projection is still in full mode, so a gate that
 // failed here would be failing a repository for exceeding a ceiling it set itself,
 // with no way to fix it except lowering the number it wrote down.
-export const CHECK_NON_BLOCKING = new Set(['orphaned', 'pack-unpinned', 'budget']);
+// `budget-cut` is here for the same reason and is the second half of the same ruling
+// (ADR-083). It says the projection was cut to fit a ceiling this repository set, so the
+// remedy is a decision about the number — and a cut the repository asked for by declaring
+// a budget is the tool working, not a repository in need of a file.
+export const CHECK_NON_BLOCKING = new Set(['orphaned', 'pack-unpinned', 'budget', 'budget-cut']);
 
 export async function syncCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();

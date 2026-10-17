@@ -46,6 +46,7 @@ import {
 } from './bench.mjs';
 import { planCommand } from './plan.mjs';
 import { sharedPlanCommand, sharedInstallCommand, sharedWarning } from './shared.mjs';
+import { evidenceCommand } from './evidence.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -107,6 +108,8 @@ export const IMPLEMENTED = {
   'plan done': (args, flags) => planCommand('done', args, flags),
   'shared plan': sharedPlanCommand,
   'shared install': sharedInstallCommand,
+  evidence: evidenceCommand,
+  'evidence check': (args, flags) => evidenceCommand(['check', ...args], flags),
   init: initCommand,
   ci: ciCommand,
   'hooks install': (args, flags) => hooksCommand('install', args, flags),

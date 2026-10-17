@@ -61,6 +61,9 @@ ${CLI} ci                     simt-dev's own .github files: create or refresh th
 ${CLI} compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)
+${CLI} evidence                the runs recorded against the tree on disk
+${CLI} evidence check <file>   a commit message that claims a run this tree does not
+                           have: a warning, or a block when gates.evidence is "block"
 ${CLI} shared plan            what a workspace's repeated rules cost to carry
                            once: the shared set, its bytes, and every path that would be written
                            (read-only; touches nothing, not even your home directory)

@@ -103,6 +103,7 @@ const JSON_COMMANDS = {
   // Reads the directory that holds the repositories rather than one of them, so it is
   // given the fixture root and not a member: the fixture holds exactly one repository, and
   // a workspace of one is a workspace.
+  evidence: { root: 'r' },
   'shared plan': { root: '.' },
   // The preview, not the write: the write lands in the reader's home directory, and a
   // contract test must never do that.

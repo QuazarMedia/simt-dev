@@ -28,6 +28,7 @@ import { resolveGate } from './resolve.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { assertVersionPin } from '../package-version.mjs';
+import { recordRun } from '../ledger/index.mjs';
 
 const exec = promisify(execFile);
 
@@ -179,7 +180,21 @@ export async function runGates(event, { root, manifest }) {
       cwd = resolved;
     }
 
+    const started = Date.now();
     const outcome = await runGate(resolution, cwd);
+    // The ledger is not the gate. A tree that cannot be named leaves no line, and the
+    // claim check then finds nothing, which is the direction that cannot invent a run.
+    try {
+      const cmd = typeof resolution.command === 'string' ? resolution.command : resolution.argv.join(' ');
+      await recordRun(root, {
+        cmd,
+        exit: outcome.code,
+        ms: Date.now() - started,
+        output: `${outcome.stdout ?? ''}\n${outcome.stderr ?? ''}`,
+      });
+    } catch {
+      // Recorded by absence: the next evidence read for this tree has no line.
+    }
     results.push({
       name,
       status: outcome.code === 0 ? 'passed' : 'failed',

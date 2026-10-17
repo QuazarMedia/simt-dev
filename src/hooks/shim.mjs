@@ -91,6 +91,37 @@ ${renderLocator(`hooks run ${event} --root "${D}ROOT"`, {
 }
 
 /**
+ * The commit-msg shim. It is not a dispatcher event: those shims do not forward
+ * git's arguments, and this one has to, because the message file is `$1`.
+ *
+ * Written only when the manifest sets `gates.evidence`. An unset value does not
+ * install a hook the repository did not ask for.
+ *
+ * @param {{npm?: boolean, version?: string}} [opts]
+ * @returns {string} POSIX sh source, LF-terminated
+ */
+export function renderEvidenceShim({ npm = true, version } = {}) {
+  const v = version ?? packageVersion();
+  const install = npm ? `npm i -D ${PACKAGE_NAME}@${v}` : `npm i -g ${PACKAGE_NAME}@${v}`;
+  const D = '$';
+  return `#!/bin/sh
+${SHIM_MARKER}
+#
+# A commit message that claims a run is checked against the ledger. The message
+# file is the first argument git passes, so this shim forwards it. Reinstall with:
+# ${CLI} hooks install --yes
+
+set -eu
+
+ROOT="${D}(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+
+${renderLocator(`evidence check "${D}1" --root "${D}ROOT"`, {
+    subject: 'the claim check',
+    remedy: `REMEDY run: ${install}, or set ${BIN_ENV} to the ${CLI} binary, or unset ${HOOKS_PATH_KEY} to opt out`,
+  })}`;
+}
+
+/**
  * A line only a chained shim carries.
  *
  * The same reason `renderShim` bakes in its event rather than reading `$0`: a

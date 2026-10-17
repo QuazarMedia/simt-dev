@@ -19,7 +19,7 @@ import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { MANIFEST, readManifest } from '../projection/manifest.mjs';
-import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../hooks/shim.mjs';
+import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderEvidenceShim, renderShim } from '../hooks/shim.mjs';
 import { GATE_KEY, gateCount, readHooksPath, readHooksState, wantsShim } from '../compare/hooksstate.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
@@ -222,11 +222,29 @@ async function installHooks(root, flags) {
     (i) => i.present && i.ours && !wanted.includes(i.event) && !chained.some((c) => c.event === i.event),
   );
 
+  // The claim check is not one of EVENTS. Those shims do not forward git's
+  // arguments, and commit-msg's only argument is the message. It is installed
+  // when the repository sets gates.evidence, and removed when that setting goes,
+  // because a shim that stays after the setting left still replaces git's own hook.
+  const evidenceDeclared = manifest?.gates?.evidence === 'warn' || manifest?.gates?.evidence === 'block';
+  const evidenceFile = fileFor('commit-msg');
+  const evidenceExisting = await readIfExists(join(root, evidenceFile));
+  const evidenceSource = evidenceDeclared ? renderEvidenceShim({ npm, version }) : null;
+  const evidenceOurs = evidenceExisting !== null && evidenceExisting.includes(SHIM_MARKER);
+  if (!evidenceDeclared && evidenceOurs) obsolete.push({ event: 'commit-msg' });
+  // A foreign commit-msg would otherwise be chained onto the same path. The chain
+  // is written after this shim, so it would replace the claim check and the check
+  // would never run. The repository's hook stays on disk and the note says it stopped.
+  if (evidenceDeclared) {
+    const at = chained.findIndex((c) => c.event === 'commit-msg');
+    if (at !== -1) chained.splice(at, 1);
+  }
+
   // Nothing to write and nothing to take away is the only refusal. It sits after
   // `obsolete` because a repository whose last gate just left the manifest has
   // something to take away, and blocking that one left no way out except undoing
   // the change by hand - see the note on `obsolete`.
-  if (wanted.length === 0 && obsolete.length === 0) {
+  if (wanted.length === 0 && obsolete.length === 0 && !evidenceDeclared) {
     if (isJson(flags)) {
       emitJson({ ok: false, command: 'hooks install', root, nothingToEnforce: true, filesWritten: false });
       return EXIT.FAIL;
@@ -276,10 +294,20 @@ async function installHooks(root, flags) {
       // Named in the plan because the reader approving this write is about to lose a
       // file, and "REMOVED pre-push" does not say why - which is the difference between
       // agreeing with it and discovering later that a gate had been dropped by accident.
-      note: `no gate for ${h.event} in ${MANIFEST_FILE}; the shim enforced nothing`,
+      note:
+        h.event === 'commit-msg'
+          ? `gates.evidence is unset, so the claim check stopped`
+          : `no gate for ${h.event} in ${MANIFEST_FILE}; the shim enforced nothing`,
     });
   }
-  const routed = wanted.length > 0 || chained.length > 0;
+  if (evidenceSource) {
+    plan.push({
+      file: evidenceFile,
+      action: evidenceExisting === evidenceSource ? 'unchanged' : evidenceExisting === null ? 'created' : 'updated',
+      note: 'commit-msg checks a verification claim against the ledger',
+    });
+  }
+  const routed = wanted.length > 0 || chained.length > 0 || evidenceDeclared;
 
   // The routing this install leaves behind, which is not always `wants`. A repository
   // that removed its last gate has no shims to route to, and leaving `core.hooksPath`
@@ -362,6 +390,12 @@ async function installHooks(root, flags) {
   for (const h of obsolete) {
     await rm(join(root, fileFor(h.event)));
   }
+  // After the chain loop, so a chained commit-msg cannot replace the claim check.
+  if (evidenceSource) {
+    const path = join(root, evidenceFile);
+    await writeFile(path, evidenceSource);
+    await chmod(path, 0o755);
+  }
 
   // `core.hooksPath` tells git to read ONE directory for EVERY event, so leaving it
   // pointing at a directory of no shims stops the repository's own hooks - the ones in
@@ -385,6 +419,10 @@ async function installHooks(root, flags) {
       notes.push(
         `chained ${f.event}: ${fileFor(f.event)} runs ${f.path} (${f.bytes} bytes), so it keeps running`,
       );
+    } else if (f.event === 'commit-msg' && evidenceDeclared) {
+      notes.push(
+        `stopped running commit-msg at ${f.path} (${f.bytes} bytes); the claim check replaced it, and the file is still on disk, untouched`,
+      );
     } else if (leftRunning.some((c) => c.event === f.event)) {
       // A third case, and the one that was misreported: a hook this tool could not chain
       // because the shim would have had to run itself. Nothing overwrote it, so it still
@@ -403,7 +441,9 @@ async function installHooks(root, flags) {
   }
   for (const h of obsolete) {
     notes.push(
-      `removed ${fileFor(h.event)}: ${MANIFEST_FILE} declares no ${h.event} gate, so the shim enforced nothing and still replaced git's own hook`,
+      h.event === 'commit-msg'
+        ? `removed ${fileFor(h.event)}: ${MANIFEST_FILE} no longer sets gates.evidence, so the claim check stopped replacing git's own commit-msg`
+        : `removed ${fileFor(h.event)}: ${MANIFEST_FILE} declares no ${h.event} gate, so the shim enforced nothing and still replaced git's own hook`,
     );
   }
   if (leaves === null && current !== null) {

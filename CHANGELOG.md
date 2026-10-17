@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A run is evidence for one tree
+
+`simt evidence` prints the runs recorded against the tree on disk. A gate the dispatcher runs appends a line: the command, the exit, a short summary, and a digest of the output. Editing any file changes the tree, so that line no longer applies. `simt evidence check` warns when a commit message says the tests passed and this tree has no passing line, and fails the commit when `gates.evidence` is `block`. `simt hooks install --yes` writes the commit-msg shim only when that setting is present (ADR-087).
+
 ### A workspace carries its repeated rules once
 
 `simt shared plan` names the rules every repository in a workspace renders with the same bytes, and where each harness would load that copy. `simt shared install --yes` writes the copy into the user-level file the harness actually reads, and records the ids on each repository's manifest under `shared`. The next `simt sync` drops those rules from the region and names them, with the command that shows each one. `simt doctor` says when the copy is missing or stale, and does not fail the repository for it. The 30 KB estate bar and the bench comparison are unmeasured (ADR-084).

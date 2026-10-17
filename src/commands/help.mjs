@@ -1,7 +1,7 @@
 import { emit } from '../output/index.mjs';
 import { parse } from '../argv.mjs';
-import { CLI } from '../name.mjs';
-import { DEFAULT_DIRECTORIES, DEFAULT_TEMPLATE, USER_PLAN_FILE } from '../plan/template.mjs';
+import { CLI, MANIFEST_FILE } from '../name.mjs';
+import { DEFAULT_DIRECTORIES, DEFAULT_TEMPLATE } from '../plan/template.mjs';
 
 const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into the ecosystem
                            (dry-run unless --yes; conflicts block without
@@ -48,8 +48,8 @@ ${CLI} agent-hooks install     write this repo's policies into the harnesses tha
                             key it does not own; Codex needs the hook trusted)
 ${CLI} agent-hooks status      what each harness will run, and what is not trusted yet
 ${CLI} plan status             count tracker rows
-                           (${USER_PLAN_FILE} when the repository has one,
-                           otherwise the ${DEFAULT_TEMPLATE} template:
+                           (${MANIFEST_FILE} key plans when set, otherwise
+                           the ${DEFAULT_TEMPLATE} template:
                            ${DEFAULT_DIRECTORIES.join(' and ')})
 ${CLI} plan next [<id>]        one ready slice's section, or the one named; ~1 KB
 ${CLI} plan done <id> [<sha>]  mark one row; dry-run unless --yes

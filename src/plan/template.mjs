@@ -2,26 +2,22 @@
 //
 // Hardcoding docs/plans, the word "review", or the column State would index
 // this package's own documents and misread everyone else's. The file
-// templates/plan/simt-dev.json is the format delivered with the tool. A
-// repository that needs a different one writes simt-plan.json at its root,
-// and any section it leaves out stays as the delivered file has it.
-//
-// That file is not a key of simt.json. init rewrites the manifest from the
-// fields it owns, and a repository that has not adopted has no manifest at
-// all; the template has to survive both.
+// templates/plan/tracker.json is the format delivered with the tool. A
+// repository replaces any section of it with the `plans` key in its manifest.
+// A section it leaves out stays as the delivered file has it. init keeps that
+// key, because a key this tool does not write belongs to the repository.
 
 import { readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { CLI } from '../name.mjs';
+import { manifestPath, readManifest } from '../projection/manifest.mjs';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const BUILTIN_DIR = join(PACKAGE_ROOT, 'templates', 'plan');
 
-export const DEFAULT_TEMPLATE = 'simt-dev';
-export const USER_PLAN_FILE = 'simt-plan.json';
+export const DEFAULT_TEMPLATE = 'tracker';
 
 const KNOWN = new Set(['$comment', 'name', 'directories', 'id', 'columns', 'states', 'ready', 'dependency', 'wave', 'section']);
 const ID_KEYS = new Set(['pattern', 'headers']);
@@ -49,7 +45,11 @@ function readJson(path) {
 }
 
 function remedyFor(source) {
-  if (source === USER_PLAN_FILE) return `fix ${USER_PLAN_FILE}, or remove it to use the ${DEFAULT_TEMPLATE} template`;
+  if (source.endsWith(' plans')) {
+    const file = source.slice(0, -' plans'.length);
+    return `fix the plans key in ${file}, or remove it to use the ${DEFAULT_TEMPLATE} template`;
+  }
+  if (source.endsWith('.json')) return `fix ${source} so it parses`;
   return `run: ${CLI} --help`;
 }
 
@@ -306,10 +306,11 @@ function compile(body, source, root) {
 /**
  * The format for this repository.
  *
- * The delivered template applies when the repository has no simt-plan.json.
- * A file that is present replaces the sections it names. A file that cannot
- * be read is an error: falling back to the delivered template would index
- * the wrong directories and mark the wrong row.
+ * The delivered template applies when the manifest has no `plans` key, and
+ * when there is no manifest. The key overlays the delivered template: a
+ * section it names replaces that section. A key that cannot be read is an
+ * error. Falling back to the delivered template would index the wrong
+ * directories and mark the wrong row.
  *
  * @returns {Promise<{format: object}|{error: string, remedy: string}>}
  */
@@ -317,22 +318,14 @@ export async function loadFormat(root) {
   if (!DEFAULT_BODY || typeof DEFAULT_BODY !== 'object') {
     return bad(`the ${DEFAULT_TEMPLATE} plan template`, 'is not a JSON object');
   }
-  const path = join(root, USER_PLAN_FILE);
-  let text;
-  try {
-    text = await readFile(path, 'utf8');
-  } catch (error) {
-    if (error?.code === 'ENOENT') return compile(DEFAULT_BODY, `the ${DEFAULT_TEMPLATE} plan template`, root);
-    return bad(USER_PLAN_FILE, 'could not be read');
+  const { manifest, exists, error } = await readManifest(root);
+  if (!error && (!exists || manifest?.plans == null)) {
+    return compile(DEFAULT_BODY, `the ${DEFAULT_TEMPLATE} plan template`, root);
   }
-  let user;
-  try {
-    user = JSON.parse(text);
-  } catch (error) {
-    return bad(USER_PLAN_FILE, `is not valid JSON (${error.message})`);
+  const file = basename(await manifestPath(root));
+  if (error) return bad(file, error);
+  if (typeof manifest.plans !== 'object' || Array.isArray(manifest.plans)) {
+    return bad(`${file} plans`, 'must be an object');
   }
-  if (!user || typeof user !== 'object' || Array.isArray(user)) return bad(USER_PLAN_FILE, 'must be a JSON object');
-  const body = overlay(DEFAULT_BODY, user);
-  if (typeof user.name !== 'string' || user.name.trim() === '') body.name = 'simt-plan';
-  return compile(body, USER_PLAN_FILE, root);
+  return compile(overlay(DEFAULT_BODY, manifest.plans), `${file} plans`, root);
 }

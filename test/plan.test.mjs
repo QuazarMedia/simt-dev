@@ -24,7 +24,7 @@ function cli(args) {
 }
 
 async function repo(files) {
-  const root = await mkdtemp(join(tmpdir(), 'simt-plan-'));
+  const root = await mkdtemp(join(tmpdir(), 'simt-tracker-'));
   made.push(root);
   for (const [rel, body] of Object.entries(files)) {
     const path = join(root, rel);
@@ -303,24 +303,27 @@ test('mcp exposes the same two calls, and plan_done does not write', async () =>
 });
 
 test('the delivered template is what a repository gets', async () => {
-  const file = JSON.parse(await readFile(join(ROOT, 'templates', 'plan', 'simt-dev.json'), 'utf8'));
+  const file = JSON.parse(await readFile(join(ROOT, 'templates', 'plan', 'tracker.json'), 'utf8'));
   const state = await loadPlanState(ROOT);
   assert.equal(state.error, undefined);
   assert.equal(state.format.name, file.name);
   assert.deepEqual(state.format.directories.map((dir) => dir.path), file.directories.map((dir) => dir.path));
   const help = cli(['--help']);
   assert.equal(help.code, 0, help.stderr);
-  assert.match(help.stdout, /simt-plan\.json/);
+  assert.match(help.stdout, /simt\.json key plans/);
+  assert.match(help.stdout, /tracker/);
   for (const dir of file.directories) assert.match(help.stdout, new RegExp(dir.path.replaceAll('/', '\\/')));
 });
 
-test('simt-plan.json moves the directories and keeps the delivered columns', async () => {
+test('the plans key moves the directories and keeps the delivered columns', async () => {
   const root = await repo({
-    'simt-plan.json': `${JSON.stringify({
-      directories: [
-        { kind: 'plans', path: 'planning' },
-        { kind: 'reviews', path: 'notes' },
-      ],
+    'simt.json': `${JSON.stringify({
+      plans: {
+        directories: [
+          { kind: 'plans', path: 'planning' },
+          { kind: 'reviews', path: 'notes' },
+        ],
+      },
     })}\n`,
     'docs/plans/0001.md': '| ID | State |\n| --- | --- |\n| Z9 | Queued |\n',
     'planning/0004.md': `# p
@@ -337,34 +340,54 @@ test('simt-plan.json moves the directories and keeps the delivered columns', asy
 `,
   });
   const state = await loadPlanState(root);
-  assert.equal(state.format.name, 'simt-plan');
+  assert.equal(state.format.name, 'tracker');
   assert.deepEqual(state.slices.map((slice) => slice.id).sort(), ['A1', 'S1']);
   assert.equal(state.slices.find((slice) => slice.id === 'A1').ready, true);
   assert.equal(state.slices.some((slice) => slice.id === 'Z9'), false);
 });
 
+test('a legacy manifest carries the plans key the same way', async () => {
+  const root = await repo({
+    'simt-dev.json': `${JSON.stringify({
+      plans: {
+        directories: [
+          { kind: 'plans', path: 'planning' },
+          { kind: 'reviews', path: 'notes' },
+        ],
+      },
+    })}\n`,
+    'planning/0001.md': '| ID | State |\n| --- | --- |\n| A1 | Queued |\n',
+    'docs/plans/0001.md': '| ID | State |\n| --- | --- |\n| Z9 | Queued |\n',
+  });
+  const state = await loadPlanState(root);
+  assert.equal(state.format.name, 'tracker');
+  assert.deepEqual(state.slices.map((slice) => slice.id), ['A1']);
+});
+
 test('a template replaces the columns, the states and the reference words', async () => {
   const root = await repo({
-    'simt-plan.json': `${JSON.stringify({
-      name: 'acme',
-      directories: [
-        { kind: 'plans', word: 'rfc', path: 'notes/rfcs' },
-        { kind: 'reviews', word: 'review', path: 'notes/reviews' },
-      ],
-      id: { pattern: '^FEATURE-[0-9]+$', headers: ['task'] },
-      columns: {
-        state: ['progress'],
-        depends: ['blocked by'],
-        title: ['title'],
-        evidence: ['proof'],
+    'simt.json': `${JSON.stringify({
+      plans: {
+        name: 'acme',
+        directories: [
+          { kind: 'plans', word: 'rfc', path: 'notes/rfcs' },
+          { kind: 'reviews', word: 'review', path: 'notes/reviews' },
+        ],
+        id: { pattern: '^FEATURE-[0-9]+$', headers: ['task'] },
+        columns: {
+          state: ['progress'],
+          depends: ['blocked by'],
+          title: ['title'],
+          evidence: ['proof'],
+        },
+        states: [
+          { id: 'waiting', write: 'Waiting', read: ['waiting'] },
+          { id: 'shipped', write: 'Shipped', read: ['shipped'], satisfies: true },
+        ],
+        ready: 'waiting',
+        dependency: { group: '^phases?\\s+(.+)$' },
+        wave: { label: ['phase'], members: ['items'] },
       },
-      states: [
-        { id: 'waiting', write: 'Waiting', read: ['waiting'] },
-        { id: 'shipped', write: 'Shipped', read: ['shipped'], satisfies: true },
-      ],
-      ready: 'waiting',
-      dependency: { group: '^phases?\\s+(.+)$' },
-      wave: { label: ['phase'], members: ['items'] },
     })}\n`,
     'docs/plans/0001.md': '| ID | State |\n| --- | --- |\n| Z9 | Queued |\n',
     'notes/rfcs/0007-one.md': `# rfc
@@ -390,31 +413,34 @@ test('a template replaces the columns, the states and the reference words', asyn
   assert.equal(after.next.id, 'FEATURE-2');
 });
 
-test('a template that cannot be read is not silently the default', async () => {
+test('a plans key that cannot be read is not silently the default', async () => {
   const broken = await repo({
-    'simt-plan.json': '{',
+    'simt.json': '{',
     'docs/plans/0001.md': '| ID | State |\n| --- | --- |\n| Z9 | Queued |\n',
   });
   const invalid = cli(['plan', 'status', '--root', broken]);
   assert.notEqual(invalid.code, 0);
-  assert.match(invalid.stderr, /simt-plan\.json/);
-  assert.match(invalid.stderr, /remove it to use the simt-dev template/);
+  assert.match(invalid.stderr, /simt\.json/);
+  assert.match(invalid.stderr, /fix simt\.json so it parses/);
   assert.doesNotMatch(invalid.stdout, /Z9/);
 
   const outside = await repo({
-    'simt-plan.json': `${JSON.stringify({
-      directories: [
-        { kind: 'plans', path: '../plans' },
-        { kind: 'reviews', path: 'docs/reviews' },
-      ],
+    'simt.json': `${JSON.stringify({
+      plans: {
+        directories: [
+          { kind: 'plans', path: '../plans' },
+          { kind: 'reviews', path: 'docs/reviews' },
+        ],
+      },
     })}\n`,
   });
   const escaped = cli(['plan', 'next', '--root', outside]);
   assert.notEqual(escaped.code, 0);
   assert.match(escaped.stderr, /inside the repository/);
+  assert.match(escaped.stderr, /plans key in simt\.json/);
 
   const pattern = await repo({
-    'simt-plan.json': `${JSON.stringify({ id: { pattern: '(' } })}\n`,
+    'simt.json': `${JSON.stringify({ plans: { id: { pattern: '(' } } })}\n`,
   });
   const badPattern = cli(['plan', 'status', '--root', pattern]);
   assert.notEqual(badPattern.code, 0);

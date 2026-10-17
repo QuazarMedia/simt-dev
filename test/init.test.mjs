@@ -83,6 +83,21 @@ test('manifest: an existing manifest is never weakened by a re-init', () => {
   assert.equal(next.projection.simtDevSha, 'abc1234');
 });
 
+test('manifest: a re-init keeps a key it does not own', () => {
+  const plans = { directories: [{ kind: 'plans', path: 'planning' }] };
+  const existing = { plans, notes: 'kept' };
+  const next = buildManifest({ root: '/x/y', stack: ['node'], sha: 'abc', existing });
+  assert.deepEqual(next.plans, plans);
+  assert.equal(next.notes, 'kept');
+  assert.equal(next.projection.simtDevSha, 'abc');
+  const keys = Object.keys(next);
+  assert.ok(keys.indexOf('plans') > keys.indexOf('projection'));
+  assert.ok(keys.indexOf('notes') > keys.indexOf('plans'));
+  const fresh = buildManifest({ root: '/x/y', stack: ['node'] });
+  assert.equal(Object.hasOwn(fresh, 'plans'), false);
+  assert.equal(Object.hasOwn(fresh, 'notes'), false);
+});
+
 test('manifest: substitutions are seeded, not absent (ADR-016)', () => {
   // An absent key looks like an oversight; an empty object says the shape exists and
   // nothing needs filling in yet.

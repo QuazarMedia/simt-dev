@@ -1,6 +1,6 @@
 # ADR-081 — A tracker is read through the repository's template
 
-Status: **accepted** · 2026-10-16
+Status: **accepted** · 2026-10-16 · rulings 1 and 2 superseded by ADR-082
 
 ## Context
 

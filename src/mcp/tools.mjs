@@ -746,7 +746,7 @@ export const TOOLS = [
         id: { type: 'string', description: 'slice id' },
         sha: { type: 'string', description: 'commit sha that closed the slice' },
         test: { type: 'string', description: 'test command that closed it' },
-        state: { type: 'string', description: 'target state; omitted means the completed state of the repository template (Complete for simt-dev)' },
+        state: { type: 'string', description: 'target state; omitted means the completed state of the repository template (Complete for tracker)' },
       },
       required: ['id'],
     },

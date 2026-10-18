@@ -540,7 +540,9 @@ keeps its prose until the module graph exists.
   October 2025; its fork LadybugDB could be an optional adapter if a query ever needs Cypher.
 
 **Accept.** Reindexing after a one-file change takes under 300 ms. The same blobs produce the
-same rows.
+same rows. Shipped as `simt index`. `node:sqlite` when this Node can open it and create an
+FTS5 table; a JSON-lines file otherwise. A blob that has not changed is not read again
+(ADR-089).
 
 ### R21 — Zero-dependency extractors, optional tree-sitter (L)
 
@@ -878,7 +880,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R17 | Evidence ledger and claim check | 2 | — | M | D5 (ADR-087) | evidence invalidated by any edit | Complete |
 | R18 | Safe compaction of own gate output | 2 | R16 | S | — | every failure line survives | Queued |
 | R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | ADR-088 | kernel shrinks; compliance not lower (unmeasured) | Complete |
-| R20 | Index store | 3 | review 0002 S47 | M | D6 | reindex < 300 ms; deterministic | Queued |
+| R20 | Index store | 3 | review 0002 S47 | M | D6 (ADR-089) | reindex < 300 ms; deterministic | Complete |
 | R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 | ≥ 90% symbol recall | Queued |
 | R22 | Ranked repo map | 3 | R21 | M | — | recall@10 ≥ 60% of gold files | Queued |
 | R23 | Impact analysis | 3 | R21, R25 | M | — | importers, tests, cross-repo consumer | Queued |
@@ -1004,7 +1006,7 @@ this plan's tracker are review 0002's, written `0002 P7`.
 | D3 | Rules have a kernel and a commentary, and the class is the rule's own declaration (ADR-073) |
 | D4 | Agent-time hooks are a projected surface, with one policy table for every harness |
 | D5 | The evidence ledger, and what counts as a claim |
-| D6 | The local index is `node:sqlite`, gitignored and always rebuildable |
+| D6 | The local index is `node:sqlite`, gitignored and always rebuildable (ADR-089) |
 | D7 | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default (ADR-075) |
 | D8 | Distribution as a single-file binary alongside npm |
 | D9 | Tracker tables are a parsed format; the columns and directories are the tracker template unless `plans` in the manifest names another (ADR-081, ADR-082) |

@@ -12,5 +12,6 @@ dist/
 # Local index, evidence ledger and benchmark run outputs (plan 0003 §4).
 # Task descriptors in .simt-dev/bench/tasks/*.json are committed; runs are not.
 .simt-dev/index.sqlite
+.simt-dev/index.jsonl
 .simt-dev/ledger.jsonl
 .simt-dev/bench/runs/

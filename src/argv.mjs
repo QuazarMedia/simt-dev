@@ -67,6 +67,9 @@ export const BOOL_FLAGS = new Set([
   // default because the ranking is the answer a task asked for, and the recall
   // figure needs the hidden benchmark patches.
   'recall',
+  // tests: also list files that only changed in the same commits as a test.
+  // Off by default because a shared commit is not a test.
+  'cochange',
 ]);
 
 export const VALUE_FLAGS = new Set([

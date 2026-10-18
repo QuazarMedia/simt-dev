@@ -62,6 +62,10 @@ ${CLI} compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)
 ${CLI} index                   rebuild the local file index from git blob hashes
+${CLI} tests [path]          the tests that exercise a file: an import, the conventional
+                           source beside the test, or a coverage record that
+                           names both (--cochange adds files that only share
+                           commits, and only those)
 ${CLI} map [--task "<text>"] [--level outline|names|signatures]
                            the files this task is most likely to touch, within
                            --budget bytes (default 2048; 0 is unlimited). outline

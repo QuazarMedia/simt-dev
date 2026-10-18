@@ -14,7 +14,7 @@ import { readEdges, readFiles, readSymbols } from './store.mjs';
 
 export const ITERATIONS = 20;
 export const DAMPING = 0.85;
-export const TOP = 10;
+const TOP = 10;
 export const DEFAULT_BUDGET = 2048;
 
 const STOP = new Set([

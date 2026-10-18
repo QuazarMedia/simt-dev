@@ -116,6 +116,12 @@ test('the ceiling fails, the trigger warns, and a named generator is exempt', as
   assert.ok(!exempt.some((f) => f.file === 'gen/out.js'));
   assert.ok(exempt.some((f) => f.file === 'long.js' && f.status === 'file-lines'));
 
+  await mkdir(join(root, 'node_modules', 'pkg'), { recursive: true });
+  await writeFile(join(root, 'node_modules', 'pkg', 'long.js'), `${'x\n'.repeat(1001)}`);
+  await git(['-C', root, 'add', 'node_modules/pkg/long.js']);
+  const vendored = await runDeclaredChecks(root, selected, { limits: { fileLines: { warn: 400, error: 1000 } } });
+  assert.ok(!vendored.some((f) => f.file.startsWith('node_modules/')));
+
   await writeFile(join(root, 'region.md'), `<!-- simt:generated -->\n${'x\n'.repeat(1001)}`);
   await git(['-C', root, 'add', 'region.md']);
   const marked = await runDeclaredChecks(root, selected, { limits: { fileLines: { warn: 400, error: 1000 } } });

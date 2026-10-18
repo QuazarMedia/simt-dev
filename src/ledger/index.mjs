@@ -14,7 +14,7 @@ import { promisify } from 'node:util';
 
 const exec = promisify(execFile);
 
-export const LEDGER_FILE = '.simt-dev/ledger.jsonl';
+const LEDGER_FILE = '.simt-dev/ledger.jsonl';
 
 /** Phrases that claim a run happened. `unverified` and `not verified` are removed
  *  first, because both contain the word and neither is a claim. */

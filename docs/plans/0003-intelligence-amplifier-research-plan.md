@@ -480,6 +480,8 @@ The pre-commit hook, the Stop hook (R15) and agents call it directly. Output is 
 
 **Accept.** In simt-dev, changing `src/resolve/resolve.mjs` selects exactly the test files that
 import it directly or transitively, checked against a hand-built list, in under 5 s.
+The list is 51 files. Eight other test files do not import it. Selection measured
+at about 40 ms (ADR-094).
 
 ### R17 — Evidence ledger and claim check (M, D5)
 
@@ -884,7 +886,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R13 | Cache-stable rendering and lockfile | 1 | review 0002 S01 | S | 0002 P1 (ADR-086) | byte-identical across machines | Complete |
 | R14 | Harness loader table | 1 | — | S | — | provenance on every row | Complete |
 | R15 | Agent-time hooks from one policy | 2 | R14, R17 | L | D4 (ADR-079) | decisions correct per harness; p95 < 100 ms | Complete |
-| R16 | Diff-aware gates | 2 | R24 | M | — | focused selection < 5 s | Queued |
+| R16 | Diff-aware gates | 2 | R24 | M | ADR-094 | 51 files, selection < 5 s | Complete |
 | R17 | Evidence ledger and claim check | 2 | — | M | D5 (ADR-087) | evidence invalidated by any edit | Complete |
 | R18 | Safe compaction of own gate output | 2 | R16 | S | — | every failure line survives | Queued |
 | R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | ADR-088 | kernel shrinks; compliance not lower (unmeasured) | Complete |

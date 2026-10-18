@@ -142,7 +142,7 @@ function langOf(filePath) {
   return LANG[base.slice(dot + 1)] ?? '';
 }
 
-async function packageOf(root, filePath, cache) {
+export async function packageOf(root, filePath, cache) {
   let dir = dirname(filePath);
   if (dir === '.') dir = '';
   const seen = [];

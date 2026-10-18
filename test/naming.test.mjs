@@ -34,7 +34,8 @@ const pkg = JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8'));
 
 const VERBS = [
   'init', 'doctor', 'check', 'sync', 'upgrade', 'ci', 'compare',
-  'hooks', 'mcp', 'rules', 'skills', 'graph', 'tokens', 'harness', 'bench', 'plan', 'shared', 'evidence', 'index', 'map', 'tests', 'why',
+  'hooks', 'mcp', 'rules', 'skills', 'graph', 'tokens', 'harness', 'bench', 'plan', 'shared', 'evidence', 'index',
+  'map', 'tests', 'why', 'gate',
 ];
 
 // What follows the project name when the project name is standing in for a PROGRAM

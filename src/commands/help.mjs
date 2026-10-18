@@ -61,6 +61,7 @@ ${CLI} ci                     simt-dev's own .github files: create or refresh th
 ${CLI} compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)
+${CLI} index                   rebuild the local file index from git blob hashes
 ${CLI} evidence                the runs recorded against the tree on disk
 ${CLI} evidence check <file>   a commit message that claims a run this tree does not
                            have: a warning, or a block when gates.evidence is "block"

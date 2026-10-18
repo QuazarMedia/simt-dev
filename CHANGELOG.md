@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### The local index is a cache of git blobs
+
+`simt index` rebuilds `.simt-dev/index.sqlite` from `git ls-files`. A blob that has not changed is not read again, and the same blobs produce the same rows. When this Node cannot open `node:sqlite` with FTS5, the same rows are written to `.simt-dev/index.jsonl` instead (ADR-089).
+
 ### A marked line is enforced by a checker
 
 A rule line may name a checker with `simt-check`. The projection keeps `Enforced:` and the checker's name, and `simt check` runs the checker. The file-length line is `max-file-lines`: past 400 lines warns, past 1000 fails, and a path is exempt only when `limits.fileLines.generated` names it. `import-direction` stays in the prose until the module graph exists. Probe compliance is unmeasured (ADR-088).

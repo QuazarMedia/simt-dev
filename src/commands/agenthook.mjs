@@ -11,6 +11,12 @@
 // walks the repository. A hook that measured the tree before answering would be exactly
 // the latency the plan's acceptance criterion exists to prevent.
 //
+// A second event, `prompt-submit`, delivers rather than decides: it needs the manifest,
+// the index and the packet assembly, so it is reached through a dynamic `import()` that
+// only that event takes. A tool call therefore still pays for nothing that walks the
+// repository, and the one path that does pays for it once per prompt instead of once per
+// command.
+//
 // A denial exits 2, which is what every harness in the table reads as "block". A mistake
 // in the hook's own invocation must NOT exit 2: a typo in a config would then block every
 // tool call. Failures of this command exit 1, which a harness reports as a failed hook,
@@ -60,6 +66,21 @@ export async function agentHookCommand(args, flags) {
     return EXIT.OK;
   }
 
+  // Delivery, not decision: the packet goes into the prompt and the exit code stays 0
+  // whatever happens. The module behind it is the one thing here that reads the
+  // repository, and the tool-call path above must not pay for it, so the door is a
+  // dynamic import that only this event opens.
+  if (event !== EVENTS[0]) {
+    const { deliverPrompt } = await import('../agenthooks/prompt.mjs');
+    const delivered = await deliverPrompt(row, payload);
+    if (delivered.skipped) {
+      note(`note     ${id}: no packet delivered (${delivered.skipped})`);
+      return EXIT.OK;
+    }
+    emit(JSON.stringify(delivered.json));
+    return EXIT.OK;
+  }
+
   const { root, command, writes } = factsFrom(row, payload);
   const facts = await factsFor(root, { command, writes });
   const decision = decide({ event, facts, env: process.env });
@@ -91,13 +112,31 @@ export async function agentHooksCommand(sub, args, flags) {
 
 async function installHooks(root, flags) {
   const mode = writeMode(flags);
+  // The delivery is a second entry in the same config, and a repository asks for it by
+  // declaring a `brief` key rather than by having the entry. Read through a dynamic
+  // import for the same reason the hook delivers through one.
+  const { promptOptIn } = await import('../agenthooks/prompt.mjs');
+  const optIn = await promptOptIn(root);
   const plan = [];
   for (const row of adapters()) {
     const path = hookPath(row.id);
     const existing = await readIfExists(join(root, path));
-    const result = rendered(row, existing);
-    plan.push({ id: row.id, path, action: result.error ? 'refused' : result.action, error: result.error, text: result.text });
+    const result = rendered(row, existing, { prompt: optIn.optedIn });
+    plan.push({
+      id: row.id,
+      path,
+      action: result.error ? 'refused' : result.action,
+      error: result.error,
+      text: result.text,
+      prompt: row.prompt === null || row.prompt === undefined ? null : optIn.optedIn ? 'declared' : 'not declared',
+    });
   }
+
+  // One line for the repository, not one per adapter: the opt-in is a property of the
+  // repository, and someone who has not declared it is told how once.
+  const promptLine = plan.some((p) => p.prompt !== null) && !optIn.optedIn
+    ? [`PROMPT   not opted in (${optIn.why}); add "brief": {} to the manifest to deliver the packet on every prompt`]
+    : [];
 
   // The readers this tool does not write an entry for, reported rather than skipped in
   // silence: a command that writes four files and says nothing about the fifth harness
@@ -128,6 +167,7 @@ async function installHooks(root, flags) {
         `repo     ${root}`,
         ...plan.map((p) => `${p.action.toUpperCase().padEnd(9)} ${p.id.padEnd(12)} ${p.path}${p.error ? `  (${p.error})` : ''}`),
         ...others.map((o) => `${o.state === 'none' ? 'NO FILE ' : 'NOT OURS'} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
+        ...promptLine,
         '',
         refused.length > 0
           ? `REFUSED  ${refused.length} config file(s) could not be read; nothing written`
@@ -177,6 +217,7 @@ async function installHooks(root, flags) {
       `repo     ${root}`,
       ...plan.map((p) => `${p.action.toUpperCase().padEnd(9)} ${p.id.padEnd(12)} ${p.path}`),
       ...others.map((o) => `${o.state === 'none' ? 'NO FILE ' : 'NOT OURS'} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
+      ...promptLine,
       '',
       `WROTE    ${written.length} hooks file(s); each one runs ${CLI} agent-hook before the tool call`,
     ].join('\n'),
@@ -196,14 +237,14 @@ async function hooksStatus(root, flags) {
     const path = hookPath(row.id);
     const existing = await readIfExists(join(root, path));
     if (existing === null) {
-      rows.push({ id: row.id, path, state: 'absent', entries: 0, note: null });
+      rows.push({ id: row.id, path, state: 'absent', entries: 0, prompt: row.prompt ? 'absent' : null, note: null });
       continue;
     }
     let config;
     try {
       config = JSON.parse(existing);
     } catch (e) {
-      rows.push({ id: row.id, path, state: 'unreadable', entries: 0, note: e.message });
+      rows.push({ id: row.id, path, state: 'unreadable', entries: 0, prompt: row.prompt ? 'unknown' : null, note: e.message });
       problems.push(`${path} is not valid JSON: ${e.message}`);
       continue;
     }
@@ -211,16 +252,18 @@ async function hooksStatus(root, flags) {
     // refuses to write into one. Status has to agree with it, or one question gets two
     // answers and the quiet one is the one a reader acts on.
     if (config === null || typeof config !== 'object' || Array.isArray(config)) {
-      rows.push({ id: row.id, path, state: 'unreadable', entries: 0, note: 'not a JSON object' });
+      rows.push({ id: row.id, path, state: 'unreadable', entries: 0, prompt: row.prompt ? 'unknown' : null, note: 'not a JSON object' });
       problems.push(`${path} is not a JSON object, so this tool will not write into it`);
       continue;
     }
     const found = installedIn(row, config).length;
+    const prompts = row.prompt ? installedIn(row, config, EVENTS[1]).length : 0;
     rows.push({
       id: row.id,
       path,
       state: found > 0 ? 'present' : 'absent',
       entries: found,
+      prompt: row.prompt ? (prompts > 0 ? 'present' : 'absent') : null,
       note: found > 0 ? (row.trust ?? null) : null,
     });
   }
@@ -243,6 +286,10 @@ async function hooksStatus(root, flags) {
     const state = { present: 'PRESENT ', absent: 'ABSENT  ', unreadable: 'INVALID ', none: 'NO FILE ', other: 'NOT OURS' }[r.state];
     lines.push(`${state} ${r.id.padEnd(12)} ${r.path ?? '(no hooks file is documented)'}`);
     if (r.state === 'absent') lines.push(`          ${' '.repeat(12)} install: ${CLI} agent-hooks install --yes`);
+    // The second event is a separate answer to a separate question: a harness can carry
+    // the tool hook and not the delivery, and a reader who is told "PRESENT" would
+    // otherwise conclude the packet arrives on every prompt.
+    if (r.prompt) lines.push(`          ${' '.repeat(12)} prompt-submit: ${r.prompt}`);
     if (r.note) lines.push(`          ${' '.repeat(12)} ${r.note}`);
   }
   if (problems.length > 0) {

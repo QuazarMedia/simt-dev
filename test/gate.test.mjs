@@ -21,8 +21,10 @@ const exec = promisify(execFile);
 const ROOT = new URL('..', import.meta.url).pathname;
 
 const RESOLVE = [
+  'test/agenthooks.test.mjs',
   'test/baselines.test.mjs',
   'test/bench.test.mjs',
+  'test/brief.test.mjs',
   'test/card.test.mjs',
   'test/checks.test.mjs',
   'test/ci.test.mjs',

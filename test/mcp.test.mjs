@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -567,4 +567,50 @@ test('mcp: --list answers without reading stdin', async () => {
   const { stdout } = await exec('node', [BIN, 'mcp', '--list'], { input: '' });
   assert.match(stdout, /read-only tools/);
   assert.match(stdout, /No tool here writes/);
+});
+
+test('mcp: brief reads the index and never builds one', async () => {
+  // `brief` is the one tool every argument of which is optional, so the generic loop above
+  // reaches it with `{}` and a root of the process's cwd. That is exactly how a read-only
+  // tool can quietly write: the packet assembly builds an index when it finds none, and a
+  // call would then leave a cache in whatever repository the editor happened to sit in.
+  // The declaration and the behaviour have to agree, so this test warms a fixture by
+  // hand and asserts that the cold call wrote nothing.
+  const dir = await mkdtemp(join(tmpdir(), 'simt-brief-'));
+  await writeFile(join(dir, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
+  await mkdir(join(dir, 'src'), { recursive: true });
+  await writeFile(join(dir, 'src', 'keep.mjs'), 'export function keep(value) { return value; }\n');
+  await exec('git', ['init', '-q', dir]);
+  await exec('git', ['-C', dir, 'add', '-A']);
+  await exec('git', [
+    '-C', dir,
+    '-c', 'user.email=tests@simt.invalid',
+    '-c', 'user.name=simt-dev tests',
+    '-c', 'commit.gpgsign=false',
+    'commit', '-qm', 'initial',
+  ]);
+
+  const state = { version: null };
+  await handle(req('initialize', { protocolVersion: '2025-11-25' }), TOOLS, { state });
+  const call = (id) => handle(req('tools/call', { name: 'brief', arguments: { root: dir, task: 'fix src/keep.mjs' } }, id), TOOLS, { state });
+
+  const cold = await call(2);
+  assert.equal(cold.result.isError, true, 'an index-less repository is a stated failure, not an empty packet');
+  assertValid(cold.result.structuredContent, ERROR_SHAPE, 'brief failure');
+  assert.match(cold.result.structuredContent.remedy, new RegExp(`${CLI} index`));
+  await assert.rejects(
+    access(join(dir, '.simt-dev')),
+    'brief built an index, which no tool here may do',
+  );
+
+  // Warm it the way a person would, then ask again.
+  await exec('node', [BIN, 'index', '--root', dir]);
+
+  const warm = await call(3);
+  assert.equal(warm.result.isError, false, JSON.stringify(warm.result));
+  const brief = TOOLS.find((t) => t.name === 'brief');
+  assertValid(warm.result.structuredContent, brief.outputSchema, 'brief success');
+  const packet = warm.result.structuredContent;
+  assert.match(packet.text, /src\/keep\.mjs/, 'the packet names the file the task mentions');
+  assert.ok(packet.bytes > 0 && packet.bytes <= 2048, `packet was ${packet.bytes} bytes`);
 });

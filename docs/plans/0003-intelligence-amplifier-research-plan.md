@@ -901,7 +901,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R26 | Federation with external MCP | 3 | R27 | S | — | fixture cited as source | Queued |
 | R27 | Brief v2 | 4 | R10, R22, R24, R25 | M | — | turns −20%, C −15%, ΔR ≥ 0 | Complete |
 | R28 | Hybrid retrieval (+ optional embeddings) | 4 | R20, R37 | M | D2 | +10 pts recall or stays off | Queued |
-| R29 | Delivery: pull and push | 4 | R15, R27 | S | D4 | ≤ 2 KB in < 300 ms | Queued |
+| R29 | Delivery: pull and push | 4 | R15, R27 | S | D4 (ADR-079) | ≤ 2 KB in < 300 ms | Complete |
 | R30 | Skill compiler and trigger report | 4 | R02, review 0002 S44 | M | — | per-skill trigger report | Queued |
 | R31 | Plan and tracker index | 4 | — | S | D9 | `plan next` and `plan done` exact | Complete |
 | R32 | Lessons ledger | 5 | R17 | M | — | one candidate per fail-then-fix | Queued |
@@ -972,6 +972,43 @@ no ADR, so that retirement is left to a slice that carries one. What the packet 
 is deliberate too: the TESTS section lists what the index already knows, because a brief is
 delivered on every prompt submit and R29's bar is 300 ms — `simt tests <path>` remains the
 authority for multi-line and dynamic imports, and the packet names it.
+
+**R29 — Complete, and delivered to the two harnesses that can carry it** (D4, ADR-079). Both
+halves ship. **Pull:** an MCP `brief` tool assembles the same packet R27's command does, from
+one implementation (`src/brief/assemble.mjs`, which the CLI, the tool and the hook all call)
+rather than a second copy of it; every argument is optional, so a client with no task gets a
+description of the repository itself. It is a tool and not a resource because
+`resources/read` calls `readResource(uri)` with no root, and a per-repository packet is not a
+document the server can rebuild from a URI; shipping a resource would have meant threading a
+root through an API whose two collections are global. **Push:** `agent-hook prompt-submit
+--harness <id>` injects the packet as message-level context, which leaves the cached system
+prefix alone. It never decides and never exits 2: a delivery whose own bug could stop a person
+typing is worse than no delivery, so every failure — no prompt in the payload, no opt-in, a
+cold index, an assembly error — prints why on stderr and exits 0. **The row's design names
+four harnesses and this ships two, deliberately.** Claude Code and Codex both document
+`UserPromptSubmit` carrying `hookSpecificOutput.additionalContext` (their pages read
+2026-10-19), and neither takes a `matcher` on that event, so the prompt group is written
+without one. Cursor's `beforeSubmitPrompt` cannot inject at all — its only answer is `continue`
+and an exit code, both of which block the prompt — so it is not in the table: installing a
+hook there would add a way to stop a person typing for no gain. Gemini CLI's `BeforeAgent` can
+inject, but the product was superseded by Antigravity CLI on 2026-06-18 and
+`.gemini/settings.json` is not in the reader table (R14), so there is no verified path to
+write. **Opt-in is the presence of a `brief` key in the manifest** — absent means nothing is
+written and nothing is injected, which is what `agent-hooks install` and `agent-hooks status`
+both report. `brief.bytes` may lower the ceiling; a declared `0`, which the CLI reads as "no
+ceiling", is not honoured here, because a delivered packet meaning the whole repository is the
+one thing the cap exists to prevent. The cap is `PROMPT_CAP_BYTES = 2048`, a number recorded
+with the measurement below and not raisable without a new one. The pre-tool path pays nothing
+for any of it: the manifest, the index and the assembly are reached through a dynamic
+`import()` that only a prompt event opens, so a tool call still loads the policy module, the
+decision and the renderer and nothing that walks the repository — the property R15's structural
+test asserts, now with a test of its own. **Measured, warm:** the end-to-end hook on a 30-file
+fixture is 227 ms at p95 and injects 464 bytes; this repository's packet is 1997 bytes and its
+assembly is 145 ms at p95, against a bare `node -e 0` of about 87 ms on this machine. So the
+packet is under 2 KB wherever it has been measured, and the assembly is under 300 ms; the
+largest tree to hand spends about 300 ms of CLI process wall time, most of it node's start.
+What is not measured is the same gap R15 and R27 record: no harness is installed here, so no
+agent has confirmed that it reads the injected context.
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

@@ -70,9 +70,20 @@ async function recall(root, flags) {
   return EXIT.OK;
 }
 
-export async function loadGraph(root) {
+/**
+ * The files, symbols and edges the index holds, building the index once when it is empty.
+ *
+ * `build: false` refuses that rebuild and answers with `cold: true` instead. The one
+ * caller that passes it is the prompt-submit hook (R29), and the reason is the bar that
+ * hook has to meet: a delivered packet that built an index would make a person's first
+ * prompt in a fresh clone wait on a walk of the whole repository, and a prompt that takes
+ * a minute to appear is how a hook gets uninstalled. The next prompt gets the packet, and
+ * a command a person typed at a terminal always builds what it needs.
+ */
+export async function loadGraph(root, { build = true } = {}) {
   let files = await readFiles(root);
   if (files.length === 0) {
+    if (!build) return { files: [], symbols: [], edges: [], cold: true };
     try {
       await reindex(root);
     } catch (error) {

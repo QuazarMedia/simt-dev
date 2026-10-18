@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A gate report keeps the failures and counts the passes
+
+`simt gate` compacts a report it knows how to read: TAP, JUnit XML, pytest's junit file, vitest or jest JSON, and `go test -json`. Failures come first, with the name, the assertion and the location. Passing tests are a count. The raw log path is printed. Anything else is printed unchanged (ADR-095).
+
 ### A change runs the tests that import it
 
 `simt gate` selects the test files that import a changed file, directly or through other files, and runs only those with the package's own runner. Paths name the change. `--changed` reads the diff. A clean diff runs nothing. Changing `src/resolve/resolve.mjs` in this checkout selects 51 files, the hand-built list, in about 40 ms. The bar is 5 seconds (ADR-094).

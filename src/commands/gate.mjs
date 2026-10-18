@@ -2,15 +2,18 @@
 //
 // Paths name the change. `--changed` reads the diff instead. The tests are the
 // ones that import a changed file, directly or through other files, and the
-// runner is the one the package already uses. Nothing else runs.
+// runner is the one the package already uses. Nothing else runs. A report
+// this tool knows how to read is compacted; the raw log is kept.
 
 import { execFile } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { detectTestRunner } from '../bench/mine.mjs';
+import { compactOutput } from '../index/compact.mjs';
 import { readImportEdges, selectTests } from '../index/gate.mjs';
 import { packageOf } from '../index/store.mjs';
 
@@ -64,6 +67,7 @@ async function runSelected(root, flags, selected) {
   const runs = [];
   let code = 0;
   const text = [];
+  const rawParts = [];
   for (const [pkg, files] of [...groups.entries()].sort((a, b) => cmp(a[0], b[0]))) {
     const relative = files.map((file) => (pkg && file.startsWith(`${pkg}/`) ? file.slice(pkg.length + 1) : file));
     const cwd = join(root, pkg);
@@ -92,16 +96,35 @@ async function runSelected(root, flags, selected) {
       }),
     );
     if (result.code !== 0) code = result.code;
-    runs.push({ package: pkg, command: runner.displayCmd, code: result.code, stdout: String(result.stdout ?? ''), stderr: String(result.stderr ?? '') });
-    text.push(String(result.stdout ?? ''), String(result.stderr ?? ''));
+    const stdout = String(result.stdout ?? '');
+    const stderr = String(result.stderr ?? '');
+    const body = stderr ? `${stdout}\n${stderr}` : stdout;
+    rawParts.push(body);
+    const compact = compactOutput(body);
+    runs.push({ package: pkg, command: runner.displayCmd, code: result.code, stdout, stderr });
+    text.push(compact ?? body);
   }
-  const payload = { ok: code === 0, command: 'gate', root, selected, code, runs };
+  const raw = await writeRaw(root, rawParts.join('\n'));
+  if (raw) text.push('', `raw  ${raw}`);
+  const payload = { ok: code === 0, command: 'gate', root, selected, code, raw, runs };
   if (isJson(flags)) {
     emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
     return code === 0 ? EXIT.OK : EXIT.FAIL;
   }
   emit(text.filter((line) => line !== undefined).join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return code === 0 ? EXIT.OK : EXIT.FAIL;
+}
+
+async function writeRaw(root, body) {
+  try {
+    const dir = join(root, '.simt-dev', 'gate');
+    await mkdir(dir, { recursive: true });
+    const name = `gate-${Date.now()}.log`;
+    await writeFile(join(dir, name), body);
+    return `.simt-dev/gate/${name}`;
+  } catch {
+    return '';
+  }
 }
 
 async function tracked(root) {

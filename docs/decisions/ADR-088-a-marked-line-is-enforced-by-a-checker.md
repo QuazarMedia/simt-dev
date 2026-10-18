@@ -1,6 +1,6 @@
 # ADR-088 — A marked line is enforced by a checker
 
-Status: **accepted** · 2026-10-18 · filed as R19 (plan 0003)
+Status: **accepted** · 2026-10-18 · filed as R19 (plan 0003) · ruling 3 narrowed by ADR-090
 
 **Affects:** `src/kernel/checks.mjs`, `rules/core.md`, `src/commands/sync.mjs`,
 `test/checks.test.mjs`

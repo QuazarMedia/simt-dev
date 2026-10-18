@@ -137,6 +137,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-077',
     'ADR-081',
     'ADR-083',
+    'ADR-088',
   ]);
   for (const d of decisions) {
     for (const p of d.partial) {

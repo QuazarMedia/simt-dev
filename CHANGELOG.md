@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### The index names the exports and the imports
+
+`simt index` fills symbols and import edges from the blob it already hashes. The built-in extractors are line-oriented, for the languages a map needs, and on the labelled fixtures they recall at least 90% of the exported names for TypeScript, Kotlin, Python and Go. A structural parser is a separate package named by `index.parsers`; with that key absent, nothing is loaded. It writes cache rows and does not edit the repository. A live comparison against tree-sitter is unmeasured (ADR-090).
+
 ### The local index is a cache of git blobs
 
 `simt index` rebuilds `.simt-dev/index.sqlite` from `git ls-files`. A blob that has not changed is not read again, and the same blobs produce the same rows. When this Node cannot open `node:sqlite` with FTS5, the same rows are written to `.simt-dev/index.jsonl` instead (ADR-089).

@@ -96,7 +96,7 @@ jobs:
           # 4c27514. A depth-1 checkout fails both, and both run in `npm test`.
           fetch-depth: 0
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           # The floor in this package's `engines.node`. The version that
           # publishes is the version that runs, so it is started on the floor

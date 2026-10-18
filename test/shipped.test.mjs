@@ -406,6 +406,26 @@ test('core does not claim every rule cites a decision', async () => {
   assert.doesNotMatch(text, /Every rule below carries the number/);
 });
 
+test('a shipped rule names the command this package installs', async () => {
+  // The records convert `simt-dev <verb>` on the way out. A rule does not: its body
+  // is copied into the region, so the spelling in the file is the spelling a reader
+  // types. `simt-dev.json` stays, because that is the manifest the project still reads.
+  const verb = /`simt-dev (?:init|doctor|check|sync|upgrade|ci|compare|hooks|mcp|rules|skills|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact)\b/;
+  async function walk(dir) {
+    const hits = [];
+    for (const entry of await readdir(dir, { withFileTypes: true })) {
+      const path = join(dir, entry.name);
+      if (entry.isDirectory()) hits.push(...await walk(path));
+      else if (entry.name.endsWith('.md') || entry.name.endsWith('.mdc')) {
+        if (verb.test(await readFile(path, 'utf8'))) hits.push(path.slice(ROOT.length + 1));
+      }
+    }
+    return hits;
+  }
+  assert.deepEqual(await walk(join(ROOT, 'rules')), [], `a rule tells the reader to run ${PROJECT}, and the command is ${CLI}`);
+  assert.match(await readFile(join(ROOT, 'rules/core.md'), 'utf8'), new RegExp('`' + CLI + ' rules why'));
+});
+
 test('rules why does not name an estate repository', async () => {
   const { code, stdout } = await runCli(['rules', 'why', 'ADR-001']);
   assert.equal(code, EXIT.OK, stdout);

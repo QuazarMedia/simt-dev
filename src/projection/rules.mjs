@@ -34,6 +34,7 @@ import { declaredBudget, declaredShared, manifestPath, readManifest } from './ma
 import { commandCard, CARD_LIMIT_BYTES } from '../kernel/card.mjs';
 import { packToBudget } from '../kernel/budget.mjs';
 import { filterInferable, inferableDefect, inferableProofs } from '../kernel/inferability.mjs';
+import { checkDefect, foldChecks } from '../kernel/checks.mjs';
 import { BASELINES } from './baselines.mjs';
 import { CLI } from '../name.mjs';
 import { installedSkills } from './disclosure.mjs';
@@ -520,14 +521,22 @@ export async function desiredRegion(root, flags) {
   // which lines the reader already knows.
   const inferable = [];
   const shipped = [];
+  let enforced = 0;
   for (const r of packed) {
     const filtered = filterInferable(r.body, proofs);
-    if (!filtered.changed) {
+    const folded = foldChecks(filtered.body);
+    enforced += folded.enforced.length;
+    if (!filtered.changed && !folded.changed) {
       shipped.push(r);
       continue;
     }
     for (const x of filtered.removed) inferable.push({ rule: r.id, text: x.text, expr: x.expr });
-    shipped.push({ ...r, body: filtered.body });
+    shipped.push({ ...r, body: folded.body });
+  }
+  if (enforced > 0) {
+    notes.push(
+      `enforced: ${enforced} line(s) left the region because a checker runs them`,
+    );
   }
   if (inferable.length > 0) {
     // Never silent, and never a heading. A line that left with no trace repeats the
@@ -1037,7 +1046,7 @@ export async function loadRules(root = null) {
       // it travels the field that already reaches `check` and `rules list`. The
       // frontmatter defect wins, because a rule that cannot say what it applies to cannot
       // be reasoned about at all.
-      error: describeDefect(meta) ?? inferableDefect(body),
+      error: describeDefect(meta) ?? inferableDefect(body) ?? checkDefect(body),
     });
   }
   return out;
@@ -1086,7 +1095,8 @@ export async function packageRegions(root, flags, rootProfiles = null) {
     if (delta.length === 0) continue;
     const shipped = delta.map((r) => {
       const filtered = filterInferable(r.body, proofs);
-      return filtered.changed ? { ...r, body: filtered.body } : r;
+      const folded = foldChecks(filtered.body);
+      return filtered.changed || folded.changed ? { ...r, body: folded.body } : r;
     });
     regions.push({
       path: pkg.path,

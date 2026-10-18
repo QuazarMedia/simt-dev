@@ -27,7 +27,7 @@ const CLAIM = /\btests?\s+pass(?:ed)?\b|\bverified\b/i;
  * @returns {Promise<string>} the write-tree id
  */
 export async function treeId(root) {
-  const dir = await mkdtemp(join(tmpdir(), 'simt-index-'));
+  const dir = await mkdtemp(join(tmpdir(), 'tree-index-'));
   const index = join(dir, 'index');
   const env = { ...process.env, GIT_INDEX_FILE: index };
   try {

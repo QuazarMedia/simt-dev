@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A marked line is enforced by a checker
+
+A rule line may name a checker with `simt-check`. The projection keeps `Enforced:` and the checker's name, and `simt check` runs the checker. The file-length line is `max-file-lines`: past 400 lines warns, past 1000 fails, and a path is exempt only when `limits.fileLines.generated` names it. `import-direction` stays in the prose until the module graph exists. Probe compliance is unmeasured (ADR-088).
+
 ### A run is evidence for one tree
 
 `simt evidence` prints the runs recorded against the tree on disk. A gate the dispatcher runs appends a line: the command, the exit, a short summary, and a digest of the output. Editing any file changes the tree, so that line no longer applies. `simt evidence check` warns when a commit message says the tests passed and this tree has no passing line, and fails the commit when `gates.evidence` is `block`. `simt hooks install --yes` writes the commit-msg shim only when that setting is present (ADR-087).

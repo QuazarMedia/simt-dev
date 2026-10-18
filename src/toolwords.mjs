@@ -17,6 +17,7 @@
 import { KNOWN_KEYS } from './projection/mdc.mjs';
 import { PROFILE_KEYS } from './projection/rules.mjs';
 import { INFERABLE_MARKER } from './kernel/inferability.mjs';
+import { CHECK_MARKER } from './kernel/checks.mjs';
 
 /**
  * `simt-` names that belong to this tool and never to a repository.
@@ -31,6 +32,7 @@ export const TOOL_WORDS = new Set([
   ...KNOWN_KEYS,
   ...PROFILE_KEYS,
   INFERABLE_MARKER,
+  CHECK_MARKER,
   'simt-dev',
   'simt-dev-check',
   'simt-hooks',

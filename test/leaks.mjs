@@ -9,6 +9,7 @@
 
 import assert from 'node:assert/strict';
 import { ESTATE_NAME } from '../src/decisions/index.mjs';
+import { TOOL_WORDS } from '../src/toolwords.mjs';
 
 /**
  * Paths and phrases that only mean something inside simt-dev's own tree.
@@ -54,6 +55,16 @@ export const AUTHOR_ADDRESSED = [
 export const NAMESPACED_PROVENANCE =
   /^\s*(?:<!--\s*(?:simt|simt-dev):[^>]*-->|#\s*(?:simt|simt-dev):.*)\s*$/gm;
 
+/**
+ * A name this tool owns is not a repository (ADR-080). The decisions reader already
+ * exempts these words. This guard has to do the same, or a marker in a shipped rule
+ * reads as a private repository and the rule cannot name its own checker.
+ */
+const TOOL_WORD = new RegExp(
+  `\\b(?:${[...TOOL_WORDS].map((word) => word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\b`,
+  'g',
+);
+
 export function assertClean(where, text) {
   // Author-addressed text is checked everywhere, including comments: the old header
   // said "edit the source in simt-dev" from inside a comment, and that was a real
@@ -62,7 +73,8 @@ export function assertClean(where, text) {
     const m = re.exec(text);
     assert.equal(m, null, `${where} ships ${what}: ${JSON.stringify(m?.[0])}\n\n${text}`);
   }
-  const prose = text.replace(NAMESPACED_PROVENANCE, '');
+  TOOL_WORD.lastIndex = 0;
+  const prose = text.replace(NAMESPACED_PROVENANCE, '').replace(TOOL_WORD, '');
   for (const { re, what } of LEAKS) {
     const m = re.exec(prose);
     assert.equal(m, null, `${where} ships ${what}: ${JSON.stringify(m?.[0])}\n\n${text}`);

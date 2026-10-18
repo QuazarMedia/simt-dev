@@ -16,6 +16,12 @@ ${CLI} upgrade                move every consumer to this simt-dev SHA, as one s
                            (dry-run unless --yes; moves a pin only - it never
                            adopts or repairs a repo; never commits or pushes)
 
+${CLI} brief "<task>"         one packet for a task: the kind, the commands, the
+                           likely files, the tests and the decisions that govern
+                           them, inside --budget bytes (default 2048; 0 is
+                           unlimited). Says how many items it cut; --explain
+                           says why each was kept or dropped
+
 ${CLI} skills index           tier-0 catalog: every skill, one line each
 ${CLI} skills brief --task    tier-1 pre-assembled brief  <- the common case
 ${CLI} skills show <name>     tier-2 body (respects --max-bytes)
@@ -124,7 +130,8 @@ ${CLI} mcp                    the read-only surface as MCP tools over stdio
 const FLAGS = `--json                 structured output (compact; one document, one line)
 --pretty                indent --json for a human
 --max-bytes <n>         hard ceiling on emitted bytes (0 = unlimited, default 0)
---budget <n>            context budget for skills brief (default 20480)
+--budget <n>            context budget for a brief (default 2048)
+                        (skills brief keeps its own default of 20480)
 --plan                  emit a fetch plan instead of inlining skill bodies
 --skill <name>          force a skill into the brief (repeatable)
 --task "<text>"         the task text used for capability resolution
@@ -142,7 +149,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --frozen                check: the lock must match this projection; an output
                         change no input change explains fails the gate
 --explain               sync: name each line dropped as already inferable, with
-                        the fact behind it
+                        the fact behind it; brief: name every item and why it
+                        was kept or cut, with its section's value
 --all                   ignore a cap: every ruling of a record, or the skills budget
 --variant <id>          which body of a multi-variant skill to use
 --from <repo/path>      install from a declared source by name

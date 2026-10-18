@@ -25,6 +25,7 @@ import {
   whyCommand as skillsWhy,
   evalCommand as skillsEval,
 } from './skills.mjs';
+import { briefCommand } from './brief.mjs';
 import { syncCommand, checkCommand } from './sync.mjs';
 import { initCommand } from './init.mjs';
 import { ciCommand } from './ci.mjs';
@@ -95,6 +96,7 @@ const GROUPS = new Map([
  * just correct: nothing in the map depends on the call.
  */
 export const IMPLEMENTED = {
+  brief: briefCommand,
   doctor: runDoctor,
   'graph lint': lintCommand,
   'skills index': skillsIndex,

@@ -6,6 +6,21 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A task brief fits in the bytes a prompt can carry
+
+`simt brief "<task>"` assembles what a task needs into one packet: the kind of the task
+and the commands that kind needs, the files the map ranks highest, the tests the index
+knows for them, the decisions that govern them, the skills the resolver selects, the
+lessons that name those paths, and the cautions — dirty files to leave alone, generated
+paths, files no test covers. The packet stays inside `--budget` bytes (2048 by default,
+`0` for all of it), ends with the number of items it had to cut, and prints the same bytes
+on the same tree; `--explain` prints every item with the reason it was kept or dropped.
+The accept figure it was designed against — 20% fewer turns, 15% cheaper than the kernel
+arm at no loss of resolved rate — is unmeasured here, because it needs a bench run and an
+installed agent CLI and neither is on this machine. `simt skills brief` keeps its own
+behaviour for now: retiring it changes two accepted decisions and an MCP output schema,
+and this slice carries no decision to do it.
+
 ## [0.3.1] — 2026-10-18
 
 ### Who a change reaches

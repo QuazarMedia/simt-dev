@@ -62,6 +62,10 @@ ${CLI} compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)
 ${CLI} index                   rebuild the local file index from git blob hashes
+${CLI} why [path]            what governs a file: a decision whose Affects line names
+                           it, a rule whose scope matches it, a skill, a gate
+                           or a lesson. With no path, the Affects tokens this
+                           tree cannot resolve (UNRESOLVED-AFFECTS)
 ${CLI} tests [path]          the tests that exercise a file: an import, the conventional
                            source beside the test, or a coverage record that
                            names both (--cochange adds files that only share

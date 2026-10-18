@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### what governs a file is the decision, rule, skill, gate or lesson that names it
+
+`simt why` reads an Affects line as the tokens in backticks, including a line the paragraph wraps onto. A token that is a command, a path, or a glob is an edge. A token that is none of those is printed as `UNRESOLVED-AFFECTS`. Rules, skills, gates and lessons contribute the path lists they already publish. At `4c27514` every one of the sixteen Affects tokens resolves or is reported, and ADR-017 is the only record that names the dispatcher (ADR-093).
+
 ### The tests of a file are its importers, its conventional neighbour, and its coverage
 
 `simt tests` lists the tests that exercise a file. An import counts, including one whose specifier is on the next line and a dynamic `import()`. So does the conventional source beside the test, and a coverage record that names both sides. Files that only share commits are a separate list, added with `--cochange`. On 30 hand-labelled files in this checkout every predicted test is in the label. The bar is 0.8 (ADR-092).

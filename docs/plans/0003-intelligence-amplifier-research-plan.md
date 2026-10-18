@@ -612,8 +612,11 @@ ADR-001 to ADR-010 put "affects all repos" in the status line instead. So the pa
 
 New records get structured `simt-affects:` frontmatter from R34.
 
-**Accept.** `why src/hooks/dispatcher.mjs` lists ADR-017 at `4c27514`, the only record naming
-it. Every backticked token in the 16 lines either resolves or is reported.
+**Accept.** At `4c27514` the sixteen Affects lines are the whole set, every
+backticked token either resolves or is reported as `UNRESOLVED-AFFECTS`, and
+ADR-017 is the only record naming `src/hooks/dispatcher.mjs`. On this checkout
+`simt why` lists that record and the later ones that name the same file
+(ADR-093).
 
 ### R26 — Federation with external code-graph servers (S)
 
@@ -890,7 +893,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R22 | Ranked repo map | 3 | R21 | M | ADR-091 | recall@10 55.6% (bar 60%) | Complete |
 | R23 | Impact analysis | 3 | R21, R25 | M | — | importers, tests, cross-repo consumer | Queued |
 | R24 | Test mapping | 3 | R21 | M | ADR-092 | precision 1.0 (bar 0.8) | Complete |
-| R25 | Governance graph, `why` | 3 | R20 | S | — | matches `Affects:` exactly | Queued |
+| R25 | Governance graph, `why` | 3 | R20 | S | ADR-093 | ADR-017 at 4c27514; unresolved tokens reported | Complete |
 | R26 | Federation with external MCP | 3 | R27 | S | — | fixture cited as source | Queued |
 | R27 | Brief v2 | 4 | R10, R22, R24, R25 | M | — | turns −20%, C −15%, ΔR ≥ 0 | Queued |
 | R28 | Hybrid retrieval (+ optional embeddings) | 4 | R20, R37 | M | D2 | +10 pts recall or stays off | Queued |

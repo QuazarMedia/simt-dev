@@ -926,12 +926,12 @@
         "ionosphere",
         "kalman"
       ],
-      "bytes": 9899,
+      "bytes": 10012,
       "sources": [
         {
           "repo": "simt-gnss",
           "path": ".cursor/skills/gnss-engine",
-          "bytes": 9899,
+          "bytes": 10012,
           "role": "canonical"
         }
       ],

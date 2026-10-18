@@ -60,7 +60,7 @@ commands belongs in this repository, not here.
 
 - No type-system escapes, no unawaited async work, no debug printing in application code.
 - 400 lines is a review trigger; 1000 lines is a hard ceiling. Generated files are exempt
-  when the hook names the generator. (ADR-005)
+  when the hook names the generator. (ADR-005) <!-- simt-check: max-file-lines -->
 - Never weaken CSP, CORS, auth, audit, cache or validation controls to silence a test, warning
   or alert.
 - Review verdicts are exactly three: `BLOCK`, `APPROVE WITH RESIDUAL RISK` (must list what was

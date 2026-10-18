@@ -29,6 +29,7 @@ import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { assertVersionPin, packageVersion } from '../package-version.mjs';
 import { resolvePacks } from '../packs.mjs';
 import { computeLock, readLock, LOCK_FILE } from '../projection/lock.mjs';
+import { runDeclaredChecks } from '../kernel/checks.mjs';
 
 /** Findings `sync` reports and does not fail on.
  *
@@ -93,7 +94,7 @@ export const SYNC_NON_BLOCKING = new Set([
 // (ADR-083). It says the projection was cut to fit a ceiling this repository set, so the
 // remedy is a decision about the number — and a cut the repository asked for by declaring
 // a budget is the tool working, not a repository in need of a file.
-export const CHECK_NON_BLOCKING = new Set(['orphaned', 'pack-unpinned', 'budget', 'budget-cut']);
+export const CHECK_NON_BLOCKING = new Set(['orphaned', 'pack-unpinned', 'budget', 'budget-cut', 'file-lines-warn', 'check-unbuilt']);
 
 export async function syncCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
@@ -519,6 +520,11 @@ export async function checkCommand(positional, flags) {  const root = flags.root
     if (drift) findings.push(drift);
   }
   if (flags.frozen) findings.push(...(await frozenFindings(root, flags)));
+  // The checkers a selected rule declared (ADR-088). They read the rule source,
+  // not the folded region, so a line that left the prompt is still the line that runs.
+  const fp = await fingerprint(root);
+  const { selected } = select(rules.filter((r) => r.error === null), fp.stack ?? [], fp.facts ?? []);
+  findings.push(...(await runDeclaredChecks(root, selected, manifest ?? null)));
 
   // `CHECK_NON_BLOCKING`, not the union. This is the gate whose exit code a repository
   // acts on, so a finding it reports and does not fail on is a decision recorded in a

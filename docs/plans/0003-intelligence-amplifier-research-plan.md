@@ -520,7 +520,10 @@ survive.
 "Enforced:" line, and its prose leaves the prompt.
 
 **Accept.** ADR-005's 400/1000-line rule becomes a check. The kernel shrinks by the enforced
-bytes, and probe compliance is equal or better.
+bytes, and probe compliance is equal or better. Shipped as `simt-check` on the file-length
+line: the projection keeps `Enforced: max-file-lines`, and `simt check` warns past the
+trigger and fails past the ceiling (ADR-088). Probe compliance is unmeasured. `import-direction`
+keeps its prose until the module graph exists.
 
 ## 8. Phase 3 — Repository intelligence
 
@@ -874,7 +877,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R16 | Diff-aware gates | 2 | R24 | M | — | focused selection < 5 s | Queued |
 | R17 | Evidence ledger and claim check | 2 | — | M | D5 (ADR-087) | evidence invalidated by any edit | Complete |
 | R18 | Safe compaction of own gate output | 2 | R16 | S | — | every failure line survives | Queued |
-| R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | — | kernel shrinks; compliance not lower | Queued |
+| R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | ADR-088 | kernel shrinks; compliance not lower (unmeasured) | Complete |
 | R20 | Index store | 3 | review 0002 S47 | M | D6 | reindex < 300 ms; deterministic | Queued |
 | R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 | ≥ 90% symbol recall | Queued |
 | R22 | Ranked repo map | 3 | R21 | M | — | recall@10 ≥ 60% of gold files | Queued |

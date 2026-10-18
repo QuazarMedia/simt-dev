@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { diff, parse, inject } from './markers.mjs';
 import { ruleName } from './mdc.mjs';
 import { foldsRules, frontmatterBlock, POINTERS, rulePath, SURFACES } from './surfaces.mjs';
+import { foldChecks } from '../kernel/checks.mjs';
 
 /**
  * A managed rule file is a GENERATED FILE, unlike AGENTS.md.
@@ -169,7 +170,7 @@ export async function scopedTargets(root, rules, sha, resolved, notes) {
       alwaysApply: false,
       scope: rule.scope,
     };
-    targets.push(...(await ruleTargets(root, scoped, rule.body, sha, resolved, notes)).targets);
+    targets.push(...(await ruleTargets(root, scoped, foldChecks(rule.body).body, sha, resolved, notes)).targets);
   }
   return { targets };
 }

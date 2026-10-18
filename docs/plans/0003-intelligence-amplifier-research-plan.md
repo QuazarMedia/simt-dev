@@ -899,7 +899,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R24 | Test mapping | 3 | R21 | M | ADR-092 | precision 1.0 (bar 0.8) | Complete |
 | R25 | Governance graph, `why` | 3 | R20 | S | ADR-093 | ADR-017 at 4c27514; unresolved tokens reported | Complete |
 | R26 | Federation with external MCP | 3 | R27 | S | — | fixture cited as source | Queued |
-| R27 | Brief v2 | 4 | R10, R22, R24, R25 | M | — | turns −20%, C −15%, ΔR ≥ 0 | Queued |
+| R27 | Brief v2 | 4 | R10, R22, R24, R25 | M | — | turns −20%, C −15%, ΔR ≥ 0 | Complete |
 | R28 | Hybrid retrieval (+ optional embeddings) | 4 | R20, R37 | M | D2 | +10 pts recall or stays off | Queued |
 | R29 | Delivery: pull and push | 4 | R15, R27 | S | D4 | ≤ 2 KB in < 300 ms | Queued |
 | R30 | Skill compiler and trigger report | 4 | R02, review 0002 S44 | M | — | per-skill trigger report | Queued |
@@ -952,6 +952,26 @@ or loads the command registry. The accept criterion's headless agent run was not
 cannot be from here: no harness is installed on this machine (`claude`, `codex`, `cursor-agent`,
 `gemini`, `aider` are all absent from `PATH`). That is the one piece of this row's accept that
 is outstanding; ADR-079 records it as not run rather than letting a fixture stand in for it.
+
+**R27 — Complete, not Accepted.** The packet ships: `simt brief "<task>"` assembles the
+task's kind and the commands that kind needs, the ranked files, the tests the index knows
+for them, the decisions that govern them, the skills the resolver selects, the lessons that
+name those paths, and the cautions that keep a reader out of trouble, inside `--budget`
+bytes (2048 by default, `0` for the whole packet). A packet that is short says so — its
+last line names what it cut and how much of it — and `--explain` prints every item with the
+reason it was kept or dropped, so the packet can be reviewed rather than trusted. On the
+fixture the whole packet is 454 B, two runs print the same bytes, and the kind is printed
+beside the evidence that chose it. The row's accept figure (20% fewer turns, 15% cheaper
+against the kernel arm, at no loss of resolved rate) is **unmeasured**: it needs a bench run
+plus an installed agent CLI, and no harness is on this machine (`claude`, `codex`,
+`cursor-agent`, `gemini`, `aider` are all absent from `PATH`) — the same gap R15 records.
+`skills brief` and MCP's `skills_brief` keep their own contract: superseding them changes
+two accepted decisions (ADR-035 ruling 5 documents the no-input caveat, ADR-052 the
+`--skill` and budget behaviour) and the shape of an MCP output schema, and this row declares
+no ADR, so that retirement is left to a slice that carries one. What the packet does not do
+is deliberate too: the TESTS section lists what the index already knows, because a brief is
+delivered on every prompt submit and R29's bar is 300 ms — `simt tests <path>` remains the
+authority for multi-line and dynamic imports, and the packet names it.
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

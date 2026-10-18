@@ -70,7 +70,7 @@ async function recall(root, flags) {
   return EXIT.OK;
 }
 
-async function loadGraph(root) {
+export async function loadGraph(root) {
   let files = await readFiles(root);
   if (files.length === 0) {
     try {

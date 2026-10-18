@@ -78,6 +78,7 @@ const JSON_COMMANDS = {
   doctor: [],
   'skills index': { noRoot: true },
   'skills brief': ['--task', 'write a test'],
+  brief: ['--task', 'write a test'],
   // Reads the workspace, not a root; the fixture holds no workspace to read.
   'skills find': { noRoot: true, args: ['test'] },
   'graph lint': { noRoot: true },

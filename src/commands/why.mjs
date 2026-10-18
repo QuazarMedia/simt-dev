@@ -146,7 +146,7 @@ async function skillScopes(root) {
     .map((skill) => ({ id: String(skill.name ?? ''), detail: String(skill.summary ?? ''), paths: skill.paths }));
 }
 
-async function lessonScopes(root) {
+export async function lessonScopes(root) {
   const dir = join(root, 'docs', 'lessons');
   let names = [];
   try {

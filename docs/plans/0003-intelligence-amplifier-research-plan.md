@@ -586,7 +586,9 @@ reports when present (lcov, JaCoCo XML, coverage.py JSON, Go cover profiles), an
 **co-change mining**: files that historically change together with a test. R10 and R16 consume
 it.
 
-**Accept.** Precision is at least 0.8 against a hand-labelled set of 30 simt-dev files.
+**Accept.** Precision is the share of predicted tests that the label also names.
+On 30 hand-labelled files in this checkout the figure is 1.0. The bar is 0.8
+(ADR-092).
 
 ### R25 — Governance graph: `simt-dev why <file>` (S)
 
@@ -887,7 +889,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 (ADR-090) | ≥ 90% symbol recall | Complete |
 | R22 | Ranked repo map | 3 | R21 | M | ADR-091 | recall@10 55.6% (bar 60%) | Complete |
 | R23 | Impact analysis | 3 | R21, R25 | M | — | importers, tests, cross-repo consumer | Queued |
-| R24 | Test mapping | 3 | R21 | M | — | precision ≥ 0.8 | Queued |
+| R24 | Test mapping | 3 | R21 | M | ADR-092 | precision 1.0 (bar 0.8) | Complete |
 | R25 | Governance graph, `why` | 3 | R20 | S | — | matches `Affects:` exactly | Queued |
 | R26 | Federation with external MCP | 3 | R27 | S | — | fixture cited as source | Queued |
 | R27 | Brief v2 | 4 | R10, R22, R24, R25 | M | — | turns −20%, C −15%, ΔR ≥ 0 | Queued |

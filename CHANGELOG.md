@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### The tests of a file are its importers, its conventional neighbour, and its coverage
+
+`simt tests` lists the tests that exercise a file. An import counts, including one whose specifier is on the next line and a dynamic `import()`. So does the conventional source beside the test, and a coverage record that names both sides. Files that only share commits are a separate list, added with `--cochange`. On 30 hand-labelled files in this checkout every predicted test is in the label. The bar is 0.8 (ADR-092).
+
 ### The map ranks the files a task is likely to touch
 
 `simt map` orders the index by the task's words and by the import and call edges around them. It renders paths, exported names, or signatures, inside a byte budget. `simt bench report` prints recall@10: the mean fraction of a mined task's gold files that land in the top 10. On the 20 mined tasks measured here that figure is 55.6%. The bar is 60% (ADR-091).

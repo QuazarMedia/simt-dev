@@ -171,4 +171,5 @@ hooks and the CI gate need the POSIX host.
 
 ## Licence
 
-Apache-2.0. See [LICENSE](LICENSE).
+Apache-2.0. See [LICENSE](LICENSE). Report a vulnerability through
+[SECURITY.md](SECURITY.md).

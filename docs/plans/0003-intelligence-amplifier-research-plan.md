@@ -580,7 +580,8 @@ decisions and rules (R25), and owners from `CODEOWNERS`. In a workspace it adds
 references. That makes test-gate's "producer before consumer" rule checkable.
 
 **Accept.** On fixtures, the impact of a changed export lists its importers, their tests, and
-one cross-repo consumer.
+one cross-repo consumer. The fixture lists both importers, the test of that closure,
+and the other repository's file that names the OpenAPI document (ADR-096).
 
 ### R24 — Test mapping (M)
 
@@ -894,7 +895,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R20 | Index store | 3 | review 0002 S47 | M | D6 (ADR-089) | reindex < 300 ms; deterministic | Complete |
 | R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 (ADR-090) | ≥ 90% symbol recall | Complete |
 | R22 | Ranked repo map | 3 | R21 | M | ADR-091 | recall@10 55.6% (bar 60%) | Complete |
-| R23 | Impact analysis | 3 | R21, R25 | M | — | importers, tests, cross-repo consumer | Queued |
+| R23 | Impact analysis | 3 | R21, R25 | M | ADR-096 | importers, tests, one consumer | Complete |
 | R24 | Test mapping | 3 | R21 | M | ADR-092 | precision 1.0 (bar 0.8) | Complete |
 | R25 | Governance graph, `why` | 3 | R20 | S | ADR-093 | ADR-017 at 4c27514; unresolved tokens reported | Complete |
 | R26 | Federation with external MCP | 3 | R27 | S | — | fixture cited as source | Queued |

@@ -72,6 +72,8 @@ ${CLI} tests [path]          the tests that exercise a file: an import, the conv
                            commits, and only those)
 ${CLI} gate [path...]        the tests a change reaches, and only those
                            (--changed reads the diff instead of the paths)
+${CLI} impact <file|symbol>  who a change reaches: importers, their tests,
+                           what governs it, and a contract another repository references
 ${CLI} map [--task "<text>"] [--level outline|names|signatures]
                            the files this task is most likely to touch, within
                            --budget bytes (default 2048; 0 is unlimited). outline

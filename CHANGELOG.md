@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Who a change reaches
+
+`simt impact` takes a tracked path or the name of one export. It lists the files that import it, the tests of that closure, the decisions and rules that govern the file, and the last matching CODEOWNERS line. In a workspace it also lists another repository that references an OpenAPI document or a JSON Schema file this change touches. Each list stops at 64 (ADR-096).
+
 ### A gate report keeps the failures and counts the passes
 
 `simt gate` compacts a report it knows how to read: TAP, JUnit XML, pytest's junit file, vitest or jest JSON, and `go test -json`. Failures come first, with the name, the assertion and the location. Passing tests are a count. The raw log path is printed. Anything else is printed unchanged (ADR-095).

@@ -67,8 +67,8 @@ export function importEdges(entries) {
   return imports;
 }
 
-/** Import edges for tracked paths, read from the worktree. A missing file contributes none. */
-export async function readImportEdges(root, files) {
+/** Texts for tracked paths, read from the worktree. A missing file contributes none. */
+export async function readEntries(root, files) {
   const entries = [];
   const paths = [...files].sort();
   const batch = 32;
@@ -85,7 +85,12 @@ export async function readImportEdges(root, files) {
     }));
     entries.push(...read);
   }
-  return importEdges(entries);
+  return entries;
+}
+
+/** Import edges for tracked paths. A missing file contributes none. */
+export async function readImportEdges(root, files) {
+  return importEdges(await readEntries(root, files));
 }
 
 function langOf(file) {

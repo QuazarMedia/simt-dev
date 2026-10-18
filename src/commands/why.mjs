@@ -34,7 +34,7 @@ export async function whyCommand(args, flags, commands = []) {
   if (listed.error) return listed.error;
   const files = new Set(listed.files);
   const ctx = { files, commands: new Set(commands), roots: sourceRoots(files) };
-  const records = await decisions(root);
+  const records = await decisionRecords(root);
   const target = args[0];
   if (!target) return reportUnresolved(root, flags, unresolvedAffects(records, ctx));
   if (!files.has(target)) return fail(`not in the tree: ${target}`, EXIT.USAGE, `pass a path git tracks`);
@@ -77,7 +77,7 @@ async function tracked(root) {
   }
 }
 
-async function decisions(root) {
+export async function decisionRecords(root) {
   const dir = join(root, 'docs', 'decisions');
   let names = [];
   try {
@@ -111,7 +111,7 @@ async function loadCorpus(root) {
   return { rules, skills, gates, lessons, commands };
 }
 
-async function ruleScopes(root) {
+export async function ruleScopes(root) {
   const rules = [];
   for (const dir of RULE_DIRS) {
     let names = [];

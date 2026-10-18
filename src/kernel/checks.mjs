@@ -148,6 +148,10 @@ async function fileLines(root, check, manifest) {
   const findings = [];
   const prefixes = Array.isArray(generated) ? generated.filter((g) => typeof g === 'string' && g !== '') : [];
   for (const rel of files) {
+    // A committed dependency is not a file this repository wrote. Counting it
+    // fails every install of this package, because the package's own sources
+    // are longer than the ceiling the consumer declared.
+    if (rel.split('/').includes('node_modules')) continue;
     if (exempt(rel, prefixes)) continue;
     let text;
     try {

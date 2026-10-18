@@ -8,7 +8,7 @@
 import { isTestPath } from '../bench/mine.mjs';
 import { selectTests } from './gate.mjs';
 
-export const IMPACT_LIMIT = 64;
+const IMPACT_LIMIT = 64;
 
 const CONTRACT_EXT = new Set(['json', 'yaml', 'yml']);
 

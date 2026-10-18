@@ -15,7 +15,7 @@ import { readFrontmatter } from '../graph/spec.mjs';
  * and the directories the loader table records, which are the same four. A fifth would
  * be a place this tool can write a skill and then fail to tell the reader it is there.
  */
-export const SKILL_DIRS = ['.agents/skills', '.cursor/skills', '.claude/skills', '.opencode/skills'];
+const SKILL_DIRS = ['.agents/skills', '.cursor/skills', '.claude/skills', '.opencode/skills'];
 
 /**
  * The skills installed in a repository, one entry per file.

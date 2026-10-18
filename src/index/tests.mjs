@@ -126,7 +126,7 @@ export function parseJacoco(text) {
   return pairs;
 }
 
-export function parseCoveragePy(text) {
+function parseCoveragePy(text) {
   let parsed;
   try {
     parsed = JSON.parse(text);

@@ -33,7 +33,7 @@ const LANG = {
 };
 
 /** `sqlite` when this process can open a database and create an FTS5 table. */
-export async function probeBackend() {
+async function probeBackend() {
   try {
     const { DatabaseSync } = await import('node:sqlite');
     const db = new DatabaseSync(':memory:');

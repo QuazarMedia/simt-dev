@@ -57,6 +57,8 @@ export const SYNC_NON_BLOCKING = new Set([
   'pack-unpinned',
   'budget',
   'budget-cut',
+  'file-lines-warn',
+  'check-unbuilt',
 ]);
 
 /**

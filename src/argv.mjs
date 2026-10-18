@@ -70,6 +70,10 @@ export const BOOL_FLAGS = new Set([
   // tests: also list files that only changed in the same commits as a test.
   // Off by default because a shared commit is not a test.
   'cochange',
+  // gate: read the working-tree diff instead of the paths named after the command.
+  // Off by default because a path is the change the caller named, and the diff
+  // is a different question.
+  'changed',
 ]);
 
 export const VALUE_FLAGS = new Set([

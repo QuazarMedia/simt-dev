@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### A change runs the tests that import it
+
+`simt gate` selects the test files that import a changed file, directly or through other files, and runs only those with the package's own runner. Paths name the change. `--changed` reads the diff. A clean diff runs nothing. Changing `src/resolve/resolve.mjs` in this checkout selects 51 files, the hand-built list, in about 40 ms. The bar is 5 seconds (ADR-094).
+
 ### what governs a file is the decision, rule, skill, gate or lesson that names it
 
 `simt why` reads an Affects line as the tokens in backticks, including a line the paragraph wraps onto. A token that is a command, a path, or a glob is an edge. A token that is none of those is printed as `UNRESOLVED-AFFECTS`. Rules, skills, gates and lessons contribute the path lists they already publish. At `4c27514` every one of the sixteen Affects tokens resolves or is reported, and ADR-017 is the only record that names the dispatcher (ADR-093).

@@ -7,7 +7,7 @@ simt-priority: hard
 
 # Shared rules
 
-Where a rule cites a decision, run `simt-dev rules why ADR-NNN` to read it,
+Where a rule cites a decision, run `simt rules why ADR-NNN` to read it,
 including whether it is still in force.
 
 These rules are stack-agnostic. Whatever is specific to your stack, your product or your

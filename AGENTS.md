@@ -103,11 +103,11 @@ Two corollaries that are easy to get wrong:
 
 ## Why this repository is not self-adopted
 
-Running `simt-dev init` here would pin this repository's own SHA into its own `AGENTS.md`, so
-every commit would make that file stale and every `simt-dev upgrade` would rewrite it. The
+Running `simt init` here would pin this repository's own SHA into its own `AGENTS.md`, so
+every commit would make that file stale and every `simt upgrade` would rewrite it. The
 value of the generated region is that it is *stable text* — it should not churn because
 unrelated code moved. So the rules are written by hand here and tested directly.
 
-The acceptance test for a change to rule text is therefore not `simt-dev check` in this
+The acceptance test for a change to rule text is therefore not `simt check` in this
 repository. It is: render the region for a real repository, read it as that repository's
 agent, and confirm every instruction in it is one that agent can act on.

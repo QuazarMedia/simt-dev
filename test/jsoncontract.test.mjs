@@ -105,6 +105,7 @@ const JSON_COMMANDS = {
   // a workspace of one is a workspace.
   evidence: { root: 'r' },
   index: { root: 'r' },
+  map: { root: 'r' },
   'shared plan': { root: '.' },
   // The preview, not the write: the write lands in the reader's home directory, and a
   // contract test must never do that.

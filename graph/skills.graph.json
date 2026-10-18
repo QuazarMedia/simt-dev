@@ -902,7 +902,7 @@
     },
     {
       "name": "gnss-engine",
-      "summary": "Navigate and extend the GNSS raw-measurement engine: RTCM, NTRIP, WLS, Kalman, Hatch filtering",
+      "summary": "Navigate and extend the standalone SIMT GNSS engine library (simt-gnss): parsers, solvers, filters, corrections, orbit, SimtGnssEngine facade",
       "capabilities": [
         "positioning"
       ],
@@ -911,8 +911,8 @@
         "kotlin"
       ],
       "paths": [
-        "feature/gnss/**",
-        "**/gnss/**"
+        "gnss-core/**",
+        "gnss-android/**"
       ],
       "keywords": [
         "gnss",
@@ -926,16 +926,52 @@
         "ionosphere",
         "kalman"
       ],
-      "bytes": 7196,
+      "bytes": 9899,
       "sources": [
         {
-          "repo": "simt-app",
+          "repo": "simt-gnss",
           "path": ".cursor/skills/gnss-engine",
-          "bytes": 7196,
+          "bytes": 9899,
           "role": "canonical"
         }
       ],
       "note": "Physics-heavy and review-hardened; do not simplify formulas, constants or gating logic."
+    },
+    {
+      "name": "gnss-integration",
+      "summary": "Consume the GNSS engine library inside simt-app: NTRIP/SSR corrections, location services, diagnostics mapping, GNSS UI",
+      "capabilities": [
+        "positioning"
+      ],
+      "stack": [
+        "gradle",
+        "kotlin"
+      ],
+      "paths": [
+        "feature/gnss/**"
+      ],
+      "keywords": [
+        "gnss",
+        "rtk",
+        "ppp",
+        "ntrip",
+        "rtcm",
+        "corrections",
+        "location",
+        "gnssmeasurement",
+        "gnssscreen",
+        "composite-build"
+      ],
+      "bytes": 3987,
+      "sources": [
+        {
+          "repo": "simt-app",
+          "path": ".cursor/skills/gnss-integration",
+          "bytes": 3987,
+          "role": "canonical"
+        }
+      ],
+      "note": "Integration-only layer; engine changes belong in simt-gnss."
     },
     {
       "name": "graphify",

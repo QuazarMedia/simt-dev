@@ -565,8 +565,9 @@ tree-sitter is unmeasured (ADR-090).
 it mentions (Aider's approach). It renders within a budget at one of three detail levels:
 `outline` (paths), `names` or `signatures`. It is deterministic: fixed iterations, sorted ties.
 
-**Accept.** On mined tasks, the gold patch's files appear in the map's top 10 for at least 60% of
-tasks (recall@10, reported by R03).
+**Accept.** recall@10 is the mean fraction of a task's gold files that land in the top 10.
+`simt bench report` prints it. On the 20 mined tasks in this checkout the figure is 55.6%.
+The bar is 60%, and this ranking does not meet it (ADR-091).
 
 ### R23 — Impact analysis: `simt-dev impact <file|symbol>` (M)
 
@@ -884,7 +885,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | ADR-088 | kernel shrinks; compliance not lower (unmeasured) | Complete |
 | R20 | Index store | 3 | review 0002 S47 | M | D6 (ADR-089) | reindex < 300 ms; deterministic | Complete |
 | R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 (ADR-090) | ≥ 90% symbol recall | Complete |
-| R22 | Ranked repo map | 3 | R21 | M | — | recall@10 ≥ 60% of gold files | Queued |
+| R22 | Ranked repo map | 3 | R21 | M | ADR-091 | recall@10 55.6% (bar 60%) | Complete |
 | R23 | Impact analysis | 3 | R21, R25 | M | — | importers, tests, cross-repo consumer | Queued |
 | R24 | Test mapping | 3 | R21 | M | — | precision ≥ 0.8 | Queued |
 | R25 | Governance graph, `why` | 3 | R20 | S | — | matches `Affects:` exactly | Queued |

@@ -12,6 +12,7 @@ import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.m
 import { DEFAULT_MINE_TARGET, mineTasks } from '../bench/mine.mjs';
 import { regradeRun, runBench } from '../bench/run.mjs';
 import { buildBenchReport } from '../bench/report.mjs';
+import { formatRecall, measureRecall } from '../index/map.mjs';
 import { ablateBench } from '../bench/ablate.mjs';
 import { runBenchProbes } from '../bench/probes.mjs';
 import { listFlag } from './skills.mjs';
@@ -223,6 +224,8 @@ export async function benchReportCommand(positional, flags) {
     );
   }
 
+  const mapRecall = await recallOrUnmeasured(root);
+
   if (isJson(flags)) {
     emitJson({
       ok: true,
@@ -232,12 +235,21 @@ export async function benchReportCommand(positional, flags) {
       runCount: report.runCount,
       arms: report.arms,
       comparison: report.comparison,
+      mapRecall,
     });
     return EXIT.OK;
   }
 
-  emit(report.markdown, { maxBytes: flags.maxBytes ?? 0 });
+  emit(`${report.markdown}\n\n### Map\n\n${formatRecall(mapRecall)}`, { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
+}
+
+async function recallOrUnmeasured(root) {
+  try {
+    return await measureRecall(root);
+  } catch {
+    return { measured: false, reason: 'not run', tasks: 0, missing: 0, recall: null };
+  }
 }
 
 export async function benchAblateCommand(positional, flags) {

@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### The map ranks the files a task is likely to touch
+
+`simt map` orders the index by the task's words and by the import and call edges around them. It renders paths, exported names, or signatures, inside a byte budget. `simt bench report` prints recall@10: the mean fraction of a mined task's gold files that land in the top 10. On the 20 mined tasks measured here that figure is 55.6%. The bar is 60% (ADR-091).
+
 ### The index names the exports and the imports
 
 `simt index` fills symbols and import edges from the blob it already hashes. The built-in extractors are line-oriented, for the languages a map needs, and on the labelled fixtures they recall at least 90% of the exported names for TypeScript, Kotlin, Python and Go. A structural parser is a separate package named by `index.parsers`; with that key absent, nothing is loaded. It writes cache rows and does not edit the repository. A live comparison against tree-sitter is unmeasured (ADR-090).

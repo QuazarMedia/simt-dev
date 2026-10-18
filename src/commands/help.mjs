@@ -62,6 +62,11 @@ ${CLI} compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)
 ${CLI} index                   rebuild the local file index from git blob hashes
+${CLI} map [--task "<text>"] [--level outline|names|signatures]
+                           the files this task is most likely to touch, within
+                           --budget bytes (default 2048; 0 is unlimited). outline
+                           is paths, names adds exports, signatures adds the line.
+                           --recall reports gold-file recall@10 on mined tasks
 ${CLI} evidence                the runs recorded against the tree on disk
 ${CLI} evidence check <file>   a commit message that claims a run this tree does not
                            have: a warning, or a block when gates.evidence is "block"

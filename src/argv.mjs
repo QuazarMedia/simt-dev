@@ -63,6 +63,10 @@ export const BOOL_FLAGS = new Set([
   // written one yet is not drift, and a gate that failed for the absence would be
   // red on every repository this package already adopted.
   'frozen',
+  // map: report gold-file recall@10 instead of rendering the ranking. Off by
+  // default because the ranking is the answer a task asked for, and the recall
+  // figure needs the hidden benchmark patches.
+  'recall',
 ]);
 
 export const VALUE_FLAGS = new Set([
@@ -104,6 +108,9 @@ export const VALUE_FLAGS = new Set([
   // plan done: the test command that proves the slice. Plan 0003 R31.
   'test',
   'state',
+  // map: outline (paths), names (exported symbols) or signatures (the line).
+  // A boolean would not say which of the three the caller wanted.
+  'level',
 ]);
 
 /**

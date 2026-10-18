@@ -48,6 +48,7 @@ import { planCommand } from './plan.mjs';
 import { sharedPlanCommand, sharedInstallCommand, sharedWarning } from './shared.mjs';
 import { evidenceCommand } from './evidence.mjs';
 import { indexCommand } from './repoindex.mjs';
+import { mapCommand } from './map.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -111,6 +112,7 @@ export const IMPLEMENTED = {
   'shared install': sharedInstallCommand,
   evidence: evidenceCommand,
   index: indexCommand,
+  map: mapCommand,
   'evidence check': (args, flags) => evidenceCommand(['check', ...args], flags),
   init: initCommand,
   ci: ciCommand,

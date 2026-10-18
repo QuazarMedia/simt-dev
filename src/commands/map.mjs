@@ -1,0 +1,91 @@
+// `simt map` ranks the files a task is most likely to touch (R22, ADR-091).
+// The cache is read, and rebuilt once when it is empty, because a map of no
+// files is not an answer. The rebuild writes the gitignored index, which is
+// the same cache `simt index` writes.
+
+import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
+import { CLI } from '../name.mjs';
+import { readEdges, readFiles, readSymbols, reindex } from '../index/store.mjs';
+import { DEFAULT_BUDGET, formatRecall, measureRecall, rankFiles, renderMap } from '../index/map.mjs';
+
+const LEVELS = new Set(['outline', 'names', 'signatures']);
+
+export async function mapCommand(args, flags) {
+  if (args.length > 0) return fail(`unknown map argument ${args[0]}`, EXIT.USAGE, `run: ${CLI} map`);
+  const root = flags.root ?? process.cwd();
+  if (flags.recall === true) return recall(root, flags);
+  const level = flags.level ?? 'outline';
+  if (!LEVELS.has(level)) {
+    return fail(`unknown level ${level}`, EXIT.USAGE, 'use outline, names or signatures');
+  }
+  const budget = flags.budget === undefined ? DEFAULT_BUDGET : Number(flags.budget);
+  if (!Number.isInteger(budget) || budget < 0) {
+    return fail(`budget must be a non-negative integer`, EXIT.USAGE, `run: ${CLI} map --budget 2048`);
+  }
+  const loaded = await loadGraph(root);
+  if (loaded.error) return loaded.error;
+  const task = typeof flags.task === 'string' ? flags.task : '';
+  const ranked = rankFiles({ ...loaded, task });
+  const rendered = renderMap(ranked, loaded.symbols, { level, budget });
+  const payload = {
+    ok: true,
+    command: 'map',
+    root,
+    level,
+    budget,
+    shown: rendered.shown,
+    total: rendered.total,
+    truncated: rendered.truncated,
+    files: rendered.files,
+    text: rendered.text,
+  };
+  if (isJson(flags)) {
+    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    return EXIT.OK;
+  }
+  const lines = [
+    `level    ${level}`,
+    `shown    ${rendered.shown}`,
+    `total    ${rendered.total}`,
+    `budget   ${budget}`,
+  ];
+  if (rendered.text) lines.push(rendered.text);
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  return EXIT.OK;
+}
+
+async function recall(root, flags) {
+  let result;
+  try {
+    result = await measureRecall(root);
+  } catch (error) {
+    return fail(`could not measure recall (${error.message})`, EXIT.UNSUPPORTED, `run ${CLI} index in a git repository`);
+  }
+  const payload = { ok: true, command: 'map', root, recall: result };
+  if (isJson(flags)) {
+    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    return EXIT.OK;
+  }
+  emit(formatRecall(result), { maxBytes: flags.maxBytes ?? 0 });
+  return EXIT.OK;
+}
+
+async function loadGraph(root) {
+  let files = await readFiles(root);
+  if (files.length === 0) {
+    try {
+      await reindex(root);
+    } catch (error) {
+      return {
+        error: fail(
+          `could not map this repository (${error.message})`,
+          EXIT.UNSUPPORTED,
+          'run this inside a git repository',
+        ),
+      };
+    }
+    files = await readFiles(root);
+  }
+  const [symbols, edges] = await Promise.all([readSymbols(root), readEdges(root)]);
+  return { files, symbols, edges };
+}

@@ -512,7 +512,8 @@ vitest or jest JSON, pytest junit, `go test -json`):
 It **never** intercepts arbitrary shell commands; §1.1 item 2 is why.
 
 **Accept.** Golden tests per format show every failing test's name, assertion and location
-survive.
+survive. TAP, JUnit XML, pytest's junit file, vitest or jest JSON, and `go test -json`
+each keep those three and leave the passing name out (ADR-095).
 
 ### R19 — Rule-to-check compiler (M)
 
@@ -888,7 +889,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R15 | Agent-time hooks from one policy | 2 | R14, R17 | L | D4 (ADR-079) | decisions correct per harness; p95 < 100 ms | Complete |
 | R16 | Diff-aware gates | 2 | R24 | M | ADR-094 | 51 files, selection < 5 s | Complete |
 | R17 | Evidence ledger and claim check | 2 | — | M | D5 (ADR-087) | evidence invalidated by any edit | Complete |
-| R18 | Safe compaction of own gate output | 2 | R16 | S | — | every failure line survives | Queued |
+| R18 | Safe compaction of own gate output | 2 | R16 | S | ADR-095 | every failure line survives | Complete |
 | R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | ADR-088 | kernel shrinks; compliance not lower (unmeasured) | Complete |
 | R20 | Index store | 3 | review 0002 S47 | M | D6 (ADR-089) | reindex < 300 ms; deterministic | Complete |
 | R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 (ADR-090) | ≥ 90% symbol recall | Complete |

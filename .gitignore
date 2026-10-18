@@ -15,3 +15,4 @@ dist/
 .simt-dev/index.jsonl
 .simt-dev/ledger.jsonl
 .simt-dev/bench/runs/
+.simt-dev/gate/

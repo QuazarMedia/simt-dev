@@ -6,6 +6,8 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] — 2026-10-18
+
 ### Who a change reaches
 
 `simt impact` takes a tracked path or the name of one export. It lists the files that import it, the tests of that closure, the decisions and rules that govern the file, and the last matching CODEOWNERS line. In a workspace it also lists another repository that references an OpenAPI document or a JSON Schema file this change touches. Each list stops at 64 (ADR-096).
@@ -40,7 +42,7 @@ All notable changes to this package are recorded here. The format follows
 
 ### A marked line is enforced by a checker
 
-A rule line may name a checker with `simt-check`. The projection keeps `Enforced:` and the checker's name, and `simt check` runs the checker. The file-length line is `max-file-lines`: past 400 lines warns, past 1000 fails, and a path is exempt only when `limits.fileLines.generated` names it. `import-direction` stays in the prose until the module graph exists. Probe compliance is unmeasured (ADR-088).
+A rule line may name a checker with `simt-check`. The projection keeps `Enforced:` and the checker's name, and `simt check` runs the checker. The file-length line is `max-file-lines`: past 400 lines warns, past 1000 fails, and a path is exempt only when `limits.fileLines.generated` names it. A path under `node_modules` is not counted: a committed dependency is not a file this repository wrote, and counting it failed every install of this package. A file-length warning and a checker that is not built yet are reported and do not fail `check` or `sync`. `import-direction` stays in the prose until the module graph exists. Probe compliance is unmeasured (ADR-088).
 
 ### A run is evidence for one tree
 
@@ -57,6 +59,14 @@ The generated region ends with a `## Disclosure` section: one line per scoped pr
 ### The stable prefix comes first
 
 Shipped rules lead the region, and the command card follows them, so an edit this repository makes changes only the tail. `simt sync --yes` writes `simt-dev.lock.json` with an input digest and an output digest. `simt check --frozen` fails when the output moves and the inputs did not, and names a stale lock separately (ADR-086).
+
+### Kernel mode packs to the budget the repository declared
+
+`mode: kernel` reads `budget.bytes`, holds back a reserve for the files that load beside the region, and drops rules least-valuable-first until the region fits. Every cut rule is named, with the command that shows it. `full` mode cuts nothing. A repository whose hard rules already exceed the budget is told so, and those rules stay (ADR-083).
+
+### Vulnerability reports
+
+`SECURITY.md` names the two places a report goes: a GitHub issue on this repository, or `security@simt.space`.
 
 ## [0.3.0] — 2026-10-17
 
@@ -615,6 +625,7 @@ never ran `simt hooks install` again will find nothing until the dependency is r
 and `simt hooks install --yes` is re-run. That is a real upgrade step and it is called out
 here rather than discovered.
 
+[0.3.1]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.3.1
 [0.3.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.3.0
 [0.2.2]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.2.2
 [0.2.1]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.2.1

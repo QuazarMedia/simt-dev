@@ -107,6 +107,7 @@ const JSON_COMMANDS = {
   index: { root: 'r' },
   map: { root: 'r' },
   tests: { root: 'r' },
+  why: { root: 'r' },
   'shared plan': { root: '.' },
   // The preview, not the write: the write lands in the reader's home directory, and a
   // contract test must never do that.

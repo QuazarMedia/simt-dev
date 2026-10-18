@@ -50,6 +50,7 @@ import { evidenceCommand } from './evidence.mjs';
 import { indexCommand } from './repoindex.mjs';
 import { mapCommand } from './map.mjs';
 import { testsCommand } from './tests.mjs';
+import { whyCommand } from './why.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -115,6 +116,7 @@ export const IMPLEMENTED = {
   index: indexCommand,
   map: mapCommand,
   tests: testsCommand,
+  why: (args, flags) => whyCommand(args, flags, COMMANDS),
   'evidence check': (args, flags) => evidenceCommand(['check', ...args], flags),
   init: initCommand,
   ci: ciCommand,

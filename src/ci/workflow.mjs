@@ -148,6 +148,16 @@ function uses(action) {
   return `      - uses: ${repo}@${commit} # ${release}`;
 }
 
+/** This repository's own gate runs `npm test`, and two of those tests read
+ *  history. A consumer's gate does not, so its checkout stays shallow. */
+function checkoutFull() {
+  return `${uses('checkout')}
+        with:
+          # \`bench mine\` counts commits, and the Affects snapshot reads
+          # 4c27514. A depth-1 checkout fails both, and both run in \`npm test\`.
+          fetch-depth: 0`;
+}
+
 /** The YAML every copy shares, so the two cannot drift on triggers, permissions or
  *  concurrency. Only `name`, the runner and `steps` vary, and only because they have
  *  to. The own gate also varies the platforms and the Node versions, because this
@@ -246,7 +256,7 @@ export function renderWorkflow({ own = false, npm = true, version } = {}) {
     return `${header(true)}${skeleton(
       'simt-dev own gate',
       [
-        uses('checkout'),
+        checkoutFull(),
         setupNode('${{ matrix.node }}'),
         // The two checks `.githooks/pre-push` runs, named here rather than discovered,
         // because a reader of this file has to be able to answer "what stops a merge"

@@ -554,8 +554,10 @@ FTS5 table; a JSON-lines file otherwise. A blob that has not changed is not read
 - **Optional:** `@quazarmedia/simt-dev-parsers` (web-tree-sitter WASM plus grammars) adds exact
   symbols and call edges in the same schema, and is used automatically when installed.
 
-**Accept.** On fixtures, built-in recall is at least 90% of tree-sitter's exported symbols for
-TS, Kotlin, Python and Go.
+**Accept.** On fixtures, built-in recall is at least 90% of the hand-labelled exported
+symbols for TS, Kotlin, Python and Go. Shipped inside `simt index`. A parser package is
+named with `index.parsers` and is off when that key is absent; a live comparison against
+tree-sitter is unmeasured (ADR-090).
 
 ### R22 — Ranked repo map (M)
 
@@ -881,7 +883,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R18 | Safe compaction of own gate output | 2 | R16 | S | — | every failure line survives | Queued |
 | R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | ADR-088 | kernel shrinks; compliance not lower (unmeasured) | Complete |
 | R20 | Index store | 3 | review 0002 S47 | M | D6 (ADR-089) | reindex < 300 ms; deterministic | Complete |
-| R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 | ≥ 90% symbol recall | Queued |
+| R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 (ADR-090) | ≥ 90% symbol recall | Complete |
 | R22 | Ranked repo map | 3 | R21 | M | — | recall@10 ≥ 60% of gold files | Queued |
 | R23 | Impact analysis | 3 | R21, R25 | M | — | importers, tests, cross-repo consumer | Queued |
 | R24 | Test mapping | 3 | R21 | M | — | precision ≥ 0.8 | Queued |
@@ -1002,7 +1004,7 @@ this plan's tracker are review 0002's, written `0002 P7`.
 | Proposal | Ruling |
 | --- | --- |
 | D1 | A change to what agents read is measured before it ships, or labelled unmeasured in its record (ADR-076) |
-| D2 | Optional adapters are separate packages, off by default, and propose rather than write |
+| D2 | Optional adapters are separate packages, off by default, and propose rather than write (ADR-090) |
 | D3 | Rules have a kernel and a commentary, and the class is the rule's own declaration (ADR-073) |
 | D4 | Agent-time hooks are a projected surface, with one policy table for every harness |
 | D5 | The evidence ledger, and what counts as a claim |

@@ -5,9 +5,9 @@
 // block would be the whole section: the core rules are consecutive bullets, and
 // marking one of them must not take its neighbours with it.
 //
-// `import-direction` is named and not built. The module graph it needs is R21, so
-// the prose stays. Dropping an instruction before the checker exists would make
-// the line look enforced.
+// `import-direction` records nothing about which way an import may point. The
+// index has the edges (R21). A direction still has to be named before the prose
+// can leave, or the line would say Enforced and nothing would be enforcing it.
 
 import { execFile } from 'node:child_process';
 import { readFile, stat } from 'node:fs/promises';
@@ -18,7 +18,7 @@ const exec = promisify(execFile);
 
 export const CHECK_MARKER = 'simt-check';
 
-/** Checkers this tool can run. `import-direction` is recognised and waits on R21. */
+/** Checkers this tool can run. `import-direction` is recognised and waits on a named direction. */
 const RUNNABLE = new Set(['max-file-lines', 'forbid-regex', 'forbidden-path-edit', 'required-file']);
 
 const MARKER = /<!--\s*simt-check:\s*([^>]*?)\s*-->/g;
@@ -118,8 +118,8 @@ async function runOne(root, check, manifest) {
     return [{
       file: check.source,
       status: 'check-unbuilt',
-      detail: 'import-direction needs the module graph, which is not built yet',
-      remedy: 'leave the instruction in the rule until that graph exists',
+      detail: 'import-direction has no direction to enforce; the index records imports and no rule names which way they may point',
+      remedy: 'leave the instruction in the rule until a direction is named',
     }];
   }
   if (check.name === 'max-file-lines') return fileLines(root, check, manifest);

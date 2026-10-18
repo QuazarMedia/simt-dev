@@ -15,6 +15,16 @@ import { packToBudget } from '../kernel/budget.mjs';
 export const DEFAULT_BRIEF_BYTES = 2048;
 
 /**
+ * The most this tool will ever inject into somebody else's prompt (plan 0003 R29).
+ *
+ * The same number as the default and a different fact: the default is what a packet packs
+ * to, and this is the bar the delivery slice was accepted against. A repository may lower
+ * its own ceiling; it may not raise it past a number that was measured, because a manifest
+ * that could raise it would make an unmeasured figure the promise the tool keeps.
+ */
+export const PROMPT_CAP_BYTES = 2048;
+
+/**
  * The sections, in the order a reader meets them.
  *
  * The order is fixed and identical in every packet. A reader who has to search for the

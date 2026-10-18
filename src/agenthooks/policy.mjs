@@ -21,8 +21,15 @@
 
 import { CLI } from '../name.mjs';
 
-/** The events an agent-time hook can answer, normalised across harnesses. */
-export const EVENTS = ['pre-tool-use'];
+/**
+ * The events an agent-time hook can answer, normalised across harnesses.
+ *
+ * `pre-tool-use` is a decision: a payload in, a deny or nothing out, and exit 2 means
+ * block. `prompt-submit` is a delivery: the same payload shape in, context out, and it
+ * never denies anything — a hook that could stop a person's prompt would be a hook whose
+ * own bug is a person who cannot type (R29).
+ */
+export const EVENTS = ['pre-tool-use', 'prompt-submit'];
 
 /** The environment variable that lifts named policies for one session. */
 export const ALLOW_ENV = 'SIMT_ALLOW';

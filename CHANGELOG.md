@@ -21,6 +21,20 @@ installed agent CLI and neither is on this machine. `simt skills brief` keeps it
 behaviour for now: retiring it changes two accepted decisions and an MCP output schema,
 and this slice carries no decision to do it.
 
+### The packet arrives without being asked for
+
+A repository that declares a `brief` key in its manifest gets the packet injected as context
+before every prompt: `simt agent-hooks install` writes a `UserPromptSubmit` hook into Claude
+Code's and Codex's own config, and `simt agent-hook prompt-submit --harness <id>` answers in
+that harness's dialect with `hookSpecificOutput.additionalContext`. It never decides and never
+exits 2 — no prompt text, no opt-in, a cold index or an assembly error all print why on stderr
+and exit 0. The injection is capped at 2048 bytes; `brief.bytes` may lower that and may not
+raise it. Cursor and Gemini CLI are not in the table: Cursor's prompt event can only block a
+prompt, and Gemini CLI's replacement is not in the reader table. The pre-tool path pays nothing
+for this — the repository is reached through a dynamic import only a prompt event opens. MCP
+gains a `brief` tool so a client can pull the same packet, assembled by the same code as the
+command.
+
 ## [0.3.1] — 2026-10-18
 
 ### Who a change reaches

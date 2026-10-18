@@ -11,6 +11,26 @@
 //   cursor       .cursor/hooks.json      preToolUse      {"version":1,"hooks":{E:[h]}}
 //   antigravity  .agents/hooks.json      PreToolUse      {"<name>":{E:[{matcher,hooks:[h]}]}}
 //
+// The prompt-submit event (R29) is a second table, and it is shorter because the vendors
+// are: two of the four document a prompt event that can put text into the model's context,
+// and a delivery is the only thing this tool does there. Neither takes a matcher — both
+// document that field for tool events, and a matcher a harness ignores is a matcher the
+// next person believes is filtering something.
+//
+//   claude       .claude/settings.json   UserPromptSubmit   hookSpecificOutput.additionalContext
+//   codex        .codex/hooks.json       UserPromptSubmit   hookSpecificOutput.additionalContext
+//   cursor       .cursor/hooks.json      beforeSubmitPrompt CANNOT INJECT: block-only
+//   antigravity  .agents/hooks.json      (no prompt event documented)
+//
+// Cursor is the one that would be a mistake to write anyway. Its `beforeSubmitPrompt` hook
+// can only continue or block, so the entry would carry no packet and a broken one would
+// stop a person from typing — and its only injection point, `sessionStart.additional_context`,
+// fires once when the session is created, which is a different lifetime from the brief a
+// task needs. Gemini CLI documents `BeforeAgent`, which does inject, but the product was
+// replaced by Antigravity CLI on 2026-06-18 and its config is not in the reader table this
+// module takes its paths from; a harness this tool did not verify is a harness it does not
+// write to.
+//
 // The paths are not written here. They come from the reader table (R14) because that is
 // where each one was verified against its vendor page, and a second copy of a verified
 // fact is a copy that drifts the first time a vendor moves the file.
@@ -36,8 +56,8 @@ const TIMEOUT_SECONDS = 10;
  * harness's dialect when a payload arrived in an unexpected shape, and the harness would
  * read a decision it does not understand as no decision at all.
  */
-export function hookCommand(id) {
-  return `${CLI} agent-hook ${EVENTS[0]} --harness ${id}`;
+export function hookCommand(id, event = EVENTS[0]) {
+  return `${CLI} agent-hook ${event} --harness ${id}`;
 }
 
 /** The path a config file lives at, from the reader table rather than a second list. */
@@ -73,6 +93,14 @@ const ADAPTERS = {
     deny: (message) => ({
       hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: message },
     }),
+    // The delivery door. `additionalContext` is documented for this event and is
+    // wrapped into the conversation at the point the hook fired, which is why the
+    // packet goes here rather than into a system prompt: the cached prefix survives.
+    prompt: {
+      event: 'UserPromptSubmit',
+      verified: 'code.claude.com/docs/en/hooks, read 2026-10-19',
+      context: (text) => ({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } }),
+    },
   },
   codex: {
     id: 'codex',
@@ -96,6 +124,11 @@ const ADAPTERS = {
     deny: (message) => ({
       hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: message },
     }),
+    prompt: {
+      event: 'UserPromptSubmit',
+      verified: 'developers.openai.com/codex/hooks, read 2026-10-19',
+      context: (text) => ({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } }),
+    },
   },
   cursor: {
     id: 'cursor',
@@ -111,6 +144,10 @@ const ADAPTERS = {
         : [],
     }),
     deny: (message) => ({ permission: 'deny', user_message: message, agent_message: message }),
+    // beforeSubmitPrompt is documented as continue/block and nothing else, so there is no
+    // key to deliver a packet in. Writing the entry anyway would put a command that reads
+    // a repository on the path of every prompt a person types, to say nothing.
+    prompt: null,
   },
   antigravity: {
     id: 'antigravity',
@@ -133,6 +170,9 @@ const ADAPTERS = {
       };
     },
     deny: (message) => ({ decision: 'deny', reason: message }),
+    // No prompt event is documented for this harness's hooks file, and a guessed event
+    // name is a hook that never fires while its config says it does.
+    prompt: null,
   },
 };
 
@@ -160,6 +200,32 @@ export function decisionJson(row, decision) {
   return row.deny(decision.messages.join('\n'));
 }
 
+/**
+ * The document to print for a delivery, or null when the harness takes none.
+ *
+ * A delivery is never a decision: nothing here can deny, and the caller exits 0 whatever
+ * this returns. That is the whole difference between the two events, and it is why the
+ * prompt event has no `denyExit` — there is no exit code that means "here is some context".
+ */
+export function deliveryJson(row, text) {
+  return row.prompt ? row.prompt.context(text) : null;
+}
+
+/**
+ * The submitted text a prompt payload carries, or null when it carries none we recognise.
+ *
+ * Marked inferred rather than documented: both harnesses that take this event place the
+ * prompt at the top level, but only in the example on each page, not as a stated contract.
+ * An unrecognised payload therefore delivers nothing and says so on stderr. The failure
+ * this must not have is the opposite one — a packet delivered as though it answered a task
+ * it never saw, which reads as a confident answer about the wrong question.
+ */
+export function promptText(row, payload) {
+  if (!row.prompt) return null;
+  const text = payload?.prompt ?? payload?.user_prompt ?? payload?.message;
+  return typeof text === 'string' && text.trim().length > 0 ? text : null;
+}
+
 // ---------------------------------------------------------------------------
 // The config file: reading ours out of somebody else's JSON, and putting it back.
 // ---------------------------------------------------------------------------
@@ -180,9 +246,28 @@ function container(row, config, { create = false } = {}) {
   return config.hooks ?? null;
 }
 
+/** The vendor's name for one of our events on this row, or null when it has none. */
+function vendorEvent(row, event) {
+  if (event === EVENTS[0]) return row.event;
+  if (event === 'prompt-submit') return row.prompt?.event ?? null;
+  return null;
+}
+
+/** The events a row answers, and the name each one goes under in its config file. */
+function eventsOf(row, { prompt = false } = {}) {
+  const pairs = [[EVENTS[0], row.event]];
+  if (prompt && row.prompt) pairs.push(['prompt-submit', row.prompt.event]);
+  return pairs;
+}
+
 /** The group this tool owns for one event, in that harness's shape. */
-function group(row) {
-  const command = hookCommand(row.id);
+function group(row, event = EVENTS[0]) {
+  const command = hookCommand(row.id, event);
+  if (event !== EVENTS[0]) {
+    // No matcher: both vendors document that field for tool events, and a matcher a
+    // harness ignores is a matcher the next reader believes is filtering something.
+    return { hooks: [{ type: 'command', command, timeout: TIMEOUT_SECONDS }] };
+  }
   if (row.id === 'cursor') {
     // failClosed is set because a hooks file this tool wrote should not silently
     // degrade to fail-open on its own crash: the vendor's default turns a broken hook
@@ -197,35 +282,44 @@ function ours(entry) {
   return JSON.stringify(entry).includes(`${CLI} agent-hook`);
 }
 
-function entries(row, config) {
-  const box = container(row, config);
-  const list = box?.[row.event];
+function entries(row, config, event = EVENTS[0]) {
+  const name = vendorEvent(row, event);
+  if (name === null) return [];
+  const list = container(row, config)?.[name];
   return Array.isArray(list) ? list : [];
 }
 
-/** Our entries in this document, for `status`; the document is not modified. */
-export function installedIn(row, config) {
-  return entries(row, config).filter(ours);
+/** Our entries in this document for one event, for `status`; the document is not modified. */
+export function installedIn(row, config, event = EVENTS[0]) {
+  return entries(row, config, event).filter(ours);
 }
 
 /**
- * The document with this tool's hook added, everything else left alone.
+ * The document with this tool's hooks added, everything else left alone.
  *
  * Written as JSON with two spaces and a trailing newline because that is what a file in
  * a repository reads like; a config that is rewritten with different indentation on
  * every run is a diff nobody can review. Keys this tool does not own are preserved
  * exactly, including their order, because the file belongs to the repository.
+ *
+ * One file can carry both events — Claude and Codex each hold a tool hook and a prompt
+ * hook in the same document — so this writes one group per event the row answers rather
+ * than one group per file. `prompt` is the caller's opt-in: a repository that has not
+ * asked for a delivered packet gets the tool hook and nothing extra, and the file it never
+ * asked to change is a file this tool does not touch.
  */
-function withHook(row, config) {
+function withHook(row, config, { prompt = false } = {}) {
   const box = container(row, config, { create: true });
-  const kept = entries(row, config).filter((e) => !ours(e));
-  box[row.event] = [...kept, group(row)];
+  for (const [event, name] of eventsOf(row, { prompt })) {
+    const kept = entries(row, config, event).filter((e) => !ours(e));
+    box[name] = [...kept, group(row, event)];
+  }
   return config;
 }
 
 /** The text `install` would write, or the reason the existing file cannot be read. */
-export function rendered(row, existing) {
-  if (existing === null) return { text: `${JSON.stringify(withHook(row, {}), null, 2)}\n`, action: 'created' };
+export function rendered(row, existing, options = {}) {
+  if (existing === null) return { text: `${JSON.stringify(withHook(row, {}, options), null, 2)}\n`, action: 'created' };
   let config;
   try {
     config = JSON.parse(existing);
@@ -235,6 +329,6 @@ export function rendered(row, existing) {
   if (config === null || typeof config !== 'object' || Array.isArray(config)) {
     return { error: 'not a JSON object; left alone' };
   }
-  const text = `${JSON.stringify(withHook(row, config), null, 2)}\n`;
+  const text = `${JSON.stringify(withHook(row, config, options), null, 2)}\n`;
   return { text, action: text === existing ? 'unchanged' : 'updated' };
 }

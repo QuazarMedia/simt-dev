@@ -27,6 +27,8 @@ import { discover } from '../compare/discover.mjs';
 import { buildRow, summarise } from '../compare/row.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { dirtyPaths, parsePathList, readBody } from '../commands/skills.mjs';
+import { assembleBrief } from '../brief/assemble.mjs';
+import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
 import { planNext, planDone } from '../plan/index.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { measureSkill } from '../graph/load.mjs';
@@ -332,6 +334,24 @@ const output = {
       remedy: { type: ['string', 'null'] },
     },
     required: ['root', 'id', 'wouldChange', 'dryRun'],
+  },
+  brief: {
+    type: 'object',
+    properties: {
+      root: { type: 'string' },
+      kind: { type: 'string' },
+      basis: { type: 'string' },
+      task: { type: 'string' },
+      scope: { type: 'array', items: { type: 'string' } },
+      budget: { type: 'number' },
+      bytes: { type: 'number' },
+      before: { type: 'number' },
+      floorHeld: { type: 'boolean' },
+      cut: { type: 'array', items: { type: 'string' } },
+      sections: { type: 'object', additionalProperties: { type: 'array', items: { type: 'string' } } },
+      text: { type: 'string' },
+    },
+    required: ['root', 'kind', 'basis', 'task', 'scope', 'budget', 'bytes', 'before', 'floorHeld', 'cut', 'sections', 'text'],
   },
   /** The shape of every tool failure, which is a result and not a protocol error. */
   error: ERROR_SHAPE,
@@ -769,6 +789,53 @@ export const TOOLS = [
         wouldChange: result.wouldChange,
         dryRun: true,
         remedy: result.remedy,
+      };
+    },
+  },
+  {
+    outputSchema: output.brief,
+    name: 'brief',
+    description:
+      'The packet for one task, in the bytes a prompt can carry: the kind of task it is, the commands that kind needs, the files the index ranks highest, the tests that cover them, the decisions that govern them, the skills that apply and the lessons that name those paths. Every argument is optional - with no task it describes the repository itself.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: { type: 'string', description: 'repository root; defaults to the editor cwd' },
+        task: { type: 'string', description: "what the agent is about to do, in the user's own words" },
+        paths: { type: 'string', description: 'comma-separated paths to scope the packet to, instead of the files git reports as modified' },
+        budget: { type: 'number', description: 'byte ceiling; 0 means the whole packet (default 2048)' },
+      },
+      required: [],
+    },
+    async run(args) {
+      const root = rootOf(args);
+      const budget = Number.isFinite(args?.budget) && args.budget >= 0 ? args.budget : DEFAULT_BRIEF_BYTES;
+      // Read, never build: every tool here declares itself read-only, and a call that
+      // indexed the tree would make that declaration false. A brief with no index to read
+      // says which command makes one - the same rule the delivered packet follows, so a
+      // pull and a push pay the same price and neither one writes.
+      const result = await assembleBrief({
+        root,
+        task: typeof args?.task === 'string' ? args.task : '',
+        paths: typeof args?.paths === 'string' ? args.paths : null,
+        budget,
+        build: false,
+      });
+      if (result.error) throw Object.assign(new Error('the index could not be read'), { remedy: `run: ${CLI} index` });
+      if (result.cold) throw Object.assign(new Error('this repository has no index to answer from'), { remedy: `run: ${CLI} index` });
+      return {
+        root: result.root,
+        kind: result.kind,
+        basis: result.basis,
+        task: result.task,
+        scope: result.scope,
+        budget: result.budget,
+        bytes: result.packed.after,
+        before: result.packed.before,
+        floorHeld: result.packed.floorHeld,
+        cut: result.packed.cut,
+        sections: result.sections,
+        text: result.packed.text,
       };
     },
   },

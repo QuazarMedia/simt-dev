@@ -45,7 +45,8 @@ ${CLI} hooks install [--yes]   install the shared dispatcher; report what it wou
 ${CLI} hooks status            what each git event routes to, and whether it is wired
 ${CLI} hooks run <event>       run one event's gates now, as git would
                            (pre-commit, pre-push, post-merge, ...)
-${CLI} agent-hook <event>      the entry point a harness calls before a tool call
+${CLI} agent-hook <event>      the entry point a harness calls: pre-tool-use decides,
+                            prompt-submit delivers the packet as prompt context
                            (reads one JSON payload on stdin and answers in that
                             harness's dialect; exit 2 blocks; needs --harness)
 ${CLI} agent-hooks install     write this repo's policies into the harnesses that

@@ -17,6 +17,8 @@ import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
+import { postDeliveryJson } from '../agenthooks/render.mjs';
+
 const exec = promisify(execFile);
 
 export const LESSONS_FILE = '.simt-dev/lessons.jsonl';
@@ -657,5 +659,202 @@ export async function promoteLesson(root, options = {}) {
     path: relPath,
     markdown,
     written: Boolean(options.apply),
+  };
+}
+
+/**
+ * Format a promoted lesson as a single paragraph for after-tool hook injection (plan 0003 R33).
+ *
+ * @param {object} lesson
+ * @returns {string}
+ */
+export function formatLessonParagraph(lesson) {
+  const id = String(lesson?.id ?? 'lesson').trim();
+  const title = String(lesson?.title ?? id).replace(/\s+/g, ' ').trim();
+  const body = String(lesson?.paragraph ?? '').replace(/\s+/g, ' ').trim();
+  if (!body || body === title) {
+    return `Lesson ${id}: ${title}`;
+  }
+  return `Lesson ${id} (${title}): ${body}`;
+}
+
+function hashLine(line) {
+  const norm = normaliseErrorLine(line);
+  return `sha256-${createHash('sha256').update(norm, 'utf8').digest('hex')}`;
+}
+
+function firstDefinedNumber(values) {
+  for (const v of values) {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+  }
+  return undefined;
+}
+
+function extractFailureSignals(payloadOrOutput) {
+  if (typeof payloadOrOutput === 'string') {
+    const trimmed = payloadOrOutput.trim();
+    if (!trimmed) return { failed: false, reason: 'empty tool output', signatures: [] };
+    const sigs = new Set([errorSignature(trimmed)]);
+    for (const line of trimmed.split(/\r?\n/)) {
+      const norm = normaliseErrorLine(line);
+      if (norm) sigs.add(hashLine(norm));
+    }
+    return { failed: true, signatures: [...sigs] };
+  }
+
+  if (!payloadOrOutput || typeof payloadOrOutput !== 'object') {
+    return { failed: false, reason: 'empty tool output', signatures: [] };
+  }
+
+  const p = payloadOrOutput;
+  const resp =
+    p.tool_response ?? p.tool_output ?? p.tool_result ?? p.toolResponse ?? null;
+  const respObj = resp && typeof resp === 'object' && !Array.isArray(resp) ? resp : {};
+
+  const exitCode = firstDefinedNumber([
+    p.exit_code,
+    p.exitCode,
+    p.exit,
+    p.status,
+    respObj.exit_code,
+    respObj.exitCode,
+    respObj.exit,
+    respObj.status,
+    respObj.code,
+  ]);
+  const isError =
+    p.is_error ?? p.isError ?? respObj.is_error ?? respObj.isError ?? undefined;
+
+  if (exitCode === 0 && isError !== true) {
+    return { failed: false, reason: 'the tool call exited 0', signatures: [] };
+  }
+  if (isError === false && exitCode === undefined) {
+    return { failed: false, reason: 'the tool call reported no error', signatures: [] };
+  }
+
+  const sigs = new Set();
+  for (const rawSig of [p.signature, respObj.signature]) {
+    if (typeof rawSig === 'string' && rawSig.startsWith('sha256-')) {
+      sigs.add(rawSig.trim());
+    }
+  }
+
+  for (const errLine of [p.errorLine, respObj.errorLine]) {
+    if (typeof errLine === 'string' && errLine.trim()) {
+      sigs.add(hashLine(errLine));
+      sigs.add(errorSignature(errLine));
+    }
+  }
+
+  const textParts = [];
+  if (typeof resp === 'string') textParts.push(resp);
+  for (const field of [
+    respObj.stderr,
+    respObj.stdout,
+    respObj.output,
+    respObj.error,
+    respObj.text,
+    typeof respObj.content === 'string'
+      ? respObj.content
+      : Array.isArray(respObj.content)
+        ? respObj.content.map((c) => (typeof c === 'string' ? c : (c?.text ?? ''))).join('\n')
+        : '',
+    p.stderr,
+    p.stdout,
+    p.output,
+    p.error,
+    p.summary,
+  ]) {
+    if (typeof field === 'string' && field.trim()) textParts.push(field);
+  }
+
+  if (typeof p.summary === 'string') {
+    const inner =
+      /^\d+\s+fail\s+\((.+)\)$/.exec(p.summary.trim())?.[1] ??
+      /^exit\s+-?\d+\s+\((.+)\)$/.exec(p.summary.trim())?.[1];
+    if (inner) {
+      sigs.add(hashLine(inner));
+      sigs.add(errorSignature(inner));
+    }
+  }
+
+  const combined = textParts.join('\n').trim();
+  if (combined) {
+    sigs.add(errorSignature(combined));
+    for (const line of combined.split(/\r?\n/)) {
+      const norm = normaliseErrorLine(line);
+      if (norm) sigs.add(hashLine(norm));
+    }
+  }
+
+  if (sigs.size === 0) {
+    return { failed: false, reason: 'the payload carries no failing tool output', signatures: [] };
+  }
+
+  return { failed: true, signatures: [...sigs] };
+}
+
+/**
+ * Match a failing tool output or replayed failure payload against promoted lessons by error signature.
+ *
+ * @param {Array<object>} lessons
+ * @param {string|object} payloadOrOutput
+ * @returns {{lesson: object, paragraph: string, signature: string}|null}
+ */
+export function matchLessonByOutput(lessons, payloadOrOutput) {
+  if (!Array.isArray(lessons) || lessons.length === 0) return null;
+  const signals = extractFailureSignals(payloadOrOutput);
+  if (!signals.failed || signals.signatures.length === 0) return null;
+
+  const sigSet = new Set(signals.signatures);
+  for (const lesson of lessons) {
+    if (lesson?.signature && sigSet.has(lesson.signature)) {
+      return {
+        lesson,
+        paragraph: formatLessonParagraph(lesson),
+        signature: lesson.signature,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Recall and inject a matching lesson as one paragraph when an after-tool hook (`post-tool-use`)
+ * sees failing output whose signature matches a promoted lesson in `docs/lessons/*.md` (plan 0003 R33).
+ *
+ * @param {object} row harness adapter row from `src/agenthooks/render.mjs`
+ * @param {object} payload hook stdin JSON payload
+ * @param {{root?: string}} [options]
+ * @returns {Promise<{json?: object, root?: string, lesson?: object, paragraph?: string, signature?: string, skipped?: string}>}
+ */
+export async function deliverLessonRecall(row, payload, options = {}) {
+  const root = row?.root?.(payload) ?? payload?.root ?? options.root ?? process.cwd();
+  const signals = extractFailureSignals(payload);
+  if (!signals.failed) {
+    return { skipped: signals.reason ?? 'no failing tool output' };
+  }
+
+  const lessons = await listPromotedLessons(root);
+  if (lessons.length === 0) {
+    return { skipped: 'no promoted lessons in docs/lessons' };
+  }
+
+  const matched = matchLessonByOutput(lessons, payload);
+  if (!matched) {
+    return { skipped: 'no lesson matches the failure signature' };
+  }
+
+  const json = postDeliveryJson(row, matched.paragraph);
+  if (json === null) {
+    return { skipped: `${row?.id ?? 'harness'} has no post-tool event that can inject` };
+  }
+
+  return {
+    json,
+    root,
+    lesson: matched.lesson,
+    paragraph: matched.paragraph,
+    signature: matched.signature,
   };
 }

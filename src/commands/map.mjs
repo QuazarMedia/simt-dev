@@ -5,8 +5,15 @@
 
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { readEdges, readFiles, readSymbols, reindex } from '../index/store.mjs';
-import { DEFAULT_BUDGET, formatRecall, measureRecall, rankFiles, renderMap } from '../index/map.mjs';
+import { readEdges, readEmbeddings, readFiles, readFts, readSymbols, reindex, searchFtsBm25 } from '../index/store.mjs';
+import {
+  DEFAULT_BUDGET,
+  embedTaskQuery,
+  formatRecall,
+  measureRecall,
+  rankFiles,
+  renderMap,
+} from '../index/map.mjs';
 
 const LEVELS = new Set(['outline', 'names', 'signatures']);
 
@@ -25,7 +32,15 @@ export async function mapCommand(args, flags) {
   const loaded = await loadGraph(root);
   if (loaded.error) return loaded.error;
   const task = typeof flags.task === 'string' ? flags.task : '';
-  const ranked = rankFiles({ ...loaded, task });
+  const bm25 = task.trim().length > 0 ? await searchFtsBm25(root, task, { fts: loaded.fts }) : [];
+  const queryVector =
+    flags.embed === true && loaded.embeddings.length > 0
+      ? await embedTaskQuery(root, task, {
+          embed: true,
+          allowRemote: flags.allowRemote === true,
+        })
+      : null;
+  const ranked = rankFiles({ ...loaded, bm25, queryVector, task });
   const rendered = renderMap(ranked, loaded.symbols, { level, budget });
   const payload = {
     ok: true,
@@ -57,7 +72,10 @@ export async function mapCommand(args, flags) {
 async function recall(root, flags) {
   let result;
   try {
-    result = await measureRecall(root);
+    result = await measureRecall(root, {
+      embed: flags.embed === true,
+      allowRemote: flags.allowRemote === true,
+    });
   } catch (error) {
     return fail(`could not measure recall (${error.message})`, EXIT.UNSUPPORTED, `run ${CLI} index in a git repository`);
   }
@@ -71,7 +89,8 @@ async function recall(root, flags) {
 }
 
 /**
- * The files, symbols and edges the index holds, building the index once when it is empty.
+ * The files, symbols, edges, FTS rows and stored vector embeddings the index holds,
+ * building the index once when it is empty.
  *
  * `build: false` refuses that rebuild and answers with `cold: true` instead. The one
  * caller that passes it is the prompt-submit hook (R29), and the reason is the bar that
@@ -83,7 +102,7 @@ async function recall(root, flags) {
 export async function loadGraph(root, { build = true } = {}) {
   let files = await readFiles(root);
   if (files.length === 0) {
-    if (!build) return { files: [], symbols: [], edges: [], cold: true };
+    if (!build) return { files: [], symbols: [], edges: [], fts: [], embeddings: [], cold: true };
     try {
       await reindex(root);
     } catch (error) {
@@ -97,6 +116,11 @@ export async function loadGraph(root, { build = true } = {}) {
     }
     files = await readFiles(root);
   }
-  const [symbols, edges] = await Promise.all([readSymbols(root), readEdges(root)]);
-  return { files, symbols, edges };
+  const [symbols, edges, fts, embeddings] = await Promise.all([
+    readSymbols(root),
+    readEdges(root),
+    readFts(root),
+    readEmbeddings(root),
+  ]);
+  return { files, symbols, edges, fts, embeddings };
 }

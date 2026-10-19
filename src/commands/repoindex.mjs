@@ -13,7 +13,10 @@ export async function indexCommand(args, flags) {
   const root = flags.root ?? process.cwd();
   let result;
   try {
-    result = await reindex(root);
+    result = await reindex(root, {
+      embed: flags.embed === true,
+      allowRemote: flags.allowRemote === true,
+    });
   } catch (error) {
     return fail(
       `could not index this repository (${error.message})`,

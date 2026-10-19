@@ -9,17 +9,42 @@ import { dirname, join } from 'node:path';
 
 export const SQLITE_FILE = '.simt-dev/index.sqlite';
 export const JSONL_FILE = '.simt-dev/index.jsonl';
-export const SCHEMA_V = '2';
+export const SCHEMA_V = '3';
 
 const SCHEMA = `
 create table if not exists files(path text primary key, blob text, lang text, bytes int, pkg text);
 create table if not exists symbols(id integer primary key, path text, name text, kind text, line int, sig text, exported int);
 create table if not exists edges(src text, dst text, kind text, weight real);
 create virtual table if not exists fts using fts5(kind, ref, body);
+create table if not exists embeddings(path text primary key, blob text, model text, dims int, vec blob);
 create table if not exists meta(key text primary key, value text);
 `;
 
-export async function writeSqlite(root, next, removed, symbols, edges, fts) {
+export function encodeVectorBlob(vec) {
+  if (!Array.isArray(vec) && !(vec instanceof Float32Array)) return Buffer.alloc(0);
+  const f32 = vec instanceof Float32Array ? vec : Float32Array.from(vec, (v) => Number(v) || 0);
+  return Buffer.from(f32.buffer, f32.byteOffset, f32.byteLength);
+}
+
+export function decodeVectorBlob(blob) {
+  if (!blob) return new Float32Array(0);
+  if (blob instanceof Float32Array) return blob;
+  if (Array.isArray(blob)) return Float32Array.from(blob, (v) => Number(v) || 0);
+  const buf = Buffer.isBuffer(blob)
+    ? blob
+    : blob instanceof Uint8Array
+      ? Buffer.from(blob.buffer, blob.byteOffset, blob.byteLength)
+      : typeof blob === 'string'
+        ? Buffer.from(blob, 'base64')
+        : Buffer.alloc(0);
+  const count = Math.floor(buf.byteLength / 4);
+  if (count === 0) return new Float32Array(0);
+  const copy = new Uint8Array(count * 4);
+  copy.set(new Uint8Array(buf.buffer, buf.byteOffset, count * 4));
+  return new Float32Array(copy.buffer);
+}
+
+export async function writeSqlite(root, next, removed, symbols, edges, fts, embeddings = []) {
   const { DatabaseSync } = await import('node:sqlite');
   const file = join(root, SQLITE_FILE);
   await mkdir(dirname(file), { recursive: true });
@@ -32,25 +57,35 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts) {
     const dropSymbols = db.prepare('delete from symbols where path = ?');
     const dropEdges = db.prepare('delete from edges where src = ? or dst = ?');
     const dropFts = db.prepare('delete from fts where ref = ?');
+    const dropEmbed = db.prepare('delete from embeddings where path = ?');
     const dropFile = db.prepare('delete from files where path = ?');
     const addSymbol = db.prepare('insert into symbols(path, name, kind, line, sig, exported) values (?, ?, ?, ?, ?, ?)');
     const addEdge = db.prepare('insert into edges(src, dst, kind, weight) values (?, ?, ?, ?)');
     const addFts = db.prepare('insert into fts(kind, ref, body) values (?, ?, ?)');
+    const upsertEmbed = db.prepare(`insert into embeddings(path, blob, model, dims, vec) values (?, ?, ?, ?, ?)
+      on conflict(path) do update set blob = excluded.blob, model = excluded.model, dims = excluded.dims, vec = excluded.vec`);
     for (const row of next) {
       upsert.run(row.path, row.blob, row.lang, row.bytes, row.pkg);
       dropSymbols.run(row.path);
       dropEdges.run(row.path, row.path);
       dropFts.run(row.path);
+      dropEmbed.run(row.path);
     }
     for (const path of removed) {
       dropFile.run(path);
       dropSymbols.run(path);
       dropEdges.run(path, path);
       dropFts.run(path);
+      dropEmbed.run(path);
     }
     for (const row of symbols) addSymbol.run(row.path, row.name, row.kind, row.line, row.sig, row.exported);
     for (const row of edges) addEdge.run(row.src, row.dst, row.kind, row.weight);
     for (const row of fts) addFts.run(row.kind, row.ref, row.body);
+    for (const row of embeddings) {
+      const vecBlob = Buffer.isBuffer(row.vec) || row.vec instanceof Uint8Array ? row.vec : encodeVectorBlob(row.vec);
+      const dims = Number.isInteger(row.dims) ? row.dims : Math.floor(vecBlob.byteLength / 4);
+      upsertEmbed.run(row.path, row.blob ?? '', row.model ?? '', dims, vecBlob);
+    }
     db.prepare('insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value').run('schema', SCHEMA_V);
     db.exec('commit');
   } catch (error) {
@@ -61,7 +96,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts) {
   }
 }
 
-export async function writeJsonl(root, previous, next, removed, symbols, edges, fts, force) {
+export async function writeJsonl(root, previous, next, removed, symbols, edges, fts, force, embeddings = []) {
   const gone = new Set(removed);
   const replaced = new Map(next.map((row) => [row.path, row]));
   const drop = new Set([...replaced.keys(), ...gone]);
@@ -76,9 +111,14 @@ export async function writeJsonl(root, previous, next, removed, symbols, edges, 
   const keptSymbols = force ? [] : (await readJsonl(root, 'symbols')).filter((row) => !drop.has(row.path));
   const keptEdges = force ? [] : (await readJsonl(root, 'edges')).filter((row) => !drop.has(row.src) && !drop.has(row.dst));
   const keptFts = force ? [] : (await readJsonl(root, 'fts')).filter((row) => !drop.has(row.ref));
+  const newEmbedPaths = new Set(embeddings.map((row) => row.path));
+  const keptEmbeddings = force
+    ? []
+    : (await readJsonl(root, 'embeddings')).filter((row) => !drop.has(row.path) && !newEmbedPaths.has(row.path));
   const allSymbols = [...keptSymbols, ...symbols].sort(bySymbol);
   const allEdges = [...keptEdges, ...edges].sort(byEdge);
   const allFts = [...keptFts, ...fts].sort((a, b) => cmp(a.ref, b.ref));
+  const allEmbeddings = [...keptEmbeddings, ...embeddings].sort(byPath);
   const file = join(root, JSONL_FILE);
   await mkdir(dirname(file), { recursive: true });
   const lines = [
@@ -87,9 +127,21 @@ export async function writeJsonl(root, previous, next, removed, symbols, edges, 
     ...allSymbols.map((row) => JSON.stringify({ table: 'symbols', path: row.path, name: row.name, kind: row.kind, line: row.line, sig: row.sig, exported: row.exported })),
     ...allEdges.map((row) => JSON.stringify({ table: 'edges', src: row.src, dst: row.dst, kind: row.kind, weight: row.weight })),
     ...allFts.map((row) => JSON.stringify({ table: 'fts', kind: row.kind, ref: row.ref, body: row.body })),
+    ...allEmbeddings.map((row) => {
+      const vecBlob = Buffer.isBuffer(row.vec) || row.vec instanceof Uint8Array ? Buffer.from(row.vec.buffer, row.vec.byteOffset, row.vec.byteLength) : encodeVectorBlob(row.vec);
+      const dims = Number.isInteger(row.dims) ? row.dims : Math.floor(vecBlob.byteLength / 4);
+      return JSON.stringify({
+        table: 'embeddings',
+        path: row.path,
+        blob: row.blob ?? '',
+        model: row.model ?? '',
+        dims,
+        vec: vecBlob.toString('base64'),
+      });
+    }),
   ];
   await writeFile(file, `${lines.join('\n')}\n`);
-  return { symbols: allSymbols.length, edges: allEdges.length };
+  return { symbols: allSymbols.length, edges: allEdges.length, embeddings: allEmbeddings.length };
 }
 
 export async function readJsonl(root, table) {
@@ -109,6 +161,16 @@ export async function readJsonl(root, table) {
     else if (table === 'symbols') rows.push({ path: row.path, name: row.name, kind: row.kind, line: row.line, sig: row.sig, exported: row.exported });
     else if (table === 'edges') rows.push({ src: row.src, dst: row.dst, kind: row.kind, weight: row.weight });
     else if (table === 'fts') rows.push({ kind: row.kind, ref: row.ref, body: row.body });
+    else if (table === 'embeddings') {
+      const vec = decodeVectorBlob(row.vec);
+      rows.push({
+        path: row.path,
+        blob: row.blob ?? '',
+        model: row.model ?? '',
+        dims: Number.isInteger(row.dims) ? row.dims : vec.length,
+        vec,
+      });
+    }
   }
   if (table === 'symbols') rows.sort(bySymbol);
   else if (table === 'edges') rows.sort(byEdge);
@@ -117,7 +179,7 @@ export async function readJsonl(root, table) {
   return rows;
 }
 
-export async function readSqliteRows(root, sql) {
+export async function readSqliteRows(root, sql, params = []) {
   let DatabaseSync;
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
@@ -132,7 +194,7 @@ export async function readSqliteRows(root, sql) {
   }
   const db = new DatabaseSync(file);
   try {
-    return db.prepare(sql).all();
+    return db.prepare(sql).all(...params);
   } catch {
     return [];
   } finally {
@@ -152,7 +214,12 @@ export async function readSchema(root, backend) {
 export async function countSqlite(root) {
   const symbols = await readSqliteRows(root, 'select count(*) as n from symbols');
   const edges = await readSqliteRows(root, 'select count(*) as n from edges');
-  return { symbols: Number(symbols[0]?.n ?? 0), edges: Number(edges[0]?.n ?? 0) };
+  const embeddings = await readSqliteRows(root, 'select count(*) as n from embeddings');
+  return {
+    symbols: Number(symbols[0]?.n ?? 0),
+    edges: Number(edges[0]?.n ?? 0),
+    embeddings: Number(embeddings[0]?.n ?? 0),
+  };
 }
 
 function byPath(a, b) {

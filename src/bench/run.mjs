@@ -18,6 +18,7 @@ import { rankSkills, tokenize } from '../resolve/resolve.mjs';
 import { gradeWorkspace } from './grade.mjs';
 import { resolveVaultDir } from './mine.mjs';
 import { ablateSectionInWorkspace, parseAblationArmName } from './ablate.mjs';
+import { applyVariantInWorkspace, parseVariantArmName } from './variants.mjs';
 
 const STATE_DIR = `.${CONFIG_DIR}`;
 
@@ -291,6 +292,15 @@ export async function parseArmSpec(rawSpec, cwd = process.cwd()) {
         env: {},
       };
     }
+    const variantSpec = parseVariantArmName(spec);
+    if (variantSpec) {
+      return {
+        ...variantSpec,
+        write: {},
+        remove: [],
+        env: {},
+      };
+    }
     if (!BUILTIN_ARMS.has(spec)) {
       throw new Error(
         `unknown arm "${spec}"; built-in arms are: ${[...BUILTIN_ARMS].join(', ')} (or pass --arm name=path/to/arm.json)`,
@@ -519,9 +529,12 @@ async function writeTaskBrief(workDir, task) {
  */
 export async function materialiseArm(workDir, armSpec, task = {}) {
   const ablate = armSpec.ablate ?? parseAblationArmName(armSpec.name)?.ablate ?? null;
+  const variant = armSpec.variant ?? parseVariantArmName(armSpec.name)?.variant ?? null;
   const base = armSpec.base ?? (BUILTIN_ARMS.has(armSpec.name) ? armSpec.name : null);
   if (ablate) {
     await ablateSectionInWorkspace(workDir, ablate);
+  } else if (variant) {
+    await applyVariantInWorkspace(workDir, variant);
   } else if (base === 'bare') {
     await stripBareArm(workDir);
   } else if (base === 'current') {
@@ -592,6 +605,17 @@ export async function prepareIsolatedWorkspace(root, baseSha, armSpec, task = {}
         const text = await readFile(join(rootLessonsDir, file), 'utf8');
         await writeFile(target, text, 'utf8');
       }
+    }
+  }
+
+  const rootProfilesDir = join(root, STATE_DIR, 'profiles');
+  const rootProfileFiles = (await readdir(rootProfilesDir).catch(() => [])).filter((f) => f.endsWith('.md'));
+  if (rootProfileFiles.length > 0) {
+    const destProfilesDir = join(workDir, STATE_DIR, 'profiles');
+    await mkdir(destProfilesDir, { recursive: true });
+    for (const file of rootProfileFiles) {
+      const text = await readFile(join(rootProfilesDir, file), 'utf8');
+      await writeFile(join(destProfilesDir, file), text, 'utf8');
     }
   }
 

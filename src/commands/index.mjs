@@ -45,6 +45,7 @@ import {
   benchReportCommand,
   benchAblateCommand,
   benchProbesCommand,
+  benchVariantsCommand,
 } from './bench.mjs';
 import { planCommand } from './plan.mjs';
 import { sharedPlanCommand, sharedInstallCommand, sharedWarning } from './shared.mjs';
@@ -150,6 +151,7 @@ export const IMPLEMENTED = {
   'bench report': benchReportCommand,
   'bench ablate': benchAblateCommand,
   'bench probes': benchProbesCommand,
+  'bench variants': benchVariantsCommand,
   upgrade: upgradeCommand,
   mcp: mcpCommand,
 };

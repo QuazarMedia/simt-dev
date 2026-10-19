@@ -18,6 +18,7 @@ import { KNOWN_KEYS } from './projection/mdc.mjs';
 import { PROFILE_KEYS } from './projection/rules.mjs';
 import { INFERABLE_MARKER } from './kernel/inferability.mjs';
 import { CHECK_MARKER } from './kernel/checks.mjs';
+import { VARIANTS_MARKER } from './kernel/variants.mjs';
 import { LESSON_KEYS } from './memory/lessons.mjs';
 import { DECISION_KEYS } from './memory/decide.mjs';
 
@@ -37,6 +38,7 @@ export const TOOL_WORDS = new Set([
   ...DECISION_KEYS,
   INFERABLE_MARKER,
   CHECK_MARKER,
+  VARIANTS_MARKER,
   'simt-dev',
   'simt-dev-check',
   'simt-hooks',

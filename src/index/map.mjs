@@ -1,19 +1,32 @@
-// Ranked repo map (R22, ADR-091).
+// Ranked repo map and hybrid retrieval (R22, R28, ADR-091).
 //
-// PageRank over import and call edges, personalised to the task. An edge is
-// followed in both directions: the file that imports a mentioned file is part of
-// the task, and so is the file it imports. One direction would hide one of them.
-// Iterations and the tie break are fixed so two runs of the same graph return
-// the same order. A random walk, or a tie broken by insertion order, would not.
+// PageRank over import and call edges, personalised to the task, fused with
+// FTS5 BM25 (`bm25()`) and resolver signals via reciprocal-rank fusion (RRF).
+// Optional local vector embeddings (stored as SQLite blobs via R37) are scored
+// by brute-force cosine similarity and stay off by default unless they raise
+// gold-file recall@10 by at least 10 percentage points (+0.10).
 
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { resolveVaultDir } from '../bench/mine.mjs';
-import { readEdges, readFiles, readSymbols } from './store.mjs';
+import { isTestPath, resolveVaultDir } from '../bench/mine.mjs';
+import { readLocalConfig } from '../local/config.mjs';
+import { localEmbed } from '../local/client.mjs';
+import {
+  decodeVectorBlob,
+  readEdges,
+  readEmbeddings,
+  readFiles,
+  readFts,
+  readSymbols,
+  scoreFtsBm25,
+  searchFtsBm25,
+} from './store.mjs';
 
 export const ITERATIONS = 20;
 export const DAMPING = 0.85;
+export const RRF_K = 40;
+export const EMBED_RECALL_GAIN_BAR = 0.1;
 const TOP = 10;
 export const DEFAULT_BUDGET = 2048;
 
@@ -26,13 +39,106 @@ const STOP = new Set([
 ]);
 
 /**
- * Rank files for one task. No task text ranks the whole graph. A task ranks the
- * files it mentions and the files one import or call away from those.
+ * Reciprocal-rank fusion (RRF) over multiple ranked lists.
  *
- * @param {{files: {path: string}[], edges: {src: string, dst: string, kind: string, weight?: number}[], symbols: {path: string, name: string}[], task?: string}} input
+ * Each list entry may be a path string or `{ path }`. Ties break by path ascending
+ * so fusion is strictly deterministic.
+ *
+ * @param {{items: ({path: string}|string)[], weight?: number}[]} lists
+ * @param {number} [k]
  * @returns {{path: string, rank: number}[]}
  */
-export function rankFiles({ files, edges, symbols, task = '' }) {
+export function rrfFuse(lists, k = RRF_K) {
+  const fused = new Map();
+  const bestScore = new Map();
+  for (const { items = [], weight = 1 } of lists) {
+    if (!Array.isArray(items) || weight <= 0) continue;
+    for (let i = 0; i < items.length; i += 1) {
+      const entry = items[i];
+      const path = typeof entry === 'string' ? entry : entry?.path;
+      if (!path) continue;
+      fused.set(path, (fused.get(path) ?? 0) + weight / (k + i + 1));
+      if (typeof entry === 'object' && typeof entry?.score === 'number') {
+        bestScore.set(path, Math.max(bestScore.get(path) ?? 0, entry.score));
+      }
+    }
+  }
+  return [...fused.entries()]
+    .map(([path, rank]) => ({ path, rank, score: bestScore.get(path) ?? 0 }))
+    .sort((a, b) => (a.rank !== b.rank ? (a.rank < b.rank ? 1 : -1) : cmp(a.path, b.path)));
+}
+
+/**
+ * Brute-force cosine similarity between two numeric / Float32Array vectors.
+ */
+export function cosineSimilarity(a, b) {
+  if (!a || !b) return 0;
+  const len = Math.min(a.length ?? 0, b.length ?? 0);
+  if (len === 0) return 0;
+  let dot = 0;
+  let normA = 0;
+  let normB = 0;
+  for (let i = 0; i < len; i += 1) {
+    const va = Number(a[i]) || 0;
+    const vb = Number(b[i]) || 0;
+    dot += va * vb;
+    normA += va * va;
+    normB += vb * vb;
+  }
+  const denom = Math.sqrt(normA) * Math.sqrt(normB);
+  if (denom === 0) return 0;
+  return dot / denom;
+}
+
+/**
+ * Rank stored vector embeddings against a query vector by brute-force cosine similarity.
+ *
+ * @param {{path: string, vec: Float32Array|number[]|Buffer}[]} embeddings
+ * @param {Float32Array|number[]|Buffer} queryVector
+ * @returns {{path: string, score: number}[]}
+ */
+export function rankByCosine(embeddings, queryVector) {
+  const qVec = queryVector instanceof Float32Array ? queryVector : decodeVectorBlob(queryVector);
+  if (!Array.isArray(embeddings) || embeddings.length === 0 || qVec.length === 0) return [];
+  const scored = [];
+  for (const row of embeddings) {
+    if (!row?.path) continue;
+    const vec = row.vec instanceof Float32Array ? row.vec : decodeVectorBlob(row.vec);
+    if (vec.length === 0) continue;
+    const sim = cosineSimilarity(vec, qVec);
+    if (sim > 0) scored.push({ path: row.path, score: sim });
+  }
+  return scored.sort((a, b) => (a.score !== b.score ? (a.score < b.score ? 1 : -1) : cmp(a.path, b.path)));
+}
+
+/**
+ * Rank files for one task. No task text ranks the whole graph. A task ranks the
+ * files it mentions and the files one import or call away from those, and when
+ * FTS / BM25 rows or optional vector embeddings are supplied, fuses BM25 +
+ * graph proximity + resolver signals via reciprocal-rank fusion (R28).
+ *
+ * @param {{
+ *   files: {path: string}[],
+ *   edges: {src: string, dst: string, kind: string, weight?: number}[],
+ *   symbols: {path: string, name: string}[],
+ *   fts?: {kind?: string, ref?: string, path?: string, body?: string}[],
+ *   bm25?: {path: string, score?: number}[],
+ *   embeddings?: {path: string, vec: Float32Array|number[]|Buffer}[],
+ *   queryVector?: Float32Array|number[]|Buffer|null,
+ *   task?: string
+ * }} input
+ * @returns {{path: string, rank: number, score: number}[]}
+ */
+export function rankFiles({
+  files,
+  edges,
+  symbols,
+  fts = undefined,
+  bm25 = undefined,
+  embeddings = undefined,
+  queryVector = null,
+  task = '',
+}) {
   const nodes = [...new Set(files.map((file) => file.path))].sort();
   const symbolsByPath = groupSymbols(symbols);
   const scores = scoreFiles(nodes, symbolsByPath, task);
@@ -43,9 +149,44 @@ export function rankFiles({ files, edges, symbols, task = '' }) {
   // A file the task mentions stays ahead of a file it does not. PageRank on
   // this graph otherwise returns the file every module imports, and the files
   // the task named never reach the top 10.
-  return kept
+  const baseRanked = kept
     .map((path, i) => ({ path, rank: rank[i], score: scores.get(path) ?? 0 }))
     .sort(byRank);
+
+  if (String(task ?? '').trim().length === 0) return baseRanked;
+
+  const knownPaths = new Set(nodes);
+  const rawBm25 = Array.isArray(bm25)
+    ? bm25
+    : Array.isArray(fts) && fts.length > 0
+      ? scoreFtsBm25(fts, task)
+      : [];
+  const bm25Ranked = rawBm25
+    .filter((row) => knownPaths.has(row.path) && !isTestPath(row.path))
+    .slice(0, 30);
+
+  const embedRanked =
+    queryVector && Array.isArray(embeddings) && embeddings.length > 0
+      ? rankByCosine(embeddings, queryVector)
+          .filter((row) => knownPaths.has(row.path) && !isTestPath(row.path))
+          .slice(0, 30)
+      : [];
+
+  if (bm25Ranked.length === 0 && embedRanked.length === 0) {
+    return baseRanked;
+  }
+
+  const resolverRanked = baseRanked.filter((row) => (row.score ?? 0) > 0);
+  const graphRanked = [...baseRanked].sort((a, b) => (a.rank !== b.rank ? (a.rank < b.rank ? 1 : -1) : cmp(a.path, b.path)));
+  const lists = [
+    { items: resolverRanked, weight: 2.0 },
+    { items: graphRanked, weight: 1.0 },
+    { items: bm25Ranked, weight: 1.0 },
+  ];
+  if (embedRanked.length > 0) {
+    lists.push({ items: embedRanked, weight: 1.5 });
+  }
+  return rrfFuse(lists, RRF_K);
 }
 
 /**
@@ -102,12 +243,46 @@ export function goldPaths(patch) {
 }
 
 /**
+ * Embed a task query using the repository's configured `local.embed` endpoint.
+ *
+ * Returns `null` without opening a socket when `embed` is false, `local.embed`
+ * is unset, or a non-loopback URL is refused.
+ */
+export async function embedTaskQuery(root, task, { embed = false, allowRemote = false, fetchImpl = undefined } = {}) {
+  if (!embed || String(task ?? '').trim().length === 0) return null;
+  const localCfg = await readLocalConfig(root, { allowRemote });
+  if (!localCfg.embed || localCfg.embed.blocked) return null;
+  const res = await localEmbed(localCfg.embed, {
+    input: String(task).slice(0, 4096),
+    allowRemote,
+    fetchImpl,
+  });
+  if (!res.ok || !Array.isArray(res.embeddings?.[0]) || res.embeddings[0].length === 0) {
+    return null;
+  }
+  return Float32Array.from(res.embeddings[0], (v) => Number(v) || 0);
+}
+
+/**
  * Mean recall@10 over mined tasks whose gold patch is in the vault.
  * A missing vault is unmeasured, not a zero: the absence of a hidden patch is
  * not evidence the map missed the file (ADR-076).
  *
+ * When `embed: true` (or stored embeddings are provided), also evaluates recall@10
+ * with embeddings fused in and enforces the R28 acceptance gate: embeddings stay off
+ * by default unless they raise gold-file recall@10 by at least 10 percentage points
+ * (`EMBED_RECALL_GAIN_BAR = 0.1`).
+ *
  * @param {string} root
- * @param {{vaultRoot?: string, backend?: string}} [opts]
+ * @param {{
+ *   vaultRoot?: string,
+ *   backend?: string,
+ *   embed?: boolean,
+ *   allowRemote?: boolean,
+ *   fetchImpl?: typeof fetch,
+ *   embeddings?: {path: string, vec: Float32Array|number[]|Buffer}[],
+ *   taskVectors?: Record<string, Float32Array|number[]>|Map<string, Float32Array|number[]>
+ * }} [opts]
  */
 export async function measureRecall(root, opts = {}) {
   const tasksDir = join(root, '.simt-dev', 'bench', 'tasks');
@@ -121,9 +296,19 @@ export async function measureRecall(root, opts = {}) {
   if (files.length === 0) {
     return { measured: false, reason: 'no index', tasks: 0, missing: 0, recall: null };
   }
-  const [symbols, edges] = await Promise.all([readSymbols(root, opts), readEdges(root, opts)]);
+  const [symbols, edges, fts] = await Promise.all([
+    readSymbols(root, opts),
+    readEdges(root, opts),
+    readFts(root, opts),
+  ]);
+  const storedEmbeddings =
+    opts.embeddings ?? (opts.embed ? await readEmbeddings(root, opts) : []);
+  const checkEmbed = storedEmbeddings.length > 0 || opts.embed === true;
+
   const vault = opts.vaultRoot ?? resolveVaultDir(root);
   let sum = 0;
+  let embedSum = 0;
+  let embedEvaluated = 0;
   let tasks = 0;
   let missing = 0;
   for (const name of names) {
@@ -140,12 +325,61 @@ export async function measureRecall(root, opts = {}) {
       missing += 1;
       continue;
     }
-    const ranked = rankFiles({ files, edges, symbols, task: task.prompt ?? '' });
+    const prompt = task.prompt ?? '';
+    const bm25 = await searchFtsBm25(root, prompt, { ...opts, fts });
+    const ranked = rankFiles({ files, edges, symbols, fts, bm25, task: prompt });
     sum += recallAt10(ranked, gold);
     tasks += 1;
+
+    if (checkEmbed && storedEmbeddings.length > 0) {
+      const providedVec =
+        opts.taskVectors instanceof Map
+          ? opts.taskVectors.get(task.id)
+          : opts.taskVectors?.[task.id];
+      const queryVector =
+        providedVec ??
+        (await embedTaskQuery(root, prompt, {
+          embed: opts.embed === true,
+          allowRemote: opts.allowRemote === true,
+          fetchImpl: opts.fetchImpl,
+        }));
+      if (queryVector) {
+        const embedRanked = rankFiles({
+          files,
+          edges,
+          symbols,
+          fts,
+          bm25,
+          embeddings: storedEmbeddings,
+          queryVector,
+          task: prompt,
+        });
+        embedSum += recallAt10(embedRanked, gold);
+        embedEvaluated += 1;
+      } else {
+        embedSum += recallAt10(ranked, gold);
+      }
+    }
   }
   if (tasks === 0) return { measured: false, reason: 'no gold patches', tasks: 0, missing, recall: null };
-  return { measured: true, reason: '', tasks, missing, recall: sum / tasks };
+  const baseRecall = sum / tasks;
+  const embedRecall = checkEmbed && embedEvaluated > 0 ? embedSum / tasks : null;
+  const embedDelta = embedRecall === null ? null : embedRecall - baseRecall;
+  // R28 acceptance gate: embeddings stay off by default unless they raise
+  // gold-file recall@10 by at least 10 points (+0.10).
+  const embedAccepted = embedDelta !== null && embedDelta + 1e-9 >= EMBED_RECALL_GAIN_BAR;
+  return {
+    measured: true,
+    reason: '',
+    tasks,
+    missing,
+    recall: embedAccepted ? embedRecall : baseRecall,
+    baseRecall,
+    embedRecall,
+    embedDelta,
+    embedAccepted,
+    embeddingsDefault: 'off',
+  };
 }
 
 export function formatRecall(result) {

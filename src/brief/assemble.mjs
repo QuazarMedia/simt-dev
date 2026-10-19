@@ -39,8 +39,9 @@ import { DEFAULT_BRIEF_BYTES, buildPacket, collect } from './packet.mjs';
 import { classifyTask, cardVerbs } from './kind.mjs';
 import { commandCard } from '../kernel/card.mjs';
 import { decisionHits, scopeHits, sourceRoots } from '../index/govern.mjs';
-import { rankFiles, renderMap } from '../index/map.mjs';
+import { embedTaskQuery, rankFiles, renderMap } from '../index/map.mjs';
 import { SQLITE_FILE } from '../index/persist.mjs';
+import { searchFtsBm25 } from '../index/store.mjs';
 import { testEdges, testsFor } from '../index/tests.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
@@ -132,7 +133,7 @@ export async function assembleBrief({
   const graph = await loadGraph(root, { build });
   if (graph.error) return { error: graph.error };
   if (graph.cold) return { cold: true };
-  const { files, symbols, edges } = graph;
+  const { files, symbols, edges, fts = [], embeddings = [] } = graph;
   const filePaths = new Set(files.map((file) => file.path));
 
   const { kind, basis } = classifyTask(task, { paths: scope });
@@ -172,7 +173,15 @@ export async function assembleBrief({
     });
   }
 
-  const ranked = rankFiles({ files, symbols, edges, task });
+  const bm25 = task.trim().length > 0 ? await searchFtsBm25(root, task, { fts }) : [];
+  const queryVector =
+    flags?.embed === true && embeddings.length > 0
+      ? await embedTaskQuery(root, task, {
+          embed: true,
+          allowRemote: flags?.allowRemote === true,
+        })
+      : null;
+  const ranked = rankFiles({ files, symbols, edges, fts, bm25, embeddings, queryVector, task });
   const rendered = renderMap(ranked, symbols, { level: 'names', budget: budget > 0 ? budget * MAP_FACTOR : 0 });
   for (const line of rendered.text.split('\n')) {
     packet.add('FILES', line, { why: ['ranked by the task words against the import graph'] });

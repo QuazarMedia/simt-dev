@@ -900,7 +900,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R25 | Governance graph, `why` | 3 | R20 | S | ADR-093 | ADR-017 at 4c27514; unresolved tokens reported | Complete |
 | R26 | Federation with external MCP | 3 | R27 | S | — | fixture cited as source | Complete |
 | R27 | Brief v2 | 4 | R10, R22, R24, R25 | M | — | turns −20%, C −15%, ΔR ≥ 0 | Complete |
-| R28 | Hybrid retrieval (+ optional embeddings) | 4 | R20, R37 | M | D2 | +10 pts recall or stays off | Queued |
+| R28 | Hybrid retrieval (+ optional embeddings) | 4 | R20, R37 | M | D2 (ADR-090) | +10 pts recall or stays off | Complete |
 | R29 | Delivery: pull and push | 4 | R15, R27 | S | D4 (ADR-079) | ≤ 2 KB in < 300 ms | Complete |
 | R30 | Skill compiler and trigger report | 4 | R02, review 0002 S44 | M | — | per-skill trigger report | Complete |
 | R31 | Plan and tracker index | 4 | — | S | D9 | `plan next` and `plan done` exact | Complete |
@@ -1123,6 +1123,21 @@ servers, configured in `simt.json` / `simt-dev.json` as
 manifest, no socket is ever opened (`socketsOpened: 0`, verified by hooking
 `net.Socket.prototype.connect`). Non-loopback URLs are refused before any socket is opened
 unless `--allow-remote` is passed (`test/local.test.mjs`).
+
+**R28 — Complete** (D2, ADR-090). `src/index/store.mjs` and `src/index/persist.mjs` index
+full-text tokens (`ftsKindOf`, `buildFtsBody`) across `code`, `docs`, `skills`, `decisions`
+and `lessons` into the SQLite FTS5 `fts` table (with deterministic Okapi BM25 fallback
+`scoreFtsBm25` for JSONL), and `src/index/map.mjs` (`rankFiles`, `rrfFuse`) fuses FTS5
+`bm25(fts)` (`searchFtsBm25`), PageRank graph proximity, and resolver signals via
+reciprocal-rank fusion (`RRF_K = 40`). On this repository's 20 mined benchmark tasks,
+deterministic hybrid retrieval raises gold-file recall@10 from 54.3% to 61.3% (SQLite FTS5)
+and 60.3% (JSONL), clearing ADR-091's 60% bar. Optional local embeddings via R37
+(`--embed`, `local.embed`) are stored as `Float32Array` SQLite blobs in the `embeddings`
+table (`encodeVectorBlob`, `decodeVectorBlob`), ranked by brute-force cosine similarity
+(`cosineSimilarity`, `rankByCosine`), and gated by `measureRecall` against
+`EMBED_RECALL_GAIN_BAR = 0.1` (+10 percentage points recall@10) so embeddings stay off by
+default (`embeddingsDefault: "off"`) and open zero sockets unless `--embed` is passed
+(`test/map.test.mjs`).
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

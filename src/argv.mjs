@@ -77,6 +77,9 @@ export const BOOL_FLAGS = new Set([
   // local doctor: allow non-loopback model URLs. Off by default because nothing leaves
   // the machine unless explicitly overridden (ADR-075, plan 0003 R37).
   'allow-remote',
+  // index / map / brief: opt into local vector embeddings configured under local.embed
+  // (plan 0003 R28, R37). Off by default unless recall@10 gains at least 10 points.
+  'embed',
 ]);
 
 export const VALUE_FLAGS = new Set([

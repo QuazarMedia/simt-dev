@@ -205,6 +205,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --level <name>          map: detail level (outline, names, signatures)
 --supersedes <spec>     decide: superseded ADR or ruling (ADR-NNN or ADR-NNN:<ruling>[:<kind>]; repeatable)
 --allow-remote          local doctor: allow non-loopback model URLs (refused by default)
+--embed                 index / map / brief: compute or query optional local vector embeddings
+                        (off by default unless recall@10 gains at least 10 points)
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

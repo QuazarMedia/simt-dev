@@ -6,6 +6,10 @@
   "author": "Said Elimam",
   "private": false,
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/QuazarMedia/simt-dev"
+  },
   "engines": {
     "node": ">=22.20.0"
   },

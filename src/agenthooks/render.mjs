@@ -101,6 +101,12 @@ const ADAPTERS = {
       verified: 'code.claude.com/docs/en/hooks, read 2026-10-19',
       context: (text) => ({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } }),
     },
+    post: {
+      event: 'PostToolUse',
+      matcher: 'Bash',
+      verified: 'code.claude.com/docs/en/hooks, read 2026-10-19',
+      context: (text) => ({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: text } }),
+    },
   },
   codex: {
     id: 'codex',
@@ -129,6 +135,12 @@ const ADAPTERS = {
       verified: 'developers.openai.com/codex/hooks, read 2026-10-19',
       context: (text) => ({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } }),
     },
+    post: {
+      event: 'PostToolUse',
+      matcher: 'Bash',
+      verified: 'developers.openai.com/codex/hooks, read 2026-10-19',
+      context: (text) => ({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: text } }),
+    },
   },
   cursor: {
     id: 'cursor',
@@ -148,6 +160,7 @@ const ADAPTERS = {
     // key to deliver a packet in. Writing the entry anyway would put a command that reads
     // a repository on the path of every prompt a person types, to say nothing.
     prompt: null,
+    post: null,
   },
   antigravity: {
     id: 'antigravity',
@@ -173,6 +186,7 @@ const ADAPTERS = {
     // No prompt event is documented for this harness's hooks file, and a guessed event
     // name is a hook that never fires while its config says it does.
     prompt: null,
+    post: null,
   },
 };
 
@@ -209,6 +223,11 @@ export function decisionJson(row, decision) {
  */
 export function deliveryJson(row, text) {
   return row.prompt ? row.prompt.context(text) : null;
+}
+
+/** The document to print for a post-tool lesson recall delivery, or null when the harness takes none. */
+export function postDeliveryJson(row, text) {
+  return row.post ? row.post.context(text) : null;
 }
 
 /**
@@ -250,23 +269,31 @@ function container(row, config, { create = false } = {}) {
 function vendorEvent(row, event) {
   if (event === EVENTS[0]) return row.event;
   if (event === 'prompt-submit') return row.prompt?.event ?? null;
+  if (event === 'post-tool-use') return row.post?.event ?? null;
   return null;
 }
 
 /** The events a row answers, and the name each one goes under in its config file. */
-function eventsOf(row, { prompt = false } = {}) {
+function eventsOf(row, { prompt = false, post = false } = {}) {
   const pairs = [[EVENTS[0], row.event]];
   if (prompt && row.prompt) pairs.push(['prompt-submit', row.prompt.event]);
+  if (post && row.post) pairs.push(['post-tool-use', row.post.event]);
   return pairs;
 }
 
 /** The group this tool owns for one event, in that harness's shape. */
 function group(row, event = EVENTS[0]) {
   const command = hookCommand(row.id, event);
-  if (event !== EVENTS[0]) {
+  if (event === 'prompt-submit') {
     // No matcher: both vendors document that field for tool events, and a matcher a
     // harness ignores is a matcher the next reader believes is filtering something.
     return { hooks: [{ type: 'command', command, timeout: TIMEOUT_SECONDS }] };
+  }
+  if (event === 'post-tool-use') {
+    const matcher = row.post?.matcher;
+    return matcher
+      ? { matcher, hooks: [{ type: 'command', command, timeout: TIMEOUT_SECONDS }] }
+      : { hooks: [{ type: 'command', command, timeout: TIMEOUT_SECONDS }] };
   }
   if (row.id === 'cursor') {
     // failClosed is set because a hooks file this tool wrote should not silently
@@ -308,9 +335,9 @@ export function installedIn(row, config, event = EVENTS[0]) {
  * asked for a delivered packet gets the tool hook and nothing extra, and the file it never
  * asked to change is a file this tool does not touch.
  */
-function withHook(row, config, { prompt = false } = {}) {
+function withHook(row, config, { prompt = false, post = false } = {}) {
   const box = container(row, config, { create: true });
-  for (const [event, name] of eventsOf(row, { prompt })) {
+  for (const [event, name] of eventsOf(row, { prompt, post })) {
     const kept = entries(row, config, event).filter((e) => !ours(e));
     box[name] = [...kept, group(row, event)];
   }

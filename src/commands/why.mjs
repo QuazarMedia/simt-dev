@@ -22,6 +22,7 @@ import {
   sourceRoots,
   unresolvedAffects,
 } from '../index/govern.mjs';
+import { parseLessonFile } from '../memory/lessons.mjs';
 
 const exec = promisify(execFile);
 
@@ -160,8 +161,16 @@ export async function lessonScopes(root) {
     const paths = lessonPaths(text);
     if (paths.length === 0) continue;
     const id = name.replace(/\.md$/, '');
+    const parsed = parseLessonFile(id, text);
     const detail = /^#\s+(.*)$/m.exec(text)?.[1] ?? id;
-    lessons.push({ id, detail, paths });
+    lessons.push({
+      id,
+      detail,
+      paragraph: parsed.paragraph,
+      paths,
+      signature: parsed.signature,
+      keywords: parsed.keywords,
+    });
   }
   return lessons;
 }

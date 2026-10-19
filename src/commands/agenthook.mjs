@@ -70,7 +70,7 @@ export async function agentHookCommand(args, flags) {
   // whatever happens. The module behind it is the one thing here that reads the
   // repository, and the tool-call path above must not pay for it, so the door is a
   // dynamic import that only this event opens.
-  if (event !== EVENTS[0]) {
+  if (event === 'prompt-submit') {
     const { deliverPrompt } = await import('../agenthooks/prompt.mjs');
     const delivered = await deliverPrompt(row, payload);
     if (delivered.skipped) {
@@ -78,6 +78,17 @@ export async function agentHookCommand(args, flags) {
       return EXIT.OK;
     }
     emit(JSON.stringify(delivered.json));
+    return EXIT.OK;
+  }
+
+  if (event === 'post-tool-use') {
+    const { deliverLessonRecall } = await import('../memory/lessons.mjs');
+    const recalled = await deliverLessonRecall(row, payload, { root: flags.root });
+    if (recalled.skipped) {
+      note(`note     ${id}: no lesson recalled (${recalled.skipped})`);
+      return EXIT.OK;
+    }
+    emit(JSON.stringify(recalled.json));
     return EXIT.OK;
   }
 
@@ -132,12 +143,17 @@ async function installHooks(root, flags) {
   // declaring a `brief` key rather than by having the entry. Read through a dynamic
   // import for the same reason the hook delivers through one.
   const { promptOptIn } = await import('../agenthooks/prompt.mjs');
-  const optIn = await promptOptIn(root);
+  const { listPromotedLessons } = await import('../memory/lessons.mjs');
+  const [optIn, promotedLessons] = await Promise.all([
+    promptOptIn(root),
+    listPromotedLessons(root).catch(() => []),
+  ]);
+  const hasLessons = promotedLessons.length > 0;
   const plan = [];
   for (const row of adapters()) {
     const path = hookPath(row.id);
     const existing = await readIfExists(join(root, path));
-    const result = rendered(row, existing, { prompt: optIn.optedIn });
+    const result = rendered(row, existing, { prompt: optIn.optedIn, post: hasLessons });
     plan.push({
       id: row.id,
       path,

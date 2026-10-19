@@ -7,6 +7,8 @@ import { fileURLToPath } from 'node:url';
 
 import { loadRegistry } from '../graph/load.mjs';
 import { extractOpenedSkills, matchSkillsForPaths } from '../graph/compile.mjs';
+import { matchGlob } from '../index/govern.mjs';
+import { formatLessonParagraph, listPromotedLessons } from '../memory/lessons.mjs';
 import { CONFIG_DIR, MANIFEST_FILE } from '../name.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { plan } from '../projection/project.mjs';
@@ -401,7 +403,7 @@ async function stripBareArm(workDir) {
     }
   }
 
-  for (const rel of ['.githooks', '.mcp.json', '.cursor/mcp.json', '.vscode/mcp.json']) {
+  for (const rel of ['.githooks', '.mcp.json', '.cursor/mcp.json', '.vscode/mcp.json', 'docs/lessons']) {
     await rm(join(workDir, rel), { recursive: true, force: true }).catch(() => {});
   }
 
@@ -458,19 +460,31 @@ async function applyProjectionMode(workDir, mode) {
 
 async function writeTaskBrief(workDir, task) {
   const prompt = String(task?.prompt ?? '');
-  const [registry, fp] = await Promise.all([
+  const taskTokens = tokenize(prompt);
+  const taskTokenSet = new Set(taskTokens);
+  const [registry, fp, lessons] = await Promise.all([
     loadRegistry().catch(() => ({ skills: [] })),
     fingerprint(workDir).catch(() => ({ stacks: [], facts: new Set() })),
+    listPromotedLessons(workDir).catch(() => []),
   ]);
   const skillsList = Array.isArray(registry.skills)
     ? registry.skills
     : Object.values(registry.skills ?? {});
   const { selected = [] } = rankSkills(skillsList, {
-    taskTokens: tokenize(prompt),
+    taskTokens,
     paths: [],
     repoStack: fp.stack ?? [],
   });
   const ranked = selected.slice(0, 5);
+
+  const taskPaths = Array.isArray(task?.paths) ? task.paths : [];
+  const matchingLessons = lessons.filter((lesson) => {
+    const lessonGlobs = Array.isArray(lesson.paths) ? lesson.paths : [];
+    if (taskPaths.some((p) => lessonGlobs.some((glob) => matchGlob(glob, p)))) return true;
+    if (lessonGlobs.some((glob) => prompt.includes(glob.replace(/\/\*\*$/, '')))) return true;
+    const kw = Array.isArray(lesson.keywords) ? lesson.keywords : [];
+    return kw.some((k) => taskTokenSet.has(String(k).toLowerCase()));
+  });
 
   const lines = [
     `# Task Brief: ${task?.id ?? 'task'}`,
@@ -481,6 +495,13 @@ async function writeTaskBrief(workDir, task) {
     ...(ranked.length > 0
       ? ranked.map((r) => `- ${r.skill.name} (score ${r.score}): ${r.skill.description ?? ''}`)
       : ['- (none matched)']),
+    ...(matchingLessons.length > 0
+      ? [
+          '',
+          '## Lessons',
+          ...matchingLessons.map((l) => `- ${formatLessonParagraph(l)}`),
+        ]
+      : []),
     '',
   ];
   const briefPath = join(workDir, STATE_DIR, 'brief.md');
@@ -558,6 +579,20 @@ export async function prepareIsolatedWorkspace(root, baseSha, armSpec, task = {}
   if (tarRes.code !== 0) {
     await rm(slotDir, { recursive: true, force: true }).catch(() => {});
     throw new Error(`tar unpack failed for ${baseSha}: ${tarRes.stderr.toString('utf8').trim()}`);
+  }
+
+  const rootLessonsDir = join(root, 'docs', 'lessons');
+  const rootLessonFiles = (await readdir(rootLessonsDir).catch(() => [])).filter((f) => f.endsWith('.md'));
+  if (rootLessonFiles.length > 0) {
+    const destLessonsDir = join(workDir, 'docs', 'lessons');
+    await mkdir(destLessonsDir, { recursive: true });
+    for (const file of rootLessonFiles) {
+      const target = join(destLessonsDir, file);
+      if (!existsSync(target)) {
+        const text = await readFile(join(rootLessonsDir, file), 'utf8');
+        await writeFile(target, text, 'utf8');
+      }
+    }
   }
 
   const { env } = await materialiseArm(workDir, armSpec, task);

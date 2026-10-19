@@ -284,10 +284,23 @@ export async function assembleBrief({
     }
   }
 
+  const lessonTargets = [...new Set([...scope, ...likely])];
+  const taskTokenSet = new Set(tokenize(task));
   for (const lesson of await lessonScopes(root)) {
-    const hits = likely.flatMap((path) => scopeHits(path, { lessons: [lesson] }));
-    if (hits.length > 0) {
-      packet.add('LESSONS', `${lesson.id} — ${lesson.detail}`, { why: ['a lesson names a path this task will touch'] });
+    const pathHits = lessonTargets.flatMap((path) => scopeHits(path, { lessons: [lesson] }));
+    const keywordMatch =
+      pathHits.length === 0 &&
+      Array.isArray(lesson.keywords) &&
+      lesson.keywords.some((kw) => taskTokenSet.has(String(kw).toLowerCase())) &&
+      [...filePaths].some((path) => scopeHits(path, { lessons: [lesson] }).length > 0);
+    if (pathHits.length > 0 || keywordMatch) {
+      const body =
+        lesson.paragraph && lesson.paragraph !== lesson.detail
+          ? `${lesson.detail}: ${lesson.paragraph.replace(/\s+/g, ' ').trim()}`
+          : lesson.detail;
+      packet.add('LESSONS', `${lesson.id} — ${body}`, {
+        why: [pathHits.length > 0 ? 'a lesson names a path this task will touch' : 'a lesson trigger matches this task'],
+      });
     }
   }
 

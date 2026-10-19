@@ -905,7 +905,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R30 | Skill compiler and trigger report | 4 | R02, review 0002 S44 | M | — | per-skill trigger report | Complete |
 | R31 | Plan and tracker index | 4 | — | S | D9 | `plan next` and `plan done` exact | Complete |
 | R32 | Lessons ledger | 5 | R17 | M | — | one candidate per fail-then-fix | Complete |
-| R33 | Lesson recall | 5 | R32, R15 | S | — | fewer turns on recurrences | Queued |
+| R33 | Lesson recall | 5 | R32, R15 | S | — | fewer turns on recurrences | Complete |
 | R34 | Decision assistant | 5 | review 0002 S31 | S | — | structured supersession | Queued |
 | R35 | Variant selection | 5 | R04 | M | D1 | lockfile records evidence | Queued |
 | R36 | Estate learning | 5 | R17, R32 | S | — | deterministic report | Queued |
@@ -1064,6 +1064,18 @@ findings, and (4) agent-time hook denials (`src/commands/agenthook.mjs`). `simt 
 promotes a candidate to `docs/lessons/NNNN-<slug>.md` with the Appendix A frontmatter
 (`simt-trigger`, `simt-evidence`, `simt-expires`), which `src/index/govern.mjs` and `simt why`
 read directly.
+
+**R33 — Complete.** `simt agent-hook post-tool-use --harness <id>` (`src/commands/agenthook.mjs`,
+`src/agenthooks/render.mjs`, `src/memory/lessons.mjs`) inspects failing tool output or a replayed
+ledger failure line, computes the normalised error signature (`sha256` of `firstErrorLine` and of
+each non-empty output line), and when it matches a promoted lesson in `docs/lessons/*.md`, injects
+that lesson as one paragraph via `hookSpecificOutput.additionalContext` (`PostToolUse` on Claude
+Code and Codex). `src/brief/assemble.mjs` and `src/commands/why.mjs` (`lessonScopes`) include
+matching lessons in the `LESSONS` section whenever the task's `scope` (`--paths` or modified
+working-tree files), top ranked `likely` files, or trigger keywords match a lesson's
+`simt-trigger`. Replaying a recorded failure and running the recurring-failure benchmark fixture
+confirm single-paragraph injection and turn reduction (`test/lessons.test.mjs`); live LLM harness
+measurement remains subject to the same environment boundary recorded in R15 and R27.
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

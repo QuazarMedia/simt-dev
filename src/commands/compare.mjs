@@ -26,6 +26,7 @@ import { provenanceDigest } from '../projection/project.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { buildRow, summarise } from '../compare/row.mjs';
 import { discover } from '../compare/discover.mjs';
+import { learnAcrossEstate, renderLearningLines } from '../compare/learn.mjs';
 import { targetRoot, WORKSPACE_REMEDY } from '../workspace.mjs';
 
 /** Gate kinds, so a row can tell a command gate with no command from a script gate. */
@@ -65,6 +66,7 @@ export async function compareCommand(positional, flags) {
   // bound. Determinism of the output matters more than wall clock on a dashboard.
   const rows = [];
   for (const repo of found.repos) rows.push(await buildRow(repo, context));
+  const learning = await learnAcrossEstate(found.repos);
 
   const summary = summarise(rows, {
     root,
@@ -106,6 +108,7 @@ export async function compareCommand(positional, flags) {
         shas: summary.shas,
       },
       rows,
+      learning,
       worktrees: found.worktrees.map((w) => ({
         name: w.name,
         path: w.path,
@@ -117,7 +120,7 @@ export async function compareCommand(positional, flags) {
     return rows.some((r) => r.problems.length > 0) ? EXIT.FAIL : EXIT.OK;
   }
 
-  emit(render(rows, summary, found), { maxBytes: flags.maxBytes ?? 0 });
+  emit(render(rows, summary, found, learning), { maxBytes: flags.maxBytes ?? 0 });
   if (summary.shape === 'repo') {
     note('note     one repository compared; pass --root at a workspace directory to compare its siblings');
   } else if (target.source === 'none') {
@@ -146,7 +149,7 @@ export async function compareCommand(positional, flags) {
  * the longest value, and an agent cannot tell which column is which without
  * counting spaces.
  */
-function render(rows, summary, found) {
+function render(rows, summary, found, learning = null) {
   const lines = [
     // `workspace` and `repo` are the same field with different names, and the name is the
     // honest one: a reader who sees "workspace" and gets one repo was told a lie. `root`
@@ -202,6 +205,11 @@ function render(rows, summary, found) {
       for (const n of r.notes) lines.push(`          note ${n}`);
     }
     lines.push('');
+  }
+
+  const learningLines = renderLearningLines(learning);
+  if (learningLines.length > 0) {
+    lines.push(...learningLines, '');
   }
 
   return lines.join('\n').trimEnd();

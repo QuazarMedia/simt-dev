@@ -19,6 +19,7 @@ import { plan } from '../src/projection/project.mjs';
 import { classify, discover, ownerFromGitdir, parseGitdirPointer, slugMatchesDir } from '../src/compare/discover.mjs';
 import { buildRow, summarise } from '../src/compare/row.mjs';
 import { readHooksState } from '../src/compare/hooksstate.mjs';
+import { classifyGateCommand, classifyRuleViolations, learnAcrossEstate, renderAdrDraft, renderLearningLines } from '../src/compare/learn.mjs';
 import { GATES } from '../src/hooks/gates.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { resolve, dirname } from 'node:path';
@@ -807,4 +808,250 @@ test('a repo is complete exactly when install has nothing left to write', async 
     'a declared gate with no shim is still a defect',
   );
   assert.equal(after.hooksComplete, false);
+});
+
+// --- R36: estate learning through compare ----------------------------------
+
+test('R36: classifyGateCommand and classifyRuleViolations map commands and hook denials deterministically', () => {
+  assert.deepEqual(classifyGateCommand('npm run --silent lint'), { gate: 'lint', adr: 'ADR-004' });
+  assert.deepEqual(classifyGateCommand('node --test test/unit.test.mjs'), { gate: 'test', adr: 'ADR-003' });
+  assert.deepEqual(
+    classifyGateCommand('scripts/check-mem.sh', { gates: { commands: { memory: 'scripts/check-mem.sh' } } }),
+    { gate: 'memory', adr: 'ADR-003' },
+  );
+
+  const pushHit = classifyRuleViolations({
+    kind: 'hook-denial',
+    errorLine: 'Push needs explicit approval (ADR-001); ask the user.',
+    keywords: ['push'],
+  });
+  assert.deepEqual(pushHit, [{ rule: 'push', adr: 'ADR-001', kind: 'policy' }]);
+
+  const reviewHit = classifyRuleViolations({
+    kind: 'review-block',
+    errorLine: 'BLOCK: refactored outside the blast radius (ADR-002)',
+    keywords: ['blast'],
+  });
+  assert.deepEqual(reviewHit, [{ rule: 'ADR-002', adr: 'ADR-002', kind: 'adr' }]);
+});
+
+test('R36: compare aggregates ledgers, hook denials, and zero-value rules across a workspace into byte-identical ADR drafts', async () => {
+  const ws = await scratch();
+  const repoA = await gitRepo('alpha', { 'README.md': 'a\n' }, ws);
+  const repoB = await gitRepo('beta', { 'README.md': 'b\n' }, ws);
+
+  await mkdir(join(repoA, '.simt-dev', 'bench', 'runs'), { recursive: true });
+  await mkdir(join(repoB, '.simt-dev', 'bench', 'runs'), { recursive: true });
+
+  // Ledger entries for alpha and beta: test fails repeatedly and is slow, lint is fast and passes.
+  const alphaLedger = [
+    {
+      v: 1,
+      ts: '2026-10-19T10:00:00Z',
+      tree: '1111111111111111111111111111111111111111',
+      cmd: 'npm run --silent test',
+      exit: 1,
+      ms: 2400,
+      outputDigest: 'sha256-aaa',
+      summary: '0 pass, 1 fail',
+      errorLine: 'not ok 1 - suite failed',
+      signature: 'sha256-111',
+    },
+    {
+      v: 1,
+      ts: '2026-10-19T10:01:00Z',
+      tree: '2222222222222222222222222222222222222222',
+      cmd: 'npm run --silent lint',
+      exit: 0,
+      ms: 120,
+      outputDigest: 'sha256-bbb',
+      summary: 'exit 0',
+    },
+  ];
+  const betaLedger = [
+    {
+      v: 1,
+      ts: '2026-10-19T11:00:00Z',
+      tree: '3333333333333333333333333333333333333333',
+      cmd: 'npm run --silent test',
+      exit: 1,
+      ms: 3100,
+      outputDigest: 'sha256-ccc',
+      summary: '0 pass, 2 fail',
+      errorLine: 'not ok 1 - suite failed',
+      signature: 'sha256-111',
+    },
+    {
+      v: 1,
+      ts: '2026-10-19T11:05:00Z',
+      tree: '4444444444444444444444444444444444444444',
+      cmd: 'npm run --silent typecheck',
+      exit: 0,
+      ms: 1850,
+      outputDigest: 'sha256-ddd',
+      summary: 'exit 0',
+    },
+  ];
+
+  await writeFile(join(repoA, '.simt-dev', 'ledger.jsonl'), `${alphaLedger.map((x) => JSON.stringify(x)).join('\n')}\n`);
+  await writeFile(join(repoB, '.simt-dev', 'ledger.jsonl'), `${betaLedger.map((x) => JSON.stringify(x)).join('\n')}\n`);
+
+  // Hook denials and review-block candidates across alpha and beta.
+  const alphaLessons = [
+    {
+      v: 1,
+      id: 'c-0001',
+      ts: '2026-10-19T10:02:00Z',
+      kind: 'hook-denial',
+      signature: 'sha256-push',
+      errorLine: 'Push needs explicit approval (ADR-001); ask the user.',
+      summary: 'Push needs explicit approval (ADR-001); ask the user.',
+      cmd: 'git push origin main',
+      paths: [],
+      keywords: ['push'],
+      evidence: ['git push origin main'],
+      fixDiff: '',
+      status: 'candidate',
+      promotedTo: null,
+    },
+    {
+      v: 1,
+      id: 'c-0002',
+      ts: '2026-10-19T10:03:00Z',
+      kind: 'hook-denial',
+      signature: 'sha256-rewrite',
+      errorLine: 'Never amend, rebase, reset --hard, force-push or --no-verify unless asked (ADR-017).',
+      summary: 'Never amend, rebase, reset --hard, force-push or --no-verify unless asked (ADR-017).',
+      cmd: 'git commit --no-verify -m x',
+      paths: [],
+      keywords: ['rewrite'],
+      evidence: ['git commit --no-verify -m x'],
+      fixDiff: '',
+      status: 'candidate',
+      promotedTo: null,
+    },
+  ];
+  const betaLessons = [
+    {
+      v: 1,
+      id: 'c-0001',
+      ts: '2026-10-19T11:02:00Z',
+      kind: 'hook-denial',
+      signature: 'sha256-push',
+      errorLine: 'Push needs explicit approval (ADR-001); ask the user.',
+      summary: 'Push needs explicit approval (ADR-001); ask the user.',
+      cmd: 'git push',
+      paths: [],
+      keywords: ['push'],
+      evidence: ['git push'],
+      fixDiff: '',
+      status: 'candidate',
+      promotedTo: null,
+    },
+  ];
+
+  await writeFile(join(repoA, '.simt-dev', 'lessons.jsonl'), `${alphaLessons.map((x) => JSON.stringify(x)).join('\n')}\n`);
+  await writeFile(join(repoB, '.simt-dev', 'lessons.jsonl'), `${betaLessons.map((x) => JSON.stringify(x)).join('\n')}\n`);
+
+  // Ablation run records in alpha showing `core:style` has dR = 0 and dC > 0 (`current` costs more than `no-core-style`).
+  const benchRecords = [
+    {
+      task: 't-01',
+      arm: 'no-core-style',
+      rep: 1,
+      harness: 'claude',
+      model: 'claude-sonnet-4-5',
+      resolved: true,
+      gatesPassed: true,
+      costUsd: 0.01,
+      usage: { input: 1000, cacheRead: 0, cacheWrite: 0, output: 200 },
+    },
+    {
+      task: 't-01',
+      arm: 'current',
+      rep: 1,
+      harness: 'claude',
+      model: 'claude-sonnet-4-5',
+      resolved: true,
+      gatesPassed: true,
+      costUsd: 0.04,
+      usage: { input: 4000, cacheRead: 0, cacheWrite: 0, output: 200 },
+    },
+  ];
+  await writeFile(join(repoA, '.simt-dev', 'bench', 'runs', 'r-01.json'), `${JSON.stringify(benchRecords[0])}\n`);
+  await writeFile(join(repoA, '.simt-dev', 'bench', 'runs', 'r-02.json'), `${JSON.stringify(benchRecords[1])}\n`);
+
+  // Run `compare` twice (both JSON and text) and assert byte-identical output and expected rankings.
+  const firstJson = await exec('node', [BIN, 'compare', '--root', ws, '--json'], { maxBuffer: 16 << 20 });
+  const secondJson = await exec('node', [BIN, 'compare', '--root', ws, '--json'], { maxBuffer: 16 << 20 });
+  assert.equal(firstJson.stdout, secondJson.stdout, 'compare --json must be byte-identical across runs on the same ledgers');
+
+  const firstText = await exec('node', [BIN, 'compare', '--root', ws], { maxBuffer: 16 << 20 });
+  const secondText = await exec('node', [BIN, 'compare', '--root', ws], { maxBuffer: 16 << 20 });
+  assert.equal(firstText.stdout, secondText.stdout, 'compare text report must be byte-identical across runs on the same ledgers');
+
+  const payload = JSON.parse(firstJson.stdout);
+  const { learning } = payload;
+  assert.ok(learning, 'compare --json must include learning block');
+  assert.equal(learning.reposWithLedgers, 2);
+  assert.equal(learning.reposWithDenials, 2);
+  assert.equal(learning.totalLedgerRuns, 4);
+  assert.equal(learning.totalHookDenials, 3);
+
+  // Most-violated rules: push (2 across alpha, beta) then rewrite (1 in alpha).
+  assert.equal(learning.mostViolatedRules.length, 2);
+  assert.equal(learning.mostViolatedRules[0].rule, 'push');
+  assert.equal(learning.mostViolatedRules[0].adr, 'ADR-001');
+  assert.equal(learning.mostViolatedRules[0].count, 2);
+  assert.deepEqual(learning.mostViolatedRules[0].repos, ['alpha', 'beta']);
+  assert.equal(learning.mostViolatedRules[1].rule, 'rewrite');
+  assert.equal(learning.mostViolatedRules[1].count, 1);
+
+  // Most-failing gates: test (2/2 failed).
+  assert.equal(learning.mostFailingGates.length, 1);
+  assert.equal(learning.mostFailingGates[0].gate, 'test');
+  assert.equal(learning.mostFailingGates[0].failures, 2);
+  assert.equal(learning.mostFailingGates[0].runs, 2);
+  assert.equal(learning.mostFailingGates[0].failRate, 1);
+
+  // Slowest gates: test (p95 3100ms), typecheck (p95 1850ms), lint (p95 120ms).
+  assert.deepEqual(
+    learning.slowestGates.map((g) => g.gate),
+    ['test', 'typecheck', 'lint'],
+  );
+
+  // Rules with no measured value: core:style (dR = 0, dC > 0).
+  assert.equal(learning.noValueRules.length, 1);
+  assert.equal(learning.noValueRules[0].sectionId, 'core:style');
+  assert.equal(learning.noValueRules[0].dR, 0);
+  assert.ok(learning.noValueRules[0].dC > 0);
+
+  // ADR drafts generated for violated rules, failing gate, slow gate (typecheck >= 1000ms), and no-value rule.
+  const categories = learning.adrDrafts.map((d) => `${d.category}:${d.target}`);
+  assert.deepEqual(categories, [
+    'violated-rule:push',
+    'violated-rule:rewrite',
+    'failing-gate:test',
+    'slow-gate:typecheck',
+    'no-value-rule:core:style',
+  ]);
+  for (const draft of learning.adrDrafts) {
+    assert.match(draft.markdown, /^---\nsimt-affects:/);
+    assert.match(draft.markdown, /Status: draft/);
+    assert.match(draft.markdown, /## Rulings/);
+  }
+
+  // Text output includes the learning summary and draft lines.
+  assert.match(firstText.stdout, /learning\s+4 ledger run\(s\) across 2 repo\(s\), 3 hook denial\(s\) across 2 repo\(s\), 5 ADR draft\(s\)/);
+  assert.match(firstText.stdout, /violated\s+push \(ADR-001\)\s+count=2\s+repos=alpha,beta/);
+  assert.match(firstText.stdout, /failing\s+test \(ADR-003\)\s+failures=2\/2 \(100%\)/);
+  assert.match(firstText.stdout, /novalue\s+core:style\s+dR=0/);
+  assert.match(firstText.stdout, /draft\s+ADR-DRAFT-001\s+\[violated-rule\]/);
+
+  // Direct call with reversed repo order produces the exact same structure and markdown.
+  const learnForward = await learnAcrossEstate([repoA, repoB]);
+  const learnReverse = await learnAcrossEstate([repoB, repoA]);
+  assert.deepEqual(learnForward, learnReverse);
+  assert.ok(renderAdrDraft({ draftId: 'ADR-DRAFT-001', category: 'test', title: 'T', context: 'C', rulings: ['R'] }).includes('Status: draft'));
+  assert.ok(renderLearningLines(learnForward, { force: true }).some((l) => l.includes('Status: draft')));
 });

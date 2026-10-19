@@ -21,6 +21,8 @@ import { fileURLToPath } from 'node:url';
 import { MANIFEST_FILE } from '../name.mjs';
 import { CLI } from '../name.mjs';
 import { PREFIX_ARGUING, TOOL_WORDS } from '../toolwords.mjs';
+import { parseDecisionFrontmatter, splitFrontmatter } from '../memory/decide.mjs';
+import { affectsTokens } from '../index/govern.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const DECISIONS_DIR = resolve(HERE, '..', '..', 'docs', 'decisions');
@@ -174,6 +176,85 @@ export function citations(text) {
 }
 
 /**
+ * Parse one ADR markdown document, reading structured `simt-affects` and
+ * `simt-supersedes` frontmatter first (plan 0003 R34).
+ *
+ * @param {string} file filename (e.g. `ADR-097-example.md`)
+ * @param {string} text raw markdown content
+ * @param {{all?: boolean}} [options]
+ * @returns {{ok: boolean, decision?: object, error?: string, rawBody?: string}}
+ */
+export function parseDecision(file, text, { all = false } = {}) {
+  const fm = parseDecisionFrontmatter(text);
+  const { body } = splitFrontmatter(text);
+  const fileId = /^ADR-(\d{3,})/i.exec(file)?.[0]?.toUpperCase();
+  const heading = /^#\s+(.*)$/m.exec(body)?.[1] ?? null;
+  const headId = heading ? /^(ADR-\d{3,})/i.exec(heading)?.[1]?.toUpperCase() : null;
+  const id = fileId ?? headId ?? null;
+  if (!id) {
+    return { ok: false, error: `${file}: filename does not start with ADR-NNN` };
+  }
+  if (!heading) {
+    return { ok: false, error: `${file}: no level-1 heading` };
+  }
+  const rawStatus = statusParagraph(body);
+  if (rawStatus === null) {
+    return { ok: false, error: `${file}: no Status: line, so currency cannot be reported` };
+  }
+  const status = stripMarkdown(rawStatus);
+  const selfNum = Number(id.replace(/^ADR-/i, ''));
+
+  const fmPartial = [];
+  const fmWholeSupersedes = [];
+  for (const entry of fm.supersedes) {
+    const otherNum = Number(entry.adr.replace(/^ADR-/i, ''));
+    if (entry.ruling === null) {
+      if (otherNum < selfNum) fmWholeSupersedes.push(entry.adr);
+    } else if (otherNum > selfNum || entry.adr === id) {
+      fmPartial.push({
+        ruling: entry.ruling,
+        kind: entry.kind ?? 'superseded',
+        by: entry.adr === id ? null : entry.adr,
+      });
+    }
+  }
+
+  const prosePartial = partialSupersessions(status);
+  const partial = [...fmPartial];
+  for (const p of prosePartial) {
+    if (!partial.some((x) => x.ruling === p.ruling && x.by === p.by)) {
+      partial.push(p);
+    }
+  }
+
+  const proseSupersedes = [...status.matchAll(/supersedes ADR-(\d{3,})(?!\s+[Ss]?rulings?\b)/g)].map(
+    (m) => `ADR-${m[1]}`,
+  );
+  const supersedes = [...new Set([...fmWholeSupersedes, ...proseSupersedes])];
+  const title = heading.replace(/^ADR-\d{3,}\s*[—–-]\s*/i, '').trim();
+
+  return {
+    ok: true,
+    rawBody: body,
+    decision: {
+      id,
+      file,
+      title,
+      status: redactInternalPaths(redactCommand(status)),
+      accepted: /^accepted\b/i.test(status),
+      supersededBy: firstMatch(status, /^superseded by ADR-(\d{3,})/i),
+      supersedes,
+      supersedesRulings: fm.supersedes,
+      affects: affectsTokens(text),
+      frontmatter: fm.hasFrontmatter ? { affects: fm.affects, supersedes: fm.supersedes } : null,
+      partial,
+      summary: summarise(body, partial, { all, file }),
+      bytes: Buffer.byteLength(text),
+    },
+  };
+}
+
+/**
  * Load every ADR record once.
  *
  * An unreadable or unparseable record is an error rather than a skipped file: a
@@ -181,69 +262,52 @@ export function citations(text) {
  *
  * @returns {Promise<{ok: boolean, decisions: object[], errors: string[]}>}
  */
-export async function loadDecisions({ all = false } = {}) {
+export async function loadDecisions({ all = false, dir = DECISIONS_DIR } = {}) {
   let names;
   try {
-    names = (await readdir(DECISIONS_DIR)).filter((n) => /^ADR-\d{3}-.*\.md$/.test(n)).sort();
+    names = (await readdir(dir)).filter((n) => /^ADR-\d{3,}-.*\.md$/.test(n)).sort();
   } catch (error) {
-    return { ok: false, decisions: [], errors: [`${DECISIONS_DIR}: unreadable (${error.message})`] };
+    return { ok: false, decisions: [], errors: [`${dir}: unreadable (${error.message})`] };
   }
 
   const decisions = [];
+  const rawBodies = new Map();
   const errors = [];
 
   for (const file of names) {
-    const text = await readFile(join(DECISIONS_DIR, file), 'utf8');
-    const id = /^ADR-(\d{3})/.exec(file)?.[0];
-    if (!id) {
-      errors.push(`${file}: filename does not start with ADR-NNN`);
+    const text = await readFile(join(dir, file), 'utf8');
+    const parsed = parseDecision(file, text, { all });
+    if (!parsed.ok) {
+      errors.push(parsed.error);
       continue;
     }
-    const heading = /^#\s+(.*)$/m.exec(text)?.[1] ?? null;
-    if (!heading) {
-      errors.push(`${file}: no level-1 heading`);
-      continue;
-    }
-    const rawStatus = statusParagraph(text);
-    if (rawStatus === null) {
-      errors.push(`${file}: no Status: line, so currency cannot be reported`);
-      continue;
-    }
-    // Every field below is read off the flattened paragraph, with markdown already
-    // removed. The link form and the bare form are then one spelling, so a record that
-    // writes `superseded by ADR-046` and one that writes `superseded by
-    // [ADR-046](...)` are read by the same line of code rather than by two regexes that
-    // have to be kept in step.
-    const status = stripMarkdown(rawStatus);
-    const partial = partialSupersessions(status);
-    // The heading repeats the id; the decision title is what follows the dash.
-    const title = heading.replace(/^ADR-\d{3}\s*[—–-]\s*/, '').trim();
+    rawBodies.set(parsed.decision.id, parsed.rawBody);
+    decisions.push(parsed.decision);
+  }
 
-    decisions.push({
-      id,
-      file,
-      title,
-      // Everything structural above this line is derived from the record's own prose and
-      // is therefore unredacted: `partial` in particular has to say "ruling 1 superseded
-      // by ADR-053", and a ruling number is not a location. What a reader in another
-      // repository receives is the status line, so that is what is scrubbed — here, once,
-      // rather than at each of the four places that print it.
-      status: redactInternalPaths(redactCommand(status)),
-      // Anchored to the start of the status, and this is the whole of the rule. A record
-      // is superseded only when its own status says so first. Unanchored, the clause
-      // "ruling 2 superseded by [ADR-024]" inside ADR-023's paragraph matched, and the
-      // command would then answer "ruling 2" by printing ADR-024's rulings and
-      // suppressing the five in ADR-023 that still stand - a partial supersession
-      // silently becoming a total one, which is the reverse of what the status says.
-      accepted: /^accepted\b/i.test(status),
-      supersededBy: firstMatch(status, /^superseded by ADR-(\d{3})/i),
-      supersedes: [...status.matchAll(/supersedes ADR-(\d{3})(?!\s+[Ss]?rulings?\b)/g)].map(
-        (m) => `ADR-${m[1]}`,
-      ),
-      partial,
-      summary: summarise(text, partial, { all, file }),
-      bytes: Buffer.byteLength(text),
-    });
+  const index = byId(decisions);
+  for (const d of decisions) {
+    const selfNum = Number(d.id.replace(/^ADR-/i, ''));
+    for (const entry of d.supersedesRulings ?? []) {
+      const otherNum = Number(entry.adr.replace(/^ADR-/i, ''));
+      if (otherNum >= selfNum) continue;
+      const target = index.get(entry.adr);
+      if (!target) continue;
+      if (entry.ruling === null) {
+        target.supersededBy = d.id;
+        target.accepted = false;
+      } else if (!target.partial.some((p) => p.ruling === entry.ruling && p.by === d.id)) {
+        target.partial.unshift({
+          ruling: entry.ruling,
+          kind: entry.kind ?? 'superseded',
+          by: d.id,
+        });
+        target.summary = summarise(rawBodies.get(target.id) ?? '', target.partial, {
+          all,
+          file: target.file,
+        });
+      }
+    }
   }
 
   return { ok: errors.length === 0, decisions, errors };
@@ -524,7 +588,7 @@ export function redactEstate(text) {
  * Only a real verb follows, which is what keeps `simt-dev.json`, `simt-dev-check.yml` and
  * `simt-dev's` untouched - those are the project's artefacts and the project keeps its name.
  */
-const VERB = '(?:init|doctor|check|sync|upgrade|ci|compare|hooks|mcp|rules|skills|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact|--[a-z-]+)';
+const VERB = '(?:init|doctor|check|sync|upgrade|ci|compare|hooks|mcp|rules|skills|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact|lessons|decide|--[a-z-]+)';
 
 function redactCommand(text) {
   return String(text ?? '').replace(new RegExp(`\\bsimt-dev (?=${VERB})\\b`, 'g'), `${CLI} `);

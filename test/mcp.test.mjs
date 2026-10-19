@@ -523,6 +523,7 @@ test('mcp: every tool answers, and every answer matches the schema it declared',
     skills_find: { query: 'test' },
     rules_why: { what: 'ADR-001' },
     plan_done: { id: 'no-such-slice' },
+    federation_query: { query: 'what calls the keep helper' },
   };
 
   for (const tool of TOOLS) {

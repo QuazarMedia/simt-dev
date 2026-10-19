@@ -1,11 +1,12 @@
 // The federation query: one structural question per task, one answer per server (0003 R26).
 //
 // The slice is narrow on purpose. When a repository names external code-graph servers, the
-// brief delegates a single structural question to each and cites where the answer came from.
-// It is not a proxy — there is no MCP tool that forwards to a foreign server, so nothing
-// here can be called for anything but a brief. It is not a second index, so there is no
-// coverage bookkeeping to keep in sync. And it is not a gate, so a server that is down
-// produces a sentence and never a failure.
+// brief delegates a single structural question to each and cites where the answer came from,
+// and the `federation_query` tool asks one on demand. Neither is a general proxy: a question
+// goes to the tool and argument the manifest declared, so a server exposes no tool here that
+// the repository did not name. It is not a second index, so there is no coverage bookkeeping
+// to keep in sync. And it is not a gate, so a server that is down produces a sentence and
+// never a failure.
 //
 // The servers are asked in the order the manifest declares them, one at a time. Parallel
 // would be faster and would make the packet's item order a race, and a packet whose order

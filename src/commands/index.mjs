@@ -55,6 +55,7 @@ import { testsCommand } from './tests.mjs';
 import { whyCommand } from './why.mjs';
 import { gateCommand } from './gate.mjs';
 import { impactCommand } from './impact.mjs';
+import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -81,6 +82,7 @@ const GROUPS = new Map([
   // where", and `install` — the subcommand that touches a reader's home directory — is the
   // one that needs `--yes` before it does anything.
   ['shared', 'plan'],
+  ['lessons', 'list'],
 ]);
 
 /**
@@ -125,6 +127,8 @@ export const IMPLEMENTED = {
   why: (args, flags) => whyCommand(args, flags, COMMANDS),
   gate: gateCommand,
   impact: (args, flags) => impactCommand(args, flags, COMMANDS),
+  'lessons list': lessonsListCommand,
+  'lessons review': lessonsReviewCommand,
   'evidence check': (args, flags) => evidenceCommand(['check', ...args], flags),
   init: initCommand,
   ci: ciCommand,

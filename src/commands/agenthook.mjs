@@ -98,6 +98,22 @@ export async function agentHookCommand(args, flags) {
   const json = decisionJson(row, decision);
   if (json === null) return EXIT.OK;
 
+  if (root) {
+    try {
+      const { recordHookDenial } = await import('../memory/lessons.mjs');
+      await recordHookDenial(root, {
+        harness: row.id,
+        event,
+        policies: decision.blocked,
+        messages: decision.messages,
+        command,
+        writes,
+      });
+    } catch {
+      // Recording a lesson candidate must never block or alter the hook decision.
+    }
+  }
+
   emit(JSON.stringify(json));
   for (const message of decision.messages) note(`blocked  ${message}`);
   return row.denyExit;

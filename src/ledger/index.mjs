@@ -12,6 +12,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
+import {
+  LESSONS_FILE,
+  errorSignature,
+  firstErrorLine,
+  normaliseErrorLine,
+  recordFailThenFix,
+} from '../memory/lessons.mjs';
+
 const exec = promisify(execFile);
 
 const LEDGER_FILE = '.simt-dev/ledger.jsonl';
@@ -34,7 +42,11 @@ export async function treeId(root) {
     // The ledger is a record of the tree, so it cannot be part of the tree it names.
     // `git add -A` would take it once the file exists, and the line would prove a
     // tree that stopped existing when the line was written.
-    await exec('git', ['add', '-A', '--', '.', ':(exclude).simt-dev/ledger.jsonl'], { cwd: root, env });
+    await exec(
+      'git',
+      ['add', '-A', '--', '.', `:(exclude)${LEDGER_FILE}`, `:(exclude)${LESSONS_FILE}`],
+      { cwd: root, env },
+    );
     const { stdout } = await exec('git', ['write-tree'], { cwd: root, env });
     return stdout.trim();
   } finally {
@@ -47,6 +59,7 @@ export async function treeId(root) {
  * change, and a ledger that kept logs would keep whatever the command printed.
  */
 export async function recordRun(root, { cmd, exit, ms, output }) {
+  const { entries: prior } = await readLedger(root).catch(() => ({ entries: [] }));
   const line = {
     v: 1,
     ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
@@ -56,9 +69,31 @@ export async function recordRun(root, { cmd, exit, ms, output }) {
     ms,
     outputDigest: `sha256-${createHash('sha256').update(output).digest('hex')}`,
     summary: summarise(output, exit),
+    ...(exit !== 0
+      ? {
+          errorLine: normaliseErrorLine(firstErrorLine(output)),
+          signature: errorSignature(output),
+        }
+      : {}),
   };
   await mkdir(join(root, '.simt-dev'), { recursive: true });
   await appendFile(join(root, LEDGER_FILE), `${JSON.stringify(line)}\n`);
+
+  if (exit === 0 && typeof cmd === 'string') {
+    let pendingFail = null;
+    for (const entry of prior) {
+      if (entry.cmd !== cmd) continue;
+      if (entry.exit !== 0) {
+        if (!pendingFail) pendingFail = entry;
+      } else {
+        pendingFail = null;
+      }
+    }
+    if (pendingFail) {
+      await recordFailThenFix(root, { failEntry: pendingFail, passEntry: line }).catch(() => {});
+    }
+  }
+
   return line;
 }
 

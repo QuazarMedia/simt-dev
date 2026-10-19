@@ -74,6 +74,7 @@ const RESOLVE = [
   'test/tsconfig.test.mjs',
   'test/unit.test.mjs',
   'test/upgrade.test.mjs',
+  'test/variants.test.mjs',
   'test/why-fixture.test.mjs',
   'test/why-snapshot.test.mjs',
   'test/workspace.test.mjs',

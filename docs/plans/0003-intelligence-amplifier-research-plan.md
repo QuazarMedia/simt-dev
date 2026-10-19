@@ -908,7 +908,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R33 | Lesson recall | 5 | R32, R15 | S | — | fewer turns on recurrences | Complete |
 | R34 | Decision assistant | 5 | review 0002 S31 | S | — | structured supersession | Complete |
 | R35 | Variant selection | 5 | R04 | M | D1 (ADR-076) | lockfile records evidence | Complete |
-| R36 | Estate learning | 5 | R17, R32 | S | — | deterministic report | Queued |
+| R36 | Estate learning | 5 | R17, R32 | S | — | deterministic report | Complete |
 | R37 | Local model adapter | 6 | — | S | D2, D7 | no socket when unset | Queued |
 | R38 | Distiller | 6 | R37, R02 | M | D2 | parity at lower C, or experimental | Queued |
 | R39 | Local critic | 6 | R37, R25 | M | D2 | precision ≥ 0.8 to gate | Queued |
@@ -1101,6 +1101,18 @@ variants (`variant-<slotId>-<key>`) on the canary suite (escalating to the full 
 `simt-dev.lock.json`, and re-opens the experiment whenever `model` or `harness` changes
 (`test/variants.test.mjs`). Shipped rule files carry no unmeasured variant markers per D1
 (ADR-076) and ADR-078.
+
+**R36 — Complete.** `simt compare` (`src/compare/learn.mjs`, `src/commands/compare.mjs`) aggregates
+`.simt-dev/ledger.jsonl` (R17), `.simt-dev/lessons.jsonl` (R32), and stored leave-one-out ablation
+runs (R04) across every repository in the discovered workspace to report: (1) the most-violated
+rules and policies (`mostViolatedRules`, mapped from hook denials and `review-block` candidates to
+`src/agenthooks/policy.mjs` and governing ADRs), (2) the most-failing gates (`mostFailingGates`,
+sorted by failure count, failure rate, and gate name) and slowest gates (`slowestGates`, sorted by
+p95 and mean duration), (3) rules/sections with no measured value (`noValueRules` where
+`dR <= 0.01` and `dC > 0`), and (4) deterministic ADR drafts (`adrDrafts`, with `Status: draft`
+and structured `simt-affects` / `simt-supersedes` frontmatter, containing no wall-clock timestamps).
+Given the same ledgers on disk, both `simt compare` and `simt compare --json` are byte-identical
+across runs (`test/compare.test.mjs`).
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

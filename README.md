@@ -83,18 +83,18 @@ this order of purpose:
 
 ## Install
 
-Requires **Node >= 22.20.0**. The current published release is **0.3.1**. Pin it.
+Requires **Node >= 22.20.0**. The current published release is **0.4.0**. Pin it.
 The tool writes a content digest into the files it generates, and an unpinned upgrade
 changes them under you.
 
 ```sh
-npm i -D simt-dev@0.3.1
+npm i -D simt-dev@0.4.0
 
 # or globally
-npm i -g simt-dev@0.3.1
+npm i -g simt-dev@0.4.0
 
 # or once, with no install
-npx -y simt-dev@0.3.1 check
+npx -y simt-dev@0.4.0 check
 ```
 
 ### From PyPI

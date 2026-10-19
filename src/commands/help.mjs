@@ -92,6 +92,10 @@ ${CLI} map [--task "<text>"] [--level outline|names|signatures]
 ${CLI} evidence                the runs recorded against the tree on disk
 ${CLI} evidence check <file>   a commit message that claims a run this tree does not
                            have: a warning, or a block when gates.evidence is "block"
+${CLI} lessons list            deterministic lesson candidates in .simt-dev/lessons.jsonl
+                           and promoted lessons in docs/lessons/*.md
+${CLI} lessons review [<id>]   promote a lesson candidate to docs/lessons/NNNN-<slug>.md
+                           (dry-run unless --yes; writes Appendix A frontmatter)
 ${CLI} shared plan            what a workspace's repeated rules cost to carry
                            once: the shared set, its bytes, and every path that would be written
                            (read-only; touches nothing, not even your home directory)

@@ -112,6 +112,8 @@ const JSON_COMMANDS = {
   why: { root: 'r' },
   gate: { root: 'r' },
   impact: { root: 'r' },
+  'lessons list': { root: 'r' },
+  'lessons review': { root: 'r' },
   'shared plan': { root: '.' },
   // The preview, not the write: the write lands in the reader's home directory, and a
   // contract test must never do that.

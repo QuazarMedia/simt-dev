@@ -904,7 +904,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R29 | Delivery: pull and push | 4 | R15, R27 | S | D4 (ADR-079) | ≤ 2 KB in < 300 ms | Complete |
 | R30 | Skill compiler and trigger report | 4 | R02, review 0002 S44 | M | — | per-skill trigger report | Complete |
 | R31 | Plan and tracker index | 4 | — | S | D9 | `plan next` and `plan done` exact | Complete |
-| R32 | Lessons ledger | 5 | R17 | M | — | one candidate per fail-then-fix | Queued |
+| R32 | Lessons ledger | 5 | R17 | M | — | one candidate per fail-then-fix | Complete |
 | R33 | Lesson recall | 5 | R32, R15 | S | — | fewer turns on recurrences | Queued |
 | R34 | Decision assistant | 5 | review 0002 S31 | S | — | structured supersession | Queued |
 | R35 | Variant selection | 5 | R04 | M | D1 | lockfile records evidence | Queued |
@@ -1052,6 +1052,18 @@ and `skills show` / `skills_show` calls from the transcript, which gives per-ski
 recall and precision. Description proposals (`proposeSkillDescription`) are written with
 `{model, promptHash, digest}` provenance to `.simt-dev/proposals/skills/<name>.json` for a human
 to merge (Principle P2).
+
+**R32 — Complete.** `src/memory/lessons.mjs` and `src/commands/lessons.mjs` (`simt lessons list`,
+`simt lessons review`) deterministically capture lesson candidates into `.simt-dev/lessons.jsonl`
+across all four sources: (1) a gate or test that fails and then passes in one session
+(`src/ledger/index.mjs` records the normalised first error line and its `sha256` signature on
+failing runs, pairs the failing tree with the subsequent passing tree for that command, and
+computes the exact `error signature → fix diff` and touched `paths` between the two git trees),
+(2) reverted commits (`Revert "..."` / `This reverts commit <sha>`), (3) ADR-008 `BLOCK` review
+findings, and (4) agent-time hook denials (`src/commands/agenthook.mjs`). `simt lessons review`
+promotes a candidate to `docs/lessons/NNNN-<slug>.md` with the Appendix A frontmatter
+(`simt-trigger`, `simt-evidence`, `simt-expires`), which `src/index/govern.mjs` and `simt why`
+read directly.
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

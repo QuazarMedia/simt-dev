@@ -46,9 +46,11 @@ line records what a server claims without yet skipping the index's own extractio
 languages. The list is the repository's own committed declaration, the same trust model as
 `gates.commands`, and nothing is started that the manifest did not name. A malformed entry, a
 spawn failure, a protocol error or a timeout all become a caution and the brief still exits
-`0`; a server that never answers is bounded by its own per-server timeout. The packet
-delivered at prompt submit does not federate — starting someone else's process is not a wait
-a 300 ms submit may take.
+`0`; a server that never answers is bounded by its own per-server timeout. MCP also gains a
+`federation_query` tool, which asks a named server (or every declared one) one structural
+question on demand and returns the answer with its source; like the brief's fan-out it goes
+only to the tool and argument the manifest declared. The packet delivered at prompt submit
+does not federate — starting someone else's process is not a wait a 300 ms submit may take.
 
 ## [0.3.1] — 2026-10-18
 

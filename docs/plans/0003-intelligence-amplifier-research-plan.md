@@ -1029,10 +1029,11 @@ intact. **Two boundaries are deliberate, and both read the plan narrowly.** The 
 recorded, not taken: a server declares the `languages` it covers and the packet prints `covers
 <langs>`, but the index still extracts those languages, because skipping extraction is a change
 to `src/index/extract.mjs` and the row's accept names only the citation. And the delegated query
-is one question per task, not a proxy: there is no MCP tool that forwards to a foreign server,
-so federation is reachable only from a brief. `federate` is on for `simt brief` and the MCP
-`brief` tool, and off for the prompt-submit delivery, where R29's 300 ms bar forbids starting
-someone else's process.
+is one question per task; the MCP `federation_query` tool asks one on demand, but it is a façade
+and not a general proxy: the question goes to the tool and argument the manifest declared, so no
+foreign tool is reachable that the repository did not name. `federate` is on for `simt brief`
+and the MCP `brief` tool, and off for the prompt-submit delivery, where R29's 300 ms bar forbids
+starting someone else's process.
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

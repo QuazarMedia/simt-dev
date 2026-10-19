@@ -20,6 +20,7 @@ import { promisify } from 'node:util';
 
 import { DEFAULT_TIMEOUT_MS } from '../src/federation/client.mjs';
 import { federationServers } from '../src/federation/config.mjs';
+import { TOOLS } from '../src/mcp/tools.mjs';
 import { git } from './fixture.mjs';
 
 const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
@@ -199,4 +200,49 @@ test('a repository that declared nothing pays nothing', async (t) => {
   const { code, stdout } = await run(root, ['brief', 'fix the keep helper']);
   assert.equal(code, 0);
   assert.ok(!stdout.includes('FEDERATION'), 'a packet with no federation declaration mentions federation');
+});
+
+/** The tool the surface exposes, looked up once so a rename fails loudly here. */
+function federationTool() {
+  const tool = TOOLS.find((entry) => entry.name === 'federation_query');
+  assert.ok(tool, 'the mcp surface has no federation_query tool');
+  return tool;
+}
+
+test('the federation tool forwards a query and names the server that answered', async (t) => {
+  const root = await fixture({ servers: [answeringEntry()] });
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const answer = await federationTool().run({ root, query: 'what calls keep' });
+  assert.deepEqual(answer.servers, ['fixture-graph']);
+  assert.equal(answer.answers.length, 1);
+  assert.equal(answer.answers[0].server, 'fixture-graph');
+  assert.equal(answer.answers[0].tool, 'query');
+  assert.match(answer.answers[0].text, /fixture knows about what calls keep/);
+  assert.deepEqual(answer.findings, []);
+});
+
+test('the federation tool says so when the repository declared nothing', async (t) => {
+  const root = await fixture(undefined);
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  await assert.rejects(() => federationTool().run({ root, query: 'anything' }), (error) => {
+    assert.match(error.message, /declares no federation server/);
+    assert.match(error.remedy, /simt\.json/);
+    return true;
+  });
+});
+
+test('the federation tool asks only the server it was named', async (t) => {
+  const root = await fixture({ servers: [answeringEntry()] });
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const answer = await federationTool().run({ root, query: 'keep', server: 'fixture-graph' });
+  assert.deepEqual(answer.servers, ['fixture-graph']);
+
+  await assert.rejects(() => federationTool().run({ root, query: 'keep', server: 'absent' }), (error) => {
+    assert.match(error.message, /no declared federation server is named absent/);
+    assert.match(error.remedy, /fixture-graph/);
+    return true;
+  });
 });

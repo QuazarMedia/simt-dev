@@ -29,6 +29,8 @@ import { GATES } from '../hooks/gates.mjs';
 import { dirtyPaths, parsePathList, readBody } from '../commands/skills.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
+import { readFederation } from '../federation/config.mjs';
+import { consult } from '../federation/query.mjs';
 import { planNext, planDone } from '../plan/index.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { measureSkill } from '../graph/load.mjs';
@@ -352,6 +354,29 @@ const output = {
       text: { type: 'string' },
     },
     required: ['root', 'kind', 'basis', 'task', 'scope', 'budget', 'bytes', 'before', 'floorHeld', 'cut', 'sections', 'text'],
+  },
+  federation_query: {
+    type: 'object',
+    properties: {
+      root: { type: 'string' },
+      query: { type: 'string' },
+      servers: { type: 'array', items: { type: 'string' } },
+      answers: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            server: { type: 'string' },
+            tool: { type: 'string' },
+            query: { type: 'string' },
+            text: { type: 'string' },
+          },
+          required: ['server', 'tool', 'query', 'text'],
+        },
+      },
+      findings: { type: 'array', items: { type: 'string' } },
+    },
+    required: ['root', 'query', 'servers', 'answers', 'findings'],
   },
   /** The shape of every tool failure, which is a result and not a protocol error. */
   error: ERROR_SHAPE,
@@ -836,6 +861,51 @@ export const TOOLS = [
         cut: result.packed.cut,
         sections: result.sections,
         text: result.packed.text,
+      };
+    },
+  },
+  {
+    outputSchema: output.federation_query,
+    name: 'federation_query',
+    description:
+      'Ask a code-graph server this repository declared one structural question, and return its answer with the name of the server that gave it. Read-only: it reads the "federation" block from simt.json and starts only the servers the manifest itself names, and a repository that declared none is told so rather than queried.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: { type: 'string', description: 'repository root; defaults to the editor cwd' },
+        query: { type: 'string', description: "the structural question to ask, in the user's own words" },
+        server: { type: 'string', description: 'ask only this declared server, by name; omit to ask every one of them' },
+      },
+      required: ['query'],
+    },
+    async run(args) {
+      const root = rootOf(args);
+      const query = typeof args?.query === 'string' ? args.query.trim() : '';
+      if (query.length === 0) {
+        throw Object.assign(new Error('the query is empty'), {
+          remedy: 'pass a query, for example the symbol or file to look up',
+        });
+      }
+      const { servers, findings } = await readFederation(root);
+      if (servers.length === 0) {
+        throw Object.assign(new Error('this repository declares no federation server'), {
+          remedy: 'add a "federation" block naming a server to simt.json, or use the brief tool',
+        });
+      }
+      const only = typeof args?.server === 'string' && args.server.length > 0 ? args.server : null;
+      const chosen = only === null ? servers : servers.filter((server) => server.name === only);
+      if (only !== null && chosen.length === 0) {
+        throw Object.assign(new Error(`no declared federation server is named ${only}`), {
+          remedy: `declared servers: ${servers.map((server) => server.name).join(', ')}`,
+        });
+      }
+      const { answers, findings: failures } = await consult({ root, query, servers: chosen });
+      return {
+        root,
+        query,
+        servers: chosen.map((server) => server.name),
+        answers,
+        findings: [...findings, ...failures],
       };
     },
   },

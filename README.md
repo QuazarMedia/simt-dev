@@ -137,9 +137,11 @@ Text outside the markers is left alone. A regeneration does not revert it.
 
 `simt.json` also carries a `federation` block when the repository names external
 code-graph servers, each with the command that starts it. A brief may then ask one of
-them one structural question for a task and cite the answer's source. Nothing is started
-unless the manifest declared it, and a server that does not answer costs the packet a
-sentence, never the packet.
+them one structural question for a task and cite the answer's source, and the MCP
+`federation_query` tool asks one on demand, naming the server it asked. The question goes
+to the tool and argument the manifest declared, so no foreign tool is reachable that the
+repository did not name. Nothing is started unless the manifest declared it, and a server
+that does not answer costs the packet a sentence, never the packet.
 
 These are caches, gitignored, and rebuildable. They are not repository content:
 

@@ -33,6 +33,7 @@ const RESOLVE = [
   'test/disclosure.test.mjs',
   'test/eval.test.mjs',
   'test/extract.test.mjs',
+  'test/federation.test.mjs',
   'test/fixture.mjs',
   'test/genericity.test.mjs',
   'test/graph.test.mjs',

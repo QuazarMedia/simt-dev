@@ -35,6 +35,21 @@ for this — the repository is reached through a dynamic import only a prompt ev
 gains a `brief` tool so a client can pull the same packet, assembled by the same code as the
 command.
 
+### A brief can cite a code graph it did not build
+
+A repository may declare a `federation` block in `simt.json` naming external code-graph
+servers, each with the command that starts it and, optionally, the MCP tool to ask, the
+argument the question goes in, the languages it covers and the timeout to wait. `simt brief`
+and the MCP `brief` tool then ask each declared server one structural question for the task
+and add the answer to a `FEDERATION` section that names its source; a `covers <languages>`
+line records what a server claims without yet skipping the index's own extraction of those
+languages. The list is the repository's own committed declaration, the same trust model as
+`gates.commands`, and nothing is started that the manifest did not name. A malformed entry, a
+spawn failure, a protocol error or a timeout all become a caution and the brief still exits
+`0`; a server that never answers is bounded by its own per-server timeout. The packet
+delivered at prompt submit does not federate — starting someone else's process is not a wait
+a 300 ms submit may take.
+
 ## [0.3.1] — 2026-10-18
 
 ### Who a change reaches

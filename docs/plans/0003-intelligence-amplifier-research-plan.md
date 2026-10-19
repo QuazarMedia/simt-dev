@@ -898,7 +898,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R23 | Impact analysis | 3 | R21, R25 | M | ADR-096 | importers, tests, one consumer | Complete |
 | R24 | Test mapping | 3 | R21 | M | ADR-092 | precision 1.0 (bar 0.8) | Complete |
 | R25 | Governance graph, `why` | 3 | R20 | S | ADR-093 | ADR-017 at 4c27514; unresolved tokens reported | Complete |
-| R26 | Federation with external MCP | 3 | R27 | S | — | fixture cited as source | Queued |
+| R26 | Federation with external MCP | 3 | R27 | S | — | fixture cited as source | Complete |
 | R27 | Brief v2 | 4 | R10, R22, R24, R25 | M | — | turns −20%, C −15%, ΔR ≥ 0 | Complete |
 | R28 | Hybrid retrieval (+ optional embeddings) | 4 | R20, R37 | M | D2 | +10 pts recall or stays off | Queued |
 | R29 | Delivery: pull and push | 4 | R15, R27 | S | D4 (ADR-079) | ≤ 2 KB in < 300 ms | Complete |
@@ -1009,6 +1009,30 @@ packet is under 2 KB wherever it has been measured, and the assembly is under 30
 largest tree to hand spends about 300 ms of CLI process wall time, most of it node's start.
 What is not measured is the same gap R15 and R27 record: no harness is installed here, so no
 agent has confirmed that it reads the injected context.
+
+**R26 — Complete, and it federates rather than rebuilds.** A repository may declare a
+`federation` block in `simt.json` naming external code-graph servers — `{name, command, args,
+tool, argument, languages, timeoutMs}` — and the brief then asks each one a single structural
+question for the task and adds the answer to a `FEDERATION` section that names its source. The
+row's accept is the one it was designed against, and it is met literally: a fake MCP server, a
+real child process over real stdio spoken to in newline-delimited JSON-RPC, answers, and the
+packet cites `fixture-graph — fixture knows about <task>`; the JSON payload carries the same
+line under `sections.FEDERATION`. The trust model is `gates.commands`'s — the command comes
+from the repository's own committed manifest — and nothing is started that the manifest did not
+name: no harness config is probed, because "what did the editor configure" is R42's question and
+a different one. The block is the opt-in and the only one, so a repository that declared
+nothing runs nothing, which its own test asserts. It never throws and never hangs: a spawn
+failure, a server that exits, a protocol error, a tool that returns no text, and a server that
+never answers all become a sentence — the last through a real per-server timeout (5000 ms by
+default) that kills the child — and the brief exits 0 with a caution and the rest of the packet
+intact. **Two boundaries are deliberate, and both read the plan narrowly.** The R21 skip is
+recorded, not taken: a server declares the `languages` it covers and the packet prints `covers
+<langs>`, but the index still extracts those languages, because skipping extraction is a change
+to `src/index/extract.mjs` and the row's accept names only the citation. And the delegated query
+is one question per task, not a proxy: there is no MCP tool that forwards to a foreign server,
+so federation is reachable only from a brief. `federate` is on for `simt brief` and the MCP
+`brief` tool, and off for the prompt-submit delivery, where R29's 300 ms bar forbids starting
+someone else's process.
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

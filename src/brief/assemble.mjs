@@ -10,9 +10,12 @@
 // The two properties that make a packet worth reading belong to the assembly, not to any
 // one renderer:
 //
-//   * Deterministic. No clock, no locale, no network, no environment beyond the paths git
-//     reports. The same tree gives the same items, which is what makes a packet
-//     reviewable: a diff in a packet is a diff in what every agent reads next.
+//   * Deterministic, until the repository names a server. No clock, no locale, no network,
+//     no environment beyond the paths git reports, so the same tree gives the same items —
+//     which is what makes a packet reviewable: a diff in a packet is a diff in what every
+//     agent reads next. The one exception is opt-in and declared: a `federation` block in
+//     the manifest lets the packet cite an external server's answer, and that answer is
+//     cited precisely because it is the one item a reader cannot reproduce from the tree.
 //   * Cheap. Warm, this reads the index, the command card, the decisions, the lesson
 //     scopes and the skill registry, and walks nothing else. `simt tests <path>` is the
 //     authoritative selector for the tests of a file — it reads test blobs and commit
@@ -24,6 +27,12 @@
 // `build: false`, so the first prompt in a fresh clone reports a cold index instead of
 // waiting on a repository walk; the command and the MCP tool, which a person asked for,
 // build the index they need.
+//
+// `federate` is the second, and it exists to keep the delivery's latency promise honest: a
+// packet delivered into a prompt submits within 300 ms, and starting someone else's server
+// is not a wait a prompt submit may take, so that one caller turns federation off. The
+// command and the tool leave it on. It is inert either way in a repository that declared no
+// servers.
 
 import { CLI } from '../name.mjs';
 import { DEFAULT_BRIEF_BYTES, buildPacket, collect } from './packet.mjs';
@@ -39,6 +48,8 @@ import { closure, rankSkills, selectWithinBudget, tokenize } from '../resolve/re
 import { loadGraph } from '../commands/map.mjs';
 import { dirtyPaths, parsePathList } from '../commands/skills.mjs';
 import { decisionRecords, lessonScopes } from '../commands/why.mjs';
+import { readFederation } from '../federation/config.mjs';
+import { consult } from '../federation/query.mjs';
 
 /**
  * How many ranked files the packet may consider as candidates for other sections.
@@ -100,6 +111,8 @@ async function generatedRegions(root) {
  *   delivered brief may ask for
  * @param {object} [options.flags] passed through to the skill registry loader
  * @param {boolean} [options.build] whether an empty index may be built here
+ * @param {boolean} [options.federate] whether a declared external server may be asked one
+ *   question; a delivered packet turns it off to keep its 300 ms bar
  * @returns a packet, or `{ error }` carrying the exit code a failure already reported, or
  *   `{ cold: true }` when the index is empty and this caller may not build one
  */
@@ -110,6 +123,7 @@ export async function assembleBrief({
   budget = DEFAULT_BRIEF_BYTES,
   flags = {},
   build = true,
+  federate = true,
 } = {}) {
   const named = paths !== null;
   const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(STATE_DIR));
@@ -202,6 +216,45 @@ export async function assembleBrief({
     packet.add('CAUTIONS', `decisions name tokens nothing resolves: ${[...unresolved].sort().join(', ')}`, {
       why: [`\`${CLI} why\` reports them`],
     });
+  }
+
+  if (federate) {
+    const { servers, findings } = await readFederation(root);
+    for (const finding of findings) {
+      packet.add('CAUTIONS', `federation: ${finding}`, {
+        why: ['a server the manifest names is skipped rather than guessed at'],
+      });
+    }
+    if (servers.length > 0) {
+      for (const server of servers) {
+        if (server.languages.length > 0) {
+          packet.add('FEDERATION', `${server.name} covers ${[...server.languages].sort().join(', ')}`, {
+            why: ['the answer for a covered language can come from this server'],
+          });
+        }
+      }
+      // One question, and the task is the question. With no task text there is still a
+      // question worth asking — the file the index ranks highest — and with neither there
+      // is nothing to ask, which is a caution rather than a fabricated query.
+      const question = task.trim().length > 0 ? task.trim() : (likely[0] ?? '');
+      if (question.length === 0) {
+        packet.add('CAUTIONS', 'federation is declared but this packet has no task to ask about', {
+          why: ['a structural question needs something to be about'],
+        });
+      } else {
+        const asked = await consult({ root, query: question, servers });
+        for (const answer of asked.answers) {
+          packet.add('FEDERATION', `${answer.server} — ${answer.text}`, {
+            why: [`\`${answer.server}\`, declared under \`federation.servers\`, answered \`${answer.tool}\``],
+          });
+        }
+        for (const finding of asked.findings) {
+          packet.add('CAUTIONS', `federation: ${finding}`, {
+            why: ['the brief carries on; a server that is down is not a task that cannot start'],
+          });
+        }
+      }
+    }
   }
 
   const loaded = await loadRegistry(null, flags);

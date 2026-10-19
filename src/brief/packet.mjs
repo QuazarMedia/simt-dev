@@ -30,7 +30,7 @@ export const PROMPT_CAP_BYTES = 2048;
  * The order is fixed and identical in every packet. A reader who has to search for the
  * command is paying the cost the packet exists to remove.
  */
-const SECTIONS = ['TASK', 'COMMANDS', 'FILES', 'TESTS', 'DECISIONS', 'SKILLS', 'LESSONS', 'CAUTIONS'];
+const SECTIONS = ['TASK', 'COMMANDS', 'FILES', 'TESTS', 'DECISIONS', 'FEDERATION', 'SKILLS', 'LESSONS', 'CAUTIONS'];
 
 /**
  * What each section is worth when something has to go.
@@ -40,12 +40,19 @@ const SECTIONS = ['TASK', 'COMMANDS', 'FILES', 'TESTS', 'DECISIONS', 'SKILLS', '
  * question: what would a reader rather lose? Cautions they can rediscover, then lessons,
  * then skill pointers (one command answers all three), then decisions, then tests, then
  * files. Commands and the task are why the packet exists.
+ *
+ * Federation sits with the decisions, and for the same reason: an external server's answer
+ * names a source a reader can go back to, so losing it costs a question rather than a fact.
+ * A section added later takes a value beside its neighbours rather than renumbering them —
+ * the numbers are a standing answer to "what would a reader rather lose", and a new section
+ * is not a reason to change what an old one is worth.
  */
 const SECTION_VALUE = {
   CAUTIONS: 1,
   LESSONS: 2,
   SKILLS: 3,
   DECISIONS: 4,
+  FEDERATION: 4,
   TESTS: 5,
   FILES: 6,
   COMMANDS: 7,

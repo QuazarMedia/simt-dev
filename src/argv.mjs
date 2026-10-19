@@ -74,6 +74,9 @@ export const BOOL_FLAGS = new Set([
   // Off by default because a path is the change the caller named, and the diff
   // is a different question.
   'changed',
+  // local doctor: allow non-loopback model URLs. Off by default because nothing leaves
+  // the machine unless explicitly overridden (ADR-075, plan 0003 R37).
+  'allow-remote',
 ]);
 
 export const VALUE_FLAGS = new Set([

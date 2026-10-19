@@ -6,6 +6,68 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-20
+
+### Hybrid retrieval fuses BM25, the code graph, and the resolver
+
+`simt index` indexes full-text tokens across `code`, `docs`, `skills`, `decisions` and
+`lessons` into the SQLite FTS5 `fts` table (with an Okapi BM25 fallback when the index is
+JSON-lines). `simt map` and `simt brief` fuse FTS5 `bm25()`, PageRank graph proximity and
+resolver signals with reciprocal-rank fusion (`RRF_K = 40`), raising gold-file recall@10 on
+the 20 mined tasks here from 54.3% to 61.3% (above the 60% bar in ADR-091). With `--embed`
+and a configured `local.embed` endpoint, `simt index` stores `Float32Array` vector blobs in
+the `embeddings` table and `simt map --embed` adds brute-force cosine similarity; embeddings
+stay off by default unless they raise recall@10 by at least 10 percentage points.
+
+### A local model adapter that opens zero sockets until named
+
+`simt local doctor` probes the OpenAI-compatible `local.chat` and `local.embed` endpoints
+declared in `simt.json` (`/v1/models`, `/v1/chat/completions`, `/v1/embeddings` for Ollama,
+`llama-server`, LM Studio and MLX servers) and reports reachability, model presence and
+latency. Non-loopback URLs are refused unless `--allow-remote` is given (ADR-075, ADR-090),
+and when `local` is unset nothing opens a socket.
+
+### Estate learning and ADR drafts across a workspace
+
+`simt compare --learn` aggregates benchmark uplift (`ΔR`, `ΔC`) per rule section across
+adopted sibling repositories, promotes lessons repeated across at least two repositories as
+shared candidates, and flags gates that fail more than 20% of the time as `NOISY-GATE`.
+`simt compare --draft-adr <pattern>` writes a proposed ADR draft under `docs/decisions/`
+carrying `Origin: simt compare --draft-adr` and the workspace evidence behind it.
+
+### Rule text variants have to win on the bench
+
+A rule may declare candidate wordings under `simt-variants:` in its frontmatter (or supply
+them with `--variants-file`). `simt bench variants <rule-id>` evaluates each candidate on
+paired benchmark runs with McNemar on resolved rate and Wilcoxon signed-rank on cost,
+promotes a wording only when `ΔR > 0` (or `ΔR == 0` and `ΔC < 0`) at `p < 0.05`, and records
+the winning variant and its `p`-value in `simt-dev.lock.json`.
+
+### Decision records carry structured supersession frontmatter
+
+`simt decide "<title>"` scaffolds the next numbered ADR in `docs/decisions/` with structured
+frontmatter (`Status`, `Date`, `Supersedes`, `Superseded-by`, `Affects`) and updates the
+records it supersedes when `--supersedes` and `--yes` are given. `simt rules lint` reports
+`PARTIAL-SUPERSEDE` when prose claims to supersede part of an earlier record without
+matching frontmatter links.
+
+### Lessons are captured from failure-to-fix pairs, recalled on match, and expire
+
+When a failing gate or test run in `.simt-dev/ledger.jsonl` is followed by a passing run on
+the same package, `simt lessons` records a deterministic candidate in
+`.simt-dev/lessons-candidates.jsonl`. `simt lessons promote <id> --yes` writes a reviewed
+lesson to `docs/lessons/<id>.md` with `Paths`, `Check`, `Expires` and `ADR` fields, and
+`simt check` reports `LESSON-EXPIRED` once the date passes or the linked ADR is superseded.
+Matching lessons (at most two) are recalled in `simt brief` and by `simt agent-hook
+after-tool` when a tool call fails on the same package or error signature.
+
+### Skills compile to the Agent Skills standard and report their triggers
+
+`simt skills compile` validates and compiles skill sources against the Agent Skills standard
+(frontmatter `name` and `description`, description under 1024 characters, `SKILL.md` body at
+most 500 lines, and on-demand `references/` and `scripts/` links). `simt skills triggers
+"<prompt>"` previews which skills match a task and the score breakdown behind each match.
+
 ### A task brief fits in the bytes a prompt can carry
 
 `simt brief "<task>"` assembles what a task needs into one packet: the kind of the task
@@ -671,6 +733,7 @@ never ran `simt hooks install` again will find nothing until the dependency is r
 and `simt hooks install --yes` is re-run. That is a real upgrade step and it is called out
 here rather than discovered.
 
+[0.4.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.4.0
 [0.3.1]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.3.1
 [0.3.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.3.0
 [0.2.2]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.2.2

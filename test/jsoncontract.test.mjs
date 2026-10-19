@@ -77,6 +77,7 @@ async function run(args) {
 const JSON_COMMANDS = {
   doctor: [],
   'skills index': { noRoot: true },
+  'skills compile': { root: 'r' },
   'skills brief': ['--task', 'write a test'],
   brief: ['--task', 'write a test'],
   // Reads the workspace, not a root; the fixture holds no workspace to read.

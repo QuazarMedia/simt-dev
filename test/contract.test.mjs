@@ -162,6 +162,7 @@ const JSON_COMMANDS = [
   },
   { name: 'skills show', args: () => ['skills', 'show', 'slice-commit'], env: async () => ({}) },
   { name: 'skills why', args: () => ['skills', 'why', 'slice-commit'], env: async () => ({}) },
+  { name: 'skills compile', args: (root) => ['skills', 'compile', '--root', root], env: async () => ({}) },
   // The corpus and the registry both resolve from the package root in a checkout, so
   // this row needs no workspace and no root; it asserts the contract on a command whose
   // answer is a measurement, not a projection.

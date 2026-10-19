@@ -6,6 +6,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { loadRegistry } from '../graph/load.mjs';
+import { extractOpenedSkills, matchSkillsForPaths } from '../graph/compile.mjs';
 import { CONFIG_DIR, MANIFEST_FILE } from '../name.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { plan } from '../projection/project.mjs';
@@ -598,49 +599,24 @@ function buildAdapterArgs(adapter, { prompt, turns, model, analyticsLog }) {
 }
 
 async function executeAdapter(adapter, workDir, task, { vaultRoot, model, maxTurns, env, timeoutMs, slotDir }) {
-  if (adapter.id === 'noop') {
-    return parseAdapterUsage(adapter, '');
-  }
-
+  if (adapter.id === 'noop') return { ...parseAdapterUsage(adapter, ''), transcript: '' };
   if (adapter.id === 'gold') {
-    const goldPatchPath = join(vaultRoot, task.id, 'gold.patch');
-    const goldPatch = await readFile(goldPatchPath);
+    const goldPatch = await readFile(join(vaultRoot, task.id, 'gold.patch'));
     if (goldPatch.length > 0) {
-      const applyRes = await runCmd('git', ['apply', '-'], {
-        cwd: workDir,
-        input: goldPatch,
-        timeoutMs,
-      });
+      const applyRes = await runCmd('git', ['apply', '-'], { cwd: workDir, input: goldPatch, timeoutMs });
       if (applyRes.code !== 0) {
-        await runCmd('git', ['apply', '--3way', '-'], {
-          cwd: workDir,
-          input: goldPatch,
-          timeoutMs,
-        });
+        await runCmd('git', ['apply', '--3way', '-'], { cwd: workDir, input: goldPatch, timeoutMs });
       }
     }
-    return parseAdapterUsage(adapter, '');
+    return { ...parseAdapterUsage(adapter, ''), transcript: '' };
   }
 
   const analyticsLog = join(slotDir, 'analytics.jsonl');
-  const args = buildAdapterArgs(adapter, {
-    prompt: String(task.prompt ?? ''),
-    turns: maxTurns,
-    model,
-    analyticsLog,
-  });
-
-  const outcome = await runCmd(adapter.bin, args, {
-    cwd: workDir,
-    env,
-    timeoutMs,
-  });
-  const analyticsText =
-    adapter.format === 'analytics-log'
-      ? await readFile(analyticsLog, 'utf8').catch(() => '')
-      : '';
-
-  return parseAdapterUsage(adapter, outcome.stdout.toString('utf8'), analyticsText);
+  const args = buildAdapterArgs(adapter, { prompt: String(task.prompt ?? ''), turns: maxTurns, model, analyticsLog });
+  const outcome = await runCmd(adapter.bin, args, { cwd: workDir, env, timeoutMs });
+  const stdoutText = outcome.stdout.toString('utf8');
+  const analyticsText = adapter.format === 'analytics-log' ? await readFile(analyticsLog, 'utf8').catch(() => '') : '';
+  return { ...parseAdapterUsage(adapter, stdoutText, analyticsText), transcript: `${stdoutText}\n${analyticsText}` };
 }
 
 async function loadTasks(root, filterIds = []) {
@@ -776,6 +752,9 @@ export async function runBench(
     }
   }
 
+  const regRes = await loadRegistry().catch(() => ({ registry: { skills: [] } }));
+  const registrySkills = regRes?.registry?.skills ?? [];
+  const knownSkillNames = new Set(registrySkills.map((s) => s.name));
   const parentDir = await mkdtemp(join(tmpdir(), 'bench-batch-'));
   try {
     const records = await mapPool(plannedRuns, concurrency, async (item) => {
@@ -787,7 +766,7 @@ export async function runBench(
         { parentDir },
       );
       try {
-        const { usage, costUsd } = await executeAdapter(adapter, workDir, item.task, {
+        const { usage, costUsd, transcript } = await executeAdapter(adapter, workDir, item.task, {
           vaultRoot,
           model: resolvedModel,
           maxTurns,
@@ -801,6 +780,13 @@ export async function runBench(
           initialHead,
           timeoutMs,
         });
+        const expectedSkills = matchSkillsForPaths(registrySkills, grade.goldFiles ?? []);
+        const openedSkills =
+          adapter.id === 'gold'
+            ? expectedSkills
+            : adapter.id === 'noop'
+              ? []
+              : extractOpenedSkills(transcript, knownSkillNames);
 
         const record = {
           schemaVersion: 1,
@@ -814,6 +800,7 @@ export async function runBench(
           usage,
           costUsd,
           diff: grade.diff,
+          skills: { expected: expectedSkills, opened: openedSkills },
           probe: null,
         };
 

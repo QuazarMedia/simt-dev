@@ -173,6 +173,7 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
       resolved: false,
       gatesPassed: false,
       diff,
+      goldFiles: [...goldFiles],
       agentPatch: diffPatchRes.stdout,
     };
   }
@@ -183,6 +184,7 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
       resolved: false,
       gatesPassed: false,
       diff,
+      goldFiles: [...goldFiles],
       agentPatch: diffPatchRes.stdout,
     };
   }
@@ -224,6 +226,7 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
     resolved,
     gatesPassed,
     diff,
+    goldFiles: [...goldFiles],
     agentPatch: diffPatchRes.stdout,
   };
 }

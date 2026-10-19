@@ -34,6 +34,9 @@ ${CLI} skills eval [corpus]   measure the resolver against a gold corpus
 ${CLI} skills install <name>  pin a skill into the repo as a local override
                            (dry-run unless --yes; a multi-variant skill needs
                            --variant or --from rather than a guess)
+${CLI} skills compile [<name>] compile a skill to Agent Skills standard, flag bodies
+                           over 5000 tokens with a split plan, and report per-skill
+                           trigger recall and precision from R02 transcripts
 
 ${CLI} rules list             the rule catalogue (--root marks what applies to a repo)
 ${CLI} rules show <id>        one rule body

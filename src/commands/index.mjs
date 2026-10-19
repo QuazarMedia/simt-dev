@@ -35,6 +35,7 @@ import { compareCommand } from './compare.mjs';
 import { upgradeCommand } from './upgrade.mjs';
 import { mcpCommand } from './mcp.mjs';
 import { installCommand } from './skillsinstall.mjs';
+import { compileCommand } from './skillscompile.mjs';
 import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
 import { tokensCommand } from './tokens.mjs';
 import { harnessCommand, harnessLoadersCommand } from './harness.mjs';
@@ -106,6 +107,7 @@ export const IMPLEMENTED = {
   'skills why': skillsWhy,
   'skills eval': skillsEval,
   'skills install': installCommand,
+  'skills compile': compileCommand,
   'rules list': rulesList,
   'rules show': rulesShow,
   'rules why': rulesWhy,

@@ -902,7 +902,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R27 | Brief v2 | 4 | R10, R22, R24, R25 | M | — | turns −20%, C −15%, ΔR ≥ 0 | Complete |
 | R28 | Hybrid retrieval (+ optional embeddings) | 4 | R20, R37 | M | D2 | +10 pts recall or stays off | Queued |
 | R29 | Delivery: pull and push | 4 | R15, R27 | S | D4 (ADR-079) | ≤ 2 KB in < 300 ms | Complete |
-| R30 | Skill compiler and trigger report | 4 | R02, review 0002 S44 | M | — | per-skill trigger report | Queued |
+| R30 | Skill compiler and trigger report | 4 | R02, review 0002 S44 | M | — | per-skill trigger report | Complete |
 | R31 | Plan and tracker index | 4 | — | S | D9 | `plan next` and `plan done` exact | Complete |
 | R32 | Lessons ledger | 5 | R17 | M | — | one candidate per fail-then-fix | Queued |
 | R33 | Lesson recall | 5 | R32, R15 | S | — | fewer turns on recurrences | Queued |
@@ -1034,6 +1034,24 @@ and not a general proxy: the question goes to the tool and argument the manifest
 foreign tool is reachable that the repository did not name. `federate` is on for `simt brief`
 and the MCP `brief` tool, and off for the prompt-submit delivery, where R29's 300 ms bar forbids
 starting someone else's process.
+
+**R30 — Complete.** `simt skills compile [<name>]` (`src/graph/compile.mjs`,
+`src/commands/skillscompile.mjs`) compiles a skill into the Agent Skills layout
+(`<name>/SKILL.md` plus `references/*.md`), normalising frontmatter to the published
+specification (S44, ADR-069) and moving non-specification frontmatter keys under `metadata` so
+`checkSkill` reports zero errors and zero warnings. Every skill over 5,000 tokens (20,000 bytes
+at 4 B/token) or 500 lines is flagged with a deterministic progressive-disclosure split plan —
+all seven skills over 20 KB in `graph/skills.graph.json` (`cloudflare`, `durable-objects`,
+`firebase-basics`, `graphify`, `prototype-ui-fidelity`, `update-press-kit`,
+`workers-best-practices`) are flagged whether their source repositories are on disk or read from
+registry metadata alone, and when the markdown body is present it is split along `## ` sections
+into `references/*.md` with a `## References` index keeping `SKILL.md` under 5,000 tokens. R02
+benchmark runs (`src/bench/run.mjs`) record `skills: { expected, opened }` per task by matching
+the gold patch's paths against each skill's declared `paths` globs and extracting skill reads
+and `skills show` / `skills_show` calls from the transcript, which gives per-skill trigger
+recall and precision. Description proposals (`proposeSkillDescription`) are written with
+`{model, promptHash, digest}` provenance to `.simt-dev/proposals/skills/<name>.json` for a human
+to merge (Principle P2).
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

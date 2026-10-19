@@ -907,7 +907,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R32 | Lessons ledger | 5 | R17 | M | — | one candidate per fail-then-fix | Complete |
 | R33 | Lesson recall | 5 | R32, R15 | S | — | fewer turns on recurrences | Complete |
 | R34 | Decision assistant | 5 | review 0002 S31 | S | — | structured supersession | Complete |
-| R35 | Variant selection | 5 | R04 | M | D1 | lockfile records evidence | Queued |
+| R35 | Variant selection | 5 | R04 | M | D1 (ADR-076) | lockfile records evidence | Complete |
 | R36 | Estate learning | 5 | R17, R32 | S | — | deterministic report | Queued |
 | R37 | Local model adapter | 6 | — | S | D2, D7 | no socket when unset | Queued |
 | R38 | Distiller | 6 | R37, R02 | M | D2 | parity at lower C, or experimental | Queued |
@@ -1088,6 +1088,19 @@ structured partial and whole-record supersessions across the decision set so `si
 `simt decide --check`, and `simt check` fail with `prose-partial-supersession` whenever a partial
 supersession is stated only in prose without a matching `simt-supersedes` frontmatter entry
 (`test/decide.test.mjs`).
+
+**R35 — Complete.** Rule lines may carry `<!-- simt-variants: <slot> <spec> -->`
+(`src/kernel/variants.mjs`, `src/bench/variants.mjs`, `simt bench variants`). When unlocked,
+projection renders the baseline variant (`a`, or the item's own text) and strips the marker; when
+`simt-dev.lock.json` records a locked winner under `variants["<ruleId>.<slot>"]`, `desiredRegion`
+and `packageRegions` (`src/projection/rules.mjs`) deterministically render that winner and
+`computeLock` (`src/projection/lock.mjs`) hashes the locked winner map into `inputs` so
+`check --frozen` detects stale or tampered locks. `simt bench variants --yes` evaluates candidate
+variants (`variant-<slotId>-<key>`) on the canary suite (escalating to the full suite when
+`shouldEscalateCanary` triggers), records `{winner, variant, model, harness, dR, dC, n, p}` in
+`simt-dev.lock.json`, and re-opens the experiment whenever `model` or `harness` changes
+(`test/variants.test.mjs`). Shipped rule files carry no unmeasured variant markers per D1
+(ADR-076) and ADR-078.
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

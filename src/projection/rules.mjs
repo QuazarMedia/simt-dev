@@ -35,6 +35,7 @@ import { commandCard, CARD_LIMIT_BYTES } from '../kernel/card.mjs';
 import { packToBudget } from '../kernel/budget.mjs';
 import { filterInferable, inferableDefect, inferableProofs } from '../kernel/inferability.mjs';
 import { checkDefect, foldChecks } from '../kernel/checks.mjs';
+import { foldVariants, readLockedVariants, variantsDefect } from '../kernel/variants.mjs';
 import { BASELINES } from './baselines.mjs';
 import { CLI } from '../name.mjs';
 import { installedSkills } from './disclosure.mjs';
@@ -403,12 +404,14 @@ async function ruleBodies(root, manifest, flags) {
     for (const p of renderProblems) problems.push(`${rule.file}: ${p}`);
     if (renderProblems.length > 0) continue;
 
+    const variantFolded = foldVariants(body, rule.id ?? '', flags?.variants ?? null);
+
     // One canonical body, one target per selected surface. The body is identical
     // everywhere; only the frontmatter the editor reads before any rule text
     // differs. Without this loop a repo in a Claude Code session receives
     // AGENTS.md and none of the always-on process rules, because those lived only
     // in a directory only Cursor reads.
-    bodies.push({ rule, body });
+    bodies.push({ rule, body: variantFolded.body });
   }
 
   return { resolved, bodies, problems, notes, skipped };
@@ -449,12 +452,14 @@ function toolRule(rule) {
 
 export async function desiredRegion(root, flags) {
   const { stack, facts, manifest } = await fingerprint(root);
+  const lockedVariants =
+    flags?.variants !== undefined ? flags.variants : await readLockedVariants(root);
   const all = await loadRules(root);
   const { selected, fallback, notes } = select(all, stack, facts);
   const { resolved, bodies, problems, notes: ruleNotes } = await ruleBodies(
     root,
     manifest,
-    flags ?? {},
+    { ...(flags ?? {}), variants: lockedVariants },
   );
   notes.push(...ruleNotes);
 
@@ -476,7 +481,8 @@ export async function desiredRegion(root, flags) {
     // selected surface cannot narrow, the file would be the only home for a rule that
     // reader cannot reach — so it stays, and says why.
     if (narrowing) {
-      scoped.push(r);
+      const vf = foldVariants(r.body, r.id ?? '', lockedVariants);
+      scoped.push(vf.changed ? { ...r, body: vf.body } : r);
       continue;
     }
     inRegion.push(r);
@@ -521,17 +527,26 @@ export async function desiredRegion(root, flags) {
   // which lines the reader already knows.
   const inferable = [];
   const shipped = [];
+  const variantsSelected = [];
   let enforced = 0;
   for (const r of packed) {
-    const filtered = filterInferable(r.body, proofs);
+    const variantFolded = foldVariants(r.body, r.id ?? '', lockedVariants);
+    const filtered = filterInferable(variantFolded.body, proofs);
     const folded = foldChecks(filtered.body);
     enforced += folded.enforced.length;
-    if (!filtered.changed && !folded.changed) {
+    variantsSelected.push(...variantFolded.selected);
+    if (!variantFolded.changed && !filtered.changed && !folded.changed) {
       shipped.push(r);
       continue;
     }
     for (const x of filtered.removed) inferable.push({ rule: r.id, text: x.text, expr: x.expr });
     shipped.push({ ...r, body: folded.body });
+  }
+  const lockedNonDefault = variantsSelected.filter((v) => v.locked && v.winner !== v.baseline);
+  if (lockedNonDefault.length > 0) {
+    notes.push(
+      `variants: applied ${lockedNonDefault.length} locked variant(s) (${lockedNonDefault.map((v) => `${v.slotId}=${v.winner}`).join(', ')})`,
+    );
   }
   if (enforced > 0) {
     notes.push(
@@ -1046,7 +1061,11 @@ export async function loadRules(root = null) {
       // it travels the field that already reaches `check` and `rules list`. The
       // frontmatter defect wins, because a rule that cannot say what it applies to cannot
       // be reasoned about at all.
-      error: describeDefect(meta) ?? inferableDefect(body) ?? checkDefect(body),
+      error:
+        describeDefect(meta) ??
+        inferableDefect(body) ??
+        checkDefect(body) ??
+        variantsDefect(body, meta['simt-id'] ?? ''),
     });
   }
   return out;
@@ -1081,6 +1100,8 @@ export async function packageRegions(root, flags, rootProfiles = null) {
   if (packages.length === 0) return { regions: [], notes };
 
   const rules = await loadRules(root);
+  const lockedVariants =
+    flags?.variants !== undefined ? flags.variants : await readLockedVariants(root);
   const sha = await provenanceDigest();
   // The ROOT's proofs, not the package's. The rule set is the root's, so which lines it
   // already proves is a fact about the repository rather than about the directory a file
@@ -1094,9 +1115,12 @@ export async function packageRegions(root, flags, rootProfiles = null) {
     const delta = selected.filter((r) => !shared.includes(r.id));
     if (delta.length === 0) continue;
     const shipped = delta.map((r) => {
-      const filtered = filterInferable(r.body, proofs);
+      const variantFolded = foldVariants(r.body, r.id ?? '', lockedVariants);
+      const filtered = filterInferable(variantFolded.body, proofs);
       const folded = foldChecks(filtered.body);
-      return filtered.changed || folded.changed ? { ...r, body: folded.body } : r;
+      return variantFolded.changed || filtered.changed || folded.changed
+        ? { ...r, body: folded.body }
+        : r;
     });
     regions.push({
       path: pkg.path,

@@ -8,9 +8,10 @@
 // rewritten.
 
 import { createHash } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { readLockedVariants } from '../kernel/variants.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { desiredRegion, provenanceDigest, LOCAL_PROFILE_DIR } from './rules.mjs';
 import { readManifest } from './manifest.mjs';
@@ -29,11 +30,25 @@ const MANIFEST_KEYS = ['mode', 'budget', 'shared', 'surfaces', 'gates'];
  *   body that was written and not a body for a different set of surfaces
  */
 export async function computeLock(root, flags = {}) {
-  const desired = await desiredRegion(root, flags);
-  return {
-    inputs: await inputDigest(root),
-    outputs: createHash('sha256').update(desired.body).digest('hex'),
-  };
+  const variants =
+    flags?.variants !== undefined ? flags.variants : await readLockedVariants(root);
+  const desired = await desiredRegion(root, { ...flags, variants });
+  const inputs = await inputDigest(root, variants);
+  const outputs = createHash('sha256').update(desired.body).digest('hex');
+  const hasVariants =
+    variants && typeof variants === 'object' && Object.keys(variants).length > 0;
+  return hasVariants ? { inputs, outputs, variants } : { inputs, outputs };
+}
+
+/**
+ * Record locked variant winners in `simt-dev.lock.json` alongside updated digests.
+ */
+export async function writeLockVariants(root, nextVariants, flags = {}) {
+  const existing = await readLockedVariants(root);
+  const merged = { ...existing, ...(nextVariants ?? {}) };
+  const lock = await computeLock(root, { ...flags, variants: merged });
+  await writeFile(join(root, LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
+  return lock;
 }
 
 /** Read a lock, or null when the file is not there. A file that does not parse is an
@@ -52,13 +67,19 @@ export async function readLock(root) {
     if (typeof lock?.inputs !== 'string' || typeof lock?.outputs !== 'string') {
       return { lock: null, error: 'must be an object with inputs and outputs' };
     }
+    if (
+      lock.variants !== undefined &&
+      (typeof lock.variants !== 'object' || lock.variants === null || Array.isArray(lock.variants))
+    ) {
+      return { lock: null, error: 'variants must be an object' };
+    }
     return { lock, error: null };
   } catch (error) {
     return { lock: null, error: error.message };
   }
 }
 
-async function inputDigest(root) {
+async function inputDigest(root, variants = {}) {
   const hash = createHash('sha256');
   hash.update(`provenance:${await provenanceDigest()}\n`);
   const { stack, facts } = await fingerprint(root);
@@ -88,6 +109,17 @@ async function inputDigest(root) {
     hash.update(`scripts:${JSON.stringify(scripts)}\n`);
   } catch (error) {
     if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) throw error;
+  }
+  const variantKeys =
+    variants && typeof variants === 'object' ? Object.keys(variants).sort() : [];
+  if (variantKeys.length > 0) {
+    const winners = {};
+    for (const key of variantKeys) {
+      const entry = variants[key];
+      winners[key] =
+        typeof entry === 'string' ? entry : (entry?.winner ?? entry?.variant ?? null);
+    }
+    hash.update(`variants:${JSON.stringify(winners)}\n`);
   }
   return hash.digest('hex');
 }

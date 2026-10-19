@@ -135,6 +135,9 @@ ${CLI} bench ablate [--yes]    leave-one-out ablation across core, profile and p
 ${CLI} bench probes [--yes]    12 synthetic rule-compliance probes with deterministic graders
                             (dry-run unless --yes; grades git state, transcript and ledger,
                             and reports compliance per arm)
+${CLI} bench variants [--yes]  evaluate simt-variants rule slots on the canary suite and lock
+                            winning variants in simt-dev.lock.json (dry-run unless --yes;
+                            re-opens when model or harness changes)
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;

@@ -15,6 +15,7 @@ import { buildBenchReport } from '../bench/report.mjs';
 import { formatRecall, measureRecall } from '../index/map.mjs';
 import { ablateBench } from '../bench/ablate.mjs';
 import { runBenchProbes } from '../bench/probes.mjs';
+import { selectRuleVariants } from '../bench/variants.mjs';
 import { listFlag } from './skills.mjs';
 
 export async function benchMineCommand(positional, flags) {
@@ -280,16 +281,8 @@ export async function benchAblateCommand(positional, flags) {
     emitJson({
       ok: true,
       command: 'bench ablate',
-      root: result.root,
       dryRun,
-      applied: result.applied,
-      pricesLoaded: result.pricesLoaded,
-      canarySize: result.canarySize,
-      canaryTasks: result.canaryTasks,
-      totalTasks: result.totalTasks,
-      sections: result.sections,
-      ranking: result.ranking,
-      deletionCandidates: result.deletionCandidates,
+      ...result,
     });
     return EXIT.OK;
   }
@@ -340,13 +333,8 @@ export async function benchProbesCommand(positional, flags) {
     emitJson({
       ok: true,
       command: 'bench probes',
-      root: result.root,
       dryRun,
-      applied: result.applied,
-      probeCount: result.probeCount,
-      probes: result.probes,
-      arms: result.arms,
-      runs: result.runs,
+      ...result,
     });
     return EXIT.OK;
   }
@@ -363,6 +351,43 @@ export async function benchProbesCommand(positional, flags) {
     lines.push(`remedy   run: ${CLI} bench probes --yes`);
   }
 
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  return EXIT.OK;
+}
+
+export async function benchVariantsCommand(positional, flags) {
+  const root = resolve(flags.root ?? positional[0] ?? process.cwd());
+  const { dryRun, apply } = writeMode(flags);
+  let result;
+  try {
+    result = await selectRuleVariants(root, {
+      apply,
+      harness: flags.harness ?? 'gold',
+      model: flags.model,
+      reps: flags.reps ?? 1,
+      includeAll: flags.all === true,
+    });
+  } catch (error) {
+    return fail(
+      `${root}: ${error.message ?? error}`,
+      EXIT.CONFIG,
+      `mine tasks first with \`${CLI} bench mine --yes\` and rerun \`${CLI} bench variants --yes\``,
+    );
+  }
+  if (isJson(flags)) {
+    emitJson({ ok: true, command: 'bench variants', dryRun, ...result });
+    return EXIT.OK;
+  }
+  const lines = [
+    `bench    variants  ${result.root}`,
+    `mode     ${result.applied ? 'applied' : dryRun ? 'dry-run (writes nothing)' : 'preview / stored runs (pass --yes to execute canary and lock winners)'}`,
+    `harness  ${result.harness}  model=${result.model}`,
+    `slots    ${result.slots.length}  (canary: ${result.canaryTasks}/${result.totalTasks} tasks)`,
+    ...result.slots.map(
+      (s) => `slot     ${s.slotId}  status=${s.status}  winner=${s.winner}  dR=${s.dR}  dC=${s.dC}  n=${s.n}  p=${s.p}`,
+    ),
+  ];
+  if (!result.applied) lines.push(`remedy   run: ${CLI} bench variants --yes`);
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
 }

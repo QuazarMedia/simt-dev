@@ -669,7 +669,7 @@ export const TOOLS = [
       const { decisions } = await loadDecisions();
       const index = byId(decisions);
 
-      if (/^ADR-\d{3}$/i.test(what)) {
+      if (/^ADR-\d{3,}$/i.test(what)) {
         const id = what.toUpperCase();
         const d = decisions.find((x) => x.id === id);
         if (!d) throw new Error(`no decision record ${id}`);

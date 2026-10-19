@@ -58,6 +58,7 @@ import { impactCommand } from './impact.mjs';
 import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { decideCommand } from './decide.mjs';
 import { parse } from '../argv.mjs';
+import { CLI } from '../name.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 
@@ -196,7 +197,7 @@ export async function dispatch(argv) {
     // simt-dev: they run this tool, not its source tree. The step number is the
     // stable handle; the file that documents it is an implementation detail.
     return fail(
-      `\`simt-dev ${path}\` is declared but not implemented`,
+      `\`${CLI} ${path}\` is declared but not implemented`,
       EXIT.UNSUPPORTED,
       `implementation step ${step} is not built yet`,
     );

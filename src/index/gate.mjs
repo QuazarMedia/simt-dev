@@ -9,13 +9,8 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { isTestPath } from '../bench/mine.mjs';
+import { langOf } from './store.mjs';
 import { importsOf } from './tests.mjs';
-
-const LANG = {
-  js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
-  ts: 'typescript', tsx: 'typescript', kt: 'kotlin', kts: 'kotlin', java: 'java',
-  py: 'python', go: 'go', rs: 'rust', swift: 'swift', dart: 'dart', rb: 'ruby', cs: 'csharp',
-};
 
 /**
  * Test files that import one of `changed`, directly or through other files.
@@ -91,11 +86,4 @@ export async function readEntries(root, files) {
 /** Import edges for tracked paths. A missing file contributes none. */
 export async function readImportEdges(root, files) {
   return importEdges(await readEntries(root, files));
-}
-
-function langOf(file) {
-  const base = file.slice(file.lastIndexOf('/') + 1);
-  const dot = base.lastIndexOf('.');
-  if (dot <= 0) return '';
-  return LANG[base.slice(dot + 1)] ?? '';
 }

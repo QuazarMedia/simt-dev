@@ -218,8 +218,7 @@ function extension(file) {
 }
 
 function frontmatter(text) {
-  const match = /^---\n([\s\S]*?)\n---/.exec(String(text));
-  return match ? match[1] : '';
+  return splitFrontmatter(text).front ?? '';
 }
 
 function quotedList(front, key) {

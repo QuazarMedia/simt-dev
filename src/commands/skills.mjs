@@ -22,6 +22,9 @@ import { fingerprint } from '../resolve/fingerprint.mjs';
 import { tokenize, rankSkills, closure, selectWithinBudget, resolveAlias, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { CLI } from '../name.mjs';
+import { parsePathList } from '../argv.mjs';
+
+export { parsePathList };
 
 const DEFAULT_BUDGET = 20480;
 
@@ -42,23 +45,6 @@ export async function dirtyPaths(root) {
   }
 }
 
-export function parsePathList(value) {
-  return String(value ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/**
- * Read a list flag in both the forms this tool ships.
- *
- * `--skill` accepts `--skill a --skill b` and `--skill a,b`, and arrives here as an
- * array in the first case and a string in the second. `String(['a','b'])` happens to
- * produce `'a,b'`, so the old one-line reader would have kept working by accident — and
- * would have started throwing the moment a skill name contained the character the
- * join inserts. Both shapes are handled rather than one being relied upon, because
- * relying on it is the same class of bug as the one being fixed here.
- */
 export function listFlag(value) {
   return (Array.isArray(value) ? value : [value])
     .flatMap((v) => parsePathList(v))

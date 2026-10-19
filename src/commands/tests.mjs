@@ -13,16 +13,10 @@ import { promisify } from 'node:util';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { isTestPath } from '../bench/mine.mjs';
-import { readEdges, readFiles, reindex } from '../index/store.mjs';
+import { blobTexts, langOf, readEdges, readFiles, reindex } from '../index/store.mjs';
 import { HISTORY, importsOf, parseCoverage, testEdges, testsFor } from '../index/tests.mjs';
 
 const exec = promisify(execFile);
-
-const LANG = {
-  js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
-  ts: 'typescript', tsx: 'typescript', kt: 'kotlin', kts: 'kotlin', java: 'java',
-  py: 'python', go: 'go', rs: 'rust', swift: 'swift', dart: 'dart', rb: 'ruby', cs: 'csharp',
-};
 
 const COVERAGE_PATHS = [
   'coverage/lcov.info',
@@ -112,7 +106,7 @@ async function testBlobs(root, files) {
   for (const file of files) {
     if (isTestPath(file.path) && file.blob) blobs.push(file.blob);
   }
-  return cat(root, blobs);
+  return blobTexts(root, blobs).catch(() => new Map());
 }
 
 async function coverageTexts(root) {
@@ -148,45 +142,4 @@ async function history(root) {
     if (paths.length > 0) commits.push(paths);
   }
   return commits;
-}
-
-async function cat(root, blobs) {
-  const unique = [...new Set(blobs)];
-  const texts = new Map();
-  if (unique.length === 0) return texts;
-  const body = await batch(root, unique);
-  let offset = 0;
-  while (offset < body.length) {
-    const nl = body.indexOf(0x0a, offset);
-    if (nl < 0) break;
-    const header = body.toString('utf8', offset, nl);
-    const parts = header.split(' ');
-    const size = Number(parts[2]);
-    if (parts[1] !== 'blob' || !Number.isFinite(size)) {
-      offset = nl + 1;
-      continue;
-    }
-    const start = nl + 1;
-    const bytes = body.subarray(start, start + size);
-    offset = start + size + 1;
-    texts.set(parts[0], bytes.includes(0) ? null : bytes.toString('utf8'));
-  }
-  return texts;
-}
-
-function batch(root, blobs) {
-  return new Promise((resolve) => {
-    const child = execFile('git', ['cat-file', '--batch'], { cwd: root, maxBuffer: 32 << 20, encoding: 'buffer' }, (error, stdout) => {
-      resolve(error ? Buffer.alloc(0) : stdout);
-    });
-    child.stdin.write(`${blobs.join('\n')}\n`);
-    child.stdin.end();
-  });
-}
-
-function langOf(path) {
-  const base = path.slice(path.lastIndexOf('/') + 1);
-  const dot = base.lastIndexOf('.');
-  if (dot <= 0) return '';
-  return LANG[base.slice(dot + 1)] ?? '';
 }

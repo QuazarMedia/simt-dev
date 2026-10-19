@@ -300,8 +300,15 @@ test('every command name the tool prints is the name this package ships', async 
   const files = [
     'src/commands/help.mjs', 'src/commands/index.mjs', 'src/commands/sync.mjs',
     'src/commands/init.mjs', 'src/commands/rules.mjs', 'src/commands/skills.mjs',
-    'src/commands/skillsinstall.mjs', 'src/commands/hooks.mjs', 'src/commands/upgrade.mjs',
+    'src/commands/skillsinstall.mjs', 'src/commands/skillscompile.mjs',
+    'src/commands/hooks.mjs', 'src/commands/agenthook.mjs', 'src/commands/upgrade.mjs',
     'src/commands/compare.mjs', 'src/commands/mcp.mjs', 'src/commands/graph.mjs',
+    'src/commands/ci.mjs', 'src/commands/tokens.mjs', 'src/commands/harness.mjs',
+    'src/commands/bench.mjs', 'src/commands/shared.mjs', 'src/commands/evidence.mjs',
+    'src/commands/repoindex.mjs', 'src/commands/map.mjs', 'src/commands/tests.mjs',
+    'src/commands/why.mjs', 'src/commands/gate.mjs', 'src/commands/impact.mjs',
+    'src/commands/lessons.mjs', 'src/commands/decide.mjs', 'src/commands/brief.mjs',
+    'src/commands/plan.mjs',
     'src/compare/row.mjs', 'src/compare/discover.mjs', 'src/compare/hooksstate.mjs',
     'src/upgrade/plan.mjs', 'src/projection/conflicts.mjs', 'src/projection/manifest.mjs',
     'src/projection/project.mjs', 'src/projection/markers.mjs', 'src/projection/mdc.mjs',
@@ -312,7 +319,7 @@ test('every command name the tool prints is the name this package ships', async 
   for (const file of files) {
     const text = await readFile(join(ROOT, file), 'utf8');
     const code = text.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
-    const m = new RegExp(`\\b${PROJECT} (?:init|sync|check|rules|skills|hooks|compare|doctor|upgrade|mcp|graph)\\b`).exec(code);
+    const m = new RegExp(`\\b${PROJECT} (?:init|sync|check|rules|skills|hooks|agent-hook|agent-hooks|compare|doctor|upgrade|mcp|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact|lessons|decide|brief|plan)\\b`).exec(code);
     assert.equal(m, null, `${file} tells the reader to run "${m?.[0]}", and the binary is ${CLI}.`);
   }
 });
@@ -410,7 +417,7 @@ test('a shipped rule names the command this package installs', async () => {
   // The records convert `simt-dev <verb>` on the way out. A rule does not: its body
   // is copied into the region, so the spelling in the file is the spelling a reader
   // types. `simt-dev.json` stays, because that is the manifest the project still reads.
-  const verb = /`simt-dev (?:init|doctor|check|sync|upgrade|ci|compare|hooks|mcp|rules|skills|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact)\b/;
+  const verb = /`simt-dev (?:init|doctor|check|sync|upgrade|ci|compare|hooks|agent-hook|agent-hooks|mcp|rules|skills|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact|lessons|decide|brief|plan)\b/;
   async function walk(dir) {
     const hits = [];
     for (const entry of await readdir(dir, { withFileTypes: true })) {

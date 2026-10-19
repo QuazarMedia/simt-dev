@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
+import { parsePathList } from '../argv.mjs';
 import {
   LESSONS_DIR,
   LESSONS_FILE,
@@ -14,15 +15,6 @@ import {
   promoteLesson,
   readLessonCandidates,
 } from '../memory/lessons.mjs';
-
-function parsePathsFlag(raw) {
-  if (!raw) return undefined;
-  const list = String(raw)
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-  return list.length > 0 ? list : undefined;
-}
 
 export async function lessonsListCommand(args, flags) {
   if (args.length > 0) {
@@ -88,7 +80,8 @@ export async function lessonsReviewCommand(args, flags) {
   }
   const root = resolve(flags.root ?? process.cwd());
   const mode = writeMode(flags);
-  const paths = parsePathsFlag(flags.paths);
+  const parsedPaths = parsePathList(flags.paths);
+  const paths = parsedPaths.length > 0 ? parsedPaths : undefined;
   const title = flags.task ? String(flags.task) : undefined;
 
   const result = await promoteLesson(root, {

@@ -18,6 +18,8 @@ import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { postDeliveryJson } from '../agenthooks/render.mjs';
+import { lessonPaths } from '../index/govern.mjs';
+import { splitFrontmatter } from './decide.mjs';
 
 const exec = promisify(execFile);
 
@@ -527,15 +529,11 @@ export function renderLessonMarkdown(candidate, options = {}) {
  * @returns {object}
  */
 export function parseLessonFile(id, text) {
-  const raw = String(text ?? '');
-  const fmMatch = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/.exec(raw);
-  const front = fmMatch ? fmMatch[1] : '';
-  const body = fmMatch ? fmMatch[2].trim() : raw.trim();
+  const { front: rawFront, body: rawBody } = splitFrontmatter(text);
+  const front = rawFront ?? '';
+  const body = rawBody.trim();
 
-  const pathsMatch = /paths:\s*\[([^\]]*)\]/.exec(front);
-  const paths = pathsMatch
-    ? [...pathsMatch[1].matchAll(/['"]([^'"]+)['"]/g)].map((m) => m[1])
-    : [];
+  const paths = lessonPaths(text);
   const sigMatch = /signature:\s*['"]?(sha256-[0-9a-f]+)['"]?/i.exec(front);
   const signature = sigMatch ? sigMatch[1] : null;
   const kwMatch = /keywords:\s*\[([^\]]*)\]/.exec(front);

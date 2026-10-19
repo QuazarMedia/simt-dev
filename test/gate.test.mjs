@@ -31,6 +31,7 @@ const RESOLVE = [
   'test/compare.test.mjs',
   'test/compile.test.mjs',
   'test/contract.test.mjs',
+  'test/decide.test.mjs',
   'test/disclosure.test.mjs',
   'test/eval.test.mjs',
   'test/extract.test.mjs',

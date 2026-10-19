@@ -307,6 +307,16 @@ const WRITERS = [
       return `${hooksPath}\n${shim}`;
     },
   },
+  {
+    name: 'agent-hooks install',
+    authorise: ['--yes'],
+    verify: async (root) => readFile(join(root, '.claude/settings.json'), 'utf8').catch(() => null),
+  },
+  {
+    name: 'decide',
+    authorise: ['--yes'],
+    verify: async (root) => readFile(join(root, 'docs/decisions/ADR-001-untitled-decision.md'), 'utf8').catch(() => null),
+  },
 ];
 
 for (const writer of WRITERS) {

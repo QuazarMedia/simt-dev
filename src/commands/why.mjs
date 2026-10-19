@@ -15,14 +15,14 @@ import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { FORMATTABLE, GATES } from '../hooks/gates.mjs';
 import {
   decisionHits,
-  lessonPaths,
   scopeHits,
   scopePaths,
   sortHits,
   sourceRoots,
   unresolvedAffects,
 } from '../index/govern.mjs';
-import { parseLessonFile } from '../memory/lessons.mjs';
+import { splitFrontmatter } from '../memory/decide.mjs';
+import { listPromotedLessons } from '../memory/lessons.mjs';
 
 const exec = promisify(execFile);
 
@@ -82,16 +82,17 @@ export async function decisionRecords(root) {
   const dir = join(root, 'docs', 'decisions');
   let names = [];
   try {
-    names = (await readdir(dir)).filter((name) => /^ADR-\d{3}-.*\.md$/.test(name)).sort();
+    names = (await readdir(dir)).filter((name) => /^ADR-\d{3,}-.*\.md$/i.test(name)).sort();
   } catch {
     return [];
   }
   const records = [];
   for (const name of names) {
     const text = await readFile(join(dir, name), 'utf8');
-    const id = /^ADR-\d{3}/.exec(name)[0];
-    const heading = /^#\s+(.*)$/m.exec(text)?.[1] ?? id;
-    const title = heading.replace(/^ADR-\d{3}\s+[—–-]\s+/, '');
+    const { body } = splitFrontmatter(text);
+    const id = /^ADR-\d{3,}/i.exec(name)[0].toUpperCase();
+    const heading = /^#\s+(.*)$/m.exec(body)?.[1] ?? id;
+    const title = heading.replace(/^ADR-\d{3,}\s*[—–-]\s*/i, '').trim();
     records.push({ id, title, text });
   }
   return records;
@@ -148,31 +149,16 @@ async function skillScopes(root) {
 }
 
 export async function lessonScopes(root) {
-  const dir = join(root, 'docs', 'lessons');
-  let names = [];
-  try {
-    names = (await readdir(dir)).filter((name) => name.endsWith('.md')).sort();
-  } catch {
-    return [];
-  }
-  const lessons = [];
-  for (const name of names) {
-    const text = await readFile(join(dir, name), 'utf8');
-    const paths = lessonPaths(text);
-    if (paths.length === 0) continue;
-    const id = name.replace(/\.md$/, '');
-    const parsed = parseLessonFile(id, text);
-    const detail = /^#\s+(.*)$/m.exec(text)?.[1] ?? id;
-    lessons.push({
-      id,
-      detail,
-      paragraph: parsed.paragraph,
-      paths,
-      signature: parsed.signature,
-      keywords: parsed.keywords,
-    });
-  }
-  return lessons;
+  return (await listPromotedLessons(root))
+    .filter((lesson) => lesson.paths.length > 0)
+    .map((lesson) => ({
+      id: lesson.id,
+      detail: lesson.title,
+      paragraph: lesson.paragraph,
+      paths: lesson.paths,
+      signature: lesson.signature,
+      keywords: lesson.keywords,
+    }));
 }
 
 async function gateCommands(root) {

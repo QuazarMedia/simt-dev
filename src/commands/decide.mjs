@@ -7,6 +7,7 @@ import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/i
 import { CLI } from '../name.mjs';
 import { DECISIONS_DIR } from '../decisions/index.mjs';
 import { lintDecisions, scaffoldDecision } from '../memory/decide.mjs';
+import { parsePathList } from '../argv.mjs';
 
 export async function decideCommand(args, flags) {
   const root = flags.root ?? process.cwd();
@@ -45,12 +46,8 @@ export async function decideCommand(args, flags) {
 
   const mode = writeMode(flags);
   const title = args.join(' ').trim() || flags.task || 'Untitled decision';
-  const explicitPaths = flags.paths
-    ? String(flags.paths)
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : undefined;
+  const parsedPaths = parsePathList(flags.paths);
+  const explicitPaths = flags.paths !== undefined ? parsedPaths : undefined;
 
   const res = await scaffoldDecision(root, {
     title,

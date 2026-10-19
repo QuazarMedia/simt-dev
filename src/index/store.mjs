@@ -135,7 +135,7 @@ export async function readEdges(root, opts = {}) {
   return readJsonl(root, 'edges');
 }
 
-function langOf(filePath) {
+export function langOf(filePath) {
   const base = filePath.slice(filePath.lastIndexOf('/') + 1);
   const dot = base.lastIndexOf('.');
   if (dot <= 0) return '';
@@ -263,7 +263,7 @@ function normalise(filePath, got) {
   return { symbols, imports: Array.isArray(got.imports) ? got.imports : [], edges };
 }
 
-async function blobTexts(root, blobs) {
+export async function blobTexts(root, blobs) {
   const unique = [...new Set(blobs)];
   const texts = new Map();
   if (unique.length === 0) return texts;

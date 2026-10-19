@@ -14,14 +14,14 @@ export const DECISION_KEYS = ['simt-affects', 'simt-supersedes'];
 
 const VALID_KINDS = new Set(['superseded', 'narrowed', 'withdrawn']);
 
-const PASSIVE_PARTIAL_RE =
-  /\b(?:one ruling|rulings?\s+(\d+(?:\s*(?:,|and)\s*\d+)*))\s+(superseded|narrowed|withdrawn)\s+by\s+(ADR-\d{3}|the same record)\b/gi;
+export const PARTIAL_CLAUSE =
+  /\b(?:one ruling|rulings?\s+(\d+(?:\s*(?:,|and)\s*\d+)*))\s+(superseded|narrowed|withdrawn)\s+by\s+(ADR-\d{3,}|the same record)\b/gi;
 
 const ACTIVE_PARTIAL_AFTER_RE =
-  /\b(supersedes?|narrowed|narrows|withdrawn|withdraws|amends?|refines?)\s+(?:\[?(ADR-\d{3})\]?(?:\([^)]*\))?)\s+rulings?\s+(\d+(?:\s*(?:,|and)\s*\d+)*)\b/gi;
+  /\b(supersedes?|narrowed|narrows|withdrawn|withdraws|amends?|refines?)\s+(?:\[?(ADR-\d{3,})\]?(?:\([^)]*\))?)\s+rulings?\s+(\d+(?:\s*(?:,|and)\s*\d+)*)\b/gi;
 
 const ACTIVE_PARTIAL_BEFORE_RE =
-  /\b(supersedes?|narrowed|narrows|withdrawn|withdraws|amends?|refines?)\s+rulings?\s+(\d+(?:\s*(?:,|and)\s*\d+)*)\s+of\s+(?:\[?(ADR-\d{3})\]?(?:\([^)]*\))?)\b/gi;
+  /\b(supersedes?|narrowed|narrows|withdrawn|withdraws|amends?|refines?)\s+rulings?\s+(\d+(?:\s*(?:,|and)\s*\d+)*)\s+of\s+(?:\[?(ADR-\d{3,})\]?(?:\([^)]*\))?)\b/gi;
 
 function normaliseKind(verb) {
   const v = String(verb ?? 'superseded').toLowerCase();
@@ -388,7 +388,7 @@ function prosePartialSupersessions(body) {
   const clean = headSection.replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/[*`]/g, '').replace(/\s+/g, ' ');
 
   let lastNamed = null;
-  for (const m of clean.matchAll(PASSIVE_PARTIAL_RE)) {
+  for (const m of clean.matchAll(PARTIAL_CLAUSE)) {
     const [raw, list, kind, ref] = m;
     const adr = /^ADR-/i.test(ref) ? ref.toUpperCase() : lastNamed;
     if (/^ADR-/i.test(ref)) lastNamed = ref.toUpperCase();

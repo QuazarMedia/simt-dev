@@ -209,6 +209,13 @@ export function parse(argv) {
   return { ok: true, value: { flags, positional } };
 }
 
+export function parsePathList(value) {
+  return String(value ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 /** `--max-bytes` -> `maxBytes`. Callers use camelCase; users type kebab-case. */
 function camel(name) {
   return name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());

@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 import { MANIFEST_FILE } from '../name.mjs';
 import { CLI } from '../name.mjs';
 import { PREFIX_ARGUING, TOOL_WORDS } from '../toolwords.mjs';
-import { parseDecisionFrontmatter, splitFrontmatter } from '../memory/decide.mjs';
+import { PARTIAL_CLAUSE, parseDecisionFrontmatter, splitFrontmatter } from '../memory/decide.mjs';
 import { affectsTokens } from '../index/govern.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -97,19 +97,6 @@ const ADR_IN_TEXT = /\bADR-(\d{3})\b/g;
  * none of them.
  */
 const SIBLING_FIELD = /^\*{0,2}[A-Z][\w]*(?:[ \t]+[\w]+){0,3}:\*{0,2}(?:[ \t]|$)/;
-
-/**
- * `ruling N <verb> by <ADR>`, in every form the corpus uses.
- *
- * Four spellings, all of them real: `ruling 3 superseded by ADR-046`, `rulings 1 and 2
- * narrowed by ADR-026`, `rulings 3 and 4 narrowed by the same record`, and `one ruling
- * narrowed by ADR-045` - which names no number at all, because the record does not say
- * which ruling it meant. That last one is carried with `ruling: null` rather than
- * dropped: a clause the tool can see but cannot resolve is reported as unresolved, and
- * the corpus test below pins that there are none.
- */
-const PARTIAL_CLAUSE =
-  /\b(?:one ruling|rulings?\s+(\d+(?:\s*(?:,|and)\s*\d+)*))\s+(superseded|narrowed|withdrawn)\s+by\s+(ADR-\d{3}|the same record)\b/gi;
 
 /** How a record says a ruling was numbered, when it did not use a digit. */
 const ORDINALS = ['One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten'];
@@ -588,7 +575,7 @@ export function redactEstate(text) {
  * Only a real verb follows, which is what keeps `simt-dev.json`, `simt-dev-check.yml` and
  * `simt-dev's` untouched - those are the project's artefacts and the project keeps its name.
  */
-const VERB = '(?:init|doctor|check|sync|upgrade|ci|compare|hooks|mcp|rules|skills|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact|lessons|decide|--[a-z-]+)';
+const VERB = '(?:init|doctor|check|sync|upgrade|ci|compare|hooks|agent-hook|agent-hooks|mcp|rules|skills|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact|lessons|decide|brief|plan|--[a-z-]+)';
 
 function redactCommand(text) {
   return String(text ?? '').replace(new RegExp(`\\bsimt-dev (?=${VERB})\\b`, 'g'), `${CLI} `);

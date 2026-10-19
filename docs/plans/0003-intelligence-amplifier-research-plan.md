@@ -909,7 +909,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R34 | Decision assistant | 5 | review 0002 S31 | S | — | structured supersession | Complete |
 | R35 | Variant selection | 5 | R04 | M | D1 (ADR-076) | lockfile records evidence | Complete |
 | R36 | Estate learning | 5 | R17, R32 | S | — | deterministic report | Complete |
-| R37 | Local model adapter | 6 | — | S | D2, D7 | no socket when unset | Queued |
+| R37 | Local model adapter | 6 | — | S | D2 (ADR-090), D7 (ADR-075) | no socket when unset | Complete |
 | R38 | Distiller | 6 | R37, R02 | M | D2 | parity at lower C, or experimental | Queued |
 | R39 | Local critic | 6 | R37, R25 | M | D2 | precision ≥ 0.8 to gate | Queued |
 | R40 | Model and effort advice | 6 | R03 | M | — | C −25% at ΔR ≥ −2 | Queued |
@@ -1113,6 +1113,16 @@ p95 and mean duration), (3) rules/sections with no measured value (`noValueRules
 and structured `simt-affects` / `simt-supersedes` frontmatter, containing no wall-clock timestamps).
 Given the same ledgers on disk, both `simt compare` and `simt compare --json` are byte-identical
 across runs (`test/compare.test.mjs`).
+
+**R37 — Complete** (D2, ADR-090; D7, ADR-075). `src/local/config.mjs`, `src/local/client.mjs`,
+and `src/commands/local.mjs` (`simt local doctor`) provide a zero-dependency OpenAI-compatible
+client (`localModels`, `localChat`, `localEmbed`, `probeLocal`) over `fetch` to
+`http://127.0.0.1:<port>/v1/...` for Ollama, llama.cpp `llama-server`, LM Studio and MLX
+servers, configured in `simt.json` / `simt-dev.json` as
+`local: { chat: { url, model }, embed: { url, model } }`. When `local` is unset in the
+manifest, no socket is ever opened (`socketsOpened: 0`, verified by hooking
+`net.Socket.prototype.connect`). Non-loopback URLs are refused before any socket is opened
+unless `--allow-remote` is passed (`test/local.test.mjs`).
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

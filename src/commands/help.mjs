@@ -100,6 +100,9 @@ ${CLI} decide [<title>]        scaffold an ADR with the next free number, a Stat
                            a rulings skeleton, and structured simt-affects +
                            simt-supersedes frontmatter (dry-run unless --yes;
                            --check lints ADRs for prose-only partial supersessions)
+${CLI} local doctor            probe configured local model endpoints (chat and embed)
+                           (reads local in ${MANIFEST_FILE}; opens no socket when
+                           unset; refuses non-loopback URLs without --allow-remote)
 ${CLI} shared plan            what a workspace's repeated rules cost to carry
                            once: the shared set, its bytes, and every path that would be written
                            (read-only; touches nothing, not even your home directory)
@@ -201,6 +204,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --state <name>          plan done: target state (default: Complete)
 --level <name>          map: detail level (outline, names, signatures)
 --supersedes <spec>     decide: superseded ADR or ruling (ADR-NNN or ADR-NNN:<ruling>[:<kind>]; repeatable)
+--allow-remote          local doctor: allow non-loopback model URLs (refused by default)
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

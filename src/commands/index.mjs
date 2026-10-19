@@ -58,6 +58,7 @@ import { gateCommand } from './gate.mjs';
 import { impactCommand } from './impact.mjs';
 import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { decideCommand } from './decide.mjs';
+import { localDoctorCommand } from './local.mjs';
 import { parse } from '../argv.mjs';
 import { CLI } from '../name.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
@@ -86,6 +87,7 @@ const GROUPS = new Map([
   // one that needs `--yes` before it does anything.
   ['shared', 'plan'],
   ['lessons', 'list'],
+  ['local', 'doctor'],
 ]);
 
 /**
@@ -133,6 +135,7 @@ export const IMPLEMENTED = {
   'lessons list': lessonsListCommand,
   'lessons review': lessonsReviewCommand,
   decide: decideCommand,
+  'local doctor': localDoctorCommand,
   'evidence check': (args, flags) => evidenceCommand(['check', ...args], flags),
   init: initCommand,
   ci: ciCommand,

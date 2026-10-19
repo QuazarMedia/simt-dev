@@ -308,7 +308,7 @@ test('every command name the tool prints is the name this package ships', async 
     'src/commands/repoindex.mjs', 'src/commands/map.mjs', 'src/commands/tests.mjs',
     'src/commands/why.mjs', 'src/commands/gate.mjs', 'src/commands/impact.mjs',
     'src/commands/lessons.mjs', 'src/commands/decide.mjs', 'src/commands/brief.mjs',
-    'src/commands/plan.mjs',
+    'src/commands/plan.mjs', 'src/commands/local.mjs',
     'src/compare/row.mjs', 'src/compare/discover.mjs', 'src/compare/hooksstate.mjs',
     'src/upgrade/plan.mjs', 'src/projection/conflicts.mjs', 'src/projection/manifest.mjs',
     'src/projection/project.mjs', 'src/projection/markers.mjs', 'src/projection/mdc.mjs',
@@ -319,7 +319,7 @@ test('every command name the tool prints is the name this package ships', async 
   for (const file of files) {
     const text = await readFile(join(ROOT, file), 'utf8');
     const code = text.split('\n').filter((l) => !/^\s*(\*|\/\/|\/\*)/.test(l)).join('\n');
-    const m = new RegExp(`\\b${PROJECT} (?:init|sync|check|rules|skills|hooks|agent-hook|agent-hooks|compare|doctor|upgrade|mcp|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact|lessons|decide|brief|plan)\\b`).exec(code);
+    const m = new RegExp(`\\b${PROJECT} (?:init|sync|check|rules|skills|hooks|agent-hook|agent-hooks|compare|doctor|upgrade|mcp|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact|lessons|decide|brief|plan|local)\\b`).exec(code);
     assert.equal(m, null, `${file} tells the reader to run "${m?.[0]}", and the binary is ${CLI}.`);
   }
 });

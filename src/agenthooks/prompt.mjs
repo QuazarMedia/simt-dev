@@ -68,7 +68,10 @@ export async function deliverPrompt(row, payload) {
   const optIn = await promptOptIn(root);
   if (!optIn.optedIn) return { skipped: optIn.why };
 
-  const result = await assembleBrief({ root, task, budget: optIn.bytes, build: false });
+  // Federation is off on this path and on no other: a delivery has 300 ms to answer, and
+  // starting a declared server is a wait a prompt submit must not take. The task is the
+  // question a federation would ask, and a person is not made to wait for it here.
+  const result = await assembleBrief({ root, task, budget: optIn.bytes, build: false, federate: false });
   if (result.error) return { skipped: 'the packet could not be assembled' };
   if (result.cold) return { skipped: 'the index is empty, and a delivered packet never builds one' };
 

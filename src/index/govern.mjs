@@ -6,22 +6,35 @@
 // and a lesson do the same with their own path list. Nothing here is stored: the
 // answer is the records on disk.
 
+import { parseDecisionFrontmatter, splitFrontmatter } from '../memory/decide.mjs';
+
 const SIBLING = /^\*{0,2}[A-Z][\w-]*(?:[ \t]+[\w-]+){0,3}:\*{0,2}(?:[ \t]|$)/;
 const HEADING = /^#{1,6}\s/;
 const TOOL = /^(?:simt-dev|simt)\b/;
 
-/** Backticked tokens of the Affects paragraph, in order. */
+/**
+ * Affected tokens of a decision record: reads `simt-affects:` frontmatter first (R34),
+ * falling back to backticked tokens of the `Affects:` paragraph (R25).
+ */
 export function affectsTokens(text) {
-  const lines = String(text).split('\n');
+  const fm = parseDecisionFrontmatter(text);
+  const { body } = splitFrontmatter(text);
+  const lines = String(body).split('\n');
   const start = lines.findIndex((line) => /^\s*\*{0,2}Affects:\*{0,2}/.test(line));
-  if (start < 0) return [];
-  const parts = [lines[start].replace(/^\s*\*{0,2}Affects:\*{0,2}\s*/, '')];
-  for (let i = start + 1; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (line.trim() === '' || SIBLING.test(line) || HEADING.test(line)) break;
-    parts.push(line);
+  const proseTokens = [];
+  if (start >= 0) {
+    const parts = [lines[start].replace(/^\s*\*{0,2}Affects:\*{0,2}\s*/, '')];
+    for (let i = start + 1; i < lines.length; i += 1) {
+      const line = lines[i];
+      if (line.trim() === '' || SIBLING.test(line) || HEADING.test(line)) break;
+      parts.push(line);
+    }
+    proseTokens.push(...[...parts.join('\n').matchAll(/`([^`]+)`/g)].map((match) => match[1].trim()).filter(Boolean));
   }
-  return [...parts.join('\n').matchAll(/`([^`]+)`/g)].map((match) => match[1].trim()).filter(Boolean);
+  if (fm.hasAffects) {
+    return [...new Set([...fm.affects, ...proseTokens])];
+  }
+  return proseTokens;
 }
 
 /**

@@ -906,7 +906,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R31 | Plan and tracker index | 4 | — | S | D9 | `plan next` and `plan done` exact | Complete |
 | R32 | Lessons ledger | 5 | R17 | M | — | one candidate per fail-then-fix | Complete |
 | R33 | Lesson recall | 5 | R32, R15 | S | — | fewer turns on recurrences | Complete |
-| R34 | Decision assistant | 5 | review 0002 S31 | S | — | structured supersession | Queued |
+| R34 | Decision assistant | 5 | review 0002 S31 | S | — | structured supersession | Complete |
 | R35 | Variant selection | 5 | R04 | M | D1 | lockfile records evidence | Queued |
 | R36 | Estate learning | 5 | R17, R32 | S | — | deterministic report | Queued |
 | R37 | Local model adapter | 6 | — | S | D2, D7 | no socket when unset | Queued |
@@ -1076,6 +1076,18 @@ working-tree files), top ranked `likely` files, or trigger keywords match a less
 `simt-trigger`. Replaying a recorded failure and running the recurring-failure benchmark fixture
 confirm single-paragraph injection and turn reduction (`test/lessons.test.mjs`); live LLM harness
 measurement remains subject to the same environment boundary recorded in R15 and R27.
+
+**R34 — Complete.** `simt decide [<title>] [--supersedes ADR-NNN[:<ruling>[:<kind>]]]`
+(`src/memory/decide.mjs`, `src/commands/decide.mjs`) scaffolds an ADR in `docs/decisions/` with the
+next free number, a `Status:` line, a numbered rulings skeleton, and structured YAML frontmatter
+(`simt-affects:` populated from the git diff or `--paths`, and `simt-supersedes: [{adr, ruling}]`).
+`src/index/govern.mjs` (`affectsTokens`) and `src/decisions/index.mjs` (`parseDecision`,
+`loadDecisions`) read `simt-affects:` and `simt-supersedes:` frontmatter first and propagate
+structured partial and whole-record supersessions across the decision set so `simt rules why` and
+`simt why` resolve them without requiring prose edits in place. `lintDecision`, `lintDecisions`,
+`simt decide --check`, and `simt check` fail with `prose-partial-supersession` whenever a partial
+supersession is stated only in prose without a matching `simt-supersedes` frontmatter entry
+(`test/decide.test.mjs`).
 
 **R08 — Complete, with one half of its metric demonstrated and the other argued** (ADR-083).
 What shipped: the projection reads the declared budget through one reader, packs only in kernel

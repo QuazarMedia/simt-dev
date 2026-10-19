@@ -118,6 +118,8 @@ export const VALUE_FLAGS = new Set([
   // map: outline (paths), names (exported symbols) or signatures (the line).
   // A boolean would not say which of the three the caller wanted.
   'level',
+  // decide: structured supersession spec (ADR-NNN or ADR-NNN:<ruling>[:<kind>], repeatable).
+  'supersedes',
 ]);
 
 /**
@@ -133,7 +135,7 @@ export const VALUE_FLAGS = new Set([
  * is a superset of the old behaviour, not a replacement: `--skill a,b` parsed before it
  * parses now.
  */
-export const REPEATABLE_FLAGS = new Set(['skill', 'arm', 'compare']);
+export const REPEATABLE_FLAGS = new Set(['skill', 'arm', 'compare', 'supersedes']);
 
 /**
  * @param {string[]} argv raw arguments, excluding node and the script path

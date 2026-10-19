@@ -30,6 +30,8 @@ import { assertVersionPin, packageVersion } from '../package-version.mjs';
 import { resolvePacks } from '../packs.mjs';
 import { computeLock, readLock, LOCK_FILE } from '../projection/lock.mjs';
 import { runDeclaredChecks } from '../kernel/checks.mjs';
+import { DECISIONS_DIR } from '../decisions/index.mjs';
+import { lintDecisions } from '../memory/decide.mjs';
 
 /** Findings `sync` reports and does not fail on.
  *
@@ -527,6 +529,19 @@ export async function checkCommand(positional, flags) {  const root = flags.root
   const fp = await fingerprint(root);
   const { selected } = select(rules.filter((r) => r.error === null), fp.stack ?? [], fp.facts ?? []);
   findings.push(...(await runDeclaredChecks(root, selected, manifest ?? null)));
+
+  const decisionsDir = join(root, 'docs', 'decisions');
+  const decisionLint = await lintDecisions(decisionsDir, {
+    allowHistorical: resolve(decisionsDir) === DECISIONS_DIR,
+  });
+  findings.push(
+    ...decisionLint.findings.map((f) => ({
+      file: ['docs', 'decisions', f.file].join('/'),
+      status: f.status,
+      detail: f.detail,
+      remedy: f.remedy,
+    })),
+  );
 
   // `CHECK_NON_BLOCKING`, not the union. This is the gate whose exit code a repository
   // acts on, so a finding it reports and does not fail on is a decision recorded in a

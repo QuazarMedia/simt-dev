@@ -96,6 +96,10 @@ ${CLI} lessons list            deterministic lesson candidates in .simt-dev/less
                            and promoted lessons in docs/lessons/*.md
 ${CLI} lessons review [<id>]   promote a lesson candidate to docs/lessons/NNNN-<slug>.md
                            (dry-run unless --yes; writes Appendix A frontmatter)
+${CLI} decide [<title>]        scaffold an ADR with the next free number, a Status: line,
+                           a rulings skeleton, and structured simt-affects +
+                           simt-supersedes frontmatter (dry-run unless --yes;
+                           --check lints ADRs for prose-only partial supersessions)
 ${CLI} shared plan            what a workspace's repeated rules cost to carry
                            once: the shared set, its bytes, and every path that would be written
                            (read-only; touches nothing, not even your home directory)
@@ -192,6 +196,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --compare <a> <b>       bench report: compare two arms with deltas and p-values
 --test <cmd>            plan done: the test command that closes the row
 --state <name>          plan done: target state (default: Complete)
+--level <name>          map: detail level (outline, names, signatures)
+--supersedes <spec>     decide: superseded ADR or ruling (ADR-NNN or ADR-NNN:<ruling>[:<kind>]; repeatable)
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

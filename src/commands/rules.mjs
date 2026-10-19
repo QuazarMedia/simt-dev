@@ -14,6 +14,8 @@
 // one, because "this rule has no decision behind it" is exactly the fact a
 // reviewer needs and exactly the fact an empty output would hide.
 
+import { readdir } from 'node:fs/promises';
+import { join } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { loadRules, select } from '../projection/project.mjs';
 import { loadMdcRules } from '../projection/mdc.mjs';
@@ -217,10 +219,17 @@ export async function whyCommand(args, flags) {
   if (!what) return fail('rules why needs a rule id or an ADR id', EXIT.USAGE, `usage: ${CLI} rules why <rule-id|ADR-NNN>`);
 
   const { rules, broken } = await load(flags.root ?? null);
-  const { ok, decisions, errors } = await loadDecisions({ all: flags.all === true });
+  const localDir = flags.root ? join(flags.root, 'docs', 'decisions') : null;
+  const hasLocal = localDir
+    ? (await readdir(localDir).catch(() => [])).some((n) => /^ADR-\d{3,}-.*\.md$/i.test(n))
+    : false;
+  const { ok, decisions, errors } = await loadDecisions({
+    all: flags.all === true,
+    ...(hasLocal ? { dir: localDir } : {}),
+  });
   if (!ok) return fail(errors[0], EXIT.CONFIG, 'the decision records must be readable for provenance to work');
 
-  return what.match(/^ADR-\d{3}$/i)
+  return what.match(/^ADR-\d{3,}$/i)
     ? adrDirection(what.toUpperCase(), rules, decisions, flags)
     : ruleDirection(what, rules, decisions, flags, broken);
 }
@@ -326,6 +335,12 @@ async function adrDirection(adr, rules, decisions, flags) {
   ];
   if (d.supersededBy) lines.push(`SUPERSEDED by ${d.supersededBy} - this record is retained as evidence, not as policy.`);
   if (d.supersedes.length > 0) lines.push(`supersedes  ${d.supersedes.join(', ')}`);
+  const partialForward = (d.supersedesRulings ?? []).filter((s) => s.ruling !== null);
+  if (partialForward.length > 0) {
+    lines.push(
+      `supersedes  ${partialForward.map((s) => `${s.adr} ruling ${s.ruling} (${s.kind})`).join('; ')}`,
+    );
+  }
   // A partial supersession is named here as well as on the ruling it moved, because the
   // two print different sets: this prints every ruling the record lost, and the
   // annotation prints the ones inside the excerpt below. A ruling past the excerpt

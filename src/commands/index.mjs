@@ -56,6 +56,7 @@ import { whyCommand } from './why.mjs';
 import { gateCommand } from './gate.mjs';
 import { impactCommand } from './impact.mjs';
 import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
+import { decideCommand } from './decide.mjs';
 import { parse } from '../argv.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -129,6 +130,7 @@ export const IMPLEMENTED = {
   impact: (args, flags) => impactCommand(args, flags, COMMANDS),
   'lessons list': lessonsListCommand,
   'lessons review': lessonsReviewCommand,
+  decide: decideCommand,
   'evidence check': (args, flags) => evidenceCommand(['check', ...args], flags),
   init: initCommand,
   ci: ciCommand,

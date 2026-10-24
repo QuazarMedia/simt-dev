@@ -103,6 +103,13 @@ ${CLI} decide [<title>]        scaffold an ADR with the next free number, a Stat
 ${CLI} local doctor            probe configured local model endpoints (chat and embed)
                            (reads local in ${MANIFEST_FILE}; opens no socket when
                            unset; refuses non-loopback URLs without --allow-remote)
+${CLI} distill <skill|doc>     a budgeted proposal summary of a skill body or doc,
+                           every claim citing the source line range it rests on
+                           (writes .simt-dev/distilled/<digest>.md; a proposal a
+                           human merges - never projected or committed;
+                           deterministic outline by default; --local proposes
+                           from the configured chat model instead; the cache is
+                           keyed by source digest and budget, --refresh regenerates)
 ${CLI} shared plan            what a workspace's repeated rules cost to carry
                            once: the shared set, its bytes, and every path that would be written
                            (read-only; touches nothing, not even your home directory)
@@ -204,9 +211,14 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --state <name>          plan done: target state (default: Complete)
 --level <name>          map: detail level (outline, names, signatures)
 --supersedes <spec>     decide: superseded ADR or ruling (ADR-NNN or ADR-NNN:<ruling>[:<kind>]; repeatable)
---allow-remote          local doctor: allow non-loopback model URLs (refused by default)
+--allow-remote          local doctor / distill: allow non-loopback model URLs
+                         (refused by default)
 --embed                 index / map / brief: compute or query optional local vector embeddings
                         (off by default unless recall@10 gains at least 10 points)
+--refresh               distill: regenerate a proposal that is already cached
+--local                 distill: propose the summary from the configured local chat
+                         model (local.chat); off by default, which distills with the
+                         deterministic outline instead
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

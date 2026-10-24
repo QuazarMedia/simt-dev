@@ -15,7 +15,7 @@ import { existsSync } from 'node:fs';
 
 import { EXIT, emit, emitJson, fail, isJson, note as emitNote } from '../output/index.mjs';
 import { loadRegistry } from '../graph/load.mjs';
-import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
+import { bodyFile, sourcePath } from '../resolve/body.mjs';
 import { unknownSkills, scoreCorpus } from '../resolve/eval.mjs';
 import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
@@ -656,36 +656,6 @@ export async function evalCommand(positional, flags) {
 
 // --- bodies -------------------------------------------------------------------
 
-/**
- * Resolve a skill's body to an absolute path.
- *
- * Sources are declared as `repo/path`, so finding one needs the workspace that
- * CONTAINS the repos. That used to be `resolve(here, '..', '..', '..')`, which is
- * right in the checkout and wrong in `node_modules` - so every source resolved to a
- * path that could not exist and `skills` failed with 38 ENOENT lines. Now it comes
- * from configuration, and `null` is a legitimate answer meaning "this installation
- * has no workspace" (ADR-014).
- *
- * A second location exists and is not a fallback: the repo being read is itself a
- * location for a declared source, matched on bytes rather than on hope (ADR-015).
- * The canonical source is still tried first, so a workspace body always wins.
- */
-async function sourcePath(skill, workspaceRoot, root) {
-  const canonical = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
-
-  if (canonical) {
-    const found = await locateSource(canonical, { workspaceRoot, root });
-    if (found.path) return found.path;
-  }
-
-  const held = await sourceHeldLocally(skill, root, { workspaceRoot });
-  if (held && !held.ambiguous) return held.path;
-
-  // A skill with no canonical source, or one whose bytes match nothing, has no
-  // body. Say so rather than printing an empty section.
-  return canonical && workspaceRoot ? join(workspaceRoot, canonical.repo, canonical.path) : null;
-}
-
 /** A one-line pointer. The reasons stay, so a brief that cannot inline still says why. */
 function pointerLine(entry) {
   const why = [...entry.reasons, ...[...entry.via].map((v) => `requires:${v}`)];
@@ -705,8 +675,7 @@ export async function readBody(skill, workspaceRoot, root) {
   }
   if (!existsSync(full)) return `(body unavailable: ${full} is not on this machine)`;
   try {
-    const target = existsSync(join(full, 'SKILL.md')) ? join(full, 'SKILL.md') : full;
-    return (await readFile(target, 'utf8')).trimEnd();
+    return (await readFile(bodyFile(full), 'utf8')).trimEnd();
   } catch (error) {
     return `(body unreadable: ${error.message})`;
   }

@@ -80,6 +80,14 @@ export const BOOL_FLAGS = new Set([
   // index / map / brief: opt into local vector embeddings configured under local.embed
   // (plan 0003 R28, R37). Off by default unless recall@10 gains at least 10 points.
   'embed',
+  // distill: regenerate a proposal that is already cached. Off by default because
+  // the cache is the point - the same source at the same budget is the same answer,
+  // and re-reading it is cheaper than re-deriving it (plan 0003 R38).
+  'refresh',
+  // distill: propose the summary from the configured local chat model instead of
+  // the deterministic outline. Off by default: no model in the default path (P1),
+  // and a model that is not asked for should not be opened against (ADR-090).
+  'local',
 ]);
 
 export const VALUE_FLAGS = new Set([

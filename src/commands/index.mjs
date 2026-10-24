@@ -59,6 +59,7 @@ import { impactCommand } from './impact.mjs';
 import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { decideCommand } from './decide.mjs';
 import { localDoctorCommand } from './local.mjs';
+import { distillCommand } from './distill.mjs';
 import { parse } from '../argv.mjs';
 import { CLI } from '../name.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
@@ -135,6 +136,7 @@ export const IMPLEMENTED = {
   'lessons list': lessonsListCommand,
   'lessons review': lessonsReviewCommand,
   decide: decideCommand,
+  distill: distillCommand,
   'local doctor': localDoctorCommand,
   'evidence check': (args, flags) => evidenceCommand(['check', ...args], flags),
   init: initCommand,

@@ -910,7 +910,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R35 | Variant selection | 5 | R04 | M | D1 (ADR-076) | lockfile records evidence | Complete |
 | R36 | Estate learning | 5 | R17, R32 | S | — | deterministic report | Complete |
 | R37 | Local model adapter | 6 | — | S | D2 (ADR-090), D7 (ADR-075) | no socket when unset | Complete |
-| R38 | Distiller | 6 | R37, R02 | M | D2 | parity at lower C, or experimental | Queued |
+| R38 | Distiller | 6 | R37, R02 | M | D2 | parity at lower C, or experimental | Complete |
 | R39 | Local critic | 6 | R37, R25 | M | D2 | precision ≥ 0.8 to gate | Queued |
 | R40 | Model and effort advice | 6 | R03 | M | — | C −25% at ΔR ≥ −2 | Queued |
 | R41 | MCP 2026-07-28 | 7 | review 0002 S43 | M | — | 3 versions; `tools/list` ≤ 2 KB | Queued |
@@ -1123,6 +1123,25 @@ servers, configured in `simt.json` / `simt-dev.json` as
 manifest, no socket is ever opened (`socketsOpened: 0`, verified by hooking
 `net.Socket.prototype.connect`). Non-loopback URLs are refused before any socket is opened
 unless `--allow-remote` is passed (`test/local.test.mjs`).
+
+**R38 — Complete, experimental** (D2, ADR-090; P2, ADR-075). `simt distill <skill|doc>`
+(`src/distill/engine.mjs`, `src/distill/distill.mjs`, `src/commands/distill.mjs`) writes a
+budgeted summary beside its provenance to `.simt-dev/distilled/<digest>.md` — a proposal a
+human merges; nothing is projected, nothing is committed, and no source file is edited. The
+digest binds the recipe as well as the content, so one cache file per source per
+engine/budget, and `--refresh` re-derives an unchanged one (byte-identical, verified). The
+default engine (`outline`) is deterministic and offline: the heading skeleton plus the first
+content line of each section, cut first come to the budget, every line a `>[L<n>]` citation
+the verifier checks against the source. `--local` proposes instead from the configured local
+chat model (R37): it is refused without one rather than silently outlining, numbers the
+source lines in the prompt so the model's `[L<n>-<m>]` citations are checkable, and stores a
+summary with fabricated ranges as `verified: false` with named faults — never silently
+trusted. By ADR-002, `sourcePath` and `bodyFile` moved to `src/resolve/body.mjs` (the second
+real caller ended the private copy in `skills.mjs`). The row's acceptance metric — distilled
+body plus references matching the full body on R at lower C — is unmeasured, so per the row's
+own criterion the feature stays experimental, and the label is emitted in the JSON document
+every run produces (`note`). 14 tests in `test/distill.test.mjs`; the full suite passes from
+a copy at a path with no siblings (ADR-031).
 
 **R28 — Complete** (D2, ADR-090). `src/index/store.mjs` and `src/index/persist.mjs` index
 full-text tokens (`ftsKindOf`, `buildFtsBody`) across `code`, `docs`, `skills`, `decisions`

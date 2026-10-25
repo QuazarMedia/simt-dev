@@ -23,7 +23,7 @@ import { CLI, MANIFEST_FILE } from '../src/name.mjs';
 import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = join(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = join(HERE, '..', 'bin', 'simt.mjs');
 const ROOT = join(HERE, '..');
 
 const made = [];
@@ -384,7 +384,7 @@ test('nothing on the hook path reads the repository, and the entry point does no
       assert.equal(text.includes(`'${heavy}`), false, `${file} imports ${heavy}, which reads the repository`);
     }
   }
-  const bin = await readFile(join(ROOT, 'bin', 'simt-dev.mjs'), 'utf8');
+  const bin = await readFile(join(ROOT, 'bin', 'simt.mjs'), 'utf8');
   assert.equal(
     /^import .*commands\/index\.mjs/m.test(bin),
     false,

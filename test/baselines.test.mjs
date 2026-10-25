@@ -22,7 +22,7 @@ import { inject, parse, STYLES } from '../src/projection/markers.mjs';
 import { checkTargets, plan } from '../src/projection/project.mjs';
 
 const run = promisify(execFile);
-const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt.mjs');
 const SHA = 'a831794';
 
 async function scratch() {

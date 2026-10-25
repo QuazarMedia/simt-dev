@@ -38,7 +38,7 @@ import { plan, checkTargets, pointerTargets, pointerState } from '../src/project
 
 const exec = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const scratch = () => mkdtemp(join(tmpdir(), 'simt-surf-'));
 
 async function capture(args) {

@@ -41,7 +41,7 @@ import { EXIT } from '../src/output/index.mjs';
 import { assertClean } from './leaks.mjs';
 
 const exec = promisify(execFile);
-const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
+const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 const temps = [];
 
 /**
@@ -511,7 +511,7 @@ test('the own copy runs a gate this repository can actually pass', async () => {
   const own = renderWorkflow({ own: true });
   assert.doesNotMatch(own, /run: \|/);
   assert.match(own, /run: npm test/);
-  assert.match(own, /run: node bin\/simt-dev\.mjs graph lint/);
+  assert.match(own, /run: node bin\/simt\.mjs graph lint/);
   // Every command it names has to exist in this repository, and that is checkable:
   // the two are the same checks `.githooks/pre-push` already runs before a push.
   const hook = await readFile(join(PACKAGE_ROOT, '.githooks', 'pre-push'), 'utf8');
@@ -619,12 +619,12 @@ test('the own gate\'s own copy is checked with a command that can fail', async (
   const yaml = renderWorkflow({ own: true });
   assert.match(
     yaml,
-    /run: node bin\/simt-dev\.mjs ci --check/,
+    /run: node bin\/simt\.mjs ci --check/,
     'the own gate must run the form that can fail, or the step is decoration',
   );
   // And not both spellings: a bare `ci` left in the file would be the same step
   // described twice, one of which still passes on drift.
-  assert.doesNotMatch(yaml, /run: node bin\/simt-dev\.mjs ci$/m);
+  assert.doesNotMatch(yaml, /run: node bin\/simt\.mjs ci$/m);
 });
 
 test('`ci --check` exits non-zero on a stale copy and shows what changed', async () => {

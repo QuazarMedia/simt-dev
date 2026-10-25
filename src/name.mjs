@@ -102,4 +102,4 @@ export const CLI = 'simt';
 export const PACKAGE_NAME = PROJECT;
 
 /** The entry point, relative to the package root. LOCKED: `bin` in package.json. */
-export const BIN_REL = 'bin/simt-dev.mjs';
+export const BIN_REL = 'bin/simt.mjs';

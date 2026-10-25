@@ -54,7 +54,7 @@ const execCli = promisify(execFile);
 async function runCli(args) {
   const cwd = await mkdtemp(join(tmpdir(), 'simt-cli-'));
   try {
-    const { stdout } = await execCli('node', [join(ROOT, 'bin', 'simt-dev.mjs'), ...args], { cwd });
+    const { stdout } = await execCli('node', [join(ROOT, 'bin', 'simt.mjs'), ...args], { cwd });
     return { code: 0, stdout };
   } catch (failure) {
     return {

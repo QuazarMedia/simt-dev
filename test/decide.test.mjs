@@ -25,7 +25,7 @@ import { byId, DECISIONS_DIR, loadDecisions, parseDecision } from '../src/decisi
 import { affectsTokens } from '../src/index/govern.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 function git(args, options = {}) {

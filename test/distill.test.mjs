@@ -35,7 +35,7 @@ import {
 import { distillTarget } from '../src/distill/distill.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 process.env.SIMT_DEV_WORKSPACE = 'off';

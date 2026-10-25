@@ -19,7 +19,7 @@ import { promisify } from 'node:util';
 import { CLI } from '../src/name.mjs';
 import { git } from './fixture.mjs';
 
-const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
+const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 
 async function run(root, args) {
   try {

@@ -14,7 +14,7 @@ import { readManifest, MANIFEST } from '../src/projection/manifest.mjs';
 import { skillWorkspace, workspaceEnv, cmd } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 // The bodies these tests install live here, staged from the registry by the suite

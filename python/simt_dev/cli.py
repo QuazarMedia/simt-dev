@@ -45,7 +45,7 @@ ENV_NODE = "SIMT_DEV_NODE"
 # checkout without editing anything.
 ENV_BIN = "SIMT_DEV_BIN"
 
-BIN_REL = os.path.join("bin", "simt-dev.mjs")
+BIN_REL = os.path.join("bin", "simt.mjs")
 
 
 def vendored_root():
@@ -164,7 +164,7 @@ def _program(vendored):
             sys.stderr.write(
                 f"simt: {ENV_BIN} names a command line, not a program.\n"
                 f"  set it to a single executable or a .mjs path, e.g.\n"
-                f"    {ENV_BIN}=/path/to/checkout/bin/simt-dev.mjs\n"
+                f"    {ENV_BIN}=/path/to/checkout/bin/simt.mjs\n"
             )
             return None
         return override if override.endswith(".mjs") else None

@@ -29,7 +29,7 @@ printf '%s\n' "simt-dev pre-push: running tests"
 npm test --silent >/dev/null || fail "tests" "npm test must pass before pushing"
 
 printf '%s\n' "simt-dev pre-push: checking the registry"
-node bin/simt-dev.mjs graph lint >/dev/null || fail "graph lint" "the skill registry is inconsistent"
+node bin/simt.mjs graph lint >/dev/null || fail "graph lint" "the skill registry is inconsistent"
 
 printf '%s\n' "simt-dev pre-push: checking the shipped-content guards"
 node --test test/shipped.test.mjs >/dev/null 2>&1 || fail "shipped content" "shipped text leaks or names a command this package does not install"

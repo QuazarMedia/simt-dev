@@ -37,7 +37,7 @@ import {
 } from '../src/review/critic.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 const GIT = { EMAIL: 't@example.com', NAME: 'T' };
 

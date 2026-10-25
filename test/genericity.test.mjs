@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { fingerprint, STACK_TAGS, FACT_TAGS, KNOWN_TAGS, __internals } from '../src/resolve/fingerprint.mjs';
 import { plan, loadRules, select, checkTarget, LOCAL_PROFILE_DIR } from '../src/projection/project.mjs';
 
-const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 // The shipped binary, not this module graph: a guard that only fires because of how

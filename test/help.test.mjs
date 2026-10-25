@@ -8,7 +8,7 @@ import { parse } from '../src/argv.mjs';
 import { BOOL_FLAGS, REPEATABLE_FLAGS, VALUE_FLAGS } from '../src/argv.mjs';
 
 const exec = promisify(execFile);
-const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
+const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 
 async function help() {
   const { stdout } = await exec('node', [BIN, '--help'], { maxBuffer: 8 << 20 });

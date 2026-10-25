@@ -36,7 +36,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const registry = JSON.parse(await readFile(resolve(ROOT, 'graph', 'skills.graph.json'), 'utf8'));
 const corpus = JSON.parse(await readFile(resolve(ROOT, 'test', 'fixtures', 'eval-corpus.json'), 'utf8'));
 
-const BIN = resolve(ROOT, 'bin', 'simt-dev.mjs');
+const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 // Scored once, through the same function `simt skills eval` calls: a second copy of

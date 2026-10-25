@@ -11,7 +11,7 @@ import { CLI } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
-const BIN = resolve(ROOT, 'bin', 'simt-dev.mjs');
+const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const made = [];
 
 after(async () => {

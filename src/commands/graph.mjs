@@ -1,4 +1,4 @@
-// `simt-dev graph lint` - verify the hand-authored registry against reality.
+// `simt graph lint` - verify the hand-authored registry against reality.
 //
 // Implementation sequence step 2. This command is the reason hand-authoring the
 // registry is safe: 38 nodes across 6 repos is bookkeeping that rots silently.
@@ -64,7 +64,7 @@ export async function lintCommand(positional, flags) {
   }
 
   if (!registry) {
-    // The default remedy for this exit code is `run: simt-dev graph lint`, which from
+    // The default remedy for this exit code is `run: simt graph lint`, which from
     // inside `graph lint` is circular: the reader just ran it and got this. Name the
     // argument the command takes, because an explicit path is the way out (ADR-061).
     return fail(errors[0] ?? `${path}: unreadable`, EXIT.REGISTRY, `run: ${CLI} graph lint <path-to-registry>`);

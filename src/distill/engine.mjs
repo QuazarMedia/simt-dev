@@ -167,7 +167,7 @@ export function verifyCitations(body, sourceLineCount) {
 }
 
 /** The proposal file's frontmatter. No wall-clock value here: byte-stable (P4). */
-export function proposalFrontmatter({ source, digest, engine, budget, prompt, verified }) {
+export function proposalFrontmatter({ source, digest, engine, budget, prompt, verified, verdict, advisory }) {
   return [
     '---',
     `source: ${source}`,
@@ -175,6 +175,8 @@ export function proposalFrontmatter({ source, digest, engine, budget, prompt, ve
     `engine: ${engine}`,
     `budget: ${budget}`,
     prompt ? `prompt: ${prompt}` : null,
+    verdict ? `verdict: ${verdict}` : null,
+    advisory ? 'advisory: true' : null,
     verified === false ? 'verified: false' : 'verified: true',
     'status: proposal',
     '---',

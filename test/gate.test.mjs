@@ -32,7 +32,10 @@ const RESOLVE = [
   'test/compile.test.mjs',
   'test/contract.test.mjs',
   'test/decide.test.mjs',
+  // distill reaches the resolver only since R39: its --local guard goes through
+  // local/config.mjs, which resolves the manifest, so the closure widened.
   'test/disclosure.test.mjs',
+  'test/distill.test.mjs',
   'test/eval.test.mjs',
   'test/extract.test.mjs',
   'test/federation.test.mjs',

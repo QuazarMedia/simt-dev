@@ -46,6 +46,7 @@ import {
   benchAblateCommand,
   benchProbesCommand,
   benchVariantsCommand,
+  benchCriticCommand,
 } from './bench.mjs';
 import { planCommand } from './plan.mjs';
 import { sharedPlanCommand, sharedInstallCommand, sharedWarning } from './shared.mjs';
@@ -58,6 +59,7 @@ import { gateCommand } from './gate.mjs';
 import { impactCommand } from './impact.mjs';
 import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { decideCommand } from './decide.mjs';
+import { reviewCommand } from './review.mjs';
 import { localDoctorCommand } from './local.mjs';
 import { distillCommand } from './distill.mjs';
 import { parse } from '../argv.mjs';
@@ -137,6 +139,9 @@ export const IMPLEMENTED = {
   'lessons review': lessonsReviewCommand,
   decide: decideCommand,
   distill: distillCommand,
+  // R25 machinery needs the runnable command names for Affects command tokens,
+  // same wiring `why` and `impact` get through their lambdas.
+  review: (args, flags) => reviewCommand(args, flags, COMMANDS),
   'local doctor': localDoctorCommand,
   'evidence check': (args, flags) => evidenceCommand(['check', ...args], flags),
   init: initCommand,
@@ -157,6 +162,11 @@ export const IMPLEMENTED = {
   'bench ablate': benchAblateCommand,
   'bench probes': benchProbesCommand,
   'bench variants': benchVariantsCommand,
+  // plan 0003 R39. The critic's acceptance bench measures BLOCK-precision and
+  // recall over a labelled set; until it reports its floor, the critic entries
+  // stay advisory and no gate reads them. COMMANDS rides along so the brief
+  // resolves Affects command tokens the way `simt why` does.
+  'bench critic': (args, flags) => benchCriticCommand(args, flags, COMMANDS),
   upgrade: upgradeCommand,
   mcp: mcpCommand,
 };

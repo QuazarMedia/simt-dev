@@ -63,7 +63,9 @@ function reportUnresolved(root, flags, unresolved) {
   return EXIT.OK;
 }
 
-async function tracked(root) {
+// `async function tracked(root)` (read by `simt why`) becomes `export async`:
+// the critic's brief resolves governance the same way without a second copy.
+export async function tracked(root) {
   try {
     const { stdout } = await exec('git', ['ls-files'], { cwd: root, maxBuffer: 16 << 20 });
     return { files: stdout.split('\n').filter(Boolean) };
@@ -98,7 +100,8 @@ export async function decisionRecords(root) {
   return records;
 }
 
-async function loadCorpus(root) {
+// `async function loadCorpus(root)` (read by `simt why`) becomes `export async`.
+export async function loadCorpus(root) {
   const [rules, skills, lessons, commands] = await Promise.all([
     ruleScopes(root),
     skillScopes(root),

@@ -16,6 +16,7 @@ import { formatRecall, measureRecall } from '../index/map.mjs';
 import { ablateBench } from '../bench/ablate.mjs';
 import { runBenchProbes } from '../bench/probes.mjs';
 import { selectRuleVariants } from '../bench/variants.mjs';
+import { criticBench } from '../review/critic.mjs';
 import { listFlag } from './skills.mjs';
 
 export async function benchMineCommand(positional, flags) {
@@ -394,3 +395,34 @@ export async function benchVariantsCommand(positional, flags) {
 
 
 
+
+// `simt bench critic` (plan 0003 R39).
+//
+// The row's acceptance measured, or reported missing rather than inferred: the
+// critic runs over a labelled set of historical diffs and the bench reports
+// precision and recall for the BLOCK binary. The metric never gates the critic —
+// the row says precision >= 0.8 on >= 30 labelled diffs promotes it to a gate,
+// and until a bench here shows that, every report calls the critic advisory.
+export async function benchCriticCommand(positional, flags, commands = []) {
+  const root = resolve(flags.root ?? positional[0] ?? process.cwd());
+  const labelsPath = flags.labels ?? '.simt-dev/critic-labels.jsonl';
+  const result = await criticBench(root, { labelsPath, flags, commands });
+  if (typeof result === 'number') return result;
+
+  if (isJson(flags)) {
+    emitJson(result, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    return EXIT.OK;
+  }
+  const lines = [
+    `bench    critic  ${root}`,
+    `labels   ${result.labels} (${labelsPath})  measured ${result.measured}  errors ${result.errors.length}`,
+    `counts   tp=${result.tp} fp=${result.fp} fn=${result.fn} tn=${result.tn}`,
+    `precision ${result.precision === null ? 'unmeasured' : result.precision.toFixed(3)}`,
+    `recall    ${result.recall === null ? 'unmeasured' : result.recall.toFixed(3)}`,
+    `gated    ${result.gated ? 'yes' : 'no'}`,
+  ];
+  if (result.labelsNote) lines.push(`labels   ${result.labelsNote}`);
+  for (const error of result.errors) lines.push(`error    ${error}`);
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  return EXIT.OK;
+}

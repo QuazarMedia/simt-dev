@@ -911,7 +911,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R36 | Estate learning | 5 | R17, R32 | S | — | deterministic report | Complete |
 | R37 | Local model adapter | 6 | — | S | D2 (ADR-090), D7 (ADR-075) | no socket when unset | Complete |
 | R38 | Distiller | 6 | R37, R02 | M | D2 | parity at lower C, or experimental | Complete |
-| R39 | Local critic | 6 | R37, R25 | M | D2 | precision ≥ 0.8 to gate | Queued |
+| R39 | Local critic | 6 | R37, R25 | M | D2 | precision ≥ 0.8 to gate | Complete |
 | R40 | Model and effort advice | 6 | R03 | M | — | C −25% at ΔR ≥ −2 | Queued |
 | R41 | MCP 2026-07-28 | 7 | review 0002 S43 | M | — | 3 versions; `tools/list` ≤ 2 KB | Queued |
 | R42 | Harness adapters as data | 7 | R14, R15 | M | — | provenance; detection on fixtures | Queued |
@@ -1141,6 +1141,31 @@ real caller ended the private copy in `skills.mjs`). The row's acceptance metric
 body plus references matching the full body on R at lower C — is unmeasured, so per the row's
 own criterion the feature stays experimental, and the label is emitted in the JSON document
 every run produces (`note`). 14 tests in `test/distill.test.mjs`; the full suite passes from
+a copy at a path with no siblings (ADR-031).
+
+**R39 — Complete, advisory** (D2, ADR-090; the row's gate bar was unmet on purpose).
+`simt review [--local]` (`src/review/critic.mjs`, `src/commands/review.mjs`) reads the staged
+diff, gathers what governs it (R25: decision `Affects:` hits plus rule `simt-scope` hits per
+changed file, deduped, with ADR-008 always in the brief because the verdict cites the
+vocabulary itself) — without `--local` the run **stops at the brief**: the deterministic path
+needs no model. With `--local` the brief goes to the configured local chat model (R37), the
+reply is verified against the brief (vocabulary check under ADR-008; governance cited with
+an `@id` marker so file:line backticks in findings are not citations; a fabricated id is
+named; BLOCK without a paired finding and a residual-risk list without content are faults),
+and lands as a proposal at `.simt-dev/reviews/<digest>.md` — advisory by construction,
+nothing projected or committed, `verified: false` with named faults when the reply breaks
+the protocol. The cache is keyed by the digest of the prompt (diff + governance + budget),
+byte-stable, `--refresh` re-derives. By ADR-002 the config guard became the shared
+`chatEndpoint` in `src/local/config.mjs` (distill's `--local` path is now its second
+caller), `loadCorpus`/`tracked` were exported from `src/commands/why.mjs`, and the
+proposal frontmatter gained `verdict`/`advisory`; `governingItems` stays private — deadcode
+counts an export as a promise to a caller. The row's acceptance metric — precision ≥ 0.8
+on a labelled set of ≥ 30 historical diffs — is **unmeasured** (no labelled set exists
+yet); `simt bench critic --labels <path>` exists to measure it: it reads labels a human
+wrote (the tool never annotates), runs the critic over each historical diff, and reports
+confusion counts with precision and recall — `gated` flips only at precision ≥ 0.8 over
+≥ 30 labels with zero peer errors, so review stays advisory until then (ADR-076 note
+travels in every report). 15 tests in `test/review.test.mjs`; the full suite passes from
 a copy at a path with no siblings (ADR-031).
 
 **R28 — Complete** (D2, ADR-090). `src/index/store.mjs` and `src/index/persist.mjs` index

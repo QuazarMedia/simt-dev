@@ -4,7 +4,7 @@
 // otherwise. Either one is a cache: `git ls-files -s` can rebuild it, so a missing
 // file is not a lost database. A blob that has not changed is not read again.
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
@@ -387,9 +387,9 @@ export async function packageOf(root, filePath, cache) {
   }
 }
 
-function git(root, args, input, binary = false) {
+function git(root, args, input) {
   return new Promise((resolve, reject) => {
-    const child = execFile('git', args, { cwd: root, encoding: binary ? 'buffer' : 'utf8', maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
+    const child = execFile('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) reject(Object.assign(error, { stdout, stderr }));
       else resolve(stdout);
     });
@@ -477,28 +477,58 @@ function normalise(filePath, got) {
   return { symbols, imports: Array.isArray(got.imports) ? got.imports : [], edges };
 }
 
+/**
+ * The body of each listed blob, read as one `cat-file --batch` stream.
+ *
+ * Streamed and parsed incrementally rather than buffered: the combined output of a
+ * repository whose tracked content exceeds execFile's maxBuffer (64 MiB) used to
+ * reject the whole index with "stdout maxBuffer length exceeded" — an ~82 MiB
+ * Android checkout died on first run for exactly that reason.
+ */
 export async function blobTexts(root, blobs) {
   const unique = [...new Set(blobs)];
   const texts = new Map();
   if (unique.length === 0) return texts;
-  const stdout = await git(root, ['cat-file', '--batch'], `${unique.join('\n')}\n`, true);
-  let offset = 0;
-  while (offset < stdout.length) {
-    const nl = stdout.indexOf(0x0a, offset);
-    if (nl < 0) break;
-    const header = stdout.toString('utf8', offset, nl);
-    const parts = header.split(' ');
-    const size = Number(parts[2]);
-    if (parts[1] !== 'blob' || !Number.isFinite(size)) {
-      offset = nl + 1;
-      continue;
+  const child = spawn('git', ['cat-file', '--batch'], { cwd: root });
+  child.stdin.end(`${unique.join('\n')}\n`);
+  let pending = null;
+  const onChunk = (chunk) => {
+    pending = pending === null ? chunk : Buffer.concat([pending, chunk]);
+    let consumed = 0;
+    for (;;) {
+      const nl = pending.indexOf(0x0a, consumed);
+      if (nl < 0) break;
+      const parts = pending.toString('utf8', consumed, nl).split(' ');
+      const size = Number(parts[2]);
+      if (parts[1] !== 'blob' || !Number.isFinite(size)) {
+        consumed = nl + 1;
+        continue;
+      }
+      const end = nl + 1 + size + 1;
+      if (pending.length < end) break; // the body is not fully arrived yet
+      const start = nl + 1;
+      const body = pending.subarray(start, start + size);
+      consumed = end;
+      texts.set(parts[0], body.includes(0) ? null : body.toString('utf8'));
     }
-    const start = nl + 1;
-    const body = stdout.subarray(start, start + size);
-    offset = start + size + 1;
-    texts.set(parts[0], body.includes(0) ? null : body.toString('utf8'));
-  }
-  return texts;
+    // Drop the consumed prefix. Copy the tail once it has grown past a MiB, so the
+    // released bytes are actually freed instead of staying alive behind a view into
+    // the buffer they came from.
+    if (consumed > 0) {
+      const tail = pending.subarray(consumed);
+      pending = tail.length === 0 ? null : consumed >= 1 << 20 ? Buffer.from(tail) : tail;
+    }
+  };
+  return new Promise((resolve, reject) => {
+    let stderr = '';
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.stdout.on('data', onChunk);
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code !== 0) reject(new Error(`git cat-file --batch exited ${code}${stderr ? `: ${stderr.trim()}` : ''}`));
+      else resolve(texts);
+    });
+  });
 }
 
 async function blobSizes(root, blobs) {

@@ -11,7 +11,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { CHAIN_MARKER, EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderShim } from '../hooks/shim.mjs';
+import { CHAIN_MARKER, EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderShim } from '../hooks/shim.mjs';
 import { foreignHooks, resolveHooksDir } from '../hooks/where.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
 
@@ -142,7 +142,15 @@ async function describeShim(path, root) {
   }
   let stale = true;
   try {
-    stale = content !== renderShim(basename(path), { npm: await hasNpm(root), version: packageVersion() });
+    // A chained shim is current against the repository hook it chains to, not against
+    // the dispatcher template: comparing it to renderShim read every chained ungated
+    // event as stale forever, and no reinstall could clear it.
+    if (content.includes(CHAIN_MARKER)) {
+      const chain = await readChainedShim(path);
+      stale = chain === null || content !== renderChainedShim(chain.event, chain.target);
+    } else {
+      stale = content !== renderShim(basename(path), { npm: await hasNpm(root), version: packageVersion() });
+    }
   } catch {
     stale = true;
   }
@@ -177,17 +185,21 @@ export async function readHooksState(root, options = {}) {
   const staleOurs = [];
   for (const hook of live) {
     const shim = EVENTS.includes(hook.event) ? await describeShim(hook.path, root) : { stale: true };
-    if (!shim.stale) continue;
     // A chained shim is ours too, and its name says nothing: `post-commit` is what the
     // repository called its own hook, and the shim exists under that name precisely so
     // git finds it. Reading it as foreign would make every re-install refuse with "this
     // repo already runs hooks simt did not write" - a shim this tool wrote, refusing
     // itself. Identity is content, the same rule as the dispatcher shim above.
+    //
+    // Classified before the currency skip, because a current chain shim is not stale -
+    // and install still has to maintain it from `chained`, or a second run would forget
+    // the very shim that is already correct.
     const chain = await readChainedShim(hook.path);
     if (chain) {
       chained.push({ ...chain, path: hook.path });
       continue;
     }
+    if (!shim.stale) continue;
     // And so is a dispatcher shim from an EARLIER version of this tool, which is the
     // ordinary state of every repository adopted before the last release.
     //

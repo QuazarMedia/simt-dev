@@ -37,6 +37,7 @@
 import { CLI } from '../name.mjs';
 import { DEFAULT_BRIEF_BYTES, buildPacket, collect } from './packet.mjs';
 import { classifyTask, cardVerbs } from './kind.mjs';
+import { briefAdvice } from '../advice/advice.mjs';
 import { commandCard } from '../kernel/card.mjs';
 import { decisionHits, scopeHits, sourceRoots } from '../index/govern.mjs';
 import { embedTaskQuery, rankFiles, renderMap } from '../index/map.mjs';
@@ -189,6 +190,27 @@ export async function assembleBrief({
   if (rendered.truncated) {
     packet.add('CAUTIONS', `the map held back ${rendered.total - rendered.shown} of ${rendered.total} files`, {
       why: [`\`${CLI} map --budget 0\` lists them all`],
+    });
+  }
+
+  // Model and effort advice comes from the repository's bench history, not from anything a
+  // model produced, so it stays deterministic. The tier exists only if the history resolved
+  // a similar task, and the claim travels with its own numbers and its unmeasured accept
+  // bar; simt-dev never selects the model an agent runs (plan 0003 R40).
+  const advice = await briefAdvice(root, { task, scope, kind });
+  if (advice?.picked) {
+    packet.add('ADVICE', advice.picked.line, {
+      why: ['the tier is the estate’s own bench ladder, and a human still names the model'],
+    });
+    packet.add('ADVICE', advice.picked.basis, {
+      why: ['an advice claim names the neighborhood that backs it, so the reader can re-derive it'],
+    });
+    packet.add('ADVICE', advice.picked.metric, {
+      why: ['the row has an accept bar, and nothing in a packet may claim the bar was met'],
+    });
+  } else if (advice?.caution) {
+    packet.add('CAUTIONS', advice.caution, {
+      why: ['advice without a neighborhood is a guess dressed as history'],
     });
   }
 

@@ -912,7 +912,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R37 | Local model adapter | 6 | — | S | D2 (ADR-090), D7 (ADR-075) | no socket when unset | Complete |
 | R38 | Distiller | 6 | R37, R02 | M | D2 | parity at lower C, or experimental | Complete |
 | R39 | Local critic | 6 | R37, R25 | M | D2 | precision ≥ 0.8 to gate | Complete |
-| R40 | Model and effort advice | 6 | R03 | M | — | C −25% at ΔR ≥ −2 | Queued |
+| R40 | Model and effort advice | 6 | R03 | M | — | C −25% at ΔR ≥ −2 | Complete |
 | R41 | MCP 2026-07-28 | 7 | review 0002 S43 | M | — | 3 versions; `tools/list` ≤ 2 KB | Queued |
 | R42 | Harness adapters as data | 7 | R14, R15 | M | — | provenance; detection on fixtures | Queued |
 | R43 | Plugin packaging | 7 | R42 | M | — | installs and passes R15 fixtures | Queued |
@@ -1167,6 +1167,31 @@ confusion counts with precision and recall — `gated` flips only at precision �
 ≥ 30 labels with zero peer errors, so review stays advisory until then (ADR-076 note
 travels in every report). 15 tests in `test/review.test.mjs`; the full suite passes from
 a copy at a path with no siblings (ADR-031).
+
+**R40 — Complete, advisory** (the row's accept bar is unmeasured on purpose). The advice
+engine (`src/advice/advice.mjs`) maps a task's features — kind (`classifyTask`, the brief's
+own classification, never re-derived) and the estimate of files it will touch (the brief's
+scope size, which the mined task's gold stat answers on the history side) — to the cheapest
+tier that resolved similar tasks, read entirely from the estate's own bench evidence:
+`.simt-dev/bench/runs/` records (`R, C via the shared report cost model, tool calls`) joined
+to `.simt-dev/bench/tasks/` descriptors (`prompt` → kind, `gold.files`). The tier ladder is
+the estate's own price ladder in thirds — no vendor name in the code — so one rung cannot
+claim `frontier` until the history has three classes; the ladder ranks every class the
+estate ever ran, but the pick is floored by resolution ("resolved similar tasks" is a
+requirement, not a style — a class that failed for less money consults nobody). The measure
+follows the bench report: dollars when any resolved run priced its tokens, total tokens
+otherwise, and the claim names which. Effort advice is relative to the estate's resolved
+median tool calls (`plan first` / `no plan mode`); the file window may specialize a
+neighborhood only when the kind has enough evidence to lend (NARROW_MIN_POOL / MIN_RESOLVED)
+so narrowing never manufactures evidence. simt-dev never selects a model (P2/D2): the
+naming stays with the human; the packet carries the tier with its own numbers and the
+unmeasured accept bar (C −25% at ΔR ≥ −2 on held-out tasks — no held-out bench exists), and
+a neighborhood with nothing that resolved lands as a CAUTION, not a made-up tier. By ADR-002
+the mined-task loader was extracted to `src/bench/tasks.mjs` on its second real reader
+(the advice engine), with `bench run` as the first; the brief packet gained the ADVICE
+section (reader-meet order after TASK, cut at a caution's worth, plan 0003 R40). 15 tests
+in `test/advice.test.mjs`; the full suite passes from a copy at a path with no siblings
+(ADR-031).
 
 **R28 — Complete** (D2, ADR-090). `src/index/store.mjs` and `src/index/persist.mjs` index
 full-text tokens (`ftsKindOf`, `buildFtsBody`) across `code`, `docs`, `skills`, `decisions`

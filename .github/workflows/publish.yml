@@ -191,3 +191,64 @@ jobs:
         run: npm stage list
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # -------------------------------------------------------------------------
+  # GitHub release
+  #
+  # The tag is pushed, the version is validated, and the npm channel is staged:
+  # this is the end of what CI is allowed to do, and it is where a release
+  # record belongs. The two downstream channels (PyPI, Homebrew) run by hand from
+  # publish-channels.yml after a maintainer approves the stage, so this job does
+  # not wait on them - it records the version that is now staged, with the notes
+  # for exactly that version cut out of CHANGELOG.md.
+  create-release:
+    name: create the release
+    needs: [version, publish-npm]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      # A release is a content object, so writing one needs contents:write.
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: cut this version's notes out of the changelog
+        # CHANGELOG.md is Keep-a-Changelog: each version is a `## [X.Y.Z]` block
+        # running to the next `## [`. Cutting the block for the version this tag
+        # names - rather than pasting the whole file, or the Unreleased block -
+        # is what makes the release notes say what THIS release changed. The
+        # match is a fixed-string prefix, so the dots in the version are not
+        # read as regex. A version with no block yet (published before notes
+        # were written) falls back to the version line rather than an empty body.
+        run: |
+          set -eu
+          version="${{ needs.version.outputs.version }}"
+          awk -v v="$version" '
+            index($0, "## [" v "]") == 1 { found = 1; next }
+            /^## / && found { exit }
+            found { print }
+          ' CHANGELOG.md | sed '/./,$!d' > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "no changelog block for $version; using the version line"
+            printf 'simt-dev %s\n' "$version" > release-notes.md
+          fi
+          echo "::group::release notes for $version"
+          cat release-notes.md
+          echo "::endgroup::"
+
+      - name: create or update the release
+        # Idempotent: re-running the workflow for a tag must not fail on an
+        # existing release, so an existing one has its notes refreshed rather
+        # than the create being retried. The title defaults to the tag name.
+        run: |
+          set -eu
+          version="${{ needs.version.outputs.version }}"
+          tag="v${version}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "release ${tag} exists; refreshing its notes"
+            gh release edit "$tag" --notes-file release-notes.md
+          else
+            gh release create "$tag" --notes-file release-notes.md
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}

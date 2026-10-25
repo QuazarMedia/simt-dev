@@ -247,9 +247,26 @@ jobs:
         # that would be rejected there is a tap that will not be accepted, and
         # the failure would arrive as a rejected pull request rather than as a
         # red job.
+        #
+        # Homebrew 7 refuses `brew audit <path>` ("calling brew audit [path ...]
+        # is disabled") and audits BY NAME. A name resolves through a tap, so the
+        # formula is copied into a throwaway local tap and that tap is trusted
+        # before the audit: Homebrew 7 also refuses to load a formula from a tap
+        # it does not trust, and a tap is a git repository, so the directory is
+        # initialised and committed first. The name `quazarmedia/homebrew-simt-dev`
+        # is local scaffolding only - it is not the tap the formula is pushed to,
+        # which the next steps name from ${{ vars.HOMEBREW_TAP }}.
         run: |
           set -eu
-          brew audit --strict Formula/simt-dev.rb
+          prefix="$(brew --prefix)"
+          tap="$prefix/Library/Taps/quazarmedia/homebrew-simt-dev"
+          mkdir -p "$tap/Formula"
+          cp Formula/simt-dev.rb "$tap/Formula/simt-dev.rb"
+          git -C "$tap" init -q
+          git -C "$tap" -c user.name=audit -c user.email=audit@localhost add -A
+          git -C "$tap" -c user.name=audit -c user.email=audit@localhost commit -qm "formula for audit"
+          brew trust quazarmedia/simt-dev
+          brew audit --strict simt-dev
 
       - name: render the formula for this release
         run: |

@@ -46,6 +46,17 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 export const ROOT = resolve(HERE, '..', '..');
 const RULES_DIR = join(ROOT, 'rules');
 
+// The orientation pointer that follows the command card in every projected region.
+//
+// The agent playbook — `brief` on a new task, `why` before an edit — lives in this
+// package's README and never reaches the agent working in an adopted repository: the
+// projection carries the rules, not the tool that serves them. Without this line the
+// agent has no way to know `simt brief` exists, and "answers over exploration" has no
+// delivery path in the one file every harness reads. Static on purpose: a byte that
+// varied per repository would break the stable prefix this region exists to protect.
+export const ORIENTATION_POINTER =
+  `New task? Run \`${CLI} brief "<task>"\` before exploring; before editing a file, \`${CLI} why <file>\`.`;
+
 /**
  * The identity recorded in generated regions and in the manifest pin.
  *
@@ -683,6 +694,10 @@ export async function desiredRegion(root, flags) {
     const repoRules = kept.filter((r) => !toolRule(r)).sort((a, b) => String(a.id).localeCompare(String(b.id)));
     let text = render(stable);
     if (card.text) text += `${text === '' ? '' : '\n\n'}${card.text}`;
+    // The pointer follows the card: the card says what this repository runs, and the
+    // pointer says how the tool serves a task. Adjacent, they read as one block of
+    // repo-facing advice instead of two facts the reader has to connect.
+    text += `${text === '' ? '' : '\n\n'}${ORIENTATION_POINTER}`;
     const repoText = render(repoRules);
     if (repoText) text += `\n\n${repoText}`;
     const sources = [...stable, ...repoRules].map((r) => r.source);

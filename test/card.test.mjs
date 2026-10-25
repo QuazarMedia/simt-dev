@@ -15,7 +15,7 @@ import { test } from 'node:test';
 
 import { CARD_LIMIT_BYTES, commandCard } from '../src/kernel/card.mjs';
 import { buildManifest, ECOSYSTEMS } from '../src/projection/manifest.mjs';
-import { desiredRegion } from '../src/projection/rules.mjs';
+import { desiredRegion, ORIENTATION_POINTER } from '../src/projection/rules.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
 
 /** A throwaway repository. A `null` value makes a directory. */
@@ -264,6 +264,22 @@ test('kernel mode keeps the card, because the mode defers rules and not commands
     'a kernel that dropped the card would withhold the one command a reader most needs',
   );
   assert.match(desired.body, /- test: `pytest`/);
+});
+
+test('the orientation pointer follows the card in full and kernel mode', async () => {
+  const root = await fixture({ 'pyproject.toml': '[project]\nname = "x"\n' });
+  const manifest = buildManifest({ root, stack: ['python'], sha: 'abc1234', version: '0.2.2' });
+  await writeFile(join(root, 'simt.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+
+  const full = await desiredRegion(root, {});
+  assert.ok(full.body.includes(ORIENTATION_POINTER), 'full mode carries the pointer');
+
+  await writeFile(join(root, 'simt.json'), `${JSON.stringify({ ...manifest, mode: 'kernel' }, null, 2)}\n`);
+  const kernel = await desiredRegion(root, {});
+  assert.equal(kernel.mode, 'kernel');
+  const cardAt = kernel.body.indexOf('Commands for this repository:\n');
+  const pointerAt = kernel.body.indexOf(ORIENTATION_POINTER);
+  assert.ok(pointerAt > cardAt, 'a pointer before the card would lead with advice the commands do not back');
 });
 
 // ------------------------------------------------------------------ the ceiling is enforced, not hoped

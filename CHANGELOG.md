@@ -28,7 +28,7 @@ catalogue to an adopting repository is a confident wrong answer: the skills
 it names do not live in the reader's workspace. 0.5.0 carried the registry
 because a fresh install's `simt skills *` and `simt distill` otherwise found
 none; the fix is the honest absence the tiered loader already reports — the
-path it would have read, and the `simt-dev graph lint <path>` remedy — with a
+path it would have read, and the `simt graph lint <path>` remedy — with a
 workspace that owns the registry naming it through `--workspace`,
 `SIMT_DEV_WORKSPACE` or the user config file. Custom skills were never part
 of the registry: they live in each repository, and the disclosure scan

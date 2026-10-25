@@ -1,4 +1,4 @@
-// `simt-dev rules` - the rule catalogue and its provenance.
+// `simt rules` - the rule catalogue and its provenance.
 //
 // A rule is only meaningful if you can answer "why is this here?". Three
 // commands, mirroring the skill surface deliberately: `list` is the catalogue,

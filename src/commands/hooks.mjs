@@ -1,4 +1,4 @@
-// simt-dev hooks install | status | run
+// simt hooks install | status | run
 //
 // Three commands with one shared body. `install` writes the shims and points
 // core.hooksPath at them; `status` reports what is installed and what would

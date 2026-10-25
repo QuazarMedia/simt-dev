@@ -1,4 +1,4 @@
-// simt-dev mcp - serve the tool surface over MCP on stdio.
+// simt mcp - serve the tool surface over MCP on stdio.
 //
 // Optional by design (plan 0002 section 5): it adds a transport, not a capability, and
 // the CLI stays the primary interface because it works in CI, in a hook and in a bare

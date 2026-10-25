@@ -21,7 +21,7 @@ async function fixture(files = {}) {
 
 test('every rule file carries an id', async () => {
   // A rule without an id would be projected with no traceable source, so
-  // `simt-dev rules why` could never resolve it.
+  // `simt rules why` could never resolve it.
   const rules = await loadRules();
   assert.ok(rules.length >= 7, `expected core + 6 profiles, got ${rules.length}`);
   for (const r of rules) {
@@ -206,7 +206,7 @@ test('check reports current, drift, unmanaged and absent distinctly', async () =
   assert.equal((await checkTarget(managed)).status, 'current');
 
   // Drift: an identical body recorded against a different simt-dev SHA must
-  // still read as drift, or `simt-dev check` is blind to the provenance change.
+  // still read as drift, or `simt check` is blind to the provenance change.
   // The meta must be reproduced exactly, including the sources header that
   // compose() embeds; omitting it would itself look like drift.
   const { diff } = await import('../src/projection/markers.mjs');

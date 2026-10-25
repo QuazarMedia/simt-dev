@@ -504,7 +504,7 @@ test('the adopting gate stays on one platform and the floor (S48)', () => {
 });
 
 test('the own copy runs a gate this repository can actually pass', async () => {
-  // `simt-dev check` is red here by design: this AGENTS.md is hand-written and never
+  // `simt check` is red here by design: this AGENTS.md is hand-written and never
   // self-adopted, so the check reports it as unmanaged on every run. A CI job that is
   // red the day it lands is worse than no job, because it teaches the reader to ignore
   // the thing they added in order to stop ignoring things.

@@ -1,4 +1,4 @@
-// simt-dev tokens - what a reader loads, counted.
+// simt tokens - what a reader loads, counted.
 //
 // Review 0002 S38 put the estate's always-on context at 90 KB per turn, 72% of it a
 // paragraph an earlier root had already loaded, and could only say so by reading seven

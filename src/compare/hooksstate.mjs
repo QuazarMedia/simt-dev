@@ -1,7 +1,7 @@
 // Read a repo's hook routing and shim state without changing anything.
 //
-// This is the read half of what `simt-dev hooks status` does inline. It is a separate
-// module because two callers need it - `hooks status` and `simt-dev compare` - and a
+// This is the read half of what `simt hooks status` does inline. It is a separate
+// module because two callers need it - `hooks status` and `simt compare` - and a
 // second implementation of "is this shim current?" would be exactly the
 // duplicated-source-of-truth problem the tool exists to remove. `compare` reads it
 // for N repos, so it must not shell out per repo per event.

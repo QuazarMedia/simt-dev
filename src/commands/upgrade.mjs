@@ -1,4 +1,4 @@
-// simt-dev upgrade - move every consumer to this simt-dev, as one reviewable set.
+// simt upgrade - move every consumer to this simt-dev, as one reviewable set.
 //
 // Why this command exists, and why it is shaped the way it is:
 //

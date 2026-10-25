@@ -1,4 +1,4 @@
-// `simt-dev skills` - tier 0 (index), tier 1 (brief), tier 2 (show), plus find/why.
+// `simt skills` - tier 0 (index), tier 1 (brief), tier 2 (show), plus find/why.
 //
 // Implementation sequence steps 4 and 5.
 //

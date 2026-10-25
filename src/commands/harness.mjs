@@ -24,7 +24,7 @@ import { LOADERS, LOADER_IDS, caps, loader } from '../projection/loaders.mjs';
 import { viewAll } from '../measure/loaderView.mjs';
 
 /**
- * `simt-dev harness detect`. The subcommand is validated by dispatch, which rejects a
+ * `simt harness detect`. The subcommand is validated by dispatch, which rejects a
  * second token that is not in the group registry rather than silently routing to the
  * default; this function therefore has exactly one thing to do and no second spelling
  * to keep in step with it.

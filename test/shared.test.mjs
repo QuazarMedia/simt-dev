@@ -1,4 +1,4 @@
-// simt-dev shared - carrying a workspace's repeated rules once, in the reader's home.
+// simt shared - carrying a workspace's repeated rules once, in the reader's home.
 //
 // Plan 0003 R11, ADR-084. Review 0002 S38 measured seven repositories loading 90 KB of
 // always-on rules of which 72% was a paragraph an earlier root had already loaded. The

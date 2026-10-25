@@ -412,7 +412,7 @@ export async function checkTargets(root, flags = {}) {
   //
   // Reported as `orphaned`, never `drift`. ADR-021 ruling 6: `sync` does not delete a
   // file it once generated, so there is nothing for the reader to repair and a
-  // `run: simt-dev sync --yes` remedy would be a lie. Removal is a human decision.
+  // `run: simt sync --yes` remedy would be a lie. Removal is a human decision.
   findings.push(...(await orphanedRuleFiles(root, resolved)));
 
   // Pointers are checked last, and whether one blocks depends on who reads it.
@@ -604,7 +604,7 @@ async function regionOpts(root) {
  * A reader that stops at a byte offset never sees a region that ends past it.
  * The finding names the reader, because "the file is long" does not say who stops.
  */
-// Exported for the context meter (`simt-dev tokens`), which answers the same question
+// Exported for the context meter (`simt tokens`), which answers the same question
 // about a region rather than about a diff. It reads the structured fields instead of
 // re-deriving the limit, because a second implementation of "which reader stops, and
 // where" is a second thing to keep right - and a second thing to quote in a message.

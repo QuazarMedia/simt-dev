@@ -16,8 +16,8 @@
 //      tool's output rather than the file's.
 //
 // The whole file is owned by `init` alone. It is not in `src/ci/` and not in
-// `src/projection/baselines.mjs` because it is neither a `.github` file that `simt-dev ci`
-// refreshes nor a marker region: `simt-dev check` reports its absence and never its contents.
+// `src/projection/baselines.mjs` because it is neither a `.github` file that `simt ci`
+// refreshes nor a marker region: `simt check` reports its absence and never its contents.
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -174,7 +174,7 @@ export function readJsonc(text) {
  *
  * There is no `refresh`. ADR-026 gave simt-dev's own `.github` files a refresh path because
  * this repository is the template's only author; a base file has the same argument, and it
- * is deliberately not extended to it. `simt-dev check` in this repository reports the
+ * is deliberately not extended to it. `simt check` in this repository reports the
  * baseline files as unmanaged by design, so a refresh path here would be a way to make this
  * repository's own gate green by rewriting the file it is judging — which is the same
  * mistake as a gate that edits its own expectations.

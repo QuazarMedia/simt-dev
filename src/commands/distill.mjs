@@ -1,7 +1,7 @@
 // `simt distill <skill|doc>` (plan 0003 R38).
 //
 // A budgeted summary with citations to source line ranges, written to
-// `.simt-dev/distilled/` as a proposal a human merges. The deterministic engine
+// `.simt/distilled/` as a proposal a human merges. The deterministic engine
 // is the default; a local model proposes only when the caller asks for it and the
 // manifest names one (ADR-090, ADR-075). Model output never lands anywhere
 // projected or committed text does — that is the direction this command cannot

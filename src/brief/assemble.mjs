@@ -34,14 +34,13 @@
 // command and the tool leave it on. It is inert either way in a repository that declared no
 // servers.
 
-import { CLI } from '../name.mjs';
+import { CLI, STATE_DIR } from '../name.mjs';
 import { DEFAULT_BRIEF_BYTES, buildPacket, collect } from './packet.mjs';
 import { classifyTask, cardVerbs } from './kind.mjs';
 import { briefAdvice } from '../advice/advice.mjs';
 import { commandCard } from '../kernel/card.mjs';
 import { decisionHits, scopeHits, sourceRoots } from '../index/govern.mjs';
 import { embedTaskQuery, rankFiles, renderMap } from '../index/map.mjs';
-import { SQLITE_FILE } from '../index/persist.mjs';
 import { searchFtsBm25 } from '../index/store.mjs';
 import { testEdges, testsFor } from '../index/tests.mjs';
 import { loadRegistry } from '../graph/load.mjs';
@@ -81,7 +80,6 @@ const MAP_FACTOR = 8;
  * between two identical commands is not the packet this promises. The tool's own scratch
  * space is never part of a task's scope.
  */
-const STATE_DIR = `${SQLITE_FILE.split('/')[0]}/`;
 
 /** Every file git tracks that carries a generated region, one `git grep` away. */
 async function generatedRegions(root) {
@@ -128,7 +126,7 @@ export async function assembleBrief({
   federate = true,
 } = {}) {
   const named = paths !== null;
-  const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(STATE_DIR));
+  const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(`${STATE_DIR}/`));
   const scope = named ? parsePathList(paths) : dirty;
 
   const graph = await loadGraph(root, { build });

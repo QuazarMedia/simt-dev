@@ -26,7 +26,7 @@ import { listPromotedLessons } from '../memory/lessons.mjs';
 
 const exec = promisify(execFile);
 
-const RULE_DIRS = ['rules', 'rules/stacks', 'rules/mdc', '.simt-dev/profiles'];
+const RULE_DIRS = ['rules', 'rules/stacks', 'rules/mdc', '.simt/profiles'];
 
 export async function whyCommand(args, flags, commands = []) {
   if (args.length > 1) return fail(`unknown why argument ${args[1]}`, EXIT.USAGE, `run: ${CLI} why [path]`);

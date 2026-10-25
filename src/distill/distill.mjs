@@ -6,7 +6,7 @@
 // needs the guardrails here, because its output is the kind a reader would paste
 // into a pack and forget to check.
 //
-// Nothing here writes outside `.simt-dev/distilled/`, and nothing here edits a
+// Nothing here writes outside `.simt/distilled/`, and nothing here edits a
 // source file (ADR-090, ADR-075). A proposal that a human did not merge is a dead
 // file, which is the intended failure mode: proposals expire, projections do not.
 
@@ -34,7 +34,7 @@ import {
 } from './engine.mjs';
 
 export const DEFAULT_BUDGET = 2048;
-const DISTILL_DIR = '.simt-dev/distilled';
+const DISTILL_DIR = '.simt/distilled';
 
 /**
  * The row's acceptance metric, stated where a caller reads results (ADR-076):

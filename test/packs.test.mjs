@@ -128,15 +128,15 @@ test('precedence is the repository, then the pack, then what the tool ships', as
     join(root, PACK_DIR, 'house', 'rules', 'stacks', 'node.md'),
     '---\nsimt-id: node\nsimt-applies: [node]\n---\n\n## From the pack\n',
   );
-  await mkdir(join(root, '.simt-dev', 'profiles'), { recursive: true });
+  await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
   await writeFile(
-    join(root, '.simt-dev', 'profiles', 'local.md'),
+    join(root, '.simt', 'profiles', 'local.md'),
     '---\nsimt-id: house-node\nsimt-applies: [node]\n---\n\n## From the repository\n',
   );
 
   const { selected, shadowed } = select(await loadRules(root), ['node'], []);
   assert.equal(selected.find((r) => r.id === 'node').source, `${PACK_DIR}/house/rules/stacks/node.md`);
-  assert.equal(selected.find((r) => r.id === 'house-node').source, '.simt-dev/profiles/local.md');
+  assert.equal(selected.find((r) => r.id === 'house-node').source, '.simt/profiles/local.md');
   // Both replacements are reported, because a profile that silently replaced another
   // leaves a reader unable to tell which of two texts they are being held to.
   assert.deepEqual(shadowed.map((s) => s.id).sort(), ['house-node', 'node']);
@@ -176,7 +176,7 @@ test('a declared pack with no directory blocks the gate, with a remedy that rest
   assert.equal(findings[0].status, 'pack-missing');
   // The remedy restores the bytes this manifest's digest names, and `sync` is not it:
   // a sync would render the region without the pack and call it current.
-  assert.match(findings[0].remedy, /git checkout -- \.simt-dev\/packs\/house/);
+  assert.match(findings[0].remedy, /git checkout -- \.simt\/packs\/house/);
 
   const { code, out } = await run(['check', '--root', root]);
   assert.equal(code, 1);

@@ -600,7 +600,7 @@ test('mcp: brief reads the index and never builds one', async () => {
   assertValid(cold.result.structuredContent, ERROR_SHAPE, 'brief failure');
   assert.match(cold.result.structuredContent.remedy, new RegExp(`${CLI} index`));
   await assert.rejects(
-    access(join(dir, '.simt-dev')),
+    access(join(dir, '.simt')),
     'brief built an index, which no tool here may do',
   );
 

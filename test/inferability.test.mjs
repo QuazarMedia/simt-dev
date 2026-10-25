@@ -46,10 +46,10 @@ ${KEEP}
 /** A Go repository: `go.mod` proves `has-go-mod`, and its card names build/test/lint/format. */
 async function goRepo(marker, { priority = 'convention', marked = MARKED, files = {} } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-inferable-'));
-  await mkdir(join(root, '.simt-dev', 'profiles'), { recursive: true });
+  await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
   await writeFile(join(root, 'go.mod'), 'module example\n');
   if (marker !== null) {
-    await writeFile(join(root, '.simt-dev', 'profiles', 'house.md'), profile(marker, priority, marked));
+    await writeFile(join(root, '.simt', 'profiles', 'house.md'), profile(marker, priority, marked));
   }
   for (const [name, text] of Object.entries(files)) await writeFile(join(root, name), text);
   return root;

@@ -9,7 +9,7 @@ import { loadRegistry } from '../graph/load.mjs';
 import { extractOpenedSkills, matchSkillsForPaths } from '../graph/compile.mjs';
 import { matchGlob } from '../index/govern.mjs';
 import { formatLessonParagraph, listPromotedLessons } from '../memory/lessons.mjs';
-import { CONFIG_DIR, MANIFEST_FILE } from '../name.mjs';
+import { MANIFEST_FILE, STATE_DIR } from '../name.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { plan } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
@@ -20,8 +20,6 @@ import { resolveVaultDir } from './mine.mjs';
 import { loadTasks } from './tasks.mjs';
 import { ablateSectionInWorkspace, parseAblationArmName } from './ablate.mjs';
 import { applyVariantInWorkspace, parseVariantArmName } from './variants.mjs';
-
-const STATE_DIR = `.${CONFIG_DIR}`;
 
 const BENCH_DIR = dirname(fileURLToPath(import.meta.url));
 const ADAPTERS_PATH = join(BENCH_DIR, 'adapters.json');

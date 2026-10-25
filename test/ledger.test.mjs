@@ -122,7 +122,7 @@ test('a gate the dispatcher runs is recorded against the tree', async () => {
   assert.ok(line, JSON.stringify(entries));
   assert.equal(line.exit, 0);
   assert.equal(line.summary, '1 pass, 0 fail');
-  const text = await readFile(join(root, '.simt-dev', 'ledger.jsonl'), 'utf8');
+  const text = await readFile(join(root, '.simt', 'ledger.jsonl'), 'utf8');
   assert.equal(text.includes('echo 1 pass\n'), false, 'the output itself is not the ledger');
   await rm(root, { recursive: true, force: true });
 });

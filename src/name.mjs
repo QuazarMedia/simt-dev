@@ -46,6 +46,16 @@ export const MARKER_PREFIX_LEGACY = 'simt-dev';
 export const CONFIG_DIR = PROJECT;
 
 /**
+ * The per-repository state directory: the index, ledger, benchmark runs and local-model
+ * proposals a repository writes for itself. Renamed from `.simt-dev` to `.simt`; the
+ * rename is unreleased, so no repository carries the old spelling as a name this tool
+ * cannot rewrite. Deliberately not derived from CONFIG_DIR: that is the user-level
+ * config directory, and a derivation would let two different on-disk names agree by
+ * accident rather than by decision.
+ */
+export const STATE_DIR = '.simt';
+
+/**
  * The gate this tool writes into a repository. LOCKED: it is a path in `.github`, and
  * a repo that renames the file silently stops running the gate it was adopted with.
  */

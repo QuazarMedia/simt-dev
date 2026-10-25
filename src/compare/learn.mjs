@@ -1,6 +1,6 @@
 // Estate learning through `compare` (plan 0003 R36).
 //
-// Aggregates `.simt-dev/ledger.jsonl`, `.simt-dev/lessons.jsonl`, and ablation/bench
+// Aggregates `.simt/ledger.jsonl`, `.simt/lessons.jsonl`, and ablation/bench
 // records across workspace repositories to surface:
 //   1. the most-violated rules (from hook denials and `review-block` findings);
 //   2. the most-failing and slowest gates (from evidence ledgers);
@@ -189,7 +189,7 @@ async function collectRepoAblationRecords(repoPath) {
 }
 
 async function readExplicitNoValueSections(repoPath) {
-  const file = join(repoPath, '.simt-dev', 'ablation.json');
+  const file = join(repoPath, '.simt', 'ablation.json');
   try {
     const raw = JSON.parse(await readFile(file, 'utf8'));
     const list = Array.isArray(raw?.sections) ? raw.sections : Array.isArray(raw) ? raw : [];

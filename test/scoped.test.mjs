@@ -26,11 +26,11 @@ async function writePlanned(root, p) {
 /** A python repository with a local profile that scopes itself. */
 async function scopedRepo(scope = '["pyproject.toml", "*.py"]', id = 'local-python') {
   const root = await mkdtemp(join(tmpdir(), 'simt-scoped-'));
-  await mkdir(join(root, '.simt-dev', 'profiles'), { recursive: true });
+  await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
   await writeFile(join(root, 'pyproject.toml'), '[project]\nname = "x"\n');
   await writeFile(join(root, 'main.py'), 'print(1)\n');
   await writeFile(
-    join(root, '.simt-dev', 'profiles', `${id}.md`),
+    join(root, '.simt', 'profiles', `${id}.md`),
     `---\nsimt-id: ${id}\nsimt-title: Scoped python\nsimt-applies: [python]\n${scope ? `simt-scope: ${scope}\n` : ''}---\n\n# Scoped python\n\nDo the scoped thing.\n`,
   );
   return root;

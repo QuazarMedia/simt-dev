@@ -314,7 +314,7 @@ test('R33: replaying a recorded failure into agent-hook post-tool-use injects th
   assert.equal(promoted.ok, true);
   assert.equal(promoted.written, true);
 
-  // 3. Replay the recorded failing ledger line from .simt-dev/ledger.jsonl directly into post-tool-use
+  // 3. Replay the recorded failing ledger line from .simt/ledger.jsonl directly into post-tool-use
   const { entries } = await readLedger(root);
   const recordedFailure = entries.find((e) => e.exit !== 0);
   assert.ok(recordedFailure, 'expected recorded failing ledger entry');
@@ -560,7 +560,7 @@ test('R33: bench shows fewer turns on recurring failure modes when the lesson is
       "import { spawnSync } from 'node:child_process';",
       `const simtBin = ${JSON.stringify(BIN)};`,
       `const recurringError = ${JSON.stringify(recurringError)};`,
-      "const hasBriefLesson = existsSync('.simt-dev/brief.md') && readFileSync('.simt-dev/brief.md', 'utf8').includes('0001-restage-deleted');",
+      "const hasBriefLesson = existsSync('.simt/brief.md') && readFileSync('.simt/brief.md', 'utf8').includes('0001-restage-deleted');",
       'let hookRecalled = false;',
       "if (existsSync('docs/lessons/0001-restage-deleted.md')) {",
       "  const hook = spawnSync(process.execPath, [simtBin, 'agent-hook', 'post-tool-use', '--harness', 'claude'], {",

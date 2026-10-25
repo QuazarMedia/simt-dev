@@ -9,9 +9,7 @@
 // part of this touches a model, a network or a clock.
 import { readdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { CONFIG_DIR } from '../name.mjs';
-
-const STATE_DIR = `.${CONFIG_DIR}`;
+import { STATE_DIR } from '../name.mjs';
 
 /**
  * Load mined benchmark task descriptors.

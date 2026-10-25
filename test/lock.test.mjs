@@ -17,10 +17,10 @@ import { frozenFindings } from '../src/commands/sync.mjs';
 
 async function repo() {
   const root = await mkdtemp(join(tmpdir(), 'simt-lock-'));
-  await mkdir(join(root, '.simt-dev', 'profiles'), { recursive: true });
+  await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
   await writeFile(join(root, 'package.json'), '{ "name": "x", "scripts": { "test": "node --test" } }\n');
   await writeFile(
-    join(root, '.simt-dev', 'profiles', 'house-local.md'),
+    join(root, '.simt', 'profiles', 'house-local.md'),
     '---\nsimt-id: house-local\nsimt-title: House\nsimt-applies: [node]\n---\n\n# House\n\nThe house line.\n',
   );
   return root;
@@ -43,7 +43,7 @@ test('editing a repository line changes only the tail', async () => {
   const prefix = before.slice(0, at);
 
   await writeFile(
-    join(root, '.simt-dev', 'profiles', 'house-local.md'),
+    join(root, '.simt', 'profiles', 'house-local.md'),
     '---\nsimt-id: house-local\nsimt-title: House\nsimt-applies: [node]\n---\n\n# House\n\nThe edited house line.\n',
   );
   const after = (await desiredRegion(root, {})).body;
@@ -68,7 +68,7 @@ test('a frozen check names which of the two lock failures it is', async () => {
   assert.equal(unexplained[0].status, 'lock-unexplained');
 
   await writeFile(
-    join(root, '.simt-dev', 'profiles', 'house-local.md'),
+    join(root, '.simt', 'profiles', 'house-local.md'),
     '---\nsimt-id: house-local\nsimt-title: House\nsimt-applies: [node]\n---\n\n# House\n\nA different line.\n',
   );
   await writeFile(join(root, LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`);

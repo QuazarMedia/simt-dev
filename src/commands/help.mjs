@@ -92,7 +92,7 @@ ${CLI} map [--task "<text>"] [--level outline|names|signatures]
 ${CLI} evidence                the runs recorded against the tree on disk
 ${CLI} evidence check <file>   a commit message that claims a run this tree does not
                            have: a warning, or a block when gates.evidence is "block"
-${CLI} lessons list            deterministic lesson candidates in .simt-dev/lessons.jsonl
+${CLI} lessons list            deterministic lesson candidates in .simt/lessons.jsonl
                            and promoted lessons in docs/lessons/*.md
 ${CLI} lessons review [<id>]   promote a lesson candidate to docs/lessons/NNNN-<slug>.md
                            (dry-run unless --yes; writes Appendix A frontmatter)
@@ -105,7 +105,7 @@ ${CLI} local doctor            probe configured local model endpoints (chat and 
                            unset; refuses non-loopback URLs without --allow-remote)
 ${CLI} distill <skill|doc>     a budgeted proposal summary of a skill body or doc,
                            every claim citing the source line range it rests on
-                           (writes .simt-dev/distilled/<digest>.md; a proposal a
+                           (writes .simt/distilled/<digest>.md; a proposal a
                            human merges - never projected or committed;
                            deterministic outline by default; --local proposes
                            from the configured chat model instead; the cache is
@@ -115,7 +115,7 @@ ${CLI} review [--local]        an ADR-008 verdict skeleton for the staged diff,
                            (deterministic without --local: the brief and its
                            governing ids only; --local proposes from the
                            configured chat model and writes
-                           .simt-dev/reviews/<digest>.md — a proposal a human
+                           .simt/reviews/<digest>.md — a proposal a human
                            reads, verified against the verdict vocabulary and
                            the brief's ids; advisory always, never a gate)
 ${CLI} shared plan            what a workspace's repeated rules cost to carry
@@ -157,7 +157,7 @@ ${CLI} bench variants [--yes]  evaluate simt-variants rule slots on the canary s
                             winning variants in simt-dev.lock.json (dry-run unless --yes;
                             re-opens when model or harness changes)
 ${CLI} bench critic          precision and recall of the local critic over a labelled
-                            set of historical diffs (.simt-dev/critic-labels.jsonl;
+                            set of historical diffs (.simt/critic-labels.jsonl;
                             overrides --labels; labels are human-written verdicts
                             under ADR-008; the critic is advisory until precision
                             reaches 0.8 on 30 labelled diffs)
@@ -229,7 +229,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --embed                 index / map / brief: compute or query optional local vector embeddings
                         (off by default unless recall@10 gains at least 10 points)
 --labels <path>         bench critic: the labelled set of historical diffs to score
-                        (default .simt-dev/critic-labels.jsonl; one human-written
+                        (default .simt/critic-labels.jsonl; one human-written
                         {sha, verdict} pair per line)
 --refresh               distill / review: regenerate a proposal that is already cached
 --local                 distill / review: propose the answer from the configured

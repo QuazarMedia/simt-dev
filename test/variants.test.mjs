@@ -38,14 +38,14 @@ async function makeVariantRepo() {
   const root = await mkdtemp(join(tmpdir(), 'simt-variants-'));
   tempDirs.push(root);
   await git(['init', '-q', root]);
-  await mkdir(join(root, '.simt-dev', 'profiles'), { recursive: true });
+  await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
   await writeFile(
     join(root, 'package.json'),
     '{ "name": "variant-fixture", "scripts": { "test": "node --test" } }\n',
     'utf8',
   );
   await writeFile(
-    join(root, '.simt-dev', 'profiles', 'house.md'),
+    join(root, '.simt', 'profiles', 'house.md'),
     [
       '---',
       'simt-id: house',
@@ -151,7 +151,7 @@ test('variantsDefect catches malformed markers and duplicate slots, and check re
 
   const root = await makeVariantRepo();
   await writeFile(
-    join(root, '.simt-dev', 'profiles', 'broken.md'),
+    join(root, '.simt', 'profiles', 'broken.md'),
     [
       '---',
       'simt-id: broken',
@@ -173,7 +173,7 @@ test('variantsDefect catches malformed markers and duplicate slots, and check re
   try {
     const code = await checkCommand([], { root });
     assert.equal(code, 1);
-    assert.match(out, /INVALID\s+\.simt-dev\/profiles\/broken\.md/);
+    assert.match(out, /INVALID\s+\.simt\/profiles\/broken\.md/);
     assert.match(out, /simt-variants/);
   } finally {
     process.stdout.write = origWrite;
@@ -244,7 +244,7 @@ test('selectRuleVariants runs canary suite, records lockfile evidence, and re-op
   const root = await makeVariantRepo();
 
   // Seed 2 mined tasks
-  const tasksDir = join(root, '.simt-dev', 'bench', 'tasks');
+  const tasksDir = join(root, '.simt', 'bench', 'tasks');
   await mkdir(tasksDir, { recursive: true });
   for (const id of ['t-var-01', 't-var-02']) {
     await writeFile(
@@ -276,7 +276,7 @@ test('selectRuleVariants runs canary suite, records lockfile evidence, and re-op
   let runnerCalls = 0;
   const stubRunner = async (repoRoot, opts) => {
     runnerCalls += 1;
-    const runDir = join(repoRoot, '.simt-dev', 'bench', 'runs', `run-${runnerCalls}`);
+    const runDir = join(repoRoot, '.simt', 'bench', 'runs', `run-${runnerCalls}`);
     await mkdir(runDir, { recursive: true });
     for (const arm of opts.arms) {
       for (const task of opts.tasks) {

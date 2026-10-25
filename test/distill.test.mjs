@@ -4,7 +4,7 @@
 //   1. The deterministic outline engine: heading skeleton plus the first content
 //      of each section, cut to the budget, every line citing its source line —
 //      byte-stable across calls and cheaper than the source it compresses.
-//   2. `simt distill <skill|doc>` writes the proposal to `.simt-dev/distilled/`
+//   2. `simt distill <skill|doc>` writes the proposal to `.simt/distilled/`
 //      with provenance frontmatter, never reads a socket with `--local` absent,
 //      and never touches the source it distilled.
 //   3. `--local` proposes from the configured chat model, refuses to run without

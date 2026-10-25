@@ -285,7 +285,7 @@ export async function embedTaskQuery(root, task, { embed = false, allowRemote = 
  * }} [opts]
  */
 export async function measureRecall(root, opts = {}) {
-  const tasksDir = join(root, '.simt-dev', 'bench', 'tasks');
+  const tasksDir = join(root, '.simt', 'bench', 'tasks');
   let names;
   try {
     names = (await readdir(tasksDir)).filter((name) => name.endsWith('.json')).sort();

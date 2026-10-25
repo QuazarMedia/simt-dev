@@ -8,9 +8,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-import { CONFIG_DIR } from '../name.mjs';
-
-const STATE_DIR = `.${CONFIG_DIR}`;
+import { STATE_DIR } from '../name.mjs';
 
 export const DEFAULT_BOOTSTRAP_SAMPLES = 1000;
 export const DEFAULT_BOOTSTRAP_SEED = 0x51772026;

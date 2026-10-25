@@ -25,11 +25,9 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-import { CONFIG_DIR } from '../name.mjs';
+import { STATE_DIR } from '../name.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { materialiseArm, parseArmSpec } from './run.mjs';
-
-const STATE_DIR = `.${CONFIG_DIR}`;
 
 function sanitizedEnv(extra = {}) {
   const env = { ...process.env, SIMT_DEV_WORKSPACE: 'off', ...extra };

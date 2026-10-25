@@ -587,7 +587,7 @@ test('the gate fails a repo-local profile that uses the unprefixed spelling', as
 
   const failed = await run(['check', '--root', root]);
   assert.notEqual(failed.code, 0, `check passed a profile it cannot read:\n${failed.text}`);
-  assert.match(failed.text, /INVALID\s+\.simt-dev\/profiles\/house\.md/);
+  assert.match(failed.text, /INVALID\s+\.simt\/profiles\/house\.md/);
   assert.match(failed.text, /key "applies" is this tool's own.*spelled "simt-applies"/);
 
   // Prefixed, the same profile is not a defect. The gate may still report drift —

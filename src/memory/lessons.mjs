@@ -1,6 +1,6 @@
 // Deterministic lesson candidate ledger and promotion to `docs/lessons/NNNN-<slug>.md` (plan 0003 R32).
 //
-// Four deterministic candidate sources write to `.simt-dev/lessons.jsonl`:
+// Four deterministic candidate sources write to `.simt/lessons.jsonl`:
 //   1. `fail-then-fix`: a gate or test that fails and then passes in one session,
 //      recorded as `error signature -> fix diff` (where the signature is the sha256
 //      hash of the normalised first error line);
@@ -23,7 +23,7 @@ import { splitFrontmatter } from './decide.mjs';
 
 const exec = promisify(execFile);
 
-export const LESSONS_FILE = '.simt-dev/lessons.jsonl';
+export const LESSONS_FILE = '.simt/lessons.jsonl';
 export const LESSONS_DIR = 'docs/lessons';
 export const LESSON_KEYS = new Set(['simt-trigger', 'simt-evidence', 'simt-expires']);
 const DEFAULT_EXPIRES = '2027-04-01';
@@ -137,7 +137,7 @@ function slugify(text) {
 }
 
 /**
- * Read all candidate records from `.simt-dev/lessons.jsonl`.
+ * Read all candidate records from `.simt/lessons.jsonl`.
  *
  * @param {string} root
  * @returns {Promise<{candidates: Array<object>, errors: string[]}>}
@@ -181,7 +181,7 @@ function sameEvidence(a = [], b = []) {
 }
 
 /**
- * Append one deterministic candidate to `.simt-dev/lessons.jsonl`, deduplicating by
+ * Append one deterministic candidate to `.simt/lessons.jsonl`, deduplicating by
  * `(kind, signature, evidence)`.
  *
  * @param {string} root
@@ -239,11 +239,11 @@ async function diffBetweenTrees(root, fromRef, toRef) {
   }
   try {
     const [namesOut, diffOut] = await Promise.all([
-      exec('git', ['diff', '--name-only', fromRef, toRef, '--', '.', ':(exclude).simt-dev'], {
+      exec('git', ['diff', '--name-only', fromRef, toRef, '--', '.', ':(exclude).simt'], {
         cwd: root,
         maxBuffer: 8 << 20,
       }),
-      exec('git', ['diff', '--unified=3', fromRef, toRef, '--', '.', ':(exclude).simt-dev'], {
+      exec('git', ['diff', '--unified=3', fromRef, toRef, '--', '.', ':(exclude).simt'], {
         cwd: root,
         maxBuffer: 8 << 20,
       }),
@@ -295,8 +295,8 @@ export async function recordFailThenFix(root, { failEntry, passEntry, failOutput
 }
 
 /**
- * Scan `.simt-dev/ledger.jsonl` for any fail-then-fix sequences in the session and
- * ensure each is recorded in `.simt-dev/lessons.jsonl`.
+ * Scan `.simt/ledger.jsonl` for any fail-then-fix sequences in the session and
+ * ensure each is recorded in `.simt/lessons.jsonl`.
  *
  * @param {string} root
  * @param {Array<object>} [entries]
@@ -306,7 +306,7 @@ export async function captureFromLedger(root, entries = null) {
   let list = entries;
   if (!Array.isArray(list)) {
     try {
-      const raw = await readFile(join(root, '.simt-dev', 'ledger.jsonl'), 'utf8');
+      const raw = await readFile(join(root, '.simt', 'ledger.jsonl'), 'utf8');
       list = raw
         .split('\n')
         .map((s) => s.trim())
@@ -339,7 +339,7 @@ export async function captureFromLedger(root, entries = null) {
 }
 
 /**
- * Capture reverted commits from git history into `.simt-dev/lessons.jsonl`.
+ * Capture reverted commits from git history into `.simt/lessons.jsonl`.
  *
  * @param {string} root
  * @param {{limit?: number}} [options]
@@ -408,7 +408,7 @@ export async function captureRevertedCommits(root, options = {}) {
 }
 
 /**
- * Record an ADR-008 `BLOCK` review finding in `.simt-dev/lessons.jsonl`.
+ * Record an ADR-008 `BLOCK` review finding in `.simt/lessons.jsonl`.
  *
  * @param {string} root
  * @param {{summary: string, paths?: string[], evidence?: string[], fixDiff?: string, keywords?: string[]}} finding
@@ -437,7 +437,7 @@ export async function recordReviewBlock(root, finding) {
 }
 
 /**
- * Record an agent-time hook denial (R15) in `.simt-dev/lessons.jsonl`.
+ * Record an agent-time hook denial (R15) in `.simt/lessons.jsonl`.
  *
  * @param {string} root
  * @param {{harness?: string, event?: string, policies?: string[], messages?: string[], command?: string, writes?: string[]}} denial
@@ -612,7 +612,7 @@ async function nextLessonNumber(root) {
 }
 
 /**
- * Promote a lesson candidate from `.simt-dev/lessons.jsonl` to `docs/lessons/NNNN-<slug>.md`.
+ * Promote a lesson candidate from `.simt/lessons.jsonl` to `docs/lessons/NNNN-<slug>.md`.
  *
  * @param {string} root
  * @param {{id?: string, apply?: boolean, paths?: string[], expires?: string, title?: string}} [options]
@@ -622,7 +622,7 @@ export async function promoteLesson(root, options = {}) {
   await captureFromLedger(root);
   const { candidates } = await readLessonCandidates(root);
   if (candidates.length === 0) {
-    return { ok: false, error: 'no lesson candidates in .simt-dev/lessons.jsonl' };
+    return { ok: false, error: 'no lesson candidates in .simt/lessons.jsonl' };
   }
 
   let target = null;

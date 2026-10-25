@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import { tokens } from './context.mjs';
 
 const RULE_PATH_RE =
-  /(?:^|\/)(?:AGENTS(?:\.override)?\.md|CLAUDE(?:\.local)?\.md|GEMINI\.md|SKILL\.md|\.cursor\/rules\/|\.claude\/rules\/|\.agents\/rules\/|\.github\/(?:copilot-instructions\.md|instructions\/)|\.simt-dev\/profiles\/)/;
+  /(?:^|\/)(?:AGENTS(?:\.override)?\.md|CLAUDE(?:\.local)?\.md|GEMINI\.md|SKILL\.md|\.cursor\/rules\/|\.claude\/rules\/|\.agents\/rules\/|\.github\/(?:copilot-instructions\.md|instructions\/)|\.simt\/profiles\/)/;
 
 const FILE_READ_TOOLS = new Set(['Read', 'read_file', 'NotebookRead', 'view_file', 'read']);
 

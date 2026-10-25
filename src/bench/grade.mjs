@@ -148,7 +148,7 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
     .toString('utf8')
     .split('\n')
     .map((s) => s.trim())
-    .filter((f) => Boolean(f) && !f.startsWith('.simt-dev/'));
+    .filter((f) => Boolean(f) && !f.startsWith('.simt/'));
 
   const goldFiles = new Set(extractPatchFiles(goldPatch));
   const outsideBlastRadius =

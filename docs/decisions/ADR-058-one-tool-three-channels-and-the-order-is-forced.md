@@ -2,6 +2,12 @@
 
 Status: **accepted** · 2026-10-11
 
+> Ruling 7's re-run mechanics are superseded by
+> [ADR-097](ADR-097-the-channels-publish-by-hand-and-the-version-rides-in-as-an-input.md):
+> the two channel jobs moved to a manual `workflow_dispatch` workflow whose `version`
+> input dissolves the branch-vs-tag failure recorded below. The ordering ruling —
+> npm live before either channel publishes — stands.
+
 Affects: `pyproject.toml`, `python/simt_dev/`, `Formula/simt-dev.rb`,
 `.github/workflows/publish.yml`, `scripts/release-formula.mjs`,
 `scripts/verify-wheel.mjs`, `test/packaging.test.mjs`

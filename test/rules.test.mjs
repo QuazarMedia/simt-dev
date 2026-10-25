@@ -218,6 +218,8 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // are its evidence rather than decoration. ADR-081 and ADR-082 name the directories
   // and the template file the tracker reads, which exist in this package and in the
   // repository that adopts it; the count moves because the records have to name them.
+  // ADR-097 joined because its consequence is ABOUT the two release workflows and the
+  // manual twin they replace, so it names the files a maintainer edits.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -231,6 +233,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-080',
     'ADR-081',
     'ADR-082',
+    'ADR-097',
   ]);
 });
 

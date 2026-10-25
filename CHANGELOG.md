@@ -6,6 +6,53 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-10-25
+
+### An offline distiller that proposes, never projects
+
+`simt distill <skill|doc>` writes a budgeted summary of a skill body or repository
+document with citations to source line ranges (`[L12-L15]`). The default engine is a
+deterministic outline pass with no model and no network; `--local` uses the configured
+local model endpoint from plan 0003 R37. Proposals are cached by content digest in
+`.simt-dev/distilled/<digest>.md` and carry provenance frontmatter (source digest,
+engine, prompt hash, `verified`), so a human merges them into the pack or repository:
+model output never lands in projected or committed text (ADR-090). Every citation is
+verified against the source, and a fabricated one makes the proposal
+`verified: false` with the fault named.
+
+### An advisory critic over the staged diff
+
+`simt review` gathers the brief — the governing decision records and scoped rules for
+the staged files — with no model and no network. `simt review --local` sends that brief
+plus the staged diff to the local model and receives an ADR-008 verdict skeleton
+(`BLOCK`, `APPROVE WITH RESIDUAL RISK` or `APPROVE`) that cites rule ids with an
+`@` marker; a citation to an id that governs nothing is named a fabrication, a
+`BLOCK` carries no weight without a file:line or command finding, and a residual-risk
+approval must list what the critic did not review. Verdicts land as proposals in
+`.simt-dev/reviews/<digest>.md` and stay advisory: they become a gate only when
+`simt bench critic --labels <path>` measures precision of at least 0.8 (with recall
+reported) on at least 30 historical diffs human-labelled in a JSONL file the tool
+consumes but never writes.
+
+### Model and effort advice in the brief header
+
+`simt brief` now carries an `ADVICE` header, such as `small model, no plan mode` or
+`frontier model, plan first`, derived from the estate's own bench history: the brief's
+task kind and estimated file size pick a neighbourhood of similar bench tasks, the
+cheapest model class that actually resolved them sets the tier on a thirds ladder of
+the classes the estate has observed (no vendor names in code), and median tool calls in
+the neighbourhood set the effort. Nothing is selected: a human still names the model.
+With no history the brief says nothing, and with a thin one it prints a caution rather
+than a guess. The advice is advisory until a held-out bench shows a cost cut of at
+least 25% at a resolved-rate loss of at most 2 points, so the unmeasured bar travels
+in every packet the advice appears in.
+
+### Fixed
+
+`package.json` gained the `repository` field npm's provenance verification requires:
+the sigstore bundle is checked against the public source repository, and the missing
+URL rejected the 0.4.0 upload with `E422`.
+
 ## [0.4.0] — 2026-10-20
 
 ### Hybrid retrieval fuses BM25, the code graph, and the resolver
@@ -733,6 +780,7 @@ never ran `simt hooks install` again will find nothing until the dependency is r
 and `simt hooks install --yes` is re-run. That is a real upgrade step and it is called out
 here rather than discovered.
 
+[0.5.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.5.0
 [0.4.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.4.0
 [0.3.1]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.3.1
 [0.3.0]: https://github.com/QuazarMedia/simt-dev/releases/tag/v0.3.0

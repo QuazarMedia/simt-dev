@@ -17,6 +17,7 @@ import { fingerprint } from '../resolve/fingerprint.mjs';
 import { rankSkills, tokenize } from '../resolve/resolve.mjs';
 import { gradeWorkspace } from './grade.mjs';
 import { resolveVaultDir } from './mine.mjs';
+import { loadTasks } from './tasks.mjs';
 import { ablateSectionInWorkspace, parseAblationArmName } from './ablate.mjs';
 import { applyVariantInWorkspace, parseVariantArmName } from './variants.mjs';
 
@@ -678,21 +679,8 @@ async function executeAdapter(adapter, workDir, task, { vaultRoot, model, maxTur
   return { ...parseAdapterUsage(adapter, stdoutText, analyticsText), transcript: `${stdoutText}\n${analyticsText}` };
 }
 
-async function loadTasks(root, filterIds = []) {
-  const tasksDir = join(root, STATE_DIR, 'bench', 'tasks');
-  const entries = (await readdir(tasksDir).catch(() => []))
-    .filter((f) => f.endsWith('.json'))
-    .sort();
-
-  const filterSet = new Set(filterIds);
-  const tasks = [];
-  for (const entry of entries) {
-    const data = JSON.parse(await readFile(join(tasksDir, entry), 'utf8'));
-    if (filterSet.size > 0 && !filterSet.has(data.id)) continue;
-    tasks.push(data);
-  }
-  return tasks.sort((a, b) => a.id.localeCompare(b.id));
-}
+// loadTasks lives in tasks.mjs (the advice engine became a second reader, so the loader
+// was extracted rather than copied — ADR-002).
 
 function runIdFor(harness, armName, rep) {
   return `${harness}-${armName}-r${rep}`;

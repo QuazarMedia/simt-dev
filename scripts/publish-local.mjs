@@ -1,9 +1,10 @@
 // Publish simt-dev to all three channels from one machine, in the order they
 // depend on: npm -> PyPI -> Homebrew.
 //
-// This is the manual twin of `.github/workflows/publish.yml` - for a machine
-// that cannot run Actions (a free-tier month with no minutes left, a laptop,
-// an air-gapped release). It is not a replacement for the workflow: it cannot
+// This is the manual twin of the two release workflows - `.github/workflows/publish.yml`
+// for npm and `.github/workflows/publish-channels.yml` for the two downstream channels -
+// for a machine that cannot run Actions (a free-tier month with no minutes left, a
+// laptop, an air-gapped release). It is not a replacement for the workflow: it cannot
 // mint the OIDC identity that PyPI's trusted publishing exchanges, so the PyPI
 // step uploads with an API token instead. Everything else is the same three
 // artefacts carrying the same bytes, in the same forced order.

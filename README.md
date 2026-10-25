@@ -2,7 +2,10 @@
 
 ![simt-dev, the intelligence amplifier for coding agents, and its four claims. One: say less, always — a kernel under 2 KB whose bytes stay stable so the prompt cache survives. Two: answers over exploration — a local code graph and a short task brief. Three: enforce, don't instruct — dual gates, before a tool call and at git time. Four: close the loop — benches and memory. Beneath them, the harnesses it works across and its three channels.](https://raw.githubusercontent.com/QuazarMedia/simt-dev/main/res/59e21e6d-6bf2-4d7d-b6ea-c7349a697d11.jpg)
 
-`simt` adopts a repository for the agents that work in it.
+`simt` adopts a repository for the agents that work in it, and builds an intelligence
+amplifier around them: a brief that answers before the agent explores, gates that
+validate before a tool call, benches that price every rule text, and memory that puts
+a recorded failure to work on the next one.
 
 It reads what the repository actually runs, projects the rules that are not already
 obvious into the files those agents read, and installs only the gates that repository

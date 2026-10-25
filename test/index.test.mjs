@@ -83,6 +83,23 @@ test('a removed path leaves the index', async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+test('tracked content past the old 64 MiB buffer still indexes', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  await git(['init', '-q', root]);
+  // Just past the execFile maxBuffer (64 MiB) that used to cap the cat-file output,
+  // so this fails with "stdout maxBuffer length exceeded" on the buffered code path.
+  const line = 'lorem ipsum dolor sit amet\n';
+  const body = line.repeat(Math.ceil((65 * 1024 * 1024) / line.length));
+  await writeFile(join(root, 'large.txt'), body);
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'big']);
+  const result = await reindex(root, { backend: 'jsonl' });
+  assert.equal(result.files, 1);
+  const rows = await readFiles(root, { backend: 'jsonl' });
+  assert.equal(rows[0].bytes, Buffer.byteLength(body));
+  await rm(root, { recursive: true, force: true });
+});
+
 test('index refuses a directory that is not a repository', async () => {
   const root = await mkdtemp(join(tmpdir(), 'idx-'));
   assert.equal(await indexCommand([], { root }), 5);

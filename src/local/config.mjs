@@ -8,6 +8,10 @@
 //     "embed": { "url": "http://127.0.0.1:11434/v1", "model": "nomic-embed-code" }
 //   }
 //
+// Each role also accepts an optional `apiKey` (a non-empty string). When present it is
+// sent as an `Authorization: Bearer <key>` header, for servers that require a token
+// (omlx, llama.cpp `--api-key`, OpenAI-compatible gateways). Omitted by default.
+//
 // Non-loopback URLs are refused unless `--allow-remote` is explicitly passed (ADR-075).
 
 import { EXIT, fail } from '../output/index.mjs';
@@ -114,6 +118,17 @@ function parseEndpoint(role, entry, { allowRemote = false } = {}) {
     };
   }
 
+  // Optional bearer credential for servers that require authentication (omlx,
+  // llama.cpp `--api-key`, OpenAI-compatible gateways). Absent by default: most
+  // local servers (Ollama, LM Studio) accept unauthenticated loopback requests.
+  let apiKey = '';
+  if (entry.apiKey !== undefined) {
+    if (typeof entry.apiKey !== 'string' || entry.apiKey.trim().length === 0) {
+      return { endpoint: null, finding: `\`local.${role}.apiKey\` must be a non-empty string when set` };
+    }
+    apiKey = entry.apiKey;
+  }
+
   const loopback = isLoopbackHost(parsedUrl.hostname);
   const baseUrl = resolveEndpointUrl(rawUrl, '');
   const blocked = !loopback && !allowRemote;
@@ -126,6 +141,7 @@ function parseEndpoint(role, entry, { allowRemote = false } = {}) {
         baseUrl,
         model,
         timeoutMs,
+        apiKey,
         loopback: false,
         blocked: true,
       },
@@ -141,6 +157,7 @@ function parseEndpoint(role, entry, { allowRemote = false } = {}) {
       baseUrl,
       model,
       timeoutMs,
+      apiKey,
       loopback,
       blocked: false,
     },

@@ -26,6 +26,7 @@ function guardEndpoint(endpoint, { allowRemote = false } = {}) {
   if (!model) {
     return { ok: false, error: 'local model endpoint is missing `model`', refusedRemote: false };
   }
+  const apiKey = typeof endpoint.apiKey === 'string' && endpoint.apiKey.length > 0 ? endpoint.apiKey : null;
   const loopback = isLoopbackUrl(rawUrl);
   if (!loopback && !allowRemote) {
     return {
@@ -39,6 +40,7 @@ function guardEndpoint(endpoint, { allowRemote = false } = {}) {
     url: rawUrl,
     baseUrl: resolveEndpointUrl(rawUrl, ''),
     model,
+    apiKey,
     timeoutMs: Number.isInteger(endpoint.timeoutMs) && endpoint.timeoutMs > 0
       ? endpoint.timeoutMs
       : DEFAULT_LOCAL_TIMEOUT_MS,
@@ -46,13 +48,20 @@ function guardEndpoint(endpoint, { allowRemote = false } = {}) {
   };
 }
 
-async function requestJson(url, { method = 'GET', body = undefined, timeoutMs = DEFAULT_LOCAL_TIMEOUT_MS, fetchImpl = globalThis.fetch } = {}) {
+async function requestJson(url, { method = 'GET', body = undefined, timeoutMs = DEFAULT_LOCAL_TIMEOUT_MS, apiKey = null, fetchImpl = globalThis.fetch } = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
+    const headers = {
+      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+      accept: 'application/json',
+    };
+    if (typeof apiKey === 'string' && apiKey.length > 0) {
+      headers.authorization = `Bearer ${apiKey}`;
+    }
     const response = await fetchImpl(url, {
       method,
-      headers: body !== undefined ? { 'content-type': 'application/json', accept: 'application/json' } : { accept: 'application/json' },
+      headers,
       body: body !== undefined ? JSON.stringify(body) : undefined,
       signal: controller.signal,
     });
@@ -121,6 +130,7 @@ export async function localModels(endpoint, { allowRemote = false, fetchImpl = g
   const res = await requestJson(targetUrl, {
     method: 'GET',
     timeoutMs: guard.timeoutMs,
+    apiKey: guard.apiKey,
     fetchImpl,
   });
   if (!res.ok) {
@@ -200,6 +210,7 @@ export async function localChat(
       stream: false,
     },
     timeoutMs: guard.timeoutMs,
+    apiKey: guard.apiKey,
     fetchImpl,
   });
 
@@ -275,6 +286,7 @@ export async function localEmbed(
       input: Array.isArray(input) ? input.map(String) : String(input ?? ''),
     },
     timeoutMs: guard.timeoutMs,
+    apiKey: guard.apiKey,
     fetchImpl,
   });
 

@@ -503,3 +503,42 @@ test('R37: doctor remedy distinguishes an unauthorised server from a down one', 
   assert.equal(downPayload.status, 'unreachable');
   assert.match(downPayload.remedy, /start the local model server/);
 });
+
+test('R37: reasoning models are handled — content falls back to reasoning_content', async (t) => {
+  const stub = await startStubServer((req, res, body) => {
+    if (req.url === '/v1/chat/completions') {
+      const prompt = body?.messages?.[0]?.content ?? '';
+      if (prompt === 'reasoning-only') {
+        // Tiny budget: content absent, output in reasoning_content.
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ model: 'm', choices: [{ index: 0, message: { role: 'assistant', reasoning_content: 'The' } }] }));
+        return;
+      }
+      if (prompt === 'empty') {
+        // No content, no reasoning, no text -> still an error.
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ model: 'm', choices: [{ index: 0, message: { role: 'assistant' } }] }));
+        return;
+      }
+      // Normal: both present, the final answer must win.
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ model: 'm', choices: [{ index: 0, message: { role: 'assistant', content: 'final', reasoning_content: 'thinking...' } }] }));
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ data: [{ embedding: [1] }] }));
+  });
+  t.after(() => stub.close());
+
+  const fallback = await localChat({ url: stub.baseUrl, model: 'm' }, { prompt: 'reasoning-only' });
+  assert.equal(fallback.ok, true);
+  assert.equal(fallback.content, 'The');
+
+  const preferred = await localChat({ url: stub.baseUrl, model: 'm' }, { prompt: 'normal' });
+  assert.equal(preferred.ok, true);
+  assert.equal(preferred.content, 'final');
+
+  const empty = await localChat({ url: stub.baseUrl, model: 'm' }, { prompt: 'empty' });
+  assert.equal(empty.ok, false);
+  assert.match(empty.error, /no choice content/);
+});

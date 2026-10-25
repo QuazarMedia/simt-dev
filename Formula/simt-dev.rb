@@ -23,7 +23,7 @@
 # placeholder.
 
 class SimtDev < Formula
-  desc "Shared agent rules, skills and git hooks, adopted by one command"
+  desc "An intelligence amplifier for AI coding agents, adopted by one command"
   homepage "https://github.com/QuazarMedia/simt-dev"
   url "https://registry.npmjs.org/simt-dev/-/simt-dev-0.4.0.tgz"
   sha256 "8ba319a172682db5e1f66d032d781e90ffe8ecde2664eb9e4baec462ec7f0d17"

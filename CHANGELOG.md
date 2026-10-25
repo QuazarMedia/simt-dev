@@ -6,6 +6,12 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+The one-line description the three channels publish (npm, PyPI and Homebrew) now
+names the goal plan `0003` is building toward — an intelligence amplifier for AI
+coding agents — instead of the adoption-only story it grew out of.
+
 ## [0.5.0] — 2026-10-25
 
 ### An offline distiller that proposes, never projects

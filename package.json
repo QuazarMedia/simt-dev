@@ -1,7 +1,7 @@
 {
   "name": "simt-dev",
   "version": "0.5.0",
-  "description": "Shared agent rules, skills and git hooks for a repository: one command adopts a repo, and every gate it declares is probed before it is written.",
+  "description": "An intelligence amplifier for AI coding agents: rules and dual gates adopted by one command, plus local retrieval, task briefs, benches and repo memory — deterministic by default, with local-model adapters that propose and never select.",
   "license": "Apache-2.0",
   "author": "Said Elimam",
   "private": false,

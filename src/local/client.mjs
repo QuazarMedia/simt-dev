@@ -227,12 +227,14 @@ export async function localChat(
   }
 
   const choice = Array.isArray(res.data.choices) ? res.data.choices[0] : null;
-  const content =
-    typeof choice?.message?.content === 'string'
-      ? choice.message.content
-      : typeof choice?.text === 'string'
-        ? choice.text
-        : null;
+  const message = choice?.message ?? {};
+  // Prefer the final answer. A reasoning model (omlx, Qwen3-thinking) emits its
+  // output in `reasoning_content` and leaves `content` empty or absent when the
+  // budget is tiny (e.g. doctor's 1-token ping), so fall back to it, then the
+  // legacy `text` field. Whitespace-only output counts as absent.
+  const content = [message.content, message.reasoning_content, choice?.text]
+    .map((value) => (typeof value === 'string' && value.trim().length > 0 ? value : null))
+    .find((value) => value !== null) ?? null;
 
   if (content === null) {
     return {

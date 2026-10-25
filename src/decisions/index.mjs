@@ -1,4 +1,4 @@
-// The decision index: what `simt-dev rules why` traces back to.
+// The decision index: what `simt rules why` traces back to.
 //
 // Rule bodies cite the decision that settled them inline, as `(ADR-001)`. That
 // citation is the only thing standing between "a rule someone wrote" and "a rule

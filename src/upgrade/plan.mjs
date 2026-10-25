@@ -29,7 +29,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   const primary = list[0] ?? null;
   const base = { name, path, sha, pinnedSha: manifest?.projection?.simtDevSha ?? null };
 
-  // A repo that never adopted is not behind; it is absent. `simt-dev init` is the command
+  // A repo that never adopted is not behind; it is absent. `simt init` is the command
   // for it, and calling this a failure would make the exit code describe the estate's
   // migration progress rather than this run's correctness.
   if (!manifestExists) {

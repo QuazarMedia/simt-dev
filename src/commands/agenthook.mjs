@@ -1,4 +1,4 @@
-// simt-dev agent-hook <event> | agent-hooks install | agent-hooks status
+// simt agent-hook <event> | agent-hooks install | agent-hooks status
 //
 // Three commands, one subject: the rules the tool projects, enforced while the agent is
 // working rather than when git is committing. `agent-hook` is the entry point a harness

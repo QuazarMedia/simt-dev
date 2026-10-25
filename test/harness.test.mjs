@@ -1,4 +1,4 @@
-// `simt-dev harness detect` - which harnesses a repository is set up for.
+// `simt harness detect` - which harnesses a repository is set up for.
 //
 // The claim under test is narrow and deliberate: a directory that exists implies a
 // harness is in use, and nothing more. The command does not claim what that harness

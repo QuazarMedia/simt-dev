@@ -1,5 +1,5 @@
-// simt-dev sync --yes — write the generated regions.
-// simt-dev check — the gate.
+// simt sync --yes — write the generated regions.
+// simt check — the gate.
 //
 // They share plan/project.mjs so they can never disagree about what the regions
 // should contain. sync decides whether to act; check decides severity and exit
@@ -36,7 +36,7 @@ import { lintDecisions } from '../memory/decide.mjs';
 /** Findings `sync` reports and does not fail on.
  *
  *  `pointer-unread` is a misaimed pointer whose reader this repository serves. `sync`
- *  must not refuse on it: the remedy is `simt-dev sync --yes`, so a `sync` that blocked
+ *  must not refuse on it: the remedy is `simt sync --yes`, so a `sync` that blocked
  *  would be a gate whose remedy is the command being run — ADR-025 ruling 6's hazard, and
  *  worse than a noisy gate. `check` disagrees, and the reason is the whole of ADR-051.
  *
@@ -194,9 +194,9 @@ export async function syncCommand(positional, flags) {
     if (st.state === 'current') continue;
     // A *mispointed* pointer is one this tool wrote and this tool may repair: it is a
     // symlink, so it has no content, and the remedy printed by `check` for this exact
-    // finding is `simt-dev sync --yes`. Reporting a plan and then calling `symlink()` at
+    // finding is `simt sync --yes`. Reporting a plan and then calling `symlink()` at
     // an existing path is `EEXIST` — which is what this did, and the remedy it offered
-    // was `simt-dev doctor`, which reports nothing about it. A command whose own remedy
+    // was `simt doctor`, which reports nothing about it. A command whose own remedy
     // crashes on the state it names has no remedy at all.
     //
     // Only a symlink is replaced. A regular file or a directory is somebody's work and
@@ -364,7 +364,7 @@ export async function syncCommand(positional, flags) {
 
   const idle = changed.length === 0 && pointerPlan.length === 0 && !manifestChanged;
   if (checkOnly) return idle ? EXIT.OK : EXIT.FAIL;
-  // A preview that found work is not a success: `simt-dev sync --yes` with no flags is a
+  // A preview that found work is not a success: `simt sync --yes` with no flags is a
   // check that also prints the plan, and a check that exits 0 while reporting drift
   // is the one-question-two-answers shape ADR-035 rules out. This is what lets a
   // caller run `sync` in place of `sync --check` and get the same verdict.

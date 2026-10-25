@@ -1,4 +1,4 @@
-// The matrix a `simt-dev compare` row is built from: one repo's adoption state.
+// The matrix a `simt compare` row is built from: one repo's adoption state.
 //
 // The shape of a row answers one question - "would this repo behave correctly if
 // an agent followed it today?" - from the four things that can make it not:
@@ -255,7 +255,7 @@ export async function buildRow(path, context) {  const name = path.split('/').fi
     if (region.status === 'drift') {
       // A drift has two causes with different fixes, and the SHA says which. When
       // the recorded SHA matches this simt-dev, the region was hand-edited and
-      // `simt-dev sync --yes` is right; when it does not, the repo is simply behind and the
+      // `simt sync --yes` is right; when it does not, the repo is simply behind and the
       // same command is also right - but the message must not claim a version
       // mismatch when the versions are identical, because that sends the reader
       // looking for a pin that is already correct.
@@ -274,7 +274,7 @@ export async function buildRow(path, context) {  const name = path.split('/').fi
     } else if (region.status === 'current' && row.pinnedSha && row.pinnedSha !== context.expectedSha) {
       // The region matches this simt-dev but the manifest pins an older one. The
       // next sync would stamp the newer SHA silently, so the pin is the thing
-      // that is stale - and it is the value `simt-dev upgrade` reads.
+      // that is stale - and it is the value `simt upgrade` reads.
       problems.push(
         `manifest pins simt-dev ${row.pinnedSha}, this is ${context.expectedSha}; run: ${CLI} upgrade`,
       );

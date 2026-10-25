@@ -56,7 +56,7 @@ export function sourceRoots(files) {
 /**
  * One Affects token.
  *
- * A prefixed command (`simt-dev init`, `simt hooks run`) is a command only when
+ * A prefixed command (`simt init`, `simt hooks run`) is a command only when
  * that command exists. The tool name on its own is not a command and not a path.
  * Anything else is a path or a glob, at the repo root and then under each source
  * root. A token that is none of those is unresolved.

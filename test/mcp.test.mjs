@@ -1,4 +1,4 @@
-// simt-dev mcp - the line protocol.
+// simt mcp - the line protocol.
 //
 // `handle()` is pure, so most of this file tests it without a pipe. The end-to-end test at
 // the end exists because the failure nobody catches otherwise is a stray byte of prose on
@@ -377,7 +377,7 @@ test('mcp: a uri that is not ours, or tries to escape, is refused', async () => 
 // --- end to end over a real pipe ------------------------------------------------
 
 /**
- * Feed lines to `simt-dev mcp` and collect the session.
+ * Feed lines to `simt mcp` and collect the session.
  *
  * `spawn` rather than `execFile` with an `input` option, because there is no such option:
  * the child's stdin would never be closed, the server would wait forever for EOF, and the

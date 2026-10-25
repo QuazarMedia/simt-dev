@@ -153,7 +153,7 @@ test('markers: diff says whether a region was there at all, and what it said', (
 
 test('markers: a changed sha alone counts as drift', () => {
   // The body is byte-identical but was produced by an older simt-dev. That is
-  // exactly the drift the provenance header exists to surface, so `simt-dev check`
+  // exactly the drift the provenance header exists to surface, so `simt check`
   // must not treat it as unchanged.
   const old = inject(HAND, 'body', { sha: 'aaaaaaa' }).text;
   const same = { sha: 'aaaaaaa' };

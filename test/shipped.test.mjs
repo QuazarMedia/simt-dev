@@ -247,7 +247,7 @@ test('every remedy names a command that does what the remedy claims', async () =
       //
       // The flag is searched for on the rest of the line rather than immediately
       // after the command, because a remedy may put other flags first -
-      // `simt-dev hooks install --root R --yes` is the shape `init` prints - and a
+      // `simt hooks install --root R --yes` is the shape `init` prints - and a
       // lookahead would have called that an offender. The search stops at the next
       // `simt-dev` so a correct remedy earlier on a line cannot vouch for a bare
       // one later on it. `[--yes]` in a usage synopsis is the help convention for an

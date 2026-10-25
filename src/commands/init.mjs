@@ -1,4 +1,4 @@
-// simt-dev init - adopt a repo into the ecosystem, or scaffold a new one.
+// simt init - adopt a repo into the ecosystem, or scaffold a new one.
 //
 // The governing idea: init never destroys hand-written work. It writes a manifest
 // and a generated region, reports every conflict it found BEFORE writing anything,
@@ -647,7 +647,7 @@ function render(payload, manifest, { npm = true, version } = {}) {
         : `            runs ${CLI} check where a pull request is merged; yours to edit after this`,
     );
   } else if (payload.ci.action === 'refresh') {
-    // init does not write it. `simt-dev ci` owns the template's own copy, and a
+    // init does not write it. `simt ci` owns the template's own copy, and a
     // second writer would be a second answer to who owns it.
     lines.push(`  ${'refresh'.padEnd(9)} ${payload.ci.file}  ${payload.ci.reason}`);
     lines.push(`            remedy: ${CLI} ci --yes   (init does not write simt-dev's own copy)`);

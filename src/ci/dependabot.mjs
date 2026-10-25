@@ -21,7 +21,7 @@
 //     rewritten, their file from the first commit. A repo that wants a different
 //     cadence, a private registry or an `ignore` rule edits it, and the edit
 //     stays. simt-dev's own repository is the ADR-024 exception and is refreshed
-//     by `simt-dev ci`.
+//     by `simt ci`.
 //
 // The content is detection-driven, which is the ADR-013 shape: the ecosystems
 // listed are the ones this tree actually has a manifest for. Writing an `npm`

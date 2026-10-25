@@ -1,4 +1,4 @@
-// simt-dev ci — the .github files, in the one repository whose copies are refreshed.
+// simt ci — the .github files, in the one repository whose copies are refreshed.
 //
 // Why this exists rather than a flag on `init`: the write-once rule is about a
 // repository's own file, and simt-dev's own repository has no file of its own here —

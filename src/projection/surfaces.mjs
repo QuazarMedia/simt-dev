@@ -30,7 +30,7 @@
 //      `.agents/rules/` or `.github/instructions/`, and a symlink into a
 //      directory whose reader's symlink behaviour is unverified is a guess with a
 //      mode bit. So those get machine-written copies — and because every byte is
-//      derived from `rules/mdc/*.mdc` and `simt-dev check` compares each against
+//      derived from `rules/mdc/*.mdc` and `simt check` compares each against
 //      that same derivation, they are not duplication, they are a build output.
 //      The difference from that duplicate is that nobody can hand-edit one
 //      and have it survive a sync.

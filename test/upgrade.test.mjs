@@ -1,8 +1,8 @@
-// simt-dev upgrade - moving a pin across many repositories.
+// simt upgrade - moving a pin across many repositories.
 //
 // Every test runs the tool the way a CONSUMER runs it. The failure this file exists to
 // prevent is a command that only works from its own source tree, or that quietly writes
-// something it did not report. So each test adopts real repositories with `simt-dev init`,
+// something it did not report. So each test adopts real repositories with `simt init`,
 // pins them at a known SHA, and then checks what `upgrade` did to the FILES.
 
 import assert from 'node:assert/strict';

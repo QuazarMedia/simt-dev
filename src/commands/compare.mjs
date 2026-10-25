@@ -1,4 +1,4 @@
-// simt-dev compare - the org-wide matrix.
+// simt compare - the org-wide matrix.
 //
 // This command exists because the 2026-10-05 audit had to be reconstructed by
 // hand, from 16 repositories, into 40 KB of prose. Everything it found is a fact

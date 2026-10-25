@@ -12,7 +12,7 @@
 //            Inventing a number here would be worse than declaring none.
 //
 // Every default this module produces is explained by the ADR that requires it. The
-// rationale is not duplicated into the JSON (data must stay data); `simt-dev init`
+// rationale is not duplicated into the JSON (data must stay data); `simt init`
 // prints the reason for each value it writes.
 
 import { readFile, rename, writeFile } from 'node:fs/promises';

@@ -1,4 +1,4 @@
-// simt-dev tokens - the context meter.
+// simt tokens - the context meter.
 //
 // The fixtures are synthetic, for the reason compare.test.mjs states: the properties
 // worth testing here are arithmetic and precedence, not the health of a real

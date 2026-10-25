@@ -1,6 +1,6 @@
 // The CI gate, as a file a repo owns.
 //
-// `simt-dev check` is the whole gate: projection drift, an unreadable rule, an
+// `simt check` is the whole gate: projection drift, an unreadable rule, an
 // unrunnable gate, a stale manifest. The pre-commit hook runs it locally, which
 // stops one person committing a broken region and stops nobody else - a hook is a
 // developer's machine, and every review is somebody else's. So the same command
@@ -28,7 +28,7 @@
 //     which is why the header says so in the file rather than in this comment.
 //
 // The own copy also RUNS something different, and that is not a variation for taste.
-// `simt-dev check` is red in this repository by design: AGENTS.md here is written by
+// `simt check` is red in this repository by design: AGENTS.md here is written by
 // hand and deliberately never self-adopted (see its own "Why this repository is not
 // self-adopted"), so the check reports it as unmanaged forever. A gate that is red on
 // the day it lands is the one thing worse than no gate - it teaches the reader to

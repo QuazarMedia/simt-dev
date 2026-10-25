@@ -478,7 +478,7 @@ test('a directory where a pointer belongs is reported, and named as a directory'
   // Not hypothetical: a directory at CLAUDE.md is where Claude Code keeps per-project
   // instructions. Read as "absent" it was invisible — `check` said nothing and `sync`
   // crashed with EEXIST on `symlink()` after writing every other target, naming
-  // `simt-dev doctor`, which reports nothing about it either.
+  // `simt doctor`, which reports nothing about it either.
   const root = await scratch();
   await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
   await mkdir(join(root, 'CLAUDE.md'), { recursive: true });
@@ -502,7 +502,7 @@ test('a directory where a pointer belongs is reported, and named as a directory'
 test('sync repairs a misaimed pointer, because that is the remedy it prints', async () => {
   // The row's headline crash, and the reason the remedy is `sync --yes`: `sync` used to
   // plan the pointer, call `symlink()` at a path that already existed, and die with
-  // `EEXIST` after writing every other target — naming `simt-dev doctor`, which reports
+  // `EEXIST` after writing every other target — naming `simt doctor`, which reports
   // nothing about it. A command whose own remedy crashes on the state it names has no
   // remedy at all.
   const root = await scratch();
@@ -763,7 +763,7 @@ test('a generated rule file the tool no longer writes is reported, not forgotten
   assert.equal(orphans[0].file, '.cursor/rules/test-gate.mdc');
   assert.match(orphans[0].detail, /already folded/);
   // The remedy must name a delete, not `sync`: `sync` will never write this file again,
-  // so a `run: simt-dev sync --yes` here would send the reader in a circle.
+  // so a `run: simt sync --yes` here would send the reader in a circle.
   assert.match(orphans[0].remedy, /delete \.cursor\/rules\/test-gate\.mdc/);
   assert.doesNotMatch(orphans[0].remedy, /sync/);
 });

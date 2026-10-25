@@ -23,7 +23,48 @@ Anything that needs a parser grammar, a local model, or another server is a sepa
 package, off until the repository names it, and it proposes rows or text for a person
 to merge. It does not write the projection.
 
-## Today
+## Install
+
+Requires **Node >= 22.20.0**. The current published release is **0.5.0**. Pin it.
+The tool writes a content digest into the files it generates, and an unpinned upgrade
+changes them under you.
+
+```sh
+npm i -D simt-dev@0.5.0
+
+# or globally
+npm i -g simt-dev@0.5.0
+
+# or once, with no install
+npx -y simt-dev@0.5.0 check
+```
+
+### From PyPI
+
+The wheel carries the same bytes as the npm tarball. It does not fetch them from npm
+at install time.
+
+```sh
+pip install simt-dev
+
+# when this machine has no node
+pip install "simt-dev[node]"
+```
+
+`simt` is the command on both channels. Node is resolved in this order, and the first
+one that answers wins: `SIMT_DEV_NODE`, the node bundled with the `node` extra, then
+`node` on `PATH`.
+
+### From Homebrew
+
+```sh
+brew install QuazarMedia/homebrew-tap/simt-dev
+```
+
+The formula depends on `node`, so the command works on a machine that has never had
+Node installed.
+
+## What `simt` does
 
 ```sh
 # Adopt, inspect, and maintain a repository
@@ -276,47 +317,6 @@ The local-model slices (`R38`–`R40`) shipped as they lab-written: `simt distil
 budgeted summaries with line citations, `simt review` proposes an advisory ADR-008
 verdict over the staged diff, and `simt brief` carries model/effort advice from bench
 history. All remain off until named and propose rather than write projected text.
-
-## Install
-
-Requires **Node >= 22.20.0**. The current published release is **0.5.0**. Pin it.
-The tool writes a content digest into the files it generates, and an unpinned upgrade
-changes them under you.
-
-```sh
-npm i -D simt-dev@0.5.0
-
-# or globally
-npm i -g simt-dev@0.5.0
-
-# or once, with no install
-npx -y simt-dev@0.5.0 check
-```
-
-### From PyPI
-
-The wheel carries the same bytes as the npm tarball. It does not fetch them from npm
-at install time.
-
-```sh
-pip install simt-dev
-
-# when this machine has no node
-pip install "simt-dev[node]"
-```
-
-`simt` is the command on both channels. Node is resolved in this order, and the first
-one that answers wins: `SIMT_DEV_NODE`, the node bundled with the `node` extra, then
-`node` on `PATH`.
-
-### From Homebrew
-
-```sh
-brew install QuazarMedia/homebrew-tap/simt-dev
-```
-
-The formula depends on `node`, so the command works on a machine that has never had
-Node installed.
 
 ## What it writes
 

@@ -35,10 +35,12 @@ function defaultRegistryPath() {
 /**
  * The registry to read when the reader names none, in order (ADR-061 ruling 3):
  *
- * 1. The package root, when it holds one. In this checkout that is how the tool finds its
- *    own registry, and in an installed package it finds the registry the tarball ships -
- *    the one that matches the installed code, which is why this tier wins over a workspace
- *    member that may hold a different version of the tool's catalogue.
+ * 1. The package root, when it holds one. In a source checkout that is how the tool
+ *    finds its own registry, sitting next to the code that reads it. An installed
+ *    package holds no registry (ADR-061 ruling 2): the catalogue is workspace data,
+ *    and an install serving another estate's skills to an adopting repository would
+ *    be a confident wrong answer. This tier is a source-checkout convenience; when it
+ *    is empty, resolution falls through to the workspace member or an honest absence.
  * 2. A member of the resolved workspace, when exactly one holds one: reachable in a checkout
  *    whose package root holds no registry. More than one holding it is ambiguity and the
  *    reader must pick; none is an honest absence, reported with the

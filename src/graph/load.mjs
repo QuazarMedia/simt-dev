@@ -36,13 +36,12 @@ function defaultRegistryPath() {
  * The registry to read when the reader names none, in order (ADR-061 ruling 3):
  *
  * 1. The package root, when it holds one. In this checkout that is how the tool finds its
- *    own registry; in an installed package `graph` is not in the published `files`, so it
- *    never does, and the reader falls through to 2 instead of being handed this workspace's
- *    catalogue.
- * 2. A member of the resolved workspace, when exactly one holds one: a tool installed from
- *    node_modules or a formula resolves its workspace by configuration, and the member that
- *    holds the registry is usually the tool's own checkout. More than one holding it is
- *    ambiguity and the reader must pick; none is an honest absence, reported with the
+ *    own registry, and in an installed package it finds the registry the tarball ships -
+ *    the one that matches the installed code, which is why this tier wins over a workspace
+ *    member that may hold a different version of the tool's catalogue.
+ * 2. A member of the resolved workspace, when exactly one holds one: reachable in a checkout
+ *    whose package root holds no registry. More than one holding it is ambiguity and the
+ *    reader must pick; none is an honest absence, reported with the
  *    workspace that was looked in.
  *
  * Every step is file existence plus the configured workspace, so the answer can be

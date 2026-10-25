@@ -57,7 +57,7 @@ async function run(args, env = {}) {
 async function singleRepoClone(skillName) {
   const dir = await scratch({ 'package.json': '{"name":"lonely"}' });
   await cp(
-    join(WORKSPACE, 'simt-social', '.agents', 'skills', skillName),
+    join(WORKSPACE, 'repo-06', '.agents', 'skills', skillName),
     join(dir, '.agents', 'skills', skillName),
     { recursive: true },
   );
@@ -181,7 +181,7 @@ test('skills install: writes a normal skill verbatim, frontmatter and body', asy
   const { code } = await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
   assert.equal(code, 0);
   const body = await readFile(join(root, '.agents/skills/d1-safe-change/SKILL.md'), 'utf8');
-  const src = await readFile(join(WORKSPACE, 'simt-social-api/.agents/skills/d1-safe-change/SKILL.md'), 'utf8');
+  const src = await readFile(join(WORKSPACE, 'repo-07/.agents/skills/d1-safe-change/SKILL.md'), 'utf8');
   assert.equal(body, src, 'a directory skill is copied verbatim');
 });
 
@@ -231,7 +231,7 @@ test('skills install: records provenance in {manifest} localSkills', async () =>
   assert.equal(manifest.localSkills.length, 1);
   const [entry] = manifest.localSkills;
   assert.equal(entry.name, 'd1-safe-change');
-  assert.equal(entry.from, 'simt-social-api/.agents/skills/d1-safe-change');
+  assert.equal(entry.from, 'repo-07/.agents/skills/d1-safe-change');
   assert.match(entry.sha, /^[0-9a-f]{12}$/, 'the pin records which bytes were installed');
   assert.equal(entry.bytes, 3534);
 });
@@ -304,7 +304,7 @@ test('skills install: records the variant that was actually installed', async ()
   await run(['skills', 'install', 'slice-commit', '--variant', 'api', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   assert.equal(manifest.localSkills[0].variant, 'api');
-  assert.equal(manifest.localSkills[0].from, 'simt-social-api/.agents/skills/slice-commit');
+  assert.equal(manifest.localSkills[0].from, 'repo-07/.agents/skills/slice-commit');
 });
 
 test('skills install: keeps a hand-written string entry and adds the new record', async () => {
@@ -351,7 +351,7 @@ test('skills install: installing a skill into the repo that already holds it doe
   // "installed copy" and the registry source are the same bytes. `cp` of a directory
   // onto itself fails, and the correct action is nothing.
   const { code, stdout, stderr } = await run([
-    'skills', 'install', 'slice-commit', '--root', join(WORKSPACE, 'simt-social-api'), '--yes',
+    'skills', 'install', 'slice-commit', '--root', join(WORKSPACE, 'repo-07'), '--yes',
   ]);
   assert.equal(code, 0);
   assert.match(stdout, /status {3}in-place/);
@@ -364,8 +364,8 @@ test('every variant-bearing skill resolves to exactly one variant per real repo'
   const { registry } = await loadRegistry();
   const { fingerprint } = await import('../src/resolve/fingerprint.mjs');
   const cases = [
-    { repo: 'simt-social', expect: 'web' },
-    { repo: 'simt-social-api', expect: 'api' },
+    { repo: 'repo-06', expect: 'web' },
+    { repo: 'repo-07', expect: 'api' },
   ];
   for (const skill of registry.skills) {
     if (!skill.variants?.length) continue;
@@ -394,7 +394,7 @@ test('skills install: a single-repo clone installs from the copy it already hold
   });
   assert.equal(code, 0);
   assert.match(stdout, /^workspace \(none\)/m);
-  assert.match(stdout, /^source\s+simt-social\/\.agents\/skills\/slice-commit/m);
+  assert.match(stdout, /^source\s+repo-06\/\.agents\/skills\/slice-commit/m);
   assert.match(stdout, /already holds the web variant/);
   assert.match(stdout, /^read\s+repo/m);
 });
@@ -436,7 +436,7 @@ test('skills install: signals that contradict the body the repo holds are refuse
     '.agents/skills/slice-commit/SKILL.md': (() => {
       // Exactly the canonical web body, so the repo genuinely holds the `web`
       // variant even though `hono` is present.
-      return readFileSync(join(WORKSPACE, 'simt-social', '.agents', 'skills', 'slice-commit', 'SKILL.md'), 'utf8');
+      return readFileSync(join(WORKSPACE, 'repo-06', '.agents', 'skills', 'slice-commit', 'SKILL.md'), 'utf8');
     })(),
   });
   const { code, stdout } = await run(['skills', 'install', 'slice-commit', '--root', dir], {
@@ -456,7 +456,7 @@ test('skills install: an explicit --variant is obeyed, and the disagreement is n
     'package.json': JSON.stringify({ name: 'lonely', dependencies: { hono: '^4' } }),
   });
   await cp(
-    join(WORKSPACE, 'simt-social-api', '.agents', 'skills', 'slice-commit'),
+    join(WORKSPACE, 'repo-07', '.agents', 'skills', 'slice-commit'),
     join(dir, '.agents', 'skills', 'slice-commit'),
     { recursive: true },
   );
@@ -465,7 +465,7 @@ test('skills install: an explicit --variant is obeyed, and the disagreement is n
   ]);
   assert.equal(code, 0);
   assert.match(stdout, /^install slice-commit \(variant web\)$/m);
-  assert.match(stdout, /^source\s+simt-social\/\.agents\/skills\/slice-commit/m);
+  assert.match(stdout, /^source\s+repo-06\/\.agents\/skills\/slice-commit/m);
   // The note is a diagnostic, so it goes to stderr like every other note.
   assert.match(stderr, /already holds the api body/);
 });

@@ -279,7 +279,7 @@ const WRITERS = [
   {
     name: 'skills install',
     authorise: ['--yes'],
-    source: 'simt-social-api/.agents/skills/graphify',
+    source: 'repo-07/.agents/skills/graphify',
     verify: async (root) => {
       try {
         return await readFile(join(root, '.agents/skills/graphify/SKILL.md'), 'utf8');

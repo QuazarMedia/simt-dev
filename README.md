@@ -256,12 +256,9 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
 
 ## Where the plan finishes
 
-Slices `R01`–`R37` are complete and shipped in `0.4.0`. The remaining queued slices
-(`R38`–`R55`) finish the optional model proposals, packaging, and small ergonomics:
+Slices `R01`–`R40` are complete and shipped in `0.5.0`. The remaining queued slices
+(`R41`–`R55`) finish packaging and the small ergonomics:
 
-- **Local model distillation and critic (`R38`–`R40`).** A local distiller for long tool
-  outputs, a local diff critic gated on precision >= 0.8, and benchmark-backed model/effort
-  routing advice. All remain off until named and propose rather than write projected text.
 - **Packaging and declarative harness data (`R41`–`R45`).** MCP 2026-07-28 revision
   tightening, declarative harness adapter files with provenance, single-command plugin
   packaging, a single-file binary alongside npm/PyPI/Homebrew, and benchmark-measured rule
@@ -272,20 +269,25 @@ Slices `R01`–`R37` are complete and shipped in `0.4.0`. The remaining queued s
   plus a staged-diff secret scan, `simt slice start/finish <ID>` worktrees, file leases
   for parallel agents, and `simt pr-body` assembled from the evidence ledger.
 
+The local-model slices (`R38`–`R40`) shipped as they lab-written: `simt distill` proposes
+budgeted summaries with line citations, `simt review` proposes an advisory ADR-008
+verdict over the staged diff, and `simt brief` carries model/effort advice from bench
+history. All remain off until named and propose rather than write projected text.
+
 ## Install
 
-Requires **Node >= 22.20.0**. The current published release is **0.4.0**. Pin it.
+Requires **Node >= 22.20.0**. The current published release is **0.5.0**. Pin it.
 The tool writes a content digest into the files it generates, and an unpinned upgrade
 changes them under you.
 
 ```sh
-npm i -D simt-dev@0.4.0
+npm i -D simt-dev@0.5.0
 
 # or globally
-npm i -g simt-dev@0.4.0
+npm i -g simt-dev@0.5.0
 
 # or once, with no install
-npx -y simt-dev@0.4.0 check
+npx -y simt-dev@0.5.0 check
 ```
 
 ### From PyPI

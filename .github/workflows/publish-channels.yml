@@ -55,6 +55,21 @@ on:
         description: 'the simt-dev version live on npm, e.g. 0.5.0'
         required: true
         type: string
+      # Which channels this run publishes. Each is a checkbox, and each job
+      # below gates on its own - so a run touches only the channels you tick,
+      # and an unchecked one is skipped rather than failed. Both default on: a
+      # normal release publishes every downstream channel, and a run that wants
+      # only one unchecks the rest. (A single `all|pypi|brew` choice would do,
+      # but it would special-case "both" inside every job's `if`; a checkbox per
+      # channel keeps each gate to the one line that names it.)
+      publish-pypi:
+        description: 'publish the PyPI channel (wheel + sdist)'
+        type: boolean
+        default: true
+      publish-brew:
+        description: 'publish the Homebrew channel (formula to the tap)'
+        type: boolean
+        default: true
 
 concurrency:
   # Serial rather than cancel: two dispatches for the same or neighbouring
@@ -71,6 +86,9 @@ jobs:
     name: publish to PyPI
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Runs only when the dispatch ticked this channel. An unchecked box skips
+    # the job - it does not fail, so a brew-only run is green end to end.
+    if: ${{ inputs['publish-pypi'] }}
     # The GitHub Environment that PyPI's trusted publishing is registered
     # against. Without it the OIDC request has no environment name to match,
     # and PyPI rejects the upload with a message about the publisher rather
@@ -164,6 +182,9 @@ jobs:
     name: publish to Homebrew
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Runs only when the dispatch ticked this channel. An unchecked box skips
+    # the job - it does not fail, so a PyPI-only run is green end to end.
+    if: ${{ inputs['publish-brew'] }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -209,6 +230,17 @@ jobs:
           sha256="$(shasum -a 256 /tmp/simt-dev.tgz | cut -d' ' -f1)"
           echo "sha256=${sha256}" >> "$GITHUB_ENV"
           echo "simt-dev@${version} is live at ${url} (sha256 ${sha256})"
+
+      - name: install Homebrew
+        # `ubuntu-latest` does not ship Homebrew, and `brew audit --strict`
+        # below is the one step in this job that needs it. The official install
+        # script puts Linuxbrew under /home/linuxbrew/.linuxbrew, which is not on
+        # PATH - so the install and the PATH line are one step: skip the second
+        # and `brew` is installed yet still "command not found".
+        run: |
+          set -eu
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
       - name: the formula builds and lints
         # `brew audit --strict` is the same check homebrew-core runs. A formula

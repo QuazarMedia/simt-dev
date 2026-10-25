@@ -35,7 +35,7 @@ async function run(args) {
 }
 
 const exec = promisify(execFile);
-const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
+const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 const temps = [];
 
 after(async () => {

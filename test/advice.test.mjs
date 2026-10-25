@@ -16,7 +16,7 @@ import { promisify } from 'node:util';
 import { advise, briefAdvice, loadHistory, METRIC_NOTE, tierOfRank } from '../src/advice/advice.mjs';
 import { git } from './fixture.mjs';
 
-const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
+const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 
 async function runCli(root, args) {
   try {

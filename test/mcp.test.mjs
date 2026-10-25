@@ -20,7 +20,7 @@ import { assertValid } from '../src/mcp/schema.mjs';
 import { CLI } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 const req = (method, params, id = 1) => ({ jsonrpc: '2.0', id, method, params });
@@ -209,7 +209,7 @@ test('mcp: skills_brief and `skills brief` answer the same question identically'
   for (const budget of [2000, 20000]) {
     const mcp = await brief.run({ budget, skill: 'parallel-feature-team', root: ROOT });
     const { stdout } = await exec('node', [
-      resolve(ROOT, 'bin', 'simt-dev.mjs'),
+      resolve(ROOT, 'bin', 'simt.mjs'),
       'skills', 'brief', '--root', ROOT, '--skill', 'parallel-feature-team',
       '--budget', String(budget), '--json',
     ]);

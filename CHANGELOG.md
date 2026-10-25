@@ -34,6 +34,14 @@ workspace that owns the registry naming it through `--workspace`,
 of the registry: they live in each repository, and the disclosure scan
 projects them into AGENTS.md.
 
+The entry point file is renamed from `bin/simt-dev.mjs` to `bin/simt.mjs`,
+matching the command it installs: the command has been `simt` for a long
+time, the package is still `simt-dev`, and the file path was the last place
+that carried the old spelling. `BIN_REL` in `src/name.mjs` is the single
+source of truth, so the generated hook shim and CI workflow pick up the new
+path on their next regeneration; the channels (npm, PyPI, Homebrew), the
+repository's own CI and the test harnesses follow.
+
 ## [0.5.0] — 2026-10-25
 
 ### An offline distiller that proposes, never projects

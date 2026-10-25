@@ -264,7 +264,7 @@ export function renderWorkflow({ own = false, npm = true, version } = {}) {
         '      - name: tests',
         '        run: npm test',
         '      - name: skill registry lint',
-        '        run: node bin/simt-dev.mjs graph lint',
+        '        run: node bin/simt.mjs graph lint',
         '      - name: the gate copy in this repo is current',
         // The drift this exception exists to prevent, checked where it would be caught.
         // Without it a template change lands with the copy still describing the old
@@ -272,7 +272,7 @@ export function renderWorkflow({ own = false, npm = true, version } = {}) {
         //
         // `--check`, and not the bare command: `ci` previews by default and exits 0,
         // so this step used to print the drift it exists to catch and pass anyway.
-        '        run: node bin/simt-dev.mjs ci --check',
+        '        run: node bin/simt.mjs ci --check',
       ].join('\n'),
       // ADR-012 says CI verifies on macOS and Linux. Until this matrix existed that
       // sentence was false in the one repository that could have made it true, and no

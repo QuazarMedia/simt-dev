@@ -28,7 +28,7 @@ import {
 import { skillWorkspace, workspaceEnv } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 async function run(args, env = {}) {
@@ -80,8 +80,8 @@ test('PACKAGE_ROOT is the package directory, not its parent', () => {
   // which says nothing about the bug and fails for anyone who cloned the repo
   // under a different name.
   assert.ok(existsSync(join(PACKAGE_ROOT, 'package.json')), PACKAGE_ROOT);
-  assert.ok(existsSync(join(PACKAGE_ROOT, 'bin', 'simt-dev.mjs')), PACKAGE_ROOT);
-  assert.ok(!existsSync(join(PACKAGE_ROOT, '..', 'bin', 'simt-dev.mjs')), 'must be the package, not the workspace');
+  assert.ok(existsSync(join(PACKAGE_ROOT, 'bin', 'simt.mjs')), PACKAGE_ROOT);
+  assert.ok(!existsSync(join(PACKAGE_ROOT, '..', 'bin', 'simt.mjs')), 'must be the package, not the workspace');
 });
 
 // --- configPaths --------------------------------------------------------------

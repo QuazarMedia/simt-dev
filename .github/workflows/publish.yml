@@ -130,7 +130,7 @@ jobs:
 
       - name: skill registry lint
         if: env.SKIP == 'false'
-        run: node bin/simt-dev.mjs graph lint
+        run: node bin/simt.mjs graph lint
 
       # The same file the wheel later carries. A PyPI wheel holding different
       # rules than the npm tarball is the defect this whole release path is

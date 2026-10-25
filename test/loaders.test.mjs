@@ -28,7 +28,7 @@ import { LOADERS, caps, loader } from '../src/projection/loaders.mjs';
 import { viewOf } from '../src/measure/loaderView.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 const made = [];
 

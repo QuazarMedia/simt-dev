@@ -60,14 +60,14 @@ class SimtDev < Formula
     # `/node` missing the shebang named a directory, and the symptom was
     # `permission denied` on the command rather than anything about a path.
     node = formula_opt_bin("node")/"node"
-    inreplace "#{libexec}/bin/simt-dev.mjs",
+    inreplace "#{libexec}/bin/simt.mjs",
             "#!/usr/bin/env node",
             "#!#{node}"
 
     # `simt`, and only `simt`. The command is the name on both channels; a
     # second script under the package name would be a fork in the docs waiting
     # to happen.
-    bin.install_symlink libexec/"bin/simt-dev.mjs" => "simt"
+    bin.install_symlink libexec/"bin/simt.mjs" => "simt"
   end
 
   test do

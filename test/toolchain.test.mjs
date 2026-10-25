@@ -11,7 +11,7 @@ import { allows, checkToolchain, readPins, LOCKFILES } from '../src/toolchain.mj
 import { checkTargets } from '../src/projection/project.mjs';
 
 const run = promisify(execFile);
-const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt.mjs');
 
 async function simt(args, root) {
   try {

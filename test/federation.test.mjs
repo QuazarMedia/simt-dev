@@ -23,7 +23,7 @@ import { federationServers } from '../src/federation/config.mjs';
 import { TOOLS } from '../src/mcp/tools.mjs';
 import { git } from './fixture.mjs';
 
-const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
+const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 
 /**
  * The timeout is on the child, not the test.

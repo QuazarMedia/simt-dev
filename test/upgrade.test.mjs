@@ -22,7 +22,7 @@ import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 // The third argument exists for one test: running the tool out of a package nested
@@ -546,7 +546,7 @@ test('upgrade: a commit in the CONSUMER repo does not move the stamp', async () 
   await repo(consumer, { 'requirements.txt': 'flask\n' });
   await git(['add', '-A'], { cwd: consumer });
   await git(['commit', '-m', 'the repo before adopting'], { cwd: consumer });
-  const nested = join(pkg, 'bin', 'simt-dev.mjs');
+  const nested = join(pkg, 'bin', 'simt.mjs');
   const adopted = await run(['init', '--root', consumer, '--yes'], {}, nested);
   assert.equal(adopted.code, 0, adopted.stderr);
   const consumersHead = await consumerHead(consumer);

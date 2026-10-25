@@ -437,7 +437,7 @@ test('the provenance header gives the reader the two actions that exist', async 
 });
 
 const exec = promisify(execFile);
-const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
+const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 
 /** A scratch repository holding the named files, keyed by path relative to its root. */
 async function repoWith(files) {

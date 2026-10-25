@@ -29,7 +29,7 @@ import {
 import { localChat, localEmbed, localModels, probeLocal } from '../src/local/client.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 async function runCli(args, env = {}) {

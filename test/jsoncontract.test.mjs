@@ -22,7 +22,7 @@ import { SCHEMA_VERSION } from '../src/output/index.mjs';
 import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const made = [];
 
 after(async () => {

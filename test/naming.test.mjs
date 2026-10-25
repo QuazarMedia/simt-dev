@@ -112,7 +112,7 @@ test('the names already on an adopting repository do not move', () => {
   assert.equal(CONFIG_DIR, 'simt-dev');
   assert.equal(BIN_ENV, 'SIMT_DEV_BIN');
   assert.equal(PROJECT, 'simt-dev');
-  assert.equal(BIN_REL, 'bin/simt-dev.mjs');
+  assert.equal(BIN_REL, 'bin/simt.mjs');
 });
 
 test('a renamed manifest is read as both spellings, and the new one is written', async () => {

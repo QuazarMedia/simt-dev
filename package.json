@@ -18,7 +18,7 @@
     "linux"
   ],
   "bin": {
-    "simt": "bin/simt-dev.mjs"
+    "simt": "bin/simt.mjs"
   },
   "files": [
     "bin",
@@ -42,6 +42,6 @@
   ],
   "scripts": {
     "test": "node --test --test-concurrency=4 test/*.test.mjs",
-    "lint": "node bin/simt-dev.mjs doctor"
+    "lint": "node bin/simt.mjs doctor"
   }
 }

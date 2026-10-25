@@ -28,7 +28,7 @@ import { git, cmd } from './fixture.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 
 const exec = promisify(execFile);
 const made = [];

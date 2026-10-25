@@ -19,7 +19,7 @@ import { packageVersion, hasNpm, assertVersionPin } from '../src/package-version
 import { MANIFEST_FILE } from '../src/name.mjs';
 
 const exec = promisify(execFile);
-const BIN = new URL('../bin/simt-dev.mjs', import.meta.url).pathname;
+const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 const temps = [];
 
 after(async () => {

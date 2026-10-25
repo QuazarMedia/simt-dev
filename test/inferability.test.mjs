@@ -16,7 +16,7 @@ import { CARD_VERBS } from '../src/kernel/card.mjs';
 import { filterInferable, inferableDefect, parseInferable } from '../src/kernel/inferability.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = join(HERE, '..', 'bin', 'simt-dev.mjs');
+const BIN = join(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 const MARKED = '- Use the wrapper that is in the repository.';

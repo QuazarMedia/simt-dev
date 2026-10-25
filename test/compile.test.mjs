@@ -269,7 +269,7 @@ test('proposeSkillDescription records model, promptHash and digest provenance wi
 
 test('CLI `simt skills compile` reports triggers + split plans, and writes compiled artifacts only with --yes', async () => {
   const root = await scratch();
-  const runsDir = join(root, '.simt-dev', 'bench', 'runs', 'claude-current-r1');
+  const runsDir = join(root, '.simt', 'bench', 'runs', 'claude-current-r1');
   await mkdir(runsDir, { recursive: true });
   await writeFile(
     join(runsDir, 't-01.json'),
@@ -308,13 +308,13 @@ test('CLI `simt skills compile` reports triggers + split plans, and writes compi
   const previewRes = await runCli(['skills', 'compile', 'cloudflare', '--root', root]);
   assert.equal(previewRes.code, 0, previewRes.stderr);
   assert.match(previewRes.stdout, /flagged/);
-  assert.equal(existsSync(join(root, '.simt-dev', 'compiled')), false);
+  assert.equal(existsSync(join(root, '.simt', 'compiled')), false);
 
   // Apply mode writes SKILL.md and proposal JSON
   const applyRes = await runCli(['skills', 'compile', 'cloudflare', '--root', root, '--yes', '--json']);
   assert.equal(applyRes.code, 0, applyRes.stderr);
   const appliedPayload = JSON.parse(applyRes.stdout);
   assert.equal(appliedPayload.written, true);
-  assert.equal(existsSync(join(root, '.simt-dev', 'compiled', 'skills', 'cloudflare', 'SKILL.md')), true);
-  assert.equal(existsSync(join(root, '.simt-dev', 'proposals', 'skills', 'cloudflare.json')), true);
+  assert.equal(existsSync(join(root, '.simt', 'compiled', 'skills', 'cloudflare', 'SKILL.md')), true);
+  assert.equal(existsSync(join(root, '.simt', 'proposals', 'skills', 'cloudflare.json')), true);
 });

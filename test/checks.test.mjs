@@ -20,9 +20,9 @@ async function repo() {
   const root = await mkdtemp(join(tmpdir(), 'simt-checks-'));
   await git(['init', '-q', root]);
   await writeFile(join(root, 'pyproject.toml'), '[project]\nname = "x"\n');
-  await mkdir(join(root, '.simt-dev', 'profiles'), { recursive: true });
+  await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
   await writeFile(
-    join(root, '.simt-dev', 'profiles', 'house.md'),
+    join(root, '.simt', 'profiles', 'house.md'),
     [
       '---',
       'simt-id: house-checks',

@@ -22,7 +22,7 @@ import {
 
 const exec = promisify(execFile);
 
-const LEDGER_FILE = '.simt-dev/ledger.jsonl';
+const LEDGER_FILE = '.simt/ledger.jsonl';
 
 /** Phrases that claim a run happened. `unverified` and `not verified` are removed
  *  first, because both contain the word and neither is a claim. */
@@ -76,7 +76,7 @@ export async function recordRun(root, { cmd, exit, ms, output }) {
         }
       : {}),
   };
-  await mkdir(join(root, '.simt-dev'), { recursive: true });
+  await mkdir(join(root, '.simt'), { recursive: true });
   await appendFile(join(root, LEDGER_FILE), `${JSON.stringify(line)}\n`);
 
   if (exit === 0 && typeof cmd === 'string') {

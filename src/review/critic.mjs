@@ -5,10 +5,10 @@
 // consumer: it sends the brief to the endpoint named in the manifest (R37) and asks
 // for an ADR-008 verdict skeleton, then verifies the verdict vocabulary and every
 // cited id against that brief before the reply becomes a proposal under
-// `.simt-dev/reviews/`. A proposal a human never reads is a dead file, which is the
+// `.simt/reviews/`. A proposal a human never reads is a dead file, which is the
 // intended failure mode (ADR-075, ADR-090).
 //
-// Nothing here writes outside `.simt-dev/reviews/`, and nothing here edits a source
+// Nothing here writes outside `.simt/reviews/`, and nothing here edits a source
 // file — the model is a critic, not an author. The verdict is advisory by
 // construction; no gate reads it. The row's own promotion rule names the test:
 // precision at least 0.8 on a labelled set of historical diffs. Until
@@ -32,9 +32,9 @@ import { digestOf, promptHash, proposalFrontmatter } from '../distill/engine.mjs
 
 const exec = promisify(execFile);
 
-// Locked on-disk beneath `.simt-dev`, like `.simt-dev/distilled` (R38) — a cache of
+// Locked on-disk beneath `.simt`, like `.simt/distilled` (R38) — a cache of
 // proposals keyed by content digest, never projected and never committed.
-const REVIEW_DIR = '.simt-dev/reviews';
+const REVIEW_DIR = '.simt/reviews';
 const ENGINE_REVIEW_LOCAL = 'review-local';
 
 /** The diff brief's byte cap; `--budget` overrides it, `0` means unlimited. */

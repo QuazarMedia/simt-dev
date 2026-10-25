@@ -393,7 +393,7 @@ test('mineTasks validates RED and GOLD twice, drops non-RED commits, and writes 
   const preview = await mineTasks(repo, { apply: false, env });
   assert.equal(preview.ok, true);
   assert.equal(preview.applied, false);
-  assert.equal(existsSync(join(repo, '.simt-dev', 'bench', 'tasks')), false);
+  assert.equal(existsSync(join(repo, '.simt', 'bench', 'tasks')), false);
 
   // Apply mode validates RED -> GOLD twice and keeps only commit 2.
   const firstRun = await mineTasks(repo, { apply: true, env });
@@ -410,7 +410,7 @@ test('mineTasks validates RED and GOLD twice, drops non-RED commits, and writes 
   assert.deepEqual(task.gold, { files: 1, linesAdded: 2, linesRemoved: 2 });
   assert.equal(task.vault, `vault/${task.id}`);
 
-  const taskFile = join(repo, '.simt-dev', 'bench', 'tasks', `${task.id}.json`);
+  const taskFile = join(repo, '.simt', 'bench', 'tasks', `${task.id}.json`);
   const bytesFirst = await readFile(taskFile, 'utf8');
 
   // Vault holds both patches outside the worktree.
@@ -425,8 +425,8 @@ test('mineTasks validates RED and GOLD twice, drops non-RED commits, and writes 
   assert.equal(bytesSecond, bytesFirst);
 });
 
-test('simt-dev has at least 20 verified tasks in .simt-dev/bench/tasks matching Appendix A schema', async () => {
-  const tasksDir = join(ROOT, '.simt-dev', 'bench', 'tasks');
+test('simt-dev has at least 20 verified tasks in .simt/bench/tasks matching Appendix A schema', async () => {
+  const tasksDir = join(ROOT, '.simt', 'bench', 'tasks');
   const files = (await readdir(tasksDir)).filter((f) => f.endsWith('.json')).sort();
   assert.ok(
     files.length >= DEFAULT_MINE_TARGET,
@@ -614,14 +614,14 @@ test('prepareIsolatedWorkspace creates a one-commit git export and materialiseAr
   const kernelAgents = await readFile(join(kernelWs.workDir, 'AGENTS.md'), 'utf8');
   assert.match(kernelAgents, /## Rules not in this region/);
 
-  // 3. Brief arm writes .simt-dev/brief.md.
+  // 3. Brief arm writes .simt/brief.md.
   const briefSpec = await parseArmSpec('brief');
   const briefWs = await prepareIsolatedWorkspace(repo, baseSha, briefSpec, {
     id: 't-1',
     prompt: 'validate slice commit and run focused tests',
   });
   tempDirs.push(briefWs.slotDir);
-  assert.equal(existsSync(join(briefWs.workDir, '.simt-dev', 'brief.md')), true);
+  assert.equal(existsSync(join(briefWs.workDir, '.simt', 'brief.md')), true);
 
   // 4. Custom arm file (--arm name=path/to/arm.json) writes/removes files and sets env.
   const armFile = join(repo, 'custom-arm.json');
@@ -783,7 +783,7 @@ test('bench run: gold adapter resolves 100%, noop resolves 0%, and re-grading re
   assert.deepEqual(tamperedGrade.diff, { files: 2, outsideBlastRadius: 2 });
 
   // 5. CLI `simt bench run` preview on simt-dev's mined tasks, plus execute (--yes) and --regrade on `repo`.
-  const simtTasks = (await readdir(join(ROOT, '.simt-dev', 'bench', 'tasks')))
+  const simtTasks = (await readdir(join(ROOT, '.simt', 'bench', 'tasks')))
     .filter((f) => f.endsWith('.json'))
     .sort();
   const sampleTaskId = simtTasks[0].replace(/\.json$/, '');
@@ -956,9 +956,9 @@ test('bench report (R03): cost model, quality Q, CPI, cache-hit ratio, McNemar, 
   assert.equal(wilcoxonTies.statistic, 3);
   assert.equal(wilcoxonTies.pValue, 0.3125);
 
-  // 5. End-to-end synthetic repository with .simt-dev/bench/prices.json and 6 paired tasks across bare & kernel.
+  // 5. End-to-end synthetic repository with .simt/bench/prices.json and 6 paired tasks across bare & kernel.
   const repo = await scratch('simt-report-repo-');
-  const benchDir = join(repo, '.simt-dev', 'bench');
+  const benchDir = join(repo, '.simt', 'bench');
   const bareDir = join(benchDir, 'runs', 'claude-bare-r1');
   const kernelDir = join(benchDir, 'runs', 'claude-kernel-r1');
   await mkdir(bareDir, { recursive: true });
@@ -1225,10 +1225,10 @@ test('bench ablate (R04): leave-one-out section removal, 10-task canary with esc
   //    - `core:scope-of-these-rules` has ΔR = 0 (both resolve 10/10 on canary) and ΔC > 0
   //      (keeping the section costs more tokens than removing it), with non-significant canary
   //      delta so it stays at 10 tasks (`escalated: false`) and is flagged in `deletionCandidates`.
-  const tasksDir = join(repo, '.simt-dev', 'bench', 'tasks');
+  const tasksDir = join(repo, '.simt', 'bench', 'tasks');
   await mkdir(tasksDir, { recursive: true });
   await writeFile(
-    join(repo, '.simt-dev', 'bench', 'prices.json'),
+    join(repo, '.simt', 'bench', 'prices.json'),
     JSON.stringify({ in: 3.0, cache_write: 3.75, cache_read: 0.3, out: 15.0 }, null, 2),
   );
 
@@ -1256,7 +1256,7 @@ test('bench ablate (R04): leave-one-out section removal, 10-task canary with esc
   }
 
   const writeArmRun = async (arm, taskId, { resolved, input, output }) => {
-    const dir = join(repo, '.simt-dev', 'bench', 'runs', `claude-${arm}-r1`);
+    const dir = join(repo, '.simt', 'bench', 'runs', `claude-${arm}-r1`);
     await mkdir(dir, { recursive: true });
     await writeFile(
       join(dir, `${taskId}.json`),
@@ -1358,7 +1358,7 @@ test('bench ablate (R04): leave-one-out section removal, 10-task canary with esc
   assert.deepEqual(runnerCalls[0].arms, ['current', 'no-core-truth', 'no-core-scope-of-these-rules']);
   assert.equal(runnerCalls[1].tasks.length, 2);
   assert.deepEqual(runnerCalls[1].arms, ['current', 'no-core-truth']);
-  assert.equal(existsSync(join(repo, '.simt-dev', 'bench', 'ablation.json')), true);
+  assert.equal(existsSync(join(repo, '.simt', 'bench', 'ablation.json')), true);
 
   // 5. CLI `simt bench ablate` preview and `--json` output.
   const cliJson = await runCli(['bench', 'ablate', '--root', repo, '--json']);

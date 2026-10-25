@@ -384,7 +384,7 @@ test('check raises the budget finding, and does not fail on it', async () => {
 async function cuttable() {
   const root = await repo(await scratch(), 'alpha');
   await writeFile(join(root, 'pyproject.toml'), '[project]\nname = "alpha"\n');
-  await mkdir(join(root, '.simt-dev', 'profiles'), { recursive: true });
+  await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
   for (const id of ['house-alpha', 'house-beta']) {
     // Fat, for the reason kernel.test.mjs's fixture is: naming a cut rule costs the
     // region a line in its deferred section, so a one-line rule costs more to cut than
@@ -394,7 +394,7 @@ async function cuttable() {
       (_, i) => `A generated sentence ${i} in ${id}, long enough to cost a reader real context bytes.\n\n`,
     ).join('');
     await writeFile(
-      join(root, '.simt-dev', 'profiles', `${id}.md`),
+      join(root, '.simt', 'profiles', `${id}.md`),
       `---\nsimt-id: ${id}\nsimt-title: ${id}\nsimt-applies: [python]\nsimt-priority: command\n---\n\n# ${id}\n\n${body}`,
     );
   }

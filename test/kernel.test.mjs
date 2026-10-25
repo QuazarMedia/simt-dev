@@ -21,11 +21,11 @@ import { KERNEL_CLASSES, PRIORITY_CLASSES } from '../src/projection/rules.mjs';
 /** A python repository with three local profiles: one hard, one a command, one a style. */
 async function kernelRepo() {
   const root = await mkdtemp(join(tmpdir(), 'simt-kernel-'));
-  await mkdir(join(root, '.simt-dev', 'profiles'), { recursive: true });
+  await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
   await writeFile(join(root, 'pyproject.toml'), '[project]\nname = "x"\n');
   const write = (id, priority, title, lines = 1) =>
     writeFile(
-      join(root, '.simt-dev', 'profiles', `${id}.md`),
+      join(root, '.simt', 'profiles', `${id}.md`),
       `---\nsimt-id: ${id}\nsimt-title: ${title}\nsimt-applies: [python]\nsimt-priority: ${priority}\n---\n\n# ${title}\n\n${Array.from({ length: lines }, (_, i) => `Body for ${id}, line ${i}.`).join('\n\n')}\n`,
     );
   await write('house-rule', 'hard', 'House rule');
@@ -101,7 +101,7 @@ test('kernel mode packs the hard and command classes and defers the rest', async
 test('a rule that states no class is deferred, because keeping it would defeat the mode', async () => {
   const root = await kernelRepo();
   await writeFile(
-    join(root, '.simt-dev', 'profiles', 'unclassified.md'),
+    join(root, '.simt', 'profiles', 'unclassified.md'),
     '---\nsimt-id: unclassified\nsimt-title: Unclassified\nsimt-applies: [python]\n---\n\n# Unclassified\n\nNo class at all.\n',
   );
   await declare(root, { mode: 'kernel' });
@@ -117,7 +117,7 @@ test('a rule that states no class is deferred, because keeping it would defeat t
 test('an unknown priority class is a defect, not a class nobody happened to use', async () => {
   const root = await kernelRepo();
   await writeFile(
-    join(root, '.simt-dev', 'profiles', 'wrong.md'),
+    join(root, '.simt', 'profiles', 'wrong.md'),
     '---\nsimt-id: wrong\nsimt-title: Wrong\nsimt-applies: [python]\nsimt-priority: critical\n---\n\n# Wrong\n\nA class that does not exist.\n',
   );
   // Reported where defects are reported — `graph lint` and `check` — not in the region,

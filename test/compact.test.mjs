@@ -161,7 +161,7 @@ test('gate prints the failure, counts the pass, and keeps the raw log', async ()
     assert.match(ran.stdout, /keep\.test\.mjs:\d+:\d+/);
     assert.equal(ran.stdout.includes('adds the value'), false);
     assert.match(ran.stdout, /passed  1/);
-    const raw = /raw  (\.simt-dev\/gate\/gate-\d+\.log)/.exec(ran.stdout);
+    const raw = /raw  (\.simt\/gate\/gate-\d+\.log)/.exec(ran.stdout);
     assert.ok(raw, ran.stdout);
     const log = await readFile(join(root, raw[1]), 'utf8');
     assert.match(log, /adds the value/);

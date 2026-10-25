@@ -8,7 +8,7 @@
 //
 // Hidden test patches live in `~/.cache/simt-dev/vault/<repo-id>/<task-id>/`
 // outside every worktree (RepoTrials / PatchGym), while deterministic task
-// descriptors live in `.simt-dev/bench/tasks/<id>.json`.
+// descriptors live in `.simt/bench/tasks/<id>.json`.
 
 import { execFile, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -661,7 +661,7 @@ async function validateCandidate(root, worktree, candidate, { timeoutMs = 5000 }
  * Mine verified benchmark tasks from a repository's git history.
  *
  * When `apply` is false (the default without `--yes`, or under `--dry-run`),
- * candidates are discovered and reported without writing to `.simt-dev/bench/tasks/`
+ * candidates are discovered and reported without writing to `.simt/bench/tasks/`
  * or the vault. When `apply` is true, candidates are validated in isolated
  * temporary worktrees until `target` valid tasks are collected, and written
  * deterministically to disk.
@@ -685,7 +685,7 @@ export async function mineTasks(
     return { ok: false, error: listed.error };
   }
 
-  const tasksDir = join(absRoot, '.simt-dev', 'bench', 'tasks');
+  const tasksDir = join(absRoot, '.simt', 'bench', 'tasks');
   const vaultRoot = resolveVaultDir(absRoot, { env });
 
   if (!apply) {

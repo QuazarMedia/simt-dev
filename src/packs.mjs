@@ -3,7 +3,7 @@
 // A pack is one answer to a question fourteen repositories kept asking separately:
 // "several repositories share one set of rules, and it must change in one place."
 // What a pack is NOT is a remote fetch. The content lives in the adopting
-// repository at `.simt-dev/packs/<name>/`, and the manifest records a digest of
+// repository at `.simt/packs/<name>/`, and the manifest records a digest of
 // it. Reading it from anywhere else would make the rendered region depend on a
 // path that does not resolve in the receiving repository - which is the single
 // failure this whole tool exists to prevent, and it would be introduced by the
@@ -22,7 +22,7 @@ import { readManifest } from './projection/manifest.mjs';
 import { CLI, MANIFEST_FILE } from './name.mjs';
 
 /** Where a pack's files live, relative to a repository root. */
-export const PACK_DIR = '.simt-dev/packs';
+export const PACK_DIR = '.simt/packs';
 
 // A pack name is a directory name under `PACK_DIR`, and it ends up in a path the
 // tool builds from manifest content. Restricted to the characters a directory

@@ -117,11 +117,11 @@ async function runSelected(root, flags, selected) {
 
 async function writeRaw(root, body) {
   try {
-    const dir = join(root, '.simt-dev', 'gate');
+    const dir = join(root, '.simt', 'gate');
     await mkdir(dir, { recursive: true });
     const name = `gate-${Date.now()}.log`;
     await writeFile(join(dir, name), body);
-    return `.simt-dev/gate/${name}`;
+    return `.simt/gate/${name}`;
   } catch {
     return '';
   }

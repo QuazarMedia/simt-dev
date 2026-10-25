@@ -840,8 +840,8 @@ test('R36: compare aggregates ledgers, hook denials, and zero-value rules across
   const repoA = await gitRepo('alpha', { 'README.md': 'a\n' }, ws);
   const repoB = await gitRepo('beta', { 'README.md': 'b\n' }, ws);
 
-  await mkdir(join(repoA, '.simt-dev', 'bench', 'runs'), { recursive: true });
-  await mkdir(join(repoB, '.simt-dev', 'bench', 'runs'), { recursive: true });
+  await mkdir(join(repoA, '.simt', 'bench', 'runs'), { recursive: true });
+  await mkdir(join(repoB, '.simt', 'bench', 'runs'), { recursive: true });
 
   // Ledger entries for alpha and beta: test fails repeatedly and is slow, lint is fast and passes.
   const alphaLedger = [
@@ -893,8 +893,8 @@ test('R36: compare aggregates ledgers, hook denials, and zero-value rules across
     },
   ];
 
-  await writeFile(join(repoA, '.simt-dev', 'ledger.jsonl'), `${alphaLedger.map((x) => JSON.stringify(x)).join('\n')}\n`);
-  await writeFile(join(repoB, '.simt-dev', 'ledger.jsonl'), `${betaLedger.map((x) => JSON.stringify(x)).join('\n')}\n`);
+  await writeFile(join(repoA, '.simt', 'ledger.jsonl'), `${alphaLedger.map((x) => JSON.stringify(x)).join('\n')}\n`);
+  await writeFile(join(repoB, '.simt', 'ledger.jsonl'), `${betaLedger.map((x) => JSON.stringify(x)).join('\n')}\n`);
 
   // Hook denials and review-block candidates across alpha and beta.
   const alphaLessons = [
@@ -950,8 +950,8 @@ test('R36: compare aggregates ledgers, hook denials, and zero-value rules across
     },
   ];
 
-  await writeFile(join(repoA, '.simt-dev', 'lessons.jsonl'), `${alphaLessons.map((x) => JSON.stringify(x)).join('\n')}\n`);
-  await writeFile(join(repoB, '.simt-dev', 'lessons.jsonl'), `${betaLessons.map((x) => JSON.stringify(x)).join('\n')}\n`);
+  await writeFile(join(repoA, '.simt', 'lessons.jsonl'), `${alphaLessons.map((x) => JSON.stringify(x)).join('\n')}\n`);
+  await writeFile(join(repoB, '.simt', 'lessons.jsonl'), `${betaLessons.map((x) => JSON.stringify(x)).join('\n')}\n`);
 
   // Ablation run records in alpha showing `core:style` has dR = 0 and dC > 0 (`current` costs more than `no-core-style`).
   const benchRecords = [
@@ -978,8 +978,8 @@ test('R36: compare aggregates ledgers, hook denials, and zero-value rules across
       usage: { input: 4000, cacheRead: 0, cacheWrite: 0, output: 200 },
     },
   ];
-  await writeFile(join(repoA, '.simt-dev', 'bench', 'runs', 'r-01.json'), `${JSON.stringify(benchRecords[0])}\n`);
-  await writeFile(join(repoA, '.simt-dev', 'bench', 'runs', 'r-02.json'), `${JSON.stringify(benchRecords[1])}\n`);
+  await writeFile(join(repoA, '.simt', 'bench', 'runs', 'r-01.json'), `${JSON.stringify(benchRecords[0])}\n`);
+  await writeFile(join(repoA, '.simt', 'bench', 'runs', 'r-02.json'), `${JSON.stringify(benchRecords[1])}\n`);
 
   // Run `compare` twice (both JSON and text) and assert byte-identical output and expected rankings.
   const firstJson = await exec('node', [BIN, 'compare', '--root', ws, '--json'], { maxBuffer: 16 << 20 });

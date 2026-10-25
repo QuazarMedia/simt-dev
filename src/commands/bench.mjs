@@ -2,7 +2,7 @@
 // and statistical report (`bench report`, R03).
 //
 // Like every writer in this CLI, `bench mine` and `bench run` are previews by
-// default and write artifacts to `.simt-dev/bench/` only when authorised with
+// default and write artifacts to `.simt/bench/` only when authorised with
 // `--yes` (and not `--dry-run`). `bench report` is read-only.
 
 import { resolve } from 'node:path';
@@ -91,7 +91,7 @@ export async function benchRunCommand(positional, flags) {
       return fail(
         `${root}: ${error.message ?? error}`,
         EXIT.CONFIG,
-        `pass a stored run name under .simt-dev/bench/runs/: ${CLI} bench run --regrade <run>`,
+        `pass a stored run name under .simt/bench/runs/: ${CLI} bench run --regrade <run>`,
       );
     }
 
@@ -222,7 +222,7 @@ export async function benchReportCommand(positional, flags) {
     return fail(
       `${root}: ${error.message ?? error}`,
       EXIT.CONFIG,
-      `run benchmark arms first with \`${CLI} bench run --yes\` or fix .simt-dev/bench/prices.json`,
+      `run benchmark arms first with \`${CLI} bench run --yes\` or fix .simt/bench/prices.json`,
     );
   }
 
@@ -405,7 +405,7 @@ export async function benchVariantsCommand(positional, flags) {
 // and until a bench here shows that, every report calls the critic advisory.
 export async function benchCriticCommand(positional, flags, commands = []) {
   const root = resolve(flags.root ?? positional[0] ?? process.cwd());
-  const labelsPath = flags.labels ?? '.simt-dev/critic-labels.jsonl';
+  const labelsPath = flags.labels ?? '.simt/critic-labels.jsonl';
   const result = await criticBench(root, { labelsPath, flags, commands });
   if (typeof result === 'number') return result;
 

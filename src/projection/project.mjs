@@ -11,7 +11,7 @@
 // which are interchangeable in a profile (ADR-013) - plus one fallback profile
 // so a JS/TS repo is never left with core rules and nothing else.
 //
-// Profiles may live in the repo, not only here. `.simt-dev/profiles/*.md` uses
+// Profiles may live in the repo, not only here. `.simt/profiles/*.md` uses
 // the same frontmatter contract as `rules/stacks/*.md` and is selected by the
 // same matcher, so supporting an ecosystem nobody here has heard of requires no
 // code change and no release.

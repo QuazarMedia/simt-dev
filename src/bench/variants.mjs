@@ -10,7 +10,7 @@ import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 import { extractVariantsFromRule, readLockedVariants } from '../kernel/variants.mjs';
-import { CONFIG_DIR, MANIFEST_FILE } from '../name.mjs';
+import { MANIFEST_FILE, STATE_DIR } from '../name.mjs';
 import { writeLockVariants } from '../projection/lock.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { loadMdcRules } from '../projection/mdc.mjs';
@@ -26,8 +26,6 @@ import {
   loadPrices,
   loadRunRecords,
 } from './report.mjs';
-
-const STATE_DIR = `.${CONFIG_DIR}`;
 
 /**
  * Discover every `simt-variants` slot across applicable rules for `root`.

@@ -7,7 +7,7 @@
 //   2. `simt review --local` proposes from the configured chat model, verifies
 //      the ADR-008 vocabulary and every cited id against the brief, and writes
 //      the reply where model output may land — a proposal under
-//      `.simt-dev/reviews/`, cached by digest, never a source file. A fabricated
+//      `.simt/reviews/`, cached by digest, never a source file. A fabricated
 //      citation, a non-vocabulary verdict, or an unfulfilled residual-risk duty
 //      marks the proposal `verified: false` instead of trusting it.
 //   3. `simt bench critic` reads a labelled set a human wrote for it, runs the
@@ -147,8 +147,8 @@ async function commitHistory(dir) {
 
 /** Label the history the way a human reviewer would, under ADR-008. */
 async function writeLabels(dir, rows) {
-  await mkdir(join(dir, '.simt-dev'), { recursive: true });
-  await writeFile(join(dir, '.simt-dev', 'critic-labels.jsonl'), rows.map((row) => JSON.stringify(row)).join('\n') + '\n');
+  await mkdir(join(dir, '.simt'), { recursive: true });
+  await writeFile(join(dir, '.simt', 'critic-labels.jsonl'), rows.map((row) => JSON.stringify(row)).join('\n') + '\n');
 }
 
 /**

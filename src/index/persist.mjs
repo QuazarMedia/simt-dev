@@ -7,8 +7,8 @@
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-export const SQLITE_FILE = '.simt-dev/index.sqlite';
-export const JSONL_FILE = '.simt-dev/index.jsonl';
+export const SQLITE_FILE = '.simt/index.sqlite';
+export const JSONL_FILE = '.simt/index.jsonl';
 export const SCHEMA_V = '3';
 
 const SCHEMA = `

@@ -12,6 +12,15 @@ The one-line description the three channels publish (npm, PyPI and Homebrew) now
 names the goal plan `0003` is building toward — an intelligence amplifier for AI
 coding agents — instead of the adoption-only story it grew out of.
 
+The per-repository state directory is renamed from `.simt-dev/` to `.simt/`: the
+index, ledger, lessons, bench artifacts, local-model proposals (`distilled/`,
+`reviews/`) and repo-local profiles all live under `.simt/` now. Existing state is
+not migrated — a repository that carries a `.simt-dev/` directory moves it once by
+hand (`mv .simt-dev .simt`); everything in it is cache or ledger, regenerable from
+git. The names this tool writes into files it does not own stay put: the `simt.json`
+manifest, the `simt-dev-check.yml` gate, the user-level config directory and the
+`SIMT_DEV_*` environment variables keep their names.
+
 ## [0.5.0] — 2026-10-25
 
 ### An offline distiller that proposes, never projects

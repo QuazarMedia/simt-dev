@@ -31,7 +31,7 @@ async function repo() {
 async function sameRows(root, backend) {
   const first = await reindex(root, { backend });
   const rows = await readFiles(root, { backend });
-  await rm(join(root, backend === 'sqlite' ? '.simt-dev/index.sqlite' : '.simt-dev/index.jsonl'));
+  await rm(join(root, backend === 'sqlite' ? '.simt/index.sqlite' : '.simt/index.jsonl'));
   const second = await reindex(root, { backend });
   const again = await readFiles(root, { backend });
   assert.deepEqual(again, rows);

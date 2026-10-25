@@ -15,7 +15,7 @@
 // which are interchangeable in a profile (ADR-013) - plus one fallback profile so
 // a JS/TS repo is never left with core rules and nothing else.
 //
-// Profiles may live in the repo, not only here. `.simt-dev/profiles/*.md` uses the
+// Profiles may live in the repo, not only here. `.simt/profiles/*.md` uses the
 // same frontmatter contract as `rules/stacks/*.md` and is selected by the same
 // matcher, so supporting an ecosystem nobody here has heard of requires no code
 // change and no release.
@@ -131,7 +131,7 @@ async function walk(dir, prefix = '') {
 }
 
 /** Repo-local profile directory, relative to a repo root (ADR-013 section 2). */
-export const LOCAL_PROFILE_DIR = '.simt-dev/profiles';
+export const LOCAL_PROFILE_DIR = '.simt/profiles';
 
 /**
  * Which origin outranks which when two profiles claim one `simt-id`.
@@ -962,7 +962,7 @@ function scopedPaths(rule, resolved) {
 
 /**
  * Read every rule file once, with its frontmatter parsed, plus any repo-local
- * profile under `.simt-dev/profiles/`.
+ * profile under `.simt/profiles/`.
  *
  * A rule without a `simt-id` is a defect, not a default: ids are what `rules why`
  * and the generated region's source list refer to.

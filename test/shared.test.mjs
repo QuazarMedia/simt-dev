@@ -88,11 +88,11 @@ async function estate(names, { profiles = {} } = {}) {
   const roots = [];
   for (const name of names) {
     const root = join(ws, name);
-    await mkdir(join(root, '.simt-dev', 'profiles'), { recursive: true });
+    await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
     await writeFile(join(root, 'package.json'), `${JSON.stringify({ name }, null, 2)}\n`);
     await writeFile(join(root, 'README.md'), `# ${name}\n`);
     if (profiles[name] !== undefined) {
-      await writeFile(join(root, '.simt-dev', 'profiles', 'house-local.md'), profiles[name]);
+      await writeFile(join(root, '.simt', 'profiles', 'house-local.md'), profiles[name]);
     }
     await git(['init', '-q', root]);
     await git(['-C', root, 'add', '.']);

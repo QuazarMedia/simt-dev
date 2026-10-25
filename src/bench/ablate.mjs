@@ -10,7 +10,7 @@
 import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
-import { CONFIG_DIR, MANIFEST_FILE } from '../name.mjs';
+import { MANIFEST_FILE, STATE_DIR } from '../name.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { inject, parse as parseRegion } from '../projection/markers.mjs';
 import { loadMdcRules, renderMdc, ruleName } from '../projection/mdc.mjs';
@@ -26,8 +26,6 @@ import {
   loadPrices,
   loadRunRecords,
 } from './report.mjs';
-
-const STATE_DIR = `.${CONFIG_DIR}`;
 
 export const DEFAULT_CANARY_SIZE = 10;
 export const DEL_R_TOLERANCE = 0.01;

@@ -20,9 +20,7 @@ import { resolveVaultDir } from '../bench/mine.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
-import { CLI, CONFIG_DIR } from '../name.mjs';
-
-const STATE_DIR = `.${CONFIG_DIR}`;
+import { CLI, STATE_DIR } from '../name.mjs';
 
 async function readSkillRawText(skill, workspaceRoot, root) {
   const canonical = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];

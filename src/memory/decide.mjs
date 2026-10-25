@@ -244,7 +244,7 @@ export async function diffAffectedPaths(root) {
   const addLines = (stdout) => {
     for (const line of String(stdout ?? '').split(/\r?\n/)) {
       const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith('.simt-dev/')) paths.add(trimmed);
+      if (trimmed && !trimmed.startsWith('.simt/')) paths.add(trimmed);
     }
   };
   for (const args of [

@@ -120,9 +120,9 @@ test('simt map renders the ranking, and recall is unmeasured without a vault', a
   assert.equal(recalled.code, 0);
   assert.match(recalled.stdout, /unmeasured/);
 
-  await mkdir(join(root, '.simt-dev', 'bench', 'tasks'), { recursive: true });
+  await mkdir(join(root, '.simt', 'bench', 'tasks'), { recursive: true });
   await writeFile(
-    join(root, '.simt-dev', 'bench', 'tasks', 't.json'),
+    join(root, '.simt', 'bench', 'tasks', 't.json'),
     JSON.stringify({ id: 't-1', prompt: 'change greet in src/keep.mjs' }),
   );
   const vault = join(root, 'vault');
@@ -249,9 +249,9 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   assert.equal(cachedIdx.embedState, 'cached');
 
   // 3. Evaluate recall@10 gate: embeddings are accepted only when they raise recall@10 by >= 10 points.
-  await mkdir(join(root, '.simt-dev', 'bench', 'tasks'), { recursive: true });
+  await mkdir(join(root, '.simt', 'bench', 'tasks'), { recursive: true });
   await writeFile(
-    join(root, '.simt-dev', 'bench', 'tasks', 't-sem.json'),
+    join(root, '.simt', 'bench', 'tasks', 't-sem.json'),
     JSON.stringify({ id: 't-sem', prompt: 'adjust semantic target behaviour' }),
   );
   const vault = join(root, 'vault');

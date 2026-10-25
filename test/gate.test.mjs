@@ -21,6 +21,9 @@ const exec = promisify(execFile);
 const ROOT = new URL('..', import.meta.url).pathname;
 
 const RESOLVE = [
+  // advice reaches the resolver only since R40: its loadHistory tests import the
+  // shared fixture, and the fixture loads the registry, so the closure widened.
+  'test/advice.test.mjs',
   'test/agenthooks.test.mjs',
   'test/baselines.test.mjs',
   'test/bench.test.mjs',

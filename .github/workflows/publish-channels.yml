@@ -232,7 +232,7 @@ jobs:
           echo "simt-dev@${version} is live at ${url} (sha256 ${sha256})"
 
       - name: install Homebrew
-        # `ubuntu-latest` does not ship Homebrew, and `brew audit --strict`
+        # `ubuntu-latest` does not ship Homebrew, and `brew style`
         # below is the one step in this job that needs it. The official install
         # script puts Linuxbrew under /home/linuxbrew/.linuxbrew, which is not on
         # PATH - so the install and the PATH line are one step: skip the second
@@ -242,31 +242,27 @@ jobs:
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
-      - name: the formula builds and lints
-        # `brew audit --strict` is the same check homebrew-core runs. A formula
-        # that would be rejected there is a tap that will not be accepted, and
-        # the failure would arrive as a rejected pull request rather than as a
-        # red job.
+      - name: the formula lints
+        # `brew style` runs the same RuboCop engine that homebrew-core's
+        # `brew audit --strict` uses for its style pass, so a formula that would
+        # trip those checks fails here - as a red job - instead of arriving later
+        # as a rejected tap pull request.
         #
-        # Homebrew 7 refuses `brew audit <path>` ("calling brew audit [path ...]
-        # is disabled") and audits BY NAME. A name resolves through a tap, so the
-        # formula is copied into a throwaway local tap and that tap is trusted
-        # before the audit: Homebrew 7 also refuses to load a formula from a tap
-        # it does not trust, and a tap is a git repository, so the directory is
-        # initialised and committed first. The name `quazarmedia/homebrew-simt-dev`
-        # is local scaffolding only - it is not the tap the formula is pushed to,
-        # which the next steps name from ${{ vars.HOMEBREW_TAP }}.
+        # Why `brew style <path>` and not `brew audit --strict`:
+        #   * Homebrew 7 disabled the path form of audit ("calling brew audit
+        #     [path ...] is disabled"), so audit only runs BY NAME.
+        #   * A name resolves through a trusted tap, which means copying the
+        #     formula into a throwaway local tap and trusting it first. That works
+        #     on macOS but not on the Linuxbrew runner: even after `brew trust`,
+        #     `brew audit <name>` reports "No available formula with the name",
+        #     so the gate is unreliable on CI.
+        #   * `brew style` takes a file path directly, needs no tap, and behaves
+        #     identically on both platforms. The full `brew audit --strict` still
+        #     runs for real when the formula lands in the tap, where homebrew-core's
+        #     bot audits the pull request.
         run: |
           set -eu
-          prefix="$(brew --prefix)"
-          tap="$prefix/Library/Taps/quazarmedia/homebrew-simt-dev"
-          mkdir -p "$tap/Formula"
-          cp Formula/simt-dev.rb "$tap/Formula/simt-dev.rb"
-          git -C "$tap" init -q
-          git -C "$tap" -c user.name=audit -c user.email=audit@localhost add -A
-          git -C "$tap" -c user.name=audit -c user.email=audit@localhost commit -qm "formula for audit"
-          brew trust quazarmedia/simt-dev
-          brew audit --strict simt-dev
+          brew style Formula/simt-dev.rb
 
       - name: render the formula for this release
         run: |

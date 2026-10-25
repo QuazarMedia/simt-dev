@@ -82,12 +82,12 @@ const REPO_PROFILES = {
   // and a lockfile, no stack dependencies. That is enough for the commands under
   // test, because no variant-bearing skill declares a source outside the two
   // profiles below, so nothing has to be selected by signal from anywhere else.
-  'simt-social': {
+  'repo-06': {
     profile: 'web',
     files: {
       'package.json': `${JSON.stringify(
         {
-          name: 'simt-social',
+          name: 'repo-06',
           dependencies: { react: '^19.0.0', 'react-router': '^7.0.0' },
           devDependencies: { vite: '^6.0.0', typescript: '^5.6.0' },
         },
@@ -97,12 +97,12 @@ const REPO_PROFILES = {
       'vite.config.ts': 'export default {};\n',
     },
   },
-  'simt-social-api': {
+  'repo-07': {
     profile: 'api',
     files: {
       'package.json': `${JSON.stringify(
         {
-          name: 'simt-social-api',
+          name: 'repo-07',
           dependencies: { hono: '^4.0.0' },
           devDependencies: { typescript: '^5.6.0', wrangler: '^3.0.0' },
         },

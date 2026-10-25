@@ -9,10 +9,10 @@
 // So this file packs the working tree, installs the tarball into a consumer with
 // nothing else in it, and drives `node_modules/.bin/simt-dev`. Everything it
 // asserts is something the reader of this repository would only learn from the
-// published package: the registry being absent from the published set and the
-// command saying so, the decisions being present to read, and a full adoption
-// surviving `init`, a commit, `check`, `upgrade`, `hooks install` and a second
-// real commit.
+// published package: the registry the tarball ships, linted from inside node_modules
+// without reaching this checkout, the decisions being present to read, and a full
+// adoption surviving `init`, a commit, `check`, `upgrade`, `hooks install` and a
+// second real commit.
 //
 // What it deliberately does not assert is that a file Prettier would reformat. The
 // package has no dependencies (ADR-012), so there is no Prettier to reach for and
@@ -161,35 +161,37 @@ async function adopted(mutate) {
   return root;
 }
 
-test('the installed tool ships no registry, and says so instead of reading the author\'s', async () => {
+test('the installed tool ships the registry, and lints it without reading the author\'s', async () => {
   const root = join(stage, 'seed');
 
   const lint = await simt(root, ['graph', 'lint', '--root', '.']);
-  // ADR-061: the catalogue is workspace data, and the published set has none of it.
-  // The honest answer is a named path and a specific exit code, not a confident
-  // foreign list - the failure the old constant had was answering from this tree.
-  assert.equal(lint.code, 4, lint.out);
+  // The published set carries graph/skills.graph.json (package.json `files`), so a
+  // fresh install lints the registry it ships: the named path is inside node_modules,
+  // and the tool never falls back to this checkout. Without a workspace the byte
+  // counts are not checked - that is reported, not hidden (ADR-014).
+  assert.equal(lint.code, 0, lint.out);
   // Self-containment, stated as the two paths it has to disagree on: it looked where
   // an install puts the package, and it did not fall back to this checkout.
-  assert.match(lint.out, /no skill registry at \S*node_modules\/.*graph\/skills\.graph\.json/);
+  assert.match(lint.out, /registry\s+\S*node_modules\/.*graph\/skills\.graph\.json/);
   assert.equal(lint.out.includes(PACKAGE_ROOT), false, 'the installed tool reached into this checkout');
+  assert.match(lint.out, /OK structural checks only/);
 });
 
-test('the installed tool finds the registry a configured workspace holds', async () => {
-  // The tier the previous test's remedy points at (ADR-061 ruling 3): a tool installed
-  // from node_modules resolves its workspace by configuration, and the registry is found
-  // in the MEMBER that holds it. Without this tier the remedy above would send the reader
-  // to a command that still answers "no registry" - a dead end, which is the failure
-  // this repository's rules forbid.
+test('an explicitly named registry wins over the one the installed tool ships', async () => {
+  // The installed package now ships graph/, so the default resolution always finds the
+  // bundled registry (tier 1 of ADR-061 ruling 3). The tier a configured workspace's
+  // member holds is reachable by naming it: an explicit path wins over everything, and
+  // the reader sees where the tool actually looked - the same dead-end the old remedy
+  // would have led to if naming a path were not the way out.
   const root = join(stage, 'seed');
   const ws = join(stage, 'workspace-tier3');
   const registryPath = join(ws, 'registry-holder', 'graph', 'skills.graph.json');
   await mkdir(dirname(registryPath), { recursive: true });
   await cp(join(PACKAGE_ROOT, 'graph', 'skills.graph.json'), registryPath);
 
-  const lint = await simt(root, ['graph', 'lint', '--root', '.'], { ...NO_ESTATE, SIMT_DEV_WORKSPACE: ws });
+  const lint = await simt(root, ['graph', 'lint', registryPath], { ...NO_ESTATE, SIMT_DEV_WORKSPACE: ws });
   assert.equal(lint.code, 0, lint.out);
-  // It read the member's registry, not the author's: the named path is inside the
+  // It read the named registry, not the bundled one: the named path is inside the
   // configured workspace and nowhere else.
   assert.match(lint.out, new RegExp(registryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });

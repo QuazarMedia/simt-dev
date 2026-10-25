@@ -6,7 +6,7 @@
   "stackVocabularySource": "src/resolve/fingerprint.mjs",
   "conventions": {
     "variants": "One node, several bodies, discriminated by stack. Used when the SAME skill name exists in several repos with genuinely different content (the 8 duplicated Social names).",
-    "variant-stack": "A variant stack must name the tag that DIFFERS between the bodies, not a tag both repos share. cloudflare-workers is emitted by simt-social as well as simt-social-api (both ship a wrangler.jsonc), so an api variant listing it matches the web repo too and stops discriminating; hono is the tag that actually separates them. Lint can check that variant stacks are pairwise disjoint, but not that they are discriminative in practice - the goldens test resolves every variant-bearing skill against both real repos and requires exactly one match.",
+    "variant-stack": "A variant stack must name the tag that DIFFERS between the bodies, not a tag both repos share. cloudflare-workers is emitted by repo-06 as well as repo-07 (both ship a wrangler.jsonc), so an api variant listing it matches the web repo too and stops discriminating; hono is the tag that actually separates them. Lint can check that variant stacks are pairwise disjoint, but not that they are discriminative in practice - the goldens test resolves every variant-bearing skill against both real repos and requires exactly one match.",
     "variant-of": "Several nodes that are siblings, discriminated by stack. Used when siblings have DIFFERENT names (web-security-review / api-security-review). Both mechanisms resolve identically: one body per stack.",
     "sources.role": "canonical = the body that becomes the single home. variant = a real distinct body. stub = a thin pointer to another node. duplicate = byte-identical to the canonical body. deprecated = retired name, see alias-of.",
     "deferred": "Derived, not chosen: deferred is true exactly when totalBytes exceeds deferredThreshold. Hand-editing it is a lint error."
@@ -108,7 +108,7 @@
   "skills": [
     {
       "name": "add-country-galaxy",
-      "summary": "Onboard a launch galaxy across simt-api map assets, simt-social-api registry/D1 and the web consumer",
+      "summary": "Onboard a launch galaxy across repo-01 map assets, repo-07 registry/D1 and the web consumer",
       "capabilities": [
         "maps",
         "contract",
@@ -157,20 +157,20 @@
       ],
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/add-country-galaxy",
           "bytes": 15921,
           "role": "canonical"
         },
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/add-country-galaxy",
           "bytes": 1852,
           "role": "stub",
           "note": "44-line Phase-3 pointer to the canonical copy; the cleanest alias pattern already in the estate"
         }
       ],
-      "note": "Spans three repos and deliberately excludes simt-social-media."
+      "note": "Spans three repos and deliberately excludes repo-06-media."
     },
     {
       "name": "add-feature-module",
@@ -198,7 +198,7 @@
       "bytes": 4864,
       "sources": [
         {
-          "repo": "simt-app",
+          "repo": "repo-02",
           "path": ".cursor/skills/add-feature-module",
           "bytes": 4864,
           "role": "canonical"
@@ -232,7 +232,7 @@
       "bytes": 6731,
       "sources": [
         {
-          "repo": "simt-app",
+          "repo": "repo-02",
           "path": ".cursor/skills/add-screen-or-overlay",
           "bytes": 6731,
           "role": "canonical"
@@ -272,7 +272,7 @@
       "variantOf": "feature-slice",
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/api-feature-slice",
           "bytes": 4493,
           "role": "canonical"
@@ -281,7 +281,7 @@
     },
     {
       "name": "api-contract-sync",
-      "summary": "Synchronise web code with the generated simt-social-api OpenAPI contract",
+      "summary": "Synchronise web code with the generated repo-07 OpenAPI contract",
       "capabilities": [
         "contract"
       ],
@@ -294,7 +294,7 @@
       ],
       "paths": [
         "app/contracts/**",
-        "simt-social-openapi-contract.json"
+        "repo-06-openapi-contract.json"
       ],
       "keywords": [
         "openapi",
@@ -308,7 +308,7 @@
       "bytes": 2973,
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/api-contract-sync",
           "bytes": 2973,
           "role": "canonical"
@@ -345,7 +345,7 @@
       "variantOf": "security-review",
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/api-security-review",
           "bytes": 4380,
           "role": "canonical"
@@ -397,13 +397,13 @@
       ],
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/bug-commit",
           "bytes": 5135,
           "role": "canonical"
         },
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/bug-commit",
           "bytes": 5000,
           "role": "variant",
@@ -439,7 +439,7 @@
       "bytes": 4123,
       "sources": [
         {
-          "repo": "simt-app",
+          "repo": "repo-02",
           "path": ".cursor/skills/build-test-verify",
           "bytes": 4123,
           "role": "canonical"
@@ -475,7 +475,7 @@
       "vendored": true,
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/cloudflare",
           "bytes": 384869,
           "role": "canonical",
@@ -513,7 +513,7 @@
       "bytes": 4538,
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/cloudflare-release",
           "bytes": 4538,
           "role": "canonical"
@@ -571,13 +571,13 @@
       ],
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/complete-testing",
           "bytes": 7324,
           "role": "canonical"
         },
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/complete-testing",
           "bytes": 6309,
           "role": "variant",
@@ -614,7 +614,7 @@
       "bytes": 16559,
       "sources": [
         {
-          "repo": "simt-blog",
+          "repo": "repo-03",
           "path": ".agents/skills/create-blog-guide",
           "bytes": 16559,
           "role": "canonical"
@@ -650,7 +650,7 @@
       "bytes": 14773,
       "sources": [
         {
-          "repo": "simt-blog",
+          "repo": "repo-03",
           "path": ".agents/skills/create-blog-visuals",
           "bytes": 14773,
           "role": "canonical"
@@ -685,7 +685,7 @@
       "bytes": 6461,
       "sources": [
         {
-          "repo": "simt-app",
+          "repo": "repo-02",
           "path": ".cursor/skills/data-layer",
           "bytes": 6461,
           "role": "canonical"
@@ -720,7 +720,7 @@
       "bytes": 9365,
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/data-seeding",
           "bytes": 9365,
           "role": "canonical"
@@ -755,7 +755,7 @@
       "bytes": 3534,
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/d1-safe-change",
           "bytes": 3534,
           "role": "canonical"
@@ -785,7 +785,7 @@
       "bytes": 4957,
       "sources": [
         {
-          "repo": "simt-app",
+          "repo": "repo-02",
           "path": ".cursor/skills/documenting-features",
           "bytes": 4957,
           "role": "canonical"
@@ -819,7 +819,7 @@
       "vendored": true,
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/durable-objects",
           "bytes": 28434,
           "role": "canonical"
@@ -855,7 +855,7 @@
       "vendored": true,
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/firebase-auth-basics",
           "bytes": 13147,
           "role": "canonical",
@@ -892,7 +892,7 @@
       "vendored": true,
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/firebase-basics",
           "bytes": 35088,
           "role": "canonical",
@@ -902,7 +902,7 @@
     },
     {
       "name": "gnss-engine",
-      "summary": "Navigate and extend the standalone SIMT GNSS engine library (simt-gnss): parsers, solvers, filters, corrections, orbit, SimtGnssEngine facade",
+      "summary": "Navigate and extend the standalone SIMT GNSS engine library (repo-04): parsers, solvers, filters, corrections, orbit, SimtGnssEngine facade",
       "capabilities": [
         "positioning"
       ],
@@ -929,7 +929,7 @@
       "bytes": 10012,
       "sources": [
         {
-          "repo": "simt-gnss",
+          "repo": "repo-04",
           "path": ".cursor/skills/gnss-engine",
           "bytes": 10012,
           "role": "canonical"
@@ -939,7 +939,7 @@
     },
     {
       "name": "gnss-integration",
-      "summary": "Consume the GNSS engine library inside simt-app: NTRIP/SSR corrections, location services, diagnostics mapping, GNSS UI",
+      "summary": "Consume the GNSS engine library inside repo-02: NTRIP/SSR corrections, location services, diagnostics mapping, GNSS UI",
       "capabilities": [
         "positioning"
       ],
@@ -965,13 +965,13 @@
       "bytes": 3987,
       "sources": [
         {
-          "repo": "simt-app",
+          "repo": "repo-02",
           "path": ".cursor/skills/gnss-integration",
           "bytes": 3987,
           "role": "canonical"
         }
       ],
-      "note": "Integration-only layer; engine changes belong in simt-gnss."
+      "note": "Integration-only layer; engine changes belong in repo-04."
     },
     {
       "name": "graphify",
@@ -1004,14 +1004,14 @@
       "vendored": true,
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/graphify",
           "bytes": 84534,
           "role": "canonical",
-          "note": "byte-identical to the simt-social copy, version-pinned 0.9.32"
+          "note": "byte-identical to the repo-06 copy, version-pinned 0.9.32"
         },
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/graphify",
           "bytes": 84534,
           "role": "duplicate"
@@ -1051,7 +1051,7 @@
       "bytes": 3362,
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/localization-accessibility",
           "bytes": 3362,
           "role": "canonical"
@@ -1089,7 +1089,7 @@
       "bytes": 3504,
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/maplibre-ui",
           "bytes": 3504,
           "role": "canonical"
@@ -1120,13 +1120,13 @@
       "aliasOf": "slice-commit",
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/milestone-commit",
           "bytes": 609,
           "role": "deprecated"
         },
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/milestone-commit",
           "bytes": 603,
           "role": "deprecated"
@@ -1163,7 +1163,7 @@
       "bytes": 4909,
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/observability-review",
           "bytes": 4909,
           "role": "canonical"
@@ -1201,14 +1201,14 @@
       ],
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/parallel-feature-team",
           "bytes": 1131,
           "role": "canonical",
           "note": "4-line drift from the API copy; the API copy hardcodes a cross-repo path to this one"
         },
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/parallel-feature-team",
           "bytes": 1127,
           "role": "duplicate"
@@ -1263,14 +1263,14 @@
       ],
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/postflight-preview-check",
           "bytes": 12984,
           "role": "canonical",
           "note": "262 drifted lines; adds API Shield publishing and a production-domain denylist covering media.simt.social and goto.simt.app that the web copy lacks"
         },
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/postflight-preview-check",
           "bytes": 6606,
           "role": "variant"
@@ -1306,7 +1306,7 @@
       "bytes": 5904,
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/production-quality-review",
           "bytes": 5904,
           "role": "canonical",
@@ -1346,7 +1346,7 @@
       "deferred": true,
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/prototype-ui-fidelity",
           "bytes": 20581,
           "role": "canonical",
@@ -1401,13 +1401,13 @@
       ],
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/slice-commit",
           "bytes": 5048,
           "role": "canonical"
         },
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/slice-commit",
           "bytes": 4866,
           "role": "variant",
@@ -1442,7 +1442,7 @@
       "deferred": true,
       "sources": [
         {
-          "repo": "simt-landing",
+          "repo": "repo-05",
           "path": ".agents/skills/update-press-kit",
           "bytes": 20555,
           "role": "canonical"
@@ -1476,7 +1476,7 @@
       "bytes": 3538,
       "sources": [
         {
-          "repo": "simt-app",
+          "repo": "repo-02",
           "path": ".cursor/skills/wear-data-sync",
           "bytes": 3538,
           "role": "canonical"
@@ -1517,7 +1517,7 @@
       "variantOf": "feature-slice",
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/web-feature-slice",
           "bytes": 4844,
           "role": "canonical"
@@ -1555,7 +1555,7 @@
       "variantOf": "security-review",
       "sources": [
         {
-          "repo": "simt-social",
+          "repo": "repo-06",
           "path": ".agents/skills/web-security-review",
           "bytes": 4622,
           "role": "canonical"
@@ -1590,7 +1590,7 @@
       "vendored": true,
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/workers-best-practices",
           "bytes": 31720,
           "role": "canonical"
@@ -1625,7 +1625,7 @@
       "vendored": true,
       "sources": [
         {
-          "repo": "simt-social-api",
+          "repo": "repo-07",
           "path": ".agents/skills/wrangler",
           "bytes": 18359,
           "role": "canonical"

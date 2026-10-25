@@ -1148,6 +1148,24 @@ test('hooks install: chains a foreign hook on a gated event this repo declares n
   assert.doesNotMatch(stderr, /stopped running pre-push/);
 });
 
+test('hooks status: a current chained shim is reported present, not stale', async () => {
+  // The other half of the pre-push defect above: the chain shim was compared against
+  // the dispatcher template, so a freshly installed one read as stale forever and no
+  // reinstall could clear it. A chain shim's currency is its target, not the
+  // dispatcher bytes.
+  const root = await fixture({
+    manifest: { gates: { preCommit: ['lint'], prePush: [] }, commands: {} },
+    scripts: { lint: 'true' },
+    files: { '.git/hooks/pre-push': '#!/bin/sh\nexit 0\n' },
+  });
+  await chmod(join(root, '.git', 'hooks', 'pre-push'), 0o755);
+  await simt(['hooks', 'install', '--root', root, '--yes'], root);
+
+  const { stdout } = await simt(['hooks', 'status', '--root', root], root);
+  assert.match(stdout, /^PRESENT  pre-push\s+executable=true$/m, stdout);
+  assert.doesNotMatch(stdout, /differs from this simt-dev/);
+});
+
 test('hooks install: refuses to install shims for a repo that declares no runnable gate', async () => {
   // A shim with an empty gate list enforces nothing, yet its mere existence
   // replaces whatever git was running. Installing one over a working hook is a

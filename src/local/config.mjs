@@ -10,6 +10,7 @@
 //
 // Non-loopback URLs are refused unless `--allow-remote` is explicitly passed (ADR-075).
 
+import { EXIT, fail } from '../output/index.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 
@@ -231,4 +232,38 @@ export async function readLocalConfig(root, { allowRemote = false } = {}) {
     manifestExists: true,
     manifestError: null,
   };
+}
+
+/**
+ * The guard every model consumer shares (R37's distill, R39's critic and bench).
+ *
+ * A `--local`-shaped call without a usable chat endpoint is a configuration
+ * error, never a silent fallback to the deterministic path: a caller who asked
+ * for the model and got the deterministic answer would read that answer as the
+ * model's — and the reverse, reading model output as deterministic, is worse.
+ * Second real user arrived with the critic, so the guard moved here from the
+ * distiller's `runEngine` (ADR-002).
+ *
+ * Returns `{ chat }` on success or `{ exit }` with the failure already shaped
+ * (the same pass-through shape the command layer returns).
+ */
+export function chatEndpoint(config) {
+  if (config.manifestError !== null) {
+    return { exit: fail(`${MANIFEST_FILE}: ${config.manifestError}`, EXIT.CONFIG) };
+  }
+  if (!config.configured || !config.chat || config.findings.length > 0) {
+    const detail = !config.configured
+      ? 'no local model is configured'
+      : config.remoteBlocked
+        ? 'the configured chat endpoint is non-loopback and was refused'
+        : 'the local configuration has errors';
+    return {
+      exit: fail(
+        `--local needs a usable local chat endpoint: ${detail}`,
+        EXIT.CONFIG,
+        `configure local.chat in ${MANIFEST_FILE} (plan 0003 R37), or run without --local for the deterministic path`,
+      ),
+    };
+  }
+  return { chat: config.chat };
 }

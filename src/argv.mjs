@@ -92,6 +92,10 @@ export const BOOL_FLAGS = new Set([
 
 export const VALUE_FLAGS = new Set([
   'budget',
+  // bench critic: the labelled set of historical diffs to score (plan 0003 R39).
+  // A path, not a switch, because the labels themselves come from a human under
+  // ADR-008 — the tool never annotates for them.
+  'labels',
   'max-bytes',
   'paths',
   'skill',

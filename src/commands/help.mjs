@@ -110,6 +110,14 @@ ${CLI} distill <skill|doc>     a budgeted proposal summary of a skill body or do
                            deterministic outline by default; --local proposes
                            from the configured chat model instead; the cache is
                            keyed by source digest and budget, --refresh regenerates)
+${CLI} review [--local]        an ADR-008 verdict skeleton for the staged diff,
+                           the brief listing everything that governs it (R25)
+                           (deterministic without --local: the brief and its
+                           governing ids only; --local proposes from the
+                           configured chat model and writes
+                           .simt-dev/reviews/<digest>.md — a proposal a human
+                           reads, verified against the verdict vocabulary and
+                           the brief's ids; advisory always, never a gate)
 ${CLI} shared plan            what a workspace's repeated rules cost to carry
                            once: the shared set, its bytes, and every path that would be written
                            (read-only; touches nothing, not even your home directory)
@@ -148,6 +156,11 @@ ${CLI} bench probes [--yes]    12 synthetic rule-compliance probes with determin
 ${CLI} bench variants [--yes]  evaluate simt-variants rule slots on the canary suite and lock
                             winning variants in simt-dev.lock.json (dry-run unless --yes;
                             re-opens when model or harness changes)
+${CLI} bench critic          precision and recall of the local critic over a labelled
+                            set of historical diffs (.simt-dev/critic-labels.jsonl;
+                            overrides --labels; labels are human-written verdicts
+                            under ADR-008; the critic is advisory until precision
+                            reaches 0.8 on 30 labelled diffs)
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
@@ -211,14 +224,17 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --state <name>          plan done: target state (default: Complete)
 --level <name>          map: detail level (outline, names, signatures)
 --supersedes <spec>     decide: superseded ADR or ruling (ADR-NNN or ADR-NNN:<ruling>[:<kind>]; repeatable)
---allow-remote          local doctor / distill: allow non-loopback model URLs
-                         (refused by default)
+--allow-remote          local doctor / distill / review: allow non-loopback model
+                         URLs (refused by default)
 --embed                 index / map / brief: compute or query optional local vector embeddings
                         (off by default unless recall@10 gains at least 10 points)
---refresh               distill: regenerate a proposal that is already cached
---local                 distill: propose the summary from the configured local chat
-                         model (local.chat); off by default, which distills with the
-                         deterministic outline instead
+--labels <path>         bench critic: the labelled set of historical diffs to score
+                        (default .simt-dev/critic-labels.jsonl; one human-written
+                        {sha, verdict} pair per line)
+--refresh               distill / review: regenerate a proposal that is already cached
+--local                 distill / review: propose the answer from the configured
+                         local chat model (local.chat); off by default, which
+                         uses the deterministic path instead
 --help                  this text
 --version               the version, and the SHA it was built from`;
 

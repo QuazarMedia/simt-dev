@@ -14,12 +14,12 @@ import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { EXIT, fail } from '../output/index.mjs';
-import { CLI, MANIFEST_FILE } from '../name.mjs';
+import { CLI } from '../name.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { bodyFile, sourcePath } from '../resolve/body.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
-import { readLocalConfig } from '../local/config.mjs';
+import { readLocalConfig, chatEndpoint } from '../local/config.mjs';
 import { localChat } from '../local/client.mjs';
 import {
   ENGINE_LOCAL,
@@ -119,23 +119,10 @@ async function runEngine(kind, text, budget, context) {
 
   const { root, allowRemote, name } = context;
   const config = await readLocalConfig(root, { allowRemote });
-  if (config.manifestError !== null) {
-    return { exit: fail(`${MANIFEST_FILE}: ${config.manifestError}`, EXIT.CONFIG) };
-  }
-  if (!config.configured || !config.chat || config.findings.length > 0) {
-    const detail = !config.configured
-      ? 'no local model is configured'
-      : config.remoteBlocked
-        ? 'the configured chat endpoint is non-loopback and was refused'
-        : 'the local configuration has errors';
-    return {
-      exit: fail(
-        `--local needs a usable local chat endpoint: ${detail}`,
-        EXIT.CONFIG,
-        `configure local.chat in ${MANIFEST_FILE} (plan 0003 R37), or run without --local for the deterministic engine`,
-      ),
-    };
-  }
+  // The shared guard arrived from `local/config.mjs` when the critic became the
+  // second real user of the same rules (plan 0003 R39, ADR-002).
+  const endpoint = chatEndpoint(config);
+  if (endpoint.exit !== undefined) return endpoint;
 
   const prompt = buildLocalPrompt(name, text, budget);
   const chat = await localChat(config.chat, {

@@ -421,3 +421,85 @@ test('R37: malformed config and unreachable servers report clear remedies', asyn
   assert.match(failedPayload.error, /model runner crashed/);
   assert.match(failedPayload.remedy, /local doctor/);
 });
+
+test('R37: optional apiKey is parsed, validated, and defaults to absent', () => {
+  const withKey = parseLocalConfig({ local: { chat: { url: 'http://127.0.0.1:8000/v1', model: 'm', apiKey: 'sk-test' } } });
+  assert.equal(withKey.configured, true);
+  assert.deepEqual(withKey.findings, []);
+  assert.equal(withKey.chat.apiKey, 'sk-test');
+
+  const withoutKey = parseLocalConfig({ local: { chat: { url: 'http://127.0.0.1:8000/v1', model: 'm' } } });
+  assert.deepEqual(withoutKey.findings, []);
+  assert.equal(withoutKey.chat.apiKey, '');
+
+  const empty = parseLocalConfig({ local: { chat: { url: 'http://127.0.0.1:8000/v1', model: 'm', apiKey: '' } } });
+  assert.ok(empty.findings.some((f) => f.includes('apiKey')));
+
+  const notString = parseLocalConfig({ local: { chat: { url: 'http://127.0.0.1:8000/v1', model: 'm', apiKey: 123 } } });
+  assert.ok(notString.findings.some((f) => f.includes('apiKey')));
+});
+
+test('R37: apiKey is sent as a Bearer header when set, and omitted when unset', async (t) => {
+  const seenAuth = [];
+  const stub = await startStubServer((req, res) => {
+    seenAuth.push(req.headers.authorization ?? null);
+    if (req.url === '/v1/chat/completions') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ model: 'm', choices: [{ message: { content: 'pong' } }] }));
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ data: [{ embedding: [1, 2] }] }));
+  });
+  t.after(() => stub.close());
+
+  const withKey = await localChat({ url: stub.baseUrl, model: 'm', apiKey: 'sk-secret' }, { prompt: 'hi' });
+  assert.equal(withKey.ok, true);
+
+  const withoutKey = await localChat({ url: stub.baseUrl, model: 'm' }, { prompt: 'hi' });
+  assert.equal(withoutKey.ok, true);
+
+  assert.equal(seenAuth.length, 2);
+  assert.equal(seenAuth[0], 'Bearer sk-secret');
+  assert.equal(seenAuth[1], null);
+});
+
+test('R37: doctor remedy distinguishes an unauthorised server from a down one', async (t) => {
+  const authStub = await startStubServer((req, res) => {
+    res.writeHead(401, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: { message: 'API key required' } }));
+  });
+  t.after(() => authStub.close());
+
+  const authRoot = await mkdtemp(join(tmpdir(), 'simt-local-auth-'));
+  t.after(() => rm(authRoot, { recursive: true, force: true }));
+  await writeFile(
+    join(authRoot, 'simt.json'),
+    `${JSON.stringify({ id: 'auth-repo', local: { chat: { url: authStub.baseUrl, model: 'm' } } }, null, 2)}\n`,
+  );
+
+  const authCli = await runCli(['local', 'doctor', '--root', authRoot, '--json']);
+  assert.equal(authCli.code, 1);
+  const authPayload = JSON.parse(authCli.stdout);
+  assert.equal(authPayload.status, 'unreachable');
+  assert.match(authPayload.remedy, /apiKey/);
+  assert.doesNotMatch(authPayload.remedy, /start the local model server/);
+
+  const downStub = await startStubServer((req, res) => {
+    res.writeHead(500, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: { message: 'internal error' } }));
+  });
+  t.after(() => downStub.close());
+
+  const downRoot = await mkdtemp(join(tmpdir(), 'simt-local-down-'));
+  t.after(() => rm(downRoot, { recursive: true, force: true }));
+  await writeFile(
+    join(downRoot, 'simt.json'),
+    `${JSON.stringify({ id: 'down-repo', local: { chat: { url: downStub.baseUrl, model: 'm' } } }, null, 2)}\n`,
+  );
+
+  const downCli = await runCli(['local', 'doctor', '--root', downRoot, '--json']);
+  const downPayload = JSON.parse(downCli.stdout);
+  assert.equal(downPayload.status, 'unreachable');
+  assert.match(downPayload.remedy, /start the local model server/);
+});

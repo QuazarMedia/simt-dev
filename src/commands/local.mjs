@@ -30,6 +30,14 @@ function formatRoleLine(role, report) {
   return `${role.padEnd(8)} ok  ${report.model} @ ${report.url}${extra}${listed}`;
 }
 
+// `requestJson` shapes a non-OK response as "METHOD url failed (STATUS): message",
+// so the HTTP status is the reliable signal here — 401/403 mean the server is up but
+// rejected the request as unauthorised, which is a different remedy than "start it".
+function isAuthFailure(report) {
+  if (!report || typeof report.error !== 'string') return false;
+  return /failed \(40[13]\)/.test(report.error);
+}
+
 function remedyFor(result) {
   if (result.status === 'refused-remote') {
     return `set a loopback URL (http://127.0.0.1:<port>/v1) in ${MANIFEST_FILE}, or run: ${CLI} local doctor --allow-remote`;
@@ -38,6 +46,9 @@ function remedyFor(result) {
     return `fix the \`local\` configuration in ${MANIFEST_FILE}`;
   }
   if (result.status === 'unreachable') {
+    if ([result.chat, result.embed].some(isAuthFailure)) {
+      return `the server is up but rejected the request as unauthorised (401/403); set \`local.<role>.apiKey\` in ${MANIFEST_FILE} to the server's bearer token, then rerun: ${CLI} local doctor`;
+    }
     return `start the local model server at the URL in ${MANIFEST_FILE}, then rerun: ${CLI} local doctor`;
   }
   return null;

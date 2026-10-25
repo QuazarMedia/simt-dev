@@ -21,6 +21,19 @@ git. The names this tool writes into files it does not own stay put: the `simt.j
 manifest, the `simt-dev-check.yml` gate, the user-level config directory and the
 `SIMT_DEV_*` environment variables keep their names.
 
+The skill registry leaves the published set again, as ADR-061 ruled when it
+first left in 0.2.1. It is a catalogue of one workspace's skills — the
+repositories whose bodies it resolves — and an installed copy serving that
+catalogue to an adopting repository is a confident wrong answer: the skills
+it names do not live in the reader's workspace. 0.5.0 carried the registry
+because a fresh install's `simt skills *` and `simt distill` otherwise found
+none; the fix is the honest absence the tiered loader already reports — the
+path it would have read, and the `simt-dev graph lint <path>` remedy — with a
+workspace that owns the registry naming it through `--workspace`,
+`SIMT_DEV_WORKSPACE` or the user config file. Custom skills were never part
+of the registry: they live in each repository, and the disclosure scan
+projects them into AGENTS.md.
+
 ## [0.5.0] — 2026-10-25
 
 ### An offline distiller that proposes, never projects

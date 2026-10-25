@@ -9,8 +9,8 @@
 // So this file packs the working tree, installs the tarball into a consumer with
 // nothing else in it, and drives `node_modules/.bin/simt-dev`. Everything it
 // asserts is something the reader of this repository would only learn from the
-// published package: the registry the tarball ships, linted from inside node_modules
-// without reaching this checkout, the decisions being present to read, and a full
+// published package: the registry it ships - none, and the honest absence it
+// reports instead (ADR-061) - the decisions being present to read, and a full
 // adoption surviving `init`, a commit, `check`, `upgrade`, `hooks install` and a
 // second real commit.
 //
@@ -161,28 +161,26 @@ async function adopted(mutate) {
   return root;
 }
 
-test('the installed tool ships the registry, and lints it without reading the author\'s', async () => {
+test('the installed tool ships no registry, and says so instead of serving one', async () => {
   const root = join(stage, 'seed');
 
   const lint = await simt(root, ['graph', 'lint', '--root', '.']);
-  // The published set carries graph/skills.graph.json (package.json `files`), so a
-  // fresh install lints the registry it ships: the named path is inside node_modules,
-  // and the tool never falls back to this checkout. Without a workspace the byte
-  // counts are not checked - that is reported, not hidden (ADR-014).
-  assert.equal(lint.code, 0, lint.out);
-  // Self-containment, stated as the two paths it has to disagree on: it looked where
-  // an install puts the package, and it did not fall back to this checkout.
-  assert.match(lint.out, /registry\s+\S*node_modules\/.*graph\/skills\.graph\.json/);
+  // ADR-061 ruling 2: the package ships no registry. The registry is workspace
+  // data - a catalogue of which skill bodies one particular workspace holds - and
+  // bundling this workspace's would serve it to every adopting repository as if it
+  // were theirs: a confident wrong answer. The honest answer is the absence, named
+  // with the path it looked at (inside node_modules) and the way out (an explicit
+  // path), and it never falls back to this checkout.
+  assert.equal(lint.code, 4, lint.out); // EXIT.REGISTRY
+  assert.match(lint.out, /no skill registry at \S*node_modules\/.*graph\/skills\.graph\.json/);
   assert.equal(lint.out.includes(PACKAGE_ROOT), false, 'the installed tool reached into this checkout');
-  assert.match(lint.out, /OK structural checks only/);
+  assert.match(lint.out, /graph lint <path-to-registry>/);
 });
 
-test('an explicitly named registry wins over the one the installed tool ships', async () => {
-  // The installed package now ships graph/, so the default resolution always finds the
-  // bundled registry (tier 1 of ADR-061 ruling 3). The tier a configured workspace's
-  // member holds is reachable by naming it: an explicit path wins over everything, and
-  // the reader sees where the tool actually looked - the same dead-end the old remedy
-  // would have led to if naming a path were not the way out.
+test('an explicitly named registry wins over the absence', async () => {
+  // The installed package ships no registry, so a reader outside this workspace has
+  // none by default. The way out is to name one: an explicit path wins over
+  // everything, and the reader sees where the tool actually looked.
   const root = join(stage, 'seed');
   const ws = join(stage, 'workspace-tier3');
   const registryPath = join(ws, 'registry-holder', 'graph', 'skills.graph.json');
@@ -191,8 +189,8 @@ test('an explicitly named registry wins over the one the installed tool ships', 
 
   const lint = await simt(root, ['graph', 'lint', registryPath], { ...NO_ESTATE, SIMT_DEV_WORKSPACE: ws });
   assert.equal(lint.code, 0, lint.out);
-  // It read the named registry, not the bundled one: the named path is inside the
-  // configured workspace and nowhere else.
+  // It read the named registry: the named path is inside the configured
+  // workspace and nowhere else.
   assert.match(lint.out, new RegExp(registryPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
 });
 

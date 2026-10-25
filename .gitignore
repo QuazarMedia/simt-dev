@@ -9,10 +9,13 @@ git.config
 .pybuild/
 dist/
 
-# Local index, evidence ledger and benchmark run outputs (plan 0003 §4).
-# Task descriptors in .simt-dev/bench/tasks/*.json are committed; runs are not.
+# Local index, evidence ledger, benchmark run outputs and local-model proposals
+# (plan 0003 §4). Task descriptors in .simt-dev/bench/tasks/*.json are committed;
+# runs, distilled summaries and review proposals are not.
 .simt-dev/index.sqlite
 .simt-dev/index.jsonl
 .simt-dev/ledger.jsonl
 .simt-dev/bench/runs/
 .simt-dev/gate/
+.simt-dev/distilled/
+.simt-dev/reviews/

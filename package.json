@@ -25,6 +25,7 @@
     "src",
     "rules",
     "templates",
+    "graph",
     "docs/decisions",
     "CHANGELOG.md"
   ],

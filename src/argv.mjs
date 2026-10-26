@@ -84,6 +84,11 @@ export const BOOL_FLAGS = new Set([
   // the cache is the point - the same source at the same budget is the same answer,
   // and re-reading it is cheaper than re-deriving it (plan 0003 R38).
   'refresh',
+  // pack lint: reject a pack whose bench summary is missing or unmeasured.
+  // Off by default because a scaffold is born unmeasured - `pack new` writes a
+  // bench.json marked unmeasured, and a lint that failed it on arrival would make
+  // every new pack red before its author wrote the rule (plan 0003 R45).
+  'require-measured',
   // distill: propose the summary from the configured local chat model instead of
   // the deterministic outline. Off by default: no model in the default path (P1),
   // and a model that is not asked for should not be opened against (ADR-090).
@@ -138,6 +143,10 @@ export const VALUE_FLAGS = new Set([
   'level',
   // decide: structured supersession spec (ADR-NNN or ADR-NNN:<ruling>[:<kind>], repeatable).
   'supersedes',
+  // pack new: where the pack's bytes come from. Required, because a pack without
+  // a source is bytes nobody can obtain again - and a source nobody can act on
+  // is refused by lint rather than blessed (plan 0003 R45).
+  'source',
   // plugin: where the generated package lands. A value rather than a boolean because
   // "generate a package" with no destination would have to guess, and a guess about where
   // a directory tree goes is the one failure that leaves files behind.

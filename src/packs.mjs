@@ -32,8 +32,11 @@ const NAME = /^[a-z0-9][a-z0-9._-]*$/;
 
 /**
  * @returns {string|null} the name if it is usable, else why it is not.
+ *
+ * Exported because `pack lint` refuses the same names the resolver refuses:
+ * a second copy of the pattern would drift exactly when a pack needed it most.
  */
-function packNameProblem(name) {
+export function packNameProblem(name) {
   if (typeof name !== 'string' || name.length === 0) return 'a pack name must be a non-empty string';
   if (!NAME.test(name)) return `\`${name}\` is not a usable pack name: lowercase letters, digits, dot, dash and underscore`;
   if (name === '.' || name === '..') return `\`${name}\` is not a usable pack name`;
@@ -49,10 +52,17 @@ function packNameProblem(name) {
  * same. That is the property that makes the digest a statement about CONTENT
  * rather than about where the reader happens to keep it.
  *
+ * `exclude` names pack-relative files the digest does not cover. It exists for the
+ * one file that must not be covered: a pack's bench summary records the digest of
+ * the bytes it was measured at, so a digest that covered the summary could never
+ * equal the digest the summary records - writing the measurement would change it.
+ * The manifest pin covers every byte; the summary binds to everything but itself.
+ *
  * @returns {Promise<string>} 40 hex chars, or `''` for a directory that is not there.
  */
-export async function packDigest(dir) {
+export async function packDigest(dir, { exclude = [] } = {}) {
   const files = [];
+  const excluded = new Set(exclude);
   const walk = async (d, prefix = '') => {
     let entries;
     try {
@@ -63,7 +73,7 @@ export async function packDigest(dir) {
     for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
       const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
       if (entry.isDirectory()) await walk(join(d, entry.name), rel);
-      else if (entry.isFile()) files.push(rel);
+      else if (entry.isFile() && !excluded.has(rel)) files.push(rel);
     }
   };
   await walk(dir);

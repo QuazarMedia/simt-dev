@@ -917,7 +917,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R42 | Harness adapters as data | 7 | R14, R15 | M | — | provenance; detection on fixtures | Complete |
 | R43 | Plugin packaging | 7 | R42 | M | — | installs and passes R15 fixtures | Complete |
 | R44 | Single-file binary | 7 | review 0002 S35 | M | D8 (ADR-098) | runs without Node on PATH | Complete |
-| R45 | Packs, measured | 7 | review 0002 S39, R03 | S | — | pack states its ΔR | Queued |
+| R45 | Packs, measured | 7 | review 0002 S39, R03 | S | — | pack states its ΔR | Complete |
 | R46 | `explain <CODE>` | 8 | — | S | — | every code documented | Queued |
 | R47 | `doctor --fix` | 8 | R49 | S | — | fixes exactly the safe set | Queued |
 | R48 | `status --line` | 8 | — | S | — | < 50 ms | Queued |
@@ -1297,6 +1297,41 @@ of the contract — the package declares a Node floor, its index is `node:sqlite
 every recorded latency is that runtime's — not a measurement, because no alternative
 artifact was built to measure; and the target list is deliberately three, so a platform
 outside it gets a loud 404 rather than a build.
+
+**R45 — Complete** (no ADR: the row asks for none, and ADR-065 already settles what a
+pack is). `simt pack new <name> --source <npm:<package>|git+https://…>` scaffolds a
+pack — `pack.json` (name, version, source), an unmeasured `bench.json`, one stack
+rule, and `package.json` for an npm source — dry-run unless `--yes`, refusing a
+directory that already exists rather than overwriting it. `simt pack lint [dir]`
+validates identity, source, layout, the `simt-id` that makes a rule selectable, the
+absent registry ADR-061 forbids, and the bench summary: shape, pack and version
+binding, arms that close to the stated dR within half a point, and a digest of the
+measured bytes — every byte but the summary itself, because a digest covering the
+file that records it could never equal the recorded one (`packDigest` grew an
+`exclude` for exactly that file; the manifest pin still covers every byte). A
+summary marked unmeasured, or missing, fails only under `--require-measured`: a
+scaffold is born unmeasured, and a lint that failed it on arrival would make every
+new pack red before its author wrote the rule. `simt pack publish [dir]` lints
+first and refuses a pack that fails it; an npm source publishes idempotently (a
+live version is skipped, so a re-run continues where it stopped), and a git source
+is refused with the tag-and-push the owning repository must run instead — published
+bytes still reach an adopter by vendoring and pinning, never by fetching at render
+time. The row's `compare` half was already green: S39 reports every pack and its
+pinned digest per repository, and this slice leaves that row untouched. Two defects
+were found and fixed while completing the slice, both in the new code: the npm
+package was split off the source on the first `@`, which names the empty string for
+a scoped package (`npm:@example/house-pack`), and the frontmatter `simt-id` read
+missed the multiline flag, so every scaffolded rule read as id-less. 21 tests in
+`test/packcli.test.mjs` — the three subcommands through the binary, the measured
+and stale and unclosed-arithmetic summaries, the vendored-pack drift against the
+manifest pin, the stub-`npm` publish/skip round trip with no network, and the pure
+validators' edge cases — and `pack new|lint|publish` in `--help`, `--json` and the
+no-write contract beside the other commands. Full suite 1265 from a copy at a path
+with no siblings (ADR-031): 1260 pass, and the 5 failures are the same 5 a pristine
+checkout of the parent commit reports on this machine (bench-mine CLI, resolver
+timing, critic precision, two why snapshots), unrelated to this slice. The plan
+spells the command `simt-dev pack`; the shipped spelling is `simt pack`, the command
+this tree answers to since the rename.
 
 **R28 — Complete** (D2, ADR-090). `src/index/store.mjs` and `src/index/persist.mjs` index
 full-text tokens (`ftsKindOf`, `buildFtsBody`) across `code`, `docs`, `skills`, `decisions`

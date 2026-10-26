@@ -166,6 +166,18 @@ ${CLI} bench critic          precision and recall of the local critic over a lab
                             overrides --labels; labels are human-written verdicts
                             under ADR-008; the critic is advisory until precision
                             reaches 0.8 on 30 labelled diffs)
+${CLI} pack new <name> --source <spec>
+                           scaffold a versioned pack: pack.json, an unmeasured
+                           bench.json, and one stack rule (dry-run unless --yes;
+                           refuses a directory that already exists)
+${CLI} pack lint [dir]        validate a pack: identity, source, rules, and the
+                           bench summary (--require-measured rejects a pack with
+                           no measured ΔR; a pack vendored under .simt/packs/ is
+                           also checked against the manifest's pin)
+${CLI} pack publish [dir] [--yes]
+                           publish an npm-sourced pack to the registry
+                           (dry-run unless --yes; skips a version already live;
+                           a git-sourced pack names the tag-and-push instead)
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
@@ -230,6 +242,10 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --state <name>          plan done: target state (default: Complete)
 --level <name>          map: detail level (outline, names, signatures)
 --supersedes <spec>     decide: superseded ADR or ruling (ADR-NNN or ADR-NNN:<ruling>[:<kind>]; repeatable)
+--source <spec>         pack new: where the pack's bytes come from
+                         (npm:<package> or git+https://…; required)
+--require-measured      pack lint: reject a pack with no measured ΔR
+                         (a bench.json marked unmeasured, or missing)
 --allow-remote          local doctor / distill / review: allow non-loopback model
                          URLs (refused by default)
 --embed                 index / map / brief: compute or query optional local vector embeddings

@@ -8,6 +8,7 @@ git.config
 
 .pybuild/
 dist/
+.sea-cache/
 
 # Local index, evidence ledger, benchmark run outputs and local-model proposals
 # (plan 0003 §4). Task descriptors in .simt/bench/tasks/*.json are committed;

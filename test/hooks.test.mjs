@@ -1250,10 +1250,12 @@ test('a shim this tool wrote in an earlier version is stale, never foreign', asy
   await simt(['hooks', 'install', '--root', root, '--yes'], root);
 
   // Age it: the banner is how authorship is established, the rest of the bytes is what
-  // makes it stale. A 0.1.x shim is exactly this - same banner, older locator.
+  // makes it stale. A 0.1.x shim is exactly this - same banner, older locator: its
+  // resolution list had three lines (the command was still spelled simt-dev, and there
+  // was no .simt/bin path yet), so the last line moves from position 4 to 3.
   const path = join(root, fileFor('pre-commit'));
   const current = await readFile(path, 'utf8');
-  const aged = current.replace('#   3. simt on PATH', '#   3. simt-dev on PATH');
+  const aged = current.replace('#   4. simt on PATH', '#   3. simt-dev on PATH');
   assert.notEqual(aged, current, 'the fixture must actually differ from what this build renders');
   await writeFile(path, aged);
   await chmod(path, 0o755);

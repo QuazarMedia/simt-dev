@@ -48,6 +48,15 @@ AGENTS.md), depth-5 `@path` imports, no published cap, and the `mcpServers`
 registration. It stays a facts row — the `gemini-md` pointer remains the one
 rule channel for that reader.
 
+Each release now carries a fourth artefact beside the tarball, the wheel and the
+formula: one single-file executable per target (`darwin-arm64`, `darwin-x64`,
+`linux-x64`), built from the same `files` set with a pinned Node runtime, published to
+the GitHub release with a `.sha256` beside it and a build-provenance attestation. It is
+the channel for a machine that has no toolchain to install one with — the binary lands
+as one file in `.simt/bin/` and carries its own runtime — and its acceptance is
+executable: a Gradle fixture with every directory containing a node removed from `PATH`
+runs `check` and the hook shim from the built bytes.
+
 ### Changed
 
 `harness detect`'s "some readers read AGENTS.md" rows no longer say bare "some"
@@ -89,6 +98,25 @@ that carried the old spelling. `BIN_REL` in `src/name.mjs` is the single
 source of truth, so the generated hook shim and CI workflow pick up the new
 path on their next regeneration; the channels (npm, PyPI, Homebrew), the
 repository's own CI and the test harnesses follow.
+
+The hook shim's remedy and the generated CI workflow now install the release binary
+for a repository without npm, instead of the pinned global npm install (`npm i -g`)
+that needed the npm that repository kind is defined by not having. The remedy is the
+one-line download the binary channel names, with its platform derived from `uname`;
+the CI step verifies the download against the published `.sha256` and runs with no
+`setup-node` step at all — a file that runs without a Node toolchain should not have
+one installed to run it.
+
+The locator resolves `.simt/bin/simt` between `node_modules` and `PATH`, so the bytes
+a repository downloaded are the bytes its gate runs and a machine-wide install cannot
+shadow them. The dispatcher's version check is unchanged and still refuses a stale
+copy, whichever path found it.
+
+Homebrew's formula downloads the release binaries rather than the npm tarball — one
+`url`/`sha256` pair per target, chosen at install time — and no longer declares
+`depends_on "node"`. `scripts/release-formula.mjs` patches each pair by content, and
+the release refuses to publish a formula whose checksums are not the bytes the tagged
+tree builds (ADR-098).
 
 ## [0.5.0] — 2026-10-25
 

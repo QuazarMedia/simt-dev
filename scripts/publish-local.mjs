@@ -2,17 +2,20 @@
 // depend on: npm -> PyPI -> Homebrew.
 //
 // This is the manual twin of the two release workflows - `.github/workflows/publish.yml`
-// for npm and `.github/workflows/publish-channels.yml` for the two downstream channels -
-// for a machine that cannot run Actions (a free-tier month with no minutes left, a
-// laptop, an air-gapped release). It is not a replacement for the workflow: it cannot
-// mint the OIDC identity that PyPI's trusted publishing exchanges, so the PyPI
-// step uploads with an API token instead. Everything else is the same three
-// artefacts carrying the same bytes, in the same forced order.
+// for npm and the release binary, and `.github/workflows/publish-channels.yml` for the
+// two downstream channels - for a machine that cannot run Actions (a free-tier month
+// with no minutes left, a laptop, an air-gapped release). It is not a replacement for
+// the workflow: it cannot mint the OIDC identity that PyPI's trusted publishing
+// exchanges, nor the identity the release assets are attested with, so the PyPI
+// step uploads with an API token instead. Everything else is the same artefacts
+// carrying the same bytes, in the same forced order.
 //
-// The order is not a preference (ADR-058): Homebrew downloads the npm tarball
-// at install time, so a formula naming a version that is not live on the npm
-// registry installs a 404. The brew step therefore fetches that tarball, and
-// fails loudly if npm has not been published first.
+// The order is not a preference (ADR-058 ruling 7, as ADR-098 narrowed it): PyPI
+// publishes once the npm version is live, and Homebrew downloads the release
+// binaries, so the tag's build must have uploaded them before the formula can be
+// pointed at the tap. The brew step therefore fetches the checksums GitHub serves
+// and compares them with a local deterministic build (ADR-098) - a tap written
+// from bytes this tree did not build is a formula that installs the wrong tool.
 //
 // It is idempotent: each channel checks whether this version is already live
 // and skips rather than failing, so a re-run after an interruption continues
@@ -35,11 +38,12 @@
 // Override with SIMT_PIP_INDEX_URL if you need a different index.
 
 import { exec, execFile } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { cp, mkdtemp, readFile, rm, stat } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+
+import { TARGETS, assetName, releaseBase } from '../src/distribute/release.mjs';
 
 const execAsync = promisify(exec);
 const run = promisify(execFile);
@@ -214,38 +218,51 @@ async function publishPyPI({ name, version, venv, dry }) {
 }
 
 /**
- * Homebrew consumes what npm produced: fetch the live tarball, checksum it,
- * render the formula, and push it to the tap. A 404 here means npm has not
- * been published (or approved) yet, which is the ordering this whole path
- * exists to enforce.
+ * Homebrew consumes the release binaries: fetch the checksum published beside
+ * each asset, compare it with a local deterministic build of this tree, render
+ * the formula from what GitHub serves, and push it to the tap.
+ *
+ * The comparison is the one the tag workflow makes (built bytes vs the formula
+ * it ships): here it is made the other way around, because the tap is written
+ * from served values - so needing the build at all is what tells this path
+ * whether the release was built from the tree it is running in.
+ *
+ * A 404 here means the release does not serve the assets yet - the tag's
+ * publish.yml run builds them - and the formula downloads what the release
+ * serves, so the tap waits rather than installing a 404.
  */
-async function publishBrew({ name, version, tap, dry }) {
+async function publishBrew({ version, tap, dry }) {
   banner(`Homebrew ${version}`, dry);
 
-  const url = `https://registry.npmjs.org/${name}/-/${name}-${version}.tgz`;
-  const tgz = join(tmpdir(), `${name}-${version}.tgz`);
-  let fetchable = true;
-  try {
-    await execAsync(`curl -fsSL --max-time 60 -o ${JSON.stringify(tgz)} ${url}`);
-  } catch {
-    fetchable = false;
-  }
-
-  // The formula's checksum is a hash of the live tarball, so it cannot be known
-  // until npm has published. Before that point a dry run reports and moves on;
-  // a live run is a hard failure, because a formula that cannot be checked is
-  // a formula that installs a 404.
-  if (!fetchable) {
-    if (dry) {
-      process.stdout.write('npm is not live yet; the formula is rendered at publish time. Re-run --only=brew once npm has published.\n');
-      return;
+  const shaByTarget = {};
+  for (const target of TARGETS) {
+    const asset = assetName(version, target);
+    const url = `${releaseBase(version)}/${asset}.sha256`;
+    let served = null;
+    try {
+      const { stdout } = await execAsync(`curl -fsSL --max-time 60 ${url}`);
+      served = stdout.trim().split(/\s+/)[0];
+    } catch {
+      served = null;
     }
-    die(`${url} is not downloadable - the npm channel must be live first. Publish it, then re-run.`);
+    if (!served) {
+      if (dry) {
+        process.stdout.write(`${asset} is not on the release yet; the formula is rendered at publish time. Re-run --only=brew once the tag's build has uploaded it.\n`);
+        return;
+      }
+      die(`${url} is not downloadable - the release must serve the binaries first.\n  The tag's publish.yml run builds and uploads them; without it:\n    gh release upload v${version} dist/simt-dev-${version}-* --clobber`);
+    }
+    // The local build is the same deterministic build the tag workflow runs
+    // (ADR-098), so a served sha256 that differs from it is a release built
+    // from another tree. The tap must not name that tree's bytes with this
+    // tree's pin.
+    const built = (await readFile(join(ROOT, 'dist', `${asset}.sha256`), 'utf8')).trim().split(/\s+/)[0];
+    if (built !== served) {
+      die(`${asset}: the release serves ${served} but this tree builds ${built}.\n  The release was built from another tree; re-run publish.yml for v${version} before writing the tap.`);
+    }
+    shaByTarget[target] = served;
   }
-
-  const sha256 = createHash('sha256').update(await readFile(tgz)).digest('hex');
-  await rm(tgz, { force: true });
-  process.stdout.write(`tarball sha256 ${sha256.slice(0, 12)}…\n`);
+  process.stdout.write(`release checksums match this tree's build\n`);
 
   if (dry) {
     process.stdout.write('would: render Formula/simt-dev.rb and push it to the tap\n');
@@ -253,7 +270,11 @@ async function publishBrew({ name, version, tap, dry }) {
   }
 
   process.stdout.write('rendering Formula/simt-dev.rb ');
-  await run('node', ['scripts/release-formula.mjs', `--version=${version}`, `--sha256=${sha256}`], { cwd: ROOT });
+  await run(
+    'node',
+    ['scripts/release-formula.mjs', `--version=${version}`, ...TARGETS.map((t) => `--sha256-${t}=${shaByTarget[t]}`)],
+    { cwd: ROOT },
+  );
   process.stdout.write('ok\n');
 
   const formula = join(ROOT, 'Formula', 'simt-dev.rb');
@@ -326,7 +347,15 @@ async function main() {
 
     if (!flags.only || flags.only === 'npm') await publishNpm({ name, version, tag: flags.tag, dry: flags.dry });
     if (wantPyPI) await publishPyPI({ name, version, venv, dry: flags.dry });
-    if (!flags.only || flags.only === 'brew') await publishBrew({ name, version, tap, dry: flags.dry });
+    // The build happens here, after the wheel steps, because buildDists wipes
+    // dist/ - and the binaries must be in it when the served checksums are
+    // compared against what this tree builds.
+    if (!flags.only || flags.only === 'brew') {
+      process.stdout.write('\nbuilding the release binaries ');
+      await run('node', ['scripts/build-sea.mjs'], { cwd: ROOT });
+      process.stdout.write('ok\n');
+      await publishBrew({ version, tap, dry: flags.dry });
+    }
 
     process.stdout.write(`\ndone. ${name}@${version} ${flags.dry ? 'would be' : 'is'} on all three channels.\n`);
   } finally {

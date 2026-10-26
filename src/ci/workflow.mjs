@@ -51,6 +51,7 @@ import { PACKAGE_NAME, WORKFLOW_FILE_NAME } from '../name.mjs';
 import { renderLocator } from '../locate.mjs';
 import { CLI } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
+import { LOCAL_BIN, LOCAL_BIN_DIR, assetNameExpr, localInstall, platformLines, releaseBase } from '../distribute/release.mjs';
 
 /** Directory whose presence means this repo runs GitHub Actions. */
 export const WORKFLOWS_DIR = '.github/workflows';
@@ -285,9 +286,19 @@ export function renderWorkflow({ own = false, npm = true, version } = {}) {
   const v = version ?? packageVersion();
   // The install step is the whole of S35's consumer CI: a repository with npm pins
   // simt-dev as a devDependency and `npm ci` restores it; one without (Gradle,
-  // Connect IQ) has no node_modules to pin in, so CI installs the same pinned global
-  // binary the machine remedy names. The two must agree, or the gate passes in one
-  // place and cannot start in the other.
+  // Connect IQ) has no node_modules to pin in, so CI downloads the release binary
+  // into the repository - the same pinned bytes the machine remedy names, verified
+  // against the checksum published beside it. The two must agree, or the gate
+  // passes in one place and cannot start in the other.
+  //
+  // The binary branch needs no setup-node at all: the SEA runs without a Node on
+  // PATH (ADR-098), and installing one to run a file that does not need it would be
+  // the toolchain this channel exists to remove, present in the one place it was not.
+  //
+  // The platform is derived in the shell (platformLines) and not from a
+  // `${{ runner.* }}` expression: an expression substituted into `$( … )` is a
+  // command substitution trying to execute "Linux", which set -eu refuses - the
+  // install would fail on every run in the one repository kind this channel is for.
   const install = npm
     ? [
         '      - name: install dependencies',
@@ -296,19 +307,36 @@ export function renderWorkflow({ own = false, npm = true, version } = {}) {
       ]
     : [
         '      - name: install the pinned gate binary',
-        '        # No node_modules to pin in, so a pinned global install: the same bytes',
-        '        # the machine remedy names, so the gate cannot pass locally and fail here.',
-        `        run: npm i -g ${PACKAGE_NAME}@${v}`,
+        '        # No node_modules to pin in, so the release binary into the repository:',
+        '        # the same bytes the machine remedy names, checked against the',
+        '        # checksum published beside it before anything runs them.',
+        '        run: |',
+        indent(
+          `set -eu
+${platformLines().join('\n')}
+asset="${assetNameExpr(v)}"
+base="${releaseBase(v)}"
+curl -fsSL "$base/$asset" -o "$asset"
+expected=$(curl -fsSL "$base/$asset.sha256" | awk '{print $1}')
+actual=$(openssl sha256 "$asset" | grep -oE '[0-9a-f]{64}')
+if [ "$expected" != "$actual" ]; then
+  echo "checksum mismatch for $asset: the release asset does not match its published sha256" >&2
+  exit 1
+fi
+mkdir -p ${LOCAL_BIN_DIR}
+mv "$asset" ${LOCAL_BIN}
+chmod +x ${LOCAL_BIN}`, 10),
       ];
   const remedy = npm
     ? `REMEDY run: npm i -D ${PACKAGE_NAME}   (the gate runs from the pinned dependency)`
-    : `REMEDY run: npm i -g ${PACKAGE_NAME}@${v}   (the gate runs from a pinned global install)`;
+    : `REMEDY run: ${localInstall(v)}   (the gate runs from the release binary in .simt/bin)`;
   const locator = renderLocator('check --root "$ROOT"', { remedy });
   return `${header(false)}${skeleton(
     `${CLI} check`,
     [
       uses('checkout'),
-      setupNode(nodeFloor()),
+      // The binary branch has no setup-node: see the install step above.
+      ...(npm ? [setupNode(nodeFloor())] : []),
       ...install,
       `      - name: ${CLI} check`,
       '        run: |',

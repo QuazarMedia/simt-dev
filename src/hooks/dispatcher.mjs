@@ -68,8 +68,9 @@ export async function runGates(event, { root, manifest }) {
   }
 
   // The gates below run from the binary that resolved this shim. For a repository
-  // without npm that is a global install, whose version nothing else pins: if it is not
-  // the one this repo adopted, the gates that run here are not the ones CI runs.
+  // without npm that is the release binary in `.simt/bin` (ADR-098), whose version
+  // nothing else pins: if it is not the one this repo adopted, the gates that run here
+  // are not the ones CI runs.
   // Placed after the empty-list check on purpose - with no gates there is nothing the
   // version could get wrong, and failing that case would block commits in repos that
   // deliberately declare none.

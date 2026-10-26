@@ -1,107 +1,78 @@
-// Render the Homebrew formula for a release.
+#!/usr/bin/env node
+// The release step that rewrites the formula for a tagged version.
 //
-// The formula in `Formula/simt-dev.rb` is the source of truth: it is a readable
-// file, it is reviewed like any other, and it is committed with the values of
-// the last release. This script changes exactly two things in it - the version
-// in the `url` and the `sha256` beside it - and nothing else.
+// Usage:
+//   node scripts/release-formula.mjs --version=0.5.0 \
+//     --sha256-darwin-arm64=<hex> --sha256-darwin-x64=<hex> --sha256-linux-x64=<hex>
 //
-// It does not regenerate the formula from a template. A template would mean the
-// bytes a reader sees in this repository are not the bytes a tap serves, which
-// is the defect ADR-023 rules out for the gate file: a second copy that can
-// drift from the first while both look authoritative. Patching two lines keeps
-// one copy.
+// The formula downloads the release binary for the platform it runs on, so a
+// release has three url/sha256 pairs to patch - one per target. The sha256s
+// must be computed from the published release assets, not from a local build:
+// this script is the one place where "what the tap will install" is decided,
+// and it must decide from what GitHub actually serves.
 //
-// The checksum is the one number that cannot be known in advance, so it is
-// passed in. Everything else about the formula is decided here, in reviewable
-// prose, and not left to a release-time string builder.
+// The patch is content-anchored, the same way the npm channel's was: it finds
+// each url line by its target suffix and the sha256 line that follows it, so
+// a formula whose layout has drifted fails loudly instead of being patched
+// blind.
 
 import { readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+import { TARGETS, releaseUrl } from '../src/distribute/release.mjs';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-export const FORMULA_FILE = join(HERE, '..', 'Formula', 'simt-dev.rb');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const FORMULA = join(ROOT, 'Formula', 'simt-dev.rb');
 
-/** The npm tarball URL for a version. Homebrew downloads this at install time. */
-export function tarballUrl(version) {
-  return `https://registry.npmjs.org/simt-dev/-/simt-dev-${version}.tgz`;
+function die(msg) {
+  console.error(`release-formula: ${msg}`);
+  process.exit(1);
 }
 
-function die(message) {
-  process.stderr.write(`release-formula: ${message}\n`);
-  process.stderr.write('  usage: node scripts/release-formula.mjs --version=0.1.2 --sha256=<64 hex chars>\n');
-  process.exit(2);
+function parseArgs(argv) {
+  const args = { version: null, sha256s: {} };
+  for (const arg of argv) {
+    if (arg.startsWith('--version=')) args.version = arg.slice('--version='.length);
+    else if (arg.startsWith('--sha256-')) {
+      const eq = arg.indexOf('=', '--sha256-'.length);
+      if (eq === -1) die(`--${arg.slice(2, eq === -1 ? arg.length : eq)} needs a value`);
+      const target = arg.slice('--sha256-'.length, eq);
+      const value = arg.slice(eq + 1);
+      if (!TARGETS.includes(target)) die(`unknown target "${target}" (expected one of ${TARGETS.join(', ')})`);
+      if (!/^[0-9a-f]{64}$/.test(value)) die(`--sha256-${target} is not a 64-hex sha256`);
+      args.sha256s[target] = value;
+    } else die(`unknown argument "${arg}"`);
+  }
+  if (!args.version || !/^\d+\.\d+\.\d+$/.test(args.version)) die('--version=<semver> is required');
+  for (const target of TARGETS) {
+    if (!args.sha256s[target]) die(`--sha256-${target}=<hex> is required`);
+  }
+  return args;
 }
 
-/**
- * Read the `--version` / `--sha256` pair.
- *
- * Both are validated rather than trusted: a formula whose checksum belongs to
- * the previous release installs a stale tool while reporting the new version,
- * which is precisely the failure a checksum exists to make impossible - and it
- * would fail at `brew install` on somebody else's machine, days later.
- */
-function parse(argv) {
-  const args = {};
-  for (const raw of argv) {
-    if (!raw.startsWith('--')) die(`unexpected argument ${JSON.stringify(raw)}`);
-    const at = raw.indexOf('=');
-    if (at < 0) die(`${raw} needs a value, as --version=0.1.2`);
-    args[raw.slice(2, at)] = raw.slice(at + 1);
-  }
-  if (!/^\d+\.\d+\.\d+$/.test(args.version ?? '')) {
-    die(`--version must be x.y.z, got ${JSON.stringify(args.version)}`);
-  }
-  if (!/^[0-9a-f]{64}$/.test(args.sha256 ?? '')) {
-    die(`--sha256 must be a 64-character hex sha256, got ${JSON.stringify(args.sha256)}`);
-  }
-  return { version: args.version, sha256: args.sha256 };
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/**
- * Replace the version and the checksum in the formula.
- *
- * Two lines, matched by their content rather than by line number. Line numbers
- * would make this script something that cannot be edited: inserting a comment
- * above the `sha256` line would silently write the checksum to the wrong place.
- *
- * @param {string} text the committed formula
- * @param {{version: string, sha256: string}} release
- * @returns {string}
- */
-export function patch(text, { version, sha256 }) {
-  const url = /^  url "https:\/\/registry\.npmjs\.org\/simt-dev\/-\/simt-dev-[\d.]+\.tgz"$/m;
-  if (!url.test(text)) {
-    die('`url` line not found - the formula has been edited in a way this script does not recognise');
-  }
-  const sum = /^  sha256 "[0-9a-f]{64}"$/m;
-  if (!sum.test(text)) {
-    die('`sha256` line not found - the formula has been edited in a way this script does not recognise');
-  }
-  return text.replace(url, `  url "${tarballUrl(version)}"`).replace(sum, `  sha256 "${sha256}"`);
+// Replace the url line that ends in -<target>" and the sha256 line that
+// follows it. Both anchors must match or the formula's layout has drifted.
+function patchPair(text, target, url, sha256) {
+  const urlRe = new RegExp(`^    url "https://github\\.com/QuazarMedia/simt-dev/releases/download/v[0-9][^"]*-${target}"$`, 'm');
+  if (!urlRe.test(text)) die(`the formula has no url line for ${target}`);
+  text = text.replace(urlRe, `    url "${url}"`);
+  const shaRe = new RegExp(`^(    url "${escapeRegExp(url)}"\n    )sha256 "[0-9a-f]{64}"$`, 'm');
+  if (!shaRe.test(text)) die(`the formula has no sha256 line after the ${target} url`);
+  return text.replace(shaRe, `$1sha256 "${sha256}"`);
 }
 
-/** Run as a script. */
-function main() {
-  const release = parse(process.argv.slice(2));
-  const before = readFileSync(FORMULA_FILE, 'utf8');
-  const after = patch(before, release);
-  if (before === after) {
-    process.stdout.write(`Formula/simt-dev.rb already describes ${release.version}; nothing to write\n`);
-  } else {
-    writeFileSync(FORMULA_FILE, after);
-    for (const [i, line] of after.split('\n').entries()) {
-      if (before.split('\n')[i] !== line) process.stdout.write(`  ${line}\n`);
-    }
-  }
-  process.stdout.write(`  url: ${tarballUrl(release.version)}\n`);
+const { version, sha256s } = parseArgs(process.argv.slice(2));
+let text = readFileSync(FORMULA, 'utf8');
+for (const target of TARGETS) {
+  text = patchPair(text, target, releaseUrl(version, target), sha256s[target]);
 }
-
-// Guarded, because `import.meta.main` does not exist on the Node floor this
-// package declares (>=22.20.0) and a second file that re-exports this one just
-// for tests is a copy. Comparing the module's own URL against the process's
-// entry point is the portable form of the same question, and without it a test
-// that imports `patch` would run the script with `node --test`'s argv, fail
-// validation, and exit 2 from inside the test runner.
-const ENTRY_POINT = process.argv[1] ? fileURLToPath(import.meta.url) === process.argv[1] : false;
-if (ENTRY_POINT) main();
+if (text === readFileSync(FORMULA, 'utf8')) {
+  console.log(`release-formula: Formula/simt-dev.rb already at v${version}`);
+} else {
+  writeFileSync(FORMULA, text);
+  console.log(`release-formula: Formula/simt-dev.rb updated to v${version}`);
+}

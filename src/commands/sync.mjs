@@ -500,8 +500,8 @@ export async function checkCommand(positional, flags) {  const root = flags.root
   const { manifest } = await readManifest(root);
   if (manifest) {
     // The gate runs from whatever binary resolved it. For a repository without npm that
-    // is a global install, and the only thing that knows which version it should be is
-    // the pin the repo recorded at adoption. A stale binary would run a different gate
+    // is the release binary in `.simt/bin` (ADR-098), and the only thing that knows
+    // which version it should be is the pin the repo recorded at adoption. A stale binary would run a different gate
     // than CI does, so the mismatch fails the gate rather than warning.
     const mismatch = assertVersionPin(manifest);
     if (mismatch) {

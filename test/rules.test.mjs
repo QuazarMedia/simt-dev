@@ -126,6 +126,11 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // Measured before the fix: eight clauses across four records, of which the parser
   // found none. Listed by id rather than by count so a record that stops declaring its
   // supersession is a visible change rather than a smaller number.
+  //
+  // ADR-058, ADR-059 and ADR-097 joined when ADR-098 landed: each now states in its own
+  // status paragraph which of its rulings the new record supersedes or narrows. That is
+  // the propagation working - the claim lives on the record that was changed, and the
+  // parser reads it there rather than inferring it from the newer record.
   assert.deepEqual(shapes, [
     'ADR-016',
     'ADR-021',
@@ -133,11 +138,14 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-025',
     'ADR-032',
     'ADR-042',
+    'ADR-058',
+    'ADR-059',
     'ADR-073',
     'ADR-077',
     'ADR-081',
     'ADR-083',
     'ADR-088',
+    'ADR-097',
   ]);
   for (const d of decisions) {
     for (const p of d.partial) {
@@ -219,7 +227,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // and the template file the tracker reads, which exist in this package and in the
   // repository that adopts it; the count moves because the records have to name them.
   // ADR-097 joined because its consequence is ABOUT the two release workflows and the
-  // manual twin they replace, so it names the files a maintainer edits.
+  // manual twin they replace, so it names the files a maintainer edits. ADR-098 joined
+  // for the same reason one channel later: a ruling that replaces the artefact a channel
+  // downloads has to name the build script, the channel module, the workflows and the
+  // formula it changes, or it is not an argument a maintainer can act on.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -234,6 +245,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-081',
     'ADR-082',
     'ADR-097',
+    'ADR-098',
   ]);
 });
 

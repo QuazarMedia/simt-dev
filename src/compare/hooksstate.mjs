@@ -123,8 +123,8 @@ export async function readHooksPath(root) {
  * already records for the same reason.
  *
  * `root` is the repository the shim belongs to: the remedy a shim prints depends on
- * the repo's kind (a devDependency where package.json exists, a pinned global install
- * where there is none), so the comparison must render the shim the way THIS repo got it,
+ * the repo's kind (a devDependency where package.json exists, the release binary into
+ * the repository where there is none), so the comparison must render the shim the way THIS repo got it,
  * or a non-npm repository would read as stale the moment this tool ships.
  */
 async function describeShim(path, root) {

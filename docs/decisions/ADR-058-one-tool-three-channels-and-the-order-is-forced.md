@@ -8,6 +8,13 @@ Status: **accepted** · 2026-10-11
 > input dissolves the branch-vs-tag failure recorded below. The ordering ruling —
 > npm live before either channel publishes — stands.
 
+> Ruling 5's artefact choice and the Homebrew half of ruling 7 are superseded by
+> [ADR-098](ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md): the
+> formula now downloads the release binary, not the npm tarball, and the Homebrew job's
+> precondition is that those assets exist rather than that the npm version is live. The
+> PyPI half of ruling 7 — npm live before the wheel publishes — stands, as does ruling
+> 5's refusal of `std_npm_args`.
+
 Affects: `pyproject.toml`, `python/simt_dev/`, `Formula/simt-dev.rb`,
 `.github/workflows/publish.yml`, `scripts/release-formula.mjs`,
 `scripts/verify-wheel.mjs`, `test/packaging.test.mjs`

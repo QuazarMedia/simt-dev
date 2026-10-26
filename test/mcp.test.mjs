@@ -18,6 +18,8 @@ import { handle, PROTOCOL_VERSION, RPC, SUPPORTED_VERSIONS, META } from '../src/
 import { TOOLS, toolNames, ERROR_SHAPE } from '../src/mcp/tools.mjs';
 import { assertValid } from '../src/mcp/schema.mjs';
 import { CLI } from '../src/name.mjs';
+import { desiredRegion } from '../src/projection/rules.mjs';
+import { planNext } from '../src/plan/index.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -193,6 +195,16 @@ test('mcp: every tool declares a usable schema', () => {
   }
 });
 
+test('mcp: the tool descriptions fit the 2 KB budget the plan set', () => {
+  // plan 0003 R41: a cacheable tools/list kept to at most 2 KB through terse
+  // descriptions. The budget is measured on the description prose - the mechanism the
+  // plan names - and not on the whole payload, which stays full: ADR-068 requires both
+  // the structured and the text shape declared, and schemas cut to fit a byte count
+  // would need a superseding ADR the tracker does not carry.
+  const total = TOOLS.reduce((n, t) => n + Buffer.byteLength(t.description, 'utf8'), 0);
+  assert.ok(total <= 2048, `${total} bytes of description against the 2 KB budget`);
+});
+
 test('mcp: skills_brief and `skills brief` answer the same question identically', async () => {
   // The row's headline: the budget arithmetic was written twice and the copies had
   // already drifted. This one checked `deferred` *after* the budget and inlined a
@@ -274,7 +286,7 @@ test('mcp: the resources capability is declared without subscriptions', async ()
   assert.equal(r.result.capabilities.resources.listChanged, undefined);
 });
 
-test('mcp: every revision lists rules and decisions', async () => {
+test('mcp: every revision lists rules, decisions, the kernel and the next slice', async () => {
   for (const version of SUPPORTED_VERSIONS) {
     const r = await handle(at(version, 'resources/list'), TOOLS);
     const { resources } = r.result;
@@ -282,11 +294,17 @@ test('mcp: every revision lists rules and decisions', async () => {
     // Sorted, so a client diffing two listings sees a change rather than a reshuffle.
     assert.deepEqual(resources.map((x) => x.uri), [...resources.map((x) => x.uri)].sort());
     for (const entry of resources) {
-      assert.match(entry.uri, /^simt:\/\/(rules|decisions)\//);
+      assert.ok(
+        /^simt:\/\/(rules|decisions)\//.test(entry.uri) || entry.uri === 'simt://kernel' || entry.uri === 'simt://plan/next',
+        `${version} listed ${entry.uri}`,
+      );
       assert.ok(entry.name && entry.mimeType === 'text/markdown' && Number.isInteger(entry.size));
     }
     assert.ok(resources.some((x) => x.uri === 'simt://rules/core'));
     assert.ok(resources.some((x) => x.uri.startsWith('simt://decisions/')));
+    // One fixed resource, not one per client or per revision: the kernel renders for any
+    // root, so it is always listed.
+    assert.ok(resources.some((x) => x.uri === 'simt://kernel'));
   }
 });
 
@@ -339,6 +357,69 @@ test('mcp: a decision record is readable and carries no estate name', async () =
   assert.doesNotMatch(content.text, /docs\/decisions\//, 'a reader outside this estate cannot resolve that path');
 });
 
+test('mcp: the kernel resource is the region in kernel mode, whatever the repo declared', async () => {
+  // The URI promises the kernel's bytes by its name. This checkout declares `full`
+  // (the default, and the only measured-safe mode), and the read still renders the
+  // kernel: the declared mode governs what `sync` writes to disk, not what a read path
+  // may ask for (ADR-002).
+  const listed = await handle(at('2026-07-28', 'resources/list'), TOOLS);
+  const entry = listed.result.resources.find((x) => x.uri === 'simt://kernel');
+  assert.ok(entry, 'the kernel resource is always listed');
+  assert.ok(Number.isInteger(entry.size) && entry.size > 0, `listed size ${entry?.size}`);
+
+  const r = await handle(at('2026-07-28', 'resources/read', { uri: 'simt://kernel' }), TOOLS);
+  const [content] = r.result.contents;
+  assert.equal(content.uri, 'simt://kernel');
+  assert.equal(content.mimeType, 'text/markdown');
+  // Listed size is read size: a client that budgets on the listing gets exactly the
+  // bytes it budgeted for.
+  assert.equal(Buffer.byteLength(content.text), entry.size);
+
+  // And they are the bytes the projection itself renders, with the kernel's two
+  // signatures: the hard class packed (core is `priority: hard`, the same rule the
+  // rules resource serves alone), and every deferred rule named with the command that
+  // fetches it - R08's accept criterion, made readable from outside the estate.
+  const region = await desiredRegion(process.cwd(), { mode: 'kernel' });
+  assert.equal(content.text, region.body);
+  assert.match(content.text, /^## Core/m);
+  assert.match(content.text, /Show it with: simt rules show/);
+});
+
+test('mcp: plan/next is listed and readable exactly when a slice is ready', async () => {
+  // Asserted against the plan module rather than a snapshot, because the tracker moves
+  // with every slice landed: the pairing a client relies on is that the listing and the
+  // read come from the same source of truth and agree in both directions.
+  const result = await planNext(process.cwd(), null);
+  const listed = await handle(at('2026-07-28', 'resources/list'), TOOLS);
+  const entry = listed.result.resources.find((x) => x.uri === 'simt://plan/next');
+  if (result.error || !result.next) {
+    assert.equal(entry, undefined, 'no slice was ready, yet plan/next was listed');
+    return;
+  }
+  assert.ok(entry, `a slice was ready (${result.next.id}) and plan/next was not listed`);
+  assert.ok(Number.isInteger(entry.size) && entry.size > 0);
+  const r = await handle(at('2026-07-28', 'resources/read', { uri: 'simt://plan/next' }), TOOLS);
+  const [content] = r.result.contents;
+  assert.equal(content.mimeType, 'text/markdown');
+  assert.equal(content.text, result.next.section);
+  assert.equal(Buffer.byteLength(content.text), entry.size);
+});
+
+test('mcp: plan/next is not found in a repository without a plan, per revision', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'simt-planres-'));
+  const opts = { root: dir };
+  const newest = await handle(at('2026-07-28', 'resources/read', { uri: 'simt://plan/next' }), TOOLS, opts);
+  assert.equal(newest.error.code, RPC.RESOURCE_NOT_FOUND);
+  const oldest = await handle(at('2025-06-18', 'resources/read', { uri: 'simt://plan/next' }), TOOLS, opts);
+  assert.equal(oldest.error.code, RPC.RESOURCE_NOT_FOUND_LEGACY);
+  const listed = await handle(at('2026-07-28', 'resources/list'), TOOLS, opts);
+  assert.equal(listed.result.resources.find((x) => x.uri === 'simt://plan/next'), undefined);
+  // The kernel rides along, because it renders read-only facts about any directory -
+  // and with a size, because a listing without one is a budget a client cannot make.
+  const kernel = listed.result.resources.find((x) => x.uri === 'simt://kernel');
+  assert.ok(kernel && kernel.size > 0, 'the kernel resource must render for any root');
+});
+
 test('mcp: a missing resource is the error its revision specifies', async () => {
   // The whole reason this surface is versioned per revision: 2026-07-28 makes -32602
   // mandatory and keeps -32002 only for clients that already accept it, while
@@ -372,6 +453,70 @@ test('mcp: a uri that is not ours, or tries to escape, is refused', async () => 
     assert.ok(r.error, `refused to refuse ${JSON.stringify(uri)}`);
     assert.equal(r.error.code, RPC.RESOURCE_NOT_FOUND);
   }
+});
+
+// --- prompts --------------------------------------------------------------------
+//
+// Two templates for the two jobs the server is for. The tests here check the shape the
+// specification cares about - capability, list, get, errors - and that the template text
+// names the tools it teaches, because a prompt that describes work the server cannot do
+// would be a lie with a message field.
+
+test('mcp: prompts are a capability, listed with their arguments at every revision', async () => {
+  for (const version of SUPPORTED_VERSIONS) {
+    const init = await handle(req('initialize', { protocolVersion: version }), TOOLS);
+    assert.deepEqual(init.result.capabilities.prompts, {});
+    const list = await handle(at(version, 'prompts/list'), TOOLS);
+    assert.deepEqual(list.result.prompts.map((p) => p.name), ['simt-brief', 'simt-slice']);
+    const brief = list.result.prompts.find((p) => p.name === 'simt-brief');
+    assert.ok(brief.arguments.some((a) => a.name === 'task' && a.required === true), 'the task argument is required');
+    const slice = list.result.prompts.find((p) => p.name === 'simt-slice');
+    assert.ok(slice.arguments.some((a) => a.name === 'id' && !a.required), 'the id argument is optional');
+  }
+  // The cache lifetime the list results carry from 2026-07-28, and must not before it.
+  const newest = await handle(at('2026-07-28', 'prompts/list'), TOOLS);
+  assert.ok(newest.result.ttlMs > 0 && newest.result.cacheScope === 'private');
+  const older = await handle(at('2025-06-18', 'prompts/list'), TOOLS);
+  assert.equal(older.result.ttlMs, undefined, 'a field the revision does not define was invented for it');
+});
+
+test('mcp: prompts/get returns the argument in a user message, at every revision', async () => {
+  for (const version of SUPPORTED_VERSIONS) {
+    const r =
+      await handle(at(version, 'prompts/get', { name: 'simt-brief', arguments: { task: 'fix the compass drift' } }), TOOLS);
+    assert.ok(r.result, `${version}: prompts/get errored: ${JSON.stringify(r.error)}`);
+    const [message] = r.result.messages;
+    assert.equal(message.role, 'user');
+    assert.equal(message.content.type, 'text');
+    assert.match(message.content.text, /fix the compass drift/);
+    // A prompt names the tools; it does not pretend to have run them. The server is
+    // read-only, and the template is written for an agent that can call.
+    assert.match(message.content.text, /`brief` tool/);
+  }
+});
+
+test('mcp: simt-slice answers with and without an id, and points at the kernel', async () => {
+  const bare = await handle(at('2026-07-28', 'prompts/get', { name: 'simt-slice' }), TOOLS);
+  const bareText = bare.result.messages[0].content.text;
+  // Omission is the default reading: "the next slice" is what the request means.
+  assert.match(bareText, /`plan_next` tool with no id/);
+  // ADR-001, stated in the template because the agent that reads it is the one that
+  // would otherwise push.
+  assert.match(bareText, /Push only on explicit user approval/);
+
+  const named = await handle(at('2026-07-28', 'prompts/get', { name: 'simt-slice', arguments: { id: 'S38' } }), TOOLS);
+  const namedText = named.result.messages[0].content.text;
+  assert.match(namedText, /id "S38"/);
+  // The rules the agent commits under are read as the resource the prompt names - the
+  // same bytes an adopting repository's own agent would start from.
+  assert.match(namedText, /simt:\/\/kernel/);
+});
+
+test('mcp: an unknown prompt is a method error naming the way to discover one', async () => {
+  const r = await handle(at('2026-07-28', 'prompts/get', { name: 'nope' }), TOOLS);
+  assert.equal(r.error.code, RPC.METHOD);
+  assert.match(r.error.message, /no prompt named "nope"/);
+  assert.match(r.error.message, /prompts\/list/);
 });
 
 // --- end to end over a real pipe ------------------------------------------------

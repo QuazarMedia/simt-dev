@@ -21,21 +21,24 @@ import { CHECK_MARKER } from './kernel/checks.mjs';
 import { VARIANTS_MARKER } from './kernel/variants.mjs';
 import { LESSON_KEYS } from './memory/lessons.mjs';
 import { DECISION_KEYS } from './memory/decide.mjs';
+import { PROMPT_WORDS } from './mcp/prompts.mjs';
 
 /**
  * `simt-` names that belong to this tool and never to a repository.
  *
- * The last three are not frontmatter: they are names this tool writes into files it
- * adopts a repository into — the package, the gate file it puts in `.github`, and the
- * hooks directory it points `core.hooksPath` at. `simt-dev` itself is here for the same
- * reason the estate pattern exempts it, and stating it once here is what stops the two
- * readers from disagreeing about the tool's own name.
+ * The three markers and the four suffixed names are not frontmatter: they are names this
+ * tool writes into files it adopts a repository into — the package, the gate file it puts
+ * in `.github`, the hooks directory it points `core.hooksPath` at, and the two prompts it
+ * serves over MCP, derived from the module that owns them. `simt-dev` itself is here for
+ * the same reason the estate pattern exempts it, and stating it once here is what stops
+ * the two readers from disagreeing about the tool's own name.
  */
 export const TOOL_WORDS = new Set([
   ...KNOWN_KEYS,
   ...PROFILE_KEYS,
   ...LESSON_KEYS,
   ...DECISION_KEYS,
+  ...PROMPT_WORDS,
   INFERABLE_MARKER,
   CHECK_MARKER,
   VARIANTS_MARKER,

@@ -407,7 +407,7 @@ export const TOOLS = [
     outputSchema: output.doctor,
     name: 'doctor',
     description:
-      'Classify a repository: its stack tags, the emitted facts with the file that proved each, and whether a simt-dev manifest is present. Call this first when you do not yet know what a repo is.',
+      'Classify a repository: stack tags, emitted facts with the file that proved each, and manifest presence. Call this first when the repo is unknown.',
     inputSchema: rootArg,
     async run(args) {
       const root = rootOf(args);
@@ -430,7 +430,7 @@ export const TOOLS = [
     outputSchema: output.skills_index,
     name: 'skills_index',
     description:
-      'The full skill catalogue: every skill with its summary, size, stack tags and whether it is deferred. Cheap enough to always afford, and the fallback when brief returns nothing useful.',
+      'Full skill catalogue: every skill with summary, size, stack tags and deferred flag. The fallback when brief returns nothing useful.',
     inputSchema: noArgs,
     async run(args) {
       const { registry: reg, verified, workspace } = await registry(args);
@@ -451,7 +451,7 @@ export const TOOLS = [
     outputSchema: output.skills_brief,
     name: 'skills_brief',
     description:
-      'THE entry point. Resolve the skill set for a task in a repository. Returns what was selected, why each was selected, what was deferred, and what was NOT selected with the reason - the last part matters, because it is what lets you override the resolver instead of guessing at it.',
+      'THE entry point. Resolve the skill set for a task: selected with why, deferred, and not selected with reason - the reasons let you override the resolver instead of guessing at it.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -517,7 +517,7 @@ export const TOOLS = [
   {
     outputSchema: output.skills_show,
     name: 'skills_show',
-    description: 'One skill body, with the metadata needed to decide whether to trust it: source path, which of the two locations it was read from, and its cited decisions.',
+    description: 'One skill body and the metadata needed to judge it: source path, the location it was read from, and its cited decisions.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -585,7 +585,7 @@ export const TOOLS = [
     outputSchema: output.skills_why,
     name: 'skills_why',
     description:
-      'The signal chain for one skill in one repository: its score, the reasons behind it, whether the stack gate admits it at all, and what it would take to make it selected.',
+      'The signal chain for one skill in one repository: its score, the reasons, whether the stack gate admits it, and what would select it.',
     inputSchema: {
       type: 'object',
       properties: { name: { type: 'string' }, root: { type: 'string' }, task: { type: 'string' } },
@@ -619,7 +619,7 @@ export const TOOLS = [
     outputSchema: output.rules_list,
     name: 'rules_list',
     description:
-      'The rule catalogue, and which rules a given repository actually receives. Pass `root` to get the selection rather than just the catalogue.',
+      'The rule catalogue, and which rules a repository actually receives. Pass root for the selection, not just the catalogue.',
     inputSchema: {
       type: 'object',
       properties: { root: { type: 'string' } },
@@ -657,7 +657,7 @@ export const TOOLS = [
     outputSchema: output.rules_why,
     name: 'rules_why',
     description:
-      'Why a rule exists. Give a rule id for the decisions that settled it and whether each is still in force, or an ADR id for the rules that decision repeats. A rule citing no decision reports that - it is a finding, not an empty answer.',
+      'Why a rule exists: a rule id for the decisions that settled it, or an ADR id for the rules that repeat it. An uncited rule is a finding, reported so.',
     inputSchema: {
       type: 'object',
       properties: { what: { type: 'string', description: 'a rule id or ADR-NNN' } },
@@ -713,7 +713,7 @@ export const TOOLS = [
     outputSchema: output.check,
     name: 'check',
     description:
-      'The gate for one repository: is its generated region current, unmanaged, drifted or malformed, and does any rule file lack an id. Read-only - it never repairs.',
+      'The gate for one repository: region current, unmanaged, drifted or malformed, and rule files lacking an id. Read-only - it never repairs.',
     inputSchema: rootArg,
     async run(args) {
       const root = rootOf(args);
@@ -730,7 +730,7 @@ export const TOOLS = [
     outputSchema: output.compare,
     name: 'compare',
     description:
-      'The organisation-wide matrix: every repository under the root, its adoption, region state, pinned simt-dev SHA, hook routing and declared gates, plus the problems found. This is the command that replaces reconstructing the estate by hand.',
+      'The workspace matrix: every repository with its adoption, region state, pinned SHA, hook routing and gates, plus the problems found.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -761,7 +761,7 @@ export const TOOLS = [
   {
     outputSchema: output.plan_next,
     name: 'plan_next',
-    description: 'The next queued slice whose dependencies are complete, and only that slice\'s section. Pass id to read one slice whether or not it is ready.',
+    description: "The next queued slice whose dependencies are complete; its design section only. Pass id for one slice whether or not it is ready.",
     inputSchema: {
       type: 'object',
       properties: {
@@ -821,7 +821,7 @@ export const TOOLS = [
     outputSchema: output.brief,
     name: 'brief',
     description:
-      'The packet for one task, in the bytes a prompt can carry: the kind of task it is, the commands that kind needs, the files the index ranks highest, the tests that cover them, the decisions that govern them, the skills that apply and the lessons that name those paths. Every argument is optional - with no task it describes the repository itself.',
+      'The packet for one task in prompt-sized bytes: task kind, needed commands, ranked files, covering tests, governing decisions, applicable skills. With no task it describes the repository.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -868,7 +868,7 @@ export const TOOLS = [
     outputSchema: output.federation_query,
     name: 'federation_query',
     description:
-      'Ask a code-graph server this repository declared one structural question, and return its answer with the name of the server that gave it. Read-only: it reads the "federation" block from simt.json and starts only the servers the manifest itself names, and a repository that declared none is told so rather than queried.',
+      'Ask a declared code-graph server one structural question; the answer names the server that gave it. Starts only servers simt.json names; a repository declaring none is told so.',
     inputSchema: {
       type: 'object',
       properties: {

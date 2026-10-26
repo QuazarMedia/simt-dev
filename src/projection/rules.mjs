@@ -512,7 +512,12 @@ export async function desiredRegion(root, flags) {
   // symmetric: packing a line that should have been deferred spends the budget the mode
   // exists to save, while deferring a line that should have been packed costs a reader
   // one `rules show`. The mode is a promise about bytes, so it is the bytes that win.
-  const mode = await projectionMode(root);
+  // An explicit `mode` flag overrides the declared one. The caller is the MCP
+  // `simt://kernel` resource, which by name promises the kernel's bytes for any
+  // repository: the declared mode governs what `sync` writes to disk, not what a read
+  // path may look at, so the read renders in the mode the URI names instead of
+  // re-reading a manifest it must not obey (ADR-002).
+  const mode = typeof flags?.mode === 'string' ? flags.mode : await projectionMode(root);
   const packed = [];
   const deferred = [];
   for (const r of inRegion) {

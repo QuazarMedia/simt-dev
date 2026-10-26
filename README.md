@@ -143,11 +143,15 @@ simt bench report [--compare a b]   # resolved rate, quality, cost, CPI, bootstr
 simt bench ablate --yes             # leave-one-out rule ablation ranked by value per KB
 simt bench probes --yes             # 12 deterministic rule-compliance probes
 simt bench variants --yes           # evaluate simt-variants slots and lock winners in simt-dev.lock.json
+simt pack new <name> --source <spec> # scaffold a versioned pack: pack.json, bench.json, one rule
+simt pack lint [dir] [--require-measured] # validate a pack and state its measured ΔR
+simt pack publish [dir] --yes       # publish an npm-sourced pack (git packs name the tag-and-push)
 simt mcp [--list]                   # serve the 13 read-only tools over stdio JSON-RPC
 ```
 
 `init`, `sync`, `upgrade`, `hooks install`, `agent-hooks install`, `shared install`,
-`skills install`, `plan done`, `lessons review`, `decide` and the `bench` writers print
+`skills install`, `plan done`, `lessons review`, `decide`, `pack new`, `pack publish`
+and the `bench` writers print
 a plan and write nothing without `--yes`. None of them commit or push. `simt index`
 writes its cache without asking: the file is gitignored and `git ls-files` can rebuild it.
 
@@ -316,12 +320,10 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
 
 ## Where the plan finishes
 
-Slices `R01`–`R40` are complete and shipped in `0.5.0`; `R41`–`R44` are complete in the
-tree and land in the next release. The remaining queued slices finish packaging and the
+Slices `R01`–`R40` are complete and shipped in `0.5.0`; `R41`–`R45` are complete in the
+tree and land in the next release. The remaining queued slices are the
 small ergonomics:
 
-- **Packaging (`R45`).** Benchmark-measured rule packs: versioned and digest-pinned, a
-  pack stating the ΔR it was measured at.
 - **The small doors (`R46`–`R55`).** `simt explain <CODE>` for every finding code, safe
   idempotent `simt doctor --fix`, a `< 50 ms` `simt status --line`, a write journal with
   `simt undo`, `--diff` on every writer, shell completions, one cross-harness ignore list

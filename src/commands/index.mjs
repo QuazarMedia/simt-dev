@@ -35,6 +35,7 @@ import { compareCommand } from './compare.mjs';
 import { upgradeCommand } from './upgrade.mjs';
 import { mcpCommand } from './mcp.mjs';
 import { pluginCommand } from './plugin.mjs';
+import { packCommand } from './pack.mjs';
 import { installCommand } from './skillsinstall.mjs';
 import { compileCommand } from './skillscompile.mjs';
 import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
@@ -92,6 +93,9 @@ const GROUPS = new Map([
   ['shared', 'plan'],
   ['lessons', 'list'],
   ['local', 'doctor'],
+  // Plan 0003 R45. The default is the read: `pack` alone lints the working
+  // directory, the way `skills` alone indexes and `graph` alone lints.
+  ['pack', 'lint'],
 ]);
 
 /**
@@ -173,6 +177,12 @@ export const IMPLEMENTED = {
   // plan 0003 R43. A bare command: the kind is a positional, so there is no group and
   // no default subcommand to resolve.
   plugin: pluginCommand,
+  // Plan 0003 R45. A group, not a bare command: `new` and `publish` write (or
+  // publish) and `lint` reads, and the dispatcher routes all three through one
+  // subcommand switch the way `hooks` does.
+  'pack new': (args, flags) => packCommand('new', args, flags),
+  'pack lint': (args, flags) => packCommand('lint', args, flags),
+  'pack publish': (args, flags) => packCommand('publish', args, flags),
 };
 
 /**

@@ -57,6 +57,14 @@ as one file in `.simt/bin/` and carries its own runtime — and its acceptance i
 executable: a Gradle fixture with every directory containing a node removed from `PATH`
 runs `check` and the hook shim from the built bytes.
 
+`simt pack new <name> --source <npm:<package>|git+https://…>` scaffolds a
+versioned pack — `pack.json`, an unmeasured `bench.json`, one stack rule — and
+`simt pack lint [dir]` validates it and states its measured ΔR, rejecting a pack
+with no bench summary under `--require-measured`. `simt pack publish [dir]` lints
+first, publishes an npm-sourced pack idempotently (a live version is skipped),
+and names the tag-and-push for a git-sourced one. The summary binds to every
+byte but itself, so recording a measurement cannot invalidate it.
+
 ### Changed
 
 `harness detect`'s "some readers read AGENTS.md" rows no longer say bare "some"

@@ -1290,13 +1290,13 @@ no-Node acceptance), and the decision-corpus tests in `test/rules.test.mjs` move
 the new record — ADR-058, ADR-059 and ADR-097 now declare in their own status
 paragraphs what ADR-098 supersedes or narrows, which is the propagation R34 built.
 1244/1244 in the full suite, also from a copy at a path with no siblings (ADR-031); the
-assets were built twice on this machine and once from that copy, all three hashing
-identically, and the committed formula carries that build's checksums. What is not done, and is recorded rather than
-implied: the plan's "evaluate Bun or Deno compile" is an evaluation of the contract —
-the package declares a Node floor, its index is `node:sqlite`, and every recorded
-latency is that runtime's — not a measurement, because no alternative artifact was
-built to measure; and the target list
-is deliberately three, so a platform outside it gets a loud 404 rather than a build.
+three assets were built in the repository and again from that copy, hashing identically,
+and the committed formula carries that build's checksums. What is not done, and is
+recorded rather than implied: the plan's "evaluate Bun or Deno compile" is an evaluation
+of the contract — the package declares a Node floor, its index is `node:sqlite`, and
+every recorded latency is that runtime's — not a measurement, because no alternative
+artifact was built to measure; and the target list is deliberately three, so a platform
+outside it gets a loud 404 rather than a build.
 
 **R28 — Complete** (D2, ADR-090). `src/index/store.mjs` and `src/index/persist.mjs` index
 full-text tokens (`ftsKindOf`, `buildFtsBody`) across `code`, `docs`, `skills`, `decisions`

@@ -282,6 +282,22 @@ test('DeepSeek drops the broader instruction file before the most specific one',
   assert.equal(view.totalBytes, 40_001);
 });
 
+test('Gemini CLI loads the GEMINI.md chain and never AGENTS.md by default', async () => {
+  // The disagreement the row exists to record: both files present, this reader loads
+  // only the context file - and a repository that relied on AGENTS.md would be invisible
+  // to it, unless settings.json context.fileName renames the context file.
+  const both = await repo({ 'AGENTS.md': 'agents\n', 'GEMINI.md': 'gemini\n' });
+  const view = await viewOf(both, loader('gemini'));
+  assert.deepEqual(view.files.map((f) => f.file), ['GEMINI.md']);
+
+  // Every file on the walk contributes, so a subdirectory session sees both - the
+  // contrast with Codex's one-file-per-directory, in a reader that publishes no cap.
+  const nested = await repo({ 'GEMINI.md': 'gemini\n', 'src/GEMINI.md': 'gemini src\n' });
+  const at = await viewOf(nested, loader('gemini'), { cwd: join(nested, 'src') });
+  assert.deepEqual(at.files.map((f) => f.file), ['GEMINI.md', 'src/GEMINI.md']);
+  assert.equal(at.totalBytes, 7 + 11);
+});
+
 test('a skill costs its frontmatter, not its body', async () => {
   const root = await repo({
     '.agents/skills/demo/SKILL.md':
@@ -304,6 +320,13 @@ test('the command reports the table and the measurement, and both name their sou
   // Copilot publishes no hooks file. It says so rather than showing an empty cell, which
   // would read as "no hooks exist".
   assert.match(table.out, /hooks {5}none documented — no hooks file is documented for Copilot/);
+  // Gemini CLI, the row this table gained when its configuration reference came back:
+  // every fact it carries names the page it was read from, including the one path a
+  // project file can carry an MCP server in.
+  const geminiStart = table.out.indexOf('\ngemini  ');
+  assert.ok(geminiStart > -1, 'the gemini row is in the table');
+  assert.match(table.out.slice(geminiStart), /mcp\s+\.gemini\/settings\.json/);
+  assert.match(table.out.slice(geminiStart), /source\s+Gemini CLI context and configuration docs.*read 2026-10-26/);
 
   const measured = await run(['harness', 'loaders', '--reader', 'codex', '--root', root, '--json']);
   assert.equal(measured.code, 0, measured.out);

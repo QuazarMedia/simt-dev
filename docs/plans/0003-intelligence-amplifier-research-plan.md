@@ -914,7 +914,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R39 | Local critic | 6 | R37, R25 | M | D2 | precision ≥ 0.8 to gate | Complete |
 | R40 | Model and effort advice | 6 | R03 | M | — | C −25% at ΔR ≥ −2 | Complete |
 | R41 | MCP 2026-07-28 | 7 | review 0002 S43 | M | — | 3 versions; `tools/list` ≤ 2 KB | Complete |
-| R42 | Harness adapters as data | 7 | R14, R15 | M | — | provenance; detection on fixtures | Queued |
+| R42 | Harness adapters as data | 7 | R14, R15 | M | — | provenance; detection on fixtures | Complete |
 | R43 | Plugin packaging | 7 | R42 | M | — | installs and passes R15 fixtures | Queued |
 | R44 | Single-file binary | 7 | review 0002 S35 | M | D8 | runs without Node on PATH | Queued |
 | R45 | Packs, measured | 7 | review 0002 S39, R03 | S | — | pack states its ΔR | Queued |
@@ -1210,6 +1210,30 @@ repositories. 8 tests in `test/mcp.test.mjs` (kernel bytes equal the listing, sl
 iff ready and its section byte-exact, not-found per revision, prompts across all three
 revisions, the description budget); 1219 pass in the full suite, also from a copy at a
 path with no siblings (ADR-031).
+
+**R42 — Complete**. Two halves. First, the loader table gained the reader it had been
+thin on: Gemini CLI, whose configuration reference the table previously recorded as
+404ing, was re-checked and found live (`docs/reference/configuration/` and
+`docs/cli/gemini-md/`, read 2026-10-26), so the row now carries every fact — the
+GEMINI.md chain with boundary markers, `context.fileName` (the one documented way this
+reader loads AGENTS.md at all), depth-5 `@path` imports, no published cap — plus the
+MCP registration, `mcpServers` in project `.gemini/settings.json`. It stays a FACTS row
+with `surface: null`, per the ruling on the `gemini-md` pointer: one rule channel per
+reader, and detection facts are not a channel. Second, `harness detect` now reports the
+MCP registration files the loader table names — single-sourced from `loaders.mjs`
+because two lists of vendor paths would drift apart exactly when a harness renames its
+config — as `kind: 'mcp'` rows carrying the same provenance rule as everything else
+(read dates added to every `mcp.verified`); a row rests on the file being a FILE, so a
+bare `.codex` full of prompts reports no servers it has never had, and MCP rows never
+count toward the unclaimed-rules note because a config file never claimed a rule
+channel. `.gemini` graduated from bare candidate to verified detection facts the same
+way facts move in everywhere in this tool: by someone reading the vendor pages. MCP
+evidence is repo-scope only (`--user` stays directories-only): the loader table carries
+project paths, and the same path means different scopes per harness in `$HOME`. 9 tests
+across `test/harness.test.mjs` and `test/loaders.test.mjs` (the five-file fixture, the
+file-not-directory contrast, the unclaimed-note exclusion, the gemini view and table
+provenance); 69/69 across the three focused suites, full suite count in the tracker
+footnote, also from a copy at a path with no siblings (ADR-031).
 
 **R28 — Complete** (D2, ADR-090). `src/index/store.mjs` and `src/index/persist.mjs` index
 full-text tokens (`ftsKindOf`, `buildFtsBody`) across `code`, `docs`, `skills`, `decisions`

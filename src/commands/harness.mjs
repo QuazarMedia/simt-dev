@@ -13,6 +13,11 @@
 // a defect in the repository: the rules in AGENTS.md still reach whichever harnesses
 // read that file, and a reader who wanted a failing command could not tell the
 // difference between "no channel" and "broken".
+//
+// R42 added the MCP registration files to the same answer. They are reported from the
+// loader table (one source of paths, with `verified` naming the vendor page) because a
+// detection question deserves the same provenance rule the loader table set: a row with
+// no source is a guess in a report.
 
 import { stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
@@ -36,7 +41,12 @@ import { viewAll } from '../measure/loaderView.mjs';
 export async function harnessCommand(positional, flags) {
   const root = flags.root ?? process.cwd();
 
-  const repo = await scan(root);
+  // MCP evidence is project-scope by construction: the loader table carries repo-root
+  // paths (.mcp.json, .codex/config.toml, …), and the same path means different scopes
+  // per harness in $HOME - Codex registers user servers in its user config, Claude Code
+  // does not keep .mcp.json there - so a home scan reports directories only, and stays
+  // right by saying less rather than by carrying a second per-harness user-scope table.
+  const repo = await scan(root, { mcp: true });
   // Only on request. The home directory is the reader's, not the repository's, and a
   // command that reports both by default is a command whose output changes because
   // somebody installed something elsewhere.
@@ -79,8 +89,13 @@ export async function harnessCommand(positional, flags) {
  * rather than raised: a permissions error on one candidate must not make the whole
  * command fail, and the difference between "could not look" and "not there" is one
  * note in the output rather than a second failure mode nobody asked for.
+ *
+ * `{ mcp: true }` (repo scans only) adds the MCP registration files the loader table
+ * records - single-sourced from `loaders.mjs` because that is the whole point of R42:
+ * the evidence is data the tool already verified once, not a second list of paths to
+ * keep in step by hand. It is file stat and nothing else: present, labelled, cited.
  */
-async function scan(root) {
+async function scan(root, { mcp = false } = {}) {
   const rows = [];
   for (const s of SURFACES) {
     for (const dir of s.configDirs ?? []) {
@@ -91,9 +106,10 @@ async function scan(root) {
   }
   for (const c of CANDIDATE_DIRS) {
     if (await present(root, c.dir)) {
-      rows.push(row(c.dir, c.harness, { readsAgentsMd: c.readsAgentsMd ?? null, verified: c.verified ?? null }));
+      rows.push(row(c.dir, c.harness, { readsAgentsMd: c.readsAgentsMd ?? null, readsAgentsMdNote: c.readsAgentsMdNote ?? null, verified: c.verified ?? null }));
     }
   }
+  if (mcp) rows.push(...(await scanMcpFiles(root)));
   rows.sort((a, b) => (a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0));
   return { root, rows };
 }
@@ -106,11 +122,49 @@ async function present(root, dir) {
   }
 }
 
+/**
+ * The MCP registration files the loader table says a project can carry.
+ *
+ * A row requires the path to be a FILE the loader table names, and it is skipped when
+ * the loader carries none (opencode registers servers in a profile key, DeepSeek as a
+ * profile plugin). Nothing reads the file: whether the JSON parses or names servers is
+ * the harness's problem at session time, and a service that promised to validate that
+ * would be a service somebody had to keep current.
+ *
+ * This is evidence, not a channel: no rule file is projected into an MCP config, so
+ * `channel` stays false and `readsAgentsMd` stays null - the fields say what they mean
+ * instead of borrowing the meaning the directory rows give them.
+ */
+async function scanMcpFiles(root) {
+  const rows = [];
+  for (const loader of LOADERS) {
+    const mcp = loader.mcp;
+    if (mcp?.path == null) continue;
+    const file = join(root, mcp.path);
+    try {
+      if (!(await stat(file)).isFile()) continue;
+    } catch {
+      continue;
+    }
+    rows.push({
+      dir: mcp.path,
+      kind: 'mcp',
+      label: loader.label,
+      surface: loader.id,
+      channel: false,
+      readsAgentsMd: null,
+      verified: mcp.verified ?? loader.verified ?? null,
+    });
+  }
+  return rows;
+}
+
 /** One present directory, and what - if anything - this tool can project into it. */
 function row(dir, label, surface) {
   const id = surface.id ?? null;
   return {
     dir,
+    kind: 'rules',
     label,
     surface: id,
     // `channel: false` is the honest half of the answer: the directory exists and this
@@ -119,14 +173,20 @@ function row(dir, label, surface) {
     // identical in a list of names.
     channel: id !== null && surface.rule != null,
     readsAgentsMd: surface.readsAgentsMd ?? null,
+    // Which reader ("some") or which configuration ("some, under this setting") - the
+    // bare three-valued column started life on rows with many readers, where "which" is
+    // a per-row note. A row that lacks one renders without it.
+    readsAgentsMdNote: surface.readsAgentsMdNote ?? null,
     verified: surface.verified ?? null,
   };
 }
 
 function countUnclaimed(scan) {
   // A candidate that cites a document and reads AGENTS.md is covered by the standard
-  // region. One that cites nothing is the case the note exists for (ADR-067).
-  return scan.rows.filter((r) => r.surface === null && r.readsAgentsMd == null).length;
+  // region. One that cites nothing is the case the note exists for (ADR-067). An MCP
+  // config row is not "unclaimed" - it never claimed a rule channel, so it must not
+  // count toward the note, or mcp.json presence would read as a rule gap it is not.
+  return scan.rows.filter((r) => r.kind === 'rules' && r.surface === null && r.readsAgentsMd == null).length;
 }
 
 /**
@@ -149,15 +209,28 @@ function render(root, repo, user) {
 function block(scan, pad) {
   if (scan.rows.length === 0) return [`${pad}(none present)`];
   return scan.rows.map((r) => {
+    // An MCP row is judged by presence alone, so it is named first: routed last, its
+    // non-null `surface` (the loader it belongs to) would collide with the directory
+    // rows' meaning and print "AGENTS.md" under a file that carries no rules at all.
     const through =
-      r.surface === null
-        ? r.readsAgentsMd === 'all'
-          ? 'AGENTS.md'
-          : 'no rule channel in this release'
-        : r.channel
-          ? 'projected rule file'
-          : 'AGENTS.md';
-    const agents = r.readsAgentsMd === 'all' ? ' (reads AGENTS.md)' : r.readsAgentsMd === 'some' ? ' (some readers read AGENTS.md)' : '';
+      r.kind === 'mcp'
+        ? 'MCP config present'
+        : r.surface === null
+          ? r.readsAgentsMd === 'all'
+            ? 'AGENTS.md'
+            : 'no rule channel in this release'
+          : r.channel
+            ? 'projected rule file'
+            : 'AGENTS.md';
+    // "some" never renders bare when the row knows which: a reader who needs the
+    // detail already had it only in the JSON, and the detail is the answer to "is my
+    // AGENTS.md read" - the question this text is here to answer.
+    const agents =
+      r.readsAgentsMd === 'all'
+        ? ' (reads AGENTS.md)'
+        : r.readsAgentsMd === 'some'
+          ? ` (some readers read AGENTS.md${r.readsAgentsMdNote ? `: ${r.readsAgentsMdNote}` : ''})`
+          : '';
     return `${pad}${r.dir.padEnd(12)} ${r.label.padEnd(38)} ${through}${agents}`;
   });
 }

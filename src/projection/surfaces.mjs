@@ -387,12 +387,30 @@ export const SURFACE_IDS = SURFACES.map((s) => s.id);
  * this repository", never "this harness is installed" and never "its rules are not
  * being loaded".
  *
+ * The exception that proves the rule is `.gemini`: R42 read Gemini CLI's
+ * configuration docs, so its entry carries readsAgentsMd and a `verified` the same way
+ * a surface row does. Everyone else stays a bare name until somebody reads their
+ * vendor pages — the bar for facts here is a document, not an ML search snippet, and
+ * that bar is what keeps this list honest as harnesses come and go.
+ *
  * `.github` is absent even though the Copilot row carries it: `.github` holds workflows
  * and issues, so its presence says nothing about whether Copilot is used, and the
  * Copilot row's own detection is not something this command is for.
  */
 export const CANDIDATE_DIRS = [
-  { dir: '.gemini', harness: 'Gemini CLI' },
+  {
+    // The one candidate with verified facts (R42): Gemini CLI's configuration reference
+    // was live and read on 2026-10-26, so presence now carries provenance instead of
+    // the default "a reader may be configured here". AGENTS.md is loaded only when
+    // settings.json `context.fileName` names it - the context file is GEMINI.md
+    // otherwise - so the fact is "some", which here means one reader under
+    // configuration, and the note says exactly that.
+    dir: '.gemini',
+    harness: 'Gemini CLI',
+    readsAgentsMd: 'some',
+    readsAgentsMdNote: 'AGENTS.md is loaded only when settings.json context.fileName names it; the context file is GEMINI.md otherwise',
+    verified: 'Gemini CLI configuration docs (geminicli.com/docs/reference/configuration/, read 2026-10-26) — a .gemini directory holds the project settings.json, and the reader loads GEMINI.md unless context.fileName renames it',
+  },
   { dir: '.windsurf', harness: 'Windsurf' },
   { dir: '.zed', harness: 'Zed' },
   { dir: '.kiro', harness: 'Kiro' },

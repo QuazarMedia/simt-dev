@@ -12,6 +12,7 @@
 // this is a block and not a script.
 
 import { BIN_ENV, BIN_REL, CLI, PACKAGE_NAME } from './name.mjs';
+import { LOCAL_BIN } from './distribute/release.mjs';
 
 /**
  * @param {string} command arguments to hand the tool, with `$ROOT` spelled as a shell
@@ -24,6 +25,13 @@ import { BIN_ENV, BIN_REL, CLI, PACKAGE_NAME } from './name.mjs';
  * @returns {string} POSIX sh source
  */
 export function renderLocator(command, { subject = CLI, remedy = `REMEDY run: npm i -D ${PACKAGE_NAME}` } = {}) {
+  // The remedy is emitted single-quoted (see the assignment at the bottom of the
+  // block), so a quote in it would end that string and re-open the shell to
+  // whatever follows. Refuse at render time: the failure is a template bug, and
+  // it should be found where the string is written, not in a hook on a machine.
+  if (remedy.includes("'")) {
+    throw new Error(`the remedy is embedded single-quoted and cannot contain a quote: ${remedy}`);
+  }
   const D = '$';
   return `# ${D}${BIN_ENV} must name ONE program: an executable on PATH, or a .mjs entry
 # point to hand to node. It cannot be a command line, because there is no safe way
@@ -59,6 +67,15 @@ if [ -f "${D}ROOT/node_modules/${PACKAGE_NAME}/${BIN_REL}" ]; then
   exec node "${D}ROOT/node_modules/${PACKAGE_NAME}/${BIN_REL}" ${command}
 fi
 
+# The binary this repository downloaded for itself: the pinned bytes, no node.
+# It is checked before PATH so a repository's own copy wins over whatever a
+# machine happens to have installed, the same way node_modules wins - and the
+# dispatcher still compares the version it runs against the pin, so a stale
+# copy is refused rather than trusted.
+if [ -x "${D}ROOT/${LOCAL_BIN}" ]; then
+  exec "${D}ROOT/${LOCAL_BIN}" ${command}
+fi
+
 if command -v ${CLI} >/dev/null 2>&1; then
   exec ${CLI} ${command}
 fi
@@ -68,7 +85,11 @@ echo "${CLI}: cannot locate ${subject}." >&2
 # unbound variable aborts the shell, so an unguarded ${D}${BIN_ENV} here would
 # kill the message that exists to explain the failure - and this block only runs
 # when nothing resolved, which is the one moment the reader needs it.
-echo "  looked for: ${D}{${BIN_ENV}:-<unset>}, ${D}ROOT/node_modules/${PACKAGE_NAME}, ${CLI} on PATH" >&2
+echo "  looked for: ${D}{${BIN_ENV}:-<unset>}, ${D}ROOT/node_modules/${PACKAGE_NAME}, ${D}ROOT/${LOCAL_BIN}, ${CLI} on PATH" >&2
+# The remedy is assigned single-quoted and echoed, so a command in it - the binary
+# download derives its platform with $(uname) - stays text here and runs only when
+# the reader runs it. A remedy in double quotes would be half-executed by this echo.
+remedy='${remedy}'
 echo "${remedy}" >&2
 exit 1
 `;

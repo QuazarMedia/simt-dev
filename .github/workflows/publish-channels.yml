@@ -6,7 +6,7 @@
 #
 #   npm     the original. A tarball of `.mjs` files - staged by publish.yml.
 #   PyPI    a wheel carrying those same bytes, plus a Python entry point.
-#   Homebrew a formula that downloads the npm tarball at install time.
+#   Homebrew a formula that downloads the release binary at install time.
 #
 # npm is the channel a human has to approve - `npm stage publish` leaves the
 # version in a staging area nothing installs until `npm stage approve`, a 2FA
@@ -26,11 +26,15 @@
 # wrong form field fails loudly instead of publishing a side channel of a
 # version this repository never claimed.
 #
-# The order between the channels is forced rather than chosen (ADR-058 ruling
-# 7): Homebrew downloads the npm tarball at install time, so a formula naming a
-# version that is not live on the npm registry installs a 404. That is why
-# every job here begins by checking that `npm view` serves the version, and
-# names the remedy when it does not: approve the stage first.
+# Each channel has its own prerequisite, and each job checks it before
+# publishing, naming the remedy when it is unmet (ADR-058 ruling 7):
+#
+#   PyPI    the wheel and the tarball carry the same bytes, so the version must
+#           be live on npm - `npm view` serves it, or the stage is still waiting
+#           for a maintainer: approve it first.
+#   Homebrew the formula downloads the release binary, which publish.yml builds
+#           when the tag is pushed - if the assets are not downloadable, the tag
+#           never ran, and the tap's checksums are set from what GitHub serves.
 #
 #   npm stage list
 #   npm stage approve <stage-id>
@@ -205,31 +209,33 @@ jobs:
           fi
           echo "v${{ inputs.version }} matches package.json"
 
-      - name: the formula will point at a tarball that exists
-        # The reason this channel runs after npm rather than beside it. A formula
-        # naming a version that is not on the npm registry installs a 404, and
-        # it does so on somebody's machine, at a tap, from a release this run
-        # already declared done. Failing here is the only way to make that
-        # impossible, and running THIS workflow after the approval - rather
-        # than waiting on a job that fails by design - is the whole reason the
-        # step above this one is phrased the way it is (ADR-097).
+      - name: the release binary the formula points at exists
+        # The formula downloads these three assets. If any of them is missing,
+        # `brew install` fails on somebody's machine from a tap this run already
+        # declared done. publish.yml builds them when the tag is pushed, so a
+        # missing asset means the tag never ran - and the remedy says so. The
+        # checksums of what GitHub actually serves land in the environment for
+        # the render step below, which is the one place the tap's values are set.
         run: |
           set -eu
           version="${{ inputs.version }}"
-          url="https://registry.npmjs.org/simt-dev/-/simt-dev-${version}.tgz"
-          if curl -fsSL -o /tmp/simt-dev.tgz "$url"; then
-            echo "fetching ${url}"
-          else
-            echo "::error::${url} is not downloadable."
-            echo "  The npm channel publishes by STAGING, and a staged version is"
-            echo "  not downloadable until a maintainer approves it. Approve the"
-            echo "  stage, then run this workflow again:"
-            echo "    npm stage approve <stage-id>"
-            exit 1
-          fi
-          sha256="$(shasum -a 256 /tmp/simt-dev.tgz | cut -d' ' -f1)"
-          echo "sha256=${sha256}" >> "$GITHUB_ENV"
-          echo "simt-dev@${version} is live at ${url} (sha256 ${sha256})"
+          for target in darwin-arm64 darwin-x64 linux-x64; do
+            read -r asset url < <(node -e "
+              import('./src/distribute/release.mjs').then((m) => {
+                console.log(m.assetName('${version}', '${target}'), m.releaseUrl('${version}', '${target}'));
+              })")
+            if ! curl -fsSL -o "/tmp/${asset}" "$url"; then
+              echo "::error::${url} is not downloadable."
+              echo "  The release binary is built by publish.yml when the tag is"
+              echo "  pushed. Push the tag (or re-run publish.yml), then run this"
+              echo "  workflow again."
+              exit 1
+            fi
+            sha256="$(shasum -a 256 "/tmp/${asset}" | cut -d' ' -f1)"
+            name="SHA256_$(printf '%s' "$target" | tr 'a-z-' 'A-Z_')"
+            echo "${name}=${sha256}" >> "$GITHUB_ENV"
+            echo "${asset} is live at ${url} (sha256 ${sha256})"
+          done
 
       - name: install Homebrew
         # `ubuntu-latest` does not ship Homebrew, and `brew style`
@@ -269,7 +275,9 @@ jobs:
           set -eu
           node scripts/release-formula.mjs \
             --version="${{ inputs.version }}" \
-            --sha256="${sha256}"
+            --sha256-darwin-arm64="${{ env.SHA256_DARWIN_ARM64 }}" \
+            --sha256-darwin-x64="${{ env.SHA256_DARWIN_X64 }}" \
+            --sha256-linux-x64="${{ env.SHA256_LINUX_X64 }}"
           git --no-pager diff -- Formula/simt-dev.rb
 
       - name: push it to the tap

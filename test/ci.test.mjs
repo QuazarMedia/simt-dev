@@ -150,13 +150,19 @@ test('the workflow runs the gate, located by the same function the hook uses', (
   carries(renderShim(EVENTS[0]), hook, 'the hook shim');
   // The package is published, so the remedy names the install that finds it. Which
   // install depends on the repo's kind: a devDependency where package.json exists (the
-  // default here), a pinned global install where there is no node_modules to pin in.
-  // The two must not be mixed, because each names the one command that works for that
-  // repo. The workflow's install line is a different surface and is checked below.
+  // default here), the release binary into the repository where there is no
+  // node_modules to pin in (ADR-098). The two must not be mixed, because each names
+  // the one command that works for that repo. The workflow's install line is a
+  // different surface and is checked below.
   assert.match(renderShim(EVENTS[0]), new RegExp(`set ${BIN_ENV} to the ${CLI} binary`));
   assert.match(renderShim(EVENTS[0]), /npm i -D simt-dev@/);
   assert.doesNotMatch(renderShim(EVENTS[0], { npm: false }), /npm i -D/);
-  assert.match(renderShim(EVENTS[0], { npm: false }), /npm i -g simt-dev@/);
+  // The binary remedy downloads the asset for THIS machine into .simt/bin, and it must
+  // not name a node install: the repo kind this remedy is for has no npm.
+  const nonNpm = renderShim(EVENTS[0], { npm: false });
+  assert.doesNotMatch(nonNpm, /npm i -g/);
+  assert.match(nonNpm, /curl -fsSL/);
+  assert.match(nonNpm, /\.simt\/bin\/simt/);
   assert.match(yaml, cmd('REMEDY run: npm i -D {cli}'));
 });
 
@@ -169,16 +175,32 @@ test('a job that cannot find the tool fails rather than passes', () => {
   assert.match(yaml, /FAILS instead of passing/);
 });
 
-test('a repository without npm installs a pinned binary in CI and still runs the gate', () => {
-  // S35: a Gradle or Connect IQ repo has no node_modules to pin simt-dev in, so CI
-  // installs the same pinned global binary the machine remedy names. The two must agree,
-  // or the gate passes in one place and cannot start in the other - a green tick from a
-  // check that never installed is the one outcome worse than a red build.
+test('a repository without npm installs the release binary in CI and still runs the gate', () => {
+  // S35, as ruled by ADR-098: a Gradle or Connect IQ repo has no node_modules to pin
+  // simt-dev in, so CI downloads the release binary into the repository - verified
+  // against the checksum published beside it - and the machine remedy names the same
+  // bytes. The two must agree, or the gate passes in one place and cannot start in
+  // the other. The binary needs no node, so the job must not install one: setup-node
+  // would be the toolchain this channel exists to remove, present in the one place it
+  // was not.
   const yaml = renderWorkflow({ own: false, npm: false });
-  assert.match(yaml, /npm i -g simt-dev@/);
+  assert.doesNotMatch(yaml, /npm i -g/);
+  assert.doesNotMatch(yaml, /setup-node/);
   assert.doesNotMatch(yaml, /npm ci/);
+  // The platform comes from the machine (uname), never from a runner expression:
+  // GitHub substitutes `${{ runner.os }}` into the script, where `$( … )` is a
+  // command substitution that tries to EXECUTE "Linux" and `set -eu` refuses.
+  // test/binary.test.mjs runs the rendered step, so this cannot come back quietly.
+  assert.doesNotMatch(yaml, /\$\{\{\s*runner\./, 'the install step must derive its platform in the shell');
+  // The download, its checksum verification, and the install into .simt/bin.
+  assert.match(yaml, /simt-dev-[\d.]+-\$os-\$arch/);
+  assert.match(yaml, /\.sha256/);
+  assert.match(yaml, /openssl sha256/);
+  assert.match(yaml, /\.simt\/bin\/simt/);
+  // The locator finds the binary before PATH, and the remedy downloads it.
   assert.match(yaml, new RegExp(`${CLI} check|check --root`));
-  assert.match(yaml, /REMEDY run: npm i -g simt-dev@/);
+  assert.match(yaml, /REMEDY run: .*curl -fsSL/);
+  assert.match(yaml, /releases\/download\/v[\d.]+/);
 });
 
 test('the workflow is gated on pull requests and does not rewrite itself', () => {
@@ -274,10 +296,10 @@ test('init writes the workflow into a repo that runs Actions, and says so', asyn
   assert.match(stderr, new RegExp(`wrote\\s+${WORKFLOW_FILE.replace(/\//g, '\\/')}`));
 });
 
-test('init writes a pinned global install into a Gradle repo with no package.json', async () => {
-  // S35: the fixture is a real Gradle repository — no package.json, so there is no
-  // node_modules to pin simt-dev in. init must detect that and write the workflow whose
-  // CI installs the same pinned global binary the machine remedy names, not a node
+test('init writes the release-binary install into a Gradle repo with no package.json', async () => {
+  // S35, as ruled by ADR-098: the fixture is a real Gradle repository — no package.json,
+  // so there is no node_modules to pin simt-dev in. init must detect that and write the
+  // workflow whose CI downloads the release binary the machine remedy names, not a node
   // install that would fail in this repo. The gate still runs from it.
   const root = await mkdtemp(join(tmpdir(), 'simt-ci-'));
   temps.push(root);
@@ -293,7 +315,8 @@ test('init writes a pinned global install into a Gradle repo with no package.jso
 
   const written = await readFile(join(root, WORKFLOW_FILE), 'utf8');
   assert.equal(written, renderWorkflow({ own: false, npm: false }));
-  assert.match(written, /npm i -g simt-dev@/);
+  assert.doesNotMatch(written, /npm i -g/);
+  assert.match(written, /\.simt\/bin\/simt/);
   assert.match(stdout, new RegExp(`create\\s+${WORKFLOW_FILE.replace(/\//g, '\\/')}`));
 });
 

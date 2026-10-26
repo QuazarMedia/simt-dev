@@ -2,9 +2,9 @@
 //
 // simt-dev ships to npm, to PyPI and to Homebrew, and each channel is a
 // different artefact - a tarball, a wheel, and a formula that downloads the
-// tarball. The thing they all have in common is the ~1.3 MB of `.mjs` files
-// under `bin/` and `src/`, and the whole risk in this arrangement is that the
-// three stop carrying the same ones.
+// single-file release binary. The thing they all have in common is the ~1.3 MB
+// of `.mjs` files under `bin/` and `src/`, and the whole risk in this
+// arrangement is that the three stop carrying the same ones.
 //
 // So most of what follows compares two files and asserts they agree. That is
 // deliberate: every invariant here is a *static* one, checkable from this
@@ -24,6 +24,8 @@ import { readFile, readdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 import test from 'node:test';
+
+import { TARGETS } from '../src/distribute/release.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
@@ -114,13 +116,19 @@ test('packaging: no second build system sits at the repository root', () => {
   }
 });
 
-test('packaging: the formula points at the npm tarball and checksums it', () => {
-  // Homebrew downloads what npm published. If the formula ever pointed at the
-  // repository source instead, `brew install` would gain a build step this
-  // package does not have, and a node build-time dependency, to install a
-  // program the source runs without either.
-  assert.match(formula, /^  url "https:\/\/registry\.npmjs\.org\/simt-dev\/-\/simt-dev-[\d.]+\.tgz"$/m);
-  assert.match(formula, /^  sha256 "[0-9a-f]{64}"$/m, 'Homebrew refuses a formula with no checksum');
+test('packaging: the formula points at the release binaries and checksums them', () => {
+  // Homebrew downloads what GitHub Releases serves. If the formula ever pointed
+  // at the repository source instead, `brew install` would gain a build step
+  // this package does not have, to install a program that ships prebuilt.
+  for (const target of TARGETS) {
+    const url = new RegExp(
+      `^    url "https://github\\.com/QuazarMedia/simt-dev/releases/download/v[0-9][^"]*-${target}"$`,
+      'm',
+    );
+    assert.match(formula, url, `no url line for ${target}`);
+  }
+  const sums = [...formula.matchAll(/^    sha256 "[0-9a-f]{64}"$/gm)];
+  assert.equal(sums.length, TARGETS.length, 'Homebrew refuses a formula with no checksum; one per target is expected');
 
   // The class name must lowercase-and-dash to the filename. Brew rejects a
   // formula that does not, and the rejection names neither the file nor the class.
@@ -130,11 +138,15 @@ test('packaging: the formula points at the npm tarball and checksums it', () => 
   assert.equal(snake, 'simt-dev', `${className} does not match Formula/simt-dev.rb`);
 });
 
-test('packaging: the formula declares the runtime it needs', () => {
-  // Without this the formula installs a program that cannot run, and the
-  // failure arrives as `node: command not found` from a depth that has nothing
-  // to do with anything the reader can fix.
-  assert.match(formula, /^  depends_on "node"$/m, 'the formula must declare its node dependency');
+test('packaging: the formula declares no runtime dependency', () => {
+  // The binary carries its own pinned Node runtime. A `depends_on "node"` would
+  // make brew install a toolchain the binary does not use, and would fail on a
+  // machine where brew's node is newer or older than the one the binary pins.
+  const code = formula
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line))
+    .join('\n');
+  assert.ok(!/depends_on/.test(code), 'the formula must not declare a dependency');
 });
 
 test('packaging: the formula does not use std_npm_args', () => {
@@ -156,9 +168,8 @@ test("packaging: the formula's version is a real release, not a placeholder", ()
   // The committed formula is the last release. A `1.0.0` placeholder would
   // install a version that does not exist, with a checksum matching nothing,
   // and would do it silently until somebody tried to install it.
-  const version = /simt-dev-([\d.]+)\.tgz/.exec(formula)?.[1];
+  const version = /simt-dev-(\d+\.\d+\.\d+)-darwin-arm64/.exec(formula)?.[1];
   assert.ok(version, 'the formula names no version');
-  assert.match(version, /^\d+\.\d+\.\d+$/, `formula version is not x.y.z: ${version}`);
   assert.ok(!['0.0.0', '1.0.0'].includes(version), `formula version looks like a stub: ${version}`);
 });
 
@@ -177,15 +188,19 @@ test('packaging: the sdist carries what the wheel build needs', () => {
   assert.ok(listed.includes('/package.json'), 'the sdist must carry package.json for the version to be read');
 });
 
-test('packaging: the release script patches only the two lines it must', () => {
+test('packaging: the release script patches only the lines it must', () => {
   // A line-number-based patch would make the script something that cannot be
-  // edited: inserting a comment above the `sha256` line would silently write
-  // the checksum to the wrong place. The patterns below are anchored on
-  // content, and this asserts they still match the committed file.
-  const url = /^  url "https:\/\/registry\.npmjs\.org\/simt-dev\/-\/simt-dev-[\d.]+\.tgz"$/m;
-  const sum = /^  sha256 "[0-9a-f]{64}"$/m;
-  assert.match(formula, url, 'the release script\'s url anchor no longer matches the formula');
-  assert.match(formula, sum, 'the release script\'s sha256 anchor no longer matches the formula');
+  // edited: inserting a comment above a `sha256` line would silently write the
+  // checksum to the wrong place. The patterns below are anchored on content,
+  // and this asserts they still match the committed file - one url/sha256 pair
+  // per target, exactly as scripts/release-formula.mjs patches them.
+  for (const target of TARGETS) {
+    const pair = new RegExp(
+      `^    url "https://github\\.com/QuazarMedia/simt-dev/releases/download/v[0-9][^"]*-${target}"\n    sha256 "[0-9a-f]{64}"$`,
+      'm',
+    );
+    assert.match(formula, pair, `the release script's ${target} anchor no longer matches the formula`);
+  }
 });
 
 test('packaging: nothing in python/ is shipped to npm', async () => {

@@ -1,6 +1,6 @@
 # ADR-059 — The version a repository runs is the one it pinned, and the gate refuses otherwise
 
-Status: **accepted** · 2026-10-12 · affects all repos
+Status: **accepted** · 2026-10-12 · affects all repos · ruling 3's no-npm install and remedy superseded by [ADR-098](ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md)
 
 ## Context
 

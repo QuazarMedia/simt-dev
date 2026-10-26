@@ -25,9 +25,10 @@ to merge. It does not write the projection.
 
 ## Install
 
-Requires **Node >= 22.20.0**. The current published release is **0.5.0**. Pin it.
-The tool writes a content digest into the files it generates, and an unpinned upgrade
-changes them under you.
+Requires **Node >= 22.20.0** for the npm and PyPI channels; the release binary carries
+its own runtime. The current published release is **0.5.0**. Pin it. The tool writes a
+content digest into the files it generates, and an unpinned upgrade changes them under
+you.
 
 ```sh
 npm i -D simt-dev@0.5.0
@@ -61,8 +62,23 @@ one that answers wins: `SIMT_DEV_NODE`, the node bundled with the `node` extra, 
 brew install QuazarMedia/homebrew-tap/simt-dev
 ```
 
-The formula depends on `node`, so the command works on a machine that has never had
-Node installed.
+The formula downloads the single-file binary for this machine, which carries its own
+runtime: the command works with no Node installed.
+
+### As a single-file binary
+
+Each release carries one executable per platform — macOS arm64 and x64, Linux x64 —
+beside its `.sha256`. The channel's first release is the version after 0.5.0; pin that,
+and run this from the repository's top level:
+
+```sh
+mkdir -p .simt/bin && os=$(uname -s | tr A-Z a-z) && arch=$(uname -m | sed "s/x86_64/x64/") && curl -fsSL "https://github.com/QuazarMedia/simt-dev/releases/download/v<version>/simt-dev-<version>-$os-$arch" -o .simt/bin/simt && chmod +x .simt/bin/simt
+```
+
+The locator checks `.simt/bin/simt` before `PATH`, so the repository's own copy is the
+one its hooks and its CI run — this is the same command the hook shim prints as its
+remedy. The generated CI workflow downloads the same asset and verifies it against the
+published `.sha256` before running anything.
 
 ## What `simt` does
 
@@ -300,13 +316,12 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
 
 ## Where the plan finishes
 
-Slices `R01`–`R40` are complete and shipped in `0.5.0`. The remaining queued slices
-(`R41`–`R55`) finish packaging and the small ergonomics:
+Slices `R01`–`R40` are complete and shipped in `0.5.0`; `R41`–`R44` are complete in the
+tree and land in the next release. The remaining queued slices finish packaging and the
+small ergonomics:
 
-- **Packaging and declarative harness data (`R41`–`R45`).** MCP 2026-07-28 revision
-  tightening, declarative harness adapter files with provenance, single-command plugin
-  packaging, a single-file binary alongside npm/PyPI/Homebrew, and benchmark-measured rule
-  packs.
+- **Packaging (`R45`).** Benchmark-measured rule packs: versioned and digest-pinned, a
+  pack stating the ΔR it was measured at.
 - **The small doors (`R46`–`R55`).** `simt explain <CODE>` for every finding code, safe
   idempotent `simt doctor --fix`, a `< 50 ms` `simt status --line`, a write journal with
   `simt undo`, `--diff` on every writer, shell completions, one cross-harness ignore list

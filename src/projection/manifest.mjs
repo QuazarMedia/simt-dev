@@ -482,8 +482,8 @@ export function buildManifest({ root, stack = [], sha, version, existing = null,
     // simtDevSha is the digest of the rule bytes this projection was rendered from;
     // version is the simt-dev release that produced it. The gate compares the running
     // binary to version and refuses on a mismatch, which is how a repository without
-    // npm (a global install, pinned only by this field) is held to the release it
-    // adopted. See src/package-version.mjs.
+    // npm (the release binary in `.simt/bin`, pinned only by this field) is held to
+    // the release it adopted. See src/package-version.mjs.
     projection: { simtDevSha: sha ?? null, version: version ?? null },
   };
   return withRepoKeys(existing, owned);

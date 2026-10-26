@@ -916,7 +916,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R41 | MCP 2026-07-28 | 7 | review 0002 S43 | M | — | 3 versions; `tools/list` ≤ 2 KB | Complete |
 | R42 | Harness adapters as data | 7 | R14, R15 | M | — | provenance; detection on fixtures | Complete |
 | R43 | Plugin packaging | 7 | R42 | M | — | installs and passes R15 fixtures | Complete |
-| R44 | Single-file binary | 7 | review 0002 S35 | M | D8 | runs without Node on PATH | Queued |
+| R44 | Single-file binary | 7 | review 0002 S35 | M | D8 (ADR-098) | runs without Node on PATH | Complete |
 | R45 | Packs, measured | 7 | review 0002 S39, R03 | S | — | pack states its ΔR | Queued |
 | R46 | `explain <CODE>` | 8 | — | S | — | every code documented | Queued |
 | R47 | `doctor --fix` | 8 | R49 | S | — | fixes exactly the safe set | Queued |
@@ -1257,6 +1257,47 @@ MCP over the copy, byte-identical rebuilds, dry-run writes nothing, unknown kind
 millisecond timeout); 1229/1229 full suite, also from a copy at a path with no siblings
 (ADR-031).
 
+**R44 — Complete, and the acceptance ran on this machine** (D8, ADR-098). One
+single-file executable per target — `darwin-arm64`, `darwin-x64`, `linux-x64`, the set
+the remedy and the CI step can name — built by `scripts/build-sea.mjs` from the npm
+`files` set plus `package.json`. The SEA entry is a CommonJS bootstrap that materializes
+the payload into `${XDG_CACHE_HOME:-$HOME/.cache}/simt-dev/<node version>/<digest>/`
+and imports `bin/simt.mjs` from there, so every `import.meta.url`-relative read works
+unmodified; the blob is generated once with relative paths and injected into a pinned
+official node base (the engines floor) per target, darwin binaries ad-hoc codesigned
+with a fixed identifier so the file path cannot leak into the signature. The tag
+workflow builds from the tagged tree, checks the built checksums against the ones the
+committed formula promises, attests with `actions/attest`, and uploads each asset with
+its `.sha256`. The channel facts live in one module (`src/distribute/release.mjs`) that
+the locator, the shim remedy, the CI renderer, the build script and the formula tooling
+all read, because a remedy naming an asset the release does not publish is a 404 with an
+error message that blames the reader. **Two defects were found and fixed while
+completing the slice, both in the generated surfaces.** The CI install step rendered
+`os=$('${{ runner.os }}' …)`, which the runner substitutes to a command substitution
+trying to execute `Linux` under `set -eu` — it never ran anywhere; the platform now
+comes from `uname` (shared with the remedy as `platformLines()`), and a test runs the
+rendered step with stub `uname`/`curl`/`openssl`, both the install and the
+checksum-refusal path. And the local release twin still called `release-formula.mjs`
+with the old single `--sha256=`; it now builds the binaries, requires the release to
+serve them, refuses checksums built from another tree, and renders all three pairs.
+**The acceptance, on this machine:** the built `darwin-arm64` asset, run with every
+directory containing `node` stripped from `PATH`, answers `--version`, runs `check` on a
+Gradle fixture (exit 1 with `ABSENT AGENTS.md` — a gate that ran, not a crash),
+answers `agent-hook pre-tool-use`, and the rendered hook shim hands over to
+`.simt/bin/simt` and refuses when the copy is absent. 15 tests in
+`test/binary.test.mjs` (the channel facts, the rendered CI step, the build pins, and the
+no-Node acceptance), and the decision-corpus tests in `test/rules.test.mjs` moved with
+the new record — ADR-058, ADR-059 and ADR-097 now declare in their own status
+paragraphs what ADR-098 supersedes or narrows, which is the propagation R34 built.
+1244/1244 in the full suite, also from a copy at a path with no siblings (ADR-031); the
+assets were built twice on this machine and once from that copy, all three hashing
+identically, and the committed formula carries that build's checksums. What is not done, and is recorded rather than
+implied: the plan's "evaluate Bun or Deno compile" is an evaluation of the contract —
+the package declares a Node floor, its index is `node:sqlite`, and every recorded
+latency is that runtime's — not a measurement, because no alternative artifact was
+built to measure; and the target list
+is deliberately three, so a platform outside it gets a loud 404 rather than a build.
+
 **R28 — Complete** (D2, ADR-090). `src/index/store.mjs` and `src/index/persist.mjs` index
 full-text tokens (`ftsKindOf`, `buildFtsBody`) across `code`, `docs`, `skills`, `decisions`
 and `lessons` into the SQLite FTS5 `fts` table (with deterministic Okapi BM25 fallback
@@ -1339,7 +1380,7 @@ this plan's tracker are review 0002's, written `0002 P7`.
 | D5 | The evidence ledger, and what counts as a claim |
 | D6 | The local index is `node:sqlite`, gitignored and always rebuildable (ADR-089) |
 | D7 | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default (ADR-075) |
-| D8 | Distribution as a single-file binary alongside npm |
+| D8 | Distribution as a single-file binary alongside npm (ADR-098) |
 | D9 | Tracker tables are a parsed format; the columns and directories are the tracker template unless `plans` in the manifest names another (ADR-081, ADR-082) |
 
 ## 18. What this plan deliberately does not do

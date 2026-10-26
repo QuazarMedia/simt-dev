@@ -132,8 +132,9 @@ ${CLI} tokens [--repos]       what a reader loads at session start, in bytes
                            repository under the root and what repeats an earlier)
 ${CLI} harness detect         which harnesses this repo (and, with --user, you)
                            are set up for, and which have a rule channel here
-                           (presence only: a directory found is not a claim about
-                           what its owner reads; exits 0 whatever it finds)
+                           (presence only: a directory or an MCP config file
+                           found is not a claim about what its owner reads;
+                           exits 0 whatever it finds)
 ${CLI} harness loaders        what each reader loads at session start, in bytes,
                             and what its size cap drops
                             (--table prints the vendor facts without measuring;

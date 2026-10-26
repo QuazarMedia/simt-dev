@@ -38,10 +38,12 @@
 //      required field rather than a comment. A reader that publishes no cap has
 //      `cap: null`, which means "checked, none found", not "not checked".
 //
-//   4. UNDOCUMENTED IS ITS OWN ANSWER. Copilot has no documented hooks file, and Gemini
-//      CLI's own configuration reference 404s today. Those cells are `null` with a
-//      `note` saying what was looked for. An empty string would read as "no hooks" and
-//      an invented path would read as a fact.
+//   4. UNDOCUMENTED IS ITS OWN ANSWER. Copilot has no documented hooks file. Those cells
+//      are `null` with a `note` saying what was looked for. An empty string would read
+//      as "no hooks" and an invented path would read as a fact. Gemini CLI spent a
+//      season here too — its configuration reference 404ed until it was re-checked on
+//      2026-10-26 and found live, which moved it from a thin row to a full one; the rule
+//      is unchanged, the example is.
 
 /**
  * One row per reader. Ordered by how widely the reader is deployed, so a truncated
@@ -152,7 +154,7 @@ export const LOADERS = [
       path: 'opencode.json',
       key: 'mcp.servers',
       verified:
-        'OpenCode v2 MCP servers docs: servers are named under mcp.servers; V2 does not place server names directly under mcp',
+        'OpenCode v2 MCP servers docs (read 2026-10-14): servers are named under mcp.servers; V2 does not place server names directly under mcp',
     },
     verified:
       'OpenCode v2 instructions, skills, plugins and MCP docs (opencode.ai/v2/docs, read 2026-10-14) — V2 loads AGENTS.md only, combining the global file with every project AGENTS.md from the workspace up to the project root; CLAUDE.md is not a fallback; the instructions array is accepted and not loaded; skills advertise name and description from .opencode/skills, .claude/skills and .agents/skills',
@@ -244,7 +246,7 @@ export const LOADERS = [
       path: '.mcp.json',
       key: null,
       verified:
-        'Claude Code MCP docs: project-scoped servers live in .mcp.json in the project root; local and user scope live in ~/.claude.json',
+        'Claude Code MCP docs (read 2026-10-14): project-scoped servers live in .mcp.json in the project root; local and user scope live in ~/.claude.json',
     },
     verified:
       'Claude Code memory docs (docs.claude.com/en/docs/claude-code/memory, read 2026-10-14) — CLAUDE.md and CLAUDE.local.md are concatenated from every directory above the working directory, subdirectory files load on demand, `@path` imports expand to four hops, a CLAUDE.md larger than 4 MiB is skipped, and AGENTS.md is read only when no CLAUDE.md exists above the working directory',
@@ -321,7 +323,7 @@ export const LOADERS = [
     mcp: {
       path: '.codex/config.toml',
       key: 'mcp_servers',
-      verified: 'Codex MCP docs: MCP configuration is stored in config.toml, ~/.codex/config.toml by default',
+      verified: 'Codex MCP docs (read 2026-10-14): MCP configuration is stored in config.toml, ~/.codex/config.toml by default',
     },
     verified:
       'Codex AGENTS.md documentation and configuration reference (developers.openai.com/codex, read 2026-10-14) — the project scope walks from the project root to the working directory, taking at most one file per directory in the order AGENTS.override.md, AGENTS.md, project_doc_fallback_filenames; the merge runs root to cwd and stops adding files at project_doc_max_bytes, 32 KiB by default',
@@ -387,7 +389,7 @@ export const LOADERS = [
     mcp: {
       path: '.cursor/mcp.json',
       key: null,
-      verified: 'Cursor MCP docs: "Create .cursor/mcp.json in your project"',
+      verified: 'Cursor MCP docs (read 2026-10-14): "Create .cursor/mcp.json in your project"',
     },
     verified:
       'Cursor rules documentation (cursor.com/docs/context/rules, read 2026-10-14) — only .cursor/rules/*.mdc is read, a plain .md there is ignored; alwaysApply decides whether a rule costs bytes at start; @file references in a rule body are not inlined; AGENTS.md is read in the project root and in subdirectories, combined with parents',
@@ -471,12 +473,81 @@ export const LOADERS = [
     mcp: {
       path: '.agents/mcp_config.json',
       key: null,
-      verified: 'Antigravity MCP docs: "Configured in your workspace under .agents/mcp_config.json"',
+      verified:
+        'Antigravity MCP docs (read 2026-10-14): "Configured in your workspace under .agents/mcp_config.json"',
     },
     verified:
       'Google Antigravity rules documentation (antigravity.google/docs/rules/, read 2026-10-14) — rules are cumulative across global, workspace and directory scope; .agents/rules/*.md requires frontmatter with trigger, and an invalid block silently discards the rule; the directory is scanned flat and nested files are ignored unless registered in .agents/rules.json; each rule file is truncated at 24,000 bytes after includes are expanded, and global plus always_on rules share a 20,000-token budget past which the largest are demoted to pointers',
     note:
       'The flat scan is the fact that made the meter wrong before this table existed: a recursive walk of .agents/rules/ counts bytes for files Antigravity never reads.',
+  },
+  {
+    id: 'gemini',
+    label: 'Gemini CLI',
+    readers: 'Gemini CLI (google-gemini/gemini-cli)',
+    // No projection surface of its own: the gemini-md pointer already hands the reader
+    // the standard region, and `context.fileName` is the only mechanism by which this
+    // reader would load AGENTS.md at all — renaming the context file is the vendor's
+    // documented way to point at it. A separate rules row would be a second way to hand
+    // one reader the same rules (the ruling recorded on the surfaces `gemini-md`
+    // pointer). This FACTS row exists because the reader's own facts differ from every
+    // other row's: no published cap, depth-5 imports, and the one MCP registration left
+    // that a project file can carry.
+    surface: null,
+    start: [
+      {
+        scope: 'project',
+        path: 'GEMINI.md',
+        tree: 'chain',
+        atStart: true,
+        why: 'Gemini CLI context docs (docs/cli/gemini-md/): GEMINI.md is collected from the working directory upward through parent directories until the first directory holding a boundary marker (.git by default) or home',
+      },
+      {
+        scope: 'user',
+        path: '~/.gemini/GEMINI.md',
+        tree: 'single',
+        atStart: true,
+        why: 'Gemini CLI context docs: the user-global ~/.gemini/GEMINI.md opens the concatenation, before any project file',
+      },
+    ],
+    alsoReads: [
+      {
+        what: 'the context file under another name — settings.json context.fileName, a string or an array',
+        atStart: true,
+        why: 'Gemini CLI configuration docs: context.fileName renames the context file (a string or an array), so an installation listing AGENTS.md there reads AGENTS.md as its GEMINI.md',
+      },
+      {
+        what: 'GEMINI.md (or the renamed context file) in subdirectories below the working directory',
+        atStart: false,
+        why: 'Gemini CLI context docs: directories a tool touches are scanned for a context file up to a trusted root, bounded by context.discoveryMaxDirs (200) - not at session start',
+      },
+    ],
+    order:
+      'user-global ~/.gemini/GEMINI.md first, then the project chain general to specific - project-root side first (upward traversal stops at the first directory holding a boundary marker, .git by default) down through each directory to the working directory - then just-in-time files a tool touch discovered; the whole result is one concatenation with origin separators',
+    cap: null,
+    capNote: 'no byte cap is published for the merged Gemini CLI context (checked 2026-10-26)',
+    imports: {
+      syntax: '@path',
+      depth: 5,
+      why: 'Gemini CLI context docs: @path imports resolve relative or absolute to a maximum depth of 5, with cycles prevented by skipping files already on the stack',
+    },
+    nested:
+      'general to specific, all loaded — unlike Codex, every context file on the walk contributes; a nearer file cannot hide a parent one, it just concatenates after it; subdirectory files wait for a tool touch',
+    skills: [],
+    skillsNote:
+      'no project skill directory is documented for Gemini CLI; extensions are the distribution mechanism, and they are tooling not context',
+    hooks: null,
+    hooksNote: 'no hooks file is documented for Gemini CLI in any first-party page checked on 2026-10-26',
+    mcp: {
+      path: '.gemini/settings.json',
+      key: 'mcpServers',
+      verified:
+        'Gemini CLI configuration docs (docs/reference/configuration/, read 2026-10-26): a project .gemini/settings.json (a user ~/.gemini/settings.json merged behind it, objects merged key by key) carries a top-level mcpServers object whose entries name a command, a url or an httpUrl',
+    },
+    verified:
+      'Gemini CLI context and configuration docs (geminicli.com/docs/cli/gemini-md/ and docs/reference/configuration/, read 2026-10-26) — settings live at project .gemini/settings.json and user ~/.gemini/settings.json, merged for objects; the context is user ~/.gemini/GEMINI.md plus the context file (GEMINI.md unless context.fileName renames it, an array is allowed) from the working directory upward through parents to the first .git or home, with @path imports to depth 5; server registration is the mcpServers object in those same settings files; no byte cap is published',
+    note:
+      'The configuration reference this table once recorded as 404ing is live again as of 2026-10-26, which is why the row is full instead of thin. What still shapes a byte count is the pair of absences the docs confirm rather than deny: no cap, and no promise that AGENTS.md is read at all — context.fileName decides that, and it may name anything.',
   },
   {
     id: 'copilot',
@@ -533,7 +604,7 @@ export const LOADERS = [
       path: '.vscode/mcp.json',
       key: null,
       verified:
-        'GitHub Copilot MCP docs: the VS Code extension reads .vscode/mcp.json; Copilot CLI reads .mcp.json, .github/mcp.json or ~/.copilot/mcp-config.json; a repository-level configuration entered on github.com is not a file at all',
+        'GitHub Copilot MCP docs (read 2026-10-14): the VS Code extension reads .vscode/mcp.json; Copilot CLI reads .mcp.json, .github/mcp.json or ~/.copilot/mcp-config.json; a repository-level configuration entered on github.com is not a file at all',
     },
     verified:
       'GitHub Copilot documentation (docs.github.com/en/copilot, read 2026-10-14) — repository-wide instructions live at .github/copilot-instructions.md; path-specific instructions live at .github/instructions/**/NAME.instructions.md with applyTo globs and an optional excludeAgent; agent instructions are one or more AGENTS.md anywhere in the repository, nearest wins, or a single root CLAUDE.md or GEMINI.md; no byte cap is published',

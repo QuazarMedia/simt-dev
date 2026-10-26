@@ -26,7 +26,28 @@ The tool descriptions in `tools/list` are cut from 2,783 bytes to 1,949,
 inside the 2 KB budget plan 0003 R41 sets for a cacheable tools list; the
 input and output schemas stay full, per ADR-068.
 
+`harness detect` reports the MCP registration files the loader table records —
+`.mcp.json` (Claude Code), `.codex/config.toml`, `.cursor/mcp.json`,
+`.agents/mcp_config.json`, `.gemini/settings.json`, `.vscode/mcp.json` — as
+`kind: 'mcp'` rows whose provenance is the vendor page each path was read from.
+A row rests on the file existing, never on a directory's presence, and never
+counts toward the no-rule-channel note: a config file doesn't claim one.
+
+The loader table gains the Gemini CLI reader, whose configuration reference the
+table previously recorded as unavailable: it is live again (read 2026-10-26), so
+the row carries the GEMINI.md chain with `.git` boundary markers, the
+`context.fileName` rename (the only documented way this reader picks up
+AGENTS.md), depth-5 `@path` imports, no published cap, and the `mcpServers`
+registration. It stays a facts row — the `gemini-md` pointer remains the one
+rule channel for that reader.
+
 ### Changed
+
+`harness detect`'s "some readers read AGENTS.md" rows no longer say bare "some"
+when the row knows which one: the `readsAgentsMdNote` travels to the text
+output, and `.gemini` graduates from unverified candidate to verified detection
+facts (presence implies Gemini CLI; AGENTS.md only when `context.fileName`
+names it).
 
 The one-line description the three channels publish (npm, PyPI and Homebrew) now
 names the goal plan `0003` is building toward — an intelligence amplifier for AI

@@ -915,7 +915,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R40 | Model and effort advice | 6 | R03 | M | — | C −25% at ΔR ≥ −2 | Complete |
 | R41 | MCP 2026-07-28 | 7 | review 0002 S43 | M | — | 3 versions; `tools/list` ≤ 2 KB | Complete |
 | R42 | Harness adapters as data | 7 | R14, R15 | M | — | provenance; detection on fixtures | Complete |
-| R43 | Plugin packaging | 7 | R42 | M | — | installs and passes R15 fixtures | Queued |
+| R43 | Plugin packaging | 7 | R42 | M | — | installs and passes R15 fixtures | Complete |
 | R44 | Single-file binary | 7 | review 0002 S35 | M | D8 | runs without Node on PATH | Queued |
 | R45 | Packs, measured | 7 | review 0002 S39, R03 | S | — | pack states its ΔR | Queued |
 | R46 | `explain <CODE>` | 8 | — | S | — | every code documented | Queued |
@@ -1234,6 +1234,28 @@ across `test/harness.test.mjs` and `test/loaders.test.mjs` (the five-file fixtur
 file-not-directory contrast, the unclaimed-note exclusion, the gemini view and table
 provenance); 69/69 across the three focused suites, full suite count in the tracker
 footnote, also from a copy at a path with no siblings (ADR-031).
+
+**R43 — Complete**. `simt plugin <claude|gemini|cursor> --out <dir>` (dry-run unless
+`--yes`) generates the three harness packages from the same tables `agent-hooks install`
+writes into a repository, so a package and a repository install cannot drift: the hooks
+document comes from `hookDocument`, the MCP registration from the adapter's entry point,
+and (for Cursor) the kernel rules from `desiredRegion`. Each package ships its own copy of
+the runtime — the `files` set npm publishes plus `package.json`, not a bare `bin`+`src`,
+because the MCP server reads `templates/` and `rules/` that a thinner copy leaves behind
+and the binary would die on the first call. The acceptance bar is that the COPIED runtime,
+with nothing on PATH to fall back on, answers each harness's R15 payload in its own dialect:
+Claude and Cursor block a push with exit 2, Gemini answers with the decision document and
+exit 0 (its vendor documents the JSON, not a block code), an ordinary command is silent on
+all three, and the copied runtime serves the MCP surface. Two facts shaped the rows: Gemini's
+timeout is milliseconds (10000, not the 10 seconds every other row uses) and it documents no
+project-dir env var, so its hook command passes no `--root` and reads the payload's `cwd`;
+and the Gemini loader row gained its hooks path (`.gemini/settings.json`), which auto-extends
+`agent-hooks install` and `status` to a fifth adapter. The skill registry is not shipped in
+any package: it is workspace data (ADR-061), and a snapshot would be stale the moment it left
+the machine it was built on. 6 tests in `test/plugins.test.mjs` (copied-runtime enforcement,
+MCP over the copy, byte-identical rebuilds, dry-run writes nothing, unknown kind, the
+millisecond timeout); 1229/1229 full suite, also from a copy at a path with no siblings
+(ADR-031).
 
 **R28 — Complete** (D2, ADR-090). `src/index/store.mjs` and `src/index/persist.mjs` index
 full-text tokens (`ftsKindOf`, `buildFtsBody`) across `code`, `docs`, `skills`, `decisions`

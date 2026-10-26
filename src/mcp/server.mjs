@@ -1,8 +1,9 @@
 // The MCP transport: newline-delimited JSON-RPC 2.0 on stdio.
 //
 // This file is the PROTOCOL and nothing else. It knows about `initialize`,
-// `tools/list`, `tools/call` and `ping`; it knows nothing about skills, rules or repos.
-// The tools themselves live in `src/mcp/tools.mjs`.
+// `tools/list`, `tools/call`, `resources/*`, `prompts/*` and what remains of `ping`; it
+// knows nothing about skills, rules or repos. The tools live in `src/mcp/tools.mjs`, the
+// resources in `src/mcp/resources.mjs`, the prompts in `src/mcp/prompts.mjs`.
 //
 // Three decisions, each of which is a place where the obvious implementation is wrong:
 //
@@ -21,6 +22,7 @@
 
 import { createInterface } from 'node:readline';
 import { CLI } from '../name.mjs';
+import { getPrompt, PROMPTS } from './prompts.mjs';
 import { RESOURCE_TEMPLATES, listResources, readResource } from './resources.mjs';
 
 /**
@@ -96,12 +98,17 @@ const LIST_CACHE = { ttlMs: 3600000, cacheScope: 'private' };
  * revision would hand it fields it did not ask for. So the version is read from the
  * request when there is one and remembered only for the clients that need it.
  *
+ * `root` is the repository the read surface answers for. The resources carry no argument
+ * channel in the specification - `resources/read` takes a URI and nothing else - so the
+ * caller names the root and the default is the process's cwd, which is what an editor's
+ * stdio server sits in.
+ *
  * @param {object|null} request a parsed JSON-RPC message
  * @param {object[]} tools
- * @param {{packageVersion?: string, state?: {version: string|null}}} options
+ * @param {{packageVersion?: string, state?: {version: string|null}, root?: string}} options
  * @returns {Promise<object|null>}
  */
-export async function handle(request, tools, { packageVersion, state } = {}) {
+export async function handle(request, tools, { packageVersion, state, root } = {}) {
   if (request === null || typeof request !== 'object' || Array.isArray(request)) {
     return error(null, RPC.REQUEST, 'request must be a JSON object');
   }
@@ -210,7 +217,7 @@ export async function handle(request, tools, { packageVersion, state } = {}) {
 
     case 'resources/list':
       return reply(
-        cacheable(v) ? { resources: await listResources(), ...LIST_CACHE } : { resources: await listResources() },
+        cacheable(v) ? { resources: await listResources(root), ...LIST_CACHE } : { resources: await listResources(root) },
       );
     case 'resources/templates/list':
       return reply(
@@ -225,11 +232,27 @@ export async function handle(request, tools, { packageVersion, state } = {}) {
       // array as the answer, so "absent" can only be an error.
       const code = atLeast(v, '2026-07-28') ? RPC.RESOURCE_NOT_FOUND : RPC.RESOURCE_NOT_FOUND_LEGACY;
       const uri = request.params?.uri;
-      const found = await readResource(uri);
+      const found = await readResource(uri, root);
       if (found === null) return error(id, code, `no such resource: ${String(uri)}`);
       return reply(
         cacheable(v) ? { contents: [found], ...LIST_CACHE } : { contents: [found] },
       );
+    }
+    case 'prompts/list':
+      return reply(
+        cacheable(v) ? { prompts: PROMPTS, ...LIST_CACHE } : { prompts: PROMPTS },
+      );
+    case 'prompts/get': {
+      const name = params?.name;
+      // `getPrompt` returns null only for a prompt this server does not have: its
+      // argument failures degrade into the template text itself, because an unfilled
+      // variable is still readable and the agent it reaches can ask the user. A named
+      // prompt that does not exist is the client's mistake, so it is a protocol error -
+      // the same rule as tools/call, and for the same reason: there is no result shape
+      // that means absence.
+      const found = await getPrompt(name, params?.arguments ?? {});
+      if (found === null) return error(id, RPC.METHOD, `no prompt named "${String(name)}"; call prompts/list first`);
+      return reply(found);
     }
     default:
       return isNotification ? null : error(id, RPC.METHOD, `unknown method "${method}"`);
@@ -256,6 +279,10 @@ function capabilities() {
     // ever set: a capability gated on a flag nobody flips is the same promise a client
     // waits on forever, only quieter.
     resources: {},
+    // Two fixed templates, listed statically: there is nothing to subscribe to and
+    // nothing that changes without a release, so the same empty object makes the same
+    // promise here as above the resources.
+    prompts: {},
   };
 }
 

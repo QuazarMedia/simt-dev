@@ -913,7 +913,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R38 | Distiller | 6 | R37, R02 | M | D2 | parity at lower C, or experimental | Complete |
 | R39 | Local critic | 6 | R37, R25 | M | D2 | precision ≥ 0.8 to gate | Complete |
 | R40 | Model and effort advice | 6 | R03 | M | — | C −25% at ΔR ≥ −2 | Complete |
-| R41 | MCP 2026-07-28 | 7 | review 0002 S43 | M | — | 3 versions; `tools/list` ≤ 2 KB | Queued |
+| R41 | MCP 2026-07-28 | 7 | review 0002 S43 | M | — | 3 versions; `tools/list` ≤ 2 KB | Complete |
 | R42 | Harness adapters as data | 7 | R14, R15 | M | — | provenance; detection on fixtures | Queued |
 | R43 | Plugin packaging | 7 | R42 | M | — | installs and passes R15 fixtures | Queued |
 | R44 | Single-file binary | 7 | review 0002 S35 | M | D8 | runs without Node on PATH | Queued |
@@ -1192,6 +1192,24 @@ the mined-task loader was extracted to `src/bench/tasks.mjs` on its second real 
 section (reader-meet order after TASK, cut at a caution's worth, plan 0003 R40). 15 tests
 in `test/advice.test.mjs`; the full suite passes from a copy at a path with no siblings
 (ADR-031).
+
+**R41 — Complete** (the first half had already shipped with review 0002 S43). The remaining
+half of the row: the two fixed resources — `simt://kernel`, the region rendered in kernel
+mode for whatever root the server sits in, because the URI promises the kernel's bytes and
+the declared mode governs what `sync` writes to disk, not what a read path may look at
+(ADR-002; `desiredRegion` gained a `flags.mode` override when this became its second real
+reader) — and `simt://plan/next`, listed only while a slice is ready so the listing never
+promises a read that errors. Two prompts, `simt-brief` and `simt-slice`, as templates that
+name the tools to call: a read-only server cannot run a task, and a model otherwise
+discovers the order by trial. The 2 KB budget is measured on the description prose, the
+mechanism the plan names — the fourteen tools went from 2,783 B to 1,949 B — while the
+input and output schemas stay full, per ADR-068's ruling that both shapes are declared.
+The prompt names enter `src/toolwords.mjs` by derivation from `src/mcp/prompts.mjs`
+(ADR-080), so the estate guard reads them as this tool's own words and not as
+repositories. 8 tests in `test/mcp.test.mjs` (kernel bytes equal the listing, slice listed
+iff ready and its section byte-exact, not-found per revision, prompts across all three
+revisions, the description budget); 1219 pass in the full suite, also from a copy at a
+path with no siblings (ADR-031).
 
 **R28 — Complete** (D2, ADR-090). `src/index/store.mjs` and `src/index/persist.mjs` index
 full-text tokens (`ftsKindOf`, `buildFtsBody`) across `code`, `docs`, `skills`, `decisions`

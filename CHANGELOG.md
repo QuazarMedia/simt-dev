@@ -6,6 +6,26 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+The MCP server answers `prompts/list` and `prompts/get` with two templates:
+`simt-brief` starts a task from the pre-assembled brief packet, and `simt-slice`
+implements one slice of the working plan (the next one whose dependencies are
+complete, or a named one) — reading the repo's rules through `simt://kernel`
+first, testing per the slice's acceptance check, committing locally and pushing
+only on explicit approval. A prompt names the tools; the server stays read-only.
+
+Two fixed resources join `simt://rules/{id}` and `simt://decisions/{adr}`:
+`simt://kernel` serves the collaborating region rendered in kernel mode for
+whatever repository the server runs in — the URI promises the kernel's bytes,
+whatever `mode` the manifest declares — and `simt://plan/next` serves the
+section of the next ready plan slice, listed only while one is ready. A listed
+resource's size is the size its read returns.
+
+The tool descriptions in `tools/list` are cut from 2,783 bytes to 1,949,
+inside the 2 KB budget plan 0003 R41 sets for a cacheable tools list; the
+input and output schemas stay full, per ADR-068.
+
 ### Changed
 
 The one-line description the three channels publish (npm, PyPI and Homebrew) now

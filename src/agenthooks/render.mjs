@@ -1,6 +1,6 @@
 // One renderer per harness: the payload in, the decision out, and the config written.
 //
-// Four harnesses read a hook and no two agree on anything. The config path, the event
+// Five harnesses read a hook and no two agree on anything. The config path, the event
 // name, the shape of the document, the tool name for a shell command, the key holding
 // the command, and the JSON a hook answers with are all different, and none of them is
 // the same fact. So this module owns the differences and `policy.mjs` owns none of
@@ -10,15 +10,17 @@
 //   codex        .codex/hooks.json       PreToolUse      {"hooks":{E:[{matcher,hooks:[h]}]}}
 //   cursor       .cursor/hooks.json      preToolUse      {"version":1,"hooks":{E:[h]}}
 //   antigravity  .agents/hooks.json      PreToolUse      {"<name>":{E:[{matcher,hooks:[h]}]}}
+//   gemini       .gemini/settings.json   BeforeTool      {"hooks":{E:[{matcher,hooks:[h]}]}}
 //
 // The prompt-submit event (R29) is a second table, and it is shorter because the vendors
-// are: two of the four document a prompt event that can put text into the model's context,
-// and a delivery is the only thing this tool does there. Neither takes a matcher — both
+// are: three of the five document a prompt event that can put text into the model's context,
+// and a delivery is the only thing this tool does there. None takes a matcher — all
 // document that field for tool events, and a matcher a harness ignores is a matcher the
 // next person believes is filtering something.
 //
 //   claude       .claude/settings.json   UserPromptSubmit   hookSpecificOutput.additionalContext
 //   codex        .codex/hooks.json       UserPromptSubmit   hookSpecificOutput.additionalContext
+//   gemini       .gemini/settings.json   BeforeAgent        hookSpecificOutput.additionalContext
 //   cursor       .cursor/hooks.json      beforeSubmitPrompt CANNOT INJECT: block-only
 //   antigravity  .agents/hooks.json      (no prompt event documented)
 //
@@ -26,10 +28,11 @@
 // can only continue or block, so the entry would carry no packet and a broken one would
 // stop a person from typing — and its only injection point, `sessionStart.additional_context`,
 // fires once when the session is created, which is a different lifetime from the brief a
-// task needs. Gemini CLI documents `BeforeAgent`, which does inject, but the product was
-// replaced by Antigravity CLI on 2026-06-18 and its config is not in the reader table this
-// module takes its paths from; a harness this tool did not verify is a harness it does not
-// write to.
+// task needs. Gemini CLI was replaced by Antigravity CLI on 2026-06-18, which is the row
+// that covers the successor; the gemini row stays because the extension is still documented
+// and installable and R43 ships a package for it, and its hooks file is in the reader table
+// this module takes its paths from — a harness this tool did not verify is a harness it
+// does not write to.
 //
 // The paths are not written here. They come from the reader table (R14) because that is
 // where each one was verified against its vendor page, and a second copy of a verified
@@ -188,9 +191,43 @@ const ADAPTERS = {
     prompt: null,
     post: null,
   },
+  gemini: {
+    id: 'gemini',
+    event: 'BeforeTool',
+    matcher: 'run_shell_command|write_file|replace',
+    // The vendor's timeout unit is milliseconds (default 60000), not the seconds every
+    // other row uses; a bare 10 here would be a ten-millisecond budget, which is a hook
+    // that never finishes. The row carries its own value so the shared constant stays
+    // honest for the four vendors that measure in seconds.
+    timeout: 10000,
+    // The reference documents the decision JSON and an exit-2 system block; the denial
+    // travels in the JSON, as antigravity does.
+    denyExit: 0,
+    verified: 'geminicli.com/docs/hooks/reference/, read 2026-10-26',
+    root: (p) => p.cwd,
+    extract: (p) => ({
+      command: p.tool_name === 'run_shell_command' ? (p.tool_input?.command ?? null) : null,
+      writes: ['write_file', 'replace'].includes(p.tool_name) ? [p.tool_input?.file_path].filter(Boolean) : [],
+    }),
+    deny: (message) => ({ decision: 'deny', reason: message }),
+    // BeforeAgent appends text to the prompt for this turn only — the same lifetime as a
+    // brief. The documented output has no hookEventName field, unlike Claude's.
+    prompt: {
+      event: 'BeforeAgent',
+      verified: 'geminicli.com/docs/hooks/reference/, read 2026-10-26',
+      context: (text) => ({ hookSpecificOutput: { additionalContext: text } }),
+    },
+    // AfterTool appends to the tool result; its input carries tool_response, which is
+    // what the lesson recall reads.
+    post: {
+      event: 'AfterTool',
+      verified: 'geminicli.com/docs/hooks/reference/, read 2026-10-26',
+      context: (text) => ({ hookSpecificOutput: { additionalContext: text } }),
+    },
+  },
 };
 
-/** The four adapters, in the order the reader table lists them. */
+/** The five adapters, in the order the reader table lists them. */
 export function adapters() {
   return hookRows()
     .filter((r) => r.path !== null)
@@ -203,9 +240,19 @@ export function adapter(id) {
   return row && hookPath(id) !== null ? row : null;
 }
 
-/** The facts a payload carries, and the root it names. An unknown shape yields none. */
-export function factsFrom(row, payload) {
-  return { root: row.root(payload) ?? process.cwd(), ...row.extract(payload ?? {}) };
+/**
+ * The facts a payload carries, and the root it names. An unknown shape yields none.
+ *
+ * `root` is a caller-supplied override that outranks the payload: a packaged hook runs
+ * from the plugin directory and the harness's environment variable names the project, so
+ * `--root` (from `$CLAUDE_PROJECT_DIR` and friends) must win over a payload cwd that is
+ * the plugin's own working directory. An empty override is treated as absent rather than
+ * trusted: an env var the harness did not set expands to `""` in the shell, and a root of
+ * the empty string would resolve every fact against the filesystem root.
+ */
+export function factsFrom(row, payload, { root } = {}) {
+  const override = typeof root === 'string' && root.trim() !== '' ? root : null;
+  return { root: override ?? row.root(payload) ?? process.cwd(), ...row.extract(payload ?? {}) };
 }
 
 /** The document to print for a decision, or null when there is nothing to say. */
@@ -281,27 +328,33 @@ function eventsOf(row, { prompt = false, post = false } = {}) {
   return pairs;
 }
 
-/** The group this tool owns for one event, in that harness's shape. */
-function group(row, event = EVENTS[0]) {
-  const command = hookCommand(row.id, event);
+/**
+ * The group this tool owns for one event, in that harness's shape.
+ *
+ * `command` overrides the entry point for one build: a package ships a self-contained
+ * runtime and its config names that copy rather than the binary on PATH, so the shape
+ * comes from this table and only the path differs.
+ */
+function group(row, event = EVENTS[0], command = hookCommand(row.id, event)) {
+  const timeout = row.timeout ?? TIMEOUT_SECONDS;
   if (event === 'prompt-submit') {
     // No matcher: both vendors document that field for tool events, and a matcher a
     // harness ignores is a matcher the next reader believes is filtering something.
-    return { hooks: [{ type: 'command', command, timeout: TIMEOUT_SECONDS }] };
+    return { hooks: [{ type: 'command', command, timeout }] };
   }
   if (event === 'post-tool-use') {
     const matcher = row.post?.matcher;
     return matcher
-      ? { matcher, hooks: [{ type: 'command', command, timeout: TIMEOUT_SECONDS }] }
-      : { hooks: [{ type: 'command', command, timeout: TIMEOUT_SECONDS }] };
+      ? { matcher, hooks: [{ type: 'command', command, timeout }] }
+      : { hooks: [{ type: 'command', command, timeout }] };
   }
   if (row.id === 'cursor') {
     // failClosed is set because a hooks file this tool wrote should not silently
     // degrade to fail-open on its own crash: the vendor's default turns a broken hook
     // into an absent one, and the whole point of writing it is that it runs.
-    return { command, timeout: TIMEOUT_SECONDS, matcher: row.matcher, failClosed: true };
+    return { command, timeout, matcher: row.matcher, failClosed: true };
   }
-  return { matcher: row.matcher, hooks: [{ type: 'command', command, timeout: TIMEOUT_SECONDS }] };
+  return { matcher: row.matcher, hooks: [{ type: 'command', command, timeout }] };
 }
 
 /** Whether a group is this tool's, judged by the command it runs and not by position. */
@@ -335,11 +388,11 @@ export function installedIn(row, config, event = EVENTS[0]) {
  * asked for a delivered packet gets the tool hook and nothing extra, and the file it never
  * asked to change is a file this tool does not touch.
  */
-function withHook(row, config, { prompt = false, post = false } = {}) {
+function withHook(row, config, { prompt = false, post = false, command } = {}) {
   const box = container(row, config, { create: true });
   for (const [event, name] of eventsOf(row, { prompt, post })) {
     const kept = entries(row, config, event).filter((e) => !ours(e));
-    box[name] = [...kept, group(row, event)];
+    box[name] = [...kept, group(row, event, event === EVENTS[0] ? command : undefined)];
   }
   return config;
 }
@@ -358,4 +411,17 @@ export function rendered(row, existing, options = {}) {
   }
   const text = `${JSON.stringify(withHook(row, config, options), null, 2)}\n`;
   return { text, action: text === existing ? 'unchanged' : 'updated' };
+}
+
+/**
+ * A fresh config document carrying only this tool's hooks, for a package that ships its
+ * own runtime: the shape comes from the same table `install` merges into a repository,
+ * and only the entry point differs — the package's copy of the binary, named by `command`.
+ * Returns null for a harness this tool has no adapter for or that documents no hooks file.
+ */
+export function hookDocument(id, { command, prompt = false, post = false } = {}) {
+  const row = adapter(id);
+  if (!row) return null;
+  const config = withHook(row, {}, { prompt, post, command });
+  return `${JSON.stringify(config, null, 2)}\n`;
 }

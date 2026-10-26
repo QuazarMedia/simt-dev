@@ -92,7 +92,11 @@ export async function agentHookCommand(args, flags) {
     return EXIT.OK;
   }
 
-  const { root, command, writes } = factsFrom(row, payload);
+  // `--root` outranks the payload: a packaged hook runs from the plugin directory and the
+  // harness's environment variable names the project, so a payload cwd that is the plugin's
+  // own working directory must not win. The repository-install path passes no flag, and the
+  // payload's cwd is what the harness reports.
+  const { root, command, writes } = factsFrom(row, payload, { root: flags.root });
   const facts = await factsFor(root, { command, writes });
   const decision = decide({ event, facts, env: process.env });
 

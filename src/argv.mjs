@@ -138,6 +138,10 @@ export const VALUE_FLAGS = new Set([
   'level',
   // decide: structured supersession spec (ADR-NNN or ADR-NNN:<ruling>[:<kind>], repeatable).
   'supersedes',
+  // plugin: where the generated package lands. A value rather than a boolean because
+  // "generate a package" with no destination would have to guess, and a guess about where
+  // a directory tree goes is the one failure that leaves files behind.
+  'out',
 ]);
 
 /**

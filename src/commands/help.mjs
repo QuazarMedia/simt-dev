@@ -57,6 +57,10 @@ ${CLI} agent-hooks install     write this repo's policies into the harnesses tha
                            (dry-run unless --yes; merges into the file, keeps every
                             key it does not own; Codex needs the hook trusted)
 ${CLI} agent-hooks status      what each harness will run, and what is not trusted yet
+${CLI} plugin <claude|gemini|cursor>  generate a harness package from the same tables
+                            (dry-run unless --yes; writes a self-contained runtime, the
+                            hooks and MCP registration, and for cursor the kernel rules;
+                            the skill registry is workspace data and is not shipped)
 ${CLI} plan status             count tracker rows
                            (${MANIFEST_FILE} key plans when set, otherwise
                            the ${DEFAULT_TEMPLATE} template:
@@ -176,6 +180,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --task "<text>"         the task text used for capability resolution
 --paths <globs>         comma-separated path globs used for path resolution
 --root <path>           repository root (default: cwd)
+--out <path>            plugin: where the generated package lands (required)
 --surfaces <ids>        comma-separated editors to write rule files for;
                          "" means AGENTS.md only (default: every surface,
                          or the "surfaces" list in simt-dev.json)

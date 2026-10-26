@@ -79,6 +79,8 @@ const shell = {
     JSON.stringify({ hook_event_name: 'preToolUse', tool_name: 'Shell', tool_input: { command }, working_directory: root }),
   antigravity: (command, root) =>
     JSON.stringify({ hook_event_name: 'PreToolUse', toolCall: { name: 'run_command', args: { CommandLine: command, Cwd: root } }, workspacePaths: [root] }),
+  gemini: (command, root) =>
+    JSON.stringify({ hook_event_name: 'BeforeTool', tool_name: 'run_shell_command', tool_input: { command }, cwd: root }),
 };
 
 /** The payload each harness documents for a file write, in its own field names. */
@@ -96,6 +98,8 @@ const write = {
     JSON.stringify({ hook_event_name: 'preToolUse', tool_name: 'Write', tool_input: { file_path: file, content: 'x' }, working_directory: root }),
   antigravity: (file, root) =>
     JSON.stringify({ hook_event_name: 'PreToolUse', toolCall: { name: 'write_to_file', args: { TargetFile: file, CodeContent: 'x' } }, workspacePaths: [root] }),
+  gemini: (file, root) =>
+    JSON.stringify({ hook_event_name: 'BeforeTool', tool_name: 'write_file', tool_input: { file_path: file, content: 'x' }, cwd: root }),
 };
 
 /** A generated region, in the html style and in the hash style the baselines use. */
@@ -123,6 +127,7 @@ test('every harness blocks a push, in its own dialect and with its own exit code
     codex: (json) => json.hookSpecificOutput.permissionDecision === 'deny',
     cursor: (json) => json.permission === 'deny',
     antigravity: (json) => json.decision === 'deny',
+    gemini: (json) => json.decision === 'deny',
   };
   for (const row of adapters()) {
     const result = HOOK(row.id, shell[row.id]('git push origin main', root));

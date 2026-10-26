@@ -34,6 +34,7 @@ import { agentHookCommand, agentHooksCommand } from './agenthook.mjs';
 import { compareCommand } from './compare.mjs';
 import { upgradeCommand } from './upgrade.mjs';
 import { mcpCommand } from './mcp.mjs';
+import { pluginCommand } from './plugin.mjs';
 import { installCommand } from './skillsinstall.mjs';
 import { compileCommand } from './skillscompile.mjs';
 import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
@@ -169,6 +170,9 @@ export const IMPLEMENTED = {
   'bench critic': (args, flags) => benchCriticCommand(args, flags, COMMANDS),
   upgrade: upgradeCommand,
   mcp: mcpCommand,
+  // plan 0003 R43. A bare command: the kind is a positional, so there is no group and
+  // no default subcommand to resolve.
+  plugin: pluginCommand,
 };
 
 /**

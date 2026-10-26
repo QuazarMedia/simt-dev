@@ -8,6 +8,13 @@ All notable changes to this package are recorded here. The format follows
 
 ### Added
 
+`simt plugin <claude|gemini|cursor> --out <dir>` generates one of the three
+harness packages from the same tables `agent-hooks install` writes — the hooks
+file, the MCP registration and, for cursor, the kernel rules — each carrying a
+self-contained copy of the runtime so it installs into a clean profile. Dry-run
+unless `--yes`. The Gemini reader row gains its hooks file (`.gemini/settings.json`),
+which extends `agent-hooks install` and `status` to a fifth adapter.
+
 The MCP server answers `prompts/list` and `prompts/get` with two templates:
 `simt-brief` starts a task from the pre-assembled brief packet, and `simt-slice`
 implements one slice of the working plan (the next one whose dependencies are

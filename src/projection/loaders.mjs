@@ -536,8 +536,11 @@ export const LOADERS = [
     skills: [],
     skillsNote:
       'no project skill directory is documented for Gemini CLI; extensions are the distribution mechanism, and they are tooling not context',
-    hooks: null,
-    hooksNote: 'no hooks file is documented for Gemini CLI in any first-party page checked on 2026-10-26',
+    hooks: {
+      path: '.gemini/settings.json',
+      verified:
+        'Gemini CLI hooks reference (geminicli.com/docs/hooks/reference/, read 2026-10-26): a project .gemini/settings.json carries a top-level hooks object whose events are arrays of {matcher, hooks:[{type:"command",command,timeout? (milliseconds)}]} — the same shape Claude and Codex use; BeforeTool denies with {decision:"deny",reason}, BeforeAgent and AfterTool inject via hookSpecificOutput.additionalContext',
+    },
     mcp: {
       path: '.gemini/settings.json',
       key: 'mcpServers',

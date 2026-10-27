@@ -17,13 +17,13 @@ class SimtDev < Formula
 
   if OS.mac? && Hardware::CPU.arm?
     url "https://github.com/QuazarMedia/simt-dev/releases/download/v0.6.2/simt-dev-0.6.2-darwin-arm64"
-    sha256 "8bc6c64d079d7b7b3d4a50202abf8a2f817db6f008c24a504827856bdfcef51f"
+    sha256 "d0e46f599b277ed9a01295fccab25f6c24c2adce4d54103d96117a3997ddd608"
   elsif OS.mac?
     url "https://github.com/QuazarMedia/simt-dev/releases/download/v0.6.2/simt-dev-0.6.2-darwin-x64"
-    sha256 "22981e6f83b5c4004fc00414e441bb6f42e338bd94fd024b5cf2c58fbc124e53"
+    sha256 "543cd16d9027beece74feab1c9043146f4715323488bc8bf6cb513e49836bc78"
   else
     url "https://github.com/QuazarMedia/simt-dev/releases/download/v0.6.2/simt-dev-0.6.2-linux-x64"
-    sha256 "e1b2a7c0c9a474c48ffc47df79f2a4b49d54c86833295bfb802eb75eae36f9c7"
+    sha256 "a8ebb761e2c2cc1aa3ffe1789aa0467f2e31569e7dc79045f4cb739029d7f0f2"
   end
 
   def install

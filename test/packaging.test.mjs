@@ -188,6 +188,17 @@ test('packaging: the sdist carries what the wheel build needs', () => {
   assert.ok(listed.includes('/package.json'), 'the sdist must carry package.json for the version to be read');
 });
 
+test('packaging: the formula description passes the tap\u2019s lint', () => {
+  // `brew style` failed the v0.6.0 channels run on `FormulaAudit/Desc`:
+  // a description starting with an article. The tap is pushed by automation
+  // after a human approved the release, so a lint failure there fails late and
+  // loudly — this asserts the rule (`brew style` runs the same RuboCop engine)
+  // where a red gate is cheap.
+  const desc = /^  desc "([^"]+)"$/m.exec(formula)?.[1];
+  assert.ok(desc, 'Formula/simt-dev.rb has no desc line for the lint to read');
+  assert.ok(!/^(a|an|the)\s/i.test(desc), `the formula description starts with an article: ${desc}`);
+});
+
 test('packaging: the release script patches only the lines it must', () => {
   // A line-number-based patch would make the script something that cannot be
   // edited: inserting a comment above a `sha256` line would silently write the

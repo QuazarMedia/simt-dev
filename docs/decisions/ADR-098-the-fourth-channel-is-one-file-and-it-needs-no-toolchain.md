@@ -5,7 +5,7 @@ simt-supersedes: [{ adr: "ADR-058", ruling: 5 }, { adr: "ADR-058", ruling: 7, ki
 
 # ADR-098 — The fourth channel is one file, and it needs no toolchain
 
-Status: **accepted** · 2026-10-26 · supersedes ADR-058 ruling 5 · narrows ADR-058 ruling 7 and ADR-097 ruling 3 · supersedes ADR-059 ruling 3
+Status: **accepted** · 2026-10-26 · supersedes ADR-058 ruling 5 · narrows ADR-058 ruling 7 and ADR-097 ruling 3 · supersedes ADR-059 ruling 3 · ruling 3's cross-host byte-identicality narrowed by [ADR-099](ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md)
 
 Affects: `scripts/build-sea.mjs`, `src/distribute/release.mjs`, `src/locate.mjs`,
 `src/hooks/shim.mjs`, `src/ci/workflow.mjs`, `.github/workflows/publish.yml`,

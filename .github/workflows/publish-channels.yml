@@ -104,7 +104,7 @@ jobs:
       # session; PyPI rejects the exchange without it.
       id-token: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The tagged tree, not whatever the dispatch form pointed at: the
           # wheel carries the bytes of the release the input names, and those
@@ -190,7 +190,7 @@ jobs:
     # the job - it does not fail, so a PyPI-only run is green end to end.
     if: ${{ inputs['publish-brew'] }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The tagged tree, for the same reason PyPI's checkout is: the
           # formula is rendered from the release's own source of truth.

@@ -11,7 +11,7 @@
 # the channel for repositories that do not use npm.
 
 class SimtDev < Formula
-  desc "An intelligence amplifier for AI coding agents, adopted by one command"
+  desc "Intelligence amplifier for AI coding agents, adopted by one command"
   homepage "https://github.com/QuazarMedia/simt-dev"
   license "Apache-2.0"
 

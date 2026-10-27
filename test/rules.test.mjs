@@ -131,6 +131,11 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // status paragraph which of its rulings the new record supersedes or narrows. That is
   // the propagation working - the claim lives on the record that was changed, and the
   // parser reads it there rather than inferring it from the newer record.
+  // ADR-098 joined when ADR-099 landed: its own status paragraph now states that
+  // ruling 3's cross-host identicality is narrowed, and the parser reads the
+  // claim on the changed record rather than inferring it from the newer one.
+  // (The lint reads a stricter shape and stays quiet — the claim lives in the
+  // possessive the house style reserves for the superseded record's own note.)
   assert.deepEqual(shapes, [
     'ADR-016',
     'ADR-021',
@@ -146,6 +151,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-083',
     'ADR-088',
     'ADR-097',
+    'ADR-098',
   ]);
   for (const d of decisions) {
     for (const p of d.partial) {
@@ -230,7 +236,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // manual twin they replace, so it names the files a maintainer edits. ADR-098 joined
   // for the same reason one channel later: a ruling that replaces the artefact a channel
   // downloads has to name the build script, the channel module, the workflows and the
-  // formula it changes, or it is not an argument a maintainer can act on.
+  // formula it changes, or it is not an argument a maintainer can act on. ADR-099
+  // joined for the same reason again: narrowing the determinism ruling without naming
+  // the workflow, the build script, the verifier and the formula it rewrites would
+  // not be an argument a maintainer can act on either.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -246,6 +255,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-082',
     'ADR-097',
     'ADR-098',
+    'ADR-099',
   ]);
 });
 

@@ -922,7 +922,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R47 | `doctor --fix` | 8 | R49 | S | — | fixes exactly the safe set | Complete |
 | R48 | `status --line` | 8 | — | S | — | < 50 ms | Complete |
 | R49 | Journal and `undo` | 8 | — | S | — | round trip | Complete |
-| R50 | `--diff` on every writer | 8 | review 0002 S10 | S | — | contract table | Queued |
+| R50 | `--diff` on every writer | 8 | review 0002 S10 | S | — | contract table | Complete |
 | R51 | Shell completions | 8 | review 0002 S15 | S | — | deterministic output | Queued |
 | R52 | Context hygiene and secret scan | 8 | R15 | S | — | sentinel blocked; parity | Queued |
 | R53 | `slice start/finish` | 8 | R31, R17 | M | — | row and commit verified | Queued |

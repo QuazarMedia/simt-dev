@@ -226,6 +226,12 @@ export function gateRunnable(gate, capability = {}) {
       : { runnable: true, why: `runs: ${declared}` };
   }
 
+  if (gate.kind === 'builtin') {
+    // The one kind with no external requirement: the implementation ships inside
+    // the binary that is reading this manifest (ADR-100). Saying otherwise would
+    // make `check` report a gate as unrunnable that runs on every commit.
+    return { runnable: true, why: 'runs inside the tool itself; nothing to install' };
+  }
   if (gate.kind === 'command') {
     return { runnable: false, why: `no command is declared for it in gates.commands` };
   }

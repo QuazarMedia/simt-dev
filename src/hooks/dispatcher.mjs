@@ -29,6 +29,7 @@ import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { assertVersionPin } from '../package-version.mjs';
 import { recordRun } from '../ledger/index.mjs';
+import { renderFindings, scanStaged } from '../secrets.mjs';
 
 const exec = promisify(execFile);
 
@@ -121,6 +122,37 @@ export async function runGates(event, { root, manifest }) {
       });
       continue;
     }
+
+    // A built-in gate runs here, in this process: no script, no command, no
+    // tool on disk (ADR-100). It gets the same ledger line and the same
+    // fail-closed reporting as every other gate; only the source of the bytes
+    // it runs over differs. Keyed on the RESOLUTION rather than the gate, so a
+    // declared command for this name takes the shell path below instead.
+    if (resolution.builtin !== undefined) {
+      const startedBuiltin = Date.now();
+      const outcome = await runBuiltinGate(resolution.builtin, { root, staged });
+      try {
+        await recordRun(root, {
+          cmd: `builtin:${resolution.builtin}`,
+          exit: outcome.ok ? 0 : 1,
+          ms: Date.now() - startedBuiltin,
+          output: outcome.output,
+        });
+      } catch {
+        // Recorded by absence: the next evidence read for this tree has no line.
+      }
+      results.push({
+        name,
+        status: outcome.ok ? 'passed' : 'failed',
+        detail: outcome.detail,
+        output: outcome.ok ? '' : outcome.output,
+        ...(outcome.remedy !== undefined ? { remedy: outcome.remedy } : {}),
+        adr: gate.adr,
+        exitCode: outcome.ok ? 0 : 1,
+      });
+      continue;
+    }
+
     if (resolution.argv === null) {
       results.push({ name, status: 'skipped', detail: resolution.detail, adr: gate.adr, exitCode: null });
       continue;
@@ -248,6 +280,59 @@ async function run(argv, cwd) {
   } catch (error) {
     return { code: typeof error.code === 'number' ? error.code : 1, stdout: error.stdout ?? '', stderr: error.stderr ?? String(error.message ?? error) };
   }
+}
+
+/** The built-in gates this dispatcher can run, by name. */
+const BUILTIN_GATES = new Map([['secret-scan', scanStaged]]);
+
+/** How many findings the report prints; the detail carries the true count. */
+const BUILTIN_REPORT_MAX = 12;
+
+/**
+ * Run a `builtin` gate in this process (ADR-100).
+ * Every outcome is a verdict with a reason: a built-in that does not exist, a
+ * diff git cannot read, or a secret found each fail with their own detail —
+ * none of them can degrade into a pass, which is the same fail-closed contract
+ * an unresolvable script gate has.
+ */
+async function runBuiltinGate(name, { root, staged }) {
+  const scan = BUILTIN_GATES.get(name);
+  if (scan === undefined) {
+    return {
+      ok: false,
+      detail: `no built-in implementation for gate "${name}"; this is a bug in ${CLI}`,
+      remedy: `remove "${name}" from ${MANIFEST_FILE} gates`,
+      output: '',
+    };
+  }
+  if (staged.length === 0) {
+    return { ok: true, detail: 'nothing staged; no added line to scan', output: '' };
+  }
+  const result = await scan(root);
+  if (result.error !== null) {
+    return {
+      ok: false,
+      detail: `the staged diff could not be read: ${result.error}`,
+      remedy: 'the gate fails closed; inspect the repository state and commit again',
+      output: '',
+    };
+  }
+  if (result.findings.length === 0) {
+    return { ok: true, detail: `${result.lines} added line(s) scanned, no secret found`, output: '' };
+  }
+  const files = new Set(result.findings.map((f) => f.file));
+  const shown = result.findings.slice(0, BUILTIN_REPORT_MAX);
+  const more = result.findings.length - shown.length;
+  return {
+    ok: false,
+    detail: `${result.findings.length} probable secret(s) in ${files.size} staged file(s)`,
+    remedy:
+      'remove the value from the staged file (or unstage it with git restore --staged <path>) ' +
+      'and commit again; the report never prints the matched bytes',
+    output:
+      renderFindings(shown) +
+      (more > 0 ? `\n  … ${more} more finding(s) not shown` : ''),
+  };
 }
 
 /**

@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { PACKAGE_NAME } from '../src/name.mjs';
 import { after, test } from 'node:test';
 
-import { GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
+import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
 import { hasScript, knownGates, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
 import { runGates } from '../src/hooks/dispatcher.mjs';
@@ -288,7 +288,9 @@ test('shim: fileFor places both events in one directory', () => {
 
 test('gates: every gate declares a kind, an ADR and a reason', () => {
   for (const gate of Object.values(GATES)) {
-    assert.ok(['staged', 'script', 'command'].includes(gate.kind), `${gate.name} kind`);
+    // Read from GATE_KINDS, the declared set: a hand-kept list here would be a
+    // second copy of the same fact, which is how a new kind ships unannounced.
+    assert.ok(GATE_KINDS.has(gate.kind), `${gate.name} kind`);
     assert.match(gate.adr, /^ADR-\d{3}$/, `${gate.name} adr`);
     assert.ok(gate.why.length > 20, `${gate.name} why`);
   }

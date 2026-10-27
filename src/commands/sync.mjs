@@ -16,7 +16,7 @@
 //     three `.mdc` rules would let a reader believe a repo is fully current when
 //     only the file they happened to open is.
 
-import { mkdir, readFile, stat, symlink, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, symlink, unlink } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { plan, checkTargets, checkTarget, provenanceDigest, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
@@ -28,6 +28,7 @@ import { CLI } from '../name.mjs';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { assertVersionPin, packageVersion } from '../package-version.mjs';
 import { resolvePacks } from '../packs.mjs';
+import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { computeLock, readLock, LOCK_FILE } from '../projection/lock.mjs';
 import { runDeclaredChecks } from '../kernel/checks.mjs';
 import { DECISIONS_DIR } from '../decisions/index.mjs';
@@ -265,11 +266,14 @@ export async function syncCommand(positional, flags) {
   // A comment that enumerates which commands follow a rule is a claim about code
   // this file does not own, and it was one commit out of date before anyone ran it.
   if (mode.apply) {
+    // Every repo-file write below is journaled, so `undo` can restore this run
+    // (R49). Pointer symlinks carry no bytes and are not journaled.
+    const journal = [];
     // The manifest first, with the rest: a gate that refuses on a stale stamp should
     // not be able to read a half-finished write, and the manifest is the file every
     // other write in this run is described by.
     if (manifestPlan) {
-      await writeManifest(root, manifestPlan.manifest);
+      await writeManifest(root, manifestPlan.manifest, journal);
       note(`wrote    ${manifestPlan.file} (generated field(s) ${manifestPlan.stale.join(', ')})`);
     }
     for (const t of changed) {
@@ -280,7 +284,7 @@ export async function syncCommand(positional, flags) {
       // derived from the target, never from the surface table, so a future surface with a
       // deeper path needs no change here.
       await mkdir(dirname(t.path), { recursive: true });
-      await writeFile(t.path, t.text);
+      await journaledWriteFile(root, journal, t.path, t.text);
       note(`wrote    ${t.file}`);
     }
     const lock = await computeLock(root, flags);
@@ -292,9 +296,10 @@ export async function syncCommand(positional, flags) {
       if (error.code !== 'ENOENT') throw error;
     }
     if (previousLock !== lockText) {
-      await writeFile(join(root, LOCK_FILE), lockText);
+      await journaledWriteFile(root, journal, join(root, LOCK_FILE), lockText);
       note(`wrote    ${LOCK_FILE}`);
     }
+    await commitJournal(root, 'sync', journal);
     for (const p of pointerPlan) {
       await mkdir(dirname(p.path), { recursive: true });
       // Only a symlink this tool wrote is replaced, and only because it has no content:

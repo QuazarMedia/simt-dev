@@ -20,7 +20,8 @@
 //   3. References come with the skill. A skill whose reference files are missing
 //      is worse than one that was never installed, because it looks installed.
 
-import { cp, mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat } from 'node:fs/promises';
+import { commitJournal, journaledCopyDir, journaledWriteFile } from '../journal.mjs';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
@@ -217,14 +218,16 @@ export async function installCommand(args, flags) {
     return EXIT.OK;
   }
 
+  // Every repo write below is journaled, so `undo` restores this run (R49).
+  const journal = [];
   await mkdir(dirname(join(dest, 'SKILL.md')), { recursive: true });
   try {
     if (measured.flat) {
-      await writeFile(join(dest, 'SKILL.md'), await wrapFlat(src, name), 'utf8');
+      await journaledWriteFile(root, journal, join(dest, 'SKILL.md'), await wrapFlat(src, name));
     } else {
       // References come with the skill: a skill whose reference files are missing
       // is worse than one that was never installed, because it looks installed.
-      await cp(src, dest, { recursive: true });
+      await journaledCopyDir(root, journal, src, dest);
     }
   } catch (error) {
     return fail(
@@ -236,12 +239,13 @@ export async function installCommand(args, flags) {
   payload.written = true;
   note(`wrote   ${payload.dest}`);
 
-  const recorded = await recordLocal(root, record, skill.name, repo);
+  const recorded = await recordLocal(root, record, skill.name, repo, journal);
   note(`${recorded.created ? 'created' : 'updated'} ${MANIFEST_FILE} localSkills`);
   if (recorded.created) {
     note(`note    this repo had no manifest; ${CLI} init still needs to run to project the rules`);
   }
   note(`note    ${name} is now repo-local and is excluded from central-drift accounting`);
+  await commitJournal(root, 'skills install', journal);
   report();
   return EXIT.OK;
 }
@@ -502,7 +506,7 @@ async function fileSha(path) {
  * default gates in it is a promise the repo cannot keep, and a command that installs one
  * skill is not entitled to make it.
  */
-async function recordLocal(root, record, name, repo) {
+async function recordLocal(root, record, name, repo, journal) {
   const { manifest, error } = await readManifest(root);
   if (error) return { written: false, reason: error };
 
@@ -525,6 +529,6 @@ async function recordLocal(root, record, name, repo) {
     }));
   const existing = Array.isArray(base.localSkills) ? base.localSkills : [];
   const kept = existing.filter((e) => (typeof e === 'string' ? e : e?.name) !== name);
-  await writeManifest(root, { ...base, localSkills: [...kept, record] });
+  await writeManifest(root, { ...base, localSkills: [...kept, record] }, journal);
   return { written: true, created: manifest === null };
 }

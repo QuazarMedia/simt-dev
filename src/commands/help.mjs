@@ -107,6 +107,10 @@ ${CLI} decide [<title>]        scaffold an ADR with the next free number, a Stat
                            a rulings skeleton, and structured simt-affects +
                            simt-supersedes frontmatter (dry-run unless --yes;
                            --check lints ADRs for prose-only partial supersessions)
+${CLI} undo                  restore the last journaled set of writes, but only
+                           when every file in it is untouched since (dry-run
+                           unless --yes; a touched file refuses the whole undo
+                           and nothing is restored)
 ${CLI} local doctor            probe configured local model endpoints (chat and embed)
                            (reads local in ${MANIFEST_FILE}; opens no socket when
                            unset; refuses non-loopback URLs without --allow-remote)

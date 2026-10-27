@@ -20,3 +20,6 @@ dist/
 .simt/gate/
 .simt/distilled/
 .simt/reviews/
+
+# Write journal for `simt undo`. Local state, never shared.
+.simt/journal/

@@ -118,6 +118,8 @@ const JSON_COMMANDS = {
   decide: { root: 'r' },
   // No repository needed: the table is compiled in, and the code is positional.
   explain: ['DRIFT'],
+  // No journaled writes on a fresh fixture: previews the empty undo, exit 0.
+  undo: { root: 'r' },
   'local doctor': { root: 'r' },
   'shared plan': { root: '.' },
   // The preview, not the write: the write lands in the reader's home directory, and a

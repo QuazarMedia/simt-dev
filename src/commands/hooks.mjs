@@ -13,7 +13,8 @@
 // foreign hook is found by asking git rather than by reading config.
 
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, realpath } from 'node:fs/promises';
+import { commitJournal, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
 import { isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -376,26 +377,31 @@ async function installHooks(root, flags) {
     return EXIT.OK;
   }
 
+  // Shim and evidence bytes are journaled so `undo` restores them (R49). The
+  // `core.hooksPath` config below is deliberately not journaled: it is git
+  // config, not a repo file, and `undo` restores files.
+  const journal = [];
   await mkdir(join(root, HOOKS_DIR), { recursive: true });
   for (const event of wanted) {
     const path = join(root, fileFor(event));
-    await writeFile(path, renderShim(event, { npm, version }));
+    await journaledWriteFile(root, journal, path, renderShim(event, { npm, version }));
     await chmod(path, 0o755);
   }
   for (const c of chained) {
     const path = join(root, fileFor(c.event));
-    await writeFile(path, renderChainedShim(c.event, c.target));
+    await journaledWriteFile(root, journal, path, renderChainedShim(c.event, c.target));
     await chmod(path, 0o755);
   }
   for (const h of obsolete) {
-    await rm(join(root, fileFor(h.event)));
+    await journaledRemoveFile(root, journal, join(root, fileFor(h.event)));
   }
   // After the chain loop, so a chained commit-msg cannot replace the claim check.
   if (evidenceSource) {
     const path = join(root, evidenceFile);
-    await writeFile(path, evidenceSource);
+    await journaledWriteFile(root, journal, path, evidenceSource);
     await chmod(path, 0o755);
   }
+  await commitJournal(root, 'hooks install', journal);
 
   // `core.hooksPath` tells git to read ONE directory for EVERY event, so leaving it
   // pointing at a directory of no shims stops the repository's own hooks - the ones in

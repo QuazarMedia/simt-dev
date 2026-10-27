@@ -24,7 +24,7 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -186,6 +186,7 @@ const JSON_COMMANDS = [
   { name: 'bench variants', args: (root) => ['bench', 'variants', '--root', root], env: async () => ({}) },
   { name: 'lessons list', args: (root) => ['lessons', 'list', '--root', root], env: async () => ({}) },
   { name: 'decide', args: (root) => ['decide', '--root', root], env: async () => ({}) },
+  { name: 'undo', args: (root) => ['undo', '--root', root], env: async () => ({}) },
   { name: 'local doctor', args: (root) => ['local', 'doctor', '--root', root], env: async () => ({}) },
 ];
 
@@ -318,6 +319,17 @@ const WRITERS = [
     name: 'decide',
     authorise: ['--yes'],
     verify: async (root) => readFile(join(root, 'docs/decisions/ADR-001-untitled-decision.md'), 'utf8').catch(() => null),
+  },
+  {
+    // `undo` with no journaled set previews the empty undo and writes nothing,
+    // which is what both modes assert. The journal directory itself is
+    // fingerprint enough: a run that recorded a set would leave one here.
+    name: 'undo',
+    // No `--yes` to authorise with: the empty undo previews under both modes.
+    authorise: [],
+    // A string, not the array: the table compares with `assert.equal`, and two
+    // reads of an unchanged directory are equal contents in different arrays.
+    verify: async (root) => (await readdir(join(root, '.simt/journal')).catch(() => null))?.join('\n') ?? null,
   },
 ];
 

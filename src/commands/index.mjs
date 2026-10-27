@@ -62,6 +62,7 @@ import { impactCommand } from './impact.mjs';
 import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { decideCommand } from './decide.mjs';
 import { explainCommand } from './explain.mjs';
+import { undoCommand } from './undo.mjs';
 import { reviewCommand } from './review.mjs';
 import { localDoctorCommand } from './local.mjs';
 import { distillCommand } from './distill.mjs';
@@ -147,6 +148,9 @@ export const IMPLEMENTED = {
   // Plan 0003 R46. A bare command: the code is a positional, so there is no
   // group and no default subcommand to resolve.
   explain: explainCommand,
+  // Plan 0003 R49. A bare command: restoring the last journaled set needs no
+  // subcommand, so there is no group and no default to resolve.
+  undo: undoCommand,
   distill: distillCommand,
   // R25 machinery needs the runnable command names for Affects command tokens,
   // same wiring `why` and `impact` get through their lambdas.

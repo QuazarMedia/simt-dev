@@ -22,8 +22,9 @@
 // tool call. Failures of this command exit 1, which a harness reports as a failed hook,
 // and that is the right blast radius for a hook that is broken rather than refusing.
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { commitJournal, journaledWriteFile } from '../journal.mjs';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
@@ -221,12 +222,15 @@ async function installHooks(root, flags) {
     return fail(`refused to write ${refused.map((p) => `${p.path} (${p.error})`).join('; ')}`, EXIT.FAIL);
   }
 
+  // Journaled so `undo` restores this run (R49).
+  const journal = [];
   const written = [];
   for (const p of plan.filter((x) => x.action !== 'unchanged')) {
     await mkdir(join(root, dirname(p.path)), { recursive: true });
-    await writeFile(join(root, p.path), p.text);
+    await journaledWriteFile(root, journal, join(root, p.path), p.text);
     written.push(p);
   }
+  await commitJournal(root, 'agent-hooks install', journal);
 
   const notes = [];
   for (const p of written) {

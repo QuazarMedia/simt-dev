@@ -60,7 +60,8 @@ ${CLI} agent-hooks install     write this repo's policies into the harnesses tha
                             read a hooks file
                            (dry-run unless --yes; merges into the file, keeps every
                             key it does not own; Codex needs the hook trusted)
-${CLI} agent-hooks status      what each harness will run, and what is not trusted yet${CLI} plugin <claude|gemini|cursor>  generate a harness package from the same tables
+${CLI} agent-hooks status      what each harness will run, and what is not trusted yet
+${CLI} plugin <claude|gemini|cursor>  generate a harness package from the same tables
                            (dry-run unless --yes; writes a self-contained runtime, the
                            hooks and MCP registration, and for cursor the kernel rules;
                            the skill registry is workspace data and is not shipped)
@@ -79,6 +80,11 @@ ${CLI} graph lint              check the skill registry against the skills on di
 ${CLI} ci                     simt-dev's own .github files: create or refresh them
                            (dry-run unless --yes; refreshes the templates' own copies
                             and no repository else's)
+${CLI} ignore [--yes]         render the one .simtignore list into .cursorignore,
+                           .aiderignore, .geminiignore and Claude's
+                           permissions.deny Read(...) entries (dry-run unless
+                           --yes; --diff prints the plan as unified diffs; the
+                           Claude settings file is merged, never replaced)
 ${CLI} compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet)

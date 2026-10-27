@@ -1,7 +1,7 @@
 import { MANIFEST_FILE } from '../name.mjs';
 // Gate definitions for the shared hook dispatcher.
 //
-// A gate has one of three kinds, and the choice is not cosmetic:
+// A gate has one of four kinds, and the choice is not cosmetic:
 //
 //   staged   run a formatter over the STAGED FILES ONLY, then re-stage them.
 //            Whole-repo formatting from a pre-commit hook would rewrite
@@ -14,13 +14,18 @@ import { MANIFEST_FILE } from '../name.mjs';
 //            know what monkeyc or a Kotlin script path looks like in one repo
 //            and something else in another. Plan 0001 section 3.2 keeps repo
 //            commands and paths local; this is that ruling in code.
+//   builtin  run inside this binary, with nothing to resolve on disk. For a
+//            check whose whole value is that a fresh clone has it: the staged-
+//            diff secret scan needs no script, no command and no tool in
+//            node_modules, and a gate that needed an install step would be a
+//            gate the repository that most needs it does not have (ADR-100).
 //
 // ADR-010 note: no gate invokes `npx` or `npm exec`. Script gates go through
 // `npm run`, and staged gates resolve the formatter from the project's own
 // `node_modules/.bin`, which is the declared dependency's binary rather than
 // one fetched at hook time.
 
-export const GATE_KINDS = new Set(['staged', 'script', 'command']);
+export const GATE_KINDS = new Set(['staged', 'script', 'command', 'builtin']);
 
 /** Extensions a `staged` formatter gate will hand to the tool. */
 export const FORMATTABLE = new Set([
@@ -29,7 +34,7 @@ export const FORMATTABLE = new Set([
 ]);
 
 /**
- * @typedef {{name: string, kind: 'staged'|'script'|'command', adr: string,
+ * @typedef {{name: string, kind: 'staged'|'script'|'command'|'builtin', adr: string,
  *            script?: string, tools?: string[], why: string}} Gate
  */
 
@@ -87,6 +92,12 @@ export const GATES = {
     kind: 'command',
     adr: 'ADR-002',
     why: 'a protocol change is a two-repo change; the drift check is what makes half of it fail loudly',
+  },
+  'secret-scan': {
+    name: 'secret-scan',
+    kind: 'builtin',
+    adr: 'ADR-100',
+    why: 'a staged diff is the last moment a secret can still be kept out of history, and the scan must be runnable by a clone with nothing installed',
   },
 };
 

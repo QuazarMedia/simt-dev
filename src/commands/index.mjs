@@ -65,6 +65,7 @@ import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { decideCommand } from './decide.mjs';
 import { explainCommand } from './explain.mjs';
 import { undoCommand } from './undo.mjs';
+import { ignoreCommand } from './ignore.mjs';
 import { completionsCommand } from './completions.mjs';
 import { reviewCommand } from './review.mjs';
 import { localDoctorCommand } from './local.mjs';
@@ -155,6 +156,9 @@ export const IMPLEMENTED = {
   // Plan 0003 R49. A bare command: restoring the last journaled set needs no
   // subcommand, so there is no group and no default to resolve.
   undo: undoCommand,
+  // Plan 0003 R52. A bare command: the one list is `.simtignore`, so there is no
+  // group and no default subcommand to resolve.
+  ignore: ignoreCommand,
   distill: distillCommand,
   // R25 machinery needs the runnable command names for Affects command tokens,
   // same wiring `why` and `impact` get through their lambdas.

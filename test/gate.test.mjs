@@ -76,6 +76,7 @@ const RESOLVE = [
   'test/resolve.test.mjs',
   'test/rules.test.mjs',
   'test/scoped.test.mjs',
+  'test/secrets.test.mjs',
   'test/shared.test.mjs',
   'test/shipped.test.mjs',
   'test/surfaces.test.mjs',

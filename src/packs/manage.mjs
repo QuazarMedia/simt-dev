@@ -14,7 +14,8 @@
 // copied in and pinned by digest, never fetched at render time.
 
 import { execFile } from 'node:child_process';
-import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat } from 'node:fs/promises';
+import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { createHash } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -545,8 +546,14 @@ export async function publishPack(dir, { apply = false } = {}) {
   return { pack: linted.pack, ok: true, published: true, skipped: false, planned, findings };
 }
 
-/** Write scaffold files into a directory that must not already exist. */
-export async function writeScaffold(dir, files) {
+/**
+ * Write scaffold files into a directory that must not already exist.
+ *
+ * `root` is the repository the journal set belongs to — usually the scaffold's
+ * own parent, so `undo` runs where the files live. Recorded (R49) because a
+ * scaffold is repo files like any other write.
+ */
+export async function writeScaffold(dir, files, root = dirname(dir)) {
   try {
     await stat(dir);
     throw new Error(
@@ -555,9 +562,11 @@ export async function writeScaffold(dir, files) {
   } catch (error) {
     if (error?.message?.startsWith('refusing to scaffold')) throw error;
   }
+  const journal = [];
   for (const file of files) {
     const abs = join(dir, file.path);
     await mkdir(dirname(abs), { recursive: true });
-    await writeFile(abs, file.text, 'utf8');
+    await journaledWriteFile(root, journal, abs, file.text);
   }
+  await commitJournal(root, 'pack new', journal);
 }

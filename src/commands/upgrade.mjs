@@ -22,7 +22,8 @@
 //      silently behind is the failure `compare` exists to surface, and this command must
 //      not be the thing that creates it.
 
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
+import { commitJournal, journaledWriteFile } from '../journal.mjs';
 
 import { basename, dirname, resolve } from 'node:path';
 
@@ -96,11 +97,14 @@ export async function upgradeCommand(positional, flags) {
         // Every planned target, not just AGENTS.md: a repo can have a current AGENTS.md
         // and three stale `.mdc` rules, and restamping only the first leaves `check` red
         // straight after a successful upgrade.
+        // One journal set per repo: a set belongs to one repository, and an
+        // `undo` in one consumer must never reach into another (R49).
+        const journal = [];
         const { targets } = await plan(p.path);
         for (const t of targets) {
           if (t.action === 'unchanged' || t.action === 'malformed') continue;
           await mkdir(dirname(t.path), { recursive: true });
-          await writeFile(t.path, t.text);
+          await journaledWriteFile(p.path, journal, t.path, t.text);
           writtenFiles.add(t.file);
         }
         const { manifest } = await readManifest(p.path);
@@ -110,11 +114,16 @@ export async function upgradeCommand(positional, flags) {
         // forever, because `sync` does not own the manifest and nothing else rewrites
         // it. An adopted repo would never have corrected it.
         const { $comment, ...chosen } = manifest ?? {};
-        await writeManifest(p.path, {
-          ...MANIFEST_COMMENT,
-          ...chosen,
-          projection: { ...(manifest?.projection ?? {}), simtDevSha: sha },
-        });
+        await writeManifest(
+          p.path,
+          {
+            ...MANIFEST_COMMENT,
+            ...chosen,
+            projection: { ...(manifest?.projection ?? {}), simtDevSha: sha },
+          },
+          journal,
+        );
+        await commitJournal(p.path, 'upgrade', journal);
         applied.push(p.name);
       } catch (error) {
         // Reported per repo rather than thrown: one unwritable repo must not hide the

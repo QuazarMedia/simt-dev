@@ -7,6 +7,7 @@ import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/i
 import { CLI } from '../name.mjs';
 import { DECISIONS_DIR } from '../decisions/index.mjs';
 import { lintDecisions, scaffoldDecision } from '../memory/decide.mjs';
+import { commitJournal } from '../journal.mjs';
 import { parsePathList } from '../argv.mjs';
 
 export async function decideCommand(args, flags) {
@@ -49,12 +50,17 @@ export async function decideCommand(args, flags) {
   const parsedPaths = parsePathList(flags.paths);
   const explicitPaths = flags.paths !== undefined ? parsedPaths : undefined;
 
+  // Journaled so `undo` restores the scaffold (R49); committed only when the
+  // run actually wrote, which commitJournal already guarantees.
+  const journal = [];
   const res = await scaffoldDecision(root, {
     title,
     affects: explicitPaths,
     supersedes: flags.supersedes,
     write: mode.apply,
+    journal: mode.apply ? journal : undefined,
   });
+  if (mode.apply && res.ok) await commitJournal(root, 'decide', journal);
 
   if (!res.ok) {
     return fail(

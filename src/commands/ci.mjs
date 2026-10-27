@@ -18,8 +18,9 @@
 // commands owns which file would be learning about ownership twice to learn nothing
 // new, and the next .github file would arrive with a third command to remember.
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { commitJournal, journaledWriteFile } from '../journal.mjs';
 
 import { EXIT, emit, emitJson, isJson, note, writeMode } from '../output/index.mjs';
 import { planWorkflow, renderWorkflow, WORKFLOW_FILE } from '../ci/workflow.mjs';
@@ -133,6 +134,8 @@ export async function ciCommand(positional, flags) {
     return EXIT.OK;
   }
 
+  // Journaled so `undo` restores this run (R49).
+  const journal = [];
   for (const { key, plan, render } of targets()) {
     const p = plans.find((x) => x.key === key);
     if (p.action === 'unchanged') continue;
@@ -140,9 +143,10 @@ export async function ciCommand(positional, flags) {
     // The renderer takes the plan because detection-driven content is a function of
     // this repo's facts: a dependabot config rendered without them would watch
     // nothing, which is the same silent-nothing the detection ruling exists to stop.
-    await writeFile(p.path, render(p));
+    await journaledWriteFile(root, journal, p.path, render(p));
     note(`wrote    ${p.file} (${p.action}; the template and this copy now agree)`);
   }
+  await commitJournal(root, 'ci', journal);
   if (isJson(flags)) {
     emitJson(
       {

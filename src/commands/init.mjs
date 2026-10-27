@@ -17,7 +17,8 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, symlink } from 'node:fs/promises';
+import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { dirname, join } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
@@ -331,7 +332,10 @@ export async function initCommand(positional, flags) {
     note(`branch   switched to ${git.branch}; ${git.from} is untouched and \`git checkout ${git.from}\` returns to it`);
   }
 
-  await writeManifest(root, manifest);
+  // Every repo-file write below is journaled, so `undo` can restore this run
+  // (R49). Pointer symlinks carry no bytes and are not journaled.
+  const journal = [];
+  await writeManifest(root, manifest, journal);
   note(`wrote    ${MANIFEST_FILE} (${manifestAction})`);
 
   // Identity last, and for the same reason the gate is written after the manifest:
@@ -345,7 +349,7 @@ export async function initCommand(positional, flags) {
   // because replacing it when it is already right would be a no-op that reads as
   // a change.
   if (payload.identity.action === 'created') {
-    await writeFile(join(root, IDENTITY_FILE), renderIdentityFile(identity));
+    await journaledWriteFile(root, journal, join(root, IDENTITY_FILE), renderIdentityFile(identity));
     await ignoreIdentity(root);
     note(`wrote    ${IDENTITY_FILE} (${identity.from === 'last-commit' ? 'from the last commit in this repository' : 'from the identity configured on this machine'}); gitignored, because it is yours and not the repository's`);
   } else if (payload.identity.action === 'unchanged') {
@@ -369,7 +373,7 @@ export async function initCommand(positional, flags) {
   // guaranteed to be misled.
   if (payload.ci.action === 'create') {
     await mkdir(dirname(join(root, payload.ci.file)), { recursive: true });
-    await writeFile(join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own, npm, version }));
+    await journaledWriteFile(root, journal, join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own, npm, version }));
     note(`wrote    ${payload.ci.file} (create; yours to edit from here, simt-dev will not rewrite it)`);
   }
   if (payload.dependabot.action === 'create') {
@@ -378,7 +382,9 @@ export async function initCommand(positional, flags) {
     // in the plan below are the bytes written here, and re-detecting would make the
     // printed entry list and the written one disagree the moment a manifest appears
     // between the two calls.
-    await writeFile(
+    await journaledWriteFile(
+      root,
+      journal,
       join(root, payload.dependabot.file),
       renderDependabot(payload.dependabot.facts, {
         stack: payload.dependabot.stack,
@@ -390,7 +396,7 @@ export async function initCommand(positional, flags) {
     );
   }
   if (payload.tsconfigBase.action === 'create') {
-    await writeFile(join(root, payload.tsconfigBase.file), renderTsconfigBase());
+    await journaledWriteFile(root, journal, join(root, payload.tsconfigBase.file), renderTsconfigBase());
     note(
       `wrote    ${payload.tsconfigBase.file} (create; ${TSCONFIG_BASE_FILE} is JSON, so it cannot say this itself — add "extends": "./${TSCONFIG_BASE_FILE}" to your tsconfig.json or nothing reads it)`,
     );
@@ -418,7 +424,7 @@ export async function initCommand(positional, flags) {
     // no such configuration at all will not have. Creating them is part of adopting,
     // not a detail of writing the file.
     await mkdir(dirname(target.path), { recursive: true });
-    await writeFile(target.path, target.text);
+    await journaledWriteFile(root, journal, target.path, target.text);
     note(`wrote    ${target.file} (${target.action})`);
   }
 
@@ -441,6 +447,7 @@ export async function initCommand(positional, flags) {
   for (const p of pointerBlocked) {
     note(`BLOCKED ${p.file}: ${p.detail} (${p.bytes} bytes); left as it is`);
   }
+  await commitJournal(root, 'init', journal);
   payload.written = true;
 
   if (isJson(flags)) emitJson(payload);

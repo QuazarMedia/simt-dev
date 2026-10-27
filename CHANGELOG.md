@@ -6,6 +6,8 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-10-27
+
 ### Added
 
 `simt plugin <claude|gemini|cursor> --out <dir>` generates one of the three

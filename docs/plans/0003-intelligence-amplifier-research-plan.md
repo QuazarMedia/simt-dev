@@ -919,7 +919,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R44 | Single-file binary | 7 | review 0002 S35 | M | D8 (ADR-098) | runs without Node on PATH | Complete |
 | R45 | Packs, measured | 7 | review 0002 S39, R03 | S | — | pack states its ΔR | Complete |
 | R46 | `explain <CODE>` | 8 | — | S | — | every code documented | Complete |
-| R47 | `doctor --fix` | 8 | R49 | S | — | fixes exactly the safe set | Queued |
+| R47 | `doctor --fix` | 8 | R49 | S | — | fixes exactly the safe set | Complete |
 | R48 | `status --line` | 8 | — | S | — | < 50 ms | Queued |
 | R49 | Journal and `undo` | 8 | — | S | — | round trip | Complete |
 | R50 | `--diff` on every writer | 8 | review 0002 S10 | S | — | contract table | Queued |

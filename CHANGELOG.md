@@ -6,6 +6,20 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-10-27
+
+### Fixed
+
+The release automation, which the v0.6.0 tag proved broken in two places. The
+tag workflow compared CI-built binaries against locally-built committed
+checksums, but the build is deterministic per host family, not across them —
+the check could never pass, and darwin binaries cannot be finished on ubuntu
+runners for lack of `codesign` anyway. Each target now builds on its native
+runner, the release verifies the served bytes equal the built bytes, and a
+`sync-formula` job re-renders the committed formula from the served bytes
+(ADR-099). The formula description no longer starts with an article, which is
+what failed the Homebrew channel's `brew style` on v0.6.0. No product change.
+
 ## [0.6.0] — 2026-10-27
 
 ### Added

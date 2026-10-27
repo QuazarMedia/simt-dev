@@ -120,6 +120,8 @@ const JSON_COMMANDS = {
   explain: ['DRIFT'],
   // No journaled writes on a fresh fixture: previews the empty undo, exit 0.
   undo: { root: 'r' },
+  // No cache on a fresh fixture: reports the miss as one document, exit 0.
+  status: { root: 'r', args: ['--line'] },
   'local doctor': { root: 'r' },
   'shared plan': { root: '.' },
   // The preview, not the write: the write lands in the reader's home directory, and a

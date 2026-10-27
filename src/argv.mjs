@@ -97,6 +97,10 @@ export const BOOL_FLAGS = new Set([
   // list the rest. Off by default because a repair, however safe, is still a
   // write, and a command whose name is a diagnosis should not write by default.
   'fix',
+  // status: print the one-line gate summary from the last check. Off by
+  // default because the only mode this command has is the line; bare `status`
+  // is a usage error naming it, the way `plan` without a subcommand is.
+  'line',
 ]);
 
 export const VALUE_FLAGS = new Set([

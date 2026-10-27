@@ -6,6 +6,16 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-10-27
+
+### Fixed
+
+The v0.6.1 tag run failed its own tests step: two decision-corpus lists in
+`test/rules.test.mjs` were not moved with ADR-099 (the partial-supersession
+shapes and the leaking-paths count, both designed to move with the corpus).
+Same product as v0.6.1; this tag exists so the release automation is proven by
+a green run rather than described by a red one.
+
 ## [0.6.1] — 2026-10-27
 
 ### Fixed

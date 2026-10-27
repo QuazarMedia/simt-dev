@@ -23,3 +23,7 @@ dist/
 
 # Write journal for `simt undo`. Local state, never shared.
 .simt/journal/
+
+# Gate state for `simt status --line`. Local state, never shared: it names the
+# commit the last `check` measured, which is meaningless anywhere else.
+.simt/check.json

@@ -53,6 +53,7 @@ import {
 import { planCommand } from './plan.mjs';
 import { sharedPlanCommand, sharedInstallCommand } from './shared.mjs';
 import { runDoctor } from './doctor.mjs';
+import { statusCommand } from './status.mjs';
 import { evidenceCommand } from './evidence.mjs';
 import { indexCommand } from './repoindex.mjs';
 import { mapCommand } from './map.mjs';
@@ -115,6 +116,9 @@ const GROUPS = new Map([
 export const IMPLEMENTED = {
   brief: briefCommand,
   doctor: runDoctor,
+  // Plan 0003 R48. A bare command: the only mode is `--line`, so there is no
+  // group and no default subcommand to resolve.
+  status: statusCommand,
   'graph lint': lintCommand,
   'skills index': skillsIndex,
   'skills find': skillsFind,

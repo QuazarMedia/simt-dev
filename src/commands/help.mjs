@@ -10,6 +10,8 @@ const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into th
 ${CLI} doctor [--fix]        classify a repo and check config health (with --fix:
                            apply the remedies flagged safe and list the rest;
                            dry-run unless --yes)
+${CLI} status --line         one line from the last check, for prompts and tmux
+                           (as of the last check; STALE after new commits)
 ${CLI} check                  the gate: projection drift, manifest validity, policy
 ${CLI} sync [--yes]           regenerate the projection (idempotent)
                            (prints the plan and exits 1 on drift without --yes,
@@ -211,6 +213,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
 --check                 report drift and write nothing (sync, ci)
+--line                  status: print the one-line gate summary from the last
+                        check (the only mode status has)
 --fix                   doctor: apply the remedies flagged safe (local,
                         idempotent, journaled); list the rest (dry-run
                         unless --yes)

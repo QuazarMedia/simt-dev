@@ -187,6 +187,8 @@ const JSON_COMMANDS = [
   { name: 'lessons list', args: (root) => ['lessons', 'list', '--root', root], env: async () => ({}) },
   { name: 'decide', args: (root) => ['decide', '--root', root], env: async () => ({}) },
   { name: 'undo', args: (root) => ['undo', '--root', root], env: async () => ({}) },
+  // No cache on a fresh fixture: the miss is one JSON document, exit 0.
+  { name: 'status', args: (root) => ['status', '--line', '--root', root], env: async () => ({}) },
   { name: 'local doctor', args: (root) => ['local', 'doctor', '--root', root], env: async () => ({}) },
 ];
 
@@ -330,6 +332,16 @@ const WRITERS = [
     // A string, not the array: the table compares with `assert.equal`, and two
     // reads of an unchanged directory are equal contents in different arrays.
     verify: async (root) => (await readdir(join(root, '.simt/journal')).catch(() => null))?.join('\n') ?? null,
+  },
+  {
+    // `check` writes the `--line` cache under `.simt/`, which is local state
+    // like the ledger and the index — not a write in this table's sense. This
+    // row pins that: the gate may record, but tracked content must be
+    // byte-identical before and after, under both modes.
+    name: 'check',
+    authorise: [],
+    verify: async (root) =>
+      `${await readFile(join(root, 'simt.json'), 'utf8').catch(() => null)}\n${await readFile(join(root, 'AGENTS.md'), 'utf8').catch(() => null)}`,
   },
 ];
 

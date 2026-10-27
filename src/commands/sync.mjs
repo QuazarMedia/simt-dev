@@ -29,6 +29,7 @@ import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { assertVersionPin, packageVersion } from '../package-version.mjs';
 import { resolvePacks } from '../packs.mjs';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { buildCacheRecord, hooksSummary, invalidateCheckCache, writeCheckCache } from '../status.mjs';
 import { computeLock, readLock, LOCK_FILE } from '../projection/lock.mjs';
 import { runDeclaredChecks } from '../kernel/checks.mjs';
 import { DECISIONS_DIR } from '../decisions/index.mjs';
@@ -300,6 +301,12 @@ export async function syncCommand(positional, flags) {
       note(`wrote    ${LOCK_FILE}`);
     }
     await commitJournal(root, 'sync', journal);
+    // The regions moved, so the last `check` no longer describes this tree.
+    // Invalidated rather than refreshed: `sync` does not run gates, checkers
+    // or decisions lint, so it cannot know what the gate would now say (R48).
+    // Gated on the journal: a no-op apply changed nothing, and the record is
+    // still true.
+    if (journal.length > 0) await invalidateCheckCache(root);
     for (const p of pointerPlan) {
       await mkdir(dirname(p.path), { recursive: true });
       // Only a symlink this tool wrote is replaced, and only because it has no content:
@@ -507,10 +514,21 @@ export async function checkCommand(positional, flags) {  const root = flags.root
     }
   }
 
+  // The rules slot of the `--line` cache, captured before anything else pushes:
+  // regions and rule sources are the projection, and a new blocking status
+  // that arrives here defaults to red rather than needing a second edit.
+  const rulesOk = !findings.some((f) => f.status !== 'current' && !CHECK_NON_BLOCKING.has(f.status));
+
   // A declared gate this repo cannot run fails closed on every commit once hooks are
   // installed. Reported here rather than left to `hooks status`, so the repo is red
   // before anyone installs anything rather than after.
-  const { manifest } = await readManifest(root);
+  const { manifest, exists } = await readManifest(root);
+  // The gates slot, counted — not just reported — so the line can print run/total.
+  // A cwd finding names a declared gate that will not run, so it counts with the
+  // unrunnable; an unknown-gate-cwd names no declared gate, so it does not.
+  let gatesRun = 0;
+  let gatesTotal = 0;
+  let hooksOk = true;
   if (manifest) {
     // The gate runs from whatever binary resolved it. For a repository without npm that
     // is the release binary in `.simt/bin` (ADR-098), and the only thing that knows
@@ -520,8 +538,15 @@ export async function checkCommand(positional, flags) {  const root = flags.root
     if (mismatch) {
       findings.push({ file: MANIFEST_FILE, status: 'version-mismatch', detail: mismatch, remedy: `run: ${CLI} upgrade --yes` });
     }
-    findings.push(...unrunnableGates(manifest, await readCapability(root)));
-    findings.push(...(await gateCwdFindings(root, manifest)));
+    const unrunnable = unrunnableGates(manifest, await readCapability(root));
+    findings.push(...unrunnable);
+    const cwdFindings = await gateCwdFindings(root, manifest);
+    findings.push(...cwdFindings);
+    gatesTotal = (manifest.gates?.preCommit ?? []).length + (manifest.gates?.prePush ?? []).length;
+    const notRun =
+      unrunnable.filter((f) => f.status === 'unrunnable').length + cwdFindings.length;
+    gatesRun = Math.max(0, gatesTotal - notRun);
+    hooksOk = (await hooksSummary(root, manifest, exists)).ok;
     // A pack the repository declares but cannot produce is reported here rather
     // than when a rule happens to be missing, because that is the failure mode
     // this guards: the region still renders, it renders SHORT, and `check` would
@@ -560,6 +585,21 @@ export async function checkCommand(positional, flags) {  const root = flags.root
   // acts on, so a finding it reports and does not fail on is a decision recorded in a
   // set — not one inherited from the writer that shares this file (ADR-051).
   const bad = findings.filter((f) => f.status !== 'current' && !CHECK_NON_BLOCKING.has(f.status));
+  // The `--line` cache is local state, not a write: counts and booleans under
+  // `.simt/`, never repo content, the same standing as the ledger and the
+  // index. Written on every run — red state is state — so a prompt never
+  // reports the tree as it was two checks ago.
+  await writeCheckCache(
+    root,
+    await buildCacheRecord(root, {
+      rulesOk,
+      hooksOk,
+      gatesRun,
+      gatesTotal,
+      blocking: bad.length,
+      warnings: findings.filter((f) => CHECK_NON_BLOCKING.has(f.status)).length,
+    }),
+  );
   const payload = {
     ok: bad.length === 0,
     command: 'check',

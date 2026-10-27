@@ -24,6 +24,7 @@
 
 import { mkdir } from 'node:fs/promises';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { invalidateCheckCache } from '../status.mjs';
 
 import { basename, dirname, resolve } from 'node:path';
 
@@ -124,6 +125,10 @@ export async function upgradeCommand(positional, flags) {
           journal,
         );
         await commitJournal(p.path, 'upgrade', journal);
+        // The pin and regions moved: the last `check` of this repo no longer
+        // describes it (R48). Gated on the journal: an untouched repo keeps
+        // its record.
+        if (journal.length > 0) await invalidateCheckCache(p.path);
         applied.push(p.name);
       } catch (error) {
         // Reported per repo rather than thrown: one unwritable repo must not hide the

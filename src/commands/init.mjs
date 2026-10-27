@@ -19,6 +19,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, readFile, symlink } from 'node:fs/promises';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { invalidateCheckCache } from '../status.mjs';
 import { dirname, join } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
@@ -448,6 +449,9 @@ export async function initCommand(positional, flags) {
     note(`BLOCKED ${p.file}: ${p.detail} (${p.bytes} bytes); left as it is`);
   }
   await commitJournal(root, 'init', journal);
+  // The tree changed, so the last `check` no longer describes it: the line
+  // goes back to "no cache" rather than reporting the tree as it was (R48).
+  await invalidateCheckCache(root);
   payload.written = true;
 
   if (isJson(flags)) emitJson(payload);

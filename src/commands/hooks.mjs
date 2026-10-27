@@ -15,6 +15,7 @@
 import { execFile } from 'node:child_process';
 import { chmod, mkdir, readFile, realpath } from 'node:fs/promises';
 import { commitJournal, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
+import { invalidateCheckCache } from '../status.mjs';
 import { isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -498,6 +499,9 @@ async function installHooks(root, flags) {
     journal,
   );
   await commitJournal(root, 'hooks install', journal);
+  // Shims and routing changed, so the hooks slot of the last `check` is stale
+  // (R48). Gated on the journal: an already-current install changes nothing.
+  if (journal.length > 0) await invalidateCheckCache(root);
 
   const notes = [];
   const chainedEvents = new Set(chained.map((c) => c.event));

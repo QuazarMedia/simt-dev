@@ -13,6 +13,7 @@
 import { EXIT, emit, emitJson, isJson, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { listJournalSets, readJournalSet, undoLastJournalSet } from '../journal.mjs';
+import { invalidateCheckCache } from '../status.mjs';
 
 export async function undoCommand(positional, flags) {
   const root = flags.root ?? positional[0] ?? process.cwd();
@@ -70,6 +71,10 @@ export async function undoCommand(positional, flags) {
     );
     return EXIT.FAIL;
   }
+  // The tree is back to before the run, so a `check` from after the run no
+  // longer describes it — the line goes back to "no cache" (R48). A restored
+  // set always restored something, so there is nothing to gate on.
+  await invalidateCheckCache(root);
   if (isJson(flags)) {
     emitJson({ ok: true, command: 'undo', root, set: result.set, restored: result.restored });
     return EXIT.OK;

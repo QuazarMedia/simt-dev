@@ -103,6 +103,7 @@ simt why [path]                     # ADRs, rules, skills, gates, and lessons go
 simt rules list [--root <path>]     # rule catalogue and what applies to a repository
 simt rules show <id>                # read one rule body (including rules deferred in kernel mode)
 simt rules why <id|ADR-NNN> [--all] # the decision that settled a rule, and whether it still stands
+simt explain <CODE> [--json]      # what a check finding means, why it is reported, and how to fix it
 simt decide "<title>" --yes         # scaffold the next ADR with structured simt-affects / simt-supersedes
 simt lessons list                   # fail-to-fix, revert, review-block, and hook-denial candidates
 simt lessons review <id> --yes      # promote a candidate to docs/lessons/NNNN-<slug>.md
@@ -161,7 +162,7 @@ writes its cache without asking: the file is gitignored and `git ls-files` can r
 rule line leaves the projection as `Enforced:` and the checker's name. The file-length
 line warns past 400 lines and fails past 1000. `simt evidence check` warns when a commit
 message claims a passing run this tree does not have, and the commit fails when
-`gates.evidence` is `block`.
+`gates.evidence` is `block`. Every finding `check` can emit is explained by `simt explain <CODE>` (DRIFT, UNMANAGED, PACK-DIGEST-MISMATCH, ...).
 
 ## Agent playbook: how and when to use each module
 

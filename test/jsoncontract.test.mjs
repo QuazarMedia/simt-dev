@@ -116,6 +116,8 @@ const JSON_COMMANDS = {
   'lessons list': { root: 'r' },
   'lessons review': { root: 'r' },
   decide: { root: 'r' },
+  // No repository needed: the table is compiled in, and the code is positional.
+  explain: ['DRIFT'],
   'local doctor': { root: 'r' },
   'shared plan': { root: '.' },
   // The preview, not the write: the write lands in the reader's home directory, and a

@@ -392,7 +392,15 @@ export async function syncCommand(positional, flags) {
  * @returns {Promise<{file: string, manifest: object, text: string,
  *                    stale: string[], previousBytes: number}|null>}
  */
-async function planManifestRepair(root, stack, sha) {
+/**
+ * The manifest-only repair `sync` applies before rewriting regions (plan 0003 R47).
+ *
+ * Exported so `doctor --fix` applies exactly this repair instead of deriving its
+ * own: the generated fields have one author, and a fix that patched them any
+ * other way would be a second answer to what "current" means. Returns null when
+ * there is nothing to repair, under exactly the conditions `sync` writes under.
+ */
+export async function planManifestRepair(root, stack, sha) {
   const drift = await manifestDrift(root, stack, sha);
   if (drift === null) return null;
   // A `reformatted` manifest is repaired only once the repository has declared that no

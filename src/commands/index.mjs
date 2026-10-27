@@ -51,7 +51,8 @@ import {
   benchCriticCommand,
 } from './bench.mjs';
 import { planCommand } from './plan.mjs';
-import { sharedPlanCommand, sharedInstallCommand, sharedWarning } from './shared.mjs';
+import { sharedPlanCommand, sharedInstallCommand } from './shared.mjs';
+import { runDoctor } from './doctor.mjs';
 import { evidenceCommand } from './evidence.mjs';
 import { indexCommand } from './repoindex.mjs';
 import { mapCommand } from './map.mjs';
@@ -68,8 +69,6 @@ import { localDoctorCommand } from './local.mjs';
 import { distillCommand } from './distill.mjs';
 import { parse } from '../argv.mjs';
 import { CLI } from '../name.mjs';
-import { fingerprint } from '../resolve/fingerprint.mjs';
-import { resolveWorkspace } from '../workspace.mjs';
 
 /** command path -> implementation sequence step (plan 0002 section 11). */
 // Every command named in plan 0002 section 5 is now implemented, so this map is empty.
@@ -280,97 +279,3 @@ function parseOrExit(argv) {
   return parsed.value;
 }
 
-/**
- * Step 3 of the implementation sequence: classify a repo from marker files alone.
- * Deliberately shipped early — it needs no registry, no rules and no projection,
- * and it makes the tool useful before any content exists.
- */
-async function runDoctor(positional, flags) {
-  const root = flags.root ?? positional[0] ?? process.cwd();
-  const result = await fingerprint(root);
-  // Which source answered the workspace question, and where it looked. A tool
-  // that silently fell back to the wrong directory would make every downstream
-  // answer confidently wrong, so the answer is reported rather than inferred
-  // (ADR-014).
-  const ws = await resolveWorkspace(flags);
-  // The shared file this repository hands rules to (ADR-084). Asked here and nowhere else
-  // because it is the one thing about a repository that is true of the reader's machine
-  // rather than of the tree: `check` must not read `$HOME`, so `doctor` is the only command
-  // that can notice a region that dropped rules into a file nobody has. Reported, never
-  // blocking — a stale copy costs a reader some of their rules, which is worth knowing and
-  // is not this repository's gate failing.
-  const shared = await sharedWarning(root, result.manifest ?? null, flags);
-
-  // Under `--json` the document is the whole report, so it has to carry both
-  // failures the text path reports AND the workspace answer the text path prints.
-  // This branch used to return before either check, with `ok` hardcoded true: a
-  // caller asking whether their config is readable was told yes, and given exit
-  // 0, while the same command in a terminal exited 3 and named the file. A
-  // scripted consumer has only this document to go on, so `ok` is derived from
-  // the exit code rather than written as a constant (S10).
-  const failure = result.error
-    ? { error: `${root}: ${result.error}`, remedy: null }
-    : ws.error
-      ? {
-          error: `workspace config ${ws.detail}: ${ws.error}`,
-          remedy: 'fix the JSON, or remove the file',
-        }
-      : null;
-  const code = failure ? EXIT.CONFIG : EXIT.OK;
-
-  if (isJson(flags)) {
-    emitJson({
-      ok: code === EXIT.OK,
-      command: 'doctor',
-      root,
-      ...result,
-      // The workspace answer is a fact about which directory the tool would
-      // act on next (ADR-014). It is printed in the text report; leaving it
-      // out of the JSON meant a machine-readable caller could not see it at
-      // all, which is the one-question-two-answers defect again.
-      workspace: {
-        root: ws.root ?? null,
-        source: ws.source,
-        detail: ws.detail,
-        error: ws.error ?? null,
-      },
-      shared,
-      ...(failure ?? {}),
-    });
-    return code;
-  }
-  if (result.error) {
-    return fail(`${root}: ${result.error}`, EXIT.CONFIG);
-  }
-  emit(
-    [
-      `root     ${root}`,
-      `stack    ${result.stack.length > 0 ? result.stack.join(', ') : '(undetected)'}`,
-      `evidence ${result.evidence.length > 0 ? result.evidence.join(' ') : '(none)'}`,
-      // Facts are what a profile selects on when it wants to survive the
-      // framework being replaced, so they are reported with the path that proved
-      // each one rather than as a bare list (ADR-013).
-      `facts    ${
-        result.facts.length > 0
-          ? result.facts.map((f) => `${f}(${result.factEvidence[f] ?? '?'})`).join(' ')
-          : '(none)'
-      }`,
-      `manifest ${result.manifest ? (result.manifest.error ?? result.manifest.id ?? 'present') : '(absent)'}`,
-      `workspace ${ws.root ?? '(none)'}  (${ws.source}: ${ws.detail})`,
-      // Printed only when this repository handed rules to a workspace copy: a line in
-      // every `doctor` is a line in every reader's terminal, and the reader who has
-      // nothing to install is not served by one (ADR-084).
-      ...(shared.declared ? [`shared    ${shared.state}  ${shared.detail}`] : []),
-    ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
-  );
-  // An unconfigured workspace is a fact, not a failure: a single repo with no
-  // workspace around it is a normal, supported case. A config file that EXISTS and
-  // does not parse is a real mistake, and that does fail - with the parse error,
-  // because naming the file without saying what is wrong with it sends the reader
-  // to the file and gives them nothing to look for.
-  if (ws.error) {
-    return fail(`workspace config ${ws.detail}: ${ws.error}`, EXIT.CONFIG, 'fix the JSON, or remove the file');
-  }
-  return EXIT.OK;
-}

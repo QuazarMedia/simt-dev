@@ -173,7 +173,7 @@ jobs:
       - name: publish
         # Trusted publishing. No token in secrets, and no long-lived credential
         # to rotate when this workflow is ever widened.
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
         # A partial upload is worse than a failed one: the wheel is visible and
         # installable while the sdist is not, so a source install of a version
         # whose wheel exists fails in a way that reads as a broken package

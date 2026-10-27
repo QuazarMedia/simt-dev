@@ -60,11 +60,14 @@ ${CLI} agent-hooks install     write this repo's policies into the harnesses tha
                             read a hooks file
                            (dry-run unless --yes; merges into the file, keeps every
                             key it does not own; Codex needs the hook trusted)
-${CLI} agent-hooks status      what each harness will run, and what is not trusted yet
-${CLI} plugin <claude|gemini|cursor>  generate a harness package from the same tables
-                            (dry-run unless --yes; writes a self-contained runtime, the
-                            hooks and MCP registration, and for cursor the kernel rules;
-                            the skill registry is workspace data and is not shipped)
+${CLI} agent-hooks status      what each harness will run, and what is not trusted yet${CLI} plugin <claude|gemini|cursor>  generate a harness package from the same tables
+                           (dry-run unless --yes; writes a self-contained runtime, the
+                           hooks and MCP registration, and for cursor the kernel rules;
+                           the skill registry is workspace data and is not shipped)
+${CLI} completions <shell>    print a bash, zsh or fish completion script
+                           (generated from the command registry, so every command
+                           completes; deterministic bytes; stdout only - redirect
+                           or source it)
 ${CLI} plan status             count tracker rows
                            (${MANIFEST_FILE} key plans when set, otherwise
                            the ${DEFAULT_TEMPLATE} template:

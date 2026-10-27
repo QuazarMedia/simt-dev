@@ -100,6 +100,9 @@ ${CLI} lessons list            deterministic lesson candidates in .simt/lessons.
                            and promoted lessons in docs/lessons/*.md
 ${CLI} lessons review [<id>]   promote a lesson candidate to docs/lessons/NNNN-<slug>.md
                            (dry-run unless --yes; writes Appendix A frontmatter)
+${CLI} explain <CODE>        what a check finding means: the decision behind it, how
+                           to fix it, and a concrete trigger (DRIFT, UNMANAGED,
+                           PACK-DIGEST-MISMATCH, ...; case-insensitive)
 ${CLI} decide [<title>]        scaffold an ADR with the next free number, a Status: line,
                            a rulings skeleton, and structured simt-affects +
                            simt-supersedes frontmatter (dry-run unless --yes;

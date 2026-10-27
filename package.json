@@ -1,6 +1,6 @@
 {
   "name": "simt-dev",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "An intelligence amplifier for AI coding agents: rules and dual gates adopted by one command, plus local retrieval, task briefs, benches and repo memory — deterministic by default, with local-model adapters that propose and never select.",
   "license": "Apache-2.0",
   "author": "Said Elimam",

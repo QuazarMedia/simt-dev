@@ -21,17 +21,19 @@
 // Unsafe findings are never applied, under any flag combination. `--fix` without
 // `--yes` previews: it names what it would apply and lists the rest.
 
+import { join } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { sharedWarning } from './shared.mjs';
-import { readManifest, writeManifest } from '../projection/manifest.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
+import { manifestPath, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { planManifestRepair } from './sync.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
-import { applyHooksInstall, planHooksInstall } from './hooks.mjs';
+import { applyHooksInstall, plannedDiffs, planHooksInstall } from './hooks.mjs';
 import { fileFor } from '../hooks/shim.mjs';
-import { commitJournal, ignoreJournal, journalHygiene } from '../journal.mjs';
+import { commitJournal, ignoreJournal, journalHygiene, journalIgnoreNext } from '../journal.mjs';
 
 /**
  * One config-health finding: what is wrong, how to fix it, and whether
@@ -41,7 +43,11 @@ import { commitJournal, ignoreJournal, journalHygiene } from '../journal.mjs';
  * findings with `safe: true` carry one; an unsafe finding is a report and a
  * manual remedy, never a function waiting for a flag.
  */
-async function collectFindings(root, { result, ws, shared }) {
+// `withDiffs` previews the safe fixes as `--diff` pairs (plan 0003 R50). Read at
+// finding creation, before any fix is applied, so the before side is true in
+// preview and in apply alike. Only safe findings carry pairs: an unsafe finding
+// is never applied, so there is no write to preview.
+async function collectFindings(root, { result, ws, shared, withDiffs = false }) {
   const findings = [];
   if (result.error) {
     // Nothing else can be asked: classification failed, so every check built on
@@ -82,20 +88,21 @@ async function collectFindings(root, { result, ws, shared }) {
     });
   } else {
     const sha = await provenanceDigest();
-    const repair = await planManifestRepair(root, result.stack, sha);
-    if (repair !== null) {
-      findings.push({
-        id: 'manifest-stale',
-        severity: 'warning',
-        detail: `generated field(s) ${repair.stale.join(', ')} do not match what this simt-dev writes`,
-        remedy: `run: ${CLI} sync --root ${root} --yes`,
-        why: null,
-        safe: true,
-        apply: async (rt, journal) => {
-          await writeManifest(rt, repair.manifest, journal);
-        },
-      });
-    }
+    const repair = await planManifestRepair(root, result.stack, sha);    if (repair !== null) {
+        const staleBefore = withDiffs ? await readBefore(await manifestPath(root)) : null;
+        findings.push({
+          id: 'manifest-stale',
+          severity: 'warning',
+          detail: `generated field(s) ${repair.stale.join(', ')} do not match what this simt-dev writes`,
+          remedy: `run: ${CLI} sync --root ${root} --yes`,
+          why: null,
+          safe: true,
+          diffs: withDiffs ? [{ path: MANIFEST_FILE, before: staleBefore, after: repair.text }] : [],
+          apply: async (rt, journal) => {
+            await writeManifest(rt, repair.manifest, journal);
+          },
+        });
+      }
 
     const planned = await planHooksInstall(root, { manifest, exists });
     if (planned.takeover) {
@@ -122,6 +129,7 @@ async function collectFindings(root, { result, ws, shared }) {
         planned.evidenceDeclared && planned.evidenceSource !== planned.evidenceExisting;
       if (evidenceMismatch) bits.push('commit-msg claim check differs from this simt-dev; reinstall refreshes it');
       if (bits.length > 0) {
+        const hooksPairs = withDiffs ? await plannedDiffs(root, planned) : [];
         findings.push({
           id: 'hooks-incomplete',
           severity: 'warning',
@@ -129,6 +137,7 @@ async function collectFindings(root, { result, ws, shared }) {
           remedy: `run: ${CLI} hooks install --root ${root} --yes`,
           why: null,
           safe: true,
+          diffs: hooksPairs,
           apply: async (rt, journal) => {
             await applyHooksInstall(rt, planned, journal);
           },
@@ -138,6 +147,8 @@ async function collectFindings(root, { result, ws, shared }) {
 
     const hygiene = await journalHygiene(root);
     if (!hygiene.ignored) {
+      const ignoreBefore = withDiffs ? await readBefore(join(root, '.gitignore')) : null;
+      const ignoreAfter = withDiffs ? journalIgnoreNext(ignoreBefore ?? '') : null;
       findings.push({
         id: 'journal-unignored',
         severity: 'warning',
@@ -145,6 +156,7 @@ async function collectFindings(root, { result, ws, shared }) {
         remedy: 'ignore the journal directory (what --fix applies)',
         why: null,
         safe: true,
+        diffs: ignoreAfter === null ? [] : [{ path: '.gitignore', before: ignoreBefore, after: ignoreAfter }],
         apply: async (rt, journal) => {
           await ignoreJournal(rt, journal);
         },
@@ -227,8 +239,8 @@ export async function runDoctor(positional, flags) {
   // blocking — the region is correct either way, and what is wrong is the reader's machine.
   const shared = await sharedWarning(root, result.manifest ?? null, flags);
 
-  const findings = await collectFindings(root, { result, ws, shared });
   const fixMode = flags.fix === true;
+  const findings = await collectFindings(root, { result, ws, shared, withDiffs: fixMode && flags.diff === true });
   const mode = writeMode(flags);
   let fix = { requested: fixMode, applied: false, fixed: [], failed: [] };
   if (fixMode && mode.apply) {
@@ -285,6 +297,7 @@ export async function runDoctor(positional, flags) {
       shared,
       findings: serialised,
       fix,
+      ...diffField(fixMode && flags.diff === true ? findings.flatMap((f) => f.diffs ?? []) : [], flags),
       ...(failure ?? {}),
     });
     return code;
@@ -315,6 +328,9 @@ export async function runDoctor(positional, flags) {
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );
+  // After the report: the report says what, the diff shows it (R50). Only the
+  // fix plan is diffed, so without --fix there is nothing to show.
+  if (fixMode && flags.diff === true) emitDiffs(findings.flatMap((f) => f.diffs ?? []), flags);
   if (failedFix) {
     return fail(
       `doctor --fix applied ${fix.fixed.length} remedie(s) and ${fix.failed.length} failed: ${fix.failed.map((f) => `${f.id} (${f.error})`).join('; ')}`,

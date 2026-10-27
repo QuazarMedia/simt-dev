@@ -25,7 +25,8 @@ import { dirname, join } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs';
-import { MANIFEST, buildManifest, manifestPath, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
+import { MANIFEST, buildManifest, manifestPath, manifestText, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { readHooksState } from '../compare/hooksstate.mjs';
 import { planWorkflow, renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
@@ -282,11 +283,69 @@ export async function initCommand(positional, flags) {
     );
   }
 
+  // The `--diff` pairs, read before anything is written so the before side is
+  // true in preview and in apply alike (R50). The after-bytes reuse the exact
+  // render calls the apply path below writes, so the diff shows the write
+  // rather than a second opinion about it. Pointers carry no bytes, so the
+  // plan lines naming the link targets are already their whole story.
+  let diffs = [];
+  if (flags.diff === true) {
+    diffs = [
+      {
+        path: MANIFEST_FILE,
+        before: await readBefore(manifestFile),
+        after: manifestText(manifest),
+      },
+    ];
+    if (payload.identity.action === 'created') {
+      diffs.push({
+        path: IDENTITY_FILE,
+        before: null,
+        after: renderIdentityFile(identity),
+      });
+    }
+    if (payload.ci.action === 'create') {
+      diffs.push({
+        path: payload.ci.file,
+        before: await readBefore(join(root, payload.ci.file)),
+        after: renderWorkflow({ own: payload.ci.own, npm, version }),
+      });
+    }
+    if (payload.dependabot.action === 'create') {
+      diffs.push({
+        path: payload.dependabot.file,
+        before: await readBefore(join(root, payload.dependabot.file)),
+        after: renderDependabot(payload.dependabot.facts, {
+          stack: payload.dependabot.stack,
+          own: payload.dependabot.own,
+        }),
+      });
+    }
+    if (payload.tsconfigBase.action === 'create') {
+      diffs.push({
+        path: payload.tsconfigBase.file,
+        before: await readBefore(join(root, payload.tsconfigBase.file)),
+        after: renderTsconfigBase(),
+      });
+    }
+    for (const target of projected.targets) {
+      if (target.action === 'unchanged' || target.action === 'malformed') continue;
+      diffs.push({
+        path: target.file,
+        before: await readBefore(target.path),
+        after: target.text,
+      });
+    }
+    Object.assign(payload, diffField(diffs, flags));
+  }
+
   // Step 4/5: report everything, then make changes only when told to.
   if (isJson(flags)) {
     if (!apply) emitJson(payload);
   } else {
     emit(render(payload, manifest, { npm, version }));
+    // After the report: the report says what, the diff shows it (R50).
+    emitDiffs(diffs, flags);
   }
   if (!apply) {
     note('');

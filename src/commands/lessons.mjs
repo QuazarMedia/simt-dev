@@ -4,6 +4,7 @@
 import { resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
+import { diffField, emitDiffs } from '../diff.mjs';
 import { CLI } from '../name.mjs';
 import { parsePathList } from '../argv.mjs';
 import {
@@ -95,6 +96,14 @@ export async function lessonsReviewCommand(args, flags) {
     return fail(result.error, EXIT.FAIL, `record a session failure-then-fix or run: ${CLI} lessons`);
   }
 
+  // The `--diff` pair: the promoted lesson file, created or refreshed (R50). The
+  // before-side rides on the result from `promoteLesson`, read before anything
+  // was written, so the diff is true in preview and in apply alike.
+  const diffs =
+    flags.diff === true
+      ? [{ path: result.path, before: result.before ?? null, after: result.markdown }]
+      : [];
+
   const payload = {
     ok: true,
     command: 'lessons review',
@@ -104,6 +113,7 @@ export async function lessonsReviewCommand(args, flags) {
     path: result.path,
     candidate: result.candidate,
     markdown: result.markdown,
+    ...diffField(diffs, flags),
   };
 
   if (isJson(flags)) {
@@ -120,6 +130,8 @@ export async function lessonsReviewCommand(args, flags) {
   ];
 
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   if (!mode.apply) {
     note(`note    dry-run  nothing written; apply with: ${CLI} lessons review --yes`);
   }

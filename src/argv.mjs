@@ -101,6 +101,10 @@ export const BOOL_FLAGS = new Set([
   // default because the only mode this command has is the line; bare `status`
   // is a usage error naming it, the way `plan` without a subcommand is.
   'line',
+  // every writer: print the plan as unified diffs. Off by default because a
+  // plan report is the compact answer and the diff is the verbose one; --diff
+  // never changes what the run writes or its exit code, only what it shows.
+  'diff',
 ]);
 
 export const VALUE_FLAGS = new Set([

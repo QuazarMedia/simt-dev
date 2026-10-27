@@ -213,6 +213,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
 --check                 report drift and write nothing (sync, ci)
+--diff                  print the plan as unified diffs (every writer;
+                        changes nothing about what the run writes)
 --line                  status: print the one-line gate summary from the last
                         check (the only mode status has)
 --fix                   doctor: apply the remedies flagged safe (local,

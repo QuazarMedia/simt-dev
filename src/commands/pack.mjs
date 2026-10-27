@@ -27,6 +27,7 @@ import {
   writeScaffold,
 } from '../packs/manage.mjs';
 import { readManifest } from '../projection/manifest.mjs';
+import { diffField, emitDiffs } from '../diff.mjs';
 
 export async function packCommand(sub, args, flags) {
   if (sub === 'new') return packNew(args, flags);
@@ -100,6 +101,9 @@ async function packNew(args, flags) {
   const dir = join(resolve(flags.root ?? process.cwd()), name);
   const files = scaffoldPack({ name, source });
   const { apply, dryRun } = writeMode(flags);
+  // A scaffold always creates into a directory that must not exist, so every
+  // before side is empty and each pair is a whole file (R50).
+  const diffs = flags.diff === true ? files.map((f) => ({ path: `${name}/${f.path}`, before: null, after: f.text })) : [];
 
   if (isJson(flags)) {
     emitJson({
@@ -110,6 +114,7 @@ async function packNew(args, flags) {
       files: files.map((f) => f.path),
       packFile: PACK_JSON,
       benchFile: BENCH_JSON,
+      ...diffField(diffs, flags),
     });
     return EXIT.OK;
   }
@@ -126,6 +131,8 @@ async function packNew(args, flags) {
       ].join('\n'),
       { maxBytes: flags.maxBytes ?? 0 },
     );
+    // After the report: the report says what, the diff shows it (R50).
+    emitDiffs(diffs, flags);
     return EXIT.OK;
   }
 
@@ -144,6 +151,8 @@ async function packNew(args, flags) {
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   return EXIT.OK;
 }
 

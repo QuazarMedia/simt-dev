@@ -8,6 +8,7 @@ import { CLI } from '../name.mjs';
 import { DECISIONS_DIR } from '../decisions/index.mjs';
 import { lintDecisions, scaffoldDecision } from '../memory/decide.mjs';
 import { commitJournal } from '../journal.mjs';
+import { diffField, emitDiffs } from '../diff.mjs';
 import { parsePathList } from '../argv.mjs';
 
 export async function decideCommand(args, flags) {
@@ -76,6 +77,10 @@ export async function decideCommand(args, flags) {
     note('dry-run  no files written');
   }
 
+  // A scaffold always creates: the number is free by construction, so the
+  // before side is empty and the pair is the whole file (R50).
+  const diffs = flags.diff === true ? [{ path: res.relPath, before: null, after: res.text }] : [];
+
   if (isJson(flags)) {
     emitJson({
       ok: true,
@@ -90,10 +95,10 @@ export async function decideCommand(args, flags) {
       supersedes: res.supersedes,
       written: res.written,
       dryRun: !mode.apply,
+      ...diffField(diffs, flags),
     });
     return EXIT.OK;
   }
-
   const supersedesLabel =
     res.supersedes.length > 0
       ? res.supersedes
@@ -118,5 +123,7 @@ export async function decideCommand(args, flags) {
   ];
 
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   return EXIT.OK;
 }

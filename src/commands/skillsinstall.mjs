@@ -20,16 +20,17 @@
 //   3. References come with the skill. A skill whose reference files are missing
 //      is worse than one that was never installed, because it looks installed.
 
-import { mkdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat } from 'node:fs/promises';
 import { commitJournal, journaledCopyDir, journaledWriteFile } from '../journal.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, relative, sep } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { loadRegistry, measureSkill } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { readCapability } from '../hooks/capability.mjs';
-import { MANIFEST, buildManifest, readManifest, writeManifest } from '../projection/manifest.mjs';
+import { MANIFEST, buildManifest, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { nearMatches } from '../resolve/near.mjs';
@@ -162,10 +163,18 @@ export async function installCommand(args, flags) {
   // `--yes --json` a command that reported a plan and changed nothing - the one
   // combination a script writes. The payload is now emitted once, at the end,
   // after the write it describes.
-  const report = () => {
-    if (isJson(flags)) emitJson(payload);
-  };
   const mode = writeMode(flags);
+  // The `--diff` pairs, read before anything is written so the before side is
+  // true in preview and in apply alike (R50). Built before the early returns
+  // below so the shared `report()` can carry the field in every mode.
+  const diffs = flags.diff === true ? await skillDiffs(root, { src, dest, destRel: payload.dest, flat: measured.flat, name, record, repo }) : [];
+  const report = () => {
+    // `--json` used to return here, before anything was written, which made
+    // `--yes --json` a command that reported a plan and changed nothing - the one
+    // combination a script writes. The payload is now emitted once, at the end,
+    // after the write it describes.
+    if (isJson(flags)) emitJson({ ...payload, ...diffField(diffs, flags) });
+  };
 
   if (!isJson(flags)) {
     emit(
@@ -214,6 +223,8 @@ export async function installCommand(args, flags) {
   // "nothing written" and then wrote. It belongs on the path that does not write.
   if (!mode.apply) {
     note(`note    dry-run  nothing written; apply with: ${CLI} skills install ${name} --yes`);
+    // After the report: the report says what, the diff shows it (R50).
+    emitDiffs(diffs, flags);
     report();
     return EXIT.OK;
   }
@@ -246,6 +257,8 @@ export async function installCommand(args, flags) {
   }
   note(`note    ${name} is now repo-local and is excluded from central-drift accounting`);
   await commitJournal(root, 'skills install', journal);
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   report();
   return EXIT.OK;
 }
@@ -506,29 +519,82 @@ async function fileSha(path) {
  * default gates in it is a promise the repo cannot keep, and a command that installs one
  * skill is not entitled to make it.
  */
-async function recordLocal(root, record, name, repo, journal) {
-  const { manifest, error } = await readManifest(root);
-  if (error) return { written: false, reason: error };
+/** Every regular file under a directory, absolute paths. Missing dir → []. */
+async function treeFiles(dir) {
+  let st;
+  try {
+    st = await stat(dir);
+  } catch (error) {
+    if (error.code === 'ENOENT') return [];
+    throw error;
+  }
+  if (!st.isDirectory()) return [dir];
+  const out = [];
+  for (const name of await readdir(dir)) {
+    out.push(...(await treeFiles(join(dir, name))));
+  }
+  return out;
+}
 
-  // A repo with no manifest gets one here, so this function writes a *promise* on that
-  // repo's behalf: it decides which gates the repo claims to run. Without a capability
-  // probe it wrote `format`, `lint`, `test` and `typecheck` into a repository with no
-  // scripts and no formatter, and `check` then reported four UNRUNNABLE gates. The moment
-  // hooks route through the manifest - which is the entire point of a gate - every commit
-  // in that repo is blocked, over gates nobody declared. ADR-017 exists to prevent exactly
-  // that, and a manifest written by a command that installs one skill was the way round it.
-  // `init` probes for the same reason; a second writer that does not is a defect waiting
-  // for the next command that needs a manifest.
-  const base =
-    manifest ??
-    (await buildManifest({
-      root,
-      stack: repo.stack,
-      sha: await provenanceDigest(),
-      capability: await readCapability(root),
-    }));
+function rel(root, path) {
+  return relative(root, path).split(sep).join('/');
+}
+
+/**
+ * The `--diff` pairs for an install: the skill files plus the manifest record
+ * (plan 0003 R50). The manifest pair needs the same object the write applies,
+ * so the plan is shared with `recordLocal` rather than derived twice.
+ */
+async function skillDiffs(root, { src, dest, destRel, flat, name, record, repo }) {
+  const pairs = [];
+  if (flat) {
+    pairs.push({
+      path: `${destRel}/SKILL.md`,
+      before: await readBefore(join(dest, 'SKILL.md')),
+      after: await wrapFlat(src, name),
+    });
+  } else {
+    // References come with the skill, so the diff walks the whole tree: only
+    // changed files render, the rest filter out as equal.
+    for (const abs of await treeFiles(src)) {
+      const destAbs = join(dest, relative(src, abs));
+      pairs.push({ path: rel(root, destAbs), before: await readBefore(destAbs), after: await readFile(abs, 'utf8') });
+    }
+  }
+  const planned = await planLocalRecord(root, record, name, repo);
+  if (!planned.error) {
+    pairs.push({
+      path: rel(root, await manifestPath(root)),
+      before: planned.manifest === null ? null : await readBefore(await manifestPath(root)),
+      after: manifestText(planned.next),
+    });
+  }
+  return pairs;
+}
+
+/**
+ * What `recordLocal` will write, computed without writing (plan 0003 R50).
+ * The diff shares this so the pair shows the same object the write applies.
+ */
+async function planLocalRecord(root, record, name, repo) {
+  const { manifest, error } = await readManifest(root);
+  if (error) return { error };
+  const base = manifest ?? (await buildManifest({ root, stack: repo.stack, sha: await provenanceDigest(), capability: await readCapability(root) }));
   const existing = Array.isArray(base.localSkills) ? base.localSkills : [];
   const kept = existing.filter((e) => (typeof e === 'string' ? e : e?.name) !== name);
-  await writeManifest(root, { ...base, localSkills: [...kept, record] }, journal);
-  return { written: true, created: manifest === null };
+  return { manifest, next: { ...base, localSkills: [...kept, record] }, created: manifest === null };
+}
+
+async function recordLocal(root, record, name, repo, journal) {
+  // The manifest this writes is `planned.next`, built by `planLocalRecord`:
+  // a repo with no manifest gets one here, which is a promise about which
+  // gates the repo claims to run. Without the capability probe inside the
+  // plan it wrote `format`, `lint`, `test` and `typecheck` into a repository
+  // with no scripts and no formatter, and `check` then reported four
+  // UNRUNNABLE gates that blocked every commit (ADR-017). Deriving the object
+  // a second way here would be a second answer to what the repo promises.
+  const planned = await planLocalRecord(root, record, name, repo);
+  if (planned.error) return { written: false, reason: planned.error };
+  await writeManifest(root, planned.next, journal);
+  return { written: true, created: planned.created };
 }

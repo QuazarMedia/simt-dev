@@ -25,6 +25,7 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
@@ -186,6 +187,17 @@ async function installHooks(root, flags) {
 
   const refused = plan.filter((p) => p.error);
 
+  // The `--diff` pairs, read before anything is written so the before side is
+  // true in preview and in apply alike (R50).
+  const diffs =
+    flags.diff === true
+      ? await Promise.all(
+        plan
+          .filter((p) => p.action !== 'unchanged')
+          .map(async (p) => ({ path: p.path, before: await readBefore(join(root, p.path)), after: p.text })),
+      )
+      : [];
+
   if (!mode.apply) {
     if (isJson(flags)) {
       emitJson({
@@ -196,6 +208,7 @@ async function installHooks(root, flags) {
         plan: plan.map(({ text, ...rest }) => rest),
         notWritten: others,
         filesWritten: false,
+        ...diffField(diffs, flags),
       });
       return refused.length > 0 ? EXIT.FAIL : EXIT.OK;
     }
@@ -208,10 +221,12 @@ async function installHooks(root, flags) {
         '',
         refused.length > 0
           ? `REFUSED  ${refused.length} config file(s) could not be read; nothing written`
-          : `PLAN     nothing written; apply with: ${CLI} agent-hooks install --yes`,
+          :        `PLAN     nothing written; apply with: ${CLI} agent-hooks install --yes`,
       ].join('\n'),
       { maxBytes: flags.maxBytes ?? 0 },
     );
+    // After the report: the report says what, the diff shows it (R50).
+    emitDiffs(diffs, flags);
     return refused.length > 0 ? EXIT.FAIL : EXIT.OK;
   }
 
@@ -249,6 +264,7 @@ async function installHooks(root, flags) {
       written: written.map((p) => p.path),
       filesWritten: true,
       notes,
+      ...diffField(diffs, flags),
     });
     return EXIT.OK;
   }
@@ -263,6 +279,8 @@ async function installHooks(root, flags) {
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   for (const o of others) note(`note     ${o.id}: not written - ${o.note}`);
   for (const n of notes) note(`note     ${n}`);
   note(`note     never committed or pushed (ADR-001); review, then commit yourself`);

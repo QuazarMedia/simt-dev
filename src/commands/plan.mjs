@@ -1,5 +1,7 @@
+import { relative } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
 import { formatCounts, planDone, planNext, planStatus } from '../plan/index.mjs';
+import { diffField, emitDiffs } from '../diff.mjs';
 import { CLI } from '../name.mjs';
 
 // Preview unless --yes, and --dry-run wins even then. A tracker row marked done
@@ -79,8 +81,16 @@ async function runDone(root, id, sha, flags) {
     dryRun: !mode.apply,
   });
   if (result.error) return fail(result.error, EXIT.USAGE, result.remedy);
+  // The `--diff` pair: the one changed tracker row (R50). The sides ride on the
+  // result from `planDone`, captured pre-write, so the diff is true in preview
+  // and in apply alike. When nothing changed the sides are equal and the diff
+  // renders empty.
+  const diffs =
+    flags.diff === true && result.beforeLine !== undefined
+      ? [{ path: relative(root, result.file), before: result.beforeLine, after: result.afterLine }]
+      : [];
   if (isJson(flags)) {
-    emitJson({ ok: true, command: 'plan done', ...result });
+    emitJson({ ok: true, command: 'plan done', ...result, ...diffField(diffs, flags) });
     return EXIT.OK;
   }
   const lines = [`repo     ${root}`];
@@ -95,5 +105,7 @@ async function runDone(root, id, sha, flags) {
   if (result.evidenceRecorded) lines.push(`evidence ${result.sha}${result.test ? `  test: ${result.test}` : ''}`);
   else if (result.evidenceNote) lines.push(`note     ${result.evidenceNote}`);
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   return EXIT.OK;
 }

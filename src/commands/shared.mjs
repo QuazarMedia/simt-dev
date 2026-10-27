@@ -14,7 +14,9 @@
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { targetRoot } from '../workspace.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import {
+  injectShared,
   intersect,
   sharedBody,
   sharedCandidates,
@@ -25,7 +27,7 @@ import {
   sharedTargets,
   writeSharedFile,
 } from '../projection/shared.mjs';
-import { buildManifest, declaredShared, readManifest, writeManifest } from '../projection/manifest.mjs';
+import { buildManifest, declaredShared, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { desiredRegion } from '../projection/rules.mjs';
 
 /**
@@ -241,6 +243,27 @@ export async function sharedInstallCommand(_args, flags) {
     manifests.push({ root, action: 'declared', manifest: built });
   }
 
+  // The `--diff` pairs, read before anything is written so the before side is
+  // true in preview and in apply alike (R50). Home-directory copies through the
+  // same `injectShared` the write applies, manifest declarations through
+  // `manifestText`; paste targets carry no file and are printed in full below.
+  let diffs = [];
+  if (flags.diff === true) {
+    for (const t of targets) {
+      if (t.path === null) continue;
+      const before = await readBefore(t.path);
+      diffs.push({ path: t.path, before, after: injectShared(before ?? '', shared, meta).text });
+    }
+    for (const row of manifests) {
+      if (row.action !== 'declared') continue;
+      diffs.push({
+        path: `${basename(row.root)}/${MANIFEST_FILE}`,
+        before: await readBefore(await manifestPath(row.root)),
+        after: manifestText(row.manifest),
+      });
+    }
+  }
+
   if (flags.yes !== true) {
     // Nothing above this line writes, and nothing below it runs without the reader's
     // consent — because one of the two writes lands in their home directory and the other
@@ -265,6 +288,7 @@ export async function sharedInstallCommand(_args, flags) {
         divergent,
         targets: states,
         manifests: manifests.map(({ root: r, action, detail }) => ({ root: r, action, detail: detail ?? null })),
+        ...diffField(diffs, flags),
       });
       return EXIT.FAIL;
     }
@@ -281,6 +305,8 @@ export async function sharedInstallCommand(_args, flags) {
       ].join('\n'),
       { maxBytes: flags.maxBytes ?? 0 },
     );
+    // After the report: the report says what, the diff shows it (R50).
+    emitDiffs(diffs, flags);
     return EXIT.FAIL;
   }
 
@@ -326,6 +352,8 @@ export async function sharedInstallCommand(_args, flags) {
   }
   lines.push(`verify   ${CLI} doctor  reports the copy as current, and ${CLI} tokens --repos --root . reports what is left`);
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   return EXIT.OK;
 }
 

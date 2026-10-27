@@ -632,6 +632,12 @@ export async function planDone(root, id, { sha = null, test = null, state = null
     line: found.index + 1,
     from,
     to: cells[slice.stateIdx],
+    // The `--diff` sides for the one changed row (plan 0003 R50). The full file
+    // is not carried: one table row is the whole write, and a context-less hunk
+    // over the row says exactly what changed. Captured pre-write, so the diff
+    // is true in preview and in apply alike.
+    beforeLine: original,
+    afterLine: newLine,
     state: format.readState(display),
     wouldChange,
     changed: wouldChange && !dryRun,

@@ -25,6 +25,7 @@
 
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { readBefore } from './diff.mjs';
 import { hookDocument } from './agenthooks/render.mjs';
 import { desiredRegion } from './projection/rules.mjs';
 import { PACKAGE_NAME, BIN_REL } from './name.mjs';
@@ -134,6 +135,15 @@ export async function buildPackage(kind, { root = process.cwd(), out, apply = fa
     'the skill registry is workspace data (ADR-061) and is not shipped; run `simt skills index` in the profile to list what a workspace would offer',
   ];
 
+  // The `--diff` before-sides, read before anything is written so the diff is
+  // true in preview and in apply alike (R50). Always captured: the files are a
+  // handful of small generated configs. The runtime copy below is excluded — it
+  // is a mechanical copy of this tool's own sources, not planned content, and
+  // diffing it would reprint the tool into the review.
+  for (const f of files) {
+    f.before = await readBefore(join(out, f.path));
+  }
+
   if (apply) {
     const runtimeTarget = join(out, runtimeDir(kind));
     await mkdir(runtimeTarget, { recursive: true });
@@ -158,7 +168,7 @@ export async function buildPackage(kind, { root = process.cwd(), out, apply = fa
     out,
     apply,
     runtime: { target: runtimeDir(kind), parts: [...pkg.files, 'package.json'] },
-    files: files.map(({ text, ...rest }) => rest),
+    files,
     notes,
   };
 }

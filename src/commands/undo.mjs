@@ -13,6 +13,8 @@
 import { EXIT, emit, emitJson, isJson, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { listJournalSets, readJournalSet, undoLastJournalSet } from '../journal.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
+import { join } from 'node:path';
 import { invalidateCheckCache } from '../status.mjs';
 
 export async function undoCommand(positional, flags) {
@@ -31,10 +33,23 @@ export async function undoCommand(positional, flags) {
 
   const set = await readJournalSet(root, id);
   const paths = set.entries.map((e) => e.path);
+  // The `--diff` pairs: what the tree holds now against what the restore
+  // would put back. A null beforeBytes is a file the run created, so the
+  // restore deletes it — the after side is empty (R50).
+  const diffs =
+    flags.diff === true
+      ? await Promise.all(
+        set.entries.map(async (e) => ({
+          path: e.path,
+          before: await readBefore(join(root, e.path)),
+          after: e.beforeBytes ?? null,
+        })),
+      )
+      : [];
 
   if (!mode.apply) {
     if (isJson(flags)) {
-      emitJson({ ok: true, command: 'undo', root, set: id, restores: paths, dryRun: true });
+      emitJson({ ok: true, command: 'undo', root, set: id, restores: paths, dryRun: true, ...diffField(diffs, flags) });
       return EXIT.OK;
     }
     emit(
@@ -43,6 +58,8 @@ export async function undoCommand(positional, flags) {
       ),
       { maxBytes: flags.maxBytes ?? 0 },
     );
+    // After the report: the report says what, the diff shows it (R50).
+    emitDiffs(diffs, flags);
     return EXIT.OK;
   }
 
@@ -76,12 +93,14 @@ export async function undoCommand(positional, flags) {
   // set always restored something, so there is nothing to gate on.
   await invalidateCheckCache(root);
   if (isJson(flags)) {
-    emitJson({ ok: true, command: 'undo', root, set: result.set, restored: result.restored });
+    emitJson({ ok: true, command: 'undo', root, set: result.set, restored: result.restored, ...diffField(diffs, flags) });
     return EXIT.OK;
   }
   emit(
     [`undone    ${result.set}`, ...result.restored.map((p) => `restored  ${p}`)].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   return EXIT.OK;
 }

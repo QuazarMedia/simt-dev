@@ -70,7 +70,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - id: v
@@ -97,7 +97,7 @@ jobs:
       # Provenance is an attestation signed by this run's OIDC identity.
       id-token: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # `bench mine` counts commits, and the Affects snapshot reads
           # 4c27514. A depth-1 checkout fails both, and both run in `npm test`.
@@ -217,7 +217,7 @@ jobs:
       # A release is a content object, so writing one needs contents:write.
       contents: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: cut this version's notes out of the changelog
         # CHANGELOG.md is Keep-a-Changelog: each version is a `## [X.Y.Z]` block
@@ -286,7 +286,7 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: build the release binary
         # The script pins its own toolchain: the node base is downloaded from

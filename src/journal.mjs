@@ -174,8 +174,10 @@ export async function journaledRemoveFile(root, acc, path) {
  * Add the journal directory to .gitignore, mirroring `ignoreIdentity`: match on
  * the exact line, never append a duplicate. Called by commitJournal so every
  * writer command is covered at once rather than each one remembering.
+ * Exported so `doctor --fix` repairs a missing entry with the same bytes a
+ * writer would have left (plan 0003 R47).
  */
-async function ignoreJournal(root) {
+export async function ignoreJournal(root, journal = null) {
   const ignorePath = join(root, '.gitignore');
   let text;
   try {
@@ -186,7 +188,11 @@ async function ignoreJournal(root) {
   const line = `${JOURNAL_DIR}/`;
   if (text.split('\n').map((l) => l.trim()).includes(line)) return;
   const prefix = text === '' || text.endsWith('\n') ? '' : '\n';
-  await writeFile(ignorePath, `${text}${prefix}\n# Write journal for \`simt undo\`. Local state, never shared.\n${line}\n`);
+  const next = `${text}${prefix}\n# Write journal for \`simt undo\`. Local state, never shared.\n${line}\n`;
+  // A caller-supplied journal records the edit so `undo` restores it (R47);
+  // without one the write stays unrecorded, as `commitJournal` needs it.
+  if (journal) await journaledWriteFile(root, journal, ignorePath, next);
+  else await writeFile(ignorePath, next);
 }
 
 function setName(command, at) {
@@ -211,6 +217,25 @@ export async function commitJournal(root, command, acc, { at = Date.now() } = {}
   await writeFile(tmp, body, 'utf8');
   await rename(tmp, join(dir, id));
   return id;
+}
+
+/**
+ * The `journal-unignored` finding's facts (plan 0003 R47): the sets on disk and
+ * whether .gitignore names the directory. One owner for the line spelling —
+ * `ignoreJournal` writes it, this reads it — so the two cannot disagree about
+ * what counts as ignored.
+ */
+export async function journalHygiene(root) {
+  const sets = await listJournalSets(root);
+  if (sets.length === 0) return { sets, ignored: true };
+  let text;
+  try {
+    text = await readFile(join(root, '.gitignore'), 'utf8');
+  } catch {
+    text = '';
+  }
+  const line = `${JOURNAL_DIR}/`;
+  return { sets, ignored: text.split('\n').map((l) => l.trim()).includes(line) };
 }
 
 /** Set ids newest-first, undone sets excluded. */

@@ -102,26 +102,25 @@ async function relativeTarget(root, target) {
   return rel === '' || rel.startsWith('..') ? resolved : rel;
 }
 
-async function installHooks(root, flags) {
-  const { manifest, exists, error } = await readManifest(root);
-  if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
-  if (!exists) {
-    return fail(`${root} has no ${MANIFEST_FILE}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
-  }
-
+/**
+ * What `hooks install` would write, computed without writing or reporting (plan 0003 R47).
+ *
+ * `installHooks` and `doctor --fix` share this rather than each deriving the write
+ * set: the set nothing else here touches (obsolete shims, chained foreign hooks)
+ * is exactly the set a second derivation gets wrong, and a fix that writes bytes
+ * the command would not is a fix that lies about what it did. Reporting stays
+ * with the callers — the plan table belongs to the command, the finding line to
+ * the doctor — so this returns facts, never text.
+ *
+ * @returns the install inputs `applyHooksInstall` needs, plus the guards each
+ *   caller enforces in its own voice (`takeover`, and the `wanted`/`obsolete`
+ *   emptiness the command refuses on)
+ */
+export async function planHooksInstall(root, { manifest, exists }) {
   const declaresGate = (event) => wantsShim(manifest, exists, event);
   const state = await readHooksState(root, { declaresGate });
   const current = state.current;
   const wants = HOOKS_DIR;
-
-  // Read through `writeMode` like every other writer, and only now: this command
-  // used to consult `flags.yes` and `flags.dryRun` directly and write when neither
-  // said otherwise, which made it the last writer still writing by default after
-  // ADR-035 and ADR-036 had settled that none of them may. Review 0002's S24
-  // listed it among the writers that "all preview first"; that was wrong, and the
-  // migration script in the same review tells an operator to run `hooks install`
-  // for a plan and then `--yes` - advice that printed a plan and wrote anyway.
-  const mode = writeMode(flags);
 
   // The release this install renders, and the kind of repository it installs into: the
   // remedy a shim prints when it cannot find the binary must name the install that
@@ -241,6 +240,120 @@ async function installHooks(root, flags) {
     if (at !== -1) chained.splice(at, 1);
   }
 
+  const routed = wanted.length > 0 || chained.length > 0 || evidenceDeclared;
+  const takeover = (current !== null && current !== wants) || state.foreign.length > 0;
+  return {
+    manifest,
+    state,
+    current,
+    wants,
+    npm,
+    version,
+    wanted,
+    chained,
+    leftRunning,
+    obsolete,
+    evidenceDeclared,
+    evidenceSource,
+    evidenceFile,
+    // Returned so a caller can tell a current claim check from a stale one
+    // without re-reading the file: the evidence shim is not one of EVENTS, so
+    // neither the problems list nor the obsolete set names its staleness.
+    evidenceExisting,
+    routed,
+    takeover,
+  };
+}
+
+/**
+ * Write a planned install: shims, chains, removals, and the git routing (plan 0003 R47).
+ *
+ * The caller's journal records the file writes, and the caller commits it under
+ * its own command name — `hooks install` here, `doctor --fix` there — so `undo`
+ * names the run that actually changed something. Reporting stays with the
+ * caller for the same reason it does in `planHooksInstall`.
+ *
+ * @returns {{wrote: string[]}} the shim paths written, removed, or refreshed
+ */
+export async function applyHooksInstall(root, planned, journal) {
+  const { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, version, routed, wants, current } =
+    planned;
+  // Shim and evidence bytes are journaled so `undo` restores them (R49). The
+  // `core.hooksPath` config below is deliberately not journaled: it is git
+  // config, not a repo file, and `undo` restores files.
+  const wrote = [];
+  await mkdir(join(root, HOOKS_DIR), { recursive: true });
+  for (const event of wanted) {
+    const path = join(root, fileFor(event));
+    await journaledWriteFile(root, journal, path, renderShim(event, { npm, version }));
+    await chmod(path, 0o755);
+    wrote.push(fileFor(event));
+  }
+  for (const c of chained) {
+    const path = join(root, fileFor(c.event));
+    await journaledWriteFile(root, journal, path, renderChainedShim(c.event, c.target));
+    await chmod(path, 0o755);
+    wrote.push(fileFor(c.event));
+  }
+  for (const h of obsolete) {
+    await journaledRemoveFile(root, journal, join(root, fileFor(h.event)));
+    wrote.push(fileFor(h.event));
+  }
+  // After the chain loop, so a chained commit-msg cannot replace the claim check.
+  if (evidenceSource) {
+    const path = join(root, evidenceFile);
+    await journaledWriteFile(root, journal, path, evidenceSource);
+    await chmod(path, 0o755);
+    wrote.push(evidenceFile);
+  }
+  // `core.hooksPath` tells git to read ONE directory for EVERY event, so leaving it
+  // pointing at a directory of no shims stops the repository's own hooks - the ones in
+  // `.git/hooks` that predate this tool - from running, silently. Unsetting it is the
+  // only way back, and this is the only place that knows the last shim just left.
+  if (routed) {
+    await exec('git', ['config', HOOKS_PATH_KEY, wants], { cwd: root });
+  } else if (current === wants) {
+    await exec('git', ['config', '--unset', HOOKS_PATH_KEY], { cwd: root });
+  }
+  return { wrote };
+}
+
+async function installHooks(root, flags) {
+  const { manifest, exists, error } = await readManifest(root);
+  if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
+  if (!exists) {
+    return fail(`${root} has no ${MANIFEST_FILE}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
+  }
+
+  // One computation, two callers (R47): the write set is derived once in
+  // `planHooksInstall` and shared with `doctor --fix`, so a fix applies exactly
+  // the bytes this command would write. Reporting stays here.
+  const {
+    state,
+    current,
+    wants,
+    npm,
+    version,
+    wanted,
+    chained,
+    leftRunning,
+    obsolete,
+    evidenceDeclared,
+    evidenceSource,
+    evidenceFile,
+    routed,
+    takeover,
+  } = await planHooksInstall(root, { manifest, exists });
+
+  // Read through `writeMode` like every other writer, and only now: this command
+  // used to consult `flags.yes` and `flags.dryRun` directly and write when neither
+  // said otherwise, which made it the last writer still writing by default after
+  // ADR-035 and ADR-036 had settled that none of them may. Review 0002's S24
+  // listed it among the writers that "all preview first"; that was wrong, and the
+  // migration script in the same review tells an operator to run `hooks install`
+  // for a plan and then `--yes` - advice that printed a plan and wrote anyway.
+  const mode = writeMode(flags);
+
   // Nothing to write and nothing to take away is the only refusal. It sits after
   // `obsolete` because a repository whose last gate just left the manifest has
   // something to take away, and blocking that one left no way out except undoing
@@ -308,7 +421,6 @@ async function installHooks(root, flags) {
       note: 'commit-msg checks a verification claim against the ledger',
     });
   }
-  const routed = wanted.length > 0 || chained.length > 0 || evidenceDeclared;
 
   // The routing this install leaves behind, which is not always `wants`. A repository
   // that removed its last gate has no shims to route to, and leaving `core.hooksPath`
@@ -325,7 +437,6 @@ async function installHooks(root, flags) {
   // being unset while a hook sits in the default location (4 KB of real logic in
   // .git/hooks/pre-commit). Reading unset as
   // "no hooks" is what let install replace a working gate with no warning.
-  const takeover = (current !== null && current !== wants) || state.foreign.length > 0;
   if (takeover && !flags.yes) {
     const detail = state.foreign.length > 0
       ? state.foreign.map((f) => `  git runs ${f.event} at ${f.path} (${f.bytes} bytes)`)
@@ -377,41 +488,15 @@ async function installHooks(root, flags) {
     return EXIT.OK;
   }
 
-  // Shim and evidence bytes are journaled so `undo` restores them (R49). The
-  // `core.hooksPath` config below is deliberately not journaled: it is git
-  // config, not a repo file, and `undo` restores files.
+  // Same bytes, two callers (R47): the write itself lives in `applyHooksInstall`
+  // and is shared with `doctor --fix`, so a fix installs what the command would.
   const journal = [];
-  await mkdir(join(root, HOOKS_DIR), { recursive: true });
-  for (const event of wanted) {
-    const path = join(root, fileFor(event));
-    await journaledWriteFile(root, journal, path, renderShim(event, { npm, version }));
-    await chmod(path, 0o755);
-  }
-  for (const c of chained) {
-    const path = join(root, fileFor(c.event));
-    await journaledWriteFile(root, journal, path, renderChainedShim(c.event, c.target));
-    await chmod(path, 0o755);
-  }
-  for (const h of obsolete) {
-    await journaledRemoveFile(root, journal, join(root, fileFor(h.event)));
-  }
-  // After the chain loop, so a chained commit-msg cannot replace the claim check.
-  if (evidenceSource) {
-    const path = join(root, evidenceFile);
-    await journaledWriteFile(root, journal, path, evidenceSource);
-    await chmod(path, 0o755);
-  }
+  await applyHooksInstall(
+    root,
+    { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, version, routed, wants, current },
+    journal,
+  );
   await commitJournal(root, 'hooks install', journal);
-
-  // `core.hooksPath` tells git to read ONE directory for EVERY event, so leaving it
-  // pointing at a directory of no shims stops the repository's own hooks - the ones in
-  // `.git/hooks` that predate this tool - from running, silently. Unsetting it is the
-  // only way back, and this is the only place that knows the last shim just left.
-  if (routed) {
-    await exec('git', ['config', HOOKS_PATH_KEY, wants], { cwd: root });
-  } else if (current === wants) {
-    await exec('git', ['config', '--unset', HOOKS_PATH_KEY], { cwd: root });
-  }
 
   const notes = [];
   const chainedEvents = new Set(chained.map((c) => c.event));

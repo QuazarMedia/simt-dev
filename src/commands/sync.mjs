@@ -21,7 +21,8 @@ import { dirname, join, resolve, sep } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { plan, checkTargets, checkTarget, provenanceDigest, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { manifestDrift, readManifest, unrunnableGates, buildManifest, writeManifest, withGenerated, manifestText } from '../projection/manifest.mjs';
+import { manifestDrift, readManifest, unrunnableGates, buildManifest, writeManifest, withGenerated, manifestText, manifestPath } from '../projection/manifest.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { CLI } from '../name.mjs';
@@ -251,6 +252,29 @@ export async function syncCommand(positional, flags) {
   }
   const manifestChanged = manifestPlan !== null;
 
+  // The `--diff` pairs, read before anything is written so the before side is
+  // true in preview and in apply alike (R50). Pointers carry no bytes, so the
+  // plan line naming the link target is already the whole story for them.
+  const diffs =
+    flags.diff === true
+      ? await Promise.all([
+        ...changed.map(async (t) => ({
+          path: t.file,
+          before: await readBefore(t.path),
+          after: t.text,
+        })),
+        ...(manifestPlan === null
+          ? []
+          : [
+              {
+                path: manifestPlan.file,
+                before: await readBefore(await manifestPath(root)),
+                after: manifestPlan.text,
+              },
+            ]),
+      ])
+      : [];
+
   // Writes happen BEFORE output in every mode. An earlier build emitted `--json`
   // first and returned, so `upgrade --yes --json` reported a plan and changed
   // nothing — the exact combination automation reaches for.
@@ -340,6 +364,7 @@ export async function syncCommand(positional, flags) {
         pointers: pointersAdded,
         written: mode.apply ? changed.length + pointersAdded.length + (manifestChanged ? 1 : 0) : 0,
         dryRun: !mode.apply,
+        ...diffField(diffs, flags),
       },
       {},
     );
@@ -372,6 +397,8 @@ export async function syncCommand(positional, flags) {
       );
     }
     emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    // After the report: the report says what, the diff shows it (R50).
+    emitDiffs(diffs, flags);
   }
 
   const idle = changed.length === 0 && pointerPlan.length === 0 && !manifestChanged;
@@ -605,6 +632,9 @@ export async function checkCommand(positional, flags) {  const root = flags.root
     command: 'check',
     root,
     findings,
+    // Uniform with every writer's `--json --diff`: the gate carries no file
+    // plan, so its diff is always empty — pinned, not excused (R50).
+    ...diffField([], flags),
   };
 
   if (isJson(flags)) {

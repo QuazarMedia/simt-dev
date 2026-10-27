@@ -41,7 +41,13 @@ try {
   }
 
   const { dispatch } = await import('../src/commands/index.mjs');
-  process.exit((await dispatch(argv)) ?? EXIT.OK);
+  const code = (await dispatch(argv)) ?? EXIT.OK;
+  // Assigned, not forced: a large document on stdout (a `--json --diff` over a
+  // skill-sized body exceeds the 64 KiB pipe buffer) is still draining when the
+  // command resolves, and `process.exit()` cuts it — exit 0 with half a JSON
+  // document on stdout. Letting the loop empty first makes the exit honest
+  // (plan 0003 R50; the S10 contract asserts the document parses).
+  process.exitCode = code;
 } catch (error) {
   process.exit(fail(error?.message ?? String(error), EXIT.FAIL));
 }

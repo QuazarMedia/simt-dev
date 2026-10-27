@@ -9,6 +9,7 @@
 import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { buildPackage, PLUGIN_KINDS } from '../plugins.mjs';
+import { diffField, emitDiffs } from '../diff.mjs';
 
 export async function pluginCommand(args, flags) {
   const kind = args[0];
@@ -29,6 +30,17 @@ export async function pluginCommand(args, flags) {
   const root = flags.root ?? process.cwd();
   const plan = await buildPackage(kind, { root, out, apply });
 
+  // The `--diff` pairs: the generated files, created or refreshed (R50). The
+  // before-sides ride on the plan from `buildPackage`, read before anything was
+  // written, so the diff is true in preview and in apply alike.
+  const diffs =
+    flags.diff === true
+      ? plan.files.map((f) => ({ path: f.path, before: f.before ?? null, after: f.text }))
+      : [];
+  // The file bytes travel in `diff`, not in the file list: a payload that
+  // carried every generated file twice would be a document nobody diffs.
+  const publicFiles = plan.files.map(({ text, before, ...rest }) => rest);
+
   if (isJson(flags)) {
     emitJson({
       ok: true,
@@ -36,8 +48,9 @@ export async function pluginCommand(args, flags) {
       out,
       dryRun: !apply,
       runtime: plan.runtime,
-      files: plan.files,
+      files: publicFiles,
       notes: plan.notes,
+      ...diffField(diffs, flags),
     });
     return EXIT.OK;
   }
@@ -57,5 +70,7 @@ export async function pluginCommand(args, flags) {
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   return EXIT.OK;
 }

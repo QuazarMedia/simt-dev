@@ -642,6 +642,17 @@ export async function promoteLesson(root, options = {}) {
   const relPath = `${LESSONS_DIR}/${num}-${slug}.md`;
   const markdown = renderLessonMarkdown(target, options);
 
+  // The `--diff` before-side, read before anything is written so the diff is true
+  // in preview and in apply alike (R50). Always a creation in practice — the
+  // number is fresh — but a hand-placed file at the same path would be
+  // overwritten, and a diff that claimed a creation there would lie about it.
+  let before = null;
+  try {
+    before = await readFile(join(root, relPath), 'utf8');
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+
   if (options.apply) {
     const fullPath = join(root, relPath);
     await mkdir(dirname(fullPath), { recursive: true });
@@ -656,6 +667,7 @@ export async function promoteLesson(root, options = {}) {
     candidate: target,
     path: relPath,
     markdown,
+    before,
     written: Boolean(options.apply),
   };
 }

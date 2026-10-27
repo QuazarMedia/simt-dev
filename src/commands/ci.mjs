@@ -21,6 +21,7 @@
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 
 import { EXIT, emit, emitJson, isJson, note, writeMode } from '../output/index.mjs';
 import { planWorkflow, renderWorkflow, WORKFLOW_FILE } from '../ci/workflow.mjs';
@@ -122,13 +123,30 @@ export async function ciCommand(positional, flags) {
     return EXIT.FAIL;
   }
 
+  // The `--diff` pairs, read before anything is written so the before side is
+  // true in preview and in apply alike (R50).
+  const renders = new Map(targets().map(({ key, render }) => [key, render]));
+  const diffs =
+    flags.diff === true
+      ? await Promise.all(
+        plans
+          .filter((p) => p.action !== 'unchanged')
+          .map(async (p) => ({ path: p.file, before: await readBefore(p.path), after: renders.get(p.key)(p) })),
+      )
+      : [];
+
   if (isJson(flags)) {
-    emitJson({ ok: true, command: 'ci', root, files: todo.map(publicPlan), written: false, dryRun: !mode.apply }, {});
+    emitJson(
+      { ok: true, command: 'ci', root, files: todo.map(publicPlan), written: false, dryRun: !mode.apply, ...diffField(diffs, flags) },
+      {},
+    );
   } else {
     emit(lines.join('\n'));
   }
 
   if (!mode.apply) {
+    // After the report: the report says what, the diff shows it (R50).
+    emitDiffs(diffs, flags);
     note('');
     note(mode.dryRun ? 'dry-run  nothing written' : `dry-run  nothing written; apply with: ${CLI} ci --yes`);
     return EXIT.OK;
@@ -155,10 +173,13 @@ export async function ciCommand(positional, flags) {
         root,
         files: plans.map((p) => ({ file: p.file, action: p.action, bytes: p.bytes })),
         written: true,
+        ...diffField(diffs, flags),
       },
       {},
     );
   }
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   return EXIT.OK;
 }
 

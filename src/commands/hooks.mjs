@@ -15,6 +15,7 @@
 import { execFile } from 'node:child_process';
 import { chmod, mkdir, readFile, realpath } from 'node:fs/promises';
 import { commitJournal, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { invalidateCheckCache } from '../status.mjs';
 import { isAbsolute, join, relative } from 'node:path';
 import { promisify } from 'node:util';
@@ -319,6 +320,33 @@ export async function applyHooksInstall(root, planned, journal) {
   return { wrote };
 }
 
+/**
+ * The `--diff` pairs for a planned install: current disk against what the
+ * install would write, re-rendered from the same inputs `applyHooksInstall`
+ * writes (plan 0003 R50). Read-only, so preview and apply share it, and
+ * `doctor --fix` reuses it rather than deriving a second answer.
+ */
+export async function plannedDiffs(root, planned) {
+  const { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, version } = planned;
+  const pairs = [];
+  for (const event of wanted) {
+    const path = fileFor(event);
+    pairs.push({ path, before: await readBefore(join(root, path)), after: renderShim(event, { npm, version }) });
+  }
+  for (const c of chained) {
+    const path = fileFor(c.event);
+    pairs.push({ path, before: await readBefore(join(root, path)), after: renderChainedShim(c.event, c.target) });
+  }
+  for (const h of obsolete) {
+    const path = fileFor(h.event);
+    pairs.push({ path, before: await readBefore(join(root, path)), after: null });
+  }
+  if (evidenceSource) {
+    pairs.push({ path: evidenceFile, before: await readBefore(join(root, evidenceFile)), after: evidenceSource });
+  }
+  return pairs;
+}
+
 async function installHooks(root, flags) {
   const { manifest, exists, error } = await readManifest(root);
   if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
@@ -462,12 +490,29 @@ async function installHooks(root, flags) {
     return EXIT.FAIL;
   }
 
+  // The `--diff` pairs, read before anything is written so the before side is
+  // true in preview and in apply alike (R50).
+  const diffs =
+    flags.diff === true
+      ? await plannedDiffs(root, { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, version })
+      : [];
+
   if (!mode.apply) {
     if (isJson(flags)) {
       // `leaves`, not `wants`. A plan that would remove the last shim also un-routes
       // git, and a payload promising to set a directory the command is about to unset
       // is the same lie in a shape a machine reads.
-      emitJson({ ok: true, command: 'hooks install', root, dryRun: true, currentHooksPath: current, wouldSet: leaves, plan, filesWritten: false });
+      emitJson({
+        ok: true,
+        command: 'hooks install',
+        root,
+        dryRun: true,
+        currentHooksPath: current,
+        wouldSet: leaves,
+        plan,
+        filesWritten: false,
+        ...diffField(diffs, flags),
+      });
       return EXIT.OK;
     }
     emit(
@@ -487,6 +532,8 @@ async function installHooks(root, flags) {
       ),
       { maxBytes: flags.maxBytes ?? 0 },
     );
+    // After the report: the report says what, the diff shows it (R50).
+    emitDiffs(diffs, flags);
     return EXIT.OK;
   }
 
@@ -549,7 +596,17 @@ async function installHooks(root, flags) {
   }
 
   if (isJson(flags)) {
-    emitJson({ ok: true, command: 'hooks install', root, hooksPath: leaves, previousHooksPath: current, plan, filesWritten: true, notes });
+    emitJson({
+      ok: true,
+      command: 'hooks install',
+      root,
+      hooksPath: leaves,
+      previousHooksPath: current,
+      plan,
+      filesWritten: true,
+      notes,
+      ...diffField(diffs, flags),
+    });
     return EXIT.OK;
   }
   emit(
@@ -564,6 +621,8 @@ async function installHooks(root, flags) {
     ),
     { maxBytes: flags.maxBytes ?? 0 },
   );
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
   for (const n of notes) note(`note     ${n}`);
   note(`note     never committed or pushed (ADR-001); review, then commit yourself`);
   return EXIT.OK;

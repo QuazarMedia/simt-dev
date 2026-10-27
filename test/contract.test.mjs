@@ -329,6 +329,9 @@ const WRITERS = [
     name: 'undo',
     // No `--yes` to authorise with: the empty undo previews under both modes.
     authorise: [],
+    // The fixture just ran `init --yes`, so this undo previews restoring that
+    // adoption: the journal set exists, and the diff shows the way back.
+
     // A string, not the array: the table compares with `assert.equal`, and two
     // reads of an unchanged directory are equal contents in different arrays.
     verify: async (root) => (await readdir(join(root, '.simt/journal')).catch(() => null))?.join('\n') ?? null,
@@ -337,9 +340,11 @@ const WRITERS = [
     // `check` writes the `--line` cache under `.simt/`, which is local state
     // like the ledger and the index — not a write in this table's sense. This
     // row pins that: the gate may record, but tracked content must be
-    // byte-identical before and after, under both modes.
+    // byte-identical before and after, under both modes. The gate carries no
+    // file plan, so its diff is empty — pinned, not excused.
     name: 'check',
     authorise: [],
+    noDiff: true,
     verify: async (root) =>
       `${await readFile(join(root, 'simt.json'), 'utf8').catch(() => null)}\n${await readFile(join(root, 'AGENTS.md'), 'utf8').catch(() => null)}`,
   },
@@ -408,6 +413,89 @@ for (const writer of WRITERS) {
               'filesystem untouched, so this row would pass while testing the refusal.',
           );
         }
+      }
+    }
+  });
+}
+
+// --- 3. --diff prints the plan without writing, in preview and under --dry-run ---
+//
+// R50: every writer accepts `--diff`, which prints what it would change — or,
+// with `--yes`, what it changed — as unified diffs. A display flag: the
+// filesystem must be byte-identical with and without it, and the exit code must
+// agree with the same run without `--diff`. `undo` (empty) and `check` (a gate)
+// carry no file plan, so their diff is empty — which this pins rather than
+// excuses, so a writer that silently drops its diff goes red here.
+for (const writer of WRITERS) {
+  test(`${writer.name} --diff shows the plan and writes nothing`, async (t) => {
+    const install = writer.source ? ['skills', 'install', 'graphify', '--from', writer.source] : [writer.name];
+    const root = await consumer({ stack: writer.stack });
+    t.after(() => rm(root, { recursive: true, force: true }));
+    if (writer.needsStalePin) await stalePin(root);
+    if (writer.needsStaleRegion) await staleRegion(root);
+    const env = writer.source ? workspaceEnv(WORKSPACE) : NO_WORKSPACE;
+    const before = await writer.verify(root);
+
+    for (const mode of ['unauthorised', 'dry-run']) {
+      const base = [
+        ...install,
+        '--root',
+        root,
+        ...(mode === 'dry-run' ? [...writer.authorise, '--dry-run'] : []),
+      ];
+      const text = await run([...base, '--diff'], env);
+      const plain = await run(base, env);
+      // A display flag: the same exit code, the same filesystem.
+      assert.equal(
+        text.code,
+        plain.code,
+        `${writer.name} --diff exited ${text.code} where the same run without it exited ${plain.code} in ${mode} mode`,
+      );
+      assert.equal(
+        await writer.verify(root),
+        before,
+        `${writer.name} --diff changed the filesystem in ${mode} mode (exit ${text.code})`,
+      );
+      if (writer.noDiff === true) {
+        assert.equal(
+          text.stdout.includes('diff --git'),
+          false,
+          `${writer.name} printed a diff for a plan it does not have`,
+        );
+      } else {
+        assert.match(
+          text.stdout,
+          /diff --git/,
+          `${writer.name} --diff printed no unified diff in ${mode} mode (exit ${text.code})`,
+        );
+      }
+      // The same diff, in the document: a caller that cannot read it from JSON
+      // has one question with two answers (ADR-014).
+      const js = await run([...base, '--diff', '--json'], env);
+      let payload = null;
+      try {
+        payload = JSON.parse(js.stdout);
+      } catch {
+        assert.fail(`${writer.name} --json --diff is not one JSON document: ${js.stdout.slice(0, 200)}`);
+      }
+      assert.equal(
+        typeof payload.diff,
+        'string',
+        `${writer.name} --json --diff carries no diff field`,
+      );
+      assert.equal(
+        await writer.verify(root),
+        before,
+        `${writer.name} --json --diff changed the filesystem in ${mode} mode`,
+      );
+      if (writer.noDiff === true) {
+        assert.equal(payload.diff, '', `${writer.name} diffed a plan it does not have`);
+      } else {
+        assert.match(
+          payload.diff,
+          /diff --git/,
+          `${writer.name} --json --diff carries an empty diff in ${mode} mode`,
+        );
       }
     }
   });

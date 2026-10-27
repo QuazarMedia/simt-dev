@@ -30,7 +30,8 @@ import { basename, dirname, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { provenanceDigest, plan } from '../projection/project.mjs';
-import { MANIFEST, MANIFEST_COMMENT, readManifest, writeManifest } from '../projection/manifest.mjs';
+import { MANIFEST, MANIFEST_COMMENT, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { FAULT_STATES, planUpgrade, summariseUpgrade } from '../upgrade/plan.mjs';
 import { discover } from '../compare/discover.mjs';
 import { resolveWorkspace, targetRoot, WORKSPACE_REMEDY } from '../workspace.mjs';
@@ -71,12 +72,56 @@ export async function upgradeCommand(positional, flags) {
   const sha = await provenanceDigest();
   const mode = writeMode(flags);
   const plans = [];
+  // The plan inputs, kept because the diff is built from them: `planUpgrade`
+  // keeps the verdict, not the bytes, and the apply path below re-plans per
+  // repo rather than reusing this loop's targets.
+  const inputs = new Map();
   for (const repo of found.repos) {
     const { manifest, exists, error } = await readManifest(repo);
     const result = await plan(repo);
+    inputs.set(repo, { targets: result.targets, manifest });
     plans.push(planUpgrade({ name: basename(repo), path: repo, manifest, manifestExists: exists, manifestError: error, targets: result.targets, sha }));
   }
   const summary = summariseUpgrade(plans);
+
+  // The `--diff` pairs, read before anything is written so the before side is
+  // true in preview and in apply alike (R50). Labels carry the repo name: one
+  // run diffs N repositories, and a bare filename would not say which. The
+  // manifest after-bytes are built the same way the apply path builds them —
+  // chosen keys kept, `$comment` refreshed, pin moved — so the diff shows the
+  // write rather than a second opinion about it.
+  const diffs =
+    flags.diff === true
+      ? (
+          await Promise.all(
+            plans
+              .filter((p) => p.action === 'updated')
+              .map(async (p) => {
+                const input = inputs.get(p.path) ?? { targets: [], manifest: null };
+                const pairs = await Promise.all(
+                  input.targets
+                    .filter((t) => t.action !== 'unchanged' && t.action !== 'malformed')
+                    .map(async (t) => ({
+                      path: `${p.name}/${t.file}`,
+                      before: await readBefore(t.path),
+                      after: t.text,
+                    })),
+                );
+                const { $comment, ...chosen } = input.manifest ?? {};
+                pairs.push({
+                  path: `${p.name}/${MANIFEST_FILE}`,
+                  before: await readBefore(await manifestPath(p.path)),
+                  after: manifestText({
+                    ...MANIFEST_COMMENT,
+                    ...chosen,
+                    projection: { ...(input.manifest?.projection ?? {}), simtDevSha: sha },
+                  }),
+                });
+                return pairs;
+              }),
+          )
+        ).flat()
+      : [];
 
   // Writes happen BEFORE the report, in every output mode. An earlier version emitted
   // the JSON payload and returned, which meant `--yes --json` reported a plan and
@@ -147,6 +192,7 @@ export async function upgradeCommand(positional, flags) {
     source: target.source,
     sha,
     dryRun: !mode.apply,
+    ...diffField(diffs, flags),
     written: applied.length > 0,
     summary: { ...summary, applied, failed },
     plans,
@@ -158,6 +204,8 @@ export async function upgradeCommand(positional, flags) {
   }
 
   emit(render(plans, summary, { root, shape: found.shape, source: target.source, sha, applied, failed }));
+  // After the report: the report says what, the diff shows it (R50).
+  emitDiffs(diffs, flags);
 
   for (const w of found.worktrees) {
     // The same reasoning as `compare`: a worktree is its parent's HEAD elsewhere, so

@@ -177,6 +177,20 @@ export async function journaledRemoveFile(root, acc, path) {
  * Exported so `doctor --fix` repairs a missing entry with the same bytes a
  * writer would have left (plan 0003 R47).
  */
+/**
+ * The .gitignore bytes `ignoreJournal` would write for `text`, or null when
+ * `text` already ignores the journal directory. One owner for the line
+ * spelling: `ignoreJournal` writes it, `journalHygiene` reads whether it is
+ * there, and `doctor --fix --diff` previews it — all through this function so
+ * the three cannot disagree about what counts as ignored (plan 0003 R50).
+ */
+export function journalIgnoreNext(text) {
+  const line = `${JOURNAL_DIR}/`;
+  if (text.split('\n').map((l) => l.trim()).includes(line)) return null;
+  const prefix = text === '' || text.endsWith('\n') ? '' : '\n';
+  return `${text}${prefix}\n# Write journal for \`simt undo\`. Local state, never shared.\n${line}\n`;
+}
+
 export async function ignoreJournal(root, journal = null) {
   const ignorePath = join(root, '.gitignore');
   let text;
@@ -185,10 +199,8 @@ export async function ignoreJournal(root, journal = null) {
   } catch {
     text = '';
   }
-  const line = `${JOURNAL_DIR}/`;
-  if (text.split('\n').map((l) => l.trim()).includes(line)) return;
-  const prefix = text === '' || text.endsWith('\n') ? '' : '\n';
-  const next = `${text}${prefix}\n# Write journal for \`simt undo\`. Local state, never shared.\n${line}\n`;
+  const next = journalIgnoreNext(text);
+  if (next === null) return;
   // A caller-supplied journal records the edit so `undo` restores it (R47);
   // without one the write stays unrecorded, as `commitJournal` needs it.
   if (journal) await journaledWriteFile(root, journal, ignorePath, next);

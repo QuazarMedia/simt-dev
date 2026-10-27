@@ -35,6 +35,9 @@ const RESOLVE = [
   'test/compile.test.mjs',
   'test/contract.test.mjs',
   'test/decide.test.mjs',
+  // diff.test.mjs imports the shared fixture for `git`, and the fixture loads
+  // the registry, so the closure is the same width as contract's.
+  'test/diff.test.mjs',
   // distill reaches the resolver only since R39: its --local guard goes through
   // local/config.mjs, which resolves the manifest, so the closure widened.
   'test/disclosure.test.mjs',

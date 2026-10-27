@@ -693,6 +693,38 @@ test('`ci --check` exits non-zero on a stale copy and shows what changed', async
   }
 });
 
+test('`ci --diff` shows the drift as unified diffs and writes nothing', async () => {
+  // Same constraint as the two tests above: the drift case exists only in this
+  // checkout, so the mutation lives in this file — tests in one file run in
+  // order, while a drift staged from a parallel test file races every assertion
+  // here that reads the same copy (plan 0003 R50). Same `finally`, same reason.
+  const path = join(PACKAGE_ROOT, WORKFLOW_FILE);
+  const before = await readFile(path, 'utf8');
+  try {
+    await writeFile(path, `${before}\n# a hand edit that drifts the copy\n`);
+
+    const text = await run(['ci', '--diff'], { cwd: PACKAGE_ROOT });
+    assert.equal(text.code, 0, text.stdout + text.stderr);
+    assert.match(text.stdout, /^diff --git a\/\.github\/workflows\/simt-dev-check\.yml/m);
+    // The before side is the drift on disk and the after side is the render, so
+    // the hand edit is what the run would take back out.
+    assert.match(text.stdout, /^-# a hand edit that drifts the copy$/m);
+
+    // The same bytes in the document: a caller that cannot read them from JSON
+    // has one question with two answers.
+    const asJson = await run(['ci', '--diff', '--json'], { cwd: PACKAGE_ROOT });
+    assert.equal(asJson.code, 0, asJson.stdout + asJson.stderr);
+    const doc = JSON.parse(asJson.stdout);
+    assert.equal(typeof doc.diff, 'string', '--json --diff must carry a diff field');
+    assert.match(doc.diff, /^-# a hand edit that drifts the copy$/m);
+
+    // A display flag: the drift is still on disk after both runs.
+    assert.match(await readFile(path, 'utf8'), /a hand edit that drifts the copy/);
+  } finally {
+    await writeFile(path, before);
+  }
+});
+
 test('`ci --json` emits exactly one document in every mode, including --dry-run', async () => {
   // `--json --dry-run` used to print nothing: the JSON branch was guarded by
   // `yes !== true && dryRun !== true`, so the one combination a script reaches for was

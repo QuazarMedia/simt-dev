@@ -320,8 +320,7 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
 
 ## Where the plan finishes
 
-Slices `R01`–`R40` are complete and shipped in `0.5.0`; `R41`–`R45` are complete in the
-tree and land in the next release. The remaining queued slices are the
+Slices `R01`–`R45` are complete and shipped in `0.6.0`. The remaining queued slices are the
 small ergonomics:
 
 - **The small doors (`R46`–`R55`).** `simt explain <CODE>` for every finding code, safe

@@ -148,6 +148,7 @@ simt pack new <name> --source <spec> # scaffold a versioned pack: pack.json, ben
 simt pack lint [dir] [--require-measured] # validate a pack and state its measured ΔR
 simt pack publish [dir] --yes       # publish an npm-sourced pack (git packs name the tag-and-push)
 simt mcp [--list]                   # serve the 13 read-only tools over stdio JSON-RPC
+simt completions <bash|zsh|fish>    # a completion script generated from the command registry
 ```
 
 `init`, `sync`, `upgrade`, `hooks install`, `agent-hooks install`, `shared install`,

@@ -120,6 +120,8 @@ const JSON_COMMANDS = {
   explain: ['DRIFT'],
   // No journaled writes on a fresh fixture: previews the empty undo, exit 0.
   undo: { root: 'r' },
+  // No repository needed: the script is generated from the registry alone.
+  completions: ['zsh'],
   // No cache on a fresh fixture: reports the miss as one document, exit 0.
   status: { root: 'r', args: ['--line'] },
   'local doctor': { root: 'r' },

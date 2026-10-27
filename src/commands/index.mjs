@@ -65,6 +65,7 @@ import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { decideCommand } from './decide.mjs';
 import { explainCommand } from './explain.mjs';
 import { undoCommand } from './undo.mjs';
+import { completionsCommand } from './completions.mjs';
 import { reviewCommand } from './review.mjs';
 import { localDoctorCommand } from './local.mjs';
 import { distillCommand } from './distill.mjs';
@@ -188,6 +189,9 @@ export const IMPLEMENTED = {
   // plan 0003 R43. A bare command: the kind is a positional, so there is no group and
   // no default subcommand to resolve.
   plugin: pluginCommand,
+  // Plan 0003 R51. A bare command: the shell is a positional. `COMMANDS` rides in
+  // from here so the engine keeps no second copy of the registry it completes.
+  completions: (args, flags) => completionsCommand(args, flags, COMMANDS),
   // Plan 0003 R45. A group, not a bare command: `new` and `publish` write (or
   // publish) and `lint` reads, and the dispatcher routes all three through one
   // subcommand switch the way `hooks` does.

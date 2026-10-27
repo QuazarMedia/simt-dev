@@ -5,8 +5,11 @@
 // commands are driven through the real binary, because only that catches a
 // writer whose pairs describe bytes it never writes. The S10 contract table in
 // `test/contract.test.mjs` covers the eight rows it owns; this file covers the
-// writers it does not: init, upgrade, ci, doctor --fix, pack new, plugin,
-// lessons review, plan done and shared install.
+// writers it does not: init, upgrade, doctor --fix, pack new, plugin, lessons
+// review, plan done and shared install. `ci`'s --diff case lives in
+// `test/ci.test.mjs`: reaching it means drifting the checkout's own workflow,
+// and that mutation only stays safe inside the one file whose tests run in
+// order over it.
 //
 // The boundary this file also pins: writers of local state (`bench`,
 // `skills compile`, the `check` cache) and the network publisher
@@ -218,28 +221,6 @@ test('upgrade --diff shows the pin and the regions, and moves neither', async ()
 
   const js = await runJson(['upgrade', '--root', root, '--diff']);
   assert.match(js.payload.diff, /"simtDevSha": "a{40}"/);
-});
-
-// `ci` refreshes only simt-dev's own copies, so its diff is only reachable in
-// this checkout. The drift below is staged and restored inside this test: the
-// run is a preview and writes nothing, and `t.after` puts the file back even
-// when an assertion fails, so a red run cannot leave the checkout dirty.
-test('ci --diff shows the drift in this checkout, and writes nothing', async (t) => {
-  const own = join(ROOT, '.github', 'workflows', 'simt-dev-check.yml');
-  const original = await readFile(own, 'utf8');
-  t.after(async () => writeFile(own, original));
-  await writeFile(own, `${original}# staged drift for test/diff.test.mjs\n`);
-
-  const text = await run(['ci', '--root', ROOT, '--diff']);
-  assert.equal(text.code, 0, text.stderr);
-  assert.match(text.stdout, /diff --git a\/.github\/workflows\/simt-dev-check\.yml/);
-  assert.match(text.stdout, /staged drift for test\/diff\.test\.mjs/);
-  const untouched = await readFile(own, 'utf8');
-  assert.match(untouched, /staged drift/, 'ci --diff repaired the drift it only previewed');
-
-  const js = await runJson(['ci', '--root', ROOT, '--diff']);
-  assert.match(js.payload.diff, /staged drift for test\/diff\.test\.mjs/);
-  await writeFile(own, original);
 });
 
 test('doctor --fix --diff previews the repair, --yes applies the same bytes', async () => {

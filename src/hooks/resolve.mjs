@@ -119,6 +119,20 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
     };
   }
 
+  if (gate.kind === 'builtin') {
+    // Nothing on disk to resolve: the implementation IS this binary, which is
+    // the whole point of the kind (ADR-100). A declared command was handled
+    // above and still wins, so a repository can swap the built-in for its own
+    // program exactly the way it can for any other gate.
+    return {
+      ok: true,
+      kind: gate.kind,
+      argv: null,
+      builtin: gate.name,
+      detail: `built-in: ${gate.name}`,
+    };
+  }
+
   if (gate.kind === 'staged') {
     const tool = await resolveStagedTool(root, gate);
     if (tool.path === null) {

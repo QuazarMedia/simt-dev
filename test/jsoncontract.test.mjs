@@ -122,6 +122,9 @@ const JSON_COMMANDS = {
   undo: { root: 'r' },
   // No repository needed: the script is generated from the registry alone.
   completions: ['zsh'],
+  // No `.simtignore` on a fresh fixture: the refusal is still one versioned
+  // document, which is the contract this list pins.
+  ignore: { root: 'r' },
   // No cache on a fresh fixture: reports the miss as one document, exit 0.
   status: { root: 'r', args: ['--line'] },
   'local doctor': { root: 'r' },

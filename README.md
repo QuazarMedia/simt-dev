@@ -149,13 +149,20 @@ simt pack lint [dir] [--require-measured] # validate a pack and state its measur
 simt pack publish [dir] --yes       # publish an npm-sourced pack (git packs name the tag-and-push)
 simt mcp [--list]                   # serve the 13 read-only tools over stdio JSON-RPC
 simt completions <bash|zsh|fish>    # a completion script generated from the command registry
+simt ignore [--yes] [--diff]        # render the one .simtignore list into .cursorignore,
+                                    # .aiderignore, .geminiignore and Claude's permissions.deny
 ```
 
 `init`, `sync`, `upgrade`, `hooks install`, `agent-hooks install`, `shared install`,
-`skills install`, `plan done`, `lessons review`, `decide`, `pack new`, `pack publish`
-and the `bench` writers print
+`skills install`, `plan done`, `lessons review`, `decide`, `ignore`, `pack new`,
+`pack publish` and the `bench` writers print
 a plan and write nothing without `--yes`. None of them commit or push. `simt index`
 writes its cache without asking: the file is gitignored and `git ls-files` can rebuild it.
+
+Declare `secret-scan` in `gates.preCommit` to block a commit whose staged diff
+carries a probable secret: the scan runs inside the binary (vendor patterns plus
+Shannon entropy, over added lines only), needs no install, and its report never
+prints the matched bytes.
 
 `check` runs the checkers a rule names (`max-file-lines`, `forbid-regex`,
 `forbidden-path-edit`, `required-file`), verifies structured ADR supersessions

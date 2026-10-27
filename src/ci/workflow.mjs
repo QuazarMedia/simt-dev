@@ -128,13 +128,15 @@ function header(own) {
  * is the release a reader recognises, and Dependabot's `github-actions` ecosystem
  * rewrites the pair together - which is why the pin needs no maintenance here.
  *
- * The major version is deliberately the one the templates already used rather than the
- * newest available. `checkout` v7 and `setup-node` v7 both carry breaking changes, and
- * a gate whose behaviour changes because somebody re-ran an updater is precisely what
- * pinning exists to prevent. Moving a major is one reviewed line in this table.
+ * The major version moves by review, not by updater. `checkout` stayed on v4 while v7
+ * carried breaking changes a gate should not absorb by re-running Dependabot; it moved
+ * to v7.0.1 when the v7 line had run green in this repository's own workflows (the
+ * checkout steps of the v7 Dependabot run all succeeded — only the template-drift
+ * tests failed, which is the pin doing its job). `setup-node` stays on v4: no run has
+ * yet proven a newer major here, and moving it is the same one reviewed line.
  */
 export const ACTIONS = {
-  checkout: { repo: 'actions/checkout', commit: '11d5960a326750d5838078e36cf38b85af677262', release: 'v4.4.0' },
+  checkout: { repo: 'actions/checkout', commit: '3d3c42e5aac5ba805825da76410c181273ba90b1', release: 'v7.0.1' },
   setupNode: { repo: 'actions/setup-node', commit: '49933ea5288caeca8642d1e84afbd3f7d6820020', release: 'v4.4.0' },
 };
 

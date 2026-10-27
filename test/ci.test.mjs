@@ -487,7 +487,7 @@ test('the pin and its release name the same commit Dependabot would', () => {
   // network call. A SHA and a release that disagree is the failure the comment
   // invites: the line reads as pinned to v4.4.0 and is not.
   assert.deepEqual(ACTIONS, {
-    checkout: { repo: 'actions/checkout', commit: '11d5960a326750d5838078e36cf38b85af677262', release: 'v4.4.0' },
+    checkout: { repo: 'actions/checkout', commit: '3d3c42e5aac5ba805825da76410c181273ba90b1', release: 'v7.0.1' },
     setupNode: { repo: 'actions/setup-node', commit: '49933ea5288caeca8642d1e84afbd3f7d6820020', release: 'v4.4.0' },
   });
   // 40 hex characters is what makes it a commit id at all; the tag form this replaced

@@ -15,9 +15,12 @@
 //      strips the signature; without the identifier the path leaks into it)
 //   5. emit dist/simt-dev-<version>-<target> + .sha256
 //
-// The pipeline is deterministic: pinned node base, relative-path blob,
-// fixed-identifier signature — the same tree builds byte-identical assets on
-// any host.
+// The pipeline is deterministic per build-host family: pinned node base,
+// relative-path blob, fixed-identifier signature — the same tree rebuilt on
+// the same OS family hashes identically (ADR-099). It is NOT byte-identical
+// across host families: a darwin-generated SEA blob and a linux-generated one
+// of the same tree differ, which is why each target builds on its native
+// runner and the release verifies served bytes instead of comparing hosts.
 //
 // Usage: node scripts/build-sea.mjs [--target darwin-arm64 ...]
 

@@ -7,6 +7,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+import { journaledWriteFile } from '../journal.mjs';
 
 const exec = promisify(execFile);
 
@@ -360,9 +361,13 @@ export async function scaffoldDecision(root, options = {}) {
     supersedes,
   });
 
+  // A caller-supplied journal records the scaffold so `undo` can restore it
+  // (R49). Callers without one (probes, tests staging fixtures) keep the old
+  // behaviour exactly.
   if (options.write) {
     await mkdir(decisionsDir, { recursive: true });
-    await writeFile(fullPath, text, 'utf8');
+    if (options.journal) await journaledWriteFile(root, options.journal, fullPath, text);
+    else await writeFile(fullPath, text, 'utf8');
   }
 
   return {

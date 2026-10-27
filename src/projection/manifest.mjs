@@ -18,6 +18,7 @@
 import { readFile, rename, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
+import { journaledWriteFile } from '../journal.mjs';
 // gates.mjs imports nothing, so this direction cannot cycle. It is the gate table
 // this file already selects from; duplicating the runnability rules here would be two
 // answers to "can this repo run that gate", which is precisely the kind of drift this
@@ -851,13 +852,17 @@ export async function readManifest(root) {
   }
 }
 
-export async function writeManifest(root, manifest) {
+export async function writeManifest(root, manifest, journal = null) {
   // A repository still holding the old name gets it moved, not shadowed. Two manifests
   // in one repo is a manifest nobody can reason about, and the second would be the one
   // that is never read - so the window closes by moving the file, not by leaving both.
   const previous = join(root, MANIFEST_LEGACY);
   const fresh = join(root, MANIFEST);
   if (existsSync(previous) && !existsSync(fresh)) await rename(previous, fresh);
-  await writeFile(fresh, manifestText(manifest));
+  // A journaled manifest is one `undo` can restore, like every other repo file a
+  // command writes (R49). Callers that span repos or the repo boundary (shared,
+  // bench) pass nothing and keep the old behaviour exactly.
+  if (journal) await journaledWriteFile(root, journal, fresh, manifestText(manifest));
+  else await writeFile(fresh, manifestText(manifest));
   return fresh;
 }

@@ -7,7 +7,9 @@ const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into th
                            (dry-run unless --yes; conflicts block without
                            --accept-conflicts; in place unless --backup;
                            never commits or pushes)
-${CLI} doctor                 classify a repo and check config health
+${CLI} doctor [--fix]        classify a repo and check config health (with --fix:
+                           apply the remedies flagged safe and list the rest;
+                           dry-run unless --yes)
 ${CLI} check                  the gate: projection drift, manifest validity, policy
 ${CLI} sync [--yes]           regenerate the projection (idempotent)
                            (prints the plan and exits 1 on drift without --yes,
@@ -209,6 +211,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
 --check                 report drift and write nothing (sync, ci)
+--fix                   doctor: apply the remedies flagged safe (local,
+                        idempotent, journaled); list the rest (dry-run
+                        unless --yes)
 --frozen                check: the lock must match this projection; an output
                         change no input change explains fails the gate
 --explain               sync: name each line dropped as already inferable, with

@@ -93,6 +93,10 @@ export const BOOL_FLAGS = new Set([
   // the deterministic outline. Off by default: no model in the default path (P1),
   // and a model that is not asked for should not be opened against (ADR-090).
   'local',
+  // doctor: apply the remedies flagged safe (local, idempotent, journaled) and
+  // list the rest. Off by default because a repair, however safe, is still a
+  // write, and a command whose name is a diagnosis should not write by default.
+  'fix',
 ]);
 
 export const VALUE_FLAGS = new Set([

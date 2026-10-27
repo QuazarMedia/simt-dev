@@ -61,6 +61,7 @@ import { gateCommand } from './gate.mjs';
 import { impactCommand } from './impact.mjs';
 import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { decideCommand } from './decide.mjs';
+import { explainCommand } from './explain.mjs';
 import { reviewCommand } from './review.mjs';
 import { localDoctorCommand } from './local.mjs';
 import { distillCommand } from './distill.mjs';
@@ -143,6 +144,9 @@ export const IMPLEMENTED = {
   'lessons list': lessonsListCommand,
   'lessons review': lessonsReviewCommand,
   decide: decideCommand,
+  // Plan 0003 R46. A bare command: the code is a positional, so there is no
+  // group and no default subcommand to resolve.
+  explain: explainCommand,
   distill: distillCommand,
   // R25 machinery needs the runnable command names for Affects command tokens,
   // same wiring `why` and `impact` get through their lambdas.

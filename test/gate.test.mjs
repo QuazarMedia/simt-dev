@@ -33,6 +33,7 @@ const RESOLVE = [
   'test/ci.test.mjs',
   'test/compare.test.mjs',
   'test/compile.test.mjs',
+  'test/completions.test.mjs',
   'test/contract.test.mjs',
   'test/decide.test.mjs',
   // diff.test.mjs imports the shared fixture for `git`, and the fixture loads

@@ -341,6 +341,7 @@ async function installHooks(root, flags) {
     evidenceDeclared,
     evidenceSource,
     evidenceFile,
+    evidenceExisting,
     routed,
     takeover,
   } = await planHooksInstall(root, { manifest, exists });

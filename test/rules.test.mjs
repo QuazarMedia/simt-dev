@@ -239,7 +239,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // formula it changes, or it is not an argument a maintainer can act on. ADR-099
   // joined for the same reason again: narrowing the determinism ruling without naming
   // the workflow, the build script, the verifier and the formula it rewrites would
-  // not be an argument a maintainer can act on either.
+  // not be an argument a maintainer can act on either. ADR-104 joined for the same
+  // reason once more: the ruling is ABOUT the normaliser, and a decision that the
+  // command is read the way a shell reads it without naming the module that does the
+  // reading would not be an argument a maintainer can act on.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -256,6 +259,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-097',
     'ADR-098',
     'ADR-099',
+    'ADR-104',
   ]);
 });
 

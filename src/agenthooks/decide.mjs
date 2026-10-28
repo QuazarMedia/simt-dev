@@ -3,8 +3,8 @@
 // Pure, so the whole decision is testable without a harness: hand it the facts a
 // renderer would extract and an environment, and it answers. The filesystem is
 // consulted in `factsFor` for exactly the facts a payload cannot carry — whether a
-// file holds bytes this tool generates, and who has leased it (ADR-101) — and nothing
-// else decides from disk.
+// file holds bytes this tool generates, who has leased it (ADR-101), and what the
+// author's git aliases expand to (ADR-104) — and nothing else decides from disk.
 //
 // Two properties are deliberate and both are about an author standing still:
 //
@@ -19,12 +19,14 @@
 // understand this" into "blocked" makes the hook a false-positive machine, and a hook
 // that blocks real work is uninstalled the same afternoon.
 
+import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 
 import { parse } from '../projection/markers.mjs';
 import { activeLeases, leasePathFor, readLeases } from '../lease.mjs';
 import { ALLOW_ENV, EVENTS, POLICY_IDS, SESSION_ENV, policiesFor } from './policy.mjs';
+import { applyAliases, commandFacts, GIT_BUILTINS } from './shell.mjs';
 
 /**
  * The policies this session has lifted, and the names in `SIMT_ALLOW` that are not
@@ -50,10 +52,21 @@ export function overrides(env = {}) {
  * rather than what is being done — and the one row with a fact the payload never
  * carries: an unreadable claim file denies a write, but a shell command with no file
  * fact is not an edit (ADR-101 ruling 4).
+ *
+ * A command row is judged on the normalised facts when they exist: the shell tokenised,
+ * wrappers unwrapped, each git invocation reduced to subcommand and options (ADR-104).
+ * When the command could not be tokenised, or the facts were never normalised at all —
+ * a test that hands `decide` a bare command string — the row's regex runs instead, so
+ * a parse failure and a pre-normalised fact are both judged the way they were before
+ * the normaliser existed.
  */
 function applies(row, facts, env) {
   if (row.inspects === 'command') {
-    return typeof facts.command === 'string' && row.match !== null && row.match.test(facts.command);
+    if (typeof facts.command !== 'string') return false;
+    if (facts.shell !== null && facts.shell !== undefined && facts.shell.parsed === true) {
+      return row.match(facts);
+    }
+    return row.regex !== null && row.regex.test(facts.command);
   }
   if (row.inspects === 'write') {
     return (facts.writes ?? []).some((w) => w.generated !== null && w.generated !== undefined);
@@ -136,23 +149,66 @@ export async function generatedBytes(root, file) {
   return null;
 }
 
+/**
+ * The author's git aliases, name to value, as `git config` spells them.
+ *
+ * One spawn for the whole command, and only when a fact needs it: the lookup reads the
+ * configuration the agent's own `git p` would read, and a git that is missing or cannot
+ * answer yields no aliases, which leaves the facts exactly where the pre-lookup policy
+ * would have found them.
+ */
+function gitAliases(root) {
+  const result = spawnSync('git', ['-C', root, 'config', '--get-regexp', '^alias\\.'], {
+    encoding: 'utf8',
+    timeout: 1000,
+  });
+  const aliases = new Map();
+  if (result.status !== 0) return aliases;
+  for (const line of String(result.stdout ?? '').split('\n')) {
+    const m = /^alias\.(\S+)\s+(.*)$/.exec(line);
+    if (m !== null) aliases.set(m[1], m[2]);
+  }
+  return aliases;
+}
+
+/**
+ * The normalised command facts the table asks about: the shell tokenised, wrappers
+ * unwrapped, each git or rm invocation reduced to what it runs.
+ *
+ * A subcommand git does not ship may be the author's alias, and what it expands to is
+ * read from their git configuration - the one step in this path that leaves the
+ * module. A command that cannot be tokenised is marked, not dropped: the policies fall
+ * back to their regex rather than seeing nothing (ADR-104).
+ */
+async function normalizeCommand(root, command) {
+  const parsed = commandFacts(command); // non-null: `command` is a string here
+  if (parsed === null || !parsed.parsed) return { parsed: false };
+  if (parsed.facts.some((f) => f.kind === 'git' && !GIT_BUILTINS.has(f.sub))) {
+    parsed.facts = applyAliases(parsed.facts, gitAliases(root));
+  }
+  return parsed;
+}
+
 /** Turn a renderer's extraction into the facts the table asks about. */
 export async function factsFor(root, { command = null, writes = [] } = {}) {
   const resolved = await Promise.all(
     writes.filter(Boolean).map(async (path) => ({ path, generated: await generatedBytes(root, path) })),
   );
+  // Shell facts, read only when the payload carried a command: the same "pay for what
+  // you use" rule as the lease facts below, which a payload with no command cannot touch.
+  const shell = typeof command === 'string' ? await normalizeCommand(root, command) : null;
   // Lease facts, read only when the payload named a file to write: the claim file is
   // irrelevant to a shell command, and a payload with no file pays nothing for a
   // feature it cannot touch. Expired claims are dropped here because the hook runs
   // now, so a TTL needs no sweeper; ownership is left whole because `decide` is the
   // one that knows which session is asking (ADR-101 ruling 3).
-  if (resolved.length === 0) return { command, writes: resolved, leaseError: null };
+  if (resolved.length === 0) return { command, writes: resolved, leaseError: null, shell };
   const read = await readLeases(root);
-  if (read.error !== null) return { command, writes: resolved, leaseError: read.error };
+  if (read.error !== null) return { command, writes: resolved, leaseError: read.error, shell };
   const live = new Map(activeLeases(read).map((l) => [l.path, l]));
   for (const w of resolved) {
     const rel = leasePathFor(root, w.path);
     w.lease = rel === null ? null : live.get(rel) ?? null;
   }
-  return { command, writes: resolved, leaseError: null };
+  return { command, writes: resolved, leaseError: null, shell };
 }

@@ -131,12 +131,32 @@ test('an accepted dependency does not unblock, and a note is not a dependency', 
   assert.equal(result.stdout.includes('### A2'), false);
 });
 
+// Both of these read a staged fixture, not this checkout: they assert the shape
+// of the answer, and a checkout whose every row is Complete still has to keep
+// them green (ADR-031 — the suite stages the environment it needs).
+const COUNTED = `# t
+
+| ID | Slice | Depends on | State |
+| --- | --- | --- | --- |
+| A1 | first | — | Complete | |
+| A2 | second | A1 | Queued | |
+
+### A1 — first
+
+The first slice is done.
+
+### A2 — second
+
+The second slice is ready.
+`;
+
 test('plan status counts by document', async () => {
-  const result = cli(['plan', 'status', '--root', ROOT]);
+  const root = await repo({ 'docs/plans/0099.md': COUNTED });
+  const result = cli(['plan', 'status', '--root', root]);
   assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stdout, /0003-intelligence-amplifier-research-plan\.md/);
+  assert.match(result.stdout, /0099\.md/);
   assert.match(result.stdout, /ready\s+\d+/);
-  const json = cli(['plan', 'status', '--json', '--root', ROOT]);
+  const json = cli(['plan', 'status', '--json', '--root', root]);
   const payload = JSON.parse(json.stdout);
   assert.equal(payload.schemaVersion, 1);
   assert.equal(payload.ok, true);
@@ -144,7 +164,8 @@ test('plan status counts by document', async () => {
 });
 
 test('plan next on this repository returns one section, not the document', async () => {
-  const result = cli(['plan', 'next', '--json', '--root', ROOT]);
+  const root = await repo({ 'docs/plans/0099.md': COUNTED });
+  const result = cli(['plan', 'next', '--json', '--root', root]);
   assert.equal(result.code, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.next.state, 'queued');

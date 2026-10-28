@@ -109,6 +109,7 @@ record's status line — never by editing the ruling in place.
 | [099](ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md) | the release verifies served bytes, and the formula mirrors them | **accepted** · 2026-10-27 · narrows ADR-098 ruling 3 |
 | [100](ADR-100-a-staged-diff-is-the-last-gate-before-history-and-it-runs-inside-the-tool.md) | a staged diff is the last gate before history, and it runs inside the tool | **accepted** · 2026-10-27 |
 | [101](ADR-101-a-file-lease-belongs-to-one-session-and-the-pre-edit-hook-refuses-another.md) | a file lease belongs to one session, and the pre-edit hook refuses another's edit | **accepted** · 2026-10-28 |
+| [102](ADR-102-the-two-queued-review-rows-are-closed-by-ruling.md) | the two rows review 0002 left queued are closed by ruling, not by authoring | **accepted** · 2026-10-28 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

@@ -20,6 +20,7 @@
 // they can ask about.
 
 import { CLI } from '../name.mjs';
+import { HOOKS_DIR, HOOKS_PATH_KEY } from '../hooks/shim.mjs';
 
 /**
  * The events an agent-time hook can answer, normalised across harnesses.
@@ -48,9 +49,16 @@ export const SESSION_ENV = 'SIMT_SESSION';
 /**
  * One row per policy.
  *
- * `inspects` names the fact the matcher is handed, and `match` the condition. The
- * `generated` row has no matcher because what it asks — does this file hold bytes this
- * tool generates — is answered by reading the file, not by the text of a payload.
+ * `inspects` names the fact the matcher is handed, and `match` the condition. A command
+ * row carries two matchers because the facts come in two states: `match` reads the
+ * normalised command - the shell tokenised, wrappers unwrapped, each git invocation
+ * reduced to subcommand and options (ADR-104) - and `regex` is the fallback that runs
+ * when the command cannot be tokenised at all, so a parse failure never weakens a
+ * policy. Facts that were never normalised - a test that hands `decide` a bare command
+ * string - also take the fallback, which is why it stays in the table rather than
+ * beside the tokenizer. The `generated` row has no matcher because what it asks — does
+ * this file hold bytes this tool generates — is answered by reading the file, not by
+ * the text of a payload.
  *
  * Order matters where two policies match one command: `git push --force` is both a
  * push and a rewrite, so both are reported and both have to be lifted before it runs.
@@ -61,7 +69,8 @@ const POLICIES = [
     adr: 'ADR-001',
     event: 'pre-tool-use',
     inspects: 'command',
-    match: /(?:^|[\s;&|(])git\s+push(?:\s|$)/,
+    match: (facts) => facts.shell.facts.some((f) => f.kind === 'git' && (f.sub === 'push' || f.sub === 'send-pack')),
+    regex: /(?:^|[\s;&|(])git\s+push(?:\s|$)/,
     message: `Push needs explicit approval (ADR-001); ask the user.`,
   },
   {
@@ -69,11 +78,49 @@ const POLICIES = [
     adr: 'ADR-017',
     event: 'pre-tool-use',
     inspects: 'command',
-    match:
+    match: (facts) =>
+      facts.shell.facts.some((f) => {
+        if (f.kind !== 'git') return false;
+        if (f.opts.has('--no-verify')) return true;
+        if (f.sub === 'commit' && (f.opts.has('--amend') || f.opts.has('n'))) return true; // -n is --no-verify
+        if (f.sub === 'reset' && f.opts.has('--hard')) return true;
+        if (f.sub === 'rebase') return true;
+        if (f.sub === 'pull' && f.opts.has('--rebase')) return true; // pull --rebase rebases
+        return (
+          (f.sub === 'push' || f.sub === 'send-pack') &&
+          (f.opts.has('--force') || f.opts.has('f') || f.refspecs.some((r) => r.startsWith('+')))
+        );
+      }),
+    regex:
       /--no-verify|git\s+commit\b[^;&|]*\s--amend|git\s+reset\s+--hard|git\s+rebase\b|git\s+push\b[^;&|]*(?:--force\b|\s-f\b)/,
     message:
       `Never amend, rebase, reset --hard, force-push or --no-verify unless asked; ` +
       `each is the escape that turns the declared gates into a suggestion (ADR-017).`,
+  },
+  {
+    id: 'hooks-disable',
+    adr: 'ADR-104',
+    event: 'pre-tool-use',
+    inspects: 'command',
+    // No regex fallback: before ADR-104 this policy did not exist, so a command that
+    // cannot be tokenised is judged exactly as it was judged before this row was written.
+    regex: null,
+    match: (facts) => {
+      const dir = (a) => a.replace(/^\.\/+/, '').replace(/\/+$/, '');
+      const key = HOOKS_PATH_KEY.toLowerCase(); // config keys are case-insensitive in git
+      return facts.shell.facts.some((f) => {
+        if (f.kind === 'git') {
+          if (f.globals.c.some((s) => s.toLowerCase().startsWith(`${key}=`))) return true;
+          if (f.sub === 'config' && f.refspecs.some((r) => r.toLowerCase() === key || r.toLowerCase().startsWith(`${key}.`))) return true;
+          return false;
+        }
+        if (f.kind === 'rm') return f.args.some((a) => dir(a) === HOOKS_DIR || dir(a).startsWith(`${HOOKS_DIR}/`));
+        return false;
+      });
+    },
+    message:
+      `That removes or reroutes the git hooks this repository's gates run in, so the gates would stop ` +
+      `running without anyone saying so; if it is deliberate, run \`${CLI} hooks install --yes\` afterwards (ADR-104).`,
   },
   {
     id: 'generated',

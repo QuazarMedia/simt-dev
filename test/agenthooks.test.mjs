@@ -185,6 +185,101 @@ test('the override lifts exactly the policy it names, and says so', async () => 
   assert.deepEqual(overrides({ SIMT_ALLOW: 'push, rewrite ,,nope' }).unknown, ['nope']);
 });
 
+test('the normalised command is what a policy matches, in every spelling the review counted', async () => {
+  // Each of these was allowed by the regex the normaliser replaced (review 0003 Q01):
+  // the same act, spelled the way an agent finds easiest. The list is the evidence,
+  // so it is asserted whole rather than sampled.
+  const root = await repo();
+  const denied = [
+    ['git -C . push', ['ADR-001']],
+    ['git -c x=y push', ['ADR-001']],
+    ['git --no-pager push', ['ADR-001']],
+    ['/usr/bin/git push', ['ADR-001']],
+    ['sh -c \'git push\'', ['ADR-001']],
+    ['`git push`', ['ADR-001']],
+    ['$(git push)', ['ADR-001']],
+    ['(git push)', ['ADR-001']],
+    ['git push;echo ok', ['ADR-001']],
+    ['git push&&echo ok', ['ADR-001']],
+    ['git send-pack origin refs/heads/main', ['ADR-001']],
+    ['git commit -n -m x', ['ADR-017']],
+    ['git commit --amen -m x', ['ADR-017']],
+    ['git commit --no-verif -m x', ['ADR-017']],
+    ['git reset --har', ['ADR-017']],
+    ['git reset -q --hard', ['ADR-017']],
+    ['git -C . commit --amend', ['ADR-017']],
+    ['git pull --rebase', ['ADR-017']],
+    ['git push -fu origin main', ['ADR-001', 'ADR-017']],
+    ['git push origin +main', ['ADR-001', 'ADR-017']],
+    ['sudo -u ci git push', ['ADR-001']],
+    ['env FOO=1 bash -lc \'git push\'', ['ADR-001']],
+    ['eval git push', ['ADR-001']],
+    ['xargs git push', ['ADR-001']],
+    ['time git push', ['ADR-001']],
+    ['git -c core.hooksPath=/dev/null commit', ['ADR-104']],
+    ['git config core.hooksPath /tmp/elsewhere', ['ADR-104']],
+    ['rm -rf .simt-hooks', ['ADR-104']],
+  ];
+  for (const [command, adrs] of denied) {
+    const result = HOOK('claude', shell.claude(command, root));
+    assert.equal(result.code, 2, `${command} was not denied: ${result.text}`);
+    for (const adr of adrs) assert.match(result.text, new RegExp(adr), `${command} did not name ${adr}: ${result.text}`);
+  }
+
+  // The false positives the regex made: a flag or a phrase inside a command that is
+  // not git, and the git commands the policies do not name.
+  const allowed = [
+    'ls -la',
+    'echo --no-verify',
+    'grep -r "git rebase" docs',
+    'git status',
+    'git commit -m x',
+    'git reset --soft HEAD~1',
+    'rm -rf build',
+  ];
+  for (const command of allowed) {
+    const result = HOOK('claude', shell.claude(command, root));
+    assert.equal(result.code, 0, `${command} was denied: ${result.text}`);
+    assert.equal(result.stdout, '', `${command} produced a decision document`);
+  }
+
+  // A command the tokenizer cannot read is judged by the old regex, never by nothing:
+  // the push at the start of this one is seen by the fallback even though the quote
+  // that ends the line never closes.
+  const unbalanced = HOOK('claude', shell.claude('git push origin main && echo "x', root));
+  assert.equal(unbalanced.code, 2);
+  assert.match(unbalanced.text, /ADR-001/);
+});
+
+test('an alias is what the author configured it to be, and the lookup pays for itself', async () => {
+  // The one fact a payload cannot carry: what `git p` expands to in the author's own
+  // configuration. The repository's config wins over a developer's global aliases, so
+  // the fixture is deterministic on any machine.
+  const root = await repo();
+  await git(['init', '-q', root]);
+  for (const [name, value] of [['p', 'push'], ['f', 'push --force'], ['s', '!git push'], ['zzz', 'status']]) {
+    await git(['-C', root, 'config', `alias.${name}`, value]);
+  }
+
+  const p = HOOK('claude', shell.claude('git p', root));
+  assert.equal(p.code, 2, `git p with alias.p=push was not denied: ${p.text}`);
+  assert.match(p.text, /ADR-001/);
+
+  const f = HOOK('claude', shell.claude('git f', root));
+  assert.equal(f.code, 2, `git f with alias.f=push --force was not denied: ${f.text}`);
+  assert.match(f.text, /ADR-001/);
+  assert.match(f.text, /ADR-017/);
+
+  const s = HOOK('claude', shell.claude('git s', root));
+  assert.equal(s.code, 2, `git s with alias.s=!git push was not denied: ${s.text}`);
+  assert.match(s.text, /ADR-001/);
+
+  // An alias to a subcommand no policy names is not a violation.
+  const zzz = HOOK('claude', shell.claude('git zzz', root));
+  assert.equal(zzz.code, 0, `git zzz with alias.zzz=status was denied: ${zzz.text}`);
+  assert.equal(zzz.stdout, '');
+});
+
 test('an edit inside a generated region is refused, in both marker styles', async () => {
   const root = await repo({ 'AGENTS.md': REGION_HTML, '.editorconfig': REGION_HASH, 'src/x.mjs': 'export const x = 1;\n' });
   for (const row of adapters()) {

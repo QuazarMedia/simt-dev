@@ -863,7 +863,7 @@ bench summary when `--require-measured` is set.
 | R51 | shell completions | zsh, bash and fish, generated from the command registry | generated files are deterministic |
 | R52 | context hygiene | one ignore list renders `.cursorignore`, `.aiderignore`, `.geminiignore` and Claude `permissions.deny` `Read(...)`; plus a zero-dep staged-diff secret scan (patterns plus entropy) | sentinel secret blocked; ignore files in parity |
 | R53 | `simt-dev slice start/finish <ID>` | `start` creates a worktree and branch, preloads the brief and sets the row In progress; `finish` runs gates, commits with a Conventional subject from the slice title, and records SHA and test command (R31) | the row edit and commit are verified on a fixture plan |
-| R54 | file leases for parallel agents | `simt-dev lease <paths>` writes `.simt-dev/leases.json` (session, TTL); a pre-edit hook denies edits leased by another session | two-session fixture |
+| R54 | file leases for parallel agents | `simt-dev lease <paths>` writes `.simt/leases.json` (session, TTL); a pre-edit hook denies edits leased by another session | two-session fixture |
 | R55 | `simt-dev pr-body` | evidence block (R17), changed decisions, gates run, residual risk in ADR-008 vocabulary | snapshot of a fixture PR |
 
 ## 14. Tracker
@@ -926,7 +926,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R51 | Shell completions | 8 | review 0002 S15 | S | — | deterministic output | Complete |
 | R52 | Context hygiene and secret scan | 8 | R15 | S | — | sentinel blocked; parity | Complete |
 | R53 | `slice start/finish` | 8 | R31, R17 | M | — | row and commit verified | Complete |
-| R54 | File leases for parallel agents | 8 | R15 | S | — | two-session fixture | Queued |
+| R54 | File leases for parallel agents | 8 | R15 | S | — | two-session fixture | Complete |
 | R55 | `pr-body` | 8 | R17 | S | — | fixture snapshot | Queued |
 
 **R07 — Complete, not Accepted** (the remaining note ADR-073 points at). The mode shipped: `mode`

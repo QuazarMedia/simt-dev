@@ -68,6 +68,47 @@ record's status line — never by editing the ruling in place.
 | [058](ADR-058-one-tool-three-channels-and-the-order-is-forced.md) | One tool, three channels, and the order is forced | accepted |
 | [059](ADR-059-the-version-a-repository-runs-is-the-one-it-pinned.md) | The version a repository runs is the one it pinned, and the gate refuses otherwise | accepted |
 | [060](ADR-060-a-repository-with-nothing-to-run-is-adopted-and-says-so.md) | A repository with nothing to run is adopted and says so; a gate is verified where it runs | accepted |
+| [061](ADR-061-the-skill-registry-is-workspace-data.md) | The skill registry is workspace data, and the package ships none of it | **accepted** · 2026-10-12 · filed as S61 |
+| [062](ADR-062-a-fresh-adoption-seeds-the-gates-it-can-run.md) | A fresh adoption seeds the canonical gates it can run, and never more | **accepted** · 2026-10-13 · filed as S40 |
+| [063](ADR-063-the-adoption-escape-hatch-is-opt-in.md) | The adoption escape hatch is opt-in, and the default writes in place | **accepted** · 2026-10-13 · filed after a consumer asked why every adoption branched |
+| [064](ADR-064-the-context-meter-counts-what-the-tool-wrote.md) | The context meter counts what the tool wrote, and says what it did not | **accepted** · 2026-10-13 · filed after review 0002 S38 |
+| [065](ADR-065-a-pack-is-one-shared-rule-set-pinned-by-digest.md) | A pack is one shared rule set, vendored into the repository and pinned by digest | **accepted** · 2026-10-13 · filed as S39 |
+| [066](ADR-066-a-monorepo-projects-once-per-package.md) | A monorepo projects once per package | **accepted** · 2026-10-13 · filed as S41 |
+| [067](ADR-067-which-harnesses-read-agents-md-is-a-column.md) | Which harnesses read AGENTS.md is a column, and a row without a document gets none | **accepted** · 2026-10-13 · filed as S42 |
+| [068](ADR-068-the-mcp-revision-list-cites-what-was-read.md) | The revision list is a claim about revisions that were read | **accepted** · 2026-10-13 · filed as S43 |
+| [069](ADR-069-the-conformance-lint-checks-the-published-specification.md) | The conformance lint checks the published specification | **accepted** · 2026-10-13 · filed as S44 |
+| [070](ADR-070-the-json-payload-carries-its-own-version.md) | The JSON payload carries its own version | **accepted** · 2026-10-13 · filed as S51 |
+| [071](ADR-071-a-rule-that-can-be-narrowed-is-written-narrow.md) | A rule that can be narrowed is written narrow | **accepted** · 2026-10-14 · filed as S50 |
+| [072](ADR-072-the-budget-is-a-declaration-beside-the-gates.md) | The budget is a declaration beside the gates, not a number inside the projection | **accepted** · 2026-10-14 · filed as S38 |
+| [073](ADR-073-a-kernel-is-a-smaller-projection-the-repository-asks-for.md) | A kernel is a smaller projection the repository asks for, not one it is given | **accepted** · 2026-10-14 · filed as S38 (R07) · ruling 6 narrowed by ADR-084 |
+| [074](ADR-074-a-rule-and-a-decision-are-readable-by-uri.md) | A rule and a decision are addressable, so they are readable by URI | **accepted** · 2026-10-14 · filed as S43 |
+| [075](ADR-075-nothing-leaves-the-machine.md) | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default | **accepted** · 2026-10-14 · filed as D7 (R06) |
+| [076](ADR-076-a-change-to-what-agents-read-is-measured.md) | A change to what agents read is measured before it ships, or labelled unmeasured in its record | **accepted** · 2026-10-15 · filed as D1 (R01) |
+| [077](ADR-077-the-command-card-leads-the-region-and-reads-committed-evidence.md) | The command card leads the region, and is derived from committed evidence only | **accepted** · 2026-10-16 · filed as R10 (plan 0003) · ruling 1 narrowed by ADR-086 |
+| [078](ADR-078-a-line-the-repository-already-proves-does-not-ship.md) | A line the repository already proves does not ship, and the author says so | **accepted** · 2026-10-16 · filed as R09 (plan 0003) |
+| [079](ADR-079-the-rules-are-enforced-at-the-tool-call-from-one-policy-table.md) | The rules are enforced at the tool call, from one policy table every harness renders | **accepted** · 2026-10-16 · filed as R15 (plan 0003) |
+| [080](ADR-080-the-tools-own-names-are-not-repositories-and-neither-reader-decides-by-shape.md) | The tool's own names are not repositories, and neither reader decides by shape | **accepted** · 2026-10-16 · settles what `rules why` calls a repository |
+| [081](ADR-081-a-tracker-is-read-through-the-repositorys-template.md) | A tracker is read through the repository's template | **accepted** · 2026-10-16 · rulings 1 and 2 superseded by ADR-082 |
+| [082](ADR-082-the-tracker-override-is-a-manifest-key.md) | The tracker override is a manifest key, and init keeps what it did not write | **accepted** · 2026-10-16 · supersedes ADR-081 rulings 1 and 2 |
+| [083](ADR-083-a-budget-is-met-by-cutting-the-kernel-and-hard-is-the-floor.md) | A budget is met by cutting the kernel, and the hard constraints are the floor | **accepted** · 2026-10-17 · filed as R08 (plan 0003) · ruling 7 narrowed by ADR-084 |
+| [084](ADR-084-a-workspace-carries-its-repeated-rules-once.md) | A workspace carries its repeated rules once, and the region does not read the reader's home | **accepted** · 2026-10-17 · filed as R11 (plan 0003) |
+| [085](ADR-085-the-region-ends-with-the-names-it-kept-out.md) | The region ends with the names of what it kept out | **accepted** · 2026-10-18 · filed as R12 (plan 0003) |
+| [086](ADR-086-the-stable-prefix-comes-first-and-the-lock-records-both-digests.md) | The stable prefix comes first, and the lock records both digests | **accepted** · 2026-10-18 · filed as R13 (plan 0003) |
+| [087](ADR-087-a-run-is-evidence-for-one-tree.md) | A run is evidence for one tree | **accepted** · 2026-10-18 · filed as R17 (plan 0003) |
+| [088](ADR-088-a-marked-line-is-enforced-by-a-checker.md) | A marked line is enforced by a checker | **accepted** · 2026-10-18 · filed as R19 (plan 0003) · ruling 3 narrowed by ADR-090 |
+| [089](ADR-089-the-local-index-is-a-cache-of-git-blobs.md) | The local index is a cache of git blobs | **accepted** · 2026-10-18 · filed as R20 (plan 0003) |
+| [090](ADR-090-an-optional-adapter-is-off-until-named.md) | An optional adapter is off until a repository names it | **accepted** · 2026-10-18 · filed as R21 (plan 0003) |
+| [091](ADR-091-the-map-ranks-files-a-task-mentions.md) | The map ranks the files a task mentions, and the files next to them | **accepted** · 2026-10-18 · filed as R22 (plan 0003) |
+| [092](ADR-092-tests-are-imports-conventions-and-coverage.md) | A test is an import, a conventional neighbour, or a coverage record | **accepted** · 2026-10-18 · filed as R24 (plan 0003) |
+| [093](ADR-093-why-names-what-governs-a-file.md) | why names what governs a file | **accepted** · 2026-10-18 · filed as R25 (plan 0003) |
+| [094](ADR-094-a-change-runs-the-tests-that-import-it.md) | a change runs the tests that import it | **accepted** · 2026-10-18 · filed as R16 (plan 0003) |
+| [095](ADR-095-gate-output-keeps-the-failures.md) | gate output keeps the failures | **accepted** · 2026-10-18 · filed as R18 (plan 0003) |
+| [096](ADR-096-impact-names-who-a-change-reaches.md) | impact names who a change reaches | **accepted** · 2026-10-18 · filed as R23 (plan 0003) |
+| [097](ADR-097-the-channels-publish-by-hand-and-the-version-rides-in-as-an-input.md) | the channels publish by hand, and the version rides in as an input | **accepted** · 2026-10-25 · ruling 3's Homebrew precondition is superseded by [ADR-098](ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md), which also restates what each channel now waits on |
+| [098](ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md) | The fourth channel is one file, and it needs no toolchain | **accepted** · 2026-10-26 · supersedes ADR-058 ruling 5 · narrows ADR-058 ruling 7 and ADR-097 ruling 3 · supersedes ADR-059 ruling 3 · ruling 3's cross-host byte-identicality narrowed by [ADR-099](ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md) |
+| [099](ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md) | the release verifies served bytes, and the formula mirrors them | **accepted** · 2026-10-27 · narrows ADR-098 ruling 3 |
+| [100](ADR-100-a-staged-diff-is-the-last-gate-before-history-and-it-runs-inside-the-tool.md) | a staged diff is the last gate before history, and it runs inside the tool | **accepted** · 2026-10-27 |
+| [101](ADR-101-a-file-lease-belongs-to-one-session-and-the-pre-edit-hook-refuses-another.md) | a file lease belongs to one session, and the pre-edit hook refuses another's edit | **accepted** · 2026-10-28 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

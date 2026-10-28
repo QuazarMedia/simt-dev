@@ -6,6 +6,49 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+`simt explain <CODE>` names what a `check` finding means, the decision behind
+it, how to fix it, and a concrete trigger — one table row per finding code, so
+every code `check` can emit has an entry.
+
+`simt doctor --fix` applies only the remedies flagged safe (local, idempotent,
+journaled) and lists the rest; a fixture with three safe and two unsafe findings
+fixes exactly three.
+
+`simt status --line` prints the gate state from the last `check` in under
+50 ms from cache — `simt PASS ✓rules ✓hooks 3/3gates` — for shell prompts, tmux
+and agent status lines.
+
+Every write records `{path, beforeDigest, afterDigest, beforeBytes}` in
+`.simt/journal/`, and `simt undo` restores the last set when every file in it
+is untouched since.
+
+`--diff` on every writer prints a unified diff of the plan next to the report,
+changing nothing about what the run writes.
+
+`simt completions <bash|zsh|fish>` prints a completion script generated from the
+command registry, so the three shells complete exactly the commands the binary
+dispatches.
+
+One ignore list (`.simtignore`) renders `.cursorignore`, `.aiderignore`,
+`.geminiignore` and Claude `permissions.deny`, and a zero-dependency
+staged-diff secret scan (vendor patterns plus Shannon entropy over added lines
+only) blocks a commit carrying a probable secret without printing the bytes.
+
+`simt slice start <id>` isolates the work in a linked worktree on branch
+`slice/<id>` with the brief preloaded and flips the tracker row In progress;
+`simt slice finish <id>` runs the declared gates, commits a Conventional
+subject from the row title, and records the SHA and test command on the row.
+
+`simt lease <paths> --session <id>` claims files until a TTL in
+`.simt/leases.json`, and the pre-edit hook denies an edit leased by another
+session (ADR-101).
+
+`simt pr-body [--base <ref>]` assembles the pull request body from the evidence
+ledger, the decision records the diff touches, the gate state from the last
+check, and the residual risk in ADR-008 vocabulary.
+
 ## [0.6.2] — 2026-10-27
 
 ### Fixed

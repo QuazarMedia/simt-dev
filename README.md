@@ -134,6 +134,8 @@ simt plan done <id> [<sha>] --yes   # mark a tracker row complete with its commi
 simt slice start <id> --yes         # a worktree on branch slice/<id> with the brief preloaded; row In progress
 simt slice finish <id> --yes        # run the pre-commit gates, commit a Conventional subject from the
                                     # row's title, and record the SHA and --test command on the row
+simt lease [<paths>] --session      # claim files for this session (--ttl, default 1h) or list claims;
+                                    # the pre-edit hook refuses another session's edit until the TTL
 simt tokens [--repos] [--session]   # measure bytes loaded at session start or split a transcript
 simt harness detect [--user]        # detect configured harnesses at repo and user level
 simt harness loaders [--table]      # what each harness loads, in what order, and where its cap truncates
@@ -158,7 +160,7 @@ simt ignore [--yes] [--diff]        # render the one .simtignore list into .curs
 
 `init`, `sync`, `upgrade`, `hooks install`, `agent-hooks install`, `shared install`,
 `skills install`, `plan done`, `lessons review`, `decide`, `ignore`, `pack new`,
-`pack publish`, `slice start`, `slice finish` and the `bench` writers print
+`pack publish`, `slice start`, `slice finish`, `lease` and the `bench` writers print
 a plan and write nothing without `--yes`. None of them push, and only
 `slice finish` commits — locally, through the pre-commit gates, and only what is
 staged. `simt index`

@@ -2,9 +2,9 @@
 //
 // Pure, so the whole decision is testable without a harness: hand it the facts a
 // renderer would extract and an environment, and it answers. The filesystem is
-// consulted in exactly one place — `generatedBytes`, which asks whether a file being
-// written to holds bytes this tool generates — because that is the one fact a payload
-// cannot carry.
+// consulted in `factsFor` for exactly the facts a payload cannot carry — whether a
+// file holds bytes this tool generates, and who has leased it (ADR-101) — and nothing
+// else decides from disk.
 //
 // Two properties are deliberate and both are about an author standing still:
 //
@@ -23,7 +23,8 @@ import { readFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 
 import { parse } from '../projection/markers.mjs';
-import { ALLOW_ENV, EVENTS, POLICY_IDS, policiesFor } from './policy.mjs';
+import { activeLeases, leasePathFor, readLeases } from '../lease.mjs';
+import { ALLOW_ENV, EVENTS, POLICY_IDS, SESSION_ENV, policiesFor } from './policy.mjs';
 
 /**
  * The policies this session has lifted, and the names in `SIMT_ALLOW` that are not
@@ -42,13 +43,27 @@ export function overrides(env = {}) {
   };
 }
 
-/** Whether one row applies to the facts. A row with no matcher reads the facts itself. */
-function applies(row, facts) {
+/**
+ * Whether one row applies to the facts. A row with no matcher reads the facts itself.
+ *
+ * `env` is only consulted by `lease`, which is the one row asking who is doing this
+ * rather than what is being done — and the one row with a fact the payload never
+ * carries: an unreadable claim file denies a write, but a shell command with no file
+ * fact is not an edit (ADR-101 ruling 4).
+ */
+function applies(row, facts, env) {
   if (row.inspects === 'command') {
     return typeof facts.command === 'string' && row.match !== null && row.match.test(facts.command);
   }
   if (row.inspects === 'write') {
     return (facts.writes ?? []).some((w) => w.generated !== null && w.generated !== undefined);
+  }
+  if (row.inspects === 'lease') {
+    const writes = facts.writes ?? [];
+    if (writes.length === 0) return false;
+    if (facts.leaseError) return true;
+    const session = typeof env[SESSION_ENV] === 'string' ? env[SESSION_ENV] : '';
+    return writes.some((w) => w.lease && w.lease.session !== session);
   }
   return false;
 }
@@ -62,7 +77,7 @@ function applies(row, facts) {
  */
 export function decide({ event = EVENTS[0], facts = {}, env = {} } = {}) {
   const { ids: lifted, unknown } = overrides(env);
-  const matched = policiesFor(event).filter((p) => applies(p, facts));
+  const matched = policiesFor(event).filter((p) => applies(p, facts, env));
   const blocked = matched.filter((p) => !lifted.has(p.id));
   return {
     event,
@@ -70,7 +85,14 @@ export function decide({ event = EVENTS[0], facts = {}, env = {} } = {}) {
     blocked: blocked.map((p) => p.id),
     lifted: matched.filter((p) => lifted.has(p.id)).map((p) => p.id),
     unknown,
-    messages: blocked.map((p) => `${p.message} (override: ${ALLOW_ENV}=${p.id})`),
+    // A row may carry a `detail` for the parts of its message that are only knowable
+    // at decision time (the lease holder's name and expiry, ADR-101 ruling 5). Every
+    // row without one renders exactly as before, override hint included.
+    messages: blocked.map((p) => {
+      const detail = typeof p.detail === 'function' ? p.detail(facts, env) : null;
+      const body = detail ? `${p.message} ${detail}` : p.message;
+      return `${body} (override: ${ALLOW_ENV}=${p.id})`;
+    }),
     adrs: blocked.map((p) => p.adr),
   };
 }
@@ -119,5 +141,18 @@ export async function factsFor(root, { command = null, writes = [] } = {}) {
   const resolved = await Promise.all(
     writes.filter(Boolean).map(async (path) => ({ path, generated: await generatedBytes(root, path) })),
   );
-  return { command, writes: resolved };
+  // Lease facts, read only when the payload named a file to write: the claim file is
+  // irrelevant to a shell command, and a payload with no file pays nothing for a
+  // feature it cannot touch. Expired claims are dropped here because the hook runs
+  // now, so a TTL needs no sweeper; ownership is left whole because `decide` is the
+  // one that knows which session is asking (ADR-101 ruling 3).
+  if (resolved.length === 0) return { command, writes: resolved, leaseError: null };
+  const read = await readLeases(root);
+  if (read.error !== null) return { command, writes: resolved, leaseError: read.error };
+  const live = new Map(activeLeases(read).map((l) => [l.path, l]));
+  for (const w of resolved) {
+    const rel = leasePathFor(root, w.path);
+    w.lease = rel === null ? null : live.get(rel) ?? null;
+  }
+  return { command, writes: resolved, leaseError: null };
 }

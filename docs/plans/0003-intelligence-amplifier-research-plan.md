@@ -927,7 +927,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R52 | Context hygiene and secret scan | 8 | R15 | S | — | sentinel blocked; parity | Complete |
 | R53 | `slice start/finish` | 8 | R31, R17 | M | — | row and commit verified | Complete |
 | R54 | File leases for parallel agents | 8 | R15 | S | — | two-session fixture | Complete |
-| R55 | `pr-body` | 8 | R17 | S | — | fixture snapshot | Queued |
+| R55 | `pr-body` | 8 | R17 | S | — | fixture snapshot | Complete |
 
 **R07 — Complete, not Accepted** (the remaining note ADR-073 points at). The mode shipped: `mode`
 is the repository's own declaration, a rule states its class in its own frontmatter, and every

@@ -32,6 +32,7 @@ import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
 import { readFederation } from '../federation/config.mjs';
 import { consult } from '../federation/query.mjs';
 import { planNext, planDone } from '../plan/index.mjs';
+import { buildPrBody } from '../prbody.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { measureSkill } from '../graph/load.mjs';
 import { CLI } from '../name.mjs';
@@ -354,6 +355,53 @@ const output = {
       text: { type: 'string' },
     },
     required: ['root', 'kind', 'basis', 'task', 'scope', 'budget', 'bytes', 'before', 'floorHeld', 'cut', 'sections', 'text'],
+  },
+  pr_body: {
+    type: 'object',
+    properties: {
+      root: { type: 'string' },
+      base: { type: ['string', 'null'] },
+      tree: { type: ['string', 'null'] },
+      verdict: { type: 'string' },
+      unreviewed: { type: 'array', items: { type: 'string' } },
+      paths: { type: 'array', items: { type: 'string' } },
+      decisions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            path: { type: 'string' },
+            id: { type: 'string' },
+            title: { type: 'string' },
+            status: { type: 'string' },
+          },
+          required: ['path', 'id', 'title', 'status'],
+        },
+      },
+      gates: {
+        type: 'object',
+        properties: {
+          declared: { type: 'array', items: { type: 'string' } },
+          evidenceMode: { type: ['string', 'null'] },
+          run: { type: ['object', 'null'] },
+          rulesOk: { type: ['boolean', 'null'] },
+          hooksOk: { type: ['boolean', 'null'] },
+          blocking: { type: 'number' },
+          warnings: { type: 'number' },
+          cached: { type: 'boolean' },
+        },
+        required: ['declared', 'blocking', 'warnings', 'cached'],
+      },
+      evidence: {
+        type: 'object',
+        properties: {
+          entries: { type: 'array', items: { type: 'object' } },
+          errors: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['entries', 'errors'],
+      },
+    },
+    required: ['root', 'base', 'tree', 'verdict', 'unreviewed', 'decisions', 'gates', 'evidence', 'paths'],
   },
   federation_query: {
     type: 'object',
@@ -817,11 +865,53 @@ export const TOOLS = [
       };
     },
   },
+  // The PR-flow entry point over this surface: the same engine the `pr-body`
+  // command renders, returning JSON for a model. Read-only like everything
+  // here — it names the tree, reads the ledger and the check cache, and writes
+  // nothing, so the exit-code-never-carries-the-verdict contract stays intact.
+  {
+    outputSchema: output.pr_body,
+    name: 'pr_body',
+    // R41's 2 KB description budget is shared, not per tool: this sentence was
+    // paid for by shortening `brief` and `federation_query`, and the test on the
+    // total holds every future tool to the same trade.
+    description:
+      'The pull request body: ledger evidence for this tree, the decisions the diff touches, gate state, and the ADR-008 verdict with what was not reviewed.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: { type: 'string', description: 'repository root; defaults to the editor cwd' },
+        base: { type: 'string', description: 'the ref the body diffs against; defaults to origin/main, then main' },
+      },
+      required: [],
+    },
+    async run(args) {
+      const root = rootOf(args);
+      const base = typeof args?.base === 'string' && args.base.length > 0 ? args.base : null;
+      const report = await buildPrBody(root, { base });
+      if (report.error !== null) {
+        throw Object.assign(new Error(report.error), {
+          remedy: `run: ${CLI} pr-body --base <ref> with a ref git knows`,
+        });
+      }
+      return {
+        root,
+        base: report.base,
+        tree: report.tree,
+        verdict: report.verdict,
+        unreviewed: report.unreviewed,
+        paths: report.paths,
+        decisions: report.decisions,
+        gates: report.gates,
+        evidence: report.evidence,
+      };
+    },
+  },
   {
     outputSchema: output.brief,
     name: 'brief',
     description:
-      'The packet for one task in prompt-sized bytes: task kind, needed commands, ranked files, covering tests, governing decisions, applicable skills. With no task it describes the repository.',
+      'The packet for one task in prompt-sized bytes: kind, commands, files, tests, decisions, skills. With no task it describes the repository.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -868,7 +958,7 @@ export const TOOLS = [
     outputSchema: output.federation_query,
     name: 'federation_query',
     description:
-      'Ask a declared code-graph server one structural question; the answer names the server that gave it. Starts only servers simt.json names; a repository declaring none is told so.',
+      'Ask a declared code-graph server one structural question; the answer names the server. Starts only servers simt.json names; none declared is an error.',
     inputSchema: {
       type: 'object',
       properties: {

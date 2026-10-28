@@ -47,7 +47,9 @@ session (ADR-101).
 
 `simt pr-body [--base <ref>]` assembles the pull request body from the evidence
 ledger, the decision records the diff touches, the gate state from the last
-check, and the residual risk in ADR-008 vocabulary.
+check, and the residual risk in ADR-008 vocabulary. It is also exposed as the
+`pr_body` MCP tool; the two longest tool descriptions were shortened to hold
+the 2 KB `tools/list` budget.
 
 ## [0.6.2] — 2026-10-27
 

@@ -110,6 +110,7 @@ record's status line — never by editing the ruling in place.
 | [100](ADR-100-a-staged-diff-is-the-last-gate-before-history-and-it-runs-inside-the-tool.md) | a staged diff is the last gate before history, and it runs inside the tool | **accepted** · 2026-10-27 |
 | [101](ADR-101-a-file-lease-belongs-to-one-session-and-the-pre-edit-hook-refuses-another.md) | a file lease belongs to one session, and the pre-edit hook refuses another's edit | **accepted** · 2026-10-28 |
 | [102](ADR-102-the-two-queued-review-rows-are-closed-by-ruling.md) | the two rows review 0002 left queued are closed by ruling, not by authoring | **accepted** · 2026-10-28 |
+| [103](ADR-103-co-projected-duplicates-merge-down.md) | duplicates stand alone, fingerprints generalize, references spell out | **accepted** · 2026-10-28 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

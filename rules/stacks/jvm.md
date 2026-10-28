@@ -26,7 +26,7 @@ rules live in the `android` profile, which selects on `has-android-manifest`.
 
 ## Modules and layers
 
-- `:core:domain` depends on no other internal module. Enforce it; do not add an
+- The core domain module depends on no other internal module. Enforce it; do not add an
   import that breaks the direction.
 - Layer suffixes: `*Repository`, `*Service`, `*Mapper`, `*Controller`. A class named
   `*Repository` that talks to HTTP is not a repository.

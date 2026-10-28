@@ -41,7 +41,7 @@ Applies to: `cloudflare-workers` — a `wrangler.json`, `wrangler.jsonc` or
 - Validate at the edge with the schema layer. Authorization is server-authoritative; a
   client-side role, claim, cache entry or URL parameter grants nothing.
 - `Request`/`Response` are globals. Do not pass them through as values into domain code.
-- Caching defaults to `private, no-store`. Never cache token, account, block, reveal, admin
+- Caching defaults to `private, no-store`. Never cache tokens, account data, admin
   decisions or authenticated errors.
 - Streaming is the default for large bodies; do not buffer without a stated reason.
 

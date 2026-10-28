@@ -80,7 +80,7 @@ test('the 6/8 partial-pass example survives (it was silently deleted in one copy
 test('preview-postflight carries BOTH the build-config and credential bullets', async () => {
   const rules = await loadMdcRules();
   const { body } = renderMdc(rules.find((r) => r.id === 'preview-postflight'));
-  assert.match(body, /SOCIAL_API_BASE_URL/);
+  assert.match(body, /preview environment's API base URL/);
   assert.match(body, /operator keychain only/);
 });
 

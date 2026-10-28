@@ -27,18 +27,17 @@ simt-substitutions:
   # neither, declares that. A worker that serves derivatives and calls no API has no
   # API base URL to set, so it declares only its own custom-domain binding.
   - key: previewApiBaseUrlNote
-    default: "- Point the preview build at the preview API Worker: set `SOCIAL_API_BASE_URL` in the Cloudflare Workers Builds preview environment to the preview API Worker URL."
+    default: "- Point the preview build at the preview API: set the preview environment's API base URL to the preview API URL."
     describe: build-config instruction, when this repo actually has a preview API base URL to set
   - key: googleOnlyNote
-    default: "- Production and public browser flows remain Google-only."
+    default: "- Production and public browser flows use the production identity only."
     describe: the identity policy this repo enforces in production
 ---
 
 # Preview-Only Authenticated Postflight
 
 Authenticated remote postflight and release checks use only {{previewWorkers}}, deployed
-with `AUTH_PROVIDER_POLICY=preview_postflight_password` and a secret-bound Firebase password
-identity (`POSTFLIGHT_PASSWORD_UID`).
+with a preview-only auth provider policy and a secret-bound password identity.
 
 ## Requirements
 
@@ -52,8 +51,8 @@ identity (`POSTFLIGHT_PASSWORD_UID`).
 ## Forbidden
 
 - Authenticated postflight against production domains ({{productionDomains}}).
-- Using real Social Google accounts for feature slice verification.
-- Demanding, pasting, or storing production Google OAuth tokens in chat or tickets.
+- Using real user accounts for feature slice verification.
+- Demanding, pasting, or storing production OAuth tokens in chat or tickets.
 
 ## Allowed Without Account
 

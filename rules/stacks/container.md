@@ -7,6 +7,8 @@ simt-scope: ["Dockerfile", "*.dockerfile"]
 simt-fallback: false
 ---
 
+# Stack profile: Containers
+
 ## Containers
 
 A Dockerfile is the build. If a rule here and the repo's own instructions disagree, the

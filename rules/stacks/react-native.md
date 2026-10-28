@@ -10,11 +10,9 @@ simt-priority: convention
 simt-scope: ["app.json", "metro.config.js", "ios/**", "android/**"]
 ---
 
-# Stack profile: React Native
-
-Applies to: `react-native` — a `react-native` or `expo` dependency. A repository whose
-UI is rendered in a browser gets the `react-web` profile instead; see that profile for
-the rules this one does not repeat.
+# Stack profile: React NativeApplies to: `react-native` — a `react-native` or `expo` dependency. A repository whose
+UI is rendered in a browser follows the browser rules instead; nothing here assumes a
+DOM, a stylesheet cascade, or URL-shared state.
 
 ## What does not apply here
 

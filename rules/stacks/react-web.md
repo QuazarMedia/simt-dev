@@ -17,8 +17,10 @@ UI is rendered in a browser.
 
 ## Types
 
-- `strict` plus the full strictness set listed in the Workers profile. Generated API DTOs only;
-  never hand-write a duplicate of a type the API already produces.
+- `strict` plus `noUncheckedIndexedAccess`, `exactOptionalPropertyTypes`,
+  `noImplicitOverride`, `noFallthroughCasesInSwitch`, `noImplicitReturns`,
+  `isolatedModules`. Generated API DTOs only; never hand-write a duplicate of a
+  type the API already produces.
 - No `any`, no unsafe casts, no non-null boundary bypasses, no floating promises, no
   `console.*`.
 
@@ -39,10 +41,9 @@ UI is rendered in a browser.
 
 ## RTL and localisation
 
-- Arabic mirrors application chrome only. North, coordinate order, geographic pan and zoom,
-  map symbols, media and universal status meaning do not mirror.
-- Every user-visible string exists in every supported locale in the same change. Adding a
-  locale touches tests, which assert locale parity.
+- RTL locales mirror application chrome only. North, coordinate order, geographic pan and
+  zoom, map symbols, media and universal status meaning do not mirror.
+- Every user-visible string exists in every supported locale in the same change.
 
 ## Accessibility
 
@@ -58,6 +59,5 @@ UI is rendered in a browser.
 - Assert behaviour, not implementation. Never weaken an assertion, an accessibility check or a
   fixture to match current behaviour.
 - No arbitrary sleeps. No `.only`. No committed `.skip`. No flaky reruns.
-- Inject a sentinel token, UID, text, gender, coordinate, URL and private media value, and
-  prove its absence from unauthorised UI, storage, cache, telemetry, URL history and
-  artifacts.
+- Inject sentinel values (a token, an id, a coordinate, a URL) and prove their absence
+  from unauthorised UI, storage, cache, telemetry, URL history and artifacts.

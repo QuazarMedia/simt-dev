@@ -133,6 +133,9 @@ const JSON_COMMANDS = {
   ignore: { root: 'r' },
   // No cache on a fresh fixture: reports the miss as one document, exit 0.
   status: { root: 'r', args: ['--line'] },
+  // No base and no ledger on a fresh fixture: the absences are lines in the
+  // report, and the report is still one document, exit 0 (R55).
+  'pr-body': { root: 'r' },
   'local doctor': { root: 'r' },
   'shared plan': { root: '.' },
   // The preview, not the write: the write lands in the reader's home directory, and a

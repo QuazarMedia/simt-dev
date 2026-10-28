@@ -67,6 +67,7 @@ import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { decideCommand } from './decide.mjs';
 import { explainCommand } from './explain.mjs';
 import { undoCommand } from './undo.mjs';
+import { prBodyCommand } from './prbody.mjs';
 import { ignoreCommand } from './ignore.mjs';
 import { completionsCommand } from './completions.mjs';
 import { reviewCommand } from './review.mjs';
@@ -167,6 +168,10 @@ export const IMPLEMENTED = {
   // Plan 0003 R49. A bare command: restoring the last journaled set needs no
   // subcommand, so there is no group and no default to resolve.
   undo: undoCommand,
+  // Plan 0003 R55. A bare command: the body is derived from the tree, the
+  // ledger and the last check, so there is no subcommand to resolve and no
+  // write to confirm.
+  'pr-body': prBodyCommand,
   // Plan 0003 R52. A bare command: the one list is `.simtignore`, so there is no
   // group and no default subcommand to resolve.
   ignore: ignoreCommand,

@@ -26,7 +26,7 @@ import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedS
 import { GATE_KEY, gateCount, readHooksPath, readHooksState, wantsShim } from '../compare/hooksstate.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { knownGates } from '../hooks/resolve.mjs';
-import { runGates } from '../hooks/dispatcher.mjs';
+import { renderGateReport, runGates } from '../hooks/dispatcher.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
@@ -63,14 +63,7 @@ async function runHook(args, flags) {
   }
 
   for (const n of result.notes ?? []) note(`note     ${n}`);
-  const lines = [`hooks    ${event}`, `gates    ${(manifest.gates[GATE_KEY[event]] ?? []).join(', ') || '(none declared)'}`];
-  for (const g of result.gates) {
-    lines.push(`${g.status.toUpperCase().padEnd(8)} ${g.name.padEnd(20)} ${g.detail}${g.adr ? `  [${g.adr}]` : ''}`);
-    if (g.remedy) lines.push(`        remedy: ${g.remedy}`);
-    if (g.output) lines.push(...g.output.split('\n').map((l) => `        ${l}`));
-  }
-  lines.push(result.failed ? 'BLOCKED  at least one gate failed' : 'PASSED');
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(renderGateReport(event, manifest.gates[GATE_KEY[event]] ?? [], result).join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return result.failed ? EXIT.FAIL : EXIT.OK;
 }
 

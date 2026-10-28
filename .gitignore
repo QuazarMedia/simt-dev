@@ -27,3 +27,7 @@ dist/
 # Gate state for `simt status --line`. Local state, never shared: it names the
 # commit the last `check` measured, which is meaningless anywhere else.
 .simt/check.json
+
+# Worktrees `simt slice start` creates, one branch per row. Local state: the branch
+# records where the work is, and the directory that holds it is not part of any commit.
+.simt/worktrees/

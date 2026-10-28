@@ -51,6 +51,7 @@ import {
   benchCriticCommand,
 } from './bench.mjs';
 import { planCommand } from './plan.mjs';
+import { sliceCommand } from './slice.mjs';
 import { sharedPlanCommand, sharedInstallCommand } from './shared.mjs';
 import { runDoctor } from './doctor.mjs';
 import { statusCommand } from './status.mjs';
@@ -87,6 +88,10 @@ const GROUPS = new Map([
   ['rules', 'list'],
   ['hooks', 'status'],
   ['plan', 'status'],
+  // Plan 0003 R53. Both halves write, so a bare `slice` has no read to default to.
+  // `start` is the default because with the id it is missing it fails with a usage
+  // error before anything is created — the one default here that cannot mutate.
+  ['slice', 'start'],
   ['agent-hooks', 'status'],
   ['harness', 'detect'],
   ['bench', 'mine'],
@@ -138,6 +143,11 @@ export const IMPLEMENTED = {
   'plan status': (args, flags) => planCommand('status', args, flags),
   'plan next': (args, flags) => planCommand('next', args, flags),
   'plan done': (args, flags) => planCommand('done', args, flags),
+  // Plan 0003 R53. A group: `start` isolates the work on a branch with its brief,
+  // `finish` runs the gates, commits and records the evidence. Both take the slice
+  // id as a positional.
+  'slice start': (args, flags) => sliceCommand('start', args, flags),
+  'slice finish': (args, flags) => sliceCommand('finish', args, flags),
   'shared plan': sharedPlanCommand,
   'shared install': sharedInstallCommand,
   evidence: evidenceCommand,

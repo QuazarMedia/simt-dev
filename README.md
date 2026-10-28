@@ -131,6 +131,9 @@ simt evidence check <msg-file>      # verify a commit message does not claim unr
 simt plan status                    # count queued, in-progress, complete, and accepted tracker rows
 simt plan next [<id>]               # print the next ready slice section (~1 KB)
 simt plan done <id> [<sha>] --yes   # mark a tracker row complete with its commit SHA and test command
+simt slice start <id> --yes         # a worktree on branch slice/<id> with the brief preloaded; row In progress
+simt slice finish <id> --yes        # run the pre-commit gates, commit a Conventional subject from the
+                                    # row's title, and record the SHA and --test command on the row
 simt tokens [--repos] [--session]   # measure bytes loaded at session start or split a transcript
 simt harness detect [--user]        # detect configured harnesses at repo and user level
 simt harness loaders [--table]      # what each harness loads, in what order, and where its cap truncates
@@ -155,8 +158,10 @@ simt ignore [--yes] [--diff]        # render the one .simtignore list into .curs
 
 `init`, `sync`, `upgrade`, `hooks install`, `agent-hooks install`, `shared install`,
 `skills install`, `plan done`, `lessons review`, `decide`, `ignore`, `pack new`,
-`pack publish` and the `bench` writers print
-a plan and write nothing without `--yes`. None of them commit or push. `simt index`
+`pack publish`, `slice start`, `slice finish` and the `bench` writers print
+a plan and write nothing without `--yes`. None of them push, and only
+`slice finish` commits — locally, through the pre-commit gates, and only what is
+staged. `simt index`
 writes its cache without asking: the file is gitignored and `git ls-files` can rebuild it.
 
 Declare `secret-scan` in `gates.preCommit` to block a commit whose staged diff

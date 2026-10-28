@@ -103,6 +103,10 @@ const JSON_COMMANDS = {
   'plan status': [],
   'plan next': [],
   'plan done': ['no-such-slice'],
+  // The refusal is the contract: an id the tracker does not carry fails as one
+  // document before any worktree or commit is touched (R53).
+  'slice start': ['no-such-slice'],
+  'slice finish': ['no-such-slice'],
   // Reads the directory that holds the repositories rather than one of them, so it is
   // given the fixture root and not a member: the fixture holds exactly one repository, and
   // a workspace of one is a workspace.

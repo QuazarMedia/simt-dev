@@ -1,6 +1,6 @@
 import { emit } from '../output/index.mjs';
 import { parse } from '../argv.mjs';
-import { CLI, MANIFEST_FILE } from '../name.mjs';
+import { CLI, MANIFEST_FILE, STATE_DIR } from '../name.mjs';
 import { DEFAULT_DIRECTORIES, DEFAULT_TEMPLATE } from '../plan/template.mjs';
 
 const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into the ecosystem
@@ -75,6 +75,14 @@ ${CLI} plan status             count tracker rows
                            ${DEFAULT_DIRECTORIES.join(' and ')})
 ${CLI} plan next [<id>]        one ready slice's section, or the one named; ~1 KB
 ${CLI} plan done <id> [<sha>]  mark one row; dry-run unless --yes
+${CLI} slice start <id>     give a slice its own worktree and branch, preload the
+                           brief, and mark the row In progress (dry-run unless
+                           --yes; the worktree is ${STATE_DIR}/worktrees/<id> on
+                           branch slice/<id>, the brief ${STATE_DIR}/brief.md in it)
+${CLI} slice finish <id>    run the pre-commit gates, commit what is staged with a
+                           Conventional subject from the row's title, then record
+                           the SHA and the --test command on the row (dry-run
+                           unless --yes; --type picks the type, default feat)
 ${CLI} graph lint              check the skill registry against the skills on disk
                            (byte counts, dangling edges, unresolvable variants)
 ${CLI} ci                     simt-dev's own .github files: create or refresh them
@@ -265,8 +273,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --reps <n>              bench run: repetitions per task and arm (default: 3)
 --regrade <run>         bench run: re-grade a stored run from its archived agent patch
 --compare <a> <b>       bench report: compare two arms with deltas and p-values
---test <cmd>            plan done: the test command that closes the row
+--test <cmd>            plan done / slice finish: the test command that closes the row
 --state <name>          plan done: target state (default: Complete)
+--type <name>           slice finish: the Conventional Commits type (default: feat)
 --level <name>          map: detail level (outline, names, signatures)
 --supersedes <spec>     decide: superseded ADR or ruling (ADR-NNN or ADR-NNN:<ruling>[:<kind>]; repeatable)
 --source <spec>         pack new: where the pack's bytes come from

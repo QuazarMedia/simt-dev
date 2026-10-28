@@ -273,6 +273,31 @@ export async function runGates(event, { root, manifest }) {
   return { event, gates: results, failed: results.some((r) => r.status === 'failed') };
 }
 
+/**
+ * The lines that report one event's gate run: the event, what was declared, every
+ * gate with its disposition, its reason and its remedy, and the verdict.
+ *
+ * Shared by `hooks run` and `slice finish` rather than written twice (ADR-002: the
+ * second real use is what the extraction exists for). Both run this dispatcher over
+ * the same event, and two renderings of one run are two ways for one of them to
+ * quietly stop printing a gate that failed.
+ *
+ * @param {string} event the hook event as git spells it
+ * @param {string[]} declared the gate names the manifest declares for it
+ * @param {object} result the value `runGates` returned
+ * @returns {string[]} the report lines, newline-free, in print order
+ */
+export function renderGateReport(event, declared, result) {
+  const lines = [`hooks    ${event}`, `gates    ${(declared ?? []).join(', ') || '(none declared)'}`];
+  for (const g of result.gates) {
+    lines.push(`${g.status.toUpperCase().padEnd(8)} ${g.name.padEnd(20)} ${g.detail}${g.adr ? `  [${g.adr}]` : ''}`);
+    if (g.remedy) lines.push(`        remedy: ${g.remedy}`);
+    if (g.output) lines.push(...g.output.split('\n').map((l) => `        ${l}`));
+  }
+  lines.push(result.failed ? 'BLOCKED  at least one gate failed' : 'PASSED');
+  return lines;
+}
+
 async function run(argv, cwd) {
   try {
     const { stdout, stderr } = await exec(argv[0], argv.slice(1), { cwd, maxBuffer: 8 * 1024 * 1024 });

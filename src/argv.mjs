@@ -150,6 +150,11 @@ export const VALUE_FLAGS = new Set([
   // plan done: the test command that proves the slice. Plan 0003 R31.
   'test',
   'state',
+  // slice finish: the Conventional Commits type for the commit it makes. A value,
+  // not a boolean, because a row title cannot say whether the slice was a feat, a
+  // fix or a chore, and deriving it from the words would be a guess no reader of
+  // the message could argue with (plan 0003 R53).
+  'type',
   // map: outline (paths), names (exported symbols) or signatures (the line).
   // A boolean would not say which of the three the caller wanted.
   'level',

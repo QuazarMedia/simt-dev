@@ -99,7 +99,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | **Wave 0 — security, data loss, release** | | | | | | | | |
 | Q01 | Pre-tool-use policy is a regex; ~25 push/rewrite/hook-disable forms pass | P0 | S | agenthooks | M | — | Complete | `a25e168`; ADR-104; `npm test` — 1375/1375, also from a sibling-less copy |
-| Q02 | Secret scan blind under `diff.external`, `-diff`, binary; mis-attributes paths | P0 | S | secrets | S | — | Queued | |
+| Q02 | Secret scan blind under `diff.external`, `-diff`, binary; mis-attributes paths | P0 | S | secrets | S | — | Complete | `1190937`; `npm test` — 1376/1376, also from a sibling-less copy |
 | Q03 | `simt plugin` packages the consumer's cwd instead of simt | P0 | F | plugins | S | — | Queued | |
 | Q04 | Homebrew tap still serves 0.4.0; release job never lands on tap `main` | P0 | D | release | S | — | Queued | |
 | Q05 | README pins 0.5.0; unreleased commands documented as shipped; `main` reports 0.6.2 | P0 | D | docs/release | S | — | Queued | |

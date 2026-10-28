@@ -925,7 +925,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R50 | `--diff` on every writer | 8 | review 0002 S10 | S | — | contract table | Complete |
 | R51 | Shell completions | 8 | review 0002 S15 | S | — | deterministic output | Complete |
 | R52 | Context hygiene and secret scan | 8 | R15 | S | — | sentinel blocked; parity | Complete |
-| R53 | `slice start/finish` | 8 | R31, R17 | M | — | row and commit verified | Queued |
+| R53 | `slice start/finish` | 8 | R31, R17 | M | — | row and commit verified | Complete |
 | R54 | File leases for parallel agents | 8 | R15 | S | — | two-session fixture | Queued |
 | R55 | `pr-body` | 8 | R17 | S | — | fixture snapshot | Queued |
 

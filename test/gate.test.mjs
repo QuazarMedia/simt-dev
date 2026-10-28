@@ -79,6 +79,9 @@ const RESOLVE = [
   'test/secrets.test.mjs',
   'test/shared.test.mjs',
   'test/shipped.test.mjs',
+  // slice.test.mjs reaches the resolver through the dispatcher's gate run and
+  // through the shared fixture, the same way secrets.test.mjs does (R53).
+  'test/slice.test.mjs',
   'test/surfaces.test.mjs',
   'test/tokens.test.mjs',
   'test/toolchain.test.mjs',

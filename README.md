@@ -85,7 +85,7 @@ published `.sha256` before running anything.
 ```sh
 # Adopt, inspect, and maintain a repository
 simt init                           # adopt or scaffold; prints a plan; --yes writes
-simt doctor                         # stack, facts, evidence, and config health
+simt doctor [--fix]                 # stack, facts, evidence, and config health (--fix applies safe remedies, journaled)
 simt check [--frozen]               # projection drift, manifest, lock, and declared checkers
 simt sync [--explain] --yes         # regenerate the projection
 simt upgrade --yes                  # move every consumer in the workspace to this SHA
@@ -126,11 +126,15 @@ simt agent-hooks status             # what each harness will run, and whether Co
 simt agent-hook <event> --harness   # evaluate pre-tool-use, post-tool-use, or prompt-submit
 simt evidence                       # gate and test runs recorded against the current git tree
 simt evidence check <msg-file>      # verify a commit message does not claim unrecorded passing runs
+simt pr-body [--base <ref>]         # a PR body: the evidence block for this tree, changed
+                                    # decisions, gate state, and residual risk in ADR-008 vocabulary
 
 # Plans, context metering, workspace learning, benchmarks, local models, and MCP
 simt plan status                    # count queued, in-progress, complete, and accepted tracker rows
 simt plan next [<id>]               # print the next ready slice section (~1 KB)
 simt plan done <id> [<sha>] --yes   # mark a tracker row complete with its commit SHA and test command
+simt status --line                  # one-line gate state from the last check, for prompts (< 50 ms)
+simt undo --yes                     # restore the last journaled set of writes, if untouched since
 simt slice start <id> --yes         # a worktree on branch slice/<id> with the brief preloaded; row In progress
 simt slice finish <id> --yes        # run the pre-commit gates, commit a Conventional subject from the
                                     # row's title, and record the SHA and --test command on the row
@@ -149,6 +153,8 @@ simt bench report [--compare a b]   # resolved rate, quality, cost, CPI, bootstr
 simt bench ablate --yes             # leave-one-out rule ablation ranked by value per KB
 simt bench probes --yes             # 12 deterministic rule-compliance probes
 simt bench variants --yes           # evaluate simt-variants slots and lock winners in simt-dev.lock.json
+simt review [--local]               # an advisory ADR-008 verdict skeleton over the staged diff
+simt distill <skill|doc>            # a budgeted proposal summary with line citations, for a person to merge
 simt pack new <name> --source <spec> # scaffold a versioned pack: pack.json, bench.json, one rule
 simt pack lint [dir] [--require-measured] # validate a pack and state its measured ΔR
 simt pack publish [dir] --yes       # publish an npm-sourced pack (git packs name the tag-and-push)
@@ -196,6 +202,7 @@ through `simt mcp`.
 | Rule violation or error | `simt lessons list` | `simt rules why <rule-id>` for the decision |
 | Working from a plan | `simt plan next` | `simt plan done <id> <sha> --yes` when finished |
 | Before committing | `simt check` | `simt evidence` to verify test claims |
+| Opening a pull request | `simt pr-body` | `--base <ref>` to diff against another fork point |
 | Repository adoption | `simt init --yes` | `simt doctor` to verify stack detection |
 | Multi-repo workspace | `simt compare` | `simt shared plan` to find deduplication opportunities |
 | Local model available | `simt local doctor` | `simt index --embed` to build vector embeddings |
@@ -328,22 +335,30 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
 | **Governance & Provenance** | `simt why [path]`, `simt rules list`, `simt rules show <id>`, `simt rules why <id\|ADR-NNN>`, `simt decide` | `rules_list`, `rules_why` | Before touching governed files (`why`), when reading deferred kernel rules (`rules show`), or when checking/scaffolding ADRs (`rules why`, `decide`) |
 | **Skills & Disclosure** | `simt skills index\|brief\|show\|why\|find\|install\|compile\|eval`, `simt graph lint` | `skills_index`, `skills_find`, `skills_brief`, `skills_show`, `skills_why` | When a task requires domain workflows or reference docs without blowing the session token budget |
 | **Memory & Lessons** | `simt lessons list`, `simt lessons review <id> --yes` | — | After fixing a failing test/gate or hitting a hook denial, to inspect or promote reusable failure-to-fix lessons |
-| **Plans & Trackers** | `simt plan status`, `simt plan next [<id>]`, `simt plan done <id> [<sha>] --yes` | `plan_next`, `plan_done` | When executing a phased implementation or review plan row by row |
+| **Plans & Trackers** | `simt plan status`, `simt plan next [<id>]`, `simt plan done <id> [<sha>] --yes`, `simt slice start\|finish <id>`, `simt lease`, `simt pr-body`, `simt status --line`, `simt undo` | `plan_next`, `plan_done` | When executing a phased implementation or review plan row by row |
 | **Adoption & Projection** | `simt init`, `simt doctor`, `simt check [--frozen]`, `simt sync`, `simt upgrade`, `simt ci` | `doctor`, `check` | When adopting a repo, diagnosing stack/config health, or verifying zero drift before commit |
 | **Dual Gates & Evidence** | `simt hooks install\|status\|run`, `simt agent-hooks install\|status`, `simt agent-hook`, `simt evidence [check]` | — | When installing git/agent hooks, running gates manually, or verifying test claims before committing |
 | **Context & Harnesses** | `simt tokens [--repos] [--session]`, `simt harness detect\|loaders`, `simt shared plan\|install` | — | When auditing startup token cost across harnesses (`claude`, `codex`, `cursor`, `opencode`, `antigravity`, `copilot`, `deepseek`) or deduplicating workspace rules |
-| **Workspace & Benchmarks** | `simt compare`, `simt bench mine\|run\|report\|ablate\|probes\|variants`, `simt local doctor` | `compare` | When auditing an entire multi-repo estate, measuring rule uplift/cost, or probing local model endpoints |
+| **Workspace & Benchmarks** | `simt compare`, `simt bench mine\|run\|report\|ablate\|probes\|variants`, `simt local doctor`, `simt review [--local]`, `simt distill` | `compare` | When auditing an entire multi-repo estate, measuring rule uplift/cost, or probing local model endpoints |
 
 ## Where the plan finishes
 
-Slices `R01`–`R45` are complete and shipped in `0.6.0`. The remaining queued slices are the
-small ergonomics:
+Slices `R01`–`R55` are all complete. The small ergonomics (`R46`–`R55`) shipped
+on top of `0.6.0`:
 
 - **The small doors (`R46`–`R55`).** `simt explain <CODE>` for every finding code, safe
   idempotent `simt doctor --fix`, a `< 50 ms` `simt status --line`, a write journal with
   `simt undo`, `--diff` on every writer, shell completions, one cross-harness ignore list
   plus a staged-diff secret scan, `simt slice start/finish <ID>` worktrees, file leases
   for parallel agents, and `simt pr-body` assembled from the evidence ledger.
+
+Two rows in review `0002` still read Queued, and neither is closable from inside this
+repository: `S38` (workspace token cost — the `simt tokens` instrument and the
+`budget.bytes` declaration shipped, the blocking gate was refused by ruling in ADR-072,
+and the kernel-default study that would close the row is still unmeasured) and `S39`
+(estate policy as a pack — the pack mechanism shipped, but moving estate content is the
+estate's own commit). Everything else in plans `0001`–`0003` and reviews `0001`–`0002`
+is Complete or Accepted.
 
 The local-model slices (`R38`–`R40`) shipped as they lab-written: `simt distill` proposes
 budgeted summaries with line citations, `simt review` proposes an advisory ADR-008

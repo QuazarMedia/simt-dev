@@ -155,6 +155,10 @@ export const VALUE_FLAGS = new Set([
   // fix or a chore, and deriving it from the words would be a guess no reader of
   // the message could argue with (plan 0003 R53).
   'type',
+  // lease: how long the claim lasts, in seconds. A value, because "a lease is short"
+  // is not a number any reader can act on, and an expiry nobody chose is an expiry
+  // nobody can plan around (plan 0003 R54, ADR-101).
+  'ttl',
   // map: outline (paths), names (exported symbols) or signatures (the line).
   // A boolean would not say which of the three the caller wanted.
   'level',

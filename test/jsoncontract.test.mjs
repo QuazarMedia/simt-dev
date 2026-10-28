@@ -107,6 +107,8 @@ const JSON_COMMANDS = {
   // document before any worktree or commit is touched (R53).
   'slice start': ['no-such-slice'],
   'slice finish': ['no-such-slice'],
+  // No claim file on a fresh fixture: the list is an empty one, exit 0 (R54).
+  lease: { root: 'r' },
   // Reads the directory that holds the repositories rather than one of them, so it is
   // given the fixture root and not a member: the fixture holds exactly one repository, and
   // a workspace of one is a workspace.

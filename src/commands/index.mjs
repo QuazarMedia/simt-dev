@@ -52,6 +52,7 @@ import {
 } from './bench.mjs';
 import { planCommand } from './plan.mjs';
 import { sliceCommand } from './slice.mjs';
+import { leaseCommand } from './lease.mjs';
 import { sharedPlanCommand, sharedInstallCommand } from './shared.mjs';
 import { runDoctor } from './doctor.mjs';
 import { statusCommand } from './status.mjs';
@@ -169,6 +170,9 @@ export const IMPLEMENTED = {
   // Plan 0003 R52. A bare command: the one list is `.simtignore`, so there is no
   // group and no default subcommand to resolve.
   ignore: ignoreCommand,
+  // Plan 0003 R54. A bare command: paths claim, no paths list, so the argument itself
+  // is the mode and there is no group to resolve.
+  lease: leaseCommand,
   distill: distillCommand,
   // R25 machinery needs the runnable command names for Affects command tokens,
   // same wiring `why` and `impact` get through their lambdas.

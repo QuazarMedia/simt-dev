@@ -1,6 +1,7 @@
 import { emit } from '../output/index.mjs';
 import { parse } from '../argv.mjs';
 import { CLI, MANIFEST_FILE, STATE_DIR } from '../name.mjs';
+import { SESSION_ENV } from '../agenthooks/policy.mjs';
 import { DEFAULT_DIRECTORIES, DEFAULT_TEMPLATE } from '../plan/template.mjs';
 
 const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into the ecosystem
@@ -83,6 +84,10 @@ ${CLI} slice finish <id>    run the pre-commit gates, commit what is staged with
                            Conventional subject from the row's title, then record
                            the SHA and the --test command on the row (dry-run
                            unless --yes; --type picks the type, default feat)
+${CLI} lease [<paths>...]    claim files for one session and a TTL, or list the
+                           claims (dry-run unless --yes; the session is --session
+                           <id> or ${SESSION_ENV}; a pre-edit hook refuses an edit
+                           to a path another session holds — ADR-101)
 ${CLI} graph lint              check the skill registry against the skills on disk
                            (byte counts, dangling edges, unresolvable variants)
 ${CLI} ci                     simt-dev's own .github files: create or refresh them
@@ -276,6 +281,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --test <cmd>            plan done / slice finish: the test command that closes the row
 --state <name>          plan done: target state (default: Complete)
 --type <name>           slice finish: the Conventional Commits type (default: feat)
+--ttl <seconds>         lease: how long a claim lasts (default: 3600)
 --level <name>          map: detail level (outline, names, signatures)
 --supersedes <spec>     decide: superseded ADR or ruling (ADR-NNN or ADR-NNN:<ruling>[:<kind>]; repeatable)
 --source <spec>         pack new: where the pack's bytes come from

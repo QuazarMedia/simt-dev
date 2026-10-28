@@ -36,6 +36,16 @@ export const EVENTS = ['pre-tool-use', 'prompt-submit', 'post-tool-use'];
 export const ALLOW_ENV = 'SIMT_ALLOW';
 
 /**
+ * The environment variable that names the session a claim was filed under and the
+ * session an edit is asked for (R54).
+ *
+ * One name in both places on purpose: a denial is only explainable if the session the
+ * hook protected is the same name `simt lease` recorded, and two spellings would drift
+ * into a refusal nobody can reconcile with a claim that exists.
+ */
+export const SESSION_ENV = 'SIMT_SESSION';
+
+/**
  * One row per policy.
  *
  * `inspects` names the fact the matcher is handed, and `match` the condition. The
@@ -74,6 +84,25 @@ const POLICIES = [
     message:
       `That file carries bytes this tool generates, so an edit there is overwritten on the next ` +
       `write; edit the source the region comes from, then run \`${CLI} sync --yes\` (ADR-036).`,
+  },
+  {
+    id: 'lease',
+    adr: 'ADR-101',
+    event: 'pre-tool-use',
+    inspects: 'lease',
+    match: null,
+    message: `That path is leased by another session (ADR-101); wait for its TTL or ask the holder to release it.`,
+    // The only row whose message is not a constant: what the blocked session needs to
+    // hear — which path, whose, until when — is read from the claim file at decision
+    // time, and a static row cannot carry a timestamp it has never seen.
+    detail: (facts, env) => {
+      if (facts.leaseError) return `${facts.leaseError}; fix or remove it so the claims are readable`;
+      const mine = env[SESSION_ENV] ?? '';
+      const held = (facts.writes ?? [])
+        .filter((w) => w.lease && w.lease.session !== mine)
+        .map((w) => `${w.path} held by ${w.lease.session} until ${new Date(w.lease.expiresAt).toISOString()}`);
+      return held.length > 0 ? `held: ${held.join('; ')}` : '';
+    },
   },
 ];
 

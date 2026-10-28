@@ -119,6 +119,11 @@ ${CLI} map [--task "<text>"] [--level outline|names|signatures]
                            --budget bytes (default 2048; 0 is unlimited). outline
                            is paths, names adds exports, signatures adds the line.
                            --recall reports gold-file recall@10 on mined tasks
+${CLI} pr-body [--base <ref>]  a pull request body: the evidence block for this tree,
+                           the decision records the diff touches, the gate
+                           state from the last check, and the residual risk
+                           in ADR-008 vocabulary (read-only; the exit code
+                           never carries the verdict)
 ${CLI} evidence                the runs recorded against the tree on disk
 ${CLI} evidence check <file>   a commit message that claims a run this tree does not
                            have: a warning, or a block when gates.evidence is "block"
@@ -225,6 +230,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --task "<text>"         the task text used for capability resolution
 --paths <globs>         comma-separated path globs used for path resolution
 --root <path>           repository root (default: cwd)
+--base <ref>           pr-body: the ref the body diffs against
+                        (default: origin/main, then main; falls back to the
+                        worktree diff against HEAD when neither exists)
 --out <path>            plugin: where the generated package lands (required)
 --surfaces <ids>        comma-separated editors to write rule files for;
                          "" means AGENTS.md only (default: every surface,

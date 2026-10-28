@@ -172,6 +172,10 @@ export const VALUE_FLAGS = new Set([
   // "generate a package" with no destination would have to guess, and a guess about where
   // a directory tree goes is the one failure that leaves files behind.
   'out',
+  // pr-body: the ref the body diffs against. A value, because the fork point is a
+  // name only the author's branch knows, and the default (origin/main, then main)
+  // is a guess the report states out loud rather than a question it asks.
+  'base',
 ]);
 
 /**

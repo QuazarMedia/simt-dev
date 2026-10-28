@@ -167,6 +167,29 @@ test('a diff git cannot read reports an error instead of a clean scan', async ()
   assert.ok(error, 'git could not answer and the scan must say so');
 });
 
+test('repository diff configuration cannot route the scan around', async () => {
+  // `diff.external` sends the diff to a program that prints nothing, `-diff` in
+  // `.gitattributes` tells git the file is binary so it prints no text at all, and
+  // `diff.mnemonicPrefix` renames the header prefixes the attribution reads. All are
+  // settings a repository can carry, and with the first two the scan used to report a
+  // clean stage for a staged key (review 0003 Q02). The scan must read the staged bytes
+  // with its own flags, whatever the repository asked git for.
+  const root = await repo();
+  await git(['-C', root, 'config', 'diff.external', '/usr/bin/true']);
+  // A boolean: when set, `--cached` diffs are headed `c/… i/…` instead of `a/… b/…`.
+  await git(['-C', root, 'config', 'diff.mnemonicPrefix', 'true']);
+  await writeFile(join(root, '.gitattributes'), '*.env -diff\n');
+  await writeFile(join(root, 'key.env'), `aws_key=${AWS_SENTINEL}\n`);
+  await git(['-C', root, 'add', '.gitattributes', 'key.env']);
+
+  const { findings, lines, error } = await scanStaged(root);
+  assert.equal(error, null, error);
+  assert.ok(lines > 0, 'the staged diff was empty: the configuration won');
+  assert.equal(findings.length, 1, JSON.stringify(findings));
+  assert.equal(findings[0].file, 'key.env');
+  assert.equal(findings[0].kind, 'aws-access-key-id');
+});
+
 // --- the gate (the acceptance test) ------------------------------------------
 
 test('the secret-scan gate blocks the sentinel, and the report does not contain it', async () => {

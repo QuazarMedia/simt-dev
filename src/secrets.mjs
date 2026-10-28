@@ -149,10 +149,29 @@ export function scanText(text) {
 export async function scanStaged(root) {
   let stdout;
   try {
-    ({ stdout } = await exec('git', ['diff', '--cached', '--unified=0', '--no-color'], {
-      cwd: root,
-      maxBuffer: 32 * 1024 * 1024,
-    }));
+    // Every flag here defeats a way a repository can keep the scan from seeing its
+    // own staged bytes (review 0003 Q02): `diff.external` routes the diff to a
+    // program that prints nothing, `-diff` in `.gitattributes` and genuinely binary
+    // files make git print no text at all, a textconv rewrites the bytes on the way
+    // out, `diff.mnemonicPrefix` renames the header prefixes the attribution below
+    // reads, and C-quoting mangles a non-ASCII name. The scan asks git for the staged
+    // bytes with its own flags and ignores what the repository asked for.
+    ({ stdout } = await exec(
+      'git',
+      [
+        '-c', 'core.quotePath=false',
+        'diff',
+        '--cached',
+        '--no-ext-diff',
+        '--no-textconv',
+        '--text',
+        '--unified=0',
+        '--no-color',
+        '--src-prefix=a/',
+        '--dst-prefix=b/',
+      ],
+      { cwd: root, maxBuffer: 32 * 1024 * 1024 },
+    ));
   } catch (error) {
     const stderr = String(error.stderr ?? '').trim();
     const reason = (stderr || String(error.message ?? error)).split('\n')[0];

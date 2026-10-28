@@ -158,7 +158,7 @@ simt distill <skill|doc>            # a budgeted proposal summary with line cita
 simt pack new <name> --source <spec> # scaffold a versioned pack: pack.json, bench.json, one rule
 simt pack lint [dir] [--require-measured] # validate a pack and state its measured ΔR
 simt pack publish [dir] --yes       # publish an npm-sourced pack (git packs name the tag-and-push)
-simt mcp [--list]                   # serve the 13 read-only tools over stdio JSON-RPC
+simt mcp [--list]                   # serve the 15 read-only tools over stdio JSON-RPC
 simt completions <bash|zsh|fish>    # a completion script generated from the command registry
 simt ignore [--yes] [--diff]        # render the one .simtignore list into .cursorignore,
                                     # .aiderignore, .geminiignore and Claude's permissions.deny
@@ -335,7 +335,7 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
 | **Governance & Provenance** | `simt why [path]`, `simt rules list`, `simt rules show <id>`, `simt rules why <id\|ADR-NNN>`, `simt decide` | `rules_list`, `rules_why` | Before touching governed files (`why`), when reading deferred kernel rules (`rules show`), or when checking/scaffolding ADRs (`rules why`, `decide`) |
 | **Skills & Disclosure** | `simt skills index\|brief\|show\|why\|find\|install\|compile\|eval`, `simt graph lint` | `skills_index`, `skills_find`, `skills_brief`, `skills_show`, `skills_why` | When a task requires domain workflows or reference docs without blowing the session token budget |
 | **Memory & Lessons** | `simt lessons list`, `simt lessons review <id> --yes` | — | After fixing a failing test/gate or hitting a hook denial, to inspect or promote reusable failure-to-fix lessons |
-| **Plans & Trackers** | `simt plan status`, `simt plan next [<id>]`, `simt plan done <id> [<sha>] --yes`, `simt slice start\|finish <id>`, `simt lease`, `simt pr-body`, `simt status --line`, `simt undo` | `plan_next`, `plan_done` | When executing a phased implementation or review plan row by row |
+| **Plans & Trackers** | `simt plan status`, `simt plan next [<id>]`, `simt plan done <id> [<sha>] --yes`, `simt slice start\|finish <id>`, `simt lease`, `simt pr-body`, `simt status --line`, `simt undo` | `plan_next`, `plan_done`, `pr_body` | When executing a phased implementation or review plan row by row |
 | **Adoption & Projection** | `simt init`, `simt doctor`, `simt check [--frozen]`, `simt sync`, `simt upgrade`, `simt ci` | `doctor`, `check` | When adopting a repo, diagnosing stack/config health, or verifying zero drift before commit |
 | **Dual Gates & Evidence** | `simt hooks install\|status\|run`, `simt agent-hooks install\|status`, `simt agent-hook`, `simt evidence [check]` | — | When installing git/agent hooks, running gates manually, or verifying test claims before committing |
 | **Context & Harnesses** | `simt tokens [--repos] [--session]`, `simt harness detect\|loaders`, `simt shared plan\|install` | — | When auditing startup token cost across harnesses (`claude`, `codex`, `cursor`, `opencode`, `antigravity`, `copilot`, `deepseek`) or deduplicating workspace rules |
@@ -352,13 +352,11 @@ on top of `0.6.0`:
   plus a staged-diff secret scan, `simt slice start/finish <ID>` worktrees, file leases
   for parallel agents, and `simt pr-body` assembled from the evidence ledger.
 
-Two rows in review `0002` still read Queued, and neither is closable from inside this
-repository: `S38` (workspace token cost — the `simt tokens` instrument and the
-`budget.bytes` declaration shipped, the blocking gate was refused by ruling in ADR-072,
-and the kernel-default study that would close the row is still unmeasured) and `S39`
-(estate policy as a pack — the pack mechanism shipped, but moving estate content is the
-estate's own commit). Everything else in plans `0001`–`0003` and reviews `0001`–`0002`
-is Complete or Accepted.
+The last two rows of review `0002` (`S38` workspace token cost, `S39` estate policy
+as a pack) are closed by ruling in ADR-102: the instrument, the declaration and the
+non-blocking finding shipped, the blocking gate and the registry-carrying pack were
+refused by ruling, and the estate-side move is recorded as whose commit it waits on.
+Everything in plans `0001`–`0003` and reviews `0001`–`0002` is Complete or Accepted.
 
 The local-model slices (`R38`–`R40`) shipped as they lab-written: `simt distill` proposes
 budgeted summaries with line citations, `simt review` proposes an advisory ADR-008

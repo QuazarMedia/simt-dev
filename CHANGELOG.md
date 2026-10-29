@@ -6,6 +6,14 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+`simt agent-hooks install --harness <id>` writes the policies into one
+harness instead of all of them; an unknown id is a usage error that names
+the valid ones. The readers the run skipped are named in the report
+(`SKIPPED`) and in the JSON document's `notWritten`, so a narrowed install
+cannot read as full coverage (ADR-107).
+
 ## [0.6.3] — 2026-10-29
 
 ### Added

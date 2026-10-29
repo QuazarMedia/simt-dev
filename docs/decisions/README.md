@@ -112,6 +112,9 @@ record's status line — never by editing the ruling in place.
 | [102](ADR-102-the-two-queued-review-rows-are-closed-by-ruling.md) | the two rows review 0002 left queued are closed by ruling, not by authoring | **accepted** · 2026-10-28 |
 | [103](ADR-103-co-projected-duplicates-merge-down.md) | duplicates stand alone, fingerprints generalize, references spell out | **accepted** · 2026-10-28 |
 | [104](ADR-104-the-pre-tool-use-policy-reads-the-command-the-way-a-shell-reads-it.md) | the pre-tool-use policy reads the command the way a shell reads it | **accepted** · 2026-10-28 |
+| [105](ADR-105-the-json-ceiling-shrinks-arrays-and-never-cuts-bytes.md) | the JSON ceiling shrinks arrays and never cuts bytes | **accepted** · 2026-10-29 |
+| [106](ADR-106-the-harness-hook-runs-through-a-repo-shim.md) | the harness hook runs through a repo shim, and `failClosed` only with it | **accepted** · 2026-10-29 |
+| [107](ADR-107-an-install-can-name-one-harness-and-the-skipped-ones-are-named.md) | an install can be narrowed to one harness, and the skipped ones are named | **accepted** · 2026-10-30 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

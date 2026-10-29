@@ -453,6 +453,59 @@ test('install reports the harnesses it did not write, rather than staying quiet 
   );
 });
 
+test('install --harness writes one reader, and names the ones it skipped', async () => {
+  const root = await repo();
+  const preview = cli(['agent-hooks', 'install', '--root', root, '--harness', 'claude']);
+  assert.equal(preview.code, 0);
+  assert.match(preview.text, /PLAN     nothing written/);
+  // The other adapters are this tool's readers, and a one-harness install must name
+  // them as skipped rather than read as full coverage (ADR-107).
+  for (const row of adapters()) {
+    if (row.id !== 'claude') assert.match(preview.text, new RegExp(`SKIPPED\\s+${row.id}`));
+  }
+
+  const install = cli(['agent-hooks', 'install', '--root', root, '--harness', 'claude', '--yes']);
+  assert.equal(install.code, 0);
+  const claude = JSON.parse(await readFile(join(root, hookPath('claude')), 'utf8'));
+  assert.equal(claude.hooks.PreToolUse[0].hooks[0].command, hookCommand('claude'));
+  // The shim is what the config points at, so a one-harness install writes it too.
+  assert.equal(
+    await readFile(join(root, AGENT_HOOK_SHIM), 'utf8').catch(() => null),
+    renderAgentHookShim({ npm: false }),
+  );
+  for (const row of adapters()) {
+    if (row.id === 'claude') continue;
+    assert.equal(
+      await readFile(join(root, hookPath(row.id)), 'utf8').catch(() => null),
+      null,
+      `${row.id} was written without being requested`,
+    );
+  }
+
+  // A second narrowed install is a no-op for the one harness, the way the full one is.
+  const again = cli(['agent-hooks', 'install', '--root', root, '--harness', 'claude', '--yes']);
+  assert.equal(again.code, 0);
+  assert.match(again.text, /UNCHANGED\s+claude/);
+});
+
+test('install --harness with an unknown id is a usage error that names the ids', async () => {
+  const root = await repo();
+  const result = cli(['agent-hooks', 'install', '--root', root, '--harness', 'windsurf']);
+  assert.equal(result.code, 2);
+  assert.match(result.text, /unknown harness `windsurf`/);
+  for (const row of adapters()) assert.ok(result.text.includes(row.id), `the remedy does not name ${row.id}`);
+});
+
+test('install --harness reports the skipped readers in the JSON document', async () => {
+  const root = await repo();
+  const json = cli(['agent-hooks', 'install', '--root', root, '--harness', 'codex', '--yes', '--json']);
+  const payload = JSON.parse(json.stdout);
+  assert.equal(payload.ok, true);
+  assert.deepEqual(payload.written, [hookPath('codex')]);
+  const skipped = payload.notWritten.filter((n) => n.state === 'skipped').map((n) => n.id).sort();
+  assert.deepEqual(skipped, adapters().filter((r) => r.id !== 'codex').map((r) => r.id).sort());
+});
+
 test('the command in the config is the command the reader types', async () => {
   for (const row of adapters()) {
     // The shim, never the bare binary: a harness does not share the shell's PATH, so a

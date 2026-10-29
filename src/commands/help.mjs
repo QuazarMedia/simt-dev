@@ -58,7 +58,7 @@ ${CLI} agent-hook <event>      the entry point a harness calls: pre-tool-use dec
                            (reads one JSON payload on stdin and answers in that
                             harness's dialect; exit 2 blocks; needs --harness)
 ${CLI} agent-hooks install     write this repo's policies into the harnesses that
-                            read a hooks file
+                            read a hooks file (--harness <id> writes one, not all)
                            (dry-run unless --yes; merges into the file, keeps every
                             key it does not own; Codex needs the hook trusted)
 ${CLI} agent-hooks status      what each harness will run, and what is not trusted yet

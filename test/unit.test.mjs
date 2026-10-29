@@ -39,9 +39,11 @@ test('argv: -- terminates flag parsing', () => {
 
 test('argv: unknown flags fail rather than being ignored', () => {
   // A typo'd gate name that is silently dropped is worse than one that fails.
-  const { ok, code } = parse(['doctor', '--nope']);
-  assert.equal(ok, false);
-  assert.equal(code, EXIT.USAGE);
+  // The failure is data, never output: only the caller knows about --json (Q11).
+  const parsed = parse(['doctor', '--nope']);
+  assert.equal(parsed.ok, false);
+  assert.equal(parsed.error.code, EXIT.USAGE);
+  assert.match(parsed.error.message, /unknown flag/);
 });
 
 test('argv: non-negative integer flags are validated', () => {

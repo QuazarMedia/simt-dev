@@ -87,11 +87,10 @@ async function loadPerSurfaceRules() {
 
 export async function listCommand(args, flags) {
   const root = flags.root ?? null;
-  const { rules, broken } = await load(root);
-
   // With --root the question becomes "which of these apply to me", which is a
   // different answer from the catalogue and the one an agent usually wants.
-  const selection = root ? await selectionFor(rules, root) : null;
+  const { rules, broken, notes } = await rulesCatalogue(root, { selectFor: root });
+  const selection = root ? new Set(rules.filter((r) => r.selected).map((r) => r.id)) : null;
 
   if (isJson(flags)) {
     emitJson(
@@ -99,19 +98,8 @@ export async function listCommand(args, flags) {
                 ok: broken.length === 0,
                 command: 'rules list',
                 root,
-                rules: sorted(rules).map((r) => ({
-                  id: r.id,
-                  title: r.title,
-                  origin: r.origin,
-                  source: r.source,
-                  applies: r.applies,
-                  fallback: r.fallback,
-                  bytes: r.bytes,
-                  error: r.error,
-                  adrs: citations(r.body),
-                  selected: selection ? selection.selected.has(r.id) : null,
-                })),
-                notes: selection?.notes ?? [],
+                rules,
+                notes,
               },
     );
     return broken.length === 0 ? EXIT.OK : EXIT.FAIL;
@@ -145,7 +133,7 @@ export async function listCommand(args, flags) {
   ];
 
   for (const rule of rows) {
-    const mark = selection && selection.selected.has(rule.id) ? '*' : ' ';
+    const mark = selection && selection.has(rule.id) ? '*' : ' ';
     lines.push(
       render(mark, rule.id, kb(rule.bytes), rule.origin, appliesLabel(rule), rule.title ?? '(no title)'),
     );
@@ -156,7 +144,7 @@ export async function listCommand(args, flags) {
   }
   if (selection) {
     lines.push('', `* selected for ${root}`);
-    for (const note of selection.notes) lines.push(`  note ${note}`);
+    for (const note of notes) lines.push(`  note ${note}`);
   }
   if (root) {
     const locals = rules.filter((r) => r.origin === 'local');
@@ -173,15 +161,128 @@ async function selectionFor(rules, root) {
   return { selected: new Set(selected.map((r) => r.id)), notes };
 }
 
+// --- cores: one computation for the CLI and the MCP tools (Q15) ----------------
+//
+// `rules_list` and `rules_why` in the MCP surface rebuilt this catalogue from the
+// same modules with narrower loads: the MCP list missed the per-surface rules and
+// the MCP why failed on them, because neither shared the catalogue below. The
+// commands render these facts for terminals; the tools return them as JSON. The
+// CLI keeps its field names; the tools adopt them.
+//
+// A core throws when it cannot answer: the message names the problem, `remedy`
+// names the next command, and `exitCode` is the exit the CLI leaves with.
+function rulesFailure(message, remedy, exitCode) {
+  throw Object.assign(new Error(message), { remedy, exitCode });
+}
+
+async function loadDecisionsFor(root, all) {
+  const localDir = root ? join(root, 'docs', 'decisions') : null;
+  const hasLocal = localDir
+    ? (await readdir(localDir).catch(() => [])).some((n) => /^ADR-\d{3,}-.*\.md$/i.test(n))
+    : false;
+  return loadDecisions({
+    all,
+    ...(hasLocal ? { dir: localDir } : {}),
+  });
+}
+
+/** The catalogue both surfaces answer from: every rule, its decisions, and the selection. */
+export async function rulesCatalogue(root, { selectFor = null } = {}) {
+  const { rules, broken } = await load(root);
+  const selection = selectFor ? await selectionFor(rules, selectFor) : null;
+  return {
+    rules: sorted(rules).map((r) => ({
+      id: r.id,
+      title: r.title,
+      origin: r.origin,
+      source: r.source,
+      applies: r.applies,
+      optIn: r.optIn ?? false,
+      fallback: r.fallback,
+      bytes: r.bytes,
+      error: r.error,
+      adrs: citations(r.body),
+      selected: selection ? selection.selected.has(r.id) : null,
+    })),
+    broken,
+    notes: selection?.notes ?? [],
+  };
+}
+
+/**
+ * The provenance facts for one rule or one decision record, in the shape the
+ * JSON documents carry. Text renders from the same facts; nothing re-derives.
+ */
+export async function rulesWhyFacts(root, what, { all = false } = {}) {
+  const { rules } = await load(root);
+  if (/^ADR-\d{3,}$/i.test(what)) {
+    const id = what.toUpperCase();
+    const { ok, decisions, errors } = await loadDecisionsFor(root, all);
+    if (!ok) {
+      rulesFailure(errors[0], 'the decision records must be readable for provenance to work', EXIT.CONFIG);
+    }
+    const record = decisions.find((x) => x.id === id);
+    // Was 'list them with: ls docs/decisions/' - a path relative to simt-dev's own
+    // tree, which resolves to nothing in the repo the reader is standing in. The
+    // remedy must be a command they can run.
+    if (!record) rulesFailure(`no decision record ${id}`, `list the known decisions with: ${CLI} rules list`, EXIT.USAGE);
+    const replacement = record.supersededBy ? decisions.find((x) => x.id === record.supersededBy) : null;
+    return {
+      direction: 'decision',
+      id,
+      adr: record,
+      supersededBy: replacement ? { id: replacement.id, title: replacement.title } : null,
+      inForce: replacement
+        ? { id: replacement.id, status: replacement.status, summary: replacement.summary }
+        : { id: record.id, status: record.status, summary: record.summary },
+      rules: rules.filter((r) => citations(r.body).includes(id)).map((r) => r.id),
+    };
+  }
+  const rule = rules.find((r) => r.id === what);
+  if (!rule) {
+    const near = nearMatches(what, rules.map((r) => r.id));
+    rulesFailure(
+      `no rule with id "${what}"${near.length > 0 ? ` (did you mean ${near.join(', ')}?)` : ''}`,
+      `run: ${CLI} rules list`,
+      EXIT.USAGE,
+    );
+  }
+  const { ok, decisions, errors } = await loadDecisionsFor(root, all);
+  if (!ok) {
+    rulesFailure(errors[0], 'the decision records must be readable for provenance to work', EXIT.CONFIG);
+  }
+  const index = byId(decisions);
+  const cited = citations(rule.body);
+  const others = rules.filter((r) => r.id !== rule.id && citations(r.body).some((c) => cited.includes(c)));
+  return {
+    direction: 'rule',
+    id: rule.id,
+    rule: rule.id,
+    title: rule.title ?? null,
+    source: rule.source,
+    origin: rule.origin,
+    adrs: cited.map((c) => index.get(c) ?? { id: c, missing: true }),
+    uncited: cited.length === 0,
+    others: others.map((r) => r.id),
+  };
+}
+
 // --- show ---------------------------------------------------------------------
 
 export async function showCommand(args, flags) {
   const id = args[0];
   if (!id) return fail('rules show needs a rule id', EXIT.USAGE, `usage: ${CLI} rules show <id>`);
 
-  const { rules, broken } = await load(flags.root ?? null);
+  const { rules } = await load(flags.root ?? null);
   const rule = rules.find((r) => r.id === id);
-  if (!rule) return unknown(id, rules);
+  if (!rule) {
+    const near = nearMatches(id, rules.map((r) => r.id));
+    return fail(
+      `no rule with id "${id}"${near.length > 0 ? ` (did you mean ${near.join(', ')}?)` : ''}`,
+      EXIT.USAGE,
+      `run: ${CLI} rules list`,
+    );
+  }
 
   const adrs = citations(rule.body);
   if (isJson(flags)) {
@@ -218,47 +319,25 @@ export async function whyCommand(args, flags) {
   const what = args[0];
   if (!what) return fail('rules why needs a rule id or an ADR id', EXIT.USAGE, `usage: ${CLI} rules why <rule-id|ADR-NNN>`);
 
-  const { rules, broken } = await load(flags.root ?? null);
-  const localDir = flags.root ? join(flags.root, 'docs', 'decisions') : null;
-  const hasLocal = localDir
-    ? (await readdir(localDir).catch(() => [])).some((n) => /^ADR-\d{3,}-.*\.md$/i.test(n))
-    : false;
-  const { ok, decisions, errors } = await loadDecisions({
-    all: flags.all === true,
-    ...(hasLocal ? { dir: localDir } : {}),
-  });
-  if (!ok) return fail(errors[0], EXIT.CONFIG, 'the decision records must be readable for provenance to work');
-
-  return what.match(/^ADR-\d{3,}$/i)
-    ? adrDirection(what.toUpperCase(), rules, decisions, flags)
-    : ruleDirection(what, rules, decisions, flags, broken);
-}
-
-async function ruleDirection(id, rules, decisions, flags, broken) {
-  const rule = rules.find((r) => r.id === id);
-  if (!rule) return unknown(id, rules);
-
-  const cited = citations(rule.body);
-  const index = byId(decisions);
+  let facts;
+  try {
+    facts = await rulesWhyFacts(flags.root ?? null, what, { all: flags.all === true });
+  } catch (error) {
+    return fail(error.message, error.exitCode ?? EXIT.FAIL, error.remedy);
+  }
 
   if (isJson(flags)) {
-    emitJson(
-      {
-                ok: true,
-                command: 'rules why',
-                rule: rule.id,
-                source: rule.source,
-                origin: rule.origin,
-                adrs: cited.map((c) => index.get(c) ?? { id: c, missing: true }),
-                uncited: cited.length === 0,
-              },
-    );
+    emitJson({ ok: true, command: 'rules why', ...facts });
     return EXIT.OK;
   }
 
-  const lines = [`${rule.id} - ${rule.title ?? '(no title)'}`, '', `source  ${rule.source} (${rule.origin})`];
+  return facts.direction === 'decision' ? adrDirection(facts, flags) : ruleDirection(facts, flags);
+}
 
-  if (cited.length === 0) {
+function ruleDirection(facts, flags) {
+  const lines = [`${facts.rule} - ${facts.title ?? '(no title)'}`, '', `source  ${facts.source} (${facts.origin})`];
+
+  if (facts.uncited) {
     lines.push(
       '',
       'provenance  NONE',
@@ -269,11 +348,10 @@ async function ruleDirection(id, rules, decisions, flags, broken) {
     return EXIT.OK;
   }
 
-  lines.push('', `settled by ${cited.length} decision${cited.length === 1 ? '' : 's'}`);
-  for (const adr of cited) {
-    const d = index.get(adr);
-    if (!d) {
-      lines.push(`  ${adr}  MISSING - the rule cites it, but this installation has no record of it`);
+  lines.push('', `settled by ${facts.adrs.length} decision${facts.adrs.length === 1 ? '' : 's'}`);
+  for (const d of facts.adrs) {
+    if (d.missing) {
+      lines.push(`  ${d.id}  MISSING - the rule cites it, but this installation has no record of it`);
       continue;
     }
     lines.push(`  ${d.id}  ${d.title}`);
@@ -286,52 +364,23 @@ async function ruleDirection(id, rules, decisions, flags, broken) {
 
   // The reverse edge is what makes this useful for maintaining the set: which
   // rules would a change to one decision touch?
-  const others = rules.filter((r) => r.id !== rule.id && citations(r.body).some((c) => cited.includes(c)));
-  if (others.length > 0) {
-    lines.push('', `shares a decision with ${others.map((r) => r.id).join(', ')}`);
+  if (facts.others.length > 0) {
+    lines.push('', `shares a decision with ${facts.others.join(', ')}`);
   }
 
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
 }
 
-async function adrDirection(adr, rules, decisions, flags) {
-  const d = decisions.find((x) => x.id === adr);
-  if (!d) {
-    // Was 'list them with: ls docs/decisions/' - a path relative to simt-dev's own
-    // tree, which resolves to nothing in the repo the reader is standing in. The
-    // remedy must be a command they can run.
-    return fail(`no decision record ${adr}`, EXIT.USAGE, `list the known decisions with: ${CLI} rules list`);
-  }
-
-  const restates = rules.filter((r) => citations(r.body).includes(d.id));
-
-  if (isJson(flags)) {
-    // The machine payload answers the same question as the text one. A caller reading
-    // `adr.summary.ruled` off a superseded record would get the reversal, so the
-    // effective ruling is carried alongside rather than instead: the record asked about
-    // is still named, and what is in force is named separately.
-    const replacement = d.supersededBy ? decisions.find((x) => x.id === d.supersededBy) : null;
-    emitJson(
-      {
-                ok: true,
-                command: 'rules why',
-                adr: d,
-                supersededBy: replacement ? { id: replacement.id, title: replacement.title } : null,
-                inForce: replacement
-                  ? { id: replacement.id, status: replacement.status, summary: replacement.summary }
-                  : { id: d.id, status: d.status, summary: d.summary },
-                rules: restates.map((r) => r.id),
-              },
-    );
-    return EXIT.OK;
-  }
+function adrDirection(facts, flags) {
+  const d = facts.adr;
+  const restates = facts.rules;
 
   const lines = [
     `${d.id} - ${d.title}`,
     '',
     `status    ${d.status}`,
-    `restates  ${restates.length > 0 ? restates.map((r) => r.id).join(', ') : '(no rule cites it)'}`,
+    `restates  ${restates.length > 0 ? restates.join(', ') : '(no rule cites it)'}`,
   ];
   if (d.supersededBy) lines.push(`SUPERSEDED by ${d.supersededBy} - this record is retained as evidence, not as policy.`);
   if (d.supersedes.length > 0) lines.push(`supersedes  ${d.supersedes.join(', ')}`);
@@ -360,7 +409,7 @@ async function adrDirection(adr, rules, decisions, flags) {
   // attached, and an agent that skims the ruling and not the banner acts on the
   // reversal. This is the failure the decision index's own header names: a provenance
   // feature that proves provenance but not currency.
-  const replacement = d.supersededBy ? decisions.find((x) => x.id === d.supersededBy) : null;
+  const replacement = facts.replacement;
   const effective = replacement ?? d;
 
   if (replacement) {
@@ -413,13 +462,4 @@ async function adrDirection(adr, rules, decisions, flags) {
   // A superseded record is not a failure; it is the supersession rule working.
   // The caller asked a question and got a true answer.
   return EXIT.OK;
-}
-
-function unknown(id, rules) {
-  const near = nearMatches(id, rules.map((r) => r.id));
-  return fail(
-    `no rule with id "${id}"${near.length > 0 ? ` (did you mean ${near.join(', ')}?)` : ''}`,
-    EXIT.USAGE,
-    `run: ${CLI} rules list`,
-  );
 }

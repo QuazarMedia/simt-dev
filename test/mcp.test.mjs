@@ -230,15 +230,12 @@ test('mcp: the tool descriptions fit the 2 KB budget the plan set', () => {
 });
 
 test('mcp: skills_brief and `skills brief` answer the same question identically', async () => {
-  // The row's headline: the budget arithmetic was written twice and the copies had
-  // already drifted. This one checked `deferred` *after* the budget and inlined a
-  // deferred dependency; `skills brief` checked it first and did not. A caller reaching
-  // for the tool and a caller reaching for the command got different answers, and
-  // neither could see the other.
-  //
-  // Both sides run the same resolver over the same registry at the same budget, and the
-  // answer is compared skill for skill. Two budgets, because one of them proves the
-  // budget is doing something: 2,000 for a group of 13,503 and 20,000 for the same one.
+  // Q15: the budget arithmetic was written twice and the copies had already
+  // drifted — this one checked `deferred` *after* the budget and inlined a
+  // deferred dependency, while `skills brief` checked it first and did not.
+  // Both surfaces now call `skillsBriefFacts`, and this test holds them to the
+  // same document. Two budgets, because one of them proves the budget is doing
+  // something: 2,000 for a group of 13,503 and 20,000 for the same one.
   const brief = TOOLS.find((t) => t.name === 'skills_brief');
   const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -252,18 +249,23 @@ test('mcp: skills_brief and `skills brief` answer the same question identically'
     const cli = JSON.parse(stdout);
 
     assert.deepEqual(
-      mcp.selected.map((s) => s.name),
-      cli.resolved.map((r) => r.name),
-      `budget ${budget}: the two surfaces selected different skills`,
+      mcp.resolved,
+      cli.resolved,
+      `budget ${budget}: the two surfaces resolved different skills`,
     );
     assert.deepEqual(
-      mcp.deferred.map((s) => s.name),
-      cli.deferred.map((d) => d.name),
+      mcp.deferred,
+      cli.deferred,
       `budget ${budget}: the two surfaces deferred different skills`,
+    );
+    assert.deepEqual(
+      mcp.excluded,
+      cli.excluded,
+      `budget ${budget}: the two surfaces excluded different skills`,
     );
     assert.equal(
       mcp.inlineBytes,
-      cli.resolved.reduce((n, r) => n + r.bytes, 0),
+      cli.inlineBytes,
       `budget ${budget}: the two surfaces report different bytes`,
     );
     // And the budget is real in both, which is the property the two copies used to share
@@ -594,7 +596,8 @@ test('mcp: a real session answers on the protocol channel and nothing else', asy
 
   const doctor = JSON.parse(messages[2].result.content[0].text);
   assert.ok(doctor.stack.includes('python'), 'doctor must classify the fixture repo');
-  assert.ok(Object.prototype.hasOwnProperty.call(doctor.facts, 'has-pyproject'));
+  assert.ok(doctor.facts.includes('has-pyproject'));
+  assert.ok(Array.isArray(doctor.findings), 'doctor must carry the findings, not just the fingerprint');
 
   // check on an unadopted repo: a successful call whose answer says unmanaged.
   assert.equal(messages[3].result.isError, false);
@@ -643,16 +646,17 @@ test('mcp: rules_why answers both directions, over a real session', async () => 
   assert.equal(byDecision.direction, 'decision');
   assert.equal(byDecision.id, 'ADR-006');
   assert.ok(byDecision.rules.includes('core'), 'ADR-006 is cited by core');
-  // The record ships inside the package, so the answer must not hand back a path that
-  // resolves against the consuming repo.
-  assert.equal(byDecision.readWith, `${CLI} rules why ADR-006`);
+  // The record ships inside the package. The full record travels in `adr`, and the
+  // effective ruling in `inForce`, so a superseded record is never read as current.
+  assert.equal(byDecision.adr.id, 'ADR-006');
+  assert.ok(byDecision.inForce.id, 'the decision answer names what is in force');
 
   const byRule = JSON.parse(messages[2].result.content[0].text);
   assert.equal(byRule.direction, 'rule');
   assert.equal(byRule.id, 'python');
   assert.equal(byRule.uncited, false);
-  assert.deepEqual(byRule.decisions.map((d) => d.id), ['ADR-006']);
-  assert.ok(byRule.decisions.every((d) => d.missing === undefined), 'every citation must resolve to a record');
+  assert.deepEqual(byRule.adrs.map((d) => d.id), ['ADR-006']);
+  assert.ok(byRule.adrs.every((d) => d.missing === undefined), 'every citation must resolve to a record');
 
   const uncited = JSON.parse(messages[3].result.content[0].text);
   assert.equal(uncited.uncited, true, 'a rule citing no decision reports that, not silence');

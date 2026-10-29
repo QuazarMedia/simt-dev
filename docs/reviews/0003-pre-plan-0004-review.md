@@ -113,7 +113,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q13 | MCP `federation_query` executes commands but is labelled read-only | P1 | S | mcp | S | — | Complete | `abe035b`; `node --test test/federation.test.mjs` 12/12 + `test/mcp.test.mjs` 43/43 (readOnlyHint:false/openWorldHint:true; root fenced to cwd+workspace; user config names servers) |
 | Q14 | MCP server memoises the first call's workspace for its lifetime | P1 | F | mcp/graph | S | — | Complete | `1de80cb`; `node --test test/graph.test.mjs` 23/23 + install/compile/brief/resolve 89/89 (memo keyed on flag+env+config inputs) |
 | **Wave 1 — wrong behaviour an agent hits** | | | | | | | | |
-| Q15 | MCP and CLI answer different questions under the same name | P1 | F | mcp | M | Q60 (full) | Queued | |
+| Q15 | MCP and CLI answer different questions under the same name | P1 | F | mcp | M | Q60 (full) | Done | |
 | Q16 | Lease policy bypassed via subdir cwd, case, symlink, `NotebookEdit`, `apply_patch` move | P1 | S | agenthooks | S | — | Queued | |
 | Q17 | `generated` policy blocks edits outside the region | P1 | F | agenthooks | M | — | Queued | |
 | Q18 | Evidence: any passing command proves "tests pass"; worktree vs index tree; narrow claim regex | P1 | F | ledger | S | Q75 | Queued | |
@@ -334,6 +334,16 @@ Count: 89 slices — 5 P0, 52 P1, 30 P2, 2 P3 (severity is the row's worst item)
   Keep old CLI field names for one minor release or bump `schemaVersion`. Parity test: for every
   MCP tool, `tools/call` structured content equals the CLI `--json` result minus the envelope.
 - **Effort:** M.
+- **Done (Q15):** the four cores live beside their commands — `checkRepo` (`sync.mjs`),
+  `diagnose` + `serialisedFindings` (`doctor.mjs`), `rulesCatalogue` + `rulesWhyFacts`
+  (`rules.mjs`), `skillsBriefFacts` + `skillsFindFacts` + `skillsShowFacts` + `skillsWhyFacts`
+  (`skills.mjs`) — and the eight MCP tools call them. CLI keeps its names and its `--json`
+  shapes (purely additive: `adrs`/`optIn` on list entries, `id`/`direction`/`others` on why,
+  `summary`/`reason`/`inlineBytes`/`facts`/`bodyText` on skills docs); the tools adopt them
+  (`selected`→`resolved`, `notSelected`→`excluded`, `decisions`→`adrs`, `why`→`reasons`/`signals`,
+  `readFrom`→`bodyFrom`, `body` path instead of text plus `bodyText`, full catalogue incl.
+  per-surface rules, full gate incl. manifest/gates/pin/lock/declared checks, full doctor
+  findings). `test/parity.test.mjs` holds all eight to the review's criterion. Q60/Q66 remain.
 
 ### Q16 — Lease bypasses (P1, security)
 - **Where:** `src/agenthooks/render.mjs:89,92-94,128-131,154,177,208` (root = payload cwd; path keys); `decide.mjs:150`; `src/lease.mjs:62`.

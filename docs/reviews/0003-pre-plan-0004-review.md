@@ -102,7 +102,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q02 | Secret scan blind under `diff.external`, `-diff`, binary; mis-attributes paths | P0 | S | secrets | S | — | Complete | `1190937`; `npm test` — 1376/1376, also from a sibling-less copy |
 | Q03 | `simt plugin` packages the consumer's cwd instead of simt | P0 | F | plugins | S | — | Complete | `678ca26`; `node --test test/plugins.test.mjs` — 6/6 + consumer-cwd repro (ships simt-dev runtime, no consumer leak) |
 | Q04 | Homebrew tap still serves 0.4.0; release job never lands on tap `main` | P0 | D | release | S | — | Complete | `7ae125e`; `node --test test/packaging.test.mjs` — 15/15 (tap push lands on main + verify job; owner still merges the stale 0.4.0 tap to current) |
-| Q05 | README pins 0.5.0; unreleased commands documented as shipped; `main` reports 0.6.2 | P0 | D | docs/release | S | — | Queued | |
+| Q05 | README pins 0.5.0; unreleased commands documented as shipped; `main` reports 0.6.2 | P0 | D | docs/release | S | — | Complete | `1c50475`; `node --test test/version-pin.test.mjs` — 7/7 (0.6.1 marked never-published; release cut stays an owner action) |
 | Q06 | npm `1.0.0` and `0.0.0-stage` placeholders are live and not deprecated | P1 | D | release | S | — | Queued | |
 | Q07 | Reindexing a changed file deletes every edge pointing into it | P1 | F | index | S | — | Queued | |
 | Q08 | Concurrent `index` → `database is locked` and an empty DB | P1 | F | index | S | — | Queued | |

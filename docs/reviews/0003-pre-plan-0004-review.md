@@ -111,7 +111,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q11 | Parse errors and "no command" ignore `--json` | P1 | F | cli | S | — | Complete | `c628655`; unit 15/15 + help/jsoncontract 11/11; review repro answers JSON on stdout with empty stderr |
 | Q12 | MCP: an internal error is answered as a parse error with `id:null`; client hangs | P1 | F | mcp | S | — | Complete | `353d5d8`; `node --test test/mcp.test.mjs` — 43/43 (parse and handle fail on separate paths) |
 | Q13 | MCP `federation_query` executes commands but is labelled read-only | P1 | S | mcp | S | — | Complete | `abe035b`; `node --test test/federation.test.mjs` 12/12 + `test/mcp.test.mjs` 43/43 (readOnlyHint:false/openWorldHint:true; root fenced to cwd+workspace; user config names servers) |
-| Q14 | MCP server memoises the first call's workspace for its lifetime | P1 | F | mcp/graph | S | — | Queued | |
+| Q14 | MCP server memoises the first call's workspace for its lifetime | P1 | F | mcp/graph | S | — | Complete | `1de80cb`; `node --test test/graph.test.mjs` 23/23 + install/compile/brief/resolve 89/89 (memo keyed on flag+env+config inputs) |
 | **Wave 1 — wrong behaviour an agent hits** | | | | | | | | |
 | Q15 | MCP and CLI answer different questions under the same name | P1 | F | mcp | M | Q60 (full) | Queued | |
 | Q16 | Lease policy bypassed via subdir cwd, case, symlink, `NotebookEdit`, `apply_patch` move | P1 | S | agenthooks | S | — | Queued | |

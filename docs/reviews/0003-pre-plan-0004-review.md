@@ -121,7 +121,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q20 | Leases: lost claims under concurrency, no release, session id from env only | P1 | F | lease | M | Q19 | Complete | `8982b72`; `node --test test/lease.test.mjs test/agenthooks.test.mjs` — 42/42 |
 | Q21 | Agent-hook command assumes `simt` on PATH; Cursor `failClosed` then blocks everything | P1 | F | agenthooks | S | — | Complete | `588c3e6`; ADR-106; `node --test test/agenthooks.test.mjs` — 30/30 |
 | Q22 | Journal/undo: `core.hooksPath` not restored, binary-unsafe, double-write refused | P1 | F | journal | M | Q68 | Complete | `7e11827`; `node --test test/undo.test.mjs test/hooks.test.mjs` — 107/107 |
-| Q23 | `slice finish` runs gates twice and commits on any branch | P1 | F | slice | S | — | Queued | |
+| Q23 | `slice finish` runs gates twice and commits on any branch | P1 | F | slice | S | — | Complete | `f80f04b`; `node --test test/slice.test.mjs test/ledger.test.mjs test/plan.test.mjs` — 42/42 |
 | Q24 | Secret scan false positives (lockfile SRI) and false negatives (`DB_PASSWORD`, unquoted, glpat…) | P1 | F | secrets | S | Q02 | Queued | |
 | Q25 | Tracker: `In progress (note)` → state `in`; `plan done` corrupts rows with a pipe | P1 | F | plan | S | — | Queued | |
 | Q26 | `projection.place: "top"` cannot work, yet it is the BEYOND-READ-LIMIT remedy | P1 | F | projection | S | — | Queued | |

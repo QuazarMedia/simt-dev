@@ -281,28 +281,47 @@ jobs:
           git --no-pager diff -- Formula/simt-dev.rb
 
       - name: push it to the tap
-        # The tap is a normal repository named `homebrew-<something>`. It is
-        # configurable rather than hardcoded because the owner's account may not
-        # be the owner that matters later - and a tap URL is the one thing in
-        # this workflow that is not about the tool.
+        # The tap is `QuazarMedia/homebrew-tap` and this job lands on its `main`:
+        # a release branch that is never merged leaves `brew install` serving the
+        # previous version while this run reports success (review 0003 Q04). The
+        # variable stays as an escape hatch, but the default is the one name the
+        # README and the formula document.
         env:
           TAP: ${{ vars.HOMEBREW_TAP || 'QuazarMedia/homebrew-tap' }}
           TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -eu
           tap="${TAP}"
-          branch="release/simt-dev-${{ inputs.version }}"
           git config --global user.name  "${{ github.actor }}"
           git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
-          git clone --quiet --depth 1 "https://x-access-token:${TOKEN}@github.com/${tap}.git" /tmp/tap
+          git clone --quiet --depth 1 --branch main "https://x-access-token:${TOKEN}@github.com/${tap}.git" /tmp/tap
           cp Formula/simt-dev.rb "/tmp/tap/Formula/simt-dev.rb"
           cd /tmp/tap
-          git checkout -b "${branch}"
           git add Formula/simt-dev.rb
           if git diff --cached --quiet; then
             echo "the tap already has this version; nothing to push"
             exit 0
           fi
           git commit --quiet -m "$(printf 'simt-dev %s\n' "${{ inputs.version }}")"
-          git push --quiet origin "${branch}"
-          echo "pushed ${branch} to ${tap} - open a PR, or merge it directly to update the tap"
+          git push --quiet origin main
+          echo "pushed simt-dev ${{ inputs.version }} to ${tap}@main"
+  verify-brew:
+    name: the tap serves this release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: [publish-brew]
+    if: ${{ inputs['publish-brew'] }}
+    steps:
+      - name: the tap formula names this version
+        env:
+          TAP: ${{ vars.HOMEBREW_TAP || 'QuazarMedia/homebrew-tap' }}
+        run: |
+          set -eu
+          url="https://raw.githubusercontent.com/${TAP}/main/Formula/simt-dev.rb"
+          formula="$(curl -fsSL "$url")"
+          if printf '%s' "$formula" | grep -q "simt-dev-${{ inputs.version }}-"; then
+            echo "the tap serves simt-dev ${{ inputs.version }}"
+          else
+            echo "::error::${url} does not name simt-dev-${{ inputs.version }}. The tap push did not land on main."
+            exit 1
+          fi

@@ -1,4 +1,4 @@
-# The Homebrew formula: `brew install QuazarMedia/tap/simt-dev`.
+# The Homebrew formula: `brew install QuazarMedia/homebrew-tap/simt-dev`.
 #
 # The tap is a mirror of this file, and the two are rewritten by the publish
 # workflow when a tag is pushed - the committed values are always those of the

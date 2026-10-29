@@ -9,7 +9,14 @@ import { readFile } from 'node:fs/promises';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
-import { claimsVerification, evidenceMode, readLedger, treeId } from '../ledger/index.mjs';
+import {
+  claimsVerification,
+  evidenceMode,
+  hasTestEvidence,
+  indexTreeId,
+  readLedger,
+  treeId,
+} from '../ledger/index.mjs';
 
 export async function evidenceCommand(args, flags) {
   const root = flags.root ?? process.cwd();
@@ -72,14 +79,17 @@ async function checkClaim(root, file, flags) {
     if (isJson(flags)) emitJson(payload, { pretty: flags.pretty === true });
     return EXIT.OK;
   }
+  // A commit records the index, not the worktree: `git add -p` can commit bytes
+  // the worktree tree never had (review 0003 Q18). Match on the staged tree, with
+  // the worktree tree as the fallback when git cannot name the index.
   let tree;
   try {
-    tree = await treeId(root);
+    tree = (await indexTreeId(root)) ?? (await treeId(root));
   } catch (error) {
     return fail(`could not name this tree (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository');
   }
   const { entries } = await readLedger(root);
-  const supported = entries.some((e) => e.tree === tree && e.exit === 0);
+  const supported = hasTestEvidence(entries, tree);
   const payload = { ok: supported || mode === 'warn', command: 'evidence check', claim: true, supported, mode, tree };
   if (supported) {
     if (isJson(flags)) emitJson(payload, { pretty: flags.pretty === true });

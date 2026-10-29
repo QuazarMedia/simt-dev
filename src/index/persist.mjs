@@ -4,7 +4,7 @@
 // rows. This file is the format; store.mjs is the walk that fills it. They are
 // split because the walk and the format together crossed the review trigger.
 
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 export const SQLITE_FILE = '.simt/index.sqlite';
@@ -44,14 +44,45 @@ export function decodeVectorBlob(blob) {
   return new Float32Array(copy.buffer);
 }
 
+let tmpSeq = 0;
+
+/** A per-writer temp file: pid plus a sequence, so in-process concurrent writers meet on no shared path. */
+function tmpFor(file) {
+  tmpSeq += 1;
+  return `${file}.${process.pid}.${tmpSeq}.tmp`;
+}
+
 export async function writeSqlite(root, next, removed, symbols, edges, fts, embeddings = []) {
   const { DatabaseSync } = await import('node:sqlite');
   const file = join(root, SQLITE_FILE);
   await mkdir(dirname(file), { recursive: true });
-  const db = new DatabaseSync(file);
+  // A cold build goes to a temp file that is renamed over the target: three
+  // concurrent cold runs used to interleave schema creation and leave a locked,
+  // table-less database behind (Q08). Each writer builds its own complete file
+  // and the rename is atomic, so the last writer wins with a whole index.
+  let cold = false;
   try {
+    await stat(file);
+  } catch {
+    cold = true;
+  }
+  const target = cold ? tmpFor(file) : file;
+  if (cold) {
+    try {
+      await stat(target);
+      const { unlink } = await import('node:fs/promises');
+      await unlink(target);
+    } catch {
+      // No stale temp file: build fresh.
+    }
+  }
+  const db = new DatabaseSync(target);
+  try {
+    db.exec('pragma journal_mode = WAL');
+    db.exec('pragma busy_timeout = 5000');
+    db.exec('pragma synchronous = normal');
     db.exec(SCHEMA);
-    db.exec('begin');
+    db.exec('begin immediate');
     const upsert = db.prepare(`insert into files(path, blob, lang, bytes, pkg) values (?, ?, ?, ?, ?)
       on conflict(path) do update set blob = excluded.blob, lang = excluded.lang, bytes = excluded.bytes, pkg = excluded.pkg`);
     const dropSymbols = db.prepare('delete from symbols where path = ?');
@@ -95,10 +126,26 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     db.exec('commit');
   } catch (error) {
     try { db.exec('rollback'); } catch { /* a failed begin has nothing to undo */ }
-    throw error;
+    throw asIndexError(error);
   } finally {
     db.close();
   }
+  if (cold) await rename(target, file);
+}
+
+/**
+ * A contended index write is a retryable race, not a broken repository: name it
+ * so the command maps its own remedy instead of blaming the git checkout (Q08).
+ */
+export function asIndexError(error) {
+  const code = error?.code ?? error?.errno;
+  if (code === 'SQLITE_BUSY' || code === 5 || /database is locked/i.test(error?.message ?? '')) {
+    const busy = new Error('another index run is writing; wait a moment and run again');
+    busy.code = 'INDEX_BUSY';
+    busy.cause = error;
+    return busy;
+  }
+  return error;
 }
 
 export async function writeJsonl(root, previous, next, removed, symbols, edges, fts, force, embeddings = []) {
@@ -128,6 +175,8 @@ export async function writeJsonl(root, previous, next, removed, symbols, edges, 
   const allEmbeddings = [...keptEmbeddings, ...embeddings].sort(byPath);
   const file = join(root, JSONL_FILE);
   await mkdir(dirname(file), { recursive: true });
+  // Written atomically: a concurrent reader never sees a half-written file.
+  const tmp = tmpFor(file);
   const lines = [
     JSON.stringify({ table: 'meta', key: 'schema', value: SCHEMA_V }),
     ...files.map((row) => JSON.stringify({ table: 'files', path: row.path, blob: row.blob, lang: row.lang, bytes: row.bytes, pkg: row.pkg })),
@@ -147,7 +196,8 @@ export async function writeJsonl(root, previous, next, removed, symbols, edges, 
       });
     }),
   ];
-  await writeFile(file, `${lines.join('\n')}\n`);
+  await writeFile(tmp, `${lines.join('\n')}\n`);
+  await rename(tmp, file);
   return { symbols: allSymbols.length, edges: allEdges.length, embeddings: allEmbeddings.length };
 }
 

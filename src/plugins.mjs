@@ -24,7 +24,8 @@
 // leaves the machine it was built on. The command says so rather than pretending.
 
 import { cp, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readBefore } from './diff.mjs';
 import { hookDocument } from './agenthooks/render.mjs';
 import { desiredRegion } from './projection/rules.mjs';
@@ -32,6 +33,15 @@ import { PACKAGE_NAME, BIN_REL } from './name.mjs';
 
 /** The kinds `simt plugin` builds, in the order the help line names them. */
 export const PLUGIN_KINDS = ['claude', 'gemini', 'cursor'];
+
+/**
+ * The package this code ships in: the runtime a generated package copies. Resolved
+ * from the module URL, not from the consumer's cwd, so `plugin` built with
+ * `--root <consumer>` still ships this tool rather than the consumer's files (Q03).
+ */
+export function packageRoot() {
+  return dirname(dirname(fileURLToPath(import.meta.url)));
+}
 
 /** Where the runtime copy lands inside a package, relative to the package root. */
 function runtimeDir(kind) {
@@ -72,7 +82,7 @@ const json = (value) => `${JSON.stringify(value, null, 2)}\n`;
  * it is many files; this returns only the handful that are authored here.
  */
 async function packageFiles(kind, { root = process.cwd(), out } = {}) {
-  const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+  const pkg = JSON.parse(await readFile(join(packageRoot(), 'package.json'), 'utf8'));
   const command = `${entryPoint(kind)} agent-hook pre-tool-use --harness ${kind}${rootFlag(kind)}`;
   const files = [];
 
@@ -129,7 +139,7 @@ export async function buildPackage(kind, { root = process.cwd(), out, apply = fa
     throw new Error(`unknown package kind \`${kind}\`; one of: ${PLUGIN_KINDS.join(', ')}`);
   }
 
-  const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+  const pkg = JSON.parse(await readFile(join(packageRoot(), 'package.json'), 'utf8'));
   const files = await packageFiles(kind, { root, out });
   const notes = [
     'the skill registry is workspace data (ADR-061) and is not shipped; run `simt skills index` in the profile to list what a workspace would offer',
@@ -152,10 +162,11 @@ export async function buildPackage(kind, { root = process.cwd(), out, apply = fa
     // dies on the first MCP call: the server reads templates/ and rules/, which a
     // bin+src-only copy leaves behind. The `files` field is the definition of "a working
     // copy of this tool", so it is the set a package ships.
+    const runtimeRoot = packageRoot();
     for (const part of pkg.files) {
-      await cp(join(root, part), join(runtimeTarget, part), { recursive: true });
+      await cp(join(runtimeRoot, part), join(runtimeTarget, part), { recursive: true });
     }
-    await cp(join(root, 'package.json'), join(runtimeTarget, 'package.json'));
+    await cp(join(runtimeRoot, 'package.json'), join(runtimeTarget, 'package.json'));
     for (const f of files) {
       const target = join(out, f.path);
       await mkdir(join(target, '..'), { recursive: true });

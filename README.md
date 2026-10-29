@@ -26,18 +26,18 @@ to merge. It does not write the projection.
 ## Install
 
 Requires **Node >= 22.20.0** for the npm and PyPI channels; the release binary carries
-its own runtime. The current published release is **0.5.0**. Pin it. The tool writes a
+its own runtime. Pin the release you install. The tool writes a
 content digest into the files it generates, and an unpinned upgrade changes them under
 you.
 
 ```sh
-npm i -D simt-dev@0.5.0
+npm i -D simt-dev
 
 # or globally
-npm i -g simt-dev@0.5.0
+npm i -g simt-dev
 
 # or once, with no install
-npx -y simt-dev@0.5.0 check
+npx -y simt-dev check
 ```
 
 ### From PyPI
@@ -68,7 +68,7 @@ runtime: the command works with no Node installed.
 ### As a single-file binary
 
 Each release carries one executable per platform — macOS arm64 and x64, Linux x64 —
-beside its `.sha256`. The channel's first release is the version after 0.5.0; pin that,
+beside its `.sha256`. Pin the release you download,
 and run this from the repository's top level:
 
 ```sh

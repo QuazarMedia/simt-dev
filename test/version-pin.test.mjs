@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import test, { after } from 'node:test';
-import { packageVersion, hasNpm, assertVersionPin } from '../src/package-version.mjs';
+import { packageVersion, hasNpm, assertVersionPin, describeVersion, checkoutSha } from '../src/package-version.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
 const exec = promisify(execFile);
@@ -68,6 +68,28 @@ test('a stale pin fails and names both versions', () => {
   assert.ok(typeof msg === 'string');
   assert.ok(msg.includes(`${MANIFEST_FILE} pins ${stale}`), msg);
   assert.ok(msg.includes(`running binary is ${packageVersion()}`), msg);
+});
+
+test('the install docs pin a release, never a literal version (Q05)', async () => {
+  // The README once pinned 0.5.0 in four places while package.json moved on: any
+  // literal `simt-dev@x.y.z` in prose rots on the next release. Install lines name
+  // the package and tell the reader to pin; they never name the number.
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  assert.ok(!/simt-dev@\d/.test(readme), 'README must not pin a literal simt-dev@version');
+  assert.ok(!/current published release is \*\*\d/.test(readme), 'README must not name the current release in prose');
+  assert.ok(!/version after 0\.5\.0/.test(readme), 'README must not date the binary channel from a literal version');
+});
+
+test('describeVersion names the checkout past its tag (Q05)', async () => {
+  // `main` 26 commits past v0.6.2 reported bare `0.6.2`: the number claimed a
+  // release the bytes were not. In a checkout past its tag the SHA travels with
+  // it; exactly on the tag the number stands alone; without git it degrades.
+  const sha = checkoutSha();
+  assert.ok(sha === null || /^[0-9a-f]+$/.test(sha), `checkout SHA is hex or absent, got ${sha}`);
+  const described = describeVersion();
+  assert.match(described, /^simt-dev \d+\.\d+\.\d+/);
+  const { stdout } = await run(['--version']);
+  assert.equal(stdout.trim(), described, '--version prints the described version');
 });
 
 test('check fails a repository whose pin does not match the running binary', async () => {

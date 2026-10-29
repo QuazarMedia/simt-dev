@@ -14,9 +14,11 @@
 //     must match: npm pins the node_modules copy for us, but nothing pins a binary, so
 //     the gate compares the running version against the pin and refuses on a mismatch.
 
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { MANIFEST_FILE } from './name.mjs';
 
@@ -36,6 +38,52 @@ export function packageVersion() {
   } catch {
     return 'unknown';
   }
+}
+
+/** The directory this package is installed in, whatever resolved the import. */
+export function packageRootDir() {
+  return dirname(dirname(fileURLToPath(import.meta.url)));
+}
+
+/**
+ * The short commit this checkout is at, or null outside a git checkout (an
+ * installed tarball or wheel has no `.git`). Read-only and best-effort: a
+ * version string must never fail because the VCS is absent (Q05).
+ */
+export function checkoutSha() {
+  try {
+    const sha = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+      cwd: packageRootDir(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return /^[0-9a-f]+$/.test(sha) ? sha : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What `--version` prints: the package version, plus the checkout SHA when run
+ * from a source tree past its tag. A `main` 26 commits past v0.6.2 reporting
+ * bare `0.6.2` is the drift Q05 closes: the number alone claims a release the
+ * bytes are not (Q05).
+ */
+export function describeVersion() {
+  const version = packageVersion();
+  const sha = checkoutSha();
+  if (!sha) return `simt-dev ${version}`;
+  try {
+    const tag = execFileSync('git', ['describe', '--tags', '--exact-match'], {
+      cwd: packageRootDir(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (tag === `v${version}`) return `simt-dev ${version}`;
+  } catch {
+    // Not exactly on the release tag: fall through to the SHA suffix.
+  }
+  return `simt-dev ${version} (${sha})`;
 }
 
 /**

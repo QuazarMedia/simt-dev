@@ -14,6 +14,7 @@
 // path to the session that broke it. Which way that fails is the caller's decision —
 // the hook refuses edits, the command refuses to write (ADR-101 rulings 4).
 
+import { existsSync, realpathSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
@@ -34,18 +35,46 @@ const LEASE_SCHEMA = 1;
 export const DEFAULT_TTL_SECONDS = 3600;
 
 /**
- * The repository-relative name of a path this tool may lease, or null when it is not
- * inside the repository at all.
+ * The one spelling a path has for lease matching: repository-relative, symlinks
+ * resolved, case-folded when the repository's git compares case-insensitively, or
+ * null when the path is not inside the repository at all.
  *
- * Relative to the root and slash-normalised, because that is the spelling the file
- * holds and the one a payload's absolute `file_path` has to become before the two can
- * be compared. The root itself leases nothing — there is no edit that "is" the
- * repository — so it answers null like a path that escapes it.
+ * A payload that reaches a file through a symlinked directory spells it one way,
+ * the claim recorded for the file spells it the other, and on a case-insensitive
+ * volume the two spellings that differ in case are the same file (review 0003
+ * Q16). Both sides of a comparison go through this, so a claim and an edit meet
+ * in the same spelling whatever road each one took to get there.
+ *
+ * The real path of the deepest existing ancestor is joined with the remainder,
+ * because `realpath` on a file that does not exist yet — the normal state of a
+ * write payload — would refuse. The root itself leases nothing — there is no
+ * edit that "is" the repository — so it answers null like a path that escapes it.
  */
-export function leasePathFor(root, input) {
-  const rel = relative(resolve(root), resolve(root, String(input ?? '')));
+export function canonicalLeasePath(root, input, { ignoreCase = false } = {}) {
+  const base = resolve(root, String(input ?? ''));
+  let anchor = base;
+  while (anchor !== resolve(anchor, '..')) {
+    if (existsSync(anchor)) break;
+    anchor = dirname(anchor);
+  }
+  let realAnchor;
+  try {
+    realAnchor = realpathSync(anchor);
+  } catch {
+    realAnchor = anchor;
+  }
+  const rest = relative(anchor, base);
+  const abs = rest === '' ? realAnchor : join(realAnchor, rest);
+  let realRoot;
+  try {
+    realRoot = realpathSync(resolve(root));
+  } catch {
+    realRoot = resolve(root);
+  }
+  const rel = relative(realRoot, abs);
   if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`)) return null;
-  return rel.split(sep).join('/');
+  const slashed = rel.split(sep).join('/');
+  return ignoreCase ? slashed.toLowerCase() : slashed;
 }
 
 /**

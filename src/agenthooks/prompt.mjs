@@ -26,6 +26,7 @@ import { readManifest } from '../projection/manifest.mjs';
 import { DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES } from '../brief/packet.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { deliveryJson, factsFrom, promptText } from './render.mjs';
+import { repoRoot } from '../repo-root.mjs';
 
 /**
  * Whether this repository asked for a delivered packet, and the ceiling it asked for.
@@ -63,8 +64,11 @@ export async function deliverPrompt(row, payload) {
   const task = promptText(row, payload);
   if (task === null) return { skipped: 'the payload carries no prompt this harness documents' };
 
-  // The root is the same dialect fact for both events, so it is read the same way.
-  const root = factsFrom(row, payload).root;
+  // The root is the same dialect fact for both events, so it is read the same way —
+  // and resolved to the repository's top level the same way: the manifest, like the
+  // lease file, is a repository-relative fact, and a prompt submitted from a
+  // subdirectory must find it (review 0003 Q16).
+  const root = repoRoot(factsFrom(row, payload).root);
   const optIn = await promptOptIn(root);
   if (!optIn.optedIn) return { skipped: optIn.why };
 

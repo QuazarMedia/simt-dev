@@ -16,7 +16,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -201,4 +201,108 @@ test('a claim file that will not parse fails closed for edits, and the command w
   assert.equal(take.code, 1, `the command wrote over unreadable claims: ${take.text}`);
   assert.match(take.stderr, /not valid JSON/);
   assert.equal(await readFile(leasePath(root), 'utf8'), '{ not json', 'the refusal rewrote the file');
+});
+
+// review 0003 Q16: a lease is only a lease if it meets the edit in the spelling the
+// edit actually takes — from a subdirectory, with the case flipped, through a
+// symlink, in a payload key this tool did not read. Each of those walked through
+// before; each of them is refused now.
+
+test('an edit from a subdirectory cwd is checked against the top-level claim', async () => {
+  const root = await repo();
+  const claim = cli(['lease', 'src/keep.mjs', '--session', 'alpha', '--root', root, '--yes']);
+  assert.equal(claim.code, 0, claim.stderr);
+
+  // cwd is the subdirectory and the path is relative to it: the same file as the claim.
+  const sub = JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    tool_input: { file_path: 'keep.mjs', content: 'x' },
+    cwd: join(root, 'src'),
+  });
+  const beta = cli(['agent-hook', 'pre-tool-use', '--harness', 'claude'], { input: sub, env: { [SESSION_ENV]: 'beta' } });
+  assert.equal(beta.code, 2, `a subdirectory cwd walked through: ${beta.text}`);
+  assert.match(beta.text, /held by alpha/, 'the refusal did not name the holder it met');
+
+  // cwd is the subdirectory and the path is absolute: the same file again.
+  const abs = JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    tool_input: { file_path: join(root, 'src', 'keep.mjs'), content: 'x' },
+    cwd: join(root, 'src'),
+  });
+  const beta2 = cli(['agent-hook', 'pre-tool-use', '--harness', 'claude'], { input: abs, env: { [SESSION_ENV]: 'beta' } });
+  assert.equal(beta2.code, 2, `an absolute path from a subdirectory cwd walked through: ${beta2.text}`);
+});
+
+test('a case-flipped name is the same file when the repository compares case-insensitively', async () => {
+  const root = await repo();
+  spawnSync('git', ['init', '-q', root]);
+  spawnSync('git', ['-C', root, 'config', 'core.ignorecase', 'true']);
+  const claim = cli(['lease', 'src/keep.mjs', '--session', 'alpha', '--root', root, '--yes']);
+  assert.equal(claim.code, 0, claim.stderr);
+
+  const flipped = edit(root, 'src/Keep.mjs', { env: { [SESSION_ENV]: 'beta' } });
+  assert.equal(flipped.code, 2, `a case-flipped name walked through: ${flipped.text}`);
+
+  // A repository that compares case-sensitively treats the two spellings as distinct files.
+  const strict = await repo();
+  spawnSync('git', ['init', '-q', strict]);
+  spawnSync('git', ['-C', strict, 'config', 'core.ignorecase', 'false']);
+  const strictClaim = cli(['lease', 'src/keep.mjs', '--session', 'alpha', '--root', strict, '--yes']);
+  assert.equal(strictClaim.code, 0, strictClaim.stderr);
+  const distinct = edit(strict, 'src/Keep.mjs', { env: { [SESSION_ENV]: 'beta' } });
+  assert.equal(distinct.code, 0, `a case-sensitive repository blocked a distinct file: ${distinct.text}`);
+});
+
+test('an edit that reaches the file through a symlinked directory is the same file', async () => {
+  const root = await repo();
+  await symlink(join(root, 'src'), join(root, 'link'));
+  const claim = cli(['lease', 'src/keep.mjs', '--session', 'alpha', '--root', root, '--yes']);
+  assert.equal(claim.code, 0, claim.stderr);
+
+  const via = edit(root, 'link/keep.mjs', { env: { [SESSION_ENV]: 'beta' } });
+  assert.equal(via.code, 2, `a symlinked directory walked through: ${via.text}`);
+  assert.match(via.text, /link\/keep\.mjs held by alpha/, 'the refusal did not name the claim behind the link');
+});
+
+test('Claude NotebookEdit and a Codex apply_patch move are checked like any other write', async () => {
+  const root = await repo();
+  await writeFile(join(root, 'src', 'nb.ipynb'), '{}\n');
+  const claim = cli(['lease', 'src/nb.ipynb', '--session', 'alpha', '--root', root, '--yes']);
+  assert.equal(claim.code, 0, claim.stderr);
+
+  // NotebookEdit spells its target `notebook_path`, a key this tool used to skip.
+  const notebook = JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'NotebookEdit',
+    tool_input: { notebook_path: 'src/nb.ipynb' },
+    cwd: root,
+  });
+  const denied = cli(['agent-hook', 'pre-tool-use', '--harness', 'claude'], { input: notebook, env: { [SESSION_ENV]: 'beta' } });
+  assert.equal(denied.code, 2, `NotebookEdit walked through: ${denied.text}`);
+
+  // A move writes its destination, so leasing the destination guards the move.
+  await writeFile(join(root, 'src', 'old.mjs'), 'x\n');
+  const dst = cli(['lease', 'src/new.mjs', '--session', 'alpha', '--root', root, '--yes']);
+  assert.equal(dst.code, 0, dst.stderr);
+
+  const patch = JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'apply_patch',
+    tool_input: { command: '*** Begin Patch\n*** Move File: src/old.mjs\n+++ src/new.mjs\n*** End Patch\n' },
+    cwd: root,
+  });
+  const moved = cli(['agent-hook', 'pre-tool-use', '--harness', 'codex'], { input: patch, env: { [SESSION_ENV]: 'beta' } });
+  assert.equal(moved.code, 2, `a move onto a leased destination walked through: ${moved.text}`);
+
+  // The spelling that names the destination outright.
+  const moveTo = JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'apply_patch',
+    tool_input: { command: '*** Begin Patch\n*** Move to: src/new.mjs\n*** End Patch\n' },
+    cwd: root,
+  });
+  const moved2 = cli(['agent-hook', 'pre-tool-use', '--harness', 'codex'], { input: moveTo, env: { [SESSION_ENV]: 'beta' } });
+  assert.equal(moved2.code, 2, `a "Move to:" destination walked through: ${moved2.text}`);
 });

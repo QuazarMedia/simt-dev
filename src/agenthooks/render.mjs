@@ -79,6 +79,40 @@ export function hookRows() {
   }));
 }
 
+/**
+ * The files an apply_patch body writes, one per header line.
+ *
+ * `Update`/`Add`/`Delete` name their file on the header itself. A move is the
+ * one header whose target is not on its own line: `*** Move File: <old>` is
+ * followed by the destination on the `+++` line, and a body that spells the
+ * destination as `*** Move to: <new>` says it outright. A move with neither
+ * spelling still writes its source out of the way, so the source is the floor
+ * a move guards.
+ */
+function patchWrites(text) {
+  const lines = text.split('\n');
+  const writes = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i].trim();
+    const direct = /^\*\*\* (?:Update|Add|Delete) File: (.+)$/.exec(line);
+    if (direct !== null) {
+      writes.push(direct[1].trim());
+      continue;
+    }
+    const moveTo = /^\*\*\* Move to: (.+)$/.exec(line);
+    if (moveTo !== null) {
+      writes.push(moveTo[1].trim());
+      continue;
+    }
+    const moveFile = /^\*\*\* Move File: (.+)$/.exec(line);
+    if (moveFile !== null) {
+      const next = lines[i + 1]?.trim();
+      writes.push(next !== undefined && next.startsWith('+++ ') ? next.slice(4).trim() : moveFile[1].trim());
+    }
+  }
+  return writes;
+}
+
 const ADAPTERS = {
   claude: {
     id: 'claude',
@@ -89,9 +123,14 @@ const ADAPTERS = {
     root: (p) => p.cwd,
     extract: (p) => ({
       command: p.tool_name === 'Bash' ? (p.tool_input?.command ?? null) : null,
-      writes: ['Edit', 'Write', 'MultiEdit', 'NotebookEdit'].includes(p.tool_name)
+      // NotebookEdit spells its target `notebook_path`, not `file_path`: a key list
+      // that misses it is a lease the notebook can walk straight through (review
+      // 0003 Q16).
+      writes: ['Edit', 'Write', 'MultiEdit'].includes(p.tool_name)
         ? [p.tool_input?.file_path].filter(Boolean)
-        : [],
+        : p.tool_name === 'NotebookEdit'
+          ? [p.tool_input?.notebook_path].filter(Boolean)
+          : [],
     }),
     deny: (message) => ({
       hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: message },
@@ -124,10 +163,12 @@ const ADAPTERS = {
     root: (p) => p.cwd,
     extract: (p) => ({
       command: p.tool_name === 'Bash' ? (p.tool_input?.command ?? null) : null,
-      // apply_patch carries its targets inside the patch text, one header line per file.
+      // apply_patch carries its targets inside the patch text, one header line per file;
+      // a move names its destination on the `+++` line after `*** Move File:`, and the
+      // destination is the file the move writes (review 0003 Q16).
       writes:
         p.tool_name === 'apply_patch'
-          ? [...String(p.tool_input?.command ?? '').matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm)].map((m) => m[1].trim())
+          ? patchWrites(String(p.tool_input?.command ?? ''))
           : [],
     }),
     deny: (message) => ({

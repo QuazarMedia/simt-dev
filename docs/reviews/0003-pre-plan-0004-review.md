@@ -104,7 +104,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q04 | Homebrew tap still serves 0.4.0; release job never lands on tap `main` | P0 | D | release | S | — | Complete | `7ae125e`; `node --test test/packaging.test.mjs` — 15/15 (tap push lands on main + verify job; owner still merges the stale 0.4.0 tap to current) |
 | Q05 | README pins 0.5.0; unreleased commands documented as shipped; `main` reports 0.6.2 | P0 | D | docs/release | S | — | Complete | `1c50475`; `node --test test/version-pin.test.mjs` — 7/7 (0.6.1 marked never-published; release cut stays an owner action) |
 | Q06 | npm `1.0.0` and `0.0.0-stage` placeholders are live and not deprecated | P1 | D | release | S | — | Complete | `762a599`; `node --test test/packaging.test.mjs` — 16/16 (RELEASING.md records the burn + deprecate commands; `npm deprecate` itself stays an owner action) |
-| Q07 | Reindexing a changed file deletes every edge pointing into it | P1 | F | index | S | — | Queued | |
+| Q07 | Reindexing a changed file deletes every edge pointing into it | P1 | F | index | S | — | Complete | `ba6767e`; `node --test test/index.test.mjs` — 8/8 (importer owns outgoing edges; removed files still drop dangling incoming) |
 | Q08 | Concurrent `index` → `database is locked` and an empty DB | P1 | F | index | S | — | Queued | |
 | Q09 | `shared install --yes --dry-run` writes into `$HOME` | P1 | F | cli | S | — | Queued | |
 | Q10 | `--json --max-bytes` emits invalid JSON with exit 0 | P1 | F | output | S | — | Queued | |

@@ -214,6 +214,23 @@ test('packaging: the release script patches only the lines it must', () => {
   }
 });
 
+test('packaging: the brew channel lands on the tap main and one tap name', async () => {
+  // Review 0003 Q04: release branches that were never merged left `brew install`
+  // serving 0.4.0 while the workflow reported success. The workflow must push to
+  // the tap `main` and then verify the tap serves the released version, and the
+  // tap name must be the same in the workflow default, the formula comment and
+  // the README install line.
+  const channels = await readFile(new URL('../.github/workflows/publish-channels.yml', import.meta.url), 'utf8');
+  assert.match(channels, /git push --quiet origin main/, 'the brew job must push to the tap main, not a release branch');
+  assert.ok(!/release\/simt-dev-/.test(channels), 'no release-branch push may remain in the channels workflow');
+  assert.match(channels, /verify-brew:/, 'the channels workflow needs a tap-verification job');
+  assert.match(channels, /does not name simt-dev-/, 'the verification must fail when the tap lags the release');
+  assert.match(channels, /QuazarMedia\/homebrew-tap/, 'the workflow tap default is QuazarMedia/homebrew-tap');
+  assert.match(formula, /brew install QuazarMedia\/homebrew-tap\/simt-dev/, 'the formula comment must name the same tap');
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  assert.match(readme, /brew install QuazarMedia\/homebrew-tap\/simt-dev/, 'the README install line must name the same tap');
+});
+
 test('packaging: nothing in python/ is shipped to npm', async () => {
   // The two distributions are separate. `python/` is the wheel's launcher and
   // the tarball has nothing to do with it; shipping it would give npm users a

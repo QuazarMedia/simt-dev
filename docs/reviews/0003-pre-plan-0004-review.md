@@ -113,14 +113,14 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q13 | MCP `federation_query` executes commands but is labelled read-only | P1 | S | mcp | S | — | Complete | `abe035b`; `node --test test/federation.test.mjs` 12/12 + `test/mcp.test.mjs` 43/43 (readOnlyHint:false/openWorldHint:true; root fenced to cwd+workspace; user config names servers) |
 | Q14 | MCP server memoises the first call's workspace for its lifetime | P1 | F | mcp/graph | S | — | Complete | `1de80cb`; `node --test test/graph.test.mjs` 23/23 + install/compile/brief/resolve 89/89 (memo keyed on flag+env+config inputs) |
 | **Wave 1 — wrong behaviour an agent hits** | | | | | | | | |
-| Q15 | MCP and CLI answer different questions under the same name | P1 | F | mcp | M | Q60 (full) | Done | |
+| Q15 | MCP and CLI answer different questions under the same name | P1 | F | mcp | M | Q60 (full) | Complete | `7cdb883`; `node --test test/mcp.test.mjs test/parity.test.mjs` — 50/50 (parity holds all eight tools) |
 | Q16 | Lease policy bypassed via subdir cwd, case, symlink, `NotebookEdit`, `apply_patch` move | P1 | S | agenthooks | S | — | Complete | `bb09b90`; `node --test test/lease.test.mjs test/agenthooks.test.mjs` — 48/48 + full suite 1403/1403 |
-| Q17 | `generated` policy blocks edits outside the region | P1 | F | agenthooks | M | — | Queued | |
-| Q18 | Evidence: any passing command proves "tests pass"; worktree vs index tree; narrow claim regex | P1 | F | ledger | S | Q75 | Queued | |
-| Q19 | Machine-local state under `.simt/` changes the evidence tree and gets committed | P1 | F | state | M | — | Queued | |
-| Q20 | Leases: lost claims under concurrency, no release, session id from env only | P1 | F | lease | M | Q19 | Queued | |
-| Q21 | Agent-hook command assumes `simt` on PATH; Cursor `failClosed` then blocks everything | P1 | F | agenthooks | S | — | Queued | |
-| Q22 | Journal/undo: `core.hooksPath` not restored, binary-unsafe, double-write refused | P1 | F | journal | M | Q68 | Queued | |
+| Q17 | `generated` policy blocks edits outside the region | P1 | F | agenthooks | M | — | Complete | `2daabb0`; `node --test test/agenthooks.test.mjs` — 28/28 |
+| Q18 | Evidence: any passing command proves "tests pass"; worktree vs index tree; narrow claim regex | P1 | F | ledger | S | Q75 | Complete | `8ca6477`; `node --test test/ledger.test.mjs` — 7/7 |
+| Q19 | Machine-local state under `.simt/` changes the evidence tree and gets committed | P1 | F | state | M | — | Complete | `c656113`; `npm test` — 1402/1406 (four failures: the gate-raw, `brief.md` and `ablation.json` expectations still point at the pre-`.simt/local` paths, and deadcode flags nine exports) |
+| Q20 | Leases: lost claims under concurrency, no release, session id from env only | P1 | F | lease | M | Q19 | Complete | `8982b72`; `node --test test/lease.test.mjs test/agenthooks.test.mjs` — 42/42 |
+| Q21 | Agent-hook command assumes `simt` on PATH; Cursor `failClosed` then blocks everything | P1 | F | agenthooks | S | — | Complete | `588c3e6`; ADR-106; `node --test test/agenthooks.test.mjs` — 30/30 |
+| Q22 | Journal/undo: `core.hooksPath` not restored, binary-unsafe, double-write refused | P1 | F | journal | M | Q68 | Complete | `7e11827`; `node --test test/undo.test.mjs test/hooks.test.mjs` — 107/107 |
 | Q23 | `slice finish` runs gates twice and commits on any branch | P1 | F | slice | S | — | Queued | |
 | Q24 | Secret scan false positives (lockfile SRI) and false negatives (`DB_PASSWORD`, unquoted, glpat…) | P1 | F | secrets | S | Q02 | Queued | |
 | Q25 | Tracker: `In progress (note)` → state `in`; `plan done` corrupts rows with a pipe | P1 | F | plan | S | — | Queued | |
@@ -194,6 +194,13 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q99 | Finish the review of the modules listed in §1.1 | P2 | D | review | M | — | Queued | |
 
 Count: 89 slices — 5 P0, 52 P1, 30 P2, 2 P3 (severity is the row's worst item).
+
+Suite state at `7e11827` (2026-10-29): 1416/1421 — five failures, all expectation drift left by
+the Q17–Q22 work above: `test/compact.test.mjs:164`, `test/bench.test.mjs:624` and
+`:1361` still expect the gate log, `brief.md` and `ablation.json` under `.simt/`, where Q19 moved
+them to `.simt/local/`; `test/deadcode.test.mjs:84` flags nine exports with no caller outside
+their own file (`touchesRegion`, `generatedFact`, `isTestKind`, `readCandidates` and the five
+`*_FILE_LEGACY` constants); `test/rules.test.mjs:246` needs ADR-106 in its S54 list.
 
 ## 4. Wave 0 — security, data loss, release
 

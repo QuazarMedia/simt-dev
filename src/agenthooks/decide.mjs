@@ -195,7 +195,7 @@ function patchRanges(patch) {
  * apply_patch body. Unknown shapes deny: without a location the check cannot prove
  * the edit is outside. A malformed region also denies, because its span is unknown.
  */
-export function touchesRegion(current, edit = {}) {
+function touchesRegion(current, edit = {}) {
   const { malformed, spans } = regionSpans(current);
   if (spans.length === 0) return false;
   if (malformed) return true;
@@ -241,7 +241,7 @@ export function touchesRegion(current, edit = {}) {
  * `edit` is the renderer's detail beside the path (possibly empty). Submodule
  * writes always touch: another repository owns every byte under its directory.
  */
-export async function generatedFact(root, file, edit = null) {
+async function generatedFact(root, file, edit = null) {
   const abs = resolve(root, file);
   const text = await readFile(abs, 'utf8').catch(() => null);
   if (text !== null && holdsRegion(text)) {

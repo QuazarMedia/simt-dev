@@ -22,7 +22,7 @@ import { localRel, readStateFile } from './state.mjs';
 
 /** Where the claims live, in every repository: beside the index and the ledger. */
 export const LEASE_FILE = localRel('leases.json');
-export const LEASE_FILE_LEGACY = '.simt/leases.json';
+const LEASE_FILE_LEGACY = '.simt/leases.json';
 
 /** The schema the file is written with; a reader that does not know it refuses. */
 const LEASE_SCHEMA = 1;

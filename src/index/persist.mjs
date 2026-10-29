@@ -11,8 +11,8 @@ import { LOCAL_DIR } from '../state.mjs';
 
 export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
 export const JSONL_FILE = join(LOCAL_DIR, 'index.jsonl');
-export const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
-export const JSONL_FILE_LEGACY = '.simt/index.jsonl';
+const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
+const JSONL_FILE_LEGACY = '.simt/index.jsonl';
 export const SCHEMA_V = '3';
 
 const SCHEMA = `

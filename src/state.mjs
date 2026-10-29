@@ -30,7 +30,7 @@ export function localRel(...parts) {
  * Where a machine-local file is read from: the new path first, then each
  * legacy path in order. Writers use only the first entry.
  */
-export function readCandidates(root, rel, legacy = []) {
+function readCandidates(root, rel, legacy = []) {
   return [join(root, rel), ...legacy.map((l) => join(root, l))];
 }
 

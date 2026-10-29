@@ -123,7 +123,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q22 | Journal/undo: `core.hooksPath` not restored, binary-unsafe, double-write refused | P1 | F | journal | M | Q68 | Complete | `7e11827`; `node --test test/undo.test.mjs test/hooks.test.mjs` — 107/107 |
 | Q23 | `slice finish` runs gates twice and commits on any branch | P1 | F | slice | S | — | Complete | `f80f04b`; `node --test test/slice.test.mjs test/ledger.test.mjs test/plan.test.mjs` — 42/42 |
 | Q24 | Secret scan false positives (lockfile SRI) and false negatives (`DB_PASSWORD`, unquoted, glpat…) | P1 | F | secrets | S | Q02 | Complete | `c222d9f`; `node --test test/secrets.test.mjs` — 22/22 |
-| Q25 | Tracker: `In progress (note)` → state `in`; `plan done` corrupts rows with a pipe | P1 | F | plan | S | — | Queued | |
+| Q25 | Tracker: `In progress (note)` → state `in`; `plan done` corrupts rows with a pipe | P1 | F | plan | S | — | Complete | b06aca6 · test: node --test test/plan.test.mjs |
 | Q26 | `projection.place: "top"` cannot work, yet it is the BEYOND-READ-LIMIT remedy | P1 | F | projection | S | — | Queued | |
 | Q27 | `surfaces: []` silently drops every process rule | P1 | F | surfaces | S | — | Queued | |
 | Q28 | Fresh TS `init --yes` then `check` exits 1 (tsconfig base nothing extends) | P1 | F/C | tsconfig | S | — | Queued | |

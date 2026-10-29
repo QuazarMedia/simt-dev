@@ -20,10 +20,11 @@
 // the file was read. Status and dependency checks never touch it: a 1 MB
 // section that belongs to a later slice is not copied into the index.
 
-import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { CLI } from '../name.mjs';
+import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { loadFormat } from './template.mjs';
 
 function clean(cell) {
@@ -100,10 +101,16 @@ function sliceKey(path, id) {
  * empty cell is the pipe that closes it. A further empty cell is real: the
  * evidence column is often blank, and stripping every trailing empty would
  * delete it and shift the state into the wrong column.
+ *
+ * A pipe inside a code span is content, not a separator: an evidence cell may
+ * carry a command line with a pipe in it, and splitting there shifts every
+ * later cell left by one (review 0003 Q25). Backticks toggle the span; a
+ * `\|` escape is content in either mode.
  */
 function splitRow(line) {
   const cells = [];
   let current = '';
+  let inCode = false;
   for (let i = 0; i < line.length; i += 1) {
     const char = line[i];
     if (char === '\\' && i + 1 < line.length) {
@@ -111,7 +118,12 @@ function splitRow(line) {
       i += 1;
       continue;
     }
-    if (char === '|') {
+    if (char === '`') {
+      inCode = !inCode;
+      current += char;
+      continue;
+    }
+    if (char === '|' && !inCode) {
       cells.push(current);
       current = '';
       continue;
@@ -596,9 +608,16 @@ export async function planDone(root, id, { sha = null, test = null, state = null
     return { root, id, error: `${id} is no longer on line ${slice.line} of ${slice.docName}`, remedy: `run: ${CLI} plan status` };
   }
 
-  const cells = splitRow(found.lines[found.index]);
-  const width = Math.max(slice.columnCount, slice.stateIdx + 1, slice.evidenceIdx + 1, cells.length);
-  while (cells.length < width) cells.push('');
+  const original = found.lines[found.index];
+  const cells = splitRow(original);
+  if (cells.length !== slice.columnCount) {
+    return {
+      root,
+      id,
+      error: `the row for ${id} has ${cells.length} cells; the table declares ${slice.columnCount}`,
+      remedy: `fix the row in ${slice.docName} — an unescaped pipe splits it — and retry`,
+    };
+  }
   const from = cells[slice.stateIdx] ?? '';
   cells[slice.stateIdx] = replaceState(from, display);
 
@@ -613,14 +632,18 @@ export async function planDone(root, id, { sha = null, test = null, state = null
     evidenceNote = 'no evidence column in this tracker; the sha was not recorded';
   }
 
-  const rebuilt = `| ${cells.join(' | ')} |`;
-  const original = found.lines[found.index];
+  // The rebuilt line keeps the original's ending: a CRLF file must not gain
+  // one LF-terminated line among its CRLF lines (review 0003 Q25).
+  const eol = original.endsWith('\r') ? '\r' : '';
+  const rebuilt = `| ${cells.join(' | ')} |${eol}`;
   const changedCells = splitRow(original).join('\0') !== cells.join('\0');
   const newLine = changedCells ? rebuilt : original;
   const wouldChange = newLine !== original;
   if (wouldChange && !dryRun) {
     found.lines[found.index] = newLine;
-    await writeFile(slice.docPath, found.lines.join('\n'), 'utf8');
+    const journal = [];
+    await journaledWriteFile(root, journal, slice.docPath, found.lines.join('\n'));
+    await commitJournal(root, 'plan', journal);
   }
 
   const apply = `run: ${CLI} plan done ${id}${sha ? ` ${sha}` : ''}${display === format.doneWrite ? '' : ` --state ${JSON.stringify(display)}`}${test ? ` --test ${JSON.stringify(test)}` : ''} --yes`;

@@ -117,8 +117,13 @@ export async function journaledWriteFile(root, acc, path, text, { mode } = {}) {
   // Internal state is written, not recorded — see the module header.
   const internal = rel(root, path) === STATE_DIR || rel(root, path).startsWith(`${STATE_DIR}/`);
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, text, 'utf8');
-  if (mode !== undefined) await chmod(path, mode);
+  // tmp + rename, the way this module writes its own set files: a crash
+  // mid-write leaves the old bytes in place, never a half-written file
+  // (review 0003 Q25). The mode lands on the tmp, so the rename carries it.
+  const tmp = `${path}.tmp-${process.pid}`;
+  await writeFile(tmp, text, 'utf8');
+  if (mode !== undefined) await chmod(tmp, mode);
+  await rename(tmp, path);
   if (!internal) {
     acc.push(fileEntry(rel(root, path), before, Buffer.from(text, 'utf8')));
   }

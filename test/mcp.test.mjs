@@ -14,7 +14,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { handle, PROTOCOL_VERSION, RPC, SUPPORTED_VERSIONS, META } from '../src/mcp/server.mjs';
+import { Readable } from 'node:stream';
+import { handle, serve, PROTOCOL_VERSION, RPC, SUPPORTED_VERSIONS, META } from '../src/mcp/server.mjs';
 import { TOOLS, toolNames, ERROR_SHAPE } from '../src/mcp/tools.mjs';
 import { assertValid } from '../src/mcp/schema.mjs';
 import { CLI } from '../src/name.mjs';
@@ -177,6 +178,29 @@ test('mcp: a tool that fails is a RESULT with isError, never a protocol error', 
   const payload = JSON.parse(r.result.content[0].text);
   assert.equal(payload.error, 'no region');
   assert.equal(payload.remedy, `run: ${CLI} sync`);
+});
+
+test('mcp: a throwing handler keeps the request id; unparseable input gets id null (Q12)', async () => {
+  // One shared try used to answer a handler throw as a parse error with `id: null`,
+  // and the client waited forever for request 7's answer. Parse and handling fail
+  // on separate paths now, each with the id its failure owns. The throw is injected
+  // by handing `serve` a tools table that cannot answer `tools/list`.
+  const lines = [
+    `${JSON.stringify(req('tools/list', {}, 7))}\n`,
+    'this is not json\n',
+  ];
+  const written = [];
+  const code = await serve(null, {
+    input: Readable.from(lines),
+    output: { write: (chunk) => { written.push(String(chunk)); return true; } },
+    packageVersion: '9.9.9',
+  });
+  assert.equal(code, 0);
+  const [handlerFailure, parseFailure] = written.join('').trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(handlerFailure.id, 7, 'the handler failure answers the request it threw in');
+  assert.equal(handlerFailure.error.code, RPC.INTERNAL);
+  assert.equal(parseFailure.id, null, 'unparseable input has no id to answer to');
+  assert.equal(parseFailure.error.code, RPC.PARSE);
 });
 
 test('mcp: truncation is announced in the text, never silent', async () => {

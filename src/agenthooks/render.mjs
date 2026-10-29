@@ -349,6 +349,17 @@ export function adapter(id) {
 }
 
 /**
+ * The session a payload claims, when it names one. Harness hook processes rarely
+ * carry `SIMT_SESSION`, so an agent is session `''` and is blocked by its own
+ * lease — the payload's own session id is the fallback (review 0003 Q20).
+ */
+export function payloadSession(payload) {
+  if (!payload || typeof payload !== 'object') return null;
+  const direct = payload.session_id ?? payload.sessionId ?? payload.session?.id ?? payload.tool_input?.session_id ?? null;
+  return typeof direct === 'string' && direct.trim() !== '' ? direct : null;
+}
+
+/**
  * The facts a payload carries, and the root it names. An unknown shape yields none.
  *
  * `root` is a caller-supplied override that outranks the payload: a packaged hook runs
@@ -360,7 +371,11 @@ export function adapter(id) {
  */
 export function factsFrom(row, payload, { root } = {}) {
   const override = typeof root === 'string' && root.trim() !== '' ? root : null;
-  return { root: override ?? row.root(payload) ?? process.cwd(), ...row.extract(payload ?? {}) };
+  return {
+    root: override ?? row.root(payload) ?? process.cwd(),
+    session: payloadSession(payload),
+    ...row.extract(payload ?? {}),
+  };
 }
 
 /** The document to print for a decision, or null when there is nothing to say. */

@@ -106,7 +106,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q06 | npm `1.0.0` and `0.0.0-stage` placeholders are live and not deprecated | P1 | D | release | S | — | Complete | `762a599`; `node --test test/packaging.test.mjs` — 16/16 (RELEASING.md records the burn + deprecate commands; `npm deprecate` itself stays an owner action) |
 | Q07 | Reindexing a changed file deletes every edge pointing into it | P1 | F | index | S | — | Complete | `ba6767e`; `node --test test/index.test.mjs` — 8/8 (importer owns outgoing edges; removed files still drop dangling incoming) |
 | Q08 | Concurrent `index` → `database is locked` and an empty DB | P1 | F | index | S | — | Complete | `1bf064b`; `node --test test/index.test.mjs` — 9/9 (WAL + busy_timeout + cold temp+rename; INDEX_BUSY maps its own remedy) |
-| Q09 | `shared install --yes --dry-run` writes into `$HOME` | P1 | F | cli | S | — | Queued | |
+| Q09 | `shared install --yes --dry-run` writes into `$HOME` | P1 | F | cli | S | — | Complete | `705018e`; `node --test test/shared.test.mjs` 13/13 + `test/init.test.mjs` 59/59 (dedicated `--yes --dry-run` rehearsal tests; contract matrix covered by the stronger per-command tests) |
 | Q10 | `--json --max-bytes` emits invalid JSON with exit 0 | P1 | F | output | S | — | Queued | |
 | Q11 | Parse errors and "no command" ignore `--json` | P1 | F | cli | S | — | Queued | |
 | Q12 | MCP: an internal error is answered as a parse error with `id:null`; client hangs | P1 | F | mcp | S | — | Queued | |

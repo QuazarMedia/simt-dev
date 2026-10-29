@@ -231,6 +231,12 @@ test('packaging: the brew channel lands on the tap main and one tap name', async
   assert.match(readme, /brew install QuazarMedia\/homebrew-tap\/simt-dev/, 'the README install line must name the same tap');
 });
 
+test('packaging: the version is not a burned placeholder (Q06)', () => {
+  // 1.0.0 and 0.0.0-stage on npm are pre-publish placeholders with no bin.
+  // Publishing (or versioning into) either reuses a burned number; see RELEASING.md.
+  assert.ok(!['1.0.0', '0.0.0-stage'].includes(pkg.version), `package.json version is a burned placeholder: ${pkg.version}`);
+});
+
 test('packaging: nothing in python/ is shipped to npm', async () => {
   // The two distributions are separate. `python/` is the wheel's launcher and
   // the tarball has nothing to do with it; shipping it would give npm users a

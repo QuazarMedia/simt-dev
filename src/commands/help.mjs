@@ -77,13 +77,19 @@ ${CLI} plan status             count tracker rows
 ${CLI} plan next [<id>]        one ready slice's section, or the one named; ~1 KB
 ${CLI} plan done <id> [<sha>]  mark one row; dry-run unless --yes
 ${CLI} slice start <id>     give a slice its own worktree and branch, preload the
-                           brief, and mark the row In progress (dry-run unless
+                           brief, and mark the row started (dry-run unless
                            --yes; the worktree is ${STATE_DIR}/local/worktrees/<id>
-                           on branch slice/<id>, the brief ${STATE_DIR}/local/brief.md in it)
+                           on branch slice/<id>, the brief ${STATE_DIR}/local/briefs/<id>.md
+                           beside it; --session <id> leases the slice)
 ${CLI} slice finish <id>    run the pre-commit gates, commit what is staged with a
                            Conventional subject from the row's title, then record
                            the SHA and the --test command on the row (dry-run
-                           unless --yes; --type picks the type, default feat)
+                           unless --yes; --type picks the type, default feat;
+                           refuses unless HEAD is the slice branch; gates the
+                           ledger already proves for this tree are not re-run)
+${CLI} slice abandon <id>   remove the worktree, delete the branch, and return
+                           the row to ready (dry-run unless --yes; refuses from
+                           inside the worktree)
 ${CLI} lease [<paths>...]    claim files for one session and a TTL, or list the
                            claims (dry-run unless --yes; the session is --session
                            <id> or ${SESSION_ENV}; a pre-edit hook refuses an edit

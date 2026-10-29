@@ -17,7 +17,7 @@
   },
   "states": [
     { "id": "queued", "write": "Queued", "read": ["queued"] },
-    { "id": "in-progress", "write": "In progress", "read": ["in progress", "in-progress"] },
+    { "id": "in-progress", "write": "In progress", "read": ["in progress", "in-progress"], "role": "started" },
     { "id": "complete", "write": "Complete", "read": ["complete", "completed", "done"], "satisfies": true },
     { "id": "accepted", "write": "Accepted", "read": ["accepted"] }
   ],

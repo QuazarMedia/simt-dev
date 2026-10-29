@@ -150,6 +150,25 @@ function isTestKind(entry) {
   return typeof entry?.cmd === 'string' && /\btest\b/i.test(entry.cmd);
 }
 
+/**
+ * The surviving passing entry for one gate on one staged tree, or null.
+ *
+ * A later failure for the same gate on the same tree cancels the pass, the
+ * way `hasTestEvidence` cancels a test pass — a gate that passed, then
+ * failed, proves nothing about the tree. Entries without an `indexTree`
+ * predate the staged-tree record and never match: a pass on an unknown tree
+ * is not evidence for this one (review 0003 Q23).
+ */
+export function passEntryForGate(entries, gate, tree) {
+  const scoped = (entries ?? []).filter((e) => e?.gate === gate && e?.indexTree === tree);
+  for (let i = 0; i < scoped.length; i += 1) {
+    if (scoped[i].exit !== 0) continue;
+    const laterFailure = scoped.slice(i + 1).some((later) => later.exit !== 0);
+    if (!laterFailure) return scoped[i];
+  }
+  return null;
+}
+
 /** A passing test-kind entry for `tree` with no later failure of the same
  *  command on the same tree. v1 lines (no `kind`) keep today's reading: any
  *  passing entry for the tree counts, so old ledgers do not go red. */

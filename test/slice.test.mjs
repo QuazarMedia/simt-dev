@@ -131,8 +131,11 @@ test('start creates the worktree and branch, preloads the brief, and sets the ro
   assert.equal(await g(['-C', wt, 'rev-parse', '--abbrev-ref', 'HEAD']), 'slice/a1');
   assert.equal(await g(['-C', wt, 'rev-parse', 'HEAD']), head, 'the branch starts at the row it belongs to');
 
-  const brief = await readFile(join(wt, '.simt', 'local', 'brief.md'), 'utf8');
+  const brief = await readFile(join(root, '.simt', 'local', 'briefs', 'a1.md'), 'utf8');
   assert.match(brief, /A1: wire the gate/, 'the brief names the slice it was preloaded for');
+  // The brief lives beside the worktree, not in it: a file inside the worktree
+  // would be untracked content in the slice's own tree.
+  assert.equal(existsSync(join(wt, '.simt', 'local', 'brief.md')), false);
 
   const plan = await readFile(planOf(root), 'utf8');
   assert.match(plan, /\| A1 \| wire the gate \| — \| In progress \|/);
@@ -153,17 +156,34 @@ test('finish without --yes previews the subject and commits nothing', async () =
   assert.match(await readFile(planOf(root), 'utf8'), /\| Queued \|/, 'the preview edited the row');
 });
 
-test('finish refuses when nothing is staged', async () => {
+test('finish refuses when HEAD is not the slice branch', async () => {
   const root = await repo();
   const before = await g(['-C', root, 'rev-parse', 'HEAD']);
 
+  // Finishing from `main` would commit main's tree under the slice's subject.
   const refused = cli(['slice', 'finish', 'A1', '--root', root, '--yes']);
+  assert.equal(refused.code, 2);
+  assert.match(refused.stderr, /not on the slice branch/);
+  assert.match(refused.stderr, /slice\/a1/);
+
+  assert.equal(await g(['-C', root, 'rev-parse', 'HEAD']), before);
+  assert.match(await readFile(planOf(root), 'utf8'), /\| Queued \|/);
+});
+
+test('finish refuses when nothing is staged', async () => {
+  const root = await repo();
+  const started = cli(['slice', 'start', 'A1', '--root', root, '--yes']);
+  assert.equal(started.code, 0, `${started.stdout}\n${started.stderr}`);
+  const wt = wtOf(root);
+  const before = await g(['-C', wt, 'rev-parse', 'HEAD']);
+
+  const refused = cli(['slice', 'finish', 'A1', '--root', wt, '--yes']);
   assert.equal(refused.code, 2);
   assert.match(refused.stderr, /nothing staged/);
   assert.match(refused.stderr, /stage what the slice changed/);
 
-  assert.equal(await g(['-C', root, 'rev-parse', 'HEAD']), before);
-  assert.match(await readFile(planOf(root), 'utf8'), /\| Queued \|/);
+  assert.equal(await g(['-C', wt, 'rev-parse', 'HEAD']), before);
+  assert.match(await readFile(planOf(root), 'utf8'), /\| In progress \|/);
 });
 
 test('finish commits with a Conventional subject from the title and records SHA and test on the row', async () => {
@@ -205,17 +225,21 @@ test('a failing declared gate blocks finish: no commit, no row edit', async () =
   const root = await repo({
     'simt.json': `${JSON.stringify({ gates: { preCommit: ['test'], commands: { test: 'false' } } }, null, 2)}\n`,
   });
-  await writeFile(join(root, 'hello.txt'), 'hi\n');
-  await git(['-C', root, 'add', 'hello.txt']);
-  const before = await g(['-C', root, 'rev-parse', 'HEAD']);
+  const started = cli(['slice', 'start', 'A1', '--root', root, '--yes']);
+  assert.equal(started.code, 0, `${started.stdout}\n${started.stderr}`);
 
-  const blocked = cli(['slice', 'finish', 'A1', '--root', root, '--yes']);
+  const wt = wtOf(root);
+  await writeFile(join(wt, 'hello.txt'), 'hi\n');
+  await git(['-C', wt, 'add', 'hello.txt']);
+  const before = await g(['-C', wt, 'rev-parse', 'HEAD']);
+
+  const blocked = cli(['slice', 'finish', 'A1', '--root', wt, '--yes']);
   assert.equal(blocked.code, 1, `${blocked.stdout}\n${blocked.stderr}`);
   assert.match(blocked.stdout, /FAILED\s+test/);
   assert.match(blocked.stdout, /BLOCKED  at least one gate failed/);
 
-  assert.equal(await g(['-C', root, 'rev-parse', 'HEAD']), before, 'the gates failed, so nothing was committed');
-  assert.match(await readFile(planOf(root), 'utf8'), /\| Queued \|/, 'a blocked finish records nothing');
+  assert.equal(await g(['-C', wt, 'rev-parse', 'HEAD']), before, 'the gates failed, so nothing was committed');
+  assert.match(await readFile(planOf(root), 'utf8'), /\| In progress \|/, 'a blocked finish records nothing');
 });
 
 test('finish rejects a --type that is not a Conventional Commits type', async () => {
@@ -227,6 +251,135 @@ test('finish rejects a --type that is not a Conventional Commits type', async ()
   const good = cli(['slice', 'finish', 'A1', '--root', root, '--type', 'fix']);
   assert.equal(good.code, 0, good.stderr);
   assert.match(good.stdout, /subject\s+fix\(a1\): wire the gate/);
+});
+
+test('start honors the template\u2019s started role, not a hard-coded word', async () => {
+  const root = await repo({
+    'simt.json': `${JSON.stringify({
+      plans: {
+        states: [
+          { id: 'queued', write: 'Queued', read: ['queued'] },
+          { id: 'in-progress', write: 'Underway', read: ['underway', 'in progress', 'in-progress'], role: 'started' },
+          { id: 'complete', write: 'Complete', read: ['complete', 'completed', 'done'], satisfies: true },
+          { id: 'accepted', write: 'Accepted', read: ['accepted'] },
+        ],
+      },
+    })}\n`,
+  });
+  const preview = cli(['slice', 'start', 'A1', '--root', root]);
+  assert.equal(preview.code, 0, preview.stderr);
+  assert.match(preview.stdout, /state\s+Queued -> Underway/);
+
+  const started = cli(['slice', 'start', 'A1', '--root', root, '--yes']);
+  assert.equal(started.code, 0, `${started.stdout}\n${started.stderr}`);
+  assert.match(await readFile(planOf(root), 'utf8'), /\| Underway \|/);
+});
+
+test('finish does not re-run a gate the ledger already proves for this tree', async () => {
+  const root = await repo({
+    'simt.json': `${JSON.stringify({ gates: { preCommit: ['secret-scan'] } }, null, 2)}\n`,
+  });
+  const started = cli(['slice', 'start', 'A1', '--root', root, '--yes']);
+  assert.equal(started.code, 0, `${started.stdout}\n${started.stderr}`);
+
+  const wt = wtOf(root);
+  await writeFile(join(wt, 'hello.txt'), 'hi\n');
+  await git(['-C', wt, 'add', 'hello.txt']);
+
+  // The run the commit hook would do: the ledger line it leaves is the evidence.
+  const ran = cli(['hooks', 'run', 'pre-commit', '--root', wt]);
+  assert.equal(ran.code, 0, `${ran.stdout}\n${ran.stderr}`);
+
+  const finished = cli(['slice', 'finish', 'A1', '--root', wt, '--yes']);
+  assert.equal(finished.code, 0, `${finished.stdout}\n${finished.stderr}`);
+  assert.match(finished.stdout, /PASSED\s+secret-scan\s+already passed on this tree/);
+  assert.match(finished.stderr, /already passed on this tree; not re-run/);
+
+  const ledger = JSON.parse(`[${await readFile(join(wt, '.simt', 'local', 'ledger.jsonl'), 'utf8').then((t) => t.trim().split('\n').join(','))}]`);
+  assert.equal(ledger.filter((e) => e.gate === 'secret-scan').length, 1, 'the gate ran once, not twice');
+});
+
+test('an unknown gate is never skipped, even with a ledger line for it', async () => {
+  const root = await repo({
+    'simt.json': `${JSON.stringify({ gates: { preCommit: ['nope'] } }, null, 2)}\n`,
+  });
+  const started = cli(['slice', 'start', 'A1', '--root', root, '--yes']);
+  assert.equal(started.code, 0, `${started.stdout}\n${started.stderr}`);
+
+  const wt = wtOf(root);
+  await writeFile(join(wt, 'hello.txt'), 'hi\n');
+  await git(['-C', wt, 'add', 'hello.txt']);
+  // A pass recorded when `nope` was a known gate is not evidence for an
+  // unknown one: the skip only covers gates the dispatcher can run.
+  const stagedTree = await g(['-C', wt, 'write-tree']);
+  await mkdir(join(wt, '.simt', 'local'), { recursive: true });
+  await writeFile(
+    join(wt, '.simt', 'local', 'ledger.jsonl'),
+    `${JSON.stringify({ v: 2, ts: '2026-10-29T00:00:00Z', tree: stagedTree, worktreeTree: stagedTree, indexTree: stagedTree, gate: 'nope', kind: 'test', cmd: 'nope', exit: 0, ms: 1, outputDigest: 'sha256-x', summary: 'ok' })}\n`,
+  );
+
+  const blocked = cli(['slice', 'finish', 'A1', '--root', wt, '--yes']);
+  assert.equal(blocked.code, 1, `${blocked.stdout}\n${blocked.stderr}`);
+  assert.match(blocked.stdout, /unknown gate/);
+});
+
+test('the slice lease blocks a second session, and releases on abandon and finish', async () => {
+  const root = await repo();
+  const leasesFile = join(root, '.simt', 'local', 'leases.json');
+  const leasesOf = async (session) =>
+    JSON.parse(await readFile(leasesFile, 'utf8')).leases.filter((l) => l.kind === 'slice' && l.session === session);
+
+  const started = cli(['slice', 'start', 'A1', '--root', root, '--session', 'alpha', '--yes']);
+  assert.equal(started.code, 0, `${started.stdout}\n${started.stderr}`);
+  assert.equal((await leasesOf('alpha')).length, 1, 'the starter holds the slice');
+
+  // The branch and worktree are gone (a crashed cleanup), but the lease is
+  // not: a second session is refused by name, not raced to the worktree.
+  await git(['-C', root, 'worktree', 'remove', '--force', wtOf(root)]);
+  await git(['-C', root, 'branch', '-D', 'slice/a1']);
+  const stolen = cli(['slice', 'start', 'A1', '--root', root, '--session', 'beta', '--yes']);
+  assert.equal(stolen.code, 1, `${stolen.stdout}\n${stolen.stderr}`);
+  assert.match(stolen.stderr, /already started by session alpha/);
+
+  const abandoned = cli(['slice', 'abandon', 'A1', '--root', root, '--session', 'alpha', '--yes']);
+  assert.equal(abandoned.code, 0, `${abandoned.stdout}\n${abandoned.stderr}`);
+  assert.equal((await leasesOf('alpha')).length, 0, 'abandon released the slice');
+  assert.match(await readFile(planOf(root), 'utf8'), /\| Queued \|/);
+
+  const retaken = cli(['slice', 'start', 'A1', '--root', root, '--session', 'beta', '--yes']);
+  assert.equal(retaken.code, 0, `${retaken.stdout}\n${retaken.stderr}`);
+  const wt = wtOf(root);
+  await writeFile(join(wt, 'src.js'), 'export const x = 1;\n');
+  await git(['-C', wt, 'add', 'src.js']);
+  const finished = cli(['slice', 'finish', 'A1', '--root', wt, '--session', 'beta', '--test', 'node --test', '--yes']);
+  assert.equal(finished.code, 0, `${finished.stdout}\n${finished.stderr}`);
+  assert.equal((await leasesOf('beta')).length, 0, 'finish released the slice');
+});
+
+test('abandon previews, refuses from inside, and takes the slice down', async () => {
+  const root = await repo();
+  const started = cli(['slice', 'start', 'A1', '--root', root, '--yes']);
+  assert.equal(started.code, 0, `${started.stdout}\n${started.stderr}`);
+  const wt = wtOf(root);
+
+  const preview = cli(['slice', 'abandon', 'A1', '--root', root]);
+  assert.equal(preview.code, 0, preview.stderr);
+  assert.match(preview.stdout, /remove\s+\.simt\/local\/worktrees\/a1/);
+  assert.match(preview.stdout, /branch slice\/a1/);
+  assert.match(preview.stdout, /state\s+In progress -> Queued/);
+  assert.match(preview.stdout, /run: simt slice abandon A1 --yes/);
+  assert.ok(existsSync(wt), 'a preview removes nothing');
+
+  const inside = cli(['slice', 'abandon', 'A1', '--root', wt, '--yes']);
+  assert.equal(inside.code, 2);
+  assert.match(inside.stderr, /cannot abandon .* from inside its worktree/);
+  assert.ok(existsSync(wt), 'a refusal removes nothing');
+
+  const done = cli(['slice', 'abandon', 'A1', '--root', root, '--yes']);
+  assert.equal(done.code, 0, `${done.stdout}\n${done.stderr}`);
+  assert.equal(existsSync(wt), false, 'the worktree is gone');
+  assert.equal(await g(['-C', root, 'branch', '--list', 'slice/a1']), '', 'the branch is gone');
+  assert.match(await readFile(planOf(root), 'utf8'), /\| A1 \| wire the gate \| — \| Queued \|/);
 });
 
 test('start answers --json as one document carrying the branch, brief and row', async () => {

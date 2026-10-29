@@ -434,6 +434,41 @@ test('a template replaces the columns, the states and the reference words', asyn
   assert.equal(after.next.id, 'FEATURE-2');
 });
 
+test('the delivered template marks the started state with a role', async () => {
+  const state = await loadPlanState(ROOT);
+  assert.equal(state.error, undefined);
+  assert.equal(state.format.startedWrite, 'In progress');
+});
+
+test('a state role must be a lower-case word, and started is claimed once', async () => {
+  const badWord = await repo({
+    'simt.json': `${JSON.stringify({
+      plans: {
+        states: [
+          { id: 'queued', write: 'Queued', read: ['queued'] },
+          { id: 'in-progress', write: 'Underway', read: ['underway'], role: 'Started' },
+          { id: 'complete', write: 'Complete', read: ['complete'], satisfies: true },
+        ],
+      },
+    })}\n`,
+  });
+  assert.match((await loadPlanState(badWord)).error, /role must be a lower-case word/);
+
+  const twice = await repo({
+    'simt.json': `${JSON.stringify({
+      plans: {
+        states: [
+          { id: 'queued', write: 'Queued', read: ['queued'] },
+          { id: 'in-progress', write: 'Underway', read: ['underway'], role: 'started' },
+          { id: 'review', write: 'In review', read: ['review'], role: 'started' },
+          { id: 'complete', write: 'Complete', read: ['complete'], satisfies: true },
+        ],
+      },
+    })}\n`,
+  });
+  assert.match((await loadPlanState(twice)).error, /role started is claimed twice/);
+});
+
 test('a plans key that cannot be read is not silently the default', async () => {
   const broken = await repo({
     'simt.json': '{',

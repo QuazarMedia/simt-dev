@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { lintRegistry, loadRegistry } from '../src/graph/load.mjs';
+import { lintRegistry, loadRegistry, workspace } from '../src/graph/load.mjs';
 import { KNOWN_TAGS } from '../src/resolve/fingerprint.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -188,4 +189,22 @@ test('lint: reports a missing file rather than throwing', async () => {
   const { ok, errors } = await loadRegistry('/definitely/not/a/registry.json');
   assert.equal(ok, false);
   assert.match(errors[0], /unreadable|invalid JSON/);
+});
+
+test('workspace: different flags resolve different workspaces (Q14)', async () => {
+  // The memo used to be first-call-wins for the process lifetime, so a call with
+  // `{workspace: ws}` poisoned every later caller. The key is the inputs now.
+  const first = await mkdtemp(join(tmpdir(), 'simt-ws-a-'));
+  const second = await mkdtemp(join(tmpdir(), 'simt-ws-b-'));
+  try {
+    const a = await workspace({ workspace: first });
+    const b = await workspace({ workspace: second });
+    assert.equal(a.root, first);
+    assert.equal(b.root, second);
+    const again = await workspace({ workspace: first });
+    assert.equal(again.root, first, 'same inputs share the one resolution');
+  } finally {
+    await rm(first, { recursive: true, force: true });
+    await rm(second, { recursive: true, force: true });
+  }
 });

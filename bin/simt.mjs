@@ -4,25 +4,32 @@
 // POSIX only (ADR-012). package.json declares os: [darwin, linux], so npm refuses
 // the install elsewhere rather than letting a hook fail obscurely.
 
-import { parse } from '../src/argv.mjs';
+import { parse, rawJsonFlag } from '../src/argv.mjs';
 import { EXIT, fail, jsonFailMode, jsonIndentDefault } from '../src/output/index.mjs';
 
 try {
   const argv = process.argv.slice(2);
   const parsed = parse(argv);
   if (!parsed.ok) {
-    process.exit(parsed.code);
+    // The flags do not exist yet, so the JSON mode is read off the raw words:
+    // a parse failure under `--json` is a JSON document on stdout, not text on
+    // stderr with an empty stdout (Q11, ADR-070 ruling 4).
+    jsonFailMode(rawJsonFlag(argv));
+    process.exit(fail(parsed.error.message, parsed.error.code));
   }
   const { flags, positional } = parsed.value;
+
+  // Set before anything can fail: `no command given` under `--json` is a JSON
+  // document too, and a failure that prints as text with an empty stdout breaks
+  // the same ruling the parse failure above honours (Q11, ADR-070 ruling 4).
+  jsonIndentDefault(flags.pretty === true);
+  jsonFailMode(flags.json === true);
 
   // No arguments at all is a usage error, not a silent help dump: an agent that
   // ran the wrong thing should be told so rather than handed 40 lines of prose.
   if (positional.length === 0 && !flags.help && !flags.version) {
     process.exit(fail('no command given', EXIT.USAGE));
   }
-
-  jsonIndentDefault(flags.pretty === true);
-  jsonFailMode(flags.json === true);
 
   // The one command that runs on somebody else's hot path, and therefore the one that
   // does not load the registry. `agent-hook` is called before every tool call an agent

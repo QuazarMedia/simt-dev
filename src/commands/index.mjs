@@ -73,7 +73,7 @@ import { completionsCommand } from './completions.mjs';
 import { reviewCommand } from './review.mjs';
 import { localDoctorCommand } from './local.mjs';
 import { distillCommand } from './distill.mjs';
-import { parse } from '../argv.mjs';
+import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI } from '../name.mjs';
 
 /** command path -> implementation sequence step (plan 0002 section 11). */
@@ -230,7 +230,7 @@ export const IMPLEMENTED = {
 export const COMMANDS = Object.keys(IMPLEMENTED).sort();
 
 export async function dispatch(argv) {
-  const { flags, positional } = parseOrExit(argv);
+  const { flags, positional, parseError } = parseOrExit(argv);
 
   // The JSON shape is decided once, here, and every command inherits it. Threading a
   // `--pretty` through twenty-five call sites would mean twenty-five places to forget,
@@ -242,6 +242,10 @@ export async function dispatch(argv) {
   // never sees an empty document.
   jsonIndentDefault(flags.pretty === true);
   jsonFailMode(flags.json === true);
+
+  // A parse failure is already the whole answer: report it once, in the asked-for
+  // shape, rather than falling through to `unknown command` on the empty path.
+  if (parseError !== undefined) return fail(parseError.message, parseError.code);
 
   // Help is shown only when explicitly asked for. An unknown command must fail with
   // a usage code, not print 40 lines of prose and exit 0 — an agent that mistyped
@@ -305,8 +309,14 @@ function commandPath(first, second) {
 }
 
 function parseOrExit(argv) {
+  // Unreachable from `bin` (it renders the failure itself and exits), but `dispatch`
+  // is also called directly: carry the failure as data so the dispatcher reports it
+  // once, in the asked-for shape, instead of printing here and again below.
   const parsed = parse(argv);
-  if (!parsed.ok) return { flags: {}, positional: [] };
+  if (!parsed.ok) {
+    const json = rawJsonFlag(argv);
+    return { flags: { json }, positional: [], parseError: parsed.error };
+  }
   return parsed.value;
 }
 

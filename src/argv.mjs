@@ -10,7 +10,7 @@
 // Anything unrecognised is an error, not a silent ignore: a typo'd gate name
 // that is ignored is worse than a typo'd gate name that fails.
 
-import { EXIT, fail } from './output/index.mjs';
+import { EXIT } from './output/index.mjs';
 
 // `--quiet`, `--semantic` and `--mermaid` were here and were read by nothing (review
 // 0001 filed it; it survived every change to this file since). Each was a plan's
@@ -194,8 +194,28 @@ export const VALUE_FLAGS = new Set([
 export const REPEATABLE_FLAGS = new Set(['skill', 'arm', 'compare', 'supersedes']);
 
 /**
+ * Whether a raw argv asks for JSON, read before parsing succeeds.
+ *
+ * A parse failure is still a result the caller may need as JSON (Q11), but the
+ * parsed flags do not exist yet — so the dispatcher reads the spelling straight
+ * off argv. Only the exact `--json` spelling counts, and nothing past `--` does:
+ * a positional that happens to read `--json` is a path, not a flag.
+ */
+export function rawJsonFlag(argv) {
+  for (const arg of argv) {
+    if (arg === '--') break;
+    if (arg === '--json') return true;
+    if (arg === '--no-json') return false;
+  }
+  return false;
+}
+
+/**
  * @param {string[]} argv raw arguments, excluding node and the script path
- * @returns {{ok: true, value: object} | {ok: false, code: number}}
+ * @returns {{ok: true, value: object} | {ok: false, error: {message: string, code: number}}}
+ *
+ * A failure is data, never output: reporting it is the caller's job, because only
+ * the caller knows whether `--json` was asked for (Q11). Nothing here prints.
  */
 export function parse(argv) {
   const flags = {};
@@ -221,14 +241,14 @@ export function parse(argv) {
     if (raw.startsWith('no-')) {
       const positive = raw.slice(3);
       if (!BOOL_FLAGS.has(positive)) {
-        return { ok: false, code: usage(`unknown flag --${raw}`) };
+        return { ok: false, error: usage(`unknown flag --${raw}`) };
       }
       flags[camel(positive)] = false;
       continue;
     }
     if (BOOL_FLAGS.has(raw)) {
       if (inlineValue !== undefined) {
-        return { ok: false, code: usage(`--${raw} takes no value`) };
+        return { ok: false, error: usage(`--${raw} takes no value`) };
       }
       flags[camel(raw)] = true;
       continue;
@@ -236,19 +256,19 @@ export function parse(argv) {
     if (VALUE_FLAGS.has(raw)) {
       const value = inlineValue ?? argv[i + 1];
       if (value === undefined || (inlineValue === undefined && value.startsWith('--'))) {
-        return { ok: false, code: usage(`--${raw} requires a value`) };
+        return { ok: false, error: usage(`--${raw} requires a value`) };
       }
       if (inlineValue === undefined) i += 1;
       if (raw === 'budget' || raw === 'max-bytes') {
         const n = Number(value);
         if (!Number.isInteger(n) || n < 0) {
-          return { ok: false, code: usage(`--${raw} must be a non-negative integer, received ${value}`) };
+          return { ok: false, error: usage(`--${raw} must be a non-negative integer, received ${value}`) };
         }
         flags[camel(raw)] = n;
       } else if (raw === 'reps') {
         const n = Number(value);
         if (!Number.isInteger(n) || n < 1) {
-          return { ok: false, code: usage(`--reps must be a positive integer, received ${value}`) };
+          return { ok: false, error: usage(`--reps must be a positive integer, received ${value}`) };
         }
         flags.reps = n;
       } else {
@@ -259,7 +279,7 @@ export function parse(argv) {
       }
       continue;
     }
-    return { ok: false, code: usage(`unknown flag --${raw}`) };
+    return { ok: false, error: usage(`unknown flag --${raw}`) };
   }
 
   return { ok: true, value: { flags, positional } };
@@ -278,5 +298,5 @@ function camel(name) {
 }
 
 function usage(message) {
-  return fail(message, EXIT.USAGE);
+  return { message, code: EXIT.USAGE };
 }

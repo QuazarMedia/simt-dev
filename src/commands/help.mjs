@@ -1,5 +1,5 @@
-import { emit } from '../output/index.mjs';
-import { parse } from '../argv.mjs';
+import { emit, fail, jsonFailMode } from '../output/index.mjs';
+import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI, MANIFEST_FILE, STATE_DIR } from '../name.mjs';
 import { SESSION_ENV } from '../agenthooks/policy.mjs';
 import { DEFAULT_DIRECTORIES, DEFAULT_TEMPLATE } from '../plan/template.mjs';
@@ -318,9 +318,12 @@ const PRINCIPLES = `design rules:
   bounded output      one fact per line, fixed field order, explicit TRUNCATED lines`;
 
 export async function help(argv) {
-  const { ok, value } = parse(argv);
-  if (!ok) return value.code;
-  const { flags } = value;
+  const parsed = parse(argv);
+  if (!parsed.ok) {
+    jsonFailMode(rawJsonFlag(argv));
+    return fail(parsed.error.message, parsed.error.code);
+  }
+  const { flags } = parsed.value;
   if (flags.version) {
     emit((await version()).trim());
     return 0;

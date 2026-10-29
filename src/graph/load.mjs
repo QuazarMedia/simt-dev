@@ -116,13 +116,22 @@ async function defaultRegistry(flags) {
  * environment, user config file, then a sibling heuristic that must verify - and a
  * failure to resolve is a WARNING, not 38 `ENOENT` lines (ADR-014).
  *
- * Resolved once per process and memoised, because every caller needs the same answer
- * and the answer cannot change while the process runs.
+ * Memoised per the inputs that decide the answer: the `--workspace` flag, the
+ * `SIMT_DEV_WORKSPACE` environment and the user-config location. A single
+ * first-call-wins promise served one caller's workspace to every later caller with
+ * different flags (Q14) — `skills_index({workspace: ws})` followed by
+ * `skills_index({})` answered `ws` twice. Callers with the same inputs still share
+ * the one resolution, which is where the cost was.
  */
-let workspacePromise = null;
+const workspacePromises = new Map();
 export function workspace(flags = {}) {
-  if (!workspacePromise) workspacePromise = resolveWorkspace(flags);
-  return workspacePromise;
+  const key = JSON.stringify([
+    flags?.workspace ?? null,
+    process.env.SIMT_DEV_WORKSPACE ?? null,
+    process.env.XDG_CONFIG_HOME ?? null,
+  ]);
+  if (!workspacePromises.has(key)) workspacePromises.set(key, resolveWorkspace(flags));
+  return workspacePromises.get(key);
 }
 
 const VALID_ROLES = new Set(['canonical', 'variant', 'stub', 'duplicate', 'deprecated']);

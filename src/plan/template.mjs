@@ -23,7 +23,7 @@ const KNOWN = new Set(['$comment', 'name', 'directories', 'id', 'columns', 'stat
 const ID_KEYS = new Set(['pattern', 'headers']);
 const COLUMN_KEYS = new Set(['state', 'depends', 'title', 'evidence']);
 const DIRECTORY_KEYS = new Set(['kind', 'word', 'path']);
-const STATE_KEYS = new Set(['id', 'write', 'read', 'satisfies']);
+const STATE_KEYS = new Set(['id', 'write', 'read', 'satisfies', 'role']);
 const DEPENDENCY_KEYS = new Set(['empty', 'separators', 'notes', 'group']);
 const WAVE_KEYS = new Set(['label', 'members']);
 const SECTION_KEYS = new Set(['depth']);
@@ -148,6 +148,7 @@ function compileStates(source, value) {
   const write = new Map();
   const known = new Set();
   const satisfies = new Set();
+  const roles = new Map();
   const order = [];
   const stateNames = [];
   for (let i = 0; i < value.length; i += 1) {
@@ -162,6 +163,13 @@ function compileStates(source, value) {
     }
     if (!Array.isArray(entry.read) || entry.read.length === 0) return bad(source, `${where}.read must list the words that mean this state`);
     if (known.has(entry.id)) return bad(source, `state ${entry.id} is listed twice`);
+    if (entry.role !== undefined && (typeof entry.role !== 'string' || !/^[a-z][a-z0-9-]*$/.test(entry.role))) {
+      return bad(source, `${where}.role must be a lower-case word`);
+    }
+    if (typeof entry.role === 'string') {
+      if (roles.has(entry.role)) return bad(source, `role ${entry.role} is claimed twice`);
+      roles.set(entry.role, entry.write.trim());
+    }
     const display = entry.write.trim();
     const aliases = new Set([entry.id, display.toLowerCase()]);
     for (const alias of entry.read) {
@@ -182,7 +190,7 @@ function compileStates(source, value) {
     else if (entry.satisfies != null && entry.satisfies !== false) return bad(source, `${where}.satisfies must be true or false`);
   }
   if (satisfies.size === 0) return bad(source, 'one state must have satisfies true, or nothing can ever be ready');
-  return { read, write, known, satisfies, order, stateNames };
+  return { read, write, known, satisfies, roles, order, stateNames };
 }
 
 function compile(body, source, root) {
@@ -262,7 +270,7 @@ function compile(body, source, root) {
 
   const byWord = new Map(directories.directories.map((dir) => [dir.word, dir.kind]));
   const doneWrite = body.states.find((entry) => entry.satisfies === true).write.trim();
-  const { read, write } = states;
+  const { read, write, roles } = states;
 
   return {
     format: {
@@ -273,6 +281,12 @@ function compile(body, source, root) {
       order: states.order,
       ready,
       doneWrite,
+      // The display a command moves a row to when work on it starts: the state
+      // carrying the `started` role, or null when no state claims it (review
+      // 0003 Q23). A null here is not an error — the caller falls back to the
+      // in-progress spelling it can read, and `plan done` fails closed on a
+      // word the template never defined.
+      startedWrite: roles.get('started') ?? null,
       stateNames: states.stateNames,
       satisfies: states.satisfies,
       known: states.known,

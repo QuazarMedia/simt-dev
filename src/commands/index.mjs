@@ -146,10 +146,12 @@ export const IMPLEMENTED = {
   'plan next': (args, flags) => planCommand('next', args, flags),
   'plan done': (args, flags) => planCommand('done', args, flags),
   // Plan 0003 R53. A group: `start` isolates the work on a branch with its brief,
-  // `finish` runs the gates, commits and records the evidence. Both take the slice
-  // id as a positional.
+  // `finish` runs the gates, commits and records the evidence, and `abandon`
+  // (review 0003 Q23) takes the slice back down. All three take the slice id
+  // as a positional.
   'slice start': (args, flags) => sliceCommand('start', args, flags),
   'slice finish': (args, flags) => sliceCommand('finish', args, flags),
+  'slice abandon': (args, flags) => sliceCommand('abandon', args, flags),
   'shared plan': sharedPlanCommand,
   'shared install': sharedInstallCommand,
   evidence: evidenceCommand,

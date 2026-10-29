@@ -160,6 +160,21 @@ test('machine-local writes never change the tree they record (review 0003 Q19)',
   await rm(root, { recursive: true, force: true });
 });
 
+test('a passing gate entry proves only its own staged tree, until a failure cancels it (Q23)', async () => {
+  const { passEntryForGate } = await import('../src/ledger/index.mjs');
+  const line = (gate, indexTree, exit) => ({ v: 2, ts: '2026-10-29T00:00:00Z', gate, indexTree, exit });
+  const entries = [line('test', 'aaa', 0), line('lint', 'aaa', 0)];
+  assert.equal(passEntryForGate(entries, 'test', 'aaa')?.gate, 'test');
+  assert.equal(passEntryForGate(entries, 'test', 'bbb'), null, 'a pass on another tree proves nothing here');
+  assert.equal(passEntryForGate(entries, 'format', 'aaa'), null, 'a pass for one gate is not a pass for another');
+  // Entries that predate the staged-tree record never match.
+  assert.equal(passEntryForGate([{ v: 1, gate: 'test', tree: 'aaa', exit: 0 }], 'test', 'aaa'), null);
+  // A later failure for the same gate on the same tree re-opens the claim.
+  assert.equal(passEntryForGate([...entries, line('test', 'aaa', 1)], 'test', 'aaa'), null);
+  // ...but a failure on another tree does not.
+  assert.ok(passEntryForGate([...entries, line('test', 'bbb', 1)], 'test', 'aaa'));
+});
+
 test('a gate the dispatcher runs is recorded against the tree', async () => {
   const root = await repo();
   const manifest = { gates: { preCommit: ['test'], commands: { test: 'echo 1 pass' } } };

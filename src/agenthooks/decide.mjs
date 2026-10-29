@@ -23,7 +23,7 @@ import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 
-import { parse } from '../projection/markers.mjs';
+import { lineRangeOf, parse, regionSpans } from '../projection/markers.mjs';
 import { activeLeases, canonicalLeasePath, readLeases } from '../lease.mjs';
 import { coreIgnoreCase } from '../repo-root.mjs';
 import { ALLOW_ENV, EVENTS, POLICY_IDS, SESSION_ENV, policiesFor } from './policy.mjs';
@@ -70,7 +70,13 @@ function applies(row, facts, env) {
     return row.regex !== null && row.regex.test(facts.command);
   }
   if (row.inspects === 'write') {
-    return (facts.writes ?? []).some((w) => w.generated !== null && w.generated !== undefined);
+    // A file carrying a region denies only an edit that touches it: an Edit outside
+    // the markers, a Write that keeps the region bytes, or a patch whose hunks miss
+    // the span is the author's own text (review 0003 Q17). No edit detail means the
+    // location is unknown, which still denies.
+    return (facts.writes ?? []).some(
+      (w) => w.generated !== null && w.generated !== undefined && w.touches !== false,
+    );
   }
   if (row.inspects === 'lease') {
     const writes = facts.writes ?? [];
@@ -139,15 +145,116 @@ async function submodules(root) {
  * editing its source, a submodule by committing in the other repository.
  */
 export async function generatedBytes(root, file) {
+  const fact = await generatedFact(root, file, null);
+  return fact.generated;
+}
+
+/** Split an `old_string` into its occurrences, each as a line range. */
+function occurrences(text, needle) {
+  if (typeof needle !== 'string' || needle === '') return [];
+  const ranges = [];
+  let from = 0;
+  for (;;) {
+    const index = text.indexOf(needle, from);
+    if (index === -1) return ranges;
+    ranges.push(lineRangeOf(text, index, needle.length));
+    from = index + Math.max(1, needle.length);
+    if (ranges.length > 64) return ranges;
+  }
+}
+
+function rangesOverlap(a, b) {
+  return a.start <= b.end && a.end >= b.start;
+}
+
+/** Line ranges an apply_patch body rewrites, per `@@ -a,b +c,d @@` headers. */
+function patchRanges(patch) {
+  const ranges = [];
+  let numbered = false;
+  let unnumbered = false;
+  for (const line of String(patch ?? '').split('\n')) {
+    const m = /^@@\s*(?:-(\d+)(?:,(\d+))?\s*\+(\d+)(?:,(\d+))?)?\s*@@/.exec(line.trim());
+    if (m === null) continue;
+    if (m[1] === undefined) {
+      unnumbered = true;
+      continue;
+    }
+    numbered = true;
+    const start = Number(m[1]);
+    const count = m[2] === undefined ? 1 : Number(m[2]);
+    ranges.push({ start, end: start + Math.max(count, 1) - 1 });
+  }
+  return { ranges, numbered, unnumbered };
+}
+
+/**
+ * Whether an edit touches the generated region in `current`.
+ *
+ * `edit` is what a renderer extracted beside the path: `old_string`/`edits` for an
+ * in-place replacement, `content` for a whole-file Write, `patch` for an
+ * apply_patch body. Unknown shapes deny: without a location the check cannot prove
+ * the edit is outside. A malformed region also denies, because its span is unknown.
+ */
+export function touchesRegion(current, edit = {}) {
+  const { malformed, spans } = regionSpans(current);
+  if (spans.length === 0) return false;
+  if (malformed) return true;
+  const needles = [];
+  if (typeof edit?.old_string === 'string') needles.push(edit.old_string);
+  for (const e of edit?.edits ?? []) {
+    if (e && typeof e.old_string === 'string') needles.push(e.old_string);
+  }
+  if (needles.length > 0) {
+    // An `old_string` the file does not contain is an edit that changes nothing:
+    // no overlap, so no denial. Every occurrence is checked because the tool
+    // replaces all of them or the first, depending on the harness, and either way
+    // one overlap is enough to touch the region.
+    return needles.some((needle) => {
+      const found = occurrences(current, needle);
+      if (found.length === 0) return false;
+      return found.some((range) => spans.some((span) => rangesOverlap(range, span)));
+    });
+  }
+  if (typeof edit?.content === 'string') {
+    // A Write replaces the whole file: it touches the region only when the region
+    // bytes change. Each style present before must still be present with the same
+    // body afterwards.
+    for (const style of ['html', 'hash']) {
+      const before = parse(current, style);
+      if (before.status !== 'ok') continue;
+      const after = parse(edit.content, style);
+      if (after.status !== 'ok' || after.body !== before.body) return true;
+    }
+    return false;
+  }
+  if (typeof edit?.patch === 'string') {
+    const { ranges, numbered } = patchRanges(edit.patch);
+    if (!numbered) return true;
+    return ranges.some((range) => spans.some((span) => rangesOverlap(range, span)));
+  }
+  return true;
+}
+
+/**
+ * Why this path is not the author's to write, with whether the edit touches it.
+ *
+ * `edit` is the renderer's detail beside the path (possibly empty). Submodule
+ * writes always touch: another repository owns every byte under its directory.
+ */
+export async function generatedFact(root, file, edit = null) {
   const abs = resolve(root, file);
   const text = await readFile(abs, 'utf8').catch(() => null);
-  if (text !== null && holdsRegion(text)) return 'region';
+  if (text !== null && holdsRegion(text)) {
+    return { path: file, generated: 'region', touches: touchesRegion(text, edit ?? {}) };
+  }
   const rel = relative(resolve(root), abs);
   if (!rel.startsWith('..')) {
     const inside = await submodules(root);
-    if (inside.some((dir) => rel === dir || rel.startsWith(`${dir}/`))) return 'submodule';
+    if (inside.some((dir) => rel === dir || rel.startsWith(`${dir}/`))) {
+      return { path: file, generated: 'submodule', touches: true };
+    }
   }
-  return null;
+  return { path: file, generated: null, touches: false };
 }
 
 /**
@@ -190,10 +297,25 @@ async function normalizeCommand(root, command) {
   return parsed;
 }
 
+/** A write entry is a path string or a `{path, ...edit}` row from a renderer. */
+function splitWrite(entry) {
+  if (typeof entry === 'string') return { path: entry, edit: {} };
+  if (entry && typeof entry === 'object' && typeof entry.path === 'string') {
+    const { path, ...edit } = entry;
+    return { path, edit };
+  }
+  return null;
+}
+
 /** Turn a renderer's extraction into the facts the table asks about. */
 export async function factsFor(root, { command = null, writes = [] } = {}) {
   const resolved = await Promise.all(
-    writes.filter(Boolean).map(async (path) => ({ path, generated: await generatedBytes(root, path) })),
+    writes.filter(Boolean).map(async (entry) => {
+      const split = splitWrite(entry);
+      if (split === null) return { path: String(entry), generated: null, touches: false };
+      const fact = await generatedFact(root, split.path, split.edit);
+      return { ...fact, edit: split.edit };
+    }),
   );
   // Shell facts, read only when the payload carried a command: the same "pay for what
   // you use" rule as the lease facts below, which a payload with no command cannot touch.

@@ -103,7 +103,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q03 | `simt plugin` packages the consumer's cwd instead of simt | P0 | F | plugins | S | — | Complete | `678ca26`; `node --test test/plugins.test.mjs` — 6/6 + consumer-cwd repro (ships simt-dev runtime, no consumer leak) |
 | Q04 | Homebrew tap still serves 0.4.0; release job never lands on tap `main` | P0 | D | release | S | — | Complete | `7ae125e`; `node --test test/packaging.test.mjs` — 15/15 (tap push lands on main + verify job; owner still merges the stale 0.4.0 tap to current) |
 | Q05 | README pins 0.5.0; unreleased commands documented as shipped; `main` reports 0.6.2 | P0 | D | docs/release | S | — | Complete | `1c50475`; `node --test test/version-pin.test.mjs` — 7/7 (0.6.1 marked never-published; release cut stays an owner action) |
-| Q06 | npm `1.0.0` and `0.0.0-stage` placeholders are live and not deprecated | P1 | D | release | S | — | Queued | |
+| Q06 | npm `1.0.0` and `0.0.0-stage` placeholders are live and not deprecated | P1 | D | release | S | — | Complete | `762a599`; `node --test test/packaging.test.mjs` — 16/16 (RELEASING.md records the burn + deprecate commands; `npm deprecate` itself stays an owner action) |
 | Q07 | Reindexing a changed file deletes every edge pointing into it | P1 | F | index | S | — | Queued | |
 | Q08 | Concurrent `index` → `database is locked` and an empty DB | P1 | F | index | S | — | Queued | |
 | Q09 | `shared install --yes --dry-run` writes into `$HOME` | P1 | F | cli | S | — | Queued | |

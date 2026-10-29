@@ -109,7 +109,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q09 | `shared install --yes --dry-run` writes into `$HOME` | P1 | F | cli | S | — | Complete | `705018e`; `node --test test/shared.test.mjs` 13/13 + `test/init.test.mjs` 59/59 (dedicated `--yes --dry-run` rehearsal tests; contract matrix covered by the stronger per-command tests) |
 | Q10 | `--json --max-bytes` emits invalid JSON with exit 0 | P1 | F | output | S | — | Complete | `91111b0`; `node --test test/unit.test.mjs test/jsoncontract.test.mjs` — 18/18 + review repro parses (ADR-105 amends ADR-070 r5) |
 | Q11 | Parse errors and "no command" ignore `--json` | P1 | F | cli | S | — | Complete | `c628655`; unit 15/15 + help/jsoncontract 11/11; review repro answers JSON on stdout with empty stderr |
-| Q12 | MCP: an internal error is answered as a parse error with `id:null`; client hangs | P1 | F | mcp | S | — | Queued | |
+| Q12 | MCP: an internal error is answered as a parse error with `id:null`; client hangs | P1 | F | mcp | S | — | Complete | `353d5d8`; `node --test test/mcp.test.mjs` — 43/43 (parse and handle fail on separate paths) |
 | Q13 | MCP `federation_query` executes commands but is labelled read-only | P1 | S | mcp | S | — | Queued | |
 | Q14 | MCP server memoises the first call's workspace for its lifetime | P1 | F | mcp/graph | S | — | Queued | |
 | **Wave 1 — wrong behaviour an agent hits** | | | | | | | | |

@@ -24,7 +24,8 @@ import { readFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
 
 import { parse } from '../projection/markers.mjs';
-import { activeLeases, leasePathFor, readLeases } from '../lease.mjs';
+import { activeLeases, canonicalLeasePath, readLeases } from '../lease.mjs';
+import { coreIgnoreCase } from '../repo-root.mjs';
 import { ALLOW_ENV, EVENTS, POLICY_IDS, SESSION_ENV, policiesFor } from './policy.mjs';
 import { applyAliases, commandFacts, GIT_BUILTINS } from './shell.mjs';
 
@@ -205,9 +206,18 @@ export async function factsFor(root, { command = null, writes = [] } = {}) {
   if (resolved.length === 0) return { command, writes: resolved, leaseError: null, shell };
   const read = await readLeases(root);
   if (read.error !== null) return { command, writes: resolved, leaseError: read.error, shell };
-  const live = new Map(activeLeases(read).map((l) => [l.path, l]));
+  // Both sides of the comparison in the one spelling a claim and an edit can
+  // both reach: symlinks resolved, case folded when the repository's git
+  // compares case-insensitively. A claim made for `src/keep.mjs` must meet an
+  // edit that spells the same file `src/Keep.mjs` on a volume where those are
+  // one file, and an edit that reaches it through a symlinked directory.
+  const ignoreCase = coreIgnoreCase(root);
+  const live = new Map();
+  for (const l of activeLeases(read)) {
+    live.set(canonicalLeasePath(root, l.path, { ignoreCase }) ?? l.path, l);
+  }
   for (const w of resolved) {
-    const rel = leasePathFor(root, w.path);
+    const rel = canonicalLeasePath(root, w.path, { ignoreCase });
     w.lease = rel === null ? null : live.get(rel) ?? null;
   }
   return { command, writes: resolved, leaseError: null, shell };

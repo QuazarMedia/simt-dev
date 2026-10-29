@@ -23,7 +23,7 @@
 // and that is the right blast radius for a hook that is broken rather than refusing.
 
 import { mkdir, readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 
@@ -31,6 +31,7 @@ import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/i
 import { CLI } from '../name.mjs';
 import { ALLOW_ENV, EVENTS, POLICY_IDS } from '../agenthooks/policy.mjs';
 import { decide, factsFor } from '../agenthooks/decide.mjs';
+import { repoRoot } from '../repo-root.mjs';
 import {
   adapter,
   adapters,
@@ -97,9 +98,19 @@ export async function agentHookCommand(args, flags) {
   // `--root` outranks the payload: a packaged hook runs from the plugin directory and the
   // harness's environment variable names the project, so a payload cwd that is the plugin's
   // own working directory must not win. The repository-install path passes no flag, and the
-  // payload's cwd is what the harness reports.
-  const { root, command, writes } = factsFrom(row, payload, { root: flags.root });
-  const facts = await factsFor(root, { command, writes });
+  // payload's cwd is what the harness reports. The answer is then resolved to the
+  // repository's top level: a harness reports the directory it happens to be in, and an
+  // agent works from subdirectories, so every repository-relative fact (the lease file,
+  // `.gitmodules`) must resolve against the root git itself uses, not the cwd (review
+  // 0003 Q16).
+  const { root: payloadRoot, command, writes } = factsFrom(row, payload, { root: flags.root });
+  const root = repoRoot(payloadRoot);
+  // A relative write path is relative to the directory the harness is in, not to the
+  // repository root the facts resolve against: an agent editing `keep.mjs` from `src/`
+  // means `src/keep.mjs`, and a path joined to the wrong base is a path the lease file
+  // will never meet (review 0003 Q16).
+  const writesAbsolute = writes.map((w) => (isAbsolute(w) ? w : join(payloadRoot, w)));
+  const facts = await factsFor(root, { command, writes: writesAbsolute });
   const decision = decide({ event, facts, env: process.env });
 
   // Both notes are about a conclusion the author is about to draw: a lift that did

@@ -13,7 +13,8 @@
 // claims the hook is about to enforce while telling the author it fixed something).
 
 import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
-import { DEFAULT_TTL_SECONDS, activeLeases, leasePathFor, readLeases, writeLeases } from '../lease.mjs';
+import { DEFAULT_TTL_SECONDS, activeLeases, canonicalLeasePath, readLeases, writeLeases } from '../lease.mjs';
+import { coreIgnoreCase } from '../repo-root.mjs';
 import { SESSION_ENV } from '../agenthooks/policy.mjs';
 import { CLI } from '../name.mjs';
 
@@ -42,8 +43,13 @@ export async function leaseCommand(args, flags) {
 
   const wanted = [];
   const seen = new Set();
+  // The claim is stored in the one spelling the hook's comparison will produce:
+  // a claim taken as `src/Keep.mjs` and an edit that spells `src/keep.mjs` must
+  // be the same claim on a case-insensitive volume, so the stored path is
+  // canonical at write time, not at read time.
+  const ignoreCase = coreIgnoreCase(root);
   for (const arg of args) {
-    const rel = leasePathFor(root, arg);
+    const rel = canonicalLeasePath(root, arg, { ignoreCase });
     if (rel === null) {
       return fail(`${arg} is not a path inside the repository`, EXIT.USAGE, `leases are repository-relative: run: ${CLI} lease <path> --session ${session}`);
     }
@@ -58,7 +64,11 @@ export async function leaseCommand(args, flags) {
     return fail(`${read.error}`, EXIT.FAIL, `fix or remove ${read.path}; the pre-edit hook fails closed on it too`);
   }
   const held = activeLeases(read);
-  const conflicts = held.filter((l) => seen.has(l.path) && l.session !== session);
+  // Older claim files hold the pre-canonical spelling, so a stored path is
+  // canonicalised before it is compared: a claim written before the resolver
+  // existed must still conflict with a claim taken for the same file.
+  const keyOf = (l) => canonicalLeasePath(root, l.path, { ignoreCase }) ?? l.path;
+  const conflicts = held.filter((l) => seen.has(keyOf(l)) && l.session !== session);
   if (conflicts.length > 0) {
     return fail(
       `${conflicts.map((c) => `${c.path} is leased by ${c.session} until ${ISO(c.expiresAt)}`).join('; ')}`,
@@ -99,7 +109,7 @@ export async function leaseCommand(args, flags) {
 
   // Keep every other live claim, refresh ours, and let an expired one fall out: the
   // write is also the only sweep the file ever gets.
-  const others = held.filter((l) => !seen.has(l.path));
+  const others = held.filter((l) => !seen.has(canonicalLeasePath(root, l.path, { ignoreCase }) ?? l.path));
   const path = await writeLeases(root, [...others, ...mine]);
 
   if (isJson(flags)) {

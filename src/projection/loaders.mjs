@@ -146,7 +146,7 @@ export const LOADERS = [
     nested: 'cumulative up to the project root at session start; files below the workspace load when that area is read',
     skills: ['.agents/skills', '.opencode/skills', '.claude/skills'],
     hooks: {
-      path: '.opencode/plugins/',
+      path: '.opencode/plugins/simt-dev.js',
       verified:
         'OpenCode v2 plugins docs: direct .ts and .js files and immediate plugin packages are loaded from every discovered .opencode/plugins/ directory, and the plugins array in opencode.json(c)',
     },

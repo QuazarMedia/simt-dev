@@ -1,4 +1,4 @@
-// simt plugin <claude|gemini|cursor> --out <dir> [--yes]
+// simt plugin <claude|gemini|cursor|opencode> --out <dir> [--yes]
 //
 // Build one harness package from the same tables `agent-hooks install` writes into a
 // repository, so a package and a repository install cannot drift apart. A dry run prints

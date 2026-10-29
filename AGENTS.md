@@ -73,6 +73,12 @@ Two corollaries that are easy to get wrong:
   name — which passed on every machine, for a reason that had nothing to do with the code.
 - **Never claim a check you did not run.** In particular, `npm test` passing is not the same as
   the projected text being correct; for rule content, read the rendered region.
+- **Do the tool's work with the tool.** When a task is one `simt-dev` performs — updating a
+  tracker row, checking a region, running the gates, building a harness package — run
+  `node bin/simt.mjs <command>` against the working tree instead of editing the artefact by
+  hand. The command is the implementation of that task: a hand edit bypasses the writer and
+  leaves the file in a shape the next run calls drift, and working on a writer without
+  running it is how a fix ships unexercised.
 - **Commit locally and report the SHA. Push only on explicit approval** (ADR-001). Never
   push on a user's behalf unless asked for it, and never reach for `--no-verify`.
 - **Do not refactor outside the blast radius** (ADR-002). A second real use inside the change

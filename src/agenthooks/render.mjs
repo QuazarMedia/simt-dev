@@ -1,6 +1,6 @@
 // One renderer per harness: the payload in, the decision out, and the config written.
 //
-// Five harnesses read a hook and no two agree on anything. The config path, the event
+// Six harnesses read a hook and no two agree on anything. The config path, the event
 // name, the shape of the document, the tool name for a shell command, the key holding
 // the command, and the JSON a hook answers with are all different, and none of them is
 // the same fact. So this module owns the differences and `policy.mjs` owns none of
@@ -11,9 +11,10 @@
 //   cursor       .cursor/hooks.json      preToolUse      {"version":1,"hooks":{E:[h]}}
 //   antigravity  .agents/hooks.json      PreToolUse      {"<name>":{E:[{matcher,hooks:[h]}]}}
 //   gemini       .gemini/settings.json   BeforeTool      {"hooks":{E:[{matcher,hooks:[h]}]}}
+//   opencode     .opencode/plugins/      execute.before  a JS plugin the tool owns whole
 //
 // The prompt-submit event (R29) is a second table, and it is shorter because the vendors
-// are: three of the five document a prompt event that can put text into the model's context,
+// are: four of the six document a prompt event that can put text into the model's context,
 // and a delivery is the only thing this tool does there. None takes a matcher — all
 // document that field for tool events, and a matcher a harness ignores is a matcher the
 // next person believes is filtering something.
@@ -21,6 +22,7 @@
 //   claude       .claude/settings.json   UserPromptSubmit   hookSpecificOutput.additionalContext
 //   codex        .codex/hooks.json       UserPromptSubmit   hookSpecificOutput.additionalContext
 //   gemini       .gemini/settings.json   BeforeAgent        hookSpecificOutput.additionalContext
+//   opencode     .opencode/plugins/      prompt             event.prompt.text, prepended
 //   cursor       .cursor/hooks.json      beforeSubmitPrompt CANNOT INJECT: block-only
 //   antigravity  .agents/hooks.json      (no prompt event documented)
 //
@@ -46,6 +48,7 @@
 
 import { CLI } from '../name.mjs';
 import { LOADERS } from '../projection/loaders.mjs';
+import { renderOpencodePlugin } from './opencode.mjs';
 import { EVENTS } from './policy.mjs';
 import { AGENT_HOOK_SHIM } from './shim.mjs';
 
@@ -336,9 +339,34 @@ const ADAPTERS = {
       context: (text) => ({ hookSpecificOutput: { additionalContext: text } }),
     },
   },
+  opencode: {
+    id: 'opencode',
+    event: 'execute.before',
+    matcher: 'shell|write|edit',
+    // The plugin is a file the tool owns whole, not a config entry to merge:
+    // `file` routes `rendered` and `hookDocument` to its source (opencode.mjs).
+    file: true,
+    // A thrown error is the block; exit 2 is how the entry point signals it,
+    // and the reason the plugin throws is what `deny` prints.
+    denyExit: 2,
+    verified: 'opencode.ai/v2/docs/build/plugins/server, read 2026-10-29',
+    root: (p) => p.cwd,
+    extract: (p) => ({
+      command: p.tool === 'shell' ? (p.input?.command ?? null) : null,
+      writes: ['write', 'edit'].includes(p.tool) ? [writeOf(p.input?.path, p.input)].filter(Boolean) : [],
+    }),
+    deny: (message) => ({ reason: message }),
+    // session.hook('prompt') admits the prompt; the packet goes in front of it.
+    prompt: {
+      event: 'prompt',
+      verified: 'opencode.ai/v2/docs/build/plugins/server, read 2026-10-29',
+      context: (text) => ({ text }),
+    },
+    post: null,
+  },
 };
 
-/** The five adapters, in the order the reader table lists them. */
+/** The six adapters, in the order the reader table lists them. */
 export function adapters() {
   return hookRows()
     .filter((r) => r.path !== null)
@@ -531,6 +559,12 @@ function withHook(row, config, { prompt = false, post = false, command } = {}) {
 
 /** The text `install` would write, or the reason the existing file cannot be read. */
 export function rendered(row, existing, options = {}) {
+  if (row.file) {
+    // The tool owns this file whole, so there is nothing to merge: the text is
+    // the plugin source and `updated` means only that the bytes differ.
+    const text = renderOpencodePlugin({ command: options.command ?? hookCommand(row.id), prompt: options.prompt });
+    return { text, action: existing === null ? 'created' : text === existing ? 'unchanged' : 'updated' };
+  }
   if (existing === null) return { text: `${JSON.stringify(withHook(row, {}, options), null, 2)}\n`, action: 'created' };
   let config;
   try {
@@ -554,6 +588,7 @@ export function rendered(row, existing, options = {}) {
 export function hookDocument(id, { command, prompt = false, post = false } = {}) {
   const row = adapter(id);
   if (!row) return null;
+  if (row.file) return renderOpencodePlugin({ command: command ?? hookCommand(id), prompt });
   const config = withHook(row, {}, { prompt, post, command });
   return `${JSON.stringify(config, null, 2)}\n`;
 }

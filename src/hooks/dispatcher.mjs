@@ -137,6 +137,8 @@ export async function runGates(event, { root, manifest }) {
           exit: outcome.ok ? 0 : 1,
           ms: Date.now() - startedBuiltin,
           output: outcome.output,
+          gate: name,
+          kind: 'builtin',
         });
       } catch {
         // Recorded by absence: the next evidence read for this tree has no line.
@@ -219,11 +221,18 @@ export async function runGates(event, { root, manifest }) {
     // claim check then finds nothing, which is the direction that cannot invent a run.
     try {
       const cmd = typeof resolution.command === 'string' ? resolution.command : resolution.argv.join(' ');
+      // The evidence claim needs the gate and its kind: a passing secret-scan is
+      // not a passing test run (review 0003 Q18). Coverage proves tests; anything
+      // else keeps its own kind or the gate name.
+      const kind =
+        name === 'test' || name === 'coverage' ? 'test' : name === 'lint' ? 'lint' : name === 'format' ? 'format' : (gate.kind ?? name);
       await recordRun(root, {
         cmd,
         exit: outcome.code,
         ms: Date.now() - started,
         output: `${outcome.stdout ?? ''}\n${outcome.stderr ?? ''}`,
+        gate: name,
+        kind,
       });
     } catch {
       // Recorded by absence: the next evidence read for this tree has no line.

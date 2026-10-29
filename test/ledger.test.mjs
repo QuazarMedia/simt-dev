@@ -53,9 +53,17 @@ test('editing a file after a green run invalidates the evidence', async () => {
 
 test('a claim needs a passing run for this tree, and block is the only hard failure', async () => {
   assert.equal(claimsVerification('tests pass'), true);
+  assert.equal(claimsVerification('tests passing'), true);
+  assert.equal(claimsVerification('npm test passes'), true);
+  assert.equal(claimsVerification('the suite is green'), true);
   assert.equal(claimsVerification('Verified the fix.'), true);
   assert.equal(claimsVerification('still unverified'), false);
   assert.equal(claimsVerification('not verified yet'), false);
+  // Trailers describe the commit, not the run: claim words inside a trailer line
+  // do not count, but a body claim beside trailers still does.
+  assert.equal(claimsVerification('fix\n\nSigned-off-by: A <a@x> tests pass'), false);
+  assert.equal(claimsVerification('fix\n\ntests pass\nSigned-off-by: A <a@x>'), true);
+  assert.equal(claimsVerification('fix\n\nCo-authored-by: nobody'), false);
 
   const root = await repo();
   const message = join(root, 'COMMIT_EDITMSG');
@@ -66,10 +74,29 @@ test('a claim needs a passing run for this tree, and block is the only hard fail
   await writeFile(join(root, 'simt.json'), '{ "gates": { "evidence": "block" } }\n');
   assert.equal(await evidenceCommand(['check', message], { root }), 1);
 
-  await recordRun(root, { cmd: 'node --test', exit: 0, ms: 4, output: '1 pass\n' });
+  await recordRun(root, { cmd: 'node --test', exit: 0, ms: 4, output: '1 pass\n', gate: 'test', kind: 'test' });
   assert.equal(await evidenceCommand(['check', message], { root }), 0);
 
+  // The commit records the index, not the worktree (review 0003 Q18): an
+  // unstaged edit is not committed, so the staged tree is still supported.
   await writeFile(join(root, 'a.txt'), 'changed after the run\n');
+  assert.equal(await evidenceCommand(['check', message], { root }), 0);
+  // Staging it changes what the commit would carry, so the claim goes unsupported.
+  await git(['-C', root, 'add', 'a.txt']);
+  assert.equal(await evidenceCommand(['check', message], { root }), 1);
+  await rm(root, { recursive: true, force: true });
+});
+
+test('a passing builtin is not a passing test, and a later failure re-opens the claim (Q18)', async () => {
+  const root = await repo();
+  const message = join(root, 'COMMIT_EDITMSG');
+  await writeFile(message, 'fix\n\ntests pass\n');
+  await writeFile(join(root, 'simt.json'), '{ "gates": { "evidence": "block" } }\n');
+  await recordRun(root, { cmd: 'builtin:secret-scan', exit: 0, ms: 1, output: '', gate: 'secret-scan', kind: 'builtin' });
+  assert.equal(await evidenceCommand(['check', message], { root }), 1);
+  await recordRun(root, { cmd: 'npm test', exit: 0, ms: 4, output: '1 pass\n', gate: 'test', kind: 'test' });
+  assert.equal(await evidenceCommand(['check', message], { root }), 0);
+  await recordRun(root, { cmd: 'npm test', exit: 1, ms: 4, output: '1 fail\n', gate: 'test', kind: 'test' });
   assert.equal(await evidenceCommand(['check', message], { root }), 1);
   await rm(root, { recursive: true, force: true });
 });

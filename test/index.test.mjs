@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { git } from './fixture.mjs';
-import { readFiles, reindex } from '../src/index/store.mjs';
+import { readEdges, readFiles, reindex } from '../src/index/store.mjs';
 import { indexCommand } from '../src/commands/repoindex.mjs';
 
 async function repo() {
@@ -82,6 +82,30 @@ test('a removed path leaves the index', async () => {
   assert.equal(rows.some((row) => row.path === 'README'), false);
   await rm(root, { recursive: true, force: true });
 });
+
+for (const backend of ['sqlite', 'jsonl']) {
+  test(`reindexing a changed file keeps the edges pointing into it (${backend}, Q07)`, async () => {
+    // The importer owns its outgoing edges: editing src/a.mjs must not delete the
+    // test -> src edge, which belongs to the unchanged test file.
+    const root = await mkdtemp(join(tmpdir(), 'idx-'));
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 1;\n');
+    await writeFile(join(root, 'test.mjs'), "import { a } from './src/a.mjs';\nconsole.log(a);\n");
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    await reindex(root, { backend });
+    const before = (await readEdges(root, { backend })).filter((e) => e.dst === 'src/a.mjs');
+    assert.ok(before.length > 0, 'the test -> src edge is indexed');
+    await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 2;\n');
+    await git(['-C', root, 'add', 'src/a.mjs']);
+    await git(['-C', root, 'commit', '-qm', 'bump']);
+    await reindex(root, { backend });
+    const after = (await readEdges(root, { backend })).filter((e) => e.dst === 'src/a.mjs');
+    assert.ok(after.length > 0, 'reindexing src/a.mjs kept the edge pointing into it');
+    await rm(root, { recursive: true, force: true });
+  });
+}
 
 test('tracked content past the old 64 MiB buffer still indexes', async () => {
   const root = await mkdtemp(join(tmpdir(), 'idx-'));

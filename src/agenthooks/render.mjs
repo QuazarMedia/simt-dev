@@ -47,6 +47,7 @@
 import { CLI } from '../name.mjs';
 import { LOADERS } from '../projection/loaders.mjs';
 import { EVENTS } from './policy.mjs';
+import { AGENT_HOOK_SHIM } from './shim.mjs';
 
 /** The seconds a hook is allowed before the harness gives up on it. */
 const TIMEOUT_SECONDS = 10;
@@ -54,13 +55,15 @@ const TIMEOUT_SECONDS = 10;
 /**
  * The hook's own entry point, as it appears inside every harness's config.
  *
- * A repository that has this tool has its binary on PATH, and `--harness` is explicit
- * rather than detected from the payload: a hook that guessed would answer in the wrong
- * harness's dialect when a payload arrived in an unexpected shape, and the harness would
+ * The shim, never the bare binary: a harness does not share the shell's PATH,
+ * so a config naming `simt` runs nothing on Claude and blocks everything on
+ * Cursor (review 0003 Q21). `--harness` stays explicit rather than detected
+ * from the payload: a hook that guessed would answer in the wrong harness's
+ * dialect when a payload arrived in an unexpected shape, and the harness would
  * read a decision it does not understand as no decision at all.
  */
 export function hookCommand(id, event = EVENTS[0]) {
-  return `${CLI} agent-hook ${event} --harness ${id}`;
+  return `${AGENT_HOOK_SHIM} ${event} --harness ${id}`;
 }
 
 /** The path a config file lives at, from the reader table rather than a second list. */
@@ -475,6 +478,9 @@ function group(row, event = EVENTS[0], command = hookCommand(row.id, event)) {
     // failClosed is set because a hooks file this tool wrote should not silently
     // degrade to fail-open on its own crash: the vendor's default turns a broken hook
     // into an absent one, and the whole point of writing it is that it runs.
+    // It is set only because the command is the repo shim (review 0003 Q21):
+    // failClosed on a bare-PATH binary would block every tool call on the machines
+    // where the binary is not installed, which is exactly the machines the shim exists for.
     return { command, timeout, matcher: row.matcher, failClosed: true };
   }
   return { matcher: row.matcher, hooks: [{ type: 'command', command, timeout }] };
@@ -482,7 +488,10 @@ function group(row, event = EVENTS[0], command = hookCommand(row.id, event)) {
 
 /** Whether a group is this tool's, judged by the command it runs and not by position. */
 function ours(entry) {
-  return JSON.stringify(entry).includes(`${CLI} agent-hook`);
+  const text = JSON.stringify(entry);
+  // The shim spelling first; the bare-binary spelling is the pre-shim install,
+  // still recognised (and migrated on the next install) for one release.
+  return text.includes(AGENT_HOOK_SHIM) || text.includes(`${CLI} agent-hook`);
 }
 
 function entries(row, config, event = EVENTS[0]) {

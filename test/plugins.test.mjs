@@ -1,4 +1,4 @@
-// Package generation (plan 0003 R43): three harness packages from one set of tables,
+// Package generation (plan 0003 R43): four harness packages from one set of tables,
 // each self-contained enough to install into a clean profile and pass the R15 fixture
 // payloads against its own copy of the runtime.
 //
@@ -47,11 +47,11 @@ function copiedBin(out, kind) {
 /**
  * Run a copied runtime's agent-hook with a payload on stdin, exactly as the package's
  * generated command would: claude and cursor pass --root (their vendors set a project-dir
- * env var), gemini does not (its base input carries cwd instead).
+ * env var), gemini and opencode do not (their payloads carry cwd instead).
  */
 function hook(out, kind, payload, project) {
   const args = ['agent-hook', 'pre-tool-use', '--harness', kind];
-  if (kind !== 'gemini') args.push('--root', project);
+  if (kind !== 'gemini' && kind !== 'opencode') args.push('--root', project);
   const result = spawnSync(process.execPath, [copiedBin(out, kind), ...args], {
     input: payload,
     encoding: 'utf8',
@@ -110,11 +110,18 @@ test('each package, run from its own copied runtime, blocks a push in its own di
   assert.equal(g.code, 0, 'gemini answers with the decision document, exit 0');
   assert.equal(JSON.parse(g.stdout).decision, 'deny');
 
+  const opencode = await temp('simt-pkgo-');
+  assert.equal(build('opencode', opencode).status, 0);
+  const o = hook(opencode, 'opencode', JSON.stringify({ tool: 'shell', input: { command: 'git push origin main' }, cwd: project }), project);
+  assert.equal(o.code, 2, 'opencode blocks with exit 2');
+  assert.match(o.stdout, /"reason":/, 'opencode answers with the reason the plugin throws');
+
   // An ordinary command is silent on every dialect: no decision document, exit 0.
   for (const [kind, out, payload] of [
     ['claude', claude, { tool_name: 'Bash', tool_input: { command: 'ls' }, cwd: project }],
     ['cursor', cursor, { tool_name: 'Shell', tool_input: { command: 'ls' }, working_directory: project }],
     ['gemini', gemini, { tool_name: 'run_shell_command', tool_input: { command: 'ls' }, cwd: project }],
+    ['opencode', opencode, { tool: 'shell', input: { command: 'ls' }, cwd: project }],
   ]) {
     const r = hook(out, kind, JSON.stringify(payload), project);
     assert.equal(r.code, 0, `${kind}: ordinary command exits 0`);
@@ -167,9 +174,20 @@ test('a dry run writes nothing; --yes writes the generated files', async () => {
 test('an unknown kind is a usage failure that names the valid kinds', () => {
   const result = build('foo', join(tmpdir(), 'simt-pkgnever-'));
   assert.equal(result.status, 2);
-  for (const kind of ['claude', 'gemini', 'cursor']) {
+  for (const kind of ['claude', 'gemini', 'cursor', 'opencode']) {
     assert.ok(result.stderr.includes(kind), `the remedy names \`${kind}\``);
   }
+});
+
+test('the opencode package is a plugin at the root, and its server is valid JS naming the runtime', async () => {
+  const out = await temp('simt-pkgsrv-');
+  assert.equal(build('opencode', out).status, 0);
+  const text = await readFile(join(out, 'server.js'), 'utf8');
+  // OpenCode loads a local plugin directory's root `server` file, so the document is that
+  // file: a module that spawns the package's own copy of the runtime.
+  assert.match(text, /node bin\/simt\.mjs agent-hook pre-tool-use --harness opencode/);
+  const check = spawnSync(process.execPath, ['--check', join(out, 'server.js')]);
+  assert.equal(check.status, 0, `the generated server is not valid JS: ${check.stderr}`);
 });
 
 test('the gemini hooks document carries a millisecond timeout, not the seconds every other row uses', async () => {

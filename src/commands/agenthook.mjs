@@ -337,10 +337,31 @@ async function installHooks(root, flags) {
 async function hooksStatus(root, flags) {
   const rows = [];
   const problems = [];
+  // The plugin file this tool owns whole is compared against what `install` would write
+  // right now, so status reads the same opt-in install reads: a file that matches the
+  // preview is present, anything else is drift an install will rewrite.
+  const { promptOptIn } = await import('../agenthooks/prompt.mjs');
+  const optIn = await promptOptIn(root);
 
   for (const row of adapters()) {
     const path = hookPath(row.id);
     const existing = await readIfExists(join(root, path));
+    if (row.file) {
+      if (existing === null) {
+        rows.push({ id: row.id, path, state: 'absent', entries: 0, prompt: row.prompt ? 'absent' : null, note: null });
+      } else {
+        const present = rendered(row, existing, { prompt: optIn.optedIn }).action === 'unchanged';
+        rows.push({
+          id: row.id,
+          path,
+          state: present ? 'present' : 'drift',
+          entries: present ? 1 : 0,
+          prompt: row.prompt ? (present && optIn.optedIn ? 'present' : 'absent') : null,
+          note: present ? null : 'differs from what install would write; run install to restore it',
+        });
+      }
+      continue;
+    }
     if (existing === null) {
       rows.push({ id: row.id, path, state: 'absent', entries: 0, prompt: row.prompt ? 'absent' : null, note: null });
       continue;
@@ -388,7 +409,7 @@ async function hooksStatus(root, flags) {
 
   const lines = [`repo     ${root}`];
   for (const r of rows) {
-    const state = { present: 'PRESENT ', absent: 'ABSENT  ', unreadable: 'INVALID ', none: 'NO FILE ', other: 'NOT OURS' }[r.state];
+    const state = { present: 'PRESENT ', absent: 'ABSENT  ', unreadable: 'INVALID ', drift: 'DRIFT   ', none: 'NO FILE ', other: 'NOT OURS' }[r.state];
     lines.push(`${state} ${r.id.padEnd(12)} ${r.path ?? '(no hooks file is documented)'}`);
     if (r.state === 'absent') lines.push(`          ${' '.repeat(12)} install: ${CLI} agent-hooks install --yes`);
     // The second event is a separate answer to a separate question: a harness can carry

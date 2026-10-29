@@ -32,7 +32,7 @@ import { desiredRegion } from './projection/rules.mjs';
 import { PACKAGE_NAME, BIN_REL } from './name.mjs';
 
 /** The kinds `simt plugin` builds, in the order the help line names them. */
-export const PLUGIN_KINDS = ['claude', 'gemini', 'cursor'];
+export const PLUGIN_KINDS = ['claude', 'gemini', 'cursor', 'opencode'];
 
 /**
  * The package this code ships in: the runtime a generated package copies. Resolved
@@ -71,7 +71,11 @@ function rootFlag(kind) {
 
 /** Where the hooks document lands inside a package, relative to the package root. */
 function hooksPath(kind) {
-  return kind === 'cursor' ? join('.cursor', 'hooks.json') : join('hooks', 'hooks.json');
+  if (kind === 'cursor') return join('.cursor', 'hooks.json');
+  // OpenCode loads a local plugin directory's root `server` file as the plugin, so the
+  // generated document is that file at the root rather than a hooks config to merge.
+  if (kind === 'opencode') return 'server.js';
+  return join('hooks', 'hooks.json');
 }
 
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`;

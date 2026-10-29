@@ -62,7 +62,7 @@ ${CLI} agent-hooks install     write this repo's policies into the harnesses tha
                            (dry-run unless --yes; merges into the file, keeps every
                             key it does not own; Codex needs the hook trusted)
 ${CLI} agent-hooks status      what each harness will run, and what is not trusted yet
-${CLI} plugin <claude|gemini|cursor>  generate a harness package from the same tables
+${CLI} plugin <claude|gemini|cursor|opencode>  generate a harness package from the same tables
                            (dry-run unless --yes; writes a self-contained runtime, the
                            hooks and MCP registration, and for cursor the kernel rules;
                            the skill registry is workspace data and is not shipped)

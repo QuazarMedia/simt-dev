@@ -1,8 +1,8 @@
-// Agent-time hooks (plan 0003 R15): one policy table, four dialects, and the same
+// Agent-time hooks (plan 0003 R15): one policy table, six dialects, and the same
 // decision whichever harness asks.
 //
 // Every harness case feeds the payload that harness documents, because the whole
-// difficulty of this surface is that the four vendors agree on nothing - not the config
+// difficulty of this surface is that the six vendors agree on nothing - not the config
 // path, not the event name, not the field the command arrives in, not the field a
 // denial comes back in. A fixture written from our own idea of the shape would pass here
 // and fail on the first real tool call.
@@ -83,6 +83,8 @@ const shell = {
     JSON.stringify({ hook_event_name: 'PreToolUse', toolCall: { name: 'run_command', args: { CommandLine: command, Cwd: root } }, workspacePaths: [root] }),
   gemini: (command, root) =>
     JSON.stringify({ hook_event_name: 'BeforeTool', tool_name: 'run_shell_command', tool_input: { command }, cwd: root }),
+  opencode: (command, root) =>
+    JSON.stringify({ tool: 'shell', input: { command }, cwd: root }),
 };
 
 /** The payload each harness documents for a file write, in its own field names. */
@@ -102,6 +104,8 @@ const write = {
     JSON.stringify({ hook_event_name: 'PreToolUse', toolCall: { name: 'write_to_file', args: { TargetFile: file, CodeContent: 'x' } }, workspacePaths: [root] }),
   gemini: (file, root) =>
     JSON.stringify({ hook_event_name: 'BeforeTool', tool_name: 'write_file', tool_input: { file_path: file, content: 'x' }, cwd: root }),
+  opencode: (file, root) =>
+    JSON.stringify({ tool: 'write', input: { path: file, content: 'x' }, cwd: root }),
 };
 
 /** A generated region, in the html style and in the hash style the baselines use. */
@@ -130,6 +134,7 @@ test('every harness blocks a push, in its own dialect and with its own exit code
     cursor: (json) => json.permission === 'deny',
     antigravity: (json) => json.decision === 'deny',
     gemini: (json) => json.decision === 'deny',
+    opencode: (json) => typeof json.reason === 'string' && json.reason.length > 0,
   };
   for (const row of adapters()) {
     const result = HOOK(row.id, shell[row.id]('git push origin main', root));
@@ -377,8 +382,10 @@ test('install merges into the file a harness already owns', async () => {
   assert.equal(claude.hooks.PreToolUse[1].hooks[0].command, hookCommand('claude'));
 
   for (const row of adapters()) {
-    const config = JSON.parse(await readFile(join(root, hookPath(row.id)), 'utf8'));
-    assert.ok(JSON.stringify(config).includes(hookCommand(row.id)), `${row.id} has no hook running this tool`);
+    // Raw text, not parsed JSON: the opencode entry is a plugin file this tool owns
+    // whole, and every form carries the same command verbatim.
+    const text = await readFile(join(root, hookPath(row.id)), 'utf8');
+    assert.ok(text.includes(hookCommand(row.id)), `${row.id} has no hook running this tool`);
   }
 
   // A second install is a no-op, which is what makes it safe to run from a script.
@@ -444,7 +451,6 @@ test('install reports the harnesses it did not write, rather than staying quiet 
     payload.notWritten.map((n) => n.id).sort(),
     hookRows().filter((r) => adapter(r.id) === null).map((r) => r.id).sort(),
   );
-  assert.ok(payload.notWritten.some((n) => n.id === 'opencode'), 'opencode loads hooks as plugins, and that is a fact worth printing');
 });
 
 test('the command in the config is the command the reader types', async () => {
@@ -759,4 +765,42 @@ test('the delivery is reached through a dynamic import, so a tool call never loa
   const source = await readFile(join(ROOT, 'src', 'commands', 'agenthook.mjs'), 'utf8');
   assert.match(source, /await import\('\.\.\/agenthooks\/prompt\.mjs'\)/);
   assert.equal(/^\s*import .*agenthooks\/prompt\.mjs/m.test(source), false, 'the delivery is on the tool-call path');
+});
+
+test('the opencode entry is a plugin file the tool owns whole, and install round-trips it', async () => {
+  const root = await repo();
+  const preview = cli(['agent-hooks', 'install', '--root', root]);
+  assert.match(preview.text, /CREATED\s+opencode/, 'a fresh repository gets the plugin created');
+  cli(['agent-hooks', 'install', '--root', root, '--yes']);
+  const path = join(root, hookPath('opencode'));
+  const text = await readFile(path, 'utf8');
+  assert.ok(text.includes(AGENT_HOOK_SHIM), 'the plugin names the shim every other harness points at');
+  // The file is loaded by OpenCode as a module, so it must be valid JS before it is trusted.
+  const check = spawnSync(process.execPath, ['--check', path]);
+  assert.equal(check.status, 0, `the generated plugin is not valid JS: ${check.stderr}`);
+
+  // A hand edit is drift, and status names the repair rather than reporting presence.
+  await writeFile(path, `${text}// mine\n`);
+  const status = cli(['agent-hooks', 'status', '--root', root]);
+  assert.match(status.text, /DRIFT\s+opencode/, status.text);
+  assert.match(status.text, /install to restore/);
+
+  // A second install restores the bytes and is a no-op once more.
+  const again = cli(['agent-hooks', 'install', '--root', root, '--yes']);
+  assert.match(again.text, /UPDATED\s+opencode/, again.text);
+  assert.equal(await readFile(path, 'utf8'), text, 'install did not restore the file it generated');
+  const settled = cli(['agent-hooks', 'status', '--root', root]);
+  assert.match(settled.text, /PRESENT\s+opencode/, settled.text);
+});
+
+test('the opencode plugin carries the prompt hook only where the repository opted in', async () => {
+  const quiet = await repo({ [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture' }, null, 2)}\n` });
+  cli(['agent-hooks', 'install', '--root', quiet, '--yes']);
+  const quietText = await readFile(join(quiet, hookPath('opencode')), 'utf8');
+  assert.doesNotMatch(quietText, /session\.hook\('prompt'/, 'the delivery was installed without an opt-in');
+
+  const asked = await served({ brief: {} }, { warm: false });
+  cli(['agent-hooks', 'install', '--root', asked, '--yes']);
+  const askedText = await readFile(join(asked, hookPath('opencode')), 'utf8');
+  assert.match(askedText, /session\.hook\('prompt'/, 'the opted-in repository got the delivery');
 });

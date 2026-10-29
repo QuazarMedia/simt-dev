@@ -14,12 +14,13 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
 import { DEFAULT_TIMEOUT_MS } from '../src/federation/client.mjs';
-import { federationServers } from '../src/federation/config.mjs';
+import { federationAccess, federationServers } from '../src/federation/config.mjs';
+import { CONFIG_DIR, CONFIG_FILE } from '../src/workspace.mjs';
 import { TOOLS } from '../src/mcp/tools.mjs';
 import { git } from './fixture.mjs';
 
@@ -209,17 +210,83 @@ function federationTool() {
   return tool;
 }
 
+/**
+ * The operator's side of the trust contract (Q13): the workspace this server was
+ * started in, and a user config naming the servers it may start. Spawning repo
+ * commands is authorised by the operator's file, never by the repo manifest alone.
+ */
+async function withOperator(root, userFederation, body) {
+  const home = await mkdtemp(join(tmpdir(), 'federation-home-'));
+  await mkdir(join(home, CONFIG_DIR), { recursive: true });
+  await writeFile(join(home, CONFIG_DIR, CONFIG_FILE), `${JSON.stringify({ federation: userFederation }, null, 2)}\n`);
+  const previous = { workspace: process.env.SIMT_DEV_WORKSPACE, xdg: process.env.XDG_CONFIG_HOME };
+  process.env.SIMT_DEV_WORKSPACE = dirname(root);
+  process.env.XDG_CONFIG_HOME = home;
+  try {
+    return await body(join(home, CONFIG_DIR, CONFIG_FILE));
+  } finally {
+    if (previous.workspace === undefined) delete process.env.SIMT_DEV_WORKSPACE;
+    else process.env.SIMT_DEV_WORKSPACE = previous.workspace;
+    if (previous.xdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = previous.xdg;
+    await rm(home, { recursive: true, force: true });
+  }
+}
+
 test('the federation tool forwards a query and names the server that answered', async (t) => {
   const root = await fixture({ servers: [answeringEntry()] });
   t.after(() => rm(root, { recursive: true, force: true }));
 
-  const answer = await federationTool().run({ root, query: 'what calls keep' });
+  const answer = await withOperator(root, { servers: ['fixture-graph'] }, () =>
+    federationTool().run({ root, query: 'what calls keep' }));
   assert.deepEqual(answer.servers, ['fixture-graph']);
   assert.equal(answer.answers.length, 1);
   assert.equal(answer.answers[0].server, 'fixture-graph');
   assert.equal(answer.answers[0].tool, 'query');
   assert.match(answer.answers[0].text, /fixture knows about what calls keep/);
   assert.deepEqual(answer.findings, []);
+});
+
+test('the federation tool refuses a root outside the server workspace (Q13)', async (t) => {
+  // A model-supplied root can point at a directory with a crafted manifest whose
+  // `command` this tool would otherwise spawn. Outside the server's own ground —
+  // its cwd or the resolved workspace — the call is refused before anything runs.
+  const root = await fixture({ servers: [answeringEntry()] });
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  await assert.rejects(() => federationTool().run({ root, query: 'anything' }), (error) => {
+    assert.match(error.message, /outside the server workspace/);
+    assert.match(error.remedy, /workspace this server was started in/);
+    return true;
+  });
+});
+
+test('the federation tool refuses a server the user config does not name (Q13)', async (t) => {
+  // The repo manifest declares; the operator authorises. A server nobody named in
+  // their own file is a spawn nobody approved, however the repo asks.
+  const root = await fixture({ servers: [answeringEntry()] });
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  await withOperator(root, { servers: ['someone-else'] }, async (configPath) => {
+    await assert.rejects(() => federationTool().run({ root, query: 'anything' }), (error) => {
+      assert.match(error.message, /not named in the user config/);
+      assert.ok(error.remedy.includes(configPath), `the remedy names the operator file: ${error.remedy}`);
+      return true;
+    });
+  });
+});
+
+test('federationAccess is the two gates in one pure function (Q13)', () => {
+  const base = { cwd: '/srv/app', workspaceRoot: '/srv/ws', serverNames: ['g'], userConfig: { federation: { servers: ['g'] } }, configPath: '/home/op/.config/simt-dev/config.json' };
+  assert.equal(federationAccess({ ...base, root: '/srv/ws/repo' }), null);
+  assert.equal(federationAccess({ ...base, root: '/srv/app' }), null);
+  assert.equal(federationAccess({ ...base, root: '/srv/app', workspaceRoot: null }), null);
+  const outside = federationAccess({ ...base, root: '/tmp/evil' });
+  assert.match(outside.message, /outside the server workspace/);
+  const unnamed = federationAccess({ ...base, root: '/srv/ws/repo', serverNames: ['evil'] });
+  assert.match(unnamed.message, /not named in the user config/);
+  assert.ok(unnamed.remedy.includes(base.configPath));
+  assert.equal(federationAccess({ ...base, root: '/srv/ws/repo', userConfig: { federation: { allow: true } }, serverNames: ['anything'] }), null);
 });
 
 test('the federation tool says so when the repository declared nothing', async (t) => {
@@ -237,7 +304,8 @@ test('the federation tool asks only the server it was named', async (t) => {
   const root = await fixture({ servers: [answeringEntry()] });
   t.after(() => rm(root, { recursive: true, force: true }));
 
-  const answer = await federationTool().run({ root, query: 'keep', server: 'fixture-graph' });
+  const answer = await withOperator(root, { servers: ['fixture-graph'] }, () =>
+    federationTool().run({ root, query: 'keep', server: 'fixture-graph' }));
   assert.deepEqual(answer.servers, ['fixture-graph']);
 
   await assert.rejects(() => federationTool().run({ root, query: 'keep', server: 'absent' }), (error) => {

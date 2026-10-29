@@ -45,10 +45,10 @@ export async function mcpCommand(positional, flags) {
       [
         `simt-dev ${version} - MCP surface over stdio (protocols ${SUPPORTED_VERSIONS.join(', ')})`,
         '',
-        `${TOOLS.length} read-only tools:`,
+        `${TOOLS.length} tools (all read-only except federation_query, which starts a declared server):`,
         ...TOOLS.map((t) => `  ${t.name.padEnd(16)} ${t.description.split('.')[0]}`),
         '',
-        'No tool here writes. init, sync, hooks install, skills install and upgrade stay in the',
+        'Nothing here writes to your repositories. init, sync, hooks install, skills install and upgrade stay in the',
         'CLI, because each is meant to be read as a diff by a human before it touches anything.',
         '',
         `serve them with: ${positional[0] ?? `${CLI} mcp`}`,

@@ -29,11 +29,11 @@ import { GATES } from '../hooks/gates.mjs';
 import { dirtyPaths, parsePathList, readBody } from '../commands/skills.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
-import { readFederation } from '../federation/config.mjs';
+import { federationAccess, readFederation } from '../federation/config.mjs';
 import { consult } from '../federation/query.mjs';
 import { planNext, planDone } from '../plan/index.mjs';
 import { buildPrBody } from '../prbody.mjs';
-import { resolveWorkspace } from '../workspace.mjs';
+import { configPaths, readUserConfig, resolveWorkspace } from '../workspace.mjs';
 import { measureSkill } from '../graph/load.mjs';
 import { CLI } from '../name.mjs';
 
@@ -959,6 +959,9 @@ export const TOOLS = [
     name: 'federation_query',
     description:
       'Ask a declared code-graph server one structural question; the answer names the server. Starts only servers simt.json names; none declared is an error.',
+    // This tool spawns the repo manifest's `command`, so it is not read-only: a client
+    // that cached its answer as one would replay a process spawn as a pure read (Q13).
+    annotations: { readOnlyHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
       properties: {
@@ -988,6 +991,21 @@ export const TOOLS = [
         throw Object.assign(new Error(`no declared federation server is named ${only}`), {
           remedy: `declared servers: ${servers.map((server) => server.name).join(', ')}`,
         });
+      }
+      // A model-supplied root can point at a directory with a crafted manifest, and a
+      // repo manifest alone must not authorise a spawn on the operator's machine (Q13).
+      const ws = await resolveWorkspace(args ?? {});
+      const user = await readUserConfig();
+      const denied = federationAccess({
+        root,
+        cwd: process.cwd(),
+        workspaceRoot: ws.root,
+        serverNames: chosen.map((server) => server.name),
+        userConfig: user.config,
+        configPath: user.path ?? configPaths()[0] ?? '~/.config/simt-dev/config.json',
+      });
+      if (denied !== null) {
+        throw Object.assign(new Error(denied.message), { remedy: denied.remedy });
       }
       const { answers, findings: failures } = await consult({ root, query, servers: chosen });
       return {

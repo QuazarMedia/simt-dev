@@ -242,7 +242,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // not be an argument a maintainer can act on either. ADR-104 joined for the same
   // reason once more: the ruling is ABOUT the normaliser, and a decision that the
   // command is read the way a shell reads it without naming the module that does the
-  // reading would not be an argument a maintainer can act on.
+  // reading would not be an argument a maintainer can act on. ADR-106 joined for the
+  // same reason once more: the ruling is ABOUT the shim, and a decision that every
+  // harness entry runs through it without naming the locator block the shim is
+  // rendered from would not be an argument a maintainer can act on.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -260,6 +263,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-098',
     'ADR-099',
     'ADR-104',
+    'ADR-106',
   ]);
 });
 

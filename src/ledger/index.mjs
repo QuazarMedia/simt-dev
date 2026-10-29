@@ -23,7 +23,7 @@ import { TREE_EXCLUDES, localRel, readStateFile } from '../state.mjs';
 const exec = promisify(execFile);
 
 export const LEDGER_FILE = localRel('ledger.jsonl');
-export const LEDGER_FILE_LEGACY = '.simt/ledger.jsonl';
+const LEDGER_FILE_LEGACY = '.simt/ledger.jsonl';
 
 /** Phrases that claim a run happened. `unverified` and `not verified` are removed
  *  first, because both contain the word and neither is a claim. Trailers
@@ -145,7 +145,7 @@ export async function readLedger(root) {
 
 /** Whether the entry counts as a test-kind run (review 0003 Q18). v1 lines
  *  carry no kind, so a command naming test counts; v2 lines use the recorded kind. */
-export function isTestKind(entry) {
+function isTestKind(entry) {
   if (typeof entry?.kind === 'string') return entry.kind === 'test';
   return typeof entry?.cmd === 'string' && /\btest\b/i.test(entry.cmd);
 }

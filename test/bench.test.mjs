@@ -621,7 +621,7 @@ test('prepareIsolatedWorkspace creates a one-commit git export and materialiseAr
     prompt: 'validate slice commit and run focused tests',
   });
   tempDirs.push(briefWs.slotDir);
-  assert.equal(existsSync(join(briefWs.workDir, '.simt', 'brief.md')), true);
+  assert.equal(existsSync(join(briefWs.workDir, '.simt', 'local', 'brief.md')), true);
 
   // 4. Custom arm file (--arm name=path/to/arm.json) writes/removes files and sets env.
   const armFile = join(repo, 'custom-arm.json');
@@ -1358,7 +1358,7 @@ test('bench ablate (R04): leave-one-out section removal, 10-task canary with esc
   assert.deepEqual(runnerCalls[0].arms, ['current', 'no-core-truth', 'no-core-scope-of-these-rules']);
   assert.equal(runnerCalls[1].tasks.length, 2);
   assert.deepEqual(runnerCalls[1].arms, ['current', 'no-core-truth']);
-  assert.equal(existsSync(join(repo, '.simt', 'bench', 'ablation.json')), true);
+  assert.equal(existsSync(join(repo, '.simt', 'local', 'bench', 'ablation.json')), true);
 
   // 5. CLI `simt bench ablate` preview and `--json` output.
   const cliJson = await runCli(['bench', 'ablate', '--root', repo, '--json']);

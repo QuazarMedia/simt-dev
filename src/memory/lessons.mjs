@@ -25,7 +25,7 @@ import { splitFrontmatter } from './decide.mjs';
 const exec = promisify(execFile);
 
 export const LESSONS_FILE = localRel('lessons.jsonl');
-export const LESSONS_FILE_LEGACY = '.simt/lessons.jsonl';
+const LESSONS_FILE_LEGACY = '.simt/lessons.jsonl';
 const LEDGER_REL = localRel('ledger.jsonl');
 const LEDGER_REL_LEGACY = '.simt/ledger.jsonl';
 export const LESSONS_DIR = 'docs/lessons';

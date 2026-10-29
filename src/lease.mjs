@@ -15,7 +15,7 @@
 // the hook refuses edits, the command refuses to write (ADR-101 rulings 4).
 
 import { existsSync, realpathSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, open, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { localRel, readStateFile } from './state.mjs';
@@ -139,6 +139,57 @@ export async function writeLeases(root, leases) {
   const sorted = [...leases].sort((a, b) => a.path.localeCompare(b.path));
   const body = `${JSON.stringify({ schemaVersion: LEASE_SCHEMA, leases: sorted }, null, 2)}\n`;
   await mkdir(dirname(path), { recursive: true });
-  await writeFile(path, body, 'utf8');
+  // Atomic against a concurrent writer and a concurrent reader: a half-written
+  // claim file fails closed for every edit (review 0003 Q20).
+  const tmp = `${path}.tmp-${process.pid}`;
+  await writeFile(tmp, body, 'utf8');
+  await rename(tmp, path);
   return path;
+}
+
+/** A lock is stale when its holder died holding it, not when it is merely slow. */
+const LOCK_STALE_MS = 10_000;
+const LOCK_WAIT_MS = 10_000;
+
+/**
+ * Run `fn` with the claim file held: an `O_EXCL` lockfile (stale ones reaped),
+ * the read-modify-write re-done inside, the lock released afterwards.
+ *
+ * Twelve concurrent claims stored seven before this: every claimant read the
+ * same file, each wrote back only what it had seen. Re-reading under the lock
+ * closes that race (review 0003 Q20).
+ */
+export async function withLeaseLock(root, fn) {
+  const lockPath = join(root, `${LEASE_FILE}.lock`);
+  await mkdir(dirname(lockPath), { recursive: true });
+  const deadline = Date.now() + LOCK_WAIT_MS;
+  for (;;) {
+    try {
+      const fd = await open(lockPath, 'wx');
+      await fd.close();
+      break;
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      let stale = false;
+      try {
+        const st = await stat(lockPath);
+        stale = Date.now() - st.mtimeMs > LOCK_STALE_MS;
+      } catch {
+        stale = true;
+      }
+      if (stale) {
+        await unlink(lockPath).catch(() => {});
+        continue;
+      }
+      if (Date.now() > deadline) {
+        throw new Error(`could not take the lease lock; remove ${lockPath} if no lease run is active`);
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+  }
+  try {
+    return await fn();
+  } finally {
+    await unlink(lockPath).catch(() => {});
+  }
 }

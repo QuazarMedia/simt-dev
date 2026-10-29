@@ -29,7 +29,7 @@ import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { ALLOW_ENV, EVENTS, POLICY_IDS } from '../agenthooks/policy.mjs';
+import { ALLOW_ENV, EVENTS, POLICY_IDS, SESSION_ENV } from '../agenthooks/policy.mjs';
 import { decide, factsFor } from '../agenthooks/decide.mjs';
 import { repoRoot } from '../repo-root.mjs';
 import {
@@ -103,7 +103,7 @@ export async function agentHookCommand(args, flags) {
   // agent works from subdirectories, so every repository-relative fact (the lease file,
   // `.gitmodules`) must resolve against the root git itself uses, not the cwd (review
   // 0003 Q16).
-  const { root: payloadRoot, command, writes } = factsFrom(row, payload, { root: flags.root });
+  const { root: payloadRoot, command, writes, session: payloadSession } = factsFrom(row, payload, { root: flags.root });
   const root = repoRoot(payloadRoot);
   // A relative write path is relative to the directory the harness is in, not to the
   // repository root the facts resolve against: an agent editing `keep.mjs` from `src/`
@@ -117,7 +117,14 @@ export async function agentHookCommand(args, flags) {
     return typeof w === 'string' ? abs : { ...w, path: abs };
   });
   const facts = await factsFor(root, { command, writes: writesAbsolute });
-  const decision = decide({ event, facts, env: process.env });
+  // Harness hook processes rarely carry SIMT_SESSION, so the payload's own
+  // session id is the fallback: without it an agent is blocked by its own
+  // lease (review 0003 Q20). The environment still wins when it names one.
+  const session =
+    typeof process.env[SESSION_ENV] === 'string' && process.env[SESSION_ENV] !== ''
+      ? process.env[SESSION_ENV]
+      : (payloadSession ?? '');
+  const decision = decide({ event, facts, env: { ...process.env, [SESSION_ENV]: session } });
 
   // Both notes are about a conclusion the author is about to draw: a lift that did
   // nothing because of a typo, and a lift that is the reason the command they expected to

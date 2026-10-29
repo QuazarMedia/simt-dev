@@ -87,7 +87,8 @@ ${CLI} slice finish <id>    run the pre-commit gates, commit what is staged with
 ${CLI} lease [<paths>...]    claim files for one session and a TTL, or list the
                            claims (dry-run unless --yes; the session is --session
                            <id> or ${SESSION_ENV}; a pre-edit hook refuses an edit
-                           to a path another session holds — ADR-101)
+                           to a path another session holds — ADR-101;
+                           release and renew end and extend your own claims)
 ${CLI} graph lint              check the skill registry against the skills on disk
                            (byte counts, dangling edges, unresolvable variants)
 ${CLI} ci                     simt-dev's own .github files: create or refresh them

@@ -306,3 +306,80 @@ test('Claude NotebookEdit and a Codex apply_patch move are checked like any othe
   const moved2 = cli(['agent-hook', 'pre-tool-use', '--harness', 'codex'], { input: moveTo, env: { [SESSION_ENV]: 'beta' } });
   assert.equal(moved2.code, 2, `a "Move to:" destination walked through: ${moved2.text}`);
 });
+
+test('twelve concurrent claims all land: the read-modify-write holds a lock (Q20)', async () => {
+  const root = await repo();
+  const results = await Promise.all(
+    Array.from({ length: 12 }, (_, i) =>
+      (async () => {
+        const r = spawnSync(process.execPath, [BIN, 'lease', `src/f${i}.mjs`, '--session', `s${i}`, '--root', root, '--yes'], {
+          env: { ...process.env },
+          encoding: 'utf8',
+        });
+        return r.status ?? 1;
+      })(),
+    ),
+  );
+  assert.ok(results.every((c) => c === 0), `a concurrent claim failed: ${results.join(',')}`);
+  const claims = await readClaims(root);
+  assert.equal(claims.leases.length, 12, `only ${claims.leases.length} of 12 concurrent claims stored`);
+});
+
+test('the holder releases and renews its own claims, and nobody else\u2019s (Q20)', async () => {
+  const root = await repo();
+  assert.equal(cli(['lease', 'src/keep.mjs', '--session', 'alpha', '--root', root, '--yes']).code, 0);
+  assert.equal(cli(['lease', 'src/other.mjs', '--session', 'beta', '--root', root, '--yes']).code, 0);
+
+  const preview = cli(['lease', 'release', 'src/keep.mjs', '--session', 'alpha', '--root', root]);
+  assert.equal(preview.code, 0, preview.text);
+  assert.match(preview.stdout, /would    release src\/keep\.mjs/);
+  assert.equal((await readClaims(root)).leases.length, 2, 'the preview released a claim');
+
+  const foreign = cli(['lease', 'release', 'src/other.mjs', '--session', 'alpha', '--root', root, '--yes']);
+  assert.equal(foreign.code, 1, foreign.text);
+  assert.match(foreign.stderr, /leased by beta/);
+
+  const released = cli(['lease', 'release', 'src/keep.mjs', '--session', 'alpha', '--root', root, '--yes']);
+  assert.equal(released.code, 0, released.text);
+  assert.match(released.stdout, /RELEASED src\/keep\.mjs/);
+  assert.deepEqual((await readClaims(root)).leases.map((l) => l.path), ['src/other.mjs']);
+
+  const renewed = cli(['lease', 'renew', 'src/other.mjs', '--session', 'beta', '--ttl', '7200', '--root', root, '--yes']);
+  assert.equal(renewed.code, 0, renewed.text);
+  assert.match(renewed.stdout, /RENEWED   src\/other\.mjs/);
+  assert.ok((await readClaims(root)).leases[0].expiresAt > Date.now() + 3600 * 1000);
+
+  const foreignRenew = cli(['lease', 'renew', 'src/other.mjs', '--session', 'alpha', '--root', root, '--yes']);
+  assert.equal(foreignRenew.code, 1, foreignRenew.text);
+
+  const empty = cli(['lease', 'release', 'src/gone.mjs', '--session', 'alpha', '--root', root, '--yes']);
+  assert.equal(empty.code, 0, empty.text);
+  assert.match(empty.stdout, /no active claims/);
+});
+
+test('the hook reads the session from the payload when the environment names none (Q20)', async () => {
+  const root = await repo();
+  assert.equal(cli(['lease', 'src/keep.mjs', '--session', 'alpha', '--root', root, '--yes']).code, 0);
+  const withSession = JSON.stringify({
+    hook_event_name: 'PreToolUse',
+    tool_name: 'Write',
+    tool_input: { file_path: 'src/keep.mjs', content: 'x' },
+    cwd: root,
+    session_id: 'alpha',
+  });
+  const own = cli(['agent-hook', 'pre-tool-use', '--harness', 'claude'], { input: withSession, env: { [SESSION_ENV]: '' } });
+  assert.equal(own.code, 0, `the payload session did not identify the holder: ${own.text}`);
+  const other = cli(['agent-hook', 'pre-tool-use', '--harness', 'claude'], {
+    input: withSession,
+    env: { [SESSION_ENV]: 'beta' },
+  });
+  assert.equal(other.code, 2, 'the environment session did not win over the payload');
+});
+
+test('a claim records the harness that took it, and the list shows it (Q20)', async () => {
+  const root = await repo();
+  const taken = cli(['lease', 'src/keep.mjs', '--session', 'alpha', '--harness', 'claude', '--root', root, '--yes']);
+  assert.equal(taken.code, 0, taken.text);
+  assert.equal((await readClaims(root)).leases[0].harness, 'claude');
+  assert.match(cli(['lease', '--root', root]).stdout, /alpha\/claude/);
+});

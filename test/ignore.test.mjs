@@ -129,7 +129,7 @@ test('--diff prints the plan as unified diffs without changing what runs', async
 test('a second run reports every target unchanged and writes nothing new', async () => {
   const root = await scratch({ '.simtignore': LIST });
   await run(['ignore', '--root', root, '--yes']);
-  const before = await readdir(join(root, '.simt', 'journal'));
+  const before = await readdir(join(root, '.simt', 'local', 'journal'));
 
   const second = await run(['ignore', '--root', root, '--yes', '--json']);
   assert.equal(second.code, 0, second.stderr);
@@ -139,7 +139,7 @@ test('a second run reports every target unchanged and writes nothing new', async
   assert.equal(payload.action ?? 'unchanged', 'unchanged');
   for (const file of payload.files) assert.equal(file.action, 'unchanged', JSON.stringify(payload.files));
 
-  const after = await readdir(join(root, '.simt', 'journal'));
+  const after = await readdir(join(root, '.simt', 'local', 'journal'));
   assert.equal(after.length, before.length, 'an unchanged run journals nothing');
 });
 
@@ -157,9 +157,9 @@ test('the write is journaled as one set, and the payload is one versioned docume
   assert.equal(payload.entries, 3);
   assert.equal(payload.files.length, 4);
 
-  const journal = await readdir(join(root, '.simt', 'journal'));
+  const journal = await readdir(join(root, '.simt', 'local', 'journal'));
   assert.ok(journal.length >= 1, 'the write left an undo set (R49)');
-  const set = JSON.parse(await readFile(join(root, '.simt', 'journal', journal[0]), 'utf8'));
+  const set = JSON.parse(await readFile(join(root, '.simt', 'local', 'journal', journal[0]), 'utf8'));
   assert.equal(set.command, 'ignore');
   assert.equal(set.entries.length, 4, 'all four writes are in the set');
   for (const entry of set.entries) assert.ok(entry.beforeDigest !== undefined, 'entries carry digests');

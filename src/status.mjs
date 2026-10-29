@@ -31,11 +31,12 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { readHooksState, wantsShim } from './compare/hooksstate.mjs';
-import { STATE_DIR } from './name.mjs';
+import { LOCAL_DIR } from './state.mjs';
 
 const exec = promisify(execFile);
 
-const CACHE_FILE = join(STATE_DIR, 'check.json');
+const CACHE_FILE = join(LOCAL_DIR, 'check.json');
+const CACHE_FILE_LEGACY = '.simt/check.json';
 const CACHE_VERSION = 1;
 
 /**
@@ -79,7 +80,7 @@ export async function buildCacheRecord(root, summary) {
 /** Atomically replace the cache. A killed `check` leaves the previous record, not half of one. */
 export async function writeCheckCache(root, record) {
   const path = cachePath(root);
-  await mkdir(join(root, STATE_DIR), { recursive: true });
+  await mkdir(join(root, LOCAL_DIR), { recursive: true });
   const body = `${JSON.stringify(record)}\n`;
   const tmp = `${path}.tmp-${process.pid}`;
   await writeFile(tmp, body, 'utf8');
@@ -88,9 +89,13 @@ export async function writeCheckCache(root, record) {
 
 /** The last record `check` wrote, or null when it never ran (or a writer invalidated it). */
 export async function readCheckCache(root) {
+  // The pre-move path is a fallback for one release (review 0003 Q19).
   let raw;
   try {
-    raw = await readFile(cachePath(root), 'utf8');
+    raw = await readFile(cachePath(root), 'utf8').catch(async (error) => {
+      if (error.code !== 'ENOENT') throw error;
+      return readFile(join(root, CACHE_FILE_LEGACY), 'utf8');
+    });
   } catch (error) {
     if (error.code === 'ENOENT') return null;
     throw error;

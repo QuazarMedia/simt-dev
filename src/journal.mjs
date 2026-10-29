@@ -37,8 +37,10 @@ import { cp, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'n
 import { dirname, join, relative, sep } from 'node:path';
 
 import { STATE_DIR } from './name.mjs';
+import { LOCAL_DIR } from './state.mjs';
 
-const JOURNAL_DIR = join(STATE_DIR, 'journal');
+const JOURNAL_DIR = join(LOCAL_DIR, 'journal');
+const JOURNAL_DIR_LEGACY = '.simt/journal';
 const SET_SUFFIX = '.json';
 const UNDONE_SUFFIX = '.undone.json';
 
@@ -179,14 +181,19 @@ export async function journaledRemoveFile(root, acc, path) {
  */
 /**
  * The .gitignore bytes `ignoreJournal` would write for `text`, or null when
- * `text` already ignores the journal directory. One owner for the line
+ * `text` already ignores machine-local state. One owner for the line
  * spelling: `ignoreJournal` writes it, `journalHygiene` reads whether it is
  * there, and `doctor --fix --diff` previews it — all through this function so
  * the three cannot disagree about what counts as ignored (plan 0003 R50).
+ *
+ * The ignored line is the whole local area (review 0003 Q19), not just the
+ * journal: every machine-local write lives under it, and one line covers them.
  */
 export function journalIgnoreNext(text) {
-  const line = `${JOURNAL_DIR}/`;
-  if (text.split('\n').map((l) => l.trim()).includes(line)) return null;
+  const line = `${LOCAL_DIR}/`;
+  const legacy = `${JOURNAL_DIR_LEGACY}/`;
+  const lines = text.split('\n').map((l) => l.trim());
+  if (lines.includes(line) || lines.includes(legacy)) return null;
   const prefix = text === '' || text.endsWith('\n') ? '' : '\n';
   return `${text}${prefix}\n# Write journal for \`simt undo\`. Local state, never shared.\n${line}\n`;
 }
@@ -246,18 +253,24 @@ export async function journalHygiene(root) {
   } catch {
     text = '';
   }
-  const line = `${JOURNAL_DIR}/`;
-  return { sets, ignored: text.split('\n').map((l) => l.trim()).includes(line) };
+  const lines = text.split('\n').map((l) => l.trim());
+  return { sets, ignored: lines.includes(`${LOCAL_DIR}/`) || lines.includes(`${JOURNAL_DIR_LEGACY}/`) };
 }
 
 /** Set ids newest-first, undone sets excluded. */
 export async function listJournalSets(root) {
+  // The pre-move directory is a fallback for one release (review 0003 Q19).
   let names;
   try {
     names = await readdir(join(root, JOURNAL_DIR));
   } catch (error) {
-    if (error.code === 'ENOENT') return [];
-    throw error;
+    if (error.code !== 'ENOENT') throw error;
+    try {
+      names = await readdir(join(root, JOURNAL_DIR_LEGACY));
+    } catch (legacyError) {
+      if (legacyError.code === 'ENOENT') return [];
+      throw legacyError;
+    }
   }
   // An undone set ends in `.undone.json`, which itself ends in `.json` — the
   // suffix test alone would list history as current and `undo` would restore
@@ -265,8 +278,19 @@ export async function listJournalSets(root) {
   return names.filter((n) => n.endsWith(SET_SUFFIX) && !n.endsWith(UNDONE_SUFFIX)).sort().reverse();
 }
 
+/** The directory holding set `id`, preferring the post-move one. */
+async function journalDirFor(root, id) {
+  try {
+    await stat(join(root, JOURNAL_DIR, id));
+    return JOURNAL_DIR;
+  } catch {
+    return JOURNAL_DIR_LEGACY;
+  }
+}
+
 export async function readJournalSet(root, id) {
-  const raw = await readFile(join(root, JOURNAL_DIR, id), 'utf8');
+  const dir = await journalDirFor(root, id);
+  const raw = await readFile(join(root, dir, id), 'utf8');
   return JSON.parse(raw);
 }
 
@@ -309,7 +333,8 @@ async function undoJournalSet(root, id) {
     }
     restored.push(entry.path);
   }
-  await rename(join(root, JOURNAL_DIR, id), join(root, JOURNAL_DIR, id.replace(/\.json$/, UNDONE_SUFFIX)));
+  const dir = await journalDirFor(root, id);
+  await rename(join(root, dir, id), join(root, dir, id.replace(/\.json$/, UNDONE_SUFFIX)));
   return { restored };
 }
 

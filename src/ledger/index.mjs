@@ -7,22 +7,23 @@
 
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { appendFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import {
-  LESSONS_FILE,
   errorSignature,
   firstErrorLine,
   normaliseErrorLine,
   recordFailThenFix,
 } from '../memory/lessons.mjs';
+import { TREE_EXCLUDES, localRel, readStateFile } from '../state.mjs';
 
 const exec = promisify(execFile);
 
-const LEDGER_FILE = '.simt/ledger.jsonl';
+export const LEDGER_FILE = localRel('ledger.jsonl');
+export const LEDGER_FILE_LEGACY = '.simt/ledger.jsonl';
 
 /** Phrases that claim a run happened. `unverified` and `not verified` are removed
  *  first, because both contain the word and neither is a claim. Trailers
@@ -43,14 +44,12 @@ export async function treeId(root) {
   const index = join(dir, 'index');
   const env = { ...process.env, GIT_INDEX_FILE: index };
   try {
-    // The ledger is a record of the tree, so it cannot be part of the tree it names.
-    // `git add -A` would take it once the file exists, and the line would prove a
-    // tree that stopped existing when the line was written.
-    await exec(
-      'git',
-      ['add', '-A', '--', '.', `:(exclude)${LEDGER_FILE}`, `:(exclude)${LESSONS_FILE}`],
-      { cwd: root, env },
-    );
+    // Machine-local state is a record of the tree, so it cannot be part of the
+    // tree it names. `git add -A` would take it once the file exists, and the
+    // line would prove a tree that stopped existing when the line was written
+    // (review 0003 Q19).
+    const excludes = TREE_EXCLUDES.map((p) => `:(exclude)${p}`);
+    await exec('git', ['add', '-A', '--', '.', ...excludes], { cwd: root, env });
     const { stdout } = await exec('git', ['write-tree'], { cwd: root, env });
     return stdout.trim();
   } finally {
@@ -99,7 +98,7 @@ export async function recordRun(root, { cmd, exit, ms, output, gate = null, kind
         }
       : {}),
   };
-  await mkdir(join(root, '.simt'), { recursive: true });
+  await mkdir(join(root, '.simt', 'local'), { recursive: true });
   await appendFile(join(root, LEDGER_FILE), `${JSON.stringify(line)}\n`);
 
   if (exit === 0 && typeof cmd === 'string') {
@@ -123,13 +122,9 @@ export async function recordRun(root, { cmd, exit, ms, output, gate = null, kind
 /** Every well-formed line. A line that does not parse is returned as an error so a
  *  damaged ledger cannot look empty. */
 export async function readLedger(root) {
-  let text;
-  try {
-    text = await readFile(join(root, LEDGER_FILE), 'utf8');
-  } catch (error) {
-    if (error.code === 'ENOENT') return { entries: [], errors: [] };
-    throw error;
-  }
+  // The pre-move path is a fallback for one release (review 0003 Q19).
+  const { text } = await readStateFile(root, LEDGER_FILE, [LEDGER_FILE_LEGACY]);
+  if (text === null) return { entries: [], errors: [] };
   const entries = [];
   const errors = [];
   for (const [i, raw] of text.split('\n').entries()) {

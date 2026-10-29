@@ -175,7 +175,7 @@ test('the file window specializes only a neighborhood with evidence to spare', (
 test('loadHistory reads the stored records and the mined descriptors behind them', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'advice-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const runsDir = join(root, '.simt', 'bench', 'runs', 'stub-current-r1');
+  const runsDir = join(root, '.simt', 'local', 'bench', 'runs', 'stub-current-r1');
   const tasksDir = join(root, '.simt', 'bench', 'tasks');
   await mkdir(tasksDir, { recursive: true });
   await mkdir(runsDir, { recursive: true });
@@ -221,7 +221,7 @@ test('loadHistory reads the stored records and the mined descriptors behind them
 test('a record without its mined task stays honest, and a task nobody ran is no evidence', async (t) => {
   const root = await mkdtemp(join(tmpdir(), 'advice-orphans-'));
   t.after(() => rm(root, { recursive: true, force: true }));
-  const runsDir = join(root, '.simt', 'bench', 'runs', 'stub-current-r1');
+  const runsDir = join(root, '.simt', 'local', 'bench', 'runs', 'stub-current-r1');
   const tasksDir = join(root, '.simt', 'bench', 'tasks');
   await mkdir(tasksDir, { recursive: true });
   await mkdir(runsDir, { recursive: true });
@@ -254,7 +254,7 @@ test('the brief carries the advice in its header when the history has the eviden
   assert.equal(await briefAdvice(root, { task: 'fix the keep helper' }), null);
 
   const tasksDir = join(root, '.simt', 'bench', 'tasks');
-  const runsDir = join(root, '.simt', 'bench', 'runs', 'stub-mini-r1');
+  const runsDir = join(root, '.simt', 'local', 'bench', 'runs', 'stub-mini-r1');
   await mkdir(tasksDir, { recursive: true });
   await mkdir(runsDir, { recursive: true });
   const descriptor = {

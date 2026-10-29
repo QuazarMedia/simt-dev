@@ -32,9 +32,11 @@ import { digestOf, promptHash, proposalFrontmatter } from '../distill/engine.mjs
 
 const exec = promisify(execFile);
 
-// Locked on-disk beneath `.simt`, like `.simt/distilled` (R38) — a cache of
+import { LOCAL_DIR } from '../state.mjs';
+
+// Locked on-disk beneath machine-local state, like the distilled cache (R38) —
 // proposals keyed by content digest, never projected and never committed.
-const REVIEW_DIR = '.simt/reviews';
+const REVIEW_DIR = join(LOCAL_DIR, 'reviews');
 const ENGINE_REVIEW_LOCAL = 'review-local';
 
 /** The diff brief's byte cap; `--budget` overrides it, `0` means unlimited. */

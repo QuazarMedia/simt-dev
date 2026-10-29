@@ -11,7 +11,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { git } from './fixture.mjs';
-import { treeId, recordRun, readLedger, claimsVerification } from '../src/ledger/index.mjs';
+import { treeId, recordRun, readLedger, claimsVerification, LEDGER_FILE } from '../src/ledger/index.mjs';
+import { LESSONS_FILE } from '../src/memory/lessons.mjs';
+import { LEASE_FILE } from '../src/lease.mjs';
+import { journalIgnoreNext } from '../src/journal.mjs';
 import { evidenceCommand } from '../src/commands/evidence.mjs';
 import { runGates } from '../src/hooks/dispatcher.mjs';
 import { hooksCommand } from '../src/commands/hooks.mjs';
@@ -138,6 +141,25 @@ test('a hand-written commit-msg does not replace the claim check', async () => {
   await rm(root, { recursive: true, force: true });
 });
 
+test('machine-local writes never change the tree they record (review 0003 Q19)', async () => {
+  const root = await repo();
+  const before = await treeId(root);
+  // Every machine-local path lives under .simt/local/.
+  for (const file of [LEDGER_FILE, LESSONS_FILE, LEASE_FILE]) {
+    assert.match(file, /^\.simt\/local\//, `${file} is not machine-local state`);
+  }
+  await recordRun(root, { cmd: 'node --test', exit: 0, ms: 4, output: '1 pass\n', gate: 'test', kind: 'test' });
+  const { entries } = await readLedger(root);
+  assert.equal(entries.length, 1);
+  assert.equal(entries[0].tree, before, 'recording the run changed the tree it records');
+  assert.equal(await treeId(root), before);
+  // The ignore line covers the whole local area, so a checkout carrying old
+  // state still ignores it.
+  assert.match(journalIgnoreNext('') ?? '', /\.simt\/local\//);
+  assert.equal(journalIgnoreNext('.simt/local/\n'), null);
+  await rm(root, { recursive: true, force: true });
+});
+
 test('a gate the dispatcher runs is recorded against the tree', async () => {
   const root = await repo();
   const manifest = { gates: { preCommit: ['test'], commands: { test: 'echo 1 pass' } } };
@@ -149,7 +171,7 @@ test('a gate the dispatcher runs is recorded against the tree', async () => {
   assert.ok(line, JSON.stringify(entries));
   assert.equal(line.exit, 0);
   assert.equal(line.summary, '1 pass, 0 fail');
-  const text = await readFile(join(root, '.simt', 'ledger.jsonl'), 'utf8');
+  const text = await readFile(join(root, LEDGER_FILE), 'utf8');
   assert.equal(text.includes('echo 1 pass\n'), false, 'the output itself is not the ledger');
   await rm(root, { recursive: true, force: true });
 });

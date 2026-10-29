@@ -7,7 +7,7 @@
 
 import { execFile } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
@@ -16,6 +16,7 @@ import { detectTestRunner } from '../bench/mine.mjs';
 import { compactOutput } from '../index/compact.mjs';
 import { readImportEdges, selectTests } from '../index/gate.mjs';
 import { packageOf } from '../index/store.mjs';
+import { localRel } from '../state.mjs';
 
 const exec = promisify(execFile);
 
@@ -116,12 +117,13 @@ async function runSelected(root, flags, selected) {
 }
 
 async function writeRaw(root, body) {
+  // Raw gate output is machine-local state (review 0003 Q19).
   try {
-    const dir = join(root, '.simt', 'gate');
+    const rel = localRel('gate', `gate-${Date.now()}.log`);
+    const dir = join(root, dirname(rel));
     await mkdir(dir, { recursive: true });
-    const name = `gate-${Date.now()}.log`;
-    await writeFile(join(dir, name), body);
-    return `.simt/gate/${name}`;
+    await writeFile(join(root, rel), body);
+    return rel;
   } catch {
     return '';
   }

@@ -189,14 +189,18 @@ async function collectRepoAblationRecords(repoPath) {
 }
 
 async function readExplicitNoValueSections(repoPath) {
-  const file = join(repoPath, '.simt', 'ablation.json');
-  try {
-    const raw = JSON.parse(await readFile(file, 'utf8'));
-    const list = Array.isArray(raw?.sections) ? raw.sections : Array.isArray(raw) ? raw : [];
-    return list;
-  } catch {
-    return [];
+  // Ablation output moved to machine-local state; the old path is a fallback
+  // for one release (review 0003 Q19).
+  for (const rel of ['.simt/local/bench/ablation.json', '.simt/ablation.json']) {
+    try {
+      const raw = JSON.parse(await readFile(join(repoPath, rel), 'utf8'));
+      const list = Array.isArray(raw?.sections) ? raw.sections : Array.isArray(raw) ? raw : [];
+      return list;
+    } catch {
+      // Next candidate.
+    }
   }
+  return [];
 }
 
 function formatAffectsList(affects) {

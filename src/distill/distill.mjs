@@ -34,7 +34,9 @@ import {
 } from './engine.mjs';
 
 export const DEFAULT_BUDGET = 2048;
-const DISTILL_DIR = '.simt/distilled';
+import { LOCAL_DIR } from '../state.mjs';
+
+const DISTILL_DIR = join(LOCAL_DIR, 'distilled');
 
 /**
  * The row's acceptance metric, stated where a caller reads results (ADR-076):

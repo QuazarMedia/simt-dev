@@ -20,7 +20,8 @@ import { resolveVaultDir } from '../bench/mine.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
-import { CLI, STATE_DIR } from '../name.mjs';
+import { CLI } from '../name.mjs';
+import { LOCAL_DIR } from '../state.mjs';
 
 async function readSkillRawText(skill, workspaceRoot, root) {
   const canonical = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
@@ -44,7 +45,7 @@ async function readSkillRawText(skill, workspaceRoot, root) {
 
 async function loadGoldPathsByTask(root) {
   const map = new Map();
-  const tasksDir = join(root, STATE_DIR, 'bench', 'tasks');
+  const tasksDir = join(root, '.simt', 'bench', 'tasks');
   const vaultRoot = resolveVaultDir(root);
   const entries = (await readdir(tasksDir).catch(() => [])).filter((f) => f.endsWith('.json')).sort();
   for (const entry of entries) {
@@ -172,26 +173,26 @@ async function runSingleSkillCompile(skill, registry, { root, workspaceRoot, fla
     triggerStats,
   });
 
-  const outDir = join(root, STATE_DIR, 'compiled', 'skills', skill.name);
-  const proposalPath = join(root, STATE_DIR, 'proposals', 'skills', `${skill.name}.json`);
+  const outDir = join(root, LOCAL_DIR, 'compiled', 'skills', skill.name);
+  const proposalPath = join(root, LOCAL_DIR, 'proposals', 'skills', `${skill.name}.json`);
   const writtenFiles = [];
 
   if (mode.apply) {
     await mkdir(outDir, { recursive: true });
     await writeFile(join(outDir, 'SKILL.md'), compiled.mainText, 'utf8');
-    writtenFiles.push(`${STATE_DIR}/compiled/skills/${skill.name}/SKILL.md`);
+    writtenFiles.push(`${LOCAL_DIR}/compiled/skills/${skill.name}/SKILL.md`);
 
     for (const ref of compiled.references) {
       if (!ref.content) continue;
       const refFull = join(outDir, ref.path);
       await mkdir(dirname(refFull), { recursive: true });
       await writeFile(refFull, ref.content, 'utf8');
-      writtenFiles.push(`${STATE_DIR}/compiled/skills/${skill.name}/${ref.path}`);
+      writtenFiles.push(`${LOCAL_DIR}/compiled/skills/${skill.name}/${ref.path}`);
     }
 
     await mkdir(dirname(proposalPath), { recursive: true });
     await writeFile(proposalPath, `${JSON.stringify(proposal, null, 2)}\n`, 'utf8');
-    writtenFiles.push(`${STATE_DIR}/proposals/skills/${skill.name}.json`);
+    writtenFiles.push(`${LOCAL_DIR}/proposals/skills/${skill.name}.json`);
   }
 
   if (isJson(flags)) {

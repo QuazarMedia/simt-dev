@@ -19,11 +19,15 @@ import { promisify } from 'node:util';
 
 import { postDeliveryJson } from '../agenthooks/render.mjs';
 import { lessonPaths } from '../index/govern.mjs';
+import { localRel, readStateFile } from '../state.mjs';
 import { splitFrontmatter } from './decide.mjs';
 
 const exec = promisify(execFile);
 
-export const LESSONS_FILE = '.simt/lessons.jsonl';
+export const LESSONS_FILE = localRel('lessons.jsonl');
+export const LESSONS_FILE_LEGACY = '.simt/lessons.jsonl';
+const LEDGER_REL = localRel('ledger.jsonl');
+const LEDGER_REL_LEGACY = '.simt/ledger.jsonl';
 export const LESSONS_DIR = 'docs/lessons';
 export const LESSON_KEYS = new Set(['simt-trigger', 'simt-evidence', 'simt-expires']);
 const DEFAULT_EXPIRES = '2027-04-01';
@@ -143,13 +147,14 @@ function slugify(text) {
  * @returns {Promise<{candidates: Array<object>, errors: string[]}>}
  */
 export async function readLessonCandidates(root) {
+  // The pre-move path is a fallback for one release (review 0003 Q19).
   let text;
   try {
-    text = await readFile(join(root, LESSONS_FILE), 'utf8');
+    ({ text } = await readStateFile(root, LESSONS_FILE, [LESSONS_FILE_LEGACY]));
   } catch (error) {
-    if (error.code === 'ENOENT') return { candidates: [], errors: [] };
     throw error;
   }
+  if (text === null) return { candidates: [], errors: [] };
   const candidates = [];
   const errors = [];
   for (const [i, raw] of text.split('\n').entries()) {
@@ -306,8 +311,8 @@ export async function captureFromLedger(root, entries = null) {
   let list = entries;
   if (!Array.isArray(list)) {
     try {
-      const raw = await readFile(join(root, '.simt', 'ledger.jsonl'), 'utf8');
-      list = raw
+      const { text } = await readStateFile(root, LEDGER_REL, [LEDGER_REL_LEGACY]);
+      list = (text ?? '')
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean)

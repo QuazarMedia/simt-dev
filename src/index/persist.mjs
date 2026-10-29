@@ -7,8 +7,12 @@
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
-export const SQLITE_FILE = '.simt/index.sqlite';
-export const JSONL_FILE = '.simt/index.jsonl';
+import { LOCAL_DIR } from '../state.mjs';
+
+export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
+export const JSONL_FILE = join(LOCAL_DIR, 'index.jsonl');
+export const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
+export const JSONL_FILE_LEGACY = '.simt/index.jsonl';
 export const SCHEMA_V = '3';
 
 const SCHEMA = `
@@ -202,11 +206,16 @@ export async function writeJsonl(root, previous, next, removed, symbols, edges, 
 }
 
 export async function readJsonl(root, table) {
+  // The pre-move path is a fallback for one release (review 0003 Q19).
   let text;
   try {
     text = await readFile(join(root, JSONL_FILE), 'utf8');
   } catch {
-    return [];
+    try {
+      text = await readFile(join(root, JSONL_FILE_LEGACY), 'utf8');
+    } catch {
+      return [];
+    }
   }
   const rows = [];
   for (const line of text.split('\n')) {
@@ -243,11 +252,17 @@ export async function readSqliteRows(root, sql, params = []) {
   } catch {
     return [];
   }
-  const file = join(root, SQLITE_FILE);
+  // The pre-move path is a fallback for one release (review 0003 Q19).
+  let file = join(root, SQLITE_FILE);
   try {
     await stat(file);
   } catch {
-    return [];
+    file = join(root, SQLITE_FILE_LEGACY);
+    try {
+      await stat(file);
+    } catch {
+      return [];
+    }
   }
   const db = new DatabaseSync(file);
   try {

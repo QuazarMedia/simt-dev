@@ -334,7 +334,7 @@ const WRITERS = [
 
     // A string, not the array: the table compares with `assert.equal`, and two
     // reads of an unchanged directory are equal contents in different arrays.
-    verify: async (root) => (await readdir(join(root, '.simt/journal')).catch(() => null))?.join('\n') ?? null,
+    verify: async (root) => (await readdir(join(root, '.simt/local/journal')).catch(() => null))?.join('\n') ?? null,
   },
   {
     // `check` writes the `--line` cache under `.simt/`, which is local state

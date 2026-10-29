@@ -231,22 +231,22 @@ test('doctor --fix --diff previews the repair, --yes applies the same bytes', as
     ignore,
     text0
       .split('\n')
-      .filter((l) => !l.includes('.simt/journal') && !l.includes('Write journal'))
+      .filter((l) => !l.includes('.simt/local') && !l.includes('.simt/journal') && !l.includes('Write journal'))
       .join('\n'),
   );
 
   const preview = await run(['doctor', '--root', root, '--fix', '--diff']);
   assert.equal(preview.code, 0, preview.stderr);
   assert.match(preview.stdout, /diff --git a\/\.gitignore/);
-  assert.match(preview.stdout, /\+?\.simt\/journal\//);
+  assert.match(preview.stdout, /\+?\.simt\/local\//);
   const untouched = await readFile(ignore, 'utf8');
-  assert.equal(untouched.includes('.simt/journal/'), false, 'doctor --fix --diff repaired without --yes');
+  assert.equal(untouched.includes('.simt/local/journal/') || untouched.includes('.simt/journal/'), false, 'doctor --fix --diff repaired without --yes');
 
   const applied = await run(['doctor', '--root', root, '--fix', '--yes', '--diff']);
   assert.equal(applied.code, 0, applied.stderr);
   assert.match(applied.stdout, /diff --git a\/\.gitignore/);
   const fixed = await readFile(ignore, 'utf8');
-  assert.equal(fixed.includes('.simt/journal/'), true);
+  assert.equal(fixed.includes('.simt/local/'), true, 'doctor --fix ignores machine-local state');
 });
 
 test('pack new --diff shows the scaffold and scaffolds nothing', async () => {

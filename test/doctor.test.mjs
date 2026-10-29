@@ -86,7 +86,7 @@ async function fiveFindingFixture(t) {
   const ignorePath = join(root, '.gitignore');
   const kept = (await readFile(ignorePath, 'utf8'))
     .split('\n')
-    .filter((l) => !l.includes('journal') && !l.includes('Write journal for'))
+    .filter((l) => !l.includes('journal') && !l.includes('.simt/local') && !l.includes('Write journal for'))
     .join('\n');
   await writeFile(ignorePath, kept, 'utf8');
 
@@ -145,7 +145,7 @@ test('R47: --fix --yes fixes exactly the 3 safe findings, journaled', async (t) 
   assert.notEqual(manifest.projection.simtDevSha, '0'.repeat(40));
   await readFile(join(root, '.simt-hooks', 'pre-commit'));
   const ignore = await readFile(join(root, '.gitignore'), 'utf8');
-  assert.match(ignore, /\.simt\/journal\//);
+  assert.match(ignore, /\.simt\/local\//);
 
   // A second run sees only the 2 unsafe findings: the safe set is gone.
   const again = await runCli(['doctor', '--root', root, '--json'], env);

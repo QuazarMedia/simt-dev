@@ -11,6 +11,7 @@ import { join } from 'node:path';
 
 import { git } from './fixture.mjs';
 import { readEdges, readFiles, reindex } from '../src/index/store.mjs';
+import { JSONL_FILE, SQLITE_FILE } from '../src/index/persist.mjs';
 import { indexCommand } from '../src/commands/repoindex.mjs';
 
 async function repo() {
@@ -31,7 +32,7 @@ async function repo() {
 async function sameRows(root, backend) {
   const first = await reindex(root, { backend });
   const rows = await readFiles(root, { backend });
-  await rm(join(root, backend === 'sqlite' ? '.simt/index.sqlite' : '.simt/index.jsonl'));
+  await rm(join(root, backend === 'sqlite' ? SQLITE_FILE : JSONL_FILE));
   const second = await reindex(root, { backend });
   const again = await readFiles(root, { backend });
   assert.deepEqual(again, rows);

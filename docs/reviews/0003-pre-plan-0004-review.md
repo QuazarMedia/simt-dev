@@ -107,7 +107,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q07 | Reindexing a changed file deletes every edge pointing into it | P1 | F | index | S | — | Complete | `ba6767e`; `node --test test/index.test.mjs` — 8/8 (importer owns outgoing edges; removed files still drop dangling incoming) |
 | Q08 | Concurrent `index` → `database is locked` and an empty DB | P1 | F | index | S | — | Complete | `1bf064b`; `node --test test/index.test.mjs` — 9/9 (WAL + busy_timeout + cold temp+rename; INDEX_BUSY maps its own remedy) |
 | Q09 | `shared install --yes --dry-run` writes into `$HOME` | P1 | F | cli | S | — | Complete | `705018e`; `node --test test/shared.test.mjs` 13/13 + `test/init.test.mjs` 59/59 (dedicated `--yes --dry-run` rehearsal tests; contract matrix covered by the stronger per-command tests) |
-| Q10 | `--json --max-bytes` emits invalid JSON with exit 0 | P1 | F | output | S | — | Queued | |
+| Q10 | `--json --max-bytes` emits invalid JSON with exit 0 | P1 | F | output | S | — | Complete | `91111b0`; `node --test test/unit.test.mjs test/jsoncontract.test.mjs` — 18/18 + review repro parses (ADR-105 amends ADR-070 r5) |
 | Q11 | Parse errors and "no command" ignore `--json` | P1 | F | cli | S | — | Queued | |
 | Q12 | MCP: an internal error is answered as a parse error with `id:null`; client hangs | P1 | F | mcp | S | — | Queued | |
 | Q13 | MCP `federation_query` executes commands but is labelled read-only | P1 | S | mcp | S | — | Queued | |

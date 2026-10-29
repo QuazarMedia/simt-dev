@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { parse } from '../src/argv.mjs';
-import { emit, EXIT } from '../src/output/index.mjs';
+import { emit, emitJson, EXIT } from '../src/output/index.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
 
 test('argv: positional and boolean flags', () => {
@@ -69,6 +69,41 @@ test('output: truncation is announced, never silent', () => {
   // emit() appends the trailing newline, so the body is 101 bytes and 51 are
   // genuinely unwritten. The count must reflect real bytes, not the request.
   assert.match(out, /TRUNCATED 51 bytes omitted/);
+});
+
+test('output: --max-bytes never emits invalid JSON (Q10)', () => {
+  // The old ceiling byte-cut the document: compact JSON has no newlines, so
+  // `why --json --max-bytes 120` exited 0 with half a token on stdout. Arrays
+  // shrink with a `truncated` record naming what lost how much instead.
+  const chunks = [];
+  const stream = { write: (s) => chunks.push(s) };
+  const complete = emitJson({ ok: true, items: ['a', 'b', 'c'] }, { maxBytes: 0, stream });
+  assert.equal(complete, true);
+  assert.deepEqual(JSON.parse(chunks.join('')).items, ['a', 'b', 'c']);
+
+  chunks.length = 0;
+  const trimmed = emitJson({ ok: true, command: 'why', items: ['a'.repeat(40), 'b'.repeat(40)] }, { maxBytes: 120, stream });
+  assert.equal(trimmed, false);
+  const doc = JSON.parse(chunks.join(''));
+  assert.deepEqual(doc.items, []);
+  assert.equal(doc.truncated.field, 'items');
+  assert.equal(doc.truncated.omitted, 2);
+  assert.equal(doc.truncated.limit, 120);
+});
+
+test('output: a ceiling no trimming can fit is a MAX_BYTES envelope (Q10)', () => {
+  // A payload of one long string has no array to shrink: the answer is an error
+  // envelope that still parses, with the same remedy the text ceiling prints.
+  const chunks = [];
+  const stream = { write: (s) => chunks.push(s) };
+  const complete = emitJson({ ok: true, command: 'why', blob: 'x'.repeat(500) }, { maxBytes: 120, stream });
+  assert.equal(complete, false);
+  const doc = JSON.parse(chunks.join(''));
+  assert.equal(doc.ok, false);
+  assert.equal(doc.command, 'why');
+  assert.equal(doc.error.code, 'MAX_BYTES');
+  assert.match(doc.error.remedy, /--max-bytes 0/);
+  assert.equal(doc.truncated.limit, 120);
 });
 
 test('output: exit codes are stable', () => {

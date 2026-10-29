@@ -168,8 +168,24 @@ export async function agentHooksCommand(sub, args, flags) {
   return fail(`unknown agent-hooks subcommand ${sub}`, EXIT.USAGE, `run: ${CLI} agent-hooks status`);
 }
 
+// The label for a reader the run did not write, by the state that names why:
+// `none` documents no hooks file, `other` is a reader this tool does not write,
+// `skipped` was an adapter the caller did not ask for (ADR-107).
+const OTHER_LABEL = { none: 'NO FILE ', other: 'NOT OURS', skipped: 'SKIPPED ' };
+
 async function installHooks(root, flags) {
   const mode = writeMode(flags);
+  // `--harness` narrows the install to one reader (ADR-107). The id is validated
+  // against the same table the loop reads, so a typo fails before anything is
+  // planned; the remedy names the ids the way `agent-hook` does.
+  const selected = flags.harness;
+  if (selected !== undefined && adapter(selected) === null) {
+    return fail(
+      `unknown harness \`${selected}\``,
+      EXIT.USAGE,
+      `--harness <id>, one of: ${adapters().map((a) => a.id).join(', ')}`,
+    );
+  }
   // The delivery is a second entry in the same config, and a repository asks for it by
   // declaring a `brief` key rather than by having the entry. Read through a dynamic
   // import for the same reason the hook delivers through one.
@@ -180,8 +196,9 @@ async function installHooks(root, flags) {
     listPromotedLessons(root).catch(() => []),
   ]);
   const hasLessons = promotedLessons.length > 0;
+  const rows = selected === undefined ? adapters() : adapters().filter((r) => r.id === selected);
   const plan = [];
-  for (const row of adapters()) {
+  for (const row of rows) {
     const path = hookPath(row.id);
     const existing = await readIfExists(join(root, path));
     const result = rendered(row, existing, { prompt: optIn.optedIn, post: hasLessons });
@@ -203,11 +220,15 @@ async function installHooks(root, flags) {
 
   // The readers this tool does not write an entry for, reported rather than skipped in
   // silence: a command that writes four files and says nothing about the fifth harness
-  // in the repository reads as "that one is covered too".
+  // in the repository reads as "that one is covered too". A narrowed install adds a
+  // third state: an adapter that is this tool's but was not requested (ADR-107).
   const others = [];
   for (const r of hookRows()) {
     if (r.path === null) others.push({ id: r.id, path: null, state: 'none', note: r.note });
     else if (adapter(r.id) === null) others.push({ id: r.id, path: r.path, state: 'other', note: r.note });
+    else if (selected !== undefined && r.id !== selected) {
+      others.push({ id: r.id, path: r.path, state: 'skipped', note: 'not requested; install without --harness to write every harness' });
+    }
   }
 
   const refused = plan.filter((p) => p.error);
@@ -253,7 +274,7 @@ async function installHooks(root, flags) {
         `repo     ${root}`,
         ...plan.map((p) => `${p.action.toUpperCase().padEnd(9)} ${p.id.padEnd(12)} ${p.path}${p.error ? `  (${p.error})` : ''}`),
         `${shimAction.toUpperCase().padEnd(9)} shim         ${AGENT_HOOK_SHIM}`,
-        ...others.map((o) => `${o.state === 'none' ? 'NO FILE ' : 'NOT OURS'} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
+        ...others.map((o) => `${OTHER_LABEL[o.state]} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
         ...promptLine,
         '',
         refused.length > 0
@@ -319,7 +340,7 @@ async function installHooks(root, flags) {
       `repo     ${root}`,
       ...plan.map((p) => `${p.action.toUpperCase().padEnd(9)} ${p.id.padEnd(12)} ${p.path}`),
       `${shimAction.toUpperCase().padEnd(9)} shim         ${AGENT_HOOK_SHIM}`,
-      ...others.map((o) => `${o.state === 'none' ? 'NO FILE ' : 'NOT OURS'} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
+      ...others.map((o) => `${OTHER_LABEL[o.state]} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
       ...promptLine,
       '',
       `WROTE    ${written.length} hooks file(s)${shimWritten ? ' and the shim' : ''}; each one runs the ${AGENT_HOOK_SHIM} shim before the tool call`,

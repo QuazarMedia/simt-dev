@@ -8,7 +8,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
-import { STATE_DIR } from '../name.mjs';
+import { LOCAL_DIR } from '../state.mjs';
 
 export const DEFAULT_BOOTSTRAP_SAMPLES = 1000;
 export const DEFAULT_BOOTSTRAP_SEED = 0x51772026;
@@ -72,13 +72,21 @@ function isFlatPriceObject(obj) {
  * or a map keyed by model/harness name with an optional `"default"` entry.
  */
 export async function loadPrices(root) {
-  const pricesPath = join(resolve(root), STATE_DIR, 'bench', 'prices.json');
+  // The pre-move path is a fallback for one release (review 0003 Q19).
+  const pricesPath = join(resolve(root), LOCAL_DIR, 'bench', 'prices.json');
+  const legacyPath = join(resolve(root), '.simt', 'bench', 'prices.json');
   let rawText;
   try {
     rawText = await readFile(pricesPath, 'utf8');
   } catch (error) {
-    if (error && error.code === 'ENOENT') return null;
-    throw error;
+    if (error && error.code === 'ENOENT') {
+      try {
+        rawText = await readFile(legacyPath, 'utf8');
+      } catch (legacyError) {
+        if (legacyError && legacyError.code === 'ENOENT') return null;
+        throw legacyError;
+      }
+    } else throw error;
   }
 
   let parsed;
@@ -697,17 +705,23 @@ export function compareArms(
 }
 
 /**
- * Load all stored run records under `.simt-dev/bench/runs/`.
+ * Load all stored run records under `.simt/local/bench/runs/`.
  */
 export async function loadRunRecords(root) {
-  const runsRoot = join(resolve(root), STATE_DIR, 'bench', 'runs');
-  const entries = await readdir(runsRoot, { withFileTypes: true }).catch(() => []);
+  // The pre-move directory is a fallback for one release (review 0003 Q19).
+  const runsRoot = join(resolve(root), LOCAL_DIR, 'bench', 'runs');
+  let entries = await readdir(runsRoot, { withFileTypes: true }).catch(() => null);
+  let base = runsRoot;
+  if (entries === null) {
+    base = join(resolve(root), '.simt', 'bench', 'runs');
+    entries = await readdir(base, { withFileTypes: true }).catch(() => []);
+  }
   const sortedEntries = [...entries].sort((a, b) => a.name.localeCompare(b.name));
 
   const records = [];
   for (const entry of sortedEntries) {
     if (entry.name.startsWith('.')) continue;
-    const fullPath = join(runsRoot, entry.name);
+    const fullPath = join(base, entry.name);
     if (entry.isDirectory()) {
       const files = (await readdir(fullPath).catch(() => []))
         .filter((f) => f.endsWith('.json') && !f.startsWith('.'))

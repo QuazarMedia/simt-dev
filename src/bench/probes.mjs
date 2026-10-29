@@ -25,7 +25,7 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-import { STATE_DIR } from '../name.mjs';
+import { LOCAL_DIR } from '../state.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { materialiseArm, parseArmSpec } from './run.mjs';
 
@@ -92,7 +92,7 @@ function runNode(args, { cwd, env = {} } = {}) {
  * @returns {Promise<Array<object>>}
  */
 export async function readLedgerEntries(workDir) {
-  const ledgerPath = join(workDir, STATE_DIR, 'ledger.jsonl');
+  const ledgerPath = join(workDir, LOCAL_DIR, 'ledger.jsonl');
   try {
     const text = await readFile(ledgerPath, 'utf8');
     const entries = [];
@@ -115,7 +115,7 @@ export async function readLedgerEntries(workDir) {
  * Append a ledger entry to `.simt-dev/ledger.jsonl` in `workDir`.
  */
 export async function appendLedgerEntry(workDir, entry) {
-  const ledgerPath = join(workDir, STATE_DIR, 'ledger.jsonl');
+  const ledgerPath = join(workDir, LOCAL_DIR, 'ledger.jsonl');
   await mkdir(dirname(ledgerPath), { recursive: true });
   const treeRes = await runGit(['write-tree'], { cwd: workDir });
   const record = {
@@ -1148,8 +1148,7 @@ export async function gradeProbe(probeOrId, ctx) {
  * @param {string} root
  * @returns {Promise<Array<object>>}
  */
-export async function loadProbeRecords(root) {
-  const probesRoot = join(resolve(root), STATE_DIR, 'bench', 'probes');
+export async function loadProbeRecords(root) {    const probesRoot = join(resolve(root), LOCAL_DIR, 'bench', 'probes');
   if (!existsSync(probesRoot)) return [];
 
   const entries = await readdir(probesRoot, { withFileTypes: true }).catch(() => []);
@@ -1242,7 +1241,7 @@ export async function runBenchProbes(
       for (let rep = 1; rep <= reps; rep += 1) {
         const runDir = join(
           resolvedRoot,
-          STATE_DIR,
+          LOCAL_DIR,
           'bench',
           'probes',
           `${harness}-${armSpec.name}-r${rep}`,

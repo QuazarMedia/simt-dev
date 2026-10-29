@@ -15,13 +15,14 @@
 // the hook refuses edits, the command refuses to write (ADR-101 rulings 4).
 
 import { existsSync, realpathSync } from 'node:fs';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
-import { STATE_DIR } from './name.mjs';
+import { localRel, readStateFile } from './state.mjs';
 
 /** Where the claims live, in every repository: beside the index and the ledger. */
-export const LEASE_FILE = join(STATE_DIR, 'leases.json');
+export const LEASE_FILE = localRel('leases.json');
+export const LEASE_FILE_LEGACY = '.simt/leases.json';
 
 /** The schema the file is written with; a reader that does not know it refuses. */
 const LEASE_SCHEMA = 1;
@@ -89,13 +90,14 @@ export function canonicalLeasePath(root, input, { ignoreCase = false } = {}) {
  */
 export async function readLeases(root) {
   const path = join(root, LEASE_FILE);
+  // The pre-move path is a fallback for one release (review 0003 Q19).
   let text;
   try {
-    text = await readFile(path, 'utf8');
+    ({ text } = await readStateFile(root, LEASE_FILE, [LEASE_FILE_LEGACY]));
   } catch (error) {
-    if (error.code === 'ENOENT') return { path, leases: [], error: null };
     return { path, leases: [], error: `${LEASE_FILE} could not be read (${error.message})` };
   }
+  if (text === null) return { path, leases: [], error: null };
   try {
     const parsed = JSON.parse(text);
     if (parsed === null || typeof parsed !== 'object' || !Array.isArray(parsed.leases)) {

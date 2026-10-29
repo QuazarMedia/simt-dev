@@ -10,6 +10,7 @@ import { extractOpenedSkills, matchSkillsForPaths } from '../graph/compile.mjs';
 import { matchGlob } from '../index/govern.mjs';
 import { formatLessonParagraph, listPromotedLessons } from '../memory/lessons.mjs';
 import { MANIFEST_FILE, STATE_DIR } from '../name.mjs';
+import { LOCAL_DIR } from '../state.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { plan } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
@@ -513,7 +514,7 @@ async function writeTaskBrief(workDir, task) {
       : []),
     '',
   ];
-  const briefPath = join(workDir, STATE_DIR, 'brief.md');
+  const briefPath = join(workDir, LOCAL_DIR, 'brief.md');
   await mkdir(dirname(briefPath), { recursive: true });
   await writeFile(briefPath, lines.join('\n'), 'utf8');
 }
@@ -741,7 +742,7 @@ export async function runBench(
     throw new Error(
       filterTaskIds.length > 0
         ? `no mined tasks matched: ${filterTaskIds.join(', ')}`
-        : `no mined tasks found in ${STATE_DIR}/bench/tasks`,
+        : `no mined tasks found in .simt/bench/tasks`,
     );
   }
 
@@ -788,7 +789,7 @@ export async function runBench(
     };
   }
 
-  const runsBaseDir = join(root, STATE_DIR, 'bench', 'runs');
+  const runsBaseDir = join(root, LOCAL_DIR, 'bench', 'runs');
   for (const armSpec of armSpecs) {
     for (let rep = 1; rep <= reps; rep += 1) {
       const runDir = join(runsBaseDir, runIdFor(harness, armSpec.name, rep));
@@ -877,7 +878,7 @@ export async function runBench(
 }
 
 async function resolveRegradeTargets(root, target) {
-  const runsBaseDir = join(root, STATE_DIR, 'bench', 'runs');
+  const runsBaseDir = join(root, LOCAL_DIR, 'bench', 'runs');
   const direct = resolve(root, target);
   const candidate = existsSync(direct) ? direct : join(runsBaseDir, target);
 
@@ -933,8 +934,8 @@ export async function regradeRun(
     throw new Error(`no stored task runs found under ${target}`);
   }
 
-  const tasksDir = join(root, STATE_DIR, 'bench', 'runs');
-  const taskDefsDir = join(root, STATE_DIR, 'bench', 'tasks');
+  const tasksDir = join(root, LOCAL_DIR, 'bench', 'runs');
+  const taskDefsDir = join(root, '.simt', 'bench', 'tasks');
   const parentDir = await mkdtemp(join(tmpdir(), 'bench-regrade-'));
 
   try {

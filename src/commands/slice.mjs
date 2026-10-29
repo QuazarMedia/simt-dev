@@ -36,7 +36,8 @@ import { planDone, planNext } from '../plan/index.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { renderGateReport, runGates, stagedFiles } from '../hooks/dispatcher.mjs';
 import { readManifest } from '../projection/manifest.mjs';
-import { CLI, MANIFEST_FILE, STATE_DIR } from '../name.mjs';
+import { CLI, MANIFEST_FILE } from '../name.mjs';
+import { LOCAL_DIR } from '../state.mjs';
 
 const exec = promisify(execFile);
 
@@ -74,12 +75,16 @@ async function mainCheckout(root) {
   }
 }
 
-/** The branch and worktree a slice owns. Both derive from the id: one id, one spelling. */
+/**
+ * The branch and worktree a slice owns. Both derive from the id: one id, one spelling.
+ * The worktree lives under machine-local state (review 0003 Q19): a worktree inside
+ * the checkout would be recorded as an embedded gitlink and would change the tree id.
+ */
 function places(main, id) {
   const slug = id.toLowerCase();
   return {
     branch: `slice/${slug}`,
-    worktree: join(main, STATE_DIR, 'worktrees', slug),
+    worktree: join(main, LOCAL_DIR, 'worktrees', slug),
   };
 }
 
@@ -126,7 +131,7 @@ async function startSlice(root, id, flags) {
   if (resolved.error) return fail(resolved.error, EXIT.USAGE, resolved.remedy);
   const { title, doc } = resolved.slice;
   const { branch, worktree } = places(main, id);
-  const briefPath = join(worktree, STATE_DIR, 'brief.md');
+  const briefPath = join(worktree, LOCAL_DIR, 'brief.md');
   const task = `${id}: ${String(title ?? '').trim()}`;
   const apply = `run: ${CLI} slice start ${id} --yes`;
 
@@ -185,7 +190,7 @@ async function startSlice(root, id, flags) {
     return fail(`the worktree could not be created: ${detail}`, EXIT.FAIL, `run: git -C ${main} worktree list`);
   }
 
-  await mkdir(join(worktree, STATE_DIR), { recursive: true });
+  await mkdir(join(worktree, LOCAL_DIR), { recursive: true });
   await writeFile(briefPath, packet.packed.text, 'utf8');
 
   const row = await planDone(main, id, { state: STARTED, dryRun: false });

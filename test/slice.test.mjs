@@ -86,7 +86,7 @@ async function repo(files = {}) {
   return root;
 }
 
-const wtOf = (root) => join(root, '.simt', 'worktrees', 'a1');
+const wtOf = (root) => join(root, '.simt', 'local', 'worktrees', 'a1');
 const planOf = (root) => join(root, 'docs', 'plans', '0001.md');
 
 test('slice without an id, and a slice the tracker does not carry, are usage errors', async () => {
@@ -101,7 +101,7 @@ test('slice without an id, and a slice the tracker does not carry, are usage err
   assert.equal(noSlice.code, 2);
   assert.match(noSlice.stderr, /no tracked slice named ZZZ/);
 
-  assert.equal(existsSync(join(root, '.simt', 'worktrees')), false, 'a refusal must create nothing');
+  assert.equal(existsSync(join(root, '.simt', 'local', 'worktrees')), false, 'a refusal must create nothing');
   assert.equal(await g(['-C', root, 'status', '--porcelain']), '');
 });
 
@@ -110,7 +110,7 @@ test('start is a preview until --yes, and the preview names the branch, worktree
   const preview = cli(['slice', 'start', 'A1', '--root', root]);
   assert.equal(preview.code, 0, preview.stderr);
   assert.match(preview.stdout, /branch\s+slice\/a1/);
-  assert.match(preview.stdout, /\.simt\/worktrees\/a1/);
+  assert.match(preview.stdout, /\.simt\/local\/worktrees\/a1/);
   assert.match(preview.stdout, /state\s+Queued -> In progress/);
   assert.match(preview.stdout, /run: simt slice start A1 --yes/);
 
@@ -131,7 +131,7 @@ test('start creates the worktree and branch, preloads the brief, and sets the ro
   assert.equal(await g(['-C', wt, 'rev-parse', '--abbrev-ref', 'HEAD']), 'slice/a1');
   assert.equal(await g(['-C', wt, 'rev-parse', 'HEAD']), head, 'the branch starts at the row it belongs to');
 
-  const brief = await readFile(join(wt, '.simt', 'brief.md'), 'utf8');
+  const brief = await readFile(join(wt, '.simt', 'local', 'brief.md'), 'utf8');
   assert.match(brief, /A1: wire the gate/, 'the brief names the slice it was preloaded for');
 
   const plan = await readFile(planOf(root), 'utf8');
@@ -239,7 +239,7 @@ test('start answers --json as one document carrying the branch, brief and row', 
   assert.equal(payload.ok, true);
   assert.equal(payload.command, 'slice start');
   assert.equal(payload.branch, 'slice/a1');
-  assert.equal(payload.worktree, '.simt/worktrees/a1');
+  assert.equal(payload.worktree, '.simt/local/worktrees/a1');
   assert.ok(payload.brief.bytes > 0, 'the preloaded brief has bytes');
   assert.deepEqual(payload.state, { from: 'Queued', to: 'In progress', changed: true });
 });

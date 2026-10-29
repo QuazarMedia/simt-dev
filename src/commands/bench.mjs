@@ -405,7 +405,7 @@ export async function benchVariantsCommand(positional, flags) {
 // and until a bench here shows that, every report calls the critic advisory.
 export async function benchCriticCommand(positional, flags, commands = []) {
   const root = resolve(flags.root ?? positional[0] ?? process.cwd());
-  const labelsPath = flags.labels ?? '.simt/critic-labels.jsonl';
+  const labelsPath = flags.labels ?? '.simt/local/critic-labels.jsonl';
   const result = await criticBench(root, { labelsPath, flags, commands });
   if (typeof result === 'number') return result;
 

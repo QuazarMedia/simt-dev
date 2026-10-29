@@ -11,6 +11,7 @@ import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 import { MANIFEST_FILE, STATE_DIR } from '../name.mjs';
+import { LOCAL_DIR } from '../state.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { inject, parse as parseRegion } from '../projection/markers.mjs';
 import { loadMdcRules, renderMdc, ruleName } from '../projection/mdc.mjs';
@@ -616,7 +617,7 @@ export async function ablateBench(
   const markdown = formatAblationMarkdown(result);
 
   if (apply) {
-    const outPath = join(resolvedRoot, STATE_DIR, 'bench', 'ablation.json');
+    const outPath = join(resolvedRoot, LOCAL_DIR, 'bench', 'ablation.json');
     await mkdir(dirname(outPath), { recursive: true });
     await writeFile(outPath, `${JSON.stringify({ schemaVersion: 1, ...result }, null, 2)}\n`, 'utf8');
   }

@@ -147,8 +147,8 @@ async function commitHistory(dir) {
 
 /** Label the history the way a human reviewer would, under ADR-008. */
 async function writeLabels(dir, rows) {
-  await mkdir(join(dir, '.simt'), { recursive: true });
-  await writeFile(join(dir, '.simt', 'critic-labels.jsonl'), rows.map((row) => JSON.stringify(row)).join('\n') + '\n');
+  await mkdir(join(dir, '.simt', 'local'), { recursive: true });
+  await writeFile(join(dir, '.simt', 'local', 'critic-labels.jsonl'), rows.map((row) => JSON.stringify(row)).join('\n') + '\n');
 }
 
 /**

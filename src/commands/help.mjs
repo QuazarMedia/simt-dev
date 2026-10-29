@@ -78,8 +78,8 @@ ${CLI} plan next [<id>]        one ready slice's section, or the one named; ~1 K
 ${CLI} plan done <id> [<sha>]  mark one row; dry-run unless --yes
 ${CLI} slice start <id>     give a slice its own worktree and branch, preload the
                            brief, and mark the row In progress (dry-run unless
-                           --yes; the worktree is ${STATE_DIR}/worktrees/<id> on
-                           branch slice/<id>, the brief ${STATE_DIR}/brief.md in it)
+                           --yes; the worktree is ${STATE_DIR}/local/worktrees/<id>
+                           on branch slice/<id>, the brief ${STATE_DIR}/local/brief.md in it)
 ${CLI} slice finish <id>    run the pre-commit gates, commit what is staged with a
                            Conventional subject from the row's title, then record
                            the SHA and the --test command on the row (dry-run
@@ -127,7 +127,7 @@ ${CLI} pr-body [--base <ref>]  a pull request body: the evidence block for this 
 ${CLI} evidence                the runs recorded against the tree on disk
 ${CLI} evidence check <file>   a commit message that claims a run this tree does not
                            have: a warning, or a block when gates.evidence is "block"
-${CLI} lessons list            deterministic lesson candidates in .simt/lessons.jsonl
+${CLI} lessons list            deterministic lesson candidates in .simt/local/lessons.jsonl
                            and promoted lessons in docs/lessons/*.md
 ${CLI} lessons review [<id>]   promote a lesson candidate to docs/lessons/NNNN-<slug>.md
                            (dry-run unless --yes; writes Appendix A frontmatter)
@@ -147,7 +147,7 @@ ${CLI} local doctor            probe configured local model endpoints (chat and 
                            unset; refuses non-loopback URLs without --allow-remote)
 ${CLI} distill <skill|doc>     a budgeted proposal summary of a skill body or doc,
                            every claim citing the source line range it rests on
-                           (writes .simt/distilled/<digest>.md; a proposal a
+                           (writes .simt/local/distilled/<digest>.md; a proposal a
                            human merges - never projected or committed;
                            deterministic outline by default; --local proposes
                            from the configured chat model instead; the cache is
@@ -157,7 +157,7 @@ ${CLI} review [--local]        an ADR-008 verdict skeleton for the staged diff,
                            (deterministic without --local: the brief and its
                            governing ids only; --local proposes from the
                            configured chat model and writes
-                           .simt/reviews/<digest>.md — a proposal a human
+                           .simt/local/reviews/<digest>.md — a proposal a human
                            reads, verified against the verdict vocabulary and
                            the brief's ids; advisory always, never a gate)
 ${CLI} shared plan            what a workspace's repeated rules cost to carry
@@ -200,7 +200,7 @@ ${CLI} bench variants [--yes]  evaluate simt-variants rule slots on the canary s
                             winning variants in simt-dev.lock.json (dry-run unless --yes;
                             re-opens when model or harness changes)
 ${CLI} bench critic          precision and recall of the local critic over a labelled
-                            set of historical diffs (.simt/critic-labels.jsonl;
+                            set of historical diffs (.simt/local/critic-labels.jsonl;
                             overrides --labels; labels are human-written verdicts
                             under ADR-008; the critic is advisory until precision
                             reaches 0.8 on 30 labelled diffs)

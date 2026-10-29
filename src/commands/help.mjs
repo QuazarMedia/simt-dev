@@ -350,10 +350,6 @@ export async function help(argv) {
 }
 
 async function version() {
-  const { readFile } = await import('node:fs/promises');
-  const { fileURLToPath } = await import('node:url');
-  const { dirname, join } = await import('node:path');
-  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-  const pkg = JSON.parse(await readFile(join(root, '..', 'package.json'), 'utf8'));
-  return `simt-dev ${pkg.version}\n`;
+  const { describeVersion } = await import('../package-version.mjs');
+  return `${describeVersion()}\n`;
 }

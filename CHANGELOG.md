@@ -61,7 +61,7 @@ shapes and the leaking-paths count, both designed to move with the corpus).
 Same product as v0.6.1; this tag exists so the release automation is proven by
 a green run rather than described by a red one.
 
-## [0.6.1] — 2026-10-27
+## [0.6.1] — 2026-10-27 (tagged, never published to npm)
 
 ### Fixed
 

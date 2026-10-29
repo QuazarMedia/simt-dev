@@ -10,6 +10,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { constants } from 'node:fs';
 import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -17,9 +18,10 @@ import { fileURLToPath } from 'node:url';
 
 import { decide, overrides } from '../src/agenthooks/decide.mjs';
 import { adapter, adapters, hookCommand, hookPath, hookRows } from '../src/agenthooks/render.mjs';
+import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../src/agenthooks/shim.mjs';
 import { EVENTS, POLICY_IDS } from '../src/agenthooks/policy.mjs';
 import { SQLITE_FILE } from '../src/index/persist.mjs';
-import { CLI, MANIFEST_FILE } from '../src/name.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -352,10 +354,21 @@ test('install merges into the file a harness already owns', async () => {
   const preview = cli(['agent-hooks', 'install', '--root', root]);
   assert.equal(preview.code, 0);
   assert.match(preview.text, /PLAN     nothing written/);
+  assert.match(preview.text, /CREATE\s+shim\s+\.simt-hooks\/agent-hook/, 'a preview that hides the shim is planning a write it does not show');
   assert.equal(await readFile(join(root, '.codex', 'hooks.json'), 'utf8').catch(() => null), null, 'a preview wrote a file');
+  assert.equal(
+    await readFile(join(root, AGENT_HOOK_SHIM), 'utf8').catch(() => null),
+    null,
+    'a preview wrote the shim',
+  );
 
   const install = cli(['agent-hooks', 'install', '--root', root, '--yes']);
   assert.equal(install.code, 0);
+  assert.match(install.text, /CREATE\s+shim\s+\.simt-hooks\/agent-hook/);
+  // The shim is what the configs point at, so it is asserted the way a config is:
+  // exact bytes, and executable, because a harness runs it, not node.
+  assert.equal(await readFile(join(root, AGENT_HOOK_SHIM), 'utf8'), renderAgentHookShim({ npm: false }));
+  await access(join(root, AGENT_HOOK_SHIM), constants.X_OK);
 
   const claude = JSON.parse(await readFile(join(root, '.claude', 'settings.json'), 'utf8'));
   assert.equal(claude.model, 'opus', 'install dropped a key the harness owns');
@@ -371,7 +384,7 @@ test('install merges into the file a harness already owns', async () => {
   // A second install is a no-op, which is what makes it safe to run from a script.
   const again = cli(['agent-hooks', 'install', '--root', root, '--yes']);
   assert.equal(again.code, 0);
-  assert.equal(again.text.match(/UNCHANGED/g)?.length, adapters().length, again.text);
+  assert.equal(again.text.match(/UNCHANGED/g)?.length, adapters().length + 1, again.text);
 });
 
 test('install refuses to touch a config it cannot read, and says which', async () => {
@@ -426,6 +439,7 @@ test('install reports the harnesses it did not write, rather than staying quiet 
   assert.equal(payload.ok, true);
   assert.equal(payload.filesWritten, true);
   assert.equal(payload.written.length, adapters().length);
+  assert.deepEqual(payload.shim, { id: 'shim', path: AGENT_HOOK_SHIM, action: 'create', written: true });
   assert.deepEqual(
     payload.notWritten.map((n) => n.id).sort(),
     hookRows().filter((r) => adapter(r.id) === null).map((r) => r.id).sort(),
@@ -435,8 +449,9 @@ test('install reports the harnesses it did not write, rather than staying quiet 
 
 test('the command in the config is the command the reader types', async () => {
   for (const row of adapters()) {
-    const command = hookCommand(row.id);
-    assert.match(command, new RegExp(`^${CLI} agent-hook ${EVENTS[0]} --harness ${row.id}$`));
+    // The shim, never the bare binary: a harness does not share the shell's PATH, so a
+    // config naming `simt` runs nothing on Claude and blocks everything on Cursor.
+    assert.equal(hookCommand(row.id), `${AGENT_HOOK_SHIM} ${EVENTS[0]} --harness ${row.id}`);
   }
   const root = await repo();
   cli(['agent-hooks', 'install', '--root', root, '--yes']);
@@ -619,18 +634,52 @@ test('install writes the prompt group only into a repository that opted in', asy
   const claude = JSON.parse(await readFile(join(asked, hookPath('claude')), 'utf8'));
   const entry = claude.hooks.UserPromptSubmit;
   assert.ok(Array.isArray(entry) && entry.length === 1, JSON.stringify(claude.hooks));
-  assert.equal(entry[0].hooks[0].command, `${CLI} agent-hook ${EVENTS[1]} --harness claude`);
+  assert.equal(entry[0].hooks[0].command, `${AGENT_HOOK_SHIM} ${EVENTS[1]} --harness claude`);
   assert.equal(entry[0].matcher, undefined, 'a prompt event takes no matcher, and the vendors ignore one');
   assert.ok(Array.isArray(claude.hooks.PreToolUse), 'the prompt group displaced the tool hook in the same file');
   // A second install changes nothing at all, the prompt group included.
   const again = cli(['agent-hooks', 'install', '--root', asked, '--yes']);
-  assert.equal(again.text.match(/UNCHANGED/g)?.length, adapters().length, again.text);
+  assert.equal(again.text.match(/UNCHANGED/g)?.length, adapters().length + 1, again.text);
 
   const quiet = await repo({ [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture' }, null, 2)}\n` });
   const result = cli(['agent-hooks', 'install', '--root', quiet, '--yes']);
   assert.match(result.text, /PROMPT\s+not opted in/);
   const refused = JSON.parse(await readFile(join(quiet, hookPath('claude')), 'utf8'));
   assert.equal(refused.hooks.UserPromptSubmit, undefined, 'the delivery was installed without an opt-in');
+});
+
+test('install migrates a pre-shim entry instead of stacking a second one', async () => {
+  // `ours()` still recognises the bare-binary spelling install wrote before the shim,
+  // so the upgrade replaces that entry rather than appending beside it.
+  const root = await repo({
+    '.claude/settings.json': `${JSON.stringify(
+      { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'simt agent-hook pretooluse --harness claude' }] }] } },
+      null,
+      2,
+    )}\n`,
+  });
+  const install = cli(['agent-hooks', 'install', '--root', root, '--yes']);
+  assert.equal(install.code, 0, install.text);
+  assert.match(install.text, /UPDATED\s+claude/);
+  const claude = JSON.parse(await readFile(join(root, hookPath('claude')), 'utf8'));
+  assert.equal(claude.hooks.PreToolUse.length, 1, 'the old entry survived beside the new one');
+  assert.equal(claude.hooks.PreToolUse[0].hooks[0].command, hookCommand('claude'));
+  assert.equal(await readFile(join(root, AGENT_HOOK_SHIM), 'utf8'), renderAgentHookShim({ npm: false }));
+});
+
+test('undo removes the shim with the configs it arrived with', async () => {
+  const root = await repo();
+  const install = cli(['agent-hooks', 'install', '--root', root, '--yes']);
+  assert.equal(install.code, 0, install.text);
+  assert.ok((await readFile(join(root, AGENT_HOOK_SHIM), 'utf8')).includes('run_simt_dev'));
+  const undone = cli(['undo', '--root', root, '--yes']);
+  assert.equal(undone.code, 0, undone.text);
+  assert.equal(await readFile(join(root, AGENT_HOOK_SHIM), 'utf8').catch((e) => e.code), 'ENOENT', 'undo left the shim behind');
+  assert.equal(
+    await readFile(join(root, hookPath('claude')), 'utf8').catch((e) => e.code),
+    'ENOENT',
+    'undo left a config behind',
+  );
 });
 
 test('status reports the prompt subscription beside the tool hook', async () => {

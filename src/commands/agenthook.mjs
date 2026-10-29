@@ -22,9 +22,10 @@
 // tool call. Failures of this command exit 1, which a harness reports as a failed hook,
 // and that is the right blast radius for a hook that is broken rather than refusing.
 
-import { mkdir, readFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../agenthooks/shim.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
@@ -211,6 +212,15 @@ async function installHooks(root, flags) {
 
   const refused = plan.filter((p) => p.error);
 
+  // The shim every harness config points at: without it the entries above name a
+  // binary no harness has on PATH (review 0003 Q21). Its remedy installs the
+  // dependency the same way the git shims' does — a devDependency where the
+  // repository has a package.json, the release binary where it does not.
+  const shimText = renderAgentHookShim({ npm: (await readIfExists(join(root, 'package.json'))) !== null });
+  const shimBefore = await readBefore(join(root, AGENT_HOOK_SHIM));
+  const shimAction = shimBefore === null ? 'create' : shimBefore === shimText ? 'unchanged' : 'update';
+  const shimRow = { id: 'shim', path: AGENT_HOOK_SHIM, action: shimAction };
+
   // The `--diff` pairs, read before anything is written so the before side is
   // true in preview and in apply alike (R50).
   const diffs =
@@ -218,7 +228,8 @@ async function installHooks(root, flags) {
       ? await Promise.all(
         plan
           .filter((p) => p.action !== 'unchanged')
-          .map(async (p) => ({ path: p.path, before: await readBefore(join(root, p.path)), after: p.text })),
+          .map(async (p) => ({ path: p.path, before: await readBefore(join(root, p.path)), after: p.text }))
+          .concat(shimAction === 'unchanged' ? [] : [{ path: AGENT_HOOK_SHIM, before: shimBefore, after: shimText }]),
       )
       : [];
 
@@ -230,6 +241,7 @@ async function installHooks(root, flags) {
         root,
         dryRun: true,
         plan: plan.map(({ text, ...rest }) => rest),
+        shim: shimRow,
         notWritten: others,
         filesWritten: false,
         ...diffField(diffs, flags),
@@ -240,6 +252,7 @@ async function installHooks(root, flags) {
       [
         `repo     ${root}`,
         ...plan.map((p) => `${p.action.toUpperCase().padEnd(9)} ${p.id.padEnd(12)} ${p.path}${p.error ? `  (${p.error})` : ''}`),
+        `${shimAction.toUpperCase().padEnd(9)} shim         ${AGENT_HOOK_SHIM}`,
         ...others.map((o) => `${o.state === 'none' ? 'NO FILE ' : 'NOT OURS'} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
         ...promptLine,
         '',
@@ -269,6 +282,15 @@ async function installHooks(root, flags) {
     await journaledWriteFile(root, journal, join(root, p.path), p.text);
     written.push(p);
   }
+  // The shim is a file like the configs: unchanged installs leave it alone, and a
+  // changed one is journaled so `undo` removes or restores it with the configs.
+  let shimWritten = false;
+  if (shimAction !== 'unchanged') {
+    await mkdir(join(root, dirname(AGENT_HOOK_SHIM)), { recursive: true });
+    await journaledWriteFile(root, journal, join(root, AGENT_HOOK_SHIM), shimText);
+    await chmod(join(root, AGENT_HOOK_SHIM), 0o755);
+    shimWritten = true;
+  }
   await commitJournal(root, 'agent-hooks install', journal);
 
   const notes = [];
@@ -284,6 +306,7 @@ async function installHooks(root, flags) {
       command: 'agent-hooks install',
       root,
       plan: plan.map(({ text, ...rest }) => rest),
+      shim: { ...shimRow, written: shimWritten },
       notWritten: others,
       written: written.map((p) => p.path),
       filesWritten: true,
@@ -296,10 +319,11 @@ async function installHooks(root, flags) {
     [
       `repo     ${root}`,
       ...plan.map((p) => `${p.action.toUpperCase().padEnd(9)} ${p.id.padEnd(12)} ${p.path}`),
+      `${shimAction.toUpperCase().padEnd(9)} shim         ${AGENT_HOOK_SHIM}`,
       ...others.map((o) => `${o.state === 'none' ? 'NO FILE ' : 'NOT OURS'} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
       ...promptLine,
       '',
-      `WROTE    ${written.length} hooks file(s); each one runs ${CLI} agent-hook before the tool call`,
+      `WROTE    ${written.length} hooks file(s)${shimWritten ? ' and the shim' : ''}; each one runs the ${AGENT_HOOK_SHIM} shim before the tool call`,
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );

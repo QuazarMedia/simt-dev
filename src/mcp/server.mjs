@@ -387,11 +387,25 @@ export async function serve(tools, { input = process.stdin, output = process.std
   for await (const line of rl) {
     if (line.trim() === '') continue;
 
+    // Parse and handling fail differently and must answer differently. A line that is
+    // not JSON has no id to answer to, so it is a parse error with `id: null`; a
+    // throw inside `handle` belongs to the request it was answering, so it keeps
+    // that request's id — answering it as a parse error hangs the client that is
+    // still waiting for its answer (Q12).
     let response;
+    let message;
     try {
-      response = await handle(JSON.parse(line), tools, { packageVersion, state });
+      message = JSON.parse(line);
     } catch (parseFailure) {
       response = error(null, RPC.PARSE, `invalid JSON: ${parseFailure.message}`);
+    }
+    if (response === undefined) {
+      try {
+        response = await handle(message, tools, { packageVersion, state });
+      } catch (handlerFailure) {
+        const id = message !== null && typeof message === 'object' && 'id' in message ? message.id : null;
+        response = error(id, RPC.INTERNAL, `internal error: ${handlerFailure?.message ?? handlerFailure}`);
+      }
     }
     if (response === null) continue;
     output.write(`${JSON.stringify(response)}\n`);

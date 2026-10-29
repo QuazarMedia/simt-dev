@@ -39,7 +39,7 @@ export const PLUGIN_KINDS = ['claude', 'gemini', 'cursor'];
  * from the module URL, not from the consumer's cwd, so `plugin` built with
  * `--root <consumer>` still ships this tool rather than the consumer's files (Q03).
  */
-export function packageRoot() {
+function packageRoot() {
   return dirname(dirname(fileURLToPath(import.meta.url)));
 }
 

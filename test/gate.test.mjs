@@ -71,6 +71,7 @@ const RESOLVE = [
   'test/naming.test.mjs',
   'test/pack.test.mjs',
   'test/packs.test.mjs',
+  'test/parity.test.mjs',
   'test/plan.test.mjs',
   // prbody.test.mjs reaches the resolver through the shared fixture, the same
   // way diff.test.mjs does (R55).

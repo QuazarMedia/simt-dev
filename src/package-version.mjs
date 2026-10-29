@@ -41,7 +41,7 @@ export function packageVersion() {
 }
 
 /** The directory this package is installed in, whatever resolved the import. */
-export function packageRootDir() {
+function packageRootDir() {
   return dirname(dirname(fileURLToPath(import.meta.url)));
 }
 

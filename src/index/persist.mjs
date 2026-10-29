@@ -137,7 +137,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
  * A contended index write is a retryable race, not a broken repository: name it
  * so the command maps its own remedy instead of blaming the git checkout (Q08).
  */
-export function asIndexError(error) {
+function asIndexError(error) {
   const code = error?.code ?? error?.errno;
   if (code === 'SQLITE_BUSY' || code === 5 || /database is locked/i.test(error?.message ?? '')) {
     const busy = new Error('another index run is writing; wait a moment and run again');

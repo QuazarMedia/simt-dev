@@ -9,8 +9,19 @@ git.config
 .pybuild/
 dist/
 .sea-cache/
+.cloud-attachments/
 
 # simt-dev runtime state (per-developer; never shared): journal, evidence ledger,
 # index cache, benchmark runs, local-model proposals. Nothing in here is committed,
 # so ignore the whole directory rather than tracking its ever-growing file list.
 .simt/
+.simt-hooks/
+
+.codex/
+.opencode/
+.claude/
+.cursor/
+.gemini/
+
+# Write journal for `simt undo`. Local state, never shared.
+.simt/local/

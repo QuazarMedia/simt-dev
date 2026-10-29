@@ -1,0 +1,32 @@
+# simt:begin
+# simt:generated
+# simt:sha=29be4d70e0b1b3025591c241324bcebbfa912240
+# Generated content. Do not edit by hand - your changes are overwritten.
+# Run `simt sync --yes` to regenerate, or `simt check` to see what is stale.
+
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.md]
+# Two trailing spaces are a hard line break in Markdown. Stripping them there is not
+# tidiness; it deletes meaning the author wrote.
+trim_trailing_whitespace = false
+
+[*.{js,mjs,cjs,jsx,ts,tsx,json,jsonc,css,scss,html,yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.{py,pyi,java,kt,kts}]
+indent_size = 4
+
+[{Makefile,*.mk}]
+indent_style = tab
+
+[{*.go,*.proto}]
+indent_style = tab
+
+# simt:end

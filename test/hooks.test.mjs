@@ -740,6 +740,27 @@ test('hooks install: writes both shims, sets core.hooksPath, and is idempotent',
   assert.match(again.stdout, /UNCHANGED/);
 });
 
+test('hooks install then undo: the shims go and core.hooksPath goes back to unset', async () => {
+  // The VERIFIED defect of review 0003 Q22: `undo` removed the shims but left
+  // `core.hooksPath` pointing at their empty directory, so the repository's
+  // own hooks silently stopped running.
+  const root = await fixture({ manifest: { gates: { preCommit: ['lint'], prePush: ['test'] } } });
+  await simt(['init', '--root', root, '--yes'], root).catch(() => {});
+  await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  const { stdout } = await exec('git', ['config', '--get', HOOKS_PATH_KEY], { cwd: root });
+  assert.equal(stdout.trim(), HOOKS_DIR);
+
+  const preview = await simt(['undo', '--root', root], root);
+  assert.match(preview.stdout, /git config core\.hooksPath/);
+  const undone = await simt(['undo', '--root', root, '--yes'], root);
+  assert.match(undone.stdout, /undone/);
+
+  await assert.rejects(exec('git', ['config', '--get', HOOKS_PATH_KEY], { cwd: root }), (error) => error.code === 1);
+  for (const event of EVENTS) {
+    await assert.rejects(readFile(join(root, fileFor(event)), 'utf8'), `the ${event} shim survived its own undo`);
+  }
+});
+
 test('hooks install: refuses to take over an existing hooks path without --yes', async () => {
   const root = await fixture({ manifest: { gates: { preCommit: [], prePush: [] } } });
   await exec('git', ['config', HOOKS_PATH_KEY, 'scripts/git-hooks'], { cwd: root });

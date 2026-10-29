@@ -1,10 +1,15 @@
-// The write journal and `undo` (plan 0003 R49).
+// The write journal and `undo` (plan 0003 R49, entry kinds review 0003 Q22).
 //
-// Every repo-file write a command performs records {path, beforeDigest,
-// afterDigest, beforeBytes}, grouped per command run as one set in
-// `.simt/journal/`. `undo` restores the last set, but only when every file in
-// it is untouched since — a file whose current bytes no longer match its
-// afterDigest refuses the whole undo, naming the file, and nothing is restored.
+// Every write a command performs is recorded as one entry in the run's set:
+// `file` entries hold the pre-run bytes as base64 with the pre-run permission
+// bits (binary-safe, unlike the version-1 utf8 spelling), and `git-config`
+// entries hold one config key's before and after values, so `undo` restores
+// the routing a run changed as well as the bytes. `commitJournal` folds each
+// path and each key to a single entry — first before, last after — and `undo`
+// restores entries in reverse, skipping the ones already at their pre-run
+// state so a crashed undo resumes instead of refusing its own progress. The
+// write-ahead marker records that intent; verification still precedes any
+// restore on a fresh undo, so a refusal changes nothing.
 //
 // Three deliberate boundaries, each a failure this module refuses to be:
 //
@@ -32,17 +37,29 @@
 // a second `undo` naturally targets the set before it, and the untouched-check
 // refuses when the two sets overlap on a file the first undo already restored.
 
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { cp, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
+import { promisify } from 'node:util';
 
 import { STATE_DIR } from './name.mjs';
 import { LOCAL_DIR } from './state.mjs';
+
+const exec = promisify(execFile);
 
 const JOURNAL_DIR = join(LOCAL_DIR, 'journal');
 const JOURNAL_DIR_LEGACY = '.simt/journal';
 const SET_SUFFIX = '.json';
 const UNDONE_SUFFIX = '.undone.json';
+/** A crashed `undo` leaves its intent behind under this suffix; the next undo
+ * of the same set resumes it instead of starting over (review 0003 Q22). A
+ * marker is history, not a set, so the set listing excludes it. */
+const UNDOING_SUFFIX = '.undoing.json';
+/** Sets that predate entry kinds store `beforeBytes` as utf8 text and carry no
+ * `kind`; they are still restorable, through the legacy branch of the restore
+ * below. `commitJournal` only writes version 2. */
+const SET_VERSION = 2;
 
 function digest(bytes) {
   return `sha256-${createHash('sha256').update(bytes).digest('hex')}`;
@@ -53,16 +70,32 @@ function rel(root, path) {
 }
 
 /**
- * Read the current bytes of a path, or null when it does not exist. Any other
- * failure propagates: an unreadable file is fail-closed, not treated as absent.
+ * Read the current bytes and permission bits of a path, or null when it does
+ * not exist. Any other failure propagates: an unreadable file is fail-closed,
+ * not treated as absent.
  */
 async function readOrNull(path) {
   try {
-    return await readFile(path);
+    const [bytes, st] = await Promise.all([readFile(path), stat(path)]);
+    return { bytes, mode: st.mode & 0o777 };
   } catch (error) {
     if (error.code === 'ENOENT') return null;
     throw error;
   }
+}
+
+/** A `file` entry: the pre-run bytes as base64 (binary-safe, unlike the
+ * version-1 utf8 spelling) with the pre-run permission bits, so `undo`
+ * restores both. Removals carry `afterDigest: null` and are re-created. */
+function fileEntry(path, before, after) {
+  return {
+    kind: 'file',
+    path,
+    beforeDigest: before === null ? null : digest(before.bytes),
+    afterDigest: after === null ? null : digest(after),
+    beforeBytes: before === null ? null : before.bytes.toString('base64'),
+    modeBefore: before === null ? null : before.mode,
+  };
 }
 
 /**
@@ -72,8 +105,11 @@ async function readOrNull(path) {
  * @param {Array} acc the run's set, created by the caller and committed once
  * @param {string} path absolute path to write
  * @param {string} text the bytes to write
+ * @param {{mode?: number}} [opts] permission bits to set after the write, recorded
+ *   in the entry — a shim written then chmodded is one change, not two, and
+ *   `undo` must restore the mode the run found, not just the bytes
  */
-export async function journaledWriteFile(root, acc, path, text) {
+export async function journaledWriteFile(root, acc, path, text, { mode } = {}) {
   if (relative(root, path).startsWith('..')) {
     throw new Error(`journal refuses a write outside the repository: ${path}`);
   }
@@ -82,13 +118,9 @@ export async function journaledWriteFile(root, acc, path, text) {
   const internal = rel(root, path) === STATE_DIR || rel(root, path).startsWith(`${STATE_DIR}/`);
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, text, 'utf8');
+  if (mode !== undefined) await chmod(path, mode);
   if (!internal) {
-    acc.push({
-      path: rel(root, path),
-      beforeDigest: before === null ? null : digest(before),
-      afterDigest: digest(Buffer.from(text, 'utf8')),
-      beforeBytes: before === null ? null : before.toString('utf8'),
-    });
+    acc.push(fileEntry(rel(root, path), before, Buffer.from(text, 'utf8')));
   }
 }
 
@@ -130,22 +162,12 @@ export async function journaledCopyDir(root, acc, src, dest) {
     const prev = before.get(path) ?? null;
     before.delete(path);
     const after = await readOrNull(abs);
-    if (prev !== null && after !== null && prev.equals(after)) continue;
-    acc.push({
-      path,
-      beforeDigest: prev === null ? null : digest(prev),
-      afterDigest: digest(after),
-      beforeBytes: prev === null ? null : prev.toString('utf8'),
-    });
+    if (prev !== null && after !== null && prev.bytes.equals(after.bytes)) continue;
+    acc.push(fileEntry(path, prev, after === null ? null : after.bytes));
   }
   // Files the copy removed (an overwrite that drops a name) are removals.
   for (const [path, prev] of before) {
-    acc.push({
-      path,
-      beforeDigest: digest(prev),
-      afterDigest: null,
-      beforeBytes: prev.toString('utf8'),
-    });
+    acc.push(fileEntry(path, prev, null));
   }
 }
 
@@ -163,13 +185,44 @@ export async function journaledRemoveFile(root, acc, path) {
   const internal = rel(root, path) === STATE_DIR || rel(root, path).startsWith(`${STATE_DIR}/`);
   await unlink(path);
   if (!internal) {
-    acc.push({
-      path: rel(root, path),
-      beforeDigest: digest(before),
-      afterDigest: null,
-      beforeBytes: before.toString('utf8'),
-    });
+    acc.push(fileEntry(rel(root, path), before, null));
   }
+}
+
+/** Read one git config value in a repo, or null when unset. */
+export async function readGitValue(root, key) {
+  try {
+    const { stdout } = await exec('git', ['config', '--get', key], { cwd: root });
+    return stdout.replace(/\n$/, '');
+  } catch (error) {
+    if (error.code === 1) return null;
+    throw error;
+  }
+}
+
+/**
+ * Set (or, with `value: null`, unset) one git config key and record it as a
+ * `git-config` entry, so `undo` restores the routing a run changed — a shim
+ * without its `core.hooksPath` is a hook that no longer runs (review 0003
+ * Q22). A set to the value already there records nothing: there is no state
+ * to restore.
+ *
+ * @returns {Promise<object|null>} the entry, or null when nothing changed
+ */
+export async function journaledGitConfig(root, acc, key, value) {
+  if (typeof key !== 'string' || key === '' || /[\s]/.test(key)) {
+    throw new Error(`journal refuses an unparsable git config key: ${key}`);
+  }
+  const before = await readGitValue(root, key);
+  if (before === value) return null;
+  if (value === null) {
+    await exec('git', ['config', '--unset', key], { cwd: root });
+  } else {
+    await exec('git', ['config', key, value], { cwd: root });
+  }
+  const entry = { kind: 'git-config', key, before, after: value };
+  acc.push(entry);
+  return entry;
 }
 
 /**
@@ -220,18 +273,51 @@ function setName(command, at) {
 }
 
 /**
+ * Fold one run's entries so each path (each config key) appears once: the
+ * first before, the last after. Two writes to one path used to refuse `undo`
+ * outright, although the run's net effect is a single restore. A create
+ * followed by a removal in the same run is no change at all and folds away;
+ * unequal ghosts — a removal folded with a write — fold to the write's after
+ * with the removal's before.
+ */
+function coalesceEntries(acc) {
+  const order = [];
+  const folded = new Map();
+  for (const entry of acc) {
+    const slot = entry.kind === 'git-config' ? `\0${entry.key}` : entry.path;
+    const prev = folded.get(slot);
+    if (prev === undefined) {
+      order.push(slot);
+      folded.set(slot, entry);
+      continue;
+    }
+    if (entry.kind === 'git-config') {
+      folded.set(slot, { ...entry, before: prev.before });
+    } else {
+      folded.set(slot, { ...entry, beforeDigest: prev.beforeDigest, beforeBytes: prev.beforeBytes, modeBefore: prev.modeBefore });
+    }
+  }
+  return order.map((slot) => folded.get(slot)).filter((entry) => {
+    if (entry.kind === 'git-config') return entry.before !== entry.after;
+    // Created then removed (or set back byte-for-byte, mode aside): nothing to restore.
+    return entry.beforeDigest !== null || entry.afterDigest !== null;
+  });
+}
+
+/**
  * Persist a run's set. Writes nothing when the run changed nothing, so the
  * last set on disk is always the last run that wrote.
  *
  * @returns {Promise<string|null>} the set id (file name), or null
  */
 export async function commitJournal(root, command, acc, { at = Date.now() } = {}) {
-  if (acc.length === 0) return null;
+  const entries = coalesceEntries(acc);
+  if (entries.length === 0) return null;
   await ignoreJournal(root);
   const dir = join(root, JOURNAL_DIR);
   await mkdir(dir, { recursive: true });
   const id = setName(command, at);
-  const body = `${JSON.stringify({ version: 1, command, at, entries: acc }, null, 2)}\n`;
+  const body = `${JSON.stringify({ version: SET_VERSION, command, at, entries }, null, 2)}\n`;
   const tmp = join(dir, `${id}.tmp-${process.pid}`);
   await writeFile(tmp, body, 'utf8');
   await rename(tmp, join(dir, id));
@@ -274,8 +360,12 @@ export async function listJournalSets(root) {
   }
   // An undone set ends in `.undone.json`, which itself ends in `.json` — the
   // suffix test alone would list history as current and `undo` would restore
-  // the same set twice. Exclude the undone first.
-  return names.filter((n) => n.endsWith(SET_SUFFIX) && !n.endsWith(UNDONE_SUFFIX)).sort().reverse();
+  // the same set twice. Exclude the undone (and the crash markers, which are
+  // intent, not sets) first.
+  return names
+    .filter((n) => n.endsWith(SET_SUFFIX) && !n.endsWith(UNDONE_SUFFIX) && !n.endsWith(UNDOING_SUFFIX))
+    .sort()
+    .reverse();
 }
 
 /** The directory holding set `id`, preferring the post-move one. */
@@ -291,51 +381,135 @@ async function journalDirFor(root, id) {
 export async function readJournalSet(root, id) {
   const dir = await journalDirFor(root, id);
   const raw = await readFile(join(root, dir, id), 'utf8');
-  return JSON.parse(raw);
+  const set = JSON.parse(raw);
+  if (set.version !== SET_VERSION) {
+    // Version 1 stored `beforeBytes` as utf8 text and knew no kinds: read it
+    // through the legacy branch of the restore rather than refusing history.
+    return { ...set, entries: set.entries.map((e) => ({ ...e, kind: e.kind ?? 'file-legacy' })) };
+  }
+  return set;
+}
+
+/** The pre-run bytes of an entry as a string, for previews and diffs. */
+export function beforeText(entry) {
+  if (entry.kind === 'git-config' || entry.beforeBytes === null || entry.beforeBytes === undefined) return entry.before ?? null;
+  if (entry.kind === 'file-legacy') return entry.beforeBytes;
+  return Buffer.from(entry.beforeBytes, 'base64').toString('utf8');
+}
+
+/** The display name of an entry: a path for files, the key for config. */
+export function entryLabel(entry) {
+  return entry.kind === 'git-config' ? `git config ${entry.key}` : entry.path;
+}
+
+/** The digest of a file's current bytes, or null when absent. */
+function currentDigest(state) {
+  return state === null ? null : digest(state.bytes);
 }
 
 /**
- * Restore one set: verify every file is untouched since, then restore all.
- * Verification precedes any restore, so a refusal changes nothing.
+ * Whether an entry is already at its pre-run state — restored by an earlier
+ * attempt, or hand-set back to exactly what the run found. Restoring it again
+ * would be a no-op write, so a resumed undo skips it instead of refusing it.
+ */
+async function alreadyRestored(root, entry) {
+  if (entry.kind === 'git-config') {
+    return (await readGitValue(root, entry.key)) === entry.before;
+  }
+  const state = await readOrNull(join(root, entry.path));
+  return currentDigest(state) === entry.beforeDigest;
+}
+
+/** Whether an entry is still at the state the run left: the precondition for
+ * restoring it. Anything else is somebody's edit, and the undo is refused. */
+async function untouchedSince(root, entry) {
+  if (entry.kind === 'git-config') {
+    return (await readGitValue(root, entry.key)) === entry.after;
+  }
+  const state = await readOrNull(join(root, entry.path));
+  return currentDigest(state) === entry.afterDigest;
+}
+
+function entryBytes(entry) {
+  if (entry.beforeBytes === null) return null;
+  if (entry.kind === 'file-legacy') return Buffer.from(entry.beforeBytes, 'utf8');
+  return Buffer.from(entry.beforeBytes, 'base64');
+}
+
+/** Restore one entry: bytes and permission bits for files, the value for config. */
+async function restoreEntry(root, entry) {
+  if (entry.kind === 'git-config') {
+    await exec('git', entry.before === null ? ['config', '--unset', entry.key] : ['config', entry.key, entry.before], {
+      cwd: root,
+    });
+    return;
+  }
+  const abs = join(root, entry.path);
+  if (entry.afterDigest === null) {
+    // The run removed this path: re-create it with its pre-run bytes.
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, entryBytes(entry));
+  } else if (entry.beforeDigest === null) {
+    // The run created this path: remove it.
+    await unlink(abs);
+  } else {
+    await writeFile(abs, entryBytes(entry));
+  }
+  if (entry.modeBefore !== null && entry.modeBefore !== undefined) {
+    await chmod(abs, entry.modeBefore);
+  }
+}
+
+/**
+ * Restore one set: verify every entry is untouched since, then restore all in
+ * reverse — later writes in the run unwind first, so overlapping restores land
+ * in pre-run order.
  *
- * @returns {Promise<{restored: string[]}|{refused: {path: string, detail: string}}>}
+ * The intent lands on disk before the first restore (the write-ahead marker),
+ * so a crash mid-undo is resumable: entries already at their pre-run state
+ * are skipped, the rest are verified against the run's after-state and
+ * restored, and anything at neither refuses the whole undo. Verification
+ * still precedes any restore when there is no marker, so a refusal on a fresh
+ * undo changes nothing.
+ *
+ * @returns {Promise<{restored: string[], resumed: boolean}|{refused: {path: string, detail: string}}>}
  */
 async function undoJournalSet(root, id) {
   const set = await readJournalSet(root, id);
+  const dir = await journalDirFor(root, id);
+  const marker = join(root, dir, `${id}${UNDOING_SUFFIX}`);
+  const resumed = (await readOrNull(marker)) !== null;
   for (const entry of set.entries) {
-    const abs = join(root, entry.path);
-    const bytes = await readOrNull(abs);
-    const now = bytes === null ? null : digest(bytes);
-    if (now !== entry.afterDigest) {
+    if (await alreadyRestored(root, entry)) continue;
+    if (!(await untouchedSince(root, entry))) {
+      const label = entryLabel(entry);
       return {
         refused: {
-          path: entry.path,
+          path: label,
           detail:
-            bytes === null
-              ? 'the file was deleted after the journaled write'
-              : 'the file changed after the journaled write',
+            entry.kind === 'git-config'
+              ? `git config ${entry.key} changed after the journaled write`
+              : (await readOrNull(join(root, entry.path))) === null
+                ? 'the file was deleted after the journaled write'
+                : 'the file changed after the journaled write',
         },
       };
     }
   }
+  // The marker is the intent, written before anything is restored: a crash
+  // from here on resumes instead of refusing the files already done.
+  const tmp = `${marker}.tmp-${process.pid}`;
+  await writeFile(tmp, `${JSON.stringify({ version: 1, set: id, at: Date.now() }, null, 2)}\n`, 'utf8');
+  await rename(tmp, marker);
   const restored = [];
-  for (const entry of set.entries) {
-    const abs = join(root, entry.path);
-    if (entry.afterDigest === null) {
-      // The run removed this path: re-create it with its pre-run bytes.
-      await mkdir(dirname(abs), { recursive: true });
-      await writeFile(abs, entry.beforeBytes, 'utf8');
-    } else if (entry.beforeBytes === null) {
-      // The run created this path: remove it.
-      await unlink(abs);
-    } else {
-      await writeFile(abs, entry.beforeBytes, 'utf8');
-    }
-    restored.push(entry.path);
+  for (const entry of [...set.entries].reverse()) {
+    if (await alreadyRestored(root, entry)) continue;
+    await restoreEntry(root, entry);
+    restored.push(entryLabel(entry));
   }
-  const dir = await journalDirFor(root, id);
+  await unlink(marker);
   await rename(join(root, dir, id), join(root, dir, id.replace(/\.json$/, UNDONE_SUFFIX)));
-  return { restored };
+  return { restored, resumed };
 }
 
 /**

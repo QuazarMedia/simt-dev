@@ -1,9 +1,10 @@
 // `simt undo [--yes] [--json]`
 //
 // Restore the last journaled set of writes (plan 0003 R49): every file the last
-// writing run changed goes back to its pre-run bytes, and files the run created
-// are deleted. A run that wrote nothing leaves no set, so there is nothing to
-// restore and the command says so.
+// writing run changed goes back to its pre-run bytes, files the run created
+// are deleted, and git config keys the run set go back to their pre-run
+// values (review 0003 Q22). A run that wrote nothing leaves no set, so there
+// is nothing to restore and the command says so.
 //
 // The safety is the journal's, not the flag's: when any file in the set no
 // longer matches the bytes the run left, the whole undo is refused — restoring
@@ -12,7 +13,7 @@
 
 import { EXIT, emit, emitJson, isJson, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { listJournalSets, readJournalSet, undoLastJournalSet } from '../journal.mjs';
+import { beforeText, entryLabel, listJournalSets, readGitValue, readJournalSet, undoLastJournalSet } from '../journal.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { join } from 'node:path';
 import { invalidateCheckCache } from '../status.mjs';
@@ -32,30 +33,37 @@ export async function undoCommand(positional, flags) {
   }
 
   const set = await readJournalSet(root, id);
-  const paths = set.entries.map((e) => e.path);
+  const labels = set.entries.map(entryLabel);
   // The `--diff` pairs: what the tree holds now against what the restore
-  // would put back. A null beforeBytes is a file the run created, so the
-  // restore deletes it — the after side is empty (R50).
+  // would put back. A null before is a file the run created (or a key it
+  // set from unset), so the restore deletes it — the after side is empty
+  // (R50).
   const diffs =
     flags.diff === true
       ? await Promise.all(
-        set.entries.map(async (e) => ({
-          path: e.path,
-          before: await readBefore(join(root, e.path)),
-          after: e.beforeBytes ?? null,
-        })),
+        set.entries.map(async (e) => {
+          if (e.kind === 'git-config') {
+            return { path: entryLabel(e), before: await readGitValue(root, e.key), after: e.before ?? null };
+          }
+          return { path: e.path, before: await readBefore(join(root, e.path)), after: beforeText(e) };
+        }),
       )
       : [];
 
   if (!mode.apply) {
     if (isJson(flags)) {
-      emitJson({ ok: true, command: 'undo', root, set: id, restores: paths, dryRun: true, ...diffField(diffs, flags) });
+      emitJson({ ok: true, command: 'undo', root, set: id, restores: labels, dryRun: true, ...diffField(diffs, flags) });
       return EXIT.OK;
     }
+    const files = set.entries.filter((e) => e.kind !== 'git-config').length;
+    const keys = set.entries.length - files;
     emit(
-      [`last write  ${set.command} (${id})`, ...paths.map((p) => `restore   ${p}`), '', `would restore ${paths.length} file(s); apply with: ${CLI} undo --yes`].join(
-        '\n',
-      ),
+      [
+        `last write  ${set.command} (${id})`,
+        ...labels.map((p) => `restore   ${p}`),
+        '',
+        `would restore ${files} file(s)${keys > 0 ? ` and ${keys} git config key(s)` : ''}; apply with: ${CLI} undo --yes`,
+      ].join('\n'),
       { maxBytes: flags.maxBytes ?? 0 },
     );
     // After the report: the report says what, the diff shows it (R50).

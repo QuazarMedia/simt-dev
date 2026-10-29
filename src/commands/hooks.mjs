@@ -12,13 +12,11 @@
 // DEFAULT location, which core.hooksPath being unset does not reveal, so a
 // foreign hook is found by asking git rather than by reading config.
 
-import { execFile } from 'node:child_process';
-import { chmod, mkdir, readFile, realpath } from 'node:fs/promises';
-import { commitJournal, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
+import { mkdir, readFile, realpath } from 'node:fs/promises';
+import { commitJournal, journaledGitConfig, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { invalidateCheckCache } from '../status.mjs';
 import { isAbsolute, join, relative } from 'node:path';
-import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { MANIFEST, readManifest } from '../projection/manifest.mjs';
@@ -30,8 +28,6 @@ import { renderGateReport, runGates } from '../hooks/dispatcher.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
-
-const exec = promisify(execFile);
 
 export async function hooksCommand(sub, args, flags) {
   const root = flags.root ?? args[0] ?? process.cwd();
@@ -273,21 +269,23 @@ export async function planHooksInstall(root, { manifest, exists }) {
 export async function applyHooksInstall(root, planned, journal) {
   const { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, version, routed, wants, current } =
     planned;
-  // Shim and evidence bytes are journaled so `undo` restores them (R49). The
-  // `core.hooksPath` config below is deliberately not journaled: it is git
-  // config, not a repo file, and `undo` restores files.
+  // Shim and evidence bytes are journaled so `undo` restores them (R49), with
+  // the executable bit they are written with: a shim the run chmodded is one
+  // change, and `undo` must restore the mode it found, not just the bytes.
+  // The `core.hooksPath` routing below is journaled as a `git-config` entry
+  // for the same reason — unwinding the shims while the config still points
+  // at their directory silently stops the repository's own hooks (review 0003
+  // Q22).
   const wrote = [];
   await mkdir(join(root, HOOKS_DIR), { recursive: true });
   for (const event of wanted) {
     const path = join(root, fileFor(event));
-    await journaledWriteFile(root, journal, path, renderShim(event, { npm, version }));
-    await chmod(path, 0o755);
+    await journaledWriteFile(root, journal, path, renderShim(event, { npm, version }), { mode: 0o755 });
     wrote.push(fileFor(event));
   }
   for (const c of chained) {
     const path = join(root, fileFor(c.event));
-    await journaledWriteFile(root, journal, path, renderChainedShim(c.event, c.target));
-    await chmod(path, 0o755);
+    await journaledWriteFile(root, journal, path, renderChainedShim(c.event, c.target), { mode: 0o755 });
     wrote.push(fileFor(c.event));
   }
   for (const h of obsolete) {
@@ -297,8 +295,7 @@ export async function applyHooksInstall(root, planned, journal) {
   // After the chain loop, so a chained commit-msg cannot replace the claim check.
   if (evidenceSource) {
     const path = join(root, evidenceFile);
-    await journaledWriteFile(root, journal, path, evidenceSource);
-    await chmod(path, 0o755);
+    await journaledWriteFile(root, journal, path, evidenceSource, { mode: 0o755 });
     wrote.push(evidenceFile);
   }
   // `core.hooksPath` tells git to read ONE directory for EVERY event, so leaving it
@@ -306,9 +303,9 @@ export async function applyHooksInstall(root, planned, journal) {
   // `.git/hooks` that predate this tool - from running, silently. Unsetting it is the
   // only way back, and this is the only place that knows the last shim just left.
   if (routed) {
-    await exec('git', ['config', HOOKS_PATH_KEY, wants], { cwd: root });
+    await journaledGitConfig(root, journal, HOOKS_PATH_KEY, wants);
   } else if (current === wants) {
-    await exec('git', ['config', '--unset', HOOKS_PATH_KEY], { cwd: root });
+    await journaledGitConfig(root, journal, HOOKS_PATH_KEY, null);
   }
   return { wrote };
 }

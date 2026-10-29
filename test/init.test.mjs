@@ -133,6 +133,16 @@ test('init: dry-run is the default and writes nothing', async () => {
   await assert.rejects(readFile(join(root, MANIFEST_FILE), 'utf8'));
 });
 
+test('init: --yes --dry-run is a rehearsal and writes nothing (Q09)', async () => {
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const root = await scratch();
+  await writeFile(join(root, 'monkey.jungle'), '');
+  const code = await initCommand([], { root, yes: true, dryRun: true });
+  assert.equal(code, 0);
+  await assert.rejects(readFile(join(root, MANIFEST_FILE), 'utf8'));
+  await assert.rejects(readFile(join(root, 'AGENTS.md'), 'utf8'));
+});
+
 test('init: a conflicting repo is blocked before any write', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
   const root = await scratch();

@@ -232,6 +232,19 @@ test('plan says what a workspace would do, and writes nothing', async () => {
   assert.equal(manifest.shared, undefined, 'a preview must not declare anything either');
 });
 
+test('--yes --dry-run is a rehearsal: no home copy, no declaration (Q09)', async () => {
+  // `--yes` used to outrank `--dry-run`, so the one command that writes into
+  // `$HOME` did it when asked to rehearse. Only writeMode decides now.
+  const { ws, env, copy } = await estate(['alpha', 'beta']);
+  const rehearsal = await run(['shared', 'install', '--yes', '--dry-run', '--root', ws], env);
+  assert.match(rehearsal.out, /nothing written|dry-run/);
+  await assert.rejects(readFile(copy), /ENOENT/, '--yes --dry-run wrote the home copy');
+  for (const name of ['alpha', 'beta']) {
+    const manifest = JSON.parse(await readFile(join(ws, name, MANIFEST_FILE), 'utf8'));
+    assert.equal(manifest.shared ?? null, null, '--yes --dry-run declared in a manifest');
+  }
+});
+
 test("a repository's own rule stays in its region, and says why it was not carried", async () => {
   const { ws, roots, env } = await estate(['alpha', 'beta'], { profiles: { alpha: HOUSE_LOCAL } });
 

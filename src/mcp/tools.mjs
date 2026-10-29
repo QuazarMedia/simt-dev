@@ -5,28 +5,29 @@
 // a diff by a human before they touch anything (ADR-001, ADR-004). A model can call a
 // tool; a model cannot review a diff it never showed you.
 //
-// The tools build their own payloads from the same modules the commands use rather than
-// calling the command functions. That is not duplication for its own sake: the commands
-// render for terminals, these return JSON for a model, and forcing one renderer through a
-// transport it was not written for is how a "clean" abstraction starts lying about bytes.
-// What is shared is the LOGIC - fingerprint, the registry, the resolver, the region
-// planner - and that is what has to be shared, because two resolvers would be two
-// answers to the same question.
+// The tools return the same facts the commands render, by calling the command
+// modules' core functions rather than rebuilding the answers. The commands render
+// for terminals, these return JSON for a model, and the two copies had already
+// drifted: MCP `check` reported 3 findings where the command reports 77, the MCP
+// `doctor` was a fingerprint with none of the findings, `rules_list` missed the
+// per-surface rules, and the skills payloads disagreed on field names (Q15). The
+// CLI keeps its field names; the tools adopt them. What is shared is the whole
+// answer, because two answers to one question is what ADR-035 rules out.
 //
 // Bodies are never inlined by `skills_brief`. Tier 1 is a set of pointers and reasons;
 // the body is a separate call. A 384 KB reference inlined into a tool result is the exact
 // failure progressive disclosure exists to prevent, and a transport makes it easier to
 // cause by accident because the caller cannot see the size until it has paid for it.
 
-import { fingerprint } from '../resolve/fingerprint.mjs';
 import { loadRegistry } from '../graph/load.mjs';
-import { tokenize, rankSkills, closure, selectWithinBudget, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
-import { loadRules, select, checkTargets, provenanceDigest } from '../projection/project.mjs';
-import { loadDecisions, byId, citations } from '../decisions/index.mjs';
+import { provenanceDigest } from '../projection/project.mjs';
 import { discover } from '../compare/discover.mjs';
 import { buildRow, summarise } from '../compare/row.mjs';
 import { GATES } from '../hooks/gates.mjs';
-import { dirtyPaths, parsePathList, readBody } from '../commands/skills.mjs';
+import { checkRepo } from '../commands/sync.mjs';
+import { diagnose, serialisedFindings } from '../commands/doctor.mjs';
+import { rulesCatalogue, rulesWhyFacts } from '../commands/rules.mjs';
+import { skillsBriefFacts, skillsFindFacts, skillsShowFacts, skillsWhyFacts } from '../commands/skills.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
 import { federationAccess, readFederation } from '../federation/config.mjs';
@@ -71,9 +72,20 @@ export const ERROR_SHAPE = {
 
 const output = {
   doctor: {
+    // The `doctor --json` document minus its envelope: the same findings, the
+    // same workspace answer, the same fingerprint. (Q15)
     type: 'object',
     properties: {
       root: { type: 'string' },
+      stack: { type: 'array', items: { type: 'string' } },
+      facts: { type: 'array', items: { type: 'string' } },
+      factEvidence: { type: 'object', additionalProperties: { type: ['string', 'null'] } },
+      signals: { type: 'array', items: { type: 'string' } },
+      // One entry per signal, naming the file that proved it. The payload is a list of
+      // paths, not of records - `fingerprint` returns evidence as the paths themselves.
+      evidence: { type: 'array', items: { type: 'string' } },
+      manifest: { type: ['object', 'null'] },
+      error: { type: ['string', 'null'] },
       workspace: {
         type: 'object',
         properties: {
@@ -83,19 +95,40 @@ const output = {
           root: { type: ['string', 'null'] },
           source: { type: ['string', 'null'] },
           detail: { type: ['string', 'null'] },
+          error: { type: ['string', 'null'] },
         },
         required: ['root', 'source'],
       },
-      stack: { type: 'array', items: { type: 'string' } },
-      facts: { type: 'object', additionalProperties: { type: ['string', 'null'] } },
-      signals: { type: 'array', items: { type: 'string' } },
-      // One entry per signal, naming the file that proved it. The payload is a list of
-      // paths, not of records - `fingerprint` returns evidence as the paths themselves.
-      evidence: { type: 'array', items: { type: 'string' } },
-      manifest: { type: ['object', 'null'] },
-      error: { type: ['string', 'null'] },
+      shared: { type: ['object', 'null'] },
+      findings: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            severity: { type: 'string' },
+            detail: { type: 'string' },
+            remedy: { type: ['string', 'null'] },
+            why: { type: ['string', 'null'] },
+            safe: { type: 'boolean' },
+            fixed: { type: 'boolean' },
+          },
+          required: ['id', 'severity', 'detail', 'safe', 'fixed'],
+        },
+      },
+      fix: {
+        type: 'object',
+        properties: {
+          requested: { type: 'boolean' },
+          applied: { type: 'boolean' },
+          fixed: { type: 'array', items: { type: 'string' } },
+          failed: { type: 'array', items: { type: 'object' } },
+        },
+        required: ['requested', 'applied', 'fixed', 'failed'],
+      },
+      remedy: { type: ['string', 'null'] },
     },
-    required: ['root', 'workspace', 'stack', 'facts', 'signals', 'evidence'],
+    required: ['root', 'workspace', 'stack', 'facts', 'signals', 'evidence', 'findings'],
   },
   skills_index: {
     type: 'object',
@@ -122,53 +155,74 @@ const output = {
     },
     required: ['skills', 'totalBytes', 'entries'],
   },
+  // The `skills brief --json` document minus its envelope, or the `--all` one.
+  // The CLI keeps its field names; this adopts them. (Q15)
   skills_brief: {
-    type: 'object',
-    properties: {
-      repo: {
+    anyOf: [
+      {
         type: 'object',
         properties: {
-          root: { type: 'string' },
-          stack: { type: 'array', items: { type: 'string' } },
-          facts: { type: 'array', items: { type: 'string' } },
-        },
-        required: ['root', 'stack', 'facts'],
-      },
-      task: { type: ['string', 'null'] },
-      budget: { type: 'number' },
-      inlineBytes: { type: 'number' },
-      selected: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
-            bytes: { type: 'number' },
-            summary: { type: 'string' },
-            why: { type: 'array', items: { type: 'string' } },
+          repo: {
+            type: 'object',
+            properties: {
+              root: { type: 'string' },
+              stack: { type: 'array', items: { type: 'string' } },
+              facts: { type: 'array', items: { type: 'string' } },
+            },
+            required: ['root', 'stack', 'facts'],
           },
-          required: ['name', 'bytes', 'why'],
+          workspace: { type: 'string' },
+          task: { type: ['string', 'null'] },
+          budget: { type: 'number' },
+          inlineBytes: { type: 'number' },
+          resolved: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                bytes: { type: 'number' },
+                summary: { type: 'string' },
+                why: { type: 'array', items: { type: 'string' } },
+              },
+              required: ['name', 'bytes', 'why'],
+            },
+          },
+          deferred: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { name: { type: 'string' }, bytes: { type: 'number' }, reason: { type: 'string' } },
+              required: ['name', 'bytes', 'reason'],
+            },
+          },
+          excluded: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { name: { type: 'string' }, reason: { type: 'string' } },
+              required: ['name', 'reason'],
+            },
+          },
+          warning: { type: 'string' },
         },
+        required: ['repo', 'budget', 'inlineBytes', 'resolved', 'deferred', 'excluded'],
       },
-      deferred: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: { name: { type: 'string' }, bytes: { type: 'number' }, reason: { type: 'string' } },
-          required: ['name', 'reason'],
+      {
+        type: 'object',
+        properties: {
+          all: { type: 'boolean', enum: [true] },
+          repoStack: { type: 'array', items: { type: 'string' } },
+          inline: { type: 'array', items: { type: 'string' } },
+          deferred: { type: 'array', items: { type: 'string' } },
+          warning: { type: 'string' },
         },
+        required: ['all', 'repoStack', 'inline', 'deferred'],
       },
-      notSelected: {
-        type: 'array',
-        items: {
-          type: 'object',
-          properties: { name: { type: 'string' }, reason: { type: 'string' } },
-          required: ['name', 'reason'],
-        },
-      },
-    },
-    required: ['repo', 'budget', 'inlineBytes', 'selected', 'deferred', 'notSelected'],
+    ],
   },
+  // The `skills show --json` document minus its envelope, plus the body text the
+  // command prints below the metadata. (Q15)
   skills_show: {
     type: 'object',
     properties: {
@@ -177,9 +231,8 @@ const output = {
       bytes: { type: 'number' },
       capabilities: { type: 'array', items: { type: 'string' } },
       stack: { type: 'array', items: { type: 'string' } },
+      keywords: { type: 'array', items: { type: 'string' } },
       deferred: { type: 'boolean' },
-      source: { type: ['string', 'null'] },
-      readFrom: { type: 'string', enum: ['ok', 'empty', 'unavailable'] },
       requires: { type: 'array', items: { type: 'string' } },
       variants: {
         type: 'array',
@@ -189,10 +242,15 @@ const output = {
           required: ['id'],
         },
       },
-      maxBytes: { type: 'number' },
+      sources: { type: 'array', items: { type: 'object' } },
+      aliasOf: { type: ['string', 'null'] },
+      variantOf: { type: ['string', 'null'] },
+      workspace: { type: 'string' },
       body: { type: ['string', 'null'] },
+      bodyFrom: { type: 'string' },
+      bodyText: { type: 'string' },
     },
-    required: ['name', 'bytes', 'readFrom', 'requires', 'variants'],
+    required: ['name', 'bytes', 'bodyFrom', 'requires', 'variants'],
   },
   skills_find: {
     type: 'object',
@@ -206,29 +264,41 @@ const output = {
             name: { type: 'string' },
             score: { type: 'number' },
             summary: { type: 'string' },
-            why: { type: 'array', items: { type: 'string' } },
+            reasons: { type: 'array', items: { type: 'string' } },
           },
-          required: ['name', 'score', 'why'],
+          required: ['name', 'score', 'reasons'],
         },
       },
     },
     required: ['query', 'results'],
   },
+  // The `skills why --json` document minus its envelope. (Q15)
   skills_why: {
     type: 'object',
     properties: {
-      name: { type: 'string' },
+      skill: { type: 'string' },
       score: { type: 'number' },
       compatible: { type: 'boolean' },
-      reasons: { type: 'array', items: { type: 'string' } },
+      gate: { type: 'string' },
       repo: {
         type: 'object',
-        properties: { root: { type: 'string' }, signals: { type: 'array', items: { type: 'string' } } },
+        properties: {
+          root: { type: 'string' },
+          stack: { type: 'array', items: { type: 'string' } },
+          facts: { type: 'array', items: { type: 'string' } },
+          evidence: { type: 'array', items: { type: 'string' } },
+        },
       },
-      task: { type: ['string', 'null'] },
-      pathsSeen: { type: 'array', items: { type: 'string' } },
+      workspace: { type: 'object' },
+      paths: { type: 'array', items: { type: 'string' } },
+      taskTokens: { type: 'array', items: { type: 'string' } },
+      signals: { type: 'array', items: { type: 'string' } },
+      variants: { type: 'array', items: { type: 'object' } },
+      aliasOf: { type: ['string', 'null'] },
+      variantOf: { type: ['string', 'null'] },
+      requires: { type: 'array', items: { type: 'string' } },
     },
-    required: ['name', 'score', 'compatible', 'reasons'],
+    required: ['skill', 'score', 'compatible', 'signals'],
   },
   rules_list: {
     type: 'object',
@@ -251,7 +321,8 @@ const output = {
             bytes: { type: 'number' },
             adrs: { type: 'array', items: { type: 'string' } },
             error: { type: ['string', 'null'] },
-            selected: { type: 'boolean' },
+            fallback: { type: 'boolean' },
+            selected: { type: ['boolean', 'null'] },
           },
           required: ['source', 'bytes', 'selected'],
         },
@@ -259,23 +330,22 @@ const output = {
     },
     required: ['sha', 'rules'],
   },
+  // The `rules why --json` document minus its envelope, either direction. (Q15)
   rules_why: {
     type: 'object',
     properties: {
       direction: { type: 'string', enum: ['rule', 'decision'] },
       id: { type: 'string' },
+      rule: { type: 'string' },
       title: { type: ['string', 'null'] },
-      status: { type: 'string' },
       source: { type: 'string' },
       origin: { type: 'string' },
+      adrs: { type: 'array', items: { type: 'object' } },
       uncited: { type: 'boolean' },
-      readWith: { type: 'string' },
-      supersededBy: { type: ['string', 'null'] },
-      supersedes: { type: 'array', items: { type: 'string' } },
-      // A decision record may be partially superseded; the record carries the list of
-      // what it replaced, so this is a list and not a flag.
-      partial: { type: ['boolean', 'array'] },
-      decisions: { type: 'array', items: { type: 'object' } },
+      others: { type: 'array', items: { type: 'string' } },
+      adr: { type: 'object' },
+      supersededBy: { type: ['object', 'null'] },
+      inForce: { type: 'object' },
       rules: { type: 'array', items: { type: 'string' } },
     },
     required: ['direction', 'id'],
@@ -459,17 +529,16 @@ export const TOOLS = [
     inputSchema: rootArg,
     async run(args) {
       const root = rootOf(args);
-      const ws = await resolveWorkspace(args ?? {});
-      const result = await fingerprint(root);
+      const { result, ws, shared, findings, failure } = await diagnose(root, args ?? {});
       return {
         root,
-        workspace: { root: ws.root, source: ws.source, detail: ws.detail },
-        stack: result.stack,
-        facts: Object.fromEntries(result.facts.map((f) => [f, result.factEvidence[f] ?? null])),
-        signals: result.signals,
-        evidence: result.evidence,
-        manifest: result.manifest,
-        error: result.error ?? null,
+        ...result,
+        workspace: { root: ws.root ?? null, source: ws.source, detail: ws.detail, error: ws.error ?? null },
+        shared,
+        findings: serialisedFindings(findings),
+        // Read-only here: the command applies fixes behind `--fix`, the tool only reports.
+        fix: { requested: false, applied: false, fixed: [], failed: [] },
+        ...(failure ?? {}),
       };
     },
   },
@@ -514,51 +583,20 @@ export const TOOLS = [
     },
     async run(args) {
       const root = rootOf(args);
-      const { registry: reg } = await registry(args);
-      const repo = await fingerprint(root);
-      const paths = args?.paths ? parsePathList(args.paths) : await dirtyPaths(root);
-      const forced = parsePathList(args?.skill);
-      const budget = Number.isInteger(args?.budget) ? args.budget : 20480;
-
-      const context = { repoStack: repo.signals, taskTokens: tokenize(args?.task ?? ''), paths };
-      const { selected, excluded } = rankSkills(reg.skills, context, { forced });
-      const expanded = closure(selected, reg.skills);
-
-      // The budget decides what is INLINED, and it is the same function the CLI
-      // uses — not a second copy of the same loop. The two copies had drifted: this one
-      // checked `deferred` *after* the budget and inlined a deferred dependency, while
-      // `skills brief` checked it first and did not. A caller reaching for the MCP tool
-      // and a caller reaching for the command got different answers to one question, and
-      // neither could see the other (ADR-035's shape, one level down).
-      //
+      const facts = await skillsBriefFacts(root, args ?? {});
       // No body is ever returned by this tool: a caller that wants one calls
       // skills_show, which makes the cost visible before it is paid.
-      const { picked, deferred, used } = selectWithinBudget(expanded, {
-        budget,
-        all: args?.all === true,
-      });
-
-      const closureNames = new Set(expanded.map((e) => e.skill.name));
-      return {
-        repo: { root, stack: repo.stack, facts: repo.facts },
-        task: args?.task ?? null,
-        budget,
-        inlineBytes: used,
-        selected: picked.map((e) => ({
-          name: e.skill.name,
-          bytes: e.skill.bytes,
-          summary: e.skill.summary,
-          why: [...e.reasons, ...[...e.via].map((v) => `requires:${v}`)],
-        })),
-        deferred: deferred.map((e) => ({
-          name: e.skill.name,
-          bytes: e.skill.bytes,
-          reason: e.skill.deferred ? 'marked deferred' : 'over budget',
-        })),
-        notSelected: excluded
-          .filter((e) => !closureNames.has(e.skill.name))
-          .map((e) => ({ name: e.skill.name, reason: e.reason })),
-      };
+      if (facts.kind === 'all') {
+        return {
+          all: true,
+          repoStack: facts.repoStack,
+          inline: facts.inline.map((s) => s.name),
+          deferred: facts.deferred.map((s) => s.name),
+          ...(facts.warning ? { warning: facts.warning } : {}),
+        };
+      }
+      const { shown, shownDeferred, shownUsed, pointerOnly, excludedEntries, workspaceRoot, kind, ...doc } = facts;
+      return doc;
     },
   },
 
@@ -576,30 +614,14 @@ export const TOOLS = [
       required: ['name'],
     },
     async run(args) {
-      const name = args?.name;
-      if (typeof name !== 'string' || name.length === 0) throw new Error('skills_show needs a skill name');
-      const { registry: reg } = await registry(args);
-      const skill = reg.skills.find((s) => s.name === name);
-      if (!skill) throw new Error(`no skill named "${name}"; call skills_index or skills_find`);
-
       const root = rootOf(args);
-      const ws = await resolveWorkspace(args ?? {});
-      const body = await readBody(skill, ws.root, root);
-      const source = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
-      const located = body.startsWith('(body unavailable') ? null : body;
+      const facts = await skillsShowFacts(root, args?.name, args ?? {});
       return {
-        name,
-        summary: skill.summary,
-        bytes: skill.bytes,
-        capabilities: skill.capabilities,
-        stack: skill.stack,
-        deferred: Boolean(skill.deferred),
-        source: source ? `${source.repo}/${source.path}` : null,
-        readFrom: located === null ? 'unavailable' : body.length === 0 ? 'empty' : 'ok',
-        requires: skill.requires ?? [],
-        variants: (skill.variants ?? []).map((v) => ({ id: v.id, stack: v.stack, bytes: v.bytes })),
-        maxBytes: Number.isInteger(args?.maxBytes) ? args.maxBytes : 0,
-        body: body || null,
+        ...facts.skill,
+        workspace: facts.workspace,
+        body: facts.body,
+        bodyFrom: facts.bodyFrom,
+        bodyText: facts.bodyText,
       };
     },
   },
@@ -614,18 +636,7 @@ export const TOOLS = [
       required: ['query'],
     },
     async run(args) {
-      const query = typeof args?.query === 'string' ? args.query : '';
-      if (query.trim() === '') throw new Error('skills_find needs a query');
-      const { registry: reg } = await registry(args);
-      const tokens = tokenize(query);
-      return {
-        query,
-        results: reg.skills
-          .map((skill) => ({ skill, ...scoreSkill(skill, { repoStack: [], taskTokens: tokens, paths: [] }) }))
-          .filter((r) => selectionVerdict(r.evidence, r.reasons) === null)
-          .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name))
-          .map((r) => ({ name: r.skill.name, score: r.score, summary: r.skill.summary, why: r.reasons })),
-      };
+      return skillsFindFacts(typeof args?.query === 'string' ? args.query : '', args ?? {});
     },
   },
 
@@ -640,26 +651,8 @@ export const TOOLS = [
       required: ['name'],
     },
     async run(args) {
-      const { registry: reg } = await registry(args);
-      const skill = reg.skills.find((s) => s.name === args?.name);
-      if (!skill) throw new Error(`no skill named "${args?.name}"; call skills_find`);
       const root = rootOf(args);
-      const repo = await fingerprint(root);
-      const paths = await dirtyPaths(root);
-      const { score, reasons } = scoreSkill(skill, {
-        repoStack: repo.signals,
-        taskTokens: tokenize(args?.task ?? ''),
-        paths,
-      });
-      return {
-        name: skill.name,
-        score,
-        compatible: stackCompatible(skill, repo.signals),
-        reasons,
-        repo: { root, signals: repo.signals, evidence: repo.evidence },
-        task: args?.task ?? null,
-        pathsSeen: paths.slice(0, 20),
-      };
+      return skillsWhyFacts(root, args?.name, args ?? {});
     },
   },
 
@@ -674,29 +667,12 @@ export const TOOLS = [
       required: [],
     },
     async run(args) {
-      const root = args?.root;
-      const rules = await loadRules(typeof root === 'string' && root ? root : null);
-      const repo = typeof root === 'string' && root ? await fingerprint(root) : null;
-      const { selected, notes } = repo
-        ? select(rules, repo.stack, repo.facts)
-        : { selected: [], notes: [] };
-      const chosen = new Set(selected.map((r) => r.id));
+      const root = typeof args?.root === 'string' && args.root ? args.root : null;
+      const { rules, notes } = await rulesCatalogue(root, { selectFor: root });
       return {
         sha: await provenanceDigest(),
         notes,
-        rules: [...rules]
-          .sort((a, b) => String(a.id).localeCompare(String(b.id)))
-          .map((r) => ({
-            id: r.id,
-            title: r.title,
-            applies: r.applies,
-            origin: r.origin,
-            source: r.source,
-            bytes: r.bytes,
-            adrs: citations(r.body),
-            error: r.error,
-            selected: chosen.has(r.id),
-          })),
+        rules,
       };
     },
   },
@@ -713,47 +689,7 @@ export const TOOLS = [
     },
     async run(args) {
       const what = typeof args?.what === 'string' ? args.what : '';
-      const rules = await loadRules(null);
-      const { decisions } = await loadDecisions();
-      const index = byId(decisions);
-
-      if (/^ADR-\d{3,}$/i.test(what)) {
-        const id = what.toUpperCase();
-        const d = decisions.find((x) => x.id === id);
-        if (!d) throw new Error(`no decision record ${id}`);
-        return {
-          direction: 'decision',
-          id: d.id,
-          title: d.title,
-          status: d.status,
-          // The record travels inside the installed package. A relative path would resolve
-          // against the consuming repo and name a file that is not there, which is
-          // worse than giving no path at all.
-          readWith: `${CLI} rules why ${d.id}`,
-          supersededBy: d.supersededBy,
-          supersedes: d.supersedes,
-          partial: d.partial,
-          rules: rules.filter((r) => citations(r.body).includes(id)).map((r) => r.id),
-        };
-      }
-
-      const rule = rules.find((r) => r.id === what);
-      if (!rule) throw new Error(`no rule with id "${what}"; call rules_list`);
-      const cited = citations(rule.body);
-      return {
-        direction: 'rule',
-        id: rule.id,
-        title: rule.title,
-        source: rule.source,
-        origin: rule.origin,
-        uncited: cited.length === 0,
-        decisions: cited.map((c) => {
-          const d = index.get(c);
-          return d
-            ? { id: d.id, title: d.title, status: d.status, supersededBy: d.supersededBy }
-            : { id: c, missing: true };
-        }),
-      };
+      return rulesWhyFacts(null, what, {});
     },
   },
 
@@ -765,12 +701,8 @@ export const TOOLS = [
     inputSchema: rootArg,
     async run(args) {
       const root = rootOf(args);
-      const findings = await checkTargets(root);
-      for (const r of await loadRules()) {
-        if (r.error) findings.push({ file: r.id ?? r.file, status: 'invalid', detail: r.error });
-      }
-      const bad = findings.filter((f) => f.status !== 'current');
-      return { root, ok: bad.length === 0, findings };
+      const { ok, findings } = await checkRepo(root, {});
+      return { root, ok, findings };
     },
   },
 

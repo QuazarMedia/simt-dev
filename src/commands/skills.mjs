@@ -51,6 +51,232 @@ export function listFlag(value) {
     .filter(Boolean);
 }
 
+// --- cores: one computation for the CLI and the MCP tools (Q15) ----------------
+//
+// `skills_brief`, `skills_find`, `skills_show` and `skills_why` in the MCP
+// surface used to rebuild these answers from the same modules with different
+// loops, and the copies had already drifted: the budget loop inlined a deferred
+// dependency on one surface and not the other, and the payloads disagreed on
+// field names (`resolved`/`selected`, `reasons`/`why`, `signals`). The commands
+// below render these facts for terminals; the tools return them as JSON. The
+// CLI keeps its field names; the tools adopt them.
+//
+// A core throws when it cannot answer: the message names the problem, `remedy`
+// names the next command, and `exitCode` is the exit the CLI leaves with. The
+// MCP handler turns the same throw into an error result, so both surfaces
+// report the same failure for the same cause.
+function skillsFailure(message, remedy, exitCode) {
+  throw Object.assign(new Error(message), { remedy, exitCode });
+}
+
+async function skillsRegistry(args) {
+  const { registry, errors, ok } = await loadRegistry(null, args);
+  if (!ok) skillsFailure(errors[0], WORKSPACE_REMEDY, EXIT.REGISTRY);
+  return registry;
+}
+
+function findSkill(registry, name, verb) {
+  if (!name) skillsFailure(`${verb} needs a skill name`, `usage: ${CLI} skills ${verb} <name>`, EXIT.USAGE);
+  const skill = registry.skills.find((s) => s.name === name);
+  if (!skill) {
+    const near = nearMatches(name, registry.skills.map((s) => s.name));
+    skillsFailure(
+      `no skill named "${name}"${near.length ? ` (did you mean ${near.join(', ')}?)` : ''}`,
+      `run: ${CLI} skills find <query>`,
+      EXIT.USAGE,
+    );
+  }
+  return skill;
+}
+
+/** The JSON-safe skill facts both surfaces spread: absent lists read as empty, not missing. */
+function skillFacts(skill) {
+  return {
+    ...skill,
+    capabilities: skill.capabilities ?? [],
+    stack: skill.stack ?? [],
+    keywords: skill.keywords ?? [],
+    requires: skill.requires ?? [],
+    variants: skill.variants ?? [],
+    aliasOf: skill.aliasOf ?? null,
+    variantOf: skill.variantOf ?? null,
+  };
+}
+
+/** Tier 1: the selection the task resolves to, with the text packet's display sets. */
+export async function skillsBriefFacts(root, args = {}) {
+  const registry = await skillsRegistry(args);
+  const repo = await fingerprint(root);
+  const { note: workspace, root: workspaceRoot } = await announceWorkspace(args);
+  const repoStack = repo.signals;
+  const paths = args.paths ? parsePathList(args.paths) : await dirtyPaths(root);
+  const taskTokens = tokenize(args.task ?? '');
+  const forced = listFlag(args.skill);
+  const budget = args.budget ?? DEFAULT_BUDGET;
+  const task = args.task ?? null;
+  const repoFacts = { root, stack: repoStack, facts: repo.facts };
+
+  // A brief with no task and no paths resolves on stack alone, which produces a
+  // plausible-looking list the agent may act on. It warns rather than silently
+  // answering; under `--json` the warning is a field, not prose on stdout.
+  if (!args.task && paths.length === 0 && forced.length === 0) {
+    const warning =
+      'no --task and no staged files, so selection can only use the repo signals. ' +
+      'pass --task "<what you are doing>" or stage files so the diff drives selection, ' +
+      'or pass --all to take everything for this stack.';
+    if (args.all) {
+      const usable = registry.skills.filter((s) => stackCompatible(s, repoStack));
+      return {
+        kind: 'all',
+        repoStack,
+        inline: usable.filter((s) => !s.deferred),
+        deferred: usable.filter((s) => s.deferred),
+        warning,
+      };
+    }
+    return {
+      kind: 'brief',
+      repo: repoFacts,
+      workspace,
+      task,
+      budget,
+      inlineBytes: 0,
+      resolved: [],
+      deferred: [],
+      excluded: [],
+      shown: [],
+      shownDeferred: [],
+      shownUsed: 0,
+      pointerOnly: false,
+      warning,
+    };
+  }
+
+  const context = { repoStack, taskTokens, paths };
+  const { selected, excluded } = rankSkills(registry.skills, context, { forced });
+
+  // Hard dependencies are pulled in even when they did not score, and even past
+  // budget: a skill that is useless without its dependency is worse than a large
+  // context, because it silently misleads.
+  const expanded = closure(selected, registry.skills);
+  const { picked, deferred, used: inlineBytes } = selectWithinBudget(expanded, {
+    budget,
+    all: args.all === true,
+  });
+  const closureNames = new Set(expanded.map((e) => e.skill.name));
+
+  const plain = (entry) => ({
+    name: entry.skill.name,
+    bytes: entry.skill.bytes,
+    summary: entry.skill.summary,
+    why: [...entry.reasons, ...[...entry.via].map((v) => `requires:${v}`)],
+  });
+  // A body the packet cannot paste costs nothing. Charging the catalogue size
+  // is how a brief with no workspace reports "budget capped" and then prints
+  // the same remedy once per skill.
+  const readable = new Set();
+  for (const entry of expanded) {
+    if (await bodyReadable(entry.skill, workspaceRoot, root)) readable.add(entry.skill.name);
+  }
+  const pointerOnly = expanded.length > 0 && readable.size === 0;
+
+  let shown = picked;
+  let shownDeferred = deferred;
+  let shownUsed = inlineBytes;
+  if (pointerOnly) {
+    const priced = expanded.map((e) =>
+      e.skill.deferred ? e : { ...e, skill: { ...e.skill, bytes: 0 } },
+    );
+    const again = selectWithinBudget(priced, { budget, all: args.all === true });
+    shown = again.picked;
+    shownDeferred = again.deferred;
+    shownUsed = again.used;
+  }
+
+  return {
+    kind: 'brief',
+    repo: repoFacts,
+    workspace,
+    workspaceRoot,
+    task,
+    budget,
+    inlineBytes,
+    resolved: picked.map(plain),
+    deferred: deferred.map((e) => ({
+      name: e.skill.name,
+      bytes: e.skill.bytes,
+      reason: e.skill.deferred ? 'marked deferred' : 'over budget',
+    })),
+    excluded: excluded.filter((e) => !closureNames.has(e.skill.name)).map((e) => ({ name: e.skill.name, reason: e.reason })),
+    shown,
+    shownDeferred,
+    shownUsed,
+    pointerOnly,
+    excludedEntries: excluded.filter((e) => !closureNames.has(e.skill.name)),
+  };
+}
+
+/** Raw search across capability, keyword and summary. */
+export async function skillsFindFacts(query, args = {}) {
+  const q = String(query ?? '').trim();
+  if (!q) skillsFailure('find needs a query', `usage: ${CLI} skills find <query>`, EXIT.USAGE);
+  const registry = await skillsRegistry(args);
+  const tokens = tokenize(q);
+  const results = registry.skills
+    .map((skill) => ({ skill, ...scoreSkill(skill, { repoStack: [], taskTokens: tokens, paths: [] }) }))
+    .filter((r) => selectionVerdict(r.evidence, r.reasons) === null)
+    .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name));
+  return {
+    query: q,
+    results: results.map((r) => ({ name: r.skill.name, score: r.score, summary: r.skill.summary, reasons: r.reasons })),
+  };
+}
+
+/** Tier 2: one skill body and the metadata needed to judge it. */
+export async function skillsShowFacts(root, name, args = {}) {
+  const registry = await skillsRegistry(args);
+  const skill = findSkill(registry, name, 'show');
+  const { note: workspace, root: workspaceRoot } = await announceWorkspace(args);
+  // The repo is a location for a declared source too, so `show` reads a body the
+  // caller already has instead of reporting the body missing.
+  const body = await sourcePath(skill, workspaceRoot, root);
+  const bodyFrom = body === null ? 'none' : body.startsWith(`${root}/`) ? 'repo' : 'workspace';
+  return {
+    skill: skillFacts(skill),
+    workspace,
+    body,
+    bodyFrom,
+    bodyText: await readBody(skill, workspaceRoot, root),
+  };
+}
+
+/** The signal chain for one skill in one repository. */
+export async function skillsWhyFacts(root, name, args = {}) {
+  const registry = await skillsRegistry(args);
+  const skill = findSkill(registry, name, 'why');
+  const repo = await fingerprint(root);
+  const paths = args.paths ? parsePathList(args.paths) : await dirtyPaths(root);
+  const tokens = tokenize(args.task ?? '');
+  const { score, reasons } = scoreSkill(skill, { repoStack: repo.signals, taskTokens: tokens, paths });
+  const compatible = stackCompatible(skill, repo.signals);
+  const ws = await resolveWorkspace(args);
+  return {
+    skill: skill.name,
+    score,
+    compatible,
+    gate: compatible ? 'pass' : 'fail',
+    repo: { root, stack: repo.stack, facts: repo.facts, evidence: repo.evidence },
+    workspace: { root: ws.root ?? null, source: ws.source, detail: ws.detail },
+    paths: paths.slice(0, 8),
+    taskTokens: tokens,
+    signals: reasons,
+    variants: (skill.variants ?? []).map((v) => ({ id: v.id, stack: v.stack, bytes: v.bytes })),
+    aliasOf: skill.aliasOf ?? null,
+    variantOf: skill.variantOf ?? null,
+    requires: skill.requires ?? [],
+  };
+}
+
 /** Compact stack label: the tags that actually discriminate, not all of them. */
 function stackLabel(tags = []) {
   const DISCRIMINATING = [
@@ -142,11 +368,8 @@ function repoLine(repo) {
 }
 
 /** `--all` with no other signal: everything this stack can use, deferred excluded. */
-async function emitAll(registry, repoStack, flags, warning) {
-  const repo = new Set(repoStack);
-  const usable = registry.skills.filter((s) => stackCompatible(s, repoStack));
-  const deferred = usable.filter((s) => s.deferred);
-  const inline = usable.filter((s) => !s.deferred);
+async function emitAllFacts(facts, flags) {
+  const { inline, deferred, repoStack, warning } = facts;
 
   if (isJson(flags)) {
     emitJson(
@@ -179,22 +402,18 @@ async function emitAll(registry, repoStack, flags, warning) {
 // --- find ---------------------------------------------------------------------
 
 export async function findCommand(args, flags) {
-  const query = args.join(' ').trim();
-  if (!query) return fail('find needs a query', EXIT.USAGE, `usage: ${CLI} skills find <query>`);
-
-  const { registry, errors, ok } = await loadRegistry(null, flags);
-  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
-
-  const tokens = tokenize(query);
+  let facts;
+  try {
+    facts = await skillsFindFacts(args.join(' '), flags);
+  } catch (error) {
+    return fail(error.message, error.exitCode ?? EXIT.FAIL, error.remedy);
+  }
+  const { query, results } = facts;
   const workspace = await workspaceLine(flags);
-  const results = registry.skills
-    .map((skill) => ({ skill, ...scoreSkill(skill, { repoStack: [], taskTokens: tokens, paths: [] }) }))
-    .filter((r) => selectionVerdict(r.evidence, r.reasons) === null)
-    .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name));
 
   if (isJson(flags)) {
     emitJson(
-      { ok: true, query, workspace, results: results.map((r) => ({ name: r.skill.name, score: r.score, reasons: r.reasons })) },
+      { ok: true, query, workspace, results },
       { maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.OK;
@@ -212,7 +431,7 @@ export async function findCommand(args, flags) {
       '',
       ...results.map(
         (r) =>
-          `${r.skill.name.padEnd(26)} ${kb(r.skill.bytes).padStart(7)}  ${r.reasons.join(' ')}`,
+          `${r.name.padEnd(26)} ${kb(r.bytes).padStart(7)}  ${r.reasons.join(' ')}`,
       ),
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
@@ -221,128 +440,44 @@ export async function findCommand(args, flags) {
 }
 
 // --- brief: tier 1 ------------------------------------------------------------
-
 export async function briefCommand(args, flags) {
-  const { registry, errors, ok } = await loadRegistry(null, flags);
-  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
-
   const root = flags.root ?? process.cwd();
-  const repo = await fingerprint(root);
-  const { note: workspace, root: workspaceRoot } = await announceWorkspace(flags);
-  // stack ∪ facts: a skill may declare either, so the gate must see both.
-  const repoStack = repo.signals;
-  const paths = flags.paths ? parsePathList(flags.paths) : await dirtyPaths(root);
-  const taskTokens = tokenize(flags.task ?? '');
-  const forced = listFlag(flags.skill);
-  const budget = flags.budget ?? DEFAULT_BUDGET;
+  let facts;
+  try {
+    facts = await skillsBriefFacts(root, flags);
+  } catch (error) {
+    return fail(error.message, error.exitCode ?? EXIT.FAIL, error.remedy);
+  }
 
-  // A brief with no task and no paths resolves on stack alone, which produces a
-  // plausible-looking list the agent may act on. It is the most likely way this
-  // tool gets misused, so it warns rather than silently answering.
-  //
-  // Under `--json` the warning is a FIELD, not prose on stdout. It used to be
-  // emitted as text with no `isJson` check, so `brief --json` printed a paragraph
-  // and then nothing a caller could parse - and with `--all` the text came first
-  // and a second document followed, so stdout was neither one document nor none.
-  if (!flags.task && paths.length === 0 && forced.length === 0) {
-    const warning =
-      'no --task and no staged files, so selection can only use the repo signals. ' +
-      'pass --task "<what you are doing>" or stage files so the diff drives selection, ' +
-      'or pass --all to take everything for this stack.';
-    if (isJson(flags)) {
-      // `ok: true` because the command did what was asked; the answer being weak
-      // is what `warning` carries. Failing here would tell a caller the tool
-      // broke when in fact it is telling them their query was.
-      if (flags.all) return emitAll(registry, repoStack, flags, warning);
-      emitJson(
-        {
-                    ok: true,
-                    repo: { root, stack: repoStack },
-                    workspace,
-                    task: null,
-                    budget,
-                    resolved: [],
-                    deferred: [],
-                    excluded: [],
-                    warning,
-                  },
-    );
-      return EXIT.OK;
-    }
+  if (facts.kind === 'all') {
+    return emitAllFacts(facts, flags);
+  }
+
+  // `ok: true` because the command did what was asked; the answer being weak
+  // is what `warning` carries. Failing here would tell a caller the tool
+  // broke when in fact it is telling them their query was.
+  if (isJson(flags)) {
+    const { shown, shownDeferred, shownUsed, pointerOnly, excludedEntries, workspaceRoot, kind, ...doc } = facts;
+    emitJson({ ok: true, ...doc });
+    return EXIT.OK;
+  }
+
+  if (facts.warning) {
+    const repo = await fingerprint(root);
     emit(
       [
         `repo ${root.split('/').pop()} (${repoLine(repo)})`,
         '',
-        warning,
+        facts.warning,
       ].join('\n'),
       { maxBytes: flags.maxBytes ?? 0 },
     );
-    if (flags.all) return emitAll(registry, repoStack, flags, warning);
     return EXIT.OK;
   }
 
-  const context = { repoStack, taskTokens, paths };
-  const { selected, excluded } = rankSkills(registry.skills, context, { forced });
-
-  // Hard dependencies are pulled in even when they did not score, and even past
-  // budget: a skill that is useless without its dependency is worse than a large
-  // context, because it silently misleads.
-  const expanded = closure(selected, registry.skills);
-  const order = new Map(expanded.map((e, i) => [e.skill.name, i]));
-  expanded.sort((a, b) => (order.get(a.skill.name) - order.get(b.skill.name)));
-
-  // Budget, by one shared function. The loop this replaced existed here and in the MCP
-  // tool, and the copies had already drifted: this one skipped a `deferred` skill before
-  // looking at the budget and the other checked it after, so a deferred dependency was
-  // inlined by one command and not the other. `selectWithinBudget` is the whole
-  // arithmetic, and it is the only place that knows a dependency does not get to exceed
-  // the budget on its own — which is what let a 2,000-byte budget resolve 13,503 bytes.
-  const { picked, deferred, used: bytesUsed } = selectWithinBudget(expanded, {
-    budget,
-    all: flags.all === true,
-  });
-  const closureNames = new Set(expanded.map((e) => e.skill.name));
-
-  const excludedNames = new Set(excluded.map((e) => e.skill.name));
+  const { shown, shownDeferred, shownUsed, pointerOnly, excludedEntries, workspace, workspaceRoot, budget } = facts;
   const lines = [];
-
-  if (isJson(flags)) {
-    emitJson(
-      {
-                ok: true,
-                repo: { root, stack: repoStack },
-                workspace,
-                task: flags.task ?? null,
-                budget,
-                resolved: picked.map((e) => ({ name: e.skill.name, bytes: e.skill.bytes, why: [...e.reasons, ...[...e.via].map((v) => `requires:${v}`)] })),
-                deferred: deferred.map((e) => ({ name: e.skill.name, bytes: e.skill.bytes })),
-                excluded: excluded.filter((e) => !closureNames.has(e.skill.name)).map((e) => ({ name: e.skill.name, reason: e.reason })),
-              },
-    );
-    return EXIT.OK;
-  }
-
-  // A body the packet cannot paste costs nothing. Charging the catalogue size
-  // is how a brief with no workspace reports "budget capped" and then prints
-  // the same remedy once per skill (S33).
-  const readable = new Set();
-  for (const entry of expanded) {
-    if (await bodyReadable(entry.skill, workspaceRoot, root)) readable.add(entry.skill.name);
-  }
-  const pointerOnly = expanded.length > 0 && readable.size === 0;
-
-  let shown = picked;
-  let shownDeferred = deferred;
-  let shownUsed = bytesUsed;
-  if (pointerOnly) {
-    const priced = expanded.map((e) =>
-      e.skill.deferred ? e : { ...e, skill: { ...e.skill, bytes: 0 } },
-    );
-    const again = selectWithinBudget(priced, { budget, all: flags.all === true });
-    shown = again.picked;
-    shownDeferred = again.deferred;
-    shownUsed = again.used;
-  }
+  const repo = await fingerprint(root);
 
   lines.push(
     `RESOLVED ${shown.length} skills, ${kb(shownUsed)}${flags.all || shownUsed <= budget ? '' : ' (budget capped)'} - repo ${root.split('/').pop()} (${repoLine(repo)})`,
@@ -358,7 +493,7 @@ export async function briefCommand(args, flags) {
       lines.push('', `DEFERRED ${shownDeferred.length} (marked deferred)`);
       for (const entry of shownDeferred) lines.push(pointerLine(entry));
     }
-    const hidden = excluded.filter((e) => !closureNames.has(e.skill.name));
+    const hidden = excludedEntries;
     if (hidden.length > 0) {
       lines.push('', `NOT SELECTED ${hidden.length}`, '', `  notes: ${CLI} skills why <name> | ${CLI} skills show <name>`);
     }
@@ -398,7 +533,7 @@ export async function briefCommand(args, flags) {
     }
   }
 
-  const notSelected = excluded.filter((e) => !closureNames.has(e.skill.name));
+  const notSelected = excludedEntries;
   if (notSelected.length > 0) {
     lines.push('', 'NOT SELECTED');
     for (const { skill, reason } of notSelected) {
@@ -415,31 +550,17 @@ export async function briefCommand(args, flags) {
 // --- show: tier 2 -------------------------------------------------------------
 
 export async function showCommand(args, flags) {
-  const name = args[0];
-  if (!name) return fail('show needs a skill name', EXIT.USAGE, `usage: ${CLI} skills show <name>`);
-
-  const { registry, errors, ok } = await loadRegistry(null, flags);
-  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
-
-  const skill = registry.skills.find((s) => s.name === name);
-  if (!skill) {
-    const near = nearMatches(name, registry.skills.map((s) => s.name));
-    return fail(
-      `no skill named "${name}"${near.length ? ` (did you mean ${near.join(', ')}?)` : ''}`,
-      EXIT.USAGE,
-      `run: ${CLI} skills find <query>`,
-    );
-  }
-
-  const source = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
-  const { note: workspace, root: workspaceRoot } = await announceWorkspace(flags);
-  // The repo is a location for a declared source too, so `show` reads a body the
-  // caller already has instead of reporting the body missing (ADR-015).
   const root = flags.root ?? process.cwd();
-  const body = await sourcePath(skill, workspaceRoot, root);
-  const bodyFrom = body === null ? 'none' : body.startsWith(`${root}/`) ? 'repo' : 'workspace';
+  let facts;
+  try {
+    facts = await skillsShowFacts(root, args[0], flags);
+  } catch (error) {
+    return fail(error.message, error.exitCode ?? EXIT.FAIL, error.remedy);
+  }
+  const { skill, workspace, body, bodyFrom, bodyText } = facts;
+  const source = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
   if (isJson(flags)) {
-    emitJson({ ok: true, ...skill, workspace, body, bodyFrom }, { maxBytes: flags.maxBytes ?? 0 });
+    emitJson({ ok: true, ...skill, workspace, body, bodyFrom, bodyText }, { maxBytes: flags.maxBytes ?? 0 });
     return EXIT.OK;
   }
   emit(
@@ -458,7 +579,7 @@ export async function showCommand(args, flags) {
       `body          ${body === null ? '(unavailable)' : `${bodyFrom}  ${body}`}`,
       workspace,
       '',
-      await readBody(skill, workspaceRoot, root),
+      bodyText,
     ]
       .filter((l) => l !== null)
       .join('\n'),
@@ -470,29 +591,13 @@ export async function showCommand(args, flags) {
 // --- why ----------------------------------------------------------------------
 
 export async function whyCommand(args, flags) {
-  const name = args[0];
-  if (!name) return fail('why needs a skill name', EXIT.USAGE, `usage: ${CLI} skills why <name>`);
-
-  const { registry, errors, ok } = await loadRegistry(null, flags);
-  if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
-
-  const skill = registry.skills.find((s) => s.name === name);
-  if (!skill) {
-    const near = nearMatches(name, registry.skills.map((s) => s.name));
-    return fail(
-      `no skill named "${name}"${near.length ? ` (did you mean ${near.join(', ')}?)` : ''}`,
-      EXIT.USAGE,
-      `run: ${CLI} skills find <query>`,
-    );
-  }
-
   const root = flags.root ?? process.cwd();
-  const repo = await fingerprint(root);
-  const paths = flags.paths ? parsePathList(flags.paths) : await dirtyPaths(root);
-  const tokens = tokenize(flags.task ?? '');
-
-  const { score, reasons } = scoreSkill(skill, { repoStack: repo.signals, taskTokens: tokens, paths });
-  const compatible = stackCompatible(skill, repo.signals);
+  let facts;
+  try {
+    facts = await skillsWhyFacts(root, args[0], flags);
+  } catch (error) {
+    return fail(error.message, error.exitCode ?? EXIT.FAIL, error.remedy);
+  }
 
   // Every other command honours `--json`; this one built its answer as text and
   // emitted it, so `--json` was silently ignored and a caller got prose it could
@@ -501,48 +606,31 @@ export async function whyCommand(args, flags) {
   // to scrape: a skill that can never be selected in this repo is a decision, not
   // a line of output.
   if (isJson(flags)) {
-    const workspace = await resolveWorkspace(flags);
-    emitJson({
-      ok: true,
-      command: 'skills why',
-      skill: skill.name,
-      score,
-      compatible,
-      gate: compatible ? 'pass' : 'fail',
-      repo: { root, stack: repo.stack, facts: repo.facts, evidence: repo.evidence },
-      workspace: { root: workspace.root ?? null, source: workspace.source, detail: workspace.detail },
-      paths: paths.slice(0, 8),
-      taskTokens: tokens,
-      signals: reasons,
-      variants: (skill.variants ?? []).map((v) => ({ id: v.id, stack: v.stack, bytes: v.bytes })),
-      aliasOf: skill.aliasOf ?? null,
-      variantOf: skill.variantOf ?? null,
-      requires: skill.requires ?? [],
-    }, { maxBytes: flags.maxBytes ?? 0 });
+    emitJson({ ok: true, command: 'skills why', ...facts }, { maxBytes: flags.maxBytes ?? 0 });
     return EXIT.OK;
   }
 
   const lines = [
-    `${skill.name} - score ${score}`,
+    `${facts.skill} - score ${facts.score}`,
     '',
-    `repo stack     ${repo.stack.join(', ') || 'undetected'}`,
-    `repo facts     ${repo.facts.join(', ') || 'none'}`,
-    `repo evidence  ${repo.evidence.join(' ') || 'none'}`,
+    `repo stack     ${facts.repo.stack.join(', ') || 'undetected'}`,
+    `repo facts     ${facts.repo.facts.join(', ') || 'none'}`,
+    `repo evidence  ${facts.repo.evidence.join(' ') || 'none'}`,
     await workspaceLine(flags),
-    `paths seen     ${paths.length > 0 ? paths.slice(0, 8).join(' ') : '(none - pass --paths or stage files)'}`,
-    `task tokens    ${tokens.length > 0 ? tokens.join(' ') : '(none - pass --task)'}`,
+    `paths seen     ${facts.paths.length > 0 ? facts.paths.join(' ') : '(none - pass --paths or stage files)'}`,
+    `task tokens    ${facts.taskTokens.length > 0 ? facts.taskTokens.join(' ') : '(none - pass --task)'}`,
     '',
-    `gate           ${compatible ? 'pass (stack overlaps the repo)' : 'FAIL (no stack overlap, so it can never be selected)'}`,
-    `signals        ${reasons.length > 0 ? reasons.join(' ') : '(none - this skill scores 0 for the current context)'}`,
+    `gate           ${facts.compatible ? 'pass (stack overlaps the repo)' : 'FAIL (no stack overlap, so it can never be selected)'}`,
+    `signals        ${facts.signals.length > 0 ? facts.signals.join(' ') : '(none - this skill scores 0 for the current context)'}`,
   ];
 
-  if (skill.variants?.length > 0) {
+  if (facts.variants?.length > 0) {
     lines.push('', 'variants (one body per stack):');
-    for (const v of skill.variants) lines.push(`  ${v.id.padEnd(8)} ${v.stack.join('+').padEnd(30)} ${kb(v.bytes)}`);
+    for (const v of facts.variants) lines.push(`  ${v.id.padEnd(8)} ${v.stack.join('+').padEnd(30)} ${kb(v.bytes)}`);
   }
-  if (skill.aliasOf) lines.push('', `alias-of        ${skill.aliasOf} (retired name, resolves to that skill)`);
-  if (skill.variantOf) lines.push('', `variant-of      ${skill.variantOf} (sibling group, one body per stack)`);
-  if (skill.requires?.length > 0) lines.push(`requires        ${skill.requires.join(', ')}`);
+  if (facts.aliasOf) lines.push('', `alias-of        ${facts.aliasOf} (retired name, resolves to that skill)`);
+  if (facts.variantOf) lines.push('', `variant-of      ${facts.variantOf} (sibling group, one body per stack)`);
+  if (facts.requires?.length > 0) lines.push(`requires        ${facts.requires.join(', ')}`);
 
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
@@ -668,7 +756,7 @@ async function bodyReadable(skill, workspaceRoot, root) {
   return Boolean(full && existsSync(full));
 }
 
-export async function readBody(skill, workspaceRoot, root) {
+async function readBody(skill, workspaceRoot, root) {
   const full = await sourcePath(skill, workspaceRoot, root);
   if (!full) {
     return `(body unavailable: this installation has no workspace and ${root ?? 'this directory'} does not hold ${skill.name}; ${WORKSPACE_REMEDY})`;

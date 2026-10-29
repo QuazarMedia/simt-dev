@@ -524,8 +524,14 @@ async function gateCwdFindings(root, manifest) {
   return findings;
 }
 
-export async function checkCommand(positional, flags) {  const root = flags.root ?? positional[0] ?? process.cwd();
-  const findings = await checkTargets(root, flags);
+// --- core: the gate both the CLI and the MCP `check` tool answer from (Q15) ----
+//
+// The MCP tool rebuilt a smaller gate from `checkTargets` alone: no manifest,
+// no gates, no pin, no lock, no declared checkers — 3 findings where the command
+// reports 77. The command below renders these facts for terminals; the tool
+// returns them as JSON. The CLI keeps its field names; the tool adopts them.
+export async function checkRepo(root, opts = {}) {
+  const findings = await checkTargets(root, opts);
   const rules = await loadRules(root);
 
   // A rule file with no id would be projected without a traceable source, so it
@@ -588,7 +594,7 @@ export async function checkCommand(positional, flags) {  const root = flags.root
     const drift = await manifestDrift(root, stack, await provenanceDigest());
     if (drift) findings.push(drift);
   }
-  if (flags.frozen) findings.push(...(await frozenFindings(root, flags)));
+  if (opts.frozen) findings.push(...(await frozenFindings(root, opts)));
   // The checkers a selected rule declared (ADR-088). They read the rule source,
   // not the folded region, so a line that left the prompt is still the line that runs.
   const fp = await fingerprint(root);
@@ -627,8 +633,14 @@ export async function checkCommand(positional, flags) {  const root = flags.root
       warnings: findings.filter((f) => CHECK_NON_BLOCKING.has(f.status)).length,
     }),
   );
+  return { ok: bad.length === 0, findings };
+}
+
+export async function checkCommand(positional, flags) {
+  const root = flags.root ?? positional[0] ?? process.cwd();
+  const { ok, findings } = await checkRepo(root, flags);
   const payload = {
-    ok: bad.length === 0,
+    ok,
     command: 'check',
     root,
     findings,
@@ -639,7 +651,7 @@ export async function checkCommand(positional, flags) {  const root = flags.root
 
   if (isJson(flags)) {
     emitJson(payload, {});
-    return bad.length === 0 ? EXIT.OK : EXIT.FAIL;
+    return ok ? EXIT.OK : EXIT.FAIL;
   }
 
   // Every finding that carries a remedy prints it. A finding with a fix the reader
@@ -653,7 +665,7 @@ export async function checkCommand(positional, flags) {  const root = flags.root
       .join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );
-  return bad.length === 0 ? EXIT.OK : EXIT.FAIL;
+  return ok ? EXIT.OK : EXIT.FAIL;
 }
 
 /**

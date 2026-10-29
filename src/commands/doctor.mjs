@@ -223,38 +223,32 @@ function findingLines(findings, { fixMode, applying }) {
   });
 }
 
-/** See the module header: classification first, because everything else is a guess without it. */
-export async function runDoctor(positional, flags) {
-  const root = flags.root ?? positional[0] ?? process.cwd();
+// --- core: the config health both the CLI and the MCP `doctor` tool answer from (Q15)
+//
+// The MCP tool returned the fingerprint alone: stack, facts and manifest, and none
+// of the findings the command reports. The command below renders these facts for
+// terminals; the tool returns them as JSON. The CLI keeps its field names; the
+// tool adopts them.
+//
+// See the module header: classification first, because everything else is a guess without it.
+export async function diagnose(root, args = {}) {
   const result = await fingerprint(root);
   // Which source answered the workspace question, and where it looked. A tool
   // that silently fell back to the wrong directory would make every downstream
   // answer confidently wrong, so the answer is reported rather than inferred
   // (ADR-014).
-  const ws = await resolveWorkspace(flags);
+  const ws = await resolveWorkspace(args);
   // The shared file this repository hands rules to (ADR-084). Asked here and nowhere else
   // because it is the one thing about a repository that is true of the reader's machine
   // rather than of the tree: `check` must not read `$HOME`, so `doctor` is the only command
   // that can notice a region that dropped rules into a file nobody has. Reported, never
   // blocking — the region is correct either way, and what is wrong is the reader's machine.
-  const shared = await sharedWarning(root, result.manifest ?? null, flags);
+  const shared = await sharedWarning(root, result.manifest ?? null, args);
 
-  const fixMode = flags.fix === true;
-  const findings = await collectFindings(root, { result, ws, shared, withDiffs: fixMode && flags.diff === true });
-  const mode = writeMode(flags);
-  let fix = { requested: fixMode, applied: false, fixed: [], failed: [] };
-  if (fixMode && mode.apply) {
-    fix = { requested: true, ...(await applySafeFixes(root, findings)) };
-  }
-  const failedFix = fix.failed.length > 0;
-
+  const withDiffs = args.fix === true && args.diff === true;
+  const findings = await collectFindings(root, { result, ws, shared, withDiffs });
   // Under `--json` the document is the whole report, so it has to carry both
-  // failures the text path reports AND the workspace answer the text path prints.
-  // This branch used to return before either check, with `ok` hardcoded true: a
-  // caller asking whether their config was readable was told yes, and given exit
-  // 0, while the same command in a terminal exited 3 and named the file. A
-  // scripted consumer has only this document to go on, so `ok` is derived from
-  // the exit code rather than written as a constant (S10).
+  // failures the text path reports AND the workspace answer the text prints.
   const failure = result.error
     ? { error: `${root}: ${result.error}`, remedy: null }
     : ws.error
@@ -263,11 +257,13 @@ export async function runDoctor(positional, flags) {
           remedy: 'fix the JSON, or remove the file',
         }
       : null;
-  const code = failedFix ? EXIT.FAIL : failure ? EXIT.CONFIG : EXIT.OK;
+  const code = failure ? EXIT.CONFIG : EXIT.OK;
+  return { result, ws, shared, findings, failure, code };
+}
 
-  // The findings travel in both modes: a script reads the array, a terminal
-  // reads the lines, and neither may learn about a different set of problems.
-  const serialised = findings.map(({ id, severity, detail, remedy, why, safe, fixed }) => ({
+/** The findings as JSON-safe data: drops the `apply` closures only `--fix` uses. */
+export function serialisedFindings(findings) {
+  return findings.map(({ id, severity, detail, remedy, why, safe, fixed }) => ({
     id,
     severity,
     detail,
@@ -277,6 +273,28 @@ export async function runDoctor(positional, flags) {
     safe,
     fixed: fixed === true,
   }));
+}
+
+export async function runDoctor(positional, flags) {
+  const root = flags.root ?? positional[0] ?? process.cwd();
+  const { result, ws, shared, findings, failure, code: diagnosisCode } = await diagnose(root, flags);
+
+  const fixMode = flags.fix === true;
+  const mode = writeMode(flags);
+  let fix = { requested: fixMode, applied: false, fixed: [], failed: [] };
+  if (fixMode && mode.apply) {
+    fix = { requested: true, ...(await applySafeFixes(root, findings)) };
+  }
+  const failedFix = fix.failed.length > 0;
+
+  // A scripted consumer has only this document to go on, so `ok` is derived from
+  // the exit code rather than written as a constant (S10). A failed fix is a
+  // failure of this run on top of the diagnosis.
+  const code = failedFix ? EXIT.FAIL : diagnosisCode;
+
+  // The findings travel in both modes: a script reads the array, a terminal
+  // reads the lines, and neither may learn about a different set of problems.
+  const serialised = serialisedFindings(findings);
 
   if (isJson(flags)) {
     emitJson({

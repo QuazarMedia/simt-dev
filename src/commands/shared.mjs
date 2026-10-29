@@ -11,7 +11,7 @@
 // is `doctor`'s job rather than a third subcommand: a question asked about a repository is
 // answered by the command that already reports on a repository (ADR-084).
 
-import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { targetRoot } from '../workspace.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
@@ -264,7 +264,10 @@ export async function sharedInstallCommand(_args, flags) {
     }
   }
 
-  if (flags.yes !== true) {
+  // `--yes --dry-run` is a rehearsal, not consent: only writeMode decides, so the
+  // `--dry-run` promise holds for the one command that writes into `$HOME` (Q09).
+  const { dryRun, apply } = writeMode(flags);
+  if (!apply) {
     // Nothing above this line writes, and nothing below it runs without the reader's
     // consent — because one of the two writes lands in their home directory and the other
     // edits repositories other people may be reviewing. The states printed here come from
@@ -282,7 +285,7 @@ export async function sharedInstallCommand(_args, flags) {
       emitJson({
         ok: false,
         command: 'shared install',
-        mode: 'preview',
+        mode: dryRun ? 'dry-run' : 'preview',
         roots,
         shared,
         divergent,
@@ -301,7 +304,7 @@ export async function sharedInstallCommand(_args, flags) {
             : `  ${s.state.padEnd(9)}${s.path}`,
         ),
         `manifest ${manifests.map((m) => `${m.action}:${basename(m.root)}`).join(' ')}`,
-        `nothing written; re-run with: ${CLI} shared install --yes`,
+        dryRun ? 'dry-run  nothing written' : `nothing written; re-run with: ${CLI} shared install --yes`,
       ].join('\n'),
       { maxBytes: flags.maxBytes ?? 0 },
     );

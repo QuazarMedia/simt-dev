@@ -22,7 +22,7 @@ import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { invalidateCheckCache } from '../status.mjs';
 import { dirname, join } from 'node:path';
 
-import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs';
 import { MANIFEST, buildManifest, manifestPath, manifestText, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
@@ -108,9 +108,9 @@ export async function initCommand(positional, flags) {
   manifest.surfaces = projected.surfaces;
 
   const adoption = exists || Boolean(region?.exists);
-  const dryRun = flags.dryRun === true;
-  const approved = flags.yes === true;
-  const apply = approved && !dryRun;
+  // One decider for `--yes --dry-run`: the inline copy used to agree with it today,
+  // but a second copy of the same arithmetic is where the next bypass grows (Q09).
+  const { dryRun, apply } = writeMode(flags);
 
   const manifestAction = exists ? 'update' : 'create';
   const manifestFile = await manifestPath(root);

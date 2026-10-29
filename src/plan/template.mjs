@@ -306,9 +306,17 @@ function compile(body, source, root) {
       headingRe: new RegExp(`^(#{1,${depth}})\\s+(.*\\S)\\s*$`),
       readState(raw) {
         const plain = String(raw ?? '').replace(/\*\*/g, '').trim().toLowerCase();
+        if (plain === '') return 'unknown';
         if (read.has(plain)) return read.get(plain);
-        const token = plain.split(/[\s(]/)[0];
-        return read.get(token) ?? (token || 'unknown');
+        // A cell may carry a note after the state — "In progress (since Monday)".
+        // The state is the longest alias that prefixes the text: "in progress"
+        // must win over a shorter alias it starts, and a word no state claims
+        // is unknown, not a state (review 0003 Q25).
+        let best = '';
+        for (const alias of read.keys()) {
+          if (alias.length > best.length && plain.startsWith(alias)) best = alias;
+        }
+        return best !== '' ? read.get(best) : 'unknown';
       },
       canonical(input) {
         return write.get(String(input ?? '').trim().toLowerCase()) ?? null;

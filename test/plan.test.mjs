@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -243,6 +243,44 @@ test('plan done rewrites one row and records evidence where the tracker has a co
   const reviewText = await readFile(review, 'utf8');
   assert.match(reviewText, /\| Y02 \| two \| Y01 \| \*\*Complete\*\* \(held\) \| note — 1234abcd · test: npm test \|/);
   assert.match(reviewText, /\| Y01 \| one \| — \| Queued \|/);
+});
+
+test('a state with a trailing note is its state, and a pipe in a code span is content (review 0003 Q25)', async () => {
+  const root = await repo({
+    'docs/plans/0099.md': `# t
+
+| ID | Slice | Depends on | State | SHA / evidence |
+| --- | --- | --- | --- | --- |
+| W01 | noted | — | In progress (since Monday) | |
+| W02 | piped | — | Queued | \`a | b\` |
+| W03 | broken | — | Queued | x | y |
+`,
+  });
+  const { slices } = await loadPlanState(root);
+  const byId = new Map(slices.map((slice) => [slice.id, slice]));
+  assert.equal(byId.get('W01').state, 'in-progress');
+
+  const piped = cli(['plan', 'done', 'W02', 'abcdef1234', '--root', root, '--yes', '--test', 'npm test']);
+  assert.equal(piped.code, 0, piped.stderr);
+  const text = await readFile(join(root, 'docs', 'plans', '0099.md'), 'utf8');
+  assert.match(text, /\| W02 \| piped \| — \| Complete \| `a \| b` — abcdef1234 · test: npm test \|/);
+  assert.match(text, /\| W01 \| noted \| — \| In progress \(since Monday\) \|/);
+
+  const broken = cli(['plan', 'done', 'W03', 'deadbeef', '--root', root, '--yes']);
+  assert.notEqual(broken.code, 0);
+  assert.match(broken.stderr, /has 6 cells; the table declares 5/);
+});
+
+test('plan done keeps CRLF line endings and journals the write (review 0003 Q25)', async () => {
+  const root = await repo({
+    'docs/plans/0099.md': '# t\r\n\r\n| ID | Slice | State |\r\n| --- | --- | --- |\r\n| C01 | one | Queued |\r\n',
+  });
+  const done = cli(['plan', 'done', 'C01', 'cafebabe', '--root', root, '--yes']);
+  assert.equal(done.code, 0, done.stderr);
+  const after = await readFile(join(root, 'docs', 'plans', '0099.md'), 'utf8');
+  assert.equal(after, '# t\r\n\r\n| ID | Slice | State |\r\n| --- | --- | --- |\r\n| C01 | one | Complete |\r\n');
+  const sets = await readdir(join(root, '.simt', 'local', 'journal'));
+  assert.ok(sets.some((name) => name.endsWith('.json') && !name.endsWith('.undone.json')));
 });
 
 test('plan done previews unless told to write, and a bad cell is refused', async () => {

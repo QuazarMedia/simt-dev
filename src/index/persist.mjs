@@ -55,7 +55,11 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     const upsert = db.prepare(`insert into files(path, blob, lang, bytes, pkg) values (?, ?, ?, ?, ?)
       on conflict(path) do update set blob = excluded.blob, lang = excluded.lang, bytes = excluded.bytes, pkg = excluded.pkg`);
     const dropSymbols = db.prepare('delete from symbols where path = ?');
-    const dropEdges = db.prepare('delete from edges where src = ? or dst = ?');
+    // An importer owns its outgoing edges: re-extracting a changed file drops
+    // only `src = ?`, so the unchanged importers' edges pointing into it survive
+    // (Q07). A removed file's incoming edges dangle, so they drop with it.
+    const dropEdges = db.prepare('delete from edges where src = ?');
+    const dropIncoming = db.prepare('delete from edges where dst = ?');
     const dropFts = db.prepare('delete from fts where ref = ?');
     const dropEmbed = db.prepare('delete from embeddings where path = ?');
     const dropFile = db.prepare('delete from files where path = ?');
@@ -67,14 +71,15 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     for (const row of next) {
       upsert.run(row.path, row.blob, row.lang, row.bytes, row.pkg);
       dropSymbols.run(row.path);
-      dropEdges.run(row.path, row.path);
+      dropEdges.run(row.path);
       dropFts.run(row.path);
       dropEmbed.run(row.path);
     }
     for (const path of removed) {
       dropFile.run(path);
       dropSymbols.run(path);
-      dropEdges.run(path, path);
+      dropEdges.run(path);
+      dropIncoming.run(path);
       dropFts.run(path);
       dropEmbed.run(path);
     }
@@ -109,7 +114,9 @@ export async function writeJsonl(root, previous, next, removed, symbols, edges, 
   for (const row of replaced.values()) files.push(row);
   files.sort(byPath);
   const keptSymbols = force ? [] : (await readJsonl(root, 'symbols')).filter((row) => !drop.has(row.path));
-  const keptEdges = force ? [] : (await readJsonl(root, 'edges')).filter((row) => !drop.has(row.src) && !drop.has(row.dst));
+  // Edge ownership mirrors the sqlite backend: a changed file loses only the edges
+  // it owns (src), while a removed file also drops the edges that pointed at it.
+  const keptEdges = force ? [] : (await readJsonl(root, 'edges')).filter((row) => !drop.has(row.src) && !gone.has(row.dst));
   const keptFts = force ? [] : (await readJsonl(root, 'fts')).filter((row) => !drop.has(row.ref));
   const newEmbedPaths = new Set(embeddings.map((row) => row.path));
   const keptEmbeddings = force

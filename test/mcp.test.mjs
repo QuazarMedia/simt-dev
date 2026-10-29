@@ -720,12 +720,19 @@ test('mcp: every tool answers, and every answer matches the schema it declared',
 });
 
 test('mcp: the annotations say what the tools are', async () => {
-  // All ten are readers, and the declaration is per tool because the next tool may not
-  // be one. A client that believes a tool is read-only will cache its answer.
+  // Every tool but one is a reader, and the declaration is per tool because the next
+  // tool may not be one. A client that believes a tool is read-only will cache its
+  // answer — and federation_query spawns a repo-declared command, so it must not
+  // wear the read-only hint that invites auto-approval (Q13).
   const state = { version: null };
   await handle(req('initialize', { protocolVersion: '2025-11-25' }), TOOLS, { state });
   const list = await handle(req('tools/list'), TOOLS, { state });
   for (const t of list.result.tools) {
+    if (t.name === 'federation_query') {
+      assert.equal(t.annotations?.readOnlyHint, false, 'federation_query must not claim to be read-only');
+      assert.equal(t.annotations?.openWorldHint, true, 'federation_query must warn that it reaches beyond the model');
+      continue;
+    }
     assert.equal(t.annotations?.readOnlyHint, true, `${t.name} does not declare itself read-only`);
     assert.equal(t.annotations?.idempotentHint, true, `${t.name} does not declare itself idempotent`);
   }
@@ -735,8 +742,8 @@ test('mcp: --list answers without reading stdin', async () => {
   // An editor that has misconfigured the command has to be able to ask what it exposes
   // without hanging on a pipe nobody is writing to.
   const { stdout } = await exec('node', [BIN, 'mcp', '--list'], { input: '' });
-  assert.match(stdout, /read-only tools/);
-  assert.match(stdout, /No tool here writes/);
+  assert.match(stdout, /all read-only except federation_query/);
+  assert.match(stdout, /Nothing here writes to your repositories/);
 });
 
 test('mcp: brief reads the index and never builds one', async () => {

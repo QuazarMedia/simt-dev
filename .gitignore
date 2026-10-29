@@ -10,24 +10,7 @@ git.config
 dist/
 .sea-cache/
 
-# Local index, evidence ledger, benchmark run outputs and local-model proposals
-# (plan 0003 §4). Task descriptors in .simt/bench/tasks/*.json are committed;
-# runs, distilled summaries and review proposals are not.
-.simt/index.sqlite
-.simt/index.jsonl
-.simt/ledger.jsonl
-.simt/bench/runs/
-.simt/gate/
-.simt/distilled/
-.simt/reviews/
-
-# Write journal for `simt undo`. Local state, never shared.
-.simt/journal/
-
-# Gate state for `simt status --line`. Local state, never shared: it names the
-# commit the last `check` measured, which is meaningless anywhere else.
-.simt/check.json
-
-# Worktrees `simt slice start` creates, one branch per row. Local state: the branch
-# records where the work is, and the directory that holds it is not part of any commit.
-.simt/worktrees/
+# simt-dev runtime state (per-developer; never shared): journal, evidence ledger,
+# index cache, benchmark runs, local-model proposals. Nothing in here is committed,
+# so ignore the whole directory rather than tracking its ever-growing file list.
+.simt/

@@ -114,7 +114,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q14 | MCP server memoises the first call's workspace for its lifetime | P1 | F | mcp/graph | S | — | Complete | `1de80cb`; `node --test test/graph.test.mjs` 23/23 + install/compile/brief/resolve 89/89 (memo keyed on flag+env+config inputs) |
 | **Wave 1 — wrong behaviour an agent hits** | | | | | | | | |
 | Q15 | MCP and CLI answer different questions under the same name | P1 | F | mcp | M | Q60 (full) | Done | |
-| Q16 | Lease policy bypassed via subdir cwd, case, symlink, `NotebookEdit`, `apply_patch` move | P1 | S | agenthooks | S | — | Queued | |
+| Q16 | Lease policy bypassed via subdir cwd, case, symlink, `NotebookEdit`, `apply_patch` move | P1 | S | agenthooks | S | — | Complete | `bb09b90`; `node --test test/lease.test.mjs test/agenthooks.test.mjs` — 48/48 + full suite 1403/1403 |
 | Q17 | `generated` policy blocks edits outside the region | P1 | F | agenthooks | M | — | Queued | |
 | Q18 | Evidence: any passing command proves "tests pass"; worktree vs index tree; narrow claim regex | P1 | F | ledger | S | Q75 | Queued | |
 | Q19 | Machine-local state under `.simt/` changes the evidence tree and gets committed | P1 | F | state | M | — | Queued | |

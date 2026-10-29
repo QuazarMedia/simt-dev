@@ -109,7 +109,13 @@ export async function agentHookCommand(args, flags) {
   // repository root the facts resolve against: an agent editing `keep.mjs` from `src/`
   // means `src/keep.mjs`, and a path joined to the wrong base is a path the lease file
   // will never meet (review 0003 Q16).
-  const writesAbsolute = writes.map((w) => (isAbsolute(w) ? w : join(payloadRoot, w)));
+  // Writes are `{path, ...edit}` rows (Q17): the path resolves against the harness
+  // cwd, the edit detail travels untouched so the region check sees the old_string.
+  const writesAbsolute = writes.map((w) => {
+    const path = typeof w === 'string' ? w : w?.path;
+    const abs = typeof path === 'string' && isAbsolute(path) ? path : join(payloadRoot, path);
+    return typeof w === 'string' ? abs : { ...w, path: abs };
+  });
   const facts = await factsFor(root, { command, writes: writesAbsolute });
   const decision = decide({ event, facts, env: process.env });
 

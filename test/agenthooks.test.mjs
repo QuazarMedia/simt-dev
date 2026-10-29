@@ -647,6 +647,61 @@ test('status reports the prompt subscription beside the tool hook', async () => 
   assert.equal(byId.antigravity.prompt, null);
 });
 
+test('an edit outside the generated region is the author\'s own text (review 0003 Q17)', async () => {
+  const root = await repo({ 'AGENTS.md': REGION_HTML, 'src/x.mjs': 'export const x = 1;\n' });
+  const editOutside = (file, old_string) =>
+    JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Edit',
+      tool_input: { file_path: file, old_string, new_string: 'changed' },
+      cwd: root,
+    });
+  // Outside the markers: allowed. Inside them: denied. A Write that keeps the
+  // region bytes is allowed; one that drops them is not.
+  const outside = HOOK('claude', editOutside('AGENTS.md', '# Notes'));
+  assert.equal(outside.code, 0, `an edit outside the region was denied: ${outside.text}`);
+  assert.equal(outside.stdout, '');
+  const inside = HOOK('claude', editOutside('AGENTS.md', '- a rule'));
+  assert.equal(inside.code, 2, 'an edit inside the region was allowed');
+  assert.match(inside.text, /ADR-036/);
+  const missing = HOOK('claude', editOutside('AGENTS.md', 'no such text anywhere'));
+  assert.equal(missing.code, 0, 'an edit touching nothing was denied');
+  const kept = `${REGION_HTML.replace('# Notes', '# Changed')}`;
+  const writeKept = HOOK(
+    'claude',
+    JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Write',
+      tool_input: { file_path: 'AGENTS.md', content: kept },
+      cwd: root,
+    }),
+  );
+  assert.equal(writeKept.code, 0, `a Write keeping the region was denied: ${writeKept.text}`);
+  const writeDropped = HOOK(
+    'claude',
+    JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Write',
+      tool_input: { file_path: 'AGENTS.md', content: '# Notes\n\nhand only\n' },
+      cwd: root,
+    }),
+  );
+  assert.equal(writeDropped.code, 2, 'a Write dropping the region was allowed');
+  // A malformed region stays denied: its span is unknown, so no edit can prove
+  // itself outside it.
+  const broken = await repo({ 'AGENTS.md': '<!-- simt:begin -->\nno end\n' });
+  const brokenEdit = HOOK(
+    'claude',
+    JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Edit',
+      tool_input: { file_path: 'AGENTS.md', old_string: 'no end', new_string: 'x' },
+      cwd: broken,
+    }),
+  );
+  assert.equal(brokenEdit.code, 2, 'an edit into a malformed region was allowed');
+});
+
 test('the delivery is reached through a dynamic import, so a tool call never loads it', async () => {
   // The structural test above forbids the repository-reading modules by name. The delivery
   // needs three of them, so it lives behind a door this test keeps to a `import()`: if it

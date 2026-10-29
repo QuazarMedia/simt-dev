@@ -89,28 +89,92 @@ export function hookRows() {
  * spelling still writes its source out of the way, so the source is the floor
  * a move guards.
  */
+function asString(value) {
+  return typeof value === 'string' && value !== '' ? value : null;
+}
+
+function editFields(input = {}) {
+  const edit = {};
+  const oldString = asString(input.old_string ?? input.oldString ?? input.OldText ?? input.old_text);
+  const newString = asString(input.new_string ?? input.newString ?? input.NewText ?? input.new_text);
+  const content = asString(input.content ?? input.CodeContent ?? input.file_content ?? input.new_source ?? input.newSource);
+  if (oldString !== null) edit.old_string = oldString;
+  if (newString !== null) edit.new_string = newString;
+  if (content !== null) edit.content = content;
+  if (Array.isArray(input.edits)) {
+    const edits = input.edits
+      .filter((e) => e && typeof e === 'object')
+      .map((e) => ({
+        old_string: asString(e.old_string ?? e.oldString),
+        new_string: asString(e.new_string ?? e.newString),
+      }))
+      .filter((e) => e.old_string !== null || e.new_string !== null);
+    if (edits.length > 0) edit.edits = edits;
+  }
+  return edit;
+}
+
+function writeOf(path, input) {
+  if (!path) return null;
+  return { path, ...editFields(input ?? {}) };
+}
+
+/**
+ * The files an apply_patch body writes, one per header line.
+ *
+ * `Update`/`Add`/`Delete` name their file on the header itself. A move is the
+ * one header whose target is not on its own line: `*** Move File: <old>` is
+ * followed by the destination on the `+++` line, and a body that spells the
+ * destination as `*** Move to: <new>` says it outright. A move with neither
+ * spelling still writes its source out of the way, so the source is the floor
+ * a move guards.
+ *
+ * Each entry keeps its hunk text: without it the generated-region check cannot
+ * tell an edit outside the region from one inside it (review 0003 Q17), and
+ * every patch would deny as though it touched the region.
+ */
 function patchWrites(text) {
-  const lines = text.split('\n');
-  const writes = [];
+  return patchFiles(text).map((f) => ({ path: f.path, patch: f.hunks }));
+}
+
+function patchFiles(text) {
+  const lines = String(text ?? '').split('\n');
+  const files = [];
+  let current = null;
+  const push = () => {
+    if (current !== null) files.push(current);
+    current = null;
+  };
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i].trim();
     const direct = /^\*\*\* (?:Update|Add|Delete) File: (.+)$/.exec(line);
     if (direct !== null) {
-      writes.push(direct[1].trim());
+      push();
+      current = { path: direct[1].trim(), hunks: '' };
       continue;
     }
     const moveTo = /^\*\*\* Move to: (.+)$/.exec(line);
     if (moveTo !== null) {
-      writes.push(moveTo[1].trim());
+      push();
+      current = { path: moveTo[1].trim(), hunks: '' };
       continue;
     }
     const moveFile = /^\*\*\* Move File: (.+)$/.exec(line);
     if (moveFile !== null) {
+      push();
       const next = lines[i + 1]?.trim();
-      writes.push(next !== undefined && next.startsWith('+++ ') ? next.slice(4).trim() : moveFile[1].trim());
+      const dest = next !== undefined && next.startsWith('+++ ') ? next.slice(4).trim() : moveFile[1].trim();
+      current = { path: dest, hunks: '' };
+      continue;
     }
+    if (/^\*\*\* (Begin Patch|End Patch)/.test(line)) {
+      if (line.includes('End Patch')) push();
+      continue;
+    }
+    if (current !== null) current.hunks += `${lines[i]}\n`;
   }
-  return writes;
+  push();
+  return files.filter((f) => f.path !== '');
 }
 
 const ADAPTERS = {
@@ -125,11 +189,12 @@ const ADAPTERS = {
       command: p.tool_name === 'Bash' ? (p.tool_input?.command ?? null) : null,
       // NotebookEdit spells its target `notebook_path`, not `file_path`: a key list
       // that misses it is a lease the notebook can walk straight through (review
-      // 0003 Q16).
+      // 0003 Q16). Edit details travel with the path so the generated-region
+      // check can tell an edit outside the region from one inside it (Q17).
       writes: ['Edit', 'Write', 'MultiEdit'].includes(p.tool_name)
-        ? [p.tool_input?.file_path].filter(Boolean)
+        ? [writeOf(p.tool_input?.file_path, p.tool_input)].filter(Boolean)
         : p.tool_name === 'NotebookEdit'
-          ? [p.tool_input?.notebook_path].filter(Boolean)
+          ? [writeOf(p.tool_input?.notebook_path, p.tool_input)].filter(Boolean)
           : [],
     }),
     deny: (message) => ({
@@ -169,7 +234,7 @@ const ADAPTERS = {
       writes:
         p.tool_name === 'apply_patch'
           ? patchWrites(String(p.tool_input?.command ?? ''))
-          : [],
+          : [], // entries carry {path, patch} so the region check maps hunks (Q17)
     }),
     deny: (message) => ({
       hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: message },
@@ -196,7 +261,7 @@ const ADAPTERS = {
     extract: (p) => ({
       command: p.tool_name === 'Shell' ? (p.tool_input?.command ?? null) : null,
       writes: ['Write', 'Edit'].includes(p.tool_name)
-        ? [p.tool_input?.file_path ?? p.tool_input?.path].filter(Boolean)
+        ? [writeOf(p.tool_input?.file_path ?? p.tool_input?.path, p.tool_input)].filter(Boolean)
         : [],
     }),
     deny: (message) => ({ permission: 'deny', user_message: message, agent_message: message }),
@@ -222,8 +287,8 @@ const ADAPTERS = {
       return {
         command: call.name === 'run_command' ? (args.CommandLine ?? null) : null,
         writes: ['write_to_file', 'replace_file_content', 'multi_replace_file_content'].includes(call.name)
-          ? [args.TargetFile].filter(Boolean)
-          : [],
+          ? [writeOf(args.TargetFile, args)].filter(Boolean)
+          : [], // CodeContent/old/new travel with the path for the region check (Q17)
       };
     },
     deny: (message) => ({ decision: 'deny', reason: message }),
@@ -248,7 +313,9 @@ const ADAPTERS = {
     root: (p) => p.cwd,
     extract: (p) => ({
       command: p.tool_name === 'run_shell_command' ? (p.tool_input?.command ?? null) : null,
-      writes: ['write_file', 'replace'].includes(p.tool_name) ? [p.tool_input?.file_path].filter(Boolean) : [],
+      writes: ['write_file', 'replace'].includes(p.tool_name)
+        ? [writeOf(p.tool_input?.file_path, p.tool_input)].filter(Boolean)
+        : [],
     }),
     deny: (message) => ({ decision: 'deny', reason: message }),
     // BeforeAgent appends text to the prompt for this turn only — the same lifetime as a

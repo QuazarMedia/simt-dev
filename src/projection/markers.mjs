@@ -165,6 +165,43 @@ export function parse(text, style) {
   };
 }
 
+/**
+ * The line spans of every generated region in `text`, across both marker styles.
+ *
+ * `parse` is the single reader: a malformed region is still a region (an edit
+ * anywhere in the file stays denied), so malformed counts as a span covering the
+ * whole file rather than as absent. Line numbers are 1-based and inclusive.
+ *
+ * @returns {{malformed: boolean, spans: Array<{start: number, end: number}>}}
+ */
+export function regionSpans(text) {
+  const spans = [];
+  let malformed = false;
+  for (const style of ['html', 'hash']) {
+    const state = parse(text, style);
+    if (state.status === 'malformed') {
+      malformed = true;
+      continue;
+    }
+    if (state.status !== 'ok') continue;
+    const start = state.before === '' ? 1 : state.before.split('\n').length + 1;
+    const bodyLines = state.body === '' ? 0 : state.body.split('\n').length;
+    spans.push({ start, end: start + bodyLines + 1 });
+  }
+  if (malformed) {
+    const total = text.split('\n').length;
+    return { malformed: true, spans: [{ start: 1, end: total }] };
+  }
+  return { malformed: false, spans };
+}
+
+/** Line range of `text.slice(index, index + length)`, 1-based and inclusive. */
+export function lineRangeOf(text, index, length) {
+  const start = text.slice(0, index).split('\n').length;
+  const end = text.slice(0, index + length).split('\n').length;
+  return { start, end };
+}
+
 function malformed(lines, from, at, reason) {
   return {
     status: 'malformed',

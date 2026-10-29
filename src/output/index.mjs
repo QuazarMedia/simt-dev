@@ -144,20 +144,90 @@ export function jsonIndentDefault(pretty = process.stdout.isTTY === true) {
  * the only consumer is a person: the compact document saves them nothing and costs them
  * the diff they were about to read.
  */
+function withSchemaVersion(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) && value.schemaVersion === undefined
+    ? { schemaVersion: SCHEMA_VERSION, ...value }
+    : value;
+}
+
+function stringifyJson(value, pretty) {
+  return pretty ? JSON.stringify(value, null, 2) : JSON.stringify(value);
+}
+
+/**
+ * Shrink a payload to a byte ceiling by emptying its longest arrays first.
+ *
+ * Byte-cutting JSON produces a document that parses or exits non-zero, never both —
+ * `why --json --max-bytes 120` used to exit 0 with half a token on stdout (Q10). An
+ * importer owns nothing here: the trimmed arrays are named in `truncated`, so a reader
+ * knows exactly which list lost how many items, and the document still parses.
+ *
+ * Returns the fitted payload, or null when no array-trimming fits (the caller then
+ * answers with the `MAX_BYTES` error envelope instead).
+ */
+function fitJsonArrays(payload, maxBytes, pretty) {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const slots = [];
+  const walk = (node, path) => {
+    if (Array.isArray(node)) {
+      if (node.length > 0) slots.push({ node, path, length: node.length });
+      node.forEach((item, i) => walk(item, `${path}[${i}]`));
+    } else if (node !== null && typeof node === 'object') {
+      for (const key of Object.keys(node)) walk(node[key], path === '' ? key : `${path}.${key}`);
+    }
+  };
+  walk(payload, '');
+  if (slots.length === 0) return null;
+  slots.sort((a, b) => b.length - a.length);
+  const candidate = structuredClone(payload);
+  const trimmed = [];
+  const sizeOf = (extra) =>
+    Buffer.byteLength(stringifyJson(extra ? { ...candidate, truncated: extra } : candidate, pretty));
+  const segmentsOf = (path) =>
+    path.split('.').flatMap((part) => {
+      const m = /^(.*?)\[(\d+)\]$/.exec(part);
+      return m ? [m[1], Number(m[2])] : [part];
+    });
+  for (const slot of slots) {
+    const at = segmentsOf(slot.path);
+    let target = candidate;
+    for (let i = 0; i < at.length - 1; i += 1) target = target[at[i]];
+    if (target === null || typeof target !== 'object') continue;
+    target[at[at.length - 1]] = [];
+    trimmed.push({ field: slot.path, omitted: slot.length });
+    const extra = trimmed.length === 1
+      ? { field: trimmed[0].field, omitted: trimmed[0].omitted, limit: maxBytes }
+      : { fields: trimmed, limit: maxBytes };
+    if (sizeOf(extra) <= maxBytes) return { ...candidate, truncated: extra };
+  }
+  return null;
+}
+
 export function emitJson(value, { stream = process.stdout, pretty = prettyDefault, maxBytes = 0 } = {}) {
-  const payload =
-    value !== null && typeof value === 'object' && !Array.isArray(value) && value.schemaVersion === undefined
-      ? { schemaVersion: SCHEMA_VERSION, ...value }
-      : value;
-  const text = `${pretty ? JSON.stringify(payload, null, 2) : JSON.stringify(payload)}\n`;
-  // The same ceiling and the same announcement `emit` applies: a reader who asked for a
-  // bounded answer gets a bounded answer and is told how much is missing, rather than a
-  // half-parsed document it believes is whole.
+  const payload = withSchemaVersion(value);
+  const text = `${stringifyJson(payload, pretty)}\n`;
+  // JSON is never byte-truncated: a cut document parses as a lie, and exit 0 calls it
+  // true. Arrays shrink with a `truncated` record naming what lost how much, and a
+  // document no trimming can fit becomes a `MAX_BYTES` error envelope (Q10, ADR-105).
   if (maxBytes > 0 && Buffer.byteLength(text) > maxBytes) {
-    const slice = Buffer.from(text).subarray(0, maxBytes).toString('utf8');
-    const cut = slice.lastIndexOf('\n');
-    stream.write(cut > 0 ? `${slice.slice(0, cut)}\n` : slice);
-    stream.write(`TRUNCATED ${Buffer.byteLength(text) - maxBytes} bytes omitted, raise maxBytes\n`);
+    const fitted = fitJsonArrays(payload, maxBytes, pretty);
+    if (fitted !== null) {
+      stream.write(`${stringifyJson(fitted, pretty)}\n`);
+      return false;
+    }
+    const envelope = withSchemaVersion({
+      ...(payload !== null && typeof payload === 'object' && !Array.isArray(payload) && typeof payload.command === 'string'
+        ? { command: payload.command }
+        : {}),
+      ok: false,
+      error: {
+        code: 'MAX_BYTES',
+        message: `output exceeded the --max-bytes ceiling of ${maxBytes} bytes`,
+        remedy: 'rerun with --max-bytes 0 for the whole document',
+      },
+      truncated: { omitted: Buffer.byteLength(text) - maxBytes, limit: maxBytes },
+    });
+    stream.write(`${stringifyJson(envelope, pretty)}\n`);
     return false;
   }
   stream.write(text);

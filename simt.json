@@ -1,0 +1,34 @@
+{
+  "$comment": "Written and maintained by simt-dev. `simt sync --yes` regenerates the projected rules. `simt init` refreshes the SHA and keeps every key it does not write, so a value you add here survives a re-init. `plans` is such a key: it selects the tracker template and the directories `simt plan` reads. Omit it and the tracker template applies, which reads docs/plans and docs/reviews.",
+  "id": "simt-dev",
+  "stack": [
+    "node",
+    "python"
+  ],
+  "limits": {
+    "coverage": null,
+    "fileLines": {
+      "warn": 400,
+      "error": 1000
+    }
+  },
+  "gates": {
+    "preCommit": [
+      "lint"
+    ],
+    "prePush": [
+      "test"
+    ]
+  },
+  "localSkills": [],
+  "profiles": [],
+  "substitutions": {},
+  "packs": [],
+  "surfaces": [
+    "opencode"
+  ],
+  "projection": {
+    "simtDevSha": "29be4d70e0b1b3025591c241324bcebbfa912240",
+    "version": "0.6.3"
+  }
+}

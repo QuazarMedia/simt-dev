@@ -107,6 +107,22 @@ for (const backend of ['sqlite', 'jsonl']) {
   });
 }
 
+test('concurrent cold indexes serialize instead of locking (sqlite, Q08)', async () => {
+  // Three writers at once used to fail every run with `database is locked` and
+  // leave a database with no tables. Cold builds now go to per-writer temp
+  // files with an atomic rename, and incremental writes wait on the lock.
+  const root = await repo();
+  const runs = await Promise.all([
+    reindex(root, { backend: 'sqlite' }),
+    reindex(root, { backend: 'sqlite' }),
+    reindex(root, { backend: 'sqlite' }),
+  ]);
+  for (const run of runs) assert.ok(run.files > 0, 'each concurrent run indexed the files');
+  const rows = await readFiles(root, { backend: 'sqlite' });
+  assert.ok(rows.length > 0, 'the database has tables and rows after concurrent writes');
+  await rm(root, { recursive: true, force: true });
+});
+
 test('tracked content past the old 64 MiB buffer still indexes', async () => {
   const root = await mkdtemp(join(tmpdir(), 'idx-'));
   await git(['init', '-q', root]);

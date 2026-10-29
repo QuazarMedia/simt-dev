@@ -18,6 +18,9 @@ export async function indexCommand(args, flags) {
       allowRemote: flags.allowRemote === true,
     });
   } catch (error) {
+    if (error?.code === 'INDEX_BUSY') {
+      return fail(`could not index this repository (${error.message})`, EXIT.FAIL, 'wait a moment and run the index again');
+    }
     return fail(
       `could not index this repository (${error.message})`,
       EXIT.UNSUPPORTED,

@@ -130,7 +130,9 @@ export async function runGates(event, { root, manifest }) {
     // declared command for this name takes the shell path below instead.
     if (resolution.builtin !== undefined) {
       const startedBuiltin = Date.now();
-      const outcome = await runBuiltinGate(resolution.builtin, { root, staged });
+      // The manifest's per-builtin options, where a builtin has any: the secret
+      // scan takes its ignore globs from gates.secretScan (review 0003 Q24).
+      const outcome = await runBuiltinGate(resolution.builtin, { root, staged, options: manifest?.gates?.secretScan });
       try {
         await recordRun(root, {
           cmd: `builtin:${resolution.builtin}`,
@@ -329,7 +331,7 @@ const BUILTIN_REPORT_MAX = 12;
  * none of them can degrade into a pass, which is the same fail-closed contract
  * an unresolvable script gate has.
  */
-async function runBuiltinGate(name, { root, staged }) {
+async function runBuiltinGate(name, { root, staged, options }) {
   const scan = BUILTIN_GATES.get(name);
   if (scan === undefined) {
     return {
@@ -342,7 +344,7 @@ async function runBuiltinGate(name, { root, staged }) {
   if (staged.length === 0) {
     return { ok: true, detail: 'nothing staged; no added line to scan', output: '' };
   }
-  const result = await scan(root);
+  const result = await scan(root, options ?? {});
   if (result.error !== null) {
     return {
       ok: false,

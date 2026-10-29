@@ -9,7 +9,7 @@
 // are asserted with the same weight as the positives.
 
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -79,6 +79,46 @@ test('assigned secrets are caught through quotes, and placeholders are not secre
   assert.deepEqual(scanText('password = "changeme-example"'), [], 'a documented placeholder');
   assert.deepEqual(scanText('api_key = "<your-key-here>"'), [], 'an angle-bracket placeholder');
   assert.deepEqual(scanText('secret: "xxxxxxxxxxxxxxxxxxxx"'), [], 'obvious filler');
+});
+
+// --- review 0003 Q24: precision and recall ------------------------------------
+
+test('a prefixed key name is a secret name: DB_PASSWORD, aws_secret_access_key', () => {
+  assert.equal(scanText('DB_PASSWORD = "hunter2hunter2hunter2"')[0]?.kind, 'assigned-secret');
+  assert.equal(scanText('aws_secret_access_key=wJalrXUtnFEMI9K7MDENG/ubRVIx0oD5m')[0]?.kind, 'assigned-secret');
+});
+
+test('an unquoted .env and YAML value is caught, a short one is not', () => {
+  assert.equal(scanText('SESSION_TOKEN=9f8e7d6c5b4a3f2e1d0c')[0]?.kind, 'assigned-secret');
+  assert.deepEqual(scanText('token: none'), [], 'a four-letter value is not a secret');
+  assert.deepEqual(scanText('password = undefined'), [], 'a code sentinel is not a secret');
+});
+
+test('a real secret that contains "example" is still a secret', () => {
+  const found = scanText('token = "prod-example-9f8e7d6c5b4a3f2e"');
+  assert.ok(found.some((f) => f.kind === 'assigned-secret'), JSON.stringify(found));
+});
+
+test('the new vendor shapes are caught: gitlab, npm, encrypted key, url userinfo', () => {
+  const cases = [
+    ['gitlab-token', `curl -H "PRIVATE-TOKEN: ${['glpat', 'Ab1Cd2Ef3Gh4Ij5Kl6Mn'].join('-')}"`],
+    ['npm-token', `${['npm', 'Ab1Cd2Ef3Gh4Ij5Kl6MnOp7Qr8St9UvWx0Yz'].join('_')}`],
+    ['private-key-block', '-----BEGIN ENCRYPTED PRIVATE KEY-----'],
+    ['url-userinfo', 'url = "https://deploy:9f8e7d6c5b4a3f2e@hooks.example.com/repos"'],
+  ];
+  for (const [kind, line] of cases) {
+    const found = scanText(line);
+    assert.ok(
+      found.some((f) => f.kind === kind),
+      `${kind} not caught in: ${line.slice(0, 60)} (got ${JSON.stringify(found)})`,
+    );
+  }
+});
+
+test('a subresource-integrity hash is high-entropy bytes that are not a secret', () => {
+  const sri = `sha512-${'aB3dE6gH9jK2mN5pQ8rS1tU4vW7yZ0bC4dE5fG6hI8j'}`;
+  assert.deepEqual(scanText(`"integrity": "${sri}"`), [], 'an SRI digest in a lockfile line');
+  assert.deepEqual(scanText(`integrity="sha256-${'Ab3dE6gH9jK2mN5pQ8rS1tU4vW7yZ0bC4dE5fG6hI8j'}"`), [], 'a sha256 SRI digest');
 });
 
 // --- entropy -----------------------------------------------------------------
@@ -190,6 +230,47 @@ test('repository diff configuration cannot route the scan around', async () => {
   assert.equal(findings[0].kind, 'aws-access-key-id');
 });
 
+test('a lockfile is skipped by default: a dependency bump carries its own high-entropy bytes', async () => {
+  const root = await repo();
+  await writeFile(join(root, 'package-lock.json'), `"integrity": "sha512-${'aB3dE6gH9jK2mN5pQ8rS1tU4vW7yZ0bC4dE5fG6hI8j'}";\n`);
+  await git(['-C', root, 'add', 'package-lock.json']);
+
+  const { findings, lines, error } = await scanStaged(root);
+  assert.equal(error, null);
+  assert.ok(lines > 0, 'the lockfile line was staged');
+  assert.deepEqual(findings, [], JSON.stringify(findings));
+});
+
+test('gates.secretScan.ignore skips the named paths and only those', async () => {
+  const root = await repo();
+  await mkdir(join(root, 'vendor'), { recursive: true });
+  await writeFile(join(root, 'vendor/lib.js'), `const k = "${AWS_SENTINEL}";\n`);
+  await writeFile(join(root, 'app.js'), `const k = "${AWS_SENTINEL}";\n`);
+  await git(['-C', root, 'add', 'vendor/lib.js', 'app.js']);
+
+  const ignored = await scanStaged(root, { ignore: ['vendor/**'] });
+  assert.equal(ignored.error, null);
+  assert.equal(ignored.findings.length, 1, JSON.stringify(ignored.findings));
+  assert.equal(ignored.findings[0].file, 'app.js', 'the un-ignored file is still scanned');
+
+  const none = await scanStaged(root, { ignore: ['**'] });
+  assert.deepEqual(none.findings, [], 'a glob that matches everything skips everything');
+});
+
+test('a simt:allow-secret marker on the line exempts that line only', async () => {
+  const root = await repo();
+  await writeFile(
+    join(root, 'app.js'),
+    `const k = "${AWS_SENTINEL}"; // simt:allow-secret\nconst j = "${AWS_SENTINEL}";\n`,
+  );
+  await git(['-C', root, 'add', 'app.js']);
+
+  const { findings, error } = await scanStaged(root);
+  assert.equal(error, null);
+  assert.equal(findings.length, 1, JSON.stringify(findings));
+  assert.equal(findings[0].line, 2, 'the unmarked line is still a finding');
+});
+
 // --- the gate (the acceptance test) ------------------------------------------
 
 test('the secret-scan gate blocks the sentinel, and the report does not contain it', async () => {
@@ -250,4 +331,18 @@ test('a declared command still overrides the built-in, as it does for every kind
   const result = await runGates('pre-commit', { root, manifest });
   assert.equal(result.failed, false, JSON.stringify(result));
   assert.match(result.gates[0].detail, /echo override/);
+});
+
+test('gates.secretScan.ignore reaches the built-in through the dispatcher', async () => {
+  const root = await repo();
+  await mkdir(join(root, 'vendor'), { recursive: true });
+  await writeFile(join(root, 'vendor/lib.js'), `const k = "${AWS_SENTINEL}";\n`);
+  await git(['-C', root, 'add', 'vendor/lib.js']);
+
+  const manifest = {
+    gates: { preCommit: ['secret-scan'], prePush: [], secretScan: { ignore: ['vendor/**'] } },
+  };
+  const result = await runGates('pre-commit', { root, manifest });
+  assert.equal(result.failed, false, JSON.stringify(result));
+  assert.match(result.gates[0].detail, /no secret found/);
 });

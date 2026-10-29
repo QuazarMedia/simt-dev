@@ -33,38 +33,72 @@ const ENTROPY_MIN_LENGTH = 32;
 export const ENTROPY_MIN_BITS = 4.5;
 
 /**
- * Value markers that mean "this string is here to be replaced". A pattern match
- * or entropy hit whose value carries one of these is documentation, not a leak.
+ * A value is a placeholder when the WHOLE value is placeholder-shaped, not when
+ * it contains a placeholder word: a real secret may contain "example" and still
+ * be a secret, and the substring test blocked exactly that commit (review 0003 Q24).
  */
-const PLACEHOLDER =
-  /(example|placeholder|changeme|dummy|redacted|notasecret|your[_-]|xxxx+|<[a-z-]*>|\{\{?[a-z_.-]+\}\}?)/i;
+const PLACEHOLDER_WORD = /^(?:example|sample|placeholder|changeme|change[-_]?me|dummy|fake|redacted|notasecret|undefined|null|none|true|false|x+)$/i;
+const PLACEHOLDER_SLOT = /^(?:<[^<>]*>|\{\{?[a-z0-9_.-]+\}\}?|your[-_][a-z0-9_-]*|my[-_][a-z0-9_-]*)$/i;
+
+/**
+ * @param {string} value the candidate secret
+ * @returns {boolean} true when the whole value is documentation, not a leak
+ */
+function isPlaceholder(value) {
+  const v = String(value).trim();
+  if (v === '') return true;
+  if (PLACEHOLDER_SLOT.test(v)) return true;
+  const words = v.split(/[^a-zA-Z]+/).filter(Boolean);
+  if (words.length === 0) return true; // punctuation only: `…`, `-`
+  return words.every((w) => PLACEHOLDER_WORD.test(w));
+}
 
 /**
  * The pattern library. Each row names itself so the finding tells the reader
  * WHICH shape matched — "a secret was found" sends them hunting for it;
  * "aws-access-key-id on line 12" says what to revoke.
  *
- * `group`, when set, is the capture holding the VALUE — what the placeholder
- * check and the redaction run on. Without it the whole match is the value.
+ * `groups`, when set, lists the captures that may hold the VALUE — what the
+ * placeholder check and the redaction run on; the first defined capture wins.
+ * Without it the whole match is the value.
  */
 const PATTERNS = [
   { id: 'aws-access-key-id', re: /\b(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}\b/g },
-  { id: 'private-key-block', re: /-----BEGIN (?:RSA |EC |DSA |OPENSSH |PGP )?PRIVATE KEY(?: BLOCK)?-----/g },
+  // The type word is not the discriminator, "PRIVATE KEY" is: RSA, EC, DSA,
+  // OPENSSH, PGP and ENCRYPTED all carry the same header shape (review 0003 Q24).
+  { id: 'private-key-block', re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/g },
   { id: 'github-token', re: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b|\bgithub_pat_[A-Za-z0-9_]{22,}\b/g },
+  { id: 'gitlab-token', re: /\bglpat-[A-Za-z0-9_-]{20,}\b/g },
+  { id: 'npm-token', re: /\bnpm_[A-Za-z0-9]{36}\b/g },
   { id: 'slack-token', re: /\bxox[baprs]-[A-Za-z0-9-]{10,}\b/g },
   { id: 'stripe-live-key', re: /\b(?:sk|rk)_live_[0-9a-zA-Z]{24,}\b/g },
   { id: 'google-api-key', re: /\bAIza[0-9A-Za-z_-]{35}\b/g },
   { id: 'openai-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}\b/g },
   { id: 'jwt', re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
+  // The key name is prefix-aware — DB_PASSWORD, aws_secret_access_key — and the
+  // value may be quoted or bare, because .env and YAML do not quote (review 0003 Q24).
   {
     id: 'assigned-secret',
-    re: /\b(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret)\b\s*[:=]\s*["']([^"']{8,})["']/gi,
-    group: 1,
+    re: /\b[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret)\b\s*[:=]\s*(?:"([^"]{8,})"|'([^']{8,})'|([A-Za-z0-9+/=_-]{8,}))/gi,
+    groups: [1, 2, 3],
+  },
+  // The password half of https://user:pw@host: the only place a URL carries one.
+  {
+    id: 'url-userinfo',
+    re: /\b[a-z][a-z0-9+.-]*:\/\/[^:/\s@]+:([A-Za-z0-9._~+-]{8,})@/g,
+    groups: [1],
   },
 ];
 
 /** Longest base64ish run worth measuring for entropy. */
 const ENTROPY_CANDIDATE = /[A-Za-z0-9+/=_-]{32,}/g;
+
+/**
+ * Subresource-integrity hashes: `sha256-<base64>` and kin. A deterministic
+ * digest of file content, present in every lockfile and build manifest —
+ * high-entropy bytes that are never a secret (review 0003 Q24).
+ */
+const SRI_HASH = /^sha(1|256|384|512)-[A-Za-z0-9+/]+={0,2}$/;
 
 /**
  * Shannon entropy of a string, in bits per character.
@@ -105,9 +139,17 @@ export function scanText(text) {
   for (const pattern of PATTERNS) {
     pattern.re.lastIndex = 0;
     for (const match of text.matchAll(pattern.re)) {
-      const value = pattern.group !== undefined ? match[pattern.group] : match[0];
-      if (PLACEHOLDER.test(value)) continue;
-      const at = match.index + (pattern.group !== undefined ? match[0].indexOf(value) : 0);
+      const groups = pattern.groups ?? [0];
+      let value = null;
+      for (const g of groups) {
+        if (match[g] !== undefined) {
+          value = match[g];
+          break;
+        }
+      }
+      if (value === null) continue;
+      if (isPlaceholder(value)) continue;
+      const at = match.index + match[0].indexOf(value);
       // Overlap, not equality: a token a pattern named is one finding, and the
       // entropy reading of the same bytes would double the count a gate reports.
       if (claimed.some(([a, b]) => at < b && a < at + value.length)) continue;
@@ -120,7 +162,8 @@ export function scanText(text) {
   for (const match of text.matchAll(ENTROPY_CANDIDATE)) {
     const value = match[0];
     if (value.length < ENTROPY_MIN_LENGTH) continue;
-    if (PLACEHOLDER.test(value)) continue;
+    if (SRI_HASH.test(value)) continue;
+    if (isPlaceholder(value)) continue;
     if (claimed.some(([a, b]) => match.index < b && a < match.index + value.length)) continue;
     const bits = entropy(value);
     if (bits < ENTROPY_MIN_BITS) continue;
@@ -128,6 +171,57 @@ export function scanText(text) {
   }
 
   return found;
+}
+
+/**
+ * Lockfiles are skipped by default (review 0003 Q24): their high-entropy bytes
+ * are integrity hashes and version pins, and a dependency bump is a commit the
+ * gate must not block. The SRI allow-list above covers the same shapes wherever
+ * they appear outside a lockfile.
+ */
+const LOCKFILES = new Set([
+  'package-lock.json',
+  'npm-shrinkwrap.json',
+  'yarn.lock',
+  'bun.lockb',
+  'pnpm-lock.yaml',
+  'Cargo.lock',
+  'go.sum',
+  'composer.lock',
+  'Gemfile.lock',
+  'Pipfile.lock',
+  'poetry.lock',
+  'uv.lock',
+  'pubspec.lock',
+  'mix.lock',
+]);
+
+/** A line carrying this marker is the author's explicit exemption for that line. */
+const PRAGMA = 'simt:allow-secret';
+
+/**
+ * One glob to one anchored regex: `**` crosses separators, `*` and `?` do not.
+ * The same small matcher the ignore lists render with, because a repository
+ * that writes `vendor/**` in `.simtignore` expects the same reading here.
+ */
+function globToRegExp(glob) {
+  let re = '';
+  for (let i = 0; i < glob.length; i += 1) {
+    const c = glob[i];
+    if (c === '*') {
+      if (glob[i + 1] === '*') {
+        re += '.*';
+        i += 1;
+      } else {
+        re += '[^/]*';
+      }
+    } else if (c === '?') {
+      re += '[^/]';
+    } else {
+      re += c.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+    }
+  }
+  return new RegExp(`^${re}$`);
 }
 
 /**
@@ -141,12 +235,18 @@ export function scanText(text) {
  * one a line is.
  *
  * @param {string} root repository root
+ * @param {{ignore?: string[]}} [options] `ignore` is the manifest's
+ *   `gates.secretScan.ignore`: globs of repository paths to skip (review 0003 Q24)
  * @returns {Promise<{findings: {file: string, line: number, kind: string,
  *   preview: string, entropy?: number}[], lines: number, error: string|null}>}
  *   `error` is set only when git itself could not answer; callers fail closed on
  *   it rather than reading silence as a clean diff.
  */
-export async function scanStaged(root) {
+export async function scanStaged(root, options = {}) {
+  const ignore = (Array.isArray(options.ignore) ? options.ignore : [])
+    .filter((g) => typeof g === 'string' && g !== '')
+    .map(globToRegExp);
+
   let stdout;
   try {
     // Every flag here defeats a way a repository can keep the scan from seeing its
@@ -183,6 +283,7 @@ export async function scanStaged(root) {
   let file = null;
   let lineNo = 0;
   let inHunk = false;
+  let fileSkipped = false;
 
   for (const raw of stdout.split('\n')) {
     if (raw.startsWith('diff --git ')) {
@@ -203,12 +304,14 @@ export async function scanStaged(root) {
       if (raw.startsWith('+++ ')) {
         const path = raw.slice(4).trim();
         file = path === '/dev/null' ? null : path.replace(/^b\//, '');
+        const name = file === null ? '' : file.slice(file.lastIndexOf('/') + 1);
+        fileSkipped = file !== null && (LOCKFILES.has(name) || ignore.some((re) => re.test(file)));
       }
       continue;
     }
     if (!raw.startsWith('+')) continue; // -U0 has no context; this is `\ No newline…`
     lines += 1;
-    if (file !== null) {
+    if (file !== null && !fileSkipped && !raw.includes(PRAGMA)) {
       for (const hit of scanText(raw.slice(1))) {
         findings.push({ file, line: lineNo, ...hit });
       }

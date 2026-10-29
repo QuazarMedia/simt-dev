@@ -6,6 +6,8 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-10-29
+
 ### Added
 
 `simt explain <CODE>` names what a `check` finding means, the decision behind

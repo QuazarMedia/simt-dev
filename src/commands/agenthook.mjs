@@ -22,7 +22,7 @@
 // tool call. Failures of this command exit 1, which a harness reports as a failed hook,
 // and that is the right blast radius for a hook that is broken rather than refusing.
 
-import { chmod, mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../agenthooks/shim.mjs';
@@ -287,8 +287,7 @@ async function installHooks(root, flags) {
   let shimWritten = false;
   if (shimAction !== 'unchanged') {
     await mkdir(join(root, dirname(AGENT_HOOK_SHIM)), { recursive: true });
-    await journaledWriteFile(root, journal, join(root, AGENT_HOOK_SHIM), shimText);
-    await chmod(join(root, AGENT_HOOK_SHIM), 0o755);
+    await journaledWriteFile(root, journal, join(root, AGENT_HOOK_SHIM), shimText, { mode: 0o755 });
     shimWritten = true;
   }
   await commitJournal(root, 'agent-hooks install', journal);

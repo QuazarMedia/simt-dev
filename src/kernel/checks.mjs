@@ -154,15 +154,24 @@ async function runOne(root, check, manifest) {
   return forbiddenPath(check, diff);
 }
 
+const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.doc', '.docx', '.rst', '.adoc', '.tex']);
+
+function isTextFile(rel) {
+  const segments = rel.split('/');
+  if (segments.includes('doc') || segments.includes('docs')) return true;
+  const dot = rel.lastIndexOf('.');
+  return dot !== -1 && TEXT_EXTENSIONS.has(rel.slice(dot).toLowerCase());
+}
+
 async function fileLines(root, check, manifest) {
   const limits = manifest?.limits?.fileLines ?? {};
-  const generated = limits.generated;
-  if (generated !== undefined && !Array.isArray(generated)) {
+  const exclude = limits.exclude;
+  if (exclude !== undefined && !Array.isArray(exclude)) {
     return [{
       file: 'simt.json',
       status: 'invalid',
-      detail: 'limits.fileLines.generated must be a list of paths',
-      remedy: 'name each generated path, or remove the key',
+      detail: 'limits.fileLines.exclude must be a list of paths',
+      remedy: 'name each excluded path, or remove the key',
     }];
   }
   const warnAt = Number.isInteger(limits.warn) ? limits.warn : DEFAULT_WARN;
@@ -170,13 +179,15 @@ async function fileLines(root, check, manifest) {
   const files = await tracked(root);
   if (files === null) return [];
   const findings = [];
-  const prefixes = Array.isArray(generated) ? generated.filter((g) => typeof g === 'string' && g !== '') : [];
+  const prefixes = Array.isArray(exclude) ? exclude.filter((g) => typeof g === 'string' && g !== '') : [];
+  const skipText = limits.excludeTextFiles === true;
   for (const rel of files) {
     // A committed dependency is not a file this repository wrote. Counting it
     // fails every install of this package, because the package's own sources
     // are longer than the ceiling the consumer declared.
     if (rel.split('/').includes('node_modules')) continue;
     if (exempt(rel, prefixes)) continue;
+    if (skipText && isTextFile(rel)) continue;
     let text;
     try {
       text = await readFile(resolve(root, rel));
@@ -194,7 +205,7 @@ async function fileLines(root, check, manifest) {
         file: rel,
         status: 'file-lines',
         detail: `${lines} lines, over the ceiling of ${errorAt}`,
-        remedy: 'split the file, or name its generator in limits.fileLines.generated',
+        remedy: 'split the file, or name it in limits.fileLines.exclude',
       });
     } else if (lines > warnAt) {
       findings.push({

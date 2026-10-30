@@ -432,9 +432,9 @@ export function renderGateReport(event, declared, result) {
   return lines;
 }
 
-async function run(argv, cwd) {
+async function run(argv, cwd, env) {
   try {
-    const { stdout, stderr } = await exec(argv[0], argv.slice(1), { cwd, maxBuffer: 8 * 1024 * 1024 });
+    const { stdout, stderr } = await exec(argv[0], argv.slice(1), { cwd, env, maxBuffer: 8 * 1024 * 1024 });
     return { code: 0, stdout, stderr };
   } catch (error) {
     return { code: typeof error.code === 'number' ? error.code : 1, stdout: error.stdout ?? '', stderr: error.stderr ?? String(error.message ?? error) };
@@ -510,9 +510,13 @@ async function runBuiltinGate(name, { root, staged, options }) {
  * rather than a flag on `run`.
  */
 async function runGate(resolution, cwd) {
+  // The push override is for the push itself, not for the gates the hook runs.
+  // A test that asserts a push is denied sees the override and fails.
+  const env = { ...process.env };
+  delete env.SIMT_ALLOW;
   if (resolution.shell === true && typeof resolution.command === 'string') {
     try {
-      const { stdout, stderr } = await exec('sh', ['-c', resolution.command], { cwd, maxBuffer: 8 * 1024 * 1024 });
+      const { stdout, stderr } = await exec('sh', ['-c', resolution.command], { cwd, env, maxBuffer: 8 * 1024 * 1024 });
       return { code: 0, stdout, stderr };
     } catch (error) {
       return {
@@ -522,7 +526,7 @@ async function runGate(resolution, cwd) {
       };
     }
   }
-  return run(resolution.argv, cwd);
+  return run(resolution.argv, cwd, env);
 }
 
 async function readPkg(root) {

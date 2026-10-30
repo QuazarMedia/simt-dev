@@ -115,7 +115,7 @@ test('the ceiling fails, the trigger warns, and a named generator is exempt', as
   await writeFile(join(root, 'gen', 'out.js'), `${'x\n'.repeat(1001)}`);
   await git(['-C', root, 'add', 'gen/out.js']);
   const exempt = await runDeclaredChecks(root, selected, {
-    limits: { fileLines: { warn: 400, error: 1000, generated: ['gen'] } },
+    limits: { fileLines: { warn: 400, error: 1000, exclude: ['gen'] } },
   });
   assert.ok(!exempt.some((f) => f.file === 'gen/out.js'));
   assert.ok(exempt.some((f) => f.file === 'long.js' && f.status === 'file-lines'));
@@ -130,6 +130,45 @@ test('the ceiling fails, the trigger warns, and a named generator is exempt', as
   await git(['-C', root, 'add', 'region.md']);
   const marked = await runDeclaredChecks(root, selected, { limits: { fileLines: { warn: 400, error: 1000 } } });
   assert.ok(!marked.some((f) => f.file === 'region.md'));
+});
+
+test('excludeTextFiles skips text files by extension and directory', async () => {
+  const root = await repo();
+  const rules = (await loadRules(root)).filter((r) => r.error === null && (r.id === 'core' || r.id === 'house-checks'));
+  const big = `${'x\n'.repeat(1001)}`;
+
+  // Text files that would exceed the ceiling.
+  await writeFile(join(root, 'README.md'), big);
+  await writeFile(join(root, 'notes.txt'), big);
+  await mkdir(join(root, 'docs'), { recursive: true });
+  await writeFile(join(root, 'docs', 'guide.pdf'), big);
+  await mkdir(join(root, 'src'), { recursive: true });
+  await writeFile(join(root, 'src', 'app.js'), big);
+  for (const f of ['README.md', 'notes.txt', 'docs/guide.pdf', 'src/app.js']) {
+    await git(['-C', root, 'add', f]);
+  }
+
+  // Without excludeTextFiles: all four are flagged.
+  const all = await runDeclaredChecks(root, rules, { limits: { fileLines: { warn: 400, error: 1000 } } });
+  for (const f of ['README.md', 'notes.txt', 'docs/guide.pdf', 'src/app.js']) {
+    assert.ok(all.some((x) => x.file === f && x.status === 'file-lines'), `${f} should be flagged`);
+  }
+
+  // With excludeTextFiles: text files are skipped, the JS file is still flagged.
+  const skipped = await runDeclaredChecks(root, rules, { limits: { fileLines: { warn: 400, error: 1000, excludeTextFiles: true } } });
+  assert.ok(!skipped.some((f) => f.file === 'README.md'), '.md is excluded');
+  assert.ok(!skipped.some((f) => f.file === 'notes.txt'), '.txt is excluded');
+  assert.ok(!skipped.some((f) => f.file === 'docs/guide.pdf'), 'docs/ directory is excluded');
+  assert.ok(skipped.some((f) => f.file === 'src/app.js' && f.status === 'file-lines'), '.js is still checked');
+});
+
+test('excludeTextFiles is false by default when not set', async () => {
+  const root = await repo();
+  const rules = (await loadRules(root)).filter((r) => r.error === null && (r.id === 'core' || r.id === 'house-checks'));
+  await writeFile(join(root, 'README.md'), `${'x\n'.repeat(1001)}`);
+  await git(['-C', root, 'add', 'README.md']);
+  const findings = await runDeclaredChecks(root, rules, { limits: { fileLines: { warn: 400, error: 1000 } } });
+  assert.ok(findings.some((f) => f.file === 'README.md' && f.status === 'file-lines'), 'text file is checked when excludeTextFiles is absent');
 });
 
 test('the diff checkers see a change and not the tree it started from', async () => {

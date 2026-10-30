@@ -126,7 +126,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q25 | Tracker: `In progress (note)` → state `in`; `plan done` corrupts rows with a pipe | P1 | F | plan | S | — | Complete | b06aca6 · test: node --test test/plan.test.mjs |
 | Q26 | `projection.place: "top"` cannot work, yet it is the BEYOND-READ-LIMIT remedy | P1 | F | projection | S | — | Complete | 7223225 · test: node --test test/markers.test.mjs test/init.test.mjs |
 | Q27 | `surfaces: []` silently drops every process rule | P1 | F | surfaces | S | — | Complete | e96b539 · test: node --test test/surfaces.test.mjs |
-| Q28 | Fresh TS `init --yes` then `check` exits 1 (tsconfig base nothing extends) | P1 | F/C | tsconfig | S | — | Queued | |
+| Q28 | Fresh TS `init --yes` then `check` exits 1 (tsconfig base nothing extends) | P1 | F/C | tsconfig | S | — | Complete | f95481e · test: node --test test/tsconfig.test.mjs |
 | Q29 | Lock written outside the plan; `sync` says "nothing written"; `init` never writes it | P1 | F | projection | S | Q68 | Queued | |
 | Q30 | Init side effects (`.gitignore`, `include.path`) hidden from plan and survive `undo`; pins `surfaces:["opencode"]` | P1 | F | init | S | Q68 | Queued | |
 | Q31 | `npm run` in a pnpm repo; CI workflow fails without the devDependency; seeds and card disagree | P1 | F | ecosystem | M | Q70 | Queued | |

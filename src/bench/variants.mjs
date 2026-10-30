@@ -10,7 +10,7 @@ import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 import { extractVariantsFromRule, readLockedVariants } from '../kernel/variants.mjs';
-import { MANIFEST_FILE, STATE_DIR } from '../name.mjs';
+import { LOCK_FILE, MANIFEST_FILE, STATE_DIR } from '../name.mjs';
 import { writeLockVariants } from '../projection/lock.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { loadMdcRules } from '../projection/mdc.mjs';
@@ -131,6 +131,19 @@ export async function applyVariantInWorkspace(workDir, variant) {
   delete nextManifest.mode;
   await writeFile(manifestPath, `${JSON.stringify(nextManifest, null, 2)}\n`, 'utf8');
 
+  // plan() writes the lock as a target (Q29). Left behind, it records this arm's
+  // winner as locked, and the next selectRuleVariants on the same tree reads the
+  // experiment as closed and never runs the runner. Restore it, like the manifest.
+  const lockPath = join(workDir, LOCK_FILE);
+  let originalLockBytes = null;
+  let hadLock = false;
+  try {
+    originalLockBytes = await readFile(lockPath, 'utf8');
+    hadLock = true;
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+  }
+
   const planned = await plan(workDir, {
     variants: { [slotId]: { winner: variantKey } },
   });
@@ -145,6 +158,11 @@ export async function applyVariantInWorkspace(workDir, variant) {
     await unlink(manifestPath).catch(() => {});
   } else if (originalManifestBytes !== null) {
     await writeFile(manifestPath, originalManifestBytes, 'utf8');
+  }
+  if (!hadLock) {
+    await unlink(lockPath).catch(() => {});
+  } else {
+    await writeFile(lockPath, originalLockBytes, 'utf8');
   }
 }
 

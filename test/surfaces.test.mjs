@@ -181,6 +181,21 @@ test('the default is exactly one surface, and it is the one with no per-rule pat
   assert.equal(foldsRules(resolveSurfaces({ surfaces: ['opencode', 'cursor'] }, {})), true);
 });
 
+test('an empty selection folds too, because the region is the only channel left (review 0003 Q27)', () => {
+  // The documented meaning of `"surfaces": []` is AGENTS.md with no per-rule files
+  // and no pointers. The old answer to "does it fold?" asked whether a selected
+  // surface records the fold, so an empty selection folded nothing and every
+  // process rule went nowhere while `check` reported current. With no surface
+  // carrying a rule path, the region is the only channel a rule has, which is the
+  // fold.
+  const none = resolveSurfaces({ surfaces: [] }, {});
+  assert.deepEqual(none.ids, []);
+  assert.equal(foldsRules(none), true, 'with no per-rule channel the region must carry the rules');
+  // The inverse of the same ruling: a selection where every surface has its own
+  // rule path and none records the fold writes per-rule files, not a folded region.
+  assert.equal(foldsRules(resolveSurfaces(null, { surfaces: 'cursor' })), false);
+});
+
 test('one surface, several, or the default are all reachable and are distinguishable', () => {
   // The three answers a repo can have, and they must never be confused: a reader who
   // sees a set and its source must be able to tell a choice from the default.
@@ -288,6 +303,42 @@ test('the default surface folds every rule into AGENTS.md and writes one file', 
   for (const id of ['test-gate', 'intake-questions']) {
     assert.match(region, new RegExp(`## Process: ${id}\\n`), `${id} must be folded into the region`);
   }
+});
+
+test('a repo on "surfaces": [] gets its process rules in the region, and the gate agrees (review 0003 Q27)', async () => {
+  // The failure as the reader met it: AGENTS.md shrank from 11619 to 4488 bytes with
+  // zero `Process:` sections, and `simt check` reported current. The region is the
+  // only channel a rule has when no surface carries a rule path, so a plan that folds
+  // nothing there is a plan that projects the rules nowhere — and a gate that reads
+  // the same plan calls that state current.
+  const root = await scratch();
+  await mkdir(join(root, '.git'), { recursive: true });
+  await writeFile(
+    join(root, MANIFEST_FILE),
+    JSON.stringify({ id: 'x', version: 1, surfaces: [], gates: {} }, null, 2),
+  );
+  const p = await plan(root, {});
+  assert.equal(p.surfaceSource, 'manifest');
+  assert.deepEqual(p.surfaces, []);
+  // No per-rule files: the selection is empty, and the baselines are the only other
+  // files. A per-rule path here would be a channel no reader of this repo has.
+  assert.deepEqual(
+    p.targets.map((t) => t.file).sort(),
+    ['.editorconfig', '.gitattributes', 'AGENTS.md'],
+  );
+  const region = p.targets[0].body;
+  for (const id of ['test-gate', 'intake-questions', 'slice-commit']) {
+    assert.match(region, new RegExp(`## Process: ${id}\\n`), `${id} must be folded into the region`);
+  }
+
+  // And the gate agrees with what was written: `check` on a synced repo exits 0.
+  // That is the state that made the defect invisible — current, with the rules gone.
+  const r = await capture(['sync', '--root', root, '--yes']);
+  assert.equal(r.code, 0, r.stderr);
+  const written = await readFile(join(root, 'AGENTS.md'), 'utf8');
+  assert.match(written, /## Process: test-gate/);
+  const c = await capture(['check', '--root', root]);
+  assert.equal(c.code, 0, `${c.stdout}${c.stderr}`);
 });
 
 test('one rule reaches every selected surface with its own path and its own frontmatter', async () => {

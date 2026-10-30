@@ -327,12 +327,20 @@ export const DEFAULT_SURFACES = ['opencode'];
  * Cursor reader gets them as `.mdc`. Folding and per-rule files therefore coexist,
  * and `ruleTargets` already skips a surface that has no rule path.
  *
+ * An empty selection folds too: with no surface carrying a rule path, the region is
+ * the only channel a rule has, and the old answer (no surface folds, so nothing
+ * folds) wrote every process rule nowhere while `check` reported current (review
+ * 0003 Q27).
+ *
  * Asked in exactly two places that must agree: `desiredRegion` folds the bodies in,
  * and `mdcTargets` writes the files. Asking it twice is how ADR-020's fold decision
  * could drift between the writer and the gate, which is the step-6 failure.
  */
 export function foldsRules(resolved) {
-  return resolved.surfaces.some((s) => s.foldRules === true);
+  if (resolved.surfaces.length === 0) return true;
+  // A surface with no rule path has no per-rule channel, so its rules must be in the
+  // region; `foldRules` is that fact recorded on the row.
+  return resolved.surfaces.some((s) => s.foldRules === true || !s.rule);
 }
 
 /**

@@ -14,7 +14,26 @@ import { join } from 'node:path';
 import { desiredRegion } from '../src/projection/rules.mjs';
 import { computeLock, readLock, writeLockVariants } from '../src/projection/lock.mjs';
 import { LOCK_FILE, LOCK_LEGACY } from '../src/name.mjs';
-import { frozenFindings } from '../src/commands/sync.mjs';
+import { frozenFindings, syncCommand } from '../src/commands/sync.mjs';
+import { plan } from '../src/projection/project.mjs';
+import { initCommand } from '../src/commands/init.mjs';
+
+async function capture(run) {
+  const out = [];
+  const err = [];
+  const realOut = process.stdout.write.bind(process.stdout);
+  const realErr = process.stderr.write.bind(process.stderr);
+  process.stdout.write = (c) => { out.push(String(c)); return true; };
+  process.stderr.write = (c) => { err.push(String(c)); return true; };
+  let code;
+  try {
+    code = await run();
+  } finally {
+    process.stdout.write = realOut;
+    process.stderr.write = realErr;
+  }
+  return { code, text: `${out.join('')}${err.join('')}` };
+}
 
 async function repo() {
   const root = await mkdtemp(join(tmpdir(), 'simt-lock-'));
@@ -98,5 +117,49 @@ test('a lock under the old name is read, and the next write migrates it (ADR-110
     `${JSON.stringify(lock, null, 2)}\n`,
     'the legacy lock is read, never rewritten',
   );
+  await rm(root, { recursive: true, force: true });
+});
+
+test('the lock is a target the plan produces (Q29)', async () => {
+  const root = await repo();
+  const result = await plan(root, {});
+  const lockTarget = result.targets.find((t) => t.file === LOCK_FILE);
+  assert.ok(lockTarget, 'the plan carries a lock target');
+  assert.equal(lockTarget.kind, 'lock');
+  assert.equal(lockTarget.action, 'create', 'a fresh repo has no lock, so the plan creates it');
+  assert.equal(lockTarget.path, join(root, LOCK_FILE));
+  // The bytes the plan will write are the lock this repo should have.
+  const expected = `${JSON.stringify(await computeLock(root, {}), null, 2)}\n`;
+  assert.equal(lockTarget.text, expected);
+  await rm(root, { recursive: true, force: true });
+});
+
+test('a deleted lock is a write sync reports, not a silent no-op (Q29)', async () => {
+  const root = await repo();
+  // First sync writes the lock with everything else.
+  const first = await capture(() => syncCommand([], { root, yes: true }));
+  assert.equal(first.code, 0);
+  assert.ok((await readFile(join(root, LOCK_FILE), 'utf8')).length > 0, 'the first sync wrote the lock');
+
+  // Delete it. The next sync must show a write for the lock, not "nothing written".
+  await rm(join(root, LOCK_FILE), { force: true });
+  const again = await capture(() => syncCommand([], { root, yes: true }));
+  assert.equal(again.code, 0);
+  assert.ok(again.text.includes(LOCK_FILE), 'the plan names the lock it is writing');
+  assert.ok(!again.text.includes('already current; nothing written'), 'a deleted lock is not a no-op');
+  assert.ok((await readFile(join(root, LOCK_FILE), 'utf8')).length > 0, 'the lock is back on disk');
+
+  // And once it is current, the run is idle again.
+  const idle = await capture(() => syncCommand([], { root, yes: true }));
+  assert.ok(idle.text.includes('already current; nothing written'), 'a current lock is not a write');
+  await rm(root, { recursive: true, force: true });
+});
+
+test('init writes the lock, so check --frozen is green after adoption (Q29)', async () => {
+  const root = await repo();
+  const applied = await capture(() => initCommand([], { root, yes: true }));
+  assert.equal(applied.code, 0);
+  assert.ok((await readFile(join(root, LOCK_FILE), 'utf8')).length > 0, 'init wrote the lock');
+  assert.deepEqual(await frozenFindings(root, {}), [], 'a frozen check is green after init');
   await rm(root, { recursive: true, force: true });
 });

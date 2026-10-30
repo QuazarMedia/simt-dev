@@ -31,8 +31,9 @@ import { measureRoot } from '../measure/context.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
 import { pointerState, pointerTargets, ruleTargets, scopedTargets } from './targets.mjs';
-import { CLI } from '../name.mjs';
+import { CLI, LOCK_FILE, LOCK_LEGACY } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
+import { computeLock } from './lock.mjs';
 import {
   desiredRegion,
   provenanceDigest,
@@ -107,6 +108,36 @@ export async function plan(root, flags = {}) {
     packages.regions.map((r) => targetFor(root, join(root, r.path), r.body, r.meta, `${r.path}/${PRIMARY_TARGET}`)),
   );
 
+  // The lock records the two digests a frozen check compares (ADR-086). It is a target
+  // like every other: `plan` produces it, so preview, `--diff`, the journal, the idle
+  // test and `init` all inherit it. Computing it here rather than in `sync` is what makes
+  // a deleted lock show up in the plan as a write instead of vanishing from it — the
+  // `sync` that printed "wrote simt-dev.lock.json" and then "nothing written" (Q29).
+  const lock = await computeLock(root, flags);
+  const lockText = `${JSON.stringify(lock, null, 2)}\n`;
+  let previousLockText = '';
+  let lockExists = false;
+  for (const name of [LOCK_FILE, LOCK_LEGACY]) {
+    try {
+      previousLockText = await readFile(join(root, name), 'utf8');
+      lockExists = true;
+      break;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+  }
+  const lockTarget = {
+    file: LOCK_FILE,
+    path: join(root, LOCK_FILE),
+    kind: 'lock',
+    surface: null,
+    exists: lockExists,
+    action: !lockExists ? 'create' : previousLockText === lockText ? 'unchanged' : 'update',
+    bytes: Buffer.byteLength(lockText),
+    previousBytes: Buffer.byteLength(previousLockText),
+    text: lockText,
+  };
+
   return {
     root,
     stack,
@@ -117,7 +148,7 @@ export async function plan(root, flags = {}) {
     surfaceSource: surfaces.source,
     surfaceProblems: surfaces.problems,
     rules: all,
-    targets: [target, ...nested, ...mdc.targets, ...scoped.targets, ...baselines.targets],
+    targets: [target, ...nested, ...mdc.targets, ...scoped.targets, ...baselines.targets, lockTarget],
     packages: packages.regions.map((r) => ({ path: r.path, profiles: r.profiles })),
     mdcProblems: mdc.problems,
     notes: [...notes, ...mdc.notes, ...packages.notes],

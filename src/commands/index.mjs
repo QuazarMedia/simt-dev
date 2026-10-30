@@ -38,7 +38,7 @@ import { pluginCommand } from './plugin.mjs';
 import { packCommand } from './pack.mjs';
 import { installCommand } from './skillsinstall.mjs';
 import { compileCommand } from './skillscompile.mjs';
-import { listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
+import { decisionsCommand as rulesDecisions, listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
 import { tokensCommand } from './tokens.mjs';
 import { harnessCommand, harnessLoadersCommand } from './harness.mjs';
 import {
@@ -137,6 +137,7 @@ export const IMPLEMENTED = {
   'skills eval': skillsEval,
   'skills install': installCommand,
   'skills compile': compileCommand,
+  'rules decisions': rulesDecisions,
   'rules list': rulesList,
   'rules show': rulesShow,
   'rules why': rulesWhy,

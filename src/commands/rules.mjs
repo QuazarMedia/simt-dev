@@ -14,6 +14,7 @@
 // one, because "this rule has no decision behind it" is exactly the fact a
 // reviewer needs and exactly the fact an empty output would hide.
 
+import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { loadRules, select } from '../projection/project.mjs';
@@ -176,13 +177,36 @@ function rulesFailure(message, remedy, exitCode) {
   throw Object.assign(new Error(message), { remedy, exitCode });
 }
 
+/**
+ * The merged decision index: the package's shipped records underlay the
+ * repository's own, which win on an id collision (review 0003 Q34).
+ *
+ * Before this, a consumer with its own ADR-001/002 read `rules why core` as
+ * settled by *their* ADR-001 while the package's ADR-003…009 — the ones the
+ * shipped rules actually cite — reported MISSING. The overlay keeps both
+ * visible: every decision carries which layer it came from, so a same-number
+ * collision reads as two records, never as one answer wearing the wrong title.
+ *
+ * @returns {{ok: boolean, decisions: object[], errors: string[], origins: Record<string,'repo'|'package'>}}
+ */
 async function loadDecisionsFor(root, all) {
   // Q55: one resolution (manifest key, then detection) and the shared cache,
   // so `rules why` answers from the repository's own records without re-parsing
   // every record on every call. No root means the package's own records.
-  if (!root) return loadDecisionsCached({ root: null, dir: DECISIONS_DIR, all });
+  const pkg = await loadDecisionsCached({ root, dir: DECISIONS_DIR, all });
+  if (!root) return { ...pkg, origins: Object.fromEntries(pkg.decisions.map((d) => [d.id, 'package'])) };
   const relDir = await decisionsDir(root);
-  return loadDecisionsCached({ root, dir: join(root, relDir), all });
+  const absDir = join(root, relDir);
+  const hasLocal = (await readdir(absDir).catch(() => [])).some((n) => /^ADR-\d{3,}-.*\.md$/i.test(n));
+  if (!hasLocal) return { ...pkg, origins: Object.fromEntries(pkg.decisions.map((d) => [d.id, 'package'])) };
+  const local = await loadDecisionsCached({ root, dir: absDir, all });
+  const merged = new Map(pkg.decisions.map((d) => [d.id, d]));
+  const origins = Object.fromEntries(pkg.decisions.map((d) => [d.id, 'package']));
+  for (const d of local.decisions) {
+    merged.set(d.id, d);
+    origins[d.id] = 'repo';
+  }
+  return { ok: pkg.ok && local.ok, decisions: [...merged.values()], errors: [...pkg.errors, ...local.errors], origins };
 }
 
 /** The catalogue both surfaces answer from: every rule, its decisions, and the selection. */
@@ -216,20 +240,22 @@ export async function rulesWhyFacts(root, what, { all = false } = {}) {
   const { rules } = await load(root);
   if (/^ADR-\d{3,}$/i.test(what)) {
     const id = what.toUpperCase();
-    const { ok, decisions, errors } = await loadDecisionsFor(root, all);
+    const { ok, decisions, errors, origins } = await loadDecisionsFor(root, all);
     if (!ok) {
       rulesFailure(errors[0], 'the decision records must be readable for provenance to work', EXIT.CONFIG);
     }
-    const record = decisions.find((x) => x.id === id);
+    const record = decisions.find((x) => x.id === id) ?? null;
     // Was 'list them with: ls docs/decisions/' - a path relative to simt-dev's own
     // tree, which resolves to nothing in the repo the reader is standing in. The
-    // remedy must be a command they can run.
-    if (!record) rulesFailure(`no decision record ${id}`, `list the known decisions with: ${CLI} rules list`, EXIT.USAGE);
+    // remedy must be a command they can run (Q34: the decisions list, not the
+    // rules list - the reader asked about a decision, not a rule).
+    if (!record) rulesFailure(`no decision record ${id}`, `list the known decisions with: ${CLI} rules decisions`, EXIT.USAGE);
     const replacement = record.supersededBy ? decisions.find((x) => x.id === record.supersededBy) : null;
     return {
       direction: 'decision',
       id,
-      adr: record,
+      adr: { ...record, origin: origins[id] ?? 'package' },
+      origins,
       supersededBy: replacement ? { id: replacement.id, title: replacement.title } : null,
       inForce: replacement
         ? { id: replacement.id, status: replacement.status, summary: replacement.summary }
@@ -246,7 +272,7 @@ export async function rulesWhyFacts(root, what, { all = false } = {}) {
       EXIT.USAGE,
     );
   }
-  const { ok, decisions, errors } = await loadDecisionsFor(root, all);
+  const { ok, decisions, errors, origins } = await loadDecisionsFor(root, all);
   if (!ok) {
     rulesFailure(errors[0], 'the decision records must be readable for provenance to work', EXIT.CONFIG);
   }
@@ -260,9 +286,10 @@ export async function rulesWhyFacts(root, what, { all = false } = {}) {
     title: rule.title ?? null,
     source: rule.source,
     origin: rule.origin,
-    adrs: cited.map((c) => index.get(c) ?? { id: c, missing: true }),
+    adrs: cited.map((c) => (index.has(c) ? { ...index.get(c), origin: origins[c] ?? 'package' } : { id: c, missing: true })),
     uncited: cited.length === 0,
     others: others.map((r) => r.id),
+    origins,
   };
 }
 
@@ -350,10 +377,11 @@ function ruleDirection(facts, flags) {
   lines.push('', `settled by ${facts.adrs.length} decision${facts.adrs.length === 1 ? '' : 's'}`);
   for (const d of facts.adrs) {
     if (d.missing) {
-      lines.push(`  ${d.id}  MISSING - the rule cites it, but this installation has no record of it`);
+      lines.push(`  ${d.id}  MISSING - the rule cites it, but neither this repo nor this installation has a record of it`);
+      lines.push(`          remedy: list the known decisions with: ${CLI} rules decisions`);
       continue;
     }
-    lines.push(`  ${d.id}  ${d.title}`);
+    lines.push(`  ${d.id}  [${d.origin ?? 'package'}]  ${d.title}`);
     lines.push(`          ${d.status}`);
     if (d.supersededBy) {
       // Never print a reversed ruling as if it were current.
@@ -378,6 +406,7 @@ function adrDirection(facts, flags) {
   const lines = [
     `${d.id} - ${d.title}`,
     '',
+    `origin    ${d.origin ?? 'package'}${d.origin === 'repo' ? ' (this repository overlays the shipped record of the same number)' : ''}`,
     `status    ${d.status}`,
     `restates  ${restates.length > 0 ? restates.join(', ') : '(no rule cites it)'}`,
   ];
@@ -460,5 +489,51 @@ function adrDirection(facts, flags) {
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   // A superseded record is not a failure; it is the supersession rule working.
   // The caller asked a question and got a true answer.
+  return EXIT.OK;
+}
+
+// --- decisions ------------------------------------------------------------------
+
+/**
+ * `simt rules decisions`: every known decision record, both layers.
+ *
+ * The shipped records underlay the repository's own, which win on a number
+ * collision (review 0003 Q34). The column that matters is `origin`: a reader in
+ * a consumer repository must be able to tell the package's ADR-001 from their
+ * own, because they are two records that happen to share a number.
+ */
+export async function decisionsCommand(args, flags) {
+  const root = flags.root ?? null;
+  const { ok, decisions, errors, origins } = await loadDecisionsFor(root, flags.all === true);
+  if (!ok) {
+    return fail(errors[0], EXIT.CONFIG, 'the decision records must be readable to list them');
+  }
+  const rows = [...decisions]
+    .sort((a, b) => Number(a.id.replace(/^ADR-/i, '')) - Number(b.id.replace(/^ADR-/i, '')))
+    .map((d) => ({
+      id: d.id,
+      title: d.title,
+      status: d.status,
+      origin: origins[d.id] ?? 'package',
+      supersededBy: d.supersededBy ?? null,
+      file: d.file,
+    }));
+
+  if (isJson(flags)) {
+    emitJson({ ok: true, command: 'rules decisions', root, decisions: rows });
+    return EXIT.OK;
+  }
+
+  const repo = rows.filter((r) => r.origin === 'repo').length;
+  const lines = [
+    `${rows.length} decisions${root && repo > 0 ? ` (${repo} from this repo overlay the shipped set)` : ''}`,
+    '',
+    'id       origin   title',
+  ];
+  for (const r of rows) {
+    const head = r.status.length > 80 ? `${r.status.slice(0, 80)}...` : r.status;
+    lines.push(`${r.id.padEnd(8)}  ${r.origin.padEnd(7)}  ${r.title} — ${head}`);
+  }
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
 }

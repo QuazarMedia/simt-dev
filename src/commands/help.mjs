@@ -47,6 +47,7 @@ ${CLI} rules list             the rule catalogue (--root marks what applies to a
 ${CLI} rules show <id>        one rule body
 ${CLI} rules why <id|ADR-NNN> the decision that settled it, and whether it is still in force
                            (--all prints every ruling, not the first two)
+${CLI} rules decisions       every known decision, shipped and repo, and which layer each came from
 ${CLI} hooks install [--yes]   install the shared dispatcher; report what it would run
                            (dry-run unless --yes; refuses to take over routing git
                             already uses, and --yes is that consent)

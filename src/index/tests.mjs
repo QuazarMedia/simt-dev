@@ -9,6 +9,8 @@
 import { isTestPath } from '../bench/mine.mjs';
 import { extract, resolveImports } from './extract.mjs';
 
+export { scriptSpecifiers } from './extract.mjs';
+
 const HISTORY = 200;
 const COCHANGE_MIN = 2;
 const COCHANGE_CAP = 8;
@@ -57,38 +59,6 @@ export function testsFor(source, edges, { cochange = false } = {}) {
     found.push(edge.src);
   }
   return found;
-}
-
-/** Import specifiers in a script, including an import that spans lines. */
-export function scriptSpecifiers(text) {
-  const specs = [];
-  const lines = String(text).split('\n');
-  let buf = '';
-  let open = false;
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!open) {
-      if (!/^(?:import|export)\b/.test(trimmed)) continue;
-      // A declaration is not an import. Capturing it would swallow the next
-      // import's `from` and report a specifier the file does not have.
-      if (/^export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var)\b/.test(trimmed) && !trimmed.includes(' from ')) continue;
-      buf = trimmed;
-      open = true;
-    } else {
-      buf += `\n${trimmed}`;
-    }
-    const done = /\bfrom\s+['"][^'"]+['"]/.test(buf) || /^import\s+['"][^'"]+['"]/.test(buf) || buf.includes(';') || buf.length > 2000;
-    if (!done) continue;
-    const from = buf.match(/\bfrom\s+['"]([^'"]+)['"]/);
-    const side = buf.match(/^import\s+['"]([^'"]+)['"]/);
-    if (from) specs.push(from[1]);
-    else if (side) specs.push(side[1]);
-    buf = '';
-    open = false;
-  }
-  for (const match of String(text).matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(match[1]);
-  for (const match of String(text).matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(match[1]);
-  return [...new Set(specs)];
 }
 
 export function parseCoverage(text) {
@@ -287,8 +257,9 @@ function cmp(a, b) {
   return 0;
 }
 
-/** Relative imports in a test file, resolved against the tracked tree. */
+/** Imports in a file, resolved against the tracked tree. One path now: `extract`
+ * reads scripts with `scriptSpecifiers`, so gate, impact and the index agree on
+ * what a file imports (review 0003 Q41). */
 export function importsOf(testPath, text, lang, files) {
-  const specs = lang === 'javascript' || lang === 'typescript' ? scriptSpecifiers(text) : extract(testPath, text, lang).imports;
-  return resolveImports(testPath, specs, files, lang);
+  return resolveImports(testPath, extract(testPath, text, lang).imports, files, lang);
 }

@@ -130,6 +130,24 @@ test('a relative import points at the tracked file', () => {
   assert.deepEqual(edges, [{ src: 'src/a.ts', dst: 'src/inner.ts', kind: 'import', weight: 1 }]);
 });
 
+test('an import spanning lines is one specifier, and .js names the .ts source (Q41)', () => {
+  // The old single-line regexes saw no `from` on the first line, so an import
+  // like `store.mjs → persist.mjs` (spanning lines 15-27) produced no edge.
+  const text = 'import {\n  a,\n  b,\n} from "./persist.mjs";\nimport "./side.js";\n';
+  const found = extract('src/store.mts', text, 'typescript');
+  assert.deepEqual(found.imports, ['./persist.mjs', './side.js']);
+  const edges = resolveImports(
+    'src/store.mts',
+    found.imports,
+    new Set(['src/persist.mts', 'src/side.ts']),
+    'typescript',
+  );
+  assert.deepEqual(edges, [
+    { src: 'src/store.mts', dst: 'src/persist.mts', kind: 'import', weight: 1 },
+    { src: 'src/store.mts', dst: 'src/side.ts', kind: 'import', weight: 1 },
+  ]);
+});
+
 test('the same blobs produce the same symbols, and one edit rewrites that file', async () => {
   const root = await mkdtemp(join(tmpdir(), 'idx-'));
   await git(['init', '-q', root]);

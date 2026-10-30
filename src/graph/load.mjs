@@ -154,10 +154,15 @@ export async function loadRegistry(path = null, flags = {}) {
   // errors are facts about ABSENCE - no registry here, or more than one and the reader must
   // pick - and are reported as such. A named path that is missing is a different fact: the
   // reader pointed at a file that is not there, and it names that path.
-  let where = path;
+  //
+  // Resolution order for the registry itself (review 0003 Q37): positional path,
+  // then `--registry`, then `SIMT_REGISTRY`, then the default tiers above.
+  const explicit =
+    path ?? flags?.registry ?? process.env.SIMT_REGISTRY ?? process.env.SIMT_DEV_REGISTRY ?? null;
+  let where = explicit;
   let resolveErrors = null;
   let resolvedWorkspace = null;
-  if (path === null) {
+  if (explicit === null) {
     const found = await defaultRegistry(flags);
     where = found.where;
     resolveErrors = found.errors;
@@ -181,7 +186,7 @@ export async function loadRegistry(path = null, flags = {}) {
     registry = JSON.parse(await readFile(where, 'utf8'));
   } catch (error) {
     const message =
-      path === null && error.code === 'ENOENT'
+      explicit === null && error.code === 'ENOENT'
         ? `no skill registry at ${where}; create one there, or name it explicitly`
         : `${where}: unreadable or invalid JSON (${error.message})`;
     return {

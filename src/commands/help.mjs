@@ -254,6 +254,10 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --workspace <path>      where the skill sources live; "off" declines it
                         (default: SIMT_DEV_WORKSPACE, then the user config
                         file, then the sibling heuristic if it verifies)
+--registry <path>       which skill registry to read (skills commands and
+                        graph lint; default: SIMT_REGISTRY, then the checkout's
+                        own graph/skills.graph.json, then the one member of the
+                        workspace that holds one)
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
 --check                 report drift and write nothing (sync, ci)

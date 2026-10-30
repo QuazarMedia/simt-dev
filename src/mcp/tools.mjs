@@ -548,7 +548,13 @@ export const TOOLS = [
     name: 'skills_index',
     description:
       'Full skill catalogue: every skill with summary, size, stack tags and deferred flag. The fallback when brief returns nothing useful.',
-    inputSchema: noArgs,
+    inputSchema: {
+      type: 'object',
+      properties: {
+        registry: { type: 'string', description: 'path to skills.graph.json; else --registry / SIMT_REGISTRY / default tiers' },
+      },
+      required: [],
+    },
     async run(args) {
       const { registry: reg, verified, workspace } = await registry(args);
       return {
@@ -578,6 +584,7 @@ export const TOOLS = [
         budget: { type: 'number', description: 'context budget in bytes (default 20480)' },
         skill: { type: 'string', description: 'force a skill in, comma-separated' },
         all: { type: 'boolean', description: 'ignore the budget' },
+        registry: { type: 'string', description: 'path to skills.graph.json; else --registry / SIMT_REGISTRY / default tiers' },
       },
       required: [],
     },
@@ -610,6 +617,7 @@ export const TOOLS = [
         name: { type: 'string' },
         root: { type: 'string' },
         maxBytes: { type: 'number', description: 'hard ceiling on the returned text' },
+        registry: { type: 'string', description: 'path to skills.graph.json; else --registry / SIMT_REGISTRY / default tiers' },
       },
       required: ['name'],
     },
@@ -632,7 +640,10 @@ export const TOOLS = [
     description: 'Raw search across capability, keyword and summary. Use when skills_brief has nothing and you suspect a skill exists.',
     inputSchema: {
       type: 'object',
-      properties: { query: { type: 'string' } },
+      properties: {
+        query: { type: 'string' },
+        registry: { type: 'string', description: 'path to skills.graph.json; else --registry / SIMT_REGISTRY / default tiers' },
+      },
       required: ['query'],
     },
     async run(args) {
@@ -647,7 +658,12 @@ export const TOOLS = [
       'The signal chain for one skill in one repository: its score, the reasons, whether the stack gate admits it, and what would select it.',
     inputSchema: {
       type: 'object',
-      properties: { name: { type: 'string' }, root: { type: 'string' }, task: { type: 'string' } },
+      properties: {
+        name: { type: 'string' },
+        root: { type: 'string' },
+        task: { type: 'string' },
+        registry: { type: 'string', description: 'path to skills.graph.json; else --registry / SIMT_REGISTRY / default tiers' },
+      },
       required: ['name'],
     },
     async run(args) {

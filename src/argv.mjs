@@ -119,6 +119,10 @@ export const VALUE_FLAGS = new Set([
   'task',
   'workspace',
   'root',
+  // skills/graph: which registry to read. A value rather than a boolean because
+  // "a registry" without a path would have to guess, and the guess is the
+  // defect Q37 exists to remove (review 0003).
+  'registry',
   // skills install: which body of a multi-variant skill, and which source when the
   // bytes alone do not identify one.
   'variant',

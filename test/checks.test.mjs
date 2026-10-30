@@ -57,7 +57,11 @@ test('the file-length line leaves the projection and the neighbours stay', async
   const folded = foldChecks(sample);
   assert.equal(
     folded.body,
-    ['- No type-system escapes.', '- Enforced: max-file-lines', '- Never weaken a control.'].join('\n'),
+    [
+      '- No type-system escapes.',
+      '- Enforced: by `simt check`: more than 400 lines warns, more than 1000 fails (`limits.fileLines`)',
+      '- Never weaken a control.',
+    ].join('\n'),
   );
 
   const rules = await loadRules();
@@ -65,13 +69,13 @@ test('the file-length line leaves the projection and the neighbours stay', async
   assert.equal(core.error, null);
   const shipped = foldChecks(core.body);
   assert.ok(shipped.changed);
-  assert.match(shipped.body, /Enforced: max-file-lines/);
+  assert.match(shipped.body, /Enforced: by `simt check`: more than 400 lines warns/);
   assert.doesNotMatch(shipped.body, /400 lines is a review trigger/);
   assert.ok(Buffer.byteLength(shipped.body) < Buffer.byteLength(core.body));
 
   const root = await repo();
   const region = await desiredRegion(root, {});
-  assert.match(region.body, /Enforced: max-file-lines/);
+  assert.match(region.body, /Enforced: by `simt check`: more than 400 lines warns/);
   assert.doesNotMatch(region.body, /400 lines is a review trigger/);
   assert.match(region.notes.join('\n'), /enforced: \d+ line/);
 });

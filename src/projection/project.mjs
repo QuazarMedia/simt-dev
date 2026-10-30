@@ -151,6 +151,7 @@ export async function plan(root, flags = {}) {
     targets: [target, ...nested, ...mdc.targets, ...scoped.targets, ...baselines.targets, lockTarget],
     packages: packages.regions.map((r) => ({ path: r.path, profiles: r.profiles })),
     mdcProblems: mdc.problems,
+    crossRefs: desired.crossRefs,
     notes: [...notes, ...mdc.notes, ...packages.notes],
   };
 }
@@ -308,7 +309,20 @@ export async function checkTargets(root, flags = {}) {
   for (const p of resolved.problems) {
     findings.push({ file: `${MANIFEST_FILE}`, status: 'invalid', detail: p, remedy: `known surfaces: ${SURFACE_IDS.join(', ')}` });
   }
-  const rules = all.filter((r) => isEligible(r, new Set([...stack, ...facts]), declared.optIn));
+  const signals = new Set([...stack, ...facts]);
+  const rules = all.filter((r) => isEligible(r, signals, declared.optIn));
+
+  // A dangling cross-reference is a rule-text defect: the region renders, but it points
+  // the reader at a profile they cannot reach. A gate failure, like any other rule defect.
+  for (const p of desired.crossRefs ?? []) {
+    const idx = p.indexOf(': ');
+    findings.push({
+      file: p.slice(0, idx),
+      status: 'invalid',
+      detail: p.slice(idx + 2),
+      remedy: `co-select the profile, or name it with ${CLI} rules show <id>`,
+    });
+  }
 
   const sha = await provenanceDigest();
   const notes = [];
@@ -357,6 +371,7 @@ export async function checkTargets(root, flags = {}) {
     const { body, problems } = renderMdc(
       rule,
       ruleValues(rule, declared.values[rule.id] ?? {}, resolved.surfaces),
+      signals,
     );
     if (problems.length > 0) {
       findings.push({

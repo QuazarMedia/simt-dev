@@ -37,7 +37,7 @@ import { filterInferable, inferableDefect, inferableProofs } from '../kernel/inf
 import { checkDefect, foldChecks } from '../kernel/checks.mjs';
 import { foldVariants, readLockedVariants, variantsDefect } from '../kernel/variants.mjs';
 import { BASELINES } from './baselines.mjs';
-import { CLI } from '../name.mjs';
+import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { installedSkills } from './disclosure.mjs';
 import { PACK_DIR, resolvePacks } from '../packs.mjs';
 import { discoverPackages } from '../monorepo.mjs';
@@ -414,6 +414,7 @@ async function ruleBodies(root, manifest, flags) {
     const { body, problems: renderProblems } = renderMdc(
       rule,
       ruleValues(rule, declared.values[rule.id] ?? {}, resolved.surfaces),
+      signals,
     );
     for (const p of renderProblems) problems.push(`${rule.file}: ${p}`);
     if (renderProblems.length > 0) continue;
@@ -560,6 +561,16 @@ export async function desiredRegion(root, flags) {
     }
     for (const x of filtered.removed) inferable.push({ rule: r.id, text: x.text, expr: x.expr });
     shipped.push({ ...r, body: folded.body });
+  }
+  // A body that points the reader at a profile they cannot reach is a rule-text defect:
+  // the region renders, but the reference dangles. Kept out of `problems` because that
+  // array is the mdc list `sync` already reports, and one fault must not print twice.
+  const crossRefs = [];
+  const selectedIds = new Set(selected.map((r) => r.id));
+  for (const r of shipped) {
+    for (const p of crossRefProblems(r.body, all, selectedIds)) {
+      crossRefs.push(`${r.id}: ${p}`);
+    }
   }
   const lockedNonDefault = variantsSelected.filter((v) => v.locked && v.winner !== v.baseline);
   if (lockedNonDefault.length > 0) {
@@ -909,6 +920,7 @@ export async function desiredRegion(root, flags) {
     surfaces: resolved.ids,
     surfaceSource: resolved.source,
     problems,
+    crossRefs,
     fallback,
     notes,
     body: assembled.body,
@@ -1304,9 +1316,13 @@ export function byPriorityThenId(a, b) {
  * `Applies to` is already the first line of a stack profile once its H1 is gone,
  * so it lands directly under `## Stack: …` instead of under whatever section the
  * previous source ended on.
+ *
+ * The rule text names the manifest with a `{manifest}` token and the render
+ * substitutes it, so a rename of the file is a change in one place (MANIFEST_FILE),
+ * not a search across every rule body.
  */
 function frameSource(rule, body, kind) {
-  const text = demoteHeadings(body).trim();
+  const text = demoteHeadings(body.replaceAll('{manifest}', MANIFEST_FILE)).trim();
   if (!text) return '';
   const title = sourceTitle(rule, kind);
   if (!title) return text;
@@ -1318,6 +1334,34 @@ function sourceTitle(rule, kind) {
   if (kind === 'process') return `Process: ${rule.id}`;
   if (rule.id === 'core') return 'Core';
   return `Stack: ${rule.id}`;
+}
+
+/**
+ * A body may point the reader at another profile in two ways: naming a profile
+ * that is selected alongside it, or giving the command to fetch one
+ * (`simt rules show <id>`). A reference that is neither is one the reader of
+ * the projected region cannot follow. Both citation forms are checked: the
+ * backtick-quoted `<id> profile` in prose, and the `simt rules show <id>`
+ * command itself - an id that form names must exist, or the command 404s.
+ */
+function crossRefProblems(body, all, selectedIds) {
+  const problems = [];
+  const seen = new Set();
+  for (const m of String(body).matchAll(/`([a-z0-9][a-z0-9-]*)`\s+profile|rules show ([a-z0-9][a-z0-9-]*)/g)) {
+    const id = m[1] ?? m[2];
+    if (seen.has(id)) continue;
+    seen.add(id);
+    if (!all.some((r) => r.id === id)) {
+      problems.push(`cross-reference: body cites the \`${id}\` profile, which is not a declared rule`);
+      continue;
+    }
+    if (!selectedIds.has(id) && !new RegExp(`${CLI} rules show ${id}`).test(body)) {
+      problems.push(
+        `cross-reference: body cites the \`${id}\` profile, which is neither co-selected nor reachable via \`${CLI} rules show ${id}\``,
+      );
+    }
+  }
+  return problems;
 }
 
 /** `##` becomes `###`. A fence is left alone: a heading in an example is an example. */

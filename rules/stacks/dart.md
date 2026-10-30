@@ -8,7 +8,7 @@ simt-scope: ["pubspec.yaml", "**/*.dart"]
 
 # Stack profile: Dart
 
-Applies to: `has-pubspec` — a `pubspec.yaml`. A Flutter project is a Dart project
+Applies to: a committed `pubspec.yaml`. A Flutter project is a Dart project
 with the `flutter` SDK dependency; the Flutter-specific rules live with the tools
 that build it, not here.
 

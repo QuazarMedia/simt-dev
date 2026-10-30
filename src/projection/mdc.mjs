@@ -28,6 +28,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parse } from './markers.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 
 // ROOT is computed here rather than imported: project.mjs is the caller of every
 // function below, so importing it back would create a cycle for the sake of one
@@ -148,9 +149,18 @@ function parseSubstitutions(text) {
     const scope = next ? tail.slice(0, next.index + 1) : tail;
     const def = /^\s*default:\s*(.*)$/m.exec(scope);
     const desc = /^\s*describe:\s*(.*)$/m.exec(scope);
+    // A per-signal default: `default-<signal>:` picks the value when the repository
+    // carries that signal (a stack tag or a detection fact). `default:` is the
+    // fallback. The two cannot collide: `default:` requires the colon immediately
+    // after the word, and a signal line has a `-` there.
+    const perSignal = {};
+    for (const pm of scope.matchAll(/^\s*default-([a-z0-9][a-z0-9-]*):\s*(.*)$/gm)) {
+      perSignal[pm[1]] = unquote(pm[2].trim());
+    }
     out.push({
       key: hit[1],
       default: def ? unquote(def[1].trim()) : '',
+      perSignal,
       describe: desc ? unquote(desc[1].trim()) : '',
     });
   }
@@ -198,6 +208,19 @@ function stripFrontmatter(text) {
 }
 
 /**
+ * The default a signal set selects: the first per-signal default whose signal is
+ * present, else the plain default. Signals carry detection facts as well as stack
+ * tags, because a Go repository is selected on a fact, not a stack (review 0003 Q32).
+ */
+function pickDefault(sub, signals) {
+  const perSignal = sub.perSignal ?? {};
+  for (const s of signals) {
+    if (Object.prototype.hasOwnProperty.call(perSignal, s)) return perSignal[s];
+  }
+  return sub.default;
+}
+
+/**
  * Substitute declared placeholders.
  *
  * An empty-string default is a deliberate "this repo has nothing to add here"
@@ -209,9 +232,11 @@ function stripFrontmatter(text) {
  * rendered rule would ship a literal `{{key}}`, which reads as a finished rule
  * and is not one.
  */
-export function renderMdc(rule, declared = {}) {
+export function renderMdc(rule, declared = {}, signals = []) {
   const problems = [];
-  let body = rule.body;
+  // The rule text names the manifest with a token and the render substitutes it,
+  // so a rename of the file is a change in one place (MANIFEST_FILE).
+  let body = rule.body.replaceAll('{manifest}', MANIFEST_FILE);
 
   for (const sub of rule.substitutions) {
     const has = Object.prototype.hasOwnProperty.call(declared, sub.key);
@@ -226,17 +251,19 @@ export function renderMdc(rule, declared = {}) {
     }
 
     if (provided === undefined || provided === null || provided === '') {
-      // Fall back to the default. An empty DEFAULT is also a drop instruction,
-      // which is how the same file serves a repo that has nothing to add.
-      if (sub.default === '') {
+      // Fall back to the default the signals select. An empty chosen default is
+      // also a drop instruction, which is how the same file serves a repo that
+      // has nothing to add.
+      const chosen = pickDefault(sub, signals);
+      if (chosen === '') {
         body = dropOrReplace(body, sub.key, '');
         continue;
       }
-      if (sub.default === undefined) {
+      if (chosen === undefined) {
         problems.push(`substitution ${sub.key} has no default and none declared`);
         continue;
       }
-      body = dropOrReplace(body, sub.key, sub.default);
+      body = dropOrReplace(body, sub.key, chosen);
       continue;
     }
 

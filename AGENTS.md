@@ -122,7 +122,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=5bb13abbb8295ed3f93e720321f3a6ae127fbd62 -->
+<!-- simt:sha=993c0ddada089fd8fab25bd0da37c5a721ed1576 -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->
@@ -167,8 +167,8 @@ commands belongs in this repository, not here.
 - Name the exact commands and test files. Partial pass is a blocker; `6/8 pass` is the
   canonical example of a blocked state. Never justify a skip without a pre-existing written
   reason. (ADR-006)
-- Evidence discipline is mandatory everywhere. A **numeric** bar is declared per repo in
-  `simt.json`, never assumed centrally. (ADR-006)
+- Evidence discipline is mandatory everywhere. A **numeric** bar is declared per repo in the
+  repository's manifest (`simt.json`), never assumed centrally. (ADR-006)
 - The pre-commit hook owns format and lint for staged files; do not re-run what it just ran.
   Manual runs are correct when the hook is absent, when diagnosing a failure, or for a check
   the hook does not cover. (ADR-004)
@@ -181,7 +181,7 @@ commands belongs in this repository, not here.
 ### Code and review
 
 - No type-system escapes, no unawaited async work, no debug printing in application code.
-- Enforced: max-file-lines
+- Enforced: by `simt check`: more than 400 lines warns, more than 1000 fails (`limits.fileLines`)
 - Never weaken CSP, CORS, auth, audit, cache or validation controls to silence a test, warning
   or alert.
 - Review verdicts are exactly three: `BLOCK`, `APPROVE WITH RESIDUAL RISK` (must list what was
@@ -199,14 +199,15 @@ repository's rule, not a widening of this one.
 
 ## Stack: python
 
-Applies to: `python`. The environment rules — how to invoke tools, and which lockfile
-owns them — are in the `uv` profile, which selects on `has-uv-lock`.
+Applies to: Python — `pyproject.toml`, `requirements.txt` or `setup.py`. The
+environment rules — how to invoke tools, and which lockfile owns them — are in the
+`uv` profile (`simt rules show uv`), which selects on a committed `uv.lock`.
 
 ### Invocation
 
 - Run through the repository's own runner: `uv run` where a `uv.lock` is committed,
   `poetry run` where a `poetry.lock` is, and the repository's documented wrapper
-  otherwise. See the `uv` profile for the form that must not be used.
+  otherwise. See `simt rules show uv` for the form that must not be used.
 - Never invoke a tool from whatever environment the shell happens to have. It will
   usually be a different copy of the package than the one under test, and the failure
   it produces looks like a bug in the code.
@@ -221,9 +222,9 @@ owns them — are in the `uv` profile, which selects on `has-uv-lock`.
 
 ### Tests
 
-- `fail_under` is set per repo in `simt.json` (ADR-006). Where a repo requires
-  100 %, treat it as a behavioural gate: an uncovered path is either a missing test
-  or dead code, and both are defects.
+- `fail_under` is set per repo in the repository's manifest (`simt.json`) (ADR-006).
+  Where a repo requires 100 %, treat it as a behavioural gate: an uncovered path is
+  either a missing test or dead code, and both are defects.
 - No `pytest.skip` without a pre-existing written justification.
 - Test the narrowest layer that proves the behaviour; reach for an integration test
   only when the behaviour is genuinely cross-system.

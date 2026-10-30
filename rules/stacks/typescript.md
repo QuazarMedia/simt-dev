@@ -14,8 +14,8 @@ simt-fallback: true
 
 # Stack profile: TypeScript
 
-Applies to: `typescript`, together with the `node` profile when no more specific
-profile matches.
+Applies to: `tsconfig.json` is committed with a TypeScript dependency. A repository
+with no more specific profile receives the `node` rules alongside it.
 
 ## Types
 

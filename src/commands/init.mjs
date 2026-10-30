@@ -94,6 +94,7 @@ export async function initCommand(positional, flags) {
   const projected = await plan(root, flags);
   const region = projected.targets[0];
   const mdcProblems = projected.mdcProblems ?? [];
+  const crossRefs = projected.crossRefs ?? [];
 
   // Which editors this repo's rules reach. `--surfaces` wins for this run and is
   // recorded in the manifest so the choice survives; with nothing declared the
@@ -290,6 +291,10 @@ export async function initCommand(positional, flags) {
       `fix the reported substitution keys in ${MANIFEST_FILE}`,
     );
   }
+
+  // A dangling cross-reference does not stop the adoption: the region renders, and one
+  // unreachable reference is a defect to report, not a reason to withhold the rest.
+  for (const p of crossRefs) note(`PROBLEM  ${p}`);
 
   // Step 3: block on a real conflict before doing anything else. A duplicate is
   // reported but never blocks - restating a ruling is a hygiene problem, while

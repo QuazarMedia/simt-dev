@@ -8,7 +8,7 @@ simt-scope: ["deno.json", "deno.jsonc", "**/*.ts"]
 
 # Stack profile: Deno
 
-Applies to: `has-deno-config` — a `deno.json` or `deno.jsonc`.
+Applies to: a committed `deno.json` or `deno.jsonc`.
 
 ## Build and gates
 

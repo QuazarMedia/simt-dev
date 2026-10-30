@@ -113,6 +113,42 @@ test('a declared substitution replaces the default', async () => {
   assert.doesNotMatch(body, /`docs\/plans\/\*`/);
 });
 
+test('a per-signal default is used when the repo carries that signal', async () => {
+  const rules = await loadMdcRules();
+  const gate = rules.find((r) => r.id === 'test-gate');
+  const sub = gate.substitutions.find((s) => s.key === 'exampleTestPath');
+  assert.equal(sub.perSignal['has-go-mod'], 'path/to/the_changed_test.go');
+
+  // A Go repository is selected on a fact, not a stack tag: the signals carry facts.
+  const { body: go } = renderMdc(gate, {}, ['has-go-mod']);
+  assert.match(go, /path\/to\/the_changed_test\.go/);
+
+  const { body: other } = renderMdc(gate);
+  assert.match(other, /path\/to\/the\.changed\.test\.ts/);
+  assert.doesNotMatch(other, /the_changed_test/);
+});
+
+test('a declared substitution beats the per-signal default', async () => {
+  const rules = await loadMdcRules();
+  const gate = rules.find((r) => r.id === 'test-gate');
+  const { body } = renderMdc(gate, { exampleTestPath: 'tests/real_test.go' }, ['has-go-mod']);
+  assert.match(body, /tests\/real_test\.go/);
+});
+
+test('an empty per-signal default drops the line for that signal only', () => {
+  const rule = {
+    substitutions: [{ key: 'note', default: 'the default note', perSignal: { 'has-x': '' }, describe: '' }],
+    body: '- A note: {{note}}.',
+  };
+  assert.equal(renderMdc(rule, {}, ['has-x']).body.trim(), '');
+  assert.match(renderMdc(rule).body, /the default note/);
+});
+
+test('a {manifest} token in a body renders as the manifest filename', () => {
+  const { body } = renderMdc({ substitutions: [], body: 'declare the bar in `{manifest}`' });
+  assert.match(body, /`simt\.json`/);
+});
+
 test('an empty declaration DROPS its line rather than printing a blank', async () => {
   const rules = await loadMdcRules();
   const { body } = renderMdc(rules.find((r) => r.id === 'preview-postflight'), {

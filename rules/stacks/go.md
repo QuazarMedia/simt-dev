@@ -8,7 +8,7 @@ simt-scope: ["go.mod", "**/*.go"]
 
 # Stack profile: Go
 
-Applies to: `has-go-mod` — a module.
+Applies to: Go modules — a committed `go.mod`.
 
 ## Build and gates
 

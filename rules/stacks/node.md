@@ -42,6 +42,6 @@ Applies to: `node`, `node-web`, `typescript` when no more specific profile match
 ## Tests
 
 - `vitest`, `jest` or `node --test` — one runner per repo, declared, not inherited.
-- Focused selection is the default invocation. A full suite runs against the triggers in
-  `simt.json` (ADR-003).
+- Focused selection is the default invocation. A full suite runs against the triggers in the
+  repository's manifest (`{manifest}`) (ADR-003).
 - No snapshot-only acceptance: a snapshot proves the code did not change, not that it is right.

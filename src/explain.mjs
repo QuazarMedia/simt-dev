@@ -94,10 +94,10 @@ export const EXPLAIN_CODES = {
     example: 'gates.cwd.test set to "../shared" in a monorepo member.',
   },
   inconsistent: {
-    what: 'The TypeScript base config disagrees with this tool\u2019s floor in a way no flag explains: the project\u2019s tsconfig and the shipped base describe different compilers.',
-    why: 'ADR-025 and ADR-026: the base file is owned here and pointed at there, so a disagreement is a real fork in what the typechecker enforces — not a formatting choice. A repo that edited the owned bytes is not drift, but a repo whose config contradicts them is.',
-    fix: 'Re-align the project tsconfig with the shipped base, or record why the fork is deliberate.',
-    example: 'A project tsconfig setting strict false under a base that requires it.',
+    what: 'The project\u2019s tsconfig spells `moduleResolution` in a form the TypeScript parser accepts but the documentation does not, so it compiles and quietly disagrees with every repository that spells it the documented way.',
+    why: 'The parser is case-insensitive, which is the whole reason a workspace drifts on this key: both spellings work, so nothing ever said the other one did not. Consistency with the documentation is the only spelling checkable in one repository at a time \u2014 consistency with the other repositories would need a workspace, and `check` runs in a repository on its own.',
+    fix: 'Use the documented spelling the finding names; it compiles identically.',
+    example: '"moduleResolution": "Bundler" where the documentation writes "bundler".',
   },
   inert: {
     what: 'The TypeScript base config is present but inert: nothing in the repository reads it, so it constrains no file.',

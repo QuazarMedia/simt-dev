@@ -31,7 +31,7 @@ import { readCapability } from '../hooks/capability.mjs';
 import { readHooksState } from '../compare/hooksstate.mjs';
 import { planWorkflow, renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
 import { planDependabot, renderDependabot } from '../ci/dependabot.mjs';
-import { planTsconfigBase, renderTsconfigBase, TSCONFIG_BASE_FILE } from '../tsconfig.mjs';
+import { planTsconfigBase } from '../tsconfig.mjs';
 import {
   IDENTITY_FILE,
   INCLUDE_KEY,
@@ -327,13 +327,6 @@ export async function initCommand(positional, flags) {
         }),
       });
     }
-    if (payload.tsconfigBase.action === 'create') {
-      diffs.push({
-        path: payload.tsconfigBase.file,
-        before: await readBefore(join(root, payload.tsconfigBase.file)),
-        after: renderTsconfigBase(),
-      });
-    }
     for (const target of projected.targets) {
       if (target.action === 'unchanged' || target.action === 'malformed') continue;
       diffs.push({
@@ -461,13 +454,6 @@ export async function initCommand(positional, flags) {
       `wrote    ${payload.dependabot.file} (create; watches ${payload.dependabot.ecosystems.join(', ') || 'github actions'} — yours to edit, simt-dev will not rewrite it)`,
     );
   }
-  if (payload.tsconfigBase.action === 'create') {
-    await journaledWriteFile(root, journal, join(root, payload.tsconfigBase.file), renderTsconfigBase());
-    note(
-      `wrote    ${payload.tsconfigBase.file} (create; ${TSCONFIG_BASE_FILE} is JSON, so it cannot say this itself — add "extends": "./${TSCONFIG_BASE_FILE}" to your tsconfig.json or nothing reads it)`,
-    );
-  }
-
   // Every planned target is written, not just the AGENTS.md region. An adoption that
   // scaffolds the manifest and one region but leaves the `.mdc` rules for a later
   // `sync` produces a repo whose `check` fails on files the user was never told
@@ -769,16 +755,12 @@ function render(payload, manifest, { npm = true, version } = {}) {
     lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);
   }
 
-  // Two states rather than three: there is no refresh, because `init` writes this file once
-  // and there is no repository in this estate that owns the template. A third state here
-  // would be a mechanism for keeping a copy current that nobody has asked for.
+  // One state, and it is the point: init no longer creates the file (review 0003 Q28),
+  // so the plan line says what it will not write and why, instead of a floor appearing
+  // after the run without being in the plan. An existing base file is repo-owned and
+  // left exactly as it is, which needs no line because nothing changes.
   const tb = payload.tsconfigBase;
-  if (tb && tb.action === 'create') {
-    lines.push(`  ${'create'.padEnd(9)} ${tb.file}  ${renderTsconfigBase().length} bytes`);
-    lines.push(
-      `            the strictness flags these repositories already agree on; add "extends": "./${tb.file}" to your tsconfig.json to use it`,
-    );
-  } else if (tb && tb.action === 'skip') {
+  if (tb && tb.action === 'skip') {
     lines.push(`  ${'skip'.padEnd(9)} ${tb.file}  ${tb.reason}`);
   }
 

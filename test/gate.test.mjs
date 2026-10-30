@@ -1,10 +1,10 @@
 // Diff-aware gates (R16, ADR-094).
 //
 // A change selects the test files that import it, directly or through other
-// files. The list below was read off the import specifiers in this checkout.
-// It is not the output of the function under test. A helper under test/ is on
-// it when that helper imports the change: the shared fixture imports the graph
-// loader, and the loader imports the resolver, so the closure is wide.
+// files. Selection is asserted on a synthetic graph below, so the test does
+// not duplicate the checkout's import graph and does not widen whenever an
+// unrelated test gains an import. The end-to-end gate run is asserted on a
+// real fixture repository.
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
@@ -15,106 +15,9 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { gateCommand } from '../src/commands/gate.mjs';
-import { readImportEdges, selectTests } from '../src/index/gate.mjs';
+import { selectTests } from '../src/index/gate.mjs';
 
 const exec = promisify(execFile);
-const ROOT = new URL('..', import.meta.url).pathname;
-
-const RESOLVE = [
-  // advice reaches the resolver only since R40: its loadHistory tests import the
-  // shared fixture, and the fixture loads the registry, so the closure widened.
-  'test/advice.test.mjs',
-  'test/agenthooks.test.mjs',
-  'test/baselines.test.mjs',
-  'test/bench.test.mjs',
-  'test/brief.test.mjs',
-  'test/card.test.mjs',
-  'test/checks.test.mjs',
-  'test/ci.test.mjs',
-  'test/compare.test.mjs',
-  'test/compile.test.mjs',
-  'test/completions.test.mjs',
-  'test/contract.test.mjs',
-  'test/decide.test.mjs',
-  // decisions.test.mjs reaches the resolver through the command registry:
-  // src/decisions/index.mjs imports COMMANDS from src/commands/index.mjs, and
-  // the registry loads skills.mjs, which imports the resolver.
-  'test/decisions.test.mjs',
-  // diff.test.mjs imports the shared fixture for `git`, and the fixture loads
-  // the registry, so the closure is the same width as contract's.
-  'test/diff.test.mjs',
-  // distill reaches the resolver only since R39: its --local guard goes through
-  // local/config.mjs, which resolves the manifest, so the closure widened.
-  'test/disclosure.test.mjs',
-  'test/distill.test.mjs',
-  'test/eval.test.mjs',
-  'test/extract.test.mjs',
-  'test/federation.test.mjs',
-  'test/fixture.mjs',
-  'test/genericity.test.mjs',
-  'test/graph.test.mjs',
-  'test/help.test.mjs',
-  'test/hooks.test.mjs',
-  'test/identity.test.mjs',
-  'test/index.test.mjs',
-  'test/inferability.test.mjs',
-  'test/init.test.mjs',
-  'test/install.test.mjs',
-  'test/jsoncontract.test.mjs',
-  'test/kernel.test.mjs',
-  'test/leaks.mjs',
-  'test/ledger.test.mjs',
-  'test/loaders.test.mjs',
-  'test/lock.test.mjs',
-  'test/map.test.mjs',
-  'test/mapping.test.mjs',
-  'test/markers.test.mjs',
-  'test/mcp.test.mjs',
-  'test/mdc.test.mjs',
-  'test/monorepo.test.mjs',
-  'test/naming.test.mjs',
-  // node-runner and status reach the resolver through fingerprint, which the
-  // card and hooks-state paths import (1b1ebdd).
-  'test/node-runner.test.mjs',
-  'test/pack.test.mjs',
-  'test/packs.test.mjs',
-  'test/parity.test.mjs',
-  'test/plan.test.mjs',
-  // prbody.test.mjs reaches the resolver through the shared fixture, the same
-  // way diff.test.mjs does (R55).
-  'test/prbody.test.mjs',
-  'test/project.test.mjs',
-  'test/resolve.test.mjs',
-  'test/rules.test.mjs',
-  'test/scoped.test.mjs',
-  'test/secrets.test.mjs',
-  'test/shared.test.mjs',
-  'test/shipped.test.mjs',
-  // slice.test.mjs reaches the resolver through the dispatcher's gate run and
-  // through the shared fixture, the same way secrets.test.mjs does (R53).
-  'test/slice.test.mjs',
-  'test/status.test.mjs',
-  'test/surfaces.test.mjs',
-  'test/tokens.test.mjs',
-  'test/toolchain.test.mjs',
-  'test/tsconfig.test.mjs',
-  'test/unit.test.mjs',
-  'test/upgrade.test.mjs',
-  'test/variants.test.mjs',
-  'test/why-fixture.test.mjs',
-  'test/why-snapshot.test.mjs',
-  'test/workspace.test.mjs',
-];
-
-test('changing the resolver selects the tests that import it, in under five seconds', async () => {
-  const { stdout } = await exec('git', ['ls-files'], { cwd: ROOT, maxBuffer: 16 << 20 });
-  const files = stdout.split('\n').filter(Boolean);
-  const started = performance.now();
-  const selected = selectTests(['src/resolve/resolve.mjs'], await readImportEdges(ROOT, files));
-  const elapsed = performance.now() - started;
-  assert.deepEqual(selected, RESOLVE);
-  assert.ok(elapsed < 5000, `selection took ${elapsed.toFixed(0)} ms`);
-});
 
 test('selection follows importers and stops at a test that does not reach the change', () => {
   const imports = [

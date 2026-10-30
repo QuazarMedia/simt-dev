@@ -174,7 +174,7 @@ test('install --harness writes one reader and names the ones it skipped', async 
   assert.deepEqual(skipped, adapters().filter((r) => r.id !== 'codex').map((r) => r.id).sort());
 });
 
-test('install --harness with an unknown id is a usage error that names the ids', async () => {
+test('agents install --harness with an unknown id is a usage error that names the ids', async () => {
   const root = await repo();
   const result = cli(['agents', 'install', '--root', root, '--harness', 'windsurf']);
   assert.equal(result.code, 2);

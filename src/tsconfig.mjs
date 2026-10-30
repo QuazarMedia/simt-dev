@@ -1,72 +1,35 @@
-// `tsconfig.base.json`: the strictness floor every TypeScript repo in the estate agrees on.
+// `tsconfig.base.json`: the strictness floor a TypeScript repo writes for itself.
 //
-// This is ADR-026's mechanism — a config whose grammar has no comments is a whole file the
-// repo owns from the first commit — pointed at the file ADR-025 ruled out by name. Two
-// consequences shape everything here, and both are easy to get wrong:
+// ADR-026's mechanism — a config whose grammar has no comments is a whole file the
+// repo owns from the first commit — pointed at the file ADR-025 ruled out by name.
+// `init` used to create it (review 0003 Q28 stopped that): a floor the tool writes
+// into a fresh repo is a file nothing extends, because the repo's own `tsconfig.json`
+// is the repo's to write — and a base that nothing points at is a floor with no
+// effect, which `check` then reported as drift on every fresh adoption.
 //
-//   1. A base file is a FLOOR, not a policy. `extends` lets a child override any key, so a
-//      base can only repair a repo that is *missing* a flag. It can never repair one that
-//      spells a flag differently — the child wins and the base is inert for that key. Every
-//      key below is therefore one the estate already agrees on, and the one place the estate
-//      disagrees is a check instead (see `checkTsconfig`).
-//   2. The bytes cannot explain themselves. JSON has no comments, so this file ships with no
-//      header saying who wrote it or what a reader must do next, which is normally the one
-//      thing a shipped file owes its reader. `init` prints the `extends` line it requires
-//      and `check` reports a repo that has not adopted it, so the obligation is met by the
-//      tool's output rather than the file's.
+// What is left here is the reporting side of ADR-026, and it reports exactly the two
+// states a base file can be in that no file can fix:
 //
-// The whole file is owned by `init` alone. It is not in `src/ci/` and not in
-// `src/projection/baselines.mjs` because it is neither a `.github` file that `simt ci`
-// refreshes nor a marker region: `simt check` reports its absence and never its contents.
+//   1. `inert` — the base exists and `tsconfig.json` does not extend it, so the floor
+//      is in the repository and not in effect. `extends` lets a child override any key,
+//      so a base can only repair a repo that is *missing* a flag; it can never repair
+//      one that does not point at it.
+//   2. `inconsistent` — `moduleResolution` is spelled the way the parser accepts but
+//      the documentation does not. The parser is case-insensitive, which is the whole
+//      reason the estate drifted: both spellings work, so nothing ever said so.
+//
+// Both are non-blocking findings (review 0003 Q28): the base file is repo-owned, and
+// a gate that fails a repository over a policy decision is a gate whose remedy is a
+// choice, not a command. An existing base file stays exactly as the repo wrote it:
+// this tool does not own its bytes, so a repo that edited them is not drift.
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { fingerprint } from './resolve/fingerprint.mjs';
-import { CLI } from './name.mjs';
 
 export const TSCONFIG_BASE_FILE = 'tsconfig.base.json';
 export const TSCONFIG_FILE = 'tsconfig.json';
-
-/**
- * The strictness floor.
- *
- * Every key here is already set, and set the same way, by every `tsconfig.json` in the
- * estate that could afford it. One repository is the outlier and it is not one on purpose: it
- * is missing the seven flags below that the three social repos share, which is the gap
- * plan section 3.1 row 5 named. Nothing in this object is a value anybody has argued about;
- * it is the intersection of what four repositories independently wrote.
- *
- * Absent, and each for a reason that would be invisible to the next reader:
- *
- *   - `noEmit`. node.md:36 wants it for "any project that bundles elsewhere", and it would
- *     be harmless to inherit here because a child can set `false`. It is left out because a
- *     base that hands `noEmit` to a repo nobody looked at is a build that stops emitting,
- *     and the two repositories that bundle elsewhere did not ask for it. A floor nobody
- *     opted into is not a floor.
- *   - `moduleResolution`. All four repositories set it; three write `Bundler` and one writes
- *     `bundler`. Shipping either would change nothing, because the child overrides the base
- *     and the disagreement is precisely that the child sets it. `check` reports the spelling
- *     instead.
- *   - `target`, `lib`, `module`. Genuinely per-repo: `lib` is DOM+DOM.Iterable in two
- *     repositories and DOM+WebWorker in the other two, and a base that chose would silence
- *     one of them. These describe the platform, not the estate.
- *   - `include`, `exclude`, `paths`, `types`, `jsx`. What a project is made of.
- */
-export const STRICTNESS_FLOOR = {
-  strict: true,
-  noUncheckedIndexedAccess: true,
-  exactOptionalPropertyTypes: true,
-  noImplicitOverride: true,
-  useUnknownInCatchVariables: true,
-  noFallthroughCasesInSwitch: true,
-  noImplicitReturns: true,
-  isolatedModules: true,
-  verbatimModuleSyntax: true,
-  allowJs: false,
-  resolveJsonModule: true,
-  skipLibCheck: true,
-};
 
 /**
  * `moduleResolution` as TypeScript documents it.
@@ -86,19 +49,6 @@ export const DOCUMENTED_RESOLUTIONS = new Set([
   'nodenext',
   'bundler',
 ]);
-
-/**
- * The base file, as bytes.
- *
- * Key order is the order of `STRICTNESS_FLOOR` and not alphabetical, because the object
- * literal is the readable form and reordering it here would mean the file and the reason
- * disagree. `JSON.stringify` preserves insertion order, so the two cannot drift.
- *
- * @returns {string} JSON, LF-terminated
- */
-export function renderTsconfigBase() {
-  return `${JSON.stringify({ compilerOptions: STRICTNESS_FLOOR }, null, 2)}\n`;
-}
 
 /**
  * Parse a file that TypeScript allows to carry comments.
@@ -170,21 +120,19 @@ export function readJsonc(text) {
 }
 
 /**
- * What this repo's base file should be, and what should happen to it.
+ * What this repo's base file is, and what `init` will do about it.
  *
- * There is no `refresh`. ADR-026 gave simt-dev's own `.github` files a refresh path because
- * this repository is the template's only author; a base file has the same argument, and it
- * is deliberately not extended to it. `simt check` in this repository reports the
- * baseline files as unmanaged by design, so a refresh path here would be a way to make this
- * repository's own gate green by rewriting the file it is judging — which is the same
- * mistake as a gate that edits its own expectations.
+ * There is no `refresh`, and since review 0003 Q28 there is no `create` either: the
+ * file is the repo's to write, and a floor the tool created was one nothing extended.
+ * `init`'s whole contribution is now to say so in the plan — a file that appears after
+ * the run without being in the plan is a silent write, and "init will not write this"
+ * is a plan line, not an absence of one.
  *
- * The skip case is detection, not politeness: a repository with no TypeScript has nothing to
- * extend the base, and a `tsconfig.base.json` in a JavaScript repository is a file that
- * claims to be an authority and is read by nothing.
+ * `unchanged` means the file exists and is left exactly as it is: this tool does not
+ * own its bytes (ADR-026), so a repo that edited them is not drift.
  *
  * @param {string} root repo root
- * @returns {Promise<{file:string, path:string, action:'create'|'unchanged'|'skip',
+ * @returns {Promise<{file:string, path:string, action:'unchanged'|'skip',
  *                    exists:boolean, bytes:number, current:boolean, typescript:boolean,
  *                    reason:string|null}>}
  */
@@ -212,16 +160,19 @@ export async function planTsconfigBase(root) {
       reason: null,
     };
   }
+  // Absent is a skip in every case: init no longer creates the file (review 0003 Q28),
+  // so the plan states what it will not write and why, rather than leaving a floor
+  // behind that nothing extends.
   return {
     file: TSCONFIG_BASE_FILE,
     path,
-    action: typescript ? 'create' : 'skip',
+    action: 'skip',
     exists,
     bytes: 0,
-    current: false,
+    current: true,
     typescript,
     reason: typescript
-      ? null
+      ? 'init no longer creates the base file; a floor is a policy the repo writes for itself'
       : 'no TypeScript in this repository, so nothing would extend the base',
   };
 }
@@ -249,23 +200,12 @@ export async function checkTsconfig(root) {
     baseExists = false;
   }
 
-  const { stack } = await fingerprint(root);
-  const typescript = stack.includes('typescript');
-  if (typescript && !baseExists) {
-    findings.push({
-      file: TSCONFIG_BASE_FILE,
-      status: 'absent',
-      detail:
-        'this repo is TypeScript and has no base file, so every strictness flag is whatever ' +
-        'one person happened to write',
-      remedy: `${CLI} init --yes`,
-    });
-  }
-
   // Nothing below reads the base file's contents, and that is deliberate. This tool does not
   // own those bytes (ADR-026), so a repo that edited them is not drift — and a finding that
   // compared them would report somebody's work as an error. Only the question of whether
-  // `tsconfig.json` points at the base is this tool's to ask.
+  // `tsconfig.json` points at the base is this tool's to ask. A missing base file raises
+  // no finding at all (review 0003 Q28): writing one is the repo's decision, and a gate
+  // whose remedy is a policy choice is a gate nothing can satisfy.
   let own = null;
   try {
     own = readJsonc(await readFile(join(root, TSCONFIG_FILE), 'utf8'));

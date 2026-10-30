@@ -396,9 +396,12 @@ export function inject(text, body, meta, opts = {}) {
   // too. A body that matches with a seam that does not is red on `format:check`, and
   // reporting `unchanged` there means `check` finds no drift and `sync` never repairs
   // it - the repository stays red with no remedy the tool offers. Top placement is
-  // excluded because there the splice is a repair that legitimately moves bytes
-  // outside the markers, so the two files differ for a reason unrelated to the seam.
-  const settled = unchanged && (where === 'top' || spliced === text);
+  // excluded from the seam test because there the splice is a repair that
+  // legitimately moves bytes outside the markers, so the two files differ for a
+  // reason unrelated to the seam. Position is the test there instead: a region below
+  // the file's own settings has been moved, and the move is what `where: 'top'`
+  // exists to repair (review 0003 Q26).
+  const settled = unchanged && (where === 'top' ? state.before.trim() === '' : spliced === text);
   if (settled) return { ...seen, text, action: 'unchanged' };
 
   return { ...seen, text: spliced, action: 'updated' };

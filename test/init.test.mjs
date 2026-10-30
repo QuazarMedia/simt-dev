@@ -875,6 +875,87 @@ test('sync repairs the manifest field check refuses, and previews it first', asy
   assert.match(again.text, /already current/);
 });
 
+// `projection.place` is a sub-key the REPOSITORY chose inside an object this tool
+// writes. The repair replaced the object wholesale, so `sync --yes` deleted the
+// setting on the very run `check` was telling the reader to apply - and the drift
+// check reported the setting as a stale generated field while doing it (review 0003
+// Q26). The remedy for BEYOND-READ-LIMIT was undoing itself.
+test('a repo-chosen projection sub-key is not a stale field, and the repair keeps it', async () => {
+  const { syncCommand } = await import('../src/commands/sync.mjs');
+  const { MANIFEST_COMMENT, manifestDrift } = await import('../src/projection/manifest.mjs');
+  const { provenanceDigest } = await import('../src/projection/project.mjs');
+  const root = await scratch();
+  const stack = ['node'];
+  const sha = await provenanceDigest();
+  const version = packageVersion();
+  const base = {
+    ...MANIFEST_COMMENT,
+    id: 'r',
+    stack,
+    limits: { coverage: null, fileLines: { warn: 400, error: 1000 } },
+    gates: { preCommit: [], prePush: [] },
+    localSkills: [], profiles: [], substitutions: {}, surfaces: null,
+  };
+  const write = async (projection) =>
+    writeFile(join(root, MANIFEST_FILE), `${JSON.stringify({ ...base, projection }, null, 2)}\n`);
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x' }));
+
+  // The setting alone, with every generated field correct: not drift.
+  await write({ simtDevSha: sha, version, place: 'top' });
+  assert.equal(await manifestDrift(root, stack, sha), null, 'a repo-chosen sub-key is not a stale field');
+
+  // The setting with a stale stamp: the repair runs, and the setting survives it.
+  await write({ simtDevSha: 'aaaaaaa', version, place: 'top' });
+  assert.equal((await manifestDrift(root, stack, sha))?.status, 'stale-generated-field');
+  const applied = await capture(() => syncCommand([], { root, yes: true }));
+  assert.equal(applied.code, 0);
+  const after = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8'));
+  assert.deepEqual(after.projection, { simtDevSha: sha, version, place: 'top' });
+  assert.equal(await manifestDrift(root, stack, sha), null, 'and the gate agrees the repair kept it');
+});
+
+// End to end: the repository opts into top placement - the remedy `check` names for
+// a reader that stops before the region - and the region ends up below its own
+// settings. `check` must see the position as drift and nothing else; `sync` must
+// move the region back and settle.
+test('a top-placed region that has moved down is drift, and sync moves it back', async () => {
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const { checkCommand, syncCommand } = await import('../src/commands/sync.mjs');
+  const root = await scratch();
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x' }));
+  await capture(() => initCommand([], { root, yes: true }));
+
+  const path = join(root, MANIFEST_FILE);
+  const m = JSON.parse(await readFile(path, 'utf8'));
+  m.projection.place = 'top';
+  await writeFile(path, `${JSON.stringify(m, null, 2)}\n`);
+
+  const agents = join(root, 'AGENTS.md');
+  const text = await readFile(agents, 'utf8');
+  const region = text.slice(text.indexOf('<!-- simt:begin -->'));
+  await writeFile(agents, `# My Project\n\nHand-written settings.\n\n${region}`);
+
+  // The manifest is not the problem - the old code reported `place` as a stale
+  // generated field here - and the region's position is.
+  const check = await capture(() => checkCommand([], { root }));
+  assert.equal(check.code, 1);
+  assert.match(check.text, /region is updated/);
+  assert.doesNotMatch(check.text, /stale/i);
+
+  const applied = await capture(() => syncCommand([], { root, yes: true }));
+  assert.equal(applied.code, 0);
+  const after = await readFile(agents, 'utf8');
+  assert.ok(after.startsWith('<!-- simt:begin -->'), 'the region must be above the settings');
+  assert.match(after, /Hand-written settings\./, 'the settings survive the move');
+  assert.equal(JSON.parse(await readFile(path, 'utf8')).projection.place, 'top', 'the setting survives the run');
+
+  // And it settles: the next check is green and the next sync finds nothing.
+  assert.equal((await capture(() => checkCommand([], { root }))).code, 0);
+  const again = await capture(() => syncCommand([], { root, yes: true }));
+  assert.equal(again.code, 0);
+  assert.match(again.text, /already current/);
+});
+
 test('sync repairs a reformatted manifest only once the repo ignores it', async () => {
   const { syncCommand } = await import('../src/commands/sync.mjs');
   const { manifestDrift, MANIFEST_COMMENT } = await import('../src/projection/manifest.mjs');

@@ -27,12 +27,15 @@ const MANIFEST_KEYS = ['mode', 'budget', 'shared', 'surfaces', 'gates'];
  * @param {string} root
  * @param {object} [flags] the same flags `sync` rendered with, so the output is the
  *   body that was written and not a body for a different set of surfaces
+ * @param {object} [manifest] the manifest to digest, in place of the one on disk. A
+ *   writer that is about to write a manifest (a fresh `init`) passes it here so the
+ *   lock records the state the repo will have, not the state it has (Q29).
  */
-export async function computeLock(root, flags = {}) {
+export async function computeLock(root, flags = {}, manifest = undefined) {
   const variants =
     flags?.variants !== undefined ? flags.variants : await readLockedVariants(root);
   const desired = await desiredRegion(root, { ...flags, variants });
-  const inputs = await inputDigest(root, variants);
+  const inputs = await inputDigest(root, variants, manifest);
   const outputs = createHash('sha256').update(desired.body).digest('hex');
   const hasVariants =
     variants && typeof variants === 'object' && Object.keys(variants).length > 0;
@@ -83,13 +86,13 @@ export async function readLock(root) {
   }
 }
 
-async function inputDigest(root, variants = {}) {
+async function inputDigest(root, variants = {}, manifest = undefined) {
   const hash = createHash('sha256');
   hash.update(`provenance:${await provenanceDigest()}\n`);
   const { stack, facts } = await fingerprint(root);
   hash.update(`signals:${JSON.stringify({ stack, facts })}\n`);
-  const { manifest } = await readManifest(root);
   const owned = {};
+  if (manifest === undefined) manifest = (await readManifest(root)).manifest;
   if (manifest && typeof manifest === 'object') {
     for (const key of MANIFEST_KEYS) {
       if (manifest[key] !== undefined) owned[key] = manifest[key];

@@ -326,22 +326,12 @@ export async function syncCommand(positional, flags) {
       // mkdir; `sync` did not, so the first `sync` after a surface was added failed with
       // ENOENT on the second target and had already written the first. The parent is
       // derived from the target, never from the surface table, so a future surface with a
-      // deeper path needs no change here.
+      // deeper path needs no change here. The lock is one of these targets (Q29): it
+      // reaches this loop like every other file, so a deleted lock is a write the plan
+      // shows and the journal records.
       await mkdir(dirname(t.path), { recursive: true });
       await journaledWriteFile(root, journal, t.path, t.text);
       note(`wrote    ${t.file}`);
-    }
-    const lock = await computeLock(root, flags);
-    const lockText = `${JSON.stringify(lock, null, 2)}\n`;
-    let previousLock = null;
-    try {
-      previousLock = await readFile(join(root, LOCK_FILE), 'utf8');
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
-    if (previousLock !== lockText) {
-      await journaledWriteFile(root, journal, join(root, LOCK_FILE), lockText);
-      note(`wrote    ${LOCK_FILE}`);
     }
     await commitJournal(root, 'sync', journal);
     // The regions moved, so the last `check` no longer describes this tree.

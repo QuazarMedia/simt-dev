@@ -50,7 +50,7 @@ async function capture(args) {
   }
 }
 
-import { MANIFEST_FILE } from '../src/name.mjs';
+import { MANIFEST_FILE, LOCK_FILE } from '../src/name.mjs';
 
 const RULE = { id: 'x', description: 'A rule', alwaysApply: true, target: '.cursor/rules/x.mdc' };
 
@@ -297,7 +297,7 @@ test('the default surface folds every rule into AGENTS.md and writes one file', 
   // settings, present whatever the editor. `.gitattributes` is the second one because
   // it, like `.editorconfig`, is a file git and every editor read without a parser,
   // and it takes the last pattern that matches so the region goes first.
-  assert.deepEqual(p.targets.map((t) => t.file), ['AGENTS.md', '.editorconfig', '.gitattributes']);
+  assert.deepEqual(p.targets.map((t) => t.file), ['AGENTS.md', '.editorconfig', '.gitattributes', LOCK_FILE]);
 
   const region = p.targets[0].body;
   for (const id of ['test-gate', 'intake-questions']) {
@@ -324,7 +324,7 @@ test('a repo on "surfaces": [] gets its process rules in the region, and the gat
   // files. A per-rule path here would be a channel no reader of this repo has.
   assert.deepEqual(
     p.targets.map((t) => t.file).sort(),
-    ['.editorconfig', '.gitattributes', 'AGENTS.md'],
+    ['.editorconfig', '.gitattributes', 'AGENTS.md', LOCK_FILE],
   );
   const region = p.targets[0].body;
   for (const id of ['test-gate', 'intake-questions', 'slice-commit']) {
@@ -376,7 +376,7 @@ test('opting into a rule surface alongside the default writes one file, not two 
   // region, on the reasoning that "a Cursor reader getting .mdc files does not serve
   // them". Cursor reads AGENTS.md; cursor.com/docs/context/rules documents it. So the
   // three files were 28 KB of the same rules a second time in every Cursor session.
-  assert.deepEqual(p.targets.map((t) => t.file).sort(), ['.editorconfig', '.gitattributes', 'AGENTS.md']);
+  assert.deepEqual(p.targets.map((t) => t.file).sort(), ['.editorconfig', '.gitattributes', 'AGENTS.md', LOCK_FILE]);
   // The rule is still present - once. Asserting its ABSENCE from the plan is what makes
   // this meaningful: a change that dropped the rule entirely would pass a file-list check.
   assert.match(p.targets.find((t) => t.file === 'AGENTS.md').body, /## Process: test-gate/);

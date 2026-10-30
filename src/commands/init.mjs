@@ -44,6 +44,7 @@ import {
 import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
+import { computeLock } from '../projection/lock.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { reindex, SQLITE_FILE } from '../index/store.mjs';
 import { CLI } from '../name.mjs';
@@ -107,6 +108,21 @@ export async function initCommand(positional, flags) {
     else pointerPlan.push({ ...p, state: st.state });
   }
   manifest.surfaces = projected.surfaces;
+
+  // The lock's input digest includes the manifest this run writes. On a fresh adoption
+  // there is no manifest on disk yet, so the lock `plan` computed is the one for a repo
+  // that has none - and the adoption would be red on `check --frozen` the moment the
+  // manifest lands. Recompute it with the manifest about to write, so the bytes in the
+  // plan, the diff and the write are the same (Q29). A re-init preserves every lock
+  // input, so its `plan` bytes are already right and are left alone. After the
+  // surfaces line: that is the last mutation of the manifest, and the digest must
+  // cover the bytes that land on disk, not an earlier draft of them.
+  const lockTarget = projected.targets.find((t) => t.kind === 'lock');
+  if (lockTarget && !exists) {
+    const lock = await computeLock(root, flags, manifest);
+    lockTarget.text = `${JSON.stringify(lock, null, 2)}\n`;
+    lockTarget.bytes = Buffer.byteLength(lockTarget.text);
+  }
 
   const adoption = exists || Boolean(region?.exists);
   // One decider for `--yes --dry-run`: the inline copy used to agree with it today,
@@ -696,7 +712,9 @@ function render(payload, manifest, { npm = true, version } = {}) {
         ? 'hand-written content outside the markers is never modified'
         : target.kind === 'baseline'
           ? 'a region placed first, so your own settings below it still win (ADR-025)'
-          : 'generated file: frontmatter kept, body replaced (ADR-016)';
+          : target.kind === 'lock'
+            ? 'the two digests a frozen check compares (ADR-086)'
+            : 'generated file: frontmatter kept, body replaced (ADR-016)';
     lines.push(
       `  ${target.action.padEnd(9)} ${target.file}  ${target.previousBytes} -> ${target.bytes} bytes  ${caption}`,
     );

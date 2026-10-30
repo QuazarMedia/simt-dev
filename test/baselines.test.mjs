@@ -20,6 +20,7 @@ import { assertClean } from './leaks.mjs';
 import { BASELINES, EDITORCONFIG_BODY, GITATTRIBUTES_BODY, baselineTargets, misplaced } from '../src/projection/baselines.mjs';
 import { inject, parse, STYLES } from '../src/projection/markers.mjs';
 import { checkTargets, plan } from '../src/projection/project.mjs';
+import { LOCK_FILE } from '../src/name.mjs';
 
 const run = promisify(execFile);
 const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt.mjs');
@@ -197,12 +198,13 @@ test('a region that has been moved below the repo\'s settings is reported, with 
   const f = findings.find((x) => x.file === '.editorconfig' && x.status === 'misplaced');
   assert.ok(f, 'the gate must surface it, not just the module');
 
-  // A finding nobody is stopped by is a note. It has to fail the gate, and it has to be
-  // reported alongside a CURRENT `.editorconfig` rather than instead of it — the bytes
-  // ARE current, and saying otherwise would teach people to distrust the whole line.
+  // A finding nobody is stopped by is a note. It has to fail the gate. The DRIFT line
+  // alongside it is not a contradiction: a region below the repo's settings is a file
+  // `sync` will move back to the top, so the bytes on disk are not the bytes `sync`
+  // would write — and MISPLACED is the line that says why (review 0003 Q26).
   const checked = await simt(['check'], root);
   assert.equal(checked.code, 1, checked.out);
-  assert.match(checked.out, /CURRENT\s+\.editorconfig/);
+  assert.match(checked.out, /DRIFT\s+\.editorconfig/);
   assert.match(checked.out, /MISPLACED\s+\.editorconfig/);
 });
 
@@ -298,7 +300,7 @@ test('every baseline is loaded into the same target list as AGENTS.md', async ()
   const root = await repo();
   const p = await plan(root, {});
   const fromPlan = p.targets.filter((t) => !t.surface).map((t) => t.file);
-  assert.deepEqual(fromPlan, ['AGENTS.md', ...BASELINES.map((b) => b.file)]);
+  assert.deepEqual(fromPlan, ['AGENTS.md', ...BASELINES.map((b) => b.file), LOCK_FILE]);
 });
 // ---------------------------------------------------------------- .gitattributes
 

@@ -27,6 +27,11 @@ repository.
 
 ### Changed
 
+The projection lock is `simt.lock.json`, the name that follows the command
+and the manifest. A lock written under the old `simt-dev.lock.json` is still
+read — including the `variants` winners nothing else records — and migrates
+on the next write (ADR-110).
+
 This repository is now a consumer of itself: `simt init` ran on its own
 source, so the two tests that asserted it was *not* a consumer are rewritten
 to assert the new state, and `AGENTS.md`'s "not self-adopted" section now

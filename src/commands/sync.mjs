@@ -25,13 +25,12 @@ import { manifestDrift, readManifest, unrunnableGates, buildManifest, writeManif
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
-import { CLI } from '../name.mjs';
-import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
+import { CLI, LOCK_FILE, MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { assertVersionPin, packageVersion } from '../package-version.mjs';
 import { resolvePacks } from '../packs.mjs';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { buildCacheRecord, hooksSummary, invalidateCheckCache, writeCheckCache } from '../status.mjs';
-import { computeLock, readLock, LOCK_FILE } from '../projection/lock.mjs';
+import { computeLock, readLock } from '../projection/lock.mjs';
 import { runDeclaredChecks } from '../kernel/checks.mjs';
 import { DECISIONS_DIR } from '../decisions/index.mjs';
 import { lintDecisions } from '../memory/decide.mjs';

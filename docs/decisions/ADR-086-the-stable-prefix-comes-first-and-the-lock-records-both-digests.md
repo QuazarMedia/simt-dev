@@ -1,6 +1,6 @@
 # ADR-086 — The stable prefix comes first, and the lock records both digests
 
-Status: **accepted** · 2026-10-18 · filed as R13 (plan 0003)
+Status: **accepted** · 2026-10-18 · filed as R13 (plan 0003) · ruling 3's file name is superseded by [ADR-110](ADR-110-the-lock-file-follows-the-manifest-name-and-the-old-name-is-read-until-the-next-write.md)
 
 **Affects:** `src/projection/rules.mjs`, `src/projection/lock.mjs`, `src/commands/sync.mjs`,
 `src/argv.mjs`, `test/lock.test.mjs`, `test/card.test.mjs`

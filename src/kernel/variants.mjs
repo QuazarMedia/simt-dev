@@ -4,34 +4,45 @@
 // A rule line or list item may carry `<!-- simt-variants: <slot> <spec> -->`.
 // When unlocked, projection uses the baseline variant (`a`, or the line's own
 // prose) and strips the marker so `simt-` annotations never reach a reader.
-// When `simt-dev.lock.json` records a locked winner for `<ruleId>.<slot>`,
+// When `simt.lock.json` records a locked winner for `<ruleId>.<slot>`,
 // projection deterministically renders that winning variant.
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { LOCK_FILE, LOCK_LEGACY } from '../name.mjs';
+
 export const VARIANTS_MARKER = 'simt-variants';
-const LOCK_FILE_NAME = 'simt-dev.lock.json';
 
 /**
- * Read the locked `variants` map from `simt-dev.lock.json` in `root`, or `{}` when absent.
+ * Read the locked `variants` map from `simt.lock.json` in `root`, or `{}` when absent.
+ * A lock under the legacy name is read until the next write migrates it (ADR-110); a
+ * lock that exists but does not parse is damage, and damage is not repaired by an
+ * older file.
  */
 export async function readLockedVariants(root) {
   if (!root) return {};
-  try {
-    const raw = await readFile(join(root, LOCK_FILE_NAME), 'utf8');
-    const parsed = JSON.parse(raw);
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      parsed.variants &&
-      typeof parsed.variants === 'object' &&
-      !Array.isArray(parsed.variants)
-    ) {
-      return parsed.variants;
+  for (const name of [LOCK_FILE, LOCK_LEGACY]) {
+    let raw;
+    try {
+      raw = await readFile(join(root, name), 'utf8');
+    } catch {
+      continue; // no lock under this name; try the next one
     }
-  } catch {
-    // Missing or unreadable lockfile falls back to baseline variants.
+    try {
+      const parsed = JSON.parse(raw);
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        parsed.variants &&
+        typeof parsed.variants === 'object' &&
+        !Array.isArray(parsed.variants)
+      ) {
+        return parsed.variants;
+      }
+    } catch {
+      return {};
+    }
   }
   return {};
 }

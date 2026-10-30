@@ -152,7 +152,7 @@ simt bench run --yes                # evaluate arms (bare, current, kernel, brie
 simt bench report [--compare a b]   # resolved rate, quality, cost, CPI, bootstrap CIs, McNemar/Wilcoxon
 simt bench ablate --yes             # leave-one-out rule ablation ranked by value per KB
 simt bench probes --yes             # 12 deterministic rule-compliance probes
-simt bench variants --yes           # evaluate simt-variants slots and lock winners in simt-dev.lock.json
+simt bench variants --yes           # evaluate simt-variants slots and lock winners in simt.lock.json
 simt review [--local]               # an advisory ADR-008 verdict skeleton over the staged diff
 simt distill <skill|doc>            # a budgeted proposal summary with line citations, for a person to merge
 simt pack new <name> --source <spec> # scaffold a versioned pack: pack.json, bench.json, one rule
@@ -369,7 +369,7 @@ history. All remain off until named and propose rather than write projected text
 | --- | --- |
 | `AGENTS.md` (and `<package>/AGENTS.md` in monorepos) | the projection, between `<!-- simt:begin -->` and `<!-- simt:end -->`. The old `simt-dev:` markers are still read, and a region migrates on its next write |
 | `simt.json` | the manifest: `gates`, `substitutions`, `budget`, `mode`, `shared`, `surfaces`, `plans`, `packs`, `federation`, `local` |
-| `simt-dev.lock.json` | the digest of the inputs, the digest of the projection, and locked `variants` winners from `simt bench variants` |
+| `simt.lock.json` | the digest of the inputs, the digest of the projection, and locked `variants` winners from `simt bench variants`. The old `simt-dev.lock.json` is still read, and a lock migrates on its next write |
 | `.cursor/rules/*.mdc`, `.claude/rules/*.md`, `.agents/rules/*.md`, `.github/instructions/*.instructions.md` | one file per rule, and only for a harness that reads that directory |
 | `.editorconfig`, `.gitattributes` | baseline regions, placed first so a later setting still wins |
 | `.simt-hooks/` and `core.hooksPath` | the shared dispatcher. It fails closed |

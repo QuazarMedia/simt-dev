@@ -13,10 +13,9 @@ import { join } from 'node:path';
 
 import { readLockedVariants } from '../kernel/variants.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
+import { LOCK_FILE, LOCK_LEGACY } from '../name.mjs';
 import { desiredRegion, provenanceDigest, LOCAL_PROFILE_DIR } from './rules.mjs';
 import { readManifest } from './manifest.mjs';
-
-export const LOCK_FILE = 'simt-dev.lock.json';
 
 /** Manifest keys that change what the region contains. Anything else in the file is
  *  the repository's own notes, and hashing it would make a comment fail the lock. */
@@ -41,7 +40,7 @@ export async function computeLock(root, flags = {}) {
 }
 
 /**
- * Record locked variant winners in `simt-dev.lock.json` alongside updated digests.
+ * Record locked variant winners in `simt.lock.json` alongside updated digests.
  */
 export async function writeLockVariants(root, nextVariants, flags = {}) {
   const existing = await readLockedVariants(root);
@@ -53,15 +52,20 @@ export async function writeLockVariants(root, nextVariants, flags = {}) {
 
 /** Read a lock, or null when the file is not there. A file that does not parse is an
  *  error the caller reports, not a missing lock: absence and damage are different
- *  repairs. */
+ *  repairs. A lock under the legacy name is a lock (ADR-110): it is read until the
+ *  next write migrates it, and a permission failure on the new name is not an excuse
+ *  to fall back to an older file. */
 export async function readLock(root) {
-  let text;
-  try {
-    text = await readFile(join(root, LOCK_FILE), 'utf8');
-  } catch (error) {
-    if (error.code === 'ENOENT') return { lock: null, error: null };
-    throw error;
+  let text = null;
+  for (const name of [LOCK_FILE, LOCK_LEGACY]) {
+    try {
+      text = await readFile(join(root, name), 'utf8');
+      break;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
   }
+  if (text === null) return { lock: null, error: null };
   try {
     const lock = JSON.parse(text);
     if (typeof lock?.inputs !== 'string' || typeof lock?.outputs !== 'string') {

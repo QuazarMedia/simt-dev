@@ -134,6 +134,8 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // ADR-098 joined when ADR-099 landed: its own status paragraph now states that
   // ruling 3's cross-host identicality is narrowed, and the parser reads the
   // claim on the changed record rather than inferring it from the newer one.
+  // ADR-086 joined when ADR-110 landed: its status paragraph now states that
+  // ruling 3's file name is superseded, and the parser reads the claim there.
   // (The lint reads a stricter shape and stays quiet — the claim lives in the
   // possessive the house style reserves for the superseded record's own note.)
   assert.deepEqual(shapes, [
@@ -149,6 +151,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-077',
     'ADR-081',
     'ADR-083',
+    'ADR-086',
     'ADR-088',
     'ADR-097',
     'ADR-098',
@@ -245,7 +248,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // reading would not be an argument a maintainer can act on. ADR-106 joined for the
   // same reason once more: the ruling is ABOUT the shim, and a decision that every
   // harness entry runs through it without naming the locator block the shim is
-  // rendered from would not be an argument a maintainer can act on.
+  // rendered from would not be an argument a maintainer can act on. ADR-110 joined for
+  // the same reason once more: the ruling is ABOUT the lock's name, and a decision that
+  // the old name is read until the next write without naming the module that owns both
+  // names would not be an argument a maintainer can act on.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -264,6 +270,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-099',
     'ADR-104',
     'ADR-106',
+    'ADR-110',
   ]);
 });
 

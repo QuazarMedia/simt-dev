@@ -204,7 +204,7 @@ ${CLI} bench probes [--yes]    12 synthetic rule-compliance probes with determin
                             (dry-run unless --yes; grades git state, transcript and ledger,
                             and reports compliance per arm)
 ${CLI} bench variants [--yes]  evaluate simt-variants rule slots on the canary suite and lock
-                            winning variants in simt-dev.lock.json (dry-run unless --yes;
+                            winning variants in simt.lock.json (dry-run unless --yes;
                             re-opens when model or harness changes)
 ${CLI} bench critic          precision and recall of the local critic over a labelled
                             set of historical diffs (.simt/local/critic-labels.jsonl;

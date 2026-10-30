@@ -18,7 +18,7 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, readFile, symlink } from 'node:fs/promises';
-import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { commitJournal, ignoreJournal, journaledWriteFile } from '../journal.mjs';
 import { invalidateCheckCache } from '../status.mjs';
 import { dirname, join } from 'node:path';
 
@@ -35,6 +35,8 @@ import { planTsconfigBase } from '../tsconfig.mjs';
 import {
   IDENTITY_FILE,
   INCLUDE_KEY,
+  gitignoreWithIdentity,
+  identityIgnored,
   ignoreIdentity,
   includeOwnIdentity,
   includesOwnIdentity,
@@ -107,7 +109,15 @@ export async function initCommand(positional, flags) {
     // not a line to save.
     else pointerPlan.push({ ...p, state: st.state });
   }
-  manifest.surfaces = projected.surfaces;
+  // Record the choice only when it was made: a flag for this run, or a key the
+  // manifest already carries with a real value. A fresh adoption with neither gets
+  // no surfaces of its own - "absent" means the global standard applies, and writing
+  // today's default into every fresh manifest would freeze it for every release after
+  // (review 0003 Q30). With a declared array, `projected.surfaces` is that same array
+  // resolved, so the assignment records rather than rewrites.
+  if (flags.surfaces !== undefined || Array.isArray(existing?.surfaces)) {
+    manifest.surfaces = projected.surfaces;
+  }
 
   // The lock's input digest includes the manifest this run writes. On a fresh adoption
   // there is no manifest on disk yet, so the lock `plan` computed is the one for a repo
@@ -141,6 +151,17 @@ export async function initCommand(positional, flags) {
   // preview that lists everything else. `exists` short-circuits the write: a
   // repository that already has one keeps it exactly as it is.
   const identity = await resolveIdentity(root);
+  // The .gitignore edit and the include repoint are writes too, so they get plan
+  // lines of their own: a line the run does not print is a write the reader
+  // approves from the diff afterwards (review 0003 Q30). The before-bytes are read
+  // once here and reused by the --diff pair below, so the preview's before side is
+  // the same bytes the plan's verb was decided from.
+  let gitignoreBefore = null;
+  let gitignoreAction = null;
+  if (!identity.exists && identity.from !== null && !(await identityIgnored(root))) {
+    gitignoreBefore = await readBefore(join(root, '.gitignore'));
+    gitignoreAction = gitignoreBefore === null ? 'create' : 'update';
+  }
   const identityPlan = {
     file: IDENTITY_FILE,
     action: identity.exists ? 'unchanged' : identity.from === null ? 'skip' : 'created',
@@ -156,6 +177,9 @@ export async function initCommand(positional, flags) {
     // pointing at another repository's identity file works here and breaks for the
     // next person who clones without that sibling checkout.
     include: await includesOwnIdentity(root),
+    // The .gitignore edit, planned like every other write: null when the entry is
+    // already there or no file is being created, 'create'/'update' otherwise.
+    gitignore: gitignoreAction,
   };
 
   const payload = {
@@ -326,6 +350,13 @@ export async function initCommand(positional, flags) {
         after: renderIdentityFile(identity),
       });
     }
+    if (payload.identity.gitignore !== null) {
+      diffs.push({
+        path: '.gitignore',
+        before: gitignoreBefore,
+        after: gitignoreWithIdentity(gitignoreBefore ?? ''),
+      });
+    }
     if (payload.ci.action === 'create') {
       diffs.push({
         path: payload.ci.file,
@@ -425,7 +456,14 @@ export async function initCommand(positional, flags) {
   // a change.
   if (payload.identity.action === 'created') {
     await journaledWriteFile(root, journal, join(root, IDENTITY_FILE), renderIdentityFile(identity));
-    await ignoreIdentity(root);
+    // Both .gitignore edits are journaled, and the journal line lands first: the two
+    // entries fold to one (first before, last after), so undo restores the pre-run
+    // bytes — or removes the file — in one step. If the journal line landed after,
+    // unrecorded, the file would no longer match the recorded after-bytes and undo
+    // would refuse (review 0003 Q30). The `ignoreJournal` inside `commitJournal`
+    // below is then a no-op.
+    await ignoreJournal(root, journal);
+    await ignoreIdentity(root, journal);
     note(`wrote    ${IDENTITY_FILE} (${identity.from === 'last-commit' ? 'from the last commit in this repository' : 'from the identity configured on this machine'}); gitignored, because it is yours and not the repository's`);
   } else if (payload.identity.action === 'unchanged') {
     note(`kept     ${IDENTITY_FILE} (${payload.identity.reason})`);
@@ -433,7 +471,7 @@ export async function initCommand(positional, flags) {
     note(`skipped  ${IDENTITY_FILE}  ${payload.identity.reason}`);
   }
   if (!payload.identity.include) {
-    await includeOwnIdentity(root);
+    await includeOwnIdentity(root, journal);
     note(`set      ${INCLUDE_KEY} = ../${IDENTITY_FILE}  this repository's own identity file`);
   }
 
@@ -674,6 +712,18 @@ function render(payload, manifest, { npm = true, version } = {}) {
         ? id.reason
         : `${id.name} <${id.email}>  from ${id.from === 'last-commit' ? "this repository's last commit" : 'the identity configured on this machine'}`;
     lines.push(`  ${verb.padEnd(9)} ${id.file}${detail ? `\n            ${detail}` : ''}`);
+    // The two side writes of the same action, each with its own line: a dry run that
+    // says `created git.config` and stops is a plan missing two of its three writes
+    // (review 0003 Q30). The include line mirrors the apply note byte for byte, so
+    // preview and run cannot tell the reader two different stories.
+    if (id.gitignore !== null) {
+      lines.push(
+        `  ${id.gitignore.padEnd(9)} .gitignore  ${IDENTITY_FILE} is per-developer, and committing it publishes one identity to everyone`,
+      );
+    }
+    if (id.include === false) {
+      lines.push(`  set        ${INCLUDE_KEY} = ../${IDENTITY_FILE}  this repository's own identity file`);
+    }
   }
   // Every gate the stack suggested and this repo cannot run is named, with the reason.
   // A silently shorter gate list reads as "this repo needs no formatting check", when

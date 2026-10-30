@@ -131,7 +131,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q30 | Init side effects (`.gitignore`, `include.path`) hidden from plan and survive `undo`; pins `surfaces:["opencode"]` | P1 | F | init | S | Q68 | Complete | 150b91e · test: node --test test/identity.test.mjs |
 | Q31 | `npm run` in a pnpm repo; CI workflow fails without the devDependency; seeds and card disagree | P1 | F | ecosystem | M | Q70 | Queued | |
 | Q32 | Shipped rule text: `simt-dev.json`, lost thresholds, `.ts` example in Go, dangling profile refs | P1 | F | content | S | — | Complete | 04ac274 · test: node --test test/checks.test.mjs test/mdc.test.mjs test/genericity.test.mjs test/shipped.test.mjs test/project.test.mjs |
-| Q33 | `upgrade` with no args targets the whole heuristic workspace | P1 | F | upgrade | M | — | Queued | |
+| Q33 | `upgrade` with no args targets the whole heuristic workspace | P1 | F | upgrade | M | — | Complete | e4b5211 · test: node --test test/upgrade.test.mjs |
 | Q34 | `rules why --root` replaces shipped decisions with the repo's; no command lists decisions | P1 | F | rules | M | Q55 | Queued | |
 | Q35 | `graph lint`: `ok:true` with errors; spec noise; diamond reported as cycle; crashes on malformed | P1 | F | graph | S | — | Queued | |
 | Q36 | Lessons: `list` writes; `review` re-promotes; O(n²) unlocked store; expiry never read; `**` paths | P1 | F | memory | M | Q73 | Queued | |

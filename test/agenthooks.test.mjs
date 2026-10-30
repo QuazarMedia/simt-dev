@@ -60,9 +60,16 @@ async function repo(files = {}) {
  * would miss half of what a hook says to the four different consumers of it.
  */
 function cli(args, { input = '', env = {} } = {}) {
+  // Hermetic: a test asserting the push is blocked must not inherit an ambient
+  // SIMT_ALLOW. The pre-push gate runs the suite with SIMT_ALLOW=push set for the
+  // outer push, and that var would lift the policy inside the spawned hook. Strip it
+  // from the inherited env; a test that wants the policy lifted passes
+  // env: { SIMT_ALLOW: ... } and it is re-added below.
+  const inherited = { ...process.env };
+  delete inherited.SIMT_ALLOW;
   const result = spawnSync(process.execPath, [BIN, ...args], {
     input,
-    env: { ...process.env, ...env },
+    env: { ...inherited, ...env },
     encoding: 'utf8',
     maxBuffer: 16 * 1024 * 1024,
   });

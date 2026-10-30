@@ -119,6 +119,22 @@ export async function planHooksInstall(root, { manifest, exists }) {
   // install where there is no node_modules to pin in.
   const version = packageVersion();
   const npm = await hasNpm(root);
+  // Q31: installed shims name the repo's own installer in their remedy.
+  // Lockfile first, `packageManager` next, npm default — the one resolver.
+  let manager = null;
+  if (npm) {
+    const { resolveNodeRunner } = await import('../ecosystem/node-runner.mjs');
+    let packageManager = null;
+    try {
+      const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+      if (typeof pkg.packageManager === 'string') packageManager = pkg.packageManager;
+    } catch {
+      // Unreadable here leaves the npm default; the manifest path reports it.
+    }
+    const { fingerprint } = await import('../resolve/fingerprint.mjs');
+    const detected = await fingerprint(root);
+    manager = resolveNodeRunner({ facts: detected.facts, packageManager }).id;
+  }
 
   // Only install a shim for an event that declares at least one gate. A shim with
   // an empty gate list enforces nothing, yet merely existing it REPLACES whatever
@@ -220,7 +236,7 @@ export async function planHooksInstall(root, { manifest, exists }) {
   const evidenceDeclared = manifest?.gates?.evidence === 'warn' || manifest?.gates?.evidence === 'block';
   const evidenceFile = fileFor('commit-msg');
   const evidenceExisting = await readIfExists(join(root, evidenceFile));
-  const evidenceSource = evidenceDeclared ? renderEvidenceShim({ npm, version }) : null;
+  const evidenceSource = evidenceDeclared ? renderEvidenceShim({ npm, manager, version }) : null;
   const evidenceOurs = evidenceExisting !== null && evidenceExisting.includes(SHIM_MARKER);
   if (!evidenceDeclared && evidenceOurs) obsolete.push({ event: 'commit-msg' });
   // A foreign commit-msg would otherwise be chained onto the same path. The chain
@@ -239,6 +255,7 @@ export async function planHooksInstall(root, { manifest, exists }) {
     current,
     wants,
     npm,
+    manager,
     version,
     wanted,
     chained,
@@ -267,7 +284,7 @@ export async function planHooksInstall(root, { manifest, exists }) {
  * @returns {{wrote: string[]}} the shim paths written, removed, or refreshed
  */
 export async function applyHooksInstall(root, planned, journal) {
-  const { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, version, routed, wants, current } =
+  const { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, manager, version, routed, wants, current } =
     planned;
   // Shim and evidence bytes are journaled so `undo` restores them (R49), with
   // the executable bit they are written with: a shim the run chmodded is one
@@ -280,7 +297,7 @@ export async function applyHooksInstall(root, planned, journal) {
   await mkdir(join(root, HOOKS_DIR), { recursive: true });
   for (const event of wanted) {
     const path = join(root, fileFor(event));
-    await journaledWriteFile(root, journal, path, renderShim(event, { npm, version }), { mode: 0o755 });
+    await journaledWriteFile(root, journal, path, renderShim(event, { npm, manager, version }), { mode: 0o755 });
     wrote.push(fileFor(event));
   }
   for (const c of chained) {
@@ -317,11 +334,11 @@ export async function applyHooksInstall(root, planned, journal) {
  * `doctor --fix` reuses it rather than deriving a second answer.
  */
 export async function plannedDiffs(root, planned) {
-  const { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, version } = planned;
+  const { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, manager, version } = planned;
   const pairs = [];
   for (const event of wanted) {
     const path = fileFor(event);
-    pairs.push({ path, before: await readBefore(join(root, path)), after: renderShim(event, { npm, version }) });
+    pairs.push({ path, before: await readBefore(join(root, path)), after: renderShim(event, { npm, manager, version }) });
   }
   for (const c of chained) {
     const path = fileFor(c.event);
@@ -352,6 +369,7 @@ async function installHooks(root, flags) {
     current,
     wants,
     npm,
+    manager,
     version,
     wanted,
     chained,
@@ -400,7 +418,7 @@ async function installHooks(root, flags) {
   const plan = [];
   for (const event of wanted) {
     const path = join(root, fileFor(event));
-    const source = renderShim(event, { npm, version });
+    const source = renderShim(event, { npm, manager, version });
     const existing = await readIfExists(path);
     if (existing === source) {
       plan.push({ file: fileFor(event), action: 'unchanged' });
@@ -484,7 +502,7 @@ async function installHooks(root, flags) {
   // true in preview and in apply alike (R50).
   const diffs =
     flags.diff === true
-      ? await plannedDiffs(root, { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, version })
+      ? await plannedDiffs(root, { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, manager, version })
       : [];
 
   if (!mode.apply) {
@@ -532,7 +550,7 @@ async function installHooks(root, flags) {
   const journal = [];
   await applyHooksInstall(
     root,
-    { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, version, routed, wants, current },
+    { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, manager, version, routed, wants, current },
     journal,
   );
   await commitJournal(root, 'hooks install', journal);

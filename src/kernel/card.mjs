@@ -23,6 +23,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { ECOSYSTEMS } from '../projection/manifest.mjs';
+import { resolveNodeRunner, runScript } from '../ecosystem/node-runner.mjs';
 
 /**
  * The card's ceiling in bytes (plan 0003 R10). Over it, the least valuable lines are
@@ -93,10 +94,12 @@ const FOCUSED = [
     // The repo's own runner decides the shape. A repository whose test script is vitest
     // or jest takes a file argument through the script; one with no such script gets the
     // built-in runner, which is the only answer that needs nothing installed to already
-    // be true. `npm test -- <file>` is the ADR-010 shape (never `npx`).
-    template: (s, f, scripts) => {
+    // be true. `<manager> test -- <file>` is the ADR-010 shape (never `npx`).
+    template: (s, f, scripts, runner) => {
       const test = scripts?.test ?? '';
-      return /vitest|jest/.test(test) ? 'npm test -- {file}' : 'node --test {file}';
+      if (!/vitest|jest/.test(test)) return 'node --test {file}';
+      const run = runner?.run ?? 'npm';
+      return `${run} test -- {file}`;
     },
   },
 ];
@@ -123,15 +126,32 @@ function text(value) {
   return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
-/** The repository's own `package.json` scripts, or an empty map. */
+/** The repository's own `package.json` scripts, plus the manager that runs them. */
 async function readScripts(root) {
   try {
     const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-    return pkg && typeof pkg.scripts === 'object' && pkg.scripts ? pkg.scripts : {};
+    const scripts = pkg && typeof pkg.scripts === 'object' && pkg.scripts ? pkg.scripts : {};
+    // Q31: the runner is committed evidence (lockfile, then `packageManager`),
+    // never an assumption of npm — the card, the gates and CI read one answer.
+    const lockfiles = [];
+    for (const file of ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json']) {
+      try {
+        await readFile(join(root, file), 'utf8');
+        lockfiles.push(file);
+      } catch {
+        // Absent is the normal case; only present files name the runner.
+      }
+    }
+    const runner = resolveNodeRunner({
+      facts: [],
+      lockfiles,
+      packageManager: typeof pkg.packageManager === 'string' ? pkg.packageManager : null,
+    });
+    return { scripts, runner };
   } catch {
     // No package.json is a normal shape (a Python or Go repository), and an unreadable one
     // is reported by the manifest path. Either way the card has no scripts to draw on.
-    return {};
+    return { scripts: {}, runner: null };
   }
 }
 
@@ -145,7 +165,7 @@ async function readScripts(root) {
  * repository has declared nothing. The last is the same table the tool seeds gates from,
  * so the card and the gate list cannot name two different commands for one repository.
  */
-function resolveVerb(verb, { manifest, facts, stack, scripts }) {
+function resolveVerb(verb, { manifest, facts, stack, scripts, runner }) {
   const declared = text(manifest?.gates?.commands?.[verb]);
   if (declared) return declared;
 
@@ -154,11 +174,11 @@ function resolveVerb(verb, { manifest, facts, stack, scripts }) {
   // is the one a hook and CI run, which is what the card is reporting.
   const scriptNames = verb === 'format' ? ['format:check', 'format'] : [verb];
   for (const name of scriptNames) {
-    if (text(scripts?.[name])) return `npm run ${name}`;
+    if (text(scripts?.[name])) return runScript(runner?.id ?? 'npm', name);
   }
 
   if (verb === 'build') {
-    if (text(scripts?.build)) return 'npm run build';
+    if (text(scripts?.build)) return runScript(runner?.id ?? 'npm', 'build');
     for (const row of BUILDS) {
       if (row.fact && facts.has(row.fact)) return row.command;
       if (row.stack && stack.has(row.stack)) return row.command;
@@ -217,11 +237,16 @@ function pickDroppable(lines) {
 export async function commandCard({ root, manifest = null, stack = [], facts = [] }) {
   const factSet = new Set(facts);
   const stackSet = new Set(stack);
-  const scripts = await readScripts(root);
+  const { scripts, runner } = await readScripts(root);
+  // Q31: the lockfile facts name the runner even when `readScripts` saw no
+  // lockfile (a fixture with a bare package.json keeps npm; a pnpm checkout
+  // resolves pnpm from its fact). Facts win inside the resolver already.
+  const { resolveNodeRunner: resolveRunner } = await import('../ecosystem/node-runner.mjs');
+  const effective = runner ?? resolveRunner({ facts: factSet });
 
   const lines = [];
   for (const verb of VERBS) {
-    const command = resolveVerb(verb, { manifest, facts: factSet, stack: stackSet, scripts });
+    const command = resolveVerb(verb, { manifest, facts: factSet, stack: stackSet, scripts, runner: effective });
     if (command) lines.push({ label: verb, command, verb });
   }
   for (const entry of FOCUSED) {
@@ -231,7 +256,7 @@ export async function commandCard({ root, manifest = null, stack = [], facts = [
     if (lines.some((l) => l.kind === entry.kind)) continue;
     lines.push({
       label: `focused test (${entry.kind})`,
-      command: entry.template(stackSet, factSet, scripts),
+      command: entry.template(stackSet, factSet, scripts, effective),
       kind: entry.kind,
       verb: 'focused',
     });

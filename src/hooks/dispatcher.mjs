@@ -25,6 +25,7 @@ import { promisify } from 'node:util';
 
 import { GATES } from './gates.mjs';
 import { resolveGate } from './resolve.mjs';
+import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { assertVersionPin } from '../package-version.mjs';
@@ -85,6 +86,24 @@ export async function runGates(event, { root, manifest }) {
   }
 
   const pkg = await readPkg(root);
+  // Q31: the runner is committed evidence (lockfile, then `packageManager`),
+  // resolved once per hook run so every script gate spawns the same manager.
+  let runner = null;
+  if (pkg) {
+    const lockfiles = [];
+    for (const file of ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json']) {
+      try {
+        await stat(join(root, file));
+        lockfiles.push(file);
+      } catch {
+        // Absent is the normal case.
+      }
+    }
+    runner = resolveNodeRunner({
+      lockfiles,
+      packageManager: typeof pkg.packageManager === 'string' ? pkg.packageManager : null,
+    }).id;
+  }
   const staged = event === 'pre-commit' ? await stagedFiles(root) : [];
   const unstaged = event === 'pre-commit' ? await unstagedFiles(root) : new Set();
   const commands = manifest?.gates?.commands;
@@ -111,7 +130,7 @@ export async function runGates(event, { root, manifest }) {
       continue;
     }
 
-    const resolution = await resolveGate(gate, { root, pkg, staged, commands });
+    const resolution = await resolveGate(gate, { root, pkg, staged, commands, runner });
     if (!resolution.ok) {
       results.push({
         name,

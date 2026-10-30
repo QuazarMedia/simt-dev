@@ -14,6 +14,25 @@ import { promisify } from 'node:util';
 import { CHAIN_MARKER, EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderShim } from '../hooks/shim.mjs';
 import { foreignHooks, resolveHooksDir } from '../hooks/where.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
+import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
+import { fingerprint } from '../resolve/fingerprint.mjs';
+
+/**
+ * The Node manager id for this repository, or null without a package.json.
+ * Lockfile first, `packageManager` next — the one resolver (review 0003 Q31).
+ */
+async function nodeManagerFor(root) {
+  if (!(await hasNpm(root))) return null;
+  const detected = await fingerprint(root);
+  let packageManager = null;
+  try {
+    const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+    if (typeof pkg.packageManager === 'string') packageManager = pkg.packageManager;
+  } catch {
+    // Unreadable here leaves the npm default; the manifest path reports it.
+  }
+  return resolveNodeRunner({ facts: detected.facts, packageManager }).id;
+}
 
 const exec = promisify(execFile);
 
@@ -149,7 +168,10 @@ async function describeShim(path, root) {
       const chain = await readChainedShim(path);
       stale = chain === null || content !== renderChainedShim(chain.event, chain.target);
     } else {
-      stale = content !== renderShim(basename(path), { npm: await hasNpm(root), version: packageVersion() });
+      // Q31: the comparison renders with the repo's own manager, or a pnpm repo
+      // reads as stale the moment this tool ships — the same one-answer rule as
+      // the install path above.
+      stale = content !== renderShim(basename(path), { npm: await hasNpm(root), manager: await nodeManagerFor(root), version: packageVersion() });
     }
   } catch {
     stale = true;

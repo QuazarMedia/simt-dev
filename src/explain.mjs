@@ -59,8 +59,8 @@ export const EXPLAIN_CODES = {
   },
   'file-lines': {
     what: 'A file exceeds the 1000-line hard ceiling: it fails the gate.',
-    why: 'ADR-005: 400 lines is a review trigger, 1000 is a hard ceiling, and generated files are exempt. The ceiling is a default a repository can narrow, never a number an agent negotiates at write time.',
-    fix: 'Split the file, or narrow the ceiling deliberately in the rule that declares it — not by editing the generated line.',
+    why: 'ADR-005: 400 lines is a review trigger, 1000 is a hard ceiling, and excluded files are exempt. The ceiling is a default a repository can narrow, never a number an agent negotiates at write time.',
+    fix: 'Split the file, or name it in limits.fileLines.exclude — not by editing the generated line.',
     example: 'A 1240-line module with no exemption: FILE-LINES names the file and the count.',
   },
   'file-lines-warn': {

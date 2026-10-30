@@ -30,7 +30,7 @@ owns them — are in the `uv` profile, which selects on `has-uv-lock`.
 
 ## Tests
 
-- `fail_under` is set per repo in `simt-dev.json` (ADR-006). Where a repo requires
+- `fail_under` is set per repo in `simt.json` (ADR-006). Where a repo requires
   100 %, treat it as a behavioural gate: an uncovered path is either a missing test
   or dead code, and both are defects.
 - No `pytest.skip` without a pre-existing written justification.

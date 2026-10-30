@@ -46,7 +46,7 @@ commands belongs in this repository, not here.
   canonical example of a blocked state. Never justify a skip without a pre-existing written
   reason. (ADR-006)
 - Evidence discipline is mandatory everywhere. A **numeric** bar is declared per repo in
-  `simt-dev.json`, never assumed centrally. (ADR-006)
+  `simt.json`, never assumed centrally. (ADR-006)
 - The pre-commit hook owns format and lint for staged files; do not re-run what it just ran.
   Manual runs are correct when the hook is absent, when diagnosing a failure, or for a check
   the hook does not cover. (ADR-004)

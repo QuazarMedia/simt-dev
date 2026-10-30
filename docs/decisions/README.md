@@ -115,6 +115,8 @@ record's status line — never by editing the ruling in place.
 | [105](ADR-105-the-json-ceiling-shrinks-arrays-and-never-cuts-bytes.md) | the JSON ceiling shrinks arrays and never cuts bytes | **accepted** · 2026-10-29 |
 | [106](ADR-106-the-harness-hook-runs-through-a-repo-shim.md) | the harness hook runs through a repo shim, and `failClosed` only with it | **accepted** · 2026-10-29 |
 | [107](ADR-107-an-install-can-name-one-harness-and-the-skipped-ones-are-named.md) | an install can be narrowed to one harness, and the skipped ones are named | **accepted** · 2026-10-30 |
+| [108](ADR-108-an-adoption-builds-the-index-and-a-command-refreshes-it-on-read.md) | an adoption builds the index, and a command that reads it refreshes it on read | **accepted** · 2026-10-30 |
+| [109](ADR-109-simt-dev-is-its-own-consumer-and-the-guards-that-kept-it-from-being-one-are-retired.md) | simt-dev is its own consumer, and the guards that kept it from being one are retired | **accepted** · 2026-10-30 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

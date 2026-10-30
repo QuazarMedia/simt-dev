@@ -750,7 +750,7 @@ export const GENERATED_KEYS = new Set(['$comment', 'projection']);
 // The sub-keys of `projection` this tool writes. `projection` is a generated key, but
 // not wholesale: the repository owns sub-keys this writer does not emit (`place` is the
 // one that shipped), and a repair that replaces the object deletes them (review 0003 Q26).
-export const PROJECTION_KEYS = new Set(['simtDevSha', 'version']);
+const PROJECTION_KEYS = new Set(['simtDevSha', 'version']);
 
 /** The `projection` object a manifest carries; anything that is not an object is nothing. */
 function projectionOf(value) {

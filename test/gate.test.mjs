@@ -36,6 +36,10 @@ const RESOLVE = [
   'test/completions.test.mjs',
   'test/contract.test.mjs',
   'test/decide.test.mjs',
+  // decisions.test.mjs reaches the resolver through the command registry:
+  // src/decisions/index.mjs imports COMMANDS from src/commands/index.mjs, and
+  // the registry loads skills.mjs, which imports the resolver.
+  'test/decisions.test.mjs',
   // diff.test.mjs imports the shared fixture for `git`, and the fixture loads
   // the registry, so the closure is the same width as contract's.
   'test/diff.test.mjs',
@@ -69,6 +73,9 @@ const RESOLVE = [
   'test/mdc.test.mjs',
   'test/monorepo.test.mjs',
   'test/naming.test.mjs',
+  // node-runner and status reach the resolver through fingerprint, which the
+  // card and hooks-state paths import (1b1ebdd).
+  'test/node-runner.test.mjs',
   'test/pack.test.mjs',
   'test/packs.test.mjs',
   'test/parity.test.mjs',
@@ -86,6 +93,7 @@ const RESOLVE = [
   // slice.test.mjs reaches the resolver through the dispatcher's gate run and
   // through the shared fixture, the same way secrets.test.mjs does (R53).
   'test/slice.test.mjs',
+  'test/status.test.mjs',
   'test/surfaces.test.mjs',
   'test/tokens.test.mjs',
   'test/toolchain.test.mjs',

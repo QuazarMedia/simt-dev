@@ -13,6 +13,8 @@ import { readLocalConfig } from '../local/config.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { extract, resolveImports } from './extract.mjs';
 import {
+  FTS_SCHEMA,
+  FTS_TRI_SCHEMA,
   JSONL_FILE,
   SCHEMA_V,
   SQLITE_FILE,
@@ -43,7 +45,8 @@ async function probeBackend() {
   try {
     const { DatabaseSync } = await import('node:sqlite');
     const db = new DatabaseSync(':memory:');
-    db.exec('create virtual table fts using fts5(kind, ref, body)');
+    db.exec(FTS_SCHEMA);
+    db.exec(FTS_TRI_SCHEMA);
     db.close();
     return 'sqlite';
   } catch {
@@ -59,29 +62,123 @@ export function ftsKindOf(filePath, lang = '') {
   return 'docs';
 }
 
-export function buildFtsBody(filePath, symbolsForPath = [], text = null) {
-  const tokens = [];
-  for (const part of String(filePath ?? '').toLowerCase().split(/[^a-z0-9]+/)) {
-    if (part.length >= 2) tokens.push(part);
-  }
-  for (const s of symbolsForPath) {
-    if (s?.name) tokens.push(s.name, s.name);
-    if (s?.sig) tokens.push(s.sig);
-  }
-  if (typeof text === 'string' && text.length > 0) {
-    const head = text.slice(0, 24000);
-    const seen = new Map();
-    for (const m of head.matchAll(/[A-Za-z][A-Za-z0-9_-]{2,}/g)) {
-      const w = m[0].toLowerCase();
-      const c = (seen.get(w) ?? 0) + 1;
-      if (c <= 6) {
-        seen.set(w, c);
-        tokens.push(w);
+/**
+ * The one fold for the FTS pipeline (review 0003 Q43; sharing it everywhere is
+ * Q72's slice, which also owns the trigram decision recorded below).
+ *
+ * NFKC before NFKD so compatibility variants fold first (half-width katakana
+ * to full-width) and combining marks strip after (München -> munchen), then
+ * lowercase. That is what FTS5 `unicode61 remove_diacritics 2` does to the
+ * same text on the sqlite side: ß stays ß on both (this SQLite build does
+ * not fold it), and a run the fold keeps whole matches a run it keeps whole.
+ *
+ * The strip spares the combining dakuten and handakuten (U+3099 U+309A): NFKD
+ * splits ド into ト plus a mark, and dropping that mark would voice every
+ * がぎぐげご to かきくけこ. unicode61 never strips them either, so the final
+ * NFKC recomposes what the strip spared.
+ */
+function foldText(text) {
+  return String(text ?? '')
+    .normalize('NFKC')
+    .normalize('NFKD')
+    .replace(/\p{M}/gu, (mark) => (mark === '゙' || mark === '゚' ? mark : ''))
+    .normalize('NFKC')
+    .toLowerCase();
+}
+
+const FOLD_RUN = /[\p{L}\p{N}]+/gu;
+const CJK_SEG = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]+|[^\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]+/gu;
+const CJK_CHAR = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u;
+
+/** Whether a token is a single CJK character (kept at any length). */
+function isCjkToken(token) {
+  return typeof token === 'string' && [...token].length === 1 && CJK_CHAR.test(token);
+}
+
+/** Maximal CJK runs in raw text: the substrings the trigram table resolves. */
+function cjkRuns(text) {
+  return [...new Set(String(text ?? '').match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]+/gu) ?? [])];
+}
+
+/**
+ * The one tokenizer for the FTS pipeline: index side, task side, both backends.
+ *
+ * Non-CJK runs keep the caller's floor; CJK runs emit single characters
+ * because unicode61 has no CJK segmentation - a run kept whole here would
+ * never match there. CamelCase is deliberately not split: `magictoken` in a
+ * task matches `magicToken` in a body because both sides only lowercase.
+ */
+export function tokenizeText(text, { min = 2 } = {}) {
+  const out = [];
+  for (const run of foldText(text).match(FOLD_RUN) ?? []) {
+    for (const seg of run.match(CJK_SEG) ?? []) {
+      if (CJK_CHAR.test(seg[0])) {
+        for (const ch of seg) out.push(ch);
+      } else if (seg.length >= min) {
+        out.push(seg);
       }
-      if (seen.size >= 600) break;
     }
   }
-  return tokens.join(' ');
+  return out;
+}
+
+/** Line-aligned sections: whole documents stay indexed, and a term deep in a
+ * long file matches its own section instead of falling past a byte cap. */
+const SECTION_CHARS = 8000;
+
+function splitSections(text) {
+  const out = [];
+  let cur = '';
+  for (const line of String(text).split('\n')) {
+    if (cur.length > 0 && cur.length + 1 + line.length > SECTION_CHARS) {
+      out.push(cur);
+      cur = '';
+    }
+    cur = cur.length === 0 ? line : `${cur}\n${line}`;
+  }
+  if (cur.length > 0) out.push(cur);
+  return out;
+}
+
+function hasCjk(text) {
+  return CJK_CHAR.test(String(text ?? ''));
+}
+
+/**
+ * One FTS row per section, `{ kind, ref, body }`, with `raw` (folded section
+ * text for the trigram table) on CJK-bearing sections only. Symbol names and
+ * signatures ride on the first section: they describe the file, not the
+ * section, and repeating them would weight long files by section count. Path
+ * tokens are gone on purpose - kind and ref are UNINDEXED now, and file-name
+ * matching is the resolver signal in scoreFiles, not a body term that matches
+ * every row of that kind.
+ */
+export function buildFtsBodies(filePath, symbolsForPath = [], text = null) {
+  if (typeof text !== 'string' || text.length === 0) return [];
+  const kind = ftsKindOf(filePath, langOf(filePath));
+  const symTokens = [];
+  for (const s of symbolsForPath) {
+    if (s?.name) symTokens.push(s.name, s.name);
+    if (s?.sig) symTokens.push(s.sig);
+  }
+  const head = tokenizeText(symTokens.join('\n'), { min: 1 }).join(' ');
+  const rows = [];
+  for (const section of splitSections(text)) {
+    const body = (rows.length === 0 && head.length > 0
+      ? `${head} ${tokenizeText(section).join(' ')}`
+      : tokenizeText(section).join(' ')
+    ).trim();
+    if (body.length === 0) continue;
+    const row = { kind, ref: filePath, body };
+    if (hasCjk(section)) row.raw = foldText(section);
+    rows.push(row);
+  }
+  return rows;
+}
+
+export function buildFtsBody(filePath, symbolsForPath = [], text = null) {
+  const rows = buildFtsBodies(filePath, symbolsForPath, text);
+  return rows.length > 0 ? rows[0].body : '';
 }
 
 const FTS_STOP = new Set([
@@ -94,14 +191,13 @@ const FTS_STOP = new Set([
 ]);
 
 export function ftsQueryTerms(task) {
-  return [
-    ...new Set(
-      String(task ?? '')
-        .toLowerCase()
-        .split(/[^a-z0-9]+/)
-        .filter((w) => w.length >= 3 && !FTS_STOP.has(w)),
-    ),
-  ].slice(0, 48);
+  const seen = new Set();
+  for (const tok of tokenizeText(task, { min: 1 })) {
+    if (seen.has(tok)) continue;
+    if (!isCjkToken(tok) && (tok.length < 3 || FTS_STOP.has(tok))) continue;
+    seen.add(tok);
+  }
+  return [...seen].slice(0, 48);
 }
 
 /**
@@ -135,6 +231,7 @@ export async function reindex(root, opts = {}) {
   const symbols = [];
   const edges = [];
   const fts = [];
+  let skipped = 0;
   for (const entry of changed) {
     const lang = langOf(entry.path);
     next.push({
@@ -150,10 +247,12 @@ export async function reindex(root, opts = {}) {
       : await runExtract(entry.path, text, lang, adapter.module);
     symbols.push(...pulled.symbols);
     edges.push(...(pulled.edges ?? resolveImports(entry.path, pulled.imports, paths, lang)));
-    const body = buildFtsBody(entry.path, pulled.symbols, text);
-    if (body.length > 0) {
-      fts.push({ kind: ftsKindOf(entry.path, lang), ref: entry.path, body });
+    // A null blob is binary: recorded in `skipped`, never tokenized.
+    if (text == null) {
+      skipped += 1;
+      continue;
     }
+    fts.push(...buildFtsBodies(entry.path, pulled.symbols, text));
   }
   const removed = previous.filter((row) => !paths.has(row.path)).map((row) => row.path);
   // The tree this build vouches for, stored beside the rows so a later read
@@ -183,6 +282,7 @@ export async function reindex(root, opts = {}) {
     embeddings: stored.embeddings ?? 0,
     embedState: embedBuild.state,
     parsers: adapter.state,
+    skipped,
     ms: Date.now() - started,
   };
 }
@@ -219,7 +319,11 @@ async function buildEmbeddings(root, listed, changedFts, { backend, force, embed
 
   const existingEmbeds = force ? [] : await readEmbeddings(root, { backend });
   const embedByPath = new Map(existingEmbeds.map((row) => [row.path, row]));
-  const ftsByPath = new Map(changedFts.map((row) => [row.ref, row.body]));
+  // Sections share a ref; the embedding input is the file's first section.
+  const ftsByPath = new Map();
+  for (const row of changedFts) {
+    if (!ftsByPath.has(row.ref)) ftsByPath.set(row.ref, row.body);
+  }
   const missingEntries = [];
   for (const entry of listed) {
     const prev = embedByPath.get(entry.path);
@@ -286,10 +390,10 @@ export async function readEdges(root, opts = {}) {
   return readJsonl(root, 'edges');
 }
 
-/** FTS rows currently indexed. */
+/** FTS rows currently indexed: one row per section, first section first. */
 export async function readFts(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') return readSqliteRows(root, 'select kind, ref, body from fts order by ref, kind');
+  if (backend === 'sqlite') return readSqliteRows(root, 'select kind, ref, body from fts order by ref, kind, rowid');
   return readJsonl(root, 'fts');
 }
 
@@ -312,29 +416,63 @@ export async function readEmbeddings(root, opts = {}) {
   return readJsonl(root, 'embeddings');
 }
 
+/** Result rows per query branch: many sections share a path. */
+const FTS_LIMIT = 200;
+
+function dedupePaths(rows) {
+  const best = new Map();
+  for (const row of rows) {
+    const prev = best.get(row.path);
+    if (!prev || row.score > prev.score) best.set(row.path, row);
+  }
+  return [...best.values()].sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+}
+
 /**
  * Rank indexed documents against a task string using BM25.
  *
  * Uses SQLite FTS5 `bm25(fts)` when the sqlite backend is active on disk, and
  * falls back to an identical Okapi BM25 computation over `fts` rows otherwise.
+ * A query with CJK also consults the trigram table - unicode61 has no CJK
+ * segmentation, so those runs are unqueryable there - and a mixed query
+ * unions both tables, trigram hits first, because an ASCII-only table cannot
+ * hold a CJK run and a trigram table cannot hold an ASCII-only file.
  */
 export async function searchFtsBm25(root, task, opts = {}) {
   const terms = ftsQueryTerms(task);
   if (terms.length === 0) return [];
   const backend = opts.backend ?? await probeBackend();
   if (backend === 'sqlite') {
-    const matchExpr = terms.map((t) => `"${t}"`).join(' OR ');
-    const rows = await readSqliteRows(
-      root,
-      'select kind, ref as path, -bm25(fts) as score from fts where fts match ? order by score desc, path asc',
-      [matchExpr],
-    );
-    if (rows.length > 0) {
-      return rows.map((row) => ({ kind: row.kind, path: row.path, score: Number(row.score) || 0 }));
+    const ascii = terms.filter((t) => !isCjkToken(t));
+    const runs = [...new Set(cjkRuns(foldText(task)))];
+    const hits = [];
+    if (runs.length > 0) {
+      hits.push(...await ftsBranch(root, 'fts_tri', [...runs, ...ascii]));
     }
+    if (ascii.length > 0) {
+      const seen = new Set(hits.map((row) => row.path));
+      for (const row of await ftsBranch(root, 'fts', ascii)) {
+        if (!seen.has(row.path)) {
+          seen.add(row.path);
+          hits.push(row);
+        }
+      }
+    }
+    if (hits.length > 0) return dedupePaths(hits).slice(0, FTS_LIMIT);
   }
   const ftsRows = opts.fts ?? await readFts(root, { backend });
-  return scoreFtsBm25(ftsRows, task);
+  return scoreFtsBm25(ftsRows, task).slice(0, FTS_LIMIT);
+}
+
+async function ftsBranch(root, table, terms) {
+  if (terms.length === 0) return [];
+  const matchExpr = terms.map((t) => `"${t}"`).join(' OR ');
+  const rows = await readSqliteRows(
+    root,
+    `select kind, ref as path, -bm25(${table}) as score from ${table} where ${table} match ? order by score desc, path asc limit ?`,
+    [matchExpr, FTS_LIMIT],
+  );
+  return rows.map((row) => ({ kind: row.kind, path: row.path, score: Number(row.score) || 0 }));
 }
 
 /**
@@ -348,10 +486,9 @@ export function scoreFtsBm25(ftsRows, task) {
   const N = ftsRows.length;
   const docs = ftsRows.map((row) => {
     const path = row.ref ?? row.path ?? '';
-    const words = `${row.kind ?? ''} ${path} ${row.body ?? ''}`
-      .toLowerCase()
-      .split(/[^a-z0-9_]+/)
-      .filter(Boolean);
+    // Body only: kind and ref are UNINDEXED on the sqlite side, so scoring
+    // them here would rank what the other backend cannot see.
+    const words = tokenizeText(row.body ?? '', { min: 1 });
     const tf = new Map();
     for (const w of words) tf.set(w, (tf.get(w) ?? 0) + 1);
     return { kind: row.kind ?? 'code', path, len: words.length, tf };
@@ -375,7 +512,8 @@ export function scoreFtsBm25(ftsRows, task) {
     }
     if (score > 0) out.push({ kind: d.kind, path: d.path, score });
   }
-  return out.sort((a, b) => b.score - a.score || (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  // Sections share a path; the file keeps its best section.
+  return dedupePaths(out);
 }
 
 export function langOf(filePath) {

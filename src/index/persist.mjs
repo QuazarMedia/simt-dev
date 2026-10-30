@@ -14,16 +14,43 @@ export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
 export const JSONL_FILE = join(LOCAL_DIR, 'index.jsonl');
 const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
 const JSONL_FILE_LEGACY = '.simt/index.jsonl';
-export const SCHEMA_V = '3';
+export const SCHEMA_V = '4';
+
+// The FTS tables carry their tokenizer in their definition, so `if not exists`
+// cannot migrate them: a v3 database would keep tokenizing new rows the v3 way
+// (ASCII fold, kind and ref searchable). ensureFtsSchema drops and recreates
+// them when the definition drifted; Q44 replaces the wipe with versioned
+// migrations.
+export const FTS_SCHEMA = 'create virtual table fts using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "unicode61 remove_diacritics 2")';
+export const FTS_TRI_SCHEMA = 'create virtual table fts_tri using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "trigram")';
 
 const SCHEMA = `
 create table if not exists files(path text primary key, blob text, lang text, bytes int, pkg text);
 create table if not exists symbols(id integer primary key, path text, name text, kind text, line int, sig text, exported int);
 create table if not exists edges(src text, dst text, kind text, weight real);
-create virtual table if not exists fts using fts5(kind, ref, body);
 create table if not exists embeddings(path text primary key, blob text, model text, dims int, vec blob);
 create table if not exists meta(key text primary key, value text);
 `;
+
+function ensureFtsSchema(db) {
+  const have = new Map(
+    db
+      .prepare("select name, sql from sqlite_master where type = 'table' and (name = 'fts' or name = 'fts_tri')")
+      .all()
+      .map((row) => [row.name, row.sql ?? '']),
+  );
+  // Match loosely on purpose: the stored text is verbatim DDL, and a missed
+  // marker recreates while a rewritten-but-equal definition never matches a
+  // marker it does not contain. Either way the tables converge on the DDL above.
+  if (!have.get('fts')?.includes('UNINDEXED') || !have.get('fts')?.includes('remove_diacritics 2')) {
+    db.exec('drop table if exists fts');
+    db.exec(FTS_SCHEMA);
+  }
+  if (!have.get('fts_tri')?.includes('trigram')) {
+    db.exec('drop table if exists fts_tri');
+    db.exec(FTS_TRI_SCHEMA);
+  }
+}
 
 export function encodeVectorBlob(vec) {
   if (!Array.isArray(vec) && !(vec instanceof Float32Array)) return Buffer.alloc(0);
@@ -113,12 +140,15 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     // (Q07). A removed file's incoming edges dangle, so they drop with it.
     const dropEdges = db.prepare('delete from edges where src = ?');
     const dropIncoming = db.prepare('delete from edges where dst = ?');
+    ensureFtsSchema(db);
     const dropFts = db.prepare('delete from fts where ref = ?');
+    const dropTri = db.prepare('delete from fts_tri where ref = ?');
     const dropEmbed = db.prepare('delete from embeddings where path = ?');
     const dropFile = db.prepare('delete from files where path = ?');
     const addSymbol = db.prepare('insert into symbols(path, name, kind, line, sig, exported) values (?, ?, ?, ?, ?, ?)');
     const addEdge = db.prepare('insert into edges(src, dst, kind, weight) values (?, ?, ?, ?)');
     const addFts = db.prepare('insert into fts(kind, ref, body) values (?, ?, ?)');
+    const addTri = db.prepare('insert into fts_tri(kind, ref, body) values (?, ?, ?)');
     const upsertEmbed = db.prepare(`insert into embeddings(path, blob, model, dims, vec) values (?, ?, ?, ?, ?)
       on conflict(path) do update set blob = excluded.blob, model = excluded.model, dims = excluded.dims, vec = excluded.vec`);
     for (const row of next) {
@@ -126,6 +156,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       dropSymbols.run(row.path);
       dropEdges.run(row.path);
       dropFts.run(row.path);
+      dropTri.run(row.path);
       dropEmbed.run(row.path);
     }
     for (const path of removed) {
@@ -134,11 +165,17 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       dropEdges.run(path);
       dropIncoming.run(path);
       dropFts.run(path);
+      dropTri.run(path);
       dropEmbed.run(path);
     }
     for (const row of symbols) addSymbol.run(row.path, row.name, row.kind, row.line, row.sig, row.exported);
     for (const row of edges) addEdge.run(row.src, row.dst, row.kind, row.weight);
-    for (const row of fts) addFts.run(row.kind, row.ref, row.body);
+    for (const row of fts) {
+      addFts.run(row.kind, row.ref, row.body);
+      // The trigram table carries folded raw text for CJK-bearing sections
+      // only; an ASCII-only section is already reachable through `fts`.
+      if (row.raw) addTri.run(row.kind, row.ref, row.raw);
+    }
     for (const row of embeddings) {
       const vecBlob = Buffer.isBuffer(row.vec) || row.vec instanceof Uint8Array ? row.vec : encodeVectorBlob(row.vec);
       const dims = Number.isInteger(row.dims) ? row.dims : Math.floor(vecBlob.byteLength / 4);

@@ -52,9 +52,15 @@ function copiedBin(out, kind) {
 function hook(out, kind, payload, project) {
   const args = ['agent-hook', 'pre-tool-use', '--harness', kind];
   if (kind !== 'gemini' && kind !== 'opencode') args.push('--root', project);
+  // Hermetic: these assertions expect the push to be blocked, so an ambient
+  // SIMT_ALLOW (set for the outer push when the pre-push gate runs the suite) must
+  // not lift the policy inside the spawned hook.
+  const inherited = { ...process.env };
+  delete inherited.SIMT_ALLOW;
   const result = spawnSync(process.execPath, [copiedBin(out, kind), ...args], {
     input: payload,
     encoding: 'utf8',
+    env: inherited,
   });
   return { code: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }

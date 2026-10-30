@@ -39,6 +39,7 @@ export async function indexCommand(args, flags) {
     `files    ${result.files}`,
     `updated  ${result.updated}`,
     `removed  ${result.removed}`,
+    `skipped  ${result.skipped ?? 0}`,
     `symbols  ${result.symbols}`,
     `edges    ${result.edges}`,
     `ms       ${result.ms}`,

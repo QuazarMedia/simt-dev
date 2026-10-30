@@ -10,7 +10,17 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { git } from './fixture.mjs';
-import { isIndexStale, readEdges, readFiles, reindex } from '../src/index/store.mjs';
+import {
+  buildFtsBodies,
+  ftsQueryTerms,
+  isIndexStale,
+  readEdges,
+  readFiles,
+  readFts,
+  reindex,
+  searchFtsBm25,
+  tokenizeText,
+} from '../src/index/store.mjs';
 import { JSONL_FILE, SQLITE_FILE } from '../src/index/persist.mjs';
 import { indexCommand } from '../src/commands/repoindex.mjs';
 
@@ -165,4 +175,69 @@ test('index refuses a directory that is not a repository', async () => {
   const root = await mkdtemp(join(tmpdir(), 'idx-'));
   assert.equal(await indexCommand([], { root }), 5);
   await rm(root, { recursive: true, force: true });
+});
+
+test('the shared tokenizer folds diacritics and splits CJK into characters (Q43)', async () => {
+  // unicode61 remove_diacritics 2 folds München the same way, and this
+  // SQLite build folds ß on neither side, so both agree to keep it.
+  assert.deepEqual(tokenizeText('Die Straße in München'), ['die', 'straße', 'in', 'munchen']);
+  assert.deepEqual(tokenizeText('日本語のドキュメント'), ['日', '本', '語', 'の', 'ド', 'キ', 'ュ', 'メ', 'ン', 'ト']);
+  assert.deepEqual(ftsQueryTerms('Fix the magicToken checksum in this file'), ['fix', 'magictoken', 'checksum']);
+  const mixed = ftsQueryTerms('日本語の refactor 方法');
+  assert.ok(mixed.includes('日') && mixed.includes('refactor') && mixed.includes('法'));
+});
+
+test('whole documents index in sections past the old caps (Q43)', async () => {
+  // The old body kept 24k characters and 600 tokens: a token at the end of a
+  // long file never indexed. Sections keep every token.
+  const filler = Array.from({ length: 3000 }, (_, i) => `const fillerVar${i} = ${i};`).join('\n');
+  const rows = buildFtsBodies('src/big.mjs', [{ name: 'top', sig: 'function top()' }], `${filler}\nconst needleDeepToken = 1;\n`);
+  assert.ok(rows.length > 1, `one row would cap again (got ${rows.length})`);
+  assert.ok(rows.every((row) => row.ref === 'src/big.mjs'));
+  assert.ok(rows.some((row) => row.body.includes('needledeeptoken')), 'the tail token is indexed');
+  assert.ok(rows[0].body.includes('top'), 'symbol tokens ride on the first section');
+});
+
+for (const backend of ['sqlite', 'jsonl']) {
+  test(`kind and ref no longer match, CJK is retrievable, binaries are counted (${backend}, Q43)`, async () => {
+    const root = await mkdtemp(join(tmpdir(), 'idx-'));
+    try {
+      await git(['init', '-q', root]);
+      await mkdir(join(root, 'docs', 'decisions'), { recursive: true });
+      await mkdir(join(root, 'src'), { recursive: true });
+      await writeFile(join(root, 'docs', 'decisions', 'why.md'), 'hello world\n');
+      await writeFile(join(root, 'jp.md'), '日本語のドキュメントです\n');
+      await writeFile(join(root, 'src', 'greet.mjs'), 'Die Straße in München ist groß\n');
+      await writeFile(join(root, 'bin.dat'), Buffer.from([0x00, 0x01, 0x02, 0x00, 0x41]));
+      await git(['-C', root, 'add', '-A']);
+      await git(['-C', root, 'commit', '-qm', 'initial']);
+      const result = await reindex(root, { backend });
+      assert.equal(result.skipped, 1);
+      const fts = await readFts(root, { backend });
+      assert.ok(fts.every((row) => row.ref !== 'bin.dat'), 'the binary leaves no FTS row');
+      // The decisions file's body never says "decisions": kind and ref are
+      // UNINDEXED now, so only body terms match.
+      assert.deepEqual(await searchFtsBm25(root, 'decisions', { backend }), []);
+      const jp = await searchFtsBm25(root, '日本語', { backend });
+      assert.ok(jp.some((row) => row.path === 'jp.md'), 'the Japanese document is found');
+      const de = await searchFtsBm25(root, 'straße', { backend });
+      assert.ok(de.some((row) => row.path === 'src/greet.mjs'), 'the German document is found');
+      // ß folds on neither backend: the boundary is identical, not half-fixed.
+      assert.deepEqual(await searchFtsBm25(root, 'strasse', { backend }), []);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test('sections of one file collapse to one hit and results stop at 200 (Q43)', async () => {
+  const rows = [];
+  for (let i = 0; i < 250; i += 1) rows.push({ kind: 'code', ref: `f${i}.js`, body: 'common target token' });
+  rows.push(
+    { kind: 'code', ref: 'multi.js', body: 'target section one' },
+    { kind: 'code', ref: 'multi.js', body: 'target section two target' },
+  );
+  const ranked = await searchFtsBm25('/nonexistent', 'target', { backend: 'jsonl', fts: rows });
+  assert.equal(ranked.length, 200);
+  assert.equal(ranked.filter((row) => row.path === 'multi.js').length, 1);
 });

@@ -495,7 +495,7 @@ test('install --harness writes one reader, and names the ones it skipped', async
   assert.match(again.text, /UNCHANGED\s+claude/);
 });
 
-test('install --harness with an unknown id is a usage error that names the ids', async () => {
+test('agent-hooks install --harness with an unknown id is a usage error that names the ids', async () => {
   const root = await repo();
   const result = cli(['agent-hooks', 'install', '--root', root, '--harness', 'windsurf']);
   assert.equal(result.code, 2);

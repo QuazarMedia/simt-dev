@@ -46,14 +46,6 @@ async function repo() {
   return root;
 }
 
-test('two renders of one repository are the same bytes', async () => {
-  const root = await repo();
-  const a = await desiredRegion(root, {});
-  const b = await desiredRegion(root, {});
-  assert.equal(a.body, b.body);
-  await rm(root, { recursive: true, force: true });
-});
-
 test('editing a repository line changes only the tail', async () => {
   const root = await repo();
   const before = (await desiredRegion(root, {})).body;

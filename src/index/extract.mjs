@@ -51,19 +51,138 @@ export function extract(filePath, text, lang) {
   return { symbols, imports: found.imports };
 }
 
-/** Import specifiers become edges. A relative one points at a tracked file when one matches. */
+/**
+ * Import specifiers become edges. A relative one points at a tracked file when
+ * one matches; a non-relative one goes through the language's namespace
+ * strategy below (review 0003 Q40).
+ */
 export function resolveImports(filePath, imports, files, lang) {
   const have = files instanceof Set ? files : new Set(files);
+  const stems = indexByStem(have);
+  const dirs = lang === 'go' || lang === 'csharp' ? indexDirs(have, lang === 'go' ? '.go' : '.cs') : null;
   const edges = [];
   const seen = new Set();
   for (const spec of imports) {
-    const dst = resolveOne(filePath, spec, have, lang);
+    const dst = resolveOne(filePath, spec, have, stems, dirs, lang);
     if (seen.has(dst)) continue;
     seen.add(dst);
     edges.push({ src: filePath, dst, kind: 'import', weight: 1 });
   }
   edges.sort(byEdge);
   return edges;
+}
+
+/** Stem (basename) to tracked paths, so a namespace lookup touches its stem group, not the tree. */
+function indexByStem(have) {
+  const map = new Map();
+  for (const file of have) {
+    const stem = file.slice(file.lastIndexOf('/') + 1);
+    const list = map.get(stem);
+    if (list) list.push(file);
+    else map.set(stem, [file]);
+  }
+  return map;
+}
+
+/** Directory to files of one extension, for the languages whose imports name a package, not a file. */
+function indexDirs(have, ext) {
+  const map = new Map();
+  for (const file of have) {
+    if (!file.endsWith(ext)) continue;
+    const dir = file.includes('/') ? file.slice(0, file.lastIndexOf('/')) : '';
+    const list = map.get(dir);
+    if (list) list.push(file);
+    else map.set(dir, [file]);
+  }
+  return map;
+}
+
+/**
+ * One strategy per namespace language (review 0003 Q40).
+ *
+ * Outside JS/TS, imports name namespaces: `com.foo.Bar`, `pkg.mod`,
+ * `example.com/mod/pkg`, `crate::a::b`, `A.B.C`. Each builder maps the spec
+ * to ordered path candidates; the first candidate with exactly one tracked hit
+ * wins, several hits stay the raw specifier (ambiguous is not resolved), and
+ * none keeps the old behaviour. Languages whose imports cannot name a file -
+ * a C# `using` names a namespace shared by many files, a Go import names a
+ * package - resolve only the single-file case and keep the rest as specs.
+ */
+function nonRelativeCandidates(spec, lang) {
+  if (lang === 'kotlin' || lang === 'java') {
+    const parts = spec.split('.');
+    if (parts.length < 2 || parts.some((p) => p === '')) return null;
+    return dottedFileCandidates(parts, lang === 'kotlin' ? ['.kt', '.kts'] : ['.java'], null);
+  }
+  if (lang === 'python') {
+    const parts = spec.split('.');
+    if (parts.some((p) => p === '')) return null;
+    const base = parts.join('/');
+    return [`${base}.py`, `${base}/__init__.py`];
+  }
+  if (lang === 'rust') {
+    const parts = spec.split('::');
+    if (parts[0] === 'crate' || parts[0] === 'self' || parts[0] === 'super') parts.shift();
+    else if (parts[0] === '') return null;
+    if (parts.length === 0 || parts.some((p) => p === '')) return null;
+    return dottedFileCandidates(parts, ['.rs'], 'mod.rs');
+  }
+  return null;
+}
+
+/**
+ * Full dotted path first, then dropping a trailing Uppercase segment: a nested
+ * type lives in its outer file (`com.foo.Outer.Inner` → `Outer.kt`). The drop
+ * stops at a lowercase segment, so `java.util.List` never becomes `util.java` -
+ * a stdlib import must not resolve to a coincidental file of that name.
+ */
+function dottedFileCandidates(parts, exts, modFile) {
+  const out = [];
+  const segs = [...parts];
+  for (;;) {
+    const base = segs.join('/');
+    for (const ext of exts) out.push(`${base}${ext}`);
+    if (modFile) out.push(`${base}/${modFile}`);
+    const last = segs[segs.length - 1] ?? '';
+    const outer = segs[segs.length - 2] ?? '';
+    if (segs.length < 2 || !/^[A-Z]/.test(last) || (segs.length > 2 && !/^[A-Z]/.test(outer))) break;
+    segs.pop();
+  }
+  return out;
+}
+
+/** First candidate with exactly one tracked hit wins; several hits are ambiguous, not resolved. */
+function suffixHit(candidates, have, stems) {
+  for (const candidate of candidates) {
+    if (have.has(candidate)) return candidate;
+    const stem = candidate.slice(candidate.lastIndexOf('/') + 1);
+    const hits = (stems.get(stem) ?? []).filter((f) => f === candidate || f.endsWith(`/${candidate}`));
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1) return null;
+  }
+  return null;
+}
+
+/**
+ * A package import resolves to its directory's single file, and only then.
+ *
+ * Stripping from the left is the go.mod-prefix strategy without reading go.mod:
+ * whatever the module prefix is, it is the part that does not match. A package
+ * of several files has no single answer a file edge could name, so it stays a
+ * specifier rather than pointing at an arbitrary member.
+ */
+function dirHit(spec, dirs) {
+  const parts = spec.replace(/\\/g, '/').replace(/^\.\//, '').split('/').filter((p) => p !== '');
+  for (let i = 0; i < parts.length; i += 1) {
+    const suffix = parts.slice(i).join('/');
+    const found = [];
+    for (const [dir, members] of dirs) {
+      if (dir === suffix || (suffix !== '' && dir.endsWith(`/${suffix}`))) found.push(...members);
+    }
+    if (found.length === 1) return found[0];
+    if (found.length > 1) return null;
+  }
+  return null;
 }
 
 /**
@@ -76,9 +195,19 @@ export function resolveImports(filePath, imports, files, lang) {
  */
 const EXT_SWAPS = { '.js': ['.ts', '.tsx'], '.mjs': ['.mts'], '.cjs': ['.cts'] };
 
-function resolveOne(filePath, spec, files, lang) {
+function resolveOne(filePath, spec, files, stems, dirs, lang) {
   const rel = relativeSpec(spec);
-  if (rel === null) return spec;
+  if (rel === null) {
+    if (lang === 'go' || lang === 'csharp') {
+      // Namespace-as-directory: `A.B.C` and `example.com/mod/pkg` use dots and
+      // slashes interchangeably for what is a directory on disk.
+      const dotted = lang === 'csharp' ? String(spec).replace(/\\/g, '/').split('.').join('/') : String(spec);
+      return dirHit(dotted, dirs) ?? spec;
+    }
+    const candidates = nonRelativeCandidates(String(spec), lang);
+    if (candidates === null) return spec;
+    return suffixHit(candidates, files, stems) ?? spec;
+  }
   const dir = filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/')) : '';
   const base = slash(dir, rel);
   const candidates = [base];

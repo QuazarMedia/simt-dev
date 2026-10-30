@@ -153,7 +153,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q52 | Brief/map noise: 47 false "unresolved" commands, false "generated" cautions, `distill` crash, silent no-match | P2 | F | brief | S | — | Queued | |
 | Q53 | Git dispatcher/shim robustness: no gate timeout, 8 MB buffer = fail, no `-z`, spaces, no `node` check | P2 | F | hooks | M | — | Queued | |
 | Q54 | No runtime Node version check (npm only warns, pip never checks) | P2 | F | bin | S | — | Queued | |
-| Q55 | Decisions: duplicate numbers pass, `\d{3}` limit, 4 readers hard-code `docs/decisions`, heuristic parse | P2 | F | decisions | M | — | Queued | |
+| Q55 | Decisions: duplicate numbers pass, `\d{3}` limit, 4 readers hard-code `docs/decisions`, heuristic parse | P2 | F | decisions | M | — | Complete | 69d9d60 · test: node --test test/decisions.test.mjs test/decide.test.mjs test/rules.test.mjs test/undo.test.mjs test/shipped.test.mjs test/mcp.test.mjs test/compare.test.mjs test/explain.test.mjs test/checks.test.mjs test/project.test.mjs test/install.test.mjs test/doctor.test.mjs |
 | Q56 | MCP protocol hardening: id/jsonrpc/args validation, line cap, `skills_show` contract, contradictory instructions | P2 | F | mcp | S | — | Queued | |
 | Q57 | Own CI: 32 s from its 5-min timeout; no push trigger; no hook wired; pre-push breaks ADR-031 | P1 | D | ci | S | — | Queued | |
 | Q58 | Packs: preview hits the network; symlinks unpinned; argument order inverted | P2 | F | packs | S | — | Queued | |

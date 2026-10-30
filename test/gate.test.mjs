@@ -102,6 +102,55 @@ test('gate --changed sees a modified non-ASCII path (Q39)', async () => {
   }
 });
 
+test('gate names a nonexistent path, and says the empty set out loud (Q40)', async () => {
+  // The old answer for `gate no/such/file.mjs` was ok:true with no tests -
+  // indistinguishable from "safe". A path that is neither tracked nor on disk
+  // is a usage error; a tracked file with no importers says `nothing-selected`.
+  const root = await mkdtemp(join(tmpdir(), 'idx-gate-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'lonely.mjs'), 'export const lonely = 1;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    const missing = await capture(() => gateCommand(['no/such/file.mjs'], { root }));
+    assert.equal(missing.code, 2);
+    assert.match(`${missing.stdout}${missing.stderr}`, /no such file: no\/such\/file\.mjs/);
+    const empty = await capture(() => gateCommand(['src/lonely.mjs'], { root, json: true }));
+    assert.equal(empty.code, 0, empty.stderr);
+    const payload = JSON.parse(empty.stdout);
+    assert.deepEqual(payload.selected, []);
+    assert.deepEqual(payload.unmatched, []);
+    assert.equal(payload.graph, 'resolved');
+    assert.equal(payload.verdict, 'nothing-selected');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('gate reports an unresolvable language graph (Q40)', async () => {
+  // One Kotlin edge, zero resolutions: the graph cannot see the language, and
+  // the payload says so instead of letting `selected: []` look like safety.
+  const root = await mkdtemp(join(tmpdir(), 'idx-gate-'));
+  try {
+    await git(['init', '-q', root]);
+    const dir = join(root, 'src', 'main', 'kotlin', 'com', 'foo');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'Main.kt'), 'import com.foo.Missing\nfun main() = 1\n');
+    await writeFile(join(dir, 'Util.kt'), 'fun util() = 1\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    const payload = JSON.parse(
+      (await capture(() => gateCommand(['src/main/kotlin/com/foo/Util.kt'], { root, json: true }))).stdout,
+    );
+    assert.deepEqual(payload.selected, []);
+    assert.equal(payload.graph, 'unresolved');
+    assert.equal(payload.verdict, 'nothing-selected');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function git(args) {
   return exec('git', ['-c', 'user.name=simt-dev tests', '-c', 'user.email=tests@example.com', '-c', 'commit.gpgsign=false', ...args], { maxBuffer: 16 << 20 });
 }

@@ -148,6 +148,39 @@ test('an import spanning lines is one specifier, and .js names the .ts source (Q
   ]);
 });
 
+test('namespaces resolve to the one tracked file, and stay specs otherwise (Q40)', () => {
+  // The review's evidence: 0 of 22,220 Kotlin edges pointed at a tracked file,
+  // because dotted imports were stored raw. stdlib and ambiguous names still
+  // are - resolving them would invent the edge instead of finding it.
+  const files = new Set([
+    'src/main/kotlin/com/foo/Bar.kt',
+    'src/main/kotlin/com/foo/Outer.kt',
+    'src/main/java/com/foo/App.java',
+    'pkg/mod.py',
+    'internal/pkg/foo.go',
+    'src/a.rs',
+    'src/a/b.rs',
+  ]);
+  const dst = (path, spec, lang) => resolveImports(path, [spec], files, lang)[0].dst;
+  assert.equal(dst('x.kt', 'com.foo.Bar', 'kotlin'), 'src/main/kotlin/com/foo/Bar.kt');
+  assert.equal(dst('x.kt', 'com.foo.Outer.Inner', 'kotlin'), 'src/main/kotlin/com/foo/Outer.kt');
+  assert.equal(dst('Main.java', 'com.foo.App', 'java'), 'src/main/java/com/foo/App.java');
+  assert.equal(dst('x.kt', 'java.util.List', 'kotlin'), 'java.util.List', 'stdlib stays a spec');
+  assert.equal(dst('x.kt', 'com.foo.Missing', 'kotlin'), 'com.foo.Missing', 'absent stays a spec');
+  assert.equal(dst('x.py', 'pkg.mod', 'python'), 'pkg/mod.py');
+  assert.equal(dst('x.py', 'sys', 'python'), 'sys', 'stdlib stays a spec');
+  assert.equal(dst('x.go', 'example.com/mod/internal/pkg', 'go'), 'internal/pkg/foo.go');
+  assert.equal(dst('x.rs', 'crate::a::b', 'rust'), 'src/a/b.rs');
+  assert.equal(dst('x.rs', 'crate::a::Item', 'rust'), 'src/a.rs');
+  assert.equal(dst('x.rs', 'std::io::Read', 'rust'), 'std::io::Read', 'stdlib stays a spec');
+  const two = new Set([...files, 'other/kotlin/com/foo/Bar.kt']);
+  assert.equal(
+    resolveImports('x.kt', ['com.foo.Bar'], two, 'kotlin')[0].dst,
+    'com.foo.Bar',
+    'two homelands is ambiguous, not resolved',
+  );
+});
+
 test('the same blobs produce the same symbols, and one edit rewrites that file', async () => {
   const root = await mkdtemp(join(tmpdir(), 'idx-'));
   await git(['init', '-q', root]);

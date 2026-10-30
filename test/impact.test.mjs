@@ -120,6 +120,29 @@ test('impact names a non-ASCII path instead of calling it missing (Q39)', async 
   }
 });
 
+test('impact follows a resolved Kotlin import (Q40)', async () => {
+  // Before the resolve pass every dotted import stayed a raw specifier, so a
+  // type used across files listed no importers. Now the edge resolves through
+  // the package path and the importer is named.
+  const root = await mkdtemp(join(tmpdir(), 'idx-impact-'));
+  try {
+    const dir = join(root, 'src', 'main', 'kotlin', 'com', 'foo');
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, 'A.kt'), 'package com.foo\nclass A\n');
+    await writeFile(join(dir, 'B.kt'), 'package com.foo\nimport com.foo.A\nclass B(val a: A)\n');
+    await git(['init', '-q', root]);
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    const listed = await capture(() =>
+      impactCommand(['src/main/kotlin/com/foo/A.kt'], { root, workspace: 'off' }),
+    );
+    assert.equal(listed.code, 0, listed.stderr);
+    assert.match(listed.stdout, /importer\s+src\/main\/kotlin\/com\/foo\/B\.kt/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function git(args) {
   return exec('git', ['-c', 'user.name=simt-dev tests', '-c', 'user.email=tests@example.com', '-c', 'commit.gpgsign=false', ...args], { maxBuffer: 16 << 20 });
 }

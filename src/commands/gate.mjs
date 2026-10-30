@@ -6,6 +6,7 @@
 // this tool knows how to read is compacted; the raw log is kept.
 
 import { execFile } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -15,7 +16,7 @@ import { CLI } from '../name.mjs';
 import { detectTestRunner } from '../bench/mine.mjs';
 import { compactOutput } from '../index/compact.mjs';
 import { readImportEdges, selectTests } from '../index/gate.mjs';
-import { packageOf } from '../index/store.mjs';
+import { langOf, packageOf } from '../index/store.mjs';
 import { localRel } from '../state.mjs';
 
 const exec = promisify(execFile);
@@ -32,31 +33,81 @@ export async function gateCommand(args, flags) {
   }
   if (changed.length === 0) {
     if (flags.changed === true) {
+      // No change: nothing is unmatched and no language is implicated, so the
+      // graph is vacuously resolved and the verdict is still said out loud.
       if (isJson(flags)) {
-        emitJson({ ok: true, command: 'gate', root, selected: [], code: 0 }, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+        emitJson(
+          { ok: true, command: 'gate', root, selected: [], unmatched: [], graph: 'resolved', verdict: 'nothing-selected', code: 0 },
+          { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 },
+        );
       } else {
-        emit('selected  0', { maxBytes: flags.maxBytes ?? 0 });
+        emit('selected  0\nverdict  nothing-selected', { maxBytes: flags.maxBytes ?? 0 });
       }
       return EXIT.OK;
     }
     return fail(`nothing changed`, EXIT.USAGE, `pass a path, or ${CLI} gate --changed`);
   }
+  // Q40: an explicit path that is neither tracked nor on disk names nothing the
+  // gate could select from. That is a usage error, not an empty selection: the
+  // old answer (`ok: true`, no tests, exit 0) was indistinguishable from "this
+  // change is safe" and trained the reader to trust it.
+  const unknown = changed.filter((p) => !listed.files.includes(p) && !existsSync(join(root, p)));
+  if (unknown.length > 0) {
+    return fail(
+      `no such file: ${unknown.join(', ')}`,
+      EXIT.USAGE,
+      `pass a path git tracks, or ${CLI} gate --changed`,
+    );
+  }
   const files = new Set(listed.files);
   for (const file of changed) files.add(file);
-  const selected = selectTests(changed, await readImportEdges(root, files));
+  const edges = await readImportEdges(root, files);
+  const selected = selectTests(changed, edges);
+  // Q40: the selection explains itself. `unmatched` names explicit paths the
+  // tracked tree does not carry (untracked but present, so the run proceeds);
+  // `graph` is `unresolved` when a language has edges but none of them reaches
+  // a tracked file (the Kotlin estate: thousands of specs, zero resolutions);
+  // `verdict` says the empty set out loud instead of leaving `selected: []` to
+  // be read as either safe or blind. `ok` stays as is until W27's opt-in.
+  const unmatched = changed.filter((p) => !listed.files.includes(p));
+  const graph = graphState(edges, files);
   if (selected.length === 0) {
-    const payload = { ok: true, command: 'gate', root, selected, code: 0 };
+    const payload = { ok: true, command: 'gate', root, selected, unmatched, graph, verdict: 'nothing-selected', code: 0 };
     if (isJson(flags)) {
       emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
       return EXIT.OK;
     }
-    emit('selected  0', { maxBytes: flags.maxBytes ?? 0 });
+    const lines = ['selected  0', 'verdict  nothing-selected'];
+    if (unmatched.length > 0) lines.push(`unmatched  ${unmatched.join(', ')}`);
+    if (graph === 'unresolved') lines.push('graph  unresolved');
+    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
     return EXIT.OK;
   }
-  return runSelected(root, flags, selected);
+  return runSelected(root, flags, selected, { unmatched, graph });
 }
 
-async function runSelected(root, flags, selected) {
+/**
+ * `resolved` unless some language present in the edges has total edges but
+ * zero reaching a tracked file. A language with no edges at all is not
+ * evidence of anything - an unimported file needs no resolution.
+ */
+function graphState(edges, files) {
+  const byLang = new Map();
+  for (const edge of edges) {
+    const lang = langOf(edge.src);
+    if (!lang) continue;
+    const stat = byLang.get(lang) ?? { total: 0, resolved: 0 };
+    stat.total += 1;
+    if (files.has(edge.dst)) stat.resolved += 1;
+    byLang.set(lang, stat);
+  }
+  for (const stat of byLang.values()) {
+    if (stat.total > 0 && stat.resolved === 0) return 'unresolved';
+  }
+  return 'resolved';
+}
+
+async function runSelected(root, flags, selected, { unmatched = [], graph = 'resolved' } = {}) {
   const cache = new Map();
   const groups = new Map();
   for (const file of selected) {
@@ -107,7 +158,18 @@ async function runSelected(root, flags, selected) {
   }
   const raw = await writeRaw(root, rawParts.join('\n'));
   if (raw) text.push('', `raw  ${raw}`);
-  const payload = { ok: code === 0, command: 'gate', root, selected, code, raw, runs };
+  const payload = {
+    ok: code === 0,
+    command: 'gate',
+    root,
+    selected,
+    unmatched,
+    graph,
+    verdict: 'selected',
+    code,
+    raw,
+    runs,
+  };
   if (isJson(flags)) {
     emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
     return code === 0 ? EXIT.OK : EXIT.FAIL;

@@ -26,7 +26,7 @@ Known traps to assume until verified otherwise:
 ## Memory
 
 - Memory budgets are hard limits, not targets, and they are the repo's declared gate
-  (`simt-dev.json`). Zero allocation in `onUpdate`; no allocation in a draw callback.
+  (`simt.json`). Zero allocation in `onUpdate`; no allocation in a draw callback.
 - A memory check that "currently exits 1 by design" is not a gate — it is noise that teaches
   everyone to ignore it. Declare the budget or drop the check.
 

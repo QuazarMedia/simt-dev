@@ -45,6 +45,7 @@ import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
+import { reindex, SQLITE_FILE } from '../index/store.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
@@ -184,6 +185,11 @@ export async function initCommand(positional, flags) {
     },
     adoption,
     manifest: { file: MANIFEST, action: manifestAction, path: manifestFile },
+    // Local state, not a repository file: gitignored, rebuildable from `git ls-files -s`,
+    // and not journaled. The plan names it because a file that appears after the run
+    // without being in the plan is the same silent write as any other. `build` means
+    // "built when --yes is applied"; the apply path replaces this with the result.
+    index: { file: SQLITE_FILE, action: 'build' },
     region: region && {
       file: region.file,
       action: region.action,
@@ -513,6 +519,23 @@ export async function initCommand(positional, flags) {
   await invalidateCheckCache(root);
   payload.written = true;
 
+  // The index is a cache of git blobs (ADR-089): gitignored, rebuildable, and not
+  // journaled. Building it here means the first `simt map` or `simt brief` in a fresh
+  // adoption answers from real files instead of walking the tree on the reader's first
+  // prompt. A failure is a note, not a failed adoption: the next read rebuilds what
+  // this one could not.
+  try {
+    const built = await reindex(root);
+    payload.index = { file: SQLITE_FILE, action: 'built', files: built.files, symbols: built.symbols, ms: built.ms };
+    note(
+      `index    ${built.files} files, ${built.symbols} symbols in ${built.ms} ms; gitignored cache, ` +
+        `refreshed on read by ${CLI} map, brief and slice`,
+    );
+  } catch (error) {
+    payload.index = { file: SQLITE_FILE, action: 'failed', reason: error.message };
+    note(`index    not built (${error.message}); ${CLI} index rebuilds it`);
+  }
+
   if (isJson(flags)) emitJson(payload);
 
   note('');
@@ -758,6 +781,12 @@ function render(payload, manifest, { npm = true, version } = {}) {
   } else if (tb && tb.action === 'skip') {
     lines.push(`  ${'skip'.padEnd(9)} ${tb.file}  ${tb.reason}`);
   }
+
+  // The index is local state, not a repository file: gitignored and rebuildable, so the
+  // plan line describes what apply does rather than a file written into the tree.
+  lines.push(
+    `  ${'build'.padEnd(9)} ${payload.index.file}  gitignored cache of the git index; built on apply, refreshed on read by ${CLI} map, brief and slice (ADR-089)`,
+  );
 
   const { findings, summary } = payload;
   if (summary.conflicts > 0) {

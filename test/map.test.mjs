@@ -139,6 +139,28 @@ test('simt map renders the ranking, and recall is unmeasured without a vault', a
   await rm(bare, { recursive: true, force: true });
 });
 
+test('a file added after the build is visible to map without a manual index (ADR-108)', async () => {
+  // The cache is refreshed from the git index on every read: a blob that has not
+  // changed is not re-read, so the cost of a current repository is one `git ls-files`,
+  // and a file staged after the last build is in the next map.
+  const root = await mkdtemp(join(tmpdir(), 'idx-refresh-'));
+  await git(['init', '-q', root]);
+  await mkdir(join(root, 'src'), { recursive: true });
+  await writeFile(join(root, 'src', 'keep.mjs'), 'export function greet() {}\n');
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'initial']);
+  await reindex(root, { backend: 'jsonl' });
+
+  // The build is done; a file that lands afterwards is not in the cache yet.
+  await writeFile(join(root, 'src', 'late.mjs'), 'export const late = 1;\n');
+  await git(['-C', root, 'add', '-A']);
+
+  const mapped = await capture(() => mapCommand([], { root, task: 'change late in src/late.mjs', budget: '0' }));
+  assert.equal(mapped.code, 0);
+  assert.match(mapped.stdout, /src\/late\.mjs/, 'the file staged after the build is not in the map');
+  await rm(root, { recursive: true, force: true });
+});
+
 test('R28: hybrid retrieval fuses FTS5 bm25, graph proximity and resolver signals deterministically', async () => {
   assert.equal(RRF_K, 40);
   assert.equal(EMBED_RECALL_GAIN_BAR, 0.1);

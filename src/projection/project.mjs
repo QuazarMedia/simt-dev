@@ -53,6 +53,16 @@ import {
  *  most agents, including ones that ignore .cursor/ entirely. */
 export const PRIMARY_TARGET = 'AGENTS.md';
 
+/** The gate's verdict on a region `sync` has already written. `current` rows carry
+ *  `detail: null`, not `undefined`: a key whose value is `undefined` survives into the
+ *  structured MCP surface but is dropped by `JSON.stringify`, so the two surfaces of one
+ *  answer no longer deep-equal. */
+function regionVerdict(action) {
+  return action === 'unchanged'
+    ? { status: 'current', detail: null }
+    : { status: 'drift', detail: `region is ${action}; run: ${CLI} sync --yes` };
+}
+
 
 /**
  * @param {string} root repo root
@@ -286,8 +296,7 @@ export async function checkTargets(root, flags = {}) {
       findings.push({
         file: target.file,
         surface: target.surface,
-        status: action === 'unchanged' ? 'current' : 'drift',
-        detail: action === 'unchanged' ? undefined : `region is ${action}; run: ${CLI} sync --yes`,
+        ...regionVerdict(action),
         recordedSha: parse(target.previous).sha ?? null,
       });
     }
@@ -359,8 +368,7 @@ export async function checkTargets(root, flags = {}) {
       findings.push({
         file: rel,
         surface: target.surface,
-        status: action === 'unchanged' ? 'current' : 'drift',
-        detail: action === 'unchanged' ? undefined : `region is ${action}; run: ${CLI} sync --yes`,
+        ...regionVerdict(action),
         recordedSha: state.sha ?? null,
       });
     }
@@ -395,8 +403,7 @@ export async function checkTargets(root, flags = {}) {
     }
     findings.push({
       file: t.file,
-      status: t.action === 'unchanged' ? 'current' : 'drift',
-      detail: t.action === 'unchanged' ? undefined : `region is ${t.action}; run: ${CLI} sync --yes`,
+      ...regionVerdict(t.action),
       recordedSha: state.sha ?? null,
     });
     const off = misplaced(state, t.style);
@@ -566,8 +573,7 @@ async function checkRegion(root, dir, body, meta) {
   const d = diff(existing, body, meta, await regionOpts(root));
   return {
     file: PRIMARY_TARGET,
-    status: d.action === 'unchanged' ? 'current' : 'drift',
-    detail: d.action === 'unchanged' ? undefined : `region is ${d.action}; run: ${CLI} sync --yes`,
+    ...regionVerdict(d.action),
     recordedSha: state.sha ?? null,
     expectedSha: meta.sha,
   };

@@ -502,23 +502,23 @@ test('upgrade: a hand-written AGENTS.md is left byte-identical and named in the 
   }
 });
 
-test('upgrade: simt-dev itself is not a consumer and round-trips as a no-op', async () => {
-  // The acceptance criterion in plan 0002 section 11. simt-dev has no manifest, so the
-  // command must report that rather than stamp a pin into the repo that produces pins.
-  //
-  // The invariant is "simt-dev is not a consumer of itself", and it is asserted here
-  // as "no simt-dev.json appears" rather than as a particular summary. Asserting the
-  // summary meant asserting a `repos: 1`, and `repos: 1` is only reachable when this
-  // checkout happens to BE a git repo: a `.git`-less copy (a tarball, `git archive`,
-  // the published package itself) is a directory holding no repositories, which
-  // `discover` refuses with exit 3 and a remedy. Both answers are correct, so the
-  // test asserted a property of the author's directory and failed for anyone whose
-  // clone is not a repo. ADR-031 is the same defect one level up.
+test('upgrade: simt-dev is its own consumer and round-trips without moving the stamp', async () => {
+  // The inverse of the guard that used to live here: this repository runs `simt init`
+  // on itself, so the manifest exists. The stamp is a digest of the rule content — and
+  // this checkout IS that content — so an upgrade from its own source has nothing to
+  // move and must write nothing. Asserting the stamp did not move, rather than a
+  // particular summary, keeps the test true for a `.git`-less copy of the source: the
+  // property-not-accident discipline ADR-031 settled for this file.
   const root = resolve(HERE, '..');
-  await assert.rejects(readFile(join(root, MANIFEST_FILE)), 'simt-dev must not be its own consumer');
+  const before = await readJson(join(root, MANIFEST_FILE));
   const { code } = await run(['upgrade', '--root', root, '--yes']);
-  assert.ok(code === 0 || code === 3, `expected a no-op or a refusal, got exit ${code}`);
-  await assert.rejects(readFile(join(root, MANIFEST_FILE)), 'upgrade stamped a pin into simt-dev');
+  assert.equal(code, 0, `an upgrade over its own source is a no-op, got exit ${code}`);
+  const after = await readJson(join(root, MANIFEST_FILE));
+  assert.equal(
+    after.projection.simtDevSha,
+    before.projection.simtDevSha,
+    'the stamp moved on a no-op upgrade',
+  );
 });
 
 test('upgrade: a commit in the CONSUMER repo does not move the stamp', async () => {

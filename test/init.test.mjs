@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chmod, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -1057,6 +1057,33 @@ test('init without --backup writes in place: no tag, no branch (ADR-063)', async
   // The adoption itself still happened, in place.
   const manifest = await readFile(join(root, MANIFEST_FILE), 'utf8');
   assert.ok(manifest.length > 0, 'the manifest was not written in place');
+});
+
+test('init --yes builds the index and reports it; a dry run leaves none behind (ADR-108)', async () => {
+  // The index is a cache of git blobs: gitignored, rebuildable, and not journaled.
+  // Building it during the adoption means the first `simt map` or `simt brief` in a
+  // fresh repository answers from real files. A dry run plans the build without doing
+  // it: a run that writes nothing must not leave a cache behind.
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const root = await scratch();
+  await git(['init', '-q'], { cwd: root });
+  await writeFile(join(root, 'notes.txt'), 'x\n');
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-qm', 'init'], { cwd: root });
+
+  const planned = await capture(() => initCommand([], { root }));
+  assert.equal(planned.code, 0);
+  assert.match(planned.text, /\.simt\/local\/index\.sqlite/, 'the plan does not name the index it will build');
+  await assert.rejects(
+    () => stat(join(root, '.simt', 'local', 'index.sqlite')),
+    'a dry run built the index',
+  );
+
+  const { code, text } = await capture(() => initCommand([], { root, yes: true }));
+  assert.equal(code, 0);
+  assert.match(text, /index    1 files/, 'the build was not reported');
+  const built = await stat(join(root, '.simt', 'local', 'index.sqlite'));
+  assert.ok(built.size > 0, 'the index was not written');
 });
 
 test('init --backup: a directory that is not a git work tree reports no branch and no tag', async () => {

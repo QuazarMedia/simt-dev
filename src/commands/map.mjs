@@ -1,7 +1,9 @@
 // `simt map` ranks the files a task is most likely to touch (R22, ADR-091).
-// The cache is read, and rebuilt once when it is empty, because a map of no
-// files is not an answer. The rebuild writes the gitignored index, which is
-// the same cache `simt index` writes.
+// The cache is refreshed from the git index on every read: `reindex` skips unchanged
+// blobs, so a current repository pays for one `git ls-files -s`, not a walk of the
+// tree. A map of stale files is a wrong answer, and the commands that read with
+// `build` on are ones a person typed at a terminal, where a few hundred
+// milliseconds is not a bar to meet.
 
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
@@ -89,20 +91,22 @@ async function recall(root, flags) {
 }
 
 /**
- * The files, symbols, edges, FTS rows and stored vector embeddings the index holds,
- * building the index once when it is empty.
+ * The files, symbols, edges, FTS rows and stored vector embeddings the index holds.
  *
- * `build: false` refuses that rebuild and answers with `cold: true` instead. The one
- * caller that passes it is the prompt-submit hook (R29), and the reason is the bar that
- * hook has to meet: a delivered packet that built an index would make a person's first
- * prompt in a fresh clone wait on a walk of the whole repository, and a prompt that takes
- * a minute to appear is how a hook gets uninstalled. The next prompt gets the packet, and
- * a command a person typed at a terminal always builds what it needs.
+ * With `build` (the default) the index is refreshed from the git index before it is
+ * read. The refresh is incremental — a blob that has not changed is not re-read — so
+ * the cost of a current repository is one `git ls-files -s`, not a walk of the tree.
+ * The callers that build are commands a person typed: `map`, `brief`, `slice`.
+ *
+ * `build: false` refuses the refresh and answers with `cold: true` when the index is
+ * empty. The callers that pass it are the prompt-submit hook (R29) and the MCP
+ * surface: a delivered packet that walked the whole repository would make a person's
+ * first prompt in a fresh clone wait, and a prompt that takes a minute to appear is
+ * how a hook gets uninstalled. The next prompt gets the packet, and a command a
+ * person typed at a terminal always builds what it needs.
  */
 export async function loadGraph(root, { build = true } = {}) {
-  let files = await readFiles(root);
-  if (files.length === 0) {
-    if (!build) return { files: [], symbols: [], edges: [], fts: [], embeddings: [], cold: true };
+  if (build) {
     try {
       await reindex(root);
     } catch (error) {
@@ -114,13 +118,16 @@ export async function loadGraph(root, { build = true } = {}) {
         ),
       };
     }
-    files = await readFiles(root);
   }
-  const [symbols, edges, fts, embeddings] = await Promise.all([
+  const [files, symbols, edges, fts, embeddings] = await Promise.all([
+    readFiles(root),
     readSymbols(root),
     readEdges(root),
     readFts(root),
     readEmbeddings(root),
   ]);
+  if (!build && files.length === 0) {
+    return { files: [], symbols: [], edges: [], fts: [], embeddings: [], cold: true };
+  }
   return { files, symbols, edges, fts, embeddings };
 }

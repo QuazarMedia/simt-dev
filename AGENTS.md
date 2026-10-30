@@ -4,7 +4,8 @@
 
 simt-dev is the **source** for everything the tool projects into other repositories: the
 rule bodies, the Cursor rule files, the skill registry, the gate definitions and the hook
-dispatcher. It is not a consumer of itself. See "Why this repository is not self-adopted".
+dispatcher. It is also a consumer of itself — it adopts its own repository with `simt init`.
+See "Why this repository adopts itself".
 
 If you are working in any other SIMT repository, this file does not apply to you — read that
 repository's own `AGENTS.md`, where the rules generated from this one have landed.
@@ -107,12 +108,13 @@ Two corollaries that are easy to get wrong:
 | `docs/decisions/` | Numbered rulings. Read these before changing what the tool believes |
 | `docs/plans/` | The two plans this was built from, with a state column per step |
 
-## Why this repository is not self-adopted
+## Why this repository adopts itself
 
-Running `simt init` here would pin this repository's own SHA into its own `AGENTS.md`, so
-every commit would make that file stale and every `simt upgrade` would rewrite it. The
-value of the generated region is that it is *stable text* — it should not churn because
-unrelated code moved. So the rules are written by hand here and tested directly.
+This repository runs `simt init` on itself: `simt.json` declares its gates, and the
+generated region below carries the rules it projects. The region's `simt:sha=` stamp is a
+digest of the rule *content* — `rules/` and the baselines — not of this repository's HEAD,
+so a commit here does not go stale. `simt check` reports the region current until the rule
+text itself changes, and `simt sync --yes` re-renders it when that happens.
 
 The acceptance test for a change to rule text is therefore not `simt check` in this
 repository. It is: render the region for a real repository, read it as that repository's
@@ -120,7 +122,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=29be4d70e0b1b3025591c241324bcebbfa912240 -->
+<!-- simt:sha=5bb13abbb8295ed3f93e720321f3a6ae127fbd62 -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->
@@ -166,7 +168,7 @@ commands belongs in this repository, not here.
   canonical example of a blocked state. Never justify a skip without a pre-existing written
   reason. (ADR-006)
 - Evidence discipline is mandatory everywhere. A **numeric** bar is declared per repo in
-  `simt-dev.json`, never assumed centrally. (ADR-006)
+  `simt.json`, never assumed centrally. (ADR-006)
 - The pre-commit hook owns format and lint for staged files; do not re-run what it just ran.
   Manual runs are correct when the hook is absent, when diagnosing a failure, or for a check
   the hook does not cover. (ADR-004)
@@ -219,7 +221,7 @@ owns them — are in the `uv` profile, which selects on `has-uv-lock`.
 
 ### Tests
 
-- `fail_under` is set per repo in `simt-dev.json` (ADR-006). Where a repo requires
+- `fail_under` is set per repo in `simt.json` (ADR-006). Where a repo requires
   100 %, treat it as a behavioural gate: an uncovered path is either a missing test
   or dead code, and both are defects.
 - No `pytest.skip` without a pre-existing written justification.

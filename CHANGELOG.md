@@ -14,6 +14,26 @@ the valid ones. The readers the run skipped are named in the report
 (`SKIPPED`) and in the JSON document's `notWritten`, so a narrowed install
 cannot read as full coverage (ADR-107).
 
+`simt init --yes` builds the repository index as part of the adoption, so
+the first `simt map` or `simt brief` in a fresh repository answers from real
+files. Commands that read the index (`map`, `brief`, `slice`) now refresh it
+from the git index on every read — unchanged blobs are not re-read, so a
+current repository pays for one `git ls-files -s` — and the prompt hook and
+MCP surface still report a cold index rather than build one (ADR-108).
+
+The rule text names the manifest as `simt.json`, the name it has had since
+the rename; four rule files still said `simt-dev.json`, which resolves in no
+repository.
+
+### Changed
+
+This repository is now a consumer of itself: `simt init` ran on its own
+source, so the two tests that asserted it was *not* a consumer are rewritten
+to assert the new state, and `AGENTS.md`'s "not self-adopted" section now
+says what is true (ADR-109). A gate finding whose `detail` is absent is now
+`null` rather than `undefined`, so the CLI's JSON and the MCP structured
+surface of one answer deep-equal.
+
 ## [0.6.3] — 2026-10-29
 
 ### Added

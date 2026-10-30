@@ -460,18 +460,23 @@ test('a gitattributes with no region is reported, not silently left alone', asyn
   assert.match(checked.out, /\.gitattributes/);
 });
 
-test('this repository adopts neither baseline for itself', async () => {
-  // Written because it was done once while adding the gitattributes row, and a mistake
-  // made once while writing the guard is worth more than any comment. The region marker
-  // records the simt-dev SHA, so a copy committed here names a commit that is no longer
-  // HEAD by the time it lands; `check` would then be red here for a reason no commit can
-  // fix, which is the state ADR-024's gate exists to avoid.
+test('this repository adopts its own baselines, region first', async () => {
+  // The opposite of the guard that used to live here. That one kept this repository
+  // region-free because a stamp naming a commit would go stale on the next one; the
+  // stamp is now a digest of the rule content, so a commit here does not go stale and
+  // `simt init` runs on its own source. The region sits first in each baseline so a
+  // setting written below it wins (ADR-025).
   const here = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   for (const row of BASELINES) {
-    const path = join(here, row.file);
-    const text = await readFile(path, 'utf8').catch(() => null);
-    assert.equal(text, null, `${row.file} exists in this repository; it must stay hand-written (ADR-027)`);
+    const text = await readFile(join(here, row.file), 'utf8');
+    const state = parse(text, row.style);
+    assert.equal(state.status, 'ok', `${row.file} must carry a well-formed region`);
+    assert.equal(
+      state.before,
+      '',
+      `${row.file}: the region must come first so a setting written below it wins (ADR-025)`,
+    );
   }
   const agents = await readFile(join(here, 'AGENTS.md'), 'utf8');
-  assert.doesNotMatch(agents, /simt(-dev)?:begin/, 'a region in either spelling would be self-adoption');
+  assert.equal(parse(agents).status, 'ok', 'self-adoption means the AGENTS.md region is here');
 });

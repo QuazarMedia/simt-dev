@@ -20,9 +20,11 @@ import {
   extractVariantsFromRule,
   foldVariants,
   parseVariantSpec,
+  readLockedVariants,
   variantsDefect,
 } from '../src/kernel/variants.mjs';
-import { LOCK_FILE, readLock, writeLockVariants } from '../src/projection/lock.mjs';
+import { readLock, writeLockVariants } from '../src/projection/lock.mjs';
+import { LOCK_FILE, LOCK_LEGACY } from '../src/name.mjs';
 import { desiredRegion } from '../src/projection/rules.mjs';
 import { git } from './fixture.mjs';
 
@@ -180,7 +182,7 @@ test('variantsDefect catches malformed markers and duplicate slots, and check re
   }
 });
 
-test('projection uses the locked winner from simt-dev.lock.json and check --frozen validates it', async () => {
+test('projection uses the locked winner from simt.lock.json and check --frozen validates it', async () => {
   const root = await makeVariantRepo();
 
   // Before locking: baseline variant `a` is projected and marker is stripped
@@ -189,7 +191,7 @@ test('projection uses the locked winner from simt-dev.lock.json and check --froz
   assert.doesNotMatch(before.body, /Never run git push without explicit approval\./);
   assert.doesNotMatch(before.body, /simt-variants/);
 
-  // Write locked variant `b` to simt-dev.lock.json
+  // Write locked variant `b` to simt.lock.json
   const lock = await writeLockVariants(root, {
     'house.push': {
       winner: 'b',
@@ -238,6 +240,20 @@ test('projection uses the locked winner from simt-dev.lock.json and check --froz
   );
   const stale = await frozenFindings(root, {});
   assert.equal(stale[0]?.status, 'lock-stale');
+});
+
+test('a locked winner under the old lock name is read, not lost (ADR-110)', async () => {
+  const root = await makeVariantRepo();
+
+  // The lock a pre-rename run wrote, moved to the legacy name.
+  const lock = await writeLockVariants(root, { 'house.push': { winner: 'b' } });
+  await rm(join(root, LOCK_FILE), { force: true });
+  await writeFile(join(root, LOCK_LEGACY), `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
+
+  assert.deepEqual(await readLockedVariants(root), lock.variants, 'the legacy file answers as the lock');
+
+  const region = await desiredRegion(root, {});
+  assert.match(region.body, /Never run git push without explicit approval\./);
 });
 
 test('selectRuleVariants runs canary suite, records lockfile evidence, and re-opens on model or harness change', async () => {
@@ -322,7 +338,7 @@ test('selectRuleVariants runs canary suite, records lockfile evidence, and re-op
   assert.equal(first.slots[0].n, 2);
   assert.equal(typeof first.slots[0].p, 'number');
 
-  // Verify simt-dev.lock.json on disk
+  // Verify simt.lock.json on disk
   const { lock } = await readLock(root);
   assert.ok(lock);
   assert.deepEqual(lock.variants['house.push'], {

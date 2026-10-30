@@ -32,6 +32,15 @@ export const MANIFEST_FILE = 'simt.json';
 /** What the manifest file was called, and still is in every adopted repo. */
 export const MANIFEST_LEGACY = 'simt-dev.json';
 
+/** The projection lock: the input and output digests a frozen check compares, and the
+ *  locked `variants` winners `simt bench variants` records (ADR-086). */
+export const LOCK_FILE = 'simt.lock.json';
+
+/** What the lock was called. Read, not written: an adopted repo's lock under the old
+ *  name may hold variant winners nothing can regenerate, so it is read until the next
+ *  write migrates it (ADR-110). */
+export const LOCK_LEGACY = 'simt-dev.lock.json';
+
 /**
  * The namespace the generated region writes into a repository's files: the begin and end
  * markers, and the provenance header inside them. It follows the command, like the

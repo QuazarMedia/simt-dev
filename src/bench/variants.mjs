@@ -3,7 +3,7 @@
 // Discovers `simt-variants` slots across applicable rules, runs candidate
 // variants on the 10-task canary suite (escalating when significant), records
 // the winning variant with `{winner, variant, model, harness, dR, dC, n, p}`
-// in `simt-dev.lock.json`, and re-opens the experiment whenever the target
+// in `simt.lock.json`, and re-opens the experiment whenever the target
 // model or harness changes.
 
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
@@ -169,7 +169,7 @@ function summarizeEvaluated(evaluated) {
 }
 
 /**
- * Run or evaluate variant selection on the canary suite and record winners in `simt-dev.lock.json`.
+ * Run or evaluate variant selection on the canary suite and record winners in `simt.lock.json`.
  */
 export async function selectRuleVariants(
   root,

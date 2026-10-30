@@ -66,6 +66,16 @@ export function resolveImports(filePath, imports, files, lang) {
   return edges;
 }
 
+/**
+ * An explicit extension that names the sibling language (review 0003 Q41).
+ *
+ * TypeScript sources import their compiled shape (`./b.js` for `b.ts`), and
+ * Node's ESM resolution requires it; the tracked tree holds the source, so
+ * the edge must try the source extension before giving up and storing the
+ * specifier raw.
+ */
+const EXT_SWAPS = { '.js': ['.ts', '.tsx'], '.mjs': ['.mts'], '.cjs': ['.cts'] };
+
 function resolveOne(filePath, spec, files, lang) {
   const rel = relativeSpec(spec);
   if (rel === null) return spec;
@@ -81,6 +91,13 @@ function resolveOne(filePath, spec, files, lang) {
   }
   for (const candidate of candidates) {
     if (files.has(candidate)) return candidate;
+  }
+  for (const [from, tos] of Object.entries(EXT_SWAPS)) {
+    if (!base.endsWith(from)) continue;
+    for (const to of tos) {
+      const swapped = base.slice(0, -from.length) + to;
+      if (files.has(swapped)) return swapped;
+    }
   }
   return spec;
 }
@@ -146,14 +163,48 @@ function scan(text, onLine) {
   return { symbols, imports };
 }
 
+/**
+ * Import specifiers in a script, including an import that spans lines.
+ *
+ * Single-line regexes missed the case the review caught (Q41): an import whose
+ * `from` lands several lines below the `import`. Buffering until the closing
+ * quote (or `;`) sees the whole statement before deciding what it names.
+ * Moved here from `tests.mjs` so the index and the test mapping read the same
+ * bytes; `tests.mjs` re-exports it, so its importers do not move.
+ */
+export function scriptSpecifiers(text) {
+  const specs = [];
+  const lines = String(text).split('\n');
+  let buf = '';
+  let open = false;
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!open) {
+      if (!/^(?:import|export)\b/.test(trimmed)) continue;
+      // A declaration is not an import. Capturing it would swallow the next
+      // import's `from` and report a specifier the file does not have.
+      if (/^export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var)\b/.test(trimmed) && !trimmed.includes(' from ')) continue;
+      buf = trimmed;
+      open = true;
+    } else {
+      buf += `\n${trimmed}`;
+    }
+    const done = /\bfrom\s+['"][^'"]+['"]/.test(buf) || /^import\s+['"][^'"]+['"]/.test(buf) || buf.includes(';') || buf.length > 2000;
+    if (!done) continue;
+    const from = buf.match(/\bfrom\s+['"]([^'"]+)['"]/);
+    const side = buf.match(/^import\s+['"]([^'"]+)['"]/);
+    if (from) specs.push(from[1]);
+    else if (side) specs.push(side[1]);
+    buf = '';
+    open = false;
+  }
+  for (const match of String(text).matchAll(/require\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(match[1]);
+  for (const match of String(text).matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(match[1]);
+  return [...new Set(specs)];
+}
+
 function script(text) {
-  return scan(text, (line, raw, lineNo, symbols, imports) => {
-    const from = line.match(/^(?:import|export)\s[\s\S]*?\sfrom\s+['"]([^'"]+)['"]/);
-    const side = line.match(/^import\s+['"]([^'"]+)['"]/);
-    const req = line.match(/\brequire\(\s*['"]([^'"]+)['"]\s*\)/);
-    if (from) imports.push(from[1]);
-    else if (side) imports.push(side[1]);
-    else if (req) imports.push(req[1]);
+  const { symbols } = scan(text, (line, raw, lineNo, symbols) => {
     let m;
     if ((m = line.match(new RegExp(`^export\\s+(?:default\\s+)?(?:async\\s+)?function\\s*\\*?\\s*(${IDENT})`)))) {
       add(symbols, m[1], 'function', lineNo, raw, 1);
@@ -179,6 +230,7 @@ function script(text) {
       add(symbols, m[1], 'class', lineNo, raw, line.startsWith('export ') ? 1 : 0);
     }
   });
+  return { symbols, imports: scriptSpecifiers(text) };
 }
 
 const KT_MOD = '(?:public|private|internal|protected|open|data|sealed|abstract|enum|inner|value|annotation|suspend|override|operator|inline)';

@@ -102,6 +102,24 @@ test('impact lists the importers, their test, and one cross-repo consumer', asyn
   }
 });
 
+test('impact names a non-ASCII path instead of calling it missing (Q39)', async () => {
+  // Without `-z`, `git ls-files` C-quotes the path and the reader's real
+  // filename matches nothing, so impact reported "not a file or an export".
+  const root = await mkdtemp(join(tmpdir(), 'idx-impact-'));
+  try {
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'ünï.mjs'), 'export const uni = 1;\n');
+    await git(['init', '-q', root]);
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    const listed = await capture(() => impactCommand(['src/ünï.mjs'], { root, workspace: 'off' }));
+    assert.equal(listed.code, 0, listed.stderr);
+    assert.match(listed.stdout, /file\s+src\/ünï\.mjs/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function git(args) {
   return exec('git', ['-c', 'user.name=simt-dev tests', '-c', 'user.email=tests@example.com', '-c', 'commit.gpgsign=false', ...args], { maxBuffer: 16 << 20 });
 }

@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { git } from './fixture.mjs';
-import { whyCommand } from '../src/commands/why.mjs';
+import { tracked, whyCommand } from '../src/commands/why.mjs';
 
 const tick = String.fromCharCode(96);
 const bt = (value) => tick + value + tick;
@@ -58,6 +58,26 @@ test('a fixture repository lists every governor and reports an unresolved token'
   const refused = await capture(() => whyCommand(['src/keep.mjs'], { root: bare }, []));
   assert.equal(refused.code, 5);
   await rm(bare, { recursive: true, force: true });
+});
+
+test('why resolves a non-ASCII path instead of calling it missing (Q39)', async () => {
+  // Without `-z`, `git ls-files` C-quotes the path and the reader's real
+  // filename matches nothing, so why reported "not in the tree".
+  const root = await mkdtemp(join(tmpdir(), 'idx-why-'));
+  try {
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'ünï.mjs'), 'export const uni = 1;\n');
+    await git(['init'], { cwd: root });
+    await git(['add', '-A'], { cwd: root });
+    await git(['commit', '-m', 'uni'], { cwd: root });
+    const { files } = await tracked(root);
+    assert.ok(files.includes('src/ünï.mjs'), 'tracked() names the raw path');
+    const listed = await capture(() => whyCommand(['src/ünï.mjs'], { root }, []));
+    assert.equal(listed.code, 0, listed.stderr);
+    assert.equal(listed.stdout.includes('not in the tree'), false, 'the path resolved');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 async function capture(run) {

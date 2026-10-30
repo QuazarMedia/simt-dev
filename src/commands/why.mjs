@@ -68,8 +68,10 @@ function reportUnresolved(root, flags, unresolved) {
 // the critic's brief resolves governance the same way without a second copy.
 export async function tracked(root) {
   try {
-    const { stdout } = await exec('git', ['ls-files'], { cwd: root, maxBuffer: 16 << 20 });
-    return { files: stdout.split('\n').filter(Boolean) };
+    // `-z`: without it git C-quotes a non-ASCII path and the reader's real
+    // filename never matches it (review 0003 Q39).
+    const { stdout } = await exec('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 16 << 20 });
+    return { files: stdout.split('\0').filter(Boolean) };
   } catch (error) {
     return {
       error: fail(

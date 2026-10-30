@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { access, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -201,6 +201,88 @@ test('mcp: a throwing handler keeps the request id; unparseable input gets id nu
   assert.equal(handlerFailure.error.code, RPC.INTERNAL);
   assert.equal(parseFailure.id, null, 'unparseable input has no id to answer to');
   assert.equal(parseFailure.error.code, RPC.PARSE);
+});
+
+test('mcp: a progressToken turns tool progress into notifications (Q38)', async () => {
+  // The plumbing is generic: any tool calling `ctx.onProgress` emits one
+  // `notifications/progress` per call, and a tool that never reports emits none.
+  const seen = [];
+  const tools = [
+    {
+      name: 'slow',
+      description: 'reports twice',
+      inputSchema: { type: 'object' },
+      async run(args, ctx) {
+        ctx?.onProgress?.(1, 2);
+        ctx?.onProgress?.(2, 2);
+        return { ok: true };
+      },
+    },
+  ];
+  const r = await handle(
+    req('tools/call', { name: 'slow', arguments: {}, _meta: { progressToken: 'tok-1' } }),
+    tools,
+    { notify: (n) => seen.push(n) },
+  );
+  assert.equal(r.result.structuredContent.ok, true);
+  assert.deepEqual(
+    seen.map((n) => [n.method, n.params]),
+    [
+      ['notifications/progress', { progressToken: 'tok-1', progress: 1, total: 2 }],
+      ['notifications/progress', { progressToken: 'tok-1', progress: 2, total: 2 }],
+    ],
+  );
+  const quiet = await handle(req('tools/call', { name: 'slow', arguments: {} }), tools, {
+    notify: () => assert.fail('no token, no notifications'),
+  });
+  assert.equal(quiet.result.structuredContent.ok, true);
+});
+
+test('mcp: compare pages with limit/cursor and reports progress (Q38)', async () => {
+  // The estate that timed clients out pages instead: each answer names the next
+  // start, and the last one names none. Progress totals the whole estate even
+  // on a page, so the client can tell a slow page from a stuck one.
+  const ws = await mkdtemp(join(tmpdir(), 'simt-mcp-compare-'));
+  try {
+    for (const name of ['a', 'b', 'c']) {
+      await mkdir(join(ws, name), { recursive: true });
+      await exec('git', ['init', '-q', '-b', 'main'], { cwd: join(ws, name) });
+    }
+    const seen = [];
+    const call = (args, id = 7) =>
+      handle(req('tools/call', { name: 'compare', arguments: args }, id), TOOLS, {
+        notify: (n) => seen.push(n),
+      });
+    const first = await call({ root: ws, limit: 2 });
+    assert.equal(first.result.structuredContent.repos.length, 2);
+    const cursor = first.result.structuredContent.cursor;
+    assert.ok(typeof cursor === 'string', 'a partial answer names its continuation');
+    assert.equal(first.result.structuredContent.total, 3);
+    const second = await call({ root: ws, cursor, limit: 2 });
+    assert.equal(second.result.structuredContent.repos.length, 1);
+    assert.equal(second.result.structuredContent.cursor, null, 'the last page names no continuation');
+    const names = [
+      ...first.result.structuredContent.repos,
+      ...second.result.structuredContent.repos,
+    ].map((r) => r.name);
+    assert.deepEqual(names, ['a', 'b', 'c'], 'pages cover the estate in discovery order');
+
+    const progressed = await handle(
+      req('tools/call', { name: 'compare', arguments: { root: ws }, _meta: { progressToken: 'p1' } }),
+      TOOLS,
+      { notify: (n) => seen.push(n) },
+    );
+    assert.equal(progressed.result.structuredContent.repos.length, 3);
+    const progress = seen.filter((n) => n.method === 'notifications/progress');
+    assert.ok(progress.length === 3, `expected 3 progress notes, got ${progress.length}`);
+    assert.deepEqual(
+      progress.map((n) => n.params.progress).sort((a, b) => a - b),
+      [1, 2, 3],
+    );
+    assert.ok(progress.every((n) => n.params.total === 3 && n.params.progressToken === 'p1'));
+  } finally {
+    await rm(ws, { recursive: true, force: true });
+  }
 });
 
 test('mcp: truncation is announced in the text, never silent', async () => {

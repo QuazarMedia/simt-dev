@@ -113,7 +113,8 @@ ${CLI} ignore [--yes]         render the one .simtignore list into .cursorignore
                            Claude settings file is merged, never replaced)
 ${CLI} compare                org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
-                           repos that have not adopted yet)
+                           repos that have not adopted yet;
+                           --concurrency <n> caps the rows built at once)
 ${CLI} index                   rebuild the local file index from git blob hashes
 ${CLI} why [path]            what governs a file: a decision whose Affects line names
                            it, a rule whose scope matches it, a skill, a gate
@@ -258,6 +259,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
                         graph lint; default: SIMT_REGISTRY, then the checkout's
                         own graph/skills.graph.json, then the one member of the
                         workspace that holds one)
+--concurrency <n>       compare: rows built at once (default 4, or
+                        SIMT_CONCURRENCY; order-preserving whatever it is)
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
 --check                 report drift and write nothing (sync, ci)

@@ -17,9 +17,10 @@ import { promisify } from 'node:util';
 import { plan } from '../src/projection/project.mjs';
 
 import { classify, discover, ownerFromGitdir, parseGitdirPointer, slugMatchesDir } from '../src/compare/discover.mjs';
-import { buildRow, summarise } from '../src/compare/row.mjs';
+import { buildRow, buildRows, resolveConcurrency, summarise } from '../src/compare/row.mjs';
+import { mapCapped } from '../src/compare/parallel.mjs';
 import { readHooksState } from '../src/compare/hooksstate.mjs';
-import { classifyGateCommand, classifyRuleViolations, learnAcrossEstate, renderAdrDraft, renderLearningLines } from '../src/compare/learn.mjs';
+import { classifyGateCommand, classifyRuleViolations, clearLearningCache, learnAcrossEstate, renderAdrDraft, renderLearningLines } from '../src/compare/learn.mjs';
 import { GATES } from '../src/hooks/gates.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { resolve, dirname } from 'node:path';
@@ -230,6 +231,81 @@ test('a worktree does not inherit the parent repo hooks routing', async () => {
 });
 
 // --- rows ------------------------------------------------------------------
+
+test('buildRows matches sequential rows in discovery order at any concurrency (Q38)', async () => {
+  // Parallelism must change the wall clock, never the matrix: two runs diff
+  // cleanly only when the rows hold discovery order whatever the cap is.
+  const root = await scratch();
+  for (const name of ['zeta', 'alpha', 'mu']) await gitRepo(name, {}, root);
+  const repos = [join(root, 'zeta'), join(root, 'alpha'), join(root, 'mu')];
+  const sequential = [];
+  for (const r of repos) sequential.push(await buildRow(r, CONTEXT));
+  for (const concurrency of [1, 2, 4]) {
+    const parallel = await buildRows(repos, CONTEXT, { concurrency });
+    assert.deepEqual(
+      parallel.map((r) => r.name),
+      sequential.map((r) => r.name),
+      `order moved at concurrency ${concurrency}`,
+    );
+    assert.deepEqual(parallel, sequential, `rows differ at concurrency ${concurrency}`);
+  }
+  const payload = await json(['compare', '--root', root, '--concurrency', '2']);
+  assert.equal(payload.rows.length, 3);
+  assert.deepEqual(
+    payload.rows.map((r) => r.name),
+    ['alpha', 'mu', 'zeta'],
+    'the CLI still answers in discovery order under a cap',
+  );
+});
+
+test('buildRows stops between rows when cancelled (Q38)', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  await assert.rejects(buildRows(['x'], CONTEXT, { signal: controller.signal }), /cancelled/);
+});
+
+test('mapCapped preserves order under contention (Q38)', async () => {
+  const order = [];
+  const out = await mapCapped([1, 2, 3, 4, 5], async (n) => {
+    await new Promise((r) => setTimeout(r, (6 - n) * 5));
+    order.push(n);
+    return n * 2;
+  }, { concurrency: 3 });
+  assert.deepEqual(out, [2, 4, 6, 8, 10]);
+  assert.notDeepEqual(order, [1, 2, 3, 4, 5], 'a pool that finishes in order proves nothing');
+});
+
+test('resolveConcurrency clamps garbage to the default (Q38)', () => {
+  assert.equal(resolveConcurrency({}), 4);
+  assert.equal(resolveConcurrency({ concurrency: 2 }), 2);
+  assert.equal(resolveConcurrency({ concurrency: 0 }), 4);
+  assert.equal(resolveConcurrency({ concurrency: 'nope' }), 4);
+  const prev = process.env.SIMT_CONCURRENCY;
+  process.env.SIMT_CONCURRENCY = '2';
+  try {
+    assert.equal(resolveConcurrency({}), 2);
+    assert.equal(resolveConcurrency({ concurrency: 3 }), 3, 'the flag beats the environment');
+  } finally {
+    if (prev === undefined) delete process.env.SIMT_CONCURRENCY;
+    else process.env.SIMT_CONCURRENCY = prev;
+  }
+});
+
+test('learnAcrossEstate memoizes by record digest (Q38)', async () => {
+  // The bootstrap comparisons are pure over the records on disk, so a second
+  // compare with unchanged inputs must not recompute them.
+  clearLearningCache();
+  try {
+    const root = await scratch();
+    await gitRepo('a', {}, root);
+    const repos = [join(root, 'a')];
+    const first = await learnAcrossEstate(repos);
+    const second = await learnAcrossEstate(repos);
+    assert.equal(second, first, 'identical inputs did not return the cached answer');
+  } finally {
+    clearLearningCache();
+  }
+});
 
 test('an unmanaged repo has no problems - it is the expected mid-migration state', async () => {
   // If a repo that has not adopted made compare exit non-zero, every run during a

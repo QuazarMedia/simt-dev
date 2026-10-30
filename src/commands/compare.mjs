@@ -24,7 +24,7 @@ import { basename, resolve } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
 import { GATES } from '../hooks/gates.mjs';
-import { buildRow, summarise } from '../compare/row.mjs';
+import { buildRows, resolveConcurrency, summarise } from '../compare/row.mjs';
 import { discover } from '../compare/discover.mjs';
 import { learnAcrossEstate, renderLearningLines } from '../compare/learn.mjs';
 import { targetRoot, WORKSPACE_REMEDY } from '../workspace.mjs';
@@ -60,12 +60,13 @@ export async function compareCommand(positional, flags) {
   const expectedSha = await provenanceDigest();
   const context = { expectedSha, gates: new Set(Object.keys(GATES)), gateKinds: GATE_KINDS };
 
-  // Sequential on purpose. 16 fingerprint+region computations each spawn a git
-  // process; running them concurrently produces a burst of subprocesses and no
-  // measurable speedup, because the work is process-spawn bound rather than CPU
-  // bound. Determinism of the output matters more than wall clock on a dashboard.
-  const rows = [];
-  for (const repo of found.repos) rows.push(await buildRow(repo, context));
+  // Parallel with a cap, in discovery order. 16 fingerprint+region computations
+  // each spawn a git process; unbounded parallelism is a burst of subprocesses
+  // with no speedup, and sequential builds are what took 48 s over MCP for 17
+  // repos (review 0003 Q38). The cap keeps the burst bounded while overlapping
+  // the spawn wait; the rows still come back in input order, so two runs diff
+  // cleanly and determinism of the output is untouched.
+  const rows = await buildRows(found.repos, context, { concurrency: resolveConcurrency(flags) });
   const learning = await learnAcrossEstate(found.repos);
 
   const summary = summarise(rows, {

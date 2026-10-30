@@ -13,8 +13,10 @@
 // every ADR draft are byte-identical (no wall-clock timestamps, fixed sorting and
 // rounding).
 
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { mapCapped, DEFAULT_CONCURRENCY } from './parallel.mjs';
 
 import { policiesFor } from '../agenthooks/policy.mjs';
 import { compareArms, evaluateRunRecord, loadPrices, loadRunRecords } from '../bench/report.mjs';
@@ -274,8 +276,54 @@ export function renderAdrDraft({
  *   adrDrafts: Array<{id: string, category: string, target: string, title: string, affects: string[], supersedes: Array<{adr: string, ruling: number|null}>, markdown: string}>
  * }>}
  */
+/**
+ * Digest-keyed memo of estate learning (review 0003 Q38).
+ *
+ * The bootstrap comparisons below are pure over the records on disk, so a
+ * second `compare` with unchanged inputs recomputes nothing. Keyed by digest,
+ * not by time, so a changed record can never read a stale answer. In-process
+ * only: the MCP server is long-lived and repeats the call per session, while a
+ * CLI run pays one computation anyway. Bounded, because estates differ.
+ */
+const learningCache = new Map();
+const LEARNING_CACHE_MAX = 8;
+
+export function clearLearningCache() {
+  learningCache.clear();
+}
+
 export async function learnAcrossEstate(repos) {
   const sortedRepos = [...(repos ?? [])].sort();
+
+  // Collection first, capped and parallel: one repo's five reads overlap the
+  // next repo's, and the aggregation below stays sequential over sorted input
+  // so the output cannot depend on completion order.
+  const collected = await mapCapped(
+    sortedRepos,
+    async (repoPath) => {
+      const [manifestRes, ledgerRes, lessonsRes, benchEvaluated, explicitAblation] = await Promise.all([
+        readManifest(repoPath).catch(() => ({ manifest: null })),
+        readLedger(repoPath).catch(() => ({ entries: [] })),
+        readLessonCandidates(repoPath).catch(() => ({ candidates: [] })),
+        collectRepoAblationRecords(repoPath),
+        readExplicitNoValueSections(repoPath),
+      ]);
+      return {
+        repoPath,
+        repoName: basename(repoPath),
+        manifest: manifestRes?.manifest ?? null,
+        ledgerEntries: ledgerRes?.entries ?? [],
+        candidates: lessonsRes?.candidates ?? [],
+        benchEvaluated,
+        explicitAblation,
+      };
+    },
+    { concurrency: DEFAULT_CONCURRENCY },
+  );
+
+  const digest = createHash('sha1').update(JSON.stringify(collected)).digest('hex');
+  const cached = learningCache.get(digest);
+  if (cached) return cached;
 
   const ruleViolations = new Map();
   const gateStats = new Map();
@@ -288,19 +336,7 @@ export async function learnAcrossEstate(repos) {
   let totalLedgerRuns = 0;
   let totalHookDenials = 0;
 
-  for (const repoPath of sortedRepos) {
-    const repoName = basename(repoPath);
-    const [manifestRes, ledgerRes, lessonsRes, benchEvaluated, explicitAblation] = await Promise.all([
-      readManifest(repoPath).catch(() => ({ manifest: null })),
-      readLedger(repoPath).catch(() => ({ entries: [] })),
-      readLessonCandidates(repoPath).catch(() => ({ candidates: [] })),
-      collectRepoAblationRecords(repoPath),
-      readExplicitNoValueSections(repoPath),
-    ]);
-
-    const manifest = manifestRes?.manifest ?? null;
-    const ledgerEntries = ledgerRes?.entries ?? [];
-    const candidates = lessonsRes?.candidates ?? [];
+  for (const { repoName, manifest, ledgerEntries, candidates, benchEvaluated, explicitAblation } of collected) {
 
     if (ledgerEntries.length > 0) reposWithLedgers += 1;
     totalLedgerRuns += ledgerEntries.length;
@@ -620,7 +656,7 @@ export async function learnAcrossEstate(repos) {
     });
   }
 
-  return {
+  const result = {
     reposWithLedgers,
     reposWithDenials,
     totalLedgerRuns,
@@ -631,6 +667,11 @@ export async function learnAcrossEstate(repos) {
     noValueRules,
     adrDrafts,
   };
+  if (learningCache.size >= LEARNING_CACHE_MAX) {
+    learningCache.delete(learningCache.keys().next().value);
+  }
+  learningCache.set(digest, result);
+  return result;
 }
 
 /**

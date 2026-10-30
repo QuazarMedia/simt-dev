@@ -22,7 +22,7 @@
 import { loadRegistry } from '../graph/load.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
 import { discover } from '../compare/discover.mjs';
-import { buildRow, summarise } from '../compare/row.mjs';
+import { buildRows, resolveConcurrency, summarise } from '../compare/row.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { checkRepo } from '../commands/sync.mjs';
 import { diagnose, serialisedFindings } from '../commands/doctor.mjs';
@@ -381,6 +381,9 @@ const output = {
       repos: { type: 'array', items: { type: 'object' } },
       worktrees: { type: 'array', items: { type: 'object' } },
       directories: { type: 'array', items: { type: 'string' } },
+      partial: { type: 'boolean' },
+      cursor: { type: ['string', 'null'] },
+      total: { type: 'number' },
     },
     required: ['root', 'shape', 'expectedSha', 'summary', 'repos'],
   },
@@ -726,23 +729,37 @@ export const TOOLS = [
     outputSchema: output.compare,
     name: 'compare',
     description:
-      'The workspace matrix: every repository with its adoption, region state, pinned SHA, hook routing and gates, plus the problems found.',
+      'The workspace matrix: adoption, region, SHA, hooks and gates per repo, plus problems. Pages with limit/cursor; honors progressToken and cancellation.',
     inputSchema: {
       type: 'object',
       properties: {
         root: { type: 'string', description: 'a workspace directory, or one repository' },
         workspace: { type: 'string', description: 'workspace root when root is not given' },
+        limit: { type: 'number', description: 'page size; without it every row is built' },
+        cursor: { type: 'string', description: 'opaque page start from a previous partial answer' },
+        concurrency: { type: 'number', description: 'rows built at once (default 4)' },
       },
       required: [],
     },
-    async run(args) {
+    async run(args, ctx = {}) {
       const root = args?.root ?? args?.workspace ?? (await resolveWorkspace(args ?? {})).root ?? process.cwd();
       const found = await discover(root);
       if (found.error) throw Object.assign(new Error(`${root}: ${found.error}`), { remedy: 'pass root' });
       const expectedSha = await provenanceDigest();
       const context = { expectedSha, gates: new Set(Object.keys(GATES)), gateKinds: GATE_KINDS };
-      const rows = [];
-      for (const repo of found.repos) rows.push(await buildRow(repo, context));
+      // A page names its start as an index into discovery order, which is
+      // stable between calls on an unchanged estate; garbage parses to 0
+      // rather than erroring, because a dashboard that refuses to run over a
+      // stale cursor is worse than one that restarts the listing.
+      const start = Math.max(0, parseInt(typeof args?.cursor === 'string' ? args.cursor : '0', 10) || 0);
+      const limit = typeof args?.limit === 'number' && args.limit >= 1 ? Math.floor(args.limit) : null;
+      const page = limit === null ? found.repos : found.repos.slice(start, start + limit);
+      const rows = await buildRows(page, context, {
+        concurrency: resolveConcurrency(args ?? {}),
+        signal: ctx?.signal ?? null,
+        onBatch: ctx?.onProgress ? (done, total) => ctx.onProgress(start + done, found.repos.length) : null,
+      });
+      const next = limit !== null && start + page.length < found.repos.length ? String(start + page.length) : null;
       return {
         root,
         shape: found.shape,
@@ -751,6 +768,7 @@ export const TOOLS = [
         repos: rows,
         worktrees: found.worktrees.map((w) => ({ name: w.name, owner: w.ownerName })),
         directories: found.directories,
+        ...(limit === null ? {} : { partial: next !== null, cursor: next, total: found.repos.length }),
       };
     },
   },

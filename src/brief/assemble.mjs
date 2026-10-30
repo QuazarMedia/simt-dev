@@ -132,6 +132,7 @@ export async function assembleBrief({
   const graph = await loadGraph(root, { build });
   if (graph.error) return { error: graph.error };
   if (graph.cold) return { cold: true };
+  const graphStale = graph.stale === true;
   const { files, symbols, edges, fts = [], embeddings = [] } = graph;
   const filePaths = new Set(files.map((file) => file.path));
 
@@ -148,6 +149,11 @@ export async function assembleBrief({
   if (task.length === 0 && !named) {
     packet.add('CAUTIONS', 'no task was given, so the packet describes the working tree rather than a task', {
       why: ['an unasked question has no answer to be short of'],
+    });
+  }
+  if (graphStale) {
+    packet.add('CAUTIONS', 'the index predates the current tree, so files added or removed since the last build are missing or ghosted', {
+      why: ['this caller may not rebuild the index; run a command that can before quoting the file list'],
     });
   }
 

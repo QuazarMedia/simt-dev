@@ -13,12 +13,14 @@
 
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, open, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { postDeliveryJson } from '../agenthooks/render.mjs';
 import { lessonPaths } from '../index/govern.mjs';
+import { recordCreatedFile } from '../journal.mjs';
+import { redactText } from '../secrets.mjs';
 import { localRel, readStateFile } from '../state.mjs';
 import { splitFrontmatter } from './decide.mjs';
 
@@ -30,7 +32,45 @@ const LEDGER_REL = localRel('ledger.jsonl');
 const LEDGER_REL_LEGACY = '.simt/ledger.jsonl';
 export const LESSONS_DIR = 'docs/lessons';
 export const LESSON_KEYS = new Set(['simt-trigger', 'simt-evidence', 'simt-expires']);
-const DEFAULT_EXPIRES = '2027-04-01';
+
+/**
+ * A stored `fixDiff` is evidence, not an archive: the diff that proved the fix,
+ * capped so one generated-file revert cannot bloat every read of the ledger.
+ * Truncation keeps the head (the hunk headers that name the files) and says so.
+ */
+const FIX_DIFF_BUDGET = 20000;
+
+/**
+ * The default expiry is relative to the promotion, not a date in the source:
+ * a fixed date rots (every lesson written today expires on someone else's
+ * schedule) and a missing one lives forever because nothing reads the field.
+ * Half a year is long enough to recur and short enough to re-earn.
+ */
+const EXPIRY_DAYS = 180;
+
+export function defaultExpires(from = new Date()) {
+  const at = new Date(from);
+  at.setUTCDate(at.getUTCDate() + EXPIRY_DAYS);
+  return at.toISOString().slice(0, 10);
+}
+
+/**
+ * Whether a `simt-expires` value has passed. Unparseable values are NOT expired:
+ * a malformed date is a data error the reader should see, and hiding the lesson
+ * would turn it into a silent one (review 0003 Q36).
+ *
+ * @param {string|null|undefined} expires
+ * @param {Date} [now]
+ * @returns {boolean}
+ */
+export function isExpired(expires, now = new Date()) {
+  if (expires === null || expires === undefined || String(expires).trim() === '') return false;
+  const at = new Date(String(expires).trim());
+  if (Number.isNaN(at.getTime())) return false;
+  const today = new Date(now);
+  today.setUTCHours(0, 0, 0, 0);
+  return at.getTime() < today.getTime();
+}
 
 const STOP_WORDS = new Set([
   'the', 'and', 'for', 'with', 'that', 'this', 'from', 'into', 'when', 'were',
@@ -180,14 +220,68 @@ async function writeLessonCandidates(root, candidates) {
   await writeFile(full, body ? `${body}\n` : '', 'utf8');
 }
 
+/**
+ * Append one record with `O_APPEND`: the ledger is written by concurrent
+ * processes (gates, hooks, the CLI), and a read-modify-write loses one of two
+ * simultaneous appends. The position is the kernel's, not a length read earlier.
+ *
+ * @param {string} root
+ * @param {object} record
+ */
+async function appendCandidateLine(root, record) {
+  const full = join(root, LESSONS_FILE);
+  await mkdir(dirname(full), { recursive: true });
+  const handle = await open(full, 'a');
+  try {
+    await handle.appendFile(`${JSON.stringify(record)}\n`, 'utf8');
+  } finally {
+    await handle.close();
+  }
+}
+
+/**
+ * The candidate id is a content hash, not a counter. Ids were `c-${length+1}`:
+ * two processes appending concurrently computed the same next index, and a
+ * hand-edited or truncated file renumbered everything after it. The hash covers
+ * the fields that make a candidate distinct, so the same candidate always maps
+ * to the same id and two different ones never share it (review 0003 Q36).
+ *
+ * @param {{kind: string, signature: string, evidence: string[], cmd: string|null}} parts
+ * @returns {string}
+ */
+export function lessonIdFor({ kind, signature, evidence = [], cmd = null }) {
+  const digest = createHash('sha256')
+    .update([kind, signature, ...evidence, cmd ?? ''].join('\n'), 'utf8')
+    .digest('hex');
+  return `l-${digest.slice(0, 12)}`;
+}
+
+/**
+ * Truncate an unbounded diff to the evidence budget, keeping the head: the hunk
+ * headers that name the files are the part a reader acts on.
+ *
+ * @param {string} diff
+ * @returns {string}
+ */
+function capFixDiff(diff) {
+  const text = String(diff ?? '');
+  if (text.length <= FIX_DIFF_BUDGET) return text;
+  return `${text.slice(0, FIX_DIFF_BUDGET)}\n… (truncated to ${FIX_DIFF_BUDGET} chars)`;
+}
+
 function sameEvidence(a = [], b = []) {
   if (a.length !== b.length) return false;
   return a.every((v, i) => v === b[i]);
 }
 
 /**
- * Append one deterministic candidate to `.simt/lessons.jsonl`, deduplicating by
+ * Append one deterministic candidate to the lessons ledger, deduplicating by
  * `(kind, signature, evidence)`.
+ *
+ * The stored text is redacted before anything else: candidates keep the raw
+ * commands that failed, and a command can carry a token. Redaction runs before
+ * the signature is hashed so the same failure redacts to the same signature
+ * (review 0003 Q36).
  *
  * @param {string} root
  * @param {object} candidate
@@ -196,15 +290,22 @@ function sameEvidence(a = [], b = []) {
 export async function appendLessonCandidate(root, candidate) {
   const { candidates } = await readLessonCandidates(root);
   const kind = String(candidate.kind ?? 'fail-then-fix');
-  const errorLine = normaliseErrorLine(candidate.errorLine ?? firstErrorLine(candidate.output ?? candidate.summary ?? ''));
+  // Redact first: the signature must be a function of the stored bytes, not of
+  // a secret nobody can reproduce (and must never be stored).
+  const errorLine = redactText(
+    normaliseErrorLine(candidate.errorLine ?? firstErrorLine(candidate.output ?? candidate.summary ?? '')),
+  );
   const signature = candidate.signature ?? errorSignature(errorLine);
-  const evidence = Array.isArray(candidate.evidence) ? candidate.evidence.map(String).filter(Boolean) : [];
+  const evidence = Array.isArray(candidate.evidence)
+    ? candidate.evidence.map((e) => redactText(String(e)).trim()).filter(Boolean)
+    : [];
+  const cmd = candidate.cmd === null || candidate.cmd === undefined ? null : redactText(String(candidate.cmd));
 
   const existing = candidates.find(
     (c) =>
       c.kind === kind &&
       c.signature === signature &&
-      (sameEvidence(c.evidence ?? [], evidence) || (c.cmd && candidate.cmd && c.cmd === candidate.cmd && c.evidence?.[0] === evidence[0])),
+      (sameEvidence(c.evidence ?? [], evidence) || (c.cmd && cmd && c.cmd === cmd && c.evidence?.[0] === evidence[0])),
   );
   if (existing) return existing;
 
@@ -213,28 +314,26 @@ export async function appendLessonCandidate(root, candidate) {
     : [];
   const keywords = Array.isArray(candidate.keywords) && candidate.keywords.length > 0
     ? [...new Set(candidate.keywords.map(String).filter(Boolean))]
-    : extractKeywords(`${errorLine} ${candidate.cmd ?? ''}`, paths);
+    : extractKeywords(`${errorLine} ${cmd ?? ''}`, paths);
 
-  const nextIndex = candidates.length + 1;
   const record = {
     v: 1,
-    id: candidate.id ?? `c-${String(nextIndex).padStart(4, '0')}`,
+    id: candidate.id ?? lessonIdFor({ kind, signature, evidence, cmd }),
     ts: candidate.ts ?? new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     kind,
     signature,
     errorLine,
-    summary: String(candidate.summary ?? (errorLine || `${kind} candidate`)).trim(),
-    cmd: candidate.cmd ?? null,
+    summary: redactText(String(candidate.summary ?? (errorLine || `${kind} candidate`))).trim(),
+    cmd,
     paths,
     keywords,
     evidence,
-    fixDiff: String(candidate.fixDiff ?? ''),
+    fixDiff: capFixDiff(redactText(candidate.fixDiff ?? '')),
     status: candidate.status ?? 'candidate',
     promotedTo: candidate.promotedTo ?? null,
   };
 
-  candidates.push(record);
-  await writeLessonCandidates(root, candidates);
+  await appendCandidateLine(root, record);
   return record;
 }
 
@@ -486,12 +585,13 @@ export async function recordHookDenial(root, denial) {
  * @returns {string}
  */
 export function renderLessonMarkdown(candidate, options = {}) {
+  // No `**` fallback: a trigger with no paths is a promotion the caller
+  // refused, not a lesson about everything. `promoteLesson` rejects those;
+  // this renders exactly the paths it was given (review 0003 Q36).
   const paths =
     Array.isArray(options.paths) && options.paths.length > 0
       ? options.paths
-      : Array.isArray(candidate.paths) && candidate.paths.length > 0
-        ? candidate.paths
-        : ['**'];
+      : (Array.isArray(candidate.paths) ? candidate.paths : []);
   const keywords =
     Array.isArray(options.keywords) && options.keywords.length > 0
       ? options.keywords
@@ -499,7 +599,7 @@ export function renderLessonMarkdown(candidate, options = {}) {
         ? candidate.keywords
         : extractKeywords(candidate.errorLine ?? candidate.summary ?? '', paths);
   const evidence = Array.isArray(candidate.evidence) ? candidate.evidence : [];
-  const expires = options.expires ?? DEFAULT_EXPIRES;
+  const expires = options.expires ?? defaultExpires();
   const title = String(options.title ?? candidate.summary ?? candidate.errorLine ?? 'Lesson').trim();
 
   const pathsLiteral = paths.map((p) => JSON.stringify(String(p))).join(', ');
@@ -533,7 +633,7 @@ export function renderLessonMarkdown(candidate, options = {}) {
  * @param {string} text
  * @returns {object}
  */
-export function parseLessonFile(id, text) {
+export function parseLessonFile(id, text, now = new Date()) {
   const { front: rawFront, body: rawBody } = splitFrontmatter(text);
   const front = rawFront ?? '';
   const body = rawBody.trim();
@@ -551,6 +651,7 @@ export function parseLessonFile(id, text) {
     : [];
   const expMatch = /^simt-expires:\s*(\S+)/m.exec(front);
   const expires = expMatch ? expMatch[1].trim() : null;
+  const expired = isExpired(expires, now);
 
   const titleMatch = /^#\s+(.+)$/m.exec(body);
   const title = titleMatch ? titleMatch[1].trim() : id;
@@ -571,16 +672,23 @@ export function parseLessonFile(id, text) {
     keywords,
     evidence,
     expires,
+    expired,
   };
 }
 
 /**
- * List all promoted lessons in `docs/lessons/*.md`.
+ * List the promoted lessons in `docs/lessons/*.md` that are still in force.
+ *
+ * `simt-expires` is read here, once, so every consumer — recall, `why`, the
+ * hook, the bench, `lessons list` — agrees on what has expired. Nothing was
+ * reading the field, so expired lessons kept firing indefinitely (review 0003
+ * Q36). Pass `includeExpired` to see the retired ones with `expired: true`.
  *
  * @param {string} root
+ * @param {{includeExpired?: boolean, now?: Date}} [options]
  * @returns {Promise<Array<object>>}
  */
-export async function listPromotedLessons(root) {
+export async function listPromotedLessons(root, { includeExpired = false, now = new Date() } = {}) {
   const dir = join(root, LESSONS_DIR);
   let names = [];
   try {
@@ -592,7 +700,8 @@ export async function listPromotedLessons(root) {
   for (const name of names) {
     const text = await readFile(join(dir, name), 'utf8');
     const id = name.replace(/\.md$/, '');
-    lessons.push(parseLessonFile(id, text));
+    const lesson = parseLessonFile(id, text, now);
+    if (!lesson.expired || includeExpired) lessons.push(lesson);
   }
   return lessons;
 }
@@ -617,17 +726,20 @@ async function nextLessonNumber(root) {
 }
 
 /**
- * Promote a lesson candidate from `.simt/lessons.jsonl` to `docs/lessons/NNNN-<slug>.md`.
+ * Promote a lesson candidate from the lessons ledger to `docs/lessons/NNNN-<slug>.md`.
+ *
+ * Capture is not promotion's business: `promoteLesson` used to scan the ledger
+ * first, so a preview (`review` without `--yes`) wrote to the store it was
+ * only reading. Capture is an explicit `lessons capture` now (review 0003 Q36).
  *
  * @param {string} root
- * @param {{id?: string, apply?: boolean, paths?: string[], expires?: string, title?: string}} [options]
+ * @param {{id?: string, apply?: boolean, paths?: string[], expires?: string, title?: string, journal?: object[]}} [options]
  * @returns {Promise<{ok: boolean, error?: string, candidate?: object, path?: string, markdown?: string, written?: boolean}>}
  */
 export async function promoteLesson(root, options = {}) {
-  await captureFromLedger(root);
   const { candidates } = await readLessonCandidates(root);
   if (candidates.length === 0) {
-    return { ok: false, error: 'no lesson candidates in .simt/lessons.jsonl' };
+    return { ok: false, error: `no lesson candidates in ${LESSONS_FILE}; capture some with: lessons capture` };
   }
 
   let target = null;
@@ -638,14 +750,31 @@ export async function promoteLesson(root, options = {}) {
     if (!target) {
       return { ok: false, error: `no lesson candidate matching "${options.id}"` };
     }
+    if (target.status === 'promoted') {
+      return { ok: false, error: `lesson candidate ${target.id} is already promoted to ${target.promotedTo}` };
+    }
   } else {
-    target = candidates.find((c) => c.status !== 'promoted') ?? candidates[0];
+    // A promoted candidate is done: falling back to it re-promotes the same
+    // lesson under a new number, which is how one candidate became 0001/0002/0003.
+    target = candidates.find((c) => c.status !== 'promoted') ?? null;
+    if (!target) {
+      return { ok: false, error: 'nothing to promote: every candidate is already promoted' };
+    }
+  }
+
+  // No `**` default: a trigger that watches every path fires on every failure,
+  // which is the same as firing on none. A pathless candidate needs `--paths`.
+  const paths = Array.isArray(options.paths) && options.paths.length > 0
+    ? options.paths
+    : (Array.isArray(target.paths) ? target.paths : []);
+  if (paths.length === 0) {
+    return { ok: false, error: `lesson candidate ${target.id} names no paths; pass --paths to say what it governs` };
   }
 
   const num = await nextLessonNumber(root);
   const slug = slugify(options.title ?? target.errorLine ?? target.summary ?? target.kind);
   const relPath = `${LESSONS_DIR}/${num}-${slug}.md`;
-  const markdown = renderLessonMarkdown(target, options);
+  const markdown = renderLessonMarkdown(target, { ...options, paths, expires: options.expires ?? defaultExpires() });
 
   // The `--diff` before-side, read before anything is written so the diff is true
   // in preview and in apply alike (R50). Always a creation in practice — the
@@ -662,6 +791,7 @@ export async function promoteLesson(root, options = {}) {
     const fullPath = join(root, relPath);
     await mkdir(dirname(fullPath), { recursive: true });
     await writeFile(fullPath, markdown, 'utf8');
+    if (Array.isArray(options.journal)) recordCreatedFile(root, options.journal, join(root, relPath), markdown);
     target.status = 'promoted';
     target.promotedTo = relPath;
     await writeLessonCandidates(root, candidates);

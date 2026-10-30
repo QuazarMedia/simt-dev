@@ -126,13 +126,15 @@ function redact(value) {
 }
 
 /**
- * Scan one line's worth of added text.
+ * Every secret span in the text: pattern matches in library order, then entropy
+ * over whatever no pattern claimed. One function because the gate report and
+ * the redactor must agree on what a secret is: two matchers drift, and the
+ * drift is a token one of them stores (review 0003 Q36).
  *
- * @param {string} text the added line, without the leading `+`
- * @returns {{kind: string, preview: string, entropy?: number}[]} findings in
- *   pattern order, then entropy over whatever no pattern claimed
+ * @param {string} text
+ * @returns {{start: number, end: number, kind: string, preview: string, entropy?: number}[]}
  */
-export function scanText(text) {
+function findSpans(text) {
   const found = [];
   const claimed = [];
 
@@ -154,7 +156,7 @@ export function scanText(text) {
       // entropy reading of the same bytes would double the count a gate reports.
       if (claimed.some(([a, b]) => at < b && a < at + value.length)) continue;
       claimed.push([at, at + value.length]);
-      found.push({ kind: pattern.id, preview: redact(value) });
+      found.push({ start: at, end: at + value.length, kind: pattern.id, preview: redact(value) });
     }
   }
 
@@ -167,10 +169,48 @@ export function scanText(text) {
     if (claimed.some(([a, b]) => match.index < b && a < match.index + value.length)) continue;
     const bits = entropy(value);
     if (bits < ENTROPY_MIN_BITS) continue;
-    found.push({ kind: 'high-entropy', preview: redact(value), entropy: Number(bits.toFixed(1)) });
+    found.push({
+      start: match.index,
+      end: match.index + value.length,
+      kind: 'high-entropy',
+      preview: redact(value),
+      entropy: Number(bits.toFixed(1)),
+    });
   }
 
   return found;
+}
+
+/**
+ * Scan one line's worth of added text.
+ *
+ * @param {string} text the added line, without the leading `+`
+ * @returns {{kind: string, preview: string, entropy?: number}[]} findings in
+ *   pattern order, then entropy over whatever no pattern claimed
+ */
+export function scanText(text) {
+  return findSpans(text).map(({ kind, preview, entropy }) =>
+    entropy === undefined ? { kind, preview } : { kind, preview, entropy },
+  );
+}
+
+/**
+ * Replace every secret span with `[redacted:<kind>]`, leaving the rest of the
+ * text byte-identical. Lesson candidates store the commands that failed, and a
+ * command can carry a token (`curl -H "Authorization: Bearer …"`); storing it
+ * verbatim writes the secret into a JSONL file that is then read, rendered and
+ * injected into prompts (review 0003 Q36).
+ *
+ * @param {string} text
+ * @returns {string} the text with secret values replaced
+ */
+export function redactText(text) {
+  const spans = findSpans(String(text ?? '')).sort((a, b) => b.start - a.start);
+  let out = String(text ?? '');
+  for (const span of spans) {
+    out = `${out.slice(0, span.start)}[redacted:${span.kind}]${out.slice(span.end)}`;
+  }
+  return out;
 }
 
 /**

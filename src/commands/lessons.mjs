@@ -5,6 +5,7 @@ import { resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
+import { commitJournal } from '../journal.mjs';
 import { CLI } from '../name.mjs';
 import { parsePathList } from '../argv.mjs';
 import {
@@ -22,13 +23,15 @@ export async function lessonsListCommand(args, flags) {
     return fail(`unknown lessons argument ${args[0]}`, EXIT.USAGE, `run: ${CLI} lessons`);
   }
   const root = resolve(flags.root ?? process.cwd());
-  await captureFromLedger(root);
-  await captureRevertedCommits(root);
-
+  // Pure: listing must not capture. Capture used to run here, so `list` wrote
+  // to the store it was reading and a read-only question had write side
+  // effects. Capturing is `lessons capture` now (review 0003 Q36).
   const [{ candidates, errors }, promoted] = await Promise.all([
     readLessonCandidates(root),
-    listPromotedLessons(root),
+    listPromotedLessons(root, { includeExpired: true }),
   ]);
+  const live = promoted.filter((l) => !l.expired);
+  const expiredCount = promoted.length - live.length;
 
   const payload = {
     ok: errors.length === 0,
@@ -37,9 +40,10 @@ export async function lessonsListCommand(args, flags) {
     ledgerFile: LESSONS_FILE,
     lessonsDir: LESSONS_DIR,
     candidateCount: candidates.length,
-    promotedCount: promoted.length,
+    promotedCount: live.length,
+    expiredCount,
     candidates,
-    promoted,
+    promoted: live,
     errors,
   };
 
@@ -50,7 +54,7 @@ export async function lessonsListCommand(args, flags) {
 
   const lines = [
     `candidates  ${candidates.length} (${LESSONS_FILE})`,
-    `promoted    ${promoted.length} (${LESSONS_DIR})`,
+    `promoted    ${live.length} (${LESSONS_DIR})${expiredCount > 0 ? `, ${expiredCount} expired` : ''}`,
   ];
 
   if (candidates.length > 0) {
@@ -62,10 +66,16 @@ export async function lessonsListCommand(args, flags) {
     }
   }
 
-  if (promoted.length > 0) {
+  if (live.length > 0) {
     lines.push('', 'LESSONS');
-    for (const l of promoted) {
+    for (const l of live) {
       lines.push(`  ${l.id.padEnd(28)}  ${(l.signature ?? 'no-signature').slice(0, 19)}  ${l.title}`);
+    }
+  }
+  if (expiredCount > 0) {
+    lines.push('', `EXPIRED ${expiredCount}`);
+    for (const l of promoted.filter((l) => l.expired)) {
+      lines.push(`  ${l.id.padEnd(28)}  expired ${l.expires ?? 'no date'}  ${l.title}`);
     }
   }
 
@@ -73,6 +83,45 @@ export async function lessonsListCommand(args, flags) {
 
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return errors.length === 0 ? EXIT.OK : EXIT.FAIL;
+}
+
+/**
+ * `simt lessons capture` — the explicit write half of the old `list`.
+ *
+ * Scans the ledger for fail-then-fix sequences and git history for reverts,
+ * and appends any new candidates. A command that writes says so in its name;
+ * `list` and `review` previews do not (review 0003 Q36).
+ */
+export async function lessonsCaptureCommand(args, flags) {
+  if (args.length > 0) {
+    return fail(`unknown lessons capture argument ${args[0]}`, EXIT.USAGE, `run: ${CLI} lessons capture`);
+  }
+  const root = resolve(flags.root ?? process.cwd());
+  const fromLedger = await captureFromLedger(root);
+  const reverts = await captureRevertedCommits(root);
+
+  const payload = {
+    ok: true,
+    command: 'lessons capture',
+    root,
+    failThenFix: fromLedger.length,
+    reverts: reverts.length,
+    captured: [...fromLedger, ...reverts],
+  };
+  if (isJson(flags)) {
+    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    return EXIT.OK;
+  }
+  const lines = [
+    `captured    ${payload.captured.length} candidates (${LESSONS_FILE})`,
+    `  fail-then-fix  ${fromLedger.length}`,
+    `  reverts        ${reverts.length}`,
+  ];
+  for (const c of payload.captured) {
+    lines.push(`  ${c.id}  ${c.kind}  ${c.summary}`);
+  }
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  return EXIT.OK;
 }
 
 export async function lessonsReviewCommand(args, flags) {
@@ -84,13 +133,20 @@ export async function lessonsReviewCommand(args, flags) {
   const parsedPaths = parsePathList(flags.paths);
   const paths = parsedPaths.length > 0 ? parsedPaths : undefined;
   const title = flags.task ? String(flags.task) : undefined;
+  const expires = typeof flags.expires === 'string' && flags.expires.trim() !== '' ? flags.expires.trim() : undefined;
 
+  // Journaled so `undo` restores the promoted file (R49); committed only when
+  // the run actually wrote, which commitJournal already guarantees.
+  const journal = [];
   const result = await promoteLesson(root, {
     id: args[0],
     apply: mode.apply,
     paths,
     title,
+    expires,
+    journal: mode.apply ? journal : undefined,
   });
+  if (mode.apply && result.ok) await commitJournal(root, 'lessons review', journal);
 
   if (!result.ok) {
     return fail(result.error, EXIT.FAIL, `record a session failure-then-fix or run: ${CLI} lessons`);

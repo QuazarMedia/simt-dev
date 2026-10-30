@@ -63,7 +63,7 @@ import { testsCommand } from './tests.mjs';
 import { whyCommand } from './why.mjs';
 import { gateCommand } from './gate.mjs';
 import { impactCommand } from './impact.mjs';
-import { lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
+import { lessonsCaptureCommand, lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
 import { decideCommand } from './decide.mjs';
 import { explainCommand } from './explain.mjs';
 import { undoCommand } from './undo.mjs';
@@ -162,6 +162,7 @@ export const IMPLEMENTED = {
   why: (args, flags) => whyCommand(args, flags, COMMANDS),
   gate: gateCommand,
   impact: (args, flags) => impactCommand(args, flags, COMMANDS),
+  'lessons capture': lessonsCaptureCommand,
   'lessons list': lessonsListCommand,
   'lessons review': lessonsReviewCommand,
   decide: decideCommand,

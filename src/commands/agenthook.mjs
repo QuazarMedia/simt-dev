@@ -22,6 +22,7 @@
 // tool call. Failures of this command exit 1, which a harness reports as a failed hook,
 // and that is the right blast radius for a hook that is broken rather than refusing.
 
+import { existsSync } from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
@@ -29,7 +30,7 @@ import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../agenthooks/shim.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
-import { CLI } from '../name.mjs';
+import { CLI, MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { ALLOW_ENV, EVENTS, POLICY_IDS, SESSION_ENV } from '../agenthooks/policy.mjs';
 import { decide, factsFor } from '../agenthooks/decide.mjs';
 import { repoRoot } from '../repo-root.mjs';
@@ -140,7 +141,11 @@ export async function agentHookCommand(args, flags) {
   const json = decisionJson(row, decision);
   if (json === null) return EXIT.OK;
 
-  if (root) {
+  // A denial is recorded only for a repository that adopted the tool: hook
+  // denials in a never-adopted repo are noise about someone else's policy, and
+  // that is how an unadopted checkout accumulated 23 candidates nobody would
+  // ever promote (review 0003 Q36). The manifest is the adoption mark.
+  if (root && (existsSync(join(root, MANIFEST_FILE)) || existsSync(join(root, MANIFEST_LEGACY)))) {
     try {
       const { recordHookDenial } = await import('../memory/lessons.mjs');
       await recordHookDenial(root, {

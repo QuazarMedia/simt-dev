@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { lintRegistry, loadRegistry, workspace } from '../src/graph/load.mjs';
+import { SPEC, SPEC_SOURCE } from '../src/graph/spec.mjs';
 import { KNOWN_TAGS } from '../src/resolve/fingerprint.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -147,6 +150,47 @@ test('lint: detects a cycle in requires', () => {
   assert.ok(codes(g).some((e) => e.includes('requires cycle')));
 });
 
+test('lint: a diamond in requires is sharing, not a cycle (Q35)', () => {
+  // The breadth-first walk shared one `seen` set across branches and reported
+  // a -> {b, c} -> d as `cycle a -> b -> c -> d -> d`. Depth-first with a
+  // recursion stack must stay silent here.
+  const g = clone();
+  const [a, b, c, d] = ['a-diamond', 'b-diamond', 'c-diamond', 'd-diamond'];
+  const leaf = (name) => ({
+    name,
+    summary: 'a probe node',
+    capabilities: [g.capabilities[0].id],
+    stack: ['node'],
+    paths: ['src/probe.ts'],
+    keywords: ['probe'],
+    bytes: 10,
+  });
+  g.skills.push(leaf(a), leaf(b), leaf(c), leaf(d));
+  const byName = new Map(g.skills.map((s) => [s.name, s]));
+  byName.get(a).requires = [b, c];
+  byName.get(b).requires = [d];
+  byName.get(c).requires = [d];
+  assert.deepEqual(
+    codes(g).filter((e) => e.includes('requires cycle')),
+    [],
+    'a diamond must not be reported as a cycle',
+  );
+});
+
+test('lint: missing capabilities is one shape error, never a crash (Q35)', () => {
+  // The shape check recorded the error and then iterated the missing array
+  // anyway: `not iterable`. The lint stops after a shape failure now.
+  const g = clone();
+  delete g.capabilities;
+  assert.deepEqual(codes(g), ['capabilities: missing or empty']);
+});
+
+test('lint: missing skills is one shape error, never secondary noise (Q35)', () => {
+  const g = clone();
+  g.skills = [];
+  assert.deepEqual(codes(g), ['skills: missing or empty']);
+});
+
 test('lint: detects alias-of-alias instead of a chain', () => {
   const g = clone();
   const alias = g.skills.find((s) => s.aliasOf);
@@ -190,6 +234,60 @@ test('lint: reports a missing file rather than throwing', async () => {
   assert.equal(ok, false);
   assert.match(errors[0], /unreadable|invalid JSON/);
 });
+
+test('CLI: the default lint runs no spec pass and stays honest about it (Q35)', async () => {
+  // The spec pass used to run without `--spec`: 37 warnings for a pass the
+  // payload claimed never ran (`spec: null`).
+  const { code, stdout } = await runCli(['graph', 'lint', '--json']);
+  assert.equal(code, 0, stdout);
+  const payload = JSON.parse(stdout);
+  assert.equal(payload.spec, null);
+  assert.deepEqual(
+    payload.warnings.filter((w) => /conformance pass|SKILL\.md/.test(w)),
+    [],
+    'no spec-pass warnings without --spec',
+  );
+});
+
+test('CLI: errors found after the load still fail the JSON contract (Q35)', async () => {
+  // `--json` reported `ok: true`, exit 0 with errors present; text said FAIL.
+  const dir = await mkdtemp(join(tmpdir(), 'simt-graph-'));
+  try {
+    const broken = clone();
+    broken.skills.push({ ...broken.skills[0] });
+    const reg = join(dir, 'registry.json');
+    await writeFile(reg, JSON.stringify(broken));
+    const { code, stdout } = await runCli(['graph', 'lint', '--json', reg]);
+    assert.notEqual(code, 0, 'errors must fail the exit code');
+    const payload = JSON.parse(stdout);
+    assert.equal(payload.ok, false);
+    assert.ok(payload.errors.some((e) => e.includes('duplicate skill name')));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI: --spec without a verified registry skips loudly instead of warning 37 times (Q35)', async () => {
+  const { stdout } = await runCli(['graph', 'lint', '--json', '--spec', SPEC]);
+  const payload = JSON.parse(stdout);
+  assert.deepEqual(payload.spec, { name: SPEC, source: SPEC_SOURCE, checked: 0 });
+  assert.ok(payload.warnings.some((w) => w.includes('spec pass skipped')));
+});
+
+const BIN = resolve(ROOT, 'bin', 'simt.mjs');
+const exec = promisify(execFile);
+
+async function runCli(args, env = {}) {
+  try {
+    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+      maxBuffer: 16 << 20,
+      env: { ...process.env, NO_COLOR: '1', SIMT_DEV_WORKSPACE: 'off', ...env },
+    });
+    return { code: 0, stdout, stderr };
+  } catch (error) {
+    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
+  }
+}
 
 test('workspace: different flags resolve different workspaces (Q14)', async () => {
   // The memo used to be first-call-wins for the process lifetime, so a call with

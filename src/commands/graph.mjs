@@ -31,16 +31,29 @@ export async function lintCommand(positional, flags) {
   // client accept these files", and the second question needs no registry at all. A
   // reader with no registry can still lint a skill directory, so the two are additive
   // rather than one gating the other.
-  const specReport = registry && workspace?.root
-    ? await lintSpec(registry, workspace.root)
-    : { errors: [], warnings: [], checked: 0 };
+  //
+  // The pass runs only when asked for (`--spec`) and only against a verified
+  // registry: without it the default lint reported 37 warnings for a pass the
+  // payload claimed never ran (`spec: null`), and `ok` stayed true over errors
+  // the spec pass had just found (review 0003 Q35).
+  let specReport = { errors: [], warnings: [], checked: 0 };
+  if (spec !== null) {
+    if (registry && verified && workspace?.root) {
+      specReport = await lintSpec(registry, workspace.root);
+    } else {
+      warnings.push(
+        'spec pass skipped: it needs --spec against a registry verified on disk (see `verified` above)',
+      );
+    }
+  }
   errors.push(...specReport.errors);
   warnings.push(...specReport.warnings);
+  const finalOk = ok && errors.length === 0;
 
   if (isJson(flags)) {
     emitJson(
       {
-        ok,
+        ok: finalOk,
         registry: path,
         capabilities: registry?.capabilities?.length ?? 0,
         skills: registry?.skills?.length ?? 0,
@@ -60,7 +73,7 @@ export async function lintCommand(positional, flags) {
       },
       { maxBytes: flags.maxBytes ?? 0 },
     );
-    return ok ? EXIT.OK : EXIT.REGISTRY;
+    return finalOk ? EXIT.OK : EXIT.REGISTRY;
   }
 
   if (!registry) {

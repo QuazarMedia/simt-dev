@@ -282,14 +282,20 @@ export function lintRegistry(registry) {
   const threshold = registry.deferredThreshold ?? 20000;
 
   // --- shape -----------------------------------------------------------------
+  // Every check below assumes arrays of objects. A registry that fails the shape
+  // is already fully described by the shape error; continuing past it only
+  // trades one true error for a crash (`for..of` over `undefined`) or a pile of
+  // secondary noise, so the lint stops here (review 0003 Q35).
   if (!Array.isArray(registry.capabilities) || capabilities.size === 0) {
     err('capabilities: missing or empty');
   }
   if (!Array.isArray(registry.skills) || skills.length === 0) {
     err('skills: missing or empty');
+  }
+  if (errors.length > 0) {
     return { sync: errors, warnings, index };
   }
-  for (const c of registry.capabilities) {
+  for (const c of registry.capabilities ?? []) {
     if (!c.id || !c.summary) err(`capability ${c.id ?? '<no id>'}: needs id and summary`);
   }
 
@@ -449,22 +455,22 @@ function checkRequires(at, skill, index, err) {
     if (!index.has(dep)) err(`${at}: requires unknown skill "${dep}"`);
     if (dep === skill.name) err(`${at}: requires itself`);
   }
-  // Cycle detection over `requires`. Depth is bounded by node count, so an
-  // accidental cycle terminates rather than hanging the lint.
-  const seen = new Set([skill.name]);
-  let frontier = skill.requires ?? [];
-  while (frontier.length > 0) {
-    const next = [];
-    for (const dep of frontier) {
-      if (seen.has(dep)) {
-        err(`requires cycle: ${[...seen].join(' -> ')} -> ${dep}`);
+  // Cycle detection over `requires`, depth-first with a recursion stack. The old
+  // breadth-first walk shared one `seen` set across branches, so a diamond
+  // (a requires b and c; both require d) reported d's second visit as a cycle.
+  // Only a dependency already on the current path is a cycle; a node reached
+  // through two branches is sharing, not looping (review 0003 Q35).
+  const visit = (name, path) => {
+    const stack = [...path, name];
+    for (const dep of index.get(name)?.requires ?? []) {
+      if (stack.includes(dep)) {
+        err(`requires cycle: ${[...stack, dep].join(' -> ')}`);
         return;
       }
-      seen.add(dep);
-      next.push(...(index.get(dep)?.requires ?? []));
+      visit(dep, stack);
     }
-    frontier = next;
-  }
+  };
+  visit(skill.name, []);
 }
 
 function checkAlias(at, skill, index, err) {
@@ -644,8 +650,7 @@ export async function measureSkill(full) {
     hasEntry = false;
   }
   if (!hasEntry) {
-    const md = files === 1 ? '' : '';
-    throw Object.assign(new Error(`${full} has no SKILL.md entry point${md}`), { code: 'NO_SKILL_MD' });
+    throw Object.assign(new Error(`${full} has no SKILL.md entry point`), { code: 'NO_SKILL_MD' });
   }
 
   return { bytes, files, flat: false };

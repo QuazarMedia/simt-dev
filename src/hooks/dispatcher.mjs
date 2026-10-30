@@ -19,7 +19,8 @@
 //   its reason, so "passed" can never be mistaken for "only some of it passed".
 
 import { execFile } from 'node:child_process';
-import { readFile, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, symlink } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { basename, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -85,6 +86,61 @@ export async function runGates(event, { root, manifest }) {
     };
   }
 
+  // A pre-push gate runs against the COMMITTED tree, not the working one. Uncommitted
+  // work must not block the push of previous commits: a gate that fails on WIP the
+  // author has not committed is blocking a push it does not own. The worktree is
+  // disposable and shares the repository's object store, so `git worktree add` is cheap
+  // and needs no clone. The ledger and the version pin stay at the real root - the
+  // evidence is about this repository, not the throwaway checkout.
+  let runRoot = root;
+  let headWorktree = null;
+  if (event === 'pre-push') {
+    const materialized = await materializeHeadWorktree(root);
+    if (materialized.path === null) {
+      return {
+        event,
+        gates: [
+          {
+            name: 'head',
+            status: 'failed',
+            detail: materialized.error,
+            remedy: 'commit the work, or resolve the git state so HEAD is a valid reference, then push again',
+            adr: null,
+          },
+        ],
+        failed: true,
+      };
+    }
+    runRoot = materialized.path;
+    headWorktree = materialized.path;
+  }
+
+  try {
+    return await runGatesAt(event, { root: runRoot, ledgerRoot: root, manifest, declared, key });
+  } finally {
+    if (headWorktree !== null) await removeHeadWorktree(root, headWorktree);
+  }
+}
+
+/**
+ * Run the declared gates at `root`, recording evidence at `ledgerRoot`.
+ *
+ * For a pre-push run the two differ: the gates execute in a throwaway worktree at
+ * HEAD so uncommitted work cannot block the push, while the ledger line belongs to
+ * the repository the author is standing in. For every other event they are the same
+ * path, which is why this is one function with two names for the root rather than
+ * two functions.
+ *
+ * @param {string} event
+ * @param {object} ctx
+ * @param {string} ctx.root the tree the gates execute in
+ * @param {string} ctx.ledgerRoot the repository the evidence is recorded in
+ * @param {object} ctx.manifest
+ * @param {string[]} ctx.declared the gate names for this event
+ * @param {string} ctx.key the manifest key for this event
+ * @returns {Promise<{event: string, gates: object[], failed: boolean}>}
+ */
+async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key }) {
   const pkg = await readPkg(root);
   // Q31: the runner is committed evidence (lockfile, then `packageManager`),
   // resolved once per hook run so every script gate spawns the same manager.
@@ -153,7 +209,7 @@ export async function runGates(event, { root, manifest }) {
       // scan takes its ignore globs from gates.secretScan (review 0003 Q24).
       const outcome = await runBuiltinGate(resolution.builtin, { root, staged, options: manifest?.gates?.secretScan });
       try {
-        await recordRun(root, {
+        await recordRun(ledgerRoot, {
           cmd: `builtin:${resolution.builtin}`,
           exit: outcome.ok ? 0 : 1,
           ms: Date.now() - startedBuiltin,
@@ -247,7 +303,7 @@ export async function runGates(event, { root, manifest }) {
       // else keeps its own kind or the gate name.
       const kind =
         name === 'test' || name === 'coverage' ? 'test' : name === 'lint' ? 'lint' : name === 'format' ? 'format' : (gate.kind ?? name);
-      await recordRun(root, {
+      await recordRun(ledgerRoot, {
         cmd,
         exit: outcome.code,
         ms: Date.now() - started,
@@ -301,6 +357,54 @@ export async function runGates(event, { root, manifest }) {
   }
 
   return { event, gates: results, failed: results.some((r) => r.status === 'failed') };
+}
+
+/**
+ * Materialize a detached worktree at HEAD so the pre-push gates run against the
+ * committed tree, not the working one. The worktree shares the repository's object
+ * store, so `git worktree add` is cheap and needs no clone. `node_modules` is
+ * symlinked in when the real root has one, because a script gate resolves its runner
+ * and binaries from there and a fresh worktree does not carry it.
+ *
+ * Fails closed: an unborn HEAD (no commits) or a git error returns `{ path: null }`
+ * with the reason, and the caller turns that into a gate failure rather than running
+ * against a tree it cannot name.
+ *
+ * @param {string} root the real repository root
+ * @returns {Promise<{path: string, error?: never}|{path: null, error: string}>}
+ */
+async function materializeHeadWorktree(root) {
+  const path = await mkdtemp(join(tmpdir(), 'head-gate-'));
+  try {
+    await exec('git', ['worktree', 'add', '--detach', path, 'HEAD'], { cwd: root });
+  } catch (error) {
+    await rm(path, { recursive: true, force: true }).catch(() => {});
+    return { path: null, error: `git worktree add failed: ${String(error.stderr ?? error.message).trim()}` };
+  }
+  const nodeModules = join(root, 'node_modules');
+  try {
+    await symlink(nodeModules, join(path, 'node_modules'));
+  } catch {
+    // Absent node_modules is the normal case for a repo with no install step; a
+    // dangling link is harmless, and `npm run` does not need it to exist.
+  }
+  return { path };
+}
+
+/**
+ * Remove a pre-push worktree. `--force` because a gate may have left it dirty (a
+ * formatter, a test that writes fixtures); the worktree is disposable, the real tree
+ * is not. Falls back to `rm -rf` plus a prune when git cannot remove it (a lock, a
+ * path in a state git does not expect), so a cleanup failure never leaks the tree.
+ *
+ * @param {string} root the real repository root
+ * @param {string} path the worktree to remove
+ */
+async function removeHeadWorktree(root, path) {
+  await exec('git', ['worktree', 'remove', '--force', path], { cwd: root }).catch(async () => {
+    await rm(path, { recursive: true, force: true }).catch(() => {});
+    await exec('git', ['worktree', 'prune'], { cwd: root }).catch(() => {});
+  });
 }
 
 /**

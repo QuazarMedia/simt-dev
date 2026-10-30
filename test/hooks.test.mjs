@@ -544,8 +544,38 @@ test('dispatcher: an empty gate list passes but says why', async () => {
 test('dispatcher: pre-push reads gates.prePush, not preCommit', async () => {
   const manifest = { gates: { preCommit: ['lint'], prePush: ['test'] } };
   const root = await fixture({ scripts: { test: 'exit 0' }, manifest });
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'init'], { cwd: root });
   const result = await runGates('pre-push', { root, manifest });
   assert.deepEqual(result.gates.map((g) => g.name), ['test']);
+});
+
+test('dispatcher: pre-push runs on HEAD, so uncommitted WIP does not block the push', async () => {
+  // The gate's test script fails when data.txt says "bad". The committed tree says
+  // "good"; the working tree has been edited to "bad". A pre-push gate that ran on the
+  // working tree would fail and block the push of a commit that is itself fine - which
+  // is exactly what the worktree-at-HEAD run exists to prevent.
+  const manifest = { gates: { preCommit: [], prePush: ['test'] } };
+  const root = await fixture({ scripts: { test: 'grep -q good data.txt' }, files: { 'data.txt': 'good\n' }, manifest });
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'init'], { cwd: root });
+  // WIP: the working tree now fails the gate, but HEAD does not.
+  await writeFile(join(root, 'data.txt'), 'bad\n');
+  const result = await runGates('pre-push', { root, manifest });
+  assert.equal(result.failed, false, `expected pre-push to pass on HEAD, got: ${JSON.stringify(result.gates)}`);
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: pre-push fails closed when HEAD cannot be materialized (no commits)', async () => {
+  // An unborn HEAD has no committed tree to run against. The gate cannot invent one,
+  // so it fails with a reason rather than running against a tree it cannot name.
+  const manifest = { gates: { preCommit: [], prePush: ['test'] } };
+  const root = await fixture({ scripts: { test: 'exit 0' }, manifest });
+  const result = await runGates('pre-push', { root, manifest });
+  assert.equal(result.failed, true);
+  const gate = result.gates.find((g) => g.name === 'head');
+  assert.equal(gate.status, 'failed');
+  assert.match(gate.detail, /git worktree add failed/);
 });
 
 test('dispatcher: an unknown event fails rather than passing silently', async () => {

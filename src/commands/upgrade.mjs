@@ -85,6 +85,14 @@ export async function upgradeCommand(positional, flags) {
   if (found.error) {
     return fail(`${root}: ${found.error}`, EXIT.CONFIG, 'pass --root <path>');
   }
+  if (found.repos.length === 0 && found.worktrees.length === 1) {
+    // A worktree passed directly is not counted as a repo by discover (its files are
+    // its parent's HEAD checked out elsewhere, so drift reporting would double-count
+    // it). Upgrading is different: the worktree carries the same rule content as its
+    // parent, so it is a valid single target. This is the shape the pre-push gate
+    // materializes - a detached worktree at HEAD that the suite runs inside.
+    found.repos = [found.worktrees[0].path];
+  }
   if (found.repos.length === 0) {
     return fail(
       `${root} contains no git repositories`,

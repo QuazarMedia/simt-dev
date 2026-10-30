@@ -20,10 +20,13 @@ import {
   appendLessonCandidate,
   captureFromLedger,
   captureRevertedCommits,
+  defaultExpires,
   deliverLessonRecall,
   errorSignature,
   firstErrorLine,
   formatLessonParagraph,
+  isExpired,
+  lessonIdFor,
   listPromotedLessons,
   matchLessonByOutput,
   normaliseErrorLine,
@@ -216,7 +219,7 @@ test('simt lessons review promotes a candidate to docs/lessons/NNNN-<slug>.md wi
     cmd: 'npm test',
     exit: 0,
   };
-  await recordFailThenFix(root, {
+  const stored = await recordFailThenFix(root, {
     failEntry,
     passEntry,
     paths: ['src/hooks/dispatcher.mjs'],
@@ -242,14 +245,17 @@ test('simt lessons review promotes a candidate to docs/lessons/NNNN-<slug>.md wi
   const fileText = await readFile(join(root, appliedPayload.path), 'utf8');
   assert.match(fileText, /^---\nsimt-trigger: \{ paths: \["src\/hooks\/dispatcher\.mjs"\], signature: "sha256-[0-9a-f]{64}", keywords: \[/);
   assert.match(fileText, /\nsimt-evidence: \["1111111111111111111111111111111111111111", "2222222222222222222222222222222222222222"\]\n/);
-  assert.match(fileText, /\nsimt-expires: 2027-04-01\n---\n/);
+  // The default expiry is relative to the promotion, not a fixed date.
+  assert.match(fileText, /\nsimt-expires: \d{4}-\d{2}-\d{2}\n---\n/);
+  assert.ok(fileText.includes(`simt-expires: ${defaultExpires()}`), 'the default expiry is promotion-relative');
 
   // Verify govern.mjs `lessonPaths` and `listPromotedLessons` parse the generated file
   assert.deepEqual(lessonPaths(fileText), ['src/hooks/dispatcher.mjs']);
   const parsed = parseLessonFile('0001-restage-failed-on-deleted-file', fileText);
   assert.equal(parsed.signature, failEntry.signature);
   assert.deepEqual(parsed.evidence, [failEntry.tree, passEntry.tree]);
-  assert.equal(parsed.expires, '2027-04-01');
+  assert.equal(parsed.expires, defaultExpires());
+  assert.equal(parsed.expired, false);
 
   const promoted = await listPromotedLessons(root);
   assert.equal(promoted.length, 1);
@@ -266,8 +272,11 @@ test('simt lessons review promotes a candidate to docs/lessons/NNNN-<slug>.md wi
   // Direct promoteLesson and renderLessonMarkdown helpers
   const md = renderLessonMarkdown(listedPayload.candidates[0], { expires: '2027-06-01' });
   assert.match(md, /simt-expires: 2027-06-01/);
-  const directPromote = await promoteLesson(root, { id: 'c-0001', apply: false });
-  assert.equal(directPromote.ok, true);
+  // `stored` is already promoted by the --yes run above: promoting it again
+  // by id must be refused, not re-promoted under a new number.
+  const directPromote = await promoteLesson(root, { id: stored.id, apply: false });
+  assert.equal(directPromote.ok, false);
+  assert.match(directPromote.error, /already promoted/);
 });
 
 function runHookCli(args, input) {
@@ -309,7 +318,10 @@ test('R33: replaying a recorded failure into agent-hook post-tool-use injects th
     output: 'TAP version 13\nok 1 - restage passes\n1..1\n',
   });
 
-  // 2. Promote the captured lesson to docs/lessons/0001-*.md
+  // 2. Capture the ledger sequence explicitly, then promote it to docs/lessons/0001-*.md.
+  // Promotion no longer scans the ledger itself: a preview must not write.
+  const captured = await captureFromLedger(root);
+  assert.equal(captured.length, 1);
   const promoted = await promoteLesson(root, { apply: true });
   assert.equal(promoted.ok, true);
   assert.equal(promoted.written, true);
@@ -383,6 +395,161 @@ test('R33: replaying a recorded failure into agent-hook post-tool-use injects th
   assert.equal(directMatch.paragraph, formatLessonParagraph(lessons[0]));
   const directDeliver = await deliverLessonRecall(adapter('claude'), recordedFailure, { root });
   assert.equal(directDeliver.paragraph, injected);
+});
+
+test('Q36: ids are content hashes, so concurrent appends cannot collide on a counter', async () => {
+  const root = await makeRepo();
+  const base = {
+    kind: 'hook-denial',
+    cmd: 'git push origin main',
+    errorLine: 'Push needs explicit approval (ADR-001); ask the user.',
+    evidence: ['git push origin main'],
+    paths: ['src/keep.mjs'],
+  };
+  const first = await appendLessonCandidate(root, base);
+  const again = await appendLessonCandidate(root, base);
+  assert.match(first.id, /^l-[0-9a-f]{12}$/);
+  assert.equal(again.id, first.id, 'the same candidate dedupes to the same content id');
+  // Same kind and signature but different evidence: distinct candidates, distinct ids.
+  const other = await appendLessonCandidate(root, { ...base, evidence: ['a different failing run'] });
+  assert.notEqual(other.id, first.id, 'a different candidate gets a different id');
+  assert.equal(
+    lessonIdFor({ kind: base.kind, signature: first.signature, evidence: first.evidence, cmd: first.cmd }),
+    first.id,
+  );
+  const { candidates } = await readLessonCandidates(root);
+  assert.equal(candidates.length, 2, 'dedup appended nothing; the distinct candidate appended one line');
+});
+
+test('Q36: the store redacts secrets and caps the fix diff at write time', async () => {
+  const root = await makeRepo();
+  const key = `sk-${'a1B2c3D4e5F6g7H8i9J0'}`;
+  const stored = await appendLessonCandidate(root, {
+    kind: 'hook-denial',
+    cmd: `curl -H "Authorization: Bearer ${key}" https://api.example.com`,
+    errorLine: 'hook denied the deploy command',
+    evidence: ['curl deploy'],
+    paths: ['src/deploy.mjs'],
+    fixDiff: `${'x'.repeat(30000)}\n`,
+  });
+  assert.ok(!stored.cmd.includes(key), 'the raw token must not be stored');
+  assert.match(stored.cmd, /\[redacted:openai-style-key\]/);
+  assert.ok(stored.fixDiff.length <= 20000 + 80, `fixDiff capped, got ${stored.fixDiff.length}`);
+  assert.match(stored.fixDiff, /truncated to 20000 chars/);
+  // The signature is over the redacted bytes, so it is reproducible without the secret.
+  assert.equal(stored.signature, errorSignature(stored.errorLine));
+});
+
+test('Q36: `list` reads, `capture` writes, and a second promotion is refused', async () => {
+  const root = await makeRepo();
+  // Ledger lines written by hand, not through recordRun: recordRun captures a
+  // passing fail-then-fix itself (the session's own recording), which would
+  // put a candidate in the store before `list` ever runs.
+  const ledger = [
+    { v: 1, ts: '2026-10-29T10:00:00Z', tree: 'a'.repeat(40), cmd: 'npm test', exit: 1, ms: 9, outputDigest: 'sha256-x', summary: 'exit 1' },
+    { v: 1, ts: '2026-10-29T10:01:00Z', tree: 'b'.repeat(40), cmd: 'npm test', exit: 0, ms: 9, outputDigest: 'sha256-y', summary: 'exit 0' },
+  ];
+  await mkdir(join(root, '.simt', 'local'), { recursive: true });
+  await writeFile(join(root, '.simt', 'local', 'ledger.jsonl'), `${ledger.map((x) => JSON.stringify(x)).join('\n')}\n`);
+
+  // `list` must not capture: the ledger holds a fail-then-fix, but no candidate exists.
+  const listed = await exec('node', [BIN, 'lessons', 'list', '--root', root, '--json']);
+  assert.equal(JSON.parse(listed.stdout).candidateCount, 0);
+  assert.equal(existsSync(join(root, LESSONS_FILE)), false, 'list must not write the store');
+
+  const captured = await exec('node', [BIN, 'lessons', 'capture', '--root', root, '--json']);
+  const capturePayload = JSON.parse(captured.stdout);
+  assert.equal(capturePayload.failThenFix, 1);
+  assert.equal(JSON.parse((await exec('node', [BIN, 'lessons', 'list', '--root', root, '--json'])).stdout).candidateCount, 1);
+
+  // The candidate needs paths to promote (no `**` default) — pass them explicitly.
+  const preview = await exec('node', [BIN, 'lessons', 'review', '--root', root, '--paths', 'src/flaky.mjs', '--json']);
+  assert.equal(JSON.parse(preview.stdout).ok, true);
+  const applied = await exec('node', [
+    BIN, 'lessons', 'review', '--root', root, '--paths', 'src/flaky.mjs', '--yes', '--json',
+  ]);
+  assert.equal(JSON.parse(applied.stdout).written, true);
+
+  // A refused promotion exits non-zero, so this uses spawnSync (which returns
+  // the result) rather than exec (which throws on a non-zero exit).
+  const againRes = spawnSync('node', [BIN, 'lessons', 'review', '--root', root, '--paths', 'src/flaky.mjs', '--json'], { encoding: 'utf8' });
+  const againPayload = JSON.parse(againRes.stdout);
+  assert.equal(againPayload.ok, false);
+  assert.match(againPayload.error ?? againRes.stderr, /nothing to promote/);
+});
+
+test('Q36: a pathless candidate is not promotable to a watch-everything trigger', async () => {
+  const root = await makeRepo();
+  const candidate = await recordHookDenial(root, {
+    harness: 'claude',
+    event: 'pre-tool-use',
+    policies: ['push'],
+    messages: ['Push needs explicit approval (ADR-001); ask the user.'],
+    command: 'git push origin main',
+  });
+  assert.deepEqual(candidate.paths, []);
+  const result = await promoteLesson(root, {});
+  assert.equal(result.ok, false);
+  assert.match(result.error, /--paths/);
+});
+
+test('Q36: expired lessons stop firing but stay listed as expired', async () => {
+  const root = await makeRepo();
+  const stored = await recordFailThenFix(root, {
+    failEntry: { tree: 'a'.repeat(40), cmd: 'npm test', exit: 1, errorLine: 'Error: stale lesson' },
+    passEntry: { tree: 'b'.repeat(40), cmd: 'npm test', exit: 0 },
+    paths: ['src/stale.mjs'],
+    fixDiff: '',
+  });
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const promoted = await promoteLesson(root, { id: stored.id, apply: true, expires: yesterday });
+  assert.equal(promoted.ok, true);
+
+  const live = await listPromotedLessons(root);
+  assert.equal(live.length, 0, 'an expired lesson must not be recalled');
+  const all = await listPromotedLessons(root, { includeExpired: true });
+  assert.equal(all.length, 1);
+  assert.equal(all[0].expired, true);
+  assert.equal(matchLessonByOutput(all.filter((l) => !l.expired), 'Error: stale lesson'), null);
+
+  const listed = await exec('node', [BIN, 'lessons', 'list', '--root', root, '--json']);
+  const payload = JSON.parse(listed.stdout);
+  assert.equal(payload.promotedCount, 0);
+  assert.equal(payload.expiredCount, 1);
+
+  assert.equal(isExpired(null), false);
+  assert.equal(isExpired('not-a-date'), false, 'a malformed date stays visible, not silently retired');
+  assert.equal(isExpired(defaultExpires()), false);
+  assert.equal(isExpired(yesterday), true);
+});
+
+test('Q36: hook denials are recorded only in a repository that adopted the tool', async () => {
+  const payload = (cwd) =>
+    JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash',
+      tool_input: { command: 'git push origin main' },
+      cwd,
+    });
+  const denied = (root) =>
+    runHookCli(['agent-hook', 'pre-tool-use', '--harness', 'claude', '--root', root], payload(root));
+
+  const bare = await makeRepo();
+  const blocked = denied(bare);
+  assert.equal(blocked.code, 2, `the push policy must still deny: ${blocked.stderr}`);
+  assert.equal(
+    existsSync(join(bare, LESSONS_FILE)),
+    false,
+    'a denial in a never-adopted repo must not start a ledger there',
+  );
+
+  const adopted = await makeRepo();
+  await writeFile(join(adopted, 'simt.json'), '{"id": "fixture"}\n', 'utf8');
+  const recorded = denied(adopted);
+  assert.equal(recorded.code, 2);
+  const { candidates } = await readLessonCandidates(adopted);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].kind, 'hook-denial');
 });
 
 test('R33: the brief includes lessons whose triggers match the task paths', async () => {

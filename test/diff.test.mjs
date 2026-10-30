@@ -286,13 +286,15 @@ test('lessons review --diff shows the promoted file and promotes nothing', async
     join(root, '.simt', 'lessons.jsonl'),
     `${JSON.stringify({ kind: 'fail-then-fix', signature: 'sha256-deadbeef', errorLine: 'Error: boom', summary: 'Error: boom' })}\n`,
   );
-  const text = await run(['lessons', 'review', '--root', root, '--diff']);
+  // A pathless candidate is not promotable without `--paths` (review 0003 Q36):
+  // a trigger that watches every path fires on every failure, the same as none.
+  const text = await run(['lessons', 'review', '--root', root, '--diff', '--paths', 'src/flaky.mjs']);
   assert.equal(text.code, 0, text.stderr);
   assert.match(text.stdout, /diff --git a\/docs\/lessons\//);
   const names = await readFile(join(root, '.simt', 'lessons.jsonl'), 'utf8');
   assert.equal(names.includes('"status":"promoted"'), false, 'lessons review --diff promoted the candidate');
 
-  const js = await runJson(['lessons', 'review', '--root', root, '--diff']);
+  const js = await runJson(['lessons', 'review', '--root', root, '--diff', '--paths', 'src/flaky.mjs']);
   assert.match(js.payload.diff, /diff --git a\/docs\/lessons\//);
 });
 

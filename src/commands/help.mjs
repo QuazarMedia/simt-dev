@@ -136,7 +136,8 @@ ${CLI} evidence                the runs recorded against the tree on disk
 ${CLI} evidence check <file>   a commit message that claims a run this tree does not
                            have: a warning, or a block when gates.evidence is "block"
 ${CLI} lessons list            deterministic lesson candidates in .simt/local/lessons.jsonl
-                           and promoted lessons in docs/lessons/*.md
+                           and promoted lessons in docs/lessons/*.md (reads nothing else)
+${CLI} lessons capture         scan the ledger and git history for new candidates (the write half of list)
 ${CLI} lessons review [<id>]   promote a lesson candidate to docs/lessons/NNNN-<slug>.md
                            (dry-run unless --yes; writes Appendix A frontmatter)
 ${CLI} explain <CODE>        what a check finding means: the decision behind it, how

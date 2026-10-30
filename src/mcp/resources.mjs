@@ -16,7 +16,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { DECISIONS_DIR, loadDecisions, redactEstate, redactInternalPaths } from '../decisions/index.mjs';
+import { DECISIONS_DIR, loadDecisionsCached, redactEstate, redactInternalPaths } from '../decisions/index.mjs';
 import { planNext } from '../plan/index.mjs';
 import { loadMdcRules } from '../projection/mdc.mjs';
 import { desiredRegion, loadRules } from '../projection/rules.mjs';
@@ -122,7 +122,9 @@ export async function listResources(root = process.cwd()) {
   const [rules, mdc, { decisions }, region, plan] = await Promise.all([
     loadRules(null),
     loadMdcRules(),
-    loadDecisions({ all: true }),
+    // Q55: the shipped records through the shared cache (root locates the cache
+    // file; the directory stays the package's own, which is what is served).
+    loadDecisionsCached({ root, dir: DECISIONS_DIR, all: true }),
     kernelRegion(root),
     planNext(root, null),
   ]);
@@ -211,7 +213,7 @@ export async function readResource(uri, root = process.cwd()) {
   // `loadDecisions` reads the index, not the records: it reports status, currency and
   // byte count, and keeps no body. Reading the file the index named is one read of a
   // record the reader has already asked for by id.
-  const { decisions } = await loadDecisions({ all: true });
+  const { decisions } = await loadDecisionsCached({ root, dir: DECISIONS_DIR, all: true });
   const decision = decisions.find((candidate) => candidate.id === parsed.id);
   if (decision === undefined) return null;
   const raw = await readFile(join(DECISIONS_DIR, decision.file), 'utf8');

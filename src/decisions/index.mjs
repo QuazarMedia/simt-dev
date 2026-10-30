@@ -14,13 +14,20 @@
 // such, because "no decision behind this" is exactly what a reviewer needs to
 // see and exactly what an empty output would hide.
 
-import { readFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises';
 import { readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MANIFEST_FILE } from '../name.mjs';
 import { CLI } from '../name.mjs';
 import { PREFIX_ARGUING, TOOL_WORDS } from '../toolwords.mjs';
+import { LOCAL_DIR } from '../state.mjs';
+import { packageVersion } from '../package-version.mjs';
+// Q55: read lazily (see commandVerbs). The registry imports the `decide`
+// command, which imports this module, so touching COMMANDS during module
+// evaluation would read an initialising binding on one of the two load
+// orders. Every use below happens at runtime, when both sides are loaded.
+import { COMMANDS } from '../commands/index.mjs';
 import { PARTIAL_CLAUSE, parseDecisionFrontmatter, splitFrontmatter } from '../memory/decide.mjs';
 import { affectsTokens } from '../index/govern.mjs';
 
@@ -82,7 +89,16 @@ export function redactInternalPaths(text) {
   return String(text ?? '').replace(internalPathPattern(), 'a file in this tool');
 }
 
-const ADR_IN_TEXT = /\bADR-(\d{3})\b/g;
+// Q55: four digits and more are real record numbers, not a typo. The old `\d{3}`
+// silently dropped every citation past ADR-999, and lexical sorting put ADR-1000
+// before ADR-999 in every listing that trusted string order.
+const ADR_IN_TEXT = /\bADR-(\d{3,})\b/g;
+
+/** Numeric sort for record ids: ADR-1000 follows ADR-999, not ADR-100. */
+function compareAdrIds(a, b) {
+  const num = (id) => Number(id.replace(/^ADR-/i, ''));
+  return num(a) - num(b) || (a < b ? -1 : a > b ? 1 : 0);
+}
 
 /**
  * A line that begins one of the record's other front-matter fields.
@@ -159,7 +175,7 @@ export function citations(text) {
   for (const match of String(text ?? '').matchAll(ADR_IN_TEXT)) {
     found.add(`ADR-${match[1]}`);
   }
-  return [...found].sort();
+  return [...found].sort(compareAdrIds);
 }
 
 /**
@@ -252,7 +268,11 @@ export function parseDecision(file, text, { all = false } = {}) {
 export async function loadDecisions({ all = false, dir = DECISIONS_DIR } = {}) {
   let names;
   try {
-    names = (await readdir(dir)).filter((n) => /^ADR-\d{3,}-.*\.md$/.test(n)).sort();
+    // Numeric, so the first record `byId` keeps under a duplicate is deterministic
+    // (lint flags the collision; the load does not guess between two files).
+    names = (await readdir(dir))
+      .filter((n) => /^ADR-\d{3,}-.*\.md$/i.test(n))
+      .sort((a, b) => compareAdrIds(adrIdOf(a) ?? a, adrIdOf(b) ?? b));
   } catch (error) {
     return { ok: false, decisions: [], errors: [`${dir}: unreadable (${error.message})`] };
   }
@@ -300,9 +320,70 @@ export async function loadDecisions({ all = false, dir = DECISIONS_DIR } = {}) {
   return { ok: errors.length === 0, decisions, errors };
 }
 
+/** The record id a filename claims, or null when it claims none. */
+function adrIdOf(file) {
+  return /^ADR-(\d{3,})/i.exec(file)?.[0]?.toUpperCase() ?? null;
+}
+
 /** Index by id, for a lookup per cited ADR. */
 export function byId(decisions) {
   return new Map(decisions.map((d) => [d.id, d]));
+}
+
+/** The command verbs a record may quote, derived from the dispatch registry. */
+export function decisionVerbs() {
+  return commandVerbs();
+}
+
+/** One file's cache identity: name, size and mtime. Any write changes one of them. */
+async function fileSignature(dir, name) {
+  const st = await stat(join(dir, name));
+  return { name, size: st.size, mtimeMs: st.mtimeMs };
+}
+
+/**
+ * Load the records, reusing a machine-local cache when the tree is unchanged.
+ *
+ * Every call used to re-parse every record (`rules why` 44 ms; part of
+ * `resources/list` 771 ms). The cache lives under `.simt/local/` — machine
+ * state, never committed — and is keyed on the directory, the `all` flag, the
+ * running version and one signature per file, so an edit, an add or an upgrade
+ * all miss honestly. Best-effort throughout: any cache failure loads fresh.
+ *
+ * @param {{root: string, dir: string, all?: boolean}} input `dir` is absolute;
+ *   callers resolve it with `decisionsDir(root)` (or the package directory for
+ *   shipped records) so this loader never guesses whose records these are.
+ */
+export async function loadDecisionsCached({ root, dir, all = false } = {}) {
+  const cachePath = root ? join(root, LOCAL_DIR, 'decisions.index.json') : null;
+  let files = null;
+  try {
+    const names = (await readdir(dir)).filter((n) => /^ADR-\d{3,}-.*\.md$/i.test(n));
+    files = [];
+    for (const name of names) files.push(await fileSignature(dir, name));
+    files.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  } catch {
+    return loadDecisions({ all, dir });
+  }
+  const key = { v: 1, tool: packageVersion(), dir, all, files };
+  if (cachePath) {
+    try {
+      const cached = JSON.parse(await readFile(cachePath, 'utf8'));
+      if (JSON.stringify(cached.key) === JSON.stringify(key)) return cached.result;
+    } catch {
+      // A missing or corrupt cache is a miss, never an error.
+    }
+  }
+  const fresh = await loadDecisions({ all, dir });
+  if (cachePath) {
+    try {
+      await mkdir(join(root, LOCAL_DIR), { recursive: true });
+      await writeFile(cachePath, JSON.stringify({ key, result: fresh }), 'utf8');
+    } catch {
+      // A read-only checkout keeps working uncached.
+    }
+  }
+  return fresh;
 }
 
 /**
@@ -545,8 +626,11 @@ const section = (name) => {
  * them - which is what this file used to do. Detection of those now depends on a name
  * never being written into shipped text, rather than on a check.
  */
-export const ESTATE_NAME =
-  /\b(?:simt-(?!dev\b)[\w-]+|repo-\d{2})\b/;
+// Q55: one shape, two flags. The estate-name pattern used to be written out twice
+// (`ESTATE_NAME` and `ESTATE`), so a shape fixed in one kept matching in the other.
+const ESTATE_SOURCE = '\\b(?:simt-(?!dev\\b)[\\w-]+|repo-\\d{2})\\b';
+
+export const ESTATE_NAME = new RegExp(ESTATE_SOURCE);
 
 /** Replace estate repository names with a phrase a reader who does not have them can use. */
 export function redactEstate(text) {
@@ -575,10 +659,24 @@ export function redactEstate(text) {
  * Only a real verb follows, which is what keeps `simt-dev.json`, `simt-dev-check.yml` and
  * `simt-dev's` untouched - those are the project's artefacts and the project keeps its name.
  */
-const VERB = '(?:init|doctor|check|sync|upgrade|ci|compare|hooks|agent-hook|agent-hooks|mcp|rules|skills|graph|tokens|harness|bench|shared|evidence|index|map|tests|why|gate|impact|lessons|decide|brief|plan|--[a-z-]+)';
+// Q55: the verbs a record may quote are the commands this binary dispatches,
+// not a hand list. The list used to miss `pack`, `plugin` and `lease`, so a record
+// quoting one read as prose instead of a runnable command.
+let verbAlternation = null;
+function commandVerbs() {
+  if (verbAlternation === null) {
+    const words = new Set();
+    for (const path of COMMANDS) {
+      const first = path.split(' ')[0];
+      if (first) words.add(first.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    }
+    verbAlternation = `(?:${[...words].sort().join('|')}|--[a-z-]+)`;
+  }
+  return verbAlternation;
+}
 
 function redactCommand(text) {
-  return String(text ?? '').replace(new RegExp(`\\bsimt-dev (?=${VERB})\\b`, 'g'), `${CLI} `);
+  return String(text ?? '').replace(new RegExp(`\\bsimt-dev (?=${commandVerbs()})\\b`, 'g'), `${CLI} `);
 }
 
 /**
@@ -590,7 +688,7 @@ function redactCommand(text) {
  * enumerating the names here put the portfolio in every adopting repository. The records
  * themselves now carry `repo-NN` labels, so that is what this matches in practice.
  */
-const ESTATE = /\b(?:simt-(?!dev\b)[\w-]+|repo-\d{2})\b/gi;
+const ESTATE = new RegExp(ESTATE_SOURCE, 'gi');
 
 /** Trim to whole sentences within a budget, never leaving a stub fragment. */
 function sentence(text, limit = 260) {

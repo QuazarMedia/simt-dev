@@ -32,7 +32,7 @@ import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { buildCacheRecord, hooksSummary, invalidateCheckCache, writeCheckCache } from '../status.mjs';
 import { computeLock, readLock } from '../projection/lock.mjs';
 import { runDeclaredChecks } from '../kernel/checks.mjs';
-import { DECISIONS_DIR } from '../decisions/index.mjs';
+import { decisionsCutoff, decisionsDir } from '../decisions/dir.mjs';
 import { lintDecisions } from '../memory/decide.mjs';
 
 /** Findings `sync` reports and does not fail on.
@@ -614,13 +614,15 @@ export async function checkRepo(root, opts = {}) {
   const { selected } = select(rules.filter((r) => r.error === null), fp.stack ?? [], fp.facts ?? []);
   findings.push(...(await runDeclaredChecks(root, selected, manifest ?? null)));
 
-  const decisionsDir = join(root, 'docs', 'decisions');
-  const decisionLint = await lintDecisions(decisionsDir, {
-    allowHistorical: resolve(decisionsDir) === DECISIONS_DIR,
+  // Q55: one resolution shared with `decide --check`, so the two commands
+  // cannot disagree about whose records these are or which are historical.
+  const relDecisionsDir = await decisionsDir(root);
+  const decisionLint = await lintDecisions(join(root, relDecisionsDir), {
+    historicalCutoff: await decisionsCutoff(root),
   });
   findings.push(
     ...decisionLint.findings.map((f) => ({
-      file: ['docs', 'decisions', f.file].join('/'),
+      file: [relDecisionsDir, f.file].join('/'),
       status: f.status,
       detail: f.detail,
       remedy: f.remedy,

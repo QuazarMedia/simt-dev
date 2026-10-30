@@ -21,6 +21,9 @@
     ]
   },
   "localSkills": [],
+  "decisions": {
+    "historicalCutoff": 96
+  },
   "profiles": [],
   "substitutions": {},
   "packs": [],

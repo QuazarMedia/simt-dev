@@ -48,9 +48,11 @@ test('citations: a body with no decision yields an empty list, not a guess', () 
   assert.deepEqual(citations('# Rules\n\nno decision here'), []);
 });
 
-test('citations: does not match a four-digit number as three', () => {
-  // ADR-0100 is not a record; matching its prefix would invent provenance.
-  assert.deepEqual(citations('ADR-0100 and ADR-01'), []);
+test('citations: a four-digit number is one record, never a three-digit prefix', () => {
+  // Review 0003 Q55: record numbers run past 999, so ADR-0100 is a record of its
+  // own. Matching its `010` prefix as ADR-010 would invent provenance; matching
+  // two digits at all would do the same for ADR-01.
+  assert.deepEqual(citations('ADR-0100 and ADR-01'), ['ADR-0100']);
 });
 
 // --- decision index -----------------------------------------------------------

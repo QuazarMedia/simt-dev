@@ -14,13 +14,14 @@
 // one, because "this rule has no decision behind it" is exactly the fact a
 // reviewer needs and exactly the fact an empty output would hide.
 
-import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { loadRules, select } from '../projection/project.mjs';
 import { loadMdcRules } from '../projection/mdc.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { byId, citations, loadDecisions, redactEstate } from '../decisions/index.mjs';
+import { byId, citations, loadDecisionsCached, redactEstate } from '../decisions/index.mjs';
+import { DECISIONS_DIR } from '../decisions/index.mjs';
+import { decisionsDir } from '../decisions/dir.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { CLI } from '../name.mjs';
 
@@ -176,14 +177,12 @@ function rulesFailure(message, remedy, exitCode) {
 }
 
 async function loadDecisionsFor(root, all) {
-  const localDir = root ? join(root, 'docs', 'decisions') : null;
-  const hasLocal = localDir
-    ? (await readdir(localDir).catch(() => [])).some((n) => /^ADR-\d{3,}-.*\.md$/i.test(n))
-    : false;
-  return loadDecisions({
-    all,
-    ...(hasLocal ? { dir: localDir } : {}),
-  });
+  // Q55: one resolution (manifest key, then detection) and the shared cache,
+  // so `rules why` answers from the repository's own records without re-parsing
+  // every record on every call. No root means the package's own records.
+  if (!root) return loadDecisionsCached({ root: null, dir: DECISIONS_DIR, all });
+  const relDir = await decisionsDir(root);
+  return loadDecisionsCached({ root, dir: join(root, relDir), all });
 }
 
 /** The catalogue both surfaces answer from: every rule, its decisions, and the selection. */

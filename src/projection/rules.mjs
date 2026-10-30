@@ -134,6 +134,10 @@ export async function provenanceInputs() {
 async function walk(dir, prefix = '') {
   const out = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
+    // A dotfile is machine noise (.DS_Store on macOS), not rule content: the digest
+    // must be stable across checkouts, and a fresh worktree does not carry the
+    // author's Finder metadata. Rule files are .md/.mdc, never dotfiles.
+    if (entry.name.startsWith('.')) continue;
     const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
     if (entry.isDirectory()) out.push(...(await walk(join(dir, entry.name), rel)));
     else if (entry.isFile()) out.push(rel);

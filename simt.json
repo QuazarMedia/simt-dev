@@ -9,7 +9,20 @@
     "coverage": null,
     "fileLines": {
       "warn": 400,
-      "error": 1000
+      "error": 1000,
+      "generated": [
+        "CHANGELOG.md",
+        "docs/plans/0003-intelligence-amplifier-research-plan.md",
+        "docs/reviews/0002-full-review-adoption-and-public-release.md",
+        "docs/reviews/0003-pre-plan-0004-review.md",
+        "graph/skills.graph.json",
+        "src/bench/run.mjs",
+        "src/memory/lessons.mjs",
+        "src/projection/rules.mjs",
+        "test/compare.test.mjs",
+        "test/hooks.test.mjs",
+        "test/init.test.mjs"
+      ]
     }
   },
   "gates": {

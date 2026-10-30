@@ -282,8 +282,11 @@ export async function mdcTargets(root, sha, manifest, flags) {
   // same `bodies` from the same call, so the region and the files cannot disagree.
   if (foldsRules(resolved) && !resolved.surfaces.some((s) => s.rule)) {
     if (bodies.length > 0) {
+      // An empty selection has no row to read the primary from; the document is the
+      // one the region lives in, which is the answer in every case this note fires.
+      const primary = resolved.surfaces[0]?.primary ?? 'AGENTS.md';
       notes.push(
-        `every rule is folded into ${resolved.surfaces[0].primary}; add a surface with its own rule path for a file per rule`,
+        `every rule is folded into ${primary}; add a surface with its own rule path for a file per rule`,
       );
     }
     return { targets, problems, notes };

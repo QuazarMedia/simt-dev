@@ -235,6 +235,42 @@ test('lint: reports a missing file rather than throwing', async () => {
   assert.match(errors[0], /unreadable|invalid JSON/);
 });
 
+test('registry: --registry flag and SIMT_REGISTRY name the file (Q37)', async () => {
+  // Outside the estate no registry resolves by default, so the reader must be
+  // able to name one. The order is the flag, then the environment, then the
+  // default tiers.
+  const dir = await mkdtemp(join(tmpdir(), 'simt-reg-'));
+  try {
+    const reg = join(dir, 'registry.json');
+    await writeFile(reg, REGISTRY);
+    const flagged = await loadRegistry(null, { registry: reg });
+    assert.equal(flagged.ok, true, flagged.errors.join('\n'));
+    assert.equal(flagged.path, reg);
+
+    const prev = process.env.SIMT_REGISTRY;
+    process.env.SIMT_REGISTRY = reg;
+    try {
+      const fromEnv = await loadRegistry(null, {});
+      assert.equal(fromEnv.ok, true, fromEnv.errors.join('\n'));
+      assert.equal(fromEnv.path, reg);
+
+      const other = join(dir, 'other.json');
+      await writeFile(other, REGISTRY);
+      const flagWins = await loadRegistry(null, { registry: other });
+      assert.equal(flagWins.path, other, 'the flag beats the environment');
+    } finally {
+      if (prev === undefined) delete process.env.SIMT_REGISTRY;
+      else process.env.SIMT_REGISTRY = prev;
+    }
+
+    const missing = await loadRegistry(null, { registry: join(dir, 'absent.json') });
+    assert.equal(missing.ok, false);
+    assert.match(missing.errors[0], /absent\.json/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('CLI: the default lint runs no spec pass and stays honest about it (Q35)', async () => {
   // The spec pass used to run without `--spec`: 37 warnings for a pass the
   // payload claimed never ran (`spec: null`).

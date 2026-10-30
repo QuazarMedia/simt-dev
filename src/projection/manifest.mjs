@@ -728,6 +728,23 @@ export function declaredShared(manifest) {
 
 export const GENERATED_KEYS = new Set(['$comment', 'projection']);
 
+// The sub-keys of `projection` this tool writes. `projection` is a generated key, but
+// not wholesale: the repository owns sub-keys this writer does not emit (`place` is the
+// one that shipped), and a repair that replaces the object deletes them (review 0003 Q26).
+export const PROJECTION_KEYS = new Set(['simtDevSha', 'version']);
+
+/** The `projection` object a manifest carries; anything that is not an object is nothing. */
+function projectionOf(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+/** Only the generated sub-keys of a `projection` object, in the order this writer emits them. */
+function generatedProjection(value) {
+  const out = {};
+  for (const key of PROJECTION_KEYS) if (key in projectionOf(value)) out[key] = value[key];
+  return out;
+}
+
 /**
  * A manifest with this tool's own fields replaced by what this build writes, and
  * nothing else touched.
@@ -738,13 +755,22 @@ export const GENERATED_KEYS = new Set(['$comment', 'projection']);
  * repo chose is never compared" is a promise about the repair too, not only about
  * the report, and a repair is exactly where it would be broken.
  *
+ * `projection` merges the same way, one level down: the object the repository has
+ * keeps every sub-key it chose, and the generated sub-keys take this build's values.
+ *
  * @param {object} manifest the repository's manifest, as parsed
  * @param {object} expected `buildManifest`'s output, from the call `manifestDrift` made
  * @returns {object} a new manifest; the argument is not mutated
  */
 export function withGenerated(manifest, expected) {
   const patched = { ...manifest };
-  for (const key of GENERATED_KEYS) if (key in expected) patched[key] = expected[key];
+  for (const key of GENERATED_KEYS) {
+    if (!(key in expected)) continue;
+    patched[key] =
+      key === 'projection'
+        ? { ...projectionOf(manifest?.projection), ...expected.projection }
+        : expected[key];
+  }
   return patched;
 }
 
@@ -787,9 +813,14 @@ export async function manifestDrift(root, stack, sha) {
   // `[...GENERATED_KEYS]`, and not `Object.keys(expected)`: the question is which
   // fields are ours, and the answer is the set above. Iterating the expected object
   // asks the same question of a different list and can only agree by coincidence.
-  const stale = [...GENERATED_KEYS].filter(
-    (key) => key in expected && JSON.stringify(manifest[key]) !== JSON.stringify(expected[key]),
-  );
+  const stale = [...GENERATED_KEYS].filter((key) => {
+    if (!(key in expected)) return false;
+    // `projection` compares on the sub-keys this tool writes: a sub-key the repo
+    // chose (`place`) is not a stale field, and reporting it is what made `sync`
+    // delete the one setting that was not stale (review 0003 Q26).
+    const actual = key === 'projection' ? generatedProjection(manifest[key]) : manifest[key];
+    return JSON.stringify(actual) !== JSON.stringify(expected[key]);
+  });
   if (stale.length > 0) {
     return {
       file: MANIFEST,

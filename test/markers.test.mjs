@@ -419,3 +419,38 @@ test('markers: the hash dialect reads legacy and writes new', () => {
   assert.doesNotMatch(result.text, /simt-dev:/);
   assert.equal(inject(result.text, 'OLD', { sha: 'abc1234' }, { style: 'hash' }).action, 'unchanged');
 });
+
+// `where: 'top'` puts the region above the file's own settings, so a region that has
+// been moved below them is drift even when every body byte matches. Position is the
+// test there: the seam between region and text is a repair artifact under top
+// placement, and comparing it would report the file that needs the move as settled
+// (review 0003 Q26).
+test('a top-placed region below the settings is drift, and the repair moves it back', () => {
+  const atBottom = `${HAND}\n${compose('the body', { sha: 'abc1234' })}`;
+  const moved = inject(atBottom, 'the body', { sha: 'abc1234' }, { where: 'top' });
+  assert.equal(moved.action, 'updated', 'a region below the settings is drift under top placement');
+  assert.ok(moved.text.startsWith(BEGIN), 'the region must land above the hand-written text');
+  assert.match(moved.text, /Hand-written guidance that must survive\./, 'the settings survive the move');
+
+  // The repair settles: a region already at the top with a matching body is unchanged,
+  // so running sync twice is a no-op.
+  const again = inject(moved.text, 'the body', { sha: 'abc1234' }, { where: 'top' });
+  assert.equal(again.action, 'unchanged');
+  assert.equal(again.text, moved.text);
+
+  // `diff` is what `check` reads; it must see the same drift and settle the same way.
+  assert.equal(diff(atBottom, 'the body', { sha: 'abc1234' }, { where: 'top' }).action, 'updated');
+  assert.equal(diff(moved.text, 'the body', { sha: 'abc1234' }, { where: 'top' }).action, 'unchanged');
+});
+
+test('top placement adds an absent region above the settings', () => {
+  const result = inject(HAND, 'the body', { sha: 'abc1234' }, { where: 'top' });
+  assert.equal(result.action, 'added');
+  assert.ok(result.text.startsWith(BEGIN));
+  assert.match(result.text, /Hand-written guidance that must survive\./);
+  assert.equal(
+    inject(result.text, 'the body', { sha: 'abc1234' }, { where: 'top' }).action,
+    'unchanged',
+    'and it settles there',
+  );
+});

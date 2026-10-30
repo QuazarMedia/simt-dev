@@ -72,7 +72,7 @@ function regionVerdict(action) {
 export async function plan(root, flags = {}) {
   const desired = await desiredRegion(root, flags);
   const { stack, facts, profiles, fallback, notes, body, meta, all, manifest } = desired;
-  const target = await targetFor(root, body, meta);
+  const target = await targetFor(root, root, body, meta);
 
   // Per-rule content projects to every editor the repo selected, not only Cursor. The
   // body is identical on each; only the frontmatter the editor reads before any rule
@@ -104,7 +104,7 @@ export async function plan(root, flags = {}) {
   // root's would read as though the packages were the repository.
   const packages = await packageRegions(root, flags, profiles);
   const nested = await Promise.all(
-    packages.regions.map((r) => targetFor(join(root, r.path), r.body, r.meta, `${r.path}/${PRIMARY_TARGET}`)),
+    packages.regions.map((r) => targetFor(root, join(root, r.path), r.body, r.meta, `${r.path}/${PRIMARY_TARGET}`)),
   );
 
   return {
@@ -124,8 +124,17 @@ export async function plan(root, flags = {}) {
   };
 }
 
-async function targetFor(root, body, meta, label = PRIMARY_TARGET) {
-  const path = join(root, PRIMARY_TARGET);
+/**
+ * Build the write target for one AGENTS.md. `root` is the repository: `regionOpts`
+ * reads its manifest, because placement is a repository-level decision that holds for
+ * every package's region too. `dir` is where the file lives, which differs from
+ * `root` only for a nested monorepo package (review 0003 Q26).
+ *
+ * @param {string} root repo root
+ * @param {string} dir directory the target file lives in
+ */
+async function targetFor(root, dir, body, meta, label = PRIMARY_TARGET) {
+  const path = join(dir, PRIMARY_TARGET);
   let existing = '';
   let exists = true;
   try {

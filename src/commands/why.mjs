@@ -13,6 +13,7 @@ import { promisify } from 'node:util';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { FORMATTABLE, GATES } from '../hooks/gates.mjs';
+import { decisionsDir } from '../decisions/dir.mjs';
 import {
   decisionHits,
   scopeHits,
@@ -81,10 +82,13 @@ export async function tracked(root) {
 }
 
 export async function decisionRecords(root) {
-  const dir = join(root, 'docs', 'decisions');
+  // Q55: the repository's own records, wherever it keeps them — not a hard-coded path.
+  const dir = join(root, await decisionsDir(root));
   let names = [];
   try {
-    names = (await readdir(dir)).filter((name) => /^ADR-\d{3,}-.*\.md$/i.test(name)).sort();
+    names = (await readdir(dir))
+      .filter((name) => /^ADR-\d{3,}-.*\.md$/i.test(name))
+      .sort((a, b) => Number(/^ADR-(\d{3,})/i.exec(a)[1]) - Number(/^ADR-(\d{3,})/i.exec(b)[1]));
   } catch {
     return [];
   }

@@ -84,6 +84,21 @@ async function readOrNull(path) {
   }
 }
 
+/**
+ * Record a file the run created with an exclusive create (`O_EXCL`).
+ *
+ * The create itself is the proof nothing was there before, so `before` is
+ * null by construction rather than by re-reading: a check-then-record would
+ * reopen the race the exclusive flag just closed. For ordinary overwrites use
+ * `journaledWriteFile`, which snapshots `before` itself.
+ */
+export function recordCreatedFile(root, acc, path, text) {
+  if (relative(root, path).startsWith('..')) {
+    throw new Error(`journal refuses a write outside the repository: ${path}`);
+  }
+  acc.push(fileEntry(rel(root, path), null, Buffer.from(text, 'utf8')));
+}
+
 /** A `file` entry: the pre-run bytes as base64 (binary-safe, unlike the
  * version-1 utf8 spelling) with the pre-run permission bits, so `undo`
  * restores both. Removals carry `afterDigest: null` and are re-created. */

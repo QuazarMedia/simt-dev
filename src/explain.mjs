@@ -117,6 +117,12 @@ export const EXPLAIN_CODES = {
     fix: 'Fix the simt-supersedes entry to [{ adr: "ADR-NNN", ruling: N }], with a real record and ruling number.',
     example: 'simt-supersedes: [{ adr: "ADR-999", ruling: 1 }] when no ADR-999 exists.',
   },
+  'duplicate-decision-id': {
+    what: 'Two decision records claim one number: the index only sees the first, so the second is a record no provenance answer can reach.',
+    why: 'Review 0003 Q55: byId keeps one silently, and a reader of the other gets a decision the tooling cannot resolve. Failing names both files while the collision is still a rename, not a rewrite of history.',
+    fix: 'Renumber the newer record to a free number, then rerun the check.',
+    example: 'ADR-002-first.md and ADR-002-second.md: DUPLICATE-DECISION-ID names both.',
+  },
   'lock-absent': {
     what: 'No lock is recorded: the projection was never locked, so there is nothing `--frozen` can compare against.',
     why: 'ADR-086: the lock is the byte-identical contract across machines, and `--frozen` without one would compare the projection against nothing and call it current. Reported only under --frozen, because a repository that never locked is not drift.',
@@ -242,6 +248,12 @@ export const EXPLAIN_CODES = {
     why: 'A check that is wrong about existence is worse than one that crashes: only ENOENT is absence, and every other failure is reported with its own code rather than folded into "missing". The gate refuses rather than passing a repository it never inspected.',
     fix: 'Read the detail (it carries the OS error): fix permissions, remove the broken link, then re-run.',
     example: 'AGENTS.md unreadable (EACCES): UNREADABLE with the errno, not ABSENT.',
+  },
+  unresolvable: {
+    what: 'The checked-in gate workflow cannot resolve simt-dev by any path its locator tries: no pinned devDependency, no release binary, no simt on PATH.',
+    why: 'Review 0003 Q31: a green tick from a check that never ran is the one outcome worse than a red one. The workflow installs whatever the repo pins, so a repo that pins nothing gates nothing — reported here instead of failing open in CI.',
+    fix: 'Run the install the finding names (the repo manager\u2019s add-dev command) so CI restores the pinned dependency.',
+    example: 'A pnpm repo whose workflow says npm ci with no simt-dev dependency: UNRESOLVABLE names pnpm add -D.',
   },
   unrunnable: {
     what: 'A declared gate cannot run here: the command it needs is not on PATH, or its runner is missing.',

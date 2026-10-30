@@ -2,10 +2,10 @@
 // a rulings skeleton, and structured `simt-affects` + `simt-supersedes` frontmatter
 // (plan 0003 R34).
 
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { DECISIONS_DIR } from '../decisions/index.mjs';
+import { decisionsCutoff, decisionsDir } from '../decisions/dir.mjs';
 import { lintDecisions, scaffoldDecision } from '../memory/decide.mjs';
 import { commitJournal } from '../journal.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
@@ -15,9 +15,10 @@ export async function decideCommand(args, flags) {
   const root = flags.root ?? process.cwd();
 
   if (flags.check === true) {
-    const decisionsDir = join(root, 'docs', 'decisions');
-    const allowHistorical = resolve(decisionsDir) === DECISIONS_DIR;
-    const res = await lintDecisions(decisionsDir, { allowHistorical });
+    // Q55: one resolution — the manifest key, then the detected directory —
+    // and the cutoff from the same config, never a hard-coded number or path.
+    const relDir = await decisionsDir(root);
+    const res = await lintDecisions(join(root, relDir), { historicalCutoff: await decisionsCutoff(root) });
 
     if (isJson(flags)) {
       emitJson({

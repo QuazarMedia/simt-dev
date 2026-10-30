@@ -21,10 +21,9 @@ import { readLedger, treeId } from './ledger/index.mjs';
 import { readCheckCache } from './status.mjs';
 import { readManifest } from './projection/manifest.mjs';
 import { splitFrontmatter } from './memory/decide.mjs';
+import { decisionsDir } from './decisions/dir.mjs';
 
 const exec = promisify(execFile);
-
-const DECISIONS_DIR = join('docs', 'decisions');
 
 /**
  * The ref the body diffs against: the override when given, else the first
@@ -98,15 +97,18 @@ async function changedPaths(root, base) {
  * reported with what it has rather than dropping the row.
  */
 async function changedDecisions(root, paths) {
-  const names = paths.filter((p) => p.startsWith(`${DECISIONS_DIR}/`) && p.toLowerCase().endsWith('.md'));
+  // Q55: the prefix is the repository's own decisions directory, not a literal.
+  const relDir = await decisionsDir(root);
+  const absDir = join(root, relDir);
+  const names = paths.filter((p) => p.startsWith(`${relDir}/`) && p.toLowerCase().endsWith('.md'));
   try {
-    await readdir(join(root, DECISIONS_DIR));
+    await readdir(absDir);
   } catch {
     return [];
   }
   const out = [];
   for (const name of names.sort()) {
-    const id = /^ADR-\d{3,}/i.exec(name.slice(DECISIONS_DIR.length + 1))?.[0].toUpperCase() ?? name;
+    const id = /^ADR-\d{3,}/i.exec(name.slice(relDir.length + 1))?.[0].toUpperCase() ?? name;
     let title = id;
     let status = 'unknown';
     try {

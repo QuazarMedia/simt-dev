@@ -7,7 +7,8 @@ import { execFile } from 'node:child_process';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { journaledWriteFile } from '../journal.mjs';
+import { recordCreatedFile } from '../journal.mjs';
+import { decisionsDir } from '../decisions/dir.mjs';
 
 const exec = promisify(execFile);
 
@@ -336,15 +337,19 @@ function renderDecisionScaffold({
   ].join('\n');
 }
 
-/** Scaffold a new ADR in `<root>/docs/decisions` with structured frontmatter. */
+/**
+ * Scaffold a new ADR in the repository's decisions directory with structured frontmatter.
+ *
+ * The number is claimed with `O_EXCL`: two concurrent scaffolds that both read
+ * the same maximum must not land on the same number, and a check-then-write
+ * would let the second silently overwrite the first. On collision the number is
+ * re-read and the next free one taken, so the retry always terminates.
+ */
 export async function scaffoldDecision(root, options = {}) {
-  const decisionsDir = options.decisionsDir ?? join(root, 'docs', 'decisions');
-  const { number, id } = await nextDecisionNumber(decisionsDir);
+  const relDir = options.decisionsDir ?? (await decisionsDir(root));
+  const absDir = join(root, relDir);
   const title = String(options.title ?? 'Untitled decision').trim() || 'Untitled decision';
   const slug = slugifyTitle(title);
-  const file = `${id}-${slug}.md`;
-  const relPath = ['docs', 'decisions', file].join('/');
-  const fullPath = join(decisionsDir, file);
   const affects = Array.isArray(options.affects)
     ? options.affects.map((p) => String(p).trim()).filter(Boolean)
     : await diffAffectedPaths(root);
@@ -352,38 +357,58 @@ export async function scaffoldDecision(root, options = {}) {
   const { entries: supersedes, errors } = parseSupersedesSpec(options.supersedes);
   if (errors.length > 0) return { ok: false, errors };
 
-  const text = renderDecisionScaffold({
-    id,
-    title,
-    date: options.date,
-    status: options.status,
-    affects,
-    supersedes,
-  });
-
-  // A caller-supplied journal records the scaffold so `undo` can restore it
-  // (R49). Callers without one (probes, tests staging fixtures) keep the old
-  // behaviour exactly.
-  if (options.write) {
-    await mkdir(decisionsDir, { recursive: true });
-    if (options.journal) await journaledWriteFile(root, options.journal, fullPath, text);
-    else await writeFile(fullPath, text, 'utf8');
+  // A dry run names the number without claiming it: the file must not exist
+  // afterwards, so no exclusive create happens here.
+  if (!options.write) {
+    const { number, id } = await nextDecisionNumber(absDir);
+    const file = `${id}-${slug}.md`;
+    return {
+      ok: true,
+      id,
+      number,
+      title,
+      slug,
+      file,
+      relPath: [relDir, file].join('/'),
+      path: join(absDir, file),
+      affects,
+      supersedes,
+      text: renderDecisionScaffold({ id, title, date: options.date, status: options.status, affects, supersedes }),
+      written: false,
+    };
   }
 
-  return {
-    ok: true,
-    id,
-    number,
-    title,
-    slug,
-    file,
-    relPath,
-    path: fullPath,
-    affects,
-    supersedes,
-    text,
-    written: Boolean(options.write),
-  };
+  await mkdir(absDir, { recursive: true });
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const { number, id } = await nextDecisionNumber(absDir);
+    const file = `${id}-${slug}.md`;
+    const fullPath = join(absDir, file);
+    const text = renderDecisionScaffold({ id, title, date: options.date, status: options.status, affects, supersedes });
+    try {
+      await writeFile(fullPath, text, { flag: 'wx' });
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      continue;
+    }
+    // The exclusive create is the journal entry's `before: null`: the file did
+    // not exist a moment ago, by construction rather than by re-reading.
+    if (options.journal) recordCreatedFile(root, options.journal, fullPath, text);
+    return {
+      ok: true,
+      id,
+      number,
+      title,
+      slug,
+      file,
+      relPath: [relDir, file].join('/'),
+      path: fullPath,
+      affects,
+      supersedes,
+      text,
+      written: true,
+    };
+  }
+  return { ok: false, errors: ['could not claim a free ADR number after 100 attempts'] };
 }
 
 /** Extract partial supersession claims stated in prose (`Status:` and header paragraphs). */
@@ -415,8 +440,15 @@ function prosePartialSupersessions(body) {
   return claims;
 }
 
-/** Lint a single ADR document for structured supersession conformance (plan 0003 R34). */
-export function lintDecision(text, { file = 'ADR-000.md', allowHistorical = false } = {}) {
+/**
+ * Lint a single ADR document for structured supersession conformance (plan 0003 R34).
+ *
+ * `historicalCutoff` exempts the first N records from the frontmatter requirement:
+ * they predate it, and demanding it retroactively would fail a history nobody can
+ * rewrite without rewriting history. Q55: the number lives in the repository's
+ * config (`decisions.historicalCutoff`, resolved by the caller), never in code.
+ */
+export function lintDecision(text, { file = 'ADR-000.md', historicalCutoff = 0 } = {}) {
   const fileMatch = file !== 'ADR-000.md' ? /^(ADR-\d{3,})/i.exec(file) : null;
   const headMatch = /^#\s+(ADR-\d{3,})\b/m.exec(String(text ?? ''));
   const id = (fileMatch?.[1] ?? headMatch?.[1] ?? /^(ADR-\d{3,})/i.exec(file)?.[1] ?? '').toUpperCase() || null;
@@ -432,7 +464,7 @@ export function lintDecision(text, { file = 'ADR-000.md', allowHistorical = fals
     remedy: 'fix simt-supersedes frontmatter to use [{ adr: "ADR-NNN", ruling: N }]',
   }));
 
-  if (allowHistorical && !fm.hasFrontmatter && num !== null && num > 0 && num <= 96) {
+  if (!fm.hasFrontmatter && num !== null && num > 0 && num <= historicalCutoff) {
     return { ok: findings.length === 0, findings };
   }
 
@@ -455,13 +487,36 @@ export function lintDecision(text, { file = 'ADR-000.md', allowHistorical = fals
   return { ok: findings.length === 0, findings };
 }
 
-/** Lint all ADR records in a decisions directory. */
-export async function lintDecisions(decisionsDir, { allowHistorical = false } = {}) {
+/**
+ * Lint all ADR records in a decisions directory.
+ *
+ * Duplicate ids are a lint finding, not a silent keep-first: two files claiming
+ * one number means `byId` answers for only one of them, and the reader of the
+ * other gets a record the index cannot see. The kept record is the first in
+ * numeric filename order — the same one the loader keeps — so lint and load
+ * never name different winners.
+ */
+export async function lintDecisions(decisionsDir, { historicalCutoff = 0 } = {}) {
   const names = (await readdir(decisionsDir).catch(() => [])).filter((n) => /^ADR-\d{3,}-.*\.md$/i.test(n)).sort();
   const findings = [];
+  const seen = new Map();
   for (const file of names) {
+    const id = /^(ADR-\d{3,})/i.exec(file)?.[1]?.toUpperCase() ?? null;
+    if (id !== null) {
+      if (seen.has(id)) {
+        findings.push({
+          file,
+          id,
+          status: 'duplicate-decision-id',
+          detail: `decision id ${id} is claimed by ${seen.get(id)} and ${file}; the index only sees the first`,
+          remedy: 'renumber the newer record to a free number, then rerun the check',
+        });
+        continue;
+      }
+      seen.set(id, file);
+    }
     const text = await readFile(join(decisionsDir, file), 'utf8');
-    findings.push(...lintDecision(text, { file, allowHistorical }).findings);
+    findings.push(...lintDecision(text, { file, historicalCutoff }).findings);
   }
   return { ok: findings.length === 0, findings };
 }

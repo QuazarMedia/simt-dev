@@ -180,6 +180,11 @@ const FACTS = [
   { name: 'has-mix', kind: 'file', paths: ['mix.exs'] },
   { name: 'has-deno-config', kind: 'file', paths: ['deno.json', 'deno.jsonc'] },
   { name: 'has-bun-lock', kind: 'file', paths: ['bun.lock', 'bun.lockb'] },
+  // Q31: one fact per Node lockfile, so the runner resolver, the card, the gate
+  // seeds and CI all read the same committed evidence instead of assuming npm.
+  { name: 'has-pnpm-lock', kind: 'file', paths: ['pnpm-lock.yaml'] },
+  { name: 'has-yarn-lock', kind: 'file', paths: ['yarn.lock'] },
+  { name: 'has-package-lock', kind: 'file', paths: ['package-lock.json'] },
   // A glob walk skips dot directories, and `.devcontainer` is one. Stat the path.
   { name: 'has-devcontainer', kind: 'path', paths: ['.devcontainer/devcontainer.json'] },
 ];

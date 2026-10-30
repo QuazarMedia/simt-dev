@@ -22,6 +22,7 @@ import { constants as fsConstants } from 'node:fs';
 import { access, readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ECOSYSTEMS, manifestPath } from '../projection/manifest.mjs';
+import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 
 /** Binaries the shared dispatcher shells out to directly, rather than via a script. */
 const BIN_DIR = join('node_modules', '.bin');
@@ -104,10 +105,22 @@ async function probeTool(root, eco) {
 export async function readCapability(root) {
   const capability = { scripts: {}, binaries: [], commands: {}, tools: [], runner: null, error: null };
 
+  // Q31: a package.json names a Node repo, but not which manager it installs
+  // with. The lockfile on disk wins over the `packageManager` field (the field
+  // can disagree; `checkToolchain` reports that), and the field wins over the
+  // npm default — so a `packageManager: pnpm@9` repo resolves pnpm before its
+  // first install, and every consumer below reads the same answer.
+  let packageManager = null;
   try {
     const manifest = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
     capability.scripts = manifest.scripts ?? {};
-    capability.runner = 'npm';
+    packageManager = typeof manifest.packageManager === 'string' ? manifest.packageManager : null;
+    const lockfiles = [];
+    for (const file of ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json']) {
+      if (await fileExists(join(root, file))) lockfiles.push(file);
+    }
+    capability.runner = resolveNodeRunner({ lockfiles, packageManager }).id;
+    capability.packageManager = packageManager;
   } catch (error) {
     // A repo with no manifest is a normal shape — a Python or Gradle repo has no
     // package.json at all — so this is reported, never thrown. The gate filter treats

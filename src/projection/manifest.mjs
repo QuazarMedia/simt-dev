@@ -24,6 +24,9 @@ import { journaledWriteFile } from '../journal.mjs';
 // answers to "can this repo run that gate", which is precisely the kind of drift this
 // file exists to prevent elsewhere.
 import { getGate } from '../hooks/gates.mjs';
+// Q31: the one Node runner table. This module and the card, capability,
+// dispatcher and CI workflow all spell `<manager> run <script>` from it.
+import { runScript } from '../ecosystem/node-runner.mjs';
 
 // Imported as well as re-exported: a bare `export { X as Y } from` binds nothing here,
 // and the manifest name is used a dozen times below in remedy strings that name this
@@ -201,7 +204,7 @@ export const ECOSYSTEMS = [
  * fail closed — the defect is declaring a gate this repo has no way to run.
  *
  * The check mirrors what the dispatcher actually attempts:
- *   - `script` gates  run `npm run <script>`, so the script must exist
+ *   - `script` gates  run `<manager> run <script>`, so the script must exist
  *   - `staged` gates  look for each named tool in `node_modules/.bin`, so it must be
  *     installed, not merely declared as a dependency
  *   - `command` gates run whatever the manifest's `gates.commands` declares, so a
@@ -237,13 +240,16 @@ export function gateRunnable(gate, capability = {}) {
   }
   if (gate.kind === 'script') {
     const script = gate.script ?? gate.name;
-    if (capability.scripts?.[script]) return { runnable: true, why: `runs: npm run ${script}` };
+    // Q31: the runnable sentence names the repo's own runner, never a bare npm
+    // assumption — the card, the dispatcher and this check read one resolver.
+    const spell = runScript(capability.runner ?? 'npm', script);
+    if (capability.scripts?.[script]) return { runnable: true, why: `runs: ${spell}` };
     // Saying "no script in package.json" about a repo with no package.json states a
     // fact about a file that does not exist and implies a fix that cannot be taken.
     return {
       runnable: false,
       why: foreign
-        ? `this repo runs ${runnerName(capability.runner)}, not npm, so "npm run ${script}" cannot run here`
+        ? `this repo runs ${runnerName(capability.runner)}, not npm, so "${spell}" cannot run here`
         : `no "${script}" script in package.json`,
     };
   }
@@ -277,11 +283,17 @@ function gateRemedy(gate, { existing = false, runner = null } = {}) {
   const name = gate?.name ?? 'the gate';
   const npmShaped = gate?.kind === 'staged' || gate?.kind === 'script';
   const foreign = isForeignRunner(runner);
+  // Q31: a missing tool in a Node repo names the repo's own installer —
+  // `pnpm add -D`, not `npm i -D` — and anything elsewhere keeps the honest
+  // undo: name the program under `gates.commands`.
+  const addDev = { npm: 'npm i -D', pnpm: 'pnpm add -D', yarn: 'yarn add -D', bun: 'bun add -d' }[runner] ?? null;
   const fix =
     npmShaped && foreign
       ? `this repo runs ${runnerName(runner)}, not npm; name the program under "gates.commands" in ${MANIFEST_FILE} instead of the npm equivalent`
       : gate?.kind === 'staged'
-        ? `install ${gate.tools.join(', ')} as a dev dependency`
+        ? addDev
+          ? `install ${gate.tools.join(', ')} as a dev dependency: ${addDev} ${gate.tools.join(' ')}   (the gate runs from the pinned dependency)`
+          : `install ${gate.tools.join(', ')} as a dev dependency`
         : gate?.kind === 'script'
           ? `add a "${gate.script ?? name}" script to package.json`
           : gate?.kind === 'command'
@@ -302,11 +314,14 @@ function gateRemedy(gate, { existing = false, runner = null } = {}) {
 /**
  * Is this runner one where `npm run` is not how a gate is spelled?
  *
- * `undefined` means "the caller did not report a runner", and `npm` means the npm
- * remedy applies. Only a positively identified other ecosystem changes the wording.
+ * `undefined` means "the caller did not report a runner", and every Node manager
+ * (`npm`, `pnpm`, `yarn`, `bun`) spells gates as `<manager> run <script>` with
+ * scripts living in the same `package.json`. Only a positively identified
+ * non-Node runner changes the wording. (Q31: pnpm is Node-shaped, not foreign.)
  */
 function isForeignRunner(runner) {
-  return runner != null && runner !== 'npm';
+  if (runner == null) return false;
+  return !['npm', 'pnpm', 'yarn', 'bun'].includes(runner);
 }
 
 /** How a reader would name the runner in a sentence. */
@@ -316,6 +331,9 @@ function runnerName(runner) {
       none: 'no recognised runner',
       gradle: 'Gradle',
       python: 'Python',
+      npm: 'npm',
+      pnpm: 'pnpm',
+      yarn: 'yarn',
       bun: 'bun',
       cargo: 'Cargo',
       go: 'Go',
@@ -383,14 +401,15 @@ export function planGates(stack = [], capability = null, facts = []) {
  */
 function ecosystemCommands(facts = [], capability = null) {
   if (!capability?.tools?.length) return {};
-  // An npm runner already answers "how do I test and format" with its own package.json
-  // scripts, and a seed only wins over those scripts when the repo has not declared a
-  // command of its own — which is exactly the mixed repos (package.json AND Cargo.toml)
-  // where the script is the deliberate answer. Seeding there would replace a choice with
-  // a default; the reader's escape hatch is declaring gates.commands by hand, which a
-  // seed would lose to anyway. Pure ecosystem repos have runner 'cargo'/'go'/... and
-  // seed normally.
-  if (capability.runner === 'npm') return {};
+  // A Node runner (npm/pnpm/yarn/bun) already answers "how do I test and format"
+  // with its own package.json scripts, and a seed only wins over those scripts when
+  // the repo has not declared a command of its own — which is exactly the mixed
+  // repos (package.json AND Cargo.toml) where the script is the deliberate answer.
+  // Seeding there would replace a choice with a default; the reader's escape hatch
+  // is declaring gates.commands by hand, which a seed would lose to anyway. Pure
+  // ecosystem repos have runner 'cargo'/'go'/... and seed normally.
+  // Q31: every Node manager skips seeding — pnpm is not "foreign", it is Node.
+  if (['npm', 'pnpm', 'yarn', 'bun'].includes(capability.runner)) return {};
   const present = new Set(facts);
   const commands = {};
   for (const eco of ECOSYSTEMS) {

@@ -52,6 +52,8 @@ import { reindex, SQLITE_FILE } from '../index/store.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
+import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
+import { PACKAGE_NAME } from '../name.mjs';
 
 const run = promisify(execFile);
 
@@ -72,6 +74,20 @@ export async function initCommand(positional, flags) {
   // a repository without node_modules obtains the binary in CI.
   const version = packageVersion();
   const npm = await hasNpm(root);
+  // Q31: the CI install step and the plan row that names it read the same
+  // resolver as the card and the gates — lockfile first, `packageManager` next.
+  // `manager` is the Node manager id or null (no package.json: binary channel).
+  let manager = null;
+  if (npm) {
+    let packageManager = null;
+    try {
+      const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+      if (typeof pkg.packageManager === 'string') packageManager = pkg.packageManager;
+    } catch {
+      // Unreadable here is reported by the manifest path; the default stays npm.
+    }
+    manager = resolveNodeRunner({ facts: detected.facts, packageManager }).id;
+  }
   const existing = await readManifest(root);
   const { manifest: current, exists, error } = existing;
   if (error) {
@@ -305,7 +321,7 @@ export async function initCommand(positional, flags) {
     if (isJson(flags)) {
       emitJson(payload);
     } else {
-      emit(render(payload, manifest, { npm, version }));
+      emit(render(payload, manifest, { npm, manager, version }));
       note('');
       note(
         `blocked  ${summary.conflicts} conflict${summary.conflicts === 1 ? '' : 's'}; nothing written`,
@@ -326,7 +342,7 @@ export async function initCommand(positional, flags) {
     payload.ok = false;
     payload.blockedBy = 'malformed-region';
     if (isJson(flags)) emitJson(payload);
-    else emit(render(payload, manifest, { npm, version }));
+    else emit(render(payload, manifest, { npm, manager, version }));
     return fail(
       `${malformed.length} target(s) have a malformed generated region (${malformed[0].file}: ${malformed[0].reason})`,
       EXIT.FAIL,
@@ -366,7 +382,7 @@ export async function initCommand(positional, flags) {
       diffs.push({
         path: payload.ci.file,
         before: await readBefore(join(root, payload.ci.file)),
-        after: renderWorkflow({ own: payload.ci.own, npm, version }),
+        after: renderWorkflow({ own: payload.ci.own, npm, manager, version }),
       });
     }
     if (payload.dependabot.action === 'create') {
@@ -394,7 +410,7 @@ export async function initCommand(positional, flags) {
   if (isJson(flags)) {
     if (!apply) emitJson(payload);
   } else {
-    emit(render(payload, manifest, { npm, version }));
+    emit(render(payload, manifest, { npm, manager, version }));
     // After the report: the report says what, the diff shows it (R50).
     emitDiffs(diffs, flags);
   }
@@ -491,7 +507,7 @@ export async function initCommand(positional, flags) {
   // guaranteed to be misled.
   if (payload.ci.action === 'create') {
     await mkdir(dirname(join(root, payload.ci.file)), { recursive: true });
-    await journaledWriteFile(root, journal, join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own, npm, version }));
+    await journaledWriteFile(root, journal, join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own, npm, manager, version }));
     note(`wrote    ${payload.ci.file} (create; yours to edit from here, simt-dev will not rewrite it)`);
   }
   if (payload.dependabot.action === 'create') {
@@ -685,7 +701,7 @@ async function git(cwd, args) {
 }
 
 /** Every line is a decision with a reason. Nothing is silent. */
-function render(payload, manifest, { npm = true, version } = {}) {
+function render(payload, manifest, { npm = true, manager = null, version } = {}) {
   const lines = [
     `repo        ${payload.root}`,
     `stack       ${payload.stack.length > 0 ? payload.stack.join(', ') : '(undetected)'}`,
@@ -792,12 +808,18 @@ function render(payload, manifest, { npm = true, version } = {}) {
   // a reader can tell "this repo does not use GitHub Actions" from "this repo was
   // not offered the gate".
   if (payload.ci.action === 'create') {
-    lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow({ own: payload.ci.own, npm, version }).length} bytes`);
+    lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow({ own: payload.ci.own, npm, manager, version }).length} bytes`);
     lines.push(
       payload.ci.own
         ? `            this repository is simt-dev's own; ${CLI} ci --yes refreshes this copy when the gate changes`
         : `            runs ${CLI} check where a pull request is merged; yours to edit after this`,
     );
+    // Q31: the workflow installs simt-dev as a devDependency, so the plan states
+    // the install the reader must run — `<pm> add -D`, never a bare npm guess.
+    if (!payload.ci.own && manager) {
+      const addDev = { npm: `npm i -D ${PACKAGE_NAME}`, pnpm: `pnpm add -D ${PACKAGE_NAME}`, yarn: `yarn add -D ${PACKAGE_NAME}`, bun: `bun add -d ${PACKAGE_NAME}` }[manager];
+      if (addDev) lines.push(`  ${'needs'.padEnd(9)} ${addDev}   (CI installs the pinned devDependency before it can run ${CLI} check)`);
+    }
   } else if (payload.ci.action === 'refresh') {
     // init does not write it. `simt ci` owns the template's own copy, and a
     // second writer would be a second answer to who owns it.

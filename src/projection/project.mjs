@@ -16,7 +16,8 @@
 // same matcher, so supporting an ecosystem nobody here has heard of requires no
 // code change and no release.
 
-import { readFile, readdir } from 'node:fs/promises';
+import { constants as fsConstants } from 'node:fs';
+import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { baselineTargets, misplaced } from './baselines.mjs';
@@ -31,8 +32,74 @@ import { measureRoot } from '../measure/context.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
 import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
 import { pointerState, pointerTargets, ruleTargets, scopedTargets } from './targets.mjs';
-import { CLI, LOCK_FILE, LOCK_LEGACY } from '../name.mjs';
-import { MANIFEST_FILE } from '../name.mjs';
+import { CLI, LOCK_FILE, LOCK_LEGACY, PACKAGE_NAME } from '../name.mjs';
+import { MANIFEST_FILE, WORKFLOW_FILE_NAME } from '../name.mjs';
+import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
+import { LOCAL_BIN } from '../distribute/release.mjs';
+
+/**
+ * A checked-in gate workflow the locator cannot resolve (review 0003 Q31).
+ *
+ * Returns a finding, or null when some resolution path can still succeed. Only
+ * committed evidence counts: the pinned devDependency, the release binary, and
+ * `simt` on this machine's PATH (a global install CI may share — its presence
+ * here is a reason to stay silent, its absence is not proof CI lacks it, so the
+ * finding also requires the first two to be missing).
+ */
+async function workflowResolvable(root) {
+  let pkg = null;
+  try {
+    pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
+  } catch {
+    pkg = null;
+  }
+  if (pkg !== null) {
+    const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+    if (Object.hasOwn(deps, PACKAGE_NAME)) return null;
+  }
+  try {
+    await stat(join(root, LOCAL_BIN));
+    return null;
+  } catch {
+    // No release binary: keep checking the last path.
+  }
+  for (const dir of (process.env.PATH ?? '').split(':').filter(Boolean)) {
+    try {
+      await access(join(dir, 'simt'), fsConstants.X_OK);
+      return null;
+    } catch {
+      // Not here; keep looking.
+    }
+  }
+  const file = `.github/workflows/${WORKFLOW_FILE_NAME}`;
+  if (pkg !== null) {
+    const lockfiles = [];
+    for (const name of ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json']) {
+      try {
+        await stat(join(root, name));
+        lockfiles.push(name);
+      } catch {
+        // Absent is the normal case.
+      }
+    }
+    const runner = resolveNodeRunner({
+      lockfiles,
+      packageManager: typeof pkg.packageManager === 'string' ? pkg.packageManager : null,
+    });
+    return {
+      file,
+      status: 'unresolvable',
+      detail: `the checked-in gate workflow looks for ${PACKAGE_NAME} in node_modules, but nothing it tries can succeed: no pinned devDependency, no ${LOCAL_BIN}, no simt on PATH`,
+      remedy: `run: ${runner.addDev} ${PACKAGE_NAME}   (the gate runs from the pinned dependency)`,
+    };
+  }
+  return {
+    file,
+    status: 'unresolvable',
+    detail: `the checked-in gate workflow cannot resolve ${PACKAGE_NAME}: no package.json to pin it in, no ${LOCAL_BIN}, no simt on PATH`,
+    remedy: `install the pinned gate binary into the repository, then re-run: simt init --yes`,
+  };
+}
 import { computeLock } from './lock.mjs';
 import {
   desiredRegion,
@@ -237,8 +304,21 @@ export async function checkTargets(root, flags = {}) {
   // Two `.github` files, one ownership rule, so one loop over both. The gate and the
   // dependency-updates config fail for the same reason and are fixed the same way,
   // and listing them separately is how the second copy of this rule gets written.
+  const workflowPlan = await planWorkflow(root);
+  // Q31: a workflow that exists but cannot resolve simt-dev by any path the
+  // locator tries is a green tick on a gate that never runs. The locator tries
+  // `$SIMT_DEV_BIN`, the pinned devDependency, the release binary and `simt`
+  // on PATH, in that order; only the middle two are committed evidence this
+  // check can see. When the repo pins nothing and carries no binary, the check
+  // can still see `simt` on its own PATH — a global install CI may share — so
+  // it stays silent then rather than crying wolf about a resolution it cannot
+  // disprove. The remedy names the repo's own manager, never a bare npm guess.
+  if (workflowPlan.action !== 'create' && workflowPlan.action !== 'skip') {
+    const unresolvable = await workflowResolvable(root);
+    if (unresolvable) findings.push(unresolvable);
+  }
   for (const [plan, what] of [
-    [await planWorkflow(root), 'nothing gates it'],
+    [workflowPlan, 'nothing gates it'],
     [await planDependabot(root), 'nothing watches its dependencies'],
   ]) {
     if (plan.action === 'create') {

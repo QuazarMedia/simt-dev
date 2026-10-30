@@ -68,7 +68,7 @@ export function hasScript(pkg, script) {
  * @returns {Promise<{ok: true, argv: string[], kind: string, detail: string}
  *                  | {ok: false, gate: string, kind: string, reason: string, remedy: string}>}
  */
-export async function resolveGate(gate, { root, pkg, staged, commands }) {
+export async function resolveGate(gate, { root, pkg, staged, commands, runner = null }) {
   const name = gate.name;
   const declared = commands?.[name];
 
@@ -172,11 +172,17 @@ export async function resolveGate(gate, { root, pkg, staged, commands }) {
         remedy: `add "${script}" to scripts, or remove "${name}" from ${MANIFEST_FILE} gates`,
       };
     }
+    // Q31: script gates run through the repo's own manager — `pnpm run`, not
+    // `npm run`, in a pnpm checkout. The default stays npm for callers that do
+    // not report one (older capabilities, hand-built contexts).
+    const { runScriptArgv, runScript } = await import('../ecosystem/node-runner.mjs');
+    const manager = runner ?? pkg?.packageManager?.split('@')?.[0] ?? 'npm';
+    const known = ['npm', 'pnpm', 'yarn', 'bun'].includes(manager) ? manager : 'npm';
     return {
       ok: true,
       kind: gate.kind,
-      argv: ['npm', 'run', '--silent', script],
-      detail: `npm run ${script}`,
+      argv: runScriptArgv(known, script),
+      detail: runScript(known, script),
     };
   }
 

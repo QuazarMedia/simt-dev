@@ -52,6 +52,7 @@ import { renderLocator } from '../locate.mjs';
 import { CLI } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { LOCAL_BIN, LOCAL_BIN_DIR, assetNameExpr, localInstall, platformLines, releaseBase } from '../distribute/release.mjs';
+import { installCommands as nodeInstallCommands } from '../ecosystem/node-runner.mjs';
 
 /** Directory whose presence means this repo runs GitHub Actions. */
 export const WORKFLOWS_DIR = '.github/workflows';
@@ -253,7 +254,7 @@ function indent(text, spaces) {
  * @param {{own?: boolean}} [options]
  * @returns {string} YAML, LF-terminated
  */
-export function renderWorkflow({ own = false, npm = true, version } = {}) {
+export function renderWorkflow({ own = false, npm = true, manager = null, version } = {}) {
   if (own) {
     const floor = nodeFloor();
     return `${header(true)}${skeleton(
@@ -286,6 +287,12 @@ export function renderWorkflow({ own = false, npm = true, version } = {}) {
   }
 
   const v = version ?? packageVersion();
+  // Q31: the install step names the repo's own manager. `manager` wins over the
+  // legacy `npm` boolean so old callers keep their bytes; a Node repo installs
+  // with its lockfile's frozen command, anything else takes the release binary.
+  // The resolver row also decides setup-node (bun ships its own runtime).
+  const nodeManager = manager ?? (npm ? 'npm' : null);
+  const nodeInstall = nodeManager ? nodeInstallCommands(nodeManager) : null;
   // The install step is the whole of S35's consumer CI: a repository with npm pins
   // simt-dev as a devDependency and `npm ci` restores it; one without (Gradle,
   // Connect IQ) has no node_modules to pin in, so CI downloads the release binary
@@ -301,11 +308,11 @@ export function renderWorkflow({ own = false, npm = true, version } = {}) {
   // `${{ runner.* }}` expression: an expression substituted into `$( … )` is a
   // command substitution trying to execute "Linux", which set -eu refuses - the
   // install would fail on every run in the one repository kind this channel is for.
-  const install = npm
+  const install = nodeInstall
     ? [
         '      - name: install dependencies',
-        '        # `npm ci` needs a lockfile; a repo without one is still gated, not skipped.',
-        '        run: npm ci || npm install',
+        `        # \`${nodeInstall.install}\` needs a lockfile; a repo without one is still gated, not skipped.`,
+        `        run: ${nodeInstall.install} || ${nodeInstall.fallback}`,
       ]
     : [
         '      - name: install the pinned gate binary',
@@ -329,8 +336,9 @@ mkdir -p ${LOCAL_BIN_DIR}
 mv "$asset" ${LOCAL_BIN}
 chmod +x ${LOCAL_BIN}`, 10),
       ];
-  const remedy = npm
-    ? `REMEDY run: npm i -D ${PACKAGE_NAME}   (the gate runs from the pinned dependency)`
+  const addDev = { npm: `npm i -D ${PACKAGE_NAME}`, pnpm: `pnpm add -D ${PACKAGE_NAME}`, yarn: `yarn add -D ${PACKAGE_NAME}`, bun: `bun add -d ${PACKAGE_NAME}` }[nodeManager] ?? null;
+  const remedy = nodeInstall && addDev
+    ? `REMEDY run: ${addDev}   (the gate runs from the pinned dependency)`
     : `REMEDY run: ${localInstall(v)}   (the gate runs from the release binary in .simt/bin)`;
   const locator = renderLocator('check --root "$ROOT"', { remedy });
   return `${header(false)}${skeleton(
@@ -338,7 +346,8 @@ chmod +x ${LOCAL_BIN}`, 10),
     [
       uses('checkout'),
       // The binary branch has no setup-node: see the install step above.
-      ...(npm ? [setupNode(nodeFloor())] : []),
+      // Q31: bun ships its own runtime, so only managers that need Node get it.
+      ...(nodeInstall && nodeInstall.setupNode ? [setupNode(nodeFloor())] : []),
       ...install,
       `      - name: ${CLI} check`,
       '        run: |',

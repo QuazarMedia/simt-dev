@@ -42,7 +42,7 @@
     "skills"
   ],
   "scripts": {
-    "test": "node --test --test-concurrency=4 test/*.test.mjs",
+    "test": "node --test --test-concurrency=16 test/*.test.mjs",
     "lint": "node bin/simt.mjs doctor"
   }
 }

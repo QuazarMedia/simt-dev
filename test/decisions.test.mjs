@@ -7,9 +7,12 @@
 // cache keyed on the files it was built from.
 
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import { promisify } from 'node:util';
+import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 
 import { decisionsCutoff, decisionsDir } from '../src/decisions/dir.mjs';
@@ -31,6 +34,22 @@ async function scratch(files = {}) {
     await writeFile(full, body);
   }
   return root;
+}
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
+const exec = promisify(execFile);
+
+async function runCli(args) {
+  try {
+    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+      maxBuffer: 16 << 20,
+      env: { ...process.env, NO_COLOR: '1', SIMT_DEV_WORKSPACE: 'off' },
+    });
+    return { code: 0, stdout, stderr };
+  } catch (error) {
+    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
+  }
 }
 
 const PROSE_ONLY = (id) =>
@@ -145,6 +164,60 @@ test('scaffoldDecision: an exclusive create never overwrites a collision', async
     assert.ok(res.ok);
     assert.equal(res.id, 'ADR-003', 'the scaffold moved past the occupied number');
     assert.equal(await readFile(join(root, 'docs', 'decisions', 'ADR-002-taken.md'), 'utf8'), PROSE_ONLY('ADR-002'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('rules why: the repo record overlays the shipped one, and both layers are named', async () => {
+  const { rulesWhyFacts } = await import('../src/commands/rules.mjs');
+  const root = await scratch({ 'docs/decisions/ADR-001-repo-first-thing.md': PROSE_ONLY('ADR-001') });
+  try {
+    const overlaid = await rulesWhyFacts(root, 'ADR-001');
+    assert.equal(overlaid.direction, 'decision');
+    assert.equal(overlaid.adr.origin, 'repo', 'the same number resolves to the repo layer');
+    // Package ADR-001 is titled differently; the repo title must win, not merge.
+    assert.ok(!/centralise/i.test(overlaid.adr.title), `expected the repo title, got: ${overlaid.adr.title}`);
+    const shipped = await rulesWhyFacts(root, 'ADR-099');
+    assert.equal(shipped.adr.origin, 'package');
+    assert.ok(shipped.origins['ADR-001'] === 'repo' && shipped.origins['ADR-099'] === 'package');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('rules why: an unknown decision points at rules decisions, not rules list', async () => {
+  const { rulesWhyFacts } = await import('../src/commands/rules.mjs');
+  const root = await scratch({ 'package.json': '{}' });
+  try {
+    await assert.rejects(rulesWhyFacts(root, 'ADR-900'), (error) => {
+      assert.match(error.message, /no decision record ADR-900/);
+      assert.match(error.remedy, /rules decisions/, 'the remedy names the decisions list, not the rules list');
+      return true;
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+  // The remedy names the decisions list (asserted structurally: the failure
+  // carries a remedy, and the command below is what it must name).
+  const { decisionsCommand } = await import('../src/commands/rules.mjs');
+  assert.equal(typeof decisionsCommand, 'function', 'simt rules decisions exists to back the remedy');
+});
+
+test('rules decisions: one list, both layers, origins marked', async () => {
+  const root = await scratch({ 'docs/decisions/ADR-001-repo-first-thing.md': PROSE_ONLY('ADR-001') });
+  try {
+    const text = await runCli(['rules', 'decisions', '--root', root]);
+    assert.equal(text.code, 0, text.stderr);
+    assert.match(text.stdout, /ADR-001\s+repo\s/);
+    assert.match(text.stdout, /ADR-099\s+package\s/);
+    const json = await runCli(['rules', 'decisions', '--root', root, '--json']);
+    assert.equal(json.code, 0, json.stderr);
+    const payload = JSON.parse(json.stdout);
+    const byId = new Map(payload.decisions.map((d) => [d.id, d]));
+    assert.equal(byId.get('ADR-001').origin, 'repo');
+    assert.equal(byId.get('ADR-099').origin, 'package');
+    assert.ok(byId.get('ADR-001').title.length > 0 && byId.get('ADR-001').status.length > 0);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

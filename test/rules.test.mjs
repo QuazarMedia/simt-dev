@@ -543,7 +543,7 @@ test('rules why: resolves a rule to the decisions that settled it', async () => 
   const { code, stdout } = await run(['rules', 'why', 'python']);
   assert.equal(code, 0);
   assert.match(stdout, /settled by 1 decision/);
-  assert.match(stdout, /ADR-006\s+Evidence discipline is central/);
+  assert.match(stdout, /ADR-006\s+\[package\]\s+Evidence discipline is central/);
 });
 
 test('rules why: a rule with no citation reports the absence as a finding', async () => {
@@ -596,6 +596,7 @@ test('rules why <ADR>: an unknown record exits USAGE', async () => {
   const { code, stderr } = await run(['rules', 'why', 'ADR-999']);
   assert.equal(code, 2);
   assert.match(stderr, /no decision record ADR-999/);
+  assert.match(stderr, cmd('list the known decisions with: {cli} rules decisions'));
 });
 
 test('rules why: without an argument it fails rather than guessing a rule', async () => {

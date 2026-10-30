@@ -131,8 +131,10 @@ async function writeRaw(root, body) {
 
 async function tracked(root) {
   try {
-    const { stdout } = await exec('git', ['ls-files'], { cwd: root, maxBuffer: 16 << 20 });
-    return { files: stdout.split('\n').filter(Boolean) };
+    // `-z`: without it git C-quotes a non-ASCII path (`src/\303\274n...`) and
+    // the reader's real filename never matches it (review 0003 Q39).
+    const { stdout } = await exec('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 16 << 20 });
+    return { files: stdout.split('\0').filter(Boolean) };
   } catch (error) {
     return {
       error: fail(
@@ -146,9 +148,9 @@ async function tracked(root) {
 
 async function changedFiles(root) {
   try {
-    const { stdout } = await exec('git', ['diff', '--name-only', 'HEAD'], { cwd: root, maxBuffer: 8 << 20 });
-    const untracked = await exec('git', ['ls-files', '--others', '--exclude-standard'], { cwd: root, maxBuffer: 8 << 20 });
-    return { files: [...new Set([...stdout.split('\n'), ...untracked.stdout.split('\n')].filter(Boolean))].sort() };
+    const { stdout } = await exec('git', ['diff', '--name-only', '-z', 'HEAD'], { cwd: root, maxBuffer: 8 << 20 });
+    const untracked = await exec('git', ['ls-files', '--others', '--exclude-standard', '-z'], { cwd: root, maxBuffer: 8 << 20 });
+    return { files: [...new Set([...stdout.split('\0'), ...untracked.stdout.split('\0')].filter(Boolean))].sort() };
   } catch (error) {
     return {
       error: fail(

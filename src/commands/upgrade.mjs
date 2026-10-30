@@ -21,6 +21,9 @@
 //   4. A repo it could not upgrade is reported loudly and fails the run. A repo left
 //      silently behind is the failure `compare` exists to surface, and this command must
 //      not be the thing that creates it.
+//   5. With no root named, it upgrades THIS repository only. The workspace is a claim
+//      about scope, so it needs `--all` or an explicit root (review 0003 Q33): the old
+//      default resolved the workspace and a dry run inside one repo planned all sixteen.
 
 import { mkdir } from 'node:fs/promises';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
@@ -55,7 +58,28 @@ export async function upgradeCommand(positional, flags) {
     }
   }
 
-  const target = await targetRoot(flags, positional);
+  // `--root`, a positional, and `--workspace` are all explicit claims about scope.
+  // Anything else is the enclosing repository, below.
+  const target = explicit || flags.workspace
+    ? await targetRoot(flags, positional)
+    : await (
+        // No root named: the scope is THIS repository, not the workspace. The old
+        // default resolved the workspace and swept every sibling - 16 repos planned
+        // from a dry run inside one of them. A workspace is a claim about scope, so
+        // it now needs `--all` or an explicit root, the way `--all` always did.
+        //
+        // The note fires only when the old default would have planned a different
+        // directory: a configured workspace that is not this repo. No workspace, or
+        // one equal to the cwd, changes nothing - and a note about an unchanged
+        // behaviour is noise.
+        (async () => {
+          const ws = await resolveWorkspace(flags);
+          if (ws.root && resolve(ws.root) !== process.cwd()) {
+            note(`note     the default scope is this repository; the workspace at ${ws.root} is not upgraded. Pass --root ${ws.root} (or --all) to upgrade it`);
+          }
+          return { root: process.cwd(), source: 'default', detail: 'the enclosing repository', ws };
+        })()
+      );
   const root = resolve(target.root);
   const found = await discover(root);
   if (found.error) {

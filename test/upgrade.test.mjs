@@ -30,18 +30,21 @@ const exec = promisify(execFile);
 // reproduce a stamp that borrows the consumer's own git — from this checkout the stamp
 // would come from simt-dev's repository, which is the right answer for the wrong reason,
 // and the test would pass against the very defect it exists to catch.
-async function run(args, env = {}, bin = BIN) {
+//
+// `opts.cwd` runs the tool FROM a directory: the default-scope tests need it, because
+// "the enclosing repository" is a fact about where the command was invoked.
+async function run(args, env = {}, bin = BIN, opts = {}) {
   try {
-    const { stdout, stderr } = await exec('node', [bin, ...args], { maxBuffer: 32 << 20, env: { ...process.env, ...env } });
+    const { stdout, stderr } = await exec('node', [bin, ...args], { maxBuffer: 32 << 20, env: { ...process.env, ...env }, cwd: opts.cwd });
     return { code: 0, stdout, stderr };
   } catch (error) {
     return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
   }
 }
 
-async function runJson(args, env = {}, bin = BIN) {
-  const { code, stdout } = await run([...args, '--json'], env, bin);
-  return { code, payload: JSON.parse(stdout) };
+async function runJson(args, env = {}, bin = BIN, opts = {}) {
+  const { code, stdout, stderr } = await run([...args, '--json'], env, bin, opts);
+  return { code, payload: JSON.parse(stdout), stderr };
 }
 
 /** A git repo with enough markers for `init` to detect a stack. */
@@ -597,6 +600,44 @@ test('upgrade: --all without a workspace fails instead of quietly scoping to one
   assert.equal(code, 3);
   assert.match(stderr, /--all needs a workspace/);
   assert.equal(stdout, '');
+});
+
+test('upgrade: no root from inside a repo upgrades that repo, not the workspace (Q33)', async () => {
+  // The defect: the default scope resolved the workspace, so a dry run inside one repo
+  // planned every sibling, and `--yes` would have written them all. The scope is now
+  // the enclosing repository; the workspace needs --all or an explicit root.
+  const ws = await mkdtemp(join(tmpdir(), 'simt-up-scope-'));
+  const alpha = await repo(join(ws, 'alpha'), { 'requirements.txt': 'flask\n' });
+  const beta = await repo(join(ws, 'beta'), { 'package.json': '{"name":"beta"}\n' });
+  for (const name of ['alpha', 'beta']) {
+    await run(['init', '--root', join(ws, name), '--yes']);
+    await pin(join(ws, name), '0000000');
+  }
+
+  // From inside alpha, with the workspace resolvable: one repo planned, not two.
+  const { code, payload, stderr } = await runJson(['upgrade', '--yes'], { SIMT_DEV_WORKSPACE: ws }, BIN, { cwd: alpha });
+  assert.equal(code, 0, stderr);
+  assert.equal(payload.shape, 'repo');
+  assert.equal(payload.summary.repos, 1, JSON.stringify(payload.summary));
+  // The one-time note fires because the old default (the workspace) would have differed.
+  assert.match(stderr, /the default scope is this repository/);
+  assert.notEqual((await readJson(join(ws, 'alpha', MANIFEST_FILE))).projection.simtDevSha, '0000000');
+  assert.equal((await readJson(join(ws, 'beta', MANIFEST_FILE))).projection.simtDevSha, '0000000', 'the sibling was swept in');
+});
+
+test('upgrade: no root with no workspace is the enclosing repo, without a note (Q33)', async () => {
+  // No workspace resolves to the cwd already, so the old and new defaults agree -
+  // and a note about an unchanged behaviour is noise.
+  const ws = await mkdtemp(join(tmpdir(), 'simt-up-scope-'));
+  const alpha = await repo(join(ws, 'alpha'), { 'requirements.txt': 'flask\n' });
+  await run(['init', '--root', alpha, '--yes']);
+  await pin(alpha, '0000000');
+
+  const { code, payload, stderr } = await runJson(['upgrade'], { SIMT_DEV_WORKSPACE: 'off' }, BIN, { cwd: alpha });
+  assert.equal(code, 0, stderr);
+  assert.equal(payload.shape, 'repo');
+  assert.equal(payload.summary.repos, 1);
+  assert.doesNotMatch(stderr, /the default scope is this repository/);
 });
 
 test('upgrade: a worktree is reported but never stamped', async () => {

@@ -587,7 +587,7 @@ const section = (name) => {
     // A record whose subject is the prefix is arguing rather than citing, so it names none.
     writtenAgainst: PREFIX_ARGUING.has(file)
       ? []
-      : [...new Set((text.match(ESTATE) ?? []).filter((name) => !TOOL_WORDS.has(name)))].sort(),
+      : [...new Set((text.match(ESTATE) ?? []).filter((name) => !TOOL_WORDS.has(name.toLowerCase())))].sort(),
   };
 }
 
@@ -638,7 +638,7 @@ export function redactEstate(text) {
     // The tool's own names are left where they are. Redacting them turned a ruling about
     // `simt-priority` into a sentence about `a repository`, which is how a reader learned
     // that the record had surveyed something and not what it said (ADR-080).
-    TOOL_WORDS.has(name) ? name : 'a repository',
+    TOOL_WORDS.has(name.toLowerCase()) ? name : 'a repository',
   );
 }
 

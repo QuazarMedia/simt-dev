@@ -541,7 +541,7 @@ test('upgrade: a commit in the CONSUMER repo does not move the stamp', async () 
   const consumer = join(ws, 'repo');
   const pkg = join(consumer, 'node_modules', '@acme', 'simt-dev');
   await mkdir(pkg, { recursive: true });
-  for (const name of ['bin', 'src', 'rules', 'graph', 'templates']) {
+  for (const name of ['bin', 'src', 'rules', 'graph', 'templates', 'agents']) {
     await cp(join(resolve(HERE, '..'), name), join(pkg, name), { recursive: true });
   }
   await cp(join(resolve(HERE, '..'), 'package.json'), join(pkg, 'package.json'));

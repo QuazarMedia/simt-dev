@@ -13,6 +13,10 @@ set -eu
 ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$ROOT"
 
+# The push override is for the push itself, not for the tests the hook runs.
+# A test that asserts a push is denied sees the override and fails.
+unset SIMT_ALLOW
+
 FAILED=""
 
 fail() {

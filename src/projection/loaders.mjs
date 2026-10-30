@@ -150,6 +150,12 @@ export const LOADERS = [
       verified:
         'OpenCode v2 plugins docs: direct .ts and .js files and immediate plugin packages are loaded from every discovered .opencode/plugins/ directory, and the plugins array in opencode.json(c)',
     },
+    agents: {
+      dir: '.opencode/agents',
+      ext: '.md',
+      verified:
+        'OpenCode v2 agents docs (opencode.ai/v2/docs/agents, read 2026-10-30): subagents are markdown files with a description frontmatter under .opencode/agents/',
+    },
     mcp: {
       path: 'opencode.json',
       key: 'mcp.servers',
@@ -242,6 +248,12 @@ export const LOADERS = [
       verified:
         'Claude Code hooks docs, hook locations: project settings at .claude/settings.json and .claude/settings.local.json, user settings at ~/.claude/settings.json',
     },
+    agents: {
+      dir: '.claude/agents',
+      ext: '.md',
+      verified:
+        'Claude Code subagents docs (code.claude.com/docs/en/sub-agents, read 2026-10-30): project subagents are markdown files with name and description frontmatter under .claude/agents/',
+    },
     mcp: {
       path: '.mcp.json',
       key: null,
@@ -320,6 +332,12 @@ export const LOADERS = [
       verified:
         'Codex hooks docs: <repo>/.codex/hooks.json or ~/.codex/hooks.json, or inline [hooks] tables in config.toml',
     },
+    agents: {
+      dir: '.codex/agents',
+      ext: '.toml',
+      verified:
+        'Codex custom agents docs (developers.openai.com/codex/subagents, read 2026-10-30): standalone TOML files under .codex/agents/ defining name, description and developer_instructions',
+    },
     mcp: {
       path: '.codex/config.toml',
       key: 'mcp_servers',
@@ -385,6 +403,12 @@ export const LOADERS = [
     hooks: {
       path: '.cursor/hooks.json',
       verified: 'Cursor agent hooks docs: <project-root>/.cursor/hooks.json and ~/.cursor/hooks.json',
+    },
+    agents: {
+      dir: '.cursor/agents',
+      ext: '.md',
+      verified:
+        'Cursor subagents docs (cursor.com/docs/subagents, read 2026-10-30): project subagents are markdown files with name and description frontmatter under .cursor/agents/',
     },
     mcp: {
       path: '.cursor/mcp.json',
@@ -470,6 +494,12 @@ export const LOADERS = [
       path: '.agents/hooks.json',
       verified: 'Antigravity hooks docs: workspace level .agents/hooks.json, global ~/.gemini/config/hooks.json',
     },
+    agents: {
+      dir: '.agents/agents',
+      ext: '.md',
+      verified:
+        'Google Antigravity subagents docs (antigravity.google/docs/subagents, read 2026-10-30): project subagents are markdown files with name and description frontmatter under .agents/agents/',
+    },
     mcp: {
       path: '.agents/mcp_config.json',
       key: null,
@@ -541,6 +571,12 @@ export const LOADERS = [
       verified:
         'Gemini CLI hooks reference (geminicli.com/docs/hooks/reference/, read 2026-10-26): a project .gemini/settings.json carries a top-level hooks object whose events are arrays of {matcher, hooks:[{type:"command",command,timeout? (milliseconds)}]} — the same shape Claude and Codex use; BeforeTool denies with {decision:"deny",reason}, BeforeAgent and AfterTool inject via hookSpecificOutput.additionalContext',
     },
+    agents: {
+      dir: '.gemini/agents',
+      ext: '.md',
+      verified:
+        'Gemini CLI subagents docs (geminicli.com/docs/core/subagents, read 2026-10-30): project subagents are markdown files with name and description frontmatter under .gemini/agents/',
+    },
     mcp: {
       path: '.gemini/settings.json',
       key: 'mcpServers',
@@ -603,6 +639,8 @@ export const LOADERS = [
     skillsNote: 'no project skill directory is documented for Copilot',
     hooks: null,
     hooksNote: 'no hooks file is documented for Copilot in any first-party page checked on 2026-10-14',
+    agents: null,
+    agentsNote: 'no file-based agents are documented for Copilot in any first-party page checked on 2026-10-30',
     mcp: {
       path: '.vscode/mcp.json',
       key: null,
@@ -707,6 +745,8 @@ export const LOADERS = [
     hooks: null,
     hooksNote:
       'DeepSeek harness hooks docs: the Claude Code and Codex bridges take an explicit configPath, and project-local hooks.json discovery is still marked TODO, so no repository path is loaded by default',
+    agents: null,
+    agentsNote: 'no file-based agents are documented for the DeepSeek harness in any first-party page checked on 2026-10-30',
     mcp: {
       path: null,
       key: '@deepseek-ai/dsh-mcp-client',

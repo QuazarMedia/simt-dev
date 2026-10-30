@@ -46,6 +46,7 @@ import {
 import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
+import { planAgents, writeAgentPlan } from '../agents/render.mjs';
 import { computeLock } from '../projection/lock.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { reindex, SQLITE_FILE } from '../index/store.mjs';
@@ -164,6 +165,10 @@ export async function initCommand(positional, flags) {
   const ci = await planWorkflow(root);
   const dependabot = await planDependabot(root);
   const tsconfigBase = await planTsconfigBase(root);
+  // ADR-111. The one agent this tool ships, planned with the rest so the operator sees
+  // it in the same preview that lists everything else. Written in the apply path with
+  // everything else, journaled the same way.
+  const agentPlan = await planAgents(root);
   // Per-developer, and planned with the rest so the operator sees it in the same
   // preview that lists everything else. `exists` short-circuits the write: a
   // repository that already has one keeps it exactly as it is.
@@ -240,6 +245,11 @@ export async function initCommand(positional, flags) {
       bytes: tsconfigBase.bytes,
       reason: tsconfigBase.reason,
     },
+    // ADR-111. The agent files the apply path will write, one per harness that documents
+    // an agents directory. `text` is stripped from the emitted payload the way the other
+    // plans strip their rendered bytes; the apply path writes from `agentPlan`, which
+    // keeps it.
+    agents: agentPlan.map(({ text, ...rest }) => rest),
     adoption,
     manifest: { file: MANIFEST, action: manifestAction, path: manifestFile },
     // Local state, not a repository file: gitignored, rebuildable from `git ls-files -s`,
@@ -574,6 +584,11 @@ export async function initCommand(positional, flags) {
   for (const p of pointerBlocked) {
     note(`BLOCKED ${p.file}: ${p.detail} (${p.bytes} bytes); left as it is`);
   }
+  // ADR-111. The agent files, written with everything else and journaled the same way,
+  // so `undo` restores them with the rest of the adoption. Written from `agentPlan`,
+  // which keeps the rendered bytes the display payload strips.
+  const agentWritten = await writeAgentPlan(root, journal, agentPlan);
+  for (const f of agentWritten) note(`wrote    ${f} (agent)`);
   await commitJournal(root, 'init', journal);
   // The tree changed, so the last `check` no longer describes it: the line
   // goes back to "no cache" rather than reporting the tree as it was (R48).
@@ -801,6 +816,13 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
   for (const p of payload.pointersBlocked ?? []) {
     lines.push(`  ${'blocked'.padEnd(9)} ${p.file}  ${p.detail} (${p.bytes} bytes), left as it is`);
     lines.push(`            remedy: move it aside, or delete it and rerun init`);
+  }
+
+  // ADR-111. The agent files, one per harness that documents an agents directory.
+  // Printed as their own kind: the file is owned whole by the tool, so the action is
+  // created, unchanged or updated and there is no byte delta to show.
+  for (const a of payload.agents ?? []) {
+    lines.push(`  ${a.action.padEnd(9)} ${a.path}  agent (ADR-111)`);
   }
 
   // The CI gate is listed as its own kind because it is the one plan entry whose

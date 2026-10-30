@@ -253,7 +253,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // rendered from would not be an argument a maintainer can act on. ADR-110 joined for
   // the same reason once more: the ruling is ABOUT the lock's name, and a decision that
   // the old name is read until the next write without naming the module that owns both
-  // names would not be an argument a maintainer can act on.
+  // names would not be an argument a maintainer can act on. ADR-111 joined for the same
+  // reason once more: the ruling is ABOUT the one agent file the tool ships, and a
+  // decision that the source of truth is one file without naming it would not be an
+  // argument a maintainer can act on.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -273,6 +276,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-104',
     'ADR-106',
     'ADR-110',
+    'ADR-111',
   ]);
 });
 

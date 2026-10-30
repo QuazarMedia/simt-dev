@@ -63,6 +63,11 @@ ${CLI} agent-hooks install     write this repo's policies into the harnesses tha
                            (dry-run unless --yes; merges into the file, keeps every
                             key it does not own; Codex needs the hook trusted)
 ${CLI} agent-hooks status      what each harness will run, and what is not trusted yet
+${CLI} agents install          write the Simt-Agent into the harnesses that read an
+                            agents file (--harness <id> writes one, not all; dry-run
+                            unless --yes; markdown with a frontmatter the harness
+                            documents, TOML for Codex)
+${CLI} agents status           what each harness carries, and what is not installed yet
 ${CLI} plugin <claude|gemini|cursor|opencode>  generate a harness package from the same tables
                            (dry-run unless --yes; writes a self-contained runtime, the
                            hooks and MCP registration, and for cursor the kernel rules;

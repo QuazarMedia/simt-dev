@@ -31,6 +31,7 @@ import { initCommand } from './init.mjs';
 import { ciCommand } from './ci.mjs';
 import { hooksCommand } from './hooks.mjs';
 import { agentHookCommand, agentHooksCommand } from './agenthook.mjs';
+import { agentsCommand } from './agent.mjs';
 import { compareCommand } from './compare.mjs';
 import { upgradeCommand } from './upgrade.mjs';
 import { mcpCommand } from './mcp.mjs';
@@ -95,6 +96,10 @@ const GROUPS = new Map([
   // error before anything is created — the one default here that cannot mutate.
   ['slice', 'start'],
   ['agent-hooks', 'status'],
+  // A group like `agent-hooks`: `install` writes the agent file into each harness's
+  // own directory, `status` reports what each harness carries. The default is the
+  // read, the way `agent-hooks`'s is.
+  ['agents', 'status'],
   ['harness', 'detect'],
   ['bench', 'mine'],
   // ADR-084. `shared` is the one group whose default writes nothing, and it is `plan` for
@@ -196,6 +201,10 @@ export const IMPLEMENTED = {
   'agent-hook': agentHookCommand,
   'agent-hooks install': (args, flags) => agentHooksCommand('install', args, flags),
   'agent-hooks status': (args, flags) => agentHooksCommand('status', args, flags),
+  // ADR-111. The one agent this tool ships, written into each harness's own agents
+  // directory. A group like `agent-hooks`: `install` writes, `status` reads.
+  'agents install': (args, flags) => agentsCommand('install', args, flags),
+  'agents status': (args, flags) => agentsCommand('status', args, flags),
   compare: compareCommand,
   tokens: tokensCommand,
   'harness detect': harnessCommand,

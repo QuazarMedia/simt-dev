@@ -16,6 +16,7 @@ import test, { after } from 'node:test';
 import { initCommand } from '../src/commands/init.mjs';
 import {
   IDENTITY_FILE,
+  INCLUDE_KEY,
   configuredIdentity,
   ignoreIdentity,
   includeOwnIdentity,
@@ -24,6 +25,8 @@ import {
   renderIdentityFile,
   resolveIdentity,
 } from '../src/identity.mjs';
+import { undoLastJournalSet } from '../src/journal.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 
 const exec = promisify(execFile);
 const temps = [];
@@ -175,4 +178,63 @@ test('identity: a repository that never configured an identity resolves to null'
   const resolved = await resolveIdentity(root);
   assert.equal(resolved.exists, false);
   assert.ok(resolved.from === null || resolved.from === 'configured');
+});
+
+// ---------------------------------------------------------------- Q30: every write is in the plan, and undo restores it
+
+test('Q30: the dry-run plan names the .gitignore edit and the include repoint', async () => {
+  // The evidence was a plan that said `created git.config` and stopped: two of the
+  // run's three writes were missing from the preview, so the reader approved them
+  // from the diff afterwards.
+  const root = await repo();
+  const { output } = await capture(() => initCommand([], { root }));
+  assert.match(output, /created\s+git\.config/);
+  assert.match(output, /create\s+\.gitignore/);
+  assert.match(output, /set\s+include\.path = \.\.\/git\.config/);
+});
+
+test('Q30: --diff previews the .gitignore bytes the apply path writes', async () => {
+  const root = await repo();
+  const { output } = await capture(() => initCommand([], { root, diff: true }));
+  assert.match(output, /diff --git a\/\.gitignore b\/\.gitignore/);
+  assert.match(output, /^\+git\.config$/m);
+});
+
+test('Q30: init --yes then undo restores the .gitignore and the include', async () => {
+  const root = await repo();
+  await initCommand([], { root, yes: true });
+  // Both side writes landed...
+  const ignored = await exec('git', ['check-ignore', '-q', IDENTITY_FILE], { cwd: root }).then(() => true, () => false);
+  assert.equal(ignored, true);
+  assert.equal(await includesOwnIdentity(root), true);
+
+  const undone = await undoLastJournalSet(root);
+  assert.ok(!('refused' in undone && undone.refused), JSON.stringify(undone.refused));
+
+  // ...and undo takes both back: no untracked .gitignore left behind, and no
+  // include.path pointing at a file that no longer exists. `--get-all` exits 1
+  // when the key is absent, which is the answer this assertion is looking for.
+  await assert.rejects(() => readFile(join(root, '.gitignore'), 'utf8'));
+  const out = await exec('git', ['config', '--local', '--get-all', INCLUDE_KEY], { cwd: root }).then((r) => r.stdout, () => '');
+  const values = out.split('\n')
+    .map((v) => v.trim())
+    .filter(Boolean);
+  assert.deepEqual(values, []);
+  await assert.rejects(() => readFile(join(root, IDENTITY_FILE), 'utf8'));
+});
+
+test('Q30: a fresh manifest records no surfaces of its own', async () => {
+  // Writing today's default into every fresh manifest would freeze it for every
+  // release after: absent means the global standard applies.
+  const root = await repo();
+  await initCommand([], { root, yes: true });
+  const manifest = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8'));
+  assert.equal(manifest.surfaces, null);
+});
+
+test('Q30: --surfaces records the choice in the manifest', async () => {
+  const root = await repo();
+  await initCommand([], { root, yes: true, surfaces: 'claude' });
+  const manifest = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8'));
+  assert.deepEqual(manifest.surfaces, ['claude']);
 });

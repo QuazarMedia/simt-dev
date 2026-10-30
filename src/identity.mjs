@@ -25,9 +25,11 @@
 // tracked file is not something an adopting command should do silently.
 
 import { execFile } from 'node:child_process';
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
+
+import { journaledGitConfig, journaledWriteFile } from './journal.mjs';
 
 const exec = promisify(execFile);
 
@@ -166,11 +168,65 @@ export async function includesOwnIdentity(root) {
  * break. Two of the repositories here had exactly that, and both worked only because
  * the sibling checkout happened to exist at the expected relative path.
  *
+ * A caller-supplied journal records the key so `undo` restores the routing (R49);
+ * without one the write stays unrecorded, as `commitJournal` needs it (review 0003
+ * Q30). The journaled path sets through `journaledGitConfig`, which records one
+ * key's before and after - the single-value case, and the only shape this tool
+ * writes.
+ *
  * @param {string} root
+ * @param {Array} [journal]
  * @returns {Promise<void>}
  */
-export async function includeOwnIdentity(root) {
+export async function includeOwnIdentity(root, journal = null) {
+  // A directory that is not a git work tree has no config to route. The lenient
+  // `git()` used to swallow the failure here, and an adoption of a plain directory
+  // must keep working: there is simply nothing to point at.
+  if ((await git(root, ['rev-parse', '--is-inside-work-tree'])) !== 'true') return;
+  if (journal) {
+    await journaledGitConfig(root, journal, INCLUDE_KEY, `../${IDENTITY_FILE}`);
+    return;
+  }
   await git(root, ['config', '--local', '--replace-all', INCLUDE_KEY, `../${IDENTITY_FILE}`]);
+}
+
+/**
+ * Whether .gitignore already names the identity file. The plan needs the answer
+ * before anything is written: a line the run does not print is a write the reader
+ * approves from the diff afterwards (review 0003 Q30).
+ *
+ * @param {string} root
+ * @returns {Promise<boolean>}
+ */
+export async function identityIgnored(root) {
+  let text;
+  try {
+    text = await readFile(join(root, '.gitignore'), 'utf8');
+  } catch {
+    return false;
+  }
+  return text.split('\n').map((l) => l.trim()).includes(IDENTITY_FILE);
+}
+
+/**
+ * The .gitignore bytes with the identity entry appended, or null when it is
+ * already there. One owner for the edit's shape: `ignoreIdentity` writes it and
+ * `init --diff` previews it, so the two cannot disagree about the bytes (review
+ * 0003 Q30).
+ *
+ * @param {string} text the current bytes, '' when the file is absent
+ * @returns {string|null}
+ */
+export function gitignoreWithIdentity(text) {
+  if (text.split('\n').map((l) => l.trim()).includes(IDENTITY_FILE)) return null;
+  const prefix = text === '' || text.endsWith('\n') ? '' : '\n';
+  return (
+    `${text}${prefix}\n` +
+    '# Per-developer git identity, written by `simt init`. Not a file to share:\n' +
+    '# it carries whoever is committing into the tree, and a repository has more than\n' +
+    '# one of those.\n' +
+    `${IDENTITY_FILE}\n`
+  );
 }
 
 /**
@@ -181,10 +237,14 @@ export async function includeOwnIdentity(root) {
  * it means nothing, and appending a duplicate of an entry that is already present
  * is how a file ends up listed twice.
  *
+ * A caller-supplied journal records the edit so `undo` restores it (R49); without
+ * one the write stays unrecorded, as `commitJournal` needs it (review 0003 Q30).
+ *
  * @param {string} root
+ * @param {Array} [journal]
  * @returns {Promise<boolean>} whether the file was changed
  */
-export async function ignoreIdentity(root) {
+export async function ignoreIdentity(root, journal = null) {
   const path = join(root, '.gitignore');
   let text;
   try {
@@ -192,16 +252,9 @@ export async function ignoreIdentity(root) {
   } catch {
     text = '';
   }
-  const already = text.split('\n').map((l) => l.trim()).includes(IDENTITY_FILE);
-  if (already) return false;
-  const prefix = text === '' || text.endsWith('\n') ? '' : '\n';
-  const block =
-    `${prefix}\n` +
-    '# Per-developer git identity, written by `simt init`. Not a file to share:\n' +
-    '# it carries whoever is committing into the tree, and a repository has more than\n' +
-    '# one of those.\n' +
-    `${IDENTITY_FILE}\n`;
-  const { writeFile } = await import('node:fs/promises');
-  await writeFile(path, text + block);
+  const next = gitignoreWithIdentity(text);
+  if (next === null) return false;
+  if (journal) await journaledWriteFile(root, journal, path, next);
+  else await writeFile(path, next);
   return true;
 }

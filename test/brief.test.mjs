@@ -17,6 +17,8 @@ import { test } from 'node:test';
 import { promisify } from 'node:util';
 
 import { CLI } from '../src/name.mjs';
+import { assembleBrief } from '../src/brief/assemble.mjs';
+import { reindex } from '../src/index/store.mjs';
 import { git } from './fixture.mjs';
 
 const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
@@ -63,6 +65,24 @@ test('a task that names a file produces its kind, its file and its test', async 
   assert.ok(stdout.includes('src/keep.mjs'), stdout);
   assert.ok(stdout.includes('src/keep.mjs -> test/keep.test.mjs'), stdout);
   assert.ok(stdout.includes('npm run test'), stdout);
+});
+
+test('a stale index warns the packet instead of quoting yesterday (Q42)', async (t) => {
+  // The delivered packet may not rebuild the index, so it says it is old.
+  // Removing README after the build makes the stored tree older than the
+  // worktree; the packet keeps its files and carries the caution.
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await reindex(root);
+  await git(['-C', root, 'rm', '-q', 'README.md']);
+  await git(['-C', root, 'commit', '-qm', 'drop readme']);
+  const packet = await assembleBrief({ root, task: 'fix the keep helper', build: false, federate: false });
+  assert.equal(packet.cold, undefined);
+  const cautions = (packet.items ?? []).filter((item) => item.section === 'CAUTIONS').map((item) => item.text);
+  assert.ok(
+    cautions.some((text) => text.includes('the index predates the current tree')),
+    `no staleness caution in: ${JSON.stringify(cautions)}`,
+  );
 });
 
 test('two runs of the same brief are the same bytes', async (t) => {

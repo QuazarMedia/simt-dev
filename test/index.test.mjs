@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { git } from './fixture.mjs';
-import { readEdges, readFiles, reindex } from '../src/index/store.mjs';
+import { isIndexStale, readEdges, readFiles, reindex } from '../src/index/store.mjs';
 import { JSONL_FILE, SQLITE_FILE } from '../src/index/persist.mjs';
 import { indexCommand } from '../src/commands/repoindex.mjs';
 
@@ -83,6 +83,26 @@ test('a removed path leaves the index', async () => {
   assert.equal(rows.some((row) => row.path === 'README'), false);
   await rm(root, { recursive: true, force: true });
 });
+
+for (const backend of ['sqlite', 'jsonl']) {
+  test(`the tree digest marks a removal stale until the next build (${backend}, Q42)`, async () => {
+    // The freshness signal is a digest compare, not a blob re-read: one
+    // `git ls-files -s` against the meta row the last build vouched for.
+    const root = await repo();
+    try {
+      assert.equal(await isIndexStale(root, { backend }), false, 'no build yet is cold, not stale');
+      await reindex(root, { backend });
+      assert.equal(await isIndexStale(root, { backend }), false);
+      await git(['-C', root, 'rm', '-q', 'README']);
+      await git(['-C', root, 'commit', '-qm', 'drop readme']);
+      assert.equal(await isIndexStale(root, { backend }), true);
+      await reindex(root, { backend });
+      assert.equal(await isIndexStale(root, { backend }), false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
 
 for (const backend of ['sqlite', 'jsonl']) {
   test(`reindexing a changed file keeps the edges pointing into it (${backend}, Q07)`, async () => {

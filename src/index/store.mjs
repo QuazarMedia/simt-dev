@@ -22,6 +22,8 @@ import {
   readJsonl,
   readSchema,
   readSqliteRows,
+  readTreeDigest,
+  treeDigest,
   writeJsonl,
   writeSqlite,
 } from './persist.mjs';
@@ -154,6 +156,8 @@ export async function reindex(root, opts = {}) {
     }
   }
   const removed = previous.filter((row) => !paths.has(row.path)).map((row) => row.path);
+  // The tree this build vouches for, stored beside the rows so a later read
+  // can compare digests instead of re-reading blobs (review 0003 Q42).
   const embedBuild = await buildEmbeddings(root, listed, fts, {
     backend,
     force,
@@ -161,12 +165,13 @@ export async function reindex(root, opts = {}) {
     allowRemote: opts.allowRemote === true,
     fetchImpl: opts.fetchImpl,
   });
+  const tree = treeDigest(listed);
   let stored;
   if (backend === 'sqlite') {
-    await writeSqlite(root, next, removed, symbols, edges, fts, embedBuild.rows);
+    await writeSqlite(root, next, removed, symbols, edges, fts, embedBuild.rows, tree);
     stored = await countSqlite(root);
   } else {
-    stored = await writeJsonl(root, previous, next, removed, symbols, edges, fts, force, embedBuild.rows);
+    stored = await writeJsonl(root, previous, next, removed, symbols, edges, fts, force, embedBuild.rows, tree);
   }
   return {
     backend,
@@ -180,6 +185,30 @@ export async function reindex(root, opts = {}) {
     parsers: adapter.state,
     ms: Date.now() - started,
   };
+}
+
+/**
+ * Whether the stored index predates the current tree (review 0003 Q42).
+ *
+ * One `git ls-files -s` and one meta read: no blob is re-read, so the check
+ * costs ~100 ms and every read path can afford it. False when no build has
+ * vouched for a tree (that is cold, not stale) and when git cannot answer -
+ * a cache of blobs is still a cache when the worktree tool is missing, and
+ * refusing to serve it would turn every offline read into an error.
+ *
+ * @returns {Promise<boolean>}
+ */
+export async function isIndexStale(root, opts = {}) {
+  const backend = opts.backend ?? await probeBackend();
+  const stored = await readTreeDigest(root, backend);
+  if (!stored) return false;
+  let listed;
+  try {
+    listed = await lsFiles(root);
+  } catch {
+    return false;
+  }
+  return treeDigest(listed) !== stored;
 }
 
 async function buildEmbeddings(root, listed, changedFts, { backend, force, embed, allowRemote, fetchImpl }) {

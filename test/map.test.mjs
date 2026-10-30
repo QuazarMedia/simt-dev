@@ -27,7 +27,7 @@ import {
   renderMap,
   rrfFuse,
 } from '../src/index/map.mjs';
-import { mapCommand } from '../src/commands/map.mjs';
+import { loadGraph, mapCommand } from '../src/commands/map.mjs';
 import {
   buildFtsBody,
   decodeVectorBlob,
@@ -45,6 +45,34 @@ const FILES = [
   { path: 'src/other.mjs' },
   { path: 'src/alone.mjs' },
 ];
+
+test('loadGraph without build reports a stale index instead of hiding it (Q42)', async () => {
+  // The prompt hook and the MCP surface may not build; what they may do is
+  // distrust. The stale rows are still served (a cache is a cache), labelled.
+  const root = await mkdtemp(join(tmpdir(), 'idx-map-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 1;\n');
+    await writeFile(join(root, 'src', 'gone.mjs'), 'export const gone = 1;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    await reindex(root);
+    const fresh = await loadGraph(root, { build: false });
+    assert.equal(fresh.cold, undefined);
+    assert.equal(fresh.stale, false);
+    await git(['-C', root, 'rm', '-q', 'src/gone.mjs']);
+    await git(['-C', root, 'commit', '-qm', 'drop gone']);
+    const old = await loadGraph(root, { build: false });
+    assert.equal(old.stale, true);
+    assert.ok(old.files.some((f) => f.path === 'src/gone.mjs'), 'stale rows are served, labelled');
+    const rebuilt = await loadGraph(root);
+    assert.equal(rebuilt.stale, false, 'a build vouches for the tree it just read');
+    assert.equal(rebuilt.files.some((f) => f.path === 'src/gone.mjs'), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('the same graph and the same task rank the same way, and a tie breaks by path', () => {
   assert.equal(ITERATIONS, 20);

@@ -4,6 +4,7 @@
 // rows. This file is the format; store.mjs is the walk that fills it. They are
 // split because the walk and the format together crossed the review trigger.
 
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
@@ -56,7 +57,24 @@ function tmpFor(file) {
   return `${file}.${process.pid}.${tmpSeq}.tmp`;
 }
 
-export async function writeSqlite(root, next, removed, symbols, edges, fts, embeddings = []) {
+/**
+ * What the index was built from, so a reader can tell a current tree from an
+ * old one without re-reading any blob (review 0003 Q42).
+ *
+ * The digest covers the `git ls-files -s` listing the build consumed: same
+ * bytes in, same digest out. Stored beside `schema` in `meta`, written on every
+ * build including the no-change one, so a build that changed nothing still
+ * vouches for the tree it saw.
+ */
+export function treeDigest(listed) {
+  const rows = [...(listed ?? [])]
+    .map((entry) => `${entry.blob ?? ''} ${entry.path ?? ''}`)
+    .sort()
+    .join('\n');
+  return createHash('sha1').update(rows, 'utf8').digest('hex');
+}
+
+export async function writeSqlite(root, next, removed, symbols, edges, fts, embeddings = [], tree = '') {
   const { DatabaseSync } = await import('node:sqlite');
   const file = join(root, SQLITE_FILE);
   await mkdir(dirname(file), { recursive: true });
@@ -126,7 +144,11 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       const dims = Number.isInteger(row.dims) ? row.dims : Math.floor(vecBlob.byteLength / 4);
       upsertEmbed.run(row.path, row.blob ?? '', row.model ?? '', dims, vecBlob);
     }
-    db.prepare('insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value').run('schema', SCHEMA_V);
+    const upsertMeta = db.prepare(
+      'insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value',
+    );
+    upsertMeta.run('schema', SCHEMA_V);
+    upsertMeta.run('tree', tree);
     db.exec('commit');
   } catch (error) {
     try { db.exec('rollback'); } catch { /* a failed begin has nothing to undo */ }
@@ -152,7 +174,7 @@ function asIndexError(error) {
   return error;
 }
 
-export async function writeJsonl(root, previous, next, removed, symbols, edges, fts, force, embeddings = []) {
+export async function writeJsonl(root, previous, next, removed, symbols, edges, fts, force, embeddings = [], tree = '') {
   const gone = new Set(removed);
   const replaced = new Map(next.map((row) => [row.path, row]));
   const drop = new Set([...replaced.keys(), ...gone]);
@@ -183,6 +205,7 @@ export async function writeJsonl(root, previous, next, removed, symbols, edges, 
   const tmp = tmpFor(file);
   const lines = [
     JSON.stringify({ table: 'meta', key: 'schema', value: SCHEMA_V }),
+    JSON.stringify({ table: 'meta', key: 'tree', value: tree }),
     ...files.map((row) => JSON.stringify({ table: 'files', path: row.path, blob: row.blob, lang: row.lang, bytes: row.bytes, pkg: row.pkg })),
     ...allSymbols.map((row) => JSON.stringify({ table: 'symbols', path: row.path, name: row.name, kind: row.kind, line: row.line, sig: row.sig, exported: row.exported })),
     ...allEdges.map((row) => JSON.stringify({ table: 'edges', src: row.src, dst: row.dst, kind: row.kind, weight: row.weight })),
@@ -281,6 +304,16 @@ export async function readSchema(root, backend) {
   }
   const rows = await readJsonl(root, 'meta');
   return rows.find((row) => row.key === 'schema')?.value ?? '';
+}
+
+/** The tree the stored index was built from, or '' when no build has vouched for one. */
+export async function readTreeDigest(root, backend) {
+  if (backend === 'sqlite') {
+    const rows = await readSqliteRows(root, "select value from meta where key = 'tree'");
+    return rows[0]?.value ?? '';
+  }
+  const rows = await readJsonl(root, 'meta');
+  return rows.find((row) => row.key === 'tree')?.value ?? '';
 }
 
 export async function countSqlite(root) {

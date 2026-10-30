@@ -12,8 +12,9 @@ simt-scope: ["build.gradle", "build.gradle.kts", "pom.xml", "settings.gradle", "
 
 # Stack profile: JVM backend
 
-Applies to: `gradle`, `has-maven-pom`, `kotlin`, `java` — a JVM build. The Android
-rules live in the `android` profile, which selects on `has-android-manifest`.
+Applies to: a JVM build — `gradle`, a committed `pom.xml`, Kotlin or Java. The
+Android rules live in the `android` profile (`simt rules show android`), which
+selects when an `AndroidManifest.xml` is present.
 
 ## Build
 

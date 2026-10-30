@@ -689,7 +689,7 @@ function frontmatterKeys(text) {
     .map((line) => /^([a-zA-Z][a-zA-Z0-9_-]*):/.exec(line.trim()))
     .filter(Boolean)
     .map((kv) => kv[1])
-    .filter((k) => !['key', 'default', 'describe'].includes(k));
+    .filter((k) => !['key', 'describe'].includes(k) && !/^default(-[a-z0-9-]+)?$/.test(k));
 }
 
 test('every key a shipped rule declares is prefixed, or is a key its reader owns', async () => {

@@ -8,7 +8,7 @@ simt-scope: ["Package.swift", "**/*.swift"]
 
 # Stack profile: Swift
 
-Applies to: `has-swift-package` — a Swift package.
+Applies to: a committed `Package.swift` — a Swift package.
 
 ## Build and gates
 

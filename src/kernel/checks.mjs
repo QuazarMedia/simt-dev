@@ -14,6 +14,8 @@ import { readFile, stat } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 
+import { CLI } from '../name.mjs';
+
 const exec = promisify(execFile);
 
 export const CHECK_MARKER = 'simt-check';
@@ -49,10 +51,31 @@ export function checkDefect(body) {
 }
 
 /**
+ * What a runnable check enforces, in the reader's terms. The bare checker id is
+ * vocabulary for the manifest author; the projected region is read by a repository
+ * that has no manifest and no checker registry.
+ */
+function checkSummary(check) {
+  const arg = check.arg;
+  switch (check.name) {
+    case 'max-file-lines':
+      return `by \`${CLI} check\`: more than ${DEFAULT_WARN} lines warns, more than ${DEFAULT_ERROR} fails (\`limits.fileLines\`)`;
+    case 'forbid-regex':
+      return `added lines matching \`${arg}\` are rejected`;
+    case 'forbidden-path-edit':
+      return `\`${arg}\` is not to be edited`;
+    case 'required-file':
+      return `\`${arg}\` must exist`;
+    default:
+      return check.name;
+  }
+}
+
+/**
  * Replace each runnable check with one `Enforced:` line. A body with no marker
  * is returned unchanged, so a rule nobody marked does not move a byte.
  *
- * @returns {{body: string, enforced: {name: string}[], changed: boolean}}
+ * @returns {{body: string, enforced: {name: string, summary: string}[], changed: boolean}}
  */
 export function foldChecks(body) {
   if (checkDefect(body) !== null || !HAS_MARKER.test(body)) {
@@ -73,8 +96,9 @@ export function foldChecks(body) {
     }
     const indent = ITEM_START.exec(unit)?.[1] ?? '';
     const bullet = ITEM_START.test(unit) ? '- ' : '';
-    kept.push(`${indent}${bullet}Enforced: ${parsed.name}`);
-    enforced.push({ name: parsed.name });
+    const summary = checkSummary(parsed);
+    kept.push(`${indent}${bullet}Enforced: ${summary}`);
+    enforced.push({ name: parsed.name, summary });
   }
   const next = kept.join('\n');
   return { body: next, enforced, changed: next !== body };

@@ -8,7 +8,7 @@ simt-scope: ["Gemfile", "**/*.rb"]
 
 # Stack profile: Ruby
 
-Applies to: `has-gemfile` — a Bundled application or gem.
+Applies to: a committed `Gemfile` — a Bundled application or gem.
 
 ## Build and gates
 

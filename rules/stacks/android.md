@@ -12,9 +12,9 @@ simt-scope: ["AndroidManifest.xml", "**/build.gradle", "**/build.gradle.kts", "*
 
 # Stack profile: Android
 
-Applies to: `has-android-manifest` — some module has a
-`src/main/AndroidManifest.xml`. A JVM backend with no Android module does not get
-this profile; see `jvm`.
+Applies to: Android modules — some module has a `src/main/AndroidManifest.xml`.
+A JVM backend with no Android module does not get this profile; see `simt rules
+show jvm`.
 
 ## Build
 

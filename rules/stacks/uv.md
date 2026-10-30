@@ -11,8 +11,9 @@ simt-scope: ["uv.lock", "pyproject.toml"]
 
 # Stack profile: uv
 
-Applies to: `has-uv-lock` — a `uv.lock` is committed, here or in a workspace package.
-The language rules are in the `python` profile, which every Python repository gets.
+Applies to: a committed `uv.lock`, here or in a workspace package. The language rules
+are in the `python` profile (`simt rules show python`), which every Python repository
+gets.
 
 ## Invocation
 

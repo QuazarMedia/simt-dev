@@ -8,7 +8,7 @@ simt-scope: ["Cargo.toml", "src/**/*.rs"]
 
 # Stack profile: Rust
 
-Applies to: `has-cargo-toml` — a Cargo workspace or crate.
+Applies to: a committed `Cargo.toml` — a Cargo workspace or crate.
 
 ## Build and gates
 

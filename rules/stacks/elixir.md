@@ -8,7 +8,7 @@ simt-scope: ["mix.exs", "lib/**/*.ex"]
 
 # Stack profile: Elixir
 
-Applies to: `has-mix` — a `mix.exs`.
+Applies to: a committed `mix.exs`.
 
 ## Build and gates
 

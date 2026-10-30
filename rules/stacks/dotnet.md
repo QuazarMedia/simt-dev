@@ -8,7 +8,7 @@ simt-scope: ["*.csproj", "*.sln", "*.fsproj"]
 
 # Stack profile: .NET
 
-Applies to: `has-nuget` — a `.csproj` or solution.
+Applies to: a committed `.csproj` or solution.
 
 ## Build and gates
 

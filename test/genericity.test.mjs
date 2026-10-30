@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, readdir, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -142,6 +142,40 @@ test('an unreadable root reports every collection empty rather than throwing', a
   assert.equal(result.error, 'unreadable-root');
   assert.deepEqual(result.stack, []);
   assert.deepEqual(result.facts, []);
+});
+
+// --- rule text: what the reader receives -------------------------------------
+
+test('rule text names no manifest file and leaks no detection vocabulary', async () => {
+  const rulesDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'rules');
+  const files = [];
+  const walk = async (dir) => {
+    for (const entry of (await readdir(dir)).sort()) {
+      const path = join(dir, entry);
+      if ((await stat(path)).isDirectory()) await walk(path);
+      else files.push(path);
+    }
+  };
+  await walk(rulesDir);
+  assert.ok(files.length > 0, 'no rule files found under rules/');
+  for (const file of files) {
+    const text = await readFile(file, 'utf8');
+    // The manifest is named with a token the render substitutes: a literal filename
+    // in a rule body is a path that resolves against this repository, not the reader's.
+    assert.doesNotMatch(
+      text,
+      /simt(?:-dev)?\.json/,
+      `${file} names the manifest file; use the {manifest} token`,
+    );
+    for (const line of text.split('\n')) {
+      if (!/^Applies to:/.test(line)) continue;
+      assert.doesNotMatch(
+        line,
+        /`has-[a-z0-9-]+`/,
+        `${file} leaks detection vocabulary in "Applies to"`,
+      );
+    }
+  }
 });
 
 // --- the vocabulary is derived, so the two cannot desynchronise -------------

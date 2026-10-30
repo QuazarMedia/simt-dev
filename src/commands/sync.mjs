@@ -172,6 +172,10 @@ export async function syncCommand(positional, flags) {
     );
   }
 
+  // A dangling cross-reference does not stop the projection: the region renders, and one
+  // unreachable reference is a defect to report, not a reason to withhold the rest.
+  for (const p of result.crossRefs ?? []) note(`PROBLEM ${p}`);
+
   const broken = result.targets.filter((t) => t.action === 'malformed');
   if (broken.length > 0) {
     const first = broken[0];

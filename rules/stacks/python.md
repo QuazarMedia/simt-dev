@@ -8,14 +8,15 @@ simt-scope: ["pyproject.toml", "requirements.txt", "setup.py", "*.py"]
 
 # Stack profile: Python
 
-Applies to: `python`. The environment rules — how to invoke tools, and which lockfile
-owns them — are in the `uv` profile, which selects on `has-uv-lock`.
+Applies to: Python — `pyproject.toml`, `requirements.txt` or `setup.py`. The
+environment rules — how to invoke tools, and which lockfile owns them — are in the
+`uv` profile (`simt rules show uv`), which selects on a committed `uv.lock`.
 
 ## Invocation
 
 - Run through the repository's own runner: `uv run` where a `uv.lock` is committed,
   `poetry run` where a `poetry.lock` is, and the repository's documented wrapper
-  otherwise. See the `uv` profile for the form that must not be used.
+  otherwise. See `simt rules show uv` for the form that must not be used.
 - Never invoke a tool from whatever environment the shell happens to have. It will
   usually be a different copy of the package than the one under test, and the failure
   it produces looks like a bug in the code.
@@ -30,9 +31,9 @@ owns them — are in the `uv` profile, which selects on `has-uv-lock`.
 
 ## Tests
 
-- `fail_under` is set per repo in `simt.json` (ADR-006). Where a repo requires
-  100 %, treat it as a behavioural gate: an uncovered path is either a missing test
-  or dead code, and both are defects.
+- `fail_under` is set per repo in the repository's manifest (`{manifest}`) (ADR-006).
+  Where a repo requires 100 %, treat it as a behavioural gate: an uncovered path is
+  either a missing test or dead code, and both are defects.
 - No `pytest.skip` without a pre-existing written justification.
 - Test the narrowest layer that proves the behaviour; reach for an integration test
   only when the behaviour is genuinely cross-system.

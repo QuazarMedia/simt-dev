@@ -10,6 +10,7 @@ simt-substitutions:
     describe: how this repo actually runs one named test file
   - key: exampleTestPath
     default: path/to/the.changed.test.ts
+    default-has-go-mod: path/to/the_changed_test.go
     describe: one real test file for this repo, used only as the named example
   - key: pathKinds
     default: feature/contract/route

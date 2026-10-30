@@ -123,6 +123,10 @@ export const VALUE_FLAGS = new Set([
   // "a registry" without a path would have to guess, and the guess is the
   // defect Q37 exists to remove (review 0003).
   'registry',
+  // compare: how many repository rows to build at once (review 0003 Q38).
+  // A count, not a switch, because "parallel" without a cap is the burst this
+  // flag exists to prevent.
+  'concurrency',
   // skills install: which body of a multi-variant skill, and which source when the
   // bytes alone do not identify one.
   'variant',

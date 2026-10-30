@@ -16,6 +16,7 @@
 // fact per line in a stable field order so two runs diff cleanly; a row that
 // reordered its columns would make every comparison between two runs unreadable.
 
+import { mapCapped, DEFAULT_CONCURRENCY, resolveConcurrency } from './parallel.mjs';
 import { checkTargets, PRIMARY_TARGET } from '../projection/project.mjs';
 import { manifestDrift, readManifest } from '../projection/manifest.mjs';
 import { loadRules, select } from '../projection/rules.mjs';
@@ -74,7 +75,8 @@ function packageEntry(f) {
   return { path: f.file, profiles: f.profiles ?? [], status: f.status, detail: f.detail ?? null };
 }
 
-export async function buildRow(path, context) {  const name = path.split('/').filter(Boolean).pop() ?? path;
+export async function buildRow(path, context) {
+  const name = path.split('/').filter(Boolean).pop() ?? path;
   const problems = [];
   const notes = [];
 
@@ -352,6 +354,29 @@ export async function buildRow(path, context) {  const name = path.split('/').fi
   }
 
   return row;
+}
+
+export { DEFAULT_CONCURRENCY, resolveConcurrency } from './parallel.mjs';
+
+/**
+ * Every row, in input order, built with at most `concurrency` in flight.
+ *
+ * A thrown row is impossible - `buildRow` never rejects - so the first error
+ * aborts, because a pool that swallows the one failure mode its worker cannot
+ * produce is decoration. `onBatch(done, total)` fires after each row for MCP
+ * `notifications/progress`; `signal` aborts between rows for
+ * `notifications/cancelled`.
+ */
+export async function buildRows(
+  paths,
+  context,
+  { concurrency = DEFAULT_CONCURRENCY, signal = null, onBatch = null } = {},
+) {
+  return mapCapped(paths, (p) => buildRow(p, context), {
+    concurrency,
+    signal,
+    onItem: onBatch,
+  });
 }
 
 function declaredGates(manifest) {

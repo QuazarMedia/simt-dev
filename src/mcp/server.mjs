@@ -103,12 +103,17 @@ const LIST_CACHE = { ttlMs: 3600000, cacheScope: 'private' };
  * caller names the root and the default is the process's cwd, which is what an editor's
  * stdio server sits in.
  *
+ * `signal` aborts the one in-flight `tools/call` (wired by `serve` to
+ * `notifications/cancelled`); `notify` emits `notifications/progress` while it
+ * runs. Both are null in tests that call this directly, and every tool must
+ * treat a missing context as "run to completion quietly".
+ *
  * @param {object|null} request a parsed JSON-RPC message
  * @param {object[]} tools
- * @param {{packageVersion?: string, state?: {version: string|null}, root?: string}} options
+ * @param {{packageVersion?: string, state?: {version: string|null}, root?: string, signal?: AbortSignal|null, notify?: ((message: object) => void)|null}} options
  * @returns {Promise<object|null>}
  */
-export async function handle(request, tools, { packageVersion, state, root } = {}) {
+export async function handle(request, tools, { packageVersion, state, root, signal = null, notify = null } = {}) {
   if (request === null || typeof request !== 'object' || Array.isArray(request)) {
     return error(null, RPC.REQUEST, 'request must be a JSON object');
   }
@@ -195,8 +200,24 @@ export async function handle(request, tools, { packageVersion, state, root } = {
         return error(id, RPC.METHOD, `no tool named "${name}"; call tools/list first`);
       }
       const args = params?.arguments ?? {};
+      // The one impurity in this file, and scoped to it: progress has to reach
+      // the client while the tool runs, not after it returns. Nothing else
+      // writes here - diagnostics still go to stderr, never this stream.
+      const progressToken = params?._meta?.progressToken;
+      const toolCtx = {
+        signal,
+        onProgress:
+          progressToken !== undefined && progressToken !== null && typeof notify === 'function'
+            ? (progress, total) =>
+                notify({
+                  jsonrpc: '2.0',
+                  method: 'notifications/progress',
+                  params: { progressToken, progress, total },
+                })
+            : null,
+      };
       try {
-        const payload = await tool.run(args);
+        const payload = await tool.run(args, toolCtx);
         // Both blocks, always. `structuredContent` is what a client validates against
         // `outputSchema` and what it can index; the text block is what a client that
         // predates structured output reads. Emitting one without the other leaves half
@@ -384,33 +405,71 @@ function error(id, code, message) {
 export async function serve(tools, { input = process.stdin, output = process.stdout, packageVersion, onError } = {}) {
   const rl = createInterface({ input, crlfDelay: Infinity });
   const state = { version: null };
-  for await (const line of rl) {
-    if (line.trim() === '') continue;
-
-    // Parse and handling fail differently and must answer differently. A line that is
-    // not JSON has no id to answer to, so it is a parse error with `id: null`; a
-    // throw inside `handle` belongs to the request it was answering, so it keeps
-    // that request's id — answering it as a parse error hangs the client that is
-    // still waiting for its answer (Q12).
-    let response;
+  // The in-flight call a `notifications/cancelled` can abort. Read this way
+  // because the loop below is blocked awaiting the tool while the client
+  // decides: the event loop still turns on subprocess waits, so the peek
+  // fires mid-run and the tool checks the signal between rows. The async
+  // iterator below yields the same line afterwards and `handle` answers it
+  // with null, as every notification is answered - the peek consumes nothing.
+  let inflight = null;
+  const peekCancel = (line) => {
+    if (!inflight || line.trim() === '') return;
     let message;
     try {
       message = JSON.parse(line);
-    } catch (parseFailure) {
-      response = error(null, RPC.PARSE, `invalid JSON: ${parseFailure.message}`);
+    } catch {
+      return;
     }
-    if (response === undefined) {
+    if (message?.method === 'notifications/cancelled' && message?.params?.requestId === inflight.id) {
+      inflight.controller.abort();
+    }
+  };
+  rl.on('line', peekCancel);
+  try {
+    for await (const line of rl) {
+      if (line.trim() === '') continue;
+
+      // Parse and handling fail differently and must answer differently. A line that is
+      // not JSON has no id to answer to, so it is a parse error with `id: null`; a
+      // throw inside `handle` belongs to the request it was answering, so it keeps
+      // that request's id — answering it as a parse error hangs the client that is
+      // still waiting for its answer (Q12).
+      let response;
+      let message;
       try {
-        response = await handle(message, tools, { packageVersion, state });
-      } catch (handlerFailure) {
-        const id = message !== null && typeof message === 'object' && 'id' in message ? message.id : null;
-        response = error(id, RPC.INTERNAL, `internal error: ${handlerFailure?.message ?? handlerFailure}`);
+        message = JSON.parse(line);
+      } catch (parseFailure) {
+        response = error(null, RPC.PARSE, `invalid JSON: ${parseFailure.message}`);
       }
+      if (response === undefined) {
+        // A notification never runs: without an id there is nothing to cancel
+        // and nothing to answer, so `notifications/cancelled` for an idle server
+        // is a no-op rather than an error.
+        const isNotification =
+          message === null || typeof message !== 'object' || Array.isArray(message) || message.id === undefined || message.id === null;
+        const controller = isNotification ? null : new AbortController();
+        if (controller) inflight = { id: message.id, controller };
+        try {
+          response = await handle(message, tools, {
+            packageVersion,
+            state,
+            signal: controller?.signal ?? null,
+            notify: (notification) => output.write(`${JSON.stringify(notification)}\n`),
+          });
+        } catch (handlerFailure) {
+          const id = message !== null && typeof message === 'object' && 'id' in message ? message.id : null;
+          response = error(id, RPC.INTERNAL, `internal error: ${handlerFailure?.message ?? handlerFailure}`);
+        } finally {
+          if (controller) inflight = null;
+        }
+      }
+      if (response === null) continue;
+      output.write(`${JSON.stringify(response)}\n`);
     }
-    if (response === null) continue;
-    output.write(`${JSON.stringify(response)}\n`);
+    return EXIT_OK;
+  } finally {
+    rl.off('line', peekCancel);
   }
-  return EXIT_OK;
 }
 
 const EXIT_OK = 0;

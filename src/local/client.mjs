@@ -18,14 +18,12 @@ function guardEndpoint(endpoint, { allowRemote = false } = {}) {
   if (!endpoint || typeof endpoint !== 'object') {
     return { ok: false, error: 'local model endpoint is not configured', refusedRemote: false };
   }
+  // `url` and `model` are validated once, where the config is read
+  // (`local/config.mjs`): an endpoint that reaches this function has both. What is left
+  // here is the one rule the config cannot enforce - a loopback-only default - and that
+  // is why this function still exists (review 0003 Q83).
   const rawUrl = typeof endpoint.url === 'string' ? endpoint.url.trim() : '';
-  if (!rawUrl) {
-    return { ok: false, error: 'local model endpoint is missing `url`', refusedRemote: false };
-  }
   const model = typeof endpoint.model === 'string' ? endpoint.model.trim() : '';
-  if (!model) {
-    return { ok: false, error: 'local model endpoint is missing `model`', refusedRemote: false };
-  }
   const apiKey = typeof endpoint.apiKey === 'string' && endpoint.apiKey.length > 0 ? endpoint.apiKey : null;
   const loopback = isLoopbackUrl(rawUrl);
   if (!loopback && !allowRemote) {

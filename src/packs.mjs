@@ -72,8 +72,26 @@ export async function packDigest(dir, { exclude = [] } = {}) {
     }
     for (const entry of entries.sort((a, b) => (a.name < b.name ? -1 : 1))) {
       const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
-      if (entry.isDirectory()) await walk(join(d, entry.name), rel);
-      else if (entry.isFile() && !excluded.has(rel)) files.push(rel);
+      if (entry.isDirectory()) {
+        await walk(join(d, entry.name), rel);
+      } else if (entry.isSymbolicLink()) {
+        // A link is not vendored bytes, and the loader follows it: the old walk skipped
+        // links while the projection read through them, so a rule reached by a link was
+        // projected without being covered by the pin (review 0003 Q58). A link to a
+        // file is hashed through its target, because `readFile` below follows it. A link
+        // to a directory is refused: recursing would let a pack's digest describe a tree
+        // it does not carry.
+        const target = await stat(join(d, entry.name)).catch(() => null);
+        if (target?.isDirectory()) {
+          const error = new Error(
+            `${rel} is a symbolic link to a directory; a pack is vendored bytes, and its digest cannot cover a tree it does not carry`,
+          );
+          error.code = 'PACK_SYMLINK';
+          error.path = rel;
+          throw error;
+        }
+        if (!excluded.has(rel)) files.push(rel);
+      } else if (entry.isFile() && !excluded.has(rel)) files.push(rel);
     }
   };
   await walk(dir);

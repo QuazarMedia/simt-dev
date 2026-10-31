@@ -105,49 +105,6 @@ export function getGate(name) {
   return GATES[name] ?? null;
 }
 
-/**
- * A gate a repo cannot run is a FAILURE, never a skip.
- *
- * This is the load-bearing decision of the whole dispatcher. A gate that
- * silently does nothing is indistinguishable from a gate that passed, and the
- * documented consequence in this estate is an agent reaching for
- * `--no-verify` - a repository removed its tests from pre-commit precisely
- * because they were slow, and slow-plus-silent is what teaches everyone that
- * hooks are advisory.
- */
-export function unresolved(name, { hasScript, binary, command, stack }) {
-  const gate = getGate(name);
-  if (gate === null) {
-    return {
-      gate: name,
-      reason: `unknown gate; the shared dispatcher knows: ${Object.keys(GATES).sort().join(', ')}`,
-      remedy: `remove "${name}" from ${MANIFEST_FILE} gates`,
-    };
-  }
-  if (gate.kind === 'script' && !hasScript(gate.script)) {
-    return {
-      gate: name,
-      reason: `no "${gate.script}" script in package.json`,
-      remedy: `add the script, or remove "${name}" from ${MANIFEST_FILE} gates`,
-    };
-  }
-  if (gate.kind === 'command' && !command) {
-    return {
-      gate: name,
-      reason: `no command declared for this gate in ${MANIFEST_FILE}`,
-      remedy: `set gates.commands["${name}"] to the command that proves it, or remove "${name}" from ${MANIFEST_FILE} gates`,
-    };
-  }
-  if (gate.kind === 'staged' && !binary) {
-    return {
-      gate: name,
-      reason: `${gate.tools.join('/')} is not installed in node_modules/.bin`,
-      remedy: `run the repo install command, or remove "format" from ${MANIFEST_FILE} gates`,
-    };
-  }
-  return null;
-}
-
 export function gateNames() {
   return Object.keys(GATES).sort();
 }

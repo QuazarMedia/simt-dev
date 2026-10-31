@@ -23,7 +23,7 @@ import { MANIFEST, readManifest } from '../projection/manifest.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderEvidenceShim, renderShim } from '../hooks/shim.mjs';
 import { GATE_KEY, gateCount, readHooksPath, readHooksState, wantsShim } from '../compare/hooksstate.mjs';
 import { GATES } from '../hooks/gates.mjs';
-import { knownGates } from '../hooks/resolve.mjs';
+import { gateNames } from '../hooks/gates.mjs';
 import { renderGateReport, runGates } from '../hooks/dispatcher.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
@@ -770,7 +770,7 @@ async function hooksStatus(root, flags) {
     const unknown = [...(manifest?.gates?.preCommit ?? []), ...(manifest?.gates?.prePush ?? [])].filter((n) => !GATES[n]);
     if (unknown.length > 0) {
       lines.push('', `unknown gates (the hook will fail): ${unknown.join(', ')}`);
-      lines.push(`known gates: ${knownGates().join(', ')}`);
+      lines.push(`known gates: ${gateNames().join(', ')}`);
     }
   }
   if (problems.length > 0) {

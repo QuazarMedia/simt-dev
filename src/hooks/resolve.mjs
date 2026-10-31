@@ -14,13 +14,8 @@ import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join } from 'node:path';
 
-import { FORMATTABLE, GATES } from './gates.mjs';
+import { FORMATTABLE, GATES, gateNames } from './gates.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
-
-/** Gate names the shared dispatcher knows, sorted. */
-export function knownGates() {
-  return Object.keys(GATES).sort();
-}
 
 /** Is this path an executable file? */
 async function isExecutable(path) {
@@ -203,7 +198,7 @@ export async function resolveGate(gate, { root, pkg, staged, commands, runner = 
     gate: name,
     kind: 'unknown',
     reason: `unknown gate kind "${gate.kind}"`,
-    remedy: `this is a bug in simt-dev; known gates: ${knownGates().join(', ')}`,
+    remedy: `this is a bug in simt-dev; )}', ')}`,
   };
 }
 

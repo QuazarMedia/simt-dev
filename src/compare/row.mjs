@@ -21,7 +21,6 @@ import { checkTargets, PRIMARY_TARGET } from '../projection/project.mjs';
 import { manifestDrift, readManifest } from '../projection/manifest.mjs';
 import { loadRules, select } from '../projection/rules.mjs';
 import { resolvePacks } from '../packs.mjs';
-import { knownGates } from '../hooks/resolve.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { readHooksState, wantsShim } from './hooksstate.mjs';
 import { CLI } from '../name.mjs';
@@ -421,4 +420,3 @@ export function summarise(rows, extra = {}) {
   };
 }
 
-export { knownGates };

@@ -167,7 +167,7 @@ export function verifyCitations(body, sourceLineCount) {
 }
 
 /** The proposal file's frontmatter. No wall-clock value here: byte-stable (P4). */
-export function proposalFrontmatter({ source, digest, engine, budget, prompt, verified, verdict, advisory }) {
+export function proposalFrontmatter({ source, digest, engine, budget, prompt, verified, verdict, advisory, faults = [] }) {
   return [
     '---',
     `source: ${source}`,
@@ -178,6 +178,10 @@ export function proposalFrontmatter({ source, digest, engine, budget, prompt, ve
     verdict ? `verdict: ${verdict}` : null,
     advisory ? 'advisory: true' : null,
     verified === false ? 'verified: false' : 'verified: true',
+    // The faults belong to the proposal, not only to the report that wrote it: a cached
+    // proposal re-read without them reported `verified:false` and nothing to fix
+    // (review 0003 Q52).
+    Array.isArray(faults) && faults.length > 0 ? `faults: ${JSON.stringify(faults)}` : null,
     'status: proposal',
     '---',
     '',

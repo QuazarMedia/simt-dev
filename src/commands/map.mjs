@@ -44,12 +44,19 @@ export async function mapCommand(args, flags) {
       : null;
   const ranked = rankFiles({ ...loaded, bm25, queryVector, task });
   const rendered = renderMap(ranked, loaded.symbols, { level, budget });
+  // What the ranking is an answer to. `graph-only` says no file or symbol mentioned the
+  // task and the list is the graph hub; reading that as a hit is how `map --task
+  // zebracorn` looked useful (review 0003 Q52).
+  const matched = ranked.filter((row) => (row.score ?? 0) > 0).length;
+  const basis = task.trim().length === 0 ? 'no-task' : matched > 0 ? 'matched' : 'graph-only';
   const payload = {
     ok: true,
     command: 'map',
     root,
     level,
     budget,
+    matched,
+    basis,
     shown: rendered.shown,
     total: rendered.total,
     truncated: rendered.truncated,
@@ -62,6 +69,7 @@ export async function mapCommand(args, flags) {
   }
   const lines = [
     `level    ${level}`,
+    `basis    ${basis}${basis === 'graph-only' ? ' (no file or symbol mentions this task; the list is the graph hub)' : ''}`,
     `shown    ${rendered.shown}`,
     `total    ${rendered.total}`,
     `budget   ${budget}`,

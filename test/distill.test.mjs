@@ -101,6 +101,31 @@ The gate fails the push.
  remedies name a command.
 `;
 
+test('a cached unverified proposal renders instead of crashing on a missing faults list (Q52)', async () => {
+  const root = await scratchDocRoot();
+  try {
+    const fresh = await distillTarget(['docs/notes.md'], { root });
+    if (typeof fresh === 'number') assert.fail(`distill exited ${fresh}`);
+    const proposalPath = join(root, fresh.proposal.path);
+    const text = await readFile(proposalPath, 'utf8');
+    // A proposal written before faults were recorded says it is unverified and carries no
+    // list; the cached read used to hand the command `undefined` and it threw.
+    await writeFile(proposalPath, text.replace('verified: true', 'verified: false'));
+
+    const cached = await distillTarget(['docs/notes.md'], { root });
+    if (typeof cached === 'number') assert.fail(`cached distill exited ${cached}`);
+    assert.equal(cached.verified, false);
+    assert.deepEqual(cached.faults, []);
+    assert.equal(cached.proposal.state, 'cached');
+
+    const cli = await runCli(['distill', 'docs/notes.md', '--root', root]);
+    assert.equal(cli.code, 0, cli.stderr);
+    assert.match(cli.stdout, /proposal\s+\.simt\/local\/distilled\//);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('R38: the outline engine picks headings plus the first content under each', () => {
   const { body } = outlineSummary(SOURCE, 0);
   const lines = body.split('\n');

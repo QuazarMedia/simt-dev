@@ -192,6 +192,16 @@ export async function distillTarget(args, flags) {
   const cached = flags.refresh === true ? null : await readFile(absProposal, 'utf8').catch(() => null);
   if (cached !== null) {
     const fields = parseExistingFrontmatter(cached);
+    let faults = [];
+    if (typeof fields.faults === 'string') {
+      try {
+        const parsedFaults = JSON.parse(fields.faults);
+        if (Array.isArray(parsedFaults)) faults = parsedFaults.map(String);
+      } catch {
+        // A malformed faults line is not a reason to refuse the proposal; the proposal
+        // still says it is unverified, and `--refresh` re-derives the list.
+      }
+    }
     return {
       ok: true,
       command: 'distill',
@@ -201,6 +211,7 @@ export async function distillTarget(args, flags) {
       budget: Number(fields.budget ?? budget),
       citations: countCitations(cached),
       verified: fields.verified !== 'false',
+      faults,
       metric: { note: METRIC_NOTE },
       proposal: { path: relProposal, state: 'cached', bytes: Buffer.byteLength(cached, 'utf8') },
     };
@@ -227,6 +238,7 @@ export async function distillTarget(args, flags) {
       engine: provenance,
       budget,
       verified: faults.length === 0,
+      faults,
     }) + `\n${outcome.body}\n`;
 
   await mkdir(join(root, DISTILL_DIR), { recursive: true });

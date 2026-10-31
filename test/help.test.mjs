@@ -10,6 +10,14 @@ import { BOOL_FLAGS, REPEATABLE_FLAGS, VALUE_FLAGS } from '../src/argv.mjs';
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 
+/** The full surface. `--help` is the core page and points here; the completeness
+ * assertions moved with it rather than being dropped, because a command that is on
+ * neither page is still a capability nobody can reach. */
+async function helpAll() {
+  const { stdout } = await exec('node', [BIN, 'help', '--all'], { maxBuffer: 16 << 20 });
+  return stdout;
+}
+
 async function help() {
   const { stdout } = await exec('node', [BIN, '--help'], { maxBuffer: 8 << 20 });
   return stdout;
@@ -29,7 +37,7 @@ async function help() {
  * that exists but cannot be reached.
  */
 test('every dispatchable command is documented in --help', async () => {
-  const text = await help();
+  const text = await helpAll();
   const missing = COMMANDS.filter((path) => !text.includes(`${'simt'} ${path}`));
   assert.deepEqual(missing, [], `undocumented commands: ${missing.join(', ')}`);
 });
@@ -40,7 +48,7 @@ test('every dispatchable command is documented in --help', async () => {
  * reader who follows it gets a usage error instead of a result.
  */
 test('--help documents nothing the binary will not run', async () => {
-  const text = await help();
+  const text = await helpAll();
   const { CLI } = await import('../src/name.mjs');
   // Every `simt <words>` at the start of a help line is a claimed command path.
   const claimed = [...text.matchAll(new RegExp(`^${CLI} ([a-z-]+(?: [a-z-]+)?)`, 'gm'))].map(
@@ -106,6 +114,29 @@ test('an absent repeatable flag is an empty list, not a stringified undefined', 
   assert.deepEqual(listFlag([]), []);
 });
 
+// --- tiers and the 2 KB page (Q61) -------------------------------------------
+
+test('help: the top-level page fits in 2 KB and says where the rest is', async () => {
+  const text = await help();
+  assert.ok(Buffer.byteLength(text) <= 2048, `${Buffer.byteLength(text)} bytes`);
+  assert.match(text, /help --all/);
+});
+
+test('help: --all still lists every command and every flag', async () => {
+  const { stdout } = await exec('node', [BIN, 'help', '--all'], { maxBuffer: 16 << 20 });
+  for (const path of COMMANDS) assert.ok(stdout.includes(`simt ${path}`), `${path} is on neither page`);
+  for (const flag of [...VALUE_FLAGS, ...BOOL_FLAGS, ...REPEATABLE_FLAGS]) {
+    assert.ok(stdout.includes(`--${flag}`), `--${flag} is undocumented in --all`);
+  }
+});
+
+test('help: no plan vocabulary reaches the reader', async () => {
+  // A consumer has no plan 0003; a row number and an appendix reference are addresses in
+  // a document the reader does not have (review 0003 Q61).
+  const text = await help();
+  assert.doesNotMatch(text, /\bR\d{2}\b|plan 000\d|Appendix/);
+});
+
 // --- one command at a time (Q61) ---------------------------------------------
 
 /**
@@ -159,7 +190,7 @@ test('every flag the parser accepts is described in --help', async () => {
   // The mirror of the command test, for the same reason. `--help` documents the flags
   // a caller will reach for; a flag that works but is undescribed is a flag nobody
   // types, and a described flag that does not parse is a promise the CLI breaks.
-  const text = await help();
+  const text = await helpAll();
   const undocumented = [...VALUE_FLAGS, ...BOOL_FLAGS, ...REPEATABLE_FLAGS]
     .filter((name) => !text.includes(`--${name}`))
     .sort();

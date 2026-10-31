@@ -126,12 +126,16 @@ export async function loadGraph(root, { build = true } = {}) {
     readFts(root),
     readEmbeddings(root),
   ]);
+  // A present index that cannot be read is named, not served as empty
+  // (review 0003 Q44): `cold` is "nothing here", `broken` is "something is
+  // here and the read failed".
+  const broken = !build && Boolean(files.error);
   if (!build && files.length === 0) {
-    return { files: [], symbols: [], edges: [], fts: [], embeddings: [], cold: true, stale: false };
+    return { files: [], symbols: [], edges: [], fts: [], embeddings: [], cold: true, broken, stale: false };
   }
   // A caller that may not build still learns the index is old (review 0003
   // Q42): the digest compare costs one `git ls-files -s`, and the freshness
   // signal is what lets a UI distrust the packet instead of quoting it.
   const stale = !build && files.length > 0 && (await isIndexStale(root));
-  return { files, symbols, edges, fts, embeddings, stale };
+  return { files, symbols, edges, fts, embeddings, stale, broken };
 }

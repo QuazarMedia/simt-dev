@@ -18,11 +18,61 @@ export const SCHEMA_V = '4';
 
 // The FTS tables carry their tokenizer in their definition, so `if not exists`
 // cannot migrate them: a v3 database would keep tokenizing new rows the v3 way
-// (ASCII fold, kind and ref searchable). ensureFtsSchema drops and recreates
-// them when the definition drifted; Q44 replaces the wipe with versioned
-// migrations.
+// (ASCII fold, kind and ref searchable). The 3 -> 4 migration below recreates
+// them, which is the versioned replacement for the per-write wipe (Q44).
 export const FTS_SCHEMA = 'create virtual table fts using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "unicode61 remove_diacritics 2")';
 export const FTS_TRI_SCHEMA = 'create virtual table fts_tri using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "trigram")';
+
+// A database written by a *newer* simt is never opened for write, and never
+// read blind (review 0003 Q44): the mismatched canonical file stays with its
+// owner, and this version reads and writes a sidecar named after itself, so
+// two pinned versions stop rewriting one file past each other (the ADR-059
+// flip-flop). An *older* database is read and written in place, and the
+// migration brings it current.
+export function indexFileFor(root, backend, version) {
+  const base = backend === 'sqlite' ? SQLITE_FILE : JSONL_FILE;
+  if (version === '' || version === SCHEMA_V) return join(root, base);
+  const dot = base.lastIndexOf('.');
+  return join(root, `${base.slice(0, dot)}.v${SCHEMA_V}${base.slice(dot)}`);
+}
+
+// The canonical file is opened for write when the stored version is this one
+// or older - the ordered migration upgrades the older one in place. A newer
+// version owns its file, and opening it here would demote the stamp.
+function canonicalForWrite(version) {
+  const at = Number(version);
+  return Number.isInteger(at) && at <= Number(SCHEMA_V);
+}
+
+// Ordered schema migrations: each step upgrades a database written at `from`
+// to `to`, applied in list order. A database at a version past the last step
+// is not opened for write at all (indexFileFor routes it to a sidecar).
+const MIGRATIONS = [
+  {
+    from: 3,
+    to: 4,
+    apply: (db) => {
+      db.exec('drop table if exists fts');
+      db.exec(FTS_SCHEMA);
+      db.exec('drop table if exists fts_tri');
+      db.exec(FTS_TRI_SCHEMA);
+    },
+  },
+];
+
+/**
+ * Bring an open database up to the current schema and stamp it. `user_version`
+ * 0 means "written before the stamp existed": those databases carried the
+ * version in meta only, so every step at or below the current schema runs -
+ * each is idempotent on an already-migrated table set.
+ */
+function migrateDb(db) {
+  const at = Number(db.prepare('pragma user_version').get()?.user_version ?? 0);
+  for (const step of MIGRATIONS) {
+    if (at === 0 || (at >= step.from && at < step.to)) step.apply(db);
+  }
+  db.exec(`pragma user_version = ${Number(SCHEMA_V)}`);
+}
 
 const SCHEMA = `
 create table if not exists files(path text primary key, blob text, lang text, bytes int, pkg text);
@@ -31,26 +81,6 @@ create table if not exists edges(src text, dst text, kind text, weight real);
 create table if not exists embeddings(path text primary key, blob text, model text, dims int, vec blob);
 create table if not exists meta(key text primary key, value text);
 `;
-
-function ensureFtsSchema(db) {
-  const have = new Map(
-    db
-      .prepare("select name, sql from sqlite_master where type = 'table' and (name = 'fts' or name = 'fts_tri')")
-      .all()
-      .map((row) => [row.name, row.sql ?? '']),
-  );
-  // Match loosely on purpose: the stored text is verbatim DDL, and a missed
-  // marker recreates while a rewritten-but-equal definition never matches a
-  // marker it does not contain. Either way the tables converge on the DDL above.
-  if (!have.get('fts')?.includes('UNINDEXED') || !have.get('fts')?.includes('remove_diacritics 2')) {
-    db.exec('drop table if exists fts');
-    db.exec(FTS_SCHEMA);
-  }
-  if (!have.get('fts_tri')?.includes('trigram')) {
-    db.exec('drop table if exists fts_tri');
-    db.exec(FTS_TRI_SCHEMA);
-  }
-}
 
 export function encodeVectorBlob(vec) {
   if (!Array.isArray(vec) && !(vec instanceof Float32Array)) return Buffer.alloc(0);
@@ -103,7 +133,32 @@ export function treeDigest(listed) {
 
 export async function writeSqlite(root, next, removed, symbols, edges, fts, embeddings = [], tree = '') {
   const { DatabaseSync } = await import('node:sqlite');
-  const file = join(root, SQLITE_FILE);
+  // The canonical file is written when it is this version's or older (the
+  // migration upgrades the older one in place, review 0003 Q44): a database at
+  // a newer version stays with its owner, and the build goes to the sidecar
+  // this version owns.
+  let file = join(root, SQLITE_FILE);
+  try {
+    await stat(file);
+  } catch {
+    file = join(root, SQLITE_FILE_LEGACY);
+    try {
+      await stat(file);
+    } catch {
+      file = null;
+    }
+  }
+  if (file) {
+    let version = SCHEMA_V;
+    try {
+      version = await storedVersion(file);
+    } catch {
+      version = SCHEMA_V; // unreadable: rebuild it in place, as a cold build would
+    }
+    file = canonicalForWrite(version) ? file : indexFileFor(root, 'sqlite', version);
+  } else {
+    file = join(root, SQLITE_FILE);
+  }
   await mkdir(dirname(file), { recursive: true });
   // A cold build goes to a temp file that is renamed over the target: three
   // concurrent cold runs used to interleave schema creation and leave a locked,
@@ -132,6 +187,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     db.exec('pragma synchronous = normal');
     db.exec(SCHEMA);
     db.exec('begin immediate');
+    migrateDb(db);
     const upsert = db.prepare(`insert into files(path, blob, lang, bytes, pkg) values (?, ?, ?, ?, ?)
       on conflict(path) do update set blob = excluded.blob, lang = excluded.lang, bytes = excluded.bytes, pkg = excluded.pkg`);
     const dropSymbols = db.prepare('delete from symbols where path = ?');
@@ -140,7 +196,6 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     // (Q07). A removed file's incoming edges dangle, so they drop with it.
     const dropEdges = db.prepare('delete from edges where src = ?');
     const dropIncoming = db.prepare('delete from edges where dst = ?');
-    ensureFtsSchema(db);
     const dropFts = db.prepare('delete from fts where ref = ?');
     const dropTri = db.prepare('delete from fts_tri where ref = ?');
     const dropEmbed = db.prepare('delete from embeddings where path = ?');
@@ -197,6 +252,32 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
 }
 
 /**
+ * The version a database declares: `PRAGMA user_version` when stamped, else the
+ * meta `schema` row databases written before the stamp carried it in. Throws
+ * when the file cannot be read as a database - the caller decides whether that
+ * is a cold start or a corrupt one.
+ */
+async function storedVersion(file) {
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(file);
+  try {
+    const user = Number(db.prepare('pragma user_version').get()?.user_version ?? 0);
+    if (user > 0) return String(user);
+    return db.prepare("select value from meta where key = 'schema'").get()?.value ?? '';
+  } finally {
+    db.close();
+  }
+}
+
+/** A damaged index file is named, not silent (review 0003 Q44). */
+function corruptIndexError(cause) {
+  const corrupt = new Error('the index file is corrupt; run the index build to replace it');
+  corrupt.code = 'INDEX_CORRUPT';
+  corrupt.cause = cause;
+  return corrupt;
+}
+
+/**
  * A contended index write is a retryable race, not a broken repository: name it
  * so the command maps its own remedy instead of blaming the git checkout (Q08).
  */
@@ -208,7 +289,43 @@ function asIndexError(error) {
     busy.cause = error;
     return busy;
   }
+  if (/file is not a database|database disk image|malformed|corrupt/i.test(error?.message ?? '')) {
+    return corruptIndexError(error);
+  }
   return error;
+}
+
+/**
+ * The jsonl file this version writes to: the canonical file when it is this
+ * version's or unreadable, the sidecar when it belongs to another version
+ * (review 0003 Q44).
+ */
+async function jsonlTargetFile(root) {
+  const base = join(root, JSONL_FILE);
+  let text = null;
+  try {
+    text = await readFile(base, 'utf8');
+  } catch {
+    try {
+      text = await readFile(join(root, JSONL_FILE_LEGACY), 'utf8');
+    } catch {
+      return base; // no file: cold build goes to the canonical path
+    }
+  }
+  try {
+    for (const line of text.split('\n')) {
+      if (line === '') continue;
+      const row = JSON.parse(line);
+      if (row.table !== 'meta' || row.key !== 'schema') continue;
+      const value = row.value ?? '';
+      // Older files are rewritten in place at the current schema; a newer one
+      // stays with its owner and the build goes to the sidecar.
+      return canonicalForWrite(value) ? base : indexFileFor(root, 'jsonl', value);
+    }
+  } catch {
+    return base; // unreadable: rebuild it in place
+  }
+  return base;
 }
 
 export async function writeJsonl(root, previous, next, removed, symbols, edges, fts, force, embeddings = [], tree = '') {
@@ -223,20 +340,20 @@ export async function writeJsonl(root, previous, next, removed, symbols, edges, 
   }
   for (const row of replaced.values()) files.push(row);
   files.sort(byPath);
-  const keptSymbols = force ? [] : (await readJsonl(root, 'symbols')).filter((row) => !drop.has(row.path));
+  const keptSymbols = force ? [] : (await readJsonl(root, 'symbols')).rows.filter((row) => !drop.has(row.path));
   // Edge ownership mirrors the sqlite backend: a changed file loses only the edges
   // it owns (src), while a removed file also drops the edges that pointed at it.
-  const keptEdges = force ? [] : (await readJsonl(root, 'edges')).filter((row) => !drop.has(row.src) && !gone.has(row.dst));
-  const keptFts = force ? [] : (await readJsonl(root, 'fts')).filter((row) => !drop.has(row.ref));
+  const keptEdges = force ? [] : (await readJsonl(root, 'edges')).rows.filter((row) => !drop.has(row.src) && !gone.has(row.dst));
+  const keptFts = force ? [] : (await readJsonl(root, 'fts')).rows.filter((row) => !drop.has(row.ref));
   const newEmbedPaths = new Set(embeddings.map((row) => row.path));
   const keptEmbeddings = force
     ? []
-    : (await readJsonl(root, 'embeddings')).filter((row) => !drop.has(row.path) && !newEmbedPaths.has(row.path));
+    : (await readJsonl(root, 'embeddings')).rows.filter((row) => !drop.has(row.path) && !newEmbedPaths.has(row.path));
   const allSymbols = [...keptSymbols, ...symbols].sort(bySymbol);
   const allEdges = [...keptEdges, ...edges].sort(byEdge);
   const allFts = [...keptFts, ...fts].sort((a, b) => cmp(a.ref, b.ref));
   const allEmbeddings = [...keptEmbeddings, ...embeddings].sort(byPath);
-  const file = join(root, JSONL_FILE);
+  const file = await jsonlTargetFile(root);
   await mkdir(dirname(file), { recursive: true });
   // Written atomically: a concurrent reader never sees a half-written file.
   const tmp = tmpFor(file);
@@ -274,44 +391,69 @@ export async function readJsonl(root, table) {
     try {
       text = await readFile(join(root, JSONL_FILE_LEGACY), 'utf8');
     } catch {
-      return [];
+      return { rows: [], error: null };
+    }
+  }
+  let schema = '';
+  try {
+    for (const line of text.split('\n')) {
+      if (line === '') continue;
+      const row = JSON.parse(line);
+      if (row.table === 'meta' && row.key === 'schema') schema = row.value ?? '';
+    }
+  } catch (error) {
+    return { rows: [], error: corruptIndexError(error) };
+  }
+  // A file a newer version owns is not read blind (review 0003 Q44): this
+  // version's sidecar is read instead, and a sidecar that has not been built
+  // yet is cold, not broken. An older file is read in place; the next write
+  // rewrites it at the current schema.
+  if (!canonicalForWrite(schema)) {
+    try {
+      text = await readFile(indexFileFor(root, 'jsonl', schema), 'utf8');
+    } catch {
+      return { rows: [], error: null };
     }
   }
   const rows = [];
-  for (const line of text.split('\n')) {
-    if (line === '') continue;
-    const row = JSON.parse(line);
-    if (row.table !== table) continue;
-    if (table === 'meta') rows.push({ key: row.key, value: row.value });
-    else if (table === 'files') rows.push({ path: row.path, blob: row.blob, lang: row.lang, bytes: row.bytes, pkg: row.pkg });
-    else if (table === 'symbols') rows.push({ path: row.path, name: row.name, kind: row.kind, line: row.line, sig: row.sig, exported: row.exported });
-    else if (table === 'edges') rows.push({ src: row.src, dst: row.dst, kind: row.kind, weight: row.weight });
-    else if (table === 'fts') rows.push({ kind: row.kind, ref: row.ref, body: row.body });
-    else if (table === 'embeddings') {
-      const vec = decodeVectorBlob(row.vec);
-      rows.push({
-        path: row.path,
-        blob: row.blob ?? '',
-        model: row.model ?? '',
-        dims: Number.isInteger(row.dims) ? row.dims : vec.length,
-        vec,
-      });
+  try {
+    for (const line of text.split('\n')) {
+      if (line === '') continue;
+      const row = JSON.parse(line);
+      if (row.table !== table) continue;
+      if (table === 'meta') rows.push({ key: row.key, value: row.value });
+      else if (table === 'files') rows.push({ path: row.path, blob: row.blob, lang: row.lang, bytes: row.bytes, pkg: row.pkg });
+      else if (table === 'symbols') rows.push({ path: row.path, name: row.name, kind: row.kind, line: row.line, sig: row.sig, exported: row.exported });
+      else if (table === 'edges') rows.push({ src: row.src, dst: row.dst, kind: row.kind, weight: row.weight });
+      else if (table === 'fts') rows.push({ kind: row.kind, ref: row.ref, body: row.body });
+      else if (table === 'embeddings') {
+        const vec = decodeVectorBlob(row.vec);
+        rows.push({
+          path: row.path,
+          blob: row.blob ?? '',
+          model: row.model ?? '',
+          dims: Number.isInteger(row.dims) ? row.dims : vec.length,
+          vec,
+        });
+      }
     }
+  } catch (error) {
+    return { rows: [], error: corruptIndexError(error) };
   }
   if (table === 'symbols') rows.sort(bySymbol);
   else if (table === 'edges') rows.sort(byEdge);
   else if (table === 'fts') rows.sort((a, b) => cmp(a.ref, b.ref));
   else rows.sort(byPath);
-  return rows;
+  return { rows, error: null };
 }
 
-export async function readSqliteRows(root, sql, params = []) {
-  let DatabaseSync;
-  try {
-    ({ DatabaseSync } = await import('node:sqlite'));
-  } catch {
-    return [];
-  }
+/**
+ * The sqlite file a read opens: the canonical file when it is this version's
+ * or older, the sidecar when it belongs to a newer one (review 0003 Q44),
+ * null when no index for this version exists. Throws when a present file
+ * cannot be read as a database - corrupt, not cold.
+ */
+async function resolveSqliteFile(root) {
   // The pre-move path is a fallback for one release (review 0003 Q19).
   let file = join(root, SQLITE_FILE);
   try {
@@ -321,14 +463,47 @@ export async function readSqliteRows(root, sql, params = []) {
     try {
       await stat(file);
     } catch {
-      return [];
+      return null;
     }
   }
+  const version = await storedVersion(file);
+  // An older database is readable in place: its tables carry the same columns,
+  // and the next write migrates it. Only a newer one is routed to a sidecar.
+  if (canonicalForWrite(version)) return file;
+  const sidecar = indexFileFor(root, 'sqlite', version);
+  try {
+    await stat(sidecar);
+    return sidecar;
+  } catch {
+    return null; // this version has not built its sidecar yet: cold
+  }
+}
+
+/**
+ * Read rows from the index. Returns `{ rows, error }`: a missing index is
+ * `{ rows: [], error: null }` (cold), a present index that cannot be read is
+ * an empty row set with a named error - "locked", "no such column" and
+ * "corrupt" used to all look like "no results" (review 0003 Q44).
+ */
+export async function readSqliteRows(root, sql, params = []) {
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch {
+    return { rows: [], error: null };
+  }
+  let file;
+  try {
+    file = await resolveSqliteFile(root);
+  } catch (error) {
+    return { rows: [], error: asIndexError(error) };
+  }
+  if (!file) return { rows: [], error: null };
   const db = new DatabaseSync(file);
   try {
-    return db.prepare(sql).all(...params);
-  } catch {
-    return [];
+    return { rows: db.prepare(sql).all(...params), error: null };
+  } catch (error) {
+    return { rows: [], error: asIndexError(error) };
   } finally {
     db.close();
   }
@@ -336,20 +511,20 @@ export async function readSqliteRows(root, sql, params = []) {
 
 export async function readSchema(root, backend) {
   if (backend === 'sqlite') {
-    const rows = await readSqliteRows(root, "select value from meta where key = 'schema'");
+    const { rows } = await readSqliteRows(root, "select value from meta where key = 'schema'");
     return rows[0]?.value ?? '';
   }
-  const rows = await readJsonl(root, 'meta');
+  const { rows } = await readJsonl(root, 'meta');
   return rows.find((row) => row.key === 'schema')?.value ?? '';
 }
 
 /** The tree the stored index was built from, or '' when no build has vouched for one. */
 export async function readTreeDigest(root, backend) {
   if (backend === 'sqlite') {
-    const rows = await readSqliteRows(root, "select value from meta where key = 'tree'");
+    const { rows } = await readSqliteRows(root, "select value from meta where key = 'tree'");
     return rows[0]?.value ?? '';
   }
-  const rows = await readJsonl(root, 'meta');
+  const { rows } = await readJsonl(root, 'meta');
   return rows.find((row) => row.key === 'tree')?.value ?? '';
 }
 
@@ -358,9 +533,9 @@ export async function countSqlite(root) {
   const edges = await readSqliteRows(root, 'select count(*) as n from edges');
   const embeddings = await readSqliteRows(root, 'select count(*) as n from embeddings');
   return {
-    symbols: Number(symbols[0]?.n ?? 0),
-    edges: Number(edges[0]?.n ?? 0),
-    embeddings: Number(embeddings[0]?.n ?? 0),
+    symbols: Number(symbols.rows[0]?.n ?? 0),
+    edges: Number(edges.rows[0]?.n ?? 0),
+    embeddings: Number(embeddings.rows[0]?.n ?? 0),
   };
 }
 

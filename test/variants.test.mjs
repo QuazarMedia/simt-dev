@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 
 import {
+  BUILTIN_HARNESSES,
   applyVariantInWorkspace,
   isVariantExperimentOpen,
   listVariantSlots,
@@ -259,10 +260,12 @@ test('a locked winner under the old lock name is read, not lost (ADR-110)', asyn
 test('selectRuleVariants runs canary suite, records lockfile evidence, and re-opens on model or harness change', async () => {
   const root = await makeVariantRepo();
 
-  // Seed 2 mined tasks
+  // Seed 8 mined tasks: eight tasks give the paired tests enough discordant pairs
+  // for a significant result (two tasks cannot beat the canary alpha)
   const tasksDir = join(root, '.simt', 'bench', 'tasks');
   await mkdir(tasksDir, { recursive: true });
-  for (const id of ['t-var-01', 't-var-02']) {
+  for (let i = 1; i <= 8; i += 1) {
+    const id = `t-var-0${i}`;
     await writeFile(
       join(tasksDir, `${id}.json`),
       JSON.stringify({ schemaVersion: 1, id, base: 'HEAD', prompt: `fix ${id}` }),
@@ -288,7 +291,9 @@ test('selectRuleVariants runs canary suite, records lockfile evidence, and re-op
   const agentsB = await readFile(join(root, 'AGENTS.md'), 'utf8');
   assert.match(agentsB, /Never run git push without explicit approval\./);
 
-  // Stub runner that writes run records where variant `b` has higher R and lower C than `a`
+  // Stub runner that writes run records where variant `b` has higher R and lower C than `a`:
+  // `a` resolves 2 of 8 tasks (discordant pairs 0:6, McNemar p = 0.03125, below the canary
+  // alpha), `b` resolves all 8. dR = 1.0 - 0.25 = 0.75, dC = 0.01 - 0.03 = -0.02.
   let runnerCalls = 0;
   const stubRunner = async (repoRoot, opts) => {
     runnerCalls += 1;
@@ -297,7 +302,7 @@ test('selectRuleVariants runs canary suite, records lockfile evidence, and re-op
     for (const arm of opts.arms) {
       for (const task of opts.tasks) {
         const isB = arm.endsWith('-b');
-        const resolved = isB ? true : task === 't-var-01';
+        const resolved = isB ? true : task === 't-var-01' || task === 't-var-02';
         const costUsd = isB ? 0.01 : 0.03;
         await writeFile(
           join(runDir, `${task}-${arm}-rep1.json`),
@@ -331,12 +336,14 @@ test('selectRuleVariants runs canary suite, records lockfile evidence, and re-op
   assert.equal(runnerCalls, 1);
   assert.equal(first.slots.length, 1);
   assert.equal(first.slots[0].winner, 'b');
+  assert.equal(first.slots[0].locked, true);
   assert.equal(first.slots[0].model, 'claude-sonnet-4-5');
   assert.equal(first.slots[0].harness, 'claude');
-  assert.equal(first.slots[0].dR, 0.5);
+  assert.equal(first.slots[0].dR, 0.75);
   assert.equal(first.slots[0].dC, -0.02);
-  assert.equal(first.slots[0].n, 2);
-  assert.equal(typeof first.slots[0].p, 'number');
+  assert.equal(first.slots[0].n, 8);
+  // min(McNemar 0.03125, Wilcoxon 2/2^8 = 0.0078125) rounded to 4 decimals
+  assert.equal(first.slots[0].p, 0.0078);
 
   // Verify simt.lock.json on disk
   const { lock } = await readLock(root);
@@ -346,10 +353,10 @@ test('selectRuleVariants runs canary suite, records lockfile evidence, and re-op
     variant: 'b',
     model: 'claude-sonnet-4-5',
     harness: 'claude',
-    dR: 0.5,
+    dR: 0.75,
     dC: -0.02,
-    n: 2,
-    p: first.slots[0].p,
+    n: 8,
+    p: 0.0078,
   });
 
   // 2. Re-running with the same model and harness keeps the experiment locked without invoking runner
@@ -413,4 +420,132 @@ test('selectRuleVariants runs canary suite, records lockfile evidence, and re-op
   } finally {
     process.stdout.write = origWrite;
   }
+});
+
+/** Seed `count` mined tasks `t-q45-01..` under `root`. */
+async function seedTasks(root, prefix, count) {
+  const tasksDir = join(root, '.simt', 'bench', 'tasks');
+  await mkdir(tasksDir, { recursive: true });
+  for (let i = 1; i <= count; i += 1) {
+    const id = `${prefix}-${String(i).padStart(2, '0')}`;
+    await writeFile(
+      join(tasksDir, `${id}.json`),
+      JSON.stringify({ schemaVersion: 1, id, base: 'HEAD', prompt: `fix ${id}` }),
+      'utf8',
+    );
+  }
+}
+
+/** A stub runner whose records are decided per call: `records(arm, task) -> record`. */
+function makeStubRunner(records) {
+  let calls = 0;
+  const runner = async (repoRoot, opts) => {
+    calls += 1;
+    const runDir = join(repoRoot, '.simt', 'bench', 'runs', `run-${calls}`);
+    await mkdir(runDir, { recursive: true });
+    for (const arm of opts.arms) {
+      for (const task of opts.tasks) {
+        const rec = records(arm, task);
+        await writeFile(
+          join(runDir, `${task}-${arm}-rep1.json`),
+          JSON.stringify({
+            schemaVersion: 1,
+            task,
+            arm,
+            harness: opts.harness,
+            model: opts.model,
+            rep: 1,
+            resolved: rec.resolved,
+            gatesPassed: true,
+            usage: { input: 100, cacheWrite: 0, cacheRead: 0, output: 50, turns: 2, toolCalls: 2 },
+            costUsd: rec.costUsd,
+            diff: { files: 1, outsideBlastRadius: 0 },
+          }),
+          'utf8',
+        );
+      }
+    }
+  };
+  runner.calls = () => calls;
+  return runner;
+}
+
+test('selectRuleVariants ranks on real cost: equal R, the cheaper arm wins (Q45 regression)', async () => {
+  // The verified Q45 failure: a (R=1, $0.01) vs b (R=1, $5.00) locked `b`, because the
+  // cost rank read a field the evaluated rows never had and compared NaN to NaN.
+  const root = await makeVariantRepo();
+  await seedTasks(root, 't-q45', 4);
+  const stubRunner = makeStubRunner((arm) => ({
+    resolved: true,
+    costUsd: arm.endsWith('-b') ? 5.0 : 0.01,
+  }));
+
+  const result = await selectRuleVariants(root, {
+    apply: true,
+    harness: 'claude',
+    model: 'claude-sonnet-4-5',
+    runner: stubRunner,
+  });
+
+  assert.equal(result.slots[0].winner, 'a');
+  assert.equal(result.slots[0].locked, false);
+  const { lock } = await readLock(root);
+  assert.equal(lock.variants['house.push'].winner, 'a');
+});
+
+test('selectRuleVariants locks the baseline when the winner is not significant', async () => {
+  // One task, discordant 0:1: McNemar p = 1.0, above the canary alpha. `b` resolves
+  // more, but the evidence is not strong enough to lock it.
+  const root = await makeVariantRepo();
+  await seedTasks(root, 't-sig', 1);
+  const stubRunner = makeStubRunner((arm) => ({
+    resolved: arm.endsWith('-b'),
+    costUsd: 0.01,
+  }));
+
+  const result = await selectRuleVariants(root, {
+    apply: true,
+    harness: 'claude',
+    model: 'claude-sonnet-4-5',
+    runner: stubRunner,
+  });
+
+  assert.equal(result.slots[0].winner, 'a');
+  assert.equal(result.slots[0].locked, false);
+  const { lock } = await readLock(root);
+  assert.equal(lock.variants['house.push'].winner, 'a', 'the baseline locks so the experiment closes');
+});
+
+test('selectRuleVariants never writes a lock entry from a built-in harness', async () => {
+  // Eight tasks, `b` significant: the measurement says `b`, but `gold` grades and does
+  // not answer, so no lock entry is written and the next run re-measures.
+  const root = await makeVariantRepo();
+  await seedTasks(root, 't-gold', 8);
+  const stubRunner = makeStubRunner((arm, task) => ({
+    resolved: arm.endsWith('-b') ? true : task.endsWith('01') || task.endsWith('02'),
+    costUsd: arm.endsWith('-b') ? 0.01 : 0.03,
+  }));
+
+  const first = await selectRuleVariants(root, { apply: true, harness: 'gold', runner: stubRunner });
+  assert.equal(first.slots[0].winner, 'b', 'the measured best is reported');
+  assert.equal(first.slots[0].locked, false);
+  assert.equal(first.lock, null, 'no lock is written from a built-in harness');
+  assert.deepEqual(await readLockedVariants(root), {});
+
+  const again = await selectRuleVariants(root, { apply: true, harness: 'gold', runner: stubRunner });
+  assert.equal(stubRunner.calls(), 2, 'the experiment stays open and re-measures');
+  assert.equal(again.slots[0].status, 'evaluated');
+});
+
+test('BUILTIN_HARNESSES matches the builtin adapters in adapters.json', async () => {
+  const adapters = JSON.parse(
+    await readFile(new URL('../src/bench/adapters.json', import.meta.url), 'utf8'),
+  );
+  const builtins = new Set(
+    Object.values(adapters.adapters)
+      .filter((a) => a.kind === 'builtin')
+      .map((a) => a.id)
+      .sort(),
+  );
+  assert.deepEqual(new Set([...BUILTIN_HARNESSES].sort()), builtins);
 });

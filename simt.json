@@ -28,7 +28,16 @@
     ],
     "prePush": [
       "test"
-    ]
+    ],
+    "prePushSkipTest": {
+      "maxCommits": 2,
+      "paths": [
+        "**/*.md",
+        "docs/**",
+        "package.json",
+        "simt.json"
+      ]
+    }
   },
   "localSkills": [],
   "decisions": {

@@ -21,7 +21,7 @@
 import { execFile } from 'node:child_process';
 import { mkdtemp, readFile, rm, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join, resolve, sep } from 'node:path';
+import { basename, join, matchesGlob, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 
 import { GATES } from './gates.mjs';
@@ -38,14 +38,117 @@ const exec = promisify(execFile);
 /** Gates that are known but not required for the event to pass. */
 const DEFAULT_EVENTS = { 'pre-commit': 'preCommit', 'pre-push': 'prePush' };
 
+/** The sha git writes for a ref that does not exist on the remote yet. */
+const ZERO_SHA = '0'.repeat(40);
+
+/**
+ * The lines git feeds a pre-push hook on stdin, one per ref being pushed:
+ * `<local ref> <local sha> <remote ref> <remote sha>`.
+ *
+ * Returns `{ refs, error }`. A line this parser cannot read is an ERROR, not a
+ * dropped line: a push that cannot be read is a push that cannot be classified,
+ * and the classifier's contract is to fail closed to the full suite.
+ *
+ * @param {string} text the raw stdin
+ * @returns {{refs: {ref: string, localSha: string, remoteSha: string}[] | null, error: string | null}}
+ */
+export function parsePushedRefs(text) {
+  const refs = [];
+  for (const line of String(text ?? '').split('\n')) {
+    const trimmed = line.trim();
+    if (trimmed === '') continue;
+    const parts = trimmed.split(' ');
+    if (parts.length !== 4) return { refs: null, error: `unrecognized pre-push line: ${trimmed}` };
+    const [ref, localSha, , remoteSha] = parts;
+    if (!/^[0-9a-f]{40}$/.test(localSha) || !/^[0-9a-f]{40}$/.test(remoteSha)) {
+      return { refs: null, error: `unrecognized sha in pre-push line: ${trimmed}` };
+    }
+    refs.push({ ref, localSha, remoteSha });
+  }
+  return { refs, error: null };
+}
+
+/**
+ * Decide whether a push carries only documentation, so the `test` gate may be
+ * skipped for it (ADR-113). Every uncertainty fails closed to `{ docsOnly: false }`
+ * with the reason the full suite runs: an empty ref list, a new branch (no remote
+ * sha to diff against), a commit count above the ceiling, a file outside the
+ * declared paths, or a git error each fail closed to the full suite.
+ *
+ * The file list is a TREE diff (`remote..local`), so a force push that drops
+ * commits is judged on the trees it replaces, not on the commit count alone.
+ *
+ * @param {string} root the repository to ask git
+ * @param {{ref: string, localSha: string, remoteSha: string}[]} refs
+ * @param {{maxCommits: number, paths: string[]}} config the manifest's `gates.prePushSkipTest`
+ * @returns {Promise<{docsOnly: boolean, reason: string}>}
+ */
+export async function classifyPush(root, refs, { maxCommits, paths }) {
+  if (refs.length === 0) {
+    return { docsOnly: false, reason: 'the push carries no readable ref list; running the full suite' };
+  }
+  let commits = 0;
+  const files = new Set();
+  for (const { ref, localSha, remoteSha } of refs) {
+    if (localSha === ZERO_SHA) continue; // a branch deletion pushes no commits
+    if (remoteSha === ZERO_SHA) {
+      return { docsOnly: false, reason: `a new branch is being pushed (${ref}); its history cannot be diffed against the remote` };
+    }
+    let count, names;
+    try {
+      ({ stdout: count } = await exec('git', ['rev-list', '--count', `${remoteSha}..${localSha}`], { cwd: root }));
+      ({ stdout: names } = await exec('git', ['diff', '--name-only', `${remoteSha}..${localSha}`], { cwd: root }));
+    } catch (error) {
+      return { docsOnly: false, reason: `the push could not be diffed: ${String(error.stderr ?? error.message).trim()}` };
+    }
+    commits += Number(count.trim());
+    for (const f of names.split('\n')) {
+      const name = f.trim();
+      if (name !== '') files.add(name);
+    }
+  }
+  if (commits > maxCommits) {
+    return { docsOnly: false, reason: `${commits} commits exceed the ${maxCommits}-commit ceiling for a docs-only push` };
+  }
+  const outside = [...files].filter((f) => !paths.some((p) => matchesGlob(f, p)));
+  if (outside.length > 0) {
+    return { docsOnly: false, reason: `${outside.length} file(s) are outside the docs-only paths: ${outside.slice(0, 5).join(', ')}` };
+  }
+  return { docsOnly: true, reason: `${commits} commit(s) touching ${files.size} file(s), all inside the docs-only paths` };
+}
+
+/**
+ * The pre-push skip decision, from the manifest and the ref list git fed on stdin.
+ *
+ * The skip is OPT-IN: a repository without `gates.prePushSkipTest` runs the full
+ * suite on every push, because a control a repo did not declare is one it did not
+ * review. A misdeclaration (missing fields) also runs the suite - a skip the
+ * manifest cannot state precisely is a skip a reviewer cannot see.
+ *
+ * @returns {Promise<{reason: string} | null>} null runs the suite; a reason skips the `test` gate
+ */
+async function resolveDocsOnlySkip(root, manifest, pushed) {
+  if (pushed === undefined) return null;
+  const config = manifest?.gates?.prePushSkipTest;
+  if (typeof config?.maxCommits !== 'number' || !Array.isArray(config?.paths)) return null;
+  const { refs, error } = parsePushedRefs(pushed);
+  if (error !== null) {
+    return null; // the caller cannot be sure what is being pushed; the suite runs
+  }
+  const verdict = await classifyPush(root, refs, { maxCommits: config.maxCommits, paths: config.paths });
+  return verdict.docsOnly ? { reason: verdict.reason } : null;
+}
+
 /**
  * @param {string} event 'pre-commit' | 'pre-push'
  * @param {object} ctx
  * @param {string} ctx.root
  * @param {object} ctx.manifest parsed simt-dev.json, or null
+ * @param {string} [ctx.pushed] the ref list git feeds pre-push on stdin; undefined when no
+ *   push is being classified (every other event, a manual run with no stdin)
  * @returns {Promise<{event: string, gates: object[], failed: boolean}>}
  */
-export async function runGates(event, { root, manifest }) {
+export async function runGates(event, { root, manifest, pushed }) {
   const key = DEFAULT_EVENTS[event];
   if (key === undefined) {
     return { event, gates: [], failed: true, error: `unknown hook event ${event}` };
@@ -94,29 +197,36 @@ export async function runGates(event, { root, manifest }) {
   // evidence is about this repository, not the throwaway checkout.
   let runRoot = root;
   let headWorktree = null;
+  let skipTest = null;
   if (event === 'pre-push') {
-    const materialized = await materializeHeadWorktree(root);
-    if (materialized.path === null) {
-      return {
-        event,
-        gates: [
-          {
-            name: 'head',
-            status: 'failed',
-            detail: materialized.error,
-            remedy: 'commit the work, or resolve the git state so HEAD is a valid reference, then push again',
-            adr: null,
-          },
-        ],
-        failed: true,
-      };
+    // Decided before the worktree exists: a push that carries only documentation
+    // skips the `test` gate (ADR-113), and a push that earns the skip needs no
+    // tree for a gate that will not run.
+    skipTest = await resolveDocsOnlySkip(root, manifest, pushed);
+    if (skipTest === null) {
+      const materialized = await materializeHeadWorktree(root);
+      if (materialized.path === null) {
+        return {
+          event,
+          gates: [
+            {
+              name: 'head',
+              status: 'failed',
+              detail: materialized.error,
+              remedy: 'commit the work, or resolve the git state so HEAD is a valid reference, then push again',
+              adr: null,
+            },
+          ],
+          failed: true,
+        };
+      }
+      runRoot = materialized.path;
+      headWorktree = materialized.path;
     }
-    runRoot = materialized.path;
-    headWorktree = materialized.path;
   }
 
   try {
-    return await runGatesAt(event, { root: runRoot, ledgerRoot: root, manifest, declared, key });
+    return await runGatesAt(event, { root: runRoot, ledgerRoot: root, manifest, declared, key, skipTest });
   } finally {
     if (headWorktree !== null) await removeHeadWorktree(root, headWorktree);
   }
@@ -138,9 +248,11 @@ export async function runGates(event, { root, manifest }) {
  * @param {object} ctx.manifest
  * @param {string[]} ctx.declared the gate names for this event
  * @param {string} ctx.key the manifest key for this event
+ * @param {{reason: string} | null} [ctx.skipTest] set when a docs-only push skips the
+ *   `test` gate (ADR-113); the reason is what the report prints in its place
  * @returns {Promise<{event: string, gates: object[], failed: boolean}>}
  */
-async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key }) {
+async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, skipTest = null }) {
   const pkg = await readPkg(root);
   // Q31: the runner is committed evidence (lockfile, then `packageManager`),
   // resolved once per hook run so every script gate spawns the same manager.
@@ -183,6 +295,14 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key }) 
         remedy: `remove "${name}" from ${MANIFEST_FILE} gates.${key}`,
         adr: null,
       });
+      continue;
+    }
+
+    // The one gate a docs-only push does not run (ADR-113). It is reported, not
+    // dropped: a skip without a printed reason would let "passed" mean "the suite
+    // never ran", which is the exact confusion the report exists to prevent.
+    if (skipTest !== null && name === 'test') {
+      results.push({ name, status: 'skipped', detail: `docs-only push: ${skipTest.reason}`, adr: 'ADR-113', exitCode: null });
       continue;
     }
 

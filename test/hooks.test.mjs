@@ -12,7 +12,7 @@ import { after, test } from 'node:test';
 import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
 import { hasScript, knownGates, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
-import { runGates } from '../src/hooks/dispatcher.mjs';
+import { classifyPush, parsePushedRefs, renderGateReport, runGates } from '../src/hooks/dispatcher.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 import { readCapability } from '../src/hooks/capability.mjs';
 import * as gateModule from '../src/projection/manifest.mjs';
@@ -576,6 +576,145 @@ test('dispatcher: pre-push fails closed when HEAD cannot be materialized (no com
   const gate = result.gates.find((g) => g.name === 'head');
   assert.equal(gate.status, 'failed');
   assert.match(gate.detail, /git worktree add failed/);
+});
+
+// ------------------------------------------------ pre-push docs-only skip (ADR-113)
+
+/** The classifier's ceiling and paths, as a manifest would declare them. */
+const SKIP_TEST = { maxCommits: 2, paths: ['**/*.md', 'docs/**'] };
+
+/**
+ * A fixture repo with a base commit and one commit on top, plus the stdin line
+ * git feeds a pre-push that pushes the top commit to an existing branch: the
+ * remote sha is the base, so the diff is exactly the top commit.
+ */
+async function twoCommitPush({ files = {}, topFiles = {}, manifest }) {
+  const root = await fixture({ scripts: { test: 'exit 0' }, files, manifest });
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'base'], { cwd: root });
+  const { stdout: base } = await exec('git', ['rev-parse', 'HEAD'], { cwd: root });
+  for (const [name, body] of Object.entries(topFiles)) {
+    await mkdir(join(root, dirname(name)), { recursive: true });
+    await writeFile(join(root, name), body);
+  }
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'top'], { cwd: root });
+  const { stdout: head } = await exec('git', ['rev-parse', 'HEAD'], { cwd: root });
+  return { root, base: base.trim(), head: head.trim(), pushed: `refs/heads/main ${head.trim()} refs/heads/main ${base.trim()}\n` };
+}
+
+test('dispatcher: a docs-only push skips the test gate and reports why', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const { root, pushed } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.failed, false);
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'skipped');
+  assert.match(gate.detail, /docs-only push: 1 commit\(s\) touching 1 file\(s\), all inside the docs-only paths/);
+  // The report names the skip: a gate that did not run must be visible as such.
+  assert.match(renderGateReport('pre-push', ['test'], result).join('\n'), /SKIPPED\s+test/);
+});
+
+test('dispatcher: a push that touches code runs the test gate', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const { root, pushed } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'src/x.js': '1\n' }, manifest });
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: more commits than the ceiling runs the test gate', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const root = await fixture({ scripts: { test: 'exit 0' }, files: { 'a.md': '1\n' }, manifest });
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'base'], { cwd: root });
+  const { stdout: base } = await exec('git', ['rev-parse', 'HEAD'], { cwd: root });
+  for (const name of ['b.md', 'c.md', 'd.md']) {
+    await writeFile(join(root, name), `${name}\n`);
+    await git(['add', '-A'], { cwd: root });
+    await git(['commit', '-m', name], { cwd: root });
+  }
+  const { stdout: head } = await exec('git', ['rev-parse', 'HEAD'], { cwd: root });
+  const pushed = `refs/heads/main ${head.trim()} refs/heads/main ${base.trim()}\n`;
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: a new branch cannot be diffed against the remote, so the test gate runs', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const { root, head } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  const pushed = `refs/heads/fresh ${head} refs/heads/fresh ${'0'.repeat(40)}\n`;
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: a branch deletion pushes no commits and earns the skip', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const { root, base } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  const pushed = `refs/heads/main ${'0'.repeat(40)} refs/heads/main ${base}\n`;
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.failed, false);
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'skipped');
+});
+
+test('dispatcher: without prePushSkipTest the suite runs on every push', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'] } };
+  const { root, pushed } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: a manual run with no stdin runs the suite', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const { root } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  const result = await runGates('pre-push', { root, manifest });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: an unreadable ref list fails closed to the suite', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const { root } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  const result = await runGates('pre-push', { root, manifest, pushed: 'not a ref list\n' });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: a misdeclared prePushSkipTest fails closed to the suite', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: { paths: ['**/*.md'] } } };
+  const { root, pushed } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('parsePushedRefs: reads git pre-push lines and refuses what it cannot read', () => {
+  const local = 'a'.repeat(40);
+  const remote = 'f'.repeat(40);
+  const ok = parsePushedRefs(`refs/heads/main ${local} refs/heads/main ${remote}\n\n`);
+  assert.equal(ok.error, null);
+  assert.deepEqual(ok.refs, [{ ref: 'refs/heads/main', localSha: local, remoteSha: remote }]);
+  assert.deepEqual(parsePushedRefs('').refs, []);
+  assert.match(parsePushedRefs('garbage').error, /unrecognized pre-push line/);
+  assert.match(parsePushedRefs(`refs/heads/main notash refs/heads/main ${remote}\n`).error, /unrecognized sha/);
+});
+
+test('classifyPush: a file outside the declared paths fails closed', async () => {
+  const { root, base, head } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'src/x.js': '1\n' }, manifest: {} });
+  const verdict = await classifyPush(root, [{ ref: 'refs/heads/main', localSha: head, remoteSha: base }], SKIP_TEST);
+  assert.equal(verdict.docsOnly, false);
+  assert.match(verdict.reason, /outside the docs-only paths: src\/x\.js/);
+});
+
+test('classifyPush: a diff git cannot answer fails closed', async () => {
+  const { root } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest: {} });
+  const missing = 'c'.repeat(40);
+  const verdict = await classifyPush(root, [{ ref: 'refs/heads/main', localSha: missing, remoteSha: missing }], SKIP_TEST);
+  assert.equal(verdict.docsOnly, false);
+  assert.match(verdict.reason, /could not be diffed/);
+});
+
+test('classifyPush: an empty ref list fails closed', async () => {
+  const { root } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest: {} });
+  const verdict = await classifyPush(root, [], SKIP_TEST);
+  assert.equal(verdict.docsOnly, false);
+  assert.match(verdict.reason, /no readable ref list/);
 });
 
 test('dispatcher: an unknown event fails rather than passing silently', async () => {

@@ -571,7 +571,9 @@ test('nothing on the hook path reads the repository, and the entry point does no
     false,
     'bin/ imports the command registry statically, so every hook pays for every command',
   );
-  assert.match(bin, /await import\('\.\.\/src\/commands\/index\.mjs'\)/);
+  // The dynamic import names the CLI body, which Q54 moved out of `bin/` so the floor
+  // check could run before any of the command graph loads.
+  assert.match(bin, /await import\('\.\.\/src\/cli\.mjs'\)/);
 });
 
 test('the decision itself is measured, and nothing larger is claimed for it', async () => {

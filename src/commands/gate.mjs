@@ -7,7 +7,7 @@
 
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -20,6 +20,9 @@ import { langOf, packageOf } from '../index/store.mjs';
 import { localRel } from '../state.mjs';
 
 const exec = promisify(execFile);
+
+/** How many raw gate logs the state directory keeps. */
+const RAW_LOG_KEEP = 5;
 
 export async function gateCommand(args, flags) {
   const root = flags.root ?? process.cwd();
@@ -185,6 +188,11 @@ async function writeRaw(root, body) {
     const dir = join(root, dirname(rel));
     await mkdir(dir, { recursive: true });
     await writeFile(join(root, rel), body);
+    // Keep the newest few: raw gate output is machine-local state (Q19), and a file per
+    // run with no bound is a directory that grows on every command (Q83).
+    const kept = await readdir(dir).catch(() => []);
+    const logs = kept.filter((name) => /^gate-\d+\.log$/.test(name)).sort().reverse();
+    for (const name of logs.slice(RAW_LOG_KEEP)) await unlink(join(dir, name)).catch(() => {});
     return rel;
   } catch {
     return '';

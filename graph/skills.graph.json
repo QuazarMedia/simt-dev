@@ -1,9 +1,7 @@
 {
-  "$schema": "./skills.graph.schema.json",
   "version": 1,
   "description": "The SIMT skill registry. Hand-authored and reviewable; structure is declared, never inferred (docs/plans/0002-simt-dev-cli.md section 3.1). Resolution is deterministic: same repo + same task = same answer.",
   "deferredThreshold": 20000,
-  "stackVocabularySource": "src/resolve/fingerprint.mjs",
   "conventions": {
     "variants": "One node, several bodies, discriminated by stack. Used when the SAME skill name exists in several repos with genuinely different content (the 8 duplicated Social names).",
     "variant-stack": "A variant stack must name the tag that DIFFERS between the bodies, not a tag both repos share. cloudflare-workers is emitted by repo-06 as well as repo-07 (both ship a wrangler.jsonc), so an api variant listing it matches the web repo too and stops discriminating; hono is the tag that actually separates them. Lint can check that variant stacks are pairwise disjoint, but not that they are discriminative in practice - the goldens test resolves every variant-bearing skill against both real repos and requires exactly one match.",

@@ -106,7 +106,7 @@ record's status line — never by editing the ruling in place.
 | [096](ADR-096-impact-names-who-a-change-reaches.md) | impact names who a change reaches | **accepted** · 2026-10-18 · filed as R23 (plan 0003) |
 | [097](ADR-097-the-channels-publish-by-hand-and-the-version-rides-in-as-an-input.md) | the channels publish by hand, and the version rides in as an input | **accepted** · 2026-10-25 · ruling 3's Homebrew precondition is superseded by [ADR-098](ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md), which also restates what each channel now waits on |
 | [098](ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md) | The fourth channel is one file, and it needs no toolchain | **accepted** · 2026-10-26 · supersedes ADR-058 ruling 5 · narrows ADR-058 ruling 7 and ADR-097 ruling 3 · supersedes ADR-059 ruling 3 · ruling 3's cross-host byte-identicality narrowed by [ADR-099](ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md) |
-| [099](ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md) | the release verifies served bytes, and the formula mirrors them | **accepted** · 2026-10-27 · narrows ADR-098 ruling 3 |
+| [099](ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md) | the release verifies served bytes, and the formula mirrors them | **accepted** · 2026-10-27 · narrows ADR-098 ruling 3 · ruling 1 superseded by [ADR-117](ADR-117-the-darwin-release-builds-on-supported-macos-15-runners-and-a-re-run-is-idempotent.md) |
 | [100](ADR-100-a-staged-diff-is-the-last-gate-before-history-and-it-runs-inside-the-tool.md) | a staged diff is the last gate before history, and it runs inside the tool | **accepted** · 2026-10-27 |
 | [101](ADR-101-a-file-lease-belongs-to-one-session-and-the-pre-edit-hook-refuses-another.md) | a file lease belongs to one session, and the pre-edit hook refuses another's edit | **accepted** · 2026-10-28 |
 | [102](ADR-102-the-two-queued-review-rows-are-closed-by-ruling.md) | the two rows review 0002 left queued are closed by ruling, not by authoring | **accepted** · 2026-10-28 |
@@ -121,6 +121,7 @@ record's status line — never by editing the ruling in place.
 | [111](ADR-111-the-tool-ships-one-agent-rendered-per-harness-and-installs-it-with-init-and-a-command.md) | the tool ships one agent, rendered per harness, and installs it with init and a command | **accepted** · 2026-10-30 |
 | [112](ADR-112-the-registry-is-what-simt-dev-ships-and-a-repo-owns-its-own-skills.md) | the registry is what simt-dev ships, and a repo owns its own skills | **accepted** · 2026-10-31 · supersedes ADR-009 ruling 4 |
 | [116](ADR-116-rust-support-reaches-the-example-path-the-indent-and-the-bench-runner.md) | Rust support reaches the example path, the indent and the bench runner | **accepted** · 2026-10-31 |
+| [117](ADR-117-the-darwin-release-builds-on-supported-macos-15-runners-and-a-re-run-is-idempotent.md) | the darwin release builds on supported macOS 15 runners, and a re-run is idempotent | **accepted** · 2026-10-31 · supersedes ADR-099 ruling 1 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

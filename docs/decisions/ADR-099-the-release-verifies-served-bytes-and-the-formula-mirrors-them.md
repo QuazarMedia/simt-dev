@@ -5,7 +5,7 @@ simt-supersedes: [{ adr: "ADR-098", ruling: 3, kind: "narrowed" }]
 
 # ADR-099 — the release verifies served bytes, and the formula mirrors them
 
-Status: **accepted** · 2026-10-27 · narrows ADR-098 ruling 3
+Status: **accepted** · 2026-10-27 · narrows ADR-098 ruling 3 · ruling 1 superseded by [ADR-117](ADR-117-the-darwin-release-builds-on-supported-macos-15-runners-and-a-re-run-is-idempotent.md)
 
 Affects: `.github/workflows/publish.yml`, `scripts/build-sea.mjs`,
 `scripts/verify-release-asset.mjs`, `Formula/simt-dev.rb`

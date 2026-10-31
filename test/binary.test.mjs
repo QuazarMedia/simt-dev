@@ -59,6 +59,38 @@ test('binary: the release builds exactly the platforms a remedy can name', () =>
   assert.deepEqual(TARGETS, ['darwin-arm64', 'darwin-x64', 'linux-x64']);
 });
 
+test('binary: darwin builds on the supported arm64 and Intel macOS 15 runners', async () => {
+  // The v0.7.0 release run used `macos-14` for both darwin targets. That image is
+  // deprecated, was in a scheduled brownout, and its two architectures use different
+  // labels: `macos-14` is arm64 and `macos-14-large` is Intel. A target built on the
+  // wrong one produces a binary it cannot run.
+  const workflow = await readFile(new URL('../.github/workflows/publish.yml', import.meta.url), 'utf8');
+  const rows = [...workflow.matchAll(/- target: (darwin-\S+)\n\s+os: (\S+)/g)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(rows, [
+    ['darwin-arm64', 'macos-15'],
+    ['darwin-x64', 'macos-15-intel'],
+  ]);
+  assert.doesNotMatch(workflow, /\bmacos-14\b/, 'macOS 14 is deprecated and its runner image is being retired');
+});
+
+test('binary: a re-run skips a version that is already staged', async () => {
+  // Staged versions are not public, so a registry-only check sends a re-run back
+  // into `npm stage publish` and fails on the duplicate. The queue check has to run
+  // after npm 11 is available and before the stage command it protects.
+  const workflow = await readFile(new URL('../.github/workflows/publish.yml', import.meta.url), 'utf8');
+  const start = workflow.indexOf('publish-npm:');
+  const job = workflow.slice(start, workflow.indexOf('create-release:', start));
+  const capability = job.indexOf('npm stage --help >/dev/null 2>&1');
+  const queue = job.indexOf('npm stage list "$name" --json');
+  const stage = job.indexOf('npm stage publish --provenance');
+  assert.ok(capability !== -1, 'the workflow never checks that npm supports stage');
+  assert.ok(queue !== -1, 'the workflow never reads the staging queue');
+  assert.ok(capability < queue, 'the queue is read before npm that supports it is installed');
+  assert.ok(queue < stage, 'the queue is read after the stage it is supposed to skip');
+  assert.match(workflow, /already staged; nothing to stage/);
+  assert.match(workflow, /--clobber/, 'a re-run must replace an existing asset, not fail on it');
+});
+
 test('binary: the asset name is the package name plus version plus target', () => {
   // The build script, the CI step and the formula all name assets from this one
   // function. The package name, not the command: it sits beside the npm tarball

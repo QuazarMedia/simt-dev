@@ -142,6 +142,8 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // possessive the house style reserves for the superseded record's own note.)
   // ADR-009 joined when ADR-112 landed: its status line now states that ruling 4
   // is superseded, and the parser reads the claim there.
+  // ADR-099 joined when ADR-117 landed: its status line now states that ruling 1
+  // is superseded, and the parser reads the claim there.
   assert.deepEqual(shapes, [
     'ADR-009',
     'ADR-016',
@@ -160,6 +162,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-088',
     'ADR-097',
     'ADR-098',
+    'ADR-099',
   ]);
   for (const d of decisions) {
     for (const p of d.partial) {

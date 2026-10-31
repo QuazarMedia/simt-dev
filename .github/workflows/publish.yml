@@ -111,18 +111,59 @@ jobs:
           node-version: '22.20.0'
           registry-url: https://registry.npmjs.org
 
-      - name: this version is not already on the registry
+      - name: staged publishing needs an npm that has it
+        # `npm stage` landed in npm 11.15.0. The node floor in this package's
+        # engines - 22.20.0 - bundles npm 10, which fails with `Unknown command:
+        # "stage"`: an error that says nothing about the package and everything
+        # about the runner, arriving after the tests passed.
+        #
+        # The major is pinned to 11 for the same reason the floor is. npm 12
+        # requires node ^22.22.2, so `npm@latest` cannot be installed on the very
+        # node this package declares it runs on - and bumping the floor to
+        # satisfy the release tool would mean the floor is set by what npm
+        # happens to ship this month rather than by what this package needs.
+        #
+        # Checked rather than assumed: installing unconditionally would fetch an
+        # npm on every release whether or not the one present already stages,
+        # and a release's bytes would depend on a registry fetch it performs.
+        # This runs before the stage check because `npm stage list` is how a
+        # re-run discovers a stage that already succeeded.
+        run: |
+          set -eu
+          if ! npm stage --help >/dev/null 2>&1; then
+            echo "npm $(npm --version) cannot stage; installing one that can"
+            npm install -g npm@11
+          fi
+          npm --version
+          npm stage --help >/dev/null
+
+      - name: this version is not already published or staged
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -eu
           version="${{ needs.version.outputs.version }}"
           name="$(node -p "require('./package.json').name")"
-          # Re-running a workflow is normal; staging the same version twice is
-          # not possible, and failing the job for it would page somebody for
-          # nothing. This checks the REGISTRY, not the staging area: a staged
-          # version is not publicly visible, so a re-run after a successful
-          # stage still looks unpublished here.
+          # Re-running a workflow is normal; publishing or staging the same
+          # version twice is not. A published version is visible on the registry;
+          # a staged one is not, so the registry check alone would send a re-run
+          # back into `npm stage publish` and fail on the duplicate. Both checks
+          # therefore run, and either one makes this job a quiet no-op.
           if npm view "${name}@${version}" version >/dev/null 2>&1; then
             echo "::notice::${name}@${version} is already published; nothing to stage"
+            echo "SKIP=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          staged="$(npm stage list "$name" --json 2>/dev/null || true)"
+          if printf '%s' "$staged" | node -e '
+            const fs = require("node:fs");
+            const [name, version] = process.argv.slice(1);
+            let rows = [];
+            try { rows = JSON.parse(fs.readFileSync(0, "utf8")); } catch {}
+            process.exit(Array.isArray(rows) && rows.some((row) =>
+              row && row.packageName === name && row.version === version) ? 0 : 1);
+          ' "$name" "$version"; then
+            echo "::notice::${name}@${version} is already staged; nothing to stage"
             echo "SKIP=true" >> "$GITHUB_ENV"
           else
             echo "SKIP=false" >> "$GITHUB_ENV"
@@ -152,30 +193,6 @@ jobs:
       - name: the wheel carries these bytes
         if: env.SKIP == 'false'
         run: node scripts/verify-wheel.mjs
-
-      - name: staged publishing needs an npm that has it
-        # `npm stage` landed in npm 11.15.0. The node floor in this package's
-        # engines - 22.20.0 - bundles npm 10, which fails with `Unknown command:
-        # "stage"`: an error that says nothing about the package and everything
-        # about the runner, arriving after the tests passed.
-        #
-        # The major is pinned to 11 for the same reason the floor is. npm 12
-        # requires node ^22.22.2, so `npm@latest` cannot be installed on the very
-        # node this package declares it runs on - and bumping the floor to
-        # satisfy the release tool would mean the floor is set by what npm
-        # happens to ship this month rather than by what this package needs.
-        #
-        # Checked rather than assumed: installing unconditionally would fetch an
-        # npm on every release whether or not the one present already stages,
-        # and a release's bytes would depend on a registry fetch it performs.
-        run: |
-          set -eu
-          if ! npm stage --help >/dev/null 2>&1; then
-            echo "npm $(npm --version) cannot stage; installing one that can"
-            npm install -g npm@11
-          fi
-          npm --version
-          npm stage --help >/dev/null
 
       - name: stage for a maintainer to approve
         if: env.SKIP == 'false'
@@ -268,7 +285,7 @@ jobs:
   # formula downloads it instead of a tarball. It is built here, from the tagged
   # tree, because it is what those two consumers receive.
   #
-  # Each target builds on its native runner (ADR-099). Two reasons, both learned
+  # Each target builds on its native runner (ADR-117). Two reasons, both learned
   # from the v0.6.0 tag: `codesign` exists only on macOS, so darwin binaries
   # cannot be finished on ubuntu; and the build is deterministic per host
   # family, not across them — a darwin-built blob and a linux-built blob of the
@@ -287,10 +304,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # macOS 14 is deprecated and its runner image is in a scheduled
+          # brownout (ADR-117). macOS 15 is the current standard image, and the
+          # two labels are the arm64 and Intel halves of it.
           - target: darwin-arm64
-            os: macos-14
+            os: macos-15
           - target: darwin-x64
-            os: macos-14
+            os: macos-15-intel
           - target: linux-x64
             os: ubuntu-latest
     permissions:

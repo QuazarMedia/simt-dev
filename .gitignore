@@ -22,6 +22,7 @@ dist/
 .claude/
 .cursor/
 .gemini/
+.freebuff/
 
 # Write journal for `simt undo`. Local state, never shared.
 .simt/local/

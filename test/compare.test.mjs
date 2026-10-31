@@ -891,6 +891,7 @@ test('a repo is complete exactly when install has nothing left to write', async 
 test('R36: classifyGateCommand and classifyRuleViolations map commands and hook denials deterministically', () => {
   assert.deepEqual(classifyGateCommand('npm run --silent lint'), { gate: 'lint', adr: 'ADR-004' });
   assert.deepEqual(classifyGateCommand('node --test test/unit.test.mjs'), { gate: 'test', adr: 'ADR-003' });
+  assert.deepEqual(classifyGateCommand('cargo test --workspace'), { gate: 'test', adr: 'ADR-003' });
   assert.deepEqual(
     classifyGateCommand('scripts/check-mem.sh', { gates: { commands: { memory: 'scripts/check-mem.sh' } } }),
     { gate: 'memory', adr: 'ADR-003' },

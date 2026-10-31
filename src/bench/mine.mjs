@@ -29,11 +29,12 @@ export const DEFAULT_MINE_TARGET = 20;
 /**
  * Classify whether a repository-relative path is a test file.
  *
- * Covers the five ecosystems named in plan 0003 §5 R01:
+ * Covers the ecosystems named in plan 0003 §5 R01:
  *   - `test/`, `tests/`, `spec/`, `__tests__/`, `src/test/`
  *   - `*.test.*`, `*.spec.*`, `*_test.*`, `*_spec.*`
  *   - `*_test.go` (Go)
  *   - `test_*.py` (pytest)
+ *   - `tests/*.rs` (Cargo integration tests)
  *   - `*Test.java`, `*Tests.java`, `*Test.kt`, `*Tests.kt` (Gradle / Maven)
  *
  * @param {string} relPath forward-slash repository-relative path
@@ -260,6 +261,31 @@ export function parseGoTestJson(text) {
 }
 
 /**
+ * Parse libtest's text output, which `cargo test` prints for every test binary.
+ *
+ * A line is a result only when it has the `test <name> ... <status>` shape.
+ * Harness summaries (`test result: ok.`), compile output and doctest prose are
+ * not results. `ignored` is neither a pass nor a failure: counting it as one
+ * would make a skipped test look like evidence the change works.
+ *
+ * @param {string} text
+ * @returns {{passed: string[], failed: string[]}}
+ */
+export function parseCargoTestOutput(text) {
+  const passed = [];
+  const failed = [];
+  for (const line of String(text ?? '').split('\n')) {
+    const match = /^test\s+(.+?)\s+\.\.\.\s+(ok|FAILED|ignored)\s*$/.exec(line.trimEnd());
+    if (!match || match[2] === 'ignored') continue;
+    (match[2] === 'ok' ? passed : failed).push(match[1]);
+  }
+  return {
+    passed: dedupeSorted(passed),
+    failed: dedupeSorted(failed),
+  };
+}
+
+/**
  * Detect the test runner for a repository and build the command for a set of
  * changed test files.
  *
@@ -299,6 +325,27 @@ export async function detectTestRunner(root, testFiles) {
         args: ['--test', '--test-reporter=tap', ...files],
       }),
       parse: (stdout) => parseTapOutput(stdout),
+    };
+  }
+
+  if (existsSync(join(root, 'Cargo.toml'))) {
+    // Cargo has no "run this file" argument. An integration test is a target
+    // named after its file in `tests/`, so it can be selected with `--test`.
+    // A source file carries inline unit tests and can only be reached by the
+    // crate's test binary, so one such file means the whole crate runs.
+    const targets = dedupeSorted(
+      files.filter((f) => /^tests\/[^/]+\.rs$/.test(f)).map((f) => basename(f, '.rs')),
+    );
+    const integrationOnly = files.length > 0 && files.every((f) => /^tests\/[^/]+\.rs$/.test(f));
+    const args = ['test'];
+    if (integrationOnly) {
+      for (const target of targets) args.push('--test', target);
+    }
+    return {
+      runner: 'cargo-test',
+      displayCmd: ['cargo', ...args].join(' '),
+      buildExec: () => ({ cmd: 'cargo', args }),
+      parse: (stdout) => parseCargoTestOutput(stdout),
     };
   }
 

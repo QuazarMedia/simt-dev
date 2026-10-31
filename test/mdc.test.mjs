@@ -123,6 +123,12 @@ test('a per-signal default is used when the repo carries that signal', async () 
   const { body: go } = renderMdc(gate, {}, ['has-go-mod']);
   assert.match(go, /path\/to\/the_changed_test\.go/);
 
+  // Cargo integration tests are files in `tests/`; a Rust reader must not be
+  // handed the TypeScript example path.
+  const { body: rust } = renderMdc(gate, {}, ['has-cargo-toml']);
+  assert.match(rust, /tests\/the_changed\.rs/);
+  assert.doesNotMatch(rust, /\.test\.ts|the_changed_test/);
+
   const { body: other } = renderMdc(gate);
   assert.match(other, /path\/to\/the\.changed\.test\.ts/);
   assert.doesNotMatch(other, /the_changed_test/);

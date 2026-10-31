@@ -76,7 +76,7 @@ trim_trailing_whitespace = false
 indent_style = space
 indent_size = 2
 
-[*.{py,pyi,java,kt,kts}]
+[*.{py,pyi,java,kt,kts,rs}]
 indent_size = 4
 
 [{Makefile,*.mk}]

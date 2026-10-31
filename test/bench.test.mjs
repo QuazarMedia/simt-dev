@@ -14,6 +14,7 @@ import {
   isTestPath,
   listCandidates,
   mineTasks,
+  parseCargoTestOutput,
   parseGoTestJson,
   parseJunitXml,
   parseTapOutput,
@@ -115,19 +116,21 @@ async function runCli(args, env = {}) {
   }
 }
 
-test('isTestPath classifies test paths across node, vitest, pytest, go, gradle and maven', () => {
+test('isTestPath classifies test paths across node, vitest, pytest, go, rust, gradle and maven', () => {
   assert.equal(isTestPath('test/resolve.test.mjs'), true);
   assert.equal(isTestPath('tests/unit/api.spec.ts'), true);
   assert.equal(isTestPath('spec/models/user_spec.rb'), true);
   assert.equal(isTestPath('src/components/__tests__/Button.tsx'), true);
   assert.equal(isTestPath('src/math.test.ts'), true);
   assert.equal(isTestPath('pkg/auth/token_test.go'), true);
+  assert.equal(isTestPath('tests/api.rs'), true);
   assert.equal(isTestPath('src/test_parser.py'), true);
   assert.equal(isTestPath('src/test/kotlin/com/example/ApiTest.kt'), true);
   assert.equal(isTestPath('src/test/java/com/example/ApiTests.java'), true);
 
   assert.equal(isTestPath('src/resolve/resolve.mjs'), false);
   assert.equal(isTestPath('pkg/auth/token.go'), false);
+  assert.equal(isTestPath('src/lib.rs'), false);
   assert.equal(isTestPath('src/main/kotlin/com/example/Api.kt'), false);
   assert.equal(isTestPath('README.md'), false);
 });
@@ -221,6 +224,25 @@ test('parseGoTestJson extracts leaf test pass and fail events and ignores packag
   assert.deepEqual(parsed.failed, ['example.com/calc > TestSub']);
 });
 
+test('parseCargoTestOutput extracts passed and failed tests and ignores skipped and summary lines', () => {
+  const stream = [
+    '   Compiling calc v0.1.0',
+    'running 3 tests',
+    'test tests::adds ... ok',
+    'test tests::divides ... FAILED',
+    'test tests::slow ... ignored',
+    'test result: FAILED. 1 passed; 1 failed; 1 ignored; 0 measured; 0 filtered out',
+    '',
+    'running 1 test',
+    'test src/lib.rs - add (line 4) ... ok',
+    'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out',
+  ].join('\n');
+
+  const parsed = parseCargoTestOutput(stream);
+  assert.deepEqual(parsed.passed, ['src/lib.rs - add (line 4)', 'tests::adds']);
+  assert.deepEqual(parsed.failed, ['tests::divides']);
+});
+
 test('detectTestRunner selects the native runner for each ecosystem', async () => {
   const nodeRepo = await scratch('simt-runner-node-');
   await writeFile(join(nodeRepo, 'package.json'), '{"name":"n"}\n');
@@ -236,6 +258,16 @@ test('detectTestRunner selects the native runner for each ecosystem', async () =
   const vitestRunner = await detectTestRunner(vitestRepo, ['test/a.test.ts']);
   assert.equal(vitestRunner.runner, 'vitest');
   assert.equal(vitestRunner.displayCmd, 'vitest run --reporter=json test/a.test.ts');
+
+  const cargoRepo = await scratch('simt-runner-cargo-');
+  await writeFile(join(cargoRepo, 'Cargo.toml'), '[package]\nname = "c"\n');
+  const cargoRunner = await detectTestRunner(cargoRepo, ['tests/api.rs']);
+  assert.equal(cargoRunner.runner, 'cargo-test');
+  assert.equal(cargoRunner.displayCmd, 'cargo test --test api');
+
+  // An inline unit test cannot be selected as a file, so the crate's binary runs.
+  const cargoUnitRunner = await detectTestRunner(cargoRepo, ['src/lib.rs']);
+  assert.equal(cargoUnitRunner.displayCmd, 'cargo test');
 
   const goRepo = await scratch('simt-runner-go-');
   await writeFile(join(goRepo, 'go.mod'), 'module example.com/m\n');

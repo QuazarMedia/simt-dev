@@ -33,6 +33,10 @@ import { journaledWriteFile } from '../journal.mjs';
 const AGENT_FILE = 'simt-agent.md';
 export const AGENT_STEM = 'simt-agent';
 
+/** The companion skill: the command reference the agent reads on demand. */
+const SKILL_SOURCE = join('skills', 'simt-commands', 'SKILL.md');
+export const SKILL_STEM = 'simt-commands';
+
 /**
  * The per-harness differences. `frontmatter` returns the ordered [key, value]
  * pairs a markdown harness documents; Codex has none because its shape is TOML,
@@ -153,6 +157,29 @@ export async function loadAgent() {
   return { name: meta.name, description: meta.description, body: body.trim() };
 }
 
+/** The companion skill file, read verbatim from this repository. */
+async function loadSkill() {
+  return readFile(join(PACKAGE_ROOT, SKILL_SOURCE), 'utf8');
+}
+
+/**
+ * Where the skill lands in the receiving repo. The same heuristic `skills
+ * install` uses: respect an existing skills directory, default to `.agents/skills`.
+ */
+async function skillDestPath(root) {
+  let entries = [];
+  try {
+    const { readdir } = await import('node:fs/promises');
+    entries = await readdir(root);
+  } catch { /* fresh repo, no entries */ }
+  let dir;
+  if (entries.includes('.agents')) dir = '.agents/skills';
+  else if (entries.includes('.cursor')) dir = '.cursor/skills';
+  else if (entries.includes('.claude')) dir = '.claude/skills';
+  else dir = '.agents/skills';
+  return join(dir, SKILL_STEM, 'SKILL.md');
+}
+
 /** A basic TOML string: double-quoted, with backslashes and quotes escaped. */
 function tomlString(value) {
   return '"' + String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
@@ -197,9 +224,9 @@ async function readIfExists(path) {
 
 /**
  * The agent files a repository should carry, one per harness that documents an
- * agents directory. Reads each existing file and renders what install would
- * write, so a dry run and a run describe the same set of files. `harness`
- * narrows to one.
+ * agents directory, plus the companion skill file. Reads each existing file and
+ * renders what install would write, so a dry run and a run describe the same set
+ * of files. `harness` narrows the agent files to one; the skill is always included.
  */
 export async function planAgents(root, { harness } = {}) {
   const agent = await loadAgent();
@@ -211,6 +238,12 @@ export async function planAgents(root, { harness } = {}) {
     const result = rendered(row, agent, existing);
     plan.push({ id: row.id, path, action: result.action, text: result.text });
   }
+  // The companion skill: one file, not per-harness.
+  const skillText = await loadSkill();
+  const skillPath = await skillDestPath(root);
+  const skillExisting = await readIfExists(join(root, skillPath));
+  const skillAction = skillExisting === null ? 'created' : skillExisting === skillText ? 'unchanged' : 'updated';
+  plan.push({ id: 'skill', path: skillPath, action: skillAction, text: skillText });
   return plan;
 }
 
@@ -226,4 +259,19 @@ export async function writeAgentPlan(root, journal, plan) {
     written.push(p.path);
   }
   return written;
+}
+
+/**
+ * Write just the skill file so `installedSkills` can find it before `plan()`
+ * computes the region. Called by `init` before the region is rendered.
+ */
+export async function writeSkillFile(root, journal) {
+  const text = await loadSkill();
+  const path = await skillDestPath(root);
+  const full = join(root, path);
+  const existing = await readIfExists(full);
+  if (existing === text) return null;
+  await mkdir(dirname(full), { recursive: true });
+  await journaledWriteFile(root, journal, full, text);
+  return path;
 }

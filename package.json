@@ -26,6 +26,7 @@
     "rules",
     "templates",
     "agents",
+    "skills",
     "docs/decisions",
     "CHANGELOG.md"
   ],

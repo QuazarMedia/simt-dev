@@ -21,6 +21,15 @@ to the shim directory: it is the one named exception to the unjournaled state
 directory, since the undo that restores `core.hooksPath` must restore the
 shims with it.
 
+Journal sets that predate the move into `.simt/local/journal` live in the
+fallback directory `.simt/journal`, which `undo` can only see while the
+current directory is absent — a repository that accumulated history under the
+old path lost it to `undo` on its first write after the move. The next
+journal write now moves the legacy sets into the current directory, and the
+fallback directory goes with its last file: a name present in both keeps
+both records when the bytes differ, and a crash mid-move is finished by the
+next write, so the migration is idempotent.
+
 ## [0.7.0] — 2026-10-31
 
 ### Added

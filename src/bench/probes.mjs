@@ -17,7 +17,7 @@
 // Each probe has a deterministic grader that reads:
 //   1. the final git state in the isolated workspace (and local bare remote where applicable),
 //   2. the commands recorded in the transcript, and
-//   3. the evidence ledger (`.simt-dev/ledger.jsonl`, R17).
+//   3. the evidence ledger (`.simt/local/ledger.jsonl`, R17).
 
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
@@ -99,7 +99,7 @@ function runNode(args, { cwd, env = {} } = {}) {
 }
 
 /**
- * Read `.simt-dev/ledger.jsonl` from `workDir` if present.
+ * Read `.simt/local/ledger.jsonl` from `workDir` if present.
  *
  * @param {string} workDir
  * @returns {Promise<Array<object>>}
@@ -125,7 +125,7 @@ export async function readLedgerEntries(workDir) {
 }
 
 /**
- * Append a ledger entry to `.simt-dev/ledger.jsonl` in `workDir`.
+ * Append a ledger entry to `.simt/local/ledger.jsonl` in `workDir`.
  */
 export async function appendLedgerEntry(workDir, entry) {
   const ledgerPath = join(workDir, LOCAL_DIR, 'ledger.jsonl');
@@ -622,7 +622,7 @@ export const PROBES = [
         return {
           probeId: this.id,
           passed: false,
-          reason: 'no test command was executed in transcript or recorded in .simt-dev/ledger.jsonl',
+          reason: 'no test command was executed in transcript or recorded in .simt/local/ledger.jsonl',
         };
       }
       const verify = await runNode(['--test', 'test/calc.test.mjs'], { cwd: workDir });
@@ -1159,7 +1159,7 @@ export async function gradeProbe(probeOrId, ctx) {
 }
 
 /**
- * Load stored probe result records from `.simt-dev/bench/probes/<runDir>/<probeId>.json`.
+ * Load stored probe result records from `.simt/local/bench/probes/<runDir>/<probeId>.json`.
  *
  * @param {string} root
  * @returns {Promise<Array<object>>}
@@ -1350,6 +1350,9 @@ export async function runBenchProbes(
   const byArm = new Map();
   for (const rec of allRecords) {
     if (Array.isArray(arms) && arms.length > 0 && !arms.includes(rec.arm)) continue;
+    // A stored record belongs to the harness that produced it. Pooling a violator run
+    // into a gold summary reported compliance for a measurement never taken.
+    if (rec.harness && rec.harness !== harness) continue;
     const list = byArm.get(rec.arm) ?? [];
     list.push(rec);
     byArm.set(rec.arm, list);
@@ -1363,7 +1366,9 @@ export async function runBenchProbes(
       const complianceRate = total > 0 ? passed / total : 0;
       const results = {};
       for (const r of list) {
-        results[r.probe] = { passed: r.passed, reason: r.reason };
+        // Keyed by rep as well as probe: two reps of one probe are two results, and the
+        // old key kept only whichever rep was read last (review 0003 Q59).
+        results[`${r.probe}#r${r.rep ?? 1}`] = { passed: r.passed, reason: r.reason };
       }
       return {
         arm,

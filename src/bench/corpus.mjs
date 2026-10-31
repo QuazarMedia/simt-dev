@@ -16,6 +16,7 @@ import { createHash } from 'node:crypto';
 import { chmod, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
+import { STATE_DIR } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { resolveVaultDir } from './mine.mjs';
 
@@ -64,7 +65,7 @@ function payloadOf(doc) {
  */
 export async function buildCorpusDocument(root, { env = process.env } = {}) {
   const absRoot = resolve(root);
-  const tasksDir = join(absRoot, '.simt', 'bench', 'tasks');
+  const tasksDir = join(absRoot, STATE_DIR, 'bench', 'tasks');
   const vaultRoot = resolveVaultDir(absRoot, { env });
 
   const names = (await readdir(tasksDir).catch(() => [])).filter((f) => f.endsWith('.json')).sort();
@@ -128,7 +129,7 @@ export function verifyCorpusDocument(doc) {
  */
 export async function writeCorpusDocument(root, doc, { env = process.env, apply = true } = {}) {
   const absRoot = resolve(root);
-  const tasksDir = join(absRoot, '.simt', 'bench', 'tasks');
+  const tasksDir = join(absRoot, STATE_DIR, 'bench', 'tasks');
   const vaultRoot = resolveVaultDir(absRoot, { env });
 
   if (apply) await mkdir(tasksDir, { recursive: true });

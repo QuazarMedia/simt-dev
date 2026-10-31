@@ -1839,24 +1839,32 @@ test('bench probes (R05): 12 synthetic compliance probes each pass on compliance
   const stored = await loadProbeRecords(repo);
   assert.equal(stored.length, 24);
 
-  const summary = await runBenchProbes(repo, {
+  // Stored records are summarised per harness: pooling a violator run into a gold
+  // summary reported compliance for a measurement never taken (review 0003 Q59).
+  const violated = await runBenchProbes(repo, {
     apply: false,
-    arms: ['bare', 'current'],
+    arms: ['bare'],
+    harness: 'violator',
   });
-  assert.equal(summary.probeCount, 12);
-  assert.equal(summary.arms.length, 2);
-
-  const bareSummary = summary.arms.find((a) => a.arm === 'bare');
-  const currentSummary = summary.arms.find((a) => a.arm === 'current');
+  assert.equal(violated.arms.length, 1);
+  const bareSummary = violated.arms.find((a) => a.arm === 'bare');
   assert.equal(bareSummary.total, 12);
   assert.equal(bareSummary.passed, 0);
   assert.equal(bareSummary.complianceRate, 0);
+
+  const goldSummary = await runBenchProbes(repo, {
+    apply: false,
+    arms: ['bare', 'current'],
+    harness: 'gold',
+  });
+  assert.equal(goldSummary.probeCount, 12);
+  assert.equal(goldSummary.arms.length, 1, 'no bare record was produced by the gold harness');
+  const currentSummary = goldSummary.arms.find((a) => a.arm === 'current');
   assert.equal(currentSummary.total, 12);
   assert.equal(currentSummary.passed, 12);
   assert.equal(currentSummary.complianceRate, 1.0);
 
-  const md = formatProbesMarkdown(summary);
-  assert.match(md, /\| bare \| 12 \| 0 \| 0\.0% \| grader calibration \|/);
+  const md = formatProbesMarkdown(goldSummary);
   assert.match(md, /\| current \| 12 \| 12 \| 100\.0% \| grader calibration \|/);
   assert.equal(bareSummary.measured, false);
   assert.equal(currentSummary.measured, false);
@@ -1869,7 +1877,7 @@ test('bench probes (R05): 12 synthetic compliance probes each pass on compliance
   assert.equal(payload.ok, true);
   assert.equal(payload.command, 'bench probes');
   assert.equal(payload.probeCount, 12);
-  assert.equal(payload.arms.length, 2);
+  assert.equal(payload.arms.length, 1);
 
   // 5. A non-built-in harness runs a real agent in the probe workspace, and its record
   // says so; the scripted harnesses stay calibration (review 0003 Q49).

@@ -147,7 +147,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q46 | Bench stats: reps paired as independent, missing cost = $0, harness/model pooled, no multiplicity control | P1 | F | bench | M | Q45 | Complete | cd6a9edda0ba4b1fc7dba80f097cb8c659df806c · test: node --test test/bench.test.mjs test/variants.test.mjs test/advice.test.mjs test/deadcode.test.mjs |
 | Q47 | Bench timeouts don't kill grandchildren and aren't recorded; one failure aborts the batch | P1 | F | bench | S | Q72 | Queued | |
 | Q48 | Bench corpus not portable; re-mine silently replaces it; Gradle/Maven graders read nothing | P1 | F | bench | M | — | Complete | 858e833bf322b47d4e7e3907e4145e5542ffa99a · test: node --test test/bench.test.mjs |
-| Q49 | Bench arms measure the wrong thing: `brief` arm, probes, `gold` default, agent can reach the vault | P1 | F | bench | M | — | Queued | |
+| Q49 | Bench arms measure the wrong thing: `brief` arm, probes, `gold` default, agent can reach the vault | P1 | F | bench | M | — | Complete | `8d515c9`; `node --test test/bench.test.mjs` — 24/24 (brief arm delivers `assembleBrief` as a prompt prefix; probes run adapters and label scripted harnesses `measured:false`; `--yes` requires `--harness`; `agentEnv` allowlist + slot HOME; vault 0700; subject-only prompts) |
 | Q50 | `compare` learning reads ablation from the wrong path | P1 | F | compare | S | — | Complete | 386244b3facb8d8ba2140327ce84df62251a9385 · test: node --test test/compare.test.mjs test/deadcode.test.mjs |
 | Q51 | zsh completion never completes flags | P1 | F | completions | S | — | Complete | 4be9e7bb65b14a2538df8ba04f8809c6f1bd404a · test: node --test test/completions.test.mjs |
 | Q52 | Brief/map noise: 47 false "unresolved" commands, false "generated" cautions, `distill` crash, silent no-match | P2 | F | brief | S | — | Queued | |
@@ -689,6 +689,17 @@ their own file (`touchesRegion`, `generatedFact`, `isTestKind`, `readCandidates`
   `--harness`; per-adapter env allowlist, HOME = slot, vault 0700, `isolation: none|env|sandbox`
   recorded (W05); subject-only or curated prompts.
 - **Effort:** M.
+- **Done (Q49):** `materialiseArm` returns a `promptPrefix` and the `brief` arm fills it from
+  `assembleBrief` (the packet's own implementation), delivered through the adapter's
+  `{prompt}` placeholder instead of a file nothing was told to read; `executeAdapter` is
+  exported and `runBenchProbes` drives any harness outside `gold`/`noop`/`violator` through
+  it, recording `measured` and the probe table's `Basis` column; a built-in record states
+  `measured:false, isolation:none`; `bench run|ablate|variants|probes --yes` exit 2 without an
+  explicit `--harness`; `agentEnv(adapter)` keeps `PATH`/locale plus the adapter's declared
+  keys, sets `HOME` to the run slot and drops `SIMT_DEV_VAULT_DIR`, `XDG_CACHE_HOME` and every
+  other credential; miner and corpus importer create 0700 vaults; a task prompt is the commit
+  subject unless `bench.mine.prompt: "body"` is declared. `sandbox` is declared in the
+  vocabulary but no run claims it.
 
 ### Q50 — `compare` reads the wrong ablation path (P1)
 - **Where:** `src/compare/learn.mjs:26,165-200`; `ablate.mjs:173-203,619`.

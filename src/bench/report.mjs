@@ -1,7 +1,7 @@
 // Cost model, paired statistical tests and report generator (`simt bench report`, R03).
 //
-// Reads stored run records from `.simt-dev/bench/runs/` and optional token pricing
-// from `.simt-dev/bench/prices.json` (per million tokens: `{in, cache_write, cache_read, out}`).
+// Reads stored run records from `.simt/local/bench/runs/` and optional token pricing
+// from `.simt/local/bench/prices.json` (per million tokens: `{in, cache_write, cache_read, out}`).
 // Never performs network lookups. All statistical estimators (paired bootstrap 95% CIs,
 // exact sign test on task-mean R, Wilcoxon signed-rank test on task-mean C) are
 // deterministic. Reps of a task are not independent tasks: pairing happens at the
@@ -69,7 +69,7 @@ function isFlatPriceObject(obj) {
 }
 
 /**
- * Load `.simt-dev/bench/prices.json` if present.
+ * Load `.simt/local/bench/prices.json` if present.
  * Supports either a flat `{in, cache_write, cache_read, out}` object (prices per 1M tokens)
  * or a map keyed by model/harness name with an optional `"default"` entry.
  */

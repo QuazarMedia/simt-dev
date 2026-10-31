@@ -137,8 +137,10 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
     readFile(join(taskVaultDir, 'gold.patch')).catch(() => Buffer.alloc(0)),
   ]);
 
-  // Remove transient brief file if the `brief` arm or agent left one untracked, so it
-  // is not counted as an implementation edit outside the task's blast radius.
+  // Intent-to-add every untracked file so a file an agent created is part of the diff:
+  // `git diff` reports tracked changes only and would not count a new file at all.
+  // Nothing is removed — an arm's untracked file is an edit outside the blast radius,
+  // which is what it is.
   await runCmd('git', ['add', '-N', '.'], { cwd: workDir });
   const [diffNamesRes, diffPatchRes] = await Promise.all([
     runCmd('git', ['diff', '--name-only', initialHead], { cwd: workDir }),
@@ -174,6 +176,7 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
       resolved: false,
       gatesPassed: false,
       diff,
+      f2pPassed: [],
       goldFiles: [...goldFiles],
       agentPatch: diffPatchRes.stdout,
     };
@@ -185,6 +188,7 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
       resolved: false,
       gatesPassed: false,
       diff,
+      f2pPassed: [],
       goldFiles: [...goldFiles],
       agentPatch: diffPatchRes.stdout,
     };
@@ -233,6 +237,9 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
     resolved,
     gatesPassed,
     diff,
+    // Which fail-to-pass tests actually passed. `resolved` is a boolean, so a regrade
+    // could only compare the verdict; the set is what a reader can check (review Q59).
+    f2pPassed: Array.isArray(task.f2p) ? task.f2p.filter((id) => passedSet.has(id)) : [],
     goldFiles: [...goldFiles],
     agentPatch: diffPatchRes.stdout,
   };

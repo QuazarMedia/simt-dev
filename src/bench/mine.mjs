@@ -18,7 +18,7 @@ import { homedir, platform as osPlatform, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { CONFIG_DIR } from '../name.mjs';
+import { CONFIG_DIR, STATE_DIR } from '../name.mjs';
 import { SCHEMA_VERSION } from '../output/index.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { packageVersion } from '../package-version.mjs';
@@ -858,7 +858,7 @@ export async function mineTasks(
   const exclude = benchCfg.exclude ?? DEFAULT_EXCLUDES;
   const promptMode = benchCfg.prompt === 'body' ? 'body' : 'subject';
 
-  const tasksDir = join(absRoot, '.simt', 'bench', 'tasks');
+  const tasksDir = join(absRoot, STATE_DIR, 'bench', 'tasks');
   const vaultRoot = resolveVaultDir(absRoot, { env });
 
   if (!apply) {

@@ -84,7 +84,7 @@ export async function benchMineCommand(positional, flags) {
     for (const task of result.tasks) {
       const subject = task.prompt.split('\n')[0];
       lines.push(
-        `task     ${task.id}  f2p=${task.f2p.length}  p2p=${task.f2p.length}  files=${task.gold.files}  +${task.gold.linesAdded}/-${task.gold.linesRemoved}  ${subject}`,
+        `task     ${task.id}  f2p=${task.f2p.length}  p2p=${task.p2p.length}  files=${task.gold.files}  +${task.gold.linesAdded}/-${task.gold.linesRemoved}  ${subject}`,
       );
     }
   } else {

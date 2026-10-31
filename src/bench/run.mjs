@@ -708,6 +708,24 @@ function buildAdapterArgs(adapter, { prompt, turns, model, analyticsLog }) {
   return args;
 }
 
+/**
+ * Apply a patch to a workspace, falling back to a three-way merge.
+ *
+ * The gold oracle and the regrade path land operator-supplied bytes the same way. They
+ * used to disagree (`--binary` on one side only), so a patch that applied under one read
+ * as unreproducible under the other (review 0003 Q59).
+ */
+async function applyPatch(workDir, patch, { timeoutMs = DEFAULT_AGENT_TIMEOUT_MS } = {}) {
+  if (!patch || patch.length === 0) return { code: 0 };
+  const applied = await runCmd('git', ['apply', '--binary', '-'], {
+    cwd: workDir,
+    input: patch,
+    timeoutMs,
+  });
+  if (applied.code === 0) return applied;
+  return runCmd('git', ['apply', '--3way', '-'], { cwd: workDir, input: patch, timeoutMs });
+}
+
 export async function executeAdapter(
   adapter,
   workDir,
@@ -717,12 +735,7 @@ export async function executeAdapter(
   if (adapter.id === 'noop') return { ...parseAdapterUsage(adapter, ''), transcript: '' };
   if (adapter.id === 'gold') {
     const goldPatch = await readFile(join(vaultRoot, task.id, 'gold.patch'));
-    if (goldPatch.length > 0) {
-      const applyRes = await runCmd('git', ['apply', '-'], { cwd: workDir, input: goldPatch, timeoutMs });
-      if (applyRes.code !== 0) {
-        await runCmd('git', ['apply', '--3way', '-'], { cwd: workDir, input: goldPatch, timeoutMs });
-      }
-    }
+    await applyPatch(workDir, goldPatch, { timeoutMs });
     return { ...parseAdapterUsage(adapter, ''), transcript: '' };
   }
 
@@ -919,6 +932,7 @@ export async function runBench(
           isolation,
           resolved: grade.resolved,
           gatesPassed: grade.gatesPassed,
+          f2pPassed: grade.f2pPassed ?? [],
           usage,
           costUsd,
           diff: grade.diff,
@@ -951,6 +965,13 @@ export async function runBench(
   } finally {
     await rm(parentDir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+/** Two string lists hold the same members, ignoring order and duplicates. */
+function sameStringSet(a, b) {
+  const left = [...new Set(a)].sort();
+  const right = [...new Set(b)].sort();
+  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 async function resolveRegradeTargets(root, target) {
@@ -1011,7 +1032,7 @@ export async function regradeRun(
   }
 
   const tasksDir = join(root, LOCAL_DIR, 'bench', 'runs');
-  const taskDefsDir = join(root, '.simt', 'bench', 'tasks');
+  const taskDefsDir = join(root, STATE_DIR, 'bench', 'tasks');
   const parentDir = await mkdtemp(join(tmpdir(), 'bench-regrade-'));
 
   try {
@@ -1048,20 +1069,7 @@ export async function regradeRun(
         { parentDir },
       );
       try {
-        if (agentPatch.length > 0) {
-          const applyRes = await runCmd('git', ['apply', '--binary', '-'], {
-            cwd: workDir,
-            input: agentPatch,
-            timeoutMs,
-          });
-          if (applyRes.code !== 0) {
-            await runCmd('git', ['apply', '--3way', '-'], {
-              cwd: workDir,
-              input: agentPatch,
-              timeoutMs,
-            });
-          }
-        }
+        await applyPatch(workDir, agentPatch, { timeoutMs });
 
         const grade = await gradeWorkspace(workDir, task, {
           vaultRoot,
@@ -1069,9 +1077,12 @@ export async function regradeRun(
           timeoutMs,
         });
 
+        // The verdicts alone cannot tell "the same tests passed" from "the same number
+        // of tests passed"; the fail-to-pass set is compared too (review 0003 Q59).
         const reproduced =
           grade.resolved === stored.resolved &&
           grade.gatesPassed === stored.gatesPassed &&
+          sameStringSet(grade.f2pPassed ?? [], stored.f2pPassed ?? []) &&
           grade.diff.files === stored.diff?.files &&
           grade.diff.outsideBlastRadius === stored.diff?.outsideBlastRadius;
 
@@ -1079,6 +1090,7 @@ export async function regradeRun(
           ...stored,
           resolved: grade.resolved,
           gatesPassed: grade.gatesPassed,
+          f2pPassed: grade.f2pPassed ?? [],
           diff: grade.diff,
         };
 

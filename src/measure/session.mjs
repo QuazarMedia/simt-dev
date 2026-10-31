@@ -8,6 +8,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+import { CLI } from '../name.mjs';
 import { tokens } from './context.mjs';
 
 const RULE_PATH_RE =
@@ -53,14 +54,14 @@ export async function measureSession(transcriptPath) {
     return {
       ok: false,
       error: '--session requires a local transcript path',
-      remedy: 'pass a local JSONL or JSON transcript path: simt tokens --session <path>',
+      remedy: `pass a local JSONL or JSON transcript path: ${CLI} tokens --session <path>`,
     };
   }
   if (/^[a-z][a-z0-9+.-]*:\/\//i.test(transcriptPath.trim())) {
     return {
       ok: false,
       error: `${transcriptPath}: remote URLs are refused; session transcripts are read locally only (ADR-075)`,
-      remedy: 'pass a local file path on this machine: simt tokens --session ./session.jsonl',
+      remedy: `pass a local file path on this machine: ${CLI} tokens --session ./session.jsonl`,
     };
   }
 

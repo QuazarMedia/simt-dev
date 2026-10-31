@@ -11,8 +11,9 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
-import { CLI, MANIFEST_FILE } from '../name.mjs';
+import { CLI } from '../name.mjs';
 import { FORMATTABLE, GATES } from '../hooks/gates.mjs';
+import { loadManifest } from '../manifest/schema.mjs';
 import { decisionsDir } from '../decisions/dir.mjs';
 import {
   decisionHits,
@@ -172,8 +173,7 @@ export async function lessonScopes(root) {
 
 async function gateCommands(root) {
   try {
-    const parsed = JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8'));
-    const commands = parsed?.gates?.commands;
+    const commands = (await loadManifest(root)).manifest?.gates?.commands;
     return commands && typeof commands === 'object' ? commands : {};
   } catch {
     return {};

@@ -258,3 +258,31 @@ export async function ignoreIdentity(root, journal = null) {
   else await writeFile(path, next);
   return true;
 }
+/**
+ * The `user.*` keys the repository's own config sets, which is the one place an
+ * identity can be overridden without a trace in the tracked tree.
+ *
+ * A repo-local `[user]` block wins over both the `git.config` include and the
+ * machine's own identity, so every commit made here inherits it silently - including
+ * the commits this tool makes on the reader's behalf (`slice finish`, `plan done`).
+ * That is not a hypothetical: 34 commits in this repository were authored as
+ * `t <t@t.t>` because `.git/config` carried that block and nothing reported it. The
+ * helper exists so `test/repo-identity.test.mjs` can fail loudly instead.
+ *
+ * `--local` rather than `--get`: the question is what THIS config adds, not what the
+ * resolved identity happens to be.
+ *
+ * @param {string} root
+ * @returns {Promise<{key: string, value: string}[]>}
+ */
+export async function localIdentityOverrides(root) {
+  const out = await git(root, ['config', '--local', '--get-regexp', '^user\\.']);
+  if (!out) return [];
+  return out
+    .split('\n')
+    .filter(Boolean)
+    .map((line) => {
+      const space = line.indexOf(' ');
+      return { key: line.slice(0, space), value: line.slice(space + 1) };
+    });
+}

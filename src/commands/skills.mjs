@@ -10,6 +10,7 @@
 // black box.
 
 import { readFile, realpath } from 'node:fs/promises';
+import { repoContext } from '../context.mjs';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
@@ -82,11 +83,11 @@ async function skillsRegistry(args) {
  * costs a fingerprint plus a directory scan, so it runs only when the registry did
  * not answer.
  */
-async function findSkill(registry, root, name, verb) {
+async function findSkill(registry, root, name, verb, ctx) {
   if (!name) skillsFailure(`${verb} needs a skill name`, `usage: ${CLI} skills ${verb} <name>`, EXIT.USAGE);
   const skill = registry.skills.find((s) => s.name === name);
   if (skill) return skill;
-  const repoStack = (await fingerprint(root)).signals;
+  const repoStack = (await ctx.fingerprint()).signals;
   const local = (await localSkillNodes(root, registry, repoStack)).find((s) => s.name === name);
   if (local) return local;
   const near = nearMatches(name, registry.skills.map((s) => s.name));
@@ -114,7 +115,10 @@ function skillFacts(skill) {
 /** Tier 1: the selection the task resolves to, with the text packet's display sets. */
 export async function skillsBriefFacts(root, args = {}) {
   const registry = await skillsRegistry(args);
-  const repo = await fingerprint(root);
+  // One context per call: a second question about the same repository inside this
+  // command costs nothing (review 0003 Q67).
+  const ctx = args.ctx ?? repoContext(root);
+  const repo = await ctx.fingerprint();
   const { note: workspace, root: workspaceRoot } = await announceWorkspace(args);
   const repoStack = repo.signals;
   const paths = args.paths ? parsePathList(args.paths) : await dirtyPaths(root);
@@ -246,7 +250,7 @@ export async function skillsFindFacts(root, query, args = {}) {
     ...registry.skills
       .map((skill) => ({ skill, ...scoreSkill(skill, context) }))
       .filter((r) => selectionVerdict(r.evidence, r.reasons) === null),
-    ...(await localSkillNodes(root, registry, (await fingerprint(root)).signals))
+    ...(await localSkillNodes(root, registry, (await (args.ctx ?? repoContext(root)).fingerprint()).signals))
       .map((skill) => ({ skill, ...scoreSkill(skill, context) }))
       .filter((r) => r.score > 0),
   ].sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name));
@@ -259,7 +263,7 @@ export async function skillsFindFacts(root, query, args = {}) {
 /** Tier 2: one skill body and the metadata needed to judge it. */
 export async function skillsShowFacts(root, name, args = {}) {
   const registry = await skillsRegistry(args);
-  const skill = await findSkill(registry, root, name, 'show');
+  const skill = await findSkill(registry, root, name, 'show', args.ctx ?? repoContext(root));
   const { note: workspace, root: workspaceRoot } = await announceWorkspace(args);
   // The repo is a location for a declared source too, so `show` reads a body the
   // caller already has instead of reporting the body missing.
@@ -287,8 +291,9 @@ export async function skillsShowFacts(root, name, args = {}) {
 /** The signal chain for one skill in one repository. */
 export async function skillsWhyFacts(root, name, args = {}) {
   const registry = await skillsRegistry(args);
-  const skill = await findSkill(registry, root, name, 'why');
-  const repo = await fingerprint(root);
+  const ctx = args.ctx ?? repoContext(root);
+  const skill = await findSkill(registry, root, name, 'why', ctx);
+  const repo = await ctx.fingerprint();
   const paths = args.paths ? parsePathList(args.paths) : await dirtyPaths(root);
   const tokens = tokenize(args.task ?? '');
   const { score, reasons } = scoreSkill(skill, { repoStack: repo.signals, taskTokens: tokens, paths });
@@ -477,9 +482,10 @@ export async function findCommand(args, flags) {
 // --- brief: tier 1 ------------------------------------------------------------
 export async function briefCommand(args, flags) {
   const root = flags.root ?? process.cwd();
+  const ctx = repoContext(root);
   let facts;
   try {
-    facts = await skillsBriefFacts(root, flags);
+    facts = await skillsBriefFacts(root, { ...flags, ctx });
   } catch (error) {
     return fail(error.message, error.exitCode ?? EXIT.FAIL, error.remedy);
   }
@@ -498,7 +504,7 @@ export async function briefCommand(args, flags) {
   }
 
   if (facts.warning) {
-    const repo = await fingerprint(root);
+    const repo = await ctx.fingerprint();
     emit(
       [
         `repo ${root.split('/').pop()} (${repoLine(repo)})`,
@@ -512,7 +518,7 @@ export async function briefCommand(args, flags) {
 
   const { shown, shownDeferred, shownUsed, pointerOnly, excludedEntries, workspace, workspaceRoot, budget } = facts;
   const lines = [];
-  const repo = await fingerprint(root);
+  const repo = await ctx.fingerprint();
 
   lines.push(
     `RESOLVED ${shown.length} skills, ${kb(shownUsed)}${flags.all || shownUsed <= budget ? '' : ' (budget capped)'} - repo ${root.split('/').pop()} (${repoLine(repo)})`,

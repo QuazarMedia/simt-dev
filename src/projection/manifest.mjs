@@ -32,31 +32,17 @@ import { runScript } from '../ecosystem/node-runner.mjs';
 // and the manifest name is used a dozen times below in remedy strings that name this
 // file by name.
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
+import { GENERATED_KEYS_OF, KEYS, loadManifest, manifestPath } from '../manifest/schema.mjs';
 import { CLI } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
 export const MANIFEST = MANIFEST_FILE;
 
+// Still exported from here because this is where the manifest lived: every caller that
+// resolved its path through this module keeps working, and the implementation moved.
+export { manifestPath };
+
 export { MANIFEST_LEGACY };
 
-/**
- * The manifest a repository has, which is not necessarily the one this tool would write.
- *
- * The file was renamed from `simt-dev.json` to `simt.json`. Every read site used to say
- * `join(root, MANIFEST)` and would have reported an adopted repository as unadopted the
- * day the constant moved - and "no manifest" means "never adopted", which is the answer
- * that offers to re-adopt a repo that is already done. Fourteen repositories carry the
- * old name on disk.
- *
- * So the old name is read as a fallback and the new one is written. `writeManifest`
- * renames rather than creating a second file, which is how the window closes: the first
- * `simt init` or `simt sync` in an adopted repo retires the old name by moving it.
- */
-export async function manifestPath(root) {
-  const next = join(root, MANIFEST);
-  if (existsSync(next)) return next;
-  const previous = join(root, MANIFEST_LEGACY);
-  return existsSync(previous) ? previous : next;
-}
 
 
 /**
@@ -745,7 +731,10 @@ export function declaredShared(manifest) {
   return { level, rules };
 }
 
-export const GENERATED_KEYS = new Set(['$comment', 'projection']);
+// Derived from the table rather than restated: a key this tool writes is a `tool` key
+// marked generated, and a second list here is the drift this module exists to end.
+export const GENERATED_KEYS = GENERATED_KEYS_OF;
+
 
 // The sub-keys of `projection` this tool writes. `projection` is a generated key, but
 // not wholesale: the repository owns sub-keys this writer does not emit (`place` is the
@@ -892,20 +881,17 @@ export function manifestText(manifest) {
   return `${JSON.stringify(manifest, null, 2)}\n`;
 }
 
-/** @returns {{manifest: object|null, exists: boolean, error: string|null}} */
+/**
+ * The manifest in the shape the callers already read, now answered by the one loader
+ * (review 0003 Q69). `error` is the unreadable-file case only: a manifest with a value
+ * the schema cannot use is still a manifest, and refusing it here would turn every
+ * reader into a second validator.
+ *
+ * @returns {Promise<{manifest: object|null, exists: boolean, error: string|null}>}
+ */
 export async function readManifest(root) {
-  const path = await manifestPath(root);
-  let text;
-  try {
-    text = await readFile(path, 'utf8');
-  } catch {
-    return { manifest: null, exists: false, error: null };
-  }
-  try {
-    return { manifest: JSON.parse(text), exists: true, error: null };
-  } catch (error) {
-    return { manifest: null, exists: true, error: `unparseable: ${error.message}` };
-  }
+  const { manifest, exists, problems } = await loadManifest(root);
+  return { manifest, exists, error: exists && manifest === null ? (problems[0] ?? 'unparseable') : null };
 }
 
 export async function writeManifest(root, manifest, journal = null) {

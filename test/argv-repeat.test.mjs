@@ -27,3 +27,37 @@ test('a repeatable flag accumulates, and a single value is still a list', () => 
   assert.deepEqual(parse(['--arm', 'a', '--arm', 'b']).value.flags.arm, ['a', 'b']);
   assert.deepEqual(parse(['--arm', 'a']).value.flags.arm, ['a']);
 });
+
+test('a flag the command does not take is named instead of silently ignored', async () => {
+  // `status --frozen` ran, reported success and discarded the flag (review 0003 Q62).
+  // One release names it on stderr; the next release makes it a usage error.
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const { fileURLToPath } = await import('node:url');
+  const bin = fileURLToPath(new URL('../bin/simt.mjs', import.meta.url));
+  const result = await promisify(execFile)('node', [bin, 'status', '--line', '--frozen']).catch((e) => e);
+  assert.match(String(result.stderr), /--frozen is not a flag of `status`/);
+});
+
+test('a flag the command does not take is carried in the JSON document too', async () => {
+  // The note exists so a caller can act; a caller parsing stdout cannot see stderr, so
+  // the same warning rides in the document (review 0003 Q62).
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const { fileURLToPath } = await import('node:url');
+  const bin = fileURLToPath(new URL('../bin/simt.mjs', import.meta.url));
+  const { stdout } = await promisify(execFile)('node', [bin, 'status', '--line', '--frozen', '--json'], { maxBuffer: 16 << 20 }).catch((e) => e);
+  const doc = JSON.parse(stdout);
+  assert.ok(Array.isArray(doc.notices), 'no notices array in the document');
+  assert.match(doc.notices[0], /--frozen is not a flag of `status`/);
+});
+
+
+test('a closed set refuses a value outside it, and names the alternatives', async () => {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const { fileURLToPath } = await import('node:url');
+  const bin = fileURLToPath(new URL('../bin/simt.mjs', import.meta.url));
+  const bad = await promisify(execFile)('node', [bin, 'map', '--level', 'bogus']).catch((e) => e);
+  assert.match(String(bad.stderr), /--level takes outline, names, signatures; received bogus/);
+});

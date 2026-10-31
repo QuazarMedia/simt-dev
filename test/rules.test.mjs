@@ -274,7 +274,11 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // the ruling is ABOUT the graph file, and a decision that membership in it is a
   // statement about the package, not about existence, without naming
   // `graph/skills.graph.json` would not be an argument a maintainer can act on.
-  assert.deepEqual(leaking, [
+    // ADR-124 joined because the ruling is ABOUT the manifest module: a decision that
+  // the keys are declared once and that an unparseable file is no manifest, without
+  // naming the module that declares them, would not be an argument a maintainer can
+  // act on.
+assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
     'ADR-026',
@@ -295,6 +299,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-110',
     'ADR-111',
     'ADR-112',
+    'ADR-124',
   ]);
 });
 

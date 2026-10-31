@@ -48,5 +48,10 @@
     "verify:shipped": "node --test test/shipped.test.mjs",
     "build:sea": "node scripts/build-sea.mjs",
     "verify:wheel": "node scripts/verify-wheel.mjs"
+  },
+  "exports": {
+    ".": "./src/api.mjs",
+    "./package.json": "./package.json",
+    "./src/*": "./src/*"
   }
 }

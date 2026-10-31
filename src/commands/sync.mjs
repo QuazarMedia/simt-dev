@@ -19,7 +19,8 @@
 import { mkdir, readFile, stat, symlink, unlink } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
-import { plan, checkTargets, checkTarget, provenanceDigest, loadRules, select, pointerTargets, pointerState } from '../projection/project.mjs';
+import { repoContext } from '../context.mjs';
+import { plan, checkTargets, checkTarget, select, pointerTargets, pointerState } from '../projection/project.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { manifestDrift, readManifest, unrunnableGates, buildManifest, writeManifest, withGenerated, manifestText, manifestPath } from '../projection/manifest.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
@@ -544,8 +545,9 @@ async function gateCwdFindings(root, manifest) {
 // reports 77. The command below renders these facts for terminals; the tool
 // returns them as JSON. The CLI keeps its field names; the tool adopts them.
 export async function checkRepo(root, opts = {}) {
-  const findings = await checkTargets(root, opts);
-  const rules = await loadRules(root);
+  const ctx = opts.ctx ?? repoContext(root);
+  const findings = await checkTargets(root, { ...opts, ctx });
+  const rules = await ctx.rules();
 
   // A rule file with no id would be projected without a traceable source, so it
   // is a gate failure rather than a warning: `rules why` could not resolve it.
@@ -568,7 +570,7 @@ export async function checkRepo(root, opts = {}) {
   // A declared gate this repo cannot run fails closed on every commit once hooks are
   // installed. Reported here rather than left to `hooks status`, so the repo is red
   // before anyone installs anything rather than after.
-  const { manifest, exists } = await readManifest(root);
+  const { manifest, exists } = await ctx.manifest();
   // The gates slot, counted — not just reported — so the line can print run/total.
   // A cwd finding names a declared gate that will not run, so it counts with the
   // unrunnable; an unknown-gate-cwd names no declared gate, so it does not.
@@ -603,14 +605,14 @@ export async function checkRepo(root, opts = {}) {
     // hand either: the next `init` puts simt-dev's own bytes back and the formatter
     // takes them away again. Reporting it here is what stops that being a surprise
     // discovered at upgrade time.
-    const { stack } = await fingerprint(root);
-    const drift = await manifestDrift(root, stack, await provenanceDigest());
+    const { stack } = await ctx.fingerprint();
+    const drift = await manifestDrift(root, stack, await ctx.digest());
     if (drift) findings.push(drift);
   }
   if (opts.frozen) findings.push(...(await frozenFindings(root, opts)));
   // The checkers a selected rule declared (ADR-088). They read the rule source,
   // not the folded region, so a line that left the prompt is still the line that runs.
-  const fp = await fingerprint(root);
+  const fp = await ctx.fingerprint();
   const { selected } = select(rules.filter((r) => r.error === null), fp.stack ?? [], fp.facts ?? []);
   findings.push(...(await runDeclaredChecks(root, selected, manifest ?? null)));
 

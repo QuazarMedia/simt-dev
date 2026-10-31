@@ -203,8 +203,47 @@ function fitJsonArrays(payload, maxBytes, pretty) {
   return null;
 }
 
+/**
+ * Warnings a run accumulated, carried into the JSON document it prints.
+ *
+ * The same reason stderr is separate from stdout: a caller reading a document cannot
+ * see a note printed beside it. A command that ignored half of what it was asked still
+ * has to succeed or fail the same way, so the note belongs IN the result, and the text
+ * mode keeps the stderr line it already had (review 0003 Q62).
+ */
+let accumulated = [];
+
+/** Record a warning for the document this run prints. */
+export function warn(message) {
+  accumulated = [...accumulated, message];
+}
+
+/**
+ * Drop what a previous run in this process recorded.
+ *
+ * The collector is per process and a process can dispatch more than once - the MCP
+ * server and the tests both do. Without this, one command's notice appeared in the
+ * next command's document, which parity between the two surfaces caught (review 0003
+ * Q62).
+ */
+export function clearWarnings() {
+  accumulated = [];
+}
+
+/** The warnings this run has recorded, in order. */
+export function warnings() {
+  return accumulated;
+}
+
 export function emitJson(value, { stream = process.stdout, pretty = prettyDefault, maxBytes = 0 } = {}) {
-  const payload = withSchemaVersion(value);
+  // `notices`, not `warnings`: `status` already reports a warning COUNT under that key,
+  // and a document cannot mean two things by one name. The collision is named here
+  // rather than bent into either shape (review 0003 Q62).
+  const carried =
+    accumulated.length > 0 && value !== null && typeof value === 'object' && !Array.isArray(value) && value.notices === undefined
+      ? { ...value, notices: accumulated }
+      : value;
+  const payload = withSchemaVersion(carried);
   const text = `${stringifyJson(payload, pretty)}\n`;
   // JSON is never byte-truncated: a cut document parses as a lie, and exit 0 calls it
   // true. Arrays shrink with a `truncated` record naming what lost how much, and a

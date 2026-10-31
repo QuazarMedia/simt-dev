@@ -6,599 +6,132 @@ decision; nothing here is duplicated into a repo's `AGENTS.md`.
 A decision is superseded by writing a new ADR with a higher number and editing the old
 record's status line — never by editing the ruling in place.
 
+This table is generated from the records: `simt rules decisions --yes` writes it, and
+`test/decisions-index.test.mjs` fails when it drifts. The history behind the numbers is
+in [architecture/history.md](architecture/history.md).
+
 | ADR | Decision | Status |
 |---|---|---|
-| [001](decisions/ADR-001-push-requires-approval.md) | Push requires explicit approval | accepted |
-| [002](decisions/ADR-002-refactor-blast-radius.md) | Blast radius bounds refactoring; a third copy is a defect | accepted |
-| [003](decisions/ADR-003-test-breadth.md) | Focused tests by default; a full suite needs a named trigger | accepted |
-| [004](decisions/ADR-004-hook-owns-format.md) | The hook owns format and lint for staged files | accepted |
-| [005](decisions/ADR-005-file-length.md) | File length: 400 review trigger, 1000 hard ceiling | accepted |
-| [006](decisions/ADR-006-coverage-bar.md) | Evidence discipline is central; the numeric bar is per-repo | accepted |
-| [007](decisions/ADR-007-section-skeleton.md) | One canonical section skeleton | accepted |
-| [008](decisions/ADR-008-verdict-vocabulary.md) | One review verdict vocabulary: three values | accepted |
-| [009](decisions/ADR-009-skill-layout.md) | Skills are `<name>/SKILL.md` with mandatory frontmatter | accepted |
-| [010](decisions/ADR-010-runner-invocation.md) | Invoke through the repo's own runner, never a package runner | accepted |
-| [011](decisions/ADR-011-windows-support.md) | Windows is supported from v1 for the CLI | **superseded by 012** |
-| [012](decisions/ADR-012-drop-windows-support.md) | Windows support dropped; POSIX only | accepted |
-| [013](decisions/ADR-013-genericity-by-facts-and-local-profiles.md) | Genericity comes from emitted facts and repo-local profiles | accepted |
-| [014](decisions/ADR-014-workspace-is-configuration.md) | The workspace is configuration, and a single repo is a supported shape | accepted · ruling 1 superseded by [ADR-119](decisions/ADR-119-the-environment-variable-points-into-a-workspace-the-repo-declared.md) |
-| [015](decisions/ADR-015-a-source-is-content-not-a-location.md) | A source is identified by its content; the repo is a location, not a precondition | accepted |
-| [016](decisions/ADR-016-a-divergent-rule-is-retired-not-merged.md) | A divergent rule is retired by a union, not merged by a variant | accepted |
-| [017](decisions/ADR-017-a-declared-gate-must-be-runnable.md) | A declared gate must be one the repo can actually run | accepted |
-| [018](decisions/ADR-018-an-unset-hooks-path-is-not-an-absent-hook.md) | An unset hooks path is not an absent hook | accepted |
-| [019](decisions/ADR-019-a-declared-command-is-the-runner.md) | A declared command is the runner; the remedy must be one the reader can take | accepted |
-| [020](decisions/ADR-020-a-rule-is-written-per-surface-and-pointed-not-copied.md) | A rule is written per surface, and pointed at — never copied | accepted |
-| [021](decisions/ADR-021-one-surface-per-repo.md) | One surface per repo, chosen or defaulted to opencode | accepted |
-| [022](decisions/ADR-022-a-key-simt-dev-reads-is-prefixed.md) | A key simt-dev reads is prefixed `simt-`; an editor's key is not | accepted |
-| [023](decisions/ADR-023-the-gate-ships-as-a-file-the-repo-owns.md) | The gate ships as bytes the repo owns, written once where Actions already runs | accepted · ruling 2 superseded by 024 |
-| [024](decisions/ADR-024-simt-dev-overwrites-its-own-gate-file.md) | simt-dev overwrites its own gate file, and no repository else's | accepted |
-| [025](decisions/ADR-025-a-baseline-is-a-region-in-a-file-the-repo-owns.md) | A baseline is a region in a file the repo owns, and only a file that can hold one | accepted · rulings 1 and 2 narrowed by 026 · ruling 8 withdrawn by 048 |
-| [026](decisions/ADR-026-a-config-without-a-region-is-a-file-the-repo-owns.md) | A config whose grammar cannot hold a region is a file the repo owns | accepted |
-| [027](decisions/ADR-027-the-one-gitattributes-line-that-is-neither-dangerous-nor-empty.md) | The one gitattributes line that is neither dangerous nor empty | accepted |
-| [028](decisions/ADR-028-a-base-file-is-a-floor-so-the-disagreement-it-cannot-repair-becomes-a-check.md) | A base file is a floor, so the disagreement it cannot repair becomes a check | accepted |
-| [029](decisions/ADR-029-the-pins-a-repository-declares-are-its-own.md) | The pins a repository declares are its own, so a check reports them and never writes them | accepted |
-| [030](decisions/ADR-030-what-a-plan-does-not-ship-is-a-decision-with-a-record.md) | What a plan does not ship is a decision with a record, not a silence | accepted |
-| [031](decisions/ADR-031-the-suite-stages-the-environment-it-needs.md) | The suite stages the environment it needs, because a test that inherits the author's directory is not evidence | accepted |
-| [032](decisions/ADR-032-provenance-is-a-content-digest-not-a-commit.md) | Provenance is a digest of the content that leaves this package, not a commit id | accepted |
-| [033](decisions/ADR-033-three-plan-rows-closed-by-decision-not-by-authoring.md) | Three plan rows are closed by ruling on them, not by authoring what they asked for | accepted |
-| [034](decisions/ADR-034-a-staged-tool-refuses-a-partially-staged-file.md) | A staged tool refuses a partially staged file rather than staging around it | accepted |
-| [035](decisions/ADR-035-one-write-decision-and-one-json-document.md) | One place decides whether a run may write, and one document says whether it did | accepted |
-| [036](decisions/ADR-036-a-writer-that-writes-says-so-and-the-instructions-naming-it-move-with-it.md) | A command that writes says so, and every instruction that names it moves with it | accepted |
-| [037](decisions/ADR-037-unchanged-means-writing-would-not-change-a-byte.md) | `unchanged` means writing would not change a byte, not that the body matches | accepted |
-| [038](decisions/ADR-038-the-gate-filter-belongs-to-every-manifest-writer.md) | The gate filter belongs to every writer of a manifest, not to `init` | accepted |
-| [039](decisions/ADR-039-a-ci-step-runs-a-form-that-can-fail.md) | A gate a CI step runs must have a form that can fail, and a refusal is a failure | accepted |
-| [040](decisions/ADR-040-the-last-writer-that-wrote-by-default-was-not-the-one-named.md) | The last writer writing by default was not the one the finding named | accepted |
-| [041](decisions/ADR-041-the-suite-installs-the-package-in-order-to-test-it.md) | The suite installs the package in order to test it | accepted |
-| [042](decisions/ADR-042-a-declared-glob-must-match-a-path-built-from-it.md) | A declared glob must match a path built from it | accepted |
-| [043](decisions/ADR-043-a-keyword-is-a-phrase-and-two-letters-is-a-word.md) | A keyword is a phrase, and two letters is a word | accepted |
-| [044](decisions/ADR-044-compatibility-is-not-evidence.md) | Compatibility is not evidence, and a resolver nobody measured is merely felt | accepted |
-| [045](decisions/ADR-045-a-dashboard-that-counts-a-defect.md) | A dashboard that counts a defect and will not name it is worse than one that does not count it | accepted |
-| [046](decisions/ADR-046-one-rule-one-copy.md) | One rule, one copy: a reader that reads AGENTS.md must not also get the file | accepted |
-| [047](decisions/ADR-047-a-profile-selects-on-what-a-repository-runs-on.md) | A profile selects on what a repository runs on, not on what it is written in | accepted · refines ADR-013 r1 |
-| [048](decisions/ADR-048-a-baseline-carries-only-keys-a-reader-honours.md) | A baseline carries only keys a reader honours | accepted · withdraws ADR-025 r8 |
-| [049](decisions/ADR-049-a-ruling-that-a-later-record-moved-says-so-where-it-is-printed.md) | A ruling that a later record moved says so where it is printed | accepted |
-| [050](decisions/ADR-050-a-byte-count-is-not-a-region-and-updated-is-not-a-change-of-rules.md) | A byte count is not a region, and `updated` is not a change of rules | accepted |
-| [051](decisions/ADR-051-a-pointer-is-the-readers-only-route-so-it-is-not-a-convenience.md) | A pointer is the reader's only route, so it is not a convenience | accepted |
-| [052](decisions/ADR-052-a-dependency-is-counted-against-the-budget-and-there-is-one-budget.md) | A dependency is counted against the budget, and there is one budget | accepted |
-| [053](decisions/ADR-053-the-node-floor-is-22-20-0.md) | The Node floor is 22.20.0 | accepted |
-| [054](decisions/ADR-054-the-digest-covers-every-byte-that-leaves-the-package.md) | The digest covers every byte that leaves the package, and a cause is read off the body | accepted · amends ADR-032 |
-| [055](decisions/ADR-055-a-status-line-travels-so-it-may-not-name-a-location.md) | A status line travels, so it may not name a location; prose is the record's own argument | accepted |
-| [056](decisions/ADR-056-three-names-one-of-which-is-cheap-to-move.md) | The command, the package and the project are three names, and only one of them is cheap to move | accepted · amends ADR-023 |
-| [057](decisions/ADR-057-an-identity-is-per-developer-and-a-repository-does-not-own-it.md) | An identity is per-developer, and a repository does not own it | accepted |
-| [058](decisions/ADR-058-one-tool-three-channels-and-the-order-is-forced.md) | One tool, three channels, and the order is forced | accepted |
-| [059](decisions/ADR-059-the-version-a-repository-runs-is-the-one-it-pinned.md) | The version a repository runs is the one it pinned, and the gate refuses otherwise | accepted |
-| [060](decisions/ADR-060-a-repository-with-nothing-to-run-is-adopted-and-says-so.md) | A repository with nothing to run is adopted and says so; a gate is verified where it runs | accepted |
-| [061](decisions/ADR-061-the-skill-registry-is-workspace-data.md) | The skill registry is workspace data, and the package ships none of it | **accepted** · 2026-10-12 · filed as S61 |
-| [062](decisions/ADR-062-a-fresh-adoption-seeds-the-gates-it-can-run.md) | A fresh adoption seeds the canonical gates it can run, and never more | **accepted** · 2026-10-13 · filed as S40 |
-| [063](decisions/ADR-063-the-adoption-escape-hatch-is-opt-in.md) | The adoption escape hatch is opt-in, and the default writes in place | **accepted** · 2026-10-13 · filed after a consumer asked why every adoption branched |
-| [064](decisions/ADR-064-the-context-meter-counts-what-the-tool-wrote.md) | The context meter counts what the tool wrote, and says what it did not | **accepted** · 2026-10-13 · filed after review 0002 S38 |
-| [065](decisions/ADR-065-a-pack-is-one-shared-rule-set-pinned-by-digest.md) | A pack is one shared rule set, vendored into the repository and pinned by digest | **accepted** · 2026-10-13 · filed as S39 |
-| [066](decisions/ADR-066-a-monorepo-projects-once-per-package.md) | A monorepo projects once per package | **accepted** · 2026-10-13 · filed as S41 |
-| [067](decisions/ADR-067-which-harnesses-read-agents-md-is-a-column.md) | Which harnesses read AGENTS.md is a column, and a row without a document gets none | **accepted** · 2026-10-13 · filed as S42 |
-| [068](decisions/ADR-068-the-mcp-revision-list-cites-what-was-read.md) | The revision list is a claim about revisions that were read | **accepted** · 2026-10-13 · filed as S43 |
-| [069](decisions/ADR-069-the-conformance-lint-checks-the-published-specification.md) | The conformance lint checks the published specification | **accepted** · 2026-10-13 · filed as S44 |
-| [070](decisions/ADR-070-the-json-payload-carries-its-own-version.md) | The JSON payload carries its own version | **accepted** · 2026-10-13 · filed as S51 |
-| [071](decisions/ADR-071-a-rule-that-can-be-narrowed-is-written-narrow.md) | A rule that can be narrowed is written narrow | **accepted** · 2026-10-14 · filed as S50 |
-| [072](decisions/ADR-072-the-budget-is-a-declaration-beside-the-gates.md) | The budget is a declaration beside the gates, not a number inside the projection | **accepted** · 2026-10-14 · filed as S38 |
-| [073](decisions/ADR-073-a-kernel-is-a-smaller-projection-the-repository-asks-for.md) | A kernel is a smaller projection the repository asks for, not one it is given | **accepted** · 2026-10-14 · filed as S38 (R07) · ruling 6 narrowed by ADR-084 |
-| [074](decisions/ADR-074-a-rule-and-a-decision-are-readable-by-uri.md) | A rule and a decision are addressable, so they are readable by URI | **accepted** · 2026-10-14 · filed as S43 |
-| [075](decisions/ADR-075-nothing-leaves-the-machine.md) | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default | **accepted** · 2026-10-14 · filed as D7 (R06) |
-| [076](decisions/ADR-076-a-change-to-what-agents-read-is-measured.md) | A change to what agents read is measured before it ships, or labelled unmeasured in its record | **accepted** · 2026-10-15 · filed as D1 (R01) |
-| [077](decisions/ADR-077-the-command-card-leads-the-region-and-reads-committed-evidence.md) | The command card leads the region, and is derived from committed evidence only | **accepted** · 2026-10-16 · filed as R10 (plan 0003) · ruling 1 narrowed by ADR-086 |
-| [078](decisions/ADR-078-a-line-the-repository-already-proves-does-not-ship.md) | A line the repository already proves does not ship, and the author says so | **accepted** · 2026-10-16 · filed as R09 (plan 0003) |
-| [079](decisions/ADR-079-the-rules-are-enforced-at-the-tool-call-from-one-policy-table.md) | The rules are enforced at the tool call, from one policy table every harness renders | **accepted** · 2026-10-16 · filed as R15 (plan 0003) |
-| [080](decisions/ADR-080-the-tools-own-names-are-not-repositories-and-neither-reader-decides-by-shape.md) | The tool's own names are not repositories, and neither reader decides by shape | **accepted** · 2026-10-16 · settles what `rules why` calls a repository |
-| [081](decisions/ADR-081-a-tracker-is-read-through-the-repositorys-template.md) | A tracker is read through the repository's template | **accepted** · 2026-10-16 · rulings 1 and 2 superseded by ADR-082 |
-| [082](decisions/ADR-082-the-tracker-override-is-a-manifest-key.md) | The tracker override is a manifest key, and init keeps what it did not write | **accepted** · 2026-10-16 · supersedes ADR-081 rulings 1 and 2 |
-| [083](decisions/ADR-083-a-budget-is-met-by-cutting-the-kernel-and-hard-is-the-floor.md) | A budget is met by cutting the kernel, and the hard constraints are the floor | **accepted** · 2026-10-17 · filed as R08 (plan 0003) · ruling 7 narrowed by ADR-084 |
-| [084](decisions/ADR-084-a-workspace-carries-its-repeated-rules-once.md) | A workspace carries its repeated rules once, and the region does not read the reader's home | **accepted** · 2026-10-17 · filed as R11 (plan 0003) |
-| [085](decisions/ADR-085-the-region-ends-with-the-names-it-kept-out.md) | The region ends with the names of what it kept out | **accepted** · 2026-10-18 · filed as R12 (plan 0003) |
-| [086](decisions/ADR-086-the-stable-prefix-comes-first-and-the-lock-records-both-digests.md) | The stable prefix comes first, and the lock records both digests | **accepted** · 2026-10-18 · filed as R13 (plan 0003) |
-| [087](decisions/ADR-087-a-run-is-evidence-for-one-tree.md) | A run is evidence for one tree | **accepted** · 2026-10-18 · filed as R17 (plan 0003) |
-| [088](decisions/ADR-088-a-marked-line-is-enforced-by-a-checker.md) | A marked line is enforced by a checker | **accepted** · 2026-10-18 · filed as R19 (plan 0003) · ruling 3 narrowed by ADR-090 |
-| [089](decisions/ADR-089-the-local-index-is-a-cache-of-git-blobs.md) | The local index is a cache of git blobs | **accepted** · 2026-10-18 · filed as R20 (plan 0003) |
-| [090](decisions/ADR-090-an-optional-adapter-is-off-until-named.md) | An optional adapter is off until a repository names it | **accepted** · 2026-10-18 · filed as R21 (plan 0003) |
-| [091](decisions/ADR-091-the-map-ranks-files-a-task-mentions.md) | The map ranks the files a task mentions, and the files next to them | **accepted** · 2026-10-18 · filed as R22 (plan 0003) |
-| [092](decisions/ADR-092-tests-are-imports-conventions-and-coverage.md) | A test is an import, a conventional neighbour, or a coverage record | **accepted** · 2026-10-18 · filed as R24 (plan 0003) |
-| [093](decisions/ADR-093-why-names-what-governs-a-file.md) | why names what governs a file | **accepted** · 2026-10-18 · filed as R25 (plan 0003) |
-| [094](decisions/ADR-094-a-change-runs-the-tests-that-import-it.md) | a change runs the tests that import it | **accepted** · 2026-10-18 · filed as R16 (plan 0003) |
-| [095](decisions/ADR-095-gate-output-keeps-the-failures.md) | gate output keeps the failures | **accepted** · 2026-10-18 · filed as R18 (plan 0003) |
-| [096](decisions/ADR-096-impact-names-who-a-change-reaches.md) | impact names who a change reaches | **accepted** · 2026-10-18 · filed as R23 (plan 0003) |
-| [097](decisions/ADR-097-the-channels-publish-by-hand-and-the-version-rides-in-as-an-input.md) | the channels publish by hand, and the version rides in as an input | **accepted** · 2026-10-25 · ruling 3's Homebrew precondition is superseded by [ADR-098](decisions/ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md), which also restates what each channel now waits on |
-| [098](decisions/ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md) | The fourth channel is one file, and it needs no toolchain | **accepted** · 2026-10-26 · supersedes ADR-058 ruling 5 · narrows ADR-058 ruling 7 and ADR-097 ruling 3 · supersedes ADR-059 ruling 3 · ruling 3's cross-host byte-identicality narrowed by [ADR-099](decisions/ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md) |
-| [099](decisions/ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md) | the release verifies served bytes, and the formula mirrors them | **accepted** · 2026-10-27 · narrows ADR-098 ruling 3 · ruling 1 superseded by [ADR-117](decisions/ADR-117-the-darwin-release-builds-on-supported-macos-15-runners-and-a-re-run-is-idempotent.md) |
-| [100](decisions/ADR-100-a-staged-diff-is-the-last-gate-before-history-and-it-runs-inside-the-tool.md) | a staged diff is the last gate before history, and it runs inside the tool | **accepted** · 2026-10-27 |
-| [101](decisions/ADR-101-a-file-lease-belongs-to-one-session-and-the-pre-edit-hook-refuses-another.md) | a file lease belongs to one session, and the pre-edit hook refuses another's edit | **accepted** · 2026-10-28 |
-| [102](decisions/ADR-102-the-two-queued-review-rows-are-closed-by-ruling.md) | the two rows review 0002 left queued are closed by ruling, not by authoring | **accepted** · 2026-10-28 |
-| [103](decisions/ADR-103-co-projected-duplicates-merge-down.md) | duplicates stand alone, fingerprints generalize, references spell out | **accepted** · 2026-10-28 |
-| [104](decisions/ADR-104-the-pre-tool-use-policy-reads-the-command-the-way-a-shell-reads-it.md) | the pre-tool-use policy reads the command the way a shell reads it | **accepted** · 2026-10-28 |
-| [105](decisions/ADR-105-the-json-ceiling-shrinks-arrays-and-never-cuts-bytes.md) | the JSON ceiling shrinks arrays and never cuts bytes | **accepted** · 2026-10-29 |
-| [106](decisions/ADR-106-the-harness-hook-runs-through-a-repo-shim.md) | the harness hook runs through a repo shim, and `failClosed` only with it | **accepted** · 2026-10-29 |
-| [107](decisions/ADR-107-an-install-can-name-one-harness-and-the-skipped-ones-are-named.md) | an install can be narrowed to one harness, and the skipped ones are named | **accepted** · 2026-10-30 |
-| [108](decisions/ADR-108-an-adoption-builds-the-index-and-a-command-refreshes-it-on-read.md) | an adoption builds the index, and a command that reads it refreshes it on read | **accepted** · 2026-10-30 |
-| [109](decisions/ADR-109-simt-dev-is-its-own-consumer-and-the-guards-that-kept-it-from-being-one-are-retired.md) | simt-dev is its own consumer, and the guards that kept it from being one are retired | **accepted** · 2026-10-30 |
-| [110](decisions/ADR-110-the-lock-file-follows-the-manifest-name-and-the-old-name-is-read-until-the-next-write.md) | the lock is `simt.lock.json`, and the old name is read until the next write | **accepted** · 2026-10-30 |
-| [111](decisions/ADR-111-the-tool-ships-one-agent-rendered-per-harness-and-installs-it-with-init-and-a-command.md) | the tool ships one agent, rendered per harness, and installs it with init and a command | **accepted** · 2026-10-30 |
-| [112](decisions/ADR-112-the-registry-is-what-simt-dev-ships-and-a-repo-owns-its-own-skills.md) | the registry is what simt-dev ships, and a repo owns its own skills | **accepted** · 2026-10-31 · supersedes ADR-009 ruling 4 |
-| [116](decisions/ADR-116-rust-support-reaches-the-example-path-the-indent-and-the-bench-runner.md) | Rust support reaches the example path, the indent and the bench runner | **accepted** · 2026-10-31 |
-| [117](decisions/ADR-117-the-darwin-release-builds-on-supported-macos-15-runners-and-a-re-run-is-idempotent.md) | the darwin release builds on supported macOS 15 runners, and a re-run is idempotent | **accepted** · 2026-10-31 · supersedes ADR-099 ruling 1 |
-| [119](decisions/ADR-119-the-environment-variable-points-into-a-workspace-the-repo-declared.md) | the environment variable points into a workspace the repo declared | **accepted** · 2026-10-31 · supersedes ADR-014 ruling 1 |
-| [120](decisions/ADR-120-a-pre-push-whose-tree-is-already-proven-green-skips-the-test-gate-on-that-evidence.md) | a pre-push whose tree is already proven green skips the test gate on that evidence | **accepted** · 2026-10-31 |
-| [122](decisions/ADR-122-the-shims-move-into-the-state-directory-and-the-legacy-directory-removes-itself.md) | the shims move into the state directory, and the legacy directory removes itself | **accepted** · 2026-10-31 |
-
-ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
-audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
-platform decision for the CLI described in
-[plan 0002](../plans/0002-simt-dev-cli.md), and they are a worked example of the
-supersession rule above: 011 was accepted, 012 reversed it the same day, and 011's record was
-kept rather than rewritten because the cost table it contains is the evidence 012 relies on.
-ADR-013 is the same rule applied to the tool rather than to the repos: the mechanism carries
-no product taxonomy, and adding an ecosystem is a profile file rather than a code change.
-ADR-014 and ADR-015 are the same rule applied to the **filesystem**. ADR-014 made the workspace
-optional; ADR-015 found that a repository is itself a location for a declared source, so a clone of
-one repo is self-sufficient with no configuration at all. Both were found by running the tool the
-way a consumer runs it, not the way its author does: the tool's own directory layout turned out to
-be part of its interface, and every test that ran from the checkout could not see that it only
-worked from the checkout.
-
-ADR-016 applies the rule to rule content itself. The estate's three always-on `.mdc` families
-existed in eight copies, none byte-identical, the worst pair differing by one byte while hiding
-three semantic losses. The canonical body is therefore the **union** of what every copy needed —
-not a per-stack variant, because two of the differences were rules each repo was missing rather
-than a choice either repo made.
-
-ADR-031 is the same lesson arriving from the other end. ADR-014 and ADR-015 fixed the tool's
-dependence on the checkout; ADR-031 fixes the **suite's**, which had quietly reintroduced it —
-nineteen tests read skill bodies out of sibling repositories and passed only on a machine that
-had them. The gate had been red on every push since the first baseline record landed. What makes
-this one worth a paragraph rather than a table row is the third cause it found: two tests that
-passed for a reason that had nothing to do with the code, because the checkout's directory
-happened to be named `simt-dev`. Those failed on nobody's machine and would have failed for
-anyone who cloned the repository under a different name. A green test that asserts a folder's
-name is worse than a red one, because it looks like evidence.
-
-ADR-032 is that lesson inside the tool rather than around it. The provenance stamp was read
-with `git rev-parse HEAD`, run in the package root — and for anyone who installed the package
-into a repository, which is the entire audience, git walks *up* out of `node_modules` and
-answers with the **consumer's** HEAD. It succeeded, so no fallback could catch it. Every
-commit a consumer made moved the stamp, including commits touching nothing the tool projects,
-so `check` reported drift on all three generated files and exited 1 after an unrelated commit,
-and `upgrade` named a cause that was false. Where git could not answer at all the answer was
-`unknown`, which the marker grammar cannot read back and `upgrade` compared against a real pin
-as though the two were versions. The stamp now identifies the content that leaves the package,
-which is the one thing every install can compute.
-
-ADR-033 is the same instinct applied to a plan instead of a tool. Closing plan 0001 meant auditing
-each row against the tree, and three rows asked for things that had never been decided: seven agent
-policies with no surviving source anywhere in the estate, a skill-collapse step that a mechanism
-landed two hours after the plan was written already answered, and two `local.properties` files that
-were committed on purpose. Each is closed by saying so, because the failure the plan's own text
-invites is a reader concluding a mechanism is outstanding and going to build it.
-
-ADR-034 is the same instinct in a hook, and the second time the defect was a promise the code
-already made in writing. `src/hooks/gates.mjs` defines a staged gate as one that runs over the
-staged files only, precisely so that "whole-repo formatting from a pre-commit hook" cannot
-"rewrite unstaged work the author did not ask to touch" — and the dispatcher then ran
-`git add` on every staged path. A file staged with `git add -p` came back with its unstaged
-hunk replaced, not merely committed, and the gate said nothing. The same loop also fed
-staged deletions to `git add`, whose failure was swallowed, so a commit holding a deletion and
-a formattable file recorded unformatted bytes silently. Both are the shape this estate's rules
-keep warning about: a control that appears to hold, reports pass, and does not.
-
-ADR-035 is the same thing measured across a whole command surface instead of one control.
-Six commands disagreed about what `--yes`, `--dry-run` and `--json` mean: `upgrade` read
-`--yes` and ignored `--dry-run`, `skills install` read neither and printed "nothing written"
-on the path that wrote, and `doctor --json` and `hooks status --json` both reported `ok: true`
-while the same commands in a terminal exited non-zero. Two of those are the shape above
-again — a check that appears to hold and reports pass. The difference is where the fix goes:
-one function decides whether a run may write, and one table asserts the JSON contract for
-every command at once, because a contract checked one command at a time is checked by
-whoever remembers.
-
-ADR-036 is the deferral that record made, settled. ADR-035 left `sync` writing by default
-because the change belonged to a slice that depended on it, and wrote the reason down
-twice rather than quietly half-applying it. Measured afterwards, `sync` was the only
-writer left that rewrote a file a bare invocation had no permission to touch — and it is
-the command a caller reaches for most, because it is the one that regenerates the text in
-front of them. The second half is the half that would have been easy to skip: the note
-inside every generated region and the comment in every manifest both tell the reader to
-run that command, and both ship into repositories that have no other copy of the
-instruction. A flag that changes what a command does without changing what the tool says
-about it leaves a permanently-false instruction in every repository in the estate, which is
-the same failure as a check that reports pass and does not hold — one layer up.
-
-ADR-037 is the same failure inside the projection primitive, and the first record here whose
-finding arrived with a line number and turned out to be two branches over. Review 0002's S29
-pointed at the code that appends a region to a document that has none; that branch was
-already correct. The blank line was missing in the code that *replaces* one, so the defect
-only appeared once a repository already had a region — which is every repository that has
-been adopted. The list case is worth reading for what it says about the failure: with no
-separating gap, a Markdown formatter reads the whole region as a continuation of the last
-list item and indents every line of it, so the file comes back changed in a way no amount
-of careful body comparison would notice. The second half is the part that made the first
-worth doing: a body that matched behind a wrong seam was reported `unchanged`, so `check`
-found nothing to report and `sync` had nothing to repair, and the repository was red on its
-own formatter with no remedy on offer. Fixing the seam without that half would have shipped
-a fix that worked once, for the one repository whose rules happened to change next.
-
-ADR-038 is the same failure once more, and the smallest instance of it so far: a decision
-record that named the right rule and attributed it to the wrong command. ADR-017 ruled that
-a gate is declared only if the repo can run it, and wrote *"`init` filters the stack table's
-proposals"* — so for as long as `init` was the only writer of a manifest, the belief and the
-code agreed. `skills install` also writes one, for a repo that has none, and it did not
-probe. The result was four gates in a repo with no scripts and no formatter, `check` red on
-all four, and a pre-commit hook that blocked the first commit it was installed in front of.
-Nothing about the rule was wrong; only the sentence that carried it. That is what the
-`Affects:` line on a record is for, and this record amends one in place of editing it —
-because a reader who finds the record and trusts it has to be able to trust the whole of it.
-
-ADR-039 is the same shape turned on the tool's own controls, and it is the only one of these
-whose subject is a gate that was enforcing a gate. This repository's workflow carries a step
-named "the gate copy in this repo is current", commented as the place the drift would be
-caught, running `simt-dev ci`. With a hand edit in that copy, `ci` printed the drift and
-exited 0 — so the step read the thing it was written to catch, said it out loud, and passed.
-Every other record here is about a check that reports pass and does not; this one is about
-the check on the checks. The same slice found two smaller instances of the same habit in the
-same command: `--json --dry-run` printed no document at all, because the mode guard was in
-the wrong place, and a refusal in a repository that adopted simt-dev printed a paragraph
-saying it was refused directly above `ok: true` and exited 0.
-
-ADR-040 is the only one here that says a previous record's *premise* was wrong, and it is worth
-reading for the shape rather than the command. Review 0002 opened Wave 0 with "`sync` is the only
-writer that writes by default" and named five siblings that "all preview first". Four were. The
-fifth, `hooks install`, read `flags.yes` and `flags.dryRun` directly, imported no write decision
-at all, and wrote the shims and repointed `core.hooksPath` whenever neither flag said otherwise —
-in the ordinary case, where ADR-018's takeover consent never fired. Three strings that ship into
-adopting repositories assumed the preview, one of them inside the shim being installed, and 586
-tests passed. What makes it a rule rather than a fix is that the same commit had to amend a
-comment written the day before, which called `hooks install` a previewing writer; a comment that
-enumerates which commands follow a rule is a claim about code its file does not own, and the next
-reader has no cheap way to check it. So the writers are a set, the set is checked by a table, and
-the table asserts the exit code as well as the bytes — because a command that *refuses* also
-changes nothing, and "wrote nothing" is the one claim a refusal satisfies for free.
-
-ADR-041 is the one that closes the gap those other records kept falling into. Every test in this
-repository imported from `../src`, which is right for a unit and blind to the artefact: S01 shipped
-a package whose `files` list and whose runtime reads disagreed, with the whole suite green, because
-no test was reading the tarball. The fix is not a better assertion but a different subject — pack
-the working tree, install it with `--offline`, and drive `node_modules/.bin/simt-dev`. `--offline`
-is the load-bearing word, and it is a constraint rather than a setting: the package has no
-dependencies to install, so adding a build-time or test-time tool starts costing a network on a
-cold runner, and a suite that fails there gets skipped, and a skipped test is indistinguishable
-from a passing one. The same constraint is why one thing that test cannot assert is recorded as
-open instead of worked around: there is no formatter to run over the output, so S29's second
-acceptance half stays pending and the seam it would have caught is asserted structurally in
-`markers.test.mjs` instead.
-
-ADR-042 is the smallest instance of the same habit: a declared value nobody ever executes. 13 of the
-registry's 65 path globs began with a double star, which compiled to an invalid regex that a `catch`
-turned into `false`, so the heaviest signal the resolver has was silently dropped for every skill
-that used one. The lint rule that keeps the registry honest asked only whether `paths` was *present* —
-the same question, in the same file, that `checkStack` had already answered for stack tags by
-rejecting a tag the detector cannot emit. A glob that matches nothing is that failure under another
-field name, so `graph lint` now requires each declared glob to match a path built from itself. Its
-third ruling is the part worth carrying forward: the registry-wide test reads the same generator the
-lint rule validates, so narrowing the generator narrows the test in step, and the test passed with
-the generator sabotaged. A check that shares its subject with the thing it checks has to have its own
-assertion about that subject.
-
-ADR-043 is the same failure in the other half of the resolver, and the word that connects them is
-*declared*. A hand-authored field is checked for being present and well-formed, which is a question
-about the file, while the resolver asks whether the value can reach anything — and a value nobody
-executed costs nothing to write. Thirteen globs matched nothing (ADR-042); thirteen keywords could
-never be produced by a task, including `durable object`, declared on three skills and dead on all
-three. Two filters were responsible: a tokenizer that discarded every word of length two, which in
-this domain is where `d1`, `r2`, `kv` and `ci` live, and a keyword comparison that asked whether one
-task token equalled the declaration, which no multi-word keyword can ever satisfy. Both were filters
-on precision applied to a registry whose values were never reachable in the first place — the same
-inversion, in the same file, one field over. It also records what the fix costs, because it does
-cost something: six two-letter stopwords now reach the summary signal, while `the` already selected
-eleven skills before the change. The honest reading is that S04's threshold was too low all along,
-and hiding that by putting the floor back to 3 would make `d1` disappear again.
-
-ADR-044 is what came after the two above, and it is the first of the three that is about the shape of
-an argument rather than about a broken value. The resolver asked two questions of a skill — *is this
-compatible with my repo* and *is this about my task* — and scored them into one number. The gate had
-already answered the first, so a skill matching three stack tags reached 45 points having said nothing
-about the task, and any score above zero selected. Meanwhile a shared word of English was worth 8 and
-cleared the bar, so a brief for "fix a typo in the README" filled a 20 KB budget with launch galaxies.
-The rule it lands on is one sentence: compatibility is a precondition, not evidence, and a
-precondition must not be counted twice. It also carries the first gold corpus, because plan 0002 has
-claimed an `eval` corpus since before this file existed and every ranking change until now was argued
-from examples. The corpus immediately earned its keep by failing a case where the resolver was right and
-the author was wrong — two skills written into a rejection list both declare the `contract`
-capability, and a hand-authored gold set is an opinion written down. Its fourth mutation is the one to
-remember: reverting the third of three commands to its own older copy of the rule passed all 621 tests,
-because nothing checked the set. ADR-035 said a promise about a set of commands holds only while
-something checks the set; that sentence was written about seven writers and turned out to be about
-three readers too.
-
-ADR-046 is the third of these records to be settled by running the command against the estate
-rather than by reading the code, and the first to overturn an earlier ruling on a fact about a
-vendor. ADR-021 decided that a Cursor reader could not be reached through `AGENTS.md` — so a repo on
-`opencode,cursor` was given the same three rules twice, once folded and once in `.mdc`, across five
-repositories and 28 KB. Cursor's documentation says plainly that it reads `AGENTS.md`. The claim was
-false when written, and it was false in a way simt-dev's own surface table already contradicted: the
-`readers` line on the opencode row names Cursor as reading `AGENTS.md` natively. A decision that
-depends on a fact should be checked against the file that records facts, and here that file was one
-row away.
-
-Its more useful lesson is the one that cost the most. The first version of the change made the
-estate go *quiet*: `staleRuleFiles` fell from 17 to 0 and every one of those files was still on
-disk, still being read twice. Then the fix for that scanned the wrong set and reported nothing at
-all, because a file becomes orphaned exactly when a repo drops the surface that wrote it. Both were
-found by running `compare` over sixteen repositories, not by reading the code. The flip side is worse:
-three of six mutations passed all 627 tests, including the one that would have made a gate nothing
-can satisfy — a file simt-dev will never write again and may never delete. A feature whose failure
-mode is "the tool silently stops looking at something it wrote" needs a negative control, because
-the broken version returns an empty list and passes every positive test.
-
-ADR-047 is the same rule applied to what a profile *selects on*, and it refines ADR-013 ruling 1
-rather than overturning it. ADR-013 promised genericity from emitted facts and repo-local
-profiles, and said detection emits facts and profiles select on facts. But the shipped
-`simt-applies` lists were keyed on language tags — `typescript`, `gradle`, `react` — which name
-what a repo is *written in*, not what it *runs on*. So any TypeScript library received Cloudflare
-Workers rules (D1, Durable Objects, wrangler), a Spring backend on Gradle received Compose and
-Wear OS rules, a React Native app received web CSS rules, and a Poetry project received `uv`
-rules. The defect was invisible in the usual way: the selection was deterministic, every test
-passed, and the profile simply landed in the wrong ecosystem. The fix is data plus `has-*`
-facts, exactly as ADR-013 requires — no engine change — and the one piece that needed a mechanism
-was `has-android-manifest`, a nested path, which is the glob walk S07's dependency closed.
-
-ADR-048 is the first record here to withdraw a value rather than a mechanism, and it
-found it by reading a format's specification instead of its own source. The shared
-`.editorconfig` shipped `[prettier] singleQuote = true` under a comment explaining why
-that section was the right home for the estate's one formatting disagreement. An
-editorconfig section header is a glob over paths, so `[prettier]` matched a file named
-`prettier`; and `singleQuote` is not one of the nine keys the specification defines, nor
-one of the six properties Prettier maps. The specification says what an undefined key
-does — cores accept and report it, plugins ignore it — which is the worst possible
-outcome: a line that parses, in a file that was current, enforcing nothing. Nothing in
-this tool could have seen it, because the gate compares bytes and the bytes agreed with
-the shipped body. The spelling that does work is `quote_type`, and the survey says not to
-use it: three of the five repositories running Prettier already state `singleQuote` and
-two do not, so a shared value reformats every source file in those two on the day they
-adopt the tool. The lesson is the narrowest one in this file — a baseline earns its place
-by naming a key a reader honours, and the ability to hold a comment says nothing about
-whether anything reads what is inside.
-
-ADR-049 is the same failure one level down, and it is the reason this index exists: a
-citation has to be resolvable, or it is decoration. `rules why ADR-023` printed the status
-`ruling 2 superseded by` — a sentence with no object, because the status is a paragraph and
-the parser read one line of it — and then printed ruling 2 as a ruling in force, which is
-the reversal the module's own header names as its failure mode. Making the status a
-paragraph is half the fix and the other half is a trap: the obvious pattern for
-whole-record supersession then matches *ruling 2 superseded by ADR-024*, and five rulings in
-that record that the status line itself says stand would have been dropped by the field
-that exists to stop exactly that. Underneath both halves is the thing neither the finding
-nor the fix mentioned — the rulings are numbered in five different ways across the records
-and the extractor read one, so ADR-045 declared six rulings and printed one, and ADR-013
-printed the literal text `### 2.` to an agent. A supersession names a ruling by number, and
-a number that cannot be located cannot be reported as no longer in force. The record's
-ninth ruling is the mutation that earned its keep: dropping the ordinal from `**One.**`
-passes every test in the suite, because no record in the estate has both a word-numbered
-ruling and a partial supersession to catch it — the failure ADR-042 recorded, reproduced
-inside the fix for it.
-
-ADR-050 is the same habit in a command rather than a reader, and its finding named one line
-of code where the defect was two questions. `upgrade` decided a repository had no region by
-asking whether its `AGENTS.md` was empty, which a hand-written one never is — so a version
-bump wrote nine kilobytes of rules into a repository that had never asked for any. But the
-obvious repair, asking whether every *region* is absent, reproduces it exactly: the estate
-builds this state by adopting and then replacing `AGENTS.md` by hand, which leaves the
-baselines' regions in place, and a guard that sees two regions concludes the repository is
-adopted. The question was never about all the files. The second half is a trap of the same
-shape: ADR-037 made a correct body behind a wrong seam report as `updated` so that `sync`
-would repair it, which gave one field two meanings, and the command whose entire job is to
-say *why* a repository is behind was reporting a formatting repair as a change of policy.
-The reader is told to diff rules that did not move. Both are the same mistake: a field read
-for the thing it was not.
-
-ADR-051 is the same mistake about a *file*, and it is worth reading for where the belief
-came from. `CLAUDE.md` was classified as a convenience and a misaimed pointer made the gate
-go green, on the reasoning that "the editors that matter already read `AGENTS.md`" — which
-this repository's own pointer table refutes with a quotation from Claude Code's
-documentation: *"Claude reads CLAUDE.md by default and AGENTS.md only as a fallback."* A
-pointer is not a second copy of a file, it is the route to one, and the old test named
-DeepSeek's loader rendering a drifted copy beside its twin. That observation is true and it
-is about duplication; a symlink aimed elsewhere is not duplication, it is a reader looking
-at the wrong file. The belief was written down in a test, so the finding it produced could
-not see it. The second half was worse and quieter: a directory at `CLAUDE.md` — which is
-where Claude Code keeps per-project instructions — was classified as *absent*, so `check`
-said nothing and `sync` crashed with `EEXIST` after writing every other target, naming
-`simt-dev doctor`, which reports nothing about it either. The note that would have said so
-printed `undefined bytes`, and `undefined` in a report reads as nothing at a glance.
-
-ADR-052 is the same habit in the resolver, and it is the first record here where the *fix*
-was the second copy of the logic rather than the first. The budget loop existed in `skills
-brief` and in the MCP tool, and both tested `entry.via.size > 0` and inlined a dependency
-whatever it weighed — so `--skill parallel-feature-team --budget 2000` resolved **13,503
-bytes against a 2,000-byte budget**, with nothing in the output saying so. The comment gave
-the reason: *"a skill that is useless without its dependency is worse than a large context,
-because it silently misleads."* The premise is right and the conclusion does not follow: a
-missing dependency is fixed by a line in the output, and an unbounded budget is not a fix
-for anything. The copies had also drifted — one tested `deferred` first and never inlined
-one, the other tested it second and would inline 384 KB — so the same question had two
-answers and neither could see the other. ADR-035's sentence about a promise about a *set*
-of readers holds only while something checks the set; here the check is a test that drives
-both surfaces and compares them, because two copies asserted separately drift and two
-copies asserted against each other do not.
-
-ADR-054 is the same habit found in the stamp itself, and it is worth reading for the order
-the two defects arrived in. ADR-032 ruled that the digest covers `rules/` and `graph/` and
-deliberately excludes `src/`, on reasoning that still holds: a refactor that projects
-byte-identical bytes must not move a consumer's stamp. But the exclusion was drawn around a
-*directory*, and the shared `.editorconfig` and `.gitattributes` blocks are not in one — they
-are two string constants in `src/projection/baselines.mjs`, and every adopting repository
-receives them. By ADR-015's own rule a source is identified by its content rather than by the
-file it lives in, so those bodies were excluded content, not excluded code. What exposed it
-was an unrelated slice: deleting seven inert lines from a shipped baseline was the first
-change here that moved bytes out of `src/` without moving the digest. `check` caught it,
-because the gate compares bytes. `upgrade` did not, and printed a pin that was unchanged
-beside a restamped region, and then named the cause as *the rules changed* — two false
-sentences, one caused by the other. With the stamp silent about a baseline, the only cause
-left to report was the one least likely to be true, and the reader is sent to diff `rules/`
-when the change is in `.editorconfig`. So the fix is two halves that have to land together:
-the digest now covers the rendered baseline bodies and names them by the file they become,
-and `upgrade` reads its cause off the projected body with the two kinds of content counted
-apart. The second half is the one worth keeping, because it is what makes a stamp that
-cannot see a change stop being able to invent one.
-
-ADR-055 is the same rule applied to the record index, and it is worth reading for a finding
-that grew while it was being fixed. The review filed this as "two records out of
-forty-eight, pre-existing". Re-measuring the corpus said five — three of them written after
-that measurement, including two in this cycle, by the same convention each time: put the
-clause in `Status:`, because `Status:` is the line the tool reads. It is the one line
-guaranteed to travel, into repositories that own none of this package's files, so the path
-arrives there resolving against nothing. `Affects:` is the field for it and is deliberately
-not printed; five records had one available and used the other. What makes the record worth
-keeping is ruling four and its cost: the ruling covers `Status:` and deliberately not the
-record's own argument, because `docs/plans/` means this package's plan in one record and the
-reader's own plans in another, and four records use that exact string for both — so a
-redaction there would corrupt them to protect six. Six prose leaks therefore remain, and a
-test asserts the count and the ids rather than leaving them as an unmeasured shrug. The
-docstring that used to claim the whole output "never contains a path" is withdrawn: it
-asserted a property the function never had, which is the same defect as a citation that
-cannot be resolved — a sentence that reads like evidence and carries none.
-
-ADR-059 is the first record here whose subject is the version of the tool itself, and it
-exists because a check that runs from the wrong binary is a pass that never happened. ADR-010
-allowed a tool that is not a project dependency to be invoked directly, *provided its version
-is pinned* — and for a repository without npm that "pinned" half had no mechanism. The version
-on `PATH` was whatever the last global install left there, and the gate that ran on commit was
-the one in it: a green tick from a check running a different gate than CI is worse than a red
-build, because it is the failure that looks like evidence. The record rules that the version a
-repository adopted is recorded in the manifest, that the gate refuses when the running binary
-differs, and that the install and the remedy are per kind — so the check CI runs is the one the
-machine remedy names. Its most load-bearing consequence is the one that keeps it from becoming a
-trap: a repository adopted before the field existed has nothing to compare against, so it is
-skipped rather than failed, and reported as drift instead — because a gate that turns red on the
-day a check ships, for a mismatch nobody can resolve until they re-adopt, is a gate no one will
-trust again.
-
-## The rule these records enforce
-
-Every shared rule has exactly **one** canonical home. Every other location is either a
-generated region or a thin pointer. Repeated policy text, duplicated source-of-truth, verbose
-prose and redundant examples are **review blockers**, not style nits.
-
-This ruling came out of the estate's own review agent, which already carries it as a checklist
-item — in exactly one file, aimed at exactly the duplication the audit found.
-
-ADR-017, ADR-018 and the one before them share a cause worth naming. Each was found by
-running the tool the way a consumer runs it — against a real repository, doing the thing a
-person would do — and not by a unit test. A test exercises the function; the defect lived in
-what the function was asked, in a location it never looked, or on a surface the JSON never
-carried. Two of the three were also cases of the same question being answered in two places:
-ADR-018's guard could not see the default hooks directory because it looked only at a config
-key, and `hooks status` carried its own copy of the read logic the shared module already had.
-
-A fourth joins them. ADR-019 is the same shape one layer over: `simt init` dropped all
-five gates on `repo-05` and told the reader to add a script to a `package.json` the
-repository will never have. The facts were right, the remedy was not followable, and once
-the repository declared what it does have, the dispatcher, `check` and `hooks status`
-gave three different answers about one manifest. Every one of these shipped green because
-the verification stopped at the tool's own gate.
-
-A fifth joins them, and it is the first about *where* the rules land rather than what they
-say. ADR-020 found that the tool's own conflict scanner read `.github/instructions/` while
-the projector wrote nothing there, so three of the four editors that read this repository's
-rules never received the always-on process rules at all — Cursor did. The fix was not a
-missing branch but a missing table: every editor is now a named row carrying the document it
-was verified against, and the test suite fails if that row emits a frontmatter key the vendor
-does not document. The failure it would have caught is quiet in both directions — an editor
-that ignores an unknown key, and an editor that discards a rule whose `trigger` it does not
-recognise, which is what Antigravity documents.
-
-A sixth is about a key rather than a byte, and it came from a question asked about this
-repository's own rule files rather than from a command anyone ran. A canonical `.mdc`
-frontmatter block holds Cursor's keys and simt-dev's in one list, and `alwaysApply: true`
-sat four lines away from `applies: always` with nothing to say which reader owned which.
-ADR-022 gives every key this tool reads a `simt-` prefix, leaves the vendors' spellings
-alone, and makes an unrecognised key a reported defect — because the mistake it looks like
-is the one ADR-016 already shipped: a rule that reaches no repository because its
-selection key was missing.
-
-A seventh is about the gate itself. Plan 1 promised a reusable workflow referenced by
-every consumer, and nothing in this repository had a `.github/` directory. A `uses:`
-line satisfies the promise by pointing every reader at bytes they do not have — the exact
-defect the rule at the top of this file exists to prevent — so ADR-023 copies the gate
-into `.github/workflows/` instead, writes it once, never rewrites it, and skips it
-entirely for a repo that does not run GitHub Actions. The record also states what the
-choice costs: a template improvement does not reach a repo that already has the file, so
-that limitation is written down rather than left for someone to rediscover as a bug.
-
-An eighth narrows it, and the reason it was needed is the shape of ADR-023's own cost.
-Write-once is right for a repo whose file may contain their deployment job, and wrong for
-the one repository that owns the template: a gate file that is a frozen copy of the gate is
-a second gate nobody maintains, and ADR-023 ruling 4 means nothing would ever report the
-gap. ADR-024 gives the exception exactly one boundary — a path, not a flag, because a flag
-is a spelling for the wrong answer — and refuses `simt-dev ci` everywhere else. Both copies
-say which world they are in, in their own header, because the reader of a diff in this
-repository should not have to guess who changed their CI.
-
-A ninth is about a file rather than a byte. The plan's tooling row asks for eight
-baselines and the same plan, eight sections earlier, already said how they should work:
-a generated region, so local content is never clobbered. Six of the eight are JSON or bare
-strings and cannot hold a region, which is not a reason to ship them anyway — it is the
-answer. `.editorconfig` can, so it is the baseline, and it goes in first so the repo's own
-settings keep winning underneath it. `end_of_line` is left out on purpose: it is a claim
-about line endings, which is `.gitattributes`' claim to make, and a repository that wanted
-CRLF could only opt out by deleting the indentation settings with it.
-
-A tenth supplies the counterexample the ninth predicted, and it arrives as a file that was
-already owed: no repository in the estate had a Dependabot config, and the plan named that
-as missing before any of this existed. The ninth said a config whose grammar cannot hold a
-comment is ruled out as a baseline, and left its consequences promising that the next such
-file would need a different mechanism. This is that mechanism, and it is not a new idea —
-it is the gate's own ownership rule, unchanged, pointed at a file whose `updates:` is a YAML
-list and therefore has nowhere to put a region. The lesson is narrow and worth stating
-plainly: partial ownership was never the reason the gate file is write-once, and a rule read
-as depending on mergeability will predict the wrong answer here. What detection buys is
-different — an entry per manifest the repo actually has, so the config never names an
-ecosystem that would sit there opening no pull requests.
-
-An eleventh goes back to a deferral and finds it was one line too broad. The ninth refused
-`.gitattributes` because every line that earns its place in a shared region changes what git
-does to the working tree, and concluded the region would be "either dangerous or empty" —
-which is true of every attribute worth sharing and false of the file. Thirteen of sixteen
-repositories had none at all; the three that did agreed about almost nothing. What survives
-is one line, and its safety is a single word: `text=auto` detects rather than instructs, so
-`* text eol=lf` — the usual way a repository quietly corrupts its own binaries — is the form
-the shared region refuses to use. Line endings were left unruled in the ninth because a
-repository wanting CRLF could only opt out by deleting the region; here it opts out with one
-line beneath it, which is what last-match-wins is for.
-
-A twelfth turns out to be about a limit rather than a mechanism, and the limit is the
-record. Row 5 named two tsconfig problems and they look like one: seven strictness flags
-missing from a repository, and one option spelled `Bundler` in three repos and `bundler` in
-a fourth. `tsconfig.base.json` fixes the first. It cannot touch the second, and no amount of
-thinking about it will make it able to — a child overrides every key its parent sets, so a
-base file is a floor for what is *missing* and is inert for what is *spelled differently*.
-Writing that limit down is what turned the second problem into a check, which is the only
-form of it a reader can act on. It also decided what the floor may contain: `noEmit` is
-inheritable and two of these repositories bundle elsewhere, so shipping it would have
-silenced the emit in a repository nobody had looked at.
-
-A thirteenth is the first one that finds the plan wrong. Row 5 offered to resolve "three
-disagreeing `.nvmrc` files", and reading them showed each one agrees perfectly with its own
-`engines`; what differs is three repositories choosing different node majors, which is a
-decision each has a reason for. There was no defect to resolve, and the useful half of the
-work was ruling out the check that would have reported it — with a test, so completeness
-does not put it back. What is left is one real defect, and it is the first shipped baseline
-with no correct value to write: the npm version is not in `package-lock.json`, and a node
-floor is as many answers as the team has reasons for. So this one ships no file at all. It
-reports, and every remedy is a command run where the answer exists, which is the only shape
-available when the tool can name the field and the manager but not the version.
-
-A fourteenth ships nothing at all, and that is the point of it. The first six baselines each
-hit a mechanism question — a region or a whole file, a floor or a check, a value to write or
-no value to derive — and each answer was waiting for somebody to find out what the format
-permits. The two items still open in the plan have no such question, because nobody has
-decided whether they should exist: commitlint is named by the plan and by no rule file and
-by no `package.json` in the estate, and the ESLint "block" cannot describe two of the four
-configurations because they have no TypeScript in them at all. Writing that down in the rows
-that asked for them costs less than shipping either one would, and it is the difference
-between a row that says "unfinished" and one that says "undecided". It also corrected two
-counts the plan got wrong, which is only possible because somebody read the estate rather
-than the plan.
+| [001](decisions/ADR-001-push-requires-approval.md) | Push requires explicit approval | accepted · 2026-10-05 · affects all repos |
+| [002](decisions/ADR-002-refactor-blast-radius.md) | Blast radius bounds refactoring; a third copy is a defect | accepted · 2026-10-05 · affects all repos |
+| [003](decisions/ADR-003-test-breadth.md) | Focused tests are the default; a full suite needs a named trigger | accepted · 2026-10-05 · affects all repos |
+| [004](decisions/ADR-004-hook-owns-format.md) | The hook owns format and lint for staged files | accepted · 2026-10-05 · affects all repos |
+| [005](decisions/ADR-005-file-length.md) | File length is two tiers: 400 review trigger, 1000 hard ceiling | accepted · 2026-10-05 · affects all repos |
+| [006](decisions/ADR-006-coverage-bar.md) | Evidence discipline is central; the numeric bar is per-repo | accepted · 2026-10-05 · affects all repos |
+| [007](decisions/ADR-007-section-skeleton.md) | One canonical section skeleton | accepted · 2026-10-05 · affects all repos |
+| [008](decisions/ADR-008-verdict-vocabulary.md) | One review verdict vocabulary: three values | accepted · 2026-10-05 · affects all repos |
+| [009](decisions/ADR-009-skill-layout.md) | Skills are `<name>/SKILL.md` with mandatory frontmatter | accepted · 2026-10-05 · affects all repos · ruling 4 superseded by ADR-112 |
+| [010](decisions/ADR-010-runner-invocation.md) | Invoke tools through the repo's own runner, never a package runner | accepted · 2026-10-05 · affects all repos |
+| [011](decisions/ADR-011-windows-support.md) | Windows is supported from v1 | superseded by ADR-012 · 2026-10-05 |
+| [012](decisions/ADR-012-drop-windows-support.md) | Windows support is dropped; POSIX only | accepted · 2026-10-05 · supersedes ADR-011 |
+| [013](decisions/ADR-013-genericity-by-facts-and-local-profiles.md) | Genericity comes from emitted facts and repo-local profiles, not from a bigger hardcoded tag table | accepted · 2026-10-05 |
+| [014](decisions/ADR-014-workspace-is-configuration.md) | The workspace is configuration, and a single repo is a first-class case | accepted · 2026-10-05 · ruling 1 superseded by ADR-119 |
+| [015](decisions/ADR-015-a-source-is-content-not-a-location.md) | A source is identified by its content; the repository is a location, not a precondition | accepted · 2026-10-05 |
+| [016](decisions/ADR-016-a-divergent-rule-is-retired-not-merged.md) | A divergent rule is retired, not merged | accepted · 2026-10-06 · one ruling narrowed by ADR-045 |
+| [017](decisions/ADR-017-a-declared-gate-must-be-runnable.md) | A declared gate must be one the repo can actually run | accepted · 2026-10-06 |
+| [018](decisions/ADR-018-an-unset-hooks-path-is-not-an-absent-hook.md) | An unset hooks path is not an absent hook | accepted · 2026-10-06 |
+| [019](decisions/ADR-019-a-declared-command-is-the-runner.md) | A declared command is the runner; the remedy must be one the reader can take | accepted · 2026-10-07 |
+| [020](decisions/ADR-020-a-rule-is-written-per-surface-and-pointed-not-copied.md) | A rule is written per surface, and pointed at — never copied | accepted · 2026-10-07 |
+| [021](decisions/ADR-021-one-surface-per-repo.md) | One surface per repo, chosen or defaulted | accepted · 2026-10-07 · ruling 3 superseded by ADR-046 |
+| [022](decisions/ADR-022-a-key-simt-dev-reads-is-prefixed.md) | A key simt-dev reads is prefixed `simt-` | accepted · 2026-10-08 |
+| [023](decisions/ADR-023-the-gate-ships-as-a-file-the-repo-owns.md) | The gate ships as a file the repo owns | accepted · 2026-10-06 · ruling 2 superseded by ADR-024, which carves out this repository's own copy; rulings 3 and 4 narrowed by the same record to every repository except this one. The text below is left as it was accepted. |
+| [024](decisions/ADR-024-simt-dev-overwrites-its-own-gate-file.md) | simt-dev overwrites its own gate file, and no repository else's | accepted · 2026-10-06 |
+| [025](decisions/ADR-025-a-baseline-is-a-region-in-a-file-the-repo-owns.md) | a baseline is a region in a file the repo owns, and only a file that can hold one | accepted · 2026-10-06 · rulings 1 and 2 narrowed by ADR-026 · ruling 8 withdrawn by ADR-048 |
+| [026](decisions/ADR-026-a-config-without-a-region-is-a-file-the-repo-owns.md) | a config whose grammar cannot hold a region is a file the repo owns | accepted · 2026-10-06 |
+| [027](decisions/ADR-027-the-one-gitattributes-line-that-is-neither-dangerous-nor-empty.md) | the one gitattributes line that is neither dangerous nor empty | accepted · 2026-10-06 |
+| [028](decisions/ADR-028-a-base-file-is-a-floor-so-the-disagreement-it-cannot-repair-becomes-a-check.md) | a base file is a floor, so the disagreement it cannot repair becomes a check | accepted · 2026-10-07 |
+| [029](decisions/ADR-029-the-pins-a-repository-declares-are-its-own.md) | the pins a repository declares are its own, so a check reports them and never writes them | accepted · 2026-10-07 |
+| [030](decisions/ADR-030-what-a-plan-does-not-ship-is-a-decision-with-a-record.md) | what a plan does not ship is a decision with a record, not a silence | accepted · 2026-10-07 |
+| [031](decisions/ADR-031-the-suite-stages-the-environment-it-needs.md) | the suite stages the environment it needs, because a test that inherits the author's directory is not evidence | accepted · 2026-10-08 |
+| [032](decisions/ADR-032-provenance-is-a-content-digest-not-a-commit.md) | provenance is a digest of the content that leaves this package, not a commit id | accepted · 2026-10-08 · ruling 1 narrowed by ADR-054 |
+| [033](decisions/ADR-033-three-plan-rows-closed-by-decision-not-by-authoring.md) | three plan rows closed by decision, not by authoring | accepted · 2026-10-08 |
+| [034](decisions/ADR-034-a-staged-tool-refuses-a-partially-staged-file.md) | A staged tool refuses a partially staged file rather than staging around it | accepted · 2026-10-08 · affects every repo with a pre-commit hook |
+| [035](decisions/ADR-035-one-write-decision-and-one-json-document.md) | One place decides whether a run may write, and one document says whether it did | accepted · 2026-10-08 · affects every command that writes or reports |
+| [036](decisions/ADR-036-a-writer-that-writes-says-so-and-the-instructions-naming-it-move-with-it.md) | A command that writes says so, and every instruction that names it moves with it | accepted · 2026-10-08 · affects sync, every remedy naming it, and the generated-region note shipped into every consumer repository |
+| [037](decisions/ADR-037-unchanged-means-writing-would-not-change-a-byte.md) | `unchanged` means writing would not change a byte, not that the body matches | accepted · 2026-10-08 · affects every generated region, in every file style |
+| [038](decisions/ADR-038-the-gate-filter-belongs-to-every-manifest-writer.md) | The gate filter belongs to every writer of a manifest, not to `init` | accepted · 2026-10-08 · amends ADR-017 ruling 1 · affects every code path that calls buildManifest |
+| [039](decisions/ADR-039-a-ci-step-runs-a-form-that-can-fail.md) | A gate a CI step runs must have a form that can fail, and a refusal is a failure | accepted · 2026-10-08 · affects ci, its own workflow copy, and any command a workflow runs |
+| [040](decisions/ADR-040-the-last-writer-that-wrote-by-default-was-not-the-one-named.md) | The last writer that wrote by default was not the one named | accepted · 2026-10-08 · affects simt hooks install, every remedy naming it, and the shim it installs |
+| [041](decisions/ADR-041-the-suite-installs-the-package-in-order-to-test-it.md) | The suite installs the package in order to test it | accepted · 2026-10-08 |
+| [042](decisions/ADR-042-a-declared-glob-must-match-a-path-built-from-it.md) | A declared glob must match a path built from it | accepted · 2026-10-08 · ruling 1 superseded by ADR-053 |
+| [043](decisions/ADR-043-a-keyword-is-a-phrase-and-two-letters-is-a-word.md) | A keyword is a phrase, and two letters is a word | accepted · 2026-10-08 |
+| [044](decisions/ADR-044-compatibility-is-not-evidence.md) | Compatibility is not evidence, and a resolver nobody measured is merely felt | accepted · 2026-10-08 · affects what skills brief and skills find return |
+| [045](decisions/ADR-045-a-dashboard-that-counts-a-defect.md) | A dashboard that counts a defect and will not name it is worse than one that does not count it | accepted · 2026-10-08 · amends ADR-016 · affects what compare reports and exits on |
+| [046](decisions/ADR-046-one-rule-one-copy.md) | One rule, one copy: a reader that reads AGENTS.md must not also get the file | accepted · 2026-10-08 · supersedes ADR-021 ruling 3 · settles P7's context-budget question |
+| [047](decisions/ADR-047-a-profile-selects-on-what-a-repository-runs-on.md) | A profile selects on what a repository runs on, not on what it is written in | accepted · 2026-10-09 · refines ADR-013 ruling 1 |
+| [048](decisions/ADR-048-a-baseline-carries-only-keys-a-reader-honours.md) | a baseline carries only keys a reader honours | accepted · 2026-10-09 · amends ADR-025 (withdraws ruling 8, corrects its context) |
+| [049](decisions/ADR-049-a-ruling-that-a-later-record-moved-says-so-where-it-is-printed.md) | a ruling that a later record moved says so where it is printed | accepted · 2026-10-09 |
+| [050](decisions/ADR-050-a-byte-count-is-not-a-region-and-updated-is-not-a-change-of-rules.md) | a byte count is not a region, and `updated` is not a change of rules | accepted · 2026-10-09 |
+| [051](decisions/ADR-051-a-pointer-is-the-readers-only-route-so-it-is-not-a-convenience.md) | a pointer is the reader's only route, so it is not a convenience | accepted · 2026-10-09 |
+| [052](decisions/ADR-052-a-dependency-is-counted-against-the-budget-and-there-is-one-budget.md) | a dependency is counted against the budget, and there is one budget | accepted · 2026-10-09 |
+| [053](decisions/ADR-053-the-node-floor-is-22-20-0.md) | The Node floor is 22.20.0 | accepted · 2026-10-10 |
+| [054](decisions/ADR-054-the-digest-covers-every-byte-that-leaves-the-package.md) | The digest covers every byte that leaves the package, and a cause is read off the body | accepted · 2026-10-10 · amends ADR-032 |
+| [055](decisions/ADR-055-a-status-line-travels-so-it-may-not-name-a-location.md) | A status line travels, so it may not name a location; prose is the record's own argument | accepted · 2026-10-10 · filed as S54 · affects a file in this tool |
+| [056](decisions/ADR-056-three-names-one-of-which-is-cheap-to-move.md) | The command, the package and the project are three names, and only one of them is cheap to move | accepted · 2026-10-10 · filed as S18 · amends ADR-023 · affects a file in this tool, package.json, a file in this tool, a file in this tool |
+| [057](decisions/ADR-057-an-identity-is-per-developer-and-a-repository-does-not-own-it.md) | An identity is per-developer, and a repository does not own it | accepted · 2026-10-11 |
+| [058](decisions/ADR-058-one-tool-three-channels-and-the-order-is-forced.md) | One tool, three channels, and the order is forced | accepted · 2026-10-11 |
+| [059](decisions/ADR-059-the-version-a-repository-runs-is-the-one-it-pinned.md) | The version a repository runs is the one it pinned, and the gate refuses otherwise | accepted · 2026-10-12 · affects all repos · ruling 3's no-npm install and remedy superseded by ADR-098 |
+| [060](decisions/ADR-060-a-repository-with-nothing-to-run-is-adopted-and-says-so.md) | A repository with nothing to run is adopted and says so, and a gate is verified where it runs | accepted · 2026-10-12 · filed as S36 |
+| [061](decisions/ADR-061-the-skill-registry-is-workspace-data.md) | The skill registry is workspace data, and the package ships none of it | accepted · 2026-10-12 · filed as S61 |
+| [062](decisions/ADR-062-a-fresh-adoption-seeds-the-gates-it-can-run.md) | A fresh adoption seeds the canonical gates it can run, and never more | accepted · 2026-10-13 · filed as S40 |
+| [063](decisions/ADR-063-the-adoption-escape-hatch-is-opt-in.md) | The adoption escape hatch is opt-in, and the default writes in place | accepted · 2026-10-13 · filed after a consumer asked why every adoption branched |
+| [064](decisions/ADR-064-the-context-meter-counts-what-the-tool-wrote.md) | The context meter counts what the tool wrote, and says what it did not | accepted · 2026-10-13 · filed after review 0002 S38 |
+| [065](decisions/ADR-065-a-pack-is-one-shared-rule-set-pinned-by-digest.md) | A pack is one shared rule set, vendored into the repository and pinned by digest | accepted · 2026-10-13 · filed as S39 |
+| [066](decisions/ADR-066-a-monorepo-projects-once-per-package.md) | A monorepo projects once per package | accepted · 2026-10-13 · filed as S41 |
+| [067](decisions/ADR-067-which-harnesses-read-agents-md-is-a-column.md) | Which harnesses read AGENTS.md is a column, and a row without a document gets none | accepted · 2026-10-13 · filed as S42 |
+| [068](decisions/ADR-068-the-mcp-revision-list-cites-what-was-read.md) | The revision list is a claim about revisions that were read | accepted · 2026-10-13 · filed as S43 |
+| [069](decisions/ADR-069-the-conformance-lint-checks-the-published-specification.md) | The conformance lint checks the published specification | accepted · 2026-10-13 · filed as S44 |
+| [070](decisions/ADR-070-the-json-payload-carries-its-own-version.md) | The JSON payload carries its own version | accepted · 2026-10-13 · filed as S51 |
+| [071](decisions/ADR-071-a-rule-that-can-be-narrowed-is-written-narrow.md) | A rule that can be narrowed is written narrow | accepted · 2026-10-14 · filed as S50 |
+| [072](decisions/ADR-072-the-budget-is-a-declaration-beside-the-gates.md) | The budget is a declaration beside the gates, not a number inside the projection | accepted · 2026-10-14 · filed as S38 |
+| [073](decisions/ADR-073-a-kernel-is-a-smaller-projection-the-repository-asks-for.md) | A kernel is a smaller projection the repository asks for, not one it is given | accepted · 2026-10-14 · filed as S38 (R07) · ruling 6 narrowed by ADR-084 |
+| [074](decisions/ADR-074-a-rule-and-a-decision-are-readable-by-uri.md) | A rule and a decision are addressable, so they are readable by URI | accepted · 2026-10-14 · filed as S43 |
+| [075](decisions/ADR-075-nothing-leaves-the-machine.md) | Nothing leaves the machine: no telemetry, local transcripts, loopback models by default | accepted · 2026-10-14 · filed as D7 (R06) |
+| [076](decisions/ADR-076-a-change-to-what-agents-read-is-measured.md) | A change to what agents read is measured before it ships, or labelled unmeasured in its record | accepted · 2026-10-15 · filed as D1 (R01) |
+| [077](decisions/ADR-077-the-command-card-leads-the-region-and-reads-committed-evidence.md) | The command card leads the region, and is derived from committed evidence only | accepted · 2026-10-16 · filed as R10 (plan 0003) · ruling 1 narrowed by ADR-086 |
+| [078](decisions/ADR-078-a-line-the-repository-already-proves-does-not-ship.md) | A line the repository already proves does not ship, and the author says so | accepted · 2026-10-16 · filed as R09 (plan 0003) |
+| [079](decisions/ADR-079-the-rules-are-enforced-at-the-tool-call-from-one-policy-table.md) | The rules are enforced at the tool call, from one policy table every harness renders | accepted · 2026-10-16 · filed as R15 (plan 0003) |
+| [080](decisions/ADR-080-the-tools-own-names-are-not-repositories-and-neither-reader-decides-by-shape.md) | The tool's own names are not repositories, and neither reader decides by shape | accepted · 2026-10-16 · settles what rules why calls a repository |
+| [081](decisions/ADR-081-a-tracker-is-read-through-the-repositorys-template.md) | A tracker is read through the repository's template | accepted · 2026-10-16 · rulings 1 and 2 superseded by ADR-082 |
+| [082](decisions/ADR-082-the-tracker-override-is-a-manifest-key.md) | The tracker override is a manifest key, and init keeps what it did not write | accepted · 2026-10-16 · supersedes ADR-081 rulings 1 and 2 |
+| [083](decisions/ADR-083-a-budget-is-met-by-cutting-the-kernel-and-hard-is-the-floor.md) | A budget is met by cutting the kernel, and the hard constraints are the floor | accepted · 2026-10-17 · filed as R08 (plan 0003) · ruling 7 narrowed by ADR-084 |
+| [084](decisions/ADR-084-a-workspace-carries-its-repeated-rules-once.md) | A workspace carries its repeated rules once, and the region does not read the reader's home | accepted · 2026-10-17 · filed as R11 (plan 0003) |
+| [085](decisions/ADR-085-the-region-ends-with-the-names-it-kept-out.md) | The region ends with the names of what it kept out | accepted · 2026-10-18 · filed as R12 (plan 0003) |
+| [086](decisions/ADR-086-the-stable-prefix-comes-first-and-the-lock-records-both-digests.md) | The stable prefix comes first, and the lock records both digests | accepted · 2026-10-18 · filed as R13 (plan 0003) · ruling 3's file name is superseded by ADR-110 |
+| [087](decisions/ADR-087-a-run-is-evidence-for-one-tree.md) | A run is evidence for one tree | accepted · 2026-10-18 · filed as R17 (plan 0003) |
+| [088](decisions/ADR-088-a-marked-line-is-enforced-by-a-checker.md) | A marked line is enforced by a checker | accepted · 2026-10-18 · filed as R19 (plan 0003) · ruling 3 narrowed by ADR-090 |
+| [089](decisions/ADR-089-the-local-index-is-a-cache-of-git-blobs.md) | The local index is a cache of git blobs | accepted · 2026-10-18 · filed as R20 (plan 0003) |
+| [090](decisions/ADR-090-an-optional-adapter-is-off-until-named.md) | An optional adapter is off until a repository names it | accepted · 2026-10-18 · filed as R21 (plan 0003) |
+| [091](decisions/ADR-091-the-map-ranks-files-a-task-mentions.md) | The map ranks the files a task mentions, and the files next to them | accepted · 2026-10-18 · filed as R22 (plan 0003) |
+| [092](decisions/ADR-092-tests-are-imports-conventions-and-coverage.md) | A test is an import, a conventional neighbour, or a coverage record | accepted · 2026-10-18 · filed as R24 (plan 0003) |
+| [093](decisions/ADR-093-why-names-what-governs-a-file.md) | why names what governs a file | accepted · 2026-10-18 · filed as R25 (plan 0003) |
+| [094](decisions/ADR-094-a-change-runs-the-tests-that-import-it.md) | a change runs the tests that import it | accepted · 2026-10-18 · filed as R16 (plan 0003) |
+| [095](decisions/ADR-095-gate-output-keeps-the-failures.md) | gate output keeps the failures | accepted · 2026-10-18 · filed as R18 (plan 0003) |
+| [096](decisions/ADR-096-impact-names-who-a-change-reaches.md) | impact names who a change reaches | accepted · 2026-10-18 · filed as R23 (plan 0003) |
+| [097](decisions/ADR-097-the-channels-publish-by-hand-and-the-version-rides-in-as-an-input.md) | the channels publish by hand, and the version rides in as an input | accepted · 2026-10-25 · ruling 3's Homebrew precondition is superseded by ADR-098, which also restates what each channel now waits on |
+| [098](decisions/ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md) | The fourth channel is one file, and it needs no toolchain | accepted · 2026-10-26 · supersedes ADR-058 ruling 5 · narrows ADR-058 ruling 7 and ADR-097 ruling 3 · supersedes ADR-059 ruling 3 · ruling 3's cross-host byte-identicality narrowed by ADR-099 |
+| [099](decisions/ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md) | the release verifies served bytes, and the formula mirrors them | accepted · 2026-10-27 · narrows ADR-098 ruling 3 · ruling 1 superseded by ADR-117 |
+| [100](decisions/ADR-100-a-staged-diff-is-the-last-gate-before-history-and-it-runs-inside-the-tool.md) | a staged diff is the last gate before history, and it runs inside the tool | accepted · 2026-10-27 |
+| [101](decisions/ADR-101-a-file-lease-belongs-to-one-session-and-the-pre-edit-hook-refuses-another.md) | a file lease belongs to one session, and the pre-edit hook refuses another's edit | accepted · 2026-10-28 |
+| [102](decisions/ADR-102-the-two-queued-review-rows-are-closed-by-ruling.md) | the two rows review 0002 left queued are closed by ruling | accepted · 2026-10-28 |
+| [103](decisions/ADR-103-co-projected-duplicates-merge-down.md) | duplicates stand alone, fingerprints generalize, references spell out | accepted · 2026-10-28 |
+| [104](decisions/ADR-104-the-pre-tool-use-policy-reads-the-command-the-way-a-shell-reads-it.md) | the pre-tool-use policy reads the command the way a shell reads it | accepted · 2026-10-28 |
+| [105](decisions/ADR-105-the-json-ceiling-shrinks-arrays-and-never-cuts-bytes.md) | the JSON ceiling shrinks arrays and never cuts bytes | accepted · 2026-10-29 · filed as review 0003 Q10 |
+| [106](decisions/ADR-106-the-harness-hook-runs-through-a-repo-shim.md) | the harness hook runs through a repo shim, and `failClosed` only with it | accepted · 2026-10-29 |
+| [107](decisions/ADR-107-an-install-can-name-one-harness-and-the-skipped-ones-are-named.md) | an install can be narrowed to one harness, and the skipped ones are named | accepted · 2026-10-30 |
+| [108](decisions/ADR-108-an-adoption-builds-the-index-and-a-command-refreshes-it-on-read.md) | an adoption builds the index, and a command that reads it refreshes it on read | accepted · 2026-10-30 |
+| [109](decisions/ADR-109-simt-dev-is-its-own-consumer-and-the-guards-that-kept-it-from-being-one-are-retired.md) | simt-dev is its own consumer, and the guards that kept it from being one are retired | accepted · 2026-10-30 |
+| [110](decisions/ADR-110-the-lock-file-follows-the-manifest-name-and-the-old-name-is-read-until-the-next-write.md) | the lock is `simt.lock.json`, and the old name is read until the next write | accepted · 2026-10-30 · supersedes ADR-086 ruling 3's file name |
+| [111](decisions/ADR-111-the-tool-ships-one-agent-rendered-per-harness-and-installs-it-with-init-and-a-command.md) | the tool ships one agent, rendered per harness, and installs it with init and a command | accepted · 2026-10-30 |
+| [112](decisions/ADR-112-the-registry-is-what-simt-dev-ships-and-a-repo-owns-its-own-skills.md) | the registry is what simt-dev ships, and a repo owns its own skills | accepted · 2026-10-31 · filed as S4 (plan 0005) · supersedes ADR-009 ruling 4 |
+| [113](decisions/ADR-113-a-pre-push-that-carries-only-documentation-skips-the-test-gate-and-says-so.md) | a pre-push that carries only documentation skips the test gate, and says so | accepted · 2026-10-31 |
+| [114](decisions/ADR-114-the-bench-pairs-at-the-task-level-a-missing-cost-is-not-zero-and-an-unasked-cross-group-compare-is-refused.md) | the bench pairs at the task level, a missing cost is not zero, and an unasked cross-group compare is refused | accepted · 2026-10-31 |
+| [115](decisions/ADR-115-the-index-stamps-its-schema-version-migrates-older-databases-in-place-and-serves-newer-ones-from-a-sidecar.md) | the index stamps its schema version, migrates older databases in place, serves newer ones from a sidecar, and names a corrupt index | accepted · 2026-10-31 · filed as review 0003 Q44 |
+| [116](decisions/ADR-116-rust-support-reaches-the-example-path-the-indent-and-the-bench-runner.md) | Rust support reaches the example path, the indent and the bench runner | accepted · 2026-10-31 |
+| [117](decisions/ADR-117-the-darwin-release-builds-on-supported-macos-15-runners-and-a-re-run-is-idempotent.md) | the darwin release builds on supported macOS 15 runners, and a re-run is idempotent | accepted · 2026-10-31 · supersedes ADR-099 ruling 1 |
+| [118](decisions/ADR-118-the-bench-corpus-is-keyed-on-history-is-append-only-and-is-portable-as-a-sealed-document.md) | the bench corpus is keyed on history, is append-only, and is portable as a sealed document | accepted · 2026-10-31 · filed as review 0003 Q48 |
+| [119](decisions/ADR-119-the-environment-variable-points-into-a-workspace-the-repo-declared.md) | the environment variable points into a workspace the repo declared | accepted · 2026-10-31 · supersedes ADR-014 ruling 1 |
+| [120](decisions/ADR-120-a-pre-push-whose-tree-is-already-proven-green-skips-the-test-gate-on-that-evidence.md) | a pre-push whose tree is already proven green skips the test gate on that evidence | accepted · 2026-10-31 |
+| [122](decisions/ADR-122-the-shims-move-into-the-state-directory-and-the-legacy-directory-removes-itself.md) | the shims move into the state directory, and the legacy directory removes itself | accepted · 2026-10-31 |
+| [123](decisions/ADR-123-a-surplus-positional-is-not-refused-because-arity-is-not-in-the-source.md) | a surplus positional is not refused, because a command's arity is not in its source | accepted · 2026-10-31 |
+| [124](decisions/ADR-124-the-manifest-has-a-schema-in-the-tool-and-its-unknown-keys-stay-the-repositorys.md) | the manifest has a schema in the tool, and its unknown keys stay the repository's | accepted · 2026-10-31 |

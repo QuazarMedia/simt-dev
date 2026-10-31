@@ -11,12 +11,15 @@ import {
   emit,
   emitJson,
   fail,
+  clearWarnings,
+  note,
+  warn,
   isJson,
   jsonFailMode,
   jsonIndentDefault,
 } from '../output/index.mjs';
 import { help } from './help.mjs';
-import { GROUP_DEFAULTS, SPEC_PATHS } from './spec.mjs';
+import { GROUP_DEFAULTS, SPEC, SPEC_PATHS } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI } from '../name.mjs';
 
@@ -27,6 +30,16 @@ import { CLI } from '../name.mjs';
  * owns, and the reason for each default now sits on the row that declares it.
  */
 export const GROUPS = GROUP_DEFAULTS;
+
+/** path -> the flags the spec declares for it. The parser knows every flag; this is
+ * what one command reads, and the difference is what the caller is told (Q62). */
+const DECLARED = new Map(SPEC.map((row) => [row.path, new Set(row.flags ?? [])]));
+
+/** Flags dispatch reads for every command: the envelope and the guard rails. */
+/** path -> the values a flag of that path accepts, where the set is closed. */
+const VALUES = new Map(SPEC.map((row) => [row.path, row.values ?? {}]));
+
+const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
 
 /**
  * Every command this binary dispatches, in one place.
@@ -236,6 +249,8 @@ export const COMMANDS = SPEC_PATHS;
 
 export async function dispatch(argv) {
   const { flags, positional, parseError } = parseOrExit(argv);
+  // One run, one set of notices: a process can dispatch repeatedly (review 0003 Q62).
+  clearWarnings();
 
   // The JSON shape is decided once, here, and every command inherits it. Threading a
   // `--pretty` through twenty-five call sites would mean twenty-five places to forget,
@@ -274,11 +289,37 @@ export async function dispatch(argv) {
   }
 
   const args = positional.slice(offset);
+
+  // Review 0003 Q62, deprecation window. The parser accepts every flag for every
+  // command, so `status --frozen` ran, ignored the flag and reported success - the
+  // caller's intent discarded with nothing to notice. A flag the spec does not declare
+  // for this path is named on stderr and still runs for one release; the next release
+  // makes it EXIT.USAGE. `--json` has no warnings array yet, so the JSON half of the
+  // window waits on the envelope (Q65).
+  const declared = DECLARED.get(path);
+  for (const key of Object.keys(flags)) {
+    if (!declared || GLOBAL_FLAGS.has(key)) continue;
+    const name = key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+    if (declared.has(name)) continue;
+    const message = `--${name} is not a flag of \`${path}\`; it was ignored, and naming one this command does not take will be a usage error in the next release`;
+    warn(message);
+    if (!isJson(flags)) note(message);
+  }
   const load = IMPLEMENTED[path];
   if (!load) return fail(`unknown command \`${path}\``, EXIT.USAGE);
   // Import only the module the matched path needs. The registry used to pull every
   // command's module graph - detection, projection, the bench corpus - before dispatch
   // began, which cost 36.5 ms on a `status --line` that reads one file (review 0003 Q64).
+  // A closed set is refused before the command runs, so the caller learns the valid
+  // values from the refusal and every reader of the spec sees the same set (review
+  // 0003 Q62). Unset is not the same as invalid: the default stays the command's.
+  for (const [flag, allowed] of Object.entries(VALUES.get(path) ?? {})) {
+    const value = flags[flag.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
+    if (value !== undefined && !allowed.includes(value)) {
+      return fail(`--${flag} takes ${allowed.join(', ')}; received ${value}`, EXIT.USAGE);
+    }
+  }
+
   const run = await load();
   return run(args, flags);
 }

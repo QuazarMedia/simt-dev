@@ -76,6 +76,7 @@ import { completionsCommand } from './completions.mjs';
 import { reviewCommand } from './review.mjs';
 import { localDoctorCommand } from './local.mjs';
 import { distillCommand } from './distill.mjs';
+import { GROUP_DEFAULTS, SPEC_PATHS } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI } from '../name.mjs';
 
@@ -86,35 +87,12 @@ import { CLI } from '../name.mjs';
 // its step, never silently succeed with empty output an agent will read as a result.
 const STEPS = new Map([]);
 
-/** groups whose subcommands may be omitted, and the default for each. */
-const GROUPS = new Map([
-  ['skills', 'index'],
-  ['graph', 'lint'],
-  ['rules', 'list'],
-  ['hooks', 'status'],
-  ['plan', 'status'],
-  // Plan 0003 R53. Both halves write, so a bare `slice` has no read to default to.
-  // `start` is the default because with the id it is missing it fails with a usage
-  // error before anything is created — the one default here that cannot mutate.
-  ['slice', 'start'],
-  ['agent-hooks', 'status'],
-  // A group like `agent-hooks`: `install` writes the agent file into each harness's
-  // own directory, `status` reports what each harness carries. The default is the
-  // read, the way `agent-hooks`'s is.
-  ['agents', 'status'],
-  ['harness', 'detect'],
-  ['bench', 'mine'],
-  // ADR-084. `shared` is the one group whose default writes nothing, and it is `plan` for
-  // the same reason `skills`'s is `index`: the read answers "what would this do, and
-  // where", and `install` — the subcommand that touches a reader's home directory — is the
-  // one that needs `--yes` before it does anything.
-  ['shared', 'plan'],
-  ['lessons', 'list'],
-  ['local', 'doctor'],
-  // Plan 0003 R45. The default is the read: `pack` alone lints the working
-  // directory, the way `skills` alone indexes and `graph` alone lints.
-  ['pack', 'lint'],
-]);
+/**
+ * Groups whose subcommand may be omitted, and the default for each. Read from the spec
+ * (review 0003 Q60) rather than kept here: this was the second copy of a fact the spec
+ * owns, and the reason for each default now sits on the row that declares it.
+ */
+export const GROUPS = GROUP_DEFAULTS;
 
 /**
  * Every command this binary dispatches, in one place.
@@ -245,9 +223,10 @@ export const IMPLEMENTED = {
 
 /**
  * The dispatchable command paths, sorted. The authoritative answer to "what can this
- * binary do", as opposed to the answer `--help` gives.
+ * binary do", as opposed to the answer `--help` gives - and the same list the spec
+ * declares, so a command cannot be dispatchable and undeclared.
  */
-export const COMMANDS = Object.keys(IMPLEMENTED).sort();
+export const COMMANDS = SPEC_PATHS;
 
 export async function dispatch(argv) {
   const { flags, positional, parseError } = parseOrExit(argv);

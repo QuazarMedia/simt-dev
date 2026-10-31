@@ -67,9 +67,10 @@ test('spec: every declared flag is one the parser accepts', () => {
 });
 
 test('spec: a command declares every flag its own module reads', () => {
-  // Written from the module source once, then held here: a flag a command starts
-  // reading without declaring it is invisible again, and an undeclared flag is exactly
-  // what dispatch now reports as ignored (review 0003 Q62).
+  // Two rules, because one module can serve several paths: a path may only declare a
+  // flag its module reads, and every flag a module reads must be declared by some path
+  // that uses it. Asserting the whole module's set against each path failed the moment
+  // `rules decisions` gained --yes, which `rules list` does not take (review 0003 Q62).
   const registry = readFileSync(new URL('../src/commands/index.mjs', import.meta.url), 'utf8');
   const body = registry.slice(registry.indexOf('export const IMPLEMENTED = {'));
   const moduleOf = new Map(
@@ -77,7 +78,10 @@ test('spec: a command declares every flag its own module reads', () => {
   );
   const GLOBAL = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
   const byPath = new Map(SPEC.map((row) => [row.path, new Set(row.flags ?? [])]));
-  for (const [path, file] of moduleOf) {
+  const byModule = new Map();
+  for (const [path, file] of moduleOf) byModule.set(file, [...(byModule.get(file) ?? []), path]);
+
+  for (const [file, paths] of byModule) {
     const source = readFileSync(new URL(`../src/commands/${file}`, import.meta.url), 'utf8');
     const read = new Set(
       [...source.matchAll(/\bflags\.([a-zA-Z][\w]*)/g)]
@@ -85,10 +89,15 @@ test('spec: a command declares every flag its own module reads', () => {
         .filter((n) => !GLOBAL.has(n))
         .map((n) => n.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)),
     );
-    assert.deepEqual([...read].sort(), [...byPath.get(path)].sort(), `${path} disagrees with ${file}`);
+    const declared = new Set(paths.flatMap((path) => [...byPath.get(path)]));
+    for (const path of paths) {
+      for (const flag of byPath.get(path)) {
+        assert.ok(read.has(flag), `${path} declares --${flag}, which ${file} never reads`);
+      }
+    }
+    assert.deepEqual([...declared].sort(), [...read].sort(), `${file} reads a flag no path declares`);
   }
 });
-
 test('spec: a summary is one phrase, not a placeholder', () => {
   for (const row of SPEC) {
     assert.ok(row.summary.length > 10 && row.summary.length <= 95, `${row.path}: ${row.summary.length} chars`);

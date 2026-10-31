@@ -352,8 +352,15 @@ const PRINCIPLES = `design rules:
   zero dependencies   a DX tool that needs an install step fails on a fresh machine
   bounded output      one fact per line, fixed field order, explicit TRUNCATED lines`;
 
-export async function help(argv) {
-  const parsed = parse(argv);
+export async function help(argv, dispatched) {
+  // `dispatched` is what `dispatch` already parsed. Called from a test or another
+  // command with only argv, help parses it itself.
+  const parsed =
+    dispatched === undefined
+      ? parse(argv)
+      : dispatched.parseError === undefined
+        ? { ok: true, value: { flags: dispatched.flags, positional: dispatched.positional } }
+        : { ok: false, error: dispatched.parseError };
   if (!parsed.ok) {
     jsonFailMode(rawJsonFlag(argv));
     return fail(parsed.error.message, parsed.error.code);

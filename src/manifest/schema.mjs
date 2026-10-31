@@ -93,9 +93,56 @@ export const KEYS = [
   { key: 'projection', owner: 'tool', generated: true, since: '0.7.0', check: (v) => (isObject(v) ? null : 'projection must be an object') },
 ];
 
+const KNOWABLE = new Set(KEYS.map((entry) => entry.key));
+
 /** The keys this tool writes, derived from the table: the `generated` marks above. */
 export const GENERATED_KEYS_OF = new Set(KEYS.filter((entry) => entry.generated === true).map((entry) => entry.key));
 
+
+/**
+ * Namespaces a consumer registered against this table.
+ *
+ * A namespace is a sub-object of the manifest that another part of the tool owns -
+ * plan 0004's `work` is the first. It registers its keys here rather than editing the
+ * table, so adding one touches two files and no reader has to learn a second shape
+ * (review 0003 Q69).
+ */
+const NAMESPACES = new Map();
+
+/**
+ * Declare the keys of one namespace. Registered keys are checked exactly like top-level
+ * ones; a namespace nobody registered is left alone, because an unknown key has never
+ * been an error in this file.
+ *
+ * @param {string} name the manifest key that carries the namespace
+ * @param {{key: string, since?: string, check: (value: unknown) => string|null}[]} keys
+ * @returns {number} how many keys the namespace declares
+ */
+export function registerNamespace(name, keys) {
+  if (!/^[a-z][a-z0-9-]*$/.test(name)) {
+    throw new Error('namespace "' + name + '" must be lower-case words joined by hyphens');
+  }
+  if (KNOWABLE.has(name)) throw new Error('namespace "' + name + '" is already a manifest key');
+  if (NAMESPACES.has(name)) throw new Error('namespace "' + name + '" is already registered');
+  if (!Array.isArray(keys) || keys.length === 0) {
+    throw new Error('namespace "' + name + '" must register at least one key');
+  }
+  for (const entry of keys) {
+    if (typeof entry?.key !== 'string' || !/^[a-z][a-z0-9]*$/.test(entry.key)) {
+      throw new Error('namespace "' + name + '" keys must be lower-case single words');
+    }
+    if (typeof entry.check !== 'function') {
+      throw new Error('namespace "' + name + '" key "' + entry.key + '" has no check');
+    }
+  }
+  NAMESPACES.set(name, keys.map((entry) => ({ owner: 'repo', since: '0.9.0', ...entry })));
+  return keys.length;
+}
+
+/** The namespaces a consumer declared, for a reader that needs the whole set. */
+export function registeredNamespaces() {
+  return [...NAMESPACES.keys()].sort();
+}
 
 /**
  * What is wrong with one parsed manifest.
@@ -115,6 +162,15 @@ export function manifestProblems(manifest) {
     if (value === undefined) continue;
     const problem = check(value);
     if (problem !== null) problems.push(problem);
+  }
+  for (const [name, keys] of NAMESPACES) {
+    const value = manifest[name];
+    if (!isObject(value)) continue;
+    for (const entry of keys) {
+      if (!(entry.key in value) || value[entry.key] === undefined) continue;
+      const problem = entry.check(value[entry.key]);
+      if (problem !== null) problems.push(name + '.' + entry.key + ': ' + problem);
+    }
   }
   return problems;
 }

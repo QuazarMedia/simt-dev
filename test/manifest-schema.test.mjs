@@ -4,7 +4,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { KEYS, loadManifest, manifestProblems } from '../src/manifest/schema.mjs';
+import { KEYS, loadManifest, manifestProblems, registerNamespace, registeredNamespaces } from '../src/manifest/schema.mjs';
 
 const scratch = () => mkdtemp(join(tmpdir(), 'simt-manifest-'));
 
@@ -77,4 +77,25 @@ test('readManifest keeps the shape its callers print, and only calls an unreadab
   const broken = await readManifest(root);
   assert.equal(broken.manifest, null);
   assert.match(broken.error, /^unparseable: /);
+});
+
+test('a namespace registers its keys, and they are checked like any other', () => {
+  // Plan 0004's `work` is the first consumer; this is the seam it uses rather than a
+  // second manifest table.
+  const count = registerNamespace('work', [
+    { key: 'threshold', since: '0.9.0', check: (v) => (Number.isInteger(v) && v >= 0 ? null : 'must be a non-negative integer') },
+  ]);
+  assert.equal(count, 1);
+  assert.deepEqual(registeredNamespaces(), ['work']);
+  assert.deepEqual(manifestProblems({ work: { threshold: -1 } }), ['work.threshold: must be a non-negative integer']);
+  assert.deepEqual(manifestProblems({ work: { threshold: 3, note: 'kept by hand' } }), [], 'an unregistered key in a namespace is not an error');
+  assert.deepEqual(manifestProblems({ work: 'not an object' }), [], 'a namespace that is not an object is not this table business');
+});
+
+test('a namespace cannot shadow a manifest key or register itself twice', () => {
+  assert.throws(() => registerNamespace('mode', [{ key: 'x', check: () => null }]), /already a manifest key/);
+  assert.throws(() => registerNamespace('work', [{ key: 'x', check: () => null }]), /already registered/);
+  assert.throws(() => registerNamespace('Bad Name', [{ key: 'x', check: () => null }]), /lower-case/);
+  assert.throws(() => registerNamespace('other', []), /at least one key/);
+  assert.throws(() => registerNamespace('other2', [{ key: 'x' }]), /no check/);
 });

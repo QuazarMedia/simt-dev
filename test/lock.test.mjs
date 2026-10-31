@@ -155,3 +155,22 @@ test('init writes the lock, so check --frozen is green after adoption (Q29)', as
   assert.deepEqual(await frozenFindings(root, {}), [], 'a frozen check is green after init');
   await rm(root, { recursive: true, force: true });
 });
+
+test('the lock records the version of its own format, and absence still reads', async () => {
+  const root = await repo();
+  const lock = await computeLock(root);
+  assert.equal(lock.version, 1, 'a written lock says which format it is');
+
+  // Absence means 1: every lock written before the field existed was written by the
+  // only format there has been, and a reader that refused those would reject every
+  // repository that adopted this tool.
+  await writeFile(join(root, LOCK_FILE), JSON.stringify({ inputs: lock.inputs, outputs: lock.outputs }));
+  const absent = await readLock(root);
+  assert.equal(absent.error, null);
+  assert.equal(absent.lock.version, undefined, 'the file is read as it is, not rewritten by the reader');
+
+  await writeFile(join(root, LOCK_FILE), JSON.stringify({ version: 0, inputs: lock.inputs, outputs: lock.outputs }));
+  const broken = await readLock(root);
+  assert.equal(broken.lock, null);
+  assert.match(broken.error, /version must be an integer of at least 1/);
+});

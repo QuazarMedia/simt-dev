@@ -17,6 +17,11 @@ import { LOCK_FILE, LOCK_LEGACY } from '../name.mjs';
 import { desiredRegion, provenanceDigest, LOCAL_PROFILE_DIR } from './rules.mjs';
 import { readManifest } from './manifest.mjs';
 
+/** The lock's own format. Bumped only when a reader must interpret an old file
+ *  differently; an absent field means 1, because every lock written before this
+ *  field existed was written by the only format there has been. */
+const LOCK_VERSION = 1;
+
 /** Manifest keys that change what the region contains. Anything else in the file is
  *  the repository's own notes, and hashing it would make a comment fail the lock. */
 const MANIFEST_KEYS = ['mode', 'budget', 'shared', 'surfaces', 'gates'];
@@ -39,7 +44,7 @@ export async function computeLock(root, flags = {}, manifest = undefined) {
   const outputs = createHash('sha256').update(desired.body).digest('hex');
   const hasVariants =
     variants && typeof variants === 'object' && Object.keys(variants).length > 0;
-  return hasVariants ? { inputs, outputs, variants } : { inputs, outputs };
+  return hasVariants ? { version: LOCK_VERSION, inputs, outputs, variants } : { version: LOCK_VERSION, inputs, outputs };
 }
 
 /**
@@ -71,6 +76,11 @@ export async function readLock(root) {
   if (text === null) return { lock: null, error: null };
   try {
     const lock = JSON.parse(text);
+    // Absent means 1; a version this build does not know is a lock it cannot judge,
+    // and reading it anyway would report drift for a format change.
+    if (lock.version !== undefined && (!Number.isInteger(lock.version) || lock.version < 1)) {
+      return { lock: null, error: 'version must be an integer of at least 1' };
+    }
     if (typeof lock?.inputs !== 'string' || typeof lock?.outputs !== 'string') {
       return { lock: null, error: 'must be an object with inputs and outputs' };
     }

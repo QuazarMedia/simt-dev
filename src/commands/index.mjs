@@ -22,6 +22,7 @@ import { help } from './help.mjs';
 import { GROUP_DEFAULTS, SPEC, SPEC_PATHS } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI } from '../name.mjs';
+import { packageVersion } from '../package-version.mjs';
 
 
 /**
@@ -240,6 +241,29 @@ export const IMPLEMENTED = {
   },
 };
 
+/** The release that turns the tolerated flag into a usage error (review 0003 Q62). */
+export const DEPRECATION_RELEASE = '0.8.0';
+
+/**
+ * Whether a tolerance that ends at `removedIn` has ended, comparing the way versions
+ * are numbered rather than the way strings are ordered: 0.10.0 is later than 0.9.0, and
+ * a string comparison says the opposite. An unreadable version refuses nothing - a build
+ * whose version cannot be read has not outlived anything, and guessing would break it.
+ */
+export function refusesAt(removedIn, version) {
+  const parse = (value) => {
+    const parts = String(value ?? '').split('.');
+    if (parts.length < 2 || parts.some((part) => !/^\d+$/.test(part))) return null;
+    return parts.map(Number);
+  };
+  const limit = parse(removedIn);
+  const current = parse(version);
+  if (limit === null || current === null) return false;
+  const [a, b] = [current[0] - limit[0], current[1] - limit[1]];
+  if (a !== 0) return a > 0;
+  return b >= 0;
+}
+
 /**
  * The dispatchable command paths, sorted. The authoritative answer to "what can this
  * binary do", as opposed to the answer `--help` gives - and the same list the spec
@@ -297,11 +321,15 @@ export async function dispatch(argv) {
   // makes it EXIT.USAGE. `--json` has no warnings array yet, so the JSON half of the
   // window waits on the envelope (Q65).
   const declared = DECLARED.get(path);
+  const refusing = refusesAt(DEPRECATION_RELEASE, packageVersion());
   for (const key of Object.keys(flags)) {
     if (!declared || GLOBAL_FLAGS.has(key)) continue;
     const name = key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
     if (declared.has(name)) continue;
-    const message = `--${name} is not a flag of \`${path}\`; it was ignored, and naming one this command does not take will be a usage error in the next release`;
+    if (refusing) {
+      return fail(`--${name} is not a flag of \`${path}\`; it was tolerated until ${DEPRECATION_RELEASE} and is refused now`, EXIT.USAGE);
+    }
+    const message = `--${name} is not a flag of \`${path}\`; it was ignored, and naming one this command does not take is a usage error from ${DEPRECATION_RELEASE}`;
     warn(message);
     if (!isJson(flags)) note(message);
   }

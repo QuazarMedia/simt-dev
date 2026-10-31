@@ -48,6 +48,6 @@ test('a flag the command does not take is carried in the JSON document too', asy
   const bin = fileURLToPath(new URL('../bin/simt.mjs', import.meta.url));
   const { stdout } = await promisify(execFile)('node', [bin, 'status', '--line', '--frozen', '--json'], { maxBuffer: 16 << 20 }).catch((e) => e);
   const doc = JSON.parse(stdout);
-  assert.ok(Array.isArray(doc.warnings), 'no warnings array in the document');
-  assert.match(doc.warnings[0], /--frozen is not a flag of `status`/);
+  assert.ok(Array.isArray(doc.notices), 'no notices array in the document');
+  assert.match(doc.notices[0], /--frozen is not a flag of `status`/);
 });

@@ -1,6 +1,6 @@
 # simt-dev
 
-![simt-dev, the intelligence amplifier for coding agents, and its four claims. One: say less, always — a kernel under 2 KB whose bytes stay stable so the prompt cache survives. Two: answers over exploration — a local code graph and a short task brief. Three: enforce, don't instruct — dual gates, before a tool call and at git time. Four: close the loop — benches and memory. Beneath them, the harnesses it works across and its three channels.](https://raw.githubusercontent.com/QuazarMedia/simt-dev/main/res/59e21e6d-6bf2-4d7d-b6ea-c7349a697d11.jpg)
+![simt-dev, the intelligence amplifier for coding agents, and its four claims. One: say less, always — a kernel under 2 KB whose bytes stay stable so the prompt cache survives. Two: answers over exploration — a local code graph and a short task brief. Three: enforce, don't instruct — dual gates, before a tool call and at git time. Four: close the loop — benches and memory. Beneath them, the harnesses it works across and its three channels.](https://raw.githubusercontent.com/QuazarMedia/simt-dev/main/res/hero.jpg)
 
 [![simt-dev own gate](https://github.com/QuazarMedia/simt-dev/actions/workflows/simt-dev-check.yml/badge.svg)](https://github.com/QuazarMedia/simt-dev/actions/workflows/simt-dev-check.yml)
 
@@ -74,13 +74,20 @@ beside its `.sha256`. Pin the release you download,
 and run this from the repository's top level:
 
 ```sh
-mkdir -p .simt/bin && os=$(uname -s | tr A-Z a-z) && arch=$(uname -m | sed "s/x86_64/x64/") && curl -fsSL "https://github.com/QuazarMedia/simt-dev/releases/download/v<version>/simt-dev-<version>-$os-$arch" -o .simt/bin/simt && chmod +x .simt/bin/simt
+version=<version>; os=$(uname -s | tr A-Z a-z); arch=$(uname -m | sed "s/x86_64/x64/")
+base="https://github.com/QuazarMedia/simt-dev/releases/download/v$version"
+asset="simt-dev-$version-$os-$arch"; tmp=$(mktemp -d)
+curl -fsSL "$base/$asset" -o "$tmp/$asset"
+curl -fsSL "$base/$asset.sha256" -o "$tmp/$asset.sha256"
+(cd "$tmp" && shasum -a 256 -c "$asset.sha256")
+mkdir -p .simt/bin && mv "$tmp/$asset" .simt/bin/simt && chmod +x .simt/bin/simt
 ```
 
 The locator checks `.simt/bin/simt` before `PATH`, so the repository's own copy is the
 one its hooks and its CI run — this is the same command the hook shim prints as its
-remedy. The generated CI workflow downloads the same asset and verifies it against the
-published `.sha256` before running anything.
+remedy. Both the snippet above and the generated CI workflow verify the asset against the
+published `.sha256` before it runs: a digest that does not match stops the copy, so a
+truncated or substituted download never becomes the command.
 
 ## What `simt` does
 

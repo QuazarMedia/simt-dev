@@ -11,7 +11,7 @@ import { after, test } from 'node:test';
 
 import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
-import { hasScript, knownGates, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
+import { hasScript, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
 import { classifyPush, parsePushedRefs, renderGateReport, runGates, stagedFiles } from '../src/hooks/dispatcher.mjs';
 import { recordRun } from '../src/ledger/index.mjs';
 import { packageVersion } from '../src/package-version.mjs';
@@ -357,7 +357,7 @@ test('gates: format is staged and the rest are script or command', () => {
 });
 
 test('gates: known gate names are sorted and include the manifest defaults', () => {
-  const names = knownGates();
+  const names = gateNames();
   assert.deepEqual(names, [...names].sort());
   for (const n of ['format', 'lint', 'test', 'coverage', 'typecheck', 'memory', 'codegen-drift', 'i18n-completeness']) {
     assert.ok(names.includes(n), `missing ${n}`);
@@ -1341,9 +1341,6 @@ test('a real git commit is blocked by a gate that cannot run', async () => {
   assert.equal(stdout.trim().split('\n').length, 1, 'only the seed commit may exist');
 });
 
-test('gateNames matches knownGates', () => {
-  assert.deepEqual(gateNames(), knownGates());
-});
 test('hooks run: an empty gate list prints one note, not one line per character', async () => {
   // The note sat next to `gates` as a bare string while the caller iterated it, so a
   // string iterated character by character: 180 lines of noise from a hook whose only

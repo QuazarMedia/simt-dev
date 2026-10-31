@@ -133,3 +133,4 @@ in [architecture/history.md](architecture/history.md).
 | [119](decisions/ADR-119-the-environment-variable-points-into-a-workspace-the-repo-declared.md) | the environment variable points into a workspace the repo declared | accepted · 2026-10-31 · supersedes ADR-014 ruling 1 |
 | [120](decisions/ADR-120-a-pre-push-whose-tree-is-already-proven-green-skips-the-test-gate-on-that-evidence.md) | a pre-push whose tree is already proven green skips the test gate on that evidence | accepted · 2026-10-31 |
 | [122](decisions/ADR-122-the-shims-move-into-the-state-directory-and-the-legacy-directory-removes-itself.md) | the shims move into the state directory, and the legacy directory removes itself | accepted · 2026-10-31 |
+| [123](decisions/ADR-123-a-surplus-positional-is-not-refused-because-arity-is-not-in-the-source.md) | a surplus positional is not refused, because a command's arity is not in its source | accepted · 2026-10-31 |

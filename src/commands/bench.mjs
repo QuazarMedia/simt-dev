@@ -217,6 +217,7 @@ export async function benchReportCommand(positional, flags) {
       harness: flags.harness,
       model: flags.model,
       compare: compareItems.length === 2 ? compareItems : null,
+      crossGroup: Boolean(flags.crossGroup),
     });
   } catch (error) {
     return fail(

@@ -24,6 +24,7 @@ import {
   collapseArmByTask,
   compareArms,
   evaluateRunRecord,
+  holmAdjust,
   loadPrices,
   loadRunRecords,
 } from './report.mjs';
@@ -184,14 +185,16 @@ export async function applyVariantInWorkspace(workDir, variant) {
  */
 function summarizeEvaluated(evaluated) {
   const tasks = collapseArmByTask(evaluated);
-  if (tasks.length === 0) return { n: 0, R: 0, C: 0 };
+  if (tasks.length === 0) return { n: 0, R: 0, C: null };
   let sumR = 0;
   let sumC = 0;
+  let costComplete = true;
   for (const t of tasks) {
     sumR += t.R;
-    sumC += t.C;
+    if (t.C === null) costComplete = false;
+    else sumC += t.C;
   }
-  return { n: tasks.length, R: sumR / tasks.length, C: sumC / tasks.length };
+  return { n: tasks.length, R: sumR / tasks.length, C: costComplete ? sumC / tasks.length : null };
 }
 
 /**
@@ -293,19 +296,31 @@ export async function selectRuleVariants(
       for (const { slot } of openStates) {
         const baseArm = variantArmName(slot.slotId, slot.baseline);
         const baseRecs = canaryEvaluated.filter((r) => r.arm === baseArm);
+        const slotComps = [];
         for (const key of Object.keys(slot.variants)) {
           if (key === slot.baseline) continue;
           const candArm = variantArmName(slot.slotId, key);
           const candRecs = canaryEvaluated.filter((r) => r.arm === candArm);
           if (baseRecs.length > 0 && candRecs.length > 0) {
-            const comp = compareArms(baseArm, baseRecs, candArm, candRecs, { samples, seed });
-            if (shouldEscalateCanary(comp, { alpha: CANARY_ALPHA })) {
-              includeBaseline.add(baseArm);
-              armsToEscalate.push(candArm);
-              escalatedArms.add(candArm);
-            }
+            slotComps.push({
+              candArm,
+              comp: compareArms(baseArm, baseRecs, candArm, candRecs, { samples, seed }),
+            });
           }
         }
+        // Family = every variant of this slot versus its baseline: testing several
+        // variants at α 0.05 each inflates the false-positive rate, so the p-values
+        // are Holm-adjusted before the escalation decision (review 0003 Q46).
+        const adjusted = holmAdjust(
+          slotComps.map(({ comp }) => Math.min(comp.rTest.pValue, comp.wilcoxon.pValue)),
+        );
+        slotComps.forEach(({ candArm, comp }, i) => {
+          if (shouldEscalateCanary(comp, { alpha: CANARY_ALPHA, pValue: adjusted[i] })) {
+            includeBaseline.add(baseArm);
+            armsToEscalate.push(candArm);
+            escalatedArms.add(candArm);
+          }
+        });
       }
       const fullEscalationArms = [...includeBaseline, ...armsToEscalate];
       if (fullEscalationArms.length > 0) {
@@ -405,13 +420,16 @@ export async function selectRuleVariants(
       continue;
     }
 
-    // Rank variants: higher R (beyond tolerance), then lower C, then fewer bytes, then key.
+    // Rank variants: higher R (beyond tolerance), then lower C (an unknown cost is
+    // worst — it cannot be ranked cheaper), then fewer bytes, then key.
     const ranked = [...candidates].sort((a, b) => {
       if (Math.abs(b.summary.R - a.summary.R) > DEL_R_TOLERANCE) {
         return b.summary.R - a.summary.R;
       }
-      if (Math.abs(a.summary.C - b.summary.C) > 1e-9) {
-        return a.summary.C - b.summary.C;
+      const ca = a.summary.C === null ? Number.POSITIVE_INFINITY : a.summary.C;
+      const cb = b.summary.C === null ? Number.POSITIVE_INFINITY : b.summary.C;
+      if (Math.abs(ca - cb) > 1e-9) {
+        return ca - cb;
       }
       if (a.bytes !== b.bytes) return a.bytes - b.bytes;
       return a.key.localeCompare(b.key);
@@ -425,10 +443,13 @@ export async function selectRuleVariants(
 
     if (best.key !== slot.baseline && best.comparison) {
       dR = Number(best.comparison.deltas.R.toFixed(4));
-      dC = Number(best.comparison.deltas.C.toFixed(4));
+      dC =
+        best.comparison.deltas.C === null
+          ? 0
+          : Number(best.comparison.deltas.C.toFixed(4));
       n = best.comparison.pairedTasks;
       p = Number(
-        Math.min(best.comparison.mcnemar.pValue, best.comparison.wilcoxon.pValue).toFixed(4),
+        Math.min(best.comparison.rTest.pValue, best.comparison.wilcoxon.pValue).toFixed(4),
       );
     } else {
       const runnerUp = ranked.find((c) => c.key !== slot.baseline && c.comparison);

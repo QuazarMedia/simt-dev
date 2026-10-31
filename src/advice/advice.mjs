@@ -98,7 +98,7 @@ export async function loadHistory(root) {
       task: record.task,
       model: record.model,
       resolved: isRunResolved(record),
-      cost: computeRunCost(record, prices),
+      cost: computeRunCost(record, prices).usd,
       tokens: tokensOf(record.usage),
       toolCalls: Number(record?.usage?.toolCalls ?? record?.usage?.tool_calls ?? 0),
       files: Number(descriptor?.gold?.files ?? record?.diff?.files ?? 0),
@@ -159,8 +159,10 @@ export function advise(features, history) {
   // the pick is allowed to stand on it.
   const ladderValues = new Map();
   for (const run of runs) {
+    const v = measure === 'cost' ? run.cost : run.tokens;
+    if (v === null) continue; // an un-costed run cannot ground a cost floor
     const values = ladderValues.get(run.model) ?? [];
-    values.push(measure === 'cost' ? run.cost : run.tokens);
+    values.push(v);
     ladderValues.set(run.model, values);
   }
   const ladderNames = [...ladderValues.keys()].sort(
@@ -170,8 +172,10 @@ export function advise(features, history) {
   const resolvedByModel = new Map();
   for (const run of pool) {
     if (!run.resolved) continue;
+    const v = measure === 'cost' ? run.cost : run.tokens;
+    if (v === null) continue;
     const values = resolvedByModel.get(run.model) ?? [];
-    values.push(measure === 'cost' ? run.cost : run.tokens);
+    values.push(v);
     resolvedByModel.set(run.model, values);
   }
 

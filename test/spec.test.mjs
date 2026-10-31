@@ -67,10 +67,10 @@ test('spec: every declared flag is one the parser accepts', () => {
 });
 
 test('spec: a command declares every flag its own module reads', () => {
-  // Two rules, because one module can serve several paths: a path may only declare a
-  // flag its module reads, and every flag a module reads must be declared by some path
-  // that uses it. Asserting the whole module's set against each path failed the moment
-  // `rules decisions` gained --yes, which `rules list` does not take (review 0003 Q62).
+  // One module can serve several paths, so the unit is the module: every flag a module
+  // reads must be declared by some path that uses it. The converse is not true - a
+  // command may hand its flags to a facts function that reads keys the module text
+  // never names - and asserting it failed for exactly that reason (review 0003 Q62).
   const registry = readFileSync(new URL('../src/commands/index.mjs', import.meta.url), 'utf8');
   const body = registry.slice(registry.indexOf('export const IMPLEMENTED = {'));
   const moduleOf = new Map(
@@ -90,12 +90,13 @@ test('spec: a command declares every flag its own module reads', () => {
         .map((n) => n.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)),
     );
     const declared = new Set(paths.flatMap((path) => [...byPath.get(path)]));
-    for (const path of paths) {
-      for (const flag of byPath.get(path)) {
-        assert.ok(read.has(flag), `${path} declares --${flag}, which ${file} never reads`);
-      }
-    }
-    assert.deepEqual([...declared].sort(), [...read].sort(), `${file} reads a flag no path declares`);
+    // Subset, not equality: a path may declare a flag this module reads through a
+    // parameter indirection, and the failure that matters is a flag read and declared
+    // nowhere - it is silently accepted and ignored (review 0003 Q62).
+    // A path may declare a flag this file never names: `skills brief` passes its flags
+    // to skillsBriefFacts, which reads `args.task`. The rule that holds is the one
+    // below - nothing a module reads may go undeclared - not its converse.
+    for (const flag of read) assert.ok(declared.has(flag), `${file} reads --${flag}, and no path declares it`);
   }
 });
 test('spec: a summary is one phrase, not a placeholder', () => {

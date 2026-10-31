@@ -91,7 +91,7 @@ export const SPEC = [
   // where", and `install` - the subcommand that touches a reader's home directory - is
   // the one that needs `--yes` before it does anything.
   { path: 'shared plan', summary: 'what the shared install would write, and where', defaultFor: 'shared', flags: ["diff"] },
-  { path: 'skills brief', summary: 'the packet for a task, read from the skill registry', flags: ["all","plan"] },
+  { path: 'skills brief', summary: 'the packet for a task, read from the skill registry', flags: ["all", "plan", "task"] },
   { path: 'skills compile', summary: 'compile a skill to the Agent Skills standard', flags: [] },
   { path: 'skills eval', summary: 'score the skill registry against transcripts', flags: ["all","plan"] },
   { path: 'skills find', summary: 'skills that match a query', flags: ["all","plan"] },

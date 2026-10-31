@@ -218,6 +218,18 @@ export function warn(message) {
   accumulated = [...accumulated, message];
 }
 
+/**
+ * Drop what a previous run in this process recorded.
+ *
+ * The collector is per process and a process can dispatch more than once - the MCP
+ * server and the tests both do. Without this, one command's notice appeared in the
+ * next command's document, which parity between the two surfaces caught (review 0003
+ * Q62).
+ */
+export function clearWarnings() {
+  accumulated = [];
+}
+
 /** The warnings this run has recorded, in order. */
 export function warnings() {
   return accumulated;

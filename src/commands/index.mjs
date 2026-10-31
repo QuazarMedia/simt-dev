@@ -11,6 +11,7 @@ import {
   emit,
   emitJson,
   fail,
+  clearWarnings,
   note,
   warn,
   isJson,
@@ -245,6 +246,8 @@ export const COMMANDS = SPEC_PATHS;
 
 export async function dispatch(argv) {
   const { flags, positional, parseError } = parseOrExit(argv);
+  // One run, one set of notices: a process can dispatch repeatedly (review 0003 Q62).
+  clearWarnings();
 
   // The JSON shape is decided once, here, and every command inherits it. Threading a
   // `--pretty` through twenty-five call sites would mean twenty-five places to forget,

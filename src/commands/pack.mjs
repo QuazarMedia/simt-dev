@@ -28,6 +28,7 @@ import {
 } from '../packs/manage.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function packCommand(sub, args, flags) {
   if (sub === 'new') return packNew(args, flags);
@@ -46,7 +47,7 @@ export async function packCommand(sub, args, flags) {
  * command's own usage promised `a` (review 0003 Q58).
  */
 function packDir(args, flags) {
-  return resolve(args[0] ?? flags.root ?? process.cwd());
+  return resolve(args[0] ?? commandRoot(flags));
 }
 
 /**
@@ -102,7 +103,7 @@ async function packNew(args, flags) {
     return fail(sourceProblem, EXIT.USAGE, 'a pack source names where the bytes come from: `npm:<package>` or `git+https://…`');
   }
 
-  const dir = join(resolve(flags.root ?? process.cwd()), name);
+  const dir = join(resolve(commandRoot(flags)), name);
   const files = scaffoldPack({ name, source });
   const { apply, dryRun } = writeMode(flags);
   // A scaffold always creates into a directory that must not exist, so every

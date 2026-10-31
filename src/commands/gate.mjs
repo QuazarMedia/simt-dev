@@ -18,6 +18,7 @@ import { compactOutput } from '../index/compact.mjs';
 import { readImportEdges, selectTests } from '../index/gate.mjs';
 import { langOf, packageOf } from '../index/store.mjs';
 import { localRel } from '../state.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 const exec = promisify(execFile);
 
@@ -25,7 +26,7 @@ const exec = promisify(execFile);
 const RAW_LOG_KEEP = 5;
 
 export async function gateCommand(args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   const listed = await tracked(root);
   if (listed.error) return listed.error;
   let changed = args.filter(Boolean);

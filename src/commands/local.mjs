@@ -8,6 +8,7 @@ import { resolve } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { probeLocal } from '../local/client.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 function formatRoleLine(role, report) {
   if (!report) return `${role.padEnd(8)} (unset)`;
@@ -55,7 +56,7 @@ function remedyFor(result) {
 }
 
 export async function localDoctorCommand(args, flags) {
-  const root = resolve(flags.root ?? args[0] ?? process.cwd());
+  const root = resolve(commandRoot(flags, args));
   const allowRemote = flags.allowRemote === true;
   const result = await probeLocal(root, { allowRemote });
 

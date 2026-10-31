@@ -17,12 +17,13 @@ import {
   promoteLesson,
   readLessonCandidates,
 } from '../memory/lessons.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function lessonsListCommand(args, flags) {
   if (args.length > 0) {
     return fail(`unknown lessons argument ${args[0]}`, EXIT.USAGE, `run: ${CLI} lessons`);
   }
-  const root = resolve(flags.root ?? process.cwd());
+  const root = resolve(commandRoot(flags));
   // Pure: listing must not capture. Capture used to run here, so `list` wrote
   // to the store it was reading and a read-only question had write side
   // effects. Capturing is `lessons capture` now (review 0003 Q36).
@@ -96,7 +97,7 @@ export async function lessonsCaptureCommand(args, flags) {
   if (args.length > 0) {
     return fail(`unknown lessons capture argument ${args[0]}`, EXIT.USAGE, `run: ${CLI} lessons capture`);
   }
-  const root = resolve(flags.root ?? process.cwd());
+  const root = resolve(commandRoot(flags));
   const fromLedger = await captureFromLedger(root);
   const reverts = await captureRevertedCommits(root);
 
@@ -128,7 +129,7 @@ export async function lessonsReviewCommand(args, flags) {
   if (args.length > 1) {
     return fail(`unknown lessons review argument ${args[1]}`, EXIT.USAGE, `run: ${CLI} lessons review [<id>] [--yes]`);
   }
-  const root = resolve(flags.root ?? process.cwd());
+  const root = resolve(commandRoot(flags));
   const mode = writeMode(flags);
   const parsedPaths = parsePathList(flags.paths);
   const paths = parsedPaths.length > 0 ? parsedPaths : undefined;

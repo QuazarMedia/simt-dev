@@ -10,9 +10,10 @@ import { lintDecisions, scaffoldDecision } from '../memory/decide.mjs';
 import { commitJournal } from '../journal.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
 import { parsePathList } from '../argv.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function decideCommand(args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
 
   if (flags.check === true) {
     // Q55: one resolution — the manifest key, then the detected directory —

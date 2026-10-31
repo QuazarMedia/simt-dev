@@ -15,6 +15,7 @@ import { CLI } from '../name.mjs';
 import { isTestPath } from '../bench/mine.mjs';
 import { blobTexts, isIndexStale, langOf, readEdges, readFiles, reindex } from '../index/store.mjs';
 import { HISTORY, importsOf, parseCoverage, testEdges, testsFor } from '../index/tests.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 const exec = promisify(execFile);
 
@@ -31,7 +32,7 @@ const COVERAGE_PATHS = [
 
 export async function testsCommand(args, flags) {
   if (args.length > 1) return fail(`unknown tests argument ${args[1]}`, EXIT.USAGE, `run: ${CLI} tests [path]`);
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   const loaded = await loadFiles(root);
   if (loaded.error) return loaded.error;
   const { files } = loaded;

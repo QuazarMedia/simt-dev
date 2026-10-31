@@ -35,6 +35,7 @@ import { computeLock, readLock } from '../projection/lock.mjs';
 import { runDeclaredChecks } from '../kernel/checks.mjs';
 import { decisionsCutoff, decisionsDir } from '../decisions/dir.mjs';
 import { lintDecisions } from '../memory/decide.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 /** Findings `sync` reports and does not fail on.
  *
@@ -124,7 +125,7 @@ export const CHECK_NON_BLOCKING = new Set([
 ]);
 
 export async function syncCommand(positional, flags) {
-  const root = flags.root ?? positional[0] ?? process.cwd();
+  const root = commandRoot(flags, positional);
   const checkOnly = flags.check === true;
   const mode = writeMode(flags);
 
@@ -654,7 +655,7 @@ export async function checkRepo(root, opts = {}) {
 }
 
 export async function checkCommand(positional, flags) {
-  const root = flags.root ?? positional[0] ?? process.cwd();
+  const root = commandRoot(flags, positional);
   const { ok, findings } = await checkRepo(root, flags);
   const payload = {
     ok,

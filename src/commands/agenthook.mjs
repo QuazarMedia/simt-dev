@@ -44,6 +44,7 @@ import {
   installedIn,
   rendered,
 } from '../agenthooks/render.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function agentHookCommand(args, flags) {
   const event = args[0];
@@ -167,7 +168,7 @@ export async function agentHookCommand(args, flags) {
 }
 
 export async function agentHooksCommand(sub, args, flags) {
-  const root = flags.root ?? args[0] ?? process.cwd();
+  const root = commandRoot(flags, args);
   if (sub === 'install') return installHooks(root, flags);
   if (sub === 'status') return hooksStatus(root, flags);
   return fail(`unknown agent-hooks subcommand ${sub}`, EXIT.USAGE, `run: ${CLI} agent-hooks status`);

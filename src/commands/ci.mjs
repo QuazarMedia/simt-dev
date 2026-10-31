@@ -27,6 +27,7 @@ import { EXIT, emit, emitJson, isJson, note, writeMode } from '../output/index.m
 import { planWorkflow, renderWorkflow, WORKFLOW_FILE } from '../ci/workflow.mjs';
 import { planDependabot, renderDependabot, DEPENDABOT_FILE } from '../ci/dependabot.mjs';
 import { CLI } from '../name.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 /**
  * The two plans, with the render and the plan-time data each needs kept attached.
@@ -43,7 +44,7 @@ function targets() {
 }
 
 export async function ciCommand(positional, flags) {
-  const root = flags.root ?? positional[0] ?? process.cwd();
+  const root = commandRoot(flags, positional);
   const mode = writeMode(flags);
   const checkOnly = flags.check === true;
 

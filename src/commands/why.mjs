@@ -25,6 +25,7 @@ import {
 } from '../index/govern.mjs';
 import { splitFrontmatter } from '../memory/decide.mjs';
 import { listPromotedLessons } from '../memory/lessons.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 const exec = promisify(execFile);
 
@@ -32,7 +33,7 @@ const RULE_DIRS = ['rules', 'rules/stacks', 'rules/mdc', '.simt/profiles'];
 
 export async function whyCommand(args, flags, commands = []) {
   if (args.length > 1) return fail(`unknown why argument ${args[1]}`, EXIT.USAGE, `run: ${CLI} why [path]`);
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   const listed = await tracked(root);
   if (listed.error) return listed.error;
   const files = new Set(listed.files);

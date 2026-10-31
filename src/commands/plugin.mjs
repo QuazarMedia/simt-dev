@@ -10,6 +10,7 @@ import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.m
 import { CLI } from '../name.mjs';
 import { buildPackage, PLUGIN_KINDS } from '../plugins.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function pluginCommand(args, flags) {
   const kind = args[0];
@@ -27,7 +28,7 @@ export async function pluginCommand(args, flags) {
   }
 
   const { apply } = writeMode(flags);
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   const plan = await buildPackage(kind, { root, out, apply });
 
   // The `--diff` pairs: the generated files, created or refreshed (R50). The

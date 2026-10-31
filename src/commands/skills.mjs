@@ -25,6 +25,7 @@ import { localSkillNodes } from '../resolve/local.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { CLI } from '../name.mjs';
 import { parsePathList } from '../argv.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export { parsePathList };
 
@@ -441,7 +442,7 @@ async function emitAllFacts(facts, flags) {
 // --- find ---------------------------------------------------------------------
 
 export async function findCommand(args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   let facts;
   try {
     facts = await skillsFindFacts(root, args.join(' '), flags);
@@ -481,7 +482,7 @@ export async function findCommand(args, flags) {
 
 // --- brief: tier 1 ------------------------------------------------------------
 export async function briefCommand(args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   const ctx = repoContext(root);
   let facts;
   try {
@@ -591,7 +592,7 @@ export async function briefCommand(args, flags) {
 // --- show: tier 2 -------------------------------------------------------------
 
 export async function showCommand(args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   let facts;
   try {
     facts = await skillsShowFacts(root, args[0], flags);
@@ -632,7 +633,7 @@ export async function showCommand(args, flags) {
 // --- why ----------------------------------------------------------------------
 
 export async function whyCommand(args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   let facts;
   try {
     facts = await skillsWhyFacts(root, args[0], flags);

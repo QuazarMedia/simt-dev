@@ -17,9 +17,10 @@ import {
   readLedger,
   treeId,
 } from '../ledger/index.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function evidenceCommand(args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   if (args[0] === 'check') return checkClaim(root, args[1], flags);
   if (args[0] !== undefined) {
     return fail(`unknown evidence subcommand ${args[0]}`, EXIT.USAGE, `run: ${CLI} evidence`);

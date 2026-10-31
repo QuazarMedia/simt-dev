@@ -27,11 +27,12 @@ import {
 import { coreIgnoreCase } from '../repo-root.mjs';
 import { SESSION_ENV } from '../agenthooks/policy.mjs';
 import { CLI } from '../name.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 const ISO = (ms) => new Date(ms).toISOString();
 
 export async function leaseCommand(args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   const [sub, ...rest] = args;
   // The denial tells a blocked session to ask the holder to release the path,
   // so releasing is a subcommand, not a missing flag (review 0003 Q20).

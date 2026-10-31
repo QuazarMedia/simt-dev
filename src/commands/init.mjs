@@ -55,6 +55,7 @@ import { MANIFEST_FILE } from '../name.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 import { PACKAGE_NAME } from '../name.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 const run = promisify(execFile);
 
@@ -62,7 +63,7 @@ const BACKUP_TAG = 'backup-before-simt-dev';
 const ADOPT_BRANCH = 'simt-dev/adopt';
 
 export async function initCommand(positional, flags) {
-  const root = flags.root ?? positional[0] ?? process.cwd();
+  const root = commandRoot(flags, positional);
 
   const detected = await fingerprint(root);
   if (detected.error) {

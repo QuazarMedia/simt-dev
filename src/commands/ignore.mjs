@@ -14,9 +14,10 @@ import { CLI } from '../name.mjs';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { CLAUDE_SETTINGS, IGNORE_FILE, parseIgnoreList, planIgnore } from '../ignore.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function ignoreCommand(args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
 
   let source;
   try {

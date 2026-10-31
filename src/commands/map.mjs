@@ -16,12 +16,13 @@ import {
   rankFiles,
   renderMap,
 } from '../index/map.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 const LEVELS = new Set(['outline', 'names', 'signatures']);
 
 export async function mapCommand(args, flags) {
   if (args.length > 0) return fail(`unknown map argument ${args[0]}`, EXIT.USAGE, `run: ${CLI} map`);
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   if (flags.recall === true) return recall(root, flags);
   const level = flags.level ?? 'outline';
   if (!LEVELS.has(level)) {

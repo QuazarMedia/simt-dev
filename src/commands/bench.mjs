@@ -20,6 +20,7 @@ import { runBenchProbes } from '../bench/probes.mjs';
 import { selectRuleVariants } from '../bench/variants.mjs';
 import { criticBench } from '../review/critic.mjs';
 import { listFlag } from './skills.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 /**
  * Refuse an authorised bench run that names no harness.
@@ -39,7 +40,7 @@ function requireHarness(flags, command) {
 }
 
 export async function benchMineCommand(positional, flags) {
-  const root = resolve(flags.root ?? positional[0] ?? process.cwd());
+  const root = resolve(commandRoot(flags, positional));
   const { dryRun, apply } = writeMode(flags);
 
   const result = await mineTasks(root, {
@@ -100,7 +101,7 @@ export async function benchMineCommand(positional, flags) {
 }
 
 export async function benchRunCommand(positional, flags) {
-  const root = resolve(flags.root ?? positional[0] ?? process.cwd());
+  const root = resolve(commandRoot(flags, positional));
   const { dryRun, apply } = writeMode(flags);
 
   if (flags.regrade !== undefined) {
@@ -281,7 +282,7 @@ async function recallOrUnmeasured(root) {
 }
 
 export async function benchAblateCommand(positional, flags) {
-  const root = resolve(flags.root ?? positional[0] ?? process.cwd());
+  const root = resolve(commandRoot(flags, positional));
   const { dryRun, apply } = writeMode(flags);
   if (apply) {
     const missing = requireHarness(flags, 'bench ablate');
@@ -336,7 +337,7 @@ export async function benchAblateCommand(positional, flags) {
 }
 
 export async function benchProbesCommand(positional, flags) {
-  const root = resolve(flags.root ?? positional[0] ?? process.cwd());
+  const root = resolve(commandRoot(flags, positional));
   const { dryRun, apply } = writeMode(flags);
   if (apply) {
     const missing = requireHarness(flags, 'bench probes');
@@ -392,7 +393,7 @@ export async function benchProbesCommand(positional, flags) {
 }
 
 export async function benchVariantsCommand(positional, flags) {
-  const root = resolve(flags.root ?? positional[0] ?? process.cwd());
+  const root = resolve(commandRoot(flags, positional));
   const { dryRun, apply } = writeMode(flags);
   if (apply) {
     const missing = requireHarness(flags, 'bench variants');
@@ -443,7 +444,7 @@ export async function benchVariantsCommand(positional, flags) {
 // the row says precision >= 0.8 on >= 30 labelled diffs promotes it to a gate,
 // and until a bench here shows that, every report calls the critic advisory.
 export async function benchCriticCommand(positional, flags, commands = []) {
-  const root = resolve(flags.root ?? positional[0] ?? process.cwd());
+  const root = resolve(commandRoot(flags, positional));
   const labelsPath = flags.labels ?? '.simt/local/critic-labels.jsonl';
   const result = await criticBench(root, { labelsPath, flags, commands });
   if (typeof result === 'number') return result;
@@ -485,7 +486,7 @@ export async function benchExportCommand(positional, flags) {
       `export the sealed corpus: ${CLI} bench export corpus.json --yes`,
     );
   }
-  const root = resolve(flags.root ?? process.cwd());
+  const root = resolve(commandRoot(flags));
   const { dryRun, apply } = writeMode(flags);
 
   let doc;
@@ -547,7 +548,7 @@ export async function benchImportCommand(positional, flags) {
       `import a sealed corpus: ${CLI} bench import corpus.json --yes`,
     );
   }
-  const root = resolve(flags.root ?? process.cwd());
+  const root = resolve(commandRoot(flags));
   const { dryRun, apply } = writeMode(flags);
 
   let doc;

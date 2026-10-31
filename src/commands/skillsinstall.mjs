@@ -38,6 +38,7 @@ import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { nameProblems } from '../graph/spec.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 /**
  * Where skills live in this repo. The estate already has a convention - a
@@ -82,7 +83,7 @@ export async function installCommand(args, flags) {
   const ws = await resolveWorkspace(flags);
   if (ws.error) return fail(`workspace config: ${ws.error}`, EXIT.CONFIG, 'fix the JSON, or remove the file');
 
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   const repo = await fingerprint(root);
   const pick = await chooseSource(skill, repo.signals, flags, { root, workspaceRoot: ws.root });
   if (pick.error) return fail(pick.error, EXIT.USAGE, pick.remedy);

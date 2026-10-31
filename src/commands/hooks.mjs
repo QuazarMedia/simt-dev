@@ -29,9 +29,10 @@ import { renderGateReport, runGates } from '../hooks/dispatcher.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function hooksCommand(sub, args, flags) {
-  const root = flags.root ?? args[0] ?? process.cwd();
+  const root = commandRoot(flags, args);
   // One context for the subcommand: install and status each ask about the same
   // repository, and `doctor --fix` asks alongside them (review 0003 Q67).
   const ctx = repoContext(root);
@@ -44,7 +45,7 @@ export async function hooksCommand(sub, args, flags) {
 /** The shim execs this; the event name is baked into the shim, so it is arg 0. */
 async function runHook(args, flags) {
   const event = args[0];
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   const ctx = repoContext(root);
   if (!EVENTS.includes(event)) {
     return fail(`unknown hook event ${event}`, EXIT.USAGE, `known events: ${EVENTS.join(', ')}`);

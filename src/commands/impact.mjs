@@ -25,6 +25,7 @@ import {
 import { decisionHits, scopeHits, sortHits, sourceRoots } from '../index/govern.mjs';
 import { decisionRecords, ruleScopes } from './why.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 const exec = promisify(execFile);
 const TEXT_EXT = new Set(['js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'json', 'yaml', 'yml', 'md', 'toml', 'xml', 'py', 'go', 'kt', 'java', 'rs']);
@@ -35,7 +36,7 @@ export async function impactCommand(args, flags, commands = []) {
   if (args.length > 1) return fail(`unknown impact argument ${args[1]}`, EXIT.USAGE, `run: ${CLI} impact <file|symbol>`);
   const target = args[0];
   if (!target) return fail(`a file or a symbol is required`, EXIT.USAGE, `run: ${CLI} impact <file|symbol>`);
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   const listed = await tracked(root);
   if (listed.error) return listed.error;
   const files = new Set(listed.files);

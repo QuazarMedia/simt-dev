@@ -33,6 +33,7 @@ import { digestOf, promptHash, proposalFrontmatter } from '../distill/engine.mjs
 const exec = promisify(execFile);
 
 import { LOCAL_DIR } from '../state.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 // Locked on-disk beneath machine-local state, like the distilled cache (R38) —
 // proposals keyed by content digest, never projected and never committed.
@@ -216,7 +217,7 @@ export async function reviewTarget(args, flags, { write = true, commands = [] } 
   if (args.length > 0) {
     return fail(`unknown review argument ${args[0]}`, EXIT.USAGE, `usage: ${CLI} review [--local]`);
   }
-  const root = resolve(flags.root ?? process.cwd());
+  const root = resolve(commandRoot(flags));
   const listed = await tracked(root);
   if (listed.error) return listed.error;
 

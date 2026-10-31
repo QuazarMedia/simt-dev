@@ -17,9 +17,10 @@ import { beforeText, entryLabel, listJournalSets, readGitValue, readJournalSet, 
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { join } from 'node:path';
 import { invalidateCheckCache } from '../status.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function undoCommand(positional, flags) {
-  const root = flags.root ?? positional[0] ?? process.cwd();
+  const root = commandRoot(flags, positional);
   const mode = writeMode(flags);
 
   const [id] = await listJournalSets(root);

@@ -35,6 +35,7 @@ import {
 
 export const DEFAULT_BUDGET = 2048;
 import { LOCAL_DIR } from '../state.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 const DISTILL_DIR = join(LOCAL_DIR, 'distilled');
 
@@ -175,7 +176,7 @@ export async function distillTarget(args, flags) {
     );
   }
 
-  const root = resolve(flags.root ?? process.cwd());
+  const root = resolve(commandRoot(flags));
   const source = await resolveTarget(target, root, flags);
   if (source.exit !== undefined) return source.exit;
 

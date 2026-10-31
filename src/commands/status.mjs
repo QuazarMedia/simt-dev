@@ -13,9 +13,10 @@
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { currentHead, readCheckCache, renderStatusLine } from '../status.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function statusCommand(args, flags) {
-  const root = flags.root ?? args[0] ?? process.cwd();
+  const root = commandRoot(flags, args);
   if (flags.line !== true) {
     return fail('status needs --line', EXIT.USAGE, `run: ${CLI} status --line --root ${root}`);
   }

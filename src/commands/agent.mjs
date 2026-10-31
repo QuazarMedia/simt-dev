@@ -27,9 +27,10 @@ import {
   rendered,
   writeAgentPlan,
 } from '../agents/render.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function agentsCommand(sub, args, flags) {
-  const root = flags.root ?? args[0] ?? process.cwd();
+  const root = commandRoot(flags, args);
   if (sub === 'install') return installAgents(root, flags);
   if (sub === 'status') return agentsStatus(root, flags);
   return fail(`unknown agents subcommand ${sub}`, EXIT.USAGE, `run: ${CLI} agents status`);

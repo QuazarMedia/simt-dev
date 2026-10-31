@@ -27,6 +27,7 @@ import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
 import { SURFACES, CANDIDATE_DIRS } from '../projection/surfaces.mjs';
 import { LOADERS, LOADER_IDS, caps, loader } from '../projection/loaders.mjs';
 import { viewAll } from '../measure/loaderView.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 /**
  * `simt harness detect`. The subcommand is validated by dispatch, which rejects a
@@ -39,7 +40,7 @@ import { viewAll } from '../measure/loaderView.mjs';
  * @returns {Promise<number>} process exit code
  */
 export async function harnessCommand(positional, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
 
   // MCP evidence is project-scope by construction: the loader table carries repo-root
   // paths (.mcp.json, .codex/config.toml, …), and the same path means different scopes
@@ -256,7 +257,7 @@ function block(scan, pad) {
  * do" in a repository where the answer is not about bytes.
  */
 export async function harnessLoadersCommand(positional, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   const wanted = typeof flags.reader === 'string' ? flags.reader : null;
   const rows = wanted === null ? LOADERS : [loader(wanted)].filter(Boolean);
 

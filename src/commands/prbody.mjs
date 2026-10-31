@@ -12,9 +12,10 @@
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { buildPrBody, renderPrBody } from '../prbody.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function prBodyCommand(args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   if (args.length > 0) {
     return fail(`pr-body takes no positional arguments`, EXIT.USAGE, `run: ${CLI} pr-body [--base <ref>]`);
   }

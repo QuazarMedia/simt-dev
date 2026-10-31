@@ -35,6 +35,7 @@ import { provenanceDigest } from '../projection/project.mjs';
 import { applyHooksInstall, plannedDiffs, planHooksInstall } from './hooks.mjs';
 import { fileFor } from '../hooks/shim.mjs';
 import { commitJournal, ignoreJournal, journalHygiene, journalIgnoreNext } from '../journal.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 /**
  * One config-health finding: what is wrong, how to fix it, and whether
@@ -280,7 +281,7 @@ export function serialisedFindings(findings) {
 }
 
 export async function runDoctor(positional, flags) {
-  const root = flags.root ?? positional[0] ?? process.cwd();
+  const root = commandRoot(flags, positional);
   const { result, ws, shared, findings, failure, code: diagnosisCode } = await diagnose(root, flags);
 
   const fixMode = flags.fix === true;

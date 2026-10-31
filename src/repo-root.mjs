@@ -51,6 +51,25 @@ export function repoRoot(cwd) {
 }
 
 /**
+ * The directory a command works on: `--root`, else the first positional when the command
+ * takes one, else the current directory.
+ *
+ * This precedence is a user-visible contract, not an implementation detail: it decides
+ * which directory `--root .` and a bare positional mean, and thirty-four commands had
+ * their own copy of it. The copies drifted - some resolved the answer, some did not; some
+ * read `args[0]`, some `positional[0]` - so the same argv could name two directories
+ * depending on which command read it (review 0003 Q65).
+ *
+ * The answer is returned verbatim, not resolved: a caller that wants an absolute path
+ * says so, and a command that reports the root it was given still reports what the reader
+ * typed. `repoRoot` answers the different question of which repository that directory
+ * belongs to.
+ */
+export function commandRoot(flags = {}, positional = []) {
+  return flags.root ?? positional[0] ?? process.cwd();
+}
+
+/**
  * Whether git on this repository compares paths case-insensitively, which is
  * the one filesystem fact a path comparison must honour: on a case-insensitive
  * volume `NB.ipynb` and `nb.ipynb` are the file, and a comparison that spells

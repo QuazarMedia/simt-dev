@@ -3,12 +3,13 @@ import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.m
 import { formatCounts, planDone, planNext, planStatus } from '../plan/index.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
 import { CLI } from '../name.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 // Preview unless --yes, and --dry-run wins even then. A tracker row marked done
 // for a commit that was never written is a claim the next reader will believe.
 
 export async function planCommand(sub, args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   if (sub === 'status') return runStatus(root, flags);
   if (sub === 'next') return runNext(root, args[0] ?? null, flags);
   if (sub === 'done') {

@@ -7,10 +7,11 @@ import { execFile } from 'node:child_process';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { JSONL_FILE, SQLITE_FILE, reindex } from '../index/store.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function indexCommand(args, flags) {
   if (args.length > 0) return fail(`unknown index argument ${args[0]}`, EXIT.USAGE, `run: ${CLI} index`);
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   let result;
   try {
     result = await reindex(root, {

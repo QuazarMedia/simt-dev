@@ -19,6 +19,7 @@ import { CLI } from '../name.mjs';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { DEFAULT_BRIEF_BYTES, explainPacket } from '../brief/packet.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 export async function briefCommand(args, flags, commands = []) {
   if (args.length > 1) {
@@ -33,7 +34,7 @@ export async function briefCommand(args, flags, commands = []) {
   }
 
   const result = await assembleBrief({
-    root: flags.root ?? process.cwd(),
+    root: commandRoot(flags),
     task: String(args[0] ?? flags.task ?? ''),
     paths: flags.paths === undefined ? null : flags.paths,
     budget,

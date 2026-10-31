@@ -22,6 +22,7 @@ import { nearMatches } from '../resolve/near.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { CLI } from '../name.mjs';
 import { LOCAL_DIR } from '../state.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 async function readSkillRawText(skill, workspaceRoot, root) {
   const canonical = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
@@ -68,7 +69,7 @@ export async function compileCommand(args, flags) {
   const { registry, errors, ok } = await loadRegistry(null, flags);
   if (!ok) return fail(errors[0], EXIT.REGISTRY, WORKSPACE_REMEDY);
 
-  const root = resolve(flags.root ?? process.cwd());
+  const root = resolve(commandRoot(flags));
   const ws = await resolveWorkspace(flags);
   const targetName = args[0] ?? null;
 

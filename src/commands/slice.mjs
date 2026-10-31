@@ -52,6 +52,7 @@ import { coreIgnoreCase } from '../repo-root.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { LOCAL_DIR } from '../state.mjs';
+import { commandRoot } from '../repo-root.mjs';
 
 const exec = promisify(execFile);
 
@@ -218,7 +219,7 @@ async function releaseSlice(main, id, session) {
 }
 
 export async function sliceCommand(sub, args, flags) {
-  const root = flags.root ?? process.cwd();
+  const root = commandRoot(flags);
   if (sub === 'start') {
     const id = args[0];
     if (!id) return fail(`${CLI} slice start needs a slice id`, EXIT.USAGE, `run: ${CLI} plan next`);

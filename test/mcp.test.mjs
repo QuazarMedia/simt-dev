@@ -41,6 +41,10 @@ test('mcp: initialize answers with the protocol version and the read-only instru
   assert.equal(r.result.protocolVersion, PROTOCOL_VERSION);
   assert.equal(r.result.serverInfo.version, '9.9.9');
   assert.match(r.result.instructions, /Read-only/);
+  // One entry point, named as a tool. The instruction used to name a CLI command the
+  // caller could not invoke, while the tool description called itself the entry point and
+  // the prompt pointed at a third one (Q56).
+  assert.match(r.result.instructions, /Call `skills_brief` first/);
 });
 
 test('mcp: an unsupported protocol version gets ours, not an echo of theirs', async () => {
@@ -295,6 +299,53 @@ test('mcp: truncation is announced in the text, never silent', async () => {
   const tools = [{ name: 'big', description: 'x', inputSchema: { type: 'object' }, async run() { return { blob: 'y'.repeat(500), maxBytes: 100 }; } }];
   const r = await handle(req('tools/call', { name: 'big', arguments: {} }), tools);
   assert.match(r.result.content[0].text, /^TRUNCATED \d+ bytes omitted; raise maxBytes$/m);
+  // Q56: the structured block is the one a client indexes, so it cannot keep the whole
+  // payload beside a text block that says something was cut.
+  assert.equal(r.result.structuredContent.truncated, true);
+  assert.ok(r.result.structuredContent.omittedBytes > 0);
+  assert.ok(!('blob' in r.result.structuredContent), 'the untruncated payload came back in the other block');
+});
+
+test('mcp: the request envelope is checked before anything reads it (Q56)', async () => {
+  const state = { version: null };
+  const bare = await handle({ id: 1, method: 'server/discover' }, TOOLS, { state });
+  assert.equal(bare.error.code, RPC.REQUEST, 'a request without jsonrpc:"2.0" was accepted');
+  const objectId = await handle({ jsonrpc: '2.0', id: { n: 1 }, method: 'server/discover' }, TOOLS, { state });
+  assert.equal(objectId.error.code, RPC.REQUEST);
+  assert.equal(objectId.id, null, 'an id that cannot be matched must not be echoed as if it could');
+});
+
+test('mcp: arguments are checked against the schema the client was shown (Q56)', async () => {
+  const state = { version: null };
+  await handle(req('initialize', { protocolVersion: '2025-11-25' }), TOOLS, { state });
+  const r = await handle(req('tools/call', { name: 'skills_show', arguments: {} }), TOOLS, { state });
+  assert.equal(r.error.code, RPC.INVALID_PARAMS, JSON.stringify(r));
+  assert.match(r.error.message, /missing required property "name"/);
+  // A tool with no required arguments still accepts the empty object, which is what a
+  // client that knows nothing sends.
+  const ok = await handle(req('tools/call', { name: 'skills_brief', arguments: {} }), TOOLS, { state });
+  assert.equal(ok.result.isError, false, JSON.stringify(ok.result));
+});
+
+test('mcp: an over-long request line is refused and the session survives (Q56)', async () => {
+  const line = JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'server/discover', params: { pad: 'x'.repeat(1 << 20) } });
+  const { stdout } = await converse(`${line}\n{"jsonrpc":"2.0","id":9,"method":"server/discover"}\n`);
+  const messages = stdout.trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(messages[0].error.code, RPC.REQUEST);
+  assert.match(messages[0].error.message, /larger than \d+ bytes/);
+  assert.deepEqual(messages[1].result.supportedVersions, SUPPORTED_VERSIONS);
+});
+
+test('mcp: skills_show says body:null and why, rather than prose in a field typed string|null (Q56)', async () => {
+  const state = { version: null };
+  await handle(req('initialize', { protocolVersion: '2025-11-25' }), TOOLS, { state });
+  const index = await handle(req('tools/call', { name: 'skills_index', arguments: {} }), TOOLS, { state });
+  const name = index.result.structuredContent.entries[0].name;
+  const shown = await handle(req('tools/call', { name: 'skills_show', arguments: { name } }), TOOLS, { state });
+  const packet = shown.result.structuredContent;
+  assertValid(packet, TOOLS.find((t) => t.name === 'skills_show').outputSchema, 'skills_show');
+  if (packet.body === null) assert.match(packet.reason, /body unavailable/);
+  else assert.equal(packet.reason, null);
 });
 
 test('mcp: every tool declares a usable schema', () => {
@@ -864,9 +915,17 @@ test('mcp: brief reads the index and never builds one', async () => {
   const call = (id) => handle(req('tools/call', { name: 'brief', arguments: { root: dir, task: 'fix src/keep.mjs' } }, id), TOOLS, { state });
 
   const cold = await call(2);
-  assert.equal(cold.result.isError, true, 'an index-less repository is a stated failure, not an empty packet');
-  assertValid(cold.result.structuredContent, ERROR_SHAPE, 'brief failure');
-  assert.match(cold.result.structuredContent.remedy, new RegExp(`${CLI} index`));
+  // Q56: the tool every surface names as the entry point must answer in a repository
+  // nobody has indexed. It falls back to the skill packet - which is read from the
+  // package, not the tree - and names the command that unlocks the repository packet.
+  const briefTool = TOOLS.find((t) => t.name === 'brief');
+  assert.equal(cold.result.isError, false, JSON.stringify(cold.result));
+  assert.equal(cold.result.structuredContent.basis, 'registry');
+  assert.match(cold.result.structuredContent.note, new RegExp(`${CLI} index`));
+  // The skill set is a list, and an empty one in a scratch repository is honest: the
+  // packet says what it excluded, and the note says what would fill it in.
+  assert.ok(Array.isArray(cold.result.structuredContent.sections.skills));
+  assertValid(cold.result.structuredContent, briefTool.outputSchema, 'brief fallback');
   await assert.rejects(
     access(join(dir, '.simt')),
     'brief built an index, which no tool here may do',

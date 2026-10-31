@@ -199,15 +199,9 @@ export async function readResource(uri, root = process.cwd()) {
     const [rules, mdc] = await Promise.all([loadRules(null), loadMdcRules()]);
     const rule = [...rules, ...mdc].find((candidate) => candidate.id === parsed.id);
     if (rule === undefined) return null;
-    const text = `${frontmatterOf(rule)}\n${rule.body ?? ''}`.trim();
-    return {
-      uri,
-      mimeType: 'text/markdown',
-      text,
-      // The body a tool returns is redacted for the same reason: a reader outside this
-      // estate is told what the rule says and not which directory here it is filed in.
-      bytes: Buffer.byteLength(text),
-    };
+    // The body a tool returns is redacted for the same reason: a reader outside this
+    // estate is told what the rule says and not which directory here it is filed in.
+    return { uri, mimeType: 'text/markdown', text: `${frontmatterOf(rule)}\n${rule.body ?? ''}`.trim() };
   }
 
   // `loadDecisions` reads the index, not the records: it reports status, currency and
@@ -218,7 +212,10 @@ export async function readResource(uri, root = process.cwd()) {
   if (decision === undefined) return null;
   const raw = await readFile(join(DECISIONS_DIR, decision.file), 'utf8');
   const text = redactInternalPaths(redactEstate(raw)).trim();
-  return { uri, mimeType: 'text/markdown', text, bytes: Buffer.byteLength(text) };
+  // `bytes` is not a `ResourceContents` field: a client validating the result against
+  // the specification sees an unexpected property, and the length is `text.length` away
+  // (Q56).
+  return { uri, mimeType: 'text/markdown', text };
 }
 
 function frontmatterOf(rule) {

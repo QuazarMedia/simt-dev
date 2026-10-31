@@ -96,7 +96,19 @@ test('parity: skills_show and skills_why answer one skill on both surfaces', asy
 
   const showMcp = await tool('skills_show').run({ root: ROOT, name });
   const showCli = answer(await cli('skills', 'show', name, '--root', ROOT));
-  assert.deepEqual(showMcp, showCli);
+  // Q56 reshapes absence and nothing else: where there is no body, MCP reports it as
+  // `body:null` with the prose in `reason`, because a client tests those fields for null.
+  // The CLI keeps prose in `bodyText` for its own reader. Every other field is one answer.
+  const { reason, body, bodyText, ...rest } = showMcp;
+  const { body: cliBody, bodyText: cliText, ...cliRest } = showCli;
+  assert.deepEqual(rest, cliRest);
+  if (reason === null) {
+    assert.deepEqual({ body, bodyText }, { body: cliBody, bodyText: cliText });
+  } else {
+    assert.equal(body, null);
+    assert.equal(bodyText, null);
+    assert.equal(reason, cliText);
+  }
 
   const whyMcp = await tool('skills_why').run({ root: ROOT, name });
   const whyCli = answer(await cli('skills', 'why', name, '--root', ROOT));

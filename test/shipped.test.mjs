@@ -925,8 +925,13 @@ test('the guard above covers what is actually published', async () => {
   // prevent. The first is caught here too, because a guard nobody can fail is one
   // somebody eventually deletes.
   const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+  // A `!` entry in `files` is an exclusion, not a published path: npm reads it as
+  // "everything above, minus this one". Counting it as published made this guard fail on
+  // an entry that publishes nothing, and dropping the exclusion instead would have
+  // shipped the 58 KB index the tarball is supposed to leave out.
+  const declared = pkg.files.filter((entry) => !entry.startsWith('!'));
   const guarded = new Set([...SHIPPED_ROOTS, ...SHIPPED_FILES]);
-  const shipped = new Set([...pkg.files, ...SHIPPED_FILES]);
+  const shipped = new Set([...declared, ...SHIPPED_FILES]);
 
   for (const entry of shipped) {
     assert.ok(guarded.has(entry), `${entry} is published by npm and is not guarded. Add it to SHIPPED_ROOTS or SHIPPED_FILES.`);

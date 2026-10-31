@@ -28,6 +28,7 @@
     "agents",
     "skills",
     "docs/decisions",
+    "!docs/decisions/README.md",
     "CHANGELOG.md"
   ],
   "keywords": [
@@ -44,6 +45,6 @@
   ],
   "scripts": {
     "test": "node --test --test-concurrency=$(node -p 'os.cpus().length') test/*.test.mjs",
-    "lint": "node bin/simt.mjs doctor"
+    "lint": "node bin/simt.mjs graph lint && node --test test/shipped.test.mjs"
   }
 }

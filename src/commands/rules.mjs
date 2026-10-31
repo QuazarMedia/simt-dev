@@ -16,6 +16,8 @@
 
 import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
+import { renderDecisionsIndex } from '../decisions/index-doc.mjs';
+import { commitJournal, journaledWriteFile } from '../journal.mjs';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { loadRules, select } from '../projection/project.mjs';
 import { loadMdcRules } from '../projection/mdc.mjs';
@@ -518,6 +520,19 @@ export async function decisionsCommand(args, flags) {
       supersededBy: d.supersededBy ?? null,
       file: d.file,
     }));
+
+  // The index is output, not authorship (review 0003 Q91): the table is rendered from
+  // the same records this command lists, so a new ADR cannot leave it behind. The
+  // write is journaled like every other repo-file write, so `undo` restores the old
+  // table - the index is not internal state even though it is generated.
+  if (flags.yes === true) {
+    const rootDir = root ?? process.cwd();
+    const journal = [];
+    await journaledWriteFile(rootDir, journal, join(rootDir, 'docs', 'decisions-index.md'), renderDecisionsIndex(rows));
+    await commitJournal(rootDir, 'rules decisions', journal);
+    emit(`wrote docs/decisions-index.md (${rows.length} decisions)`, { maxBytes: flags.maxBytes ?? 0 });
+    return EXIT.OK;
+  }
 
   if (isJson(flags)) {
     emitJson({ ok: true, command: 'rules decisions', root, decisions: rows });

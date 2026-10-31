@@ -81,7 +81,7 @@ export const SPEC = [
   { path: 'plugin', summary: 'generate a harness package from the same tables the hooks use', flags: ["diff","out"] },
   { path: 'pr-body', summary: 'the pull request body: evidence, decisions, gate state and residual risk', flags: ["base"] },
   { path: 'review', summary: 'review the staged diff against the estate rules', flags: [] },
-  { path: 'rules decisions', summary: 'every known decision, and which layer each came from', flags: ["all"] },
+  { path: 'rules decisions', summary: 'every known decision, and which layer each came from', flags: ["all", "yes"] },
   { path: 'rules list', summary: 'the rule catalogue, marked with what applies to this repository', defaultFor: 'rules', flags: ["all"] },
   { path: 'rules show', summary: 'one rule body', flags: ["all"] },
   { path: 'rules why', summary: 'the decision that settled a rule, and whether it is still in force', flags: ["all"] },

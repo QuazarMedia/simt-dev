@@ -212,6 +212,20 @@ test('a repository without npm installs the release binary in CI and still runs 
   assert.match(yaml, /releases\/download\/v[\d.]+/);
 });
 
+test("the own gate also runs on a push to main, because this repository merges locally (Q57)", () => {
+  // `pull_request` alone asked a question this repository never answers: `main`
+  // receives merges made in a checkout, so the merge commit that lands there is the
+  // one commit no gate ever ran on. The adopting copy keeps the pull_request-only
+  // ruling, which is that repository's decision to make.
+  const own = renderWorkflow({ own: true });
+  assert.match(own, /^on:\n {2}pull_request:\n {2}push:\n {4}branches: \[main\]$/m);
+  // The timeout has to fit the slowest leg or it fails a passing run: macOS took
+  // 4 min 28 s of a 5-minute budget before this changed.
+  assert.match(own, /^ {4}timeout-minutes: 15$/m);
+  assert.doesNotMatch(renderWorkflow(), /push:/, 'an adopting repo is not given a push trigger it did not ask for');
+  assert.match(renderWorkflow(), /^ {4}timeout-minutes: 5$/m);
+});
+
 test('the workflow is gated on pull requests and does not rewrite itself', () => {
   const yaml = renderWorkflow();
   assert.match(yaml, /^on:\n {2}pull_request:$/m);
@@ -621,7 +635,7 @@ test('a stale copy in simt-dev\'s own repository is reported, with the fix named
   try {
     // A token this template owns, so the edit is a drift rather than a no-op. It used
     // to be `runs-on: ubuntu-latest`, which the macOS matrix (S48) removed.
-    await writeFile(path, before.replace('timeout-minutes: 5', 'timeout-minutes: 9'));
+    await writeFile(path, before.replace('timeout-minutes: 15', 'timeout-minutes: 9'));
     const plan = await planWorkflow(PACKAGE_ROOT);
     assert.equal(plan.action, 'refresh');
     assert.match(plan.reason, /gate template has changed/);

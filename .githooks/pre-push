@@ -11,35 +11,61 @@
 set -eu
 
 ROOT=$(CDPATH='' cd -- "$(dirname -- "$0")/.." && pwd)
-cd "$ROOT"
 
 # The push override is for the push itself, not for the tests the hook runs.
 # A test that asserts a push is denied sees the override and fails.
 unset SIMT_ALLOW
 
+# The suite runs in a clone, not in this checkout. A suite that only passes beside
+# the sibling repositories it shares a parent with says nothing about what a reader
+# clones, and this hook is the last place that could notice (ADR-031). The clone
+# lands under TMPDIR, which is a path with no siblings by construction, and it holds
+# HEAD: the tree being pushed, not the work in progress this hook deliberately does
+# not judge.
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/simt-dev-prepush.XXXXXX")
+LOG="$WORK/gate.log"
+trap 'rm -rf "$WORK"' EXIT INT TERM
+
 FAILED=""
+SEP=''
 
 fail() {
   printf '%s\n' "FAILED  $1" >&2
   printf '%s\n' "        $2" >&2
-  FAILED="$FAILED $1"
+  FAILED="$FAILED$SEP$1"
+  SEP=', '
 }
 
-# Unconditional. This package has zero runtime and dev dependencies, so node_modules
-# never exists here and gating on it skipped the most important check - which is the
-# exact shape ADR-017 warns about: a gate that quietly stops running is
-# indistinguishable from one that was never installed.
-printf '%s\n' "simt-dev pre-push: running tests"
-npm test --silent >/dev/null || fail "tests" "npm test must pass before pushing"
+# One check, with its output kept rather than discarded: a failure whose reason is
+# only "failed" sends the reader to re-run the suite by hand to find out why.
+check() {
+  label=$1
+  why=$2
+  shift 2
+  printf '%s\n' "simt-dev pre-push: $label"
+  printf '\n$ %s\n' "$*" >>"$LOG"
+  if "$@" >>"$LOG" 2>&1; then
+    return 0
+  fi
+  fail "$label" "$why"
+  return 0
+}
 
-printf '%s\n' "simt-dev pre-push: checking the registry"
-node bin/simt.mjs graph lint >/dev/null || fail "graph lint" "the skill registry is inconsistent"
-
-printf '%s\n' "simt-dev pre-push: checking the shipped-content guards"
-node --test test/shipped.test.mjs >/dev/null 2>&1 || fail "shipped content" "shipped text leaks or names a command this package does not install"
+printf '%s\n' "simt-dev pre-push: copying HEAD to a path with no siblings"
+if ! git clone -q --no-local "$ROOT" "$WORK/repo" >>"$LOG" 2>&1; then
+  fail "clone" "the hook could not copy $ROOT, so no check ran"
+else
+  cd "$WORK/repo"
+  # `npm test` already runs the shipped-content guards: running that file again here
+  # was a second copy of one check, and two copies are two things to keep in step.
+  check tests "npm test must pass before pushing" npm test --silent
+  check "graph lint" "the skill registry is inconsistent" node bin/simt.mjs graph lint
+fi
 
 if [ -n "$FAILED" ]; then
-  printf '%s\n' "BLOCKED  nothing was pushed:$FAILED" >&2
+  printf '%s\n' "---- the gate's output, last 40 lines ----" >&2
+  tail -n 40 "$LOG" >&2 || true
+  printf '%s\n' "BLOCKED  nothing was pushed: $FAILED" >&2
   printf '%s\n' "        do not use --no-verify; fix the check above" >&2
   exit 1
 fi

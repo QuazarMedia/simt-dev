@@ -285,9 +285,23 @@ export function parse(argv) {
         flags.reps = n;
       } else {
         const key = camel(raw);
-        flags[key] = REPEATABLE_FLAGS.has(raw)
-          ? [...(Array.isArray(flags[key]) ? flags[key] : []), value]
-          : value;
+        if (REPEATABLE_FLAGS.has(raw)) {
+          flags[key] = [...(Array.isArray(flags[key]) ? flags[key] : []), value];
+        } else if (flags[key] !== undefined) {
+          // `--root a --root b` kept `b`, so half of what the caller asked for vanished
+          // with no error and no way to tell which half. Only a flag declared repeatable
+          // accumulates (review 0003 Q62); a second value for any other is a usage error.
+          return {
+            ok: false,
+            error: usage(
+              `--${raw} was given twice; it takes one value (repeatable: ${[...REPEATABLE_FLAGS]
+                .map((name) => `--${name}`)
+                .join(', ')})`,
+            ),
+          };
+        } else {
+          flags[key] = value;
+        }
       }
       continue;
     }

@@ -248,9 +248,10 @@ const output = {
       workspace: { type: 'string' },
       body: { type: ['string', 'null'] },
       bodyFrom: { type: 'string' },
-      bodyText: { type: 'string' },
+      bodyText: { type: ['string', 'null'] },
+      reason: { type: ['string', 'null'], description: 'why there is no body, when there is none' },
     },
-    required: ['name', 'bytes', 'bodyFrom', 'requires', 'variants'],
+    required: ['name', 'bytes', 'body', 'bodyFrom', 'bodyText', 'reason', 'requires', 'variants'],
   },
   skills_find: {
     type: 'object',
@@ -426,6 +427,7 @@ const output = {
       cut: { type: 'array', items: { type: 'string' } },
       sections: { type: 'object', additionalProperties: { type: 'array', items: { type: 'string' } } },
       text: { type: 'string' },
+      note: { type: ['string', 'null'] },
     },
     required: ['root', 'kind', 'basis', 'task', 'scope', 'budget', 'bytes', 'before', 'floorHeld', 'cut', 'sections', 'text'],
   },
@@ -627,12 +629,18 @@ export const TOOLS = [
     async run(args) {
       const root = rootOf(args);
       const facts = await skillsShowFacts(root, args?.name, args ?? {});
+      // The schema promises `body: null` when there is no body, and this used to hand the
+      // prose that says so to the field a client tests for null: a caller checking `body`
+      // for null read a paragraph as a body (Q56). The prose moves to `reason`, which is
+      // where a model looks for what to do about it.
+      const missing = typeof facts.bodyText === 'string' && facts.bodyText.startsWith('(body unavailable');
       return {
         ...facts.skill,
         workspace: facts.workspace,
-        body: facts.body,
+        body: missing ? null : facts.body,
         bodyFrom: facts.bodyFrom,
-        bodyText: facts.bodyText,
+        bodyText: missing ? null : facts.bodyText,
+        reason: missing ? facts.bodyText : null,
       };
     },
   },
@@ -905,7 +913,37 @@ export const TOOLS = [
         build: false,
       });
       if (result.error) throw Object.assign(new Error('the index could not be read'), { remedy: `run: ${CLI} index` });
-      if (result.cold) throw Object.assign(new Error('this repository has no index to answer from'), { remedy: `run: ${CLI} index` });
+      // A repository with no index is not a failed call. Every surface points here first,
+      // so the one tool told to be the entry point must answer in a repository that has
+      // never been indexed - it falls back to the skill packet, which is read from the
+      // package rather than the tree, and names the command that unlocks the rest (Q56).
+      if (result.cold) {
+        const task = typeof args?.task === 'string' ? args.task : '';
+        const facts = await skillsBriefFacts(root, { ...(args ?? {}), task });
+        // Through JSON once, so the packet carries exactly what the text block shows: a
+        // property whose value is `undefined` survives `stringify` as nothing at all, and
+        // the two blocks would then describe different objects.
+        const text = JSON.stringify(facts, null, 2);
+        const packet = JSON.parse(text);
+        const size = Buffer.byteLength(text);
+        return {
+          root,
+          kind: 'skills',
+          basis: 'registry',
+          task,
+          scope: [],
+          budget,
+          bytes: size,
+          before: size,
+          // The skill packet is one document and is not cut to fit: saying the floor held
+          // when the answer is over it is the class of claim this review exists to remove.
+          floorHeld: size <= budget,
+          cut: size <= budget ? [] : ['text'],
+          sections: { skills: (packet.resolved ?? []).map((s) => s.name) },
+          text,
+          note: `no index here, so this is the skill packet; run: ${CLI} index for the repository packet`,
+        };
+      }
       return {
         root: result.root,
         kind: result.kind,

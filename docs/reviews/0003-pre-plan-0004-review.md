@@ -146,7 +146,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q45 | `bench variants` ranks on a NaN cost and locks the winner | P1 | F | bench | S | — | Complete | 0f28a74dcb49f62e25d2a3138f8cae4ca2eea91c · test: node --test test/variants.test.mjs |
 | Q46 | Bench stats: reps paired as independent, missing cost = $0, harness/model pooled, no multiplicity control | P1 | F | bench | M | Q45 | Complete | cd6a9edda0ba4b1fc7dba80f097cb8c659df806c · test: node --test test/bench.test.mjs test/variants.test.mjs test/advice.test.mjs test/deadcode.test.mjs |
 | Q47 | Bench timeouts don't kill grandchildren and aren't recorded; one failure aborts the batch | P1 | F | bench | S | Q72 | Queued | |
-| Q48 | Bench corpus not portable; re-mine silently replaces it; Gradle/Maven graders read nothing | P1 | F | bench | M | — | Queued | |
+| Q48 | Bench corpus not portable; re-mine silently replaces it; Gradle/Maven graders read nothing | P1 | F | bench | M | — | Complete | 858e833bf322b47d4e7e3907e4145e5542ffa99a · test: node --test test/bench.test.mjs |
 | Q49 | Bench arms measure the wrong thing: `brief` arm, probes, `gold` default, agent can reach the vault | P1 | F | bench | M | — | Queued | |
 | Q50 | `compare` learning reads ablation from the wrong path | P1 | F | compare | S | — | Complete | 386244b3facb8d8ba2140327ce84df62251a9385 · test: node --test test/compare.test.mjs test/deadcode.test.mjs |
 | Q51 | zsh completion never completes flags | P1 | F | completions | S | — | Complete | 4be9e7bb65b14a2538df8ba04f8809c6f1bd404a · test: node --test test/completions.test.mjs |

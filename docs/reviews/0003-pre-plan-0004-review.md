@@ -143,7 +143,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q42 | A stale index is served with no warning | P1 | F | index | S | — | Queued | |
 | Q43 | FTS drops text past 24k chars / 600 tokens and all non-Latin text; `kind`/`ref` searchable; no LIMIT | P1 | F | index | M | Q44 | Complete | 7027dd6 · test: node --test test/index.test.mjs |
 | Q44 | Index DB has no versioning/migration; read errors look like an empty index | P1 | A | index | M | — | Queued | |
-| Q45 | `bench variants` ranks on a NaN cost and locks the winner | P1 | F | bench | S | — | Queued | |
+| Q45 | `bench variants` ranks on a NaN cost and locks the winner | P1 | F | bench | S | — | Complete | 0f28a74dcb49f62e25d2a3138f8cae4ca2eea91c · test: node --test test/variants.test.mjs |
 | Q46 | Bench stats: reps paired as independent, missing cost = $0, harness/model pooled, no multiplicity control | P1 | F | bench | M | Q45 | Queued | |
 | Q47 | Bench timeouts don't kill grandchildren and aren't recorded; one failure aborts the batch | P1 | F | bench | S | Q72 | Queued | |
 | Q48 | Bench corpus not portable; re-mine silently replaces it; Gradle/Maven graders read nothing | P1 | F | bench | M | — | Queued | |

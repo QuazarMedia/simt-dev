@@ -1,6 +1,6 @@
 # ADR-009 — Skills are `<name>/SKILL.md` with mandatory frontmatter
 
-Status: **accepted** · 2026-10-05 · affects all repos
+Status: **accepted** · 2026-10-05 · affects all repos · ruling 4 superseded by ADR-112
 
 ## Context
 

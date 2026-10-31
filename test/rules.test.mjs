@@ -140,7 +140,10 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // ruling 3's file name is superseded, and the parser reads the claim there.
   // (The lint reads a stricter shape and stays quiet — the claim lives in the
   // possessive the house style reserves for the superseded record's own note.)
+  // ADR-009 joined when ADR-112 landed: its status line now states that ruling 4
+  // is superseded, and the parser reads the claim there.
   assert.deepEqual(shapes, [
+    'ADR-009',
     'ADR-016',
     'ADR-021',
     'ADR-023',
@@ -256,7 +259,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // names would not be an argument a maintainer can act on. ADR-111 joined for the same
   // reason once more: the ruling is ABOUT the one agent file the tool ships, and a
   // decision that the source of truth is one file without naming it would not be an
-  // argument a maintainer can act on.
+  // argument a maintainer can act on. ADR-112 joined for the same reason once more:
+  // the ruling is ABOUT the graph file, and a decision that membership in it is a
+  // statement about the package, not about existence, without naming
+  // `graph/skills.graph.json` would not be an argument a maintainer can act on.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -277,6 +283,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-106',
     'ADR-110',
     'ADR-111',
+    'ADR-112',
   ]);
 });
 

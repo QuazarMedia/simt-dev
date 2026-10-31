@@ -79,7 +79,13 @@ async function actionsRepo(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-ci-'));
   temps.push(root);
   await exec('git', ['init', '-q', '.'], { cwd: root });
-  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fx', private: true }, null, 2));
+  // A repo that has completed adoption pins the tool before the gate can run from
+  // node_modules. Without the pin, `check` correctly reports an unresolvable gate;
+  // leaving it out made these tests depend on the author's global `simt` (ADR-031).
+  await writeFile(
+    join(root, 'package.json'),
+    JSON.stringify({ name: 'fx', private: true, devDependencies: { [PACKAGE_NAME]: '0.0.0' } }, null, 2),
+  );
   await mkdir(join(root, WORKFLOWS_DIR), { recursive: true });
   await writeFile(join(root, WORKFLOWS_DIR, 'build.yml'), 'name: build\n');
   for (const [name, body] of Object.entries(files)) {
@@ -94,7 +100,10 @@ async function plainRepo() {
   const root = await mkdtemp(join(tmpdir(), 'simt-ci-'));
   temps.push(root);
   await exec('git', ['init', '-q', '.'], { cwd: root });
-  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fx', private: true }, null, 2));
+  await writeFile(
+    join(root, 'package.json'),
+    JSON.stringify({ name: 'fx', private: true, devDependencies: { [PACKAGE_NAME]: '0.0.0' } }, null, 2),
+  );
   return root;
 }
 

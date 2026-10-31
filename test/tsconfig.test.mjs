@@ -37,7 +37,9 @@ async function scratch() {
 /** A repo with TypeScript sources, which is the only thing that makes the strictness findings relevant. */
 async function tsRepo(tsconfig = null) {
   const root = await scratch();
-  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'svc' }) + '\n');
+  // Adoption pins the gate before it can resolve from node_modules; without the pin
+  // `check` is correctly red, and the test would only pass with a global `simt`.
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'svc', devDependencies: { 'simt-dev': '0.0.0' } }) + '\n');
   await mkdir(join(root, 'src'), { recursive: true });
   await writeFile(join(root, 'src', 'a.ts'), 'export const a: number = 1;\n');
   if (tsconfig !== null) await writeFile(join(root, TSCONFIG_FILE), tsconfig);
@@ -47,7 +49,7 @@ async function tsRepo(tsconfig = null) {
 /** A repo with no TypeScript anywhere, where the base file would be read by nothing. */
 async function jsRepo() {
   const root = await scratch();
-  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'svc' }) + '\n');
+  await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'svc', devDependencies: { 'simt-dev': '0.0.0' } }) + '\n');
   await writeFile(join(root, 'index.js'), 'module.exports = 1;\n');
   return root;
 }
@@ -56,6 +58,10 @@ async function jsRepo() {
 async function pyRepo() {
   const root = await scratch();
   await writeFile(join(root, 'pyproject.toml'), '[project]\nname = "svc"\n');
+  // No package.json to pin in, so the gate runs from the release binary the workflow
+  // installs into the repository. Its presence is what makes `check` green here.
+  await mkdir(join(root, '.simt', 'bin'), { recursive: true });
+  await writeFile(join(root, '.simt', 'bin', 'simt'), '');
   return root;
 }
 

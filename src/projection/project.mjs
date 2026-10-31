@@ -313,7 +313,10 @@ export async function checkTargets(root, flags = {}) {
   // can still see `simt` on its own PATH — a global install CI may share — so
   // it stays silent then rather than crying wolf about a resolution it cannot
   // disprove. The remedy names the repo's own manager, never a bare npm guess.
-  if (workflowPlan.action !== 'create' && workflowPlan.action !== 'skip') {
+  // simt-dev's own copy is exempt: it runs this checkout directly and never asks the
+  // locator to find a binary, so a machine without `simt` on PATH is not evidence that
+  // the gate cannot start. The consumer copy is not exempt, because its locator does.
+  if (!workflowPlan.own && workflowPlan.action !== 'create' && workflowPlan.action !== 'skip') {
     const unresolvable = await workflowResolvable(root);
     if (unresolvable) findings.push(unresolvable);
   }

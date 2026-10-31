@@ -213,6 +213,17 @@ function fitJsonArrays(payload, maxBytes, pretty) {
  */
 let accumulated = [];
 
+// The path the dispatcher resolved. A command should not restate it: the ones that did
+// restated it wrongly (`plugin` printed `plugin claude`, `sync` printed `sync --check`),
+// and a document whose `command` disagrees with the argv that produced it is worse than
+// one with no `command` at all (review 0003 Q65).
+let canonicalCommand = null;
+
+/** Set the command path every JSON document will carry, or clear it with null. */
+export function jsonCommand(path) {
+  canonicalCommand = path ?? null;
+}
+
 /** Record a warning for the document this run prints. */
 export function warn(message) {
   accumulated = [...accumulated, message];
@@ -243,7 +254,11 @@ export function emitJson(value, { stream = process.stdout, pretty = prettyDefaul
     accumulated.length > 0 && value !== null && typeof value === 'object' && !Array.isArray(value) && value.notices === undefined
       ? { ...value, notices: accumulated }
       : value;
-  const payload = withSchemaVersion(carried);
+  const stamped =
+    canonicalCommand !== null && carried !== null && typeof carried === 'object' && !Array.isArray(carried)
+      ? { ...carried, command: canonicalCommand }
+      : carried;
+  const payload = withSchemaVersion(stamped);
   const text = `${stringifyJson(payload, pretty)}\n`;
   // JSON is never byte-truncated: a cut document parses as a lie, and exit 0 calls it
   // true. Arrays shrink with a `truncated` record naming what lost how much, and a

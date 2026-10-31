@@ -8,6 +8,7 @@
 
 import {
   EXIT,
+  jsonCommand,
   emit,
   emitJson,
   fail,
@@ -275,6 +276,8 @@ export async function dispatch(argv) {
   const { flags, positional, parseError } = parseOrExit(argv);
   // One run, one set of notices: a process can dispatch repeatedly (review 0003 Q62).
   clearWarnings();
+  // Cleared per run for the same reason the notices are: a process can dispatch twice.
+  jsonCommand(null);
 
   // The JSON shape is decided once, here, and every command inherits it. Threading a
   // `--pretty` through twenty-five call sites would mean twenty-five places to forget,
@@ -311,6 +314,9 @@ export async function dispatch(argv) {
   if (path === null) {
     return fail(`unknown command \`${[first, second].filter(Boolean).join(' ')}\``, EXIT.USAGE);
   }
+
+  // One path, stated once, by the only code that knows which one resolved.
+  jsonCommand(path);
 
   const args = positional.slice(offset);
 

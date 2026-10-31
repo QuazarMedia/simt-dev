@@ -1,6 +1,6 @@
 # Review 0002 — simt-dev at `4c27514`: fixes, enhancements, SIMT adoption, public release
 
-Status: open · 2026-10-06 · re-verified at `cea633a` and again at `228d6c5` on 2026-10-12
+Status: **closed** — 61 rows: 60 Complete, 1 Accepted · 2026-10-06 · re-verified at `cea633a` and again at `228d6c5` on 2026-10-12
 Reviewed at: `4c27514` on `main` (clean worktree, level with `origin/main`), 13 commits after
 review 0001 (`09c596d`)
 Verdict: **PASS**. Every wave-0 and wave-1 slice is Complete, S35 is Complete, and S36 is Complete by ADR-060's measure. What remains open is Wave 3 — the rows that make anyone outside this estate able to adopt the tool: S13, S15, S16, S17, S19, S21, S22, S38-S44, S50, S51. None of them is a defect in what this estate runs; they are the gap between a tool fourteen repositories use and a tool anybody can adopt.

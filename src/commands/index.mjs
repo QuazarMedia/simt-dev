@@ -12,6 +12,7 @@ import {
   emitJson,
   fail,
   note,
+  warn,
   isJson,
   jsonFailMode,
   jsonIndentDefault,
@@ -294,9 +295,9 @@ export async function dispatch(argv) {
     if (!declared || GLOBAL_FLAGS.has(key)) continue;
     const name = key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
     if (declared.has(name)) continue;
-    note(
-      `--${name} is not a flag of \`${path}\`; it was ignored, and naming one this command does not take will be a usage error in the next release`,
-    );
+    const message = `--${name} is not a flag of \`${path}\`; it was ignored, and naming one this command does not take will be a usage error in the next release`;
+    warn(message);
+    if (!isJson(flags)) note(message);
   }
   const load = IMPLEMENTED[path];
   if (!load) return fail(`unknown command \`${path}\``, EXIT.USAGE);

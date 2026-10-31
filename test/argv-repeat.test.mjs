@@ -38,3 +38,16 @@ test('a flag the command does not take is named instead of silently ignored', as
   const result = await promisify(execFile)('node', [bin, 'status', '--line', '--frozen']).catch((e) => e);
   assert.match(String(result.stderr), /--frozen is not a flag of `status`/);
 });
+
+test('a flag the command does not take is carried in the JSON document too', async () => {
+  // The note exists so a caller can act; a caller parsing stdout cannot see stderr, so
+  // the same warning rides in the document (review 0003 Q62).
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const { fileURLToPath } = await import('node:url');
+  const bin = fileURLToPath(new URL('../bin/simt.mjs', import.meta.url));
+  const { stdout } = await promisify(execFile)('node', [bin, 'status', '--line', '--frozen', '--json'], { maxBuffer: 16 << 20 }).catch((e) => e);
+  const doc = JSON.parse(stdout);
+  assert.ok(Array.isArray(doc.warnings), 'no warnings array in the document');
+  assert.match(doc.warnings[0], /--frozen is not a flag of `status`/);
+});

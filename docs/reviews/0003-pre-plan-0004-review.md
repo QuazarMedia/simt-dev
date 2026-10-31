@@ -149,7 +149,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q48 | Bench corpus not portable; re-mine silently replaces it; Gradle/Maven graders read nothing | P1 | F | bench | M | — | Queued | |
 | Q49 | Bench arms measure the wrong thing: `brief` arm, probes, `gold` default, agent can reach the vault | P1 | F | bench | M | — | Queued | |
 | Q50 | `compare` learning reads ablation from the wrong path | P1 | F | compare | S | — | Complete | 386244b3facb8d8ba2140327ce84df62251a9385 · test: node --test test/compare.test.mjs test/deadcode.test.mjs |
-| Q51 | zsh completion never completes flags | P1 | F | completions | S | — | Queued | |
+| Q51 | zsh completion never completes flags | P1 | F | completions | S | — | Complete | 4be9e7bb65b14a2538df8ba04f8809c6f1bd404a · test: node --test test/completions.test.mjs |
 | Q52 | Brief/map noise: 47 false "unresolved" commands, false "generated" cautions, `distill` crash, silent no-match | P2 | F | brief | S | — | Queued | |
 | Q53 | Git dispatcher/shim robustness: no gate timeout, 8 MB buffer = fail, no `-z`, spaces, no `node` check | P2 | F | hooks | M | — | Queued | |
 | Q54 | No runtime Node version check (npm only warns, pip never checks) | P2 | F | bin | S | — | Queued | |

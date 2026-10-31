@@ -35,23 +35,47 @@ export function renderLocator(command, { subject = CLI, remedy = `REMEDY run: np
   const D = '$';
   return `# ${D}${BIN_ENV} must name ONE program: an executable on PATH, or a .mjs entry
 # point to hand to node. It cannot be a command line, because there is no safe way
-# to split one in sh without eval, and a value with a space is refused rather than
-# half-executed - running from a source checkout is normal for anyone working on
-# this project itself, so this path has to work with no install step.
+# to split one in sh without eval, and a value with a space that names no file is
+# refused rather than half-executed - running from a source checkout is normal for
+# anyone working on this project itself, so this path has to work with no install step.
+#
+# Every .mjs entry point goes through run_node, which checks for node first: a GUI
+# client's PATH often carries none (nvm is sourced only in an interactive shell), and
+# exec node there fails with 127 and no explanation of what to install.
+run_node() {
+  if ! command -v node >/dev/null 2>&1; then
+    echo "${CLI}: cannot find node to run ${D}1." >&2
+    echo "  the hook runs a .mjs entry point through node; install Node >= 22.20.0," >&2
+    echo "  or set ${BIN_ENV} to an executable ${CLI}" >&2
+    exit 1
+  fi
+  entry="${D}1"
+  shift
+  exec node "${D}entry" "${D}@"
+}
+
 run_simt_dev() {
   case "${D}1" in
     *' '*)
+      # A space is ambiguous as text and unambiguous as a file: a value that names
+      # something on disk is a path in a directory with a space, and runs as one.
+      if [ -f "${D}1" ]; then
+        case "${D}1" in
+          *.mjs)
+            run_node "${D}@"
+            ;;
+          *)
+            exec "${D}@"
+            ;;
+        esac
+      fi
       echo "${CLI}: ${D}${BIN_ENV} names a command line, not a program." >&2
       echo "  set it to a single executable or a .mjs path, e.g." >&2
       echo "    ${BIN_ENV}=/path/to/checkout/${BIN_REL}" >&2
       exit 1
       ;;
     *.mjs)
-      # shift first: "${D}@" still holds ${D}1, which would pass the program path to
-      # itself as the first argument.
-      program="${D}1"
-      shift
-      exec node "${D}program" "${D}@"
+      run_node "${D}@"
       ;;
     *)
       exec "${D}1" "${D}@"
@@ -64,7 +88,7 @@ if [ -n "${D}{${BIN_ENV}:-}" ]; then
 fi
 
 if [ -f "${D}ROOT/node_modules/${PACKAGE_NAME}/${BIN_REL}" ]; then
-  exec node "${D}ROOT/node_modules/${PACKAGE_NAME}/${BIN_REL}" ${command}
+  run_node "${D}ROOT/node_modules/${PACKAGE_NAME}/${BIN_REL}" ${command}
 fi
 
 # The binary this repository downloaded for itself: the pinned bytes, no node.

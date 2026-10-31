@@ -77,7 +77,7 @@ export async function agentHookCommand(args, flags) {
   // dynamic import that only this event opens.
   if (event === 'prompt-submit') {
     const { deliverPrompt } = await import('../agenthooks/prompt.mjs');
-    const delivered = await deliverPrompt(row, payload);
+    const delivered = await deliverPrompt(row, payload, { root: flags.root });
     if (delivered.skipped) {
       note(`note     ${id}: no packet delivered (${delivered.skipped})`);
       return EXIT.OK;

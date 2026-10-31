@@ -60,7 +60,7 @@ export async function promptOptIn(root) {
  * a minute while a repository is walked — is how the hook gets uninstalled, and the
  * packet is not worth a prompt that cannot be typed.
  */
-export async function deliverPrompt(row, payload) {
+export async function deliverPrompt(row, payload, { root: flagRoot } = {}) {
   const task = promptText(row, payload);
   if (task === null) return { skipped: 'the payload carries no prompt this harness documents' };
 
@@ -68,7 +68,10 @@ export async function deliverPrompt(row, payload) {
   // and resolved to the repository's top level the same way: the manifest, like the
   // lease file, is a repository-relative fact, and a prompt submitted from a
   // subdirectory must find it (review 0003 Q16).
-  const root = repoRoot(factsFrom(row, payload).root);
+  // `--root` outranks the payload here as it does on the decision path: a packaged hook
+  // runs from the plugin directory, so the payload's cwd would name the wrong repository
+  // and find no manifest, which delivered nothing and looked like an opt-out.
+  const root = repoRoot(factsFrom(row, payload, { root: flagRoot }).root);
   const optIn = await promptOptIn(root);
   if (!optIn.optedIn) return { skipped: optIn.why };
 

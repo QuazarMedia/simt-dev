@@ -18,7 +18,7 @@
 //   Report what did not run. The summary names every gate, its disposition and
 //   its reason, so "passed" can never be mistaken for "only some of it passed".
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, matchesGlob, resolve, sep } from 'node:path';
@@ -34,6 +34,115 @@ import { hasTestEvidence, readLedger, recordRun } from '../ledger/index.mjs';
 import { renderFindings, scanStaged } from '../secrets.mjs';
 
 const exec = promisify(execFile);
+
+/**
+ * The default bound on one gate, in seconds, and the grace a killed gate gets before
+ * SIGKILL. A hook that runs on every commit needs a ceiling: a test runner waiting on
+ * a socket that never closes blocks the commit with no output and no way to tell a
+ * hang from slow work. `gates.timeout` raises or removes it per repository.
+ */
+const DEFAULT_GATE_TIMEOUT_SECONDS = 600;
+const KILL_GRACE_MS = 5000;
+
+/**
+ * How much of a gate's output a report can carry. This is a bound on what is KEPT, not
+ * on what the process may write: a gate whose output exceeded execFile's buffer used to
+ * be reported `failed` although it exited 0.
+ */
+const GATE_OUTPUT_TAIL_BYTES = 64 * 1024;
+
+function tailCollector() {
+  let kept = Buffer.alloc(0);
+  let dropped = 0;
+  return {
+    push(chunk) {
+      kept = Buffer.concat([kept, chunk]);
+      if (kept.length > GATE_OUTPUT_TAIL_BYTES) {
+        dropped += kept.length - GATE_OUTPUT_TAIL_BYTES;
+        kept = kept.subarray(kept.length - GATE_OUTPUT_TAIL_BYTES);
+      }
+    },
+    text: () => kept.toString('utf8'),
+    dropped: () => dropped,
+  };
+}
+
+/**
+ * Signal the gate's whole process group. A test runner spawns workers of its own, and
+ * signalling only the leader leaves them holding the pipes this function is waiting on.
+ * `detached` in the spawn below is what makes the group exist.
+ */
+function signalTree(child, signal) {
+  try {
+    process.kill(-child.pid, signal);
+  } catch {
+    try {
+      child.kill(signal);
+    } catch {
+      // Already gone: a second signal has nothing to reach.
+    }
+  }
+}
+
+/**
+ * Run one gate to completion, keeping its exit code and the tail of what it printed.
+ *
+ * `timeoutMs` of 0 means no bound, which is what `gates.timeout: 0` asks for and what
+ * the manifest does not have to say. Output is collected in full while the process
+ * runs and only the tail is retained, so a noisy passing gate passes.
+ */
+async function runBounded(argv, { cwd, env, timeoutMs }) {
+  return await new Promise((settle) => {
+    let child;
+    try {
+      child = spawn(argv[0], argv.slice(1), { cwd, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    } catch (error) {
+      settle({ code: 1, stdout: '', stderr: String(error.message ?? error), timedOut: false, dropped: 0 });
+      return;
+    }
+    const out = tailCollector();
+    const err = tailCollector();
+    let timedOut = false;
+    let timer = null;
+    let killer = null;
+    let done = false;
+    const finish = (code) => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      clearTimeout(killer);
+      settle({ code, stdout: out.text(), stderr: err.text(), timedOut, dropped: out.dropped() + err.dropped() });
+    };
+    child.stdout?.on('data', (chunk) => out.push(chunk));
+    child.stderr?.on('data', (chunk) => err.push(chunk));
+    // A missing binary emits `error` and no `close`; the message is the only evidence.
+    child.on('error', (error) => {
+      err.push(Buffer.from(String(error.message ?? error)));
+      finish(1);
+    });
+    child.on('close', (code, signal) => finish(typeof code === 'number' ? code : signal === null ? 0 : 1));
+    if (timeoutMs > 0) {
+      timer = setTimeout(() => {
+        timedOut = true;
+        signalTree(child, 'SIGTERM');
+        killer = setTimeout(() => signalTree(child, 'SIGKILL'), KILL_GRACE_MS);
+      }, timeoutMs);
+    }
+  });
+}
+
+/**
+ * The bound for one gate, in milliseconds. A number applies to every gate; a map applies
+ * per name, the shape `gates.cwd` already has. A value that is neither a positive whole
+ * number of seconds nor 0 falls back to the default rather than removing the bound: an
+ * unreadable declaration must not be the quiet way to disable the ceiling.
+ */
+function gateTimeoutMs(declared, name) {
+  const value = declared !== null && typeof declared === 'object' ? declared[name] : declared;
+  if (value === 0) return 0;
+  if (Number.isInteger(value) && value > 0) return value * 1000;
+  return DEFAULT_GATE_TIMEOUT_SECONDS * 1000;
+}
 
 /** Gates that are known but not required for the event to pass. */
 const DEFAULT_EVENTS = { 'pre-commit': 'preCommit', 'pre-push': 'prePush' };
@@ -149,13 +258,15 @@ export async function classifyPush(root, refs, { maxCommits, paths }) {
     let count, names;
     try {
       ({ stdout: count } = await exec('git', ['rev-list', '--count', `${remoteSha}..${localSha}`], { cwd: root }));
-      ({ stdout: names } = await exec('git', ['diff', '--name-only', `${remoteSha}..${localSha}`], { cwd: root }));
+      ({ stdout: names } = await exec('git', ['diff', '--name-only', '-z', `${remoteSha}..${localSha}`], { cwd: root }));
     } catch (error) {
       return { docsOnly: false, reason: `the push could not be diffed: ${String(error.stderr ?? error.message).trim()}` };
     }
     commits += Number(count.trim());
-    for (const f of names.split('\n')) {
-      const name = f.trim();
+    // `-z` and no trimming: a path is NUL-terminated because a path can contain a
+    // newline, and git quotes such a name in the line-terminated form, so splitting on
+    // newlines compares a quoted path against an unquoted glob and never matches.
+    for (const name of names.split('\0')) {
       if (name !== '') files.add(name);
     }
   }
@@ -389,6 +500,9 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
   // mean re-reading the command string to find out where anything runs, and a manifest
   // written by an older release would have to be rewritten to gain the capability.
   const cwds = manifest?.gates?.cwd ?? {};
+  // `gates.timeout` bounds one gate, in seconds: a number for every gate, or a map by
+  // name like `gates.cwd`. Absent means the default; 0 means no bound, declared.
+  const timeouts = manifest?.gates?.timeout;
   const results = [];
   // What the format gate rewrote, so restage touches those files and nothing else.
   let formatted = [];
@@ -521,8 +635,9 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
       cwd = resolved;
     }
 
+    const timeoutMs = gateTimeoutMs(timeouts, name);
     const started = Date.now();
-    const outcome = await runGate(resolution, cwd);
+    const outcome = await runGate(resolution, cwd, timeoutMs);
     // The ledger is not the gate. A tree that cannot be named leaves no line, and the
     // claim check then finds nothing, which is the direction that cannot invent a run.
     try {
@@ -543,11 +658,18 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
     } catch {
       // Recorded by absence: the next evidence read for this tree has no line.
     }
+    // A killed gate has no exit code of its own (`signal` instead), so the reason is
+    // stated rather than left to `exit 1`, and the remedy says how to change the bound.
     results.push({
       name,
       status: outcome.code === 0 ? 'passed' : 'failed',
-      detail: `${resolution.detail}${outcome.code === 0 ? '' : `: exit ${outcome.code}`}`,
+      detail: outcome.timedOut
+        ? `${resolution.detail}: timed out after ${Math.round(timeoutMs / 1000)} s`
+        : `${resolution.detail}${outcome.code === 0 ? '' : `: exit ${outcome.code}`}`,
       output: outcome.code === 0 ? '' : tail(outcome.stderr || outcome.stdout),
+      ...(outcome.timedOut
+        ? { remedy: `fix the hang, raise gates.timeout to give it longer, or set gates.timeout to 0 to remove the bound` }
+        : {}),
       adr: gate.adr,
       exitCode: outcome.code,
     });
@@ -661,13 +783,8 @@ export function renderGateReport(event, declared, result) {
   return lines;
 }
 
-async function run(argv, cwd, env) {
-  try {
-    const { stdout, stderr } = await exec(argv[0], argv.slice(1), { cwd, env, maxBuffer: 8 * 1024 * 1024 });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: typeof error.code === 'number' ? error.code : 1, stdout: error.stdout ?? '', stderr: error.stderr ?? String(error.message ?? error) };
-  }
+async function run(argv, cwd, env, timeoutMs) {
+  return await runBounded(argv, { cwd, env, timeoutMs });
 }
 
 /** The built-in gates this dispatcher can run, by name. */
@@ -738,24 +855,15 @@ async function runBuiltinGate(name, { root, staged, options }) {
  * that the two sources stay distinguishable, which is why this is a separate branch
  * rather than a flag on `run`.
  */
-async function runGate(resolution, cwd) {
+async function runGate(resolution, cwd, timeoutMs) {
   // The push override is for the push itself, not for the gates the hook runs.
   // A test that asserts a push is denied sees the override and fails.
   const env = { ...process.env };
   delete env.SIMT_ALLOW;
   if (resolution.shell === true && typeof resolution.command === 'string') {
-    try {
-      const { stdout, stderr } = await exec('sh', ['-c', resolution.command], { cwd, env, maxBuffer: 8 * 1024 * 1024 });
-      return { code: 0, stdout, stderr };
-    } catch (error) {
-      return {
-        code: typeof error.code === 'number' ? error.code : 1,
-        stdout: error.stdout ?? '',
-        stderr: error.stderr ?? String(error.message ?? error),
-      };
-    }
+    return await run(['sh', '-c', resolution.command], cwd, env, timeoutMs);
   }
-  return run(resolution.argv, cwd, env);
+  return await run(resolution.argv, cwd, env, timeoutMs);
 }
 
 async function readPkg(root) {
@@ -769,8 +877,10 @@ async function readPkg(root) {
 /** Staged paths, or [] when git cannot answer (an unborn branch, for instance). */
 export async function stagedFiles(root) {
   try {
-    const { stdout } = await exec('git', ['diff', '--cached', '--name-only', '--diff-filter=ACMR'], { cwd: root });
-    return stdout.split('\n').map((s) => s.trim()).filter(Boolean);
+    // `-z`: git quotes a path containing a newline or a quote in the line form, and a
+    // quoted name is not the path the index holds, so it never matches a staged blob.
+    const { stdout } = await exec('git', ['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR'], { cwd: root });
+    return stdout.split('\0').filter(Boolean);
   } catch {
     return [];
   }
@@ -786,8 +896,8 @@ export async function stagedFiles(root) {
  */
 async function unstagedFiles(root) {
   try {
-    const { stdout } = await exec('git', ['diff', '--name-only'], { cwd: root });
-    return new Set(stdout.split('\n').map((s) => s.trim()).filter(Boolean));
+    const { stdout } = await exec('git', ['diff', '--name-only', '-z'], { cwd: root });
+    return new Set(stdout.split('\0').filter(Boolean));
   } catch {
     return new Set();
   }

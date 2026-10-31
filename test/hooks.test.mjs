@@ -12,7 +12,7 @@ import { after, test } from 'node:test';
 import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
 import { hasScript, knownGates, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
-import { classifyPush, parsePushedRefs, renderGateReport, runGates } from '../src/hooks/dispatcher.mjs';
+import { classifyPush, parsePushedRefs, renderGateReport, runGates, stagedFiles } from '../src/hooks/dispatcher.mjs';
 import { recordRun } from '../src/ledger/index.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 import { readCapability } from '../src/hooks/capability.mjs';
@@ -267,6 +267,59 @@ test('shim: SIMT_DEV_BIN naming a command line is refused, not half-executed', a
   assert.equal(result.code, 1);
 });
 
+test('shim: a .mjs entry point without node on PATH says what to install', async () => {
+  // Regression: a GUI client's PATH often carries no node (nvm is sourced only in an
+  // interactive shell), and `exec node` there failed with 127 and no remedy. The
+  // shim is run here with a PATH that holds git and nothing else.
+  const root = await mkdtemp(join(tmpdir(), 'simt-shim-'));
+  temps.push(root);
+  await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
+  const only = await mkdtemp(join(tmpdir(), 'simt-path-'));
+  temps.push(only);
+  const git = (await exec('sh', ['-c', 'command -v git'])).stdout.trim();
+  await exec('ln', ['-s', git, join(only, 'git')]);
+
+  const path = join(root, fileFor('pre-commit'));
+  await mkdir(join(path, '..'), { recursive: true });
+  await writeFile(path, renderShim('pre-commit'));
+  await chmod(path, 0o755);
+
+  // The shell is named by absolute path: `sh` itself is resolved through the PATH the
+  // child is given, so a PATH with only git would fail to start the script at all.
+  const result = await exec('/bin/sh', [path], {
+    cwd: root,
+    env: { ...process.env, SIMT_DEV_BIN: BIN, PATH: only },
+  }).catch((error) => ({ stderr: error.stderr, code: error.code }));
+
+  assert.match(result.stderr, /cannot find node/);
+  assert.match(result.stderr, /install Node >= 22\.20\.0/);
+  assert.equal(result.code, 1);
+});
+
+test('shim: SIMT_DEV_BIN naming a path with a space is run, not refused', async () => {
+  // A checkout under "~/My Projects" is a path, and the old refusal read its space as
+  // a command line. A value that names a file is one program.
+  const root = await mkdtemp(join(tmpdir(), 'simt-shim-'));
+  temps.push(root);
+  await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
+  await writeFile(join(root, MANIFEST_FILE), JSON.stringify({ gates: { preCommit: [], prePush: [] } }));
+  const spaced = join(root, 'with space');
+  await mkdir(spaced, { recursive: true });
+  const entry = join(spaced, 'simt.mjs');
+  await exec('ln', ['-s', BIN, entry]);
+
+  const path = join(root, fileFor('pre-commit'));
+  await mkdir(join(path, '..'), { recursive: true });
+  await writeFile(path, renderShim('pre-commit'));
+  await chmod(path, 0o755);
+
+  const { stdout } = await exec('sh', [path], {
+    cwd: root,
+    env: { ...process.env, SIMT_DEV_BIN: entry, PATH: process.env.PATH },
+  });
+  assert.match(stdout, /^hooks\s+pre-commit/m);
+});
+
 test('shim: does not forward git arguments into argv', () => {
   // pre-push passes a remote name and URL; forwarding them would make argv
   // read them as command arguments.
@@ -447,6 +500,65 @@ test('resolve: formattable extensions include what the estate actually uses', ()
 });
 
 // ---------------------------------------------------------------- dispatcher
+
+test('agenthook: prompt-submit reads the repository --root names, not the payload cwd', async () => {
+  // Regression: the delivery resolved its root from the payload alone, so a packaged
+  // hook - running in the plugin directory - found no manifest and delivered nothing,
+  // which reads exactly like a repository that opted out.
+  const root = await fixture({ manifest: { brief: {} } });
+  const elsewhere = await mkdtemp(join(tmpdir(), 'simt-cwd-'));
+  temps.push(elsewhere);
+  const payload = join(root, 'payload.json');
+  await writeFile(payload, JSON.stringify({ prompt: 'add a hook', cwd: elsewhere }));
+  const { stdout, stderr } = await exec(
+    '/bin/sh',
+    ['-c', `"${process.execPath}" "${BIN}" agent-hook prompt-submit --harness claude --root "${root}" < "${payload}"`],
+    { cwd: elsewhere },
+  );
+  // A delivery that delivers nothing says why on stderr and still exits 0.
+  const out = stdout + stderr;
+  assert.doesNotMatch(out, /no manifest/);
+  assert.match(out, /the index is empty/);
+});
+
+test('dispatcher: gates.timeout bounds a hung gate and says which bound it hit', async () => {
+  // The defect: a gate waiting on something that never closes blocked the commit with
+  // no output and no way to tell a hang from slow work.
+  const manifest = { gates: { preCommit: ['test'], prePush: [], timeout: { test: 1 }, commands: { test: 'sleep 30' } } };
+  const root = await fixture({ manifest });
+  const started = Date.now();
+  const result = await runGates('pre-commit', { root, manifest });
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'failed');
+  assert.match(gate.detail, /timed out after 1 s/);
+  assert.match(gate.remedy, /gates\.timeout/);
+  assert.equal(result.failed, true);
+  assert.ok(Date.now() - started < 20_000, 'the bound did not end the run');
+});
+
+test('dispatcher: a passing gate that prints beyond the output cap still passes', async () => {
+  // The defect: execFile rejected the whole run once its buffer filled, so a gate that
+  // printed a lot and exited 0 was reported failed. The cap belongs on what is kept.
+  const root = await fixture({
+    files: { 'noisy.mjs': "process.stdout.write('x'.repeat(9 * 1024 * 1024));" },
+    manifest: { gates: { preCommit: ['test'], prePush: [], commands: { test: 'node noisy.mjs' } } },
+  });
+  const manifest = { gates: { preCommit: ['test'], prePush: [], commands: { test: 'node noisy.mjs' } } };
+  const result = await runGates('pre-commit', { root, manifest });
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'passed');
+  assert.equal(result.failed, false);
+});
+
+test('dispatcher: a staged path containing a newline is read as one path', async () => {
+  // `--name-only` without `-z` quotes such a name, and a quoted name is not the path in
+  // the index: every later membership test compared quotation against reality.
+  const root = await fixture({});
+  const name = 'weird\nname.txt';
+  await writeFile(join(root, name), 'x');
+  await exec('git', ['add', '--', name], { cwd: root });
+  assert.deepEqual(await stagedFiles(root), [name]);
+});
 
 test('dispatcher: an unresolvable gate blocks the event', async () => {
   const root = await fixture({ scripts: {}, manifest: { gates: { preCommit: ['format'], prePush: [] } } });

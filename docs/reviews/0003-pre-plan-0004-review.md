@@ -148,7 +148,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q47 | Bench timeouts don't kill grandchildren and aren't recorded; one failure aborts the batch | P1 | F | bench | S | Q72 | Queued | |
 | Q48 | Bench corpus not portable; re-mine silently replaces it; Gradle/Maven graders read nothing | P1 | F | bench | M | — | Queued | |
 | Q49 | Bench arms measure the wrong thing: `brief` arm, probes, `gold` default, agent can reach the vault | P1 | F | bench | M | — | Queued | |
-| Q50 | `compare` learning reads ablation from the wrong path | P1 | F | compare | S | — | Queued | |
+| Q50 | `compare` learning reads ablation from the wrong path | P1 | F | compare | S | — | Complete | 386244b3facb8d8ba2140327ce84df62251a9385 · test: node --test test/compare.test.mjs test/deadcode.test.mjs |
 | Q51 | zsh completion never completes flags | P1 | F | completions | S | — | Queued | |
 | Q52 | Brief/map noise: 47 false "unresolved" commands, false "generated" cautions, `distill` crash, silent no-match | P2 | F | brief | S | — | Queued | |
 | Q53 | Git dispatcher/shim robustness: no gate timeout, 8 MB buffer = fail, no `-z`, spaces, no `node` check | P2 | F | hooks | M | — | Queued | |

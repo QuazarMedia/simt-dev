@@ -80,13 +80,6 @@ import { GROUP_DEFAULTS, SPEC_PATHS } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI } from '../name.mjs';
 
-/** command path -> implementation sequence step (plan 0002 section 11). */
-// Every command named in plan 0002 section 5 is now implemented, so this map is empty.
-// It stays, rather than being deleted, because the next command should be added here
-// first: a declared-but-unimplemented command must exit UNSUPPORTED with a pointer to
-// its step, never silently succeed with empty output an agent will read as a result.
-const STEPS = new Map([]);
-
 /**
  * Groups whose subcommand may be omitted, and the default for each. Read from the spec
  * (review 0003 Q60) rather than kept here: this was the second copy of a fact the spec
@@ -264,17 +257,6 @@ export async function dispatch(argv) {
     return fail(`unknown command \`${[first, second].filter(Boolean).join(' ')}\``, EXIT.USAGE);
   }
 
-  const step = STEPS.get(path);
-  if (step !== undefined) {
-    // Two things a reader must be able to act on, and neither may name a path inside
-    // simt-dev: they run this tool, not its source tree. The step number is the
-    // stable handle; the file that documents it is an implementation detail.
-    return fail(
-      `\`${CLI} ${path}\` is declared but not implemented`,
-      EXIT.UNSUPPORTED,
-      `implementation step ${step} is not built yet`,
-    );
-  }
   const args = positional.slice(offset);
   const run = IMPLEMENTED[path];
   if (run) return run(args, flags);
@@ -302,7 +284,7 @@ function commandPath(first, second) {
   // `doctor` is not a group and this branch is only reached when `GROUPS.has(first)`.
   // Two lists of the same fact is the defect S15 was about in the help text.
   const key = `${first} ${second}`;
-  if (!STEPS.has(key) && !(key in IMPLEMENTED)) {
+  if (!(key in IMPLEMENTED)) {
     return null;
   }
   return key;

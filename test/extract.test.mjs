@@ -173,6 +173,15 @@ test('namespaces resolve to the one tracked file, and stay specs otherwise (Q40)
   assert.equal(dst('x.rs', 'crate::a::b', 'rust'), 'src/a/b.rs');
   assert.equal(dst('x.rs', 'crate::a::Item', 'rust'), 'src/a.rs');
   assert.equal(dst('x.rs', 'std::io::Read', 'rust'), 'std::io::Read', 'stdlib stays a spec');
+  // A C# `using` names a namespace the project folder carries, so the dotted spec is a
+  // directory and resolves only when that directory holds exactly one file.
+  const cs = new Set(['src/App/Foo/Bar.cs']);
+  assert.equal(resolveImports('x.cs', ['App.Foo'], cs, 'csharp')[0].dst, 'src/App/Foo/Bar.cs');
+  assert.equal(
+    resolveImports('x.cs', ['App.Foo'], new Set([...cs, 'src/App/Foo/Baz.cs']), 'csharp')[0].dst,
+    'App.Foo',
+    'a namespace of several files names no single file',
+  );
   const two = new Set([...files, 'other/kotlin/com/foo/Bar.kt']);
   assert.equal(
     resolveImports('x.kt', ['com.foo.Bar'], two, 'kotlin')[0].dst,

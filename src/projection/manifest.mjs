@@ -433,7 +433,7 @@ function ecosystemCommands(facts = [], capability = null) {
  */
 export function buildManifest({ root, stack = [], sha, version, existing = null, capability = null, surfaces = undefined, facts = [] }) {
   const gates = defaultGates(stack, facts);
-  const limits = defaultLimits(stack);
+  const limits = defaultLimits();
 
   // A re-init must never silently weaken a repo's own declaration: existing
   // limits and gates win over defaults, and only the projection stamp is refreshed.

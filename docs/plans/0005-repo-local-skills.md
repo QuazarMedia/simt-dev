@@ -1,6 +1,6 @@
 # Plan 0005 — Repo-Local Skills
 
-**Status:** in progress · 2026-10-31
+**Status:** implemented · 2026-10-31
 
 ## Scope
 

@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
-import { dirname, resolve } from 'node:path';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
@@ -18,6 +19,7 @@ import {
   syntheticPathFor,
 } from '../src/resolve/resolve.mjs';
 import { nearMatches } from '../src/resolve/near.mjs';
+import { TOOLS } from '../src/mcp/tools.mjs';
 
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -485,4 +487,155 @@ test('nearMatches: limit and max are both honoured', () => {
   // edits and one of anything is a different string.
   assert.deepEqual(nearMatches('slice-commmit', ['slice-comnit']), ['slice-comnit']);
   assert.deepEqual(nearMatches('slice-commmit', ['slice-comnit'], { max: 1 }), []);
+});
+
+// --- S3: repo-local skills (plan 0005) -----------------------------------------
+//
+// A skill that lives in a repo's skill directory and not in the registry was invisible
+// to every `skills` command, and the NOT SELECTED remedy `skills show <name>` 404'd on
+// it. These run through the shipped binary against a scratch repo that owns its own
+// skills, the way a reader in that repo would.
+
+/**
+ * A scratch repo with the given skills in `.agents/skills/` and a `package.json`, so the
+ * fingerprint reports `node` and the local nodes inherit a stack of their own.
+ */
+async function localSkillsRepo(skills) {
+  const dir = await mkdtemp(join(tmpdir(), 'simt-s3-'));
+  for (const [name, body] of Object.entries(skills)) {
+    const file = join(dir, '.agents', 'skills', name, 'SKILL.md');
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, body);
+  }
+  await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'scratch', private: true }) + '\n');
+  return dir;
+}
+
+/** Frontmatter the loader accepts and a body that names the skill, so a test can prove the bytes came from disk. */
+const skillMd = (name, description) =>
+  `---\nname: ${name}\ndescription: "${description}"\n---\n\n# ${name}\n\nDistinctive body marker: ${name}-BODY-42.\n`;
+
+/** `--root` points at the scratch repo; the workspace must not reach into the checkout beside it (ADR-031). */
+const offEnv = () => ({ ...process.env, SIMT_DEV_WORKSPACE: 'off' });
+
+test('resolve: `skills find` returns the repo\'s own skills alongside the registry (S3)', async () => {
+  const root = await localSkillsRepo({
+    'd1-safe-change': skillMd('d1-safe-change', 'Create, review, test, or deploy a D1 schema change.'),
+  });
+  try {
+    const { stdout } = await exec('node', [BIN, 'skills', 'find', 'd1', 'schema', '--root', root], { env: offEnv() });
+    // Both surfaces of one answer: the registry skill that always scored, and the local
+    // one that did not exist for `find` before this slice.
+    assert.match(stdout, /cloudflare/);
+    assert.match(stdout, /d1-safe-change/);
+    assert.match(stdout, /name:d1/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('resolve: `skills brief` inlines the body of a skill the repo owns (S3)', async () => {
+  const root = await localSkillsRepo({
+    'd1-safe-change': skillMd('d1-safe-change', 'Create, review, test, or deploy a D1 schema change.'),
+  });
+  try {
+    const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'd1 schema migration', '--root', root], {
+      env: offEnv(),
+    });
+    assert.match(stdout, /RESOLVED 1 skill/);
+    // The marker is in the SKILL.md this test wrote; if it is here, the body came from
+    // the repo's file, not from a workspace the registry never declared.
+    assert.match(stdout, /d1-safe-change-BODY-42/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('resolve: a weak local match is NOT SELECTED, with the score named (S3)', async () => {
+  // The local node scores 8 for `summary:validate`, below the minimum of 25. The reason
+  // an agent reads must name that score, the same as a registry skill would — a local
+  // skill that is excluded silently is the black box the NOT SELECTED block exists to
+  // prevent.
+  const root = await localSkillsRepo({
+    'maplibre-ui': skillMd('maplibre-ui', 'Build, debug, or validate MapLibre GL JS behavior.'),
+  });
+  try {
+    const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'please validate', '--root', root], {
+      env: offEnv(),
+    });
+    assert.match(stdout, /NOT SELECTED/);
+    assert.match(stdout, /maplibre-ui\s+only summary:validate, which scores 8; 25 is the least score that selects/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('resolve: a local copy of a registry skill ranks once (S3)', async () => {
+  // Keeping both the registry entry and its installed copy would rank one skill twice
+  // and print two lines an agent reads as two skills. The registry entry is canonical.
+  const root = await localSkillsRepo({
+    wrangler: skillMd('wrangler', 'Local copy of the vendored wrangler skill.'),
+  });
+  try {
+    const { stdout } = await exec('node', [BIN, 'skills', 'find', 'wrangler', '--root', root], { env: offEnv() });
+    const lines = stdout.split('\n').filter((line) => /^\s*wrangler\b/.test(line));
+    assert.equal(lines.length, 1, `expected one wrangler line, got:\n${stdout}`);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('resolve: `skills show` resolves a skill the repo owns (S3)', async () => {
+  // The remedy the NOT SELECTED block hands an agent used to 404 on a local name; now
+  // it must print the body from the repo's file.
+  const root = await localSkillsRepo({
+    'd1-safe-change': skillMd('d1-safe-change', 'Create, review, test, or deploy a D1 schema change.'),
+  });
+  try {
+    // A non-zero exit rejects the promise and fails the test; resolving is exit 0.
+    const { stdout } = await exec('node', [BIN, 'skills', 'show', 'd1-safe-change', '--root', root], { env: offEnv() });
+    assert.match(stdout, /body\s+repo\s+.*SKILL\.md/);
+    assert.match(stdout, /d1-safe-change-BODY-42/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('resolve: `skills why` resolves a skill the repo owns (S3)', async () => {
+  const root = await localSkillsRepo({
+    'd1-safe-change': skillMd('d1-safe-change', 'Create, review, test, or deploy a D1 schema change.'),
+  });
+  try {
+    // A non-zero exit rejects the promise and fails the test; resolving is exit 0.
+    const { stdout } = await exec(
+      'node',
+      [BIN, 'skills', 'why', 'd1-safe-change', '--task', 'd1 schema', '--root', root],
+      { env: offEnv() },
+    );
+    // The local node's stack is the repo's own, so the gate is a self-overlap that
+    // passes; the assertion is on the printed verdict, not on the rule.
+    assert.match(stdout, /gate\s+pass/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('resolve: MCP `skills_find` and the CLI answer the local repo identically (S3)', async () => {
+  // The parity rule (Q15) extends to the new `root` input: the tool must not rebuild
+  // the answer, and a second copy that drifts fails here rather than in a reader's
+  // session.
+  const root = await localSkillsRepo({
+    'd1-safe-change': skillMd('d1-safe-change', 'Create, review, test, or deploy a D1 schema change.'),
+  });
+  try {
+    const mcp = await TOOLS.find((t) => t.name === 'skills_find').run({ query: 'd1 schema', root });
+    const { stdout } = await exec('node', [BIN, 'skills', 'find', 'd1', 'schema', '--root', root, '--json'], {
+      env: offEnv(),
+    });
+    const doc = JSON.parse(stdout);
+    const { schemaVersion, ok, command, workspace, ...commandAnswer } = doc;
+    assert.deepEqual(mcp, commandAnswer);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

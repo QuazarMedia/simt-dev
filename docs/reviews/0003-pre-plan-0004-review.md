@@ -183,7 +183,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | **Wave 3 — cleanup, merges, docs, tests** | | | | | | | | |
 | Q81 | Command taxonomy: 42 → ~22 top-level words, with aliases | P2 | C | cli | M | Q60, Q62 | Queued | |
 | Q82 | `status` becomes the aggregate snapshot; `explain` covers policy ids | P2 | C | cli | S | Q81 | Queued | |
-| Q83 | Remove dead code (STEPS map, unreachable entries, double dispatch, unused helpers, dead columns) | P3 | C | cleanup | S | Q60 | Partial | `699a7bc`; node --test test/deadcode.test.mjs test/spec.test.mjs test/help.test.mjs test/unit.test.mjs; STEPS, its unreachable branch and its guard test deleted; the double dispatch, the triple parse, unresolved()/knownGates and the graph schema field are the rest |
+| Q83 | Remove dead code (STEPS map, unreachable entries, double dispatch, unused helpers, dead columns) | P3 | C | cleanup | S | Q60 | Partial | `699a7bc`; node --test test/deadcode.test.mjs test/spec.test.mjs test/help.test.mjs test/unit.test.mjs; STEPS, its unreachable branch and its guard test deleted; the double dispatch, the triple parse, unresolved()/knownGates and the graph schema field are the rest; knownGates() and unresolved() also deleted in 51564ed |
 | Q84 | Retire or demote low-value features from earlier plans (see table) | P2 | C | cleanup | M | — | Queued | |
 | Q85 | Merge the two context meters; merge `review` and `bench critic` into one `critique()` | P2 | C | measure | M | — | Queued | |
 | Q86 | Replace ~300 plan-row references in `src/` comments; delete comments that restate code | P3 | C | hygiene | M | — | Queued | |

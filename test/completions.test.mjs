@@ -142,6 +142,62 @@ test('the scripts parse: bash always, zsh and fish when the shell is installed',
   }
 });
 
+test('the zsh script completes flags, value-flag paths and commands when driven under zsh', async () => {
+  const probe = spawnSync('which', ['zsh'], { encoding: 'utf8' });
+  if (probe.status !== 0) {
+    // Not skipped silently: the diagnostic says the assertion never ran.
+    console.log('# zsh is not installed here; the driven completion check did not run');
+    return;
+  }
+  // The render tests above read the script as text; this one runs it. `zsh -f`
+  // sources the generated function with `compadd` and `_files` stubbed, then
+  // drives `_simt` the way compsys would: `words` is the command line and
+  // `CURRENT` the word being completed.
+  const dir = await mkdtemp(join(tmpdir(), 'simt-zsh-'));
+  try {
+    const scriptPath = join(dir, '_simt.zsh');
+    await writeFile(scriptPath, renderCompletions('zsh', COMMANDS));
+    const driverPath = join(dir, 'drive.zsh');
+    await writeFile(
+      driverPath,
+      [
+        'compadd() {',
+        '  print -- "COMPSADD:"',
+        '  local x',
+        '  for x in "$@"; do print -- "  $x"; done',
+        '}',
+        '_files() { print -- "FILES"; }',
+        `source '${scriptPath}'`,
+        'words=(simt --pre)',
+        'CURRENT=2',
+        '_simt',
+        "print -- '==='",
+        "words=(simt skills --root '')",
+        'CURRENT=4',
+        '_simt',
+        "print -- '==='",
+        "words=(simt '')",
+        'CURRENT=2',
+        '_simt',
+        '',
+      ].join('\n'),
+    );
+    const ran = spawnSync('zsh', ['-f', driverPath], { encoding: 'utf8' });
+    assert.equal(ran.status, 0, `zsh -f rejected the driven script:\n${ran.stderr}`);
+    const [flagsOut, valueOut, topOut] = ran.stdout.split('===');
+    assert.match(flagsOut, /COMPSADD:/, 'simt --pre<TAB> must offer flags');
+    assert.match(flagsOut, /--root/, 'the flag list must include --root');
+    assert.doesNotMatch(flagsOut, /FILES/, 'a flag word must not fall through to file completion');
+    assert.match(valueOut, /FILES/, 'simt skills --root <TAB> must complete paths');
+    assert.doesNotMatch(valueOut, /COMPSADD:/, 'a value flag must not offer words');
+    assert.match(topOut, /COMPSADD:/, 'simt <TAB> must offer commands');
+    assert.match(topOut, /bench/, 'the top-level list must include bench');
+    assert.doesNotMatch(topOut, /FILES/, 'a bare command word must not fall through to files');
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('completions without a shell is a usage error naming the shells', async () => {
   const bare = await run(['completions']);
   assert.equal(bare.code, 2, bare.stdout + bare.stderr);

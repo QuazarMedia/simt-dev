@@ -284,7 +284,7 @@ export function renderWorkflow({ own = false, npm = true, manager = null, versio
         '      - name: tests',
         '        run: npm test',
         '      - name: skill registry lint',
-        '        run: node bin/simt.mjs graph lint',
+        '        run: npm run lint',
         '      - name: the gate copy in this repo is current',
         // The drift this exception exists to prevent, checked where it would be caught.
         // Without it a template change lands with the copy still describing the old

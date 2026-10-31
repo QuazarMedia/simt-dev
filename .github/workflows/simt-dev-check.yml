@@ -59,6 +59,6 @@ jobs:
       - name: tests
         run: npm test
       - name: skill registry lint
-        run: node bin/simt.mjs graph lint
+        run: npm run lint
       - name: the gate copy in this repo is current
         run: node bin/simt.mjs ci --check

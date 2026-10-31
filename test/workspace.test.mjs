@@ -370,13 +370,13 @@ test('CLI: skills brief without a workspace names the remedy once and lists poin
   // pointers, once, and it has to stay under a kilobyte.
   const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const { code, stdout } = await run(
-    ['skills', 'brief', '--root', app, '--skill', 'api-security-review', '--budget', '100', '--task', 'd1 migration'],
+    ['skills', 'brief', '--root', app, '--skill', 'wrangler', '--budget', '100', '--task', 'wrangler deploy'],
     { SIMT_DEV_WORKSPACE: 'off' },
   );
   assert.equal(code, 0, stdout);
   assert.ok(Buffer.byteLength(stdout) < 1024, `brief is ${Buffer.byteLength(stdout)} bytes:\n${stdout}`);
   assert.equal(stdout.split(WORKSPACE_REMEDY).length - 1, 1, stdout);
-  assert.match(stdout, /^pointer {2}api-security-review/m);
+  assert.match(stdout, /^pointer {2}wrangler/m);
   assert.equal(stdout.includes('body unavailable'), false);
   assert.equal(stdout.includes('budget capped'), false);
   assert.equal(stdout.includes('\nBODIES\n'), false);
@@ -389,18 +389,18 @@ test('CLI: skills brief with a workspace still inlines the body', async () => {
   const { root } = await skillWorkspace();
   const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const { code, stdout } = await run(
-    ['skills', 'brief', '--root', app, '--skill', 'slice-commit', '--task', 'commit the slice'],
+    ['skills', 'brief', '--root', app, '--skill', 'wrangler', '--task', 'wrangler deploy'],
     workspaceEnv(root),
   );
   assert.equal(code, 0, stdout);
-  assert.match(stdout, /^SKILL slice-commit/m);
+  assert.match(stdout, /^SKILL wrangler/m);
   assert.match(stdout, /\nBODIES\n/);
   assert.equal(stdout.includes('not on this machine'), false);
 });
 
 test('CLI: skills show without a workspace explains instead of printing a bare path', async () => {
   const app = await scratch({ 'package.json': '{"name":"lonely"}' });
-  const { code, stdout } = await run(['skills', 'show', 'slice-commit', '--root', app], {
+  const { code, stdout } = await run(['skills', 'show', 'wrangler', '--root', app], {
     SIMT_DEV_WORKSPACE: 'off',
   });
   assert.equal(code, 0, 'show is still useful without a workspace');
@@ -412,7 +412,7 @@ test('CLI: skills install without a workspace refuses rather than half-installin
   // The opposite of show: installing a body it cannot read is a failed install,
   // not a degraded mode.
   const app = await scratch({ 'package.json': '{"name":"lonely"}' });
-  const { code, stderr } = await run(['skills', 'install', 'd1-safe-change', '--root', app, '--yes'], {
+  const { code, stderr } = await run(['skills', 'install', 'wrangler', '--root', app, '--yes'], {
     SIMT_DEV_WORKSPACE: 'off',
   });
   assert.notEqual(code, 0);

@@ -57,7 +57,7 @@ async function run(args, env = {}) {
 async function singleRepoClone(skillName) {
   const dir = await scratch({ 'package.json': '{"name":"lonely"}' });
   await cp(
-    join(WORKSPACE, 'repo-06', '.agents', 'skills', skillName),
+    join(WORKSPACE, 'repo-07', '.agents', 'skills', skillName),
     join(dir, '.agents', 'skills', skillName),
     { recursive: true },
   );
@@ -95,9 +95,9 @@ test('skillsDir: respects the layout a repo already uses instead of imposing one
 
 test('skills install: writes into the layout the repo already has', async () => {
   const root = await scratch({ '.cursor/keep.md': 'x\n', 'pyproject.toml': '[project]\n' });
-  const { code } = await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
+  const { code } = await run(['skills', 'install', 'wrangler', '--root', root, '--yes']);
   assert.equal(code, 0);
-  assert.ok(existsSync(join(root, '.cursor/skills/d1-safe-change/SKILL.md')));
+  assert.ok(existsSync(join(root, '.cursor/skills/wrangler/SKILL.md')));
 });
 
 // --- the three refusals -------------------------------------------------------
@@ -109,50 +109,25 @@ test('skills install: without a name it fails with usage', async () => {
 });
 
 test('skills install: an unknown skill exits USAGE and suggests a near match', async () => {
-  const { code, stderr } = await run(['skills', 'install', 'slice-commmit']);
+  const { code, stderr } = await run(['skills', 'install', 'wranglr']);
   assert.equal(code, 2);
-  assert.match(stderr, /did you mean slice-commit/);
-});
-
-test('skills install: an ambiguous variant is an error, never a guess', async () => {
-  // Getting this wrong installs the web procedure into the API repo, which is
-  // exactly the two-repo divergence the variants exist to prevent.
-  const root = await scratch({ 'monkey.jungle': '', 'src/a.mc': 'class A{}' });
-  const { code, stderr } = await run(['skills', 'install', 'slice-commit', '--root', root]);
-  assert.equal(code, 2);
-  assert.match(stderr, /none matches this repo/);
-  assert.match(stderr, /--variant <web\|api>/);
-  assert.ok(!existsSync(join(root, '.agents/skills/slice-commit')), 'nothing may be written on refusal');
-});
-
-test('skills install: two matching variants are refused rather than ranked', async () => {
-  const root = await scratch({ 'package.json': '{"dependencies":{"hono":"1","react":"18"}}' });
-  const { code, stderr } = await run(['skills', 'install', 'slice-commit', '--root', root]);
-  assert.equal(code, 2);
-  assert.match(stderr, /all match this repo/);
-});
-
-test('skills install: an unknown --variant names the ones that exist', async () => {
-  const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  const { code, stderr } = await run(['skills', 'install', 'slice-commit', '--variant', 'mobile', '--root', root]);
-  assert.equal(code, 2);
-  assert.match(stderr, /variants: web, api/);
+  assert.match(stderr, /did you mean wrangler/);
 });
 
 test('skills install: --from must name a declared source of that skill', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
   const { code, stderr } = await run([
-    'skills', 'install', 'slice-commit', '--from', 'somewhere/else', '--root', root,
+    'skills', 'install', 'wrangler', '--from', 'somewhere/else', '--root', root,
   ]);
   assert.equal(code, 2);
-  assert.match(stderr, /is not a declared source of slice-commit/);
+  assert.match(stderr, /is not a declared source of wrangler/);
 });
 
 // --- dry run is the default ----------------------------------------------------
 
 test('skills install: writes nothing without --yes', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  const { code, stderr } = await run(['skills', 'install', 'd1-safe-change', '--root', root]);
+  const { code, stderr } = await run(['skills', 'install', 'wrangler', '--root', root]);
   assert.equal(code, 0);
   assert.match(stderr, /dry-run {2}nothing written/);
   assert.ok(!existsSync(join(root, '.agents')), 'the destination directory must not even be created');
@@ -160,11 +135,11 @@ test('skills install: writes nothing without --yes', async () => {
 
 test('skills install: --json is a dry run regardless of --yes, and is structured', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  const { stdout } = await run(['skills', 'install', 'd1-safe-change', '--root', root, '--json']);
+  const { stdout } = await run(['skills', 'install', 'wrangler', '--root', root, '--json']);
   const payload = JSON.parse(stdout);
   assert.equal(payload.action, 'added');
   assert.equal(payload.written, false);
-  assert.equal(payload.dest, '.agents/skills/d1-safe-change');
+  assert.equal(payload.dest, '.agents/skills/wrangler');
   assert.ok(!existsSync(join(root, '.agents')));
 });
 
@@ -178,46 +153,44 @@ test('skills install: writes a normal skill verbatim, frontmatter and body', asy
   // the ordinary case: a `<name>/SKILL.md` source is copied byte-for-byte, so
   // a formatter-stable source stays formatter-stable in the consumer.
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  const { code } = await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
+  const { code } = await run(['skills', 'install', 'wrangler', '--root', root, '--yes']);
   assert.equal(code, 0);
-  const body = await readFile(join(root, '.agents/skills/d1-safe-change/SKILL.md'), 'utf8');
-  const src = await readFile(join(WORKSPACE, 'repo-07/.agents/skills/d1-safe-change/SKILL.md'), 'utf8');
+  const body = await readFile(join(root, '.agents/skills/wrangler/SKILL.md'), 'utf8');
+  const src = await readFile(join(WORKSPACE, 'repo-07/.agents/skills/wrangler/SKILL.md'), 'utf8');
   assert.equal(body, src, 'a directory skill is copied verbatim');
 });
 
 test('skills install: reference files come with the skill', async () => {
-  // A skill whose references are missing is worse than one never installed,
-  // because it looks installed.
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
   const { code, stdout } = await run([
-    'skills', 'install', 'add-country-galaxy', '--variant', 'api', '--root', root, '--yes',
+    'skills', 'install', 'wrangler', '--root', root, '--yes',
   ]);
   assert.equal(code, 0);
   assert.match(stdout, /2 files/);
-  const dir = join(root, '.agents/skills/add-country-galaxy');
+  const dir = join(root, '.agents/skills/wrangler');
   assert.ok(existsSync(join(dir, 'SKILL.md')));
   assert.ok(existsSync(join(dir, 'checklist.md')));
 });
 
 test('skills install: rerunning is idempotent, including the wrapped form', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
-  const before = await readFile(join(root, '.agents/skills/d1-safe-change/SKILL.md'), 'utf8');
-  const { stdout } = await run(['skills', 'install', 'd1-safe-change', '--root', root]);
+  await run(['skills', 'install', 'wrangler', '--root', root, '--yes']);
+  const before = await readFile(join(root, '.agents/skills/wrangler/SKILL.md'), 'utf8');
+  const { stdout } = await run(['skills', 'install', 'wrangler', '--root', root]);
   assert.match(stdout, /status {3}unchanged/);
   assert.equal(
-    await readFile(join(root, '.agents/skills/d1-safe-change/SKILL.md'), 'utf8'),
+    await readFile(join(root, '.agents/skills/wrangler/SKILL.md'), 'utf8'),
     before,
   );
 });
 
 test('skills install: a local edit is reported as updated, never silently overwritten', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
-  const path = join(root, '.agents/skills/d1-safe-change/SKILL.md');
+  await run(['skills', 'install', 'wrangler', '--root', root, '--yes']);
+  const path = join(root, '.agents/skills/wrangler/SKILL.md');
   const edited = `${await readFile(path, 'utf8')}\n<!-- local note -->\n`;
   await writeFile(path, edited);
-  const { stdout } = await run(['skills', 'install', 'd1-safe-change', '--root', root]);
+  const { stdout } = await run(['skills', 'install', 'wrangler', '--root', root]);
   assert.match(stdout, /status {3}updated/);
   assert.equal(await readFile(path, 'utf8'), edited, 'a dry run must not touch the file');
 });
@@ -226,14 +199,14 @@ test('skills install: a local edit is reported as updated, never silently overwr
 
 test('skills install: records provenance in {manifest} localSkills', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
+  await run(['skills', 'install', 'wrangler', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   assert.equal(manifest.localSkills.length, 1);
   const [entry] = manifest.localSkills;
-  assert.equal(entry.name, 'd1-safe-change');
-  assert.equal(entry.from, 'repo-07/.agents/skills/d1-safe-change');
+  assert.equal(entry.name, 'wrangler');
+  assert.equal(entry.from, 'repo-07/.agents/skills/wrangler');
   assert.match(entry.sha, /^[0-9a-f]{12}$/, 'the pin records which bytes were installed');
-  assert.equal(entry.bytes, 3534);
+  assert.equal(entry.bytes, 18359);
 });
 
 test('skills install: a repo with no manifest gets the full canonical shape, not a stub', async () => {
@@ -241,7 +214,7 @@ test('skills install: a repo with no manifest gets the full canonical shape, not
   // which is the field the hook dispatcher runs from - so a repo whose manifest
   // came from `skills install` would install hooks with nothing to enforce.
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
+  await run(['skills', 'install', 'wrangler', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   for (const key of ['id', 'stack', 'limits', 'gates', 'localSkills', 'projection']) {
     assert.ok(key in manifest, `manifest is missing ${key}`);
@@ -268,7 +241,7 @@ test('skills install: every gate a created manifest declares is one the repo can
   // empty list, so the same test runs against a repo that CAN run gates and requires
   // them to be there. Both halves are the same assertion: `check` accepts the manifest.
   const bare = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'd1-safe-change', '--root', bare, '--yes']);
+  await run(['skills', 'install', 'wrangler', '--root', bare, '--yes']);
   const { manifest } = await readManifest(bare);
   const declared = [...manifest.gates.preCommit, ...manifest.gates.prePush];
   assert.deepEqual(declared, [], `a repo with no scripts must declare no gates, got ${declared}`);
@@ -291,7 +264,7 @@ test('skills install: every gate a created manifest declares is one the repo can
     }),
     'node_modules/.bin/prettier': '#!/bin/sh\n',
   });
-  await run(['skills', 'install', 'd1-safe-change', '--root', capable, '--yes']);
+  await run(['skills', 'install', 'wrangler', '--root', capable, '--yes']);
   const { manifest: withGates } = await readManifest(capable);
   const got = [...withGates.gates.preCommit, ...withGates.gates.prePush];
   assert.ok(got.length > 0, 'a repo that can run gates must get them, or the probe is not running');
@@ -299,29 +272,21 @@ test('skills install: every gate a created manifest declares is one the repo can
   assert.deepEqual(stillBad, [], `check would reject this manifest: ${JSON.stringify(stillBad)}`);
 });
 
-test('skills install: records the variant that was actually installed', async () => {
-  const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'slice-commit', '--variant', 'api', '--root', root, '--yes']);
-  const { manifest } = await readManifest(root);
-  assert.equal(manifest.localSkills[0].variant, 'api');
-  assert.equal(manifest.localSkills[0].from, 'repo-07/.agents/skills/slice-commit');
-});
-
 test('skills install: keeps a hand-written string entry and adds the new record', async () => {
   const root = await scratch({
     'pyproject.toml': '[project]\n',
     [MANIFEST]: JSON.stringify({ id: 'x', localSkills: ['hand-written'] }, null, 2),
   });
-  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
+  await run(['skills', 'install', 'wrangler', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   const names = manifest.localSkills.map((e) => (typeof e === 'string' ? e : e.name));
-  assert.deepEqual(names, ['hand-written', 'd1-safe-change']);
+  assert.deepEqual(names, ['hand-written', 'wrangler']);
 });
 
 test('skills install: reinstalling replaces the record rather than duplicating it', async () => {
   const root = await scratch({ 'pyproject.toml': '[project]\n' });
-  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
-  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
+  await run(['skills', 'install', 'wrangler', '--root', root, '--yes']);
+  await run(['skills', 'install', 'wrangler', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   assert.equal(manifest.localSkills.length, 1);
 });
@@ -336,7 +301,7 @@ test('skills install: an existing manifest keeps its id, stack, limits and gates
     projection: { simtDevSha: 'aaaaaaa' },
   };
   const root = await scratch({ 'pyproject.toml': '[project]\n', [MANIFEST]: JSON.stringify(before, null, 2) });
-  await run(['skills', 'install', 'd1-safe-change', '--root', root, '--yes']);
+  await run(['skills', 'install', 'wrangler', '--root', root, '--yes']);
   const { manifest } = await readManifest(root);
   assert.equal(manifest.id, 'chosen-by-hand');
   assert.equal(manifest.limits.coverage, 100);
@@ -351,128 +316,41 @@ test('skills install: installing a skill into the repo that already holds it doe
   // "installed copy" and the registry source are the same bytes. `cp` of a directory
   // onto itself fails, and the correct action is nothing.
   const { code, stdout, stderr } = await run([
-    'skills', 'install', 'slice-commit', '--root', join(WORKSPACE, 'repo-07'), '--yes',
+    'skills', 'install', 'wrangler', '--root', join(WORKSPACE, 'repo-07'), '--yes',
   ]);
   assert.equal(code, 0);
   assert.match(stdout, /status {3}in-place/);
   assert.match(stderr, /is the registry source itself/);
 });
 
-// --- the registry invariant this command depends on ----------------------------
-
-test('every variant-bearing skill resolves to exactly one variant per real repo', async () => {
-  const { registry } = await loadRegistry();
-  const { fingerprint } = await import('../src/resolve/fingerprint.mjs');
-  const cases = [
-    { repo: 'repo-06', expect: 'web' },
-    { repo: 'repo-07', expect: 'api' },
-  ];
-  for (const skill of registry.skills) {
-    if (!skill.variants?.length) continue;
-    for (const { repo, expect } of cases) {
-      const { signals } = await fingerprint(join(WORKSPACE, repo));
-      const tags = new Set(signals);
-      const matched = skill.variants.filter((v) => v.stack.some((t) => tags.has(t)));
-      assert.equal(
-        matched.length,
-        1,
-        `${skill.name} matches ${matched.length} variants in ${repo}; a variant stack must name the tag that differs`,
-      );
-      assert.equal(matched[0].id, expect, `${skill.name} should select the ${expect} body in ${repo}`);
-    }
-  }
-});
 // --- a single-repo clone, with no workspace anywhere (ADR-015) ------------------
 
 test('skills install: a single-repo clone installs from the copy it already holds', async () => {
-  // The case that made this a ruling: a clone of one repo has no workspace, and its
-  // `package.json` cannot tell the `web` variant of slice-commit from the `api`
-  // one. Its own 5048 bytes are an exact answer, so install uses them.
-  const dir = await singleRepoClone('slice-commit');
-  const { code, stdout } = await run(['skills', 'install', 'slice-commit', '--root', dir, '--yes'], {
+  const dir = await singleRepoClone('wrangler');
+  const { code, stdout } = await run(['skills', 'install', 'wrangler', '--root', dir, '--yes'], {
     SIMT_DEV_WORKSPACE: 'off',
   });
   assert.equal(code, 0);
   assert.match(stdout, /^workspace \(none\)/m);
-  assert.match(stdout, /^source\s+repo-06\/\.agents\/skills\/slice-commit/m);
-  assert.match(stdout, /already holds the web variant/);
+  assert.match(stdout, /^source\s+repo-07\/\.agents\/skills\/wrangler/m);
   assert.match(stdout, /^read\s+repo/m);
 });
 
-test('skills install: the bytes on disk pick the variant, not the stack tags', async () => {
-  const dir = await singleRepoClone('slice-commit');
-  const { code, stdout } = await run(['skills', 'install', 'slice-commit', '--root', dir], {
-    SIMT_DEV_WORKSPACE: 'off',
-  });
-  assert.equal(code, 0);
-  assert.match(stdout, /^install slice-commit \(variant web\)$/m);
-});
-
 test('skills install: a repo holding a body with the wrong declared size is not that body', async () => {
-  // Size is the identity check. A near-miss is a different file, so it must be
-  // refused rather than installed as a degraded match.
   const dir = await scratch({
     'package.json': '{"name":"lonely"}',
-    '.agents/skills/slice-commit/SKILL.md': '---\nname: slice-commit\n---\n\nnot the real body\n',
+    '.agents/skills/wrangler/SKILL.md': '---\nname: wrangler\n---\n\nnot the real body\n',
   });
-  const { code, stderr } = await run(['skills', 'install', 'slice-commit', '--root', dir, '--yes'], {
+  const { code, stderr } = await run(['skills', 'install', 'wrangler', '--root', dir, '--yes'], {
     SIMT_DEV_WORKSPACE: 'off',
   });
   assert.notEqual(code, 0);
-  // The message has to name the file that is actually there, or the reader goes
-  // looking at their stack tags instead.
-  assert.match(stderr, /exists but is not the declared body \(5048 bytes declared\)/);
-});
-
-test('skills install: signals that contradict the body the repo holds are refused', async () => {
-  // A react/hono repo signals both variants, so `held` decides. But a repo whose
-  // signals name exactly one variant while holding the other is a disagreement
-  // between two inputs, and installing either silently would pick a side.
-  const dir = await scratch({
-    'package.json': JSON.stringify({
-      name: 'lonely',
-      dependencies: { hono: '^4', react: '^19' },
-    }),
-    '.agents/skills/slice-commit/SKILL.md': (() => {
-      // Exactly the canonical web body, so the repo genuinely holds the `web`
-      // variant even though `hono` is present.
-      return readFileSync(join(WORKSPACE, 'repo-06', '.agents', 'skills', 'slice-commit', 'SKILL.md'), 'utf8');
-    })(),
-  });
-  const { code, stdout } = await run(['skills', 'install', 'slice-commit', '--root', dir], {
-    SIMT_DEV_WORKSPACE: 'off',
-  });
-  // react + hono both match, so ambiguity is resolved by the bytes on disk.
-  assert.equal(code, 0);
-  assert.match(stdout, /the repo's own copy decides/);
-  assert.match(stdout, /^install slice-commit \(variant web\)$/m);
-});
-
-test('skills install: an explicit --variant is obeyed, and the disagreement is noted not blocked', async () => {
-  // The repo holds the `api` body and signals `hono`, so every automatic signal
-  // says `api`. An explicit --variant is the author answering a question the tool
-  // cannot, so it is obeyed - but the reader is told what they are overriding.
-  const dir = await scratch({
-    'package.json': JSON.stringify({ name: 'lonely', dependencies: { hono: '^4' } }),
-  });
-  await cp(
-    join(WORKSPACE, 'repo-07', '.agents', 'skills', 'slice-commit'),
-    join(dir, '.agents', 'skills', 'slice-commit'),
-    { recursive: true },
-  );
-  const { code, stdout, stderr } = await run([
-    'skills', 'install', 'slice-commit', '--root', dir, '--variant', 'web', '--yes',
-  ]);
-  assert.equal(code, 0);
-  assert.match(stdout, /^install slice-commit \(variant web\)$/m);
-  assert.match(stdout, /^source\s+repo-06\/\.agents\/skills\/slice-commit/m);
-  // The note is a diagnostic, so it goes to stderr like every other note.
-  assert.match(stderr, /already holds the api body/);
+  assert.match(stderr, /exists but is not the declared body \(18359 bytes declared\)/);
 });
 
 test('skills show: reads the body a single-repo clone already holds', async () => {
-  const dir = await singleRepoClone('slice-commit');
-  const { code, stdout } = await run(['skills', 'show', 'slice-commit', '--root', dir, '--max-bytes', '0'], {
+  const dir = await singleRepoClone('wrangler');
+  const { code, stdout } = await run(['skills', 'show', 'wrangler', '--root', dir, '--max-bytes', '0'], {
     SIMT_DEV_WORKSPACE: 'off',
   });
   assert.equal(code, 0);

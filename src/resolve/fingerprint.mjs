@@ -19,10 +19,11 @@
 
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 
 import { matchesGlob } from './resolve.mjs';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
+import { loadManifest } from '../manifest/schema.mjs';
 
 /** tag -> human-readable marker(s) that imply it. First match wins per tag. */
 const MARKERS = [
@@ -320,9 +321,9 @@ export async function fingerprint(root) {
     : names.has(MANIFEST_LEGACY)
       ? MANIFEST_LEGACY
       : null;
-  const manifest = manifestName === null
-    ? null
-    : await readManifest(join(root, manifestName));
+  // One reader, so a file that does not parse is a missing declaration rather than an
+  // object whose only key is "error" pretending to be this repo manifest (Q69).
+  const manifest = manifestName === null ? null : (await loadManifest(root)).manifest;
 
   const stackList = [...stack].sort();
   const factList = [...facts].sort();
@@ -337,14 +338,6 @@ export async function fingerprint(root) {
     evidence: dedupe(evidence).sort(),
     manifest,
   };
-}
-
-async function readManifest(path) {
-  try {
-    return JSON.parse(await readFile(path, 'utf8'));
-  } catch {
-    return { error: `${basename(path)} unparseable` };
-  }
 }
 
 async function isDir(path) {

@@ -144,7 +144,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q43 | FTS drops text past 24k chars / 600 tokens and all non-Latin text; `kind`/`ref` searchable; no LIMIT | P1 | F | index | M | Q44 | Complete | 7027dd6 · test: node --test test/index.test.mjs |
 | Q44 | Index DB has no versioning/migration; read errors look like an empty index | P1 | A | index | M | — | Queued | |
 | Q45 | `bench variants` ranks on a NaN cost and locks the winner | P1 | F | bench | S | — | Complete | 0f28a74dcb49f62e25d2a3138f8cae4ca2eea91c · test: node --test test/variants.test.mjs |
-| Q46 | Bench stats: reps paired as independent, missing cost = $0, harness/model pooled, no multiplicity control | P1 | F | bench | M | Q45 | Queued | |
+| Q46 | Bench stats: reps paired as independent, missing cost = $0, harness/model pooled, no multiplicity control | P1 | F | bench | M | Q45 | Complete | cd6a9edda0ba4b1fc7dba80f097cb8c659df806c · test: node --test test/bench.test.mjs test/variants.test.mjs test/advice.test.mjs test/deadcode.test.mjs |
 | Q47 | Bench timeouts don't kill grandchildren and aren't recorded; one failure aborts the batch | P1 | F | bench | S | Q72 | Queued | |
 | Q48 | Bench corpus not portable; re-mine silently replaces it; Gradle/Maven graders read nothing | P1 | F | bench | M | — | Queued | |
 | Q49 | Bench arms measure the wrong thing: `brief` arm, probes, `gold` default, agent can reach the vault | P1 | F | bench | M | — | Queued | |

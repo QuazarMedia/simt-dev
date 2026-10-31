@@ -139,7 +139,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q38 | `compare` takes 48 s (MCP clients time out at ~60 s); no progress/cancel | P1 | F | compare/mcp | M | — | Complete | `23d597a`; `node --test test/compare.test.mjs test/mcp.test.mjs` — 49/49 + 45/45; rows via capped order-preserving pool (`--concurrency`/SIMT_CONCURRENCY), learning memoized by record digest, MCP `limit`/`cursor` paging + progress notifications + cancelled honored |
 | Q39 | Non-ASCII paths break `why`/`impact`/`gate` (no `-z`); `tracked()` ×4 | P1 | F | index | S | Q72 | Complete | `0f3ede0`; `node --test test/gate.test.mjs test/impact.test.mjs test/why-fixture.test.mjs test/why.test.mjs` — 9/9; all listings use `-z`+NUL split; triple-verified the new tests fail pre-fix; dedup stays with Q72 |
 | Q40 | JVM/Python/Go/Rust/C# imports never resolve; `gate` green with nothing (or a nonexistent path) selected | P1 | F | index | M | Q70 | Queued | |
-| Q41 | Multi-line JS imports missing; `./x.js` never resolves to `x.ts`; two extractors | P1 | F | index | S | — | In progress |  |
+| Q41 | Multi-line JS imports missing; `./x.js` never resolves to `x.ts`; two extractors | P1 | F | index | S | — | Complete | 0d43d0a4d9c71c06519198b0bdfe68254de2143c · test: node --test test/extract.test.mjs test/mapping.test.mjs |
 | Q42 | A stale index is served with no warning | P1 | F | index | S | — | Queued | |
 | Q43 | FTS drops text past 24k chars / 600 tokens and all non-Latin text; `kind`/`ref` searchable; no LIMIT | P1 | F | index | M | Q44 | Complete | 7027dd6 · test: node --test test/index.test.mjs |
 | Q44 | Index DB has no versioning/migration; read errors look like an empty index | P1 | A | index | M | — | Queued | |

@@ -128,7 +128,7 @@ test('R47: --fix previews without writing', async (t) => {
   // Nothing changed: the pin is still stale, no shims, no ignore entry.
   const after = JSON.parse(await readFile(join(root, 'simt.json'), 'utf8'));
   assert.equal(after.projection.simtDevSha, before.projection.simtDevSha);
-  await assert.rejects(readFile(join(root, '.simt-hooks', 'pre-commit')), 'preview installs no shims');
+  await assert.rejects(readFile(join(root, '.simt/hooks', 'pre-commit')), 'preview installs no shims');
 });
 
 test('R47: --fix --yes fixes exactly the 3 safe findings, journaled', async (t) => {
@@ -143,7 +143,7 @@ test('R47: --fix --yes fixes exactly the 3 safe findings, journaled', async (t) 
   // On disk: the pin is current, the shim is installed, the journal ignored.
   const manifest = JSON.parse(await readFile(join(root, 'simt.json'), 'utf8'));
   assert.notEqual(manifest.projection.simtDevSha, '0'.repeat(40));
-  await readFile(join(root, '.simt-hooks', 'pre-commit'));
+  await readFile(join(root, '.simt/hooks', 'pre-commit'));
   const ignore = await readFile(join(root, '.gitignore'), 'utf8');
   assert.match(ignore, /\.simt\/local\//);
 
@@ -157,7 +157,7 @@ test('R47: --fix --yes fixes exactly the 3 safe findings, journaled', async (t) 
   assert.equal(undone.code, 0, undone.stderr.slice(0, 500));
   const restored = JSON.parse(await readFile(join(root, 'simt.json'), 'utf8'));
   assert.equal(restored.projection.simtDevSha, '0'.repeat(40));
-  await assert.rejects(readFile(join(root, '.simt-hooks', 'pre-commit')), 'undo removes the installed shim');
+  await assert.rejects(readFile(join(root, '.simt/hooks', 'pre-commit')), 'undo removes the installed shim');
 });
 
 test('R47: unsafe findings are listed under every flag combination, never applied', async (t) => {
@@ -210,7 +210,7 @@ test('R47: hooks routed elsewhere are a takeover finding, never taken over', asy
   assert.equal(fixed.code, 0);
   assert.deepEqual(JSON.parse(fixed.stdout).fix.fixed, []);
   await assert.rejects(
-    readFile(join(root, '.simt-hooks', 'pre-commit')),
+    readFile(join(root, '.simt/hooks', 'pre-commit')),
     '--fix leaves foreign-routed hooks alone',
   );
 });

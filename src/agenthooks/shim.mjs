@@ -4,7 +4,7 @@
 // harness's PATH. A harness config naming the bare `simt` binary therefore
 // runs nothing on Claude (a non-2 exit is silent: no enforcement) and blocks
 // every tool call on Cursor (its hook fails closed). The fix is a shim beside
-// the git shims, resolved the same way: `.simt-hooks/agent-hook` locates the
+// the git shims, resolved the same way: `.simt/hooks/agent-hook` locates the
 // dispatcher with the shared `renderLocator` block and hands over, so every
 // harness config names the shim and never the bare binary (review 0003 Q21).
 //

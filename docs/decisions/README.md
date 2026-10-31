@@ -124,6 +124,7 @@ record's status line — never by editing the ruling in place.
 | [117](ADR-117-the-darwin-release-builds-on-supported-macos-15-runners-and-a-re-run-is-idempotent.md) | the darwin release builds on supported macOS 15 runners, and a re-run is idempotent | **accepted** · 2026-10-31 · supersedes ADR-099 ruling 1 |
 | [119](ADR-119-the-environment-variable-points-into-a-workspace-the-repo-declared.md) | the environment variable points into a workspace the repo declared | **accepted** · 2026-10-31 · supersedes ADR-014 ruling 1 |
 | [120](ADR-120-a-pre-push-whose-tree-is-already-proven-green-skips-the-test-gate-on-that-evidence.md) | a pre-push whose tree is already proven green skips the test gate on that evidence | **accepted** · 2026-10-31 |
+| [122](ADR-122-the-shims-move-into-the-state-directory-and-the-legacy-directory-removes-itself.md) | the shims move into the state directory, and the legacy directory removes itself | **accepted** · 2026-10-31 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

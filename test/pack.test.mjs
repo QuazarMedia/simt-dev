@@ -249,7 +249,7 @@ test('a packed install survives the whole adoption, and no writer writes unasked
   assert.match(hooksPreview.out, /nothing written/);
   const hooksPath = await run('git', ['config', '--get', 'core.hooksPath'], { cwd: root });
   assert.equal(hooksPath.out.trim(), '', 'a previewed hooks install pointed git at a path');
-  const shim = await readFile(join(root, '.simt-hooks', 'pre-commit'), 'utf8').catch(() => '');
+  const shim = await readFile(join(root, '.simt/hooks', 'pre-commit'), 'utf8').catch(() => '');
   assert.equal(shim, '', 'a previewed hooks install wrote a shim');
 
   const hooksApplied = await simt(root, ['hooks', 'install', '--root', '.', '--yes']);

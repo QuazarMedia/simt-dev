@@ -6,6 +6,21 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+The git shims move from the top-level `.simt-hooks/` directory into the state
+directory at `.simt/hooks/`, and `core.hooksPath` follows (ADR-122). Every
+piece of per-repo state now has one root, and the ignore line that existed
+only for the shims is dropped. A repository installed before the move
+self-heals on its next `hooks install --yes`: the routing re-points, the new
+shims land, and the legacy directory is removed — journaled, so `undo`
+brings it back — but only when every file in it carries a simt-dev marker; a
+file the tool cannot recognise as its own leaves the directory in place.
+Because the shims land under the state directory, the journal records writes
+to the shim directory: it is the one named exception to the unjournaled state
+directory, since the undo that restores `core.hooksPath` must restore the
+shims with it.
+
 ## [0.7.0] — 2026-10-31
 
 ### Added

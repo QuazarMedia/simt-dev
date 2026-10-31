@@ -15,7 +15,6 @@ dist/
 # index cache, benchmark runs, local-model proposals. Nothing in here is committed,
 # so ignore the whole directory rather than tracking its ever-growing file list.
 .simt/
-.simt-hooks/
 
 .codex/
 .opencode/

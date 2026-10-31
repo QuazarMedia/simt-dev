@@ -422,7 +422,7 @@ test('binary: the hook shim hands over to the binary the repository downloaded, 
     await mkdir(path.dirname(local), { recursive: true });
     await writeFile(local, '#!/bin/sh\necho "stub "$@\n');
     await chmod(local, 0o755);
-    const shim = path.join(fixture, '.simt-hooks', 'pre-commit');
+    const shim = path.join(fixture, '.simt/hooks', 'pre-commit');
     await mkdir(path.dirname(shim), { recursive: true });
     await writeFile(shim, renderShim('pre-commit', { npm: false }));
     await chmod(shim, 0o755);

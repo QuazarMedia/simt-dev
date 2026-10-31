@@ -16,10 +16,14 @@
 //   - The plan row says `.simt-dev/journal/`, which predates the STATE_DIR
 //     rename (the same stale spelling survives in bench/probes.mjs comments).
 //     The journal lives under STATE_DIR like every other per-repo state.
-//   - Nothing under `.simt/` is journaled. The journal recording itself is
-//     recursion; the ledger, index and candidates are evidence and caches, and
-//     restoring those to an earlier byte-shape would corrupt R17 rather than
-//     repair anything. `journaledWriteFile` performs those writes unrecorded.
+//   - Nothing under `.simt/` is journaled, one named exception: the shim
+//     directory. The journal recording itself is recursion; the ledger, index
+//     and candidates are evidence and caches, and restoring those to an earlier
+//     byte-shape would corrupt R17 rather than repair anything. The shims are
+//     the opposite of that: git's routing points at them, and the undo that
+//     restores the routing must restore the shims with it (review 0003 Q22;
+//     ADR-122 moved them under STATE_DIR). `journaledWriteFile` performs the
+//     other writes unrecorded.
 //   - Only regular files. Symlinks carry no bytes for beforeBytes to hold, and
 //     the record shape is file bytes — pointer changes are reported by the
 //     command as before and are not undone. Removals are journaled as entries
@@ -45,6 +49,7 @@ import { promisify } from 'node:util';
 
 import { STATE_DIR } from './name.mjs';
 import { LOCAL_DIR } from './state.mjs';
+import { HOOKS_DIR } from './hooks/shim.mjs';
 
 const exec = promisify(execFile);
 
@@ -129,8 +134,11 @@ export async function journaledWriteFile(root, acc, path, text, { mode } = {}) {
     throw new Error(`journal refuses a write outside the repository: ${path}`);
   }
   const before = await readOrNull(path);
-  // Internal state is written, not recorded — see the module header.
-  const internal = rel(root, path) === STATE_DIR || rel(root, path).startsWith(`${STATE_DIR}/`);
+  // Internal state is written, not recorded — see the module header, which
+  // names the shim directory as the one exception under STATE_DIR.
+  const r = rel(root, path);
+  const internal =
+    (r === STATE_DIR || r.startsWith(`${STATE_DIR}/`)) && r !== HOOKS_DIR && !r.startsWith(`${HOOKS_DIR}/`);
   await mkdir(dirname(path), { recursive: true });
   // tmp + rename, the way this module writes its own set files: a crash
   // mid-write leaves the old bytes in place, never a half-written file
@@ -202,7 +210,9 @@ export async function journaledRemoveFile(root, acc, path) {
   }
   const before = await readOrNull(path);
   if (before === null) return;
-  const internal = rel(root, path) === STATE_DIR || rel(root, path).startsWith(`${STATE_DIR}/`);
+  const r = rel(root, path);
+  const internal =
+    (r === STATE_DIR || r.startsWith(`${STATE_DIR}/`)) && r !== HOOKS_DIR && !r.startsWith(`${HOOKS_DIR}/`);
   await unlink(path);
   if (!internal) {
     acc.push(fileEntry(rel(root, path), before, null));

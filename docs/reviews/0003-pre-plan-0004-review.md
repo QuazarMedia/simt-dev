@@ -168,7 +168,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q66 | MCP generated from the spec; progress, cancel, subscribe, roots, pagination, two-step writes | P2 | A | mcp | L | Q60, Q63 | Queued | |
 | Q67 | Per-run `RepoContext` memo (fingerprint ×11, manifest ×13, digest ×6 per `check`) | P2 | A | projection | M | — | Queued | |
 | Q68 | One write-plan/apply engine (change records) for every writer | P2 | A | write | L | — | Queued | |
-| Q69 | Manifest schema module: versioned, namespaced (`work`), one loader; lock gets a version | P2 | A | manifest | M | — | Queued | |
+| Q69 | Manifest schema module: versioned, namespaced (`work`), one loader; lock gets a version | P2 | A | manifest | M | — | Partial | ee3dee8; npm run test 1636/1636, 0 fail; node --test test/manifest-schema.test.mjs - 6/6; loadManifest names every problem in words, an unparseable file is no manifest, and an absent version is 1; the table is held to this repository own simt.json, which caught a first draft that called limits.fileLines an integer and surfaces an object; fingerprint no longer returns {error} as the manifest; the 29 direct JSON.parse callers and deriving GENERATED_KEYS from the table remain |
 | Q70 | Ecosystem/language data records (runner, gates, card, test conventions, extraction, resolution) | P2 | A | genericity | L | Q69 | Queued | |
 | Q71 | Harness data records (surface, pointer, loader, hook dialect, payload keys, plugin) | P2 | A | genericity | M | — | Queued | |
 | Q72 | Shared utilities: one git/process module, `spawnBounded`, frontmatter, tokenizer, small helpers | P2 | A | sys | M | — | Queued | |

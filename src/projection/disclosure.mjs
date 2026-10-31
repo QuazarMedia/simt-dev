@@ -25,7 +25,7 @@ const SKILL_DIRS = ['.agents/skills', '.cursor/skills', '.claude/skills', '.open
  * share a name both stay, because dropping one would hide a trigger.
  *
  * @param {string} root
- * @returns {Promise<{name: string, trigger: string, dir: string}[]>}
+ * @returns {Promise<{name: string, trigger: string, dir: string, file: string}[]>}
  */
 export async function installedSkills(root) {
   const seen = new Set();
@@ -61,7 +61,7 @@ export async function installedSkills(root) {
       const fallback = entry.isDirectory() ? entry.name : entry.name.replace(/\.md$/, '');
       const name = typeof meta.name === 'string' && meta.name !== '' ? meta.name : fallback;
       const trigger = typeof meta.description === 'string' ? meta.description.replace(/\s+/g, ' ').trim() : '';
-      skills.push({ name, trigger, dir });
+      skills.push({ name, trigger, dir, file: key });
     }
   }
   skills.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.dir < b.dir ? -1 : a.dir > b.dir ? 1 : 0));

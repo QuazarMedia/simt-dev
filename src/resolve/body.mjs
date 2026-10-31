@@ -22,6 +22,10 @@ import { existsSync } from 'node:fs';
 import { locateSource, sourceHeldLocally } from './source.mjs';
 
 export async function sourcePath(skill, workspaceRoot, root) {
+  // A node synthesized from the repo's own skill directory already names its file.
+  // Asking the workspace for it would hunt for a body the registry never declared.
+  if (skill.localFile) return skill.localFile;
+
   const canonical = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
 
   if (canonical) {

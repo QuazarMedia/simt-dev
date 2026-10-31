@@ -645,12 +645,14 @@ export const TOOLS = [
       type: 'object',
       properties: {
         query: { type: 'string' },
+        root: { type: 'string' },
         registry: { type: 'string', description: 'path to skills.graph.json; else --registry / SIMT_REGISTRY / default tiers' },
       },
       required: ['query'],
     },
     async run(args) {
-      return skillsFindFacts(typeof args?.query === 'string' ? args.query : '', args ?? {});
+      const root = rootOf(args);
+      return skillsFindFacts(root, typeof args?.query === 'string' ? args.query : '', args ?? {});
     },
   },
 

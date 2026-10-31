@@ -9,7 +9,7 @@
 // token instead of guessing. Suppressing it is how a discovery tool becomes a
 // black box.
 
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
@@ -20,6 +20,7 @@ import { unknownSkills, scoreCorpus } from '../resolve/eval.mjs';
 import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { tokenize, rankSkills, closure, selectWithinBudget, resolveAlias, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
+import { localSkillNodes } from '../resolve/local.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { CLI } from '../name.mjs';
 import { parsePathList } from '../argv.mjs';
@@ -75,18 +76,25 @@ async function skillsRegistry(args) {
   return registry;
 }
 
-function findSkill(registry, name, verb) {
+/**
+ * The named skill: the registry first, then the repo's own skills, because a skill
+ * the repo installed is addressable by the same name (plan 0005 S3). The local lookup
+ * costs a fingerprint plus a directory scan, so it runs only when the registry did
+ * not answer.
+ */
+async function findSkill(registry, root, name, verb) {
   if (!name) skillsFailure(`${verb} needs a skill name`, `usage: ${CLI} skills ${verb} <name>`, EXIT.USAGE);
   const skill = registry.skills.find((s) => s.name === name);
-  if (!skill) {
-    const near = nearMatches(name, registry.skills.map((s) => s.name));
-    skillsFailure(
-      `no skill named "${name}"${near.length ? ` (did you mean ${near.join(', ')}?)` : ''}`,
-      `run: ${CLI} skills find <query>`,
-      EXIT.USAGE,
-    );
-  }
-  return skill;
+  if (skill) return skill;
+  const repoStack = (await fingerprint(root)).signals;
+  const local = (await localSkillNodes(root, registry, repoStack)).find((s) => s.name === name);
+  if (local) return local;
+  const near = nearMatches(name, registry.skills.map((s) => s.name));
+  skillsFailure(
+    `no skill named "${name}"${near.length ? ` (did you mean ${near.join(', ')}?)` : ''}`,
+    `run: ${CLI} skills find <query>`,
+    EXIT.USAGE,
+  );
 }
 
 /** The JSON-safe skill facts both surfaces spread: absent lists read as empty, not missing. */
@@ -116,6 +124,10 @@ export async function skillsBriefFacts(root, args = {}) {
   const task = args.task ?? null;
   const repoFacts = { root, stack: repoStack, facts: repo.facts };
 
+  // The repo's own skills rank alongside the registry, so every command agrees on
+  // the names a reader in this repo can address (plan 0005 S3).
+  const pool = [...registry.skills, ...(await localSkillNodes(root, registry, repoStack))];
+
   // A brief with no task and no paths resolves on stack alone, which produces a
   // plausible-looking list the agent may act on. It warns rather than silently
   // answering; under `--json` the warning is a field, not prose on stdout.
@@ -125,7 +137,7 @@ export async function skillsBriefFacts(root, args = {}) {
       'pass --task "<what you are doing>" or stage files so the diff drives selection, ' +
       'or pass --all to take everything for this stack.';
     if (args.all) {
-      const usable = registry.skills.filter((s) => stackCompatible(s, repoStack));
+      const usable = pool.filter((s) => stackCompatible(s, repoStack));
       return {
         kind: 'all',
         repoStack,
@@ -153,12 +165,12 @@ export async function skillsBriefFacts(root, args = {}) {
   }
 
   const context = { repoStack, taskTokens, paths };
-  const { selected, excluded } = rankSkills(registry.skills, context, { forced });
+  const { selected, excluded } = rankSkills(pool, context, { forced });
 
   // Hard dependencies are pulled in even when they did not score, and even past
   // budget: a skill that is useless without its dependency is worse than a large
   // context, because it silently misleads.
-  const expanded = closure(selected, registry.skills);
+  const expanded = closure(selected, pool);
   const { picked, deferred, used: inlineBytes } = selectWithinBudget(expanded, {
     budget,
     all: args.all === true,
@@ -216,31 +228,53 @@ export async function skillsBriefFacts(root, args = {}) {
   };
 }
 
-/** Raw search across capability, keyword and summary. */
-export async function skillsFindFacts(query, args = {}) {
+/**
+ * Raw search across capability, keyword and summary.
+ *
+ * Local nodes are admitted on `score > 0`, not the `selectionVerdict` rule the
+ * registry nodes keep: that rule exists to compensate for find having no repo, and
+ * a local skill has one - its presence in the repo is the scoping signal the rule
+ * stands in for.
+ */
+export async function skillsFindFacts(root, query, args = {}) {
   const q = String(query ?? '').trim();
   if (!q) skillsFailure('find needs a query', `usage: ${CLI} skills find <query>`, EXIT.USAGE);
   const registry = await skillsRegistry(args);
   const tokens = tokenize(q);
-  const results = registry.skills
-    .map((skill) => ({ skill, ...scoreSkill(skill, { repoStack: [], taskTokens: tokens, paths: [] }) }))
-    .filter((r) => selectionVerdict(r.evidence, r.reasons) === null)
-    .sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name));
+  const context = { repoStack: [], taskTokens: tokens, paths: [] };
+  const results = [
+    ...registry.skills
+      .map((skill) => ({ skill, ...scoreSkill(skill, context) }))
+      .filter((r) => selectionVerdict(r.evidence, r.reasons) === null),
+    ...(await localSkillNodes(root, registry, (await fingerprint(root)).signals))
+      .map((skill) => ({ skill, ...scoreSkill(skill, context) }))
+      .filter((r) => r.score > 0),
+  ].sort((a, b) => b.score - a.score || a.skill.name.localeCompare(b.skill.name));
   return {
     query: q,
-    results: results.map((r) => ({ name: r.skill.name, score: r.score, summary: r.skill.summary, reasons: r.reasons })),
+    results: results.map((r) => ({ name: r.skill.name, score: r.score, bytes: r.skill.bytes, summary: r.skill.summary, reasons: r.reasons })),
   };
 }
 
 /** Tier 2: one skill body and the metadata needed to judge it. */
 export async function skillsShowFacts(root, name, args = {}) {
   const registry = await skillsRegistry(args);
-  const skill = findSkill(registry, name, 'show');
+  const skill = await findSkill(registry, root, name, 'show');
   const { note: workspace, root: workspaceRoot } = await announceWorkspace(args);
   // The repo is a location for a declared source too, so `show` reads a body the
   // caller already has instead of reporting the body missing.
   const body = await sourcePath(skill, workspaceRoot, root);
-  const bodyFrom = body === null ? 'none' : body.startsWith(`${root}/`) ? 'repo' : 'workspace';
+  // A local file is canonicalized by realpath, while a declared repo source keeps the
+  // caller's spelling: on a symlinked prefix (macOS `/var`) the label must accept the
+  // canonical root too, or a repo body is mislabelled `workspace`.
+  let realRoot = root;
+  try {
+    realRoot = await realpath(root);
+  } catch {
+    /* root does not exist; the label falls back to the un-canonical comparison */
+  }
+  const bodyFrom =
+    body === null ? 'none' : body.startsWith(`${root}/`) || body.startsWith(`${realRoot}/`) ? 'repo' : 'workspace';
   return {
     skill: skillFacts(skill),
     workspace,
@@ -253,7 +287,7 @@ export async function skillsShowFacts(root, name, args = {}) {
 /** The signal chain for one skill in one repository. */
 export async function skillsWhyFacts(root, name, args = {}) {
   const registry = await skillsRegistry(args);
-  const skill = findSkill(registry, name, 'why');
+  const skill = await findSkill(registry, root, name, 'why');
   const repo = await fingerprint(root);
   const paths = args.paths ? parsePathList(args.paths) : await dirtyPaths(root);
   const tokens = tokenize(args.task ?? '');
@@ -402,9 +436,10 @@ async function emitAllFacts(facts, flags) {
 // --- find ---------------------------------------------------------------------
 
 export async function findCommand(args, flags) {
+  const root = flags.root ?? process.cwd();
   let facts;
   try {
-    facts = await skillsFindFacts(args.join(' '), flags);
+    facts = await skillsFindFacts(root, args.join(' '), flags);
   } catch (error) {
     return fail(error.message, error.exitCode ?? EXIT.FAIL, error.remedy);
   }

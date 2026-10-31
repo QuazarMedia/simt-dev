@@ -1,4 +1,5 @@
-import { emit, fail, jsonFailMode } from '../output/index.mjs';
+import { emit, emitJson, fail, jsonFailMode } from '../output/index.mjs';
+import { SPEC, SPEC_PATHS } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI, MANIFEST_FILE, STATE_DIR } from '../name.mjs';
 import { SESSION_ENV } from '../agenthooks/policy.mjs';
@@ -357,9 +358,21 @@ export async function help(argv) {
     jsonFailMode(rawJsonFlag(argv));
     return fail(parsed.error.message, parsed.error.code);
   }
-  const { flags } = parsed.value;
+  const { flags, positional } = parsed.value;
   if (flags.version) {
     emit((await version()).trim());
+    return 0;
+  }
+  // A reader who names one command gets that command, not the whole surface (review
+  // 0003 Q61): `simt help gate` and `simt gate --help` both printed 23 KB, so the one
+  // fact being asked for was 40 screens down.
+  const asked = commandFromHelp(positional);
+  if (asked !== null) {
+    emit(commandPage(asked), { maxBytes: flags.maxBytes ?? 0 });
+    return 0;
+  }
+  if (flags.json === true) {
+    emitJson(SPEC.map(specRow), { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
     return 0;
   }
   emit(
@@ -389,4 +402,50 @@ export async function help(argv) {
 async function version() {
   const { describeVersion } = await import('../package-version.mjs');
   return `${describeVersion()}\n`;
+}
+
+/** The command a help request names, or null when it names none. */
+function commandFromHelp(positional) {
+  const words = positional[0] === 'help' ? positional.slice(1) : positional;
+  const two = words.slice(0, 2).join(' ');
+  if (SPEC_PATHS.includes(two)) return two;
+  return SPEC_PATHS.includes(words[0]) ? words[0] : null;
+}
+
+/** One spec row as the JSON a UI or a harness reads. */
+function specRow(row) {
+  return { path: row.path, summary: row.summary, ...(row.defaultFor === undefined ? {} : { defaultFor: row.defaultFor }) };
+}
+
+const PAGE_WIDTH = 78;
+
+/** The summary broken to the page width, so a narrow terminal keeps it readable. */
+function wrapped(text) {
+  const lines = [];
+  let line = '';
+  for (const word of text.split(' ')) {
+    if (line !== '' && line.length + 1 + word.length > PAGE_WIDTH) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = line === '' ? word : `${line} ${word}`;
+    }
+  }
+  if (line !== '') lines.push(line);
+  return lines;
+}
+
+/**
+ * One command's page: what it is, and where the rest of the answers are. The flags a
+ * single command declares arrive with the spec's `flags` field (Q62); until then the
+ * page points at the global list rather than inventing one per command.
+ */
+export function commandPage(path) {
+  const row = SPEC.find((r) => r.path === path);
+  if (row === undefined) return '';
+  const lines = [`${CLI} ${path} [args] [flags]`, '', ...wrapped(row.summary), ''];
+  if (row.defaultFor !== undefined) lines.push(`default  ${CLI} ${row.defaultFor} runs this command`);
+  lines.push(`flags    --json --pretty --root --max-bytes, and every global flag`);
+  lines.push(`all      ${CLI} --help   every command, and every flag it takes`);
+  return `${lines.join('\n')}\n`;
 }

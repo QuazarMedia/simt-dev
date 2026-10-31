@@ -44,7 +44,7 @@ All skills already exist in their target repos. S1 is a verification no-op.
 | S2 | Complete | 4133dba3c5067c0ee9fc907f17a9ebbc37737c8b · test: npm run test |
 | S3 | Complete | 7d44071b3aa1406655ddae0b749316467f336903 · test: npm run test |
 | S4 | Complete | b0da29c9200384689214510d7a384a27fd44e63a · test: npm run test |
-| S5 | queued | — |
+| S5 | Complete | 28f0e04 · test: npm run test (standalone copy, sibling-free path: 1535/1535 pass) |
 
 ## S1 — Verify skills exist in target repos
 

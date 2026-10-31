@@ -36,6 +36,9 @@ export const GROUPS = GROUP_DEFAULTS;
 const DECLARED = new Map(SPEC.map((row) => [row.path, new Set(row.flags ?? [])]));
 
 /** Flags dispatch reads for every command: the envelope and the guard rails. */
+/** path -> the values a flag of that path accepts, where the set is closed. */
+const VALUES = new Map(SPEC.map((row) => [row.path, row.values ?? {}]));
+
 const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
 
 /**
@@ -307,6 +310,16 @@ export async function dispatch(argv) {
   // Import only the module the matched path needs. The registry used to pull every
   // command's module graph - detection, projection, the bench corpus - before dispatch
   // began, which cost 36.5 ms on a `status --line` that reads one file (review 0003 Q64).
+  // A closed set is refused before the command runs, so the caller learns the valid
+  // values from the refusal and every reader of the spec sees the same set (review
+  // 0003 Q62). Unset is not the same as invalid: the default stays the command's.
+  for (const [flag, allowed] of Object.entries(VALUES.get(path) ?? {})) {
+    const value = flags[flag.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
+    if (value !== undefined && !allowed.includes(value)) {
+      return fail(`--${flag} takes ${allowed.join(', ')}; received ${value}`, EXIT.USAGE);
+    }
+  }
+
   const run = await load();
   return run(args, flags);
 }

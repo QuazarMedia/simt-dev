@@ -51,3 +51,13 @@ test('a flag the command does not take is carried in the JSON document too', asy
   assert.ok(Array.isArray(doc.notices), 'no notices array in the document');
   assert.match(doc.notices[0], /--frozen is not a flag of `status`/);
 });
+
+
+test('a closed set refuses a value outside it, and names the alternatives', async () => {
+  const { execFile } = await import('node:child_process');
+  const { promisify } = await import('node:util');
+  const { fileURLToPath } = await import('node:url');
+  const bin = fileURLToPath(new URL('../bin/simt.mjs', import.meta.url));
+  const bad = await promisify(execFile)('node', [bin, 'map', '--level', 'bogus']).catch((e) => e);
+  assert.match(String(bad.stderr), /--level takes outline, names, signatures; received bogus/);
+});

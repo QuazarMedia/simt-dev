@@ -120,6 +120,7 @@ record's status line — never by editing the ruling in place.
 | [110](ADR-110-the-lock-file-follows-the-manifest-name-and-the-old-name-is-read-until-the-next-write.md) | the lock is `simt.lock.json`, and the old name is read until the next write | **accepted** · 2026-10-30 |
 | [111](ADR-111-the-tool-ships-one-agent-rendered-per-harness-and-installs-it-with-init-and-a-command.md) | the tool ships one agent, rendered per harness, and installs it with init and a command | **accepted** · 2026-10-30 |
 | [112](ADR-112-the-registry-is-what-simt-dev-ships-and-a-repo-owns-its-own-skills.md) | the registry is what simt-dev ships, and a repo owns its own skills | **accepted** · 2026-10-31 · supersedes ADR-009 ruling 4 |
+| [116](ADR-116-rust-support-reaches-the-example-path-the-indent-and-the-bench-runner.md) | Rust support reaches the example path, the indent and the bench runner | **accepted** · 2026-10-31 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

@@ -85,7 +85,7 @@ export function classifyGateCommand(cmd, manifest = null) {
   for (const gate of GATE_ENTRIES) {
     if (gate.kind === 'script' && gate.script) {
       const scriptRe = new RegExp(`(?:^|\\s)npm\\s+run(?:\\s+--silent)?\\s+${gate.script}(?:\\s|$)`);
-      if (scriptRe.test(raw) || (gate.script === 'test' && /\b(?:npm\s+test|node\s+--test|pytest|go\s+test)\b/.test(raw))) {
+      if (scriptRe.test(raw) || (gate.script === 'test' && /\b(?:npm\s+test|node\s+--test|pytest|go\s+test|cargo\s+test)\b/.test(raw))) {
         return { gate: gate.name, adr: gate.adr };
       }
     }

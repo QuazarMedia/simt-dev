@@ -78,6 +78,16 @@ test('the baseline is parseable editorconfig, with every section closed', () => 
   assert.ok(sections.length >= 5);
 });
 
+test('the Rust section states four spaces, matching rustfmt', () => {
+  // Rust's own formatter uses four spaces. Leaving .rs out of the four-space
+  // group makes the shared baseline contradict `cargo fmt` in every Rust repo.
+  const rust = EDITORCONFIG_BODY.split('\n').find((line) => line.startsWith('[') && line.includes('rs'));
+  assert.ok(rust, '.rs has no section');
+  const at = EDITORCONFIG_BODY.split('\n').indexOf(rust);
+  assert.match(EDITORCONFIG_BODY.split('\n')[at + 1], /^indent_size = 4$/);
+  assert.doesNotMatch(EDITORCONFIG_BODY.split('\n')[at + 1], /indent_style = tab/);
+});
+
 test('every section header is a glob over paths, not the name of a tool', () => {
   // `[prettier]` shipped for a year and applied to nothing: an editorconfig section
   // header is a filepath glob (spec 0.17.2, "File Format"), so a bare word matches one

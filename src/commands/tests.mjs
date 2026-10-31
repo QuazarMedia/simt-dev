@@ -63,7 +63,7 @@ export async function testsCommand(args, flags) {
     return EXIT.OK;
   }
   const lines = [`tests    ${tests.length}`, ...tests];
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -79,7 +79,7 @@ function summarise(root, flags, edges) {
     emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
     return EXIT.OK;
   }
-  emit(`test      ${test}\ncochange  ${cochange}`, { maxBytes: flags.maxBytes ?? 0 });
+  emit(`test      ${test}\ncochange  ${cochange}`);
   return EXIT.OK;
 }
 

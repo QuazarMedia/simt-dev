@@ -98,7 +98,7 @@ export async function leaseCommand(args, flags) {
       ...mine.map((l) => `would    lease ${l.path} until ${ISO(l.expiresAt)}`),
       `apply    ${apply}`,
     ];
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return EXIT.OK;
   }
 
@@ -140,7 +140,7 @@ export async function leaseCommand(args, flags) {
     `ttl      ${ttl}s`,
     ...mine.map((l) => `LEASED   ${l.path}  until ${ISO(l.expiresAt)}`),
   ];
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -213,7 +213,7 @@ async function releaseLeases(root, args, flags) {
       `apply    run: ${CLI} lease release ${wanted.map((p) => JSON.stringify(p)).join(' ')} --session ${session} --yes`,
     ];
     if (isJson(flags)) emitJson({ ok: true, command: 'lease release', root, dryRun: true, session, leases: released.preview });
-    else emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    else emit(lines.join('\n'));
     return EXIT.OK;
   }
   for (const l of released.dropped) note(`note     released ${l.path} (was held by ${l.session})`);
@@ -300,6 +300,6 @@ async function listLeases(root, flags) {
     ...held.map((l) => `LEASED   ${l.path}  ${l.session}${l.harness ? `/${l.harness}` : ''}  until ${ISO(l.expiresAt)}`),
   ];
   if (held.length === 0) lines.push(`(no active leases)`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }

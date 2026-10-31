@@ -16,7 +16,7 @@ export async function distillCommand(args, flags) {
   if (typeof result === 'number') return result;
 
   if (isJson(flags)) {
-    emitJson(result, { maxBytes: flags.maxBytes ?? 0 });
+    emitJson(result);
     return EXIT.OK;
   }
 

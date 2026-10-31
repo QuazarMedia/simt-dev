@@ -121,7 +121,7 @@ export async function compareCommand(positional, flags) {
     return rows.some((r) => r.problems.length > 0) ? EXIT.FAIL : EXIT.OK;
   }
 
-  emit(render(rows, summary, found, learning), { maxBytes: flags.maxBytes ?? 0 });
+  emit(render(rows, summary, found, learning));
   if (summary.shape === 'repo') {
     note('note     one repository compared; pass --root at a workspace directory to compare its siblings');
   } else if (target.source === 'none') {

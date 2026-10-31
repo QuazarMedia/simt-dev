@@ -36,7 +36,7 @@ async function runStatus(root, flags) {
   }
   lines.push('', `total    ${formatCounts(result.totals, result.stateOrder) || '-'}`);
   lines.push(`ready    ${result.ready}`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -56,7 +56,7 @@ async function runNext(root, id, flags) {
         lines.push(`  ${row.id}  ${row.doc}  depends on: ${row.dependsOn || '(none)'}${unknown}`);
       }
     }
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return EXIT.OK;
   }
   const next = result.next;
@@ -69,7 +69,7 @@ async function runNext(root, id, flags) {
     '',
     next.section || '(no section for this id)',
   ];
-  emit(head.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(head.join('\n'));
   return EXIT.OK;
 }
 
@@ -105,7 +105,7 @@ async function runDone(root, id, sha, flags) {
   }
   if (result.evidenceRecorded) lines.push(`evidence ${result.sha}${result.test ? `  test: ${result.test}` : ''}`);
   else if (result.evidenceNote) lines.push(`note     ${result.evidenceNote}`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   // After the report: the report says what, the diff shows it (R50).
   emitDiffs(diffs, flags);
   return EXIT.OK;

@@ -296,7 +296,7 @@ async function startSlice(root, id, flags) {
       `state    ${preview.from} -> ${preview.to}`,
       `apply    ${apply}`,
     ];
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return EXIT.OK;
   }
 
@@ -373,7 +373,7 @@ async function startSlice(root, id, flags) {
     lease === null ? 'lease    (none)' : `lease    slice ${id} as ${session}`,
     `state    ${row.from} -> ${row.to}`,
   ];
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -478,7 +478,7 @@ async function finishSlice(root, id, flags) {
       `state    ${row.from} -> ${row.to}`,
       `apply    ${apply}`,
     ];
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return EXIT.OK;
   }
 
@@ -555,7 +555,7 @@ async function finishSlice(root, id, flags) {
       return EXIT.FAIL;
     }
     for (const n of gates.notes ?? []) note(`note     ${n}`);
-    emit(renderGateReport('pre-commit', declared, gates).join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(renderGateReport('pre-commit', declared, gates).join('\n'));
     return EXIT.FAIL;
   }
 
@@ -607,7 +607,7 @@ async function finishSlice(root, id, flags) {
   ];
   if (row.evidenceRecorded) lines.push(`evidence ${sha}${test ? `  test: ${test}` : ''}`);
   else if (row.evidenceNote) lines.push(`note     ${row.evidenceNote}`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -656,7 +656,7 @@ async function abandonSlice(root, id, flags) {
       `state    ${preview.from} -> ${preview.to}`,
       `apply    ${apply}`,
     ];
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return EXIT.OK;
   }
 
@@ -718,6 +718,6 @@ async function abandonSlice(root, id, flags) {
     return EXIT.OK;
   }
   const lines = [`repo     ${root}`, `slice    ${id}  ${doc}`, ...removed, `state    ${row.from} -> ${row.to}`, `lease    ${leaseLine}`];
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }

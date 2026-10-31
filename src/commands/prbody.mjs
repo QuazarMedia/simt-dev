@@ -41,6 +41,6 @@ export async function prBodyCommand(args, flags) {
     );
     return EXIT.OK;
   }
-  emit(renderPrBody(report), { maxBytes: flags.maxBytes ?? 0 });
+  emit(renderPrBody(report));
   return EXIT.OK;
 }

@@ -47,7 +47,7 @@ export async function indexCommand(args, flags) {
   ];
   if (result.parsers === 'missing') lines.push('note     index.parsers did not load, so the built-in extractors ran');
   if (!ignored) lines.push(`note     ${file} is not gitignored, and the cache is not meant to be committed`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 

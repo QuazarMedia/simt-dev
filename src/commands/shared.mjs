@@ -189,7 +189,7 @@ export async function sharedPlanCommand(_args, flags) {
     if (over !== null) lines.push(`warn     ${over}`);
   }
   lines.push(`nothing written; re-run with: ${CLI} shared install --yes`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -354,7 +354,7 @@ export async function sharedInstallCommand(_args, flags) {
     if (over !== null) lines.push(`warn     ${over}`);
   }
   lines.push(`verify   ${CLI} doctor  reports the copy as current, and ${CLI} tokens --repos --root . reports what is left`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   // After the report: the report says what, the diff shows it (R50).
   emitDiffs(diffs, flags);
   return EXIT.OK;

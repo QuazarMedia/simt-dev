@@ -76,7 +76,7 @@ export async function mapCommand(args, flags) {
     `budget   ${budget}`,
   ];
   if (rendered.text) lines.push(rendered.text);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -95,7 +95,7 @@ async function recall(root, flags) {
     emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
     return EXIT.OK;
   }
-  emit(formatRecall(result), { maxBytes: flags.maxBytes ?? 0 });
+  emit(formatRecall(result));
   return EXIT.OK;
 }
 

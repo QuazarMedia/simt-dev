@@ -32,7 +32,7 @@ export async function decideCommand(args, flags) {
     }
 
     if (res.findings.length === 0) {
-      emit('decisions  ok', { maxBytes: flags.maxBytes ?? 0 });
+      emit('decisions  ok');
       return EXIT.OK;
     }
 
@@ -124,7 +124,7 @@ export async function decideCommand(args, flags) {
         : `would write ${res.relPath}; apply with: ${CLI} decide ${JSON.stringify(res.title)} --yes`,
   ];
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   // After the report: the report says what, the diff shows it (R50).
   emitDiffs(diffs, flags);
   return EXIT.OK;

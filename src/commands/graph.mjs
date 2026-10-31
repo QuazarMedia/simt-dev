@@ -109,11 +109,11 @@ export async function lintCommand(positional, flags) {
   if (errors.length > 0) {
     lines.push('', `FAIL ${errors.length}`);
     for (const error of errors) lines.push(`  ${error}`);
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return EXIT.REGISTRY;
   }
 
   lines.push('', verified ? 'OK no findings' : 'OK structural checks only');
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }

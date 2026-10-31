@@ -156,7 +156,7 @@ export async function listCommand(args, flags) {
     if (locals.length > 0) lines.push('', `local profiles come from ${locals.map((r) => r.source).join(', ')}`);
   }
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return broken.length === 0 ? EXIT.OK : EXIT.FAIL;
 }
 
@@ -317,7 +317,7 @@ export async function showCommand(args, flags) {
 
   const adrs = citations(rule.body);
   if (isJson(flags)) {
-    emitJson({ ok: !rule.error, ...rule, adrs }, { maxBytes: flags.maxBytes ?? 0 });
+    emitJson({ ok: !rule.error, ...rule, adrs });
     return rule.error ? EXIT.FAIL : EXIT.OK;
   }
 
@@ -375,7 +375,7 @@ function ruleDirection(facts, flags) {
       '  this rule cites no decision, so nothing settles it and nothing can overturn it.',
       '  Either cite the ADR that produced it, or accept that it is this repo\'s own policy.',
     );
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return EXIT.OK;
   }
 
@@ -400,7 +400,7 @@ function ruleDirection(facts, flags) {
     lines.push('', `shares a decision with ${facts.others.join(', ')}`);
   }
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -491,7 +491,7 @@ function adrDirection(facts, flags) {
     );
   }
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   // A superseded record is not a failure; it is the supersession rule working.
   // The caller asked a question and got a true answer.
   return EXIT.OK;
@@ -533,7 +533,7 @@ export async function decisionsCommand(args, flags) {
     const journal = [];
     await journaledWriteFile(rootDir, journal, join(rootDir, 'docs', 'decisions-index.md'), renderDecisionsIndex(rows));
     await commitJournal(rootDir, 'rules decisions', journal);
-    emit(`wrote docs/decisions-index.md (${rows.length} decisions)`, { maxBytes: flags.maxBytes ?? 0 });
+    emit(`wrote docs/decisions-index.md (${rows.length} decisions)`);
     return EXIT.OK;
   }
 
@@ -552,6 +552,6 @@ export async function decisionsCommand(args, flags) {
     const head = r.status.length > 80 ? `${r.status.slice(0, 80)}...` : r.status;
     lines.push(`${r.id.padEnd(8)}  ${r.origin.padEnd(7)}  ${r.title} — ${head}`);
   }
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }

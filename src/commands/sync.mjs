@@ -411,7 +411,7 @@ export async function syncCommand(positional, flags) {
           : `would write ${changed.length + pointersAdded.length + (manifestChanged ? 1 : 0)} file(s); apply with: ${CLI} sync --yes`,
       );
     }
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     // After the report: the report says what, the diff shows it (R50).
     emitDiffs(diffs, flags);
   }

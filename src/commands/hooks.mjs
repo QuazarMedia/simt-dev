@@ -70,7 +70,7 @@ async function runHook(args, flags) {
   }
 
   for (const n of result.notes ?? []) note(`note     ${n}`);
-  emit(renderGateReport(event, manifest.gates[GATE_KEY[event]] ?? [], result).join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(renderGateReport(event, manifest.gates[GATE_KEY[event]] ?? [], result).join('\n'));
   return result.failed ? EXIT.FAIL : EXIT.OK;
 }
 
@@ -851,7 +851,7 @@ async function hooksStatus(root, flags, ctx = repoContext(root)) {
     lines.push('', 'problems:');
     for (const p of problems) lines.push(`  ${p}`);
   }
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return code;
 }
 

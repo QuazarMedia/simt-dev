@@ -96,7 +96,7 @@ export async function benchMineCommand(positional, flags) {
     lines.push(`remedy   run: ${CLI} bench mine --yes`);
   }
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -144,7 +144,7 @@ export async function benchRunCommand(positional, flags) {
         `run      ${run.runId}/${run.task}  arm=${run.arm}  resolved=${run.resolved}  gates=${run.gatesPassed}  reproduced=${run.reproduced}`,
       );
     }
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return code;
   }
 
@@ -215,7 +215,7 @@ export async function benchRunCommand(positional, flags) {
     lines.push(`remedy   run: ${CLI} bench run --yes`);
   }
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -269,7 +269,7 @@ export async function benchReportCommand(positional, flags) {
     return EXIT.OK;
   }
 
-  emit(`${report.markdown}\n\n### Map\n\n${formatRecall(mapRecall)}`, { maxBytes: flags.maxBytes ?? 0 });
+  emit(`${report.markdown}\n\n### Map\n\n${formatRecall(mapRecall)}`);
   return EXIT.OK;
 }
 
@@ -332,7 +332,7 @@ export async function benchAblateCommand(positional, flags) {
     lines.push(`remedy   run: ${CLI} bench ablate --yes`);
   }
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -388,7 +388,7 @@ export async function benchProbesCommand(positional, flags) {
     lines.push(`remedy   run: ${CLI} bench probes --yes`);
   }
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -429,7 +429,7 @@ export async function benchVariantsCommand(positional, flags) {
     ),
   ];
   if (!result.applied) lines.push(`remedy   run: ${CLI} bench variants --yes`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -463,7 +463,7 @@ export async function benchCriticCommand(positional, flags, commands = []) {
   ];
   if (result.labelsNote) lines.push(`labels   ${result.labelsNote}`);
   for (const error of result.errors) lines.push(`error    ${error}`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -535,7 +535,7 @@ export async function benchExportCommand(positional, flags) {
     `seal     ${doc.seal}`,
   ];
   if (!apply) lines.push(`remedy   run: ${CLI} bench export ${out} --yes`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -597,6 +597,6 @@ export async function benchImportCommand(positional, flags) {
     `vault    ${result.vaultRoot}`,
   ];
   if (!apply) lines.push(`remedy   run: ${CLI} bench import ${file} --yes`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }

@@ -51,7 +51,7 @@ export async function whyCommand(args, flags, commands = []) {
     return EXIT.OK;
   }
   const lines = items.map((item) => `${item.kind.padEnd(10)}${item.id}  ${item.detail}`);
-  emit(lines.length > 0 ? lines.join('\n') : 'none', { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.length > 0 ? lines.join('\n') : 'none');
   return EXIT.OK;
 }
 
@@ -62,7 +62,7 @@ function reportUnresolved(root, flags, unresolved) {
     return EXIT.OK;
   }
   const lines = unresolved.map((item) => `UNRESOLVED-AFFECTS  ${item.token}  ${item.id}`);
-  emit([`unresolved  ${unresolved.length}`, ...lines].join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit([`unresolved  ${unresolved.length}`, ...lines].join('\n'));
   return EXIT.OK;
 }
 

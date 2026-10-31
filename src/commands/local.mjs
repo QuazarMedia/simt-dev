@@ -100,7 +100,7 @@ export async function localDoctorCommand(args, flags) {
     `sockets  ${result.socketsOpened}`,
   ];
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
 
   if (!result.ok) {
     return fail(error, code, remedy);

@@ -45,7 +45,7 @@ export async function gateCommand(args, flags) {
           { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 },
         );
       } else {
-        emit('selected  0\nverdict  nothing-selected', { maxBytes: flags.maxBytes ?? 0 });
+        emit('selected  0\nverdict  nothing-selected');
       }
       return EXIT.OK;
     }
@@ -84,7 +84,7 @@ export async function gateCommand(args, flags) {
     const lines = ['selected  0', 'verdict  nothing-selected'];
     if (unmatched.length > 0) lines.push(`unmatched  ${unmatched.join(', ')}`);
     if (graph === 'unresolved') lines.push('graph  unresolved');
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return EXIT.OK;
   }
   return runSelected(root, flags, selected, { unmatched, graph });
@@ -178,7 +178,7 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
     return code === 0 ? EXIT.OK : EXIT.FAIL;
   }
-  emit(text.filter((line) => line !== undefined).join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(text.filter((line) => line !== undefined).join('\n'));
   return code === 0 ? EXIT.OK : EXIT.FAIL;
 }
 

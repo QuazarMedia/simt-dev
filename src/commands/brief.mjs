@@ -75,6 +75,6 @@ export async function briefCommand(args, flags, commands = []) {
   }
 
   const body = flags.explain === true ? [packed.text, '', 'EXPLAIN', ...explainPacket(items, { cut })] : [packed.text];
-  emit(body.join('\n'), { maxBytes: Number(flags.maxBytes ?? 0) || 0 });
+  emit(body.join('\n'));
   return EXIT.OK;
 }

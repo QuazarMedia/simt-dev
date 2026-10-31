@@ -73,7 +73,7 @@ export async function tokensCommand(positional, flags) {
       `tool output ${plain(session.toolOutput.bytes)} B  ~${plain(session.toolOutput.tokens)} tokens  (${plain(session.toolOutput.share)}%)`,
       `total       ${plain(session.total.bytes)} B  ~${plain(session.total.tokens)} tokens`,
     ];
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return EXIT.OK;
   }
 
@@ -193,6 +193,6 @@ export async function tokensCommand(positional, flags) {
     `mcp      tools/list ${plain(mcp.bytes)} B of ${plain(mcp.tools)} tools  (the same for every repository, so it is not in any total)`,
   );
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }

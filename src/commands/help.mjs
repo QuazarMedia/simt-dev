@@ -378,7 +378,7 @@ export async function help(argv, dispatched) {
   // fact being asked for was 40 screens down.
   const asked = commandFromHelp(positional);
   if (asked !== null) {
-    emit(commandPage(asked), { maxBytes: flags.maxBytes ?? 0 });
+    emit(commandPage(asked));
     return 0;
   }
   if (flags.json === true) {

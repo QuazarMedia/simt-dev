@@ -22,6 +22,6 @@ export async function completionsCommand(args, flags, commands) {
     emitJson({ ok: true, command: 'completions', shell, script });
     return EXIT.OK;
   }
-  emit(script, { maxBytes: flags.maxBytes ?? 0 });
+  emit(script);
   return EXIT.OK;
 }

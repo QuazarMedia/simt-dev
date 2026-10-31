@@ -20,6 +20,7 @@ import {
   isJson,
   jsonFailMode,
   jsonIndentDefault,
+  maxBytesLimit,
 } from '../output/index.mjs';
 import { help } from './help.mjs';
 import { GROUP_DEFAULTS, SPEC, SPEC_PATHS } from './spec.mjs';
@@ -290,6 +291,10 @@ export async function dispatch(argv) {
   // command answers in the same shape a working one does, and the caller's parse
   // never sees an empty document.
   jsonIndentDefault(flags.pretty === true);
+  // The envelope owns both presentation flags. A command that decided its own ceiling or
+  // its own indentation could disagree with the flag the caller passed, and the caller has
+  // no way to see which one won (review 0003 Q65).
+  maxBytesLimit(flags.maxBytes);
   jsonFailMode(flags.json === true);
 
   // A parse failure is already the whole answer: report it once, in the asked-for
@@ -365,12 +370,12 @@ export async function dispatch(argv) {
   const docs = jsonCaptureTake() ?? [];
   const [only] = docs;
   if (docs.length === 1 && only.value !== null && typeof only.value === 'object' && !Array.isArray(only.value)) {
-    emitJson({ ...only.value, ok: only.value.ok ?? code === 0, exitCode: code }, { pretty: only.pretty, maxBytes: only.maxBytes });
+    emitJson({ ...only.value, ok: only.value.ok ?? code === 0, exitCode: code });
     return code;
   }
   // A stream of documents (NDJSON) has no single place for one exit code; each is written
   // as the command produced it, and the process exit status still carries the code.
-  for (const doc of docs) emitJson(doc.value, { pretty: doc.pretty, maxBytes: doc.maxBytes });
+  for (const doc of docs) emitJson(doc.value);
   return code;
 }
 

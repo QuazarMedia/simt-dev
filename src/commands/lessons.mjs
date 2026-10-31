@@ -82,7 +82,7 @@ export async function lessonsListCommand(args, flags) {
 
   for (const err of errors) lines.push(`error       ${err}`);
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return errors.length === 0 ? EXIT.OK : EXIT.FAIL;
 }
 
@@ -121,7 +121,7 @@ export async function lessonsCaptureCommand(args, flags) {
   for (const c of payload.captured) {
     lines.push(`  ${c.id}  ${c.kind}  ${c.summary}`);
   }
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -186,7 +186,7 @@ export async function lessonsReviewCommand(args, flags) {
     result.markdown.trimEnd(),
   ];
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   // After the report: the report says what, the diff shows it (R50).
   emitDiffs(diffs, flags);
   if (!mode.apply) {

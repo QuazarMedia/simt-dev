@@ -194,7 +194,7 @@ async function agentsStatus(root, flags) {
     lines.push('', 'problems:');
     for (const p of problems) lines.push(`  ${p}`);
   }
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return problems.length === 0 ? EXIT.OK : EXIT.FAIL;
 }
 

@@ -23,7 +23,7 @@ export async function reviewCommand(args, flags, commands = []) {
   if (typeof result === 'number') return result;
 
   if (isJson(flags)) {
-    emitJson(result, { maxBytes: flags.maxBytes ?? 0 });
+    emitJson(result);
     return EXIT.OK;
   }
 
@@ -60,6 +60,6 @@ export async function reviewCommand(args, flags, commands = []) {
   }
   if (result.metric) lines.push(`metric    ${result.metric.note}`);
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }

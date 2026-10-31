@@ -151,7 +151,7 @@ export async function compileCommand(args, flags) {
     }
   }
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -247,7 +247,7 @@ async function runSingleSkillCompile(skill, registry, { root, workspaceRoot, fla
     }
   }
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   if (!mode.apply) {
     note(`note    dry-run  nothing written; apply with: ${CLI} skills compile ${skill.name} --yes`);
   }

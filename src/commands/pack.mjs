@@ -192,7 +192,7 @@ async function packLint(args, flags) {
     lines.push(`                        remedy: ${f.remedy}`);
   }
   lines.push('', ok ? 'PASSED   the pack is well-formed' : `FAILED   ${findings.length} finding(s)`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return ok ? EXIT.OK : EXIT.FAIL;
 }
 
@@ -252,7 +252,7 @@ async function packPublish(args, flags) {
   } else {
     lines.push('', `FAILED   ${result.findings.length} finding(s)`);
   }
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   if (result.ok && apply && result.published) {
     note(`note     never committed or pushed by this tool (ADR-001); the registry now has the bytes, the repos still need vendoring`);
   }

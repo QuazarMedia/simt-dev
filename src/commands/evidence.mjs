@@ -52,7 +52,7 @@ async function showEvidence(root, flags) {
     lines.push(`${e.exit === 0 ? 'pass' : 'fail'}     ${e.cmd}  exit ${e.exit}  ${e.summary}`);
   }
   for (const error of errors) lines.push(`error    ${error}`);
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return errors.length === 0 ? EXIT.OK : EXIT.FAIL;
 }
 
@@ -102,6 +102,6 @@ async function checkClaim(root, file, flags) {
     emitJson({ ...payload, detail, remedy }, { pretty: flags.pretty === true });
     return mode === 'block' ? EXIT.FAIL : EXIT.OK;
   }
-  emit(`${mode === 'block' ? 'BLOCKED' : 'WARNING'}  ${detail}\n         remedy: ${remedy}`, { maxBytes: flags.maxBytes ?? 0 });
+  emit(`${mode === 'block' ? 'BLOCKED' : 'WARNING'}  ${detail}\n         remedy: ${remedy}`);
   return mode === 'block' ? EXIT.FAIL : EXIT.OK;
 }

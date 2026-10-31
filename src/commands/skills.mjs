@@ -435,7 +435,7 @@ async function emitAllFacts(facts, flags) {
   if (deferred.length > 0) {
     lines.push('', `DEFERRED ${deferred.length}: ${deferred.map((s) => s.name).join(', ')}`);
   }
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -540,7 +540,7 @@ export async function briefCommand(args, flags) {
       lines.push('', `NOT SELECTED ${hidden.length}`, '', `  notes: ${CLI} skills why <name> | ${CLI} skills show <name>`);
     }
     lines.push('', 'OVERRIDE  --skill <name> | --budget <bytes> | --all | --paths <globs>');
-    emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+    emit(lines.join('\n'));
     return EXIT.OK;
   }
 
@@ -585,7 +585,7 @@ export async function briefCommand(args, flags) {
   }
 
   lines.push('', 'OVERRIDE  --skill <name> | --budget <bytes> | --all | --paths <globs>');
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -602,7 +602,7 @@ export async function showCommand(args, flags) {
   const { skill, workspace, body, bodyFrom, bodyText } = facts;
   const source = skill.sources?.find((s) => s.role === 'canonical') ?? skill.sources?.[0];
   if (isJson(flags)) {
-    emitJson({ ok: true, ...skill, workspace, body, bodyFrom, bodyText }, { maxBytes: flags.maxBytes ?? 0 });
+    emitJson({ ok: true, ...skill, workspace, body, bodyFrom, bodyText });
     return EXIT.OK;
   }
   emit(
@@ -648,7 +648,7 @@ export async function whyCommand(args, flags) {
   // to scrape: a skill that can never be selected in this repo is a decision, not
   // a line of output.
   if (isJson(flags)) {
-    emitJson({ ok: true, command: 'skills why', ...facts }, { maxBytes: flags.maxBytes ?? 0 });
+    emitJson({ ok: true, command: 'skills why', ...facts });
     return EXIT.OK;
   }
 
@@ -674,7 +674,7 @@ export async function whyCommand(args, flags) {
   if (facts.variantOf) lines.push('', `variant-of      ${facts.variantOf} (sibling group, one body per stack)`);
   if (facts.requires?.length > 0) lines.push(`requires        ${facts.requires.join(', ')}`);
 
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 
@@ -780,7 +780,7 @@ export async function evalCommand(positional, flags) {
   }
 
   lines.push('', okRun ? 'OK the resolver meets the gold corpus' : 'REGRESSION: the resolver no longer meets the gold corpus');
-  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  emit(lines.join('\n'));
   return okRun ? EXIT.OK : EXIT.FAIL;
 }
 

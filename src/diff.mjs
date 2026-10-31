@@ -49,7 +49,7 @@ export async function readBefore(path) {
 export function emitDiffs(pairs, flags) {
   if (isJson(flags)) return;
   const text = renderDiffs(pairs);
-  if (text !== '') emit(text, { maxBytes: flags.maxBytes ?? 0 });
+  if (text !== '') emit(text);
 }
 
 /** The `--diff` bytes for a JSON payload: absent entirely without the flag, so

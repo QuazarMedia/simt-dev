@@ -92,7 +92,7 @@ export function writeMode(flags) {
  * Truncation is always announced with an explicit line, never a silent ellipsis:
  * an agent that cannot tell a truncated answer from a complete one will guess.
  */
-export function emit(text, { maxBytes = 0, stream = process.stdout } = {}) {
+export function emit(text, { maxBytes = maxBytesDefault, stream = process.stdout } = {}) {
   const body = text.endsWith('\n') ? text : `${text}\n`;
   const bytes = Buffer.byteLength(body);
   if (maxBytes > 0 && bytes > maxBytes) {
@@ -130,6 +130,19 @@ export const SCHEMA_VERSION = 1;
  * before anybody sets it.
  */
 let prettyDefault = process.stdout.isTTY === true;
+
+// The byte ceiling is one flag with one reader: the envelope. Commands used to pass
+// `flags.maxBytes ?? 0` at seventy-eight call sites, which is seventy-eight chances to pass
+// a different number, or to forget and answer past the ceiling the caller set (review 0003
+// Q65). A ceiling of zero or a value that is not a number is no ceiling, the same way the
+// flag itself is read.
+let maxBytesDefault = 0;
+
+/** Set the byte ceiling every emit and every document inherits, from `--max-bytes`. */
+export function maxBytesLimit(bytes) {
+  const value = Number(bytes);
+  maxBytesDefault = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+}
 
 export function jsonIndentDefault(pretty = process.stdout.isTTY === true) {
   prettyDefault = pretty;
@@ -263,7 +276,7 @@ export function warnings() {
   return accumulated;
 }
 
-export function emitJson(value, { stream = process.stdout, pretty = prettyDefault, maxBytes = 0 } = {}) {
+export function emitJson(value, { stream = process.stdout, pretty = prettyDefault, maxBytes = maxBytesDefault } = {}) {
   // `notices`, not `warnings`: `status` already reports a warning COUNT under that key,
   // and a document cannot mean two things by one name. The collision is named here
   // rather than bent into either shape (review 0003 Q62).
@@ -276,7 +289,7 @@ export function emitJson(value, { stream = process.stdout, pretty = prettyDefaul
       ? { ...carried, command: canonicalCommand }
       : carried;
   if (captured !== null) {
-    captured.push({ value: stamped, pretty, maxBytes });
+    captured.push({ value: stamped });
     return true;
   }
   const payload = withSchemaVersion(stamped);

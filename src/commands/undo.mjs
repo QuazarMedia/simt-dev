@@ -29,7 +29,7 @@ export async function undoCommand(positional, flags) {
       emitJson({ ok: true, command: 'undo', root, set: null, restored: [], dryRun: !mode.apply });
       return EXIT.OK;
     }
-    emit('nothing to undo: no journaled writes', { maxBytes: flags.maxBytes ?? 0 });
+    emit('nothing to undo: no journaled writes');
     return EXIT.OK;
   }
 
@@ -78,7 +78,7 @@ export async function undoCommand(positional, flags) {
       emitJson({ ok: true, command: 'undo', root, set: null, restored: [] });
       return EXIT.OK;
     }
-    emit('nothing to undo: no journaled writes', { maxBytes: flags.maxBytes ?? 0 });
+    emit('nothing to undo: no journaled writes');
     return EXIT.OK;
   }
   if (result.refused) {

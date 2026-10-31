@@ -68,7 +68,7 @@ export async function impactCommand(args, flags, commands = []) {
     emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
     return EXIT.OK;
   }
-  emit(render(payload), { maxBytes: flags.maxBytes ?? 0 });
+  emit(render(payload));
   return EXIT.OK;
 }
 

@@ -190,7 +190,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q90 | Scalable docs architecture: short README, generated reference, guides, contributor how-tos, archive | P2 | D | docs | M | Q60 | Queued | |
 | Q91 | Doc drift: AGENTS.md, plan/review headers, ADR index, CHANGELOG, SECURITY, repo hygiene | P2 | D | docs | S | — | Partial | `4d95e99`; node --test test/shipped.test.mjs test/spec.test.mjs test/help.test.mjs; false headers, layout table and SECURITY channels corrected; the decisions index, CHANGELOG, stray asset and FUNDING template are the rest |
 | Q92 | Tests: shared helpers, `process.execPath`, temp cleanup, tiers, corpus-free fixtures, unit gaps | P2 | D | tests | M | — | Queued | |
-| Q93 | npm scripts (`lint` lints nothing), tarball trims | P3 | D | packaging | S | — | Queued | |
+| Q93 | npm scripts (`lint` lints nothing), tarball trims | P3 | D | packaging | S | — | Partial | `8476d76`; npm run lint + npm pack --dry-run (index absent); lint is graph lint + shipped.test.mjs, the tarball ships ADR-*.md only, the guard reads exclusions; build:sea, verify:wheel, the CI/hook npm wiring and the wheel mirror are the rest |
 | Q99 | Finish the review of the modules listed in §1.1 | P2 | D | review | M | — | Queued | |
 
 Count: 89 slices — 5 P0, 52 P1, 30 P2, 2 P3 (severity is the row's worst item).

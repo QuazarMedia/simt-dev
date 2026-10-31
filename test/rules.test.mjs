@@ -13,7 +13,7 @@ import { citations, byId, DECISIONS_DIR, loadDecisions, redactInternalPaths } fr
 import { initCommand } from '../src/commands/init.mjs';
 import { loadRules, select } from '../src/projection/project.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
-import { MANIFEST_FILE } from '../src/name.mjs';
+import { MANIFEST_FILE, STATE_DIR } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -236,8 +236,13 @@ test('the prose locations left in place are counted, so the decision cannot go u
   const { decisions } = await loadDecisions();
   const leaking = [];
   for (const d of decisions) {
+    // A token under the state directory is per-developer machine state, not package
+    // content: .gitignore drops the whole directory, so it exists in a checkout that
+    // ran `hooks install` and not in the fresh clone the pre-push gate tests in.
+    // Counting it makes the number developer-dependent - ADR-122's `.simt/hooks`
+    // turned the gate red on the very push that introduced the record.
     const prose = [...d.summary.ruled, ...d.summary.rejected].join('\n');
-    if ([...new Set(prose.match(/[\w.@/-]*[\w-]+\/[\w./-]+/g) ?? [])].some((t) => existsSync(join(root, t)))) {
+    if ([...new Set(prose.match(/[\w.@/-]*[\w-]+\/[\w./-]+/g) ?? [])].some((t) => !t.startsWith(`${STATE_DIR}/`) && existsSync(join(root, t)))) {
       leaking.push(d.id);
     }
   }
@@ -269,10 +274,6 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // the ruling is ABOUT the graph file, and a decision that membership in it is a
   // statement about the package, not about existence, without naming
   // `graph/skills.graph.json` would not be an argument a maintainer can act on.
-  // ADR-122 joined for the same reason once more: the ruling is ABOUT the shims'
-  // location, and a decision that they move into the state directory and the legacy
-  // directory removes itself without naming the directory the routing points at
-  // would not be an argument a maintainer can act on.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -294,7 +295,6 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-110',
     'ADR-111',
     'ADR-112',
-    'ADR-122',
   ]);
 });
 

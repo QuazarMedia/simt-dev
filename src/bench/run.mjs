@@ -120,7 +120,7 @@ function firstNumeric(obj, paths = []) {
 function emptyUsage() {
   return {
     usage: { input: 0, cacheWrite: 0, cacheRead: 0, output: 0, turns: 0, toolCalls: 0 },
-    costUsd: 0.0,
+    costUsd: null,
   };
 }
 
@@ -164,7 +164,7 @@ function parseJsonObject(text) {
  * @param {string|object} adapterOrId
  * @param {string} stdoutText
  * @param {string} [analyticsText]
- * @returns {{usage: {input: number, cacheWrite: number, cacheRead: number, output: number, turns: number, toolCalls: number}, costUsd: number}}
+ * @returns {{usage: {input: number, cacheWrite: number, cacheRead: number, output: number, turns: number, toolCalls: number}, costUsd: number|null}}
  */
 export function parseAdapterUsage(adapterOrId, stdoutText = '', analyticsText = '') {
   const result = emptyUsage();
@@ -193,7 +193,7 @@ export function parseAdapterUsage(adapterOrId, stdoutText = '', analyticsText = 
     result.usage.output = firstNumeric(obj, fields.output) ?? 0;
     result.usage.turns = firstNumeric(obj, fields.turns) ?? 0;
     result.usage.toolCalls = firstNumeric(obj, fields.toolCalls) ?? 0;
-    result.costUsd = firstNumeric(obj, fields.costUsd) ?? 0.0;
+    result.costUsd = firstNumeric(obj, fields.costUsd) ?? null;
 
     // Gemini CLI also nests per-model token totals under `stats.models.<name>.tokens`.
     const models = obj?.stats?.models;
@@ -266,7 +266,7 @@ export function parseAdapterUsage(adapterOrId, stdoutText = '', analyticsText = 
     }
   }
 
-  result.costUsd = Number(result.costUsd.toFixed(6));
+  if (result.costUsd !== null) result.costUsd = Number(result.costUsd.toFixed(6));
   return result;
 }
 
@@ -782,7 +782,7 @@ export async function runBench(
         resolved: null,
         gatesPassed: null,
         usage: emptyUsage().usage,
-        costUsd: 0.0,
+        costUsd: null,
         diff: { files: 0, outsideBlastRadius: 0 },
         probe: null,
       })),

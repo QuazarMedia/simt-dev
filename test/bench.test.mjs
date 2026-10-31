@@ -35,6 +35,8 @@ import {
 import {
   DEFAULT_BOOTSTRAP_SAMPLES,
   DEFAULT_BOOTSTRAP_SEED,
+  MIN_PAIRD_TASKS,
+  NON_INFERIORITY_MARGIN,
   bootstrapArmCi,
   buildBenchReport,
   compareArms,
@@ -42,10 +44,12 @@ import {
   computeRunQuality,
   evaluateRunRecord,
   formatReportMarkdown,
+  holmAdjust,
   isRunResolved,
   loadPrices,
   loadRunRecords,
   mcnemarTest,
+  signTest,
   wilcoxonSignedRank,
 } from '../src/bench/report.mjs';
 import {
@@ -875,11 +879,17 @@ test('bench report (R03): cost model, quality Q, CPI, cache-hit ratio, McNemar, 
     diff: { files: 2, outsideBlastRadius: 0 },
     probe: null,
   };
-  // Expected C = 0.30 + 0.15 + 0.09 + 0.15 = 0.69
+  // Expected C = 0.30 + 0.15 + 0.09 + 0.15 = 0.69, source 'priced' (token table wins).
   const cost = computeRunCost(sampleRun, prices);
-  assert.ok(Math.abs(cost - 0.69) < 1e-12, `expected 0.69, got ${cost}`);
-  // Without prices.json, falls back to run.costUsd.
-  assert.equal(computeRunCost(sampleRun, null), 9.99);
+  assert.ok(Math.abs(cost.usd - 0.69) < 1e-12, `expected 0.69, got ${cost.usd}`);
+  assert.equal(cost.source, 'priced');
+  // Without prices.json, falls back to run.costUsd as a reported cost.
+  assert.deepEqual(computeRunCost(sampleRun, null), { usd: 9.99, source: 'reported' });
+  // No prices table and no reported cost: the cost is missing, not zero (Q46).
+  assert.deepEqual(computeRunCost({ usage: { input: 1000, output: 500 }, costUsd: null }, null), {
+    usd: null,
+    source: 'missing',
+  });
 
   // 2. Hand computation of R, Q and cacheHitRatio.
   assert.equal(isRunResolved(sampleRun), true);
@@ -899,6 +909,7 @@ test('bench report (R03): cost model, quality Q, CPI, cache-hit ratio, McNemar, 
   assert.equal(ev.R, 1);
   assert.equal(ev.Q, 1.0);
   assert.ok(Math.abs(ev.C - 0.69) < 1e-12);
+  assert.equal(ev.costSource, 'priced');
   // cache_read / (input + cache_read) = 300_000 / (100_000 + 300_000) = 0.75
   assert.equal(ev.cacheHitRatio, 0.75);
 
@@ -921,6 +932,53 @@ test('bench report (R03): cost model, quality Q, CPI, cache-hit ratio, McNemar, 
   assert.equal(mcnemar.n00, 0);
   assert.equal(mcnemar.statistic, 6.0);
   assert.equal(mcnemar.pValue, 0.03125);
+
+  // 3b. Hand computation of the exact two-sided sign test on task-mean pairs.
+  // 4 plus, 0 minus, 2 zero -> p = 2 * (0.5)^4 = 0.125; statistic = min(plus, minus) = 0.
+  const sign = signTest([
+    [0.0, 1.0],
+    [0.0, 1.0],
+    [0.0, 1.0],
+    [0.5, 1.0],
+    [1.0, 1.0],
+    [0.0, 0.0],
+  ]);
+  assert.equal(sign.n, 6);
+  assert.equal(sign.plus, 4);
+  assert.equal(sign.minus, 0);
+  assert.equal(sign.zero, 2);
+  assert.equal(sign.statistic, 0);
+  assert.ok(Math.abs(sign.pValue - 0.125) < 1e-12, `expected 0.125, got ${sign.pValue}`);
+  // Mixed signs: 3 plus, 1 minus -> cdf = (1 + 4) / 16, p = 2 * 5/16 = 0.625.
+  const signMixed = signTest([
+    [0.0, 1.0],
+    [0.0, 1.0],
+    [0.5, 1.0],
+    [0.5, 0.0],
+  ]);
+  assert.equal(signMixed.plus, 3);
+  assert.equal(signMixed.minus, 1);
+  assert.ok(Math.abs(signMixed.pValue - 0.625) < 1e-12, `expected 0.625, got ${signMixed.pValue}`);
+  // All pairs equal: no evidence, p = 1.
+  assert.equal(signTest([[1, 1], [1, 1]]).pValue, 1);
+  // One paired task: the smallest attainable p is 0.5, never significant (Q46: a
+  // single task with ten reps must not produce ten "independent" pairs).
+  assert.equal(MIN_PAIRD_TASKS, 5);
+  assert.equal(NON_INFERIORITY_MARGIN, -0.02);
+
+  // 3c. Hand computation of the Holm step-down adjustment.
+  // Family {0.01, 0.04, 0.03}: sorted 0.01, 0.03, 0.04.
+  //   j=0: 3 * 0.01 = 0.03
+  //   j=1: 2 * 0.03 = 0.06 -> running max 0.06
+  //   j=2: 1 * 0.04 = 0.04 -> running max stays 0.06
+  // Original order {0.01, 0.04, 0.03} -> {0.03, 0.06, 0.06}.
+  const adjusted = holmAdjust([0.01, 0.04, 0.03]);
+  assert.ok(Math.abs(adjusted[0] - 0.03) < 1e-12);
+  assert.ok(Math.abs(adjusted[1] - 0.06) < 1e-12);
+  assert.ok(Math.abs(adjusted[2] - 0.06) < 1e-12);
+  // Clamped to 1 and monotone: {0.5, 0.5} -> {1, 1}.
+  assert.deepEqual(holmAdjust([0.5, 0.5]), [1, 1]);
+  assert.deepEqual(holmAdjust([]), []);
 
   // 4. Hand computation of Wilcoxon signed-rank test:
   //    Case A: 6 pairs where candidate is strictly cheaper on every task.
@@ -1044,12 +1102,12 @@ test('bench report (R03): cost model, quality Q, CPI, cache-hit ratio, McNemar, 
   // R = 2/6 = 1/3
   // Q: 2 tasks have Q=1.0, 4 tasks have Q=0.5 (gates=0.2 + probe=0.2 + hygiene=0.1) -> mean Q = (2*1.0 + 4*0.5)/6 = 4/6 = 2/3
   // C: input($0.20) + cacheRead($0.02) + mean output(35_000 * $10 / 1e6 = $0.35) = $0.57
-  // CPI: C / (R * Q) = 0.57 / ((1/3) * (2/3)) = 0.57 / (2/9) = 2.565
+  // CPI: total cost / resolved outcomes = 6 * 0.57 / 2 = 1.71 (plan 0004 §1)
   // cacheHitRatio: 600_000 / (600_000 + 600_000) = 0.5
   assert.ok(Math.abs(bareArm.R - 1 / 3) < 1e-12);
   assert.ok(Math.abs(bareArm.Q - 2 / 3) < 1e-12);
   assert.ok(Math.abs(bareArm.C - 0.57) < 1e-12);
-  assert.ok(Math.abs(bareArm.CPI - 2.565) < 1e-12);
+  assert.ok(Math.abs(bareArm.CPI - 1.71) < 1e-12);
   assert.equal(bareArm.turns, 6);
   assert.equal(bareArm.toolCalls, 10);
   assert.equal(bareArm.cacheHitRatio, 0.5);
@@ -1058,7 +1116,7 @@ test('bench report (R03): cost model, quality Q, CPI, cache-hit ratio, McNemar, 
   // R = 6/6 = 1.0
   // Q = 1.0
   // C: input($0.10) + cacheRead($0.03) + mean output(17_500 * $10 / 1e6 = $0.175) = $0.305
-  // CPI: 0.305 / (1.0 * 1.0) = 0.305
+  // CPI: 6 * 0.305 / 6 = 0.305
   // cacheHitRatio: 900_000 / (300_000 + 900_000) = 0.75
   assert.equal(kernelArm.R, 1.0);
   assert.equal(kernelArm.Q, 1.0);
@@ -1069,22 +1127,31 @@ test('bench report (R03): cost model, quality Q, CPI, cache-hit ratio, McNemar, 
   assert.equal(kernelArm.cacheHitRatio, 0.75);
 
   // Hand-computed comparison (kernel - bare):
-  // dR = +2/3, dQ = +1/3, dC = -0.265, dCPI = 0.305 - 2.565 = -2.26, dTurns = -2, dToolCalls = -4, dCache = +0.25
-  // McNemar: b=0, c=4 -> statistic = 4.0, pValue = 2 * (0.5)^4 = 2/16 = 0.125
+  // dR = +2/3, dQ = +1/3, dC = -0.265, dCPI = 0.305 - 1.71 = -1.405, dTurns = -2, dToolCalls = -4, dCache = +0.25
+  // Sign test on task-mean R: plus=4, minus=0, zero=2 -> statistic 0, p = 2 * (0.5)^4 = 0.125
+  // (task-level pairing: six tasks, not six "runs")
   // Wilcoxon: all 6 tasks have kernel cheaper -> wPlus = 0, wMinus = 21, statistic = 0, pValue = 0.03125
   const cmp = report.comparison;
   assert.ok(cmp);
+  assert.equal(cmp.pairedTasks, 6);
+  assert.equal(cmp.pairedRuns, 6);
   assert.ok(Math.abs(cmp.deltas.R - 2 / 3) < 1e-12);
   assert.ok(Math.abs(cmp.deltas.Q - 1 / 3) < 1e-12);
   assert.ok(Math.abs(cmp.deltas.C - -0.265) < 1e-12);
-  assert.ok(Math.abs(cmp.deltas.CPI - -2.26) < 1e-12);
+  assert.ok(Math.abs(cmp.deltas.CPI - -1.405) < 1e-12);
   assert.equal(cmp.deltas.turns, -2);
   assert.equal(cmp.deltas.toolCalls, -4);
   assert.equal(cmp.deltas.cacheHitRatio, 0.25);
-  assert.equal(cmp.mcnemar.statistic, 4.0);
-  assert.equal(cmp.mcnemar.pValue, 0.125);
+  assert.equal(cmp.rTest.plus, 4);
+  assert.equal(cmp.rTest.minus, 0);
+  assert.equal(cmp.rTest.statistic, 0);
+  assert.ok(Math.abs(cmp.rTest.pValue - 0.125) < 1e-12);
   assert.equal(cmp.wilcoxon.statistic, 0);
   assert.equal(cmp.wilcoxon.pValue, 0.03125);
+  // Non-inferiority: ΔR = +2/3 with a lower bound well above -2pp on 6 paired tasks.
+  assert.equal(cmp.nonInferiority.margin, -0.02);
+  assert.equal(cmp.nonInferiority.met, true);
+  assert.equal(cmp.verdict, 'non-inferior');
 
   // Direct bootstrapArmCi and compareArms determinism check.
   const ciDirect = bootstrapArmCi([{ R: 1, Q: 1, C: 0.5, turns: 3, toolCalls: 4, input: 100, cacheRead: 300, cacheHitRatio: 0.75 }]);
@@ -1097,11 +1164,14 @@ test('bench report (R03): cost model, quality Q, CPI, cache-hit ratio, McNemar, 
   );
   assert.deepEqual(cmpDirect.ci95, cmp.ci95);
   const md = formatReportMarkdown(report);
-  assert.match(md, /\| bare \| 6 \| 6 \| 33\.3% \|/);
-  assert.match(md, /\| kernel \| 6 \| 6 \| 100\.0% \|/);
+  assert.match(md, /\| bare \| claude \| sonnet \| 6 \| 6 \| 33\.3% \|/);
+  assert.match(md, /\| kernel \| claude \| sonnet \| 6 \| 6 \| 100\.0% \|/);
   assert.match(md, /### Comparison: `kernel` vs `bare`/);
-  assert.match(md, /\| McNemar \| 4\.0000 \| 0\.1250 \|/);
+  assert.match(md, /\| Sign \| 0\.0000 \| 0\.1250 \|/);
   assert.match(md, /\| Wilcoxon \| 0\.0000 \| 0\.0313 \|/);
+  assert.match(md, /Non-inferiority \(ΔR lower bound > -2\.0%\): /);
+  assert.match(md, /— met/);
+  assert.match(md, /Verdict: non-inferior \(6 paired tasks\)/);
 
   // 6. CLI `simt bench report --compare bare kernel` (two space-separated args and --json).
   const cliMd = await runCli(['bench', 'report', '--root', repo, '--compare', 'bare', 'kernel']);

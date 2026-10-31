@@ -24,6 +24,7 @@ import {
   DEFAULT_BOOTSTRAP_SEED,
   compareArms,
   evaluateRunRecord,
+  holmAdjust,
   loadPrices,
   loadRunRecords,
 } from './report.mjs';
@@ -341,11 +342,14 @@ export async function ablateSectionInWorkspace(workDir, ablate) {
 
 /**
  * Decide whether a canary comparison warrants escalating the section arm to the full task suite.
+ *
+ * `pValue` overrides the comparison's raw p-values when the caller supplies a
+ * multiplicity-adjusted value (Holm over the family of sections tested in one run).
  */
-export function shouldEscalateCanary(comparison, { alpha = CANARY_ALPHA } = {}) {
+export function shouldEscalateCanary(comparison, { alpha = CANARY_ALPHA, pValue } = {}) {
   if (!comparison || !comparison.pairedTasks) return false;
-  if (comparison.mcnemar.pValue < alpha) return true;
-  if (comparison.wilcoxon.pValue < alpha) return true;
+  const p = pValue ?? Math.min(comparison.rTest.pValue, comparison.wilcoxon.pValue);
+  if (p < alpha) return true;
   if (comparison.ci95.R[0] > 0 || comparison.ci95.R[1] < 0) return true;
   if (Math.abs(comparison.deltas.R) >= 0.2) return true;
   return false;
@@ -470,15 +474,27 @@ export async function ablateBench(
       const canaryEvaluated = canaryRecords.map((rec) => evaluateRunRecord(rec, prices));
       const currentCanary = canaryEvaluated.filter((r) => r.arm === 'current');
 
+      const canaryComparisons = [];
       for (const sec of sections) {
         const armCanary = canaryEvaluated.filter((r) => r.arm === sec.arm);
         if (currentCanary.length > 0 && armCanary.length > 0) {
-          const cmp = compareArms(sec.arm, armCanary, 'current', currentCanary, { samples, seed });
-          if (shouldEscalateCanary(cmp)) {
-            escalatedArms.add(sec.arm);
-          }
+          canaryComparisons.push({
+            sec,
+            cmp: compareArms(sec.arm, armCanary, 'current', currentCanary, { samples, seed }),
+          });
         }
       }
+      // Family = every section tested in this one run: testing ~N sections at α 0.05
+      // each inflates the false-positive rate, so the p-values are Holm-adjusted
+      // before the escalation decision (review 0003 Q46).
+      const adjusted = holmAdjust(
+        canaryComparisons.map(({ cmp }) => Math.min(cmp.rTest.pValue, cmp.wilcoxon.pValue)),
+      );
+      canaryComparisons.forEach(({ sec, cmp }, i) => {
+        if (shouldEscalateCanary(cmp, { pValue: adjusted[i] })) {
+          escalatedArms.add(sec.arm);
+        }
+      });
 
       if (escalatedArms.size > 0) {
         await execRunBench(resolvedRoot, {
@@ -530,7 +546,7 @@ export async function ablateBench(
           dC: [0, 0],
           valuePerKb: [0, 0],
         },
-        mcnemar: { statistic: 0, pValue: 1, b: 0, c: 0 },
+        rTest: { statistic: 0, pValue: 1, plus: 0, minus: 0 },
         wilcoxon: { statistic: 0, pValue: 1, wPlus: 0, wMinus: 0 },
         deletionCandidate: false,
       };
@@ -567,11 +583,11 @@ export async function ablateBench(
         dC: cmp.ci95.C,
         valuePerKb: vCi,
       },
-      mcnemar: {
-        statistic: cmp.mcnemar.statistic,
-        pValue: cmp.mcnemar.pValue,
-        b: cmp.mcnemar.b,
-        c: cmp.mcnemar.c,
+      rTest: {
+        statistic: cmp.rTest.statistic,
+        pValue: cmp.rTest.pValue,
+        plus: cmp.rTest.plus,
+        minus: cmp.rTest.minus,
       },
       wilcoxon: {
         statistic: cmp.wilcoxon.statistic,

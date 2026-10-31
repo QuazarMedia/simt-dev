@@ -3,7 +3,9 @@
 // Reads stored run records from `.simt-dev/bench/runs/` and optional token pricing
 // from `.simt-dev/bench/prices.json` (per million tokens: `{in, cache_write, cache_read, out}`).
 // Never performs network lookups. All statistical estimators (paired bootstrap 95% CIs,
-// McNemar's test on R, Wilcoxon signed-rank test on C) are deterministic.
+// exact sign test on task-mean R, Wilcoxon signed-rank test on task-mean C) are
+// deterministic. Reps of a task are not independent tasks: pairing happens at the
+// task level only (plan 0004 §1, review 0003 Q46).
 
 import { readdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -134,10 +136,13 @@ function resolvePriceEntry(prices, run) {
 
 /**
  * Compute billed cost in USD for a single run record.
- * When a price entry is provided (per 1M tokens), computes:
- *   (input * in + cacheWrite * cache_write + cacheRead * cache_read + output * out) / 1e6
- * Falls back to `run.costUsd` when no price table is supplied (or when all token counts are 0
- * and the harness reported a direct `costUsd`).
+ *
+ * Returns `{ usd, source }` where `usd` is null when the cost is unknown — a missing
+ * cost must not read as a zero cost (review 0003 Q46: the claude run with usage but no
+ * prices reported `C $0.0000 | CPI $0.0000`). `source` is:
+ *   'priced'   — computed from the token prices table
+ *   'reported' — the harness reported `costUsd` directly
+ *   'missing'  — no prices table and no reported cost; `usd` is null
  */
 export function computeRunCost(run, prices = null) {
   const usage = run?.usage ?? {};
@@ -150,17 +155,23 @@ export function computeRunCost(run, prices = null) {
   const entry = resolvePriceEntry(prices, run);
   if (entry) {
     if (totalTokens === 0 && Number(run?.costUsd ?? 0) > 0) {
-      return Number(run.costUsd);
+      return { usd: Number(run.costUsd), source: 'reported' };
     }
-    return (
-      (input * entry.in +
-        cacheWrite * entry.cache_write +
-        cacheRead * entry.cache_read +
-        output * entry.out) /
-      1_000_000
-    );
+    return {
+      usd:
+        (input * entry.in +
+          cacheWrite * entry.cache_write +
+          cacheRead * entry.cache_read +
+          output * entry.out) /
+        1_000_000,
+      source: 'priced',
+    };
   }
-  return Number(run?.costUsd ?? 0);
+  const reported = run?.costUsd;
+  if (typeof reported === 'number' && Number.isFinite(reported)) {
+    return { usd: reported, source: 'reported' };
+  }
+  return { usd: null, source: 'missing' };
 }
 
 /**
@@ -212,7 +223,7 @@ export function evaluateRunRecord(run, prices = null) {
   const toolCalls = Number(usage.toolCalls ?? usage.tool_calls ?? 0);
   const R = isRunResolved(run) ? 1 : 0;
   const Q = computeRunQuality(run);
-  const C = computeRunCost(run, prices);
+  const cost = computeRunCost(run, prices);
   const cacheDenom = input + cacheRead;
   const cacheHitRatio = cacheDenom > 0 ? cacheRead / cacheDenom : 0;
 
@@ -221,10 +232,12 @@ export function evaluateRunRecord(run, prices = null) {
     arm: String(run?.arm ?? 'default'),
     harness: String(run?.harness ?? ''),
     model: String(run?.model ?? ''),
+    experiment: String(run?.experiment ?? ''),
     rep: Number(run?.rep ?? 1),
     R,
     Q,
-    C,
+    C: cost.usd,
+    costSource: cost.source,
     turns,
     toolCalls,
     input,
@@ -244,13 +257,17 @@ function mean(values) {
 
 /**
  * Aggregate a list of task-level (or run-level) metric rows into arm summary metrics.
+ *
+ * `C` is null when any row's cost is missing — a partial cost must not read as a
+ * complete one. `CPI` is total cost divided by resolved outcomes (plan 0004 §1:
+ * "undefined when none resolve, never zero or a favourable finite score").
  */
 function summarizeRows(rows) {
   if (rows.length === 0) {
     return {
       R: 0,
       Q: 0,
-      C: 0,
+      C: null,
       CPI: null,
       turns: 0,
       toolCalls: 0,
@@ -259,7 +276,8 @@ function summarizeRows(rows) {
   }
   const R = mean(rows.map((r) => r.R));
   const Q = mean(rows.map((r) => r.Q));
-  const C = mean(rows.map((r) => r.C));
+  const costComplete = rows.every((r) => r.C !== null && r.C !== undefined);
+  const C = costComplete ? mean(rows.map((r) => r.C)) : null;
   const turns = mean(rows.map((r) => r.turns));
   const toolCalls = mean(rows.map((r) => r.toolCalls));
   let totalInput = 0;
@@ -270,8 +288,15 @@ function summarizeRows(rows) {
   }
   const cacheHitRatio =
     totalInput + totalCacheRead > 0 ? totalCacheRead / (totalInput + totalCacheRead) : 0;
-  const rq = R * Q;
-  const CPI = rq > 0 ? C / rq : null;
+
+  let totalCost = 0;
+  let resolvedCount = 0;
+  for (const r of rows) {
+    const reps = Number(r.reps ?? 1);
+    totalCost += (r.C ?? 0) * reps;
+    resolvedCount += r.R * reps;
+  }
+  const CPI = costComplete && resolvedCount > 0 ? totalCost / resolvedCount : null;
 
   return { R, Q, C, CPI, turns, toolCalls, cacheHitRatio };
 }
@@ -292,7 +317,8 @@ export function collapseArmByTask(evaluatedRuns) {
     const group = byTask.get(task);
     const R = mean(group.map((r) => r.R));
     const Q = mean(group.map((r) => r.Q));
-    const C = mean(group.map((r) => r.C));
+    const costComplete = group.every((r) => r.C !== null && r.C !== undefined);
+    const C = costComplete ? mean(group.map((r) => r.C)) : null;
     const turns = mean(group.map((r) => r.turns));
     const toolCalls = mean(group.map((r) => r.toolCalls));
     const input = mean(group.map((r) => r.input));
@@ -333,11 +359,15 @@ export function bootstrapArmCi(
   { samples = DEFAULT_BOOTSTRAP_SAMPLES, seed = DEFAULT_BOOTSTRAP_SEED } = {},
 ) {
   const n = taskRows.length;
+  // When any task's cost is missing the cost CIs are undefined, not degenerate:
+  // dropping the undefined resamples (the old behaviour) quietly narrowed the
+  // interval to the tasks that happened to price out (review 0003 Q46).
+  const costComplete = taskRows.every((r) => r.C !== null && r.C !== undefined);
   if (n === 0) {
     return {
       R: [0, 0],
       Q: [0, 0],
-      C: [0, 0],
+      C: null,
       CPI: null,
       turns: [0, 0],
       toolCalls: [0, 0],
@@ -349,7 +379,7 @@ export function bootstrapArmCi(
     return {
       R: [s.R, s.R],
       Q: [s.Q, s.Q],
-      C: [s.C, s.C],
+      C: s.C === null ? null : [s.C, s.C],
       CPI: s.CPI === null ? null : [s.CPI, s.CPI],
       turns: [s.turns, s.turns],
       toolCalls: [s.toolCalls, s.toolCalls],
@@ -374,7 +404,7 @@ export function bootstrapArmCi(
     const s = summarizeRows(draw);
     rArr.push(s.R);
     qArr.push(s.Q);
-    cArr.push(s.C);
+    if (costComplete) cArr.push(s.C);
     if (s.CPI !== null) cpiArr.push(s.CPI);
     turnsArr.push(s.turns);
     toolsArr.push(s.toolCalls);
@@ -393,7 +423,7 @@ export function bootstrapArmCi(
   return {
     R: percentilePair(rArr),
     Q: percentilePair(qArr),
-    C: percentilePair(cArr),
+    C: costComplete ? percentilePair(cArr) : null,
     CPI: cpiArr.length > 0 ? percentilePair(cpiArr) : null,
     turns: percentilePair(turnsArr),
     toolCalls: percentilePair(toolsArr),
@@ -477,6 +507,66 @@ export function mcnemarTest(pairs) {
     pValue,
     pValueAsymptotic,
   };
+}
+
+/**
+ * Non-inferiority margin for resolution rate (plan 0004 §1): the candidate is
+ * non-inferior only when the one-sided 95% lower bound of ΔR stays above -2 pp.
+ */
+export const NON_INFERIORITY_MARGIN = -0.02;
+
+/**
+ * Below this many paired tasks the two-sided exact sign test cannot reject at α = 0.05
+ * (its smallest achievable p-value at n = 4 is 0.125), so the verdict is
+ * `insufficient-tasks` instead of a p-value the sample cannot support (review 0003 Q46).
+ */
+export const MIN_PAIRD_TASKS = 5;
+
+/**
+ * Exact two-sided sign test on paired task-mean outcomes (armA, armB).
+ * Zero differences carry no evidence and are excluded, mirroring the Wilcoxon
+ * treatment of ties. This replaces McNemar on task means: the sign of a task-mean
+ * difference is the paired discrete evidence, and it does not assume the 0/1
+ * contingency McNemar requires.
+ */
+export function signTest(pairs) {
+  let plus = 0;
+  let minus = 0;
+  let zero = 0;
+  for (const [a, b] of pairs) {
+    const d = Number(b) - Number(a);
+    if (d > 1e-12) plus += 1;
+    else if (d < -1e-12) minus += 1;
+    else zero += 1;
+  }
+  return {
+    n: pairs.length,
+    plus,
+    minus,
+    zero,
+    statistic: Math.min(plus, minus),
+    pValue: exactBinomialTwoSided(plus, minus),
+  };
+}
+
+/**
+ * Holm step-down p-value adjustment: conservative FWER control for the family of
+ * comparisons (ablation sections, rule-variant slots) tested in one run.
+ *
+ * @param {number[]} pValues raw p-values of the family, in any order
+ * @returns {number[]} adjusted p-values in the original order, monotone and in [0, 1]
+ */
+export function holmAdjust(pValues) {
+  if (pValues.length === 0) return [];
+  const m = pValues.length;
+  const indexed = pValues.map((p, i) => [i, Number(p)]).sort((a, b) => a[1] - b[1]);
+  const adjusted = new Array(m);
+  let runningMax = 0;
+  for (let j = 0; j < m; j += 1) {
+    runningMax = Math.max(runningMax, Math.min(1, indexed[j][1] * (m - j)));
+    adjusted[indexed[j][0]] = runningMax;
+  }
+  return adjusted;
 }
 
 /**
@@ -576,8 +666,20 @@ export function wilcoxonSignedRank(pairs) {
 }
 
 /**
- * Pair two arms' evaluated runs and compute deltas, paired bootstrap 95% CIs,
- * McNemar test on R, and Wilcoxon signed-rank test on C.
+ * Pair two arms at the task level and compute deltas, paired bootstrap 95% CIs,
+ * an exact sign test on task-mean R, a Wilcoxon signed-rank test on task-mean C,
+ * and a one-sided non-inferiority verdict (plan 0004 §1, review 0003 Q46).
+ *
+ * Reps of a task are not independent tasks: the old run-level pairing paired
+ * (task, rep) records when both arms shared the same keys, so one task with ten
+ * reps produced ten "paired runs" and an inflated p-value. Pairing is now at the
+ * task level only; `pairedRuns` survives as a descriptive count.
+ *
+ * `verdict`:
+ *   'insufficient-tasks' — fewer than MIN_PAIRD_TASKS paired tasks
+ *   'non-inferior'       — one-sided 95% lower bound of ΔR above NON_INFERIORITY_MARGIN
+ *   'inferior'           — two-sided 95% CI of ΔR entirely below 0
+ *   'inconclusive'       — otherwise (CI too wide to decide)
  */
 export function compareArms(
   armAName,
@@ -596,24 +698,10 @@ export function compareArms(
     b: tasksB.get(task),
   }));
 
-  // Pair individual (task, rep) records when both arms share the same (task, rep) keys;
-  // otherwise fall back to task-level pairs.
-  const runMapA = new Map(armARuns.map((r) => [`${r.task}#${r.rep}`, r]));
-  const runMapB = new Map(armBRuns.map((r) => [`${r.task}#${r.rep}`, r]));
-  const sharedRunKeys = [...runMapA.keys()].filter((k) => runMapB.has(k)).sort();
-
-  const useRunPairs =
-    sharedRunKeys.length > 0 &&
-    sharedRunKeys.length === armARuns.length &&
-    sharedRunKeys.length === armBRuns.length;
-
-  const rPairs = useRunPairs
-    ? sharedRunKeys.map((k) => [runMapA.get(k).R, runMapB.get(k).R])
-    : pairedTasks.map((p) => [p.a.R, p.b.R]);
-
-  const cPairs = useRunPairs
-    ? sharedRunKeys.map((k) => [runMapA.get(k).C, runMapB.get(k).C])
-    : pairedTasks.map((p) => [p.a.C, p.b.C]);
+  const rPairs = pairedTasks.map((p) => [p.a.R, p.b.R]);
+  const cPairs = pairedTasks
+    .filter((p) => p.a.C !== null && p.b.C !== null)
+    .map((p) => [p.a.C, p.b.C]);
 
   const sumA = summarizeRows(pairedTasks.map((p) => p.a));
   const sumB = summarizeRows(pairedTasks.map((p) => p.b));
@@ -621,7 +709,7 @@ export function compareArms(
   const deltas = {
     R: sumB.R - sumA.R,
     Q: sumB.Q - sumA.Q,
-    C: sumB.C - sumA.C,
+    C: sumB.C !== null && sumA.C !== null ? sumB.C - sumA.C : null,
     CPI: sumB.CPI !== null && sumA.CPI !== null ? sumB.CPI - sumA.CPI : null,
     cpiRatio:
       sumB.CPI !== null && sumA.CPI !== null && sumA.CPI > 0 ? sumB.CPI / sumA.CPI : null,
@@ -632,12 +720,15 @@ export function compareArms(
 
   // Paired bootstrap 95% CIs on deltas (B - A).
   const n = pairedTasks.length;
+  const costComplete =
+    pairedTasks.every((p) => p.a.C !== null && p.a.C !== undefined) &&
+    pairedTasks.every((p) => p.b.C !== null && p.b.C !== undefined);
   let ci95;
   if (n <= 1) {
     ci95 = {
       R: [deltas.R, deltas.R],
       Q: [deltas.Q, deltas.Q],
-      C: [deltas.C, deltas.C],
+      C: deltas.C === null ? null : [deltas.C, deltas.C],
       CPI: deltas.CPI === null ? null : [deltas.CPI, deltas.CPI],
       turns: [deltas.turns, deltas.turns],
       toolCalls: [deltas.toolCalls, deltas.toolCalls],
@@ -665,7 +756,7 @@ export function compareArms(
       const sB = summarizeRows(drawB);
       dR.push(sB.R - sA.R);
       dQ.push(sB.Q - sA.Q);
-      dC.push(sB.C - sA.C);
+      if (costComplete) dC.push(sB.C - sA.C);
       if (sB.CPI !== null && sA.CPI !== null) dCPI.push(sB.CPI - sA.CPI);
       dTurns.push(sB.turns - sA.turns);
       dTools.push(sB.toolCalls - sA.toolCalls);
@@ -684,7 +775,7 @@ export function compareArms(
     ci95 = {
       R: percentilePair(dR),
       Q: percentilePair(dQ),
-      C: percentilePair(dC),
+      C: costComplete ? percentilePair(dC) : null,
       CPI: dCPI.length > 0 ? percentilePair(dCPI) : null,
       turns: percentilePair(dTurns),
       toolCalls: percentilePair(dTools),
@@ -692,15 +783,38 @@ export function compareArms(
     };
   }
 
+  const rTest = signTest(rPairs);
+  const pairedRuns = pairedTasks.reduce(
+    (sum, p) => sum + Math.min(Number(p.a.reps ?? 1), Number(p.b.reps ?? 1)),
+    0,
+  );
+
+  const bound = ci95.R[0];
+  const met = n < MIN_PAIRD_TASKS ? null : bound > NON_INFERIORITY_MARGIN;
+  const verdict =
+    n < MIN_PAIRD_TASKS
+      ? 'insufficient-tasks'
+      : bound > NON_INFERIORITY_MARGIN
+        ? 'non-inferior'
+        : ci95.R[1] < 0
+          ? 'inferior'
+          : 'inconclusive';
+
   return {
     baseline: armAName,
     candidate: armBName,
-    pairedTasks: pairedTasks.length,
-    pairedRuns: rPairs.length,
+    pairedTasks: n,
+    pairedRuns,
     deltas,
     ci95,
-    mcnemar: mcnemarTest(rPairs),
+    rTest,
     wilcoxon: wilcoxonSignedRank(cPairs),
+    nonInferiority: {
+      margin: NON_INFERIORITY_MARGIN,
+      bound,
+      met,
+    },
+    verdict,
   };
 }
 
@@ -774,14 +888,14 @@ function fmtSignedNum(v, digits = 2) {
  */
 export function formatReportMarkdown(report) {
   const lines = [
-    '| Arm | Tasks | Runs | R | 95% CI (R) | Q | C ($) | CPI ($) | Turns | Tool calls | Cache hit |',
-    '| --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
+    '| Arm | Harness | Model | Tasks | Runs | R | 95% CI (R) | Q | C ($) | CPI ($) | Turns | Tool calls | Cache hit |',
+    '| --- | --- | --- | ---: | ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: |',
   ];
 
   for (const arm of report.arms) {
     const rCi = `[${fmtPct(arm.ci95.R[0])}, ${fmtPct(arm.ci95.R[1])}]`;
     lines.push(
-      `| ${arm.arm} | ${arm.tasks} | ${arm.runs} | ${fmtPct(arm.R)} | ${rCi} | ${fmtNum(arm.Q, 3)} | ${fmtUsd(arm.C)} | ${fmtUsd(arm.CPI)} | ${fmtNum(arm.turns, 2)} | ${fmtNum(arm.toolCalls, 2)} | ${fmtPct(arm.cacheHitRatio)} |`,
+      `| ${arm.arm} | ${arm.harness} | ${arm.model} | ${arm.tasks} | ${arm.runs} | ${fmtPct(arm.R)} | ${rCi} | ${fmtNum(arm.Q, 3)} | ${fmtUsd(arm.C)} | ${fmtUsd(arm.CPI)} | ${fmtNum(arm.turns, 2)} | ${fmtNum(arm.toolCalls, 2)} | ${fmtPct(arm.cacheHitRatio)} |`,
     );
   }
 
@@ -798,13 +912,13 @@ export function formatReportMarkdown(report) {
     const candArm = report.arms.find((a) => a.arm === cmp.candidate);
 
     lines.push(
-      `| R | ${baseArm ? fmtPct(baseArm.R) : 'n/a'} | ${candArm ? fmtPct(candArm.R) : 'n/a'} | ${fmtSignedPct(d.R)} | [${fmtSignedPct(cmp.ci95.R[0])}, ${fmtSignedPct(cmp.ci95.R[1])}] | McNemar | ${fmtNum(cmp.mcnemar.statistic, 4)} | ${fmtNum(cmp.mcnemar.pValue, 4)} |`,
+      `| R | ${baseArm ? fmtPct(baseArm.R) : 'n/a'} | ${candArm ? fmtPct(candArm.R) : 'n/a'} | ${fmtSignedPct(d.R)} | [${fmtSignedPct(cmp.ci95.R[0])}, ${fmtSignedPct(cmp.ci95.R[1])}] | Sign | ${fmtNum(cmp.rTest.statistic, 4)} | ${fmtNum(cmp.rTest.pValue, 4)} |`,
     );
     lines.push(
       `| Q | ${baseArm ? fmtNum(baseArm.Q, 3) : 'n/a'} | ${candArm ? fmtNum(candArm.Q, 3) : 'n/a'} | ${fmtSignedNum(d.Q, 3)} | [${fmtSignedNum(cmp.ci95.Q[0], 3)}, ${fmtSignedNum(cmp.ci95.Q[1], 3)}] | — | — | — |`,
     );
     lines.push(
-      `| C ($) | ${baseArm ? fmtUsd(baseArm.C) : 'n/a'} | ${candArm ? fmtUsd(candArm.C) : 'n/a'} | ${fmtSignedUsd(d.C)} | [${fmtSignedUsd(cmp.ci95.C[0])}, ${fmtSignedUsd(cmp.ci95.C[1])}] | Wilcoxon | ${fmtNum(cmp.wilcoxon.statistic, 4)} | ${fmtNum(cmp.wilcoxon.pValue, 4)} |`,
+      `| C ($) | ${baseArm ? fmtUsd(baseArm.C) : 'n/a'} | ${candArm ? fmtUsd(candArm.C) : 'n/a'} | ${fmtSignedUsd(d.C)} | ${cmp.ci95.C ? `[${fmtSignedUsd(cmp.ci95.C[0])}, ${fmtSignedUsd(cmp.ci95.C[1])}]` : 'n/a'} | Wilcoxon | ${fmtNum(cmp.wilcoxon.statistic, 4)} | ${fmtNum(cmp.wilcoxon.pValue, 4)} |`,
     );
     lines.push(
       `| CPI ($) | ${baseArm ? fmtUsd(baseArm.CPI) : 'n/a'} | ${candArm ? fmtUsd(candArm.CPI) : 'n/a'} | ${fmtSignedUsd(d.CPI)} | ${cmp.ci95.CPI ? `[${fmtSignedUsd(cmp.ci95.CPI[0])}, ${fmtSignedUsd(cmp.ci95.CPI[1])}]` : 'n/a'} | — | — | — |`,
@@ -818,6 +932,11 @@ export function formatReportMarkdown(report) {
     lines.push(
       `| Cache hit | ${baseArm ? fmtPct(baseArm.cacheHitRatio) : 'n/a'} | ${candArm ? fmtPct(candArm.cacheHitRatio) : 'n/a'} | ${fmtSignedPct(d.cacheHitRatio)} | [${fmtSignedPct(cmp.ci95.cacheHitRatio[0])}, ${fmtSignedPct(cmp.ci95.cacheHitRatio[1])}] | — | — | — |`,
     );
+    lines.push('');
+    lines.push(
+      `Non-inferiority (ΔR lower bound > ${fmtSignedPct(cmp.nonInferiority.margin)}): ${fmtSignedPct(cmp.nonInferiority.bound)} — ${cmp.nonInferiority.met === true ? 'met' : cmp.nonInferiority.met === false ? 'not met' : 'not assessable'}`,
+    );
+    lines.push(`Verdict: ${cmp.verdict} (${cmp.pairedTasks} paired tasks)`);
   }
 
   return lines.join('\n');
@@ -825,6 +944,11 @@ export function formatReportMarkdown(report) {
 
 /**
  * Build the complete benchmark report for `root`.
+ *
+ * Arms are grouped by (harness, model, arm, experiment): pooling the `gold` and
+ * `noop` harness runs of the same arm name into one row hid what each harness
+ * actually did (review 0003 Q46). A `--compare` across two groups that differ in
+ * harness, model or experiment is refused unless `crossGroup` is set.
  */
 export async function buildBenchReport(
   root,
@@ -836,6 +960,7 @@ export async function buildBenchReport(
     prices: customPrices,
     samples = DEFAULT_BOOTSTRAP_SAMPLES,
     seed = DEFAULT_BOOTSTRAP_SEED,
+    crossGroup = false,
   } = {},
 ) {
   const resolvedRoot = resolve(root);
@@ -851,21 +976,25 @@ export async function buildBenchReport(
   });
 
   const evaluated = filtered.map((rec) => evaluateRunRecord(rec, prices));
-  const byArm = new Map();
+  const byGroup = new Map();
   for (const row of evaluated) {
-    const list = byArm.get(row.arm) ?? [];
+    const key = `${row.harness}|${row.model}|${row.arm}|${row.experiment}`;
+    const list = byGroup.get(key) ?? [];
     list.push(row);
-    byArm.set(row.arm, list);
+    byGroup.set(key, list);
   }
 
-  const armNames = [...byArm.keys()].sort();
-  const arms = armNames.map((armName) => {
-    const runs = byArm.get(armName);
+  const groupKeys = [...byGroup.keys()].sort();
+  const arms = groupKeys.map((key) => {
+    const [harness, model, armName] = key.split('|');
+    const runs = byGroup.get(key);
     const taskRows = collapseArmByTask(runs);
     const summary = summarizeRows(taskRows);
     const ci95 = bootstrapArmCi(taskRows, { samples, seed });
     return {
       arm: armName,
+      harness,
+      model,
       tasks: taskRows.length,
       runs: runs.length,
       R: summary.R,
@@ -885,15 +1014,35 @@ export async function buildBenchReport(
       throw new Error('--compare requires two arm names: --compare <arm-a> <arm-b>');
     }
     const [armA, armB] = compare;
-    const runsA = byArm.get(armA);
-    const runsB = byArm.get(armB);
-    if (!runsA || runsA.length === 0) {
-      throw new Error(`arm "${armA}" has no stored benchmark runs`);
+    const pick = (name) => {
+      const matches = groupKeys.filter((k) => k.split('|')[2] === name);
+      if (matches.length === 0) {
+        throw new Error(`arm "${name}" has no stored benchmark runs`);
+      }
+      if (matches.length > 1) {
+        const listing = matches
+          .map((k) => {
+            const [h, m, a] = k.split('|');
+            return `${a} (harness: ${h}, model: ${m})`;
+          })
+          .join('; ');
+        throw new Error(
+          `arm "${name}" is ambiguous — groups: ${listing}; filter with --harness/--model or disambiguate the arm name`,
+        );
+      }
+      return { runs: byGroup.get(matches[0]), groupKey: matches[0] };
+    };
+    const a = pick(armA);
+    const b = pick(armB);
+    const ga = a.groupKey.split('|');
+    const gb = b.groupKey.split('|');
+    const crosses = ga[0] !== gb[0] || ga[1] !== gb[1] || ga[3] !== gb[3];
+    if (crosses && !crossGroup) {
+      throw new Error(
+        `comparing "${armA}" and "${armB}" crosses groups (harness/model differ); pass crossGroup to compare across groups anyway`,
+      );
     }
-    if (!runsB || runsB.length === 0) {
-      throw new Error(`arm "${armB}" has no stored benchmark runs`);
-    }
-    comparison = compareArms(armA, runsA, armB, runsB, { samples, seed });
+    comparison = compareArms(armA, a.runs, armB, b.runs, { samples, seed });
   }
 
   const report = {

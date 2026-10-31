@@ -15,7 +15,8 @@
 # red for hours when nothing is wrong, so the channels live in their own file
 # and are RUN, not waited on (ADR-097):
 #
-#   gh workflow run publish-channels.yml -f version=0.5.0
+#   gh workflow run publish-channels.yml                    # the newest on npm
+#   gh workflow run publish-channels.yml -f version=0.5.0   # a named release
 #
 # The version is an INPUT, not the ref. That is the whole point of this file:
 # on a dispatch, `github.ref_name` is the branch the form defaulted to, and the
@@ -25,6 +26,11 @@
 # claims - so the form field is the only thing describing the release, and a
 # wrong form field fails loudly instead of publishing a side channel of a
 # version this repository never claimed.
+#
+# The field may be left as `latest` (its default) or emptied: each job's first
+# step resolves that to the concrete version the npm registry serves, and only
+# the resolved value reaches the guard - a channel named `latest` never does
+# (ADR-121).
 #
 # Each channel has its own prerequisite, and each job checks it before
 # publishing, naming the remedy when it is unmet (ADR-058 ruling 7):
@@ -52,12 +58,14 @@ on:
   workflow_dispatch:
     inputs:
       # The version of the release whose stage a maintainer just approved,
-      # without the `v` the tag wears. `0.5.0`, not `latest`: a channel named
-      # latest publishes a side channel of whatever is newest, which is the one
-      # failure this guard exists to prevent.
+      # without the `v` the tag wears. `latest` - the default - and an empty
+      # field both mean "whatever npm serves as newest"; the resolution lands
+      # in the job's environment before the guard runs, so the guard always
+      # compares a concrete version against the tag.
       version:
-        description: 'the simt-dev version live on npm, e.g. 0.5.0'
-        required: true
+        description: 'the simt-dev version live on npm, or latest for the newest published version'
+        required: false
+        default: 'latest'
         type: string
       # Which channels this run publishes. Each is a checkbox, and each job
       # below gates on its own - so a run touches only the channels you tick,
@@ -104,12 +112,26 @@ jobs:
       # session; PyPI rejects the exchange without it.
       id-token: write
     steps:
+      - name: resolve the version
+        # `latest` (the form's default) and an empty field both mean "whatever
+        # npm serves as newest". The resolution lands in the job's environment
+        # before anything else reads the version, so the checkout, the guard
+        # and the channels all name the concrete release (ADR-121).
+        run: |
+          set -eu
+          version="${{ inputs.version }}"
+          if [ -z "$version" ] || [ "$version" = "latest" ]; then
+            version="$(npm view simt-dev version)"
+          fi
+          echo "resolved version: ${version}"
+          echo "RELEASE_VERSION=${version}" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The tagged tree, not whatever the dispatch form pointed at: the
           # wheel carries the bytes of the release the input names, and those
           # bytes have an address - the tag publish.yml stamped.
-          ref: v${{ inputs.version }}
+          ref: v${{ env.RELEASE_VERSION }}
 
       - name: the tag is this package's version
         # The dispatch input replaces the tag-ref comparison publish.yml gets
@@ -119,11 +141,11 @@ jobs:
         run: |
           set -eu
           rendered="$(node -p "require('./package.json').version")"
-          if [ "${{ inputs.version }}" != "$rendered" ]; then
-            echo "::error::version input ${{ inputs.version }} does not match package.json version ${rendered} on tag v${{ inputs.version }}"
+          if [ "${{ env.RELEASE_VERSION }}" != "$rendered" ]; then
+            echo "::error::version ${{ env.RELEASE_VERSION }} does not match package.json version ${rendered} on tag v${{ env.RELEASE_VERSION }}"
             exit 1
           fi
-          echo "v${{ inputs.version }} matches package.json"
+          echo "v${{ env.RELEASE_VERSION }} matches package.json"
 
       - name: the npm channel has this version
         # The wheel and the tarball carry the same bytes, and a PyPI release
@@ -136,7 +158,7 @@ jobs:
         # stage still unapproved, the job says so and names the approval.
         run: |
           set -eu
-          version="${{ inputs.version }}"
+          version="${{ env.RELEASE_VERSION }}"
           if npm view "simt-dev@${version}" version >/dev/null 2>&1; then
             echo "simt-dev@${version} is live on npm"
           else
@@ -190,11 +212,24 @@ jobs:
     # the job - it does not fail, so a PyPI-only run is green end to end.
     if: ${{ inputs['publish-brew'] }}
     steps:
+      - name: resolve the version
+        # The same resolution as the PyPI job: the form field may be `latest`
+        # or empty, and only the concrete version the npm registry serves
+        # reaches the guard and the tap (ADR-121).
+        run: |
+          set -eu
+          version="${{ inputs.version }}"
+          if [ -z "$version" ] || [ "$version" = "latest" ]; then
+            version="$(npm view simt-dev version)"
+          fi
+          echo "resolved version: ${version}"
+          echo "RELEASE_VERSION=${version}" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The tagged tree, for the same reason PyPI's checkout is: the
           # formula is rendered from the release's own source of truth.
-          ref: v${{ inputs.version }}
+          ref: v${{ env.RELEASE_VERSION }}
 
       - name: the tag is this package's version
         # Same guard as the PyPI job: the form field is compared against the
@@ -203,11 +238,11 @@ jobs:
         run: |
           set -eu
           rendered="$(node -p "require('./package.json').version")"
-          if [ "${{ inputs.version }}" != "$rendered" ]; then
-            echo "::error::version input ${{ inputs.version }} does not match package.json version ${rendered} on tag v${{ inputs.version }}"
+          if [ "${{ env.RELEASE_VERSION }}" != "$rendered" ]; then
+            echo "::error::version ${{ env.RELEASE_VERSION }} does not match package.json version ${rendered} on tag v${{ env.RELEASE_VERSION }}"
             exit 1
           fi
-          echo "v${{ inputs.version }} matches package.json"
+          echo "v${{ env.RELEASE_VERSION }} matches package.json"
 
       - name: the release binary the formula points at exists
         # The formula downloads these three assets. If any of them is missing,
@@ -218,7 +253,7 @@ jobs:
         # the render step below, which is the one place the tap's values are set.
         run: |
           set -eu
-          version="${{ inputs.version }}"
+          version="${{ env.RELEASE_VERSION }}"
           for target in darwin-arm64 darwin-x64 linux-x64; do
             read -r asset url < <(node -e "
               import('./src/distribute/release.mjs').then((m) => {
@@ -274,7 +309,7 @@ jobs:
         run: |
           set -eu
           node scripts/release-formula.mjs \
-            --version="${{ inputs.version }}" \
+            --version="${{ env.RELEASE_VERSION }}" \
             --sha256-darwin-arm64="${{ env.SHA256_DARWIN_ARM64 }}" \
             --sha256-darwin-x64="${{ env.SHA256_DARWIN_X64 }}" \
             --sha256-linux-x64="${{ env.SHA256_LINUX_X64 }}"
@@ -302,9 +337,9 @@ jobs:
             echo "the tap already has this version; nothing to push"
             exit 0
           fi
-          git commit --quiet -m "$(printf 'simt-dev %s\n' "${{ inputs.version }}")"
+          git commit --quiet -m "$(printf 'simt-dev %s\n' "${{ env.RELEASE_VERSION }}")"
           git push --quiet origin main
-          echo "pushed simt-dev ${{ inputs.version }} to ${tap}@main"
+          echo "pushed simt-dev ${{ env.RELEASE_VERSION }} to ${tap}@main"
   verify-brew:
     name: the tap serves this release
     runs-on: ubuntu-latest
@@ -312,6 +347,18 @@ jobs:
     needs: [publish-brew]
     if: ${{ inputs['publish-brew'] }}
     steps:
+      - name: resolve the version
+        # The same resolution as the other jobs: this check greps the tap for
+        # the concrete version the release named (ADR-121).
+        run: |
+          set -eu
+          version="${{ inputs.version }}"
+          if [ -z "$version" ] || [ "$version" = "latest" ]; then
+            version="$(npm view simt-dev version)"
+          fi
+          echo "resolved version: ${version}"
+          echo "RELEASE_VERSION=${version}" >> "$GITHUB_ENV"
+
       - name: the tap formula names this version
         env:
           TAP: ${{ vars.HOMEBREW_TAP || 'QuazarMedia/homebrew-tap' }}
@@ -319,9 +366,9 @@ jobs:
           set -eu
           url="https://raw.githubusercontent.com/${TAP}/main/Formula/simt-dev.rb"
           formula="$(curl -fsSL "$url")"
-          if printf '%s' "$formula" | grep -q "simt-dev-${{ inputs.version }}-"; then
-            echo "the tap serves simt-dev ${{ inputs.version }}"
+          if printf '%s' "$formula" | grep -q "simt-dev-${{ env.RELEASE_VERSION }}-"; then
+            echo "the tap serves simt-dev ${{ env.RELEASE_VERSION }}"
           else
-            echo "::error::${url} does not name simt-dev-${{ inputs.version }}. The tap push did not land on main."
+            echo "::error::${url} does not name simt-dev-${{ env.RELEASE_VERSION }}. The tap push did not land on main."
             exit 1
           fi

@@ -7,6 +7,12 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+// The pre-push gate runs this suite in a detached worktree under the temp
+// directory. With no workspace declared, the sibling heuristic treats that
+// parent as a workspace and `compare` scans every scratch directory beside it.
+// These tests are about the protocol, not workspace discovery, so decline it.
+process.env.SIMT_DEV_WORKSPACE = 'off';
+
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';

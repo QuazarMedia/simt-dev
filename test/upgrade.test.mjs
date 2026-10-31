@@ -762,3 +762,15 @@ test('upgrade refreshes the generated comment, not only the sha', async () => {
   // The repo's own choices survive the refresh.
   assert.equal(after.id, manifest.id);
 });
+
+test('a repo that never adopted is a skip, and the document agrees with the exit code', async () => {
+  // `ok` used to be `summary.skipped === 0`, so this exact repository answered ok:false
+  // while the process exited 0. A caller reading the document stopped; one reading the
+  // status carried on; nothing said which was the verdict (review 0003 Q65).
+  const dir = await mkdtemp(join(tmpdir(), 'simt-upgrade-verdict-'));
+  await exec('git', ['init', '-q', dir]);
+  const { code, payload } = await runJson(['upgrade', '--root', dir]);
+  assert.deepEqual(payload.summary.skippedStates, ['not-adopted']);
+  assert.equal(payload.exitCode, code);
+  assert.equal(payload.ok, code === 0);
+});

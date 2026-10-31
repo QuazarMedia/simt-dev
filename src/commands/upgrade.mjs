@@ -216,8 +216,12 @@ export async function upgradeCommand(positional, flags) {
     }
   }
 
+  // One verdict, stated once. `ok` used to be `skipped === 0`, so a workspace with a
+  // repo that never adopted answered ok:false and exited 0: the document and the process
+  // disagreed, and a caller had no way to tell which one was the answer (review 0003 Q65).
+  const code = exitFor(plans, failed);
   const payload = {
-    ok: summary.skipped === 0 && failed.length === 0,
+    ok: code === EXIT.OK,
     command: 'upgrade',
     root,
     shape: found.shape,
@@ -232,7 +236,7 @@ export async function upgradeCommand(positional, flags) {
 
   if (isJson(flags)) {
     emitJson(payload);
-    return exitFor(plans, failed);
+    return code;
   }
 
   emit(render(plans, summary, { root, shape: found.shape, source: target.source, sha, applied, failed }));
@@ -256,7 +260,7 @@ export async function upgradeCommand(positional, flags) {
   } else {
     note('note     every consumer already runs this simt-dev');
   }
-  return exitFor(plans, failed);
+  return code;
 }
 
 /**

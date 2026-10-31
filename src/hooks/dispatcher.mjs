@@ -69,14 +69,63 @@ export function parsePushedRefs(text) {
 }
 
 /**
+ * Confirm a tag's commit is already accounted for, so the tag may ride along in a
+ * docs-only push (ADR-113). A tag carries no commits of its own in the release flow:
+ * it points at commits delivered (and tested) by a branch push. It is acceptable only
+ * when the commit it names is reachable from a remote-tracking ref (already pushed) or
+ * from a branch tip this same push is delivering. Any uncertainty - the tag does not
+ * resolve to a commit, the remote refs cannot be listed, no candidate is known, or the
+ * commit is unreachable from all of them - fails closed to the full suite.
+ *
+ * @param {string} root the repository to ask git
+ * @param {string} tagSha the tag's local sha from the pre-push line
+ * @param {string[]} pushingTips branch tips this same push is delivering
+ * @returns {Promise<{ok: boolean, reason: string | null}>}
+ */
+async function tagCommitAccountedFor(root, tagSha, pushingTips) {
+  let commit;
+  try {
+    ({ stdout: commit } = await exec('git', ['rev-parse', `${tagSha}^{commit}`], { cwd: root }));
+  } catch (error) {
+    return { ok: false, reason: `the tag could not be resolved to a commit: ${String(error.stderr ?? error.message).trim()}` };
+  }
+  commit = commit.trim();
+
+  let remoteRefs;
+  try {
+    ({ stdout: remoteRefs } = await exec('git', ['for-each-ref', 'refs/remotes/', '--format=%(refname)'], { cwd: root }));
+  } catch (error) {
+    return { ok: false, reason: `the remote refs could not be listed: ${String(error.stderr ?? error.message).trim()}` };
+  }
+  const candidates = [
+    ...remoteRefs.split('\n').map((s) => s.trim()).filter((s) => s !== ''),
+    ...pushingTips,
+  ];
+  if (candidates.length === 0) {
+    return { ok: false, reason: 'no remote refs are known and no branch is being pushed, so the tag’s commit cannot be confirmed as already delivered' };
+  }
+  for (const candidate of candidates) {
+    try {
+      await exec('git', ['merge-base', '--is-ancestor', commit, candidate], { cwd: root });
+      return { ok: true, reason: null };
+    } catch {
+      // not reachable from this ref; try the next candidate
+    }
+  }
+  return { ok: false, reason: `the tag’s commit (${commit.slice(0, 7)}) is not reachable from any pushed ref; it may not have been tested` };
+}
+
+/**
  * Decide whether a push carries only documentation, so the `test` gate may be
  * skipped for it (ADR-113). Every uncertainty fails closed to `{ docsOnly: false }`
  * with the reason the full suite runs: an empty ref list, a new branch (no remote
- * sha to diff against), a commit count above the ceiling, a file outside the
- * declared paths, or a git error each fail closed to the full suite.
+ * sha to diff against), a tag whose commit is not confirmed already delivered, a
+ * commit count above the ceiling, a file outside the declared paths, or a git error.
  *
- * The file list is a TREE diff (`remote..local`), so a force push that drops
- * commits is judged on the trees it replaces, not on the commit count alone.
+ * Branch refs are judged on a TREE diff (`remote..local`), so a force push that
+ * drops commits is judged on the trees it replaces, not on the commit count alone.
+ * Tag refs carry no commits of their own; each is accepted only when its commit is
+ * already accounted for (see `tagCommitAccountedFor`). Deletions push nothing.
  *
  * @param {string} root the repository to ask git
  * @param {{ref: string, localSha: string, remoteSha: string}[]} refs
@@ -87,10 +136,13 @@ export async function classifyPush(root, refs, { maxCommits, paths }) {
   if (refs.length === 0) {
     return { docsOnly: false, reason: 'the push carries no readable ref list; running the full suite' };
   }
+  const deletions = refs.filter((r) => r.localSha === ZERO_SHA).length;
+  const branches = refs.filter((r) => r.localSha !== ZERO_SHA && !r.ref.startsWith('refs/tags/'));
+  const tags = refs.filter((r) => r.localSha !== ZERO_SHA && r.ref.startsWith('refs/tags/'));
+
   let commits = 0;
   const files = new Set();
-  for (const { ref, localSha, remoteSha } of refs) {
-    if (localSha === ZERO_SHA) continue; // a branch deletion pushes no commits
+  for (const { ref, localSha, remoteSha } of branches) {
     if (remoteSha === ZERO_SHA) {
       return { docsOnly: false, reason: `a new branch is being pushed (${ref}); its history cannot be diffed against the remote` };
     }
@@ -107,6 +159,13 @@ export async function classifyPush(root, refs, { maxCommits, paths }) {
       if (name !== '') files.add(name);
     }
   }
+
+  const pushingTips = branches.map((b) => b.localSha);
+  for (const { localSha } of tags) {
+    const verdict = await tagCommitAccountedFor(root, localSha, pushingTips);
+    if (!verdict.ok) return { docsOnly: false, reason: verdict.reason };
+  }
+
   if (commits > maxCommits) {
     return { docsOnly: false, reason: `${commits} commits exceed the ${maxCommits}-commit ceiling for a docs-only push` };
   }
@@ -114,7 +173,12 @@ export async function classifyPush(root, refs, { maxCommits, paths }) {
   if (outside.length > 0) {
     return { docsOnly: false, reason: `${outside.length} file(s) are outside the docs-only paths: ${outside.slice(0, 5).join(', ')}` };
   }
-  return { docsOnly: true, reason: `${commits} commit(s) touching ${files.size} file(s), all inside the docs-only paths` };
+
+  const parts = [];
+  if (commits > 0) parts.push(`${commits} commit(s) touching ${files.size} file(s), all inside the docs-only paths`);
+  if (tags.length > 0) parts.push(`${tags.length} tag(s) already delivered`);
+  if (deletions > 0) parts.push(`${deletions} ref deletion(s)`);
+  return { docsOnly: true, reason: parts.length > 0 ? parts.join('; ') : 'no commits carried' };
 }
 
 /**

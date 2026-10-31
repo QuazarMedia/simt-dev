@@ -34,10 +34,11 @@ already the declared home of gate configuration.
 1. **The `test` gate is the only gate a push can skip, and only on evidence.**
    Before running its gates, the dispatcher classifies the push from the ref
    list git fed on stdin. The `test` gate is skipped when, and only when, every
-   ref being pushed diffs to at most a declared number of commits and every
-   file in those diffs matches a declared path. Every other gate runs
-   unconditionally: they are cheap and repo-specific, and a skip the classifier
-   does not own is a skip it did not earn.
+   ref being pushed is one of: a branch whose diff against the remote is at
+   most a declared number of commits and touches only declared paths; a tag
+   whose commit is confirmed already delivered; or a deletion. Every other gate
+   runs unconditionally: they are cheap and repo-specific, and a skip the
+   classifier does not own is a skip it did not earn.
 2. **The skip is opt-in per repository, and absence runs the suite.** The
    classification is declared in the manifest as `gates.prePushSkipTest` with
    `maxCommits` and `paths`. A repository without the key runs the full suite
@@ -45,11 +46,12 @@ already the declared home of gate configuration.
    control is downgraded from the manifest where a reviewer sees it, and a
    downgrade the manifest cannot state precisely is one it did not make.
 3. **Every uncertainty fails closed to the full suite, and a skip is reported.**
-   An unreadable ref list, a new branch (no remote sha to diff against), a
-   commit count above the ceiling, a file outside the declared paths, or a git
-   error each run the suite. When the skip does fire, the report prints the
-   gate as `SKIPPED` with the reason — the commit count and file count that
-   earned it — so the reader sees the suite was not run and why.
+   An unreadable ref list, a new branch (no remote sha to diff against), a tag
+   whose commit cannot be confirmed already delivered, a commit count above the
+   ceiling, a file outside the declared paths, or a git error each run the suite.
+   When the skip does fire, the report prints the gate as `SKIPPED` with the
+   reason — the commit count, file count, and tag count that earned it — so the
+   reader sees the suite was not run and why.
 
 ## Consequences
 
@@ -59,6 +61,12 @@ already the declared home of gate configuration.
   of a release commit.
 - The file list is a tree diff over `remote..local`, so a force push is judged
   on the trees it replaces, not on the commits it adds.
+- A release tag rides along in the skip. In the release flow a tag names commits
+  already delivered (and tested) by a branch push, so the classifier accepts it
+  only when the commit it points to is reachable from a remote-tracking ref, or
+  is among the commits the same push is delivering on a branch. A tag on a
+  commit no pushed ref contains runs the suite: the gate does not assume a tag
+  is harmless, it verifies the commit behind it.
 - The classification reads the repository's git state, so it runs on the real
   root; the disposable worktree at HEAD is for the gates, and a push that
   earns the skip does not need one.

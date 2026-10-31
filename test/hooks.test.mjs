@@ -653,7 +653,9 @@ test('dispatcher: a branch deletion pushes no commits and earns the skip', async
   const pushed = `refs/heads/main ${'0'.repeat(40)} refs/heads/main ${base}\n`;
   const result = await runGates('pre-push', { root, manifest, pushed });
   assert.equal(result.failed, false);
-  assert.equal(result.gates.find((g) => g.name === 'test').status, 'skipped');
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'skipped');
+  assert.match(gate.detail, /deletion push: 1 ref deletion\(s\)/);
 });
 
 test('dispatcher: without prePushSkipTest the suite runs on every push', async () => {
@@ -729,7 +731,9 @@ test('dispatcher: a tag on an already-pushed commit skips the test gate', async 
   assert.equal(result.failed, false);
   const gate = result.gates.find((g) => g.name === 'test');
   assert.equal(gate.status, 'skipped');
-  assert.match(gate.detail, /1 tag\(s\) already delivered/);
+  // A push that carries only a tag is a tag push; the report must not call it docs-only.
+  assert.match(gate.detail, /tag push: 1 tag\(s\) already delivered/);
+  assert.doesNotMatch(gate.detail, /docs-only/);
 });
 
 test('dispatcher: a tag whose commit no pushed ref contains runs the test gate', async () => {
@@ -755,7 +759,8 @@ test('dispatcher: a tag riding a docs-only branch push skips the test gate', asy
   assert.equal(result.failed, false);
   const gate = result.gates.find((g) => g.name === 'test');
   assert.equal(gate.status, 'skipped');
-  assert.match(gate.detail, /1 commit\(s\) touching 1 file\(s\)/);
+  // Commits are being delivered, so the push kind stays docs-only even with a tag aboard.
+  assert.match(gate.detail, /^docs-only push: 1 commit\(s\) touching 1 file\(s\)/);
   assert.match(gate.detail, /1 tag\(s\) already delivered/);
 });
 

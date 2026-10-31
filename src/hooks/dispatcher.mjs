@@ -178,7 +178,11 @@ export async function classifyPush(root, refs, { maxCommits, paths }) {
   if (commits > 0) parts.push(`${commits} commit(s) touching ${files.size} file(s), all inside the docs-only paths`);
   if (tags.length > 0) parts.push(`${tags.length} tag(s) already delivered`);
   if (deletions > 0) parts.push(`${deletions} ref deletion(s)`);
-  return { docsOnly: true, reason: parts.length > 0 ? parts.join('; ') : 'no commits carried' };
+  if (parts.length === 0) return { docsOnly: true, reason: 'no commits carried' };
+  // The report prints this as-is (ADR-113). The label names what is being pushed:
+  // a push that carries only tags is a tag push, not a docs-only push.
+  const kind = commits > 0 ? 'docs-only push' : tags.length > 0 ? 'tag push' : 'deletion push';
+  return { docsOnly: true, reason: `${kind}: ${parts.join('; ')}` };
 }
 
 /**
@@ -366,7 +370,7 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
     // dropped: a skip without a printed reason would let "passed" mean "the suite
     // never ran", which is the exact confusion the report exists to prevent.
     if (skipTest !== null && name === 'test') {
-      results.push({ name, status: 'skipped', detail: `docs-only push: ${skipTest.reason}`, adr: 'ADR-113', exitCode: null });
+      results.push({ name, status: 'skipped', detail: skipTest.reason, adr: 'ADR-113', exitCode: null });
       continue;
     }
 

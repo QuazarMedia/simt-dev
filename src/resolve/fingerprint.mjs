@@ -226,6 +226,12 @@ export async function fingerprint(root) {
   }
   const names = new Set(entries);
 
+  // One walk answers every `glob` fact. Each candidate used to walk the tree again, so
+  // a repository with seven globs paid for seven identical walks - the same directories,
+  // in the same order, for the same answer (review 0003 Q67).
+  let nested = null;
+  const nestedPaths = async () => (nested ??= await listNested(root));
+
   for (const [tag, markers] of MARKERS) {
     const hit = markers.find((m) => names.has(m));
     if (hit) {
@@ -250,7 +256,7 @@ export async function fingerprint(root) {
         break;
       }
       if (fact.kind === 'glob') {
-        const hit = (await findNested(root, candidate))[0];
+        const hit = findNestedIn(await nestedPaths(), candidate)[0];
         if (hit) {
           facts.add(fact.name);
           factEvidence[fact.name] ??= hit;
@@ -357,7 +363,7 @@ async function isDir(path) {
  * are skipped for the reason the extension sample skips them: detection is not a
  * scan of vendored output.
  */
-async function findNested(root, pattern) {
+async function listNested(root) {
   const found = [];
   const walk = async (dir, prefix, depth) => {
     let items;
@@ -371,13 +377,18 @@ async function findNested(root, pattern) {
       const rel = prefix ? `${prefix}/${item.name}` : item.name;
       if (item.isDirectory()) {
         if (depth < GLOB_DEPTH) await walk(join(dir, item.name), rel, depth + 1);
-      } else if (matchesGlob(rel, pattern)) {
+      } else {
         found.push(rel);
       }
     }
   };
   await walk(root, '', 0);
   return found.sort();
+}
+
+/** The paths in the one walk that match a shape. */
+function findNestedIn(paths, pattern) {
+  return paths.filter((rel) => matchesGlob(rel, pattern)).sort();
 }
 
 /**

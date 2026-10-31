@@ -1,6 +1,6 @@
 # ADR-097 — the channels publish by hand, and the version rides in as an input
 
-Status: **accepted** · 2026-10-25 · ruling 3's Homebrew precondition is superseded by [ADR-098](ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md), which also restates what each channel now waits on · ruling 2 is narrowed by [ADR-121](ADR-121-the-version-input-may-be-latest-and-each-job-resolves-it-before-the-guard.md), which lets the input be `latest` and resolves it per job before the guard
+Status: **accepted** · 2026-10-25 · ruling 3's Homebrew precondition is superseded by [ADR-098](ADR-098-the-fourth-channel-is-one-file-and-it-needs-no-toolchain.md), which also restates what each channel now waits on
 
 **Affects:** `.github/workflows/publish.yml`,
 `.github/workflows/publish-channels.yml`, `scripts/publish-local.mjs`,

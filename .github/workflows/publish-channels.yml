@@ -29,8 +29,7 @@
 #
 # The field may be left as `latest` (its default) or emptied: each job's first
 # step resolves that to the concrete version the npm registry serves, and only
-# the resolved value reaches the guard - a channel named `latest` never does
-# (ADR-121).
+# the resolved value reaches the guard - a channel named `latest` never does.
 #
 # Each channel has its own prerequisite, and each job checks it before
 # publishing, naming the remedy when it is unmet (ADR-058 ruling 7):
@@ -116,7 +115,7 @@ jobs:
         # `latest` (the form's default) and an empty field both mean "whatever
         # npm serves as newest". The resolution lands in the job's environment
         # before anything else reads the version, so the checkout, the guard
-        # and the channels all name the concrete release (ADR-121).
+        # and the channels all name the concrete release.
         run: |
           set -eu
           version="${{ inputs.version }}"
@@ -215,7 +214,7 @@ jobs:
       - name: resolve the version
         # The same resolution as the PyPI job: the form field may be `latest`
         # or empty, and only the concrete version the npm registry serves
-        # reaches the guard and the tap (ADR-121).
+        # reaches the guard and the tap.
         run: |
           set -eu
           version="${{ inputs.version }}"
@@ -349,7 +348,7 @@ jobs:
     steps:
       - name: resolve the version
         # The same resolution as the other jobs: this check greps the tap for
-        # the concrete version the release named (ADR-121).
+        # the concrete version the release named.
         run: |
           set -eu
           version="${{ inputs.version }}"

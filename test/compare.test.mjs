@@ -226,7 +226,7 @@ test('a worktree does not inherit the parent repo hooks routing', async () => {
   // The parent routes hooks; the worktree is a separate checkout with separate
   // config. Treating it as hooked would report a gate that does not run there.
   const root = await gitRepo('hooked');
-  await exec('git', ['config', 'core.hooksPath', '.simt-hooks'], { cwd: root });
+  await exec('git', ['config', 'core.hooksPath', '.simt/hooks'], { cwd: root });
   assert.equal((await readHooksState(root)).routed, true);
 });
 

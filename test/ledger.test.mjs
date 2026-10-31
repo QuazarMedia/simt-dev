@@ -132,7 +132,7 @@ test('hooks install writes the claim check only when the repository asks, and re
     `${JSON.stringify({ gates: { preCommit: ['test'], commands: { test: 'true' }, evidence: 'block' } })}\n`,
   );
   assert.equal(await hooksCommand('install', [], { root, yes: true }), 0);
-  const shim = await readFile(join(root, '.simt-hooks', 'commit-msg'), 'utf8');
+  const shim = await readFile(join(root, '.simt/hooks', 'commit-msg'), 'utf8');
   assert.match(shim, /evidence check "\$1"/);
   const staged = (await git(['-C', root, 'diff', '--cached', '--name-only'])).stdout;
   assert.equal(staged, '');
@@ -142,7 +142,7 @@ test('hooks install writes the claim check only when the repository asks, and re
     `${JSON.stringify({ gates: { preCommit: ['test'], commands: { test: 'true' } } })}\n`,
   );
   assert.equal(await hooksCommand('install', [], { root, yes: true }), 0);
-  await assert.rejects(readFile(join(root, '.simt-hooks', 'commit-msg'), 'utf8'));
+  await assert.rejects(readFile(join(root, '.simt/hooks', 'commit-msg'), 'utf8'));
   await rm(root, { recursive: true, force: true });
 });
 
@@ -156,7 +156,7 @@ test('a hand-written commit-msg does not replace the claim check', async () => {
     `${JSON.stringify({ gates: { preCommit: ['test'], commands: { test: 'true' }, evidence: 'warn' } })}\n`,
   );
   assert.equal(await hooksCommand('install', [], { root, yes: true }), 0);
-  const shim = await readFile(join(root, '.simt-hooks', 'commit-msg'), 'utf8');
+  const shim = await readFile(join(root, '.simt/hooks', 'commit-msg'), 'utf8');
   assert.match(shim, /evidence check "\$1"/);
   assert.doesNotMatch(shim, /chain-shim/);
   await rm(root, { recursive: true, force: true });

@@ -232,7 +232,7 @@ test('the normalised command is what a policy matches, in every spelling the rev
     ['time git push', ['ADR-001']],
     ['git -c core.hooksPath=/dev/null commit', ['ADR-104']],
     ['git config core.hooksPath /tmp/elsewhere', ['ADR-104']],
-    ['rm -rf .simt-hooks', ['ADR-104']],
+    ['rm -rf .simt\/hooks', ['ADR-104']],
   ];
   for (const [command, adrs] of denied) {
     const result = HOOK('claude', shell.claude(command, root));
@@ -366,7 +366,7 @@ test('install merges into the file a harness already owns', async () => {
   const preview = cli(['agent-hooks', 'install', '--root', root]);
   assert.equal(preview.code, 0);
   assert.match(preview.text, /PLAN     nothing written/);
-  assert.match(preview.text, /CREATE\s+shim\s+\.simt-hooks\/agent-hook/, 'a preview that hides the shim is planning a write it does not show');
+  assert.match(preview.text, /CREATE\s+shim\s+.simt\/hooks\/agent-hook/, 'a preview that hides the shim is planning a write it does not show');
   assert.equal(await readFile(join(root, '.codex', 'hooks.json'), 'utf8').catch(() => null), null, 'a preview wrote a file');
   assert.equal(
     await readFile(join(root, AGENT_HOOK_SHIM), 'utf8').catch(() => null),
@@ -376,7 +376,7 @@ test('install merges into the file a harness already owns', async () => {
 
   const install = cli(['agent-hooks', 'install', '--root', root, '--yes']);
   assert.equal(install.code, 0);
-  assert.match(install.text, /CREATE\s+shim\s+\.simt-hooks\/agent-hook/);
+  assert.match(install.text, /CREATE\s+shim\s+.simt\/hooks\/agent-hook/);
   // The shim is what the configs point at, so it is asserted the way a config is:
   // exact bytes, and executable, because a harness runs it, not node.
   assert.equal(await readFile(join(root, AGENT_HOOK_SHIM), 'utf8'), renderAgentHookShim({ npm: false }));

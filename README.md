@@ -251,7 +251,7 @@ history. All remain off until named and propose rather than write projected text
 | `simt.lock.json` | the digest of the inputs, the digest of the projection, and locked `variants` winners from `simt bench variants`. The old `simt-dev.lock.json` is still read, and a lock migrates on its next write |
 | `.cursor/rules/*.mdc`, `.claude/rules/*.md`, `.agents/rules/*.md`, `.github/instructions/*.instructions.md` | one file per rule, and only for a harness that reads that directory |
 | `.editorconfig`, `.gitattributes` | baseline regions, placed first so a later setting still wins |
-| `.simt-hooks/` and `core.hooksPath` | the shared dispatcher. It fails closed |
+| `.simt/hooks/` and `core.hooksPath` | the shared dispatcher. It fails closed |
 | `docs/decisions/ADR-NNN-<slug>.md` | numbered decision records scaffolded by `simt decide --yes` with `simt-affects` and `simt-supersedes` frontmatter |
 | `docs/lessons/NNNN-<slug>.md` | reviewed lessons promoted by `simt lessons review <id> --yes` with `simt-trigger`, `simt-evidence`, and `simt-expires` frontmatter |
 

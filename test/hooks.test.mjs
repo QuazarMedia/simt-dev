@@ -10,7 +10,7 @@ import { PACKAGE_NAME } from '../src/name.mjs';
 import { after, test } from 'node:test';
 
 import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
-import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
+import { EVENTS, HOOKS_DIR, HOOKS_DIR_LEGACY, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
 import { hasScript, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
 import { classifyPush, parsePushedRefs, renderGateReport, runGates, stagedFiles } from '../src/hooks/dispatcher.mjs';
 import { recordRun } from '../src/ledger/index.mjs';
@@ -44,7 +44,7 @@ after(async () => {
 });
 
 async function fixture({ scripts, manifest, files = {}, binaries = [], formatter = false } = {}) {
-  const root = await mkdtemp(join(tmpdir(), 'simt-hooks-'));
+  const root = await mkdtemp(join(tmpdir(), 'simt-hooksd-'));
   temps.push(root);
   await exec('git', ['init', '-q', '.'], { cwd: root });
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fx', scripts: scripts ?? {} }, null, 2));
@@ -1541,7 +1541,7 @@ test('hooks install: a second run leaves the chained shim unchanged', async () =
   const first = await readFile(join(root, HOOKS_DIR, 'post-commit'), 'utf8');
 
   const { stdout } = await simt(['hooks', 'install', '--root', root, '--yes'], root);
-  assert.match(stdout, /UNCHANGED \.simt-hooks\/post-commit/);
+  assert.match(stdout, /UNCHANGED .simt\/hooks\/post-commit/);
   assert.equal(await readFile(join(root, HOOKS_DIR, 'post-commit'), 'utf8'), first);
 });
 
@@ -1665,7 +1665,7 @@ test('hooks status --json: carries the foreign hooks, not just prose about them'
 // hook belonging to somebody else. Reading it as foreign made `hooks install --yes`
 // print, about a file it had just overwritten:
 //
-//   stopped running pre-commit at .simt-hooks/pre-commit (2565 bytes); the file is
+//   stopped running pre-commit at .simt\/hooks/pre-commit (2565 bytes); the file is
 //   still on disk, untouched - declare it in simt.json gates.commands to have the
 //   dispatcher run it
 //
@@ -1824,7 +1824,7 @@ test('hooks install: a gate dropped from the manifest has its shim removed, not 
   const stdout = out;
 
 
-  assert.match(stdout, /REMOVED\s+\.simt-hooks\/pre-push/, stdout);
+  assert.match(stdout, /REMOVED\s+.simt\/hooks\/pre-push/, stdout);
   // Named in the plan, because a reader about to lose a file is entitled to be told why:
   // "REMOVED pre-push" alone does not distinguish this from a gate dropped by mistake.
   assert.match(stdout, /no gate for pre-push in simt\.json; the shim enforced nothing/, stdout);
@@ -1855,7 +1855,7 @@ test('hooks install: removing the last gate takes the shim and the routing with 
   const stdout = out;
 
 
-  assert.match(stdout, /REMOVED\s+\.simt-hooks\/pre-commit/, stdout);
+  assert.match(stdout, /REMOVED\s+.simt\/hooks\/pre-commit/, stdout);
   // The routing goes too. core.hooksPath tells git to read ONE directory for EVERY
   // event, so leaving it pointed at an empty directory stops the repository's own
   // .git/hooks scripts running - silently, which is why the plan has to say so.
@@ -1865,22 +1865,22 @@ test('hooks install: removing the last gate takes the shim and the routing with 
 });
 
 test('hooks install: a plan that removes the last shim says it un-routes, in prose and in JSON', async () => {
-  // A plan printing "core.hooksPath updated .simt-hooks -> .simt-hooks" while the
+  // A plan printing "core.hooksPath updated .simt\/hooks -> .simt\/hooks" while the
   // command unsets it is worse than no plan, and the `--json` payload promising a
   // directory the command is about to clear is the same lie in a shape a machine reads.
   const root = await installedRepo({ preCommit: ['lint'], prePush: ['test'] });
   await setManifest(root, { preCommit: [], prePush: [] });
 
   const dry = await simt(['hooks', 'install', '--root', root], root);
-  assert.match(dry.stdout, /core\.hooksPath\s+removed\s+\.simt-hooks -> \(unset\)/, dry.stdout);
-  assert.doesNotMatch(dry.stdout, /-> \.simt-hooks\s*$/, dry.stdout);
+  assert.match(dry.stdout, /core\.hooksPath\s+removed\s+.simt\/hooks -> \(unset\)/, dry.stdout);
+  assert.doesNotMatch(dry.stdout, /-> .simt\/hooks\s*$/, dry.stdout);
 
   const { stdout } = await simt(['hooks', 'install', '--root', root, '--json'], root);
   const payload = JSON.parse(stdout);
   assert.equal(payload.wouldSet, null, payload);
   assert.deepEqual(
     payload.plan.map((p) => `${p.file}:${p.action}`),
-    ['.simt-hooks/pre-commit:removed', '.simt-hooks/pre-push:removed'],
+    ['.simt\/hooks/pre-commit:removed', '.simt\/hooks/pre-push:removed'],
   );
   assert.equal(payload.filesWritten, false);
 });
@@ -1912,6 +1912,52 @@ test('hooks install: a file a person wrote in the hooks directory is never delet
   assert.doesNotMatch(planOnly, /mine/, stdout);
 });
 
+test('hooks install: a legacy shim directory of its own files removes itself (ADR-122)', async () => {
+  // The move into the state directory is self-healing in a repository installed
+  // before it: the install re-routes git to .simt\/hooks, and the old top-level
+  // directory is then the only place that looks like a hooks directory while
+  // holding nothing git reads. Every file in it is a simt-dev shim, so the
+  // install takes it down - journaled, and announced in the plan first.
+  const root = await installedRepo({ preCommit: ['lint'], prePush: ['test'] });
+  const legacy = join(root, HOOKS_DIR_LEGACY);
+  await mkdir(legacy, { recursive: true });
+  const legacyShim = join(legacy, 'pre-commit');
+  await writeFile(legacyShim, `${SHIM_MARKER}\nexit 0\n`);
+  await chmod(legacyShim, 0o755);
+
+  const dry = await simt(['hooks', 'install', '--root', root], root);
+  assert.match(dry.stdout, new RegExp(`REMOVED\\s+${HOOKS_DIR_LEGACY}\\b`), dry.stdout);
+  assert.ok(existsSync(legacy), 'the preview wrote: it must only plan the removal');
+
+  const run = await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  const out = run.stdout + run.stderr;
+  assert.match(out, new RegExp(`REMOVED\\s+${HOOKS_DIR_LEGACY}\\b`), out);
+  assert.equal(existsSync(legacy), false, 'the legacy directory is still on disk');
+  // The move did not disturb the routing or the new shims.
+  assert.equal(await hooksPath(root), HOOKS_DIR);
+  assert.ok(await readFile(join(root, HOOKS_DIR, 'pre-commit'), 'utf8'), 'a new-location shim went missing');
+});
+
+test('hooks install: a legacy directory holding a file it did not write is left in place (ADR-122)', async () => {
+  // The marker check is what makes the removal safe: one file without a
+  // simt-dev marker is proof the directory is not exclusively this tool's, and
+  // a directory this tool does not exclusively own is not deleted on its way.
+  const root = await installedRepo({ preCommit: ['lint'], prePush: ['test'] });
+  const legacy = join(root, HOOKS_DIR_LEGACY);
+  await mkdir(legacy, { recursive: true });
+  const mine = join(legacy, 'mine');
+  await writeFile(mine, '#!/bin/sh\necho hi\n');
+  await chmod(mine, 0o755);
+
+  const run = await simt(['hooks', 'install', '--root', root, '--yes'], root);
+  const out = run.stdout + run.stderr;
+  // No plan entry for a directory the install is not removing: the plan names
+  // only what changes, and the foreign file is the reason nothing changes.
+  assert.doesNotMatch(out, /REMOVED\s+\.simt\-hooks/, out);
+  assert.ok(existsSync(mine), 'a file this tool did not write was deleted with its directory');
+  assert.equal(await hooksPath(root), HOOKS_DIR, 'the routing was disturbed by a directory it left alone');
+});
+
 test('hooks install: a chained shim survives an install that removes a dispatcher shim', async () => {
   // `obsolete` excludes `chained`, because a chained shim is a file this install
   // maintains - it re-renders it from the file's own contents on every run. Without the
@@ -1941,7 +1987,7 @@ test('hooks install: a chained shim survives an install that removes a dispatche
   const stdout = out;
 
 
-  assert.match(stdout, /REMOVED\s+\.simt-hooks\/pre-commit/, stdout);
+  assert.match(stdout, /REMOVED\s+.simt\/hooks\/pre-commit/, stdout);
   assert.ok(
     (await readdir(join(root, HOOKS_DIR))).includes('post-commit'),
     'the chained shim was deleted along with the dispatcher shim',
@@ -1953,10 +1999,10 @@ test('hooks install: a chained shim survives an install that removes a dispatche
 test('hooks install: a hook in this tool\'s own directory is not chained to itself', async () => {
   // `foreignHooks` lists every executable file in the directory git reads hooks from, and
   // when core.hooksPath is this tool's own, a file a person dropped in there is listed
-  // too. Chaining it wrote `.simt-hooks/<name>` with TARGET `.simt-hooks/<name>` - the
+  // too. Chaining it wrote `.simt\/hooks/<name>` with TARGET `.simt\/hooks/<name>` - the
   // same path - so the shim overwrote the hook it was written to preserve and then ran
-  // itself. The previous release printed `UPDATED .simt-hooks/mine (chained: runs
-  // .simt-hooks/mine)` and exited 0.
+  // itself. The previous release printed `UPDATED .simt\/hooks/mine (chained: runs
+  // .simt\/hooks/mine)` and exited 0.
   const root = await fixture({
     scripts: { lint: 'true', test: 'true' },
     manifest: { gates: { preCommit: ['lint'], prePush: ['test'] } },
@@ -1988,14 +2034,14 @@ test('hooks install: a hook in this tool\'s own directory is not chained to itse
   // It is also not adopted: git still runs the file itself, so it must not be renamed
   // into the shim namespace or moved anywhere the reader would not find it.
   assert.ok(existsSync(mine), 'the file moved');
-  assert.match(stdout, /REMOVED\s+\.simt-hooks\/pre-commit|UNCHANGED\s+\.simt-hooks\/pre-commit/, stdout);
+  assert.match(stdout, /REMOVED\s+.simt\/hooks\/pre-commit|UNCHANGED\s+.simt\/hooks\/pre-commit/, stdout);
 });
 
 test('hooks install: a hand-written file NAMED for a gated event is not deleted either', async () => {
   // The case the authorship check exists for, which the other test cannot reach.
   // `state.installed` iterates the two events this tool gates, so a file at
-  // `.simt-hooks/mine` is not in that list at all and the filter never sees it. The
-  // guard is for a file at `.simt-hooks/pre-commit` that a person wrote by hand -
+  // `.simt\/hooks/mine` is not in that list at all and the filter never sees it. The
+  // guard is for a file at `.simt\/hooks/pre-commit` that a person wrote by hand -
   // which happens, because that is exactly where a reader of the install plan would
   // look, and because a repository that abandoned this tool has its own hooks there.
   //
@@ -2014,7 +2060,7 @@ test('hooks install: a hand-written file NAMED for a gated event is not deleted 
   // Untouched, and reported as neither written nor removed.
   assert.equal(await readFile(join(root, fileFor('pre-commit')), 'utf8'), theirOwn, 'a hand-written file was deleted');
   const planOnly = stdout.split('WROTE')[0];
-  assert.doesNotMatch(planOnly, /\.simt-hooks\/pre-commit/, `plan touched a file this tool did not write:\n${stdout}`);
+  assert.doesNotMatch(planOnly, /.simt\/hooks\/pre-commit/, `plan touched a file this tool did not write:\n${stdout}`);
   // The one it DID write is still removed, so this is not a blanket refusal.
   await assert.rejects(() => readFile(join(root, fileFor('pre-push')), 'utf8'), 'the shim for the dropped gate survived');
 });

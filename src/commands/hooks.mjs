@@ -12,7 +12,7 @@
 // DEFAULT location, which core.hooksPath being unset does not reveal, so a
 // foreign hook is found by asking git rather than by reading config.
 
-import { mkdir, readFile, realpath } from 'node:fs/promises';
+import { mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { commitJournal, journaledGitConfig, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { invalidateCheckCache } from '../status.mjs';
@@ -20,7 +20,7 @@ import { isAbsolute, join, relative } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { MANIFEST, readManifest } from '../projection/manifest.mjs';
-import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderEvidenceShim, renderShim } from '../hooks/shim.mjs';
+import { CHAIN_MARKER, EVENTS, HOOKS_DIR, HOOKS_DIR_LEGACY, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderEvidenceShim, renderShim } from '../hooks/shim.mjs';
 import { GATE_KEY, gateCount, readHooksPath, readHooksState, wantsShim } from '../compare/hooksstate.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { gateNames } from '../hooks/gates.mjs';
@@ -190,8 +190,8 @@ export async function planHooksInstall(root, { manifest, exists }) {
   //
   // `foreignHooks` lists every executable file in the directory git reads hooks from -
   // and when that directory is this tool's own, a file a person dropped in there is
-  // listed too. Chaining it means writing a shim at `.simt-hooks/<name>` whose TARGET is
-  // `.simt-hooks/<name>`: the same path. The shim overwrites the hook it was written to
+  // listed too. Chaining it means writing a shim at `.simt/hooks/<name>` whose TARGET is
+  // `.simt/hooks/<name>`: the same path. The shim overwrites the hook it was written to
   // preserve and then runs itself, so the hook stops working and git recurses in a loop
   // nothing reports. Confirmed at the previous release, which printed
   // `UPDATED .simt-hooks/mine (chained: runs .simt-hooks/mine)`.
@@ -298,7 +298,48 @@ export async function planHooksInstall(root, { manifest, exists }) {
     evidenceExisting,
     routed,
     takeover,
+    // The legacy directory's removal rides on the same planned write, so the
+    // scan is here and the deletion is in `applyHooksInstall` (ADR-122).
+    legacy: await legacyHooksScan(root),
   };
+}
+
+/**
+ * Scan the legacy top-level shim directory (ADR-122). A repository installed
+ * before the move into the state directory still carries it, and it is
+ * removable only when every entry in it is a regular file that carries a
+ * simt-dev marker: the install re-routes git to the new directory, and a
+ * file this tool cannot recognise as its own is never deleted on its way.
+ *
+ * @returns {Promise<{path: string, removable: boolean}|null>} null when the
+ *   directory is absent or empty; otherwise the directory and whether the
+ *   install may take it down. `applyHooksInstall` acts on this, so the
+ *   judgment is made once, in the plan. Module-local: one caller needs no
+ *   export, and an export is a promise to a caller (deadcode).
+ */
+async function legacyHooksScan(root) {
+  const dir = join(root, HOOKS_DIR_LEGACY);
+  let entries;
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return null;
+  }
+  if (entries.length === 0) return null;
+  let removable = true;
+  for (const name of entries) {
+    const st = await stat(join(dir, name));
+    if (!st.isFile()) {
+      removable = false;
+      break;
+    }
+    const text = await readFile(join(dir, name), 'utf8');
+    if (!text.includes(SHIM_MARKER) && !text.includes(CHAIN_MARKER)) {
+      removable = false;
+      break;
+    }
+  }
+  return { path: HOOKS_DIR_LEGACY, removable };
 }
 
 /**
@@ -309,10 +350,11 @@ export async function planHooksInstall(root, { manifest, exists }) {
  * names the run that actually changed something. Reporting stays with the
  * caller for the same reason it does in `planHooksInstall`.
  *
- * @returns {{wrote: string[]}} the shim paths written, removed, or refreshed
+ * @returns {{wrote: string[], removed: string[]}} the shim paths written,
+ *   removed or refreshed, and the legacy-directory files taken down
  */
 export async function applyHooksInstall(root, planned, journal) {
-  const { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, manager, version, routed, wants, current } =
+  const { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, manager, version, routed, wants, current, legacy } =
     planned;
   // Shim and evidence bytes are journaled so `undo` restores them (R49), with
   // the executable bit they are written with: a shim the run chmodded is one
@@ -322,6 +364,7 @@ export async function applyHooksInstall(root, planned, journal) {
   // at their directory silently stops the repository's own hooks (review 0003
   // Q22).
   const wrote = [];
+  const removed = [];
   await mkdir(join(root, HOOKS_DIR), { recursive: true });
   for (const event of wanted) {
     const path = join(root, fileFor(event));
@@ -352,7 +395,19 @@ export async function applyHooksInstall(root, planned, journal) {
   } else if (current === wants) {
     await journaledGitConfig(root, journal, HOOKS_PATH_KEY, null);
   }
-  return { wrote };
+  // The move into the state directory (ADR-122): the routing now points
+  // elsewhere, so a legacy directory left behind is the only place that looks
+  // like a hooks directory while holding nothing git reads. The scan in the
+  // plan already judged it removable — every file a simt-dev marker — so
+  // deletion is journaled per file, and `undo` restores the directory.
+  if (legacy?.removable) {
+    for (const name of await readdir(join(root, HOOKS_DIR_LEGACY))) {
+      await journaledRemoveFile(root, journal, join(root, HOOKS_DIR_LEGACY, name));
+      removed.push(`${HOOKS_DIR_LEGACY}/${name}`);
+    }
+    await rm(join(root, HOOKS_DIR_LEGACY), { recursive: true });
+  }
+  return { wrote, removed };
 }
 
 /**
@@ -409,6 +464,7 @@ async function installHooks(root, flags) {
     evidenceExisting,
     routed,
     takeover,
+    legacy,
   } = await planHooksInstall(root, { manifest, exists });
 
   // Read through `writeMode` like every other writer, and only now: this command
@@ -487,11 +543,21 @@ async function installHooks(root, flags) {
       note: 'commit-msg checks a verification claim against the ledger',
     });
   }
+  if (legacy?.removable) {
+    plan.push({
+      file: HOOKS_DIR_LEGACY,
+      action: 'removed',
+      // Named in the plan for the same reason the obsolete shims are: the
+      // reader approving this write is about to lose a directory, and the
+      // routing line above does not say the old one goes too (ADR-122).
+      note: `legacy shim directory; the shims now live in ${HOOKS_DIR}`,
+    });
+  }
 
   // The routing this install leaves behind, which is not always `wants`. A repository
   // that removed its last gate has no shims to route to, and leaving `core.hooksPath`
   // pointed at the directory would stop its own hooks running - the plan has to say so,
-  // because a plan that prints "core.hooksPath updated .simt-hooks -> .simt-hooks" while
+  // because a plan that prints "core.hooksPath updated .simt/hooks -> .simt/hooks" while
   // the command unsets it is worse than no plan.
   const leaves = routed ? wants : null;
   const pathAction =
@@ -578,7 +644,7 @@ async function installHooks(root, flags) {
   const journal = [];
   await applyHooksInstall(
     root,
-    { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, manager, version, routed, wants, current },
+    { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, manager, version, routed, wants, current, legacy },
     journal,
   );
   await commitJournal(root, 'hooks install', journal);

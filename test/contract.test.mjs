@@ -299,7 +299,7 @@ const WRITERS = [
     authorise: ['--yes'],
     stack: 'node',
     // Two things are written and neither is a file in the usual sense: the shim
-    // under `.simt-hooks/`, and `core.hooksPath` inside `.git/config`. Probing
+    // under `.simt/hooks/`, and `core.hooksPath` inside `.git/config`. Probing
     // only the shim would pass on an install that wrote a hook git does not run -
     // the exact downgrade the command exists to avoid - so both are in the
     // fingerprint, and `git config --get` exits non-zero when unset, which is why
@@ -308,7 +308,7 @@ const WRITERS = [
       const hooksPath = await git(['config', '--get', 'core.hooksPath'], { cwd: root })
         .then(({ stdout }) => stdout.trim())
         .catch(() => '(unset)');
-      const shim = await readFile(join(root, '.simt-hooks/pre-commit'), 'utf8').catch(() => '(absent)');
+      const shim = await readFile(join(root, '.simt/hooks/pre-commit'), 'utf8').catch(() => '(absent)');
       return `${hooksPath}\n${shim}`;
     },
   },

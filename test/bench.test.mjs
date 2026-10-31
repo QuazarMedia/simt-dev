@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
@@ -20,8 +20,16 @@ import {
   parseTapOutput,
   parseVitestJson,
   patchStats,
+  readReports,
   resolveVaultDir,
 } from '../src/bench/mine.mjs';
+import {
+  CORPUS_KIND,
+  CORPUS_SCHEMA_VERSION,
+  buildCorpusDocument,
+  verifyCorpusDocument,
+  writeCorpusDocument,
+} from '../src/bench/corpus.mjs';
 import { extractPatchFiles, gradeWorkspace } from '../src/bench/grade.mjs';
 import {
   BUILTIN_ARMS,
@@ -438,7 +446,10 @@ test('mineTasks validates RED and GOLD twice, drops non-RED commits, and writes 
 
   const [task] = firstRun.tasks;
   assert.equal(task.schemaVersion, 1);
-  assert.match(task.id, /^t-[0-9a-f]{7}-01$/);
+  // 12 hex chars: the 7-char form could not disambiguate two tasks mined from
+  // the same commit (review 0003 Q48); the committed corpus keeps its 7-char
+  // ids and is covered by the corpus test below.
+  assert.match(task.id, /^t-[0-9a-f]{12}-01$/);
   assert.equal(task.prompt, 'feat(calc): add multiply helper\n\nAdds multiply(a, b) and unit test.');
   assert.equal(task.testCmd, 'node --test test/calc.test.mjs');
   assert.deepEqual(task.f2p, ['calc: multiply multiplies two integers']);
@@ -485,6 +496,240 @@ test('simt-dev has at least 20 verified tasks in .simt/bench/tasks matching Appe
     assert.ok(typeof task.gold === 'object' && task.gold.files >= 1);
     assert.equal(task.vault, `vault/${task.id}`);
   }
+});
+
+// A two-commit calculator repo whose second commit is a valid mining task
+// (adds multiply: RED on BASE, GOLD with the patch). Shared by the Q48 corpus
+// tests so each stages the same history in one call.
+async function calcRepo() {
+  const repo = await scratch('simt-q48-repo-');
+  await git(['init', '-q', '.'], { cwd: repo });
+  await writeFile(
+    join(repo, 'package.json'),
+    `${JSON.stringify({ name: 'fixture-repo', type: 'module' }, null, 2)}\n`,
+  );
+  await mkdir(join(repo, 'src'), { recursive: true });
+  await mkdir(join(repo, 'test'), { recursive: true });
+  await writeFile(
+    join(repo, 'src', 'calc.mjs'),
+    ['export function add(a, b) {', '  return a + b;', '}', ''].join('\n'),
+  );
+  await writeFile(
+    join(repo, 'test', 'calc.test.mjs'),
+    [
+      "import { test } from 'node:test';",
+      "import assert from 'node:assert/strict';",
+      "import { add } from '../src/calc.mjs';",
+      '',
+      "test('calc: add sums two integers', () => {",
+      '  assert.equal(add(2, 3), 5);',
+      '});',
+      '',
+    ].join('\n'),
+  );
+  await git(['add', '-A'], { cwd: repo });
+  await git(['commit', '-qm', 'chore: initial calculator'], { cwd: repo });
+
+  await writeFile(
+    join(repo, 'src', 'calc.mjs'),
+    [
+      'export function add(a, b) {',
+      '  return a + b;',
+      '}',
+      '',
+      'export function multiply(a, b) {',
+      '  return a * b;',
+      '}',
+      '',
+    ].join('\n'),
+  );
+  await writeFile(
+    join(repo, 'test', 'calc.test.mjs'),
+    [
+      "import { test } from 'node:test';",
+      "import assert from 'node:assert/strict';",
+      "import { add, multiply } from '../src/calc.mjs';",
+      '',
+      "test('calc: add sums two integers', () => {",
+      '  assert.equal(add(2, 3), 5);',
+      '});',
+      '',
+      "test('calc: multiply multiplies two integers', () => {",
+      '  assert.equal(multiply(4, 5), 20);',
+      '});',
+      '',
+    ].join('\n'),
+  );
+  await git(['add', '-A'], { cwd: repo });
+  await git(['commit', '-qm', 'feat(calc): add multiply helper\n\nAdds multiply(a, b) and unit test.'], { cwd: repo });
+  return repo;
+}
+
+test('the vault is keyed on the root commit, so a clone at another path resolves the same vault', async () => {
+  const src = await calcRepo();
+  const parent = await scratch('simt-q48-clone-parent-');
+  // Clone under a different parent but the same basename: the identity the vault
+  // is keyed on must be the history, not the checkout path.
+  const clone = join(parent, basename(src));
+  await git(['clone', '-q', src, clone]);
+
+  const env = { ...process.env };
+  assert.equal(resolveVaultDir(clone, { env }), resolveVaultDir(src, { env }));
+
+  // The key is the basename plus the root commit's prefix, not the absolute path.
+  assert.match(basename(resolveVaultDir(src, { env })), /-.+-root-[0-9a-f]{8}$/);
+});
+
+test('a re-mine is append-only: pre-existing tasks survive, and only --replace deletes them', async () => {
+  const repo = await calcRepo();
+  const vaultEnv = await scratch('simt-q48-vault-');
+  const env = { ...process.env, SIMT_DEV_VAULT_DIR: vaultEnv };
+  const tasksDir = join(repo, '.simt', 'bench', 'tasks');
+
+  const first = await mineTasks(repo, { apply: true, env });
+  assert.equal(first.ok, true);
+  assert.equal(first.tasks.length, 1);
+  const realId = first.tasks[0].id;
+
+  // A task from an older history the current mine does not reproduce.
+  const staleId = 't-deadbeef0001-01';
+  await mkdir(tasksDir, { recursive: true });
+  await writeFile(
+    join(tasksDir, `${staleId}.json`),
+    `${JSON.stringify({ schemaVersion: 1, id: staleId, sourceCommit: 'd'.repeat(40) }, null, 2)}\n`,
+  );
+
+  // Default (append-only): the stale task survives the re-mine.
+  const second = await mineTasks(repo, { apply: true, env });
+  assert.equal(second.ok, true);
+  assert.equal(existsSync(join(tasksDir, `${staleId}.json`)), true);
+  assert.equal(existsSync(join(tasksDir, `${realId}.json`)), true);
+
+  // --replace: the stale task is deleted, the reproduced task is kept.
+  const third = await mineTasks(repo, { apply: true, env, replace: true });
+  assert.equal(third.ok, true);
+  assert.equal(existsSync(join(tasksDir, `${staleId}.json`)), false);
+  assert.equal(existsSync(join(tasksDir, `${realId}.json`)), true);
+});
+
+test('readReports walks a JUnit report directory, so the Gradle and Maven graders read every XML', async () => {
+  const root = await scratch('simt-q48-junit-');
+  const results = join(root, 'build', 'test-results', 'test');
+  await mkdir(results, { recursive: true });
+  await writeFile(
+    join(results, 'TEST-com.example.CalcTest.xml'),
+    `<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="CalcTest" tests="2" failures="1">
+  <testcase classname="com.example.CalcTest" name="addsTwoNumbers" time="0.01"/>
+  <testcase classname="com.example.CalcTest" name="dividesByZero" time="0.02">
+    <failure message="expected ArithmeticException"/>
+  </testcase>
+</testsuite>`,
+  );
+  await writeFile(
+    join(results, 'TEST-com.example.MathTest.xml'),
+    `<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="MathTest" tests="1" failures="0">
+  <testcase classname="com.example.MathTest" name="roundsHalfUp" time="0.01"/>
+</testsuite>`,
+  );
+  // A non-XML artifact in the same directory must be ignored.
+  await writeFile(join(results, 'binary-output.bin'), 'not xml');
+
+  const text = await readReports([results]);
+  const parsed = parseJunitXml(text);
+  assert.deepEqual(parsed.passed, ['com.example.CalcTest > addsTwoNumbers', 'com.example.MathTest > roundsHalfUp']);
+  assert.deepEqual(parsed.failed, ['com.example.CalcTest > dividesByZero']);
+
+  // A single report file is still read; a missing path contributes nothing.
+  const single = join(root, 'single.xml');
+  await writeFile(single, '<testsuite><testcase classname="c" name="t"/></testsuite>');
+  assert.match(await readReports([single, join(root, 'absent.xml')]), /<testcase classname="c" name="t"\/>/);
+  assert.equal(await readReports([join(root, 'absent-dir')]), '');
+});
+
+test('a 12-char id that already holds a different commit is a collision, refused without --replace', async () => {
+  const repo = await calcRepo();
+  const vaultEnv = await scratch('simt-q48-vault-');
+  const env = { ...process.env, SIMT_DEV_VAULT_DIR: vaultEnv };
+  const tasksDir = join(repo, '.simt', 'bench', 'tasks');
+
+  const first = await mineTasks(repo, { apply: true, env });
+  assert.equal(first.ok, true);
+  const [task] = first.tasks;
+  assert.match(task.id, /^t-[0-9a-f]{12}-01$/);
+
+  // The same id now holds a task from a different commit: the 12-char prefix
+  // collided, and guessing which corpus the reader wants is worse than refusing.
+  const taskPath = join(tasksDir, `${task.id}.json`);
+  const prior = JSON.parse(await readFile(taskPath, 'utf8'));
+  prior.sourceCommit = 'e'.repeat(40);
+  await writeFile(taskPath, `${JSON.stringify(prior, null, 2)}\n`);
+
+  const collided = await mineTasks(repo, { apply: true, env });
+  assert.equal(collided.ok, false);
+  assert.match(collided.error, /id collision:/);
+  assert.match(collided.error, /--replace/);
+
+  // --replace takes the corpus over: the file is rewritten from the current mine.
+  const replaced = await mineTasks(repo, { apply: true, env, replace: true });
+  assert.equal(replaced.ok, true);
+  const after = JSON.parse(await readFile(taskPath, 'utf8'));
+  assert.equal(after.sourceCommit, task.sourceCommit);
+});
+
+test('a sealed corpus export imports byte-for-byte, and a tampered seal is refused', async () => {
+  const src = await calcRepo();
+  const srcVault = await scratch('simt-q48-src-vault-');
+  const srcEnv = { ...process.env, SIMT_DEV_VAULT_DIR: srcVault };
+
+  const mined = await mineTasks(src, { apply: true, env: srcEnv });
+  assert.equal(mined.ok, true);
+  assert.equal(mined.tasks.length, 1);
+  const [task] = mined.tasks;
+
+  const doc = await buildCorpusDocument(src, { env: srcEnv });
+  assert.equal(doc.kind, CORPUS_KIND);
+  assert.equal(doc.schemaVersion, CORPUS_SCHEMA_VERSION);
+  assert.equal(doc.taskCount, 1);
+  assert.equal(verifyCorpusDocument(doc), null);
+
+  // Deterministic: a second build of the same corpus seals to the same byte.
+  const again = await buildCorpusDocument(src, { env: srcEnv });
+  assert.equal(again.seal, doc.seal);
+
+  // Import into a fresh root with its own vault: descriptors and both patches land.
+  const dest = await scratch('simt-q48-dest-');
+  const destVault = await scratch('simt-q48-dest-vault-');
+  const destEnv = { ...process.env, SIMT_DEV_VAULT_DIR: destVault };
+  const written = await writeCorpusDocument(dest, doc, { env: destEnv, apply: true });
+  assert.equal(written.applied, true);
+  assert.equal(written.tasks, 1);
+
+  const imported = JSON.parse(await readFile(join(dest, '.simt', 'bench', 'tasks', `${task.id}.json`), 'utf8'));
+  assert.equal(imported.sourceCommit, task.sourceCommit);
+  // The vault is keyed <vaultBase>/<repo-id>/<task-id>/: the imported patches land
+  // under the destination's own repo id, not the source's.
+  assert.equal(existsSync(join(written.vaultRoot, task.id, 'test.patch')), true);
+  assert.equal(existsSync(join(written.vaultRoot, task.id, 'gold.patch')), true);
+  // The imported vault patch round-trips to the bytes the miner wrote.
+  const srcVaultRoot = resolveVaultDir(src, { env: srcEnv });
+  const srcPatch = await readFile(join(srcVaultRoot, task.id, 'test.patch'));
+  const destPatch = await readFile(join(written.vaultRoot, task.id, 'test.patch'));
+  assert.deepEqual(destPatch, srcPatch);
+
+  // A dry-run import writes nothing.
+  const dryDest = await scratch('simt-q48-dry-');
+  const dry = await writeCorpusDocument(dryDest, doc, { env: destEnv, apply: false });
+  assert.equal(dry.applied, false);
+  assert.equal(existsSync(join(dryDest, '.simt', 'bench', 'tasks')), false);
+
+  // Tampering with any payload byte breaks the seal.
+  const tampered = structuredClone(doc);
+  tampered.tasks[0].task.prompt = 'tampered';
+  assert.match(verifyCorpusDocument(tampered), /seal mismatch/);
+  assert.match(verifyCorpusDocument(null), /not a corpus document/);
+  assert.match(verifyCorpusDocument({ kind: 'other' }), /unexpected kind/);
 });
 
 test('CLI `simt bench mine` previews without --yes and supports --json', async () => {

@@ -50,6 +50,8 @@ import {
   benchProbesCommand,
   benchVariantsCommand,
   benchCriticCommand,
+  benchExportCommand,
+  benchImportCommand,
 } from './bench.mjs';
 import { planCommand } from './plan.mjs';
 import { sliceCommand } from './slice.mjs';
@@ -220,6 +222,11 @@ export const IMPLEMENTED = {
   // stay advisory and no gate reads them. COMMANDS rides along so the brief
   // resolves Affects command tokens the way `simt why` does.
   'bench critic': (args, flags) => benchCriticCommand(args, flags, COMMANDS),
+  // review 0003 Q48. Sealed corpus transfer: export writes one signed JSON
+  // document carrying every task and both hidden patches; import verifies the
+  // seal before it touches the vault.
+  'bench export': benchExportCommand,
+  'bench import': benchImportCommand,
   upgrade: upgradeCommand,
   mcp: mcpCommand,
   // plan 0003 R43. A bare command: the kind is a positional, so there is no group and

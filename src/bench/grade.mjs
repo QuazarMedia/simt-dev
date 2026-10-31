@@ -1,11 +1,12 @@
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { runGates } from '../hooks/dispatcher.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { readManifest } from '../projection/manifest.mjs';
-import { detectTestRunner } from './mine.mjs';
+import { detectTestRunner, readReports } from './mine.mjs';
 
 const DEFAULT_GRADE_TIMEOUT_MS = 45_000;
 
@@ -190,10 +191,16 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
   }
 
   const execSpec = runner.buildExec(workDir);
+  // Same stale-report hazard as the miner: a report left by a prior run in
+  // this workspace would be graded as this agent's result (review 0003 Q48).
+  for (const p of execSpec.reportPaths ?? []) {
+    if (existsSync(p)) await rm(p, { recursive: true, force: true });
+  }
   const runRes = await runCmd(execSpec.cmd, execSpec.args, { cwd: workDir, timeoutMs });
-  const reportText = execSpec.reportPath
-    ? await readFile(execSpec.reportPath, 'utf8').catch(() => '')
-    : '';
+  // readReports walks the report *directories* Gradle and Maven write (one
+  // XML per test class); the old single-file read saw none of them, so the
+  // grader resolved on an empty parse.
+  const reportText = await readReports(execSpec.reportPaths);
   const parsed = runner.parse(runRes.stdout.toString('utf8'), reportText);
   const testRun = {
     code: runRes.code,

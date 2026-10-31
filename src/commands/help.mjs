@@ -219,6 +219,16 @@ ${CLI} bench critic          precision and recall of the local critic over a lab
                             overrides --labels; labels are human-written verdicts
                             under ADR-008; the critic is advisory until precision
                             reaches 0.8 on 30 labelled diffs)
+${CLI} bench export <file> [--yes]
+                            sealed export of the mined corpus: every task
+                            descriptor and both hidden patches in one signed
+                            JSON file, for import on another machine
+                            (dry-run unless --yes; --root selects the repository)
+${CLI} bench import <file> [--yes]
+                            import a sealed corpus: verify the seal, then write
+                            the task descriptors and hidden patches into the
+                            repository's vault (dry-run unless --yes; --root
+                            selects the repository)
 ${CLI} pack new <name> --source <spec>
                            scaffold a versioned pack: pack.json, an unmeasured
                            bench.json, and one stack rule (dry-run unless --yes;
@@ -324,6 +334,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --labels <path>         bench critic: the labelled set of historical diffs to score
                         (default .simt/critic-labels.jsonl; one human-written
                         {sha, verdict} pair per line)
+--replace               bench mine: delete task files the current mine does not
+                        reproduce (off by default: mining is append-only; a
+                        re-mine adds, it does not replace the corpus)
 --refresh               distill / review: regenerate a proposal that is already cached
 --local                 distill / review: propose the answer from the configured
                          local chat model (local.chat); off by default, which

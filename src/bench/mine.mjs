@@ -10,21 +10,29 @@
 // outside every worktree (RepoTrials / PatchGym), while deterministic task
 // descriptors live in `.simt/bench/tasks/<id>.json`.
 
-import { execFile, spawn } from 'node:child_process';
+import { execFile, execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir, platform as osPlatform, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 import { CONFIG_DIR } from '../name.mjs';
 import { SCHEMA_VERSION } from '../output/index.mjs';
+import { readManifest } from '../projection/manifest.mjs';
+import { packageVersion } from '../package-version.mjs';
 
 const exec = promisify(execFile);
 
 /** Default target task count when mining a repository's history. */
 export const DEFAULT_MINE_TARGET = 20;
+
+/**
+ * Test paths excluded by default, overridable via `simt.json` `bench.mine.exclude`
+ * (review 0003 Q48: the pack integration test was hardcoded here, a repo fact, not a miner fact).
+ */
+const DEFAULT_EXCLUDES = ['test/pack.test.mjs'];
 
 /**
  * Classify whether a repository-relative path is a test file.
@@ -286,12 +294,55 @@ export function parseCargoTestOutput(text) {
 }
 
 /**
+ * Read every JUnit XML a run left behind, from report files or report
+ * *directories* (review 0003 Q48: Gradle writes one XML per class under
+ * `build/test-results/test/`, Maven under `target/surefire-reports/`; reading
+ * a single file saw none of them, so both graders read nothing). Directories
+ * are walked recursively in sort order so the concatenation is deterministic.
+ *
+ * @param {string[]} paths report files and/or directories
+ * @returns {Promise<string>} the concatenated XML, '' when nothing is there
+ */
+export async function readReports(paths) {
+  const chunks = [];
+  for (const p of paths ?? []) {
+    let isDir = false;
+    try {
+      isDir = (await stat(p)).isDirectory();
+    } catch {
+      continue;
+    }
+    if (isDir) {
+      const files = await listXml(p);
+      for (const file of files) {
+        chunks.push(await readFile(file, 'utf8').catch(() => ''));
+      }
+    } else {
+      chunks.push(await readFile(p, 'utf8').catch(() => ''));
+    }
+  }
+  return chunks.join('\n');
+}
+
+/** Every `*.xml` under `dir`, sorted, for a deterministic read order. */
+async function listXml(dir) {
+  const out = [];
+  const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) out.push(...(await listXml(full)));
+    else if (entry.name.endsWith('.xml')) out.push(full);
+  }
+  return out;
+}
+
+/**
  * Detect the test runner for a repository and build the command for a set of
  * changed test files.
  *
  * @param {string} root
  * @param {string[]} testFiles
- * @returns {Promise<{runner: string, displayCmd: string, buildExec: (worktree: string) => {cmd: string, args: string[], reportPath?: string}, parse: (stdout: string, reportText?: string) => {passed: string[], failed: string[]}}|null>}
+ * @returns {Promise<{runner: string, displayCmd: string, buildExec: (worktree: string) => {cmd: string, args: string[], reportPaths?: string[]}, parse: (stdout: string, reportText?: string) => {passed: string[], failed: string[]}}|null>}
  */
 export async function detectTestRunner(root, testFiles) {
   const files = [...testFiles].sort();
@@ -313,6 +364,22 @@ export async function detectTestRunner(root, testFiles) {
         buildExec: (wt) => ({
           cmd: existsSync(join(wt, bin)) ? join(wt, bin) : 'vitest',
           args: ['run', '--reporter=json', ...files],
+        }),
+        parse: (stdout) => parseVitestJson(stdout),
+      };
+    }
+    // Jest emits the same `testResults`/`assertionResults` JSON shape as
+    // Vitest (Vitest copied it), so the JSON parser serves both (review 0003
+    // Q48: a jest repository fell through to `node --test` and parsed TAP
+    // out of JSON).
+    if (deps.jest || /\bjest\b/.test(testScript)) {
+      const bin = join('node_modules', '.bin', 'jest');
+      return {
+        runner: 'jest',
+        displayCmd: `jest --json ${files.join(' ')}`,
+        buildExec: (wt) => ({
+          cmd: existsSync(join(wt, bin)) ? join(wt, bin) : 'jest',
+          args: ['--json', ...files],
         }),
         parse: (stdout) => parseVitestJson(stdout),
       };
@@ -380,7 +447,7 @@ export async function detectTestRunner(root, testFiles) {
         return {
           cmd: 'pytest',
           args: [`--junitxml=${reportPath}`, ...files],
-          reportPath,
+          reportPaths: [reportPath],
         };
       },
       parse: (_stdout, reportText) => parseJunitXml(reportText ?? ''),
@@ -398,7 +465,8 @@ export async function detectTestRunner(root, testFiles) {
       buildExec: (wt) => ({
         cmd: existsSync(join(wt, 'gradlew')) ? join(wt, 'gradlew') : 'gradle',
         args: ['test', ...filterArgs],
-        reportDir: join(wt, 'build', 'test-results', 'test'),
+        // One XML per test class; readReports walks the directory.
+        reportPaths: [join(wt, 'build', 'test-results', 'test')],
       }),
       parse: (_stdout, reportText) => parseJunitXml(reportText ?? ''),
     };
@@ -412,9 +480,11 @@ export async function detectTestRunner(root, testFiles) {
     return {
       runner: 'maven',
       displayCmd: `mvn test ${arg.join(' ')}`.trim(),
-      buildExec: () => ({
+      buildExec: (wt) => ({
         cmd: 'mvn',
         args: ['test', ...arg],
+        // Surefire writes one XML per class here; never read before (review 0003 Q48).
+        reportPaths: [join(wt, 'target', 'surefire-reports')],
       }),
       parse: (_stdout, reportText) => parseJunitXml(reportText ?? ''),
     };
@@ -448,9 +518,32 @@ export function resolveVaultDir(root, { env = process.env, home = homedir(), pla
   return join(cacheBase, CONFIG_DIR, 'vault', repoId);
 }
 
+/**
+ * The stable identity a repository's vault is keyed on: the basename for a
+ * human-readable prefix, and the root commit (first commit in history) for the
+ * digest. The root commit is identical in every clone and survives remote
+ * renames, so the vault lands in the same directory on every machine with the
+ * same history (review 0003 Q48: the absolute-path key made the committed
+ * corpus unrunnable from any other checkout). Outside git it degrades to the
+ * absolute-path digest: a root with no history has no better identity, and the
+ * vault path must never fail because git is absent.
+ *
+ * Sync, like package-version.mjs: the vault path is computed on every read, and
+ * a path that throws is worse than one that is occasionally less specific.
+ */
 function repoIdentifier(root) {
   const full = resolve(root);
   const name = basename(full).replace(/[^A-Za-z0-9._-]/g, '-') || 'repo';
+  try {
+    const sha = execFileSync('git', ['rev-list', '--max-parents=0', 'HEAD'], {
+      cwd: root,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim().split(/\s/)[0];
+    if (/^[0-9a-f]{40}$/.test(sha)) return `${name}-root-${sha.slice(0, 8)}`;
+  } catch {
+    // Not a git root (or no commits): fall through to the path digest.
+  }
   const digest = createHash('sha256').update(full).digest('hex').slice(0, 8);
   return `${name}-${digest}`;
 }
@@ -584,14 +677,14 @@ function runProcess(cmd, args, { cwd, input, env, timeoutMs = 15000 } = {}) {
 
 async function executeRunner(runner, worktree, env, timeoutMs) {
   const spec = runner.buildExec(worktree);
-  if (spec.reportPath && existsSync(spec.reportPath)) {
-    await rm(spec.reportPath, { force: true });
+  // Remove what a previous run left behind before running: a stale report
+  // would parse as this run's result, and a directory report accumulates
+  // one XML per class across runs.
+  for (const p of spec.reportPaths ?? []) {
+    if (existsSync(p)) await rm(p, { recursive: true, force: true });
   }
   const res = await runProcess(spec.cmd, spec.args, { cwd: worktree, env, timeoutMs });
-  let reportText = '';
-  if (spec.reportPath && existsSync(spec.reportPath)) {
-    reportText = await readFile(spec.reportPath, 'utf8').catch(() => '');
-  }
+  const reportText = await readReports(spec.reportPaths);
   const parsed = runner.parse(res.stdout, reportText);
   return {
     code: res.code,
@@ -606,10 +699,15 @@ async function executeRunner(runner, worktree, env, timeoutMs) {
  * twice, dropping any candidate whose test outcomes are not identical across both
  * passes.
  */
-async function validateCandidate(root, worktree, candidate, { timeoutMs = 5000 } = {}) {
-  // Skip commits that modify more than 4 test files or run `npm pack` integration
-  // builds, which are sweeping renames rather than self-contained benchmark tasks.
-  if (candidate.testFiles.length > 4 || candidate.testFiles.includes('test/pack.test.mjs')) {
+async function validateCandidate(root, worktree, candidate, { timeoutMs = 5000, exclude = DEFAULT_EXCLUDES } = {}) {
+  // Skip commits that modify more than 4 test files, or that touch a path
+  // the repository's manifest excludes (`simt.json` bench.mine.exclude,
+  // defaulting to the pack integration test the committed corpus was mined
+  // around): sweeping renames rather than self-contained benchmark tasks.
+  if (
+    candidate.testFiles.length > 4 ||
+    candidate.testFiles.some((f) => exclude.includes(f))
+  ) {
     return null;
   }
 
@@ -682,8 +780,10 @@ async function validateCandidate(root, worktree, candidate, { timeoutMs = 5000 }
   const p2p = gold1.passed.filter((id) => redPassedSet.has(id) && !redFailedSet.has(id));
   if (f2p.length === 0) return null;
 
-  const shortSha = candidate.sha.slice(0, 7);
-  const id = `t-${shortSha}-01`;
+  // 12 hex chars of the source commit: the 7-char form plus a fixed `-01`
+  // suffix could not disambiguate two tasks from the same commit (review 0003
+  // Q48). Collisions are checked at write time, where the corpus is visible.
+  const id = `t-${candidate.sha.slice(0, 12)}-01`;
   const gold = patchStats(goldPatch, candidate.implFiles.length);
 
   return {
@@ -713,8 +813,12 @@ async function validateCandidate(root, worktree, candidate, { timeoutMs = 5000 }
  * temporary worktrees until `target` valid tasks are collected, and written
  * deterministically to disk.
  *
+ * Writing is append-only: existing task files are left alone unless `replace`
+ * is set, which restores the old "reflect exactly this history" semantics by
+ * deleting files the current history does not reproduce (review 0003 Q48).
+ *
  * @param {string} root
- * @param {{apply?: boolean, target?: number, concurrency?: number, timeoutMs?: number, env?: NodeJS.ProcessEnv}} [options]
+ * @param {{apply?: boolean, target?: number, concurrency?: number, timeoutMs?: number, replace?: boolean, env?: NodeJS.ProcessEnv}} [options]
  */
 export async function mineTasks(
   root,
@@ -723,6 +827,7 @@ export async function mineTasks(
     target = DEFAULT_MINE_TARGET,
     concurrency = 4,
     timeoutMs = 5000,
+    replace = false,
     env = process.env,
   } = {},
 ) {
@@ -732,12 +837,19 @@ export async function mineTasks(
     return { ok: false, error: listed.error };
   }
 
+  // Repository-declared mining config (review 0003 Q48): an explicit option
+  // wins, then the manifest, then the default.
+  const { manifest } = await readManifest(absRoot);
+  const benchCfg = manifest?.bench?.mine ?? {};
+  const effectiveTimeout = benchCfg.timeoutMs ?? timeoutMs;
+  const exclude = benchCfg.exclude ?? DEFAULT_EXCLUDES;
+
   const tasksDir = join(absRoot, '.simt', 'bench', 'tasks');
   const vaultRoot = resolveVaultDir(absRoot, { env });
 
   if (!apply) {
     const preview = listed.candidates.slice(0, target).map((c) => ({
-      id: `t-${c.sha.slice(0, 7)}-01`,
+      id: `t-${c.sha.slice(0, 12)}-01`,
       base: c.base,
       sourceCommit: c.sha,
       subject: c.subject,
@@ -790,7 +902,7 @@ export async function mineTasks(
         cursor += 1;
         if (index >= listed.candidates.length) break;
         const candidate = listed.candidates[index];
-        const res = await validateCandidate(absRoot, wt, candidate, { timeoutMs });
+        const res = await validateCandidate(absRoot, wt, candidate, { timeoutMs: effectiveTimeout, exclude });
         if (res) {
           validated.push({ index, ...res });
         }
@@ -807,18 +919,34 @@ export async function mineTasks(
     await mkdir(tasksDir, { recursive: true });
     await mkdir(vaultRoot, { recursive: true });
 
-    // Remove stale task files when re-mining so the directory reflects the
-    // deterministic set for this history.
-    const existing = await readdir(tasksDir).catch(() => []);
-    const keepNames = new Set(selected.map((entry) => `${entry.task.id}.json`));
-    for (const name of existing) {
-      if (name.endsWith('.json') && !keepNames.has(name)) {
-        await rm(join(tasksDir, name), { force: true });
+    // Mining is append-only (review 0003 Q48: `mineTasks(target 3)` once
+    // deleted all 20 committed tasks and wrote 3 others). `replace` restores
+    // the old "reflect exactly this history" semantics, and only it deletes.
+    if (replace) {
+      const existing = await readdir(tasksDir).catch(() => []);
+      const keepNames = new Set(selected.map((entry) => `${entry.task.id}.json`));
+      for (const name of existing) {
+        if (name.endsWith('.json') && !keepNames.has(name)) {
+          await rm(join(tasksDir, name), { force: true });
+        }
       }
     }
 
     for (const entry of selected) {
       const taskPath = join(tasksDir, `${entry.task.id}.json`);
+      // An id belongs to exactly one source commit. If a file with this id
+      // holds a different commit, the 12-char prefix collided and guessing
+      // which corpus the reader wants is worse than refusing.
+      if (existsSync(taskPath) && !replace) {
+        const prior = JSON.parse(await readFile(taskPath, 'utf8'));
+        if (prior.sourceCommit !== entry.task.sourceCommit) {
+          return {
+            ok: false,
+            applied: false,
+            error: `id collision: ${taskPath} holds task from ${prior.sourceCommit}, mine produced ${entry.task.sourceCommit}; rerun with --replace to take over the corpus`,
+          };
+        }
+      }
       await writeFile(taskPath, `${JSON.stringify(entry.task, null, 2)}\n`, 'utf8');
 
       const taskVault = join(vaultRoot, entry.task.id);
@@ -826,6 +954,20 @@ export async function mineTasks(
       await writeFile(join(taskVault, 'test.patch'), entry.testPatch);
       await writeFile(join(taskVault, 'gold.patch'), entry.goldPatch);
     }
+
+    // The corpus records where it came from: which commit was HEAD when the
+    // mine ran, the target, and the simt version that validated the tasks.
+    // No timestamp — a re-mine at the same HEAD is byte-identical.
+    const { stdout: headSha } = await exec('git', ['rev-parse', 'HEAD'], { cwd: absRoot });
+    await writeFile(
+      join(dirname(tasksDir), 'corpus.json'),
+      `${JSON.stringify(
+        { minedFrom: headSha.trim(), target, simtVersion: packageVersion() },
+        null,
+        2,
+      )}\n`,
+      'utf8',
+    );
 
     return {
       ok: true,

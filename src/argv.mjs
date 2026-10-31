@@ -89,6 +89,10 @@ export const BOOL_FLAGS = new Set([
   // bench.json marked unmeasured, and a lint that failed it on arrival would make
   // every new pack red before its author wrote the rule (plan 0003 R45).
   'require-measured',
+  // bench mine: restore the old "reflect exactly this history" semantics by
+  // deleting task files the current history does not reproduce. Off by default
+  // because mining is append-only (review 0003 Q48).
+  'replace',
   // distill: propose the summary from the configured local chat model instead of
   // the deterministic outline. Off by default: no model in the default path (P1),
   // and a model that is not asked for should not be opened against (ADR-090).

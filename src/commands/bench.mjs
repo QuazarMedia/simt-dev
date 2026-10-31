@@ -5,11 +5,13 @@
 // default and write artifacts to `.simt/bench/` only when authorised with
 // `--yes` (and not `--dry-run`). `bench report` is read-only.
 
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 
 import { CLI } from '../name.mjs';
 import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
 import { DEFAULT_MINE_TARGET, mineTasks } from '../bench/mine.mjs';
+import { buildCorpusDocument, verifyCorpusDocument, writeCorpusDocument } from '../bench/corpus.mjs';
 import { regradeRun, runBench } from '../bench/run.mjs';
 import { buildBenchReport } from '../bench/report.mjs';
 import { formatRecall, measureRecall } from '../index/map.mjs';
@@ -26,6 +28,7 @@ export async function benchMineCommand(positional, flags) {
   const result = await mineTasks(root, {
     apply,
     target: DEFAULT_MINE_TARGET,
+    replace: flags.replace === true,
   });
 
   if (!result.ok) {
@@ -424,6 +427,140 @@ export async function benchCriticCommand(positional, flags, commands = []) {
   ];
   if (result.labelsNote) lines.push(`labels   ${result.labelsNote}`);
   for (const error of result.errors) lines.push(`error    ${error}`);
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  return EXIT.OK;
+}
+
+// `simt bench export` / `simt bench import` (review 0003 Q48).
+//
+// The vault is keyed on the repository's root commit and lives outside every
+// checkout. That is what makes it safe as a hidden verifier, and it is also
+// why a clone cannot read the corpus mined on another machine: the committed
+// tasks failed with ENOENT from every other checkout. A sealed document
+// carries the descriptors and both patches for every task in one file, so an
+// export on one machine and an import on another reproduce the corpus
+// exactly, and the seal is checked before a single byte is trusted.
+
+export async function benchExportCommand(positional, flags) {
+  const out = positional[0];
+  if (!out) {
+    return fail(
+      'bench export needs a target file: bench export <corpus.json>',
+      EXIT.USAGE,
+      `export the sealed corpus: ${CLI} bench export corpus.json --yes`,
+    );
+  }
+  const root = resolve(flags.root ?? process.cwd());
+  const { dryRun, apply } = writeMode(flags);
+
+  let doc;
+  try {
+    doc = await buildCorpusDocument(root);
+  } catch (error) {
+    return fail(
+      `${root}: ${error.message ?? error}`,
+      EXIT.CONFIG,
+      `mine tasks first: ${CLI} bench mine --yes`,
+    );
+  }
+
+  if (doc.taskCount === 0) {
+    return fail(
+      `${root}: no mined tasks to export`,
+      EXIT.USAGE,
+      `mine tasks first: ${CLI} bench mine --yes`,
+    );
+  }
+
+  if (apply) {
+    const absOut = resolve(out);
+    await mkdir(dirname(absOut), { recursive: true });
+    await writeFile(absOut, `${JSON.stringify(doc, null, 2)}\n`, 'utf8');
+  }
+
+  if (isJson(flags)) {
+    emitJson({
+      ok: true,
+      command: 'bench export',
+      root,
+      dryRun,
+      applied: apply,
+      out: resolve(out),
+      taskCount: doc.taskCount,
+      seal: doc.seal,
+    });
+    return EXIT.OK;
+  }
+
+  const lines = [
+    `bench    export  ${resolve(out)}`,
+    `mode     ${apply ? 'applied' : dryRun ? 'dry-run (writes nothing)' : 'preview (pass --yes to write)'}`,
+    `tasks    ${doc.taskCount}`,
+    `seal     ${doc.seal}`,
+  ];
+  if (!apply) lines.push(`remedy   run: ${CLI} bench export ${out} --yes`);
+  emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
+  return EXIT.OK;
+}
+
+export async function benchImportCommand(positional, flags) {
+  const file = positional[0];
+  if (!file) {
+    return fail(
+      'bench import needs a corpus file: bench import <corpus.json>',
+      EXIT.USAGE,
+      `import a sealed corpus: ${CLI} bench import corpus.json --yes`,
+    );
+  }
+  const root = resolve(flags.root ?? process.cwd());
+  const { dryRun, apply } = writeMode(flags);
+
+  let doc;
+  try {
+    doc = JSON.parse(await readFile(file, 'utf8'));
+  } catch (error) {
+    return fail(
+      `${file}: ${error.message ?? error}`,
+      EXIT.USAGE,
+      `export one with: ${CLI} bench export ${file} --yes`,
+    );
+  }
+
+  const problem = verifyCorpusDocument(doc);
+  if (problem !== null) {
+    return fail(
+      `${file}: ${problem}`,
+      EXIT.CONFIG,
+      `export a fresh corpus: ${CLI} bench export ${file} --yes`,
+    );
+  }
+
+  const result = await writeCorpusDocument(root, doc, { apply });
+
+  if (isJson(flags)) {
+    emitJson({
+      ok: true,
+      command: 'bench import',
+      root,
+      file: resolve(file),
+      dryRun,
+      applied: result.applied,
+      taskCount: result.tasks,
+      tasksDir: result.tasksDir,
+      vaultRoot: result.vaultRoot,
+      seal: doc.seal,
+    });
+    return EXIT.OK;
+  }
+
+  const lines = [
+    `bench    import  ${resolve(file)}`,
+    `mode     ${apply ? 'applied' : dryRun ? 'dry-run (writes nothing)' : 'preview (pass --yes to write)'}`,
+    `imported ${result.tasks} task(s)  seal=${doc.seal}`,
+    `tasks    ${result.tasksDir}`,
+    `vault    ${result.vaultRoot}`,
+  ];
+  if (!apply) lines.push(`remedy   run: ${CLI} bench import ${file} --yes`);
   emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
   return EXIT.OK;
 }

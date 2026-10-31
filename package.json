@@ -28,7 +28,6 @@
     "agents",
     "skills",
     "docs/decisions",
-    "!docs/decisions/README.md",
     "CHANGELOG.md"
   ],
   "keywords": [

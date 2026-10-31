@@ -26,7 +26,7 @@ Before you write or change anything that leaves this repository, check it agains
 | --- | --- |
 | Is the instruction addressed to the **reader** of the receiving repo? | "Edit the source in simt-dev" — advice for the author, projected into a file whose own header says do not edit |
 | Does every **path** resolve in the receiving repo? | `docs/decisions/` resolves here and nowhere else; the receiving repo has no such directory |
-| Does every **command** exist, under the name this package ships? | `simt sync` did not exist; the binary is `simt-dev`, and 102 remedy strings were unrunnable |
+| Does every **command** exist, under the name this package ships? | `simt sync` was cited before it existed, and 102 remedy strings named a command or a binary that does not exist |
 | Does every **repository name** mean something outside this estate? | `simt-garmin` in the Android profile meant nothing to a reader in a different company |
 | Can the reader **act** on it — command, not location? | A remedy naming a path is a second problem stacked on the first |
 | Is it a **fact**, or decoration that misdescribes the artefact? | A manifest comment claimed each value cites its decision record; none did |
@@ -106,7 +106,9 @@ Two corollaries that are easy to get wrong:
 | `src/mcp/` | A read-only JSON-RPC surface over the same logic the commands use |
 | `test/fixture.mjs` | The staged workspace and the identity-carrying `git`. Nothing in `test/` reads outside this checkout (ADR-031) |
 | `docs/decisions/` | Numbered rulings. Read these before changing what the tool believes |
-| `docs/plans/` | The two plans this was built from, with a state column per step |
+| `docs/plans/` | The four plans this was built from, with a state column per step |
+| `docs/reviews/` | The numbered reviews and the tracker each one leaves behind |
+| `src/commands/` | One module per command, the spec that names them, and the dispatch table |
 
 ## Why this repository adopts itself
 

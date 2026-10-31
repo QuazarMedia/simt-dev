@@ -22,13 +22,14 @@
 // `--yes` previews: it names what it would apply and lists the rest.
 
 import { join } from 'node:path';
+import { repoContext } from '../context.mjs';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { sharedWarning } from './shared.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
-import { manifestPath, readManifest, writeManifest } from '../projection/manifest.mjs';
+import { manifestPath, writeManifest } from '../projection/manifest.mjs';
 import { planManifestRepair } from './sync.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
 import { applyHooksInstall, plannedDiffs, planHooksInstall } from './hooks.mjs';
@@ -47,7 +48,7 @@ import { commitJournal, ignoreJournal, journalHygiene, journalIgnoreNext } from 
 // finding creation, before any fix is applied, so the before side is true in
 // preview and in apply alike. Only safe findings carry pairs: an unsafe finding
 // is never applied, so there is no write to preview.
-async function collectFindings(root, { result, ws, shared, withDiffs = false }) {
+async function collectFindings(root, { result, ws, shared, withDiffs = false, ctx }) {
   const findings = [];
   if (result.error) {
     // Nothing else can be asked: classification failed, so every check built on
@@ -63,7 +64,7 @@ async function collectFindings(root, { result, ws, shared, withDiffs = false }) 
     return findings;
   }
 
-  const { manifest, exists, error: manifestError } = await readManifest(root);
+  const { manifest, exists, error: manifestError } = await ctx.manifest();
   if (manifestError !== null) {
     // An unreadable manifest is a hand-edit, not a repair: re-rendering it
     // would destroy whatever the other tool was saying.
@@ -232,7 +233,10 @@ function findingLines(findings, { fixMode, applying }) {
 //
 // See the module header: classification first, because everything else is a guess without it.
 export async function diagnose(root, args = {}) {
-  const result = await fingerprint(root);
+  // One context for the whole diagnosis, so a caller that already holds one (a UI, a
+  // harness, an MCP request) does not pay for a second fingerprint (review 0003 Q67).
+  const ctx = args.ctx ?? repoContext(root);
+  const result = await ctx.fingerprint();
   // Which source answered the workspace question, and where it looked. A tool
   // that silently fell back to the wrong directory would make every downstream
   // answer confidently wrong, so the answer is reported rather than inferred
@@ -246,7 +250,7 @@ export async function diagnose(root, args = {}) {
   const shared = await sharedWarning(root, result.manifest ?? null, args);
 
   const withDiffs = args.fix === true && args.diff === true;
-  const findings = await collectFindings(root, { result, ws, shared, withDiffs });
+  const findings = await collectFindings(root, { result, ws, shared, withDiffs, ctx });
   // Under `--json` the document is the whole report, so it has to carry both
   // failures the text path reports AND the workspace answer the text prints.
   const failure = result.error

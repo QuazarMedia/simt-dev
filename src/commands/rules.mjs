@@ -15,6 +15,7 @@
 // reviewer needs and exactly the fact an empty output would hide.
 
 import { readdir } from 'node:fs/promises';
+import { repoContext } from '../context.mjs';
 import { join } from 'node:path';
 import { renderDecisionsIndex } from '../decisions/index-doc.mjs';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
@@ -51,8 +52,8 @@ function sorted(rules) {
   return [...rules].sort((a, b) => a.id.localeCompare(b.id));
 }
 
-async function load(root) {
-  const rules = await loadRules(root ?? null);
+async function load(root, ctx = repoContext(root)) {
+  const rules = await ctx.rules();
   const broken = rules.filter((r) => r.error);
   return { rules: [...rules, ...(await loadPerSurfaceRules())], broken };
 }
@@ -159,8 +160,8 @@ export async function listCommand(args, flags) {
   return broken.length === 0 ? EXIT.OK : EXIT.FAIL;
 }
 
-async function selectionFor(rules, root) {
-  const { stack, facts } = await fingerprint(root);
+async function selectionFor(rules, root, ctx = repoContext(root)) {
+  const { stack, facts } = await ctx.fingerprint();
   const { selected, notes } = select(rules, stack, facts);
   return { selected: new Set(selected.map((r) => r.id)), notes };
 }
@@ -212,9 +213,11 @@ async function loadDecisionsFor(root, all) {
 }
 
 /** The catalogue both surfaces answer from: every rule, its decisions, and the selection. */
-export async function rulesCatalogue(root, { selectFor = null } = {}) {
-  const { rules, broken } = await load(root);
-  const selection = selectFor ? await selectionFor(rules, selectFor) : null;
+export async function rulesCatalogue(root, { selectFor = null, ctx = null } = {}) {
+  const { rules, broken } = await load(root, ctx ?? repoContext(root));
+  // `selectFor` is a different repository: the caller asked for the catalogue here and
+  // the selection there, so it gets its own context rather than this repository answer.
+  const selection = selectFor ? await selectionFor(rules, selectFor, repoContext(selectFor)) : null;
   return {
     rules: sorted(rules).map((r) => ({
       id: r.id,
@@ -238,8 +241,8 @@ export async function rulesCatalogue(root, { selectFor = null } = {}) {
  * The provenance facts for one rule or one decision record, in the shape the
  * JSON documents carry. Text renders from the same facts; nothing re-derives.
  */
-export async function rulesWhyFacts(root, what, { all = false } = {}) {
-  const { rules } = await load(root);
+export async function rulesWhyFacts(root, what, { all = false, ctx = null } = {}) {
+  const { rules } = await load(root, ctx ?? repoContext(root));
   if (/^ADR-\d{3,}$/i.test(what)) {
     const id = what.toUpperCase();
     const { ok, decisions, errors, origins } = await loadDecisionsFor(root, all);

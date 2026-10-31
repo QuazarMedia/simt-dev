@@ -15,7 +15,7 @@
 // readers is safe to retry.
 
 import { fingerprint } from './resolve/fingerprint.mjs';
-import { loadManifest } from './manifest/schema.mjs';
+import { readManifest } from './projection/manifest.mjs';
 import { loadRules, provenanceDigest } from './projection/rules.mjs';
 
 /**
@@ -54,7 +54,10 @@ export function repoContext(root) {
       return { ...counts, entries: cache.size };
     },
     fingerprint: () => once('fingerprint', () => fingerprint(root)),
-    manifest: () => once('manifest', () => loadManifest(root)),
+    // The legacy shape, because that is what the commands print: `error` is the
+    // unreadable-file case and every caller already renders it. Memoising the loader's
+    // `problems` array here instead gave doctor `undefined` where it tests for null.
+    manifest: () => once('manifest', () => readManifest(root)),
     rules: () => once('rules', () => loadRules(root)),
     digest: () => once('digest', () => provenanceDigest()),
   };

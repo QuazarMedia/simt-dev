@@ -13,6 +13,7 @@ import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mj
 import { EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
 import { hasScript, knownGates, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
 import { classifyPush, parsePushedRefs, renderGateReport, runGates } from '../src/hooks/dispatcher.mjs';
+import { recordRun } from '../src/ledger/index.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 import { readCapability } from '../src/hooks/capability.mjs';
 import * as gateModule from '../src/projection/manifest.mjs';
@@ -776,6 +777,75 @@ test('dispatcher: an annotated tag is dereferenced to its commit before classifi
   const pushed = `refs/tags/v1.0 ${tagSha} refs/tags/v1.0 ${'0'.repeat(40)}\n`;
   const result = await runGates('pre-push', { root, manifest, pushed });
   assert.equal(result.gates.find((g) => g.name === 'test').status, 'skipped');
+});
+
+// ------------------------------------------------ pre-push already-passing skip (ADR-120)
+
+/**
+ * A passing `test` run recorded against `root`'s current clean tree, the way the dispatcher
+ * records one when the author runs the suite. The tree it names is the committed tree, so
+ * the pre-push gate can match it against `HEAD^{tree}`.
+ */
+async function recordGreenSuite(root) {
+  await recordRun(root, { cmd: 'npm test', exit: 0, ms: 120, output: '1580 pass, 0 fail', gate: 'test', kind: 'test' });
+}
+
+test('dispatcher: a push of an already-green tree skips the test gate on its evidence', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'] } };
+  const root = await fixture({ scripts: { test: 'exit 0' }, files: { 'a.md': '1\n' }, manifest });
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'base'], { cwd: root });
+  await recordGreenSuite(root);
+  const result = await runGates('pre-push', { root, manifest });
+  assert.equal(result.failed, false);
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'skipped');
+  assert.match(gate.detail, /already passing on current state/);
+  // The report names the record that earned the skip, so a skip is never silent.
+  assert.match(renderGateReport('pre-push', ['test'], result).join('\n'), /SKIPPED\s+test.*\[ADR-120\]/);
+});
+
+test('dispatcher: a push with no recorded run runs the test gate', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'] } };
+  const root = await fixture({ scripts: { test: 'exit 0' }, files: { 'a.md': '1\n' }, manifest });
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'base'], { cwd: root });
+  const result = await runGates('pre-push', { root, manifest });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: a later failure cancels the pass, so the suite runs', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'] } };
+  const root = await fixture({ scripts: { test: 'exit 0' }, files: { 'a.md': '1\n' }, manifest });
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'base'], { cwd: root });
+  // Green, then red on the same tree: a pass followed by a failure proves nothing.
+  await recordRun(root, { cmd: 'npm test', exit: 0, ms: 120, output: '1580 pass, 0 fail', gate: 'test', kind: 'test' });
+  await recordRun(root, { cmd: 'npm test', exit: 1, ms: 120, output: '1579 pass, 1 fail', gate: 'test', kind: 'test' });
+  const result = await runGates('pre-push', { root, manifest });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: a code push that is not docs-only skips on evidence when present', async () => {
+  // With prePushSkipTest declared, a code push is not docs-only, so the docs-only path yields
+  // and the evidence path decides: green evidence skips, none runs the suite.
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const root = await fixture({ scripts: { test: 'exit 0' }, files: { 'src/x.js': '1\n' }, manifest });
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'base'], { cwd: root });
+  const { stdout: base } = await exec('git', ['rev-parse', 'HEAD'], { cwd: root });
+  await writeFile(join(root, 'src/y.js'), '2\n');
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'top'], { cwd: root });
+  const { stdout: head } = await exec('git', ['rev-parse', 'HEAD'], { cwd: root });
+  // The evidence is for the top tree the push delivers; the push line carries the code.
+  await recordGreenSuite(root);
+  const pushed = `refs/heads/main ${head.trim()} refs/heads/main ${base.trim()}\n`;
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.failed, false);
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'skipped');
+  assert.match(gate.detail, /already passing on current state/);
 });
 
 test('dispatcher: an unknown event fails rather than passing silently', async () => {

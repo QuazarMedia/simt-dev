@@ -52,7 +52,7 @@ test('every canonical rule is present, named, and states where pushing stops', a
   assert.match(slice.body, /Never push because the work is finished/);
   assert.match(slice.body, /approval to commit is not approval to push/i);
   assert.match(slice.body, /--no-verify/);
-  assert.doesNotMatch(slice.body, /simt (?!-dev)/, 'names the tool the reader has installed');
+  assert.doesNotMatch(slice.body, /simt-dev (?=\S)/, 'names the command by the pre-rename spelling; the reader types `simt` (ADR-056)');
 });
 
 test('a rule missing id or target is a defect, not a default', () => {

@@ -122,7 +122,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=05c88f4f6a9572e3e013ac2e000543056b125a63 -->
+<!-- simt:sha=bacbb5ae3846dad9f4e2455341137f07c6d845c8 -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->
@@ -146,9 +146,16 @@ commands belongs in this repository, not here.
 
 ### Git
 
+The commit and push procedure - order, message format, worktrees - is the `slice-commit`
+rule; follow it for every commit and push.
+
 - Commit locally, report the SHA. **Push only on explicit approval.** (ADR-001)
 - Before asking for push approval, state whether the push triggers a deployment, a migration
   or any remote mutation.
+- Once approved, you may push directly without the pre-push gate re-running the full suite
+  when you already ran that suite green on the current state and changed nothing since: cite
+  the already-passing run as the pass, and the gate recognizes the evidence and skips the
+  re-run rather than paying for it again. (ADR-120)
 - Never use `--no-verify`, amend, rebase, reset or rewrite history unless explicitly asked.
 - Never commit failing, partial, secret-bearing or unrelated work.
 
@@ -293,6 +300,29 @@ one is a mechanical procedure with a fixed order, because every step after it de
 on the one before: you cannot review a diff you have not staged, and you cannot claim
 evidence for a test you have not run.
 
+### Commit message
+
+A message is read by the next agent before they are told what to do. It says what the
+commit is, what it answers, and what it changed, so a reader never reconstructs that
+from the diff.
+
+The title is Conventional Commits: imperative, no trailing period, a short scope slug
+that names the subsystem — not a ticket id.
+
+    feat(dispatcher): skip the test gate on a push that already passed
+
+The body is plain sections in this order. Drop any section that has nothing to say; a
+one-line commit needs none of them.
+
+    What: <one sentence — what this commit is>
+    Why: <what it answers — the task, defect, or decision that asked for it>
+    Before: <the state this replaces, briefly>
+    After: <the state it leaves, briefly>
+
+"Before" and "After" are a short state summary, not a diff: enough to see what moved,
+not enough to need the patch. Cite a decision record where one settles the change, and
+never claim a test in the body that was not run on this tree.
+
 ### Order
 
 1. **Run the focused test the change needs**, through the repository's own runner,
@@ -302,10 +332,8 @@ evidence for a test you have not run.
    alone. Report what you left alone; silence about it reads as "I reverted it".
 3. **Read the staged diff.** Not the working tree — the diff. It is what will be
    committed, and it is the last chance to notice a file that does not belong.
-4. **Write the message.** Conventional Commits, imperative subject, no trailing period:
-   `fix(gates): declare only gates a repo can run, and report the ones it cannot`.
-   The subject says what changed; the body says why, and what was deliberately not
-   changed.
+4. **Write the message in the format above.** The title names what changed; the body
+   says why, and what was deliberately not changed.
 5. **Commit.** `git commit`, non-interactive. Report the SHA.
 6. **Stop.**
 
@@ -321,6 +349,32 @@ mutation. Then wait. Approval to commit is not approval to push.
 Never use `--no-verify`. A hook that fails is telling you something about the change;
 skipping it turns a gate into a suggestion and the next person has no way to know it
 was skipped.
+
+Once the push is approved, you may push directly without the pre-push gate re-running
+the full suite when you already ran that suite green on the current state and changed
+nothing since: the gate records every run against the tree it ran on, recognises that
+evidence, and skips the re-run, reporting the skip and the record that earned it.
+Cite the already-passing run as the pass — do not claim a re-run that did not happen.
+(ADR-120)
+
+### Worktrees
+
+A worktree is the unit of isolation for concurrent work. The rules that keep it honest:
+
+- **One agent, one worktree, one slice.** Never direct two agents at the same files
+  concurrently; give each its own worktree and a slice whose files do not overlap.
+- **Start from the record, not from memory.** `simt slice start <id>` creates the
+  worktree for the tracker row and returns its path; work in that path, not the main
+  checkout.
+- **Finish where you started.** `simt slice finish <id>` runs the declared gates and
+  commits from the worktree; `simt plan done <id> <sha>` records the SHA in the main
+  checkout's tracker. A slice is not done when its worktree is green — it is done
+  when the tracker row is complete and the SHA is recorded.
+- **Leave the worktree when the slice is done.** A finished worktree that still holds
+  a dirty tree is a claim about work that is not committed; remove it, and report what
+  you left behind if there was any.
+- **Never rewrite history across worktrees.** A rebase, reset or amend in one worktree
+  changes the base every other worktree branched from; coordinate it, or do not do it.
 
 ### What never belongs in a commit
 

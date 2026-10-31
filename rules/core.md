@@ -24,9 +24,16 @@ commands belongs in this repository, not here.
 
 ## Git
 
+The commit and push procedure - order, message format, worktrees - is the `slice-commit`
+rule; follow it for every commit and push.
+
 - Commit locally, report the SHA. **Push only on explicit approval.** (ADR-001)
 - Before asking for push approval, state whether the push triggers a deployment, a migration
   or any remote mutation.
+- Once approved, you may push directly without the pre-push gate re-running the full suite
+  when you already ran that suite green on the current state and changed nothing since: cite
+  the already-passing run as the pass, and the gate recognizes the evidence and skips the
+  re-run rather than paying for it again. (ADR-120)
 - Never use `--no-verify`, amend, rebase, reset or rewrite history unless explicitly asked.
 - Never commit failing, partial, secret-bearing or unrelated work.
 

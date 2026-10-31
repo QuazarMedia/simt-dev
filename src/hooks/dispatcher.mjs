@@ -30,7 +30,7 @@ import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { assertVersionPin } from '../package-version.mjs';
-import { recordRun } from '../ledger/index.mjs';
+import { hasTestEvidence, readLedger, recordRun } from '../ledger/index.mjs';
 import { renderFindings, scanStaged } from '../secrets.mjs';
 
 const exec = promisify(execFile);
@@ -193,7 +193,7 @@ export async function classifyPush(root, refs, { maxCommits, paths }) {
  * review. A misdeclaration (missing fields) also runs the suite - a skip the
  * manifest cannot state precisely is a skip a reviewer cannot see.
  *
- * @returns {Promise<{reason: string} | null>} null runs the suite; a reason skips the `test` gate
+ * @returns {Promise<{reason: string, adr: string} | null>} null runs the suite; a reason skips the `test` gate
  */
 async function resolveDocsOnlySkip(root, manifest, pushed) {
   if (pushed === undefined) return null;
@@ -204,7 +204,44 @@ async function resolveDocsOnlySkip(root, manifest, pushed) {
     return null; // the caller cannot be sure what is being pushed; the suite runs
   }
   const verdict = await classifyPush(root, refs, { maxCommits: config.maxCommits, paths: config.paths });
-  return verdict.docsOnly ? { reason: verdict.reason } : null;
+  return verdict.docsOnly ? { reason: verdict.reason, adr: 'ADR-113' } : null;
+}
+
+/**
+ * The pre-push skip for a suite the author already ran on this exact tree (ADR-120).
+ *
+ * The dispatcher records every gate run against the tree it ran on (ADR-087). If a passing
+ * `test` run is recorded for the committed tree about to be pushed, and nothing has changed
+ * since, re-running the full suite at push time buys nothing: it is the same tree, already
+ * proven. This reads that evidence and earns the same reported skip the docs-only path does.
+ *
+ * It matches the COMMITTED tree (`HEAD^{tree}`), not the working tree: the pre-push gate runs
+ * at HEAD, so the evidence that matters is a pass on exactly that tree. A file edited after
+ * the green pass changes the tree id, so the match fails and the suite runs - the "no changes
+ * since" condition is enforced by the digest, not by trusting the author. Every uncertainty -
+ * an unborn HEAD, an unreadable ledger, no entry for this tree, a later failure - fails closed
+ * to the suite.
+ *
+ * @param {string} root the real repository root
+ * @returns {Promise<{reason: string} | null>} null runs the suite; a reason skips the `test` gate
+ */
+async function resolveAlreadyPassedSkip(root) {
+  let headTree;
+  try {
+    ({ stdout: headTree } = await exec('git', ['rev-parse', 'HEAD^{tree}'], { cwd: root }));
+  } catch {
+    return null;
+  }
+  headTree = headTree.trim();
+  if (!/^[0-9a-f]{40}$/.test(headTree)) return null;
+  const { entries, errors } = await readLedger(root);
+  if (errors.length > 0) return null;
+  if (!hasTestEvidence(entries, headTree)) return null;
+  return {
+    reason:
+      'already passing on current state: the test gate ran green on this tree and nothing has changed since',
+    adr: 'ADR-120',
+  };
 }
 
 /**
@@ -267,10 +304,12 @@ export async function runGates(event, { root, manifest, pushed }) {
   let headWorktree = null;
   let skipTest = null;
   if (event === 'pre-push') {
-    // Decided before the worktree exists: a push that carries only documentation
-    // skips the `test` gate (ADR-113), and a push that earns the skip needs no
-    // tree for a gate that will not run.
-    skipTest = await resolveDocsOnlySkip(root, manifest, pushed);
+    // Decided before the worktree exists: a push that carries only documentation skips the
+    // `test` gate (ADR-113), and a push whose tree the author already proved green skips it
+    // on that evidence (ADR-120). A push that earns either skip needs no tree for a gate
+    // that will not run.
+    skipTest = (await resolveDocsOnlySkip(root, manifest, pushed)) ??
+      (await resolveAlreadyPassedSkip(root));
     if (skipTest === null) {
       const materialized = await materializeHeadWorktree(root);
       if (materialized.path === null) {
@@ -316,8 +355,9 @@ export async function runGates(event, { root, manifest, pushed }) {
  * @param {object} ctx.manifest
  * @param {string[]} ctx.declared the gate names for this event
  * @param {string} ctx.key the manifest key for this event
- * @param {{reason: string} | null} [ctx.skipTest] set when a docs-only push skips the
- *   `test` gate (ADR-113); the reason is what the report prints in its place
+ * @param {{reason: string, adr: string} | null} [ctx.skipTest] set when a push skips the
+ *   `test` gate (ADR-113 for docs-only, ADR-120 for an already-green tree); the reason is
+ *   what the report prints in its place, and the adr is the record that earned it
  * @returns {Promise<{event: string, gates: object[], failed: boolean}>}
  */
 async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, skipTest = null }) {
@@ -366,11 +406,12 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
       continue;
     }
 
-    // The one gate a docs-only push does not run (ADR-113). It is reported, not
-    // dropped: a skip without a printed reason would let "passed" mean "the suite
-    // never ran", which is the exact confusion the report exists to prevent.
+    // The one gate a push may not run (ADR-113 for a docs-only push, ADR-120 for a tree
+    // already proven green). It is reported, not dropped: a skip without a printed reason
+    // would let "passed" mean "the suite never ran", which is the exact confusion the report
+    // exists to prevent.
     if (skipTest !== null && name === 'test') {
-      results.push({ name, status: 'skipped', detail: skipTest.reason, adr: 'ADR-113', exitCode: null });
+      results.push({ name, status: 'skipped', detail: skipTest.reason, adr: skipTest.adr, exitCode: null });
       continue;
     }
 

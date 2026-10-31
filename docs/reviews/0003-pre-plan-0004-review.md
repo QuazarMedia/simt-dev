@@ -188,7 +188,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q85 | Merge the two context meters; merge `review` and `bench critic` into one `critique()` | P2 | C | measure | M | — | Queued | |
 | Q86 | Replace ~300 plan-row references in `src/` comments; delete comments that restate code | P3 | C | hygiene | M | — | Queued | |
 | Q90 | Scalable docs architecture: short README, generated reference, guides, contributor how-tos, archive | P2 | D | docs | M | Q60 | Queued | |
-| Q91 | Doc drift: AGENTS.md, plan/review headers, ADR index, CHANGELOG, SECURITY, repo hygiene | P2 | D | docs | S | — | Queued | |
+| Q91 | Doc drift: AGENTS.md, plan/review headers, ADR index, CHANGELOG, SECURITY, repo hygiene | P2 | D | docs | S | — | Partial | `4d95e99`; node --test test/shipped.test.mjs test/spec.test.mjs test/help.test.mjs; false headers, layout table and SECURITY channels corrected; the decisions index, CHANGELOG, stray asset and FUNDING template are the rest |
 | Q92 | Tests: shared helpers, `process.execPath`, temp cleanup, tiers, corpus-free fixtures, unit gaps | P2 | D | tests | M | — | Queued | |
 | Q93 | npm scripts (`lint` lints nothing), tarball trims | P3 | D | packaging | S | — | Queued | |
 | Q99 | Finish the review of the modules listed in §1.1 | P2 | D | review | M | — | Queued | |

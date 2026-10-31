@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, writeFile, readFile, rm, chmod } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile, rm, chmod, mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -36,6 +36,27 @@ test('naming the tree does not stage anything', async () => {
   const after = (await git(['-C', root, 'status', '--porcelain'])).stdout;
   assert.equal(after, before);
   assert.match(after, /left-alone\.txt/);
+  await rm(root, { recursive: true, force: true });
+});
+
+test('naming the tree works when .gitignore ignores the state directory wholesale', async () => {
+  // A .gitignore that ignores `.simt/` makes the exclude pathspecs name ignored
+  // paths, and `git add` refuses them ("use -f"). The main checkout of this
+  // repository is exactly that shape, and the refusal left no ledger line -
+  // so the pre-push skip (ADR-120) had no evidence to find.
+  const root = await repo();
+  await writeFile(join(root, '.gitignore'), '.simt/\n');
+  await git(['-C', root, 'add', '.gitignore']);
+  await git(['-C', root, 'commit', '-qm', 'ignore the state directory']);
+  const state = join(root, '.simt', 'local');
+  await mkdir(state, { recursive: true });
+  await writeFile(join(state, 'ledger.jsonl'), '{}\n');
+  const first = await treeId(root);
+  assert.match(first, /^[0-9a-f]{40}$/);
+  // The state file is machine-local: editing it must not move the tree, or the
+  // evidence a line names would go stale on every write to the ledger itself.
+  await writeFile(join(state, 'ledger.jsonl'), '{} {}\n');
+  assert.equal(await treeId(root), first);
   await rm(root, { recursive: true, force: true });
 });
 

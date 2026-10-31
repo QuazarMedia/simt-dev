@@ -48,12 +48,41 @@ export async function treeId(root) {
     // tree it names. `git add -A` would take it once the file exists, and the
     // line would prove a tree that stopped existing when the line was written
     // (review 0003 Q19).
-    const excludes = TREE_EXCLUDES.map((p) => `:(exclude)${p}`);
+    //
+    // Where .gitignore already keeps a path out of the index, the pathspec
+    // would name an ignored path, and `git add` refuses it ("use -f") - and -f
+    // would force the very state back into the tree. The excludes therefore
+    // carry only the paths git does not already ignore.
+    const ignored = await ignoredSet(root, TREE_EXCLUDES);
+    const excludes = TREE_EXCLUDES.filter((p) => !ignored.has(p)).map((p) => `:(exclude)${p}`);
     await exec('git', ['add', '-A', '--', '.', ...excludes], { cwd: root, env });
     const { stdout } = await exec('git', ['write-tree'], { cwd: root, env });
     return stdout.trim();
   } finally {
     await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/**
+ * The paths git already ignores, so the exclude pathspecs do not name them.
+ * A repository with no .gitignore ignores nothing, and every exclude ships
+ * exactly as before.
+ *
+ * @param {string} root
+ * @param {string[]} paths
+ * @returns {Promise<Set<string>>}
+ */
+async function ignoredSet(root, paths) {
+  try {
+    // Paths as argv, not `--stdin`: `promisify(execFile)` drops the `input`
+    // option, so a stdin-fed `check-ignore` waits for input that never comes
+    // and the promise never settles.
+    const { stdout } = await exec('git', ['check-ignore', ...paths], { cwd: root });
+    return new Set(String(stdout).split('\n').filter(Boolean));
+  } catch {
+    // `check-ignore` exits 1 when nothing is ignored - the common case, not an
+    // error. Failing to the full exclude list is the pre-filter behaviour.
+    return new Set();
   }
 }
 

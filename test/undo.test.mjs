@@ -309,6 +309,78 @@ test('Q22: git config keys round-trip through the journal', async (t) => {
   assert.equal(await readGitValue(root, 'simt.test.key'), 'two');
 });
 
+test('H3: legacy sets under `.simt/journal` move into the current directory on the next write', async (t) => {
+  const root = await freshRoot(t);
+  const digestOf = (s) => `sha256-${createHash('sha256').update(s).digest('hex')}`;
+  const legacyId = '2000-01-01T00-00-00-000Z-ci-1.json';
+  const legacyDir = join(root, '.simt', 'journal');
+  await mkdir(legacyDir, { recursive: true });
+  await writeFile(
+    join(legacyDir, legacyId),
+    `${JSON.stringify({ version: 1, command: 'ci', at: 0, entries: [{ path: 'a.md', beforeDigest: digestOf('before\n'), afterDigest: digestOf('after\n'), beforeBytes: 'before\n' }] }, null, 2)}\n`,
+  );
+  await writeFile(join(root, 'a.md'), 'after\n', 'utf8');
+
+  // While the current directory is absent, the fallback listing sees the set.
+  assert.deepEqual(await listJournalSets(root), [legacyId]);
+
+  const journal = [];
+  await journaledWriteFile(root, journal, join(root, 'b.md'), 'new\n');
+  const id = await commitJournal(root, 'test', journal);
+  assert.ok(id, 'the run leaves a set');
+
+  // The write moved the legacy set into the current directory.
+  assert.deepEqual(await listJournalSets(root), [id, legacyId]);
+  await assert.rejects(stat(legacyDir), 'the emptied legacy directory is removed');
+
+  // And the legacy set is reachable from its new home: undo the run's set,
+  // then the migrated one.
+  const first = await undoLastJournalSet(root);
+  assert.ok(!('refused' in first && first.refused), JSON.stringify(first));
+  const second = await undoLastJournalSet(root);
+  assert.equal(second.set, legacyId, 'the migrated set is the undo target');
+  assert.ok(!('refused' in second && second.refused), JSON.stringify(second));
+  assert.equal(await readFile(join(root, 'a.md'), 'utf8'), 'before\n');
+});
+
+test('H3: a no-op journal activity moves the legacy sets, so healing does not wait for a change', async (t) => {
+  const root = await freshRoot(t);
+  const legacyDir = join(root, '.simt', 'journal');
+  await mkdir(legacyDir, { recursive: true });
+  await writeFile(join(legacyDir, '2000-01-01T00-00-00-000Z-ci-1.json'), '{}\n', 'utf8');
+
+  assert.equal(await commitJournal(root, 'test', []), null, 'a no-op commits no set');
+  assert.deepEqual(await listJournalSets(root), ['2000-01-01T00-00-00-000Z-ci-1.json']);
+  await assert.rejects(stat(legacyDir), 'the legacy directory is gone');
+});
+
+test('H3: a name in both directories keeps both records when the bytes differ', async (t) => {
+  const root = await freshRoot(t);
+  const legacyId = '2000-01-01T00-00-00-000Z-ci-1.json';
+  const legacyDir = join(root, '.simt', 'journal');
+  const currentDir = join(root, LOCAL_DIR, 'journal');
+  await mkdir(legacyDir, { recursive: true });
+  await mkdir(currentDir, { recursive: true });
+  await writeFile(join(legacyDir, legacyId), `${JSON.stringify({ version: 2, command: 'ci', at: 0, entries: [] })}\n`, 'utf8');
+  await writeFile(join(currentDir, legacyId), `${JSON.stringify({ version: 2, command: 'other', at: 1, entries: [] })}\n`, 'utf8');
+
+  const journal = [];
+  await journaledWriteFile(root, journal, join(root, 'c.md'), 'c\n');
+  await commitJournal(root, 'test', journal);
+
+  // Both copies survive: the current one shadows the legacy one in the
+  // listing, and the stray file keeps the legacy directory in place.
+  assert.ok((await readdir(legacyDir)).includes(legacyId), 'the differing legacy record is kept');
+  assert.ok((await readdir(currentDir)).includes(legacyId));
+
+  // Equal bytes collapse to one copy, and the directory goes with the last file.
+  await writeFile(join(legacyDir, legacyId), await readFile(join(currentDir, legacyId)));
+  const journal2 = [];
+  await journaledWriteFile(root, journal2, join(root, 'd.md'), 'd\n');
+  await commitJournal(root, 'test', journal2);
+  await assert.rejects(stat(legacyDir), 'the duplicate was the legacy directory\'s last file');
+});
+
 test('R49: `decide --yes` then `undo --yes` restores the tree through the binary', async (t) => {
   const root = await freshRoot(t);
   const decided = await runCli(['decide', 'Undo me', '--root', root, '--yes']);
@@ -346,4 +418,30 @@ test('R49: `undo --yes` refuses when the scaffold changed since, through the bin
   assert.equal(payload.ok, false);
   assert.ok(payload.refused.path.endsWith(file));
   assert.equal(await readFile(join(root, 'docs', 'decisions', file), 'utf8'), 'hand edit\n');
+});
+
+test('H3: a repo with only `.simt/journal` heals through the binary on the next write', async (t) => {
+  const root = await freshRoot(t);
+  const digestOf = (s) => `sha256-${createHash('sha256').update(s).digest('hex')}`;
+  const legacyId = '2000-01-01T00-00-00-000Z-ci-1.json';
+  const legacyDir = join(root, '.simt', 'journal');
+  await mkdir(legacyDir, { recursive: true });
+  await writeFile(
+    join(legacyDir, legacyId),
+    `${JSON.stringify({ version: 1, command: 'ci', at: 0, entries: [{ path: 'a.md', beforeDigest: digestOf('before\n'), afterDigest: digestOf('after\n'), beforeBytes: 'before\n' }] }, null, 2)}\n`,
+  );
+  await writeFile(join(root, 'a.md'), 'after\n', 'utf8');
+
+  // The write through the real binary moves the legacy set.
+  const decided = await runCli(['decide', 'Undo me', '--root', root, '--yes']);
+  assert.equal(decided.code, 0, decided.stderr.slice(0, 400));
+  await assert.rejects(stat(legacyDir), 'the legacy directory is gone after the write');
+  assert.ok((await readdir(join(root, LOCAL_DIR, 'journal'))).includes(legacyId), 'the set is in the current directory');
+
+  // `undo` reaches the migrated set: the run's set first, then the legacy one.
+  const first = await runCli(['undo', '--root', root, '--yes']);
+  assert.equal(first.code, 0, first.stderr.slice(0, 400));
+  const second = await runCli(['undo', '--root', root, '--yes']);
+  assert.equal(second.code, 0, second.stderr.slice(0, 400));
+  assert.equal(await readFile(join(root, 'a.md'), 'utf8'), 'before\n');
 });

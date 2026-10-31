@@ -43,7 +43,7 @@
 
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { chmod, cp, mkdir, readFile, readdir, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, mkdir, readFile, readdir, rename, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -335,12 +335,68 @@ function coalesceEntries(acc) {
 }
 
 /**
+ * Move the sets that predate the move into `.simt/local/journal` (review 0003
+ * Q19's fallback directory) into the current directory, and take the legacy
+ * directory down when the move empties it. While the current directory is
+ * absent, `listJournalSets` falls back to the legacy one; once it exists, the
+ * two are disjoint and the legacy sets are invisible to `undo` — a repo that
+ * accumulated history under the old path loses it on its first write after the
+ * move (plan 0005 H3). `commitJournal` is the only writer, so the migration
+ * rides on it and heals on the next journal activity. Every legacy set
+ * predates every current set — the current directory is created by this
+ * writer — so the move cannot disturb recency order. A name present in both
+ * keeps both copies when the bytes differ: a set file is history, and a
+ * collision is not a reason to drop one of the two records. A crash mid-move
+ * splits the sets between the two directories; the move is idempotent, so the
+ * next call finishes it.
+ */
+async function migrateLegacyJournal(root) {
+  const legacy = join(root, JOURNAL_DIR_LEGACY);
+  let names;
+  try {
+    names = await readdir(legacy);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return;
+  }
+  const dir = join(root, JOURNAL_DIR);
+  await mkdir(dir, { recursive: true });
+  for (const name of names) {
+    // Sets, `.undone.json` history and `.undoing.json` markers all end in
+    // `.json`; a stray file of any other kind keeps the directory in place.
+    if (!name.endsWith(SET_SUFFIX)) continue;
+    const from = join(legacy, name);
+    const to = join(dir, name);
+    try {
+      await stat(to);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      await rename(from, to);
+      continue;
+    }
+    // The name is taken: equal bytes are a duplicate of the same set (drop the
+    // legacy copy); differing bytes are a collision (keep both — the current
+    // copy shadows the legacy one in the listing).
+    const [a, b] = await Promise.all([readFile(from), readFile(to)]);
+    if (a.equals(b)) await unlink(from);
+  }
+  // `rmdir` fails when the directory is not empty, which is exactly the
+  // safety: a stray file the move does not take keeps the directory.
+  try {
+    await rmdir(legacy);
+  } catch (error) {
+    if (error.code !== 'ENOTEMPTY' && error.code !== 'EEXIST') throw error;
+  }
+}
+
+/**
  * Persist a run's set. Writes nothing when the run changed nothing, so the
  * last set on disk is always the last run that wrote.
  *
  * @returns {Promise<string|null>} the set id (file name), or null
  */
 export async function commitJournal(root, command, acc, { at = Date.now() } = {}) {
+  await migrateLegacyJournal(root);
   const entries = coalesceEntries(acc);
   if (entries.length === 0) return null;
   await ignoreJournal(root);
@@ -375,7 +431,10 @@ export async function journalHygiene(root) {
 
 /** Set ids newest-first, undone sets excluded. */
 export async function listJournalSets(root) {
-  // The pre-move directory is a fallback for one release (review 0003 Q19).
+  // The pre-move directory is a fallback for one release (review 0003 Q19);
+  // the sets in it move into the current directory on the next write
+  // (`migrateLegacyJournal`, plan 0005 H3), so the fallback only serves a
+  // repo that has not written since the move.
   let names;
   try {
     names = await readdir(join(root, JOURNAL_DIR));

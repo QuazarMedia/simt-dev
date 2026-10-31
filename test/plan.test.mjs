@@ -367,7 +367,9 @@ test('the delivered template is what a repository gets', async () => {
   assert.equal(state.error, undefined);
   assert.equal(state.format.name, file.name);
   assert.deepEqual(state.format.directories.map((dir) => dir.path), file.directories.map((dir) => dir.path));
-  const help = cli(['--help']);
+  // The plan keys are documented on the advanced page; the core page names the group
+  // and points at it (review 0003 Q61).
+  const help = cli(['help', '--all']);
   assert.equal(help.code, 0, help.stderr);
   assert.match(help.stdout, /simt\.json key plans/);
   assert.match(help.stdout, /tracker/);

@@ -190,7 +190,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q90 | Scalable docs architecture: short README, generated reference, guides, contributor how-tos, archive | P2 | D | docs | M | Q60 | Queued | |
 | Q91 | Doc drift: AGENTS.md, plan/review headers, ADR index, CHANGELOG, SECURITY, repo hygiene | P2 | D | docs | S | — | Partial | `4d95e99`; node --test test/shipped.test.mjs test/spec.test.mjs test/help.test.mjs; false headers, layout table and SECURITY channels corrected; the decisions index, CHANGELOG, stray asset and FUNDING template are the rest |
 | Q92 | Tests: shared helpers, `process.execPath`, temp cleanup, tiers, corpus-free fixtures, unit gaps | P2 | D | tests | M | — | Queued | |
-| Q93 | npm scripts (`lint` lints nothing), tarball trims | P3 | D | packaging | S | — | Partial | 2e2e762; node --test test/ci.test.mjs test/shipped.test.mjs test/spec.test.mjs test/help.test.mjs; build:sea and verify:wheel are npm scripts and CI and the hook call npm run lint; the tarball drops the decisions index but the wheel still carries it, because hatch excludes nothing inside a force-included directory - that is the one clause left |
+| Q93 | npm scripts (`lint` lints nothing), tarball trims | P3 | D | packaging | S | — | Complete | 1f99698; node --test test/ci.test.mjs test/shipped.test.mjs test/spec.test.mjs test/help.test.mjs; npm pack --dry-run (325 files) and uv build --wheel (332 entries, 120 records) both exclude the index, which now lives at docs/decisions-index.md; lint is graph lint, build:sea and verify:wheel are npm scripts, and the CI template and pre-push call them |
 | Q99 | Finish the review of the modules listed in §1.1 | P2 | D | review | M | — | Queued | |
 
 Count: 89 slices — 5 P0, 52 P1, 30 P2, 2 P3 (severity is the row's worst item).
@@ -742,7 +742,7 @@ their own file (`touchesRegion`, `generatedFact`, `isTestKind`, `readCandidates`
 - **Effort:** S.
 
 ### Q55 — Decisions index (P2)
-- **Where:** `src/decisions/index.mjs:28,87,249,340-470,545,580,600`; `src/memory/decide.mjs:44,230,341,420,455`; `src/commands/why.mjs:83-100`; `src/prbody.mjs:27`; `rules.mjs:222`; `sync.mjs:598`; `resolve/fingerprint.mjs:150`; `docs/decisions/README.md`.
+- **Where:** `src/decisions/index.mjs:28,87,249,340-470,545,580,600`; `src/memory/decide.mjs:44,230,341,420,455`; `src/commands/why.mjs:83-100`; `src/prbody.mjs:27`; `rules.mjs:222`; `sync.mjs:598`; `resolve/fingerprint.mjs:150`; `docs/decisions-index.md`.
 - **Evidence:** VERIFIED — two `ADR-002-*.md` pass `decide --check` and `loadDecisions`, `byId` keeps one;
   97 of 103 records have no frontmatter; every call re-parses all records (`rules_why` 44 ms; part of
   `resources/list` 771 ms); four supersessions recorded only on one side, index row for ADR-058
@@ -1225,7 +1225,7 @@ as an alias (locked ones permanent and hidden). Plan 0004's groups slot in as sp
 ### Q91 — Doc drift and repo hygiene (P2)
 - `AGENTS.md:28` ("the binary is `simt-dev`", "`simt sync` does not exist" — both now false), `:102` ("the two plans" — four), layout table covers 8 of 27 `src/` dirs and omits `docs/reviews`.
 - `docs/plans/0003…:3` says "in progress — R01–R10…" while the tracker is 55/55; `docs/reviews/0002…:3` "open" with 60 Complete + 1 Accepted → derive headers from trackers (`plan status --check`).
-- `docs/decisions/README.md` (56 KB, 590 hand-written lines, never read at runtime, shipped) → generated index + `architecture/history.md`; exclude from `files` and the wheel.
+- `docs/decisions-index.md` (56 KB, 590 hand-written lines, never read at runtime, shipped) → generated index + `architecture/history.md`; exclude from `files` and the wheel.
 - CHANGELOG 981 lines (0.2.2 entry 200 lines) → one bullet per change with an ADR link.
 - `SECURITY.md`: no supported versions, public issues as first channel; add private vulnerability reporting and response time.
 - `res/9ce4e49e-….jpg` (160 KB) tracked and unreferenced; rename the hero image; empty `state/`; template `FUNDING.yml`; README binary snippet without `.sha256` verification.
@@ -1255,7 +1255,7 @@ as an alias (locked ones permanent and hidden). Plan 0004's groups slot in as sp
   `package.json` list checks separately; tarball 906 KB / 2.83 MB unpacked / 291 files including the
   56 KB decisions README and the CHANGELOG, also embedded in the wheel and every SEA binary.
 - **Fix:** `lint` = `graph lint` + `shipped.test.mjs` + gen-docs check; `build:sea`, `verify:wheel`;
-  CI and the hook call npm scripts; exclude `docs/decisions/README.md` (mirror in `pyproject.toml`).
+  CI and the hook call npm scripts; exclude `docs/decisions-index.md` (mirror in `pyproject.toml`).
 - **Effort:** S.
 
 ### Q99 — Finish the review (P2)

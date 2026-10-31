@@ -565,13 +565,23 @@ test('nothing on the hook path reads the repository, and the entry point does no
       assert.equal(text.includes(`'${heavy}`), false, `${file} imports ${heavy}, which reads the repository`);
     }
   }
+  // Q54 split the entry point in two so the runtime floor runs first: `bin/` hands
+  // over to `src/cli.mjs`, which loads the registry. The commitment the assertion
+  // guards is unchanged - the registry arrives dynamically, one level deeper now.
   const bin = await readFile(join(ROOT, 'bin', 'simt.mjs'), 'utf8');
   assert.equal(
     /^import .*commands\/index\.mjs/m.test(bin),
     false,
     'bin/ imports the command registry statically, so every hook pays for every command',
   );
-  assert.match(bin, /await import\('\.\.\/src\/commands\/index\.mjs'\)/);
+  assert.match(bin, /await import\('\.\.\/src\/cli\.mjs'\)/);
+  const cli = await readFile(join(ROOT, 'src', 'cli.mjs'), 'utf8');
+  assert.equal(
+    /^import .*commands\/index\.mjs/m.test(cli),
+    false,
+    'src/cli.mjs imports the command registry statically, so the hot path pays for every command',
+  );
+  assert.match(cli, /await import\('\.\/commands\/index\.mjs'\)/);
 });
 
 test('the decision itself is measured, and nothing larger is claimed for it', async () => {

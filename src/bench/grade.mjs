@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -7,6 +6,7 @@ import { runGates } from '../hooks/dispatcher.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { detectTestRunner, readReports } from './mine.mjs';
+import { spawnBounded } from './process.mjs';
 
 const DEFAULT_GRADE_TIMEOUT_MS = 45_000;
 
@@ -18,48 +18,8 @@ function sanitizedEnv(extra = {}) {
   return env;
 }
 
-function runCmd(cmd, args, { cwd, input = null, timeoutMs = DEFAULT_GRADE_TIMEOUT_MS } = {}) {
-  return new Promise((resolveOutcome) => {
-    const child = spawn(cmd, args, {
-      cwd,
-      env: sanitizedEnv(),
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    const out = [];
-    const err = [];
-    let timedOut = false;
-    const timer =
-      timeoutMs > 0
-        ? setTimeout(() => {
-            timedOut = true;
-            child.kill('SIGKILL');
-          }, timeoutMs)
-        : null;
-
-    child.stdout.on('data', (chunk) => out.push(chunk));
-    child.stderr.on('data', (chunk) => err.push(chunk));
-    child.on('error', (error) => {
-      if (timer) clearTimeout(timer);
-      resolveOutcome({
-        code: 1,
-        timedOut,
-        stdout: Buffer.concat(out),
-        stderr: Buffer.from(String(error.message ?? error)),
-      });
-    });
-    child.on('close', (code) => {
-      if (timer) clearTimeout(timer);
-      resolveOutcome({
-        code: timedOut ? 124 : (code ?? 1),
-        timedOut,
-        stdout: Buffer.concat(out),
-        stderr: Buffer.concat(err),
-      });
-    });
-
-    if (input !== null) child.stdin.end(input);
-    else child.stdin.end();
-  });
+function runCmd(cmd, args, { cwd, env, input = null, timeoutMs = DEFAULT_GRADE_TIMEOUT_MS } = {}) {
+  return spawnBounded(cmd, args, { cwd, env: env ?? sanitizedEnv(), input, timeoutMs });
 }
 
 /**

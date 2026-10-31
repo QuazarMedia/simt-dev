@@ -157,7 +157,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q56 | MCP protocol hardening: id/jsonrpc/args validation, line cap, `skills_show` contract, contradictory instructions | P2 | F | mcp | S | — | Queued | |
 | Q57 | Own CI: 32 s from its 5-min timeout; no push trigger; no hook wired; pre-push breaks ADR-031 | P1 | D | ci | S | — | Queued | |
 | Q58 | Packs: preview hits the network; symlinks unpinned; argument order inverted | P2 | F | packs | S | — | Queued | |
-| Q59 | Small bench bugs: `p2p` prints f2p, probe reps overwrite, regrade inconsistent, stale `.simt-dev` paths | P3 | F | bench | S | — | Queued | |
+| Q59 | Small bench bugs: `p2p` prints f2p, probe reps overwrite, regrade inconsistent, stale `.simt-dev` paths | P3 | F | bench | S | — | Complete | `65fc5ea`; `node --test test/bench.test.mjs test/tokens.test.mjs` — 42/42 (p2p count, `probe#rep` keys, per-harness summaries, one `applyPatch`, f2p-set regrade, `STATE_DIR`/`LOCAL_DIR`/`CLI` spellings) |
 | **Wave 2 — architecture: one source of truth, ready for plan 0004, a UI and a harness** | | | | | | | | |
 | Q60 | Declarative command spec as the single source for dispatch, help, completions, MCP, README, UI | P1 | A | cli | M | — | Queued | |
 | Q61 | Tiered, generated help: ≤ 2 KB top level, `help <cmd>`, `-h`, `help --json`; no plan jargon | P1 | A | help | M | Q60 | Queued | |

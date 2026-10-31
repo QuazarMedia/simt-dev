@@ -899,6 +899,13 @@ export function formatReportMarkdown(report) {
     );
   }
 
+  if (report.excluded > 0) {
+    lines.push('');
+    lines.push(
+      `${report.excluded} run record(s) excluded: the run errored or exceeded its deadline, so it recorded no measurement`,
+    );
+  }
+
   if (report.comparison) {
     const cmp = report.comparison;
     const d = cmp.deltas;
@@ -975,7 +982,12 @@ export async function buildBenchReport(
     return true;
   });
 
-  const evaluated = filtered.map((rec) => evaluateRunRecord(rec, prices));
+  // A run that errored produced no measurement: averaging its zero tokens, zero diff and
+  // unresolved verdict into an arm reports a result nobody observed (review 0003 Q47).
+  const errored = filtered.filter((rec) => rec.status === 'error');
+  const evaluated = filtered
+    .filter((rec) => rec.status !== 'error')
+    .map((rec) => evaluateRunRecord(rec, prices));
   const byGroup = new Map();
   for (const row of evaluated) {
     const key = `${row.harness}|${row.model}|${row.arm}|${row.experiment}`;
@@ -1049,6 +1061,7 @@ export async function buildBenchReport(
     root: resolvedRoot,
     pricesLoaded: prices !== null,
     runCount: evaluated.length,
+    excluded: errored.length,
     arms,
     comparison,
   };

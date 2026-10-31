@@ -19,7 +19,6 @@
 //   2. the commands recorded in the transcript, and
 //   3. the evidence ledger (`.simt/local/ledger.jsonl`, R17).
 
-import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -27,6 +26,7 @@ import { dirname, join, resolve } from 'node:path';
 
 import { LOCAL_DIR } from '../state.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
+import { spawnBounded } from './process.mjs';
 import { adapterIsolation, executeAdapter, loadAdapters, materialiseArm, parseArmSpec } from './run.mjs';
 
 /**
@@ -50,52 +50,33 @@ function sanitizedEnv(extra = {}) {
   return env;
 }
 
-function runGit(args, { cwd, env = {} } = {}) {
-  return new Promise((resolveOutcome) => {
-    const child = spawn('git', args, {
-      cwd,
-      env: sanitizedEnv(env),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const out = [];
-    const err = [];
-    child.stdout.on('data', (c) => out.push(c));
-    child.stderr.on('data', (c) => err.push(c));
-    child.on('error', (error) =>
-      resolveOutcome({ code: 1, stdout: '', stderr: String(error.message ?? error) }),
-    );
-    child.on('close', (code) =>
-      resolveOutcome({
-        code: code ?? 1,
-        stdout: Buffer.concat(out).toString('utf8'),
-        stderr: Buffer.concat(err).toString('utf8'),
-      }),
-    );
+/** The deadline for one workspace-side git or node command inside a probe. */
+const PROBE_COMMAND_TIMEOUT_MS = 120_000;
+
+async function runGit(args, { cwd, env = {} } = {}) {
+  const outcome = await spawnBounded('git', args, {
+    cwd,
+    env: sanitizedEnv(env),
+    timeoutMs: PROBE_COMMAND_TIMEOUT_MS,
   });
+  return {
+    code: outcome.code,
+    stdout: outcome.stdout.toString('utf8'),
+    stderr: outcome.stderr.toString('utf8'),
+  };
 }
 
-function runNode(args, { cwd, env = {} } = {}) {
-  return new Promise((resolveOutcome) => {
-    const child = spawn(process.execPath, args, {
-      cwd,
-      env: sanitizedEnv(env),
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const out = [];
-    const err = [];
-    child.stdout.on('data', (c) => out.push(c));
-    child.stderr.on('data', (c) => err.push(c));
-    child.on('error', (error) =>
-      resolveOutcome({ code: 1, stdout: '', stderr: String(error.message ?? error) }),
-    );
-    child.on('close', (code) =>
-      resolveOutcome({
-        code: code ?? 1,
-        stdout: Buffer.concat(out).toString('utf8'),
-        stderr: Buffer.concat(err).toString('utf8'),
-      }),
-    );
+async function runNode(args, { cwd, env = {} } = {}) {
+  const outcome = await spawnBounded(process.execPath, args, {
+    cwd,
+    env: sanitizedEnv(env),
+    timeoutMs: PROBE_COMMAND_TIMEOUT_MS,
   });
+  return {
+    code: outcome.code,
+    stdout: outcome.stdout.toString('utf8'),
+    stderr: outcome.stderr.toString('utf8'),
+  };
 }
 
 /**

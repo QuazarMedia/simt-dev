@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { lstat, mkdir, mkdtemp, readdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,6 +15,7 @@ import { plan } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { gradeWorkspace } from './grade.mjs';
 import { resolveVaultDir } from './mine.mjs';
+import { spawnBounded } from './process.mjs';
 import { loadTasks } from './tasks.mjs';
 import { ablateSectionInWorkspace, parseAblationArmName } from './ablate.mjs';
 import { applyVariantInWorkspace, parseVariantArmName } from './variants.mjs';
@@ -125,47 +125,7 @@ export function adapterIsolation(adapter) {
 }
 
 function runCmd(cmd, args, { cwd, env, input = null, timeoutMs = DEFAULT_AGENT_TIMEOUT_MS } = {}) {
-  return new Promise((resolveOutcome) => {
-    const child = spawn(cmd, args, {
-      cwd,
-      env: sanitizedEnv(env),
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    const out = [];
-    const err = [];
-    let timedOut = false;
-    const timer =
-      timeoutMs > 0
-        ? setTimeout(() => {
-            timedOut = true;
-            child.kill('SIGKILL');
-          }, timeoutMs)
-        : null;
-
-    child.stdout.on('data', (chunk) => out.push(chunk));
-    child.stderr.on('data', (chunk) => err.push(chunk));
-    child.on('error', (error) => {
-      if (timer) clearTimeout(timer);
-      resolveOutcome({
-        code: 1,
-        timedOut,
-        stdout: Buffer.concat(out),
-        stderr: Buffer.from(String(error.message ?? error)),
-      });
-    });
-    child.on('close', (code) => {
-      if (timer) clearTimeout(timer);
-      resolveOutcome({
-        code: timedOut ? 124 : (code ?? 1),
-        timedOut,
-        stdout: Buffer.concat(out),
-        stderr: Buffer.concat(err),
-      });
-    });
-
-    if (input !== null) child.stdin.end(input);
-    else child.stdin.end();
-  });
+  return spawnBounded(cmd, args, { cwd, env: sanitizedEnv(env), input, timeoutMs });
 }
 
 function getByPath(obj, pathStr) {
@@ -732,11 +692,22 @@ export async function executeAdapter(
   task,
   { vaultRoot, model, maxTurns = DEFAULT_MAX_TURNS, env, timeoutMs, slotDir, promptPrefix = '' },
 ) {
-  if (adapter.id === 'noop') return { ...parseAdapterUsage(adapter, ''), transcript: '' };
+  if (adapter.id === 'noop') {
+    return {
+      ...parseAdapterUsage(adapter, ''),
+      transcript: '',
+      agent: { exitCode: 0, timedOut: false, wallMs: 0 },
+    };
+  }
   if (adapter.id === 'gold') {
+    const startedAt = Date.now();
     const goldPatch = await readFile(join(vaultRoot, task.id, 'gold.patch'));
     await applyPatch(workDir, goldPatch, { timeoutMs });
-    return { ...parseAdapterUsage(adapter, ''), transcript: '' };
+    return {
+      ...parseAdapterUsage(adapter, ''),
+      transcript: '',
+      agent: { exitCode: 0, timedOut: false, wallMs: Date.now() - startedAt },
+    };
   }
 
   const analyticsLog = join(slotDir, 'analytics.jsonl');
@@ -752,9 +723,20 @@ export async function executeAdapter(
     env: agentEnv(adapter, { home: slotDir, extra: env }),
     timeoutMs,
   });
+  // A binary that could not start produced no run. Grading its empty workspace would
+  // record an unresolved arm instead of the missing harness it is (review 0003 Q47).
+  if (outcome.spawnError) {
+    throw new Error(`harness ${adapter.id} could not start ${adapter.bin}: ${outcome.spawnError}`);
+  }
   const stdoutText = outcome.stdout.toString('utf8');
   const analyticsText = adapter.format === 'analytics-log' ? await readFile(analyticsLog, 'utf8').catch(() => '') : '';
-  return { ...parseAdapterUsage(adapter, stdoutText, analyticsText), transcript: `${stdoutText}\n${analyticsText}` };
+  return {
+    ...parseAdapterUsage(adapter, stdoutText, analyticsText),
+    transcript: `${stdoutText}\n${analyticsText}`,
+    // A run's own exit code, deadline and wall time belong in its record: the old one
+    // stored none, so a timed-out run was indistinguishable from a completed one.
+    agent: { exitCode: outcome.code, timedOut: outcome.timedOut, wallMs: outcome.wallMs },
+  };
 }
 
 // loadTasks lives in tasks.mjs (the advice engine became a second reader, so the loader
@@ -864,10 +846,10 @@ export async function runBench(
         model: resolvedModel,
         rep: item.rep,
         measured,
-        isolation,
-        resolved: null,
-        gatesPassed: null,
-        usage: emptyUsage().usage,
+        isolation,          status: 'planned',
+          resolved: null,
+          gatesPassed: null,
+          usage: emptyUsage().usage,
         costUsd: null,
         diff: { files: 0, outsideBlastRadius: 0 },
         probe: null,
@@ -890,15 +872,18 @@ export async function runBench(
   const parentDir = await mkdtemp(join(tmpdir(), 'bench-batch-'));
   try {
     const records = await mapPool(plannedRuns, concurrency, async (item) => {
-      const { slotDir, workDir, initialHead, env, promptPrefix } = await prepareIsolatedWorkspace(
-        root,
-        item.task.base,
-        item.armSpec,
-        item.task,
-        { parentDir },
-      );
+      let slotDir = null;
       try {
-        const { usage, costUsd, transcript } = await executeAdapter(adapter, workDir, item.task, {
+        const prepared = await prepareIsolatedWorkspace(
+          root,
+          item.task.base,
+          item.armSpec,
+          item.task,
+          { parentDir },
+        );
+        slotDir = prepared.slotDir;
+        const { workDir, initialHead, env, promptPrefix } = prepared;
+        const { usage, costUsd, transcript, agent } = await executeAdapter(adapter, workDir, item.task, {
           vaultRoot,
           model: resolvedModel,
           maxTurns,
@@ -930,6 +915,8 @@ export async function runBench(
           rep: item.rep,
           measured,
           isolation,
+          status: 'ok',
+          agent,
           resolved: grade.resolved,
           gatesPassed: grade.gatesPassed,
           f2pPassed: grade.f2pPassed ?? [],
@@ -947,8 +934,33 @@ export async function runBench(
         ]);
 
         return { ...record, runId: item.runId };
+      } catch (error) {
+        // One failed run is one exclusion, not a lost batch: the old path exited 3 and
+        // left a half-written run behind (review 0003 Q47).
+        return {
+          schemaVersion: 1,
+          runId: item.runId,
+          task: item.task.id,
+          arm: item.armSpec.name,
+          harness,
+          model: resolvedModel,
+          rep: item.rep,
+          measured,
+          isolation,
+          status: 'error',
+          error: String(error?.message ?? error),
+          resolved: false,
+          gatesPassed: false,
+          f2pPassed: [],
+          usage: emptyUsage().usage,
+          costUsd: null,
+          diff: { files: 0, outsideBlastRadius: 0 },
+          probe: null,
+        };
       } finally {
-        await rm(slotDir, { recursive: true, force: true }).catch(() => {});
+        if (slotDir !== null) {
+          await rm(slotDir, { recursive: true, force: true }).catch(() => {});
+        }
       }
     });
 

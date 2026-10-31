@@ -31,6 +31,7 @@ import {
   writeCorpusDocument,
 } from '../src/bench/corpus.mjs';
 import { extractPatchFiles, gradeWorkspace } from '../src/bench/grade.mjs';
+import { spawnBounded } from '../src/bench/process.mjs';
 import {
   BUILTIN_ARMS,
   adapterIsolation,
@@ -1092,6 +1093,31 @@ test('bench run: gold adapter resolves 100%, noop resolves 0%, and re-grading re
   assert.equal(agentResult.runs[0].measured, true);
   assert.equal(agentResult.runs[0].isolation, 'env');
 
+  // A run that cannot start is one error record, not a lost batch (review 0003 Q47).
+  const brokenAdapters = {
+    broken: {
+      id: 'broken',
+      kind: 'cli',
+      bin: '/nonexistent/agent-for-q47',
+      args: [],
+      format: 'json',
+      isolation: 'env',
+      env: [],
+      fields: {},
+    },
+  };
+  const broken = await runBench(repo, {
+    apply: true,
+    arms: ['current'],
+    harness: 'broken',
+    reps: 1,
+    vaultRoot,
+    adapters: brokenAdapters,
+  });
+  assert.equal(broken.runs.length, 1);
+  assert.equal(broken.runs[0].status, 'error');
+  assert.match(broken.runs[0].error, /agent-for-q47|ENOENT/);
+
   // 4. Direct gradeWorkspace check: an agent that edits an unrelated file and tampers with
   //    the test file has its test file reset to initialHead and outsideBlastRadius = 1.
   const ws = await prepareIsolatedWorkspace(repo, task.base, await parseArmSpec('bare'), task);
@@ -1917,6 +1943,28 @@ test('bench probes (R05): 12 synthetic compliance probes each pass on compliance
   const missingHarness = await runCli(['bench', 'probes', '--root', repo, '--yes']);
   assert.equal(missingHarness.code, 2);
   assert.match(missingHarness.stderr, /explicit --harness/);
+});
+
+test('bench process control: a deadline kills the process group and settles in time', async () => {
+  const started = Date.now();
+  const outcome = await spawnBounded(
+    process.execPath,
+    [
+      '-e',
+      "const { spawn } = require('node:child_process'); spawn('sleep', ['30'], { stdio: 'ignore' }); setInterval(() => {}, 1000);",
+    ],
+    { timeoutMs: 300 },
+  );
+  const elapsed = Date.now() - started;
+  assert.equal(outcome.timedOut, true);
+  assert.equal(outcome.code, 124);
+  assert.ok(elapsed < 5000, `the deadline settled in ${elapsed} ms, not the grandchild's 30 s`);
+  assert.ok(outcome.wallMs < 5000);
+  assert.equal(outcome.spawnError, null);
+
+  const missing = await spawnBounded('/nonexistent/agent-for-q47', [], { timeoutMs: 1000 });
+  assert.equal(missing.code, 1);
+  assert.ok(missing.spawnError);
 });
 
 test('bench isolation: an agent inherits the baseline and its adapter keys, never the vault or the operator HOME', () => {

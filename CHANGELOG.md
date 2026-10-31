@@ -6,6 +6,8 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-10-31
+
 ### Added
 
 `simt agent-hooks install --harness <id>` writes the policies into one

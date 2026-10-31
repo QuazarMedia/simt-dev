@@ -21,7 +21,7 @@ record's status line — never by editing the ruling in place.
 | [011](ADR-011-windows-support.md) | Windows is supported from v1 for the CLI | **superseded by 012** |
 | [012](ADR-012-drop-windows-support.md) | Windows support dropped; POSIX only | accepted |
 | [013](ADR-013-genericity-by-facts-and-local-profiles.md) | Genericity comes from emitted facts and repo-local profiles | accepted |
-| [014](ADR-014-workspace-is-configuration.md) | The workspace is configuration, and a single repo is a supported shape | accepted |
+| [014](ADR-014-workspace-is-configuration.md) | The workspace is configuration, and a single repo is a supported shape | accepted · ruling 1 superseded by [ADR-119](ADR-119-the-environment-variable-points-into-a-workspace-the-repo-declared.md) |
 | [015](ADR-015-a-source-is-content-not-a-location.md) | A source is identified by its content; the repo is a location, not a precondition | accepted |
 | [016](ADR-016-a-divergent-rule-is-retired-not-merged.md) | A divergent rule is retired by a union, not merged by a variant | accepted |
 | [017](ADR-017-a-declared-gate-must-be-runnable.md) | A declared gate must be one the repo can actually run | accepted |
@@ -122,6 +122,7 @@ record's status line — never by editing the ruling in place.
 | [112](ADR-112-the-registry-is-what-simt-dev-ships-and-a-repo-owns-its-own-skills.md) | the registry is what simt-dev ships, and a repo owns its own skills | **accepted** · 2026-10-31 · supersedes ADR-009 ruling 4 |
 | [116](ADR-116-rust-support-reaches-the-example-path-the-indent-and-the-bench-runner.md) | Rust support reaches the example path, the indent and the bench runner | **accepted** · 2026-10-31 |
 | [117](ADR-117-the-darwin-release-builds-on-supported-macos-15-runners-and-a-re-run-is-idempotent.md) | the darwin release builds on supported macOS 15 runners, and a re-run is idempotent | **accepted** · 2026-10-31 · supersedes ADR-099 ruling 1 |
+| [119](ADR-119-the-environment-variable-points-into-a-workspace-the-repo-declared.md) | the environment variable points into a workspace the repo declared | **accepted** · 2026-10-31 · supersedes ADR-014 ruling 1 |
 
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the

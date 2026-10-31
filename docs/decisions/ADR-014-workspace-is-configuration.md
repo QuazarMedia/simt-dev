@@ -1,6 +1,6 @@
 # ADR-014 — The workspace is configuration, and a single repo is a first-class case
 
-Status: **accepted** · 2026-10-05
+Status: **accepted** · 2026-10-05 · ruling 1 superseded by [ADR-119](ADR-119-the-environment-variable-points-into-a-workspace-the-repo-declared.md)
 Affects: `simt-dev` CLI (workspace resolution, `compare`, `skills`, registry validation, packaging)
 
 ## Context

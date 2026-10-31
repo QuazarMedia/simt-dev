@@ -117,7 +117,9 @@ async function defaultRegistry(flags) {
  * failure to resolve is a WARNING, not 38 `ENOENT` lines (ADR-014).
  *
  * Memoised per the inputs that decide the answer: the `--workspace` flag, the
- * `SIMT_DEV_WORKSPACE` environment and the user-config location. A single
+ * `SIMT_DEV_WORKSPACE` environment, the user-config location, and the current
+ * directory, whose manifest declares the workspace the variable may point into
+ * (ADR-119). A single
  * first-call-wins promise served one caller's workspace to every later caller with
  * different flags (Q14) — `skills_index({workspace: ws})` followed by
  * `skills_index({})` answered `ws` twice. Callers with the same inputs still share
@@ -129,6 +131,7 @@ export function workspace(flags = {}) {
     flags?.workspace ?? null,
     process.env.SIMT_DEV_WORKSPACE ?? null,
     process.env.XDG_CONFIG_HOME ?? null,
+    process.cwd(),
   ]);
   if (!workspacePromises.has(key)) workspacePromises.set(key, resolveWorkspace(flags));
   return workspacePromises.get(key);

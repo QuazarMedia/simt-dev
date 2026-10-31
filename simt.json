@@ -40,6 +40,7 @@
     }
   },
   "localSkills": [],
+  "workspace": "..",
   "decisions": {
     "historicalCutoff": 96
   },

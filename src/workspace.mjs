@@ -38,7 +38,8 @@ export const PACKAGE_ROOT = resolve(HERE, '..');
 // other LOCKED on-disk names, and a second copy here is a name that can drift from the
 // list of names that are allowed to move. Imported as well as re-exported, because a
 // bare `export { X } from` does not bind X here and every use below would fail.
-import { CONFIG_DIR } from './name.mjs';
+import { CONFIG_DIR, MANIFEST_FILE } from './name.mjs';
+import { manifestPath, readManifest } from './projection/manifest.mjs';
 export { CONFIG_DIR };
 export const CONFIG_FILE = 'config.json';
 
@@ -133,14 +134,25 @@ async function looksLikeWorkspace(dir) {
 /**
  * Resolve the workspace.
  *
- * Precedence, highest first: `--workspace`, `SIMT_DEV_WORKSPACE`, the user config file, then the
- * sibling heuristic of this package - and that last one only if it actually contains a git
- * repository.
+ * Precedence, highest first (ADR-119): `--workspace`, the repository's own manifest
+ * declaration, `SIMT_DEV_WORKSPACE` - a value that names a directory is honoured only
+ * where the manifest declares a workspace, because the variable is a pointer INTO a
+ * workspace the repo opted into, not one imposed on a repo that never declared one;
+ * a value that declines is honoured from anywhere, because a decline points at
+ * nothing - the manifest's value, the user config file, then the sibling heuristic
+ * of this package, which is accepted only if it actually contains a git repository.
  *
+ * A relative manifest value resolves against the manifest's directory, not the
+ * process's, so `workspace: ".."` means the same thing from any subdirectory.
+ *
+ * @param {{repoRoot?: string}} [options] `repoRoot` names the repository whose manifest
+ *   declares the workspace; it defaults to `process.cwd()`, which is the repository
+ *   for the way every command is run.
  * @returns {Promise<{root: string|null, source: string, detail: string, searched: string[], error: string|null}>}
  */
 export async function resolveWorkspace(flags = {}, options = {}) {
   const env = options.env ?? process.env;
+  const repoRoot = options.repoRoot ?? process.cwd();
   const searched = configPaths(options);
 
   // The config file is read FIRST, before precedence is applied, and a parse failure
@@ -169,16 +181,49 @@ export async function resolveWorkspace(flags = {}, options = {}) {
     );
   }
 
+  // The repository's own declaration (ADR-119). It is read before the environment
+  // variable because it is what the variable is allowed to point into: a repo that
+  // declared no workspace is a single repo with no workspace, and an environment
+  // variable cannot turn it into a member of a workspace nobody reviewed.
+  const manifest = await readManifest(repoRoot);
+  if (manifest.error) {
+    return {
+      root: null,
+      source: 'repo',
+      detail: await manifestPath(repoRoot),
+      searched,
+      error: manifest.error,
+    };
+  }
+  let repoValue = null;
+  if (manifest.exists && typeof manifest.manifest.workspace === 'string' && manifest.manifest.workspace.trim() !== '') {
+    const off = disabled(manifest.manifest.workspace, 'repo', `${MANIFEST_FILE} workspace`, searched);
+    if (off) return off; // the repo declined; the environment variable cannot enforce one
+    repoValue = manifest.manifest.workspace;
+  }
+
   if (env.SIMT_DEV_WORKSPACE) {
-    return (
-      disabled(env.SIMT_DEV_WORKSPACE, 'env', 'SIMT_DEV_WORKSPACE', searched) ?? {
+    const off = disabled(env.SIMT_DEV_WORKSPACE, 'env', 'SIMT_DEV_WORKSPACE', searched);
+    if (off) return off; // a decline points at nothing, so it needs no declaration to work
+    if (repoValue !== null) {
+      return {
         root: absolute(env.SIMT_DEV_WORKSPACE),
         source: 'env',
         detail: 'SIMT_DEV_WORKSPACE',
         searched,
         error: null,
-      }
-    );
+      };
+    }
+  }
+
+  if (repoValue !== null) {
+    return {
+      root: absolute(repoValue, repoRoot),
+      source: 'repo',
+      detail: `${MANIFEST_FILE} workspace`,
+      searched,
+      error: null,
+    };
   }
 
   if (user.exists && typeof user.config.workspace === 'string' && user.config.workspace.length > 0) {
@@ -245,11 +290,11 @@ export const WORKSPACE_REMEDY = (() => {
   return `--workspace <path>, the SIMT_DEV_WORKSPACE environment variable, or ${where}`;
 })();
 
-function absolute(p) {
+function absolute(p, base = process.cwd()) {
   const expanded = p.startsWith('~/')
     ? join(homedir(), p.slice(2))
     : p;
-  return isAbsolute(expanded) ? expanded : resolve(expanded);
+  return isAbsolute(expanded) ? expanded : resolve(base, expanded);
 }
 
 /**

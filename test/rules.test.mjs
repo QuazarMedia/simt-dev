@@ -144,8 +144,11 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // is superseded, and the parser reads the claim there.
   // ADR-099 joined when ADR-117 landed: its status line now states that ruling 1
   // is superseded, and the parser reads the claim there.
+  // ADR-014 joined when ADR-119 landed: its status line now states that ruling 1's
+  // precedence is superseded, and the parser reads the claim there.
   assert.deepEqual(shapes, [
     'ADR-009',
+    'ADR-014',
     'ADR-016',
     'ADR-021',
     'ADR-023',

@@ -31,11 +31,20 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
-async function run(args, env = {}) {
+/**
+ * The environment variable is a pointer INTO a workspace, so a repo that declared one is the
+ * one whose manifest permits the pointer. These unit tests name `repoRoot` explicitly (ADR-031):
+ * a test that resolves against the process's working directory is testing the checkout that
+ * happens to host the suite, not the code.
+ */
+const DECLARING_MANIFEST = { 'simt.json': JSON.stringify({ id: 'member', workspace: '/from/declared' }) };
+
+async function run(args, env = {}, cwd = undefined) {
   try {
     const { stdout, stderr } = await exec('node', [BIN, ...args], {
       maxBuffer: 16 << 20,
       env: { ...process.env, ...env },
+      cwd,
     });
     return { code: 0, stdout, stderr };
   } catch (error) {
@@ -154,17 +163,27 @@ test('readUserConfig: the first existing candidate wins, not the most preferred 
 test('resolveWorkspace: --workspace beats the environment variable', async () => {
   const result = await resolveWorkspace(
     { workspace: '/from/flag' },
-    { env: { SIMT_DEV_WORKSPACE: '/from/env', XDG_CONFIG_HOME: '/nonexistent' }, platform: 'linux', home: '/nonexistent' },
+    {
+      env: { SIMT_DEV_WORKSPACE: '/from/env', XDG_CONFIG_HOME: '/nonexistent' },
+      platform: 'linux',
+      home: '/nonexistent',
+      repoRoot: await scratch(),
+    },
   );
   assert.equal(result.root, '/from/flag');
   assert.equal(result.source, 'flag');
 });
 
-test('resolveWorkspace: the environment variable beats the config file', async () => {
+test('resolveWorkspace: the environment variable beats the config file, where the repo declared one', async () => {
   const dir = await scratch({ [`simt-dev/${CONFIG_FILE}`]: JSON.stringify({ workspace: '/from/config' }) });
   const result = await resolveWorkspace(
     {},
-    { env: { SIMT_DEV_WORKSPACE: '/from/env', XDG_CONFIG_HOME: dir }, platform: 'linux', home: '/nonexistent' },
+    {
+      env: { SIMT_DEV_WORKSPACE: '/from/env', XDG_CONFIG_HOME: dir },
+      platform: 'linux',
+      home: '/nonexistent',
+      repoRoot: await scratch(DECLARING_MANIFEST),
+    },
   );
   assert.equal(result.root, '/from/env');
   assert.equal(result.source, 'env');
@@ -172,7 +191,12 @@ test('resolveWorkspace: the environment variable beats the config file', async (
 
 test('resolveWorkspace: the config file beats the sibling heuristic', async () => {
   const dir = await scratch({ [`simt-dev/${CONFIG_FILE}`]: JSON.stringify({ workspace: '/from/config' }) });
-  const result = await resolveWorkspace({}, { env: { XDG_CONFIG_HOME: dir }, platform: 'linux', home: '/nonexistent' });
+  // No manifest in repoRoot: the config file is honoured even where the repo declared
+  // no workspace. The env var is the pointer that needs the declaration, not config.
+  const result = await resolveWorkspace(
+    {},
+    { env: { XDG_CONFIG_HOME: dir }, platform: 'linux', home: '/nonexistent', repoRoot: await scratch() },
+  );
   assert.equal(result.root, '/from/config');
   assert.equal(result.source, 'config');
   assert.ok(result.detail.includes(CONFIG_FILE), 'it names the file that answered');
@@ -183,20 +207,31 @@ test('resolveWorkspace: --root is NOT treated as a workspace', async () => {
   // low is the kind of wrong answer that reads as right.
   const result = await resolveWorkspace(
     { root: '/some/repo' },
-    { env: { SIMT_DEV_WORKSPACE: '/from/env', XDG_CONFIG_HOME: '/nonexistent' }, platform: 'linux', home: '/nonexistent' },
+    {
+      env: { SIMT_DEV_WORKSPACE: '/from/env', XDG_CONFIG_HOME: '/nonexistent' },
+      platform: 'linux',
+      home: '/nonexistent',
+      repoRoot: await scratch(DECLARING_MANIFEST),
+    },
   );
   assert.equal(result.source, 'env');
   assert.equal(result.root, '/from/env');
 });
 
 test('resolveWorkspace: a relative workspace is resolved, never taken literally', async () => {
-  const result = await resolveWorkspace({ workspace: 'repos' }, { env: {}, platform: 'linux', home: '/nonexistent' });
+  const result = await resolveWorkspace(
+    { workspace: 'repos' },
+    { env: {}, platform: 'linux', home: '/nonexistent', repoRoot: await scratch() },
+  );
   assert.ok(result.root.startsWith('/'), `${result.root} is not absolute`);
 });
 
 test('resolveWorkspace: an unparseable config is an error, and it names the file', async () => {
   const dir = await scratch({ [`simt-dev/${CONFIG_FILE}`]: 'nope' });
-  const result = await resolveWorkspace({}, { env: { XDG_CONFIG_HOME: dir }, platform: 'linux', home: '/nonexistent' });
+  const result = await resolveWorkspace(
+    {},
+    { env: { XDG_CONFIG_HOME: dir }, platform: 'linux', home: '/nonexistent', repoRoot: await scratch() },
+  );
   assert.equal(result.error !== null, true);
   assert.equal(result.root, null);
   assert.ok(result.detail.includes(dir));
@@ -206,7 +241,10 @@ test('resolveWorkspace: an explicit workspace is trusted even when it does not e
   // The reader asked for it explicitly; the honest answer is "unavailable", which
   // the callers already print per skill. Silently substituting a different
   // directory would be worse than believing the reader.
-  const result = await resolveWorkspace({ workspace: '/definitely/not/here' }, { env: {}, platform: 'linux', home: '/nonexistent' });
+  const result = await resolveWorkspace(
+    { workspace: '/definitely/not/here' },
+    { env: {}, platform: 'linux', home: '/nonexistent', repoRoot: await scratch() },
+  );
   assert.equal(result.root, '/definitely/not/here');
   assert.equal(result.source, 'flag');
   assert.equal(result.error, null);
@@ -216,13 +254,90 @@ test('resolveWorkspace: "off" declines the heuristic instead of guessing a direc
   // Without this there is no way for a reader to refuse the guess, and no test
   // running from this checkout can reach the unconfigured path at all.
   for (const value of ['off', 'OFF', 'none', '0']) {
-    const result = await resolveWorkspace({ workspace: value }, { env: {}, platform: 'linux', home: '/nonexistent' });
+    const result = await resolveWorkspace(
+      { workspace: value },
+      { env: {}, platform: 'linux', home: '/nonexistent', repoRoot: await scratch() },
+    );
     assert.equal(result.source, 'disabled', `flag ${value} did not decline`);
     assert.equal(result.root, null);
   }
-  const fromEnv = await resolveWorkspace({}, { env: { SIMT_DEV_WORKSPACE: 'off' }, platform: 'linux', home: '/nonexistent' });
+  // The env decline is only reachable where the repo declared a workspace: the
+  // variable is a pointer into that workspace, and a pointer can refuse to point.
+  const fromEnv = await resolveWorkspace(
+    {},
+    { env: { SIMT_DEV_WORKSPACE: 'off' }, platform: 'linux', home: '/nonexistent', repoRoot: await scratch(DECLARING_MANIFEST) },
+  );
   assert.equal(fromEnv.source, 'disabled');
   assert.match(fromEnv.detail, /declined/);
+  // A decline points at nothing, so it works where the repo declared no workspace,
+  // the case where a value naming a directory is inert.
+  const fromEnvUndeclared = await resolveWorkspace(
+    {},
+    { env: { SIMT_DEV_WORKSPACE: 'off' }, platform: 'linux', home: '/nonexistent', repoRoot: await scratch() },
+  );
+  assert.equal(fromEnvUndeclared.source, 'disabled');
+  assert.equal(fromEnvUndeclared.root, null);
+});
+
+// --- the manifest declaration (ADR-119) ---------------------------------------
+
+test('resolveWorkspace: the environment variable is inert where the repo declared no workspace', async () => {
+  // A single repo with no workspace is the default case, and an exported variable
+  // cannot turn it into a member of a workspace nobody reviewed.
+  const result = await resolveWorkspace(
+    {},
+    { env: { SIMT_DEV_WORKSPACE: '/from/env' }, platform: 'linux', home: '/nonexistent', repoRoot: await scratch() },
+  );
+  assert.notEqual(result.source, 'env', `the variable was honoured without a declaration: ${result.detail}`);
+  assert.notEqual(result.root, '/from/env');
+});
+
+test('resolveWorkspace: a manifest "off" declines even where the environment variable points somewhere', async () => {
+  const result = await resolveWorkspace(
+    {},
+    {
+      env: { SIMT_DEV_WORKSPACE: '/from/env' },
+      platform: 'linux',
+      home: '/nonexistent',
+      repoRoot: await scratch({ 'simt.json': JSON.stringify({ id: 'member', workspace: 'off' }) }),
+    },
+  );
+  assert.equal(result.source, 'disabled');
+  assert.equal(result.root, null);
+  assert.match(result.detail, /simt\.json workspace=off/);
+});
+
+test('resolveWorkspace: the manifest value beats the config file and the heuristic', async () => {
+  const dir = await scratch({ [`simt-dev/${CONFIG_FILE}`]: JSON.stringify({ workspace: '/from/config' }) });
+  const result = await resolveWorkspace(
+    {},
+    { env: { XDG_CONFIG_HOME: dir }, platform: 'linux', home: '/nonexistent', repoRoot: await scratch(DECLARING_MANIFEST) },
+  );
+  assert.equal(result.root, '/from/declared');
+  assert.equal(result.source, 'repo');
+  assert.match(result.detail, /simt\.json workspace/);
+});
+
+test('resolveWorkspace: a relative manifest value resolves against the manifest\'s directory', async () => {
+  const repo = await scratch({ 'simt.json': JSON.stringify({ id: 'member', workspace: 'repos' }) });
+  const result = await resolveWorkspace(
+    {},
+    { env: {}, platform: 'linux', home: '/nonexistent', repoRoot: repo },
+  );
+  assert.equal(result.root, join(repo, 'repos'));
+  assert.equal(result.source, 'repo');
+});
+
+test('resolveWorkspace: an unparseable manifest is an error, and it names the file', async () => {
+  const repo = await scratch({ 'simt.json': '{' });
+  const result = await resolveWorkspace(
+    {},
+    { env: {}, platform: 'linux', home: '/nonexistent', repoRoot: repo },
+  );
+  assert.equal(result.root, null);
+  assert.equal(result.source, 'repo');
+  assert.equal(result.error !== null, true);
+  assert.match(result.detail, new RegExp(repo));
 });
 
 test('CLI: a workspace that was configured but has moved is named, not exploded', async () => {
@@ -456,4 +571,28 @@ test('CLI: --workspace is honoured end to end', async () => {
   const { code, stdout } = await run(['doctor', '--root', app, '--workspace', ws], { SIMT_DEV_WORKSPACE: '/from/env' });
   assert.equal(code, 0);
   assert.match(stdout, new RegExp(`^workspace\\s+${ws.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}  \\(flag: --workspace\\)$`, 'm'));
+});
+
+// --- the environment variable, end to end (ADR-119) ----------------------------
+
+test('CLI: the environment variable is inert in a repo that declared no workspace', async () => {
+  // The consumer runs the tool FROM the repo, so the test does too: cwd is the
+  // repo, not this checkout, and the variable is an existing directory so that an
+  // errant honouring of it would be visible in the report.
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
+  const marker = await scratch();
+  const { code, stdout } = await run(['doctor', '--root', app], { SIMT_DEV_WORKSPACE: marker }, app);
+  assert.equal(code, 0, stdout);
+  assert.doesNotMatch(stdout, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')), 'the variable was honoured without a declaration');
+});
+
+test('CLI: the environment variable is honoured in a repo that declared a workspace', async () => {
+  const ws = await scratch();
+  await mkdir(join(ws, 'member', '.git'), { recursive: true });
+  await writeFile(join(ws, 'member', 'package.json'), '{"name":"member"}');
+  await writeFile(join(ws, 'member', 'simt.json'), JSON.stringify({ id: 'member', workspace: '..' }));
+  const marker = await scratch();
+  const { code, stdout } = await run(['doctor', '--root', join(ws, 'member')], { SIMT_DEV_WORKSPACE: marker }, join(ws, 'member'));
+  assert.equal(code, 0, stdout);
+  assert.match(stdout, new RegExp(`^workspace\\s+${marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}  \\(env: SIMT_DEV_WORKSPACE\\)$`, 'm'));
 });

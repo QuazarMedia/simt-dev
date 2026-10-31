@@ -10,6 +10,8 @@
       "args": ["-p", "{prompt}", "--output-format", "json", "--max-turns", "{turns}"],
       "modelArgs": ["--model", "{model}"],
       "format": "json",
+      "isolation": "env",
+      "env": ["ANTHROPIC_API_KEY"],
       "usageSource": "usage.*, total_cost_usd, num_turns",
       "fields": {
         "input": ["usage.input_tokens", "usage.input"],
@@ -30,6 +32,8 @@
       "args": ["exec", "--json", "{prompt}"],
       "modelArgs": ["--model", "{model}"],
       "format": "jsonl",
+      "isolation": "env",
+      "env": ["OPENAI_API_KEY"],
       "usageSource": "token events in JSONL",
       "fields": {
         "input": ["usage.input_tokens", "input_tokens", "usage.input"],
@@ -50,6 +54,8 @@
       "args": ["-p", "{prompt}", "--output-format", "json"],
       "modelArgs": ["--model", "{model}"],
       "format": "json",
+      "isolation": "env",
+      "env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
       "usageSource": "stats block",
       "fields": {
         "input": ["stats.inputTokens", "stats.tokens.prompt", "stats.prompt_tokens", "usage.input_tokens"],
@@ -70,6 +76,8 @@
       "args": ["run", "--format", "json", "{prompt}"],
       "modelArgs": ["--model", "{model}"],
       "format": "jsonl",
+      "isolation": "env",
+      "env": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
       "usageSource": "session export",
       "fields": {
         "input": ["tokens.input", "usage.input_tokens", "part.tokens.input"],
@@ -90,6 +98,8 @@
       "args": ["-p", "{prompt}", "--output-format", "json"],
       "modelArgs": ["--model", "{model}"],
       "format": "json",
+      "isolation": "env",
+      "env": ["CURSOR_API_KEY"],
       "usageSource": "result JSON",
       "fields": {
         "input": ["usage.input_tokens", "usage.input", "stats.inputTokens"],
@@ -110,6 +120,8 @@
       "args": ["--message", "{prompt}", "--yes-always", "--analytics-log", "{analyticsLog}"],
       "modelArgs": ["--model", "{model}"],
       "format": "analytics-log",
+      "isolation": "env",
+      "env": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
       "usageSource": "--analytics-log file",
       "fields": {
         "input": ["prompt_tokens", "properties.prompt_tokens", "usage.input_tokens"],
@@ -130,6 +142,8 @@
       "args": [],
       "modelArgs": [],
       "format": "builtin",
+      "isolation": "none",
+      "env": [],
       "usageSource": "vault gold.patch",
       "fields": {}
     },
@@ -142,6 +156,8 @@
       "args": [],
       "modelArgs": [],
       "format": "builtin",
+      "isolation": "none",
+      "env": [],
       "usageSource": "none",
       "fields": {}
     }

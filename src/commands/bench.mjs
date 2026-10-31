@@ -21,6 +21,23 @@ import { selectRuleVariants } from '../bench/variants.mjs';
 import { criticBench } from '../review/critic.mjs';
 import { listFlag } from './skills.mjs';
 
+/**
+ * Refuse an authorised bench run that names no harness.
+ *
+ * The default harness is `gold`, which applies the reference patch instead of asking
+ * an agent: a `--yes` run with no harness measured the grader and stored the result as
+ * an arm's evidence (review 0003 Q49). A default cannot be mistaken for a measurement
+ * if there is no default.
+ */
+function requireHarness(flags, command) {
+  if (typeof flags.harness === 'string' && flags.harness.length > 0) return null;
+  return fail(
+    `${command} --yes needs an explicit --harness`,
+    EXIT.USAGE,
+    `pass --harness <name>: an agent adapter such as \`--harness claude\`, or a calibration harness (\`gold\`, \`noop\`)`, 
+  );
+}
+
 export async function benchMineCommand(positional, flags) {
   const root = resolve(flags.root ?? positional[0] ?? process.cwd());
   const { dryRun, apply } = writeMode(flags);
@@ -128,6 +145,11 @@ export async function benchRunCommand(positional, flags) {
     }
     emit(lines.join('\n'), { maxBytes: flags.maxBytes ?? 0 });
     return code;
+  }
+
+  if (apply) {
+    const missing = requireHarness(flags, 'bench run');
+    if (missing !== null) return missing;
   }
 
   const arms = listFlag(flags.arm);
@@ -261,6 +283,10 @@ async function recallOrUnmeasured(root) {
 export async function benchAblateCommand(positional, flags) {
   const root = resolve(flags.root ?? positional[0] ?? process.cwd());
   const { dryRun, apply } = writeMode(flags);
+  if (apply) {
+    const missing = requireHarness(flags, 'bench ablate');
+    if (missing !== null) return missing;
+  }
   const harness = flags.harness ?? 'gold';
   const model = flags.model;
   const reps = flags.reps ?? 1;
@@ -312,6 +338,11 @@ export async function benchAblateCommand(positional, flags) {
 export async function benchProbesCommand(positional, flags) {
   const root = resolve(flags.root ?? positional[0] ?? process.cwd());
   const { dryRun, apply } = writeMode(flags);
+  if (apply) {
+    const missing = requireHarness(flags, 'bench probes');
+    if (missing !== null) return missing;
+  }
+
   const arms = listFlag(flags.arm);
   const probes = listFlag(flags.task);
   const harness = flags.harness ?? 'gold';
@@ -363,6 +394,10 @@ export async function benchProbesCommand(positional, flags) {
 export async function benchVariantsCommand(positional, flags) {
   const root = resolve(flags.root ?? positional[0] ?? process.cwd());
   const { dryRun, apply } = writeMode(flags);
+  if (apply) {
+    const missing = requireHarness(flags, 'bench variants');
+    if (missing !== null) return missing;
+  }
   let result;
   try {
     result = await selectRuleVariants(root, {

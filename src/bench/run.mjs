@@ -5,17 +5,15 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { assembleBrief } from '../brief/assemble.mjs';
+import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { extractOpenedSkills, matchSkillsForPaths } from '../graph/compile.mjs';
-import { matchGlob } from '../index/govern.mjs';
-import { formatLessonParagraph, listPromotedLessons } from '../memory/lessons.mjs';
 import { MANIFEST_FILE, STATE_DIR } from '../name.mjs';
 import { LOCAL_DIR } from '../state.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { plan } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
-import { fingerprint } from '../resolve/fingerprint.mjs';
-import { rankSkills, tokenize } from '../resolve/resolve.mjs';
 import { gradeWorkspace } from './grade.mjs';
 import { resolveVaultDir } from './mine.mjs';
 import { loadTasks } from './tasks.mjs';
@@ -52,6 +50,78 @@ function sanitizedEnv(extra = {}) {
     if (key.startsWith('NODE_TEST')) delete env[key];
   }
   return env;
+}
+
+/**
+ * What every benchmarked agent is allowed to inherit from the operator's shell.
+ *
+ * `PATH` and the locale are what a CLI needs to run at all. Nothing here names a
+ * credential or a state directory: those come from the adapter's own `env` list.
+ */
+const ENV_BASELINE = [
+  'PATH',
+  'LANG',
+  'LC_ALL',
+  'LC_CTYPE',
+  'TZ',
+  'TERM',
+  'SHELL',
+  'TMPDIR',
+  'TEMP',
+  'TMP',
+  'SystemRoot',
+  'WINDIR',
+  'USER',
+];
+
+/** The isolation levels a run may record; `sandbox` is declared, not implemented. */
+const ISOLATION_LEVELS = new Set(['none', 'env', 'sandbox']);
+
+/**
+ * The environment an arm's agent sees: the baseline, the adapter's declared keys,
+ * and nothing else.
+ *
+ * The agent used to inherit everything the operator had — `SIMT_DEV_VAULT_DIR`,
+ * `XDG_CACHE_HOME`, `HOME`, and every credential in the shell. A run that can read
+ * the vault can read the hidden tests it is graded against, and a run sharing the
+ * operator's HOME writes into their own configuration, so the number it produced
+ * described the machine rather than the arm (review 0003 Q49). `home` is the run's
+ * own slot, which is removed when the run ends.
+ *
+ * @param {object} adapter an entry from `adapters.json`
+ * @param {{home?: string, extra?: Record<string, string>, base?: NodeJS.ProcessEnv}} [options]
+ * @returns {Record<string, string>}
+ */
+export function agentEnv(adapter, { home, extra = {}, base = process.env } = {}) {
+  const allowed = new Set([...ENV_BASELINE, ...(adapter?.env ?? [])]);
+  const env = {};
+  for (const key of allowed) {
+    if (typeof base[key] === 'string') env[key] = base[key];
+  }
+  for (const [key, value] of Object.entries(extra ?? {})) {
+    if (typeof value === 'string') env[key] = value;
+  }
+  if (typeof home === 'string' && home.length > 0) env.HOME = home;
+  env.SIMT_DEV_WORKSPACE = 'off';
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('NODE_TEST')) delete env[key];
+  }
+  return env;
+}
+
+/**
+ * The isolation an adapter's runs provide, as the record states it.
+ *
+ * `none` is a built-in that scripts the workspace, `env` is a CLI driven with a
+ * scrubbed environment and a slot-local HOME, and `sandbox` is reserved for a
+ * real filesystem sandbox — nothing claims it yet, so a record never says it.
+ *
+ * @param {object} adapter
+ * @returns {'none'|'env'|'sandbox'}
+ */
+export function adapterIsolation(adapter) {
+  const declared = adapter?.isolation;
+  return ISOLATION_LEVELS.has(declared) ? declared : 'none';
 }
 
 function runCmd(cmd, args, { cwd, env, input = null, timeoutMs = DEFAULT_AGENT_TIMEOUT_MS } = {}) {
@@ -468,55 +538,29 @@ async function applyProjectionMode(workDir, mode) {
   }
 }
 
-async function writeTaskBrief(workDir, task) {
-  const prompt = String(task?.prompt ?? '');
-  const taskTokens = tokenize(prompt);
-  const taskTokenSet = new Set(taskTokens);
-  const [registry, fp, lessons] = await Promise.all([
-    loadRegistry().catch(() => ({ skills: [] })),
-    fingerprint(workDir).catch(() => ({ stacks: [], facts: new Set() })),
-    listPromotedLessons(workDir).catch(() => []),
-  ]);
-  const skillsList = Array.isArray(registry.skills)
-    ? registry.skills
-    : Object.values(registry.skills ?? {});
-  const { selected = [] } = rankSkills(skillsList, {
-    taskTokens,
-    paths: [],
-    repoStack: fp.stack ?? [],
-  });
-  const ranked = selected.slice(0, 5);
-
-  const taskPaths = Array.isArray(task?.paths) ? task.paths : [];
-  const matchingLessons = lessons.filter((lesson) => {
-    const lessonGlobs = Array.isArray(lesson.paths) ? lesson.paths : [];
-    if (taskPaths.some((p) => lessonGlobs.some((glob) => matchGlob(glob, p)))) return true;
-    if (lessonGlobs.some((glob) => prompt.includes(glob.replace(/\/\*\*$/, '')))) return true;
-    const kw = Array.isArray(lesson.keywords) ? lesson.keywords : [];
-    return kw.some((k) => taskTokenSet.has(String(k).toLowerCase()));
-  });
-
-  const lines = [
-    `# Task Brief: ${task?.id ?? 'task'}`,
-    '',
-    `Prompt: ${prompt}`,
-    '',
-    '## Ranked Skills',
-    ...(ranked.length > 0
-      ? ranked.map((r) => `- ${r.skill.name} (score ${r.score}): ${r.skill.description ?? ''}`)
-      : ['- (none matched)']),
-    ...(matchingLessons.length > 0
-      ? [
-          '',
-          '## Lessons',
-          ...matchingLessons.map((l) => `- ${formatLessonParagraph(l)}`),
-        ]
-      : []),
-    '',
-  ];
-  const briefPath = join(workDir, LOCAL_DIR, 'brief.md');
-  await mkdir(dirname(briefPath), { recursive: true });
-  await writeFile(briefPath, lines.join('\n'), 'utf8');
+/**
+ * The `brief` arm's context: the packet `simt brief` delivers, assembled by the same
+ * function the command and the prompt-submit hook call.
+ *
+ * The arm used to re-implement the packet from `registry.skills` — a property the
+ * registry does not have, so every run reported "(none matched)" while the real
+ * command resolved skills — and wrote it to a file no agent was told to read. An arm
+ * meant to measure the packet measured a different artefact (review 0003 Q49).
+ */
+async function buildBriefPrefix(workDir, task) {
+  // A packet is built from git's answer; a directory that is not a repository has none,
+  // and asking would print a failure into a bench log for no measurement.
+  if (!existsSync(join(workDir, '.git'))) return '';
+  const assembled = await assembleBrief({
+    root: workDir,
+    task: String(task?.prompt ?? ''),
+    paths: '',
+    budget: DEFAULT_BRIEF_BYTES,
+    build: true,
+    federate: false,
+  }).catch(() => null);
+  if (!assembled || assembled.error || assembled.cold) return '';
+  return assembled.packed?.text ?? '';
 }
 
 /**
@@ -525,9 +569,10 @@ async function writeTaskBrief(workDir, task) {
  * @param {string} workDir
  * @param {{name: string, kind?: string, base?: string|null, write?: Record<string, string>, remove?: string[], env?: Record<string, string>}} armSpec
  * @param {object} [task]
- * @returns {Promise<{env: Record<string, string>}>}
+ * @returns {Promise<{env: Record<string, string>, promptPrefix: string}>}
  */
 export async function materialiseArm(workDir, armSpec, task = {}) {
+  let promptPrefix = '';
   const ablate = armSpec.ablate ?? parseAblationArmName(armSpec.name)?.ablate ?? null;
   const variant = armSpec.variant ?? parseVariantArmName(armSpec.name)?.variant ?? null;
   const base = armSpec.base ?? (BUILTIN_ARMS.has(armSpec.name) ? armSpec.name : null);
@@ -543,7 +588,7 @@ export async function materialiseArm(workDir, armSpec, task = {}) {
     await applyProjectionMode(workDir, 'kernel');
   } else if (base === 'brief') {
     await applyProjectionMode(workDir, 'full');
-    await writeTaskBrief(workDir, task);
+    promptPrefix = await buildBriefPrefix(workDir, task);
   }
 
   for (const relPath of armSpec.remove ?? []) {
@@ -557,7 +602,7 @@ export async function materialiseArm(workDir, armSpec, task = {}) {
     await writeFile(target, String(content), 'utf8');
   }
 
-  return { env: { ...(armSpec.env ?? {}) } };
+  return { env: { ...(armSpec.env ?? {}) }, promptPrefix };
 }
 
 /**
@@ -570,7 +615,7 @@ export async function materialiseArm(workDir, armSpec, task = {}) {
  * @param {object} armSpec
  * @param {object} [task]
  * @param {{parentDir?: string}} [options]
- * @returns {Promise<{slotDir: string, workDir: string, initialHead: string, env: Record<string, string>}>}
+ * @returns {Promise<{slotDir: string, workDir: string, initialHead: string, env: Record<string, string>, promptPrefix: string}>}
  */
 export async function prepareIsolatedWorkspace(root, baseSha, armSpec, task = {}, { parentDir } = {}) {
   const slotDir = await mkdtemp(join(parentDir ?? tmpdir(), 'bench-run-'));
@@ -619,12 +664,18 @@ export async function prepareIsolatedWorkspace(root, baseSha, armSpec, task = {}
     }
   }
 
-  const { env } = await materialiseArm(workDir, armSpec, task);
-
   await runCmd('git', ['init', '-q'], { cwd: workDir });
   await runCmd('git', ['config', 'user.name', 'bench'], { cwd: workDir });
   await runCmd('git', ['config', 'user.email', 'bench@local'], { cwd: workDir });
   await runCmd('git', ['config', 'commit.gpgsign', 'false'], { cwd: workDir });
+
+  // The repository exists before an arm materialises: the `brief` arm assembles its
+  // packet from git's answer, which a directory that is not yet a repository cannot give.
+  const { env, promptPrefix } = await materialiseArm(workDir, armSpec, task);
+  // Assembling a packet writes tool state. It belongs to no arm, and leaving it in the
+  // base commit would make the `brief` workspace differ by an index as well as by context.
+  await rm(join(workDir, LOCAL_DIR), { recursive: true, force: true }).catch(() => {});
+
   await runCmd('git', ['add', '-A'], { cwd: workDir });
   const commitRes = await runCmd(
     'git',
@@ -639,7 +690,7 @@ export async function prepareIsolatedWorkspace(root, baseSha, armSpec, task = {}
   const headRes = await runCmd('git', ['rev-parse', 'HEAD'], { cwd: workDir });
   const initialHead = headRes.stdout.toString('utf8').trim();
 
-  return { slotDir, workDir, initialHead, env };
+  return { slotDir, workDir, initialHead, env, promptPrefix };
 }
 
 function buildAdapterArgs(adapter, { prompt, turns, model, analyticsLog }) {
@@ -657,7 +708,12 @@ function buildAdapterArgs(adapter, { prompt, turns, model, analyticsLog }) {
   return args;
 }
 
-async function executeAdapter(adapter, workDir, task, { vaultRoot, model, maxTurns, env, timeoutMs, slotDir }) {
+export async function executeAdapter(
+  adapter,
+  workDir,
+  task,
+  { vaultRoot, model, maxTurns = DEFAULT_MAX_TURNS, env, timeoutMs, slotDir, promptPrefix = '' },
+) {
   if (adapter.id === 'noop') return { ...parseAdapterUsage(adapter, ''), transcript: '' };
   if (adapter.id === 'gold') {
     const goldPatch = await readFile(join(vaultRoot, task.id, 'gold.patch'));
@@ -671,8 +727,18 @@ async function executeAdapter(adapter, workDir, task, { vaultRoot, model, maxTur
   }
 
   const analyticsLog = join(slotDir, 'analytics.jsonl');
-  const args = buildAdapterArgs(adapter, { prompt: String(task.prompt ?? ''), turns: maxTurns, model, analyticsLog });
-  const outcome = await runCmd(adapter.bin, args, { cwd: workDir, env, timeoutMs });
+  // The arm's context arrives as a prefix rather than a file the agent must be told to
+  // read, so the prompt an adapter receives is the whole thing it was given. A `gold`
+  // or `noop` run never reaches this line: it scripts the workspace instead.
+  const prompt = [String(promptPrefix ?? ''), String(task.prompt ?? '')]
+    .filter((part) => part.length > 0)
+    .join('\n\n');
+  const args = buildAdapterArgs(adapter, { prompt, turns: maxTurns, model, analyticsLog });
+  const outcome = await runCmd(adapter.bin, args, {
+    cwd: workDir,
+    env: agentEnv(adapter, { home: slotDir, extra: env }),
+    timeoutMs,
+  });
   const stdoutText = outcome.stdout.toString('utf8');
   const analyticsText = adapter.format === 'analytics-log' ? await readFile(analyticsLog, 'utf8').catch(() => '') : '';
   return { ...parseAdapterUsage(adapter, stdoutText, analyticsText), transcript: `${stdoutText}\n${analyticsText}` };
@@ -718,9 +784,10 @@ export async function runBench(
     maxTurns = DEFAULT_MAX_TURNS,
     concurrency = DEFAULT_CONCURRENCY,
     cwd = process.cwd(),
+    adapters: adapterTable,
   } = {},
 ) {
-  const adapters = await loadAdapters();
+  const adapters = adapterTable ?? (await loadAdapters());
   const adapter = adapters[harness];
   if (!adapter) {
     throw new Error(
@@ -747,6 +814,10 @@ export async function runBench(
   }
 
   const resolvedModel = model ?? (adapter.kind === 'builtin' ? adapter.id : 'default');
+  // A built-in harness scripts the workspace instead of driving an agent, so its
+  // numbers calibrate the grader and are never an arm's measurement (review 0003 Q49).
+  const measured = adapter.kind !== 'builtin';
+  const isolation = adapterIsolation(adapter);
   const plannedRuns = [];
   for (const armSpec of armSpecs) {
     for (let rep = 1; rep <= reps; rep += 1) {
@@ -779,6 +850,8 @@ export async function runBench(
         harness,
         model: resolvedModel,
         rep: item.rep,
+        measured,
+        isolation,
         resolved: null,
         gatesPassed: null,
         usage: emptyUsage().usage,
@@ -804,7 +877,7 @@ export async function runBench(
   const parentDir = await mkdtemp(join(tmpdir(), 'bench-batch-'));
   try {
     const records = await mapPool(plannedRuns, concurrency, async (item) => {
-      const { slotDir, workDir, initialHead, env } = await prepareIsolatedWorkspace(
+      const { slotDir, workDir, initialHead, env, promptPrefix } = await prepareIsolatedWorkspace(
         root,
         item.task.base,
         item.armSpec,
@@ -819,6 +892,7 @@ export async function runBench(
           env,
           timeoutMs,
           slotDir,
+          promptPrefix,
         });
 
         const grade = await gradeWorkspace(workDir, item.task, {
@@ -841,6 +915,8 @@ export async function runBench(
           harness,
           model: resolvedModel,
           rep: item.rep,
+          measured,
+          isolation,
           resolved: grade.resolved,
           gatesPassed: grade.gatesPassed,
           usage,

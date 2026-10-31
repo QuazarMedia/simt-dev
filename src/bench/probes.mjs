@@ -27,7 +27,20 @@ import { dirname, join, resolve } from 'node:path';
 
 import { LOCAL_DIR } from '../state.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
-import { materialiseArm, parseArmSpec } from './run.mjs';
+import { adapterIsolation, executeAdapter, loadAdapters, materialiseArm, parseArmSpec } from './run.mjs';
+
+/**
+ * Harnesses that script a workspace instead of driving an agent.
+ *
+ * They answer a different question — "does the grader accept compliant work and reject
+ * violating work" — and they answer it perfectly every time by construction, so their
+ * compliance rate is constant and says nothing about an arm. A record from one of these
+ * is a grader calibration, never a measurement (review 0003 Q49).
+ */
+export const CALIBRATION_HARNESSES = new Set(['gold', 'noop', 'violator']);
+
+/** How long one agent-backed probe may run before its workspace is reclaimed. */
+const PROBE_AGENT_TIMEOUT_MS = 120_000;
 
 function sanitizedEnv(extra = {}) {
   const env = { ...process.env, SIMT_DEV_WORKSPACE: 'off', ...extra };
@@ -1092,13 +1105,16 @@ export async function prepareProbeWorkspace(probe, { armSpec = null, parentDir }
 
   await probe.setup(workDir, { slotDir });
 
-  if (armSpec && probe.id !== 'p05-generated-region-edit') {
-    await materialiseArm(workDir, armSpec, { id: probe.id, prompt: probe.prompt });
-  }
-
   await runGit(['init', '-q'], { cwd: workDir });
   await runGit(['config', 'user.email', 'bench@example.invalid'], { cwd: workDir });
   await runGit(['config', 'user.name', 'bench-probe'], { cwd: workDir });
+
+  if (armSpec && probe.id !== 'p05-generated-region-edit') {
+    await materialiseArm(workDir, armSpec, { id: probe.id, prompt: probe.prompt });
+    // Same rule as a mined run: the packet's index is tool state, not part of the arm.
+    await rm(join(workDir, LOCAL_DIR), { recursive: true, force: true }).catch(() => {});
+  }
+
   await runGit(['add', '-A'], { cwd: workDir });
   await runGit(['commit', '-qm', `base: ${probe.id}`, '--no-verify'], { cwd: workDir });
   const headRes = await runGit(['rev-parse', 'HEAD'], { cwd: workDir });
@@ -1180,13 +1196,16 @@ export async function loadProbeRecords(root) {    const probesRoot = join(resolv
  */
 export function formatProbesMarkdown(report) {
   const lines = [
-    '| Arm | Probes | Passed | Compliance |',
-    '| --- | ---: | ---: | ---: |',
+    '| Arm | Probes | Passed | Compliance | Basis |',
+    '| --- | ---: | ---: | ---: | --- |',
   ];
 
+  // The basis is a column rather than a footnote because a calibration rate and a
+  // measured rate are the same four characters apart (review 0003 Q49).
   for (const arm of report.arms) {
+    const basis = arm.measured ? 'agent' : 'grader calibration';
     lines.push(
-      `| ${arm.arm} | ${arm.total} | ${arm.passed} | ${(arm.complianceRate * 100).toFixed(1)}% |`,
+      `| ${arm.arm} | ${arm.total} | ${arm.passed} | ${(arm.complianceRate * 100).toFixed(1)}% | ${basis} |`,
     );
   }
 
@@ -1220,9 +1239,23 @@ export async function runBenchProbes(
     probes: probeFilter = [],
     harness = 'gold',
     reps = 1,
+    model,
+    timeoutMs = PROBE_AGENT_TIMEOUT_MS,
+    adapters: adapterTable,
   } = {},
 ) {
   const resolvedRoot = resolve(root);
+  const calibration = CALIBRATION_HARNESSES.has(harness);
+  const adapters = calibration ? null : (adapterTable ?? (await loadAdapters()));
+  const adapter = calibration ? null : adapters[harness];
+  if (!calibration && !adapter) {
+    throw new Error(
+      `unknown probe harness "${harness}"; known harnesses: ${[...CALIBRATION_HARNESSES].sort().join(', ')}, ${Object.keys(adapters).sort().join(', ')}`,
+    );
+  }
+  const measured = !calibration;
+  const isolation = calibration ? 'none' : adapterIsolation(adapter);
+  const resolvedModel = model ?? (calibration ? harness : 'default');
   const selectedProbes =
     Array.isArray(probeFilter) && probeFilter.length > 0
       ? PROBES.filter((p) => probeFilter.includes(p.id))
@@ -1252,14 +1285,28 @@ export async function runBenchProbes(
           const ws = await prepareProbeWorkspace(probe, { armSpec });
           try {
             let outcome;
-            if (harness === 'gold') {
-              outcome = await probe.comply(ws.workDir, ws);
-            } else if (harness === 'violator' || harness === 'noop') {
-              outcome = await probe.violate(ws.workDir, ws);
+            if (calibration) {
+              // `gold` runs the compliant script, `violator` and `noop` the violating one:
+              // the pair proves the grader both accepts and rejects, nothing more.
+              outcome =
+                harness === 'gold'
+                  ? await probe.comply(ws.workDir, ws)
+                  : await probe.violate(ws.workDir, ws);
             } else {
-              throw new Error(
-                `unknown probe harness "${harness}"; supported built-in probe harnesses are gold and violator`,
+              // A real harness gets a real workspace and the probe's own prompt. Grading
+              // reads the workspace and the transcript, so the agent's own commands are
+              // what decide compliance.
+              const executed = await executeAdapter(
+                adapter,
+                ws.workDir,
+                { id: probe.id, prompt: probe.prompt },
+                { model: resolvedModel, env: {}, timeoutMs, slotDir: ws.slotDir },
               );
+              const transcript = executed.transcript ?? '';
+              outcome = {
+                commands: extractTranscriptCommands({ stdout: transcript }),
+                stdout: transcript,
+              };
             }
 
             const grade = await gradeProbe(probe, {
@@ -1278,7 +1325,10 @@ export async function runBenchProbes(
               adr: probe.adr,
               arm: armSpec.name,
               harness,
+              model: resolvedModel,
               rep,
+              measured,
+              isolation,
               passed: grade.passed,
               reason: grade.reason,
             };
@@ -1320,6 +1370,7 @@ export async function runBenchProbes(
         total,
         passed,
         complianceRate,
+        measured: list.every((r) => r.measured === true),
         results,
       };
     });

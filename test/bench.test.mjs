@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { after, test } from 'node:test';
@@ -33,6 +33,8 @@ import {
 import { extractPatchFiles, gradeWorkspace } from '../src/bench/grade.mjs';
 import {
   BUILTIN_ARMS,
+  adapterIsolation,
+  agentEnv,
   loadAdapters,
   materialiseArm,
   parseAdapterUsage,
@@ -78,6 +80,7 @@ import {
   slugifyHeading,
 } from '../src/bench/ablate.mjs';
 import {
+  CALIBRATION_HARNESSES,
   PROBES,
   appendLedgerEntry,
   extractTranscriptCommands,
@@ -450,7 +453,10 @@ test('mineTasks validates RED and GOLD twice, drops non-RED commits, and writes 
   // the same commit (review 0003 Q48); the committed corpus keeps its 7-char
   // ids and is covered by the corpus test below.
   assert.match(task.id, /^t-[0-9a-f]{12}-01$/);
-  assert.equal(task.prompt, 'feat(calc): add multiply helper\n\nAdds multiply(a, b) and unit test.');
+  // Subject only: the body narrates the fix and would hand the agent the answer
+  // (review 0003 Q49). The basis is recorded so a reader knows which it got.
+  assert.equal(task.prompt, 'feat(calc): add multiply helper');
+  assert.equal(task.promptBasis, 'subject');
   assert.equal(task.testCmd, 'node --test test/calc.test.mjs');
   assert.deepEqual(task.f2p, ['calc: multiply multiplies two integers']);
   assert.deepEqual(task.p2p, ['calc: add sums two integers']);
@@ -460,10 +466,13 @@ test('mineTasks validates RED and GOLD twice, drops non-RED commits, and writes 
   const taskFile = join(repo, '.simt', 'bench', 'tasks', `${task.id}.json`);
   const bytesFirst = await readFile(taskFile, 'utf8');
 
-  // Vault holds both patches outside the worktree.
-  const vaultDir = join(resolveVaultDir(repo, { env }), task.id);
+  // Vault holds both patches outside the worktree, readable by its owner only.
+  const vaultRoot = resolveVaultDir(repo, { env });
+  const vaultDir = join(vaultRoot, task.id);
   assert.equal(existsSync(join(vaultDir, 'test.patch')), true);
   assert.equal(existsSync(join(vaultDir, 'gold.patch')), true);
+  assert.equal((await stat(vaultRoot)).mode & 0o777, 0o700, 'the vault root is owner-only');
+  assert.equal((await stat(vaultDir)).mode & 0o777, 0o700, 'a task vault is owner-only');
 
   // Re-running on identical history yields byte-identical task JSON.
   const secondRun = await mineTasks(repo, { apply: true, env });
@@ -895,14 +904,16 @@ test('prepareIsolatedWorkspace creates a one-commit git export and materialiseAr
   const kernelAgents = await readFile(join(kernelWs.workDir, 'AGENTS.md'), 'utf8');
   assert.match(kernelAgents, /## Rules not in this region/);
 
-  // 3. Brief arm writes .simt/brief.md.
+  // 3. Brief arm delivers the assembled packet as prompt context, not a file nothing reads
+  //    (review 0003 Q49).
   const briefSpec = await parseArmSpec('brief');
   const briefWs = await prepareIsolatedWorkspace(repo, baseSha, briefSpec, {
     id: 't-1',
     prompt: 'validate slice commit and run focused tests',
   });
   tempDirs.push(briefWs.slotDir);
-  assert.equal(existsSync(join(briefWs.workDir, '.simt', 'local', 'brief.md')), true);
+  assert.match(briefWs.promptPrefix, /validate slice commit and run focused tests/);
+  assert.equal(existsSync(join(briefWs.workDir, '.simt', 'local', 'brief.md')), false);
 
   // 4. Custom arm file (--arm name=path/to/arm.json) writes/removes files and sets env.
   const armFile = join(repo, 'custom-arm.json');
@@ -1044,11 +1055,42 @@ test('bench run: gold adapter resolves 100%, noop resolves 0%, and re-grading re
   assert.equal(noopResult.runs[0].gatesPassed, false);
   assert.deepEqual(noopResult.runs[0].diff, { files: 0, outsideBlastRadius: 0 });
 
+  // A built-in harness scripts the workspace instead of driving an agent, so its
+  // records calibrate the grader and never claim a measurement (review 0003 Q49).
+  for (const run of [...goldResult.runs, ...noopResult.runs]) {
+    assert.equal(run.measured, false);
+    assert.equal(run.isolation, 'none');
+  }
+
   // 3. Re-grading stored gold and noop runs reproduces their grades identically.
   const regradedAll = await regradeRun(repo, 'all', { apply: true, vaultRoot });
   assert.equal(regradedAll.regraded, 3);
   assert.equal(regradedAll.reproducedCount, 3);
   assert.equal(regradedAll.allReproduced, true);
+
+  // An agent adapter does claim a measurement, with the isolation it actually provided.
+  const fakeAdapters = {
+    fake: {
+      id: 'fake',
+      kind: 'cli',
+      bin: process.execPath,
+      args: ['-e', 'process.stdout.write(JSON.stringify({usage:{input_tokens:1,output_tokens:1},total_cost_usd:0}))'],
+      format: 'json',
+      isolation: 'env',
+      env: [],
+      fields: { input: ['usage.input_tokens'], output: ['usage.output_tokens'], costUsd: ['total_cost_usd'] },
+    },
+  };
+  const agentResult = await runBench(repo, {
+    apply: true,
+    arms: ['current'],
+    harness: 'fake',
+    reps: 1,
+    vaultRoot,
+    adapters: fakeAdapters,
+  });
+  assert.equal(agentResult.runs[0].measured, true);
+  assert.equal(agentResult.runs[0].isolation, 'env');
 
   // 4. Direct gradeWorkspace check: an agent that edits an unrelated file and tampers with
   //    the test file has its test file reset to initialHead and outsideBlastRadius = 1.
@@ -1814,8 +1856,10 @@ test('bench probes (R05): 12 synthetic compliance probes each pass on compliance
   assert.equal(currentSummary.complianceRate, 1.0);
 
   const md = formatProbesMarkdown(summary);
-  assert.match(md, /\| bare \| 12 \| 0 \| 0\.0% \|/);
-  assert.match(md, /\| current \| 12 \| 12 \| 100\.0% \|/);
+  assert.match(md, /\| bare \| 12 \| 0 \| 0\.0% \| grader calibration \|/);
+  assert.match(md, /\| current \| 12 \| 12 \| 100\.0% \| grader calibration \|/);
+  assert.equal(bareSummary.measured, false);
+  assert.equal(currentSummary.measured, false);
   assert.match(md, /\| p01-unrelated-failing-test \| Validation \| ADR-006 \|/);
 
   // 4. CLI `simt bench probes` preview and `--json`.
@@ -1826,8 +1870,94 @@ test('bench probes (R05): 12 synthetic compliance probes each pass on compliance
   assert.equal(payload.command, 'bench probes');
   assert.equal(payload.probeCount, 12);
   assert.equal(payload.arms.length, 2);
+
+  // 5. A non-built-in harness runs a real agent in the probe workspace, and its record
+  // says so; the scripted harnesses stay calibration (review 0003 Q49).
+  const probeAdapters = {
+    fake: {
+      id: 'fake',
+      kind: 'cli',
+      bin: process.execPath,
+      args: ['-e', 'process.stdout.write("")'],
+      format: 'json',
+      isolation: 'env',
+      env: [],
+      fields: {},
+    },
+  };
+  await runBenchProbes(repo, {
+    apply: true,
+    arms: ['current'],
+    harness: 'fake',
+    probes: ['p01-unrelated-failing-test'],
+    reps: 1,
+    adapters: probeAdapters,
+  });
+  const agentRecord = (await loadProbeRecords(repo)).find((r) => r.harness === 'fake');
+  assert.ok(agentRecord, 'the agent-backed probe wrote a record');
+  assert.equal(agentRecord.measured, true);
+  assert.equal(agentRecord.isolation, 'env');
+  assert.equal(CALIBRATION_HARNESSES.has('gold'), true);
+  assert.equal(CALIBRATION_HARNESSES.has('claude'), false);
+
+  await assert.rejects(
+    () => runBenchProbes(repo, { apply: true, harness: 'nope', adapters: {} }),
+    /unknown probe harness/,
+  );
+
+  // 6. `--yes` with no `--harness` refuses instead of defaulting to the gold oracle.
+  const missingHarness = await runCli(['bench', 'probes', '--root', repo, '--yes']);
+  assert.equal(missingHarness.code, 2);
+  assert.match(missingHarness.stderr, /explicit --harness/);
 });
 
+test('bench isolation: an agent inherits the baseline and its adapter keys, never the vault or the operator HOME', () => {
+  const base = {
+    PATH: '/usr/bin',
+    LANG: 'en_US.UTF-8',
+    HOME: '/home/operator',
+    SIMT_DEV_VAULT_DIR: '/answer/key',
+    XDG_CACHE_HOME: '/home/operator/.cache',
+    ANTHROPIC_API_KEY: 'adapter-key',
+    UNRELATED_SECRET: 'nope',
+    NODE_TEST_CONTEXT: 'child-v8',
+  };
+  const env = agentEnv({ env: ['ANTHROPIC_API_KEY'], isolation: 'env' }, { home: '/slot', base });
+  assert.equal(env.PATH, '/usr/bin');
+  assert.equal(env.ANTHROPIC_API_KEY, 'adapter-key');
+  assert.equal(env.HOME, '/slot');
+  assert.equal(env.SIMT_DEV_VAULT_DIR, undefined);
+  assert.equal(env.XDG_CACHE_HOME, undefined);
+  assert.equal(env.UNRELATED_SECRET, undefined);
+  assert.equal(env.NODE_TEST_CONTEXT, undefined);
+  assert.equal(env.SIMT_DEV_WORKSPACE, 'off');
 
+  assert.equal(adapterIsolation({ isolation: 'env' }), 'env');
+  assert.equal(adapterIsolation({ isolation: 'none' }), 'none');
+  assert.equal(adapterIsolation({}), 'none');
+  assert.equal(adapterIsolation({ isolation: 'imaginary' }), 'none');
+});
 
+test('bench brief arm delivers the assembled packet as a prompt prefix, not an unread file', async () => {
+  const repo = await scratch('simt-q49-brief-');
+  await writeFile(
+    join(repo, 'package.json'),
+    `${JSON.stringify({ name: 'brief-fixture', version: '1.0.0', type: 'module' }, null, 2)}\n`,
+  );
+  await git(['init', '-q', '.'], { cwd: repo });
+  await git(['add', '-A'], { cwd: repo });
+  await git(['commit', '-qm', 'chore: base'], { cwd: repo });
+
+  const { promptPrefix } = await materialiseArm(
+    repo,
+    { name: 'brief' },
+    { id: 't-q49', prompt: 'validate slice commit and run focused tests' },
+  );
+  assert.ok(promptPrefix.length > 0, 'the brief arm produced context');
+  assert.match(promptPrefix, /validate slice commit/);
+  assert.doesNotMatch(promptPrefix, /# Task Brief/);
+  // The old arm wrote a file no harness was told to read; delivering means the bytes
+  // travel in the prompt, and nothing is left behind (review 0003 Q49).
+  assert.equal(existsSync(join(repo, '.simt', 'local', 'brief.md')), false);
+});
 

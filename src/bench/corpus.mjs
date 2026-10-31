@@ -13,7 +13,7 @@
 // seal before trusting a single byte of it.
 
 import { createHash } from 'node:crypto';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 import { packageVersion } from '../package-version.mjs';
@@ -136,7 +136,10 @@ export async function writeCorpusDocument(root, doc, { env = process.env, apply 
     if (apply) {
       await writeFile(join(tasksDir, `${entry.id}.json`), `${JSON.stringify(entry.task, null, 2)}\n`, 'utf8');
       const taskVault = join(vaultRoot, entry.id);
-      await mkdir(taskVault, { recursive: true });
+      // An imported corpus restores an answer key, so it gets the same 0700 the miner
+      // gives one (review 0003 Q49): the import must not be the cheaper way in.
+      await mkdir(taskVault, { recursive: true, mode: 0o700 });
+      await chmod(taskVault, 0o700).catch(() => {});
       await writeFile(join(taskVault, 'test.patch'), Buffer.from(entry.testPatch, 'base64'));
       await writeFile(join(taskVault, 'gold.patch'), Buffer.from(entry.goldPatch, 'base64'));
     }

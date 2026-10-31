@@ -244,7 +244,10 @@ export async function dispatch(argv) {
   // needs to be told so, not handed a wall of text it may misread as output.
   // `-h` is the alias a reader types first, and it used to reach `unknown command '-h'`.
   if (flags.help || flags.version || positional[0] === 'help' || positional[0] === '-h') {
-    return help(argv);
+    // The argv is parsed once, here, and help renders what that parse produced: it used
+    // to parse the same argv again, so `simt --help` paid for two parses and could in
+    // principle answer a different question than the dispatcher asked (review 0003 Q83).
+    return help(argv, { flags, positional, parseError });
   }
 
   const [first, second] = positional;

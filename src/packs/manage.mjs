@@ -511,6 +511,23 @@ export async function publishPack(dir, { apply = false } = {}) {
     return { pack: linted.pack, ok: false, published: false, skipped: false, planned: [], findings };
   }
 
+  // A preview is a preview. The registry read below is the one network call in this
+  // command, and running it to print a plan made `pack publish` — a preview by default
+  // — a network operation that failed offline without `--yes` (review 0003 Q58).
+  if (!apply) {
+    return {
+      pack: linted.pack,
+      ok: true,
+      published: false,
+      skipped: false,
+      planned: [
+        `npm view ${pkg}@${pack.version}  (check whether it is already live)`,
+        `npm publish  (in ${dir})`,
+      ],
+      findings,
+    };
+  }
+
   // Idempotent, the way the release twin is: a version that is already live is
   // skipped rather than republished, so a re-run after an interruption continues
   // where it stopped.
@@ -534,9 +551,6 @@ export async function publishPack(dir, { apply = false } = {}) {
   }
 
   const planned = [`npm publish  (in ${dir})`];
-  if (!apply) {
-    return { pack: linted.pack, ok: true, published: false, skipped: false, planned, findings };
-  }
   try {
     await exec('npm', ['publish'], { cwd: dir });
   } catch (error) {

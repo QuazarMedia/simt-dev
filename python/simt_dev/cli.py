@@ -27,6 +27,7 @@ somebody's editor-integrated ``simt`` loses its colours.
 
 import os
 import shutil
+import subprocess
 import sys
 
 __all__ = ["main", "find_node", "vendored_root"]
@@ -38,6 +39,10 @@ __all__ = ["main", "find_node", "vendored_root"]
 # for two questions; reusing one would make the value's meaning depend on which
 # of the two files is reading it.
 ENV_NODE = "SIMT_DEV_NODE"
+
+# The oldest node this package runs on. Mirrors package.json `engines.node` and
+# src/node-version.mjs; the launcher checks it because pip, like npm, only warns.
+MIN_NODE = (22, 20, 0)
 
 # The env var that names the program to run instead of the one this wheel ships.
 # Same meaning it has in the shim: a path to a .mjs entry point, so somebody
@@ -171,6 +176,29 @@ def _program(vendored):
     return os.path.join(vendored, BIN_REL)
 
 
+def _node_version(node):
+    """The (major, minor, patch) this node reports, or None when it cannot be run."""
+    try:
+        out = subprocess.run(
+            [node, "-p", "process.versions.node"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if out.returncode != 0:
+        return None
+    try:
+        parts = [int(part) for part in out.stdout.strip().split(".")[:3]]
+    except ValueError:
+        return None
+    while len(parts) < 3:
+        parts.append(0)
+    return tuple(parts)
+
+
 def _remedy():
     """What to do about the missing node, in a form the reader can act on.
 
@@ -200,6 +228,19 @@ def main(argv=None):
     if node is None:
         sys.stderr.write(
             "simt: cannot find node, which is the runtime this tool is written in.\n"
+            f"{_remedy()}\n"
+        )
+        return 2
+
+    # pip, like npm, only warns about the declared floor. Checked here so an old
+    # runtime says so instead of failing inside the .mjs graph with a syntax error
+    # (review 0003 Q54). A node that cannot be queried is left to execv to report.
+    version = _node_version(node)
+    if version is not None and version < MIN_NODE:
+        saw = ".".join(str(part) for part in version)
+        want = ".".join(str(part) for part in MIN_NODE)
+        sys.stderr.write(
+            f"simt: node {saw} is older than the minimum {want}.\n"
             f"{_remedy()}\n"
         )
         return 2

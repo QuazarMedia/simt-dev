@@ -27,7 +27,9 @@ export async function distillCommand(args, flags) {
       `engine    ${result.engine}`,
       `budget    ${result.budget} bytes`,
       `citations ${result.citations}`,
-      ...(result.verified === true ? [] : result.faults.map((f) => `unverified ${f}`)),
+      // A cached proposal predates this field; `?? []` keeps the report from crashing on
+      // the file the command wrote one release ago (review 0003 Q52).
+      ...(result.verified === true ? [] : (result.faults ?? []).map((f) => `unverified ${f}`)),
       `proposal  ${result.proposal.path}  (${result.proposal.state}, ${result.proposal.bytes} bytes)`,
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },

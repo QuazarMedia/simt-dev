@@ -85,6 +85,73 @@ test('a stale index warns the packet instead of quoting yesterday (Q42)', async 
   );
 });
 
+test("a decision's command token resolves against the registry, not the tool's shell card (Q52)", async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'docs', 'decisions'), { recursive: true });
+  await writeFile(
+    join(root, 'docs', 'decisions', 'ADR-001-keep.md'),
+    '# ADR-001 — keep stays\n\nAffects: `src/keep.mjs`, `simt init`\n\nStatus: accepted\n',
+  );
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'record decision']);
+
+  const cautionsOf = (packet) =>
+    (packet.items ?? []).filter((item) => item.section === 'CAUTIONS').map((item) => item.text);
+  const known = await assembleBrief({
+    root,
+    task: 'fix the keep helper in src/keep.mjs',
+    federate: false,
+    commands: ['init'],
+  });
+  assert.ok(
+    !cautionsOf(known).some((text) => text.includes('nothing resolves')),
+    `a command the tool has was reported unresolved: ${JSON.stringify(cautionsOf(known))}`,
+  );
+
+  // The same packet without the registry reports it, which is what made the token a
+  // false caution rather than a fact about the decision.
+  const blind = await assembleBrief({
+    root,
+    task: 'fix the keep helper in src/keep.mjs',
+    federate: false,
+    commands: [],
+  });
+  assert.ok(cautionsOf(blind).some((text) => text.includes('simt init')), JSON.stringify(cautionsOf(blind)));
+});
+
+test('a generated-region caution names a file with a region, not a file that quotes the marker (Q52)', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'notes.md'), 'The marker `simt:begin` appears in prose only.\n');
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'notes']);
+
+  const quoted = await assembleBrief({
+    root,
+    task: 'fix the keep helper in src/keep.mjs',
+    federate: false,
+  });
+  const quotes = (quoted.items ?? []).filter((item) => item.text.startsWith('generated — edit the source'));
+  assert.equal(quotes.length, 0, `prose quoting the marker was reported as generated: ${JSON.stringify(quotes)}`);
+
+  await writeFile(
+    join(root, 'AGENTS.md'),
+    '# Rules\n\n<!-- simt:begin -->\n<!-- simt:generated -->\ngenerated body\n<!-- simt:end -->\n',
+  );
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'region']);
+  const carrying = await assembleBrief({
+    root,
+    task: 'fix the keep helper in src/keep.mjs',
+    federate: false,
+  });
+  const named = (carrying.items ?? []).filter((item) => item.text.startsWith('generated — edit the source'));
+  assert.equal(named.length, 1);
+  assert.match(named[0].text, /AGENTS\.md/);
+  assert.doesNotMatch(named[0].text, /notes\.md/);
+});
+
 test('two runs of the same brief are the same bytes', async (t) => {
   const root = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));

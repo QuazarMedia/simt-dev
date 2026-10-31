@@ -13,9 +13,10 @@
 // seal before trusting a single byte of it.
 
 import { createHash } from 'node:crypto';
-import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
+import { STATE_DIR } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { resolveVaultDir } from './mine.mjs';
 
@@ -64,7 +65,7 @@ function payloadOf(doc) {
  */
 export async function buildCorpusDocument(root, { env = process.env } = {}) {
   const absRoot = resolve(root);
-  const tasksDir = join(absRoot, '.simt', 'bench', 'tasks');
+  const tasksDir = join(absRoot, STATE_DIR, 'bench', 'tasks');
   const vaultRoot = resolveVaultDir(absRoot, { env });
 
   const names = (await readdir(tasksDir).catch(() => [])).filter((f) => f.endsWith('.json')).sort();
@@ -128,7 +129,7 @@ export function verifyCorpusDocument(doc) {
  */
 export async function writeCorpusDocument(root, doc, { env = process.env, apply = true } = {}) {
   const absRoot = resolve(root);
-  const tasksDir = join(absRoot, '.simt', 'bench', 'tasks');
+  const tasksDir = join(absRoot, STATE_DIR, 'bench', 'tasks');
   const vaultRoot = resolveVaultDir(absRoot, { env });
 
   if (apply) await mkdir(tasksDir, { recursive: true });
@@ -136,7 +137,10 @@ export async function writeCorpusDocument(root, doc, { env = process.env, apply 
     if (apply) {
       await writeFile(join(tasksDir, `${entry.id}.json`), `${JSON.stringify(entry.task, null, 2)}\n`, 'utf8');
       const taskVault = join(vaultRoot, entry.id);
-      await mkdir(taskVault, { recursive: true });
+      // An imported corpus restores an answer key, so it gets the same 0700 the miner
+      // gives one (review 0003 Q49): the import must not be the cheaper way in.
+      await mkdir(taskVault, { recursive: true, mode: 0o700 });
+      await chmod(taskVault, 0o700).catch(() => {});
       await writeFile(join(taskVault, 'test.patch'), Buffer.from(entry.testPatch, 'base64'));
       await writeFile(join(taskVault, 'gold.patch'), Buffer.from(entry.goldPatch, 'base64'));
     }

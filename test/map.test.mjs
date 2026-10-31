@@ -189,6 +189,28 @@ test('simt map renders the ranking, and recall is unmeasured without a vault', a
   await rm(bare, { recursive: true, force: true });
 });
 
+test('map says when the ranking is the graph hub rather than a match (Q52)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-nomatch-'));
+  await git(['init', '-q', root]);
+  await mkdir(join(root, 'src'), { recursive: true });
+  await writeFile(join(root, 'src', 'keep.mjs'), 'export function greet() {}\n');
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'initial']);
+
+  const hub = await capture(() => mapCommand([], { root, task: 'zebracorn', budget: '0' }));
+  assert.equal(hub.code, 0);
+  assert.match(hub.stdout, /basis\s+graph-only/);
+  assert.match(hub.stdout, /no file or symbol mentions this task/);
+
+  const matched = await capture(() => mapCommand([], { root, task: 'change greet in src/keep.mjs', budget: '0' }));
+  assert.match(matched.stdout, /basis\s+matched/);
+
+  // No task is not a miss either: nothing was asked, so nothing is claimed.
+  const bare = await capture(() => mapCommand([], { root, budget: '0' }));
+  assert.match(bare.stdout, /basis\s+no-task/);
+  await rm(root, { recursive: true, force: true });
+});
+
 test('a file added after the build is visible to map without a manual index (ADR-108)', async () => {
   // The cache is refreshed from the git index on every read: a blob that has not
   // changed is not re-read, so the cost of a current repository is one `git ls-files`,

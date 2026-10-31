@@ -130,7 +130,7 @@ const GROUPS = new Map([
  * just correct: nothing in the map depends on the call.
  */
 export const IMPLEMENTED = {
-  brief: briefCommand,
+  brief: (args, flags) => briefCommand(args, flags, COMMANDS),
   doctor: runDoctor,
   // Plan 0003 R48. A bare command: the only mode is `--line`, so there is no
   // group and no default subcommand to resolve.

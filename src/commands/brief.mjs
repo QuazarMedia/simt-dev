@@ -20,7 +20,7 @@ import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { DEFAULT_BRIEF_BYTES, explainPacket } from '../brief/packet.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 
-export async function briefCommand(args, flags) {
+export async function briefCommand(args, flags, commands = []) {
   if (args.length > 1) {
     return fail(`brief takes one task, not ${args.length}`, EXIT.USAGE, `run: ${CLI} brief "<task>"`);
   }
@@ -38,6 +38,7 @@ export async function briefCommand(args, flags) {
     paths: flags.paths === undefined ? null : flags.paths,
     budget,
     flags,
+    commands,
   });
   if (result.error) return result.error;
   // Unreachable from here — only a delivered brief asks for a cold index to be reported

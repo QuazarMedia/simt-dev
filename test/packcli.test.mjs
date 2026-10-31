@@ -12,7 +12,7 @@
 // a table of sources is not a behaviour the binary renders.
 
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile, chmod } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile, chmod, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -296,7 +296,7 @@ test('pack publish of an npm pack with a mismatched package.json names the misma
   assert.match(out, /PACK-PACKAGE-MISMATCH/);
 });
 
-test('pack publish reports npm missing without a registry round trip', async () => {
+test('pack publish reports npm missing on --yes, and a preview asks the registry nothing (Q58)', async () => {
   const root = await scratch();
   const dir = await scaffolded(root, 'house', 'npm:@example/house-pack');
   // package.json first: it is measured bytes, so measuring first would stale the
@@ -306,8 +306,16 @@ test('pack publish reports npm missing without a registry round trip', async () 
     `${JSON.stringify({ name: '@example/house-pack', version: '0.1.0', files: ['rules/**', PACK_JSON, BENCH_JSON] }, null, 2)}\n`,
   );
   await measure(dir, 'house');
-  // No npm on PATH: the refusal must come from the spawn, not from the network.
-  const { code, out } = await run(['pack', 'publish', dir], { env: { PATH: '/nonexistent' } });
+
+  // A preview is offline: no npm on PATH is not a failure to plan (review 0003 Q58).
+  const preview = await run(['pack', 'publish', dir], { env: { PATH: '/nonexistent' } });
+  assert.equal(preview.code, 0, preview.out);
+  assert.doesNotMatch(preview.out, /PACK-NPM-MISSING/);
+  assert.match(preview.out, /npm view @example\/house-pack@0\.1\.0/);
+
+  // The authorised run is the one that needs the registry, so the refusal is there —
+  // from the spawn, not from the network.
+  const { code, out } = await run(['pack', 'publish', dir, '--yes'], { env: { PATH: '/nonexistent' } });
   assert.equal(code, 1);
   assert.match(out, /PACK-NPM-MISSING/);
 });
@@ -398,6 +406,47 @@ test('pack lint and publish answer --json with one document that agrees with the
   assert.equal(newPayload.command, 'pack new');
   assert.ok(newPayload.files.includes(PACK_JSON) && newPayload.files.includes(BENCH_JSON));
   assert.equal(newPayload.schemaVersion, 1);
+});
+
+test('a positional pack wins over --root, a preview reads no registry, and a linked rule is pinned (Q58)', async () => {
+  const rootA = await scratch('simt-q58-a-');
+  const rootB = await scratch('simt-q58-b-');
+  await exec('node', [BIN, 'pack', 'new', 'packa', '--source', 'npm:@scope/a', '--root', rootA, '--yes']);
+  await exec('node', [BIN, 'pack', 'new', 'packb', '--source', 'npm:@scope/b', '--root', rootB, '--yes']);
+  const packA = join(rootA, 'packa');
+  const packB = join(rootB, 'packb');
+
+  // The docblock and the usage line promise the positional; the code read --root first.
+  const { stdout: linted } = await exec('node', [BIN, 'pack', 'lint', packA, '--root', packB, '--json'], {
+    maxBuffer: 4 << 20,
+  });
+  assert.equal(JSON.parse(linted).dir, resolve(packA));
+
+  // A preview plans the registry check instead of performing it: with --yes absent the
+  // command answered offline, and `skipped` can only be true after a registry read.
+  const { stdout: preview } = await exec('node', [BIN, 'pack', 'publish', packA, '--json'], {
+    maxBuffer: 4 << 20,
+  });
+  const planned = JSON.parse(preview);
+  assert.equal(planned.ok, true);
+  assert.equal(planned.published, false);
+  assert.equal(planned.skipped, false);
+  assert.ok(
+    planned.planned.some((step) => step.startsWith('npm view')),
+    `the preview did not plan the registry check: ${JSON.stringify(planned.planned)}`,
+  );
+
+  // A rule reached through a link is vendored bytes the loader will read, so the pin
+  // covers it: writing through the link changes the digest.
+  await writeFile(join(packA, 'rules', 'extra.md'), '# Extra\n');
+  await symlink('extra.md', join(packA, 'rules', 'linked.md'));
+  const before = await packDigest(packA);
+  await writeFile(join(packA, 'rules', 'linked.md'), '# Changed through the link\n');
+  assert.notEqual(await packDigest(packA), before, 'a linked rule is outside the pin');
+
+  // A link to a directory is refused, not silently skipped: its bytes are not carried.
+  await symlink(packA, join(packA, 'rules', 'elsewhere'));
+  await assert.rejects(() => packDigest(packA), /symbolic link to a directory/);
 });
 
 test('bare pack lints the working directory', async () => {

@@ -13,12 +13,12 @@
 import { execFile, execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { homedir, platform as osPlatform, tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { CONFIG_DIR } from '../name.mjs';
+import { CONFIG_DIR, STATE_DIR } from '../name.mjs';
 import { SCHEMA_VERSION } from '../output/index.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { packageVersion } from '../package-version.mjs';
@@ -612,7 +612,11 @@ export async function listCandidates(root) {
 
     const cleanSubject = (subject ?? '').trim();
     const cleanBody = (body ?? '').trim();
-    const prompt = cleanBody ? `${cleanSubject}\n\n${cleanBody}` : cleanSubject;
+    // Subject only by default. A commit body usually narrates the fix ("use x * x * x
+    // here"), which hands the agent the answer and measures nothing; a repository whose
+    // messages are curated can ask for the whole message with `bench.mine.prompt: "body"`
+    // (review 0003 Q49).
+    const prompt = cleanSubject;
 
     candidates.push({
       sha: sha.trim(),
@@ -699,7 +703,12 @@ async function executeRunner(runner, worktree, env, timeoutMs) {
  * twice, dropping any candidate whose test outcomes are not identical across both
  * passes.
  */
-async function validateCandidate(root, worktree, candidate, { timeoutMs = 5000, exclude = DEFAULT_EXCLUDES } = {}) {
+async function validateCandidate(
+  root,
+  worktree,
+  candidate,
+  { timeoutMs = 5000, exclude = DEFAULT_EXCLUDES, promptMode = 'subject' } = {},
+) {
   // Skip commits that modify more than 4 test files, or that touch a path
   // the repository's manifest excludes (`simt.json` bench.mine.exclude,
   // defaulting to the pack integration test the committed corpus was mined
@@ -792,7 +801,11 @@ async function validateCandidate(root, worktree, candidate, { timeoutMs = 5000, 
       id,
       base: candidate.base,
       sourceCommit: candidate.sha,
-      prompt: candidate.prompt,
+      prompt:
+        promptMode === 'body' && candidate.body
+          ? `${candidate.subject}\n\n${candidate.body}`
+          : candidate.subject,
+      promptBasis: promptMode === 'body' && candidate.body ? 'body' : 'subject',
       testCmd: runner.displayCmd,
       f2p,
       p2p,
@@ -843,8 +856,9 @@ export async function mineTasks(
   const benchCfg = manifest?.bench?.mine ?? {};
   const effectiveTimeout = benchCfg.timeoutMs ?? timeoutMs;
   const exclude = benchCfg.exclude ?? DEFAULT_EXCLUDES;
+  const promptMode = benchCfg.prompt === 'body' ? 'body' : 'subject';
 
-  const tasksDir = join(absRoot, '.simt', 'bench', 'tasks');
+  const tasksDir = join(absRoot, STATE_DIR, 'bench', 'tasks');
   const vaultRoot = resolveVaultDir(absRoot, { env });
 
   if (!apply) {
@@ -902,7 +916,11 @@ export async function mineTasks(
         cursor += 1;
         if (index >= listed.candidates.length) break;
         const candidate = listed.candidates[index];
-        const res = await validateCandidate(absRoot, wt, candidate, { timeoutMs: effectiveTimeout, exclude });
+        const res = await validateCandidate(absRoot, wt, candidate, {
+          timeoutMs: effectiveTimeout,
+          exclude,
+          promptMode,
+        });
         if (res) {
           validated.push({ index, ...res });
         }
@@ -917,7 +935,10 @@ export async function mineTasks(
     const selected = validated.slice(0, target);
 
     await mkdir(tasksDir, { recursive: true });
-    await mkdir(vaultRoot, { recursive: true });
+    await mkdir(vaultRoot, { recursive: true, mode: 0o700 });
+    // The hidden tests are the answer key: 0700 keeps every other local account out.
+    // `mkdir` alone does not tighten a vault an earlier run created.
+    await chmod(vaultRoot, 0o700).catch(() => {});
 
     // Mining is append-only (review 0003 Q48: `mineTasks(target 3)` once
     // deleted all 20 committed tasks and wrote 3 others). `replace` restores
@@ -950,7 +971,8 @@ export async function mineTasks(
       await writeFile(taskPath, `${JSON.stringify(entry.task, null, 2)}\n`, 'utf8');
 
       const taskVault = join(vaultRoot, entry.task.id);
-      await mkdir(taskVault, { recursive: true });
+      await mkdir(taskVault, { recursive: true, mode: 0o700 });
+      await chmod(taskVault, 0o700).catch(() => {});
       await writeFile(join(taskVault, 'test.patch'), entry.testPatch);
       await writeFile(join(taskVault, 'gold.patch'), entry.goldPatch);
     }

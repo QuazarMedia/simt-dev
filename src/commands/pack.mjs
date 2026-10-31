@@ -40,9 +40,13 @@ export async function packCommand(sub, args, flags) {
  * Where a lint or publish resolves its pack: the positional directory, the
  * `--root`, or the working directory. `hooks` reads the same three in the same
  * order, so the two commands cannot disagree about which directory was meant.
+ *
+ * The positional wins, as this always said it did. The code read `--root` first,
+ * so `pack lint .simt/packs/a --root ../b` judged `b` while the prose and the
+ * command's own usage promised `a` (review 0003 Q58).
  */
 function packDir(args, flags) {
-  return resolve(flags.root ?? args[0] ?? process.cwd());
+  return resolve(args[0] ?? flags.root ?? process.cwd());
 }
 
 /**

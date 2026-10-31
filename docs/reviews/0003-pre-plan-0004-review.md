@@ -145,19 +145,19 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q44 | Index DB has no versioning/migration; read errors look like an empty index | P1 | A | index | M | — | Complete | 6cfcf2c3798d16e10f6c7982d49eaacb3e703eb9 · test: node --test test/index.test.mjs test/map.test.mjs |
 | Q45 | `bench variants` ranks on a NaN cost and locks the winner | P1 | F | bench | S | — | Complete | 0f28a74dcb49f62e25d2a3138f8cae4ca2eea91c · test: node --test test/variants.test.mjs |
 | Q46 | Bench stats: reps paired as independent, missing cost = $0, harness/model pooled, no multiplicity control | P1 | F | bench | M | Q45 | Complete | cd6a9edda0ba4b1fc7dba80f097cb8c659df806c · test: node --test test/bench.test.mjs test/variants.test.mjs test/advice.test.mjs test/deadcode.test.mjs |
-| Q47 | Bench timeouts don't kill grandchildren and aren't recorded; one failure aborts the batch | P1 | F | bench | S | Q72 | Queued | |
+| Q47 | Bench timeouts don't kill grandchildren and aren't recorded; one failure aborts the batch | P1 | F | bench | S | Q72 | Complete | `6359197`; `node --test test/bench.test.mjs` — 25/25 (`src/bench/process.mjs` kills the process group, records `status`/`agent{tool,exitCode,timedOut,wallMs}`, a spawn failure is one error record, report excludes errors; Q72 still owns the general extraction) |
 | Q48 | Bench corpus not portable; re-mine silently replaces it; Gradle/Maven graders read nothing | P1 | F | bench | M | — | Complete | 858e833bf322b47d4e7e3907e4145e5542ffa99a · test: node --test test/bench.test.mjs |
-| Q49 | Bench arms measure the wrong thing: `brief` arm, probes, `gold` default, agent can reach the vault | P1 | F | bench | M | — | Queued | |
+| Q49 | Bench arms measure the wrong thing: `brief` arm, probes, `gold` default, agent can reach the vault | P1 | F | bench | M | — | Complete | `8d515c9`; `node --test test/bench.test.mjs` — 24/24 (brief arm delivers `assembleBrief` as a prompt prefix; probes run adapters and label scripted harnesses `measured:false`; `--yes` requires `--harness`; `agentEnv` allowlist + slot HOME; vault 0700; subject-only prompts) |
 | Q50 | `compare` learning reads ablation from the wrong path | P1 | F | compare | S | — | Complete | 386244b3facb8d8ba2140327ce84df62251a9385 · test: node --test test/compare.test.mjs test/deadcode.test.mjs |
 | Q51 | zsh completion never completes flags | P1 | F | completions | S | — | Complete | 4be9e7bb65b14a2538df8ba04f8809c6f1bd404a · test: node --test test/completions.test.mjs |
-| Q52 | Brief/map noise: 47 false "unresolved" commands, false "generated" cautions, `distill` crash, silent no-match | P2 | F | brief | S | — | Queued | |
+| Q52 | Brief/map noise: 47 false "unresolved" commands, false "generated" cautions, `distill` crash, silent no-match | P2 | F | brief | S | — | Complete | `68d3e3e`; `node --test test/brief.test.mjs test/map.test.mjs test/distill.test.mjs` — 37/37 (COMMANDS threaded into `assembleBrief`; region parser gates the generated caution; faults recorded in the proposal and restored; `map`/brief say `matched 0` / `graph-only`) |
 | Q53 | Git dispatcher/shim robustness: no gate timeout, 8 MB buffer = fail, no `-z`, spaces, no `node` check | P2 | F | hooks | M | — | Queued | |
-| Q54 | No runtime Node version check (npm only warns, pip never checks) | P2 | F | bin | S | — | Queued | |
+| Q54 | No runtime Node version check (npm only warns, pip never checks) | P2 | F | bin | S | — | Complete | `4c9b270`; `node --test test/node-version.test.mjs` — 2/2 (numeric floor comparison; `bin/simt.mjs` checks it before importing the CLI; the Python launcher refuses below the same numbers) |
 | Q55 | Decisions: duplicate numbers pass, `\d{3}` limit, 4 readers hard-code `docs/decisions`, heuristic parse | P2 | F | decisions | M | — | Complete | 69d9d60 · test: node --test test/decisions.test.mjs test/decide.test.mjs test/rules.test.mjs test/undo.test.mjs test/shipped.test.mjs test/mcp.test.mjs test/compare.test.mjs test/explain.test.mjs test/checks.test.mjs test/project.test.mjs test/install.test.mjs test/doctor.test.mjs |
 | Q56 | MCP protocol hardening: id/jsonrpc/args validation, line cap, `skills_show` contract, contradictory instructions | P2 | F | mcp | S | — | Queued | |
 | Q57 | Own CI: 32 s from its 5-min timeout; no push trigger; no hook wired; pre-push breaks ADR-031 | P1 | D | ci | S | — | Queued | |
-| Q58 | Packs: preview hits the network; symlinks unpinned; argument order inverted | P2 | F | packs | S | — | Queued | |
-| Q59 | Small bench bugs: `p2p` prints f2p, probe reps overwrite, regrade inconsistent, stale `.simt-dev` paths | P3 | F | bench | S | — | Queued | |
+| Q58 | Packs: preview hits the network; symlinks unpinned; argument order inverted | P2 | F | packs | S | — | Complete | `b3472cf`; `node --test test/packcli.test.mjs test/packs.test.mjs` — 31/31 (preview plans `npm view` instead of calling it; a linked rule is hashed through its target and a linked directory is refused; positional before `--root`) |
+| Q59 | Small bench bugs: `p2p` prints f2p, probe reps overwrite, regrade inconsistent, stale `.simt-dev` paths | P3 | F | bench | S | — | Complete | `65fc5ea`; `node --test test/bench.test.mjs test/tokens.test.mjs` — 42/42 (p2p count, `probe#rep` keys, per-harness summaries, one `applyPatch`, f2p-set regrade, `STATE_DIR`/`LOCAL_DIR`/`CLI` spellings) |
 | **Wave 2 — architecture: one source of truth, ready for plan 0004, a UI and a harness** | | | | | | | | |
 | Q60 | Declarative command spec as the single source for dispatch, help, completions, MCP, README, UI | P1 | A | cli | M | — | Queued | |
 | Q61 | Tiered, generated help: ≤ 2 KB top level, `help <cmd>`, `-h`, `help --json`; no plan jargon | P1 | A | help | M | Q60 | Queued | |
@@ -689,6 +689,17 @@ their own file (`touchesRegion`, `generatedFact`, `isTestKind`, `readCandidates`
   `--harness`; per-adapter env allowlist, HOME = slot, vault 0700, `isolation: none|env|sandbox`
   recorded (W05); subject-only or curated prompts.
 - **Effort:** M.
+- **Done (Q49):** `materialiseArm` returns a `promptPrefix` and the `brief` arm fills it from
+  `assembleBrief` (the packet's own implementation), delivered through the adapter's
+  `{prompt}` placeholder instead of a file nothing was told to read; `executeAdapter` is
+  exported and `runBenchProbes` drives any harness outside `gold`/`noop`/`violator` through
+  it, recording `measured` and the probe table's `Basis` column; a built-in record states
+  `measured:false, isolation:none`; `bench run|ablate|variants|probes --yes` exit 2 without an
+  explicit `--harness`; `agentEnv(adapter)` keeps `PATH`/locale plus the adapter's declared
+  keys, sets `HOME` to the run slot and drops `SIMT_DEV_VAULT_DIR`, `XDG_CACHE_HOME` and every
+  other credential; miner and corpus importer create 0700 vaults; a task prompt is the commit
+  subject unless `bench.mine.prompt: "body"` is declared. `sandbox` is declared in the
+  vocabulary but no run claims it.
 
 ### Q50 — `compare` reads the wrong ablation path (P1)
 - **Where:** `src/compare/learn.mjs:26,165-200`; `ablate.mjs:173-203,619`.

@@ -21,7 +21,8 @@
 import { constants as fsConstants } from 'node:fs';
 import { access, readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { ECOSYSTEMS, manifestPath } from '../projection/manifest.mjs';
+import { ECOSYSTEMS } from '../projection/manifest.mjs';
+import { loadManifest } from '../manifest/schema.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 
 /** Binaries the shared dispatcher shells out to directly, rather than via a script. */
@@ -170,8 +171,7 @@ export async function readCapability(root) {
   // so the only evidence that can prove it is the declaration itself. A repo with no
   // manifest simply has no declared commands.
   try {
-    const manifest = JSON.parse(await readFile(await manifestPath(root), 'utf8'));
-    capability.commands = declaredCommands(manifest);
+    capability.commands = declaredCommands((await loadManifest(root)).manifest);
   } catch {
     capability.commands = {};
   }

@@ -23,7 +23,7 @@ test('a manifest that does not parse is a problem, not a manifest', async () => 
   assert.equal(manifest, null, 'half-read content is not a declaration');
   assert.equal(exists, true);
   assert.equal(problems.length, 1);
-  assert.match(problems[0], /does not parse/);
+  assert.match(problems[0], /^unparseable: /);
 });
 
 test('a known key with an impossible value is named in the repository\'s words', async () => {
@@ -54,4 +54,27 @@ test('every key in the table has an owner and a reason it is there', () => {
     assert.match(entry.since, /^\d+\.\d+\.\d+$/, `${entry.key} has no version it arrived in`);
     assert.equal(typeof entry.check, 'function', `${entry.key} has no check`);
   }
+});
+
+test('the generated keys are the rows the table marks generated', async () => {
+  // A second list beside the table is the drift this module exists to end: the flag is
+  // the declaration, and this is the only place the set is spelled.
+  const { GENERATED_KEYS } = await import('../src/projection/manifest.mjs');
+  const flagged = KEYS.filter((entry) => entry.generated === true).map((entry) => entry.key).sort();
+  assert.deepEqual([...GENERATED_KEYS].sort(), flagged);
+  assert.deepEqual(flagged, ['$comment', 'projection']);
+});
+
+test('readManifest keeps the shape its callers print, and only calls an unreadable file an error', async () => {
+  const { readManifest } = await import('../src/projection/manifest.mjs');
+  const repo = fileURLToPath(new URL('..', import.meta.url));
+  const good = await readManifest(repo);
+  assert.equal(good.exists, true);
+  assert.equal(good.error, null, 'a manifest with a value the schema dislikes is still a manifest');
+
+  const root = await scratch();
+  await writeFile(join(root, 'simt.json'), '{ nope');
+  const broken = await readManifest(root);
+  assert.equal(broken.manifest, null);
+  assert.match(broken.error, /^unparseable: /);
 });

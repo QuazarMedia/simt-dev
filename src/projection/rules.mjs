@@ -27,10 +27,11 @@ import { dirname, join, resolve } from 'node:path';
 
 import { fingerprint, KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 import { loadMdcRules, renderMdc } from './mdc.mjs';
-import { foldsRules, frontmatterBlock, resolveSurfaces, rulePath, canScope } from './surfaces.mjs';
+import { foldsRules, resolveSurfaces, rulePath, canScope } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
 import { compose } from './markers.mjs';
-import { declaredBudget, declaredShared, manifestPath, readManifest } from './manifest.mjs';
+import { declaredBudget, declaredShared, readManifest } from './manifest.mjs';
+import { loadManifest } from '../manifest/schema.mjs';
 import { commandCard, CARD_LIMIT_BYTES } from '../kernel/card.mjs';
 import { packToBudget } from '../kernel/budget.mjs';
 import { filterInferable, inferableDefect, inferableProofs } from '../kernel/inferability.mjs';
@@ -255,7 +256,7 @@ export function isEligible(rule, signals, optedIn) {
 export async function readDeclared(root) {
   let parsed = {};
   try {
-    parsed = JSON.parse(await readFile(await manifestPath(root), 'utf8')) ?? {};
+    parsed = (await loadManifest(root)).manifest ?? {};
   } catch {
     parsed = {};
   }

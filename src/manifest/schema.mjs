@@ -21,10 +21,33 @@
 // here is what keeps the two from drifting apart.
 
 import { readFile } from 'node:fs/promises';
-import { manifestPath } from '../projection/manifest.mjs';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 
 /** Absent means 1: the field arrived after the file did, and every file predates it. */
 const MANIFEST_VERSION = 1;
+
+/**
+ * The manifest a repository has, which is not necessarily the one this tool would write.
+ *
+ * The file was renamed from `simt-dev.json` to `simt.json`. Every read site used to say
+ * `join(root, MANIFEST_FILE)` and would have reported an adopted repository as unadopted the
+ * day the constant moved - and "no manifest" means "never adopted", which is the answer
+ * that offers to re-adopt a repo that is already done. Fourteen repositories carry the
+ * old name on disk.
+ *
+ * So the old name is read as a fallback and the new one is written. `writeManifest`
+ * renames rather than creating a second file, which is how the window closes: the first
+ * `simt init` or `simt sync` in an adopted repo retires the old name by moving it.
+ */
+export async function manifestPath(root) {
+  const next = join(root, MANIFEST_FILE);
+  if (existsSync(next)) return next;
+  const previous = join(root, MANIFEST_LEGACY);
+  return existsSync(previous) ? previous : next;
+}
+
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isStringList = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string');
@@ -38,7 +61,7 @@ const isPositiveInt = (value) => Number.isInteger(value) && value > 0;
  * they edited by hand, and "invalid" tells them nothing they did not know.
  */
 export const KEYS = [
-  { key: '$comment', owner: 'tool', since: '0.7.0', check: (v) => (typeof v === 'string' || isStringList(v) ? null : '$comment must be a string or a list of strings') },
+  { key: '$comment', owner: 'tool', generated: true, since: '0.7.0', check: (v) => (typeof v === 'string' || isStringList(v) ? null : '$comment must be a string or a list of strings') },
   { key: 'id', owner: 'tool', since: '0.7.0', check: (v) => (typeof v === 'string' && v.length > 0 ? null : 'id must be a non-empty string') },
   { key: 'version', owner: 'tool', since: '0.9.0', check: (v) => (Number.isInteger(v) && v >= 1 ? null : 'version must be an integer of at least 1') },
   { key: 'stack', owner: 'tool', since: '0.7.0', check: (v) => (isStringList(v) ? null : 'stack must be a list of profile ids') },
@@ -67,8 +90,11 @@ export const KEYS = [
   // rule), and a list is what `init` writes. An object here is a shape nothing has
   // ever produced, so accepting it would be the validator blessing a typo.
   { key: 'surfaces', owner: 'repo', since: '0.8.0', check: (v) => (v === null || isStringList(v) ? null : 'surfaces must be null or a list of surface ids') },
-  { key: 'projection', owner: 'tool', since: '0.7.0', check: (v) => (isObject(v) ? null : 'projection must be an object') },
+  { key: 'projection', owner: 'tool', generated: true, since: '0.7.0', check: (v) => (isObject(v) ? null : 'projection must be an object') },
 ];
+
+/** The keys this tool writes, derived from the table: the `generated` marks above. */
+export const GENERATED_KEYS_OF = new Set(KEYS.filter((entry) => entry.generated === true).map((entry) => entry.key));
 
 
 /**
@@ -116,10 +142,10 @@ export async function loadManifest(root) {
   try {
     parsed = JSON.parse(text);
   } catch (error) {
-    return { manifest: null, exists: true, version: MANIFEST_VERSION, problems: [`${path} does not parse: ${error.message}`], path };
+    return { manifest: null, exists: true, version: MANIFEST_VERSION, problems: [`unparseable: ${error.message}`], path };
   }
   if (!isObject(parsed)) {
-    return { manifest: null, exists: true, version: MANIFEST_VERSION, problems: [`${path} is not a JSON object`], path };
+    return { manifest: null, exists: true, version: MANIFEST_VERSION, problems: ['not a JSON object'], path };
   }
   return {
     manifest: parsed,

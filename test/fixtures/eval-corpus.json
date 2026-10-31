@@ -3,12 +3,12 @@
   "whyFixtureNotRepo": "Each case declares the repository SIGNALS rather than staging a directory, because what is being pinned is the resolver: given these repo facts and this task, these are the right skills. `fingerprint` has its own tests, and a corpus that also exercised it would fail with a resolver bug inside it and send the next reader to the wrong file.",
   "cases": [
     {
-      "name": "a D1 migration in a Workers repo picks the migration skill",
-      "why": "Review 0001 section S04 acceptance, verbatim. Also the case that proves the stack gate is not a selector: `api-contract-sync` is compatible with this repo and irrelevant to the task.",
-      "repo": { "stack": ["cloudflare-workers", "node", "has-migrations-dir"], "paths": [] },
+      "name": "a D1 migration in a Workers repo picks the platform skill",
+      "why": "Review 0001 section S04 acceptance, verbatim. `d1` is a keyword only `cloudflare` declares, so the keyword signal is the whole selection. The reject list is the other half of the same acceptance: `wrangler` scores 8 on its summary alone and must stay out, and the two skills that are compatible with this repo but irrelevant to the task prove the stack gate is not a selector.",
+      "repo": { "stack": ["cloudflare-workers", "node"], "paths": [] },
       "task": "fix d1 migration",
-      "select": ["d1-safe-change"],
-      "reject": ["api-contract-sync", "add-country-galaxy", "web-feature-slice"]
+      "select": ["cloudflare"],
+      "reject": ["wrangler", "durable-objects", "workers-best-practices"]
     },
     {
       "name": "a task made of stopwords selects nothing",
@@ -16,7 +16,7 @@
       "repo": { "stack": ["cloudflare-workers", "node"], "paths": [] },
       "task": "fix a typo in the README",
       "select": [],
-      "reject": ["add-country-galaxy", "api-feature-slice", "bug-commit"]
+      "reject": ["cloudflare", "wrangler", "workers-best-practices"]
     },
     {
       "name": "two overlapping stack tags are compatibility, not evidence",
@@ -24,38 +24,24 @@
       "repo": { "stack": ["node", "node-web", "react"], "paths": [] },
       "task": "the README",
       "select": [],
-      "reject": ["api-contract-sync", "web-feature-slice", "bug-commit", "slice-commit"]
+      "reject": ["firebase-auth-basics", "firebase-basics", "graphify", "simt-commands"]
     },
     {
       "name": "a changed file selects on the path, whatever the task says",
       "why": "Path is weight 100 and is ground truth. The task here is close to meaningless, and the skill should still be found.",
-      "repo": { "stack": ["cloudflare-workers", "hono", "typescript"], "paths": ["migrations/0042_add_galaxy.sql"] },
+      "repo": { "stack": ["cloudflare-workers", "hono", "typescript"], "paths": ["wrangler.jsonc"] },
       "task": "the usual",
-      "select": ["d1-safe-change"],
-      "reject": ["cloudflare-release"]
-    },
-    {
-      "name": "a Gradle repo asking for a screen does not get the API skills",
-      "why": "The stack gate still excludes, and now also reports why. Guards the gate against the selection rule: the rule must not become a second, weaker gate.",
-      "repo": { "stack": ["gradle", "kotlin"], "paths": [] },
-      "task": "add a screen to the settings page",
-      "select": ["add-screen-or-overlay"],
-      "reject": ["api-feature-slice", "d1-safe-change", "cloudflare"]
+      "select": ["wrangler"],
+      "reject": ["durable-objects", "graphify"],
+      "caveat": "`cloudflare` and `workers-best-practices` declare the same path and are selected too, and this case is not asserting otherwise: a path is evidence for every skill that claims it, and which of the three bodies the reader needs is a budget question, not a ranking one."
     },
     {
       "name": "a Gradle repo never sees the Cloudflare reference",
-      "why": "Pure gate, kept because the new minimum score makes it easy to confuse a low score with a rejected one.",
-      "repo": { "stack": ["gradle", "kotlin", "wear-os"], "paths": [], "task": "deploy a worker" },
+      "why": "Pure gate, kept because the new minimum score makes it easy to confuse a low score with a rejected one. The stack gate still excludes, and now also reports why. Guards the gate against the selection rule: the rule must not become a second, weaker gate.",
+      "repo": { "stack": ["gradle", "kotlin", "wear-os"], "paths": [] },
+      "task": "deploy a worker",
       "select": [],
-      "reject": ["cloudflare", "wrangler", "d1-safe-change"]
-    },
-    {
-      "name": "a persistence task in an Android repo",
-      "why": "An ecosystem with no overlap with the cases above, so the corpus is not three Workers cases wearing different names.",
-      "repo": { "stack": ["gradle", "kotlin"], "paths": [] },
-      "task": "store the reading in Room",
-      "select": ["data-layer"],
-      "reject": ["add-screen-or-overlay", "build-test-verify"]
+      "reject": ["cloudflare", "wrangler", "durable-objects"]
     },
     {
       "name": "sign-in in a Firebase repo",
@@ -63,24 +49,55 @@
       "repo": { "stack": ["firebase", "node", "node-web", "react"], "paths": [] },
       "task": "set up sign in",
       "select": ["firebase-auth-basics"],
-      "reject": ["firebase-basics", "web-security-review"]
+      "reject": ["firebase-basics", "simt-commands"]
     },
     {
-      "name": "regenerating the contract",
-      "why": "OpenAPI is the one word in the registry that identifies a contract skill unambiguously.",
-      "repo": { "stack": ["node", "node-web", "react", "typescript"], "paths": [] },
-      "task": "regenerate the openapi contract",
-      "select": ["api-contract-sync"],
-      "reject": ["data-layer", "add-screen-or-overlay", "gnss-engine"],
-      "caveat": "`web-feature-slice` and `add-country-galaxy` are also selected, and this case is not asserting otherwise: the first declares capability `contract`, the second does too, and a capability-strength signal is exactly what the minimum score admits. The registry's declaration is the thing to argue with, and that is ADR-044's subject."
+      "name": "a deploy task in a Workers repo",
+      "why": "`deploy` is a capability alias for `release`, which only `wrangler` declares, so the capability signal selects it; the keyword `deploy` confirms. The other platform skills score on `worker` alone and are not asserted against: a capability hit is exactly what the minimum score admits.",
+      "repo": { "stack": ["cloudflare-workers", "node"], "paths": [] },
+      "task": "deploy a worker",
+      "select": ["wrangler"],
+      "reject": ["firebase-auth-basics", "simt-commands", "graphify"]
     },
     {
-      "name": "an observability task",
-      "why": "A skill whose every keyword is a single common word, which is the case where an over-eager threshold would start dropping real matches.",
-      "repo": { "stack": ["cloudflare-workers", "hono", "typescript"], "paths": [] },
-      "task": "add an slo and an alert for the metric",
-      "select": ["observability-review"],
-      "reject": ["cloudflare-release"]
+      "name": "a durable object task in a Workers repo",
+      "why": "The phrase `durable object` is declared on two skills, so both are selected and only the one it names is asserted: the keyword is the declaration, and a corpus that argued with the registry's own declaration would be a second registry.",
+      "repo": { "stack": ["cloudflare-workers", "node"], "paths": [] },
+      "task": "add a durable object",
+      "select": ["durable-objects"],
+      "reject": ["firebase-auth-basics", "simt-commands", "graphify"]
+    },
+    {
+      "name": "an anti-pattern task in a Workers repo",
+      "why": "`floating promise` is a keyword only `workers-best-practices` declares. A skill whose every keyword is a phrase is the case where a token-equality matcher would select nothing.",
+      "repo": { "stack": ["cloudflare-workers"], "paths": [] },
+      "task": "fix a floating promise",
+      "select": ["workers-best-practices"],
+      "reject": ["cloudflare", "durable-objects", "wrangler"]
+    },
+    {
+      "name": "a knowledge graph task in a Node repo",
+      "why": "Three keywords of `graphify` fire on one task, which is the case where the keyword signal must not saturate: each declared keyword scores once, and the summary words that share the task's words add 8 apiece on top.",
+      "repo": { "stack": ["node", "typescript"], "paths": [] },
+      "task": "explain the knowledge graph",
+      "select": ["graphify"],
+      "reject": ["firebase-auth-basics", "firebase-basics"]
+    },
+    {
+      "name": "a simt command task in a Node repo",
+      "why": "The tool's own reference skill selects on its name and its keywords; the Firebase skills are compatible with this repo through `node` and must stay out on evidence, not on the gate.",
+      "repo": { "stack": ["node"], "paths": [] },
+      "task": "which simt command runs the gates",
+      "select": ["simt-commands"],
+      "reject": ["firebase-auth-basics", "firebase-basics", "graphify"]
+    },
+    {
+      "name": "a firebase init task in a Firebase repo",
+      "why": "`init` and `project` are keywords only `firebase-basics` declares; `firebase-auth-basics` is selected on the shared `firebase` keyword and is not asserted against, for the same reason as the durable object case.",
+      "repo": { "stack": ["firebase", "node"], "paths": [] },
+      "task": "init the firebase project",
+      "select": ["firebase-basics"],
+      "reject": ["graphify", "simt-commands"]
     }
   ]
 }

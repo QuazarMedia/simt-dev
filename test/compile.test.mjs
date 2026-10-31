@@ -129,7 +129,9 @@ test('compileSkill normalises frontmatter to Agent Skills standard and splits bo
 test('every registry skill over 5k tokens is flagged with a deterministic split plan', async () => {
   const { registry } = await loadRegistry();
   const over5k = registry.skills.filter((s) => Math.ceil(s.bytes / BYTES_PER_TOKEN) > BODY_TOKEN_BUDGET);
-  assert.equal(over5k.length, 7, 'registry has 7 skills over 5k tokens (20 KB)');
+  // Derived, not hardcoded: a fixed count is a second place to update every time a
+  // node is added or removed, and the loop below is the invariant this test owns.
+  assert.ok(over5k.length > 0, 'the registry must have at least one skill over the body budget');
 
   for (const skill of over5k) {
     const plan = planSkillSplit(skill, null);
@@ -285,7 +287,7 @@ test('CLI `simt skills compile` reports triggers + split plans, and writes compi
       usage: { input: 100, cacheWrite: 0, cacheRead: 0, output: 50, turns: 2, toolCalls: 1 },
       costUsd: 0.01,
       diff: { files: 1, outsideBlastRadius: 0 },
-      skills: { expected: ['cloudflare', 'd1-safe-change'], opened: ['d1-safe-change'] },
+      skills: { expected: ['cloudflare', 'wrangler'], opened: ['wrangler'] },
       probe: null,
     }),
     'utf8',
@@ -296,10 +298,14 @@ test('CLI `simt skills compile` reports triggers + split plans, and writes compi
   const payload = JSON.parse(reportRes.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.runCount, 1);
-  assert.equal(payload.flaggedCount, 7);
-  const d1 = payload.skills.find((s) => s.name === 'd1-safe-change');
-  assert.equal(d1.recall, 1);
-  assert.equal(d1.precision, 1);
+  const { registry } = await loadRegistry();
+  const expectedFlagged = registry.skills.filter(
+    (s) => Math.ceil(s.bytes / BYTES_PER_TOKEN) > BODY_TOKEN_BUDGET,
+  ).length;
+  assert.equal(payload.flaggedCount, expectedFlagged);
+  const wr = payload.skills.find((s) => s.name === 'wrangler');
+  assert.equal(wr.recall, 1);
+  assert.equal(wr.precision, 1);
   const cf = payload.skills.find((s) => s.name === 'cloudflare');
   assert.equal(cf.recall, 0);
   assert.equal(cf.flagged, true);

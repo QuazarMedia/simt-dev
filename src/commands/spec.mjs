@@ -21,6 +21,7 @@
  * @property {string} path the dispatch key: `status`, or `group subcommand`
  * @property {string} summary one phrase, printed by help and by the generated docs
  * @property {string} [defaultFor] the group whose bare form resolves to this row
+ * @property {string} [mcp] the MCP tool name that answers this row, when one does
  */
 
 /** @type {SpecRow[]} */
@@ -41,14 +42,14 @@ export const SPEC = [
   { path: 'bench report', summary: 'summarise the runs recorded in the vault', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench run', summary: 'run agents against the mined tasks', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench variants', summary: 'run one task across its variant prompts', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
-  { path: 'brief', summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","paths","task"], },
-  { path: 'check', summary: 'report stale or missing generated regions and every check finding', flags: ["check","diff","dry-run"], },
+  { path: 'brief', mcp: { name: 'brief', flags: ['budget', 'paths', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","paths","task"], },
+  { path: 'check', mcp: { name: 'check', flags: [] }, summary: 'report stale or missing generated regions and every check finding', flags: ["check","diff","dry-run"], },
   { path: 'ci', summary: "refresh simt-dev's own .github workflow and Dependabot files", flags: ["check","diff"], },
-  { path: 'compare', summary: 'the adoption and drift matrix across every sibling repository', flags: [], },
+  { path: 'compare', mcp: { name: 'compare', flags: [] }, summary: 'the adoption and drift matrix across every sibling repository', flags: [], },
   { path: 'completions', summary: 'print a bash, zsh or fish completion script generated from this spec', flags: [], },
   { path: 'decide', summary: 'scaffold a numbered decision record with its frontmatter', flags: ["check","diff","dry-run","paths","supersedes","task"], },
   { path: 'distill', summary: 'turn a repository into a skill or rule proposal', flags: [], },
-  { path: 'doctor', summary: 'report what is wrong with this installation', flags: ["diff","fix"], },
+  { path: 'doctor', mcp: { name: 'doctor', flags: [] }, summary: 'report what is wrong with this installation', flags: ["diff","fix"], },
   { path: 'evidence', summary: 'the runs recorded against the tree on disk', flags: [], },
   { path: 'evidence check', summary: 'a commit message claiming a run this tree does not have', flags: [], },
   { path: 'explain', summary: 'what one check finding code means, and how to fix it', flags: [], },
@@ -75,30 +76,30 @@ export const SPEC = [
   { path: 'pack lint', summary: 'lint a rule pack in the working directory', defaultFor: 'pack', flags: ["diff","require-measured","source"], },
   { path: 'pack new', summary: 'scaffold a rule pack', flags: ["diff","require-measured","source"], },
   { path: 'pack publish', summary: 'publish a rule pack', flags: ["diff","require-measured","source"], },
-  { path: 'plan done', summary: 'mark one tracker row complete, with its SHA and its evidence', flags: ["diff","state","test"], },
-  { path: 'plan next', summary: "one ready slice's section, or the one named", flags: ["diff","state","test"], },
+  { path: 'plan done', mcp: { name: 'plan_done', flags: ['state', 'test'] }, summary: 'mark one tracker row complete, with its SHA and its evidence', flags: ["diff","state","test"], },
+  { path: 'plan next', mcp: { name: 'plan_next', flags: [] }, summary: "one ready slice's section, or the one named", flags: ["diff","state","test"], },
   { path: 'plan status', summary: 'count the tracker rows', defaultFor: 'plan', flags: ["diff","state","test"], },
   { path: 'plugin', summary: 'generate a harness package from the same tables the hooks use', flags: ["diff","out"], },
-  { path: 'pr-body', summary: 'the pull request body: evidence, decisions, gate state and residual risk', flags: ["base"], },
+  { path: 'pr-body', mcp: { name: 'pr_body', flags: ['base'] }, summary: 'the pull request body: evidence, decisions, gate state and residual risk', flags: ["base"], },
   { path: 'review', summary: 'review the staged diff against the estate rules', flags: [], },
   { path: 'rules decisions', summary: 'every known decision, and which layer each came from', flags: ["all", "yes"], },
-  { path: 'rules list', summary: 'the rule catalogue, marked with what applies to this repository', defaultFor: 'rules', flags: ["all"], },
+  { path: 'rules list', mcp: { name: 'rules_list', flags: [] }, summary: 'the rule catalogue, marked with what applies to this repository', defaultFor: 'rules', flags: ["all"], },
   { path: 'rules show', summary: 'one rule body', flags: ["all"], },
-  { path: 'rules why', summary: 'the decision that settled a rule, and whether it is still in force', flags: ["all"], },
+  { path: 'rules why', mcp: { name: 'rules_why', flags: [] }, summary: 'the decision that settled a rule, and whether it is still in force', flags: ["all"], },
   { path: 'shared install', summary: 'install the shared rules into a reader home directory', flags: ["diff"], },
   // ADR-084. `shared` is the one group whose default writes nothing, and it is `plan`
   // for the same reason `skills`'s is `index`: the read answers "what would this do, and
   // where", and `install` - the subcommand that touches a reader's home directory - is
   // the one that needs `--yes` before it does anything.
   { path: 'shared plan', summary: 'what the shared install would write, and where', defaultFor: 'shared', flags: ["diff"], },
-  { path: 'skills brief', summary: 'the packet for a task, read from the skill registry', flags: ["all", "plan", "task"], },
+  { path: 'skills brief', mcp: { name: 'skills_brief', flags: ['all', 'task'] }, summary: 'the packet for a task, read from the skill registry', flags: ["all", "plan", "task"], },
   { path: 'skills compile', summary: 'compile a skill to the Agent Skills standard', flags: [], },
   { path: 'skills eval', summary: 'score the skill registry against transcripts', flags: ["all","plan"], },
-  { path: 'skills find', summary: 'skills that match a query', flags: ["all","plan"], },
-  { path: 'skills index', summary: 'rebuild the skill index', defaultFor: 'skills', flags: ["all","plan"], },
+  { path: 'skills find', mcp: { name: 'skills_find', flags: [] }, summary: 'skills that match a query', flags: ["all","plan"], },
+  { path: 'skills index', mcp: { name: 'skills_index', flags: [] }, summary: 'rebuild the skill index', defaultFor: 'skills', flags: ["all","plan"], },
   { path: 'skills install', summary: 'install skills into the workspace', flags: ["diff","from","variant"], },
-  { path: 'skills show', summary: 'one skill packet', flags: ["all","plan"], },
-  { path: 'skills why', summary: 'which skill covers a task', flags: ["all","plan"], },
+  { path: 'skills show', mcp: { name: 'skills_show', flags: [] }, summary: 'one skill packet', flags: ["all","plan"], },
+  { path: 'skills why', mcp: { name: 'skills_why', flags: [] }, summary: 'which skill covers a task', flags: ["all","plan"], },
   { path: 'slice abandon', summary: 'remove a slice worktree, delete its branch, and return the row', flags: ["session","test","type"], },
   { path: 'slice finish', summary: 'run the gates, commit the slice and record its evidence', flags: ["session","test","type"], },
   // Plan 0003 R53. Both halves write, so a bare `slice` has no read to default to.
@@ -128,6 +129,20 @@ const CORE_GROUPS = new Set(['brief', 'check', 'gate', 'graph', 'hooks', 'impact
 export function tierOf(path) {
   return CORE_GROUPS.has(path.split(' ')[0]) ? 'core' : 'advanced';
 }
+
+/**
+ * The tools that answer a question no command asks.
+ *
+ * `federation_query` reads the federation config and consults a sibling repository
+ * directly (src/federation/query.mjs). There is no CLI verb for it, so giving it a spec
+ * row would advertise a command this binary cannot dispatch; leaving it undeclared is
+ * how a tool list and a command list drift apart. It is listed here with the reason
+ * instead, and test/mcp-spec.test.mjs accepts a tool without a row only when this table
+ * says why.
+ */
+export const MCP_ONLY = [
+  { tool: 'federation_query', why: 'a transport-only read: no command in this binary asks a sibling repository a question' },
+];
 
 /** The dispatchable paths, sorted - the answer to "what can this binary do". */
 export const SPEC_PATHS = SPEC.map((row) => row.path).sort();

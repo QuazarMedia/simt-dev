@@ -27,7 +27,7 @@ set, or the resolution scores.
 | ID | Slice | Phase | Depends on | Size | Needs ADR | Success metric | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | H1 | Co-Authored-By trailer in the commit template and in `slice finish` commits | 1 | — | S | — | trailer in rule text, in `slice finish` commits, in the regenerated region; `node --test test/slice.test.mjs test/rules.test.mjs` green | Complete | 96ec141a3e5c78f771785893524cbfa324956a2d |
-| H2 | Shims move to `.simt/hooks`; `core.hooksPath` follows; the old directory cleans up on install | 1 | — | M | new record | `hooks install --yes` in a repo with a legacy `.simt-hooks/` re-routes and removes it; `node --test test/hooks.test.mjs test/agenthooks.test.mjs` green; full suite green | Queued | |
+| H2 | Shims move to `.simt/hooks`; `core.hooksPath` follows; the old directory cleans up on install | 1 | — | M | new record | `hooks install --yes` in a repo with a legacy `.simt-hooks/` re-routes and removes it; `node --test test/hooks.test.mjs test/agenthooks.test.mjs` green; full suite green | Complete | 8b7c452e0f11d2059f3819dac011e09d9f61065d |
 | H3 | Journal migrates legacy sets on write, restoring `undo` reach | 1 | — | S | — | a repo with only `.simt/journal` gets its sets moved into `.simt/local/journal` on the next write; `node --test test/undo.test.mjs` green; this checkout's 35 legacy sets reachable | Queued | |
 
 ## H1 — Co-Authored-By trailer

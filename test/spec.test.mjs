@@ -12,6 +12,7 @@ import { test } from 'node:test';
 
 import { GROUP_DEFAULTS, SPEC, SPEC_PATHS } from '../src/commands/spec.mjs';
 import { COMMANDS, GROUPS, IMPLEMENTED } from '../src/commands/index.mjs';
+import { BOOL_FLAGS, REPEATABLE_FLAGS, VALUE_FLAGS } from '../src/argv.mjs';
 
 test('spec: the registry and the spec name the same commands, both directions', () => {
   assert.deepEqual(SPEC_PATHS, Object.keys(IMPLEMENTED).sort());
@@ -53,6 +54,39 @@ test('spec: every group default is a real subcommand of the group it names', () 
 
 test('spec: dispatch reads the same defaults the spec declares', () => {
   assert.deepEqual([...GROUPS], [...GROUP_DEFAULTS]);
+});
+
+test('spec: every declared flag is one the parser accepts', () => {
+  const known = new Set([...BOOL_FLAGS, ...VALUE_FLAGS, ...REPEATABLE_FLAGS].map((n) => n.replace(/-([a-z])/g, (_, c) => c.toUpperCase())));
+  for (const row of SPEC) {
+    for (const flag of row.flags ?? []) {
+      const camel = flag.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      assert.ok(known.has(camel), `${row.path} declares --${flag}, which the parser does not accept`);
+    }
+  }
+});
+
+test('spec: a command declares every flag its own module reads', () => {
+  // Written from the module source once, then held here: a flag a command starts
+  // reading without declaring it is invisible again, and an undeclared flag is exactly
+  // what dispatch now reports as ignored (review 0003 Q62).
+  const registry = readFileSync(new URL('../src/commands/index.mjs', import.meta.url), 'utf8');
+  const body = registry.slice(registry.indexOf('export const IMPLEMENTED = {'));
+  const moduleOf = new Map(
+    [...body.matchAll(/^  '?([a-z][a-z-]*(?: [a-z-]+)?)'?: [\s\S]*?await import\('\.\/([^']+)'\)/gm)].map((m) => [m[1], m[2]]),
+  );
+  const GLOBAL = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
+  const byPath = new Map(SPEC.map((row) => [row.path, new Set(row.flags ?? [])]));
+  for (const [path, file] of moduleOf) {
+    const source = readFileSync(new URL(`../src/commands/${file}`, import.meta.url), 'utf8');
+    const read = new Set(
+      [...source.matchAll(/\bflags\.([a-zA-Z][\w]*)/g)]
+        .map((m) => m[1])
+        .filter((n) => !GLOBAL.has(n))
+        .map((n) => n.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)),
+    );
+    assert.deepEqual([...read].sort(), [...byPath.get(path)].sort(), `${path} disagrees with ${file}`);
+  }
 });
 
 test('spec: a summary is one phrase, not a placeholder', () => {

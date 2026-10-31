@@ -11,12 +11,13 @@ import {
   emit,
   emitJson,
   fail,
+  note,
   isJson,
   jsonFailMode,
   jsonIndentDefault,
 } from '../output/index.mjs';
 import { help } from './help.mjs';
-import { GROUP_DEFAULTS, SPEC_PATHS } from './spec.mjs';
+import { GROUP_DEFAULTS, SPEC, SPEC_PATHS } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI } from '../name.mjs';
 
@@ -27,6 +28,13 @@ import { CLI } from '../name.mjs';
  * owns, and the reason for each default now sits on the row that declares it.
  */
 export const GROUPS = GROUP_DEFAULTS;
+
+/** path -> the flags the spec declares for it. The parser knows every flag; this is
+ * what one command reads, and the difference is what the caller is told (Q62). */
+const DECLARED = new Map(SPEC.map((row) => [row.path, new Set(row.flags ?? [])]));
+
+/** Flags dispatch reads for every command: the envelope and the guard rails. */
+const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
 
 /**
  * Every command this binary dispatches, in one place.
@@ -274,6 +282,22 @@ export async function dispatch(argv) {
   }
 
   const args = positional.slice(offset);
+
+  // Review 0003 Q62, deprecation window. The parser accepts every flag for every
+  // command, so `status --frozen` ran, ignored the flag and reported success - the
+  // caller's intent discarded with nothing to notice. A flag the spec does not declare
+  // for this path is named on stderr and still runs for one release; the next release
+  // makes it EXIT.USAGE. `--json` has no warnings array yet, so the JSON half of the
+  // window waits on the envelope (Q65).
+  const declared = DECLARED.get(path);
+  for (const key of Object.keys(flags)) {
+    if (!declared || GLOBAL_FLAGS.has(key)) continue;
+    const name = key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+    if (declared.has(name)) continue;
+    note(
+      `--${name} is not a flag of \`${path}\`; it was ignored, and naming one this command does not take will be a usage error in the next release`,
+    );
+  }
   const load = IMPLEMENTED[path];
   if (!load) return fail(`unknown command \`${path}\``, EXIT.USAGE);
   // Import only the module the matched path needs. The registry used to pull every

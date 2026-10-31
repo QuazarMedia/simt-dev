@@ -333,6 +333,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --embed                 index / map / brief: compute or query optional local vector embeddings
                         (off by default unless recall@10 gains at least 10 points)
 --labels <path>         bench critic: the labelled set of historical diffs to score
+--cross-group           bench ablate: compare across harness, model and experiment
+                        groups instead of refusing the comparison
+--expires <when>        lessons capture: how long a captured candidate stays eligible
                         (default .simt/critic-labels.jsonl; one human-written
                         {sha, verdict} pair per line)
 --replace               bench mine: delete task files the current mine does not

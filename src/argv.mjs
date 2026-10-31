@@ -26,6 +26,11 @@ import { EXIT } from './output/index.mjs';
 // mean something, which it could not while three accepted flags had no description.
 
 export const BOOL_FLAGS = new Set([
+  // bench ablate: compare across harness, model and experiment groups. The command
+  // read `flags.crossGroup` while the parser accepted no such flag, so the override
+  // existed only in the error message that told the reader to pass it (review 0003
+  // Q62, found by the spec-vs-parser drift test).
+  'cross-group',
   'json',
   'all',
   'dry-run',
@@ -170,6 +175,9 @@ export const VALUE_FLAGS = new Set([
   // lease: how long the claim lasts, in seconds. A value, because "a lease is short"
   // is not a number any reader can act on, and an expiry nobody chose is an expiry
   // nobody can plan around (plan 0003 R54, ADR-101).
+  // lessons capture: how long a captured candidate stays eligible. A value, because a
+  // default would be a deadline nobody chose (review 0003 Q62, found by the drift test).
+  'expires',
   'ttl',
   // map: outline (paths), names (exported symbols) or signatures (the line).
   // A boolean would not say which of the three the caller wanted.

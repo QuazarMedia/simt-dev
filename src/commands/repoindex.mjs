@@ -32,7 +32,7 @@ export async function indexCommand(args, flags) {
   const ignored = await isIgnored(root, file);
   const payload = { ok: true, command: 'index', root, file, ignored, ...result };
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return EXIT.OK;
   }
   const lines = [

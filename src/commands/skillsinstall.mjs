@@ -211,7 +211,6 @@ export async function installCommand(args, flags) {
       ]
         .filter((l) => l !== null)
         .join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
   }
 

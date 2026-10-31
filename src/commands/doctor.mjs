@@ -349,7 +349,6 @@ export async function runDoctor(positional, flags) {
       ...(shared.declared ? [`shared    ${shared.state}  ${shared.detail}`] : []),
       ...findingLines(findings, { fixMode, applying: mode.apply }),
     ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   // After the report: the report says what, the diff shows it (R50). Only the
   // fix plan is diffed, so without --fix there is nothing to show.

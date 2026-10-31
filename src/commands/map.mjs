@@ -65,7 +65,7 @@ export async function mapCommand(args, flags) {
     text: rendered.text,
   };
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return EXIT.OK;
   }
   const lines = [
@@ -92,7 +92,7 @@ async function recall(root, flags) {
   }
   const payload = { ok: true, command: 'map', root, recall: result };
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return EXIT.OK;
   }
   emit(formatRecall(result));

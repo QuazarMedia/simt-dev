@@ -59,7 +59,7 @@ export async function testsCommand(args, flags) {
   const tests = testsFor(target, edges, { cochange: flags.cochange === true });
   const payload = { ok: true, command: 'tests', root, path: target, tests };
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return EXIT.OK;
   }
   const lines = [`tests    ${tests.length}`, ...tests];
@@ -76,7 +76,7 @@ function summarise(root, flags, edges) {
   }
   const payload = { ok: true, command: 'tests', root, test, cochange };
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return EXIT.OK;
   }
   emit(`test      ${test}\ncochange  ${cochange}`);

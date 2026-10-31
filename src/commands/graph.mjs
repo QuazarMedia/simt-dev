@@ -71,7 +71,6 @@ export async function lintCommand(positional, flags) {
         errors,
         warnings,
       },
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return finalOk ? EXIT.OK : EXIT.REGISTRY;
   }

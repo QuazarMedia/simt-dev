@@ -681,7 +681,6 @@ export async function checkCommand(positional, flags) {
         return f.remedy ? [head, `${' '.repeat(11)}remedy: ${f.remedy}`] : [head];
       })
       .join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   return ok ? EXIT.OK : EXIT.FAIL;
 }

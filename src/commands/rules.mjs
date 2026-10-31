@@ -334,7 +334,6 @@ export async function showCommand(args, flags) {
       '',
       rule.body,
     ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   return rule.error ? EXIT.FAIL : EXIT.OK;
 }

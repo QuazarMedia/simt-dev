@@ -87,7 +87,6 @@ export async function localDoctorCommand(args, flags) {
         findings: result.findings,
         ...(error ? { error, remedy, exitCode: code } : {}),
       },
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return code;
   }

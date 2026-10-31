@@ -53,7 +53,6 @@ export async function mcpCommand(positional, flags) {
         '',
         `serve them with: ${positional[0] ?? `${CLI} mcp`}`,
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.OK;
   }

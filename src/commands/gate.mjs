@@ -78,7 +78,7 @@ export async function gateCommand(args, flags) {
   if (selected.length === 0) {
     const payload = { ok: true, command: 'gate', root, selected, unmatched, graph, verdict: 'nothing-selected', code: 0 };
     if (isJson(flags)) {
-      emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+      emitJson(payload);
       return EXIT.OK;
     }
     const lines = ['selected  0', 'verdict  nothing-selected'];
@@ -175,7 +175,7 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     runs,
   };
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return code === 0 ? EXIT.OK : EXIT.FAIL;
   }
   emit(text.filter((line) => line !== undefined).join('\n'));

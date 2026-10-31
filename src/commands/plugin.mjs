@@ -69,7 +69,6 @@ export async function pluginCommand(args, flags) {
         ? `WROTE    ${plan.files.length} generated file(s) plus the runtime`
         : `PLAN     nothing written; apply with: ${CLI} plugin ${kind} --out ${out} --yes`,
     ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   // After the report: the report says what, the diff shows it (R50).
   emitDiffs(diffs, flags);

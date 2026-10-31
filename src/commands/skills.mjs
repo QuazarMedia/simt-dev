@@ -392,7 +392,6 @@ export async function indexCommand(args, flags) {
       '',
       `deferred entries return a pointer, not a body. Fetch one with: ${CLI} skills show <name>`,
     ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   return EXIT.OK;
 }
@@ -455,7 +454,6 @@ export async function findCommand(args, flags) {
   if (isJson(flags)) {
     emitJson(
       { ok: true, query, workspace, results },
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.OK;
   }
@@ -475,7 +473,6 @@ export async function findCommand(args, flags) {
           `${r.name.padEnd(26)} ${kb(r.bytes).padStart(7)}  ${r.reasons.join(' ')}`,
       ),
     ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   return EXIT.OK;
 }
@@ -512,7 +509,6 @@ export async function briefCommand(args, flags) {
         '',
         facts.warning,
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.OK;
   }
@@ -625,7 +621,6 @@ export async function showCommand(args, flags) {
     ]
       .filter((l) => l !== null)
       .join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   return EXIT.OK;
 }

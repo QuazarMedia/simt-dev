@@ -306,7 +306,6 @@ export async function sharedInstallCommand(_args, flags) {
         `manifest ${manifests.map((m) => `${m.action}:${basename(m.root)}`).join(' ')}`,
         dryRun ? 'dry-run  nothing written' : `nothing written; re-run with: ${CLI} shared install --yes`,
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     // After the report: the report says what, the diff shows it (R50).
     emitDiffs(diffs, flags);

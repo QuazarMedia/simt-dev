@@ -287,7 +287,6 @@ async function installHooks(root, flags) {
           ? `REFUSED  ${refused.length} config file(s) could not be read; nothing written`
           :        `PLAN     nothing written; apply with: ${CLI} agent-hooks install --yes`,
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     // After the report: the report says what, the diff shows it (R50).
     emitDiffs(diffs, flags);
@@ -351,7 +350,6 @@ async function installHooks(root, flags) {
       '',
       `WROTE    ${written.length} hooks file(s)${shimWritten ? ' and the shim' : ''}; each one runs the ${AGENT_HOOK_SHIM} shim before the tool call`,
     ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   // After the report: the report says what, the diff shows it (R50).
   emitDiffs(diffs, flags);

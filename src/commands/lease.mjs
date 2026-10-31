@@ -226,7 +226,6 @@ async function releaseLeases(root, args, flags) {
         ...released.dropped.map((l) => `RELEASED ${l.path}`),
         ...(released.dropped.length === 0 ? ['(no active claims on those paths)'] : []),
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
   }
   return EXIT.OK;
@@ -279,7 +278,6 @@ async function renewLeases(root, args, flags) {
         ...rows.map((l) => `${mode.apply ? 'RENEWED  ' : 'would    renew '} ${l.path} until ${ISO(l.expiresAt)}`),
         ...(rows.length === 0 ? ['(no active claims on those paths)'] : []),
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
   }
   return EXIT.OK;

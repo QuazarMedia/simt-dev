@@ -43,7 +43,6 @@ export async function decideCommand(args, flags) {
           ...(f.remedy ? [`  remedy: ${f.remedy}`] : []),
         ])
         .join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.FAIL;
   }

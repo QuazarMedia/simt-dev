@@ -382,7 +382,7 @@ export async function help(argv, dispatched) {
     return 0;
   }
   if (flags.json === true) {
-    emitJson(SPEC.map(specRow), { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(SPEC.map(specRow));
     return 0;
   }
   // `--all` prints every command and every flag; the default page lists the core tier and
@@ -405,7 +405,6 @@ export async function help(argv, dispatched) {
         '',
         `rulings  ${CLI} rules list   the decisions behind the rules you just read`,
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return 0;
   }
@@ -432,7 +431,6 @@ export async function help(argv, dispatched) {
       `more      ${CLI} help --all (every command and flag), ${CLI} help <command>`,
       `rulings   ${CLI} rules list (the decisions behind the rules)`,
     ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   return 0;
 }

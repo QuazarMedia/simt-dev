@@ -49,7 +49,7 @@ export async function lessonsListCommand(args, flags) {
   };
 
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return errors.length === 0 ? EXIT.OK : EXIT.FAIL;
   }
 
@@ -110,7 +110,7 @@ export async function lessonsCaptureCommand(args, flags) {
     captured: [...fromLedger, ...reverts],
   };
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return EXIT.OK;
   }
   const lines = [
@@ -174,7 +174,7 @@ export async function lessonsReviewCommand(args, flags) {
   };
 
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return EXIT.OK;
   }
 

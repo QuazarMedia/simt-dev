@@ -32,7 +32,6 @@ export async function distillCommand(args, flags) {
       ...(result.verified === true ? [] : (result.faults ?? []).map((f) => `unverified ${f}`)),
       `proposal  ${result.proposal.path}  (${result.proposal.state}, ${result.proposal.bytes} bytes)`,
     ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   return EXIT.OK;
 }

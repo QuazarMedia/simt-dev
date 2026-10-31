@@ -450,7 +450,7 @@ export async function benchCriticCommand(positional, flags, commands = []) {
   if (typeof result === 'number') return result;
 
   if (isJson(flags)) {
-    emitJson(result, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(result);
     return EXIT.OK;
   }
   const lines = [

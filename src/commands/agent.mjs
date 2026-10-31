@@ -103,7 +103,6 @@ async function installAgents(root, flags) {
         '',
         `PLAN     nothing written; apply with: ${CLI} agents install --yes`,
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     // After the report: the report says what, the diff shows it (R50).
     emitDiffs(diffs, flags);
@@ -136,7 +135,6 @@ async function installAgents(root, flags) {
       '',
       `WROTE    ${written.length} agent file(s)`,
     ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   // After the report: the report says what, the diff shows it (R50).
   emitDiffs(diffs, flags);

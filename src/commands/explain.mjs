@@ -46,7 +46,6 @@ export async function explainCommand(positional, flags) {
   }
   emit(
     [`code     ${code}`, '', row.what, '', `Why: ${row.why}`, '', `Fix: ${row.fix}`, '', `Example: ${row.example}`].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   return EXIT.OK;
 }

@@ -134,7 +134,6 @@ async function packNew(args, flags) {
         '',
         dryRun ? 'DRY-RUN  no files written' : `PLAN     nothing written; apply with: ${CLI} pack new ${name} --source ${source} --yes`,
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     // After the report: the report says what, the diff shows it (R50).
     emitDiffs(diffs, flags);
@@ -154,7 +153,6 @@ async function packNew(args, flags) {
       '',
       `WROTE    ${files.length} scaffold file(s); write the rule, then: ${CLI} pack lint ${dir}`,
     ].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   // After the report: the report says what, the diff shows it (R50).
   emitDiffs(diffs, flags);

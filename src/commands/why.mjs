@@ -47,7 +47,7 @@ export async function whyCommand(args, flags, commands = []) {
   const items = sortHits([...hits, ...scopeHits(target, corpus)]);
   const payload = { ok: true, command: 'why', root, path: target, items };
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return EXIT.OK;
   }
   const lines = items.map((item) => `${item.kind.padEnd(10)}${item.id}  ${item.detail}`);
@@ -58,7 +58,7 @@ export async function whyCommand(args, flags, commands = []) {
 function reportUnresolved(root, flags, unresolved) {
   const payload = { ok: true, command: 'why', root, unresolved };
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return EXIT.OK;
   }
   const lines = unresolved.map((item) => `UNRESOLVED-AFFECTS  ${item.token}  ${item.id}`);

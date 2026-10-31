@@ -65,7 +65,6 @@ export async function undoCommand(positional, flags) {
         '',
         `would restore ${files} file(s)${keys > 0 ? ` and ${keys} git config key(s)` : ''}; apply with: ${CLI} undo --yes`,
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     // After the report: the report says what, the diff shows it (R50).
     emitDiffs(diffs, flags);
@@ -93,7 +92,6 @@ export async function undoCommand(positional, flags) {
         '',
         'nothing was restored; re-run the writing command or merge by hand, then undo again',
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.FAIL;
   }
@@ -107,7 +105,6 @@ export async function undoCommand(positional, flags) {
   }
   emit(
     [`undone    ${result.set}`, ...result.restored.map((p) => `restored  ${p}`)].join('\n'),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   // After the report: the report says what, the diff shows it (R50).
   emitDiffs(diffs, flags);

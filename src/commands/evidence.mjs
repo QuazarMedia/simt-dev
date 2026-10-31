@@ -43,7 +43,7 @@ async function showEvidence(root, flags) {
   const mine = entries.filter((e) => e.tree === tree);
   const payload = { ok: errors.length === 0, command: 'evidence', root, tree, entries: mine, errors };
   if (isJson(flags)) {
-    emitJson(payload, { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
+    emitJson(payload);
     return errors.length === 0 ? EXIT.OK : EXIT.FAIL;
   }
   const lines = [`tree     ${tree}`];

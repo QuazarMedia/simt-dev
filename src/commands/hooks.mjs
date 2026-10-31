@@ -502,7 +502,6 @@ async function installHooks(root, flags, ctx = repoContext(root)) {
         '         and replace it with a gate that checks nothing.',
         `REMEDY  add the gates this repo can actually run to ${MANIFEST_FILE}, then re-run.`,
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.FAIL;
   }
@@ -595,7 +594,6 @@ async function installHooks(root, flags, ctx = repoContext(root)) {
         '         Taking over replaces that routing. Inspect the existing hooks first,',
         '         then re-run with --yes to accept, or set core.hooksPath yourself.',
       ].join('\n'),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.FAIL;
   }
@@ -640,7 +638,6 @@ async function installHooks(root, flags, ctx = repoContext(root)) {
           : `PLAN     nothing written; apply with: ${CLI} hooks install --root ${root} --yes`,
         manifest,
       ),
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     // After the report: the report says what, the diff shows it (R50).
     emitDiffs(diffs, flags);
@@ -729,7 +726,6 @@ async function installHooks(root, flags, ctx = repoContext(root)) {
       routed ? 'WROTE    shims and set core.hooksPath' : 'WROTE    no shims remain; core.hooksPath unset',
       manifest,
     ),
-    { maxBytes: flags.maxBytes ?? 0 },
   );
   // After the report: the report says what, the diff shows it (R50).
   emitDiffs(diffs, flags);

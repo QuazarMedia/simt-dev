@@ -118,7 +118,6 @@ export async function compileCommand(args, flags) {
           splitPlan: s.splitPlan,
         })),
       },
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.OK;
   }
@@ -224,7 +223,6 @@ async function runSingleSkillCompile(skill, registry, { root, workspaceRoot, fla
           : null,
         proposal,
       },
-      { maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.OK;
   }

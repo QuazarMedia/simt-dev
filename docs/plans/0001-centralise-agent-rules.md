@@ -258,7 +258,7 @@ The trio produced three findings that no amount of reading would have:
 
 Each was found by doing to the repo what a person does, not by reading the tool. The pattern
 is now stated where it will be read: `simt-dev/AGENTS.md` says run the tool the way a consumer
-runs it, and `docs/decisions/README.md` names the shared cause.
+runs it, and `docs/decisions-index.md` names the shared cause.
 
 **What this trio no longer covers, stated rather than hidden.** The earlier draft picked
 a repo outside this estate for its byte-identical `CLAUDE.md`, the `python` profile and the

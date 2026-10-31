@@ -369,40 +369,66 @@ async function buildEmbeddings(root, listed, changedFts, { backend, force, embed
   return { state: 'embedded', rows };
 }
 
+/**
+ * Read wrappers return arrays with the read error attached (review 0003 Q44):
+ * callers that iterate are untouched, and callers that report - map among
+ * them - can tell a broken index from an empty one.
+ */
+function withReadError(rows, error) {
+  if (error) rows.error = error;
+  return rows;
+}
+
 /** File rows, sorted by path. The same blobs read back as the same rows. */
 export async function readFiles(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') return readSqliteRows(root, 'select path, blob, lang, bytes, pkg from files order by path');
-  return readJsonl(root, 'files');
+  if (backend === 'sqlite') {
+    const { rows, error } = await readSqliteRows(root, 'select path, blob, lang, bytes, pkg from files order by path');
+    return withReadError(rows, error);
+  }
+  const { rows, error } = await readJsonl(root, 'files');
+  return withReadError(rows, error);
 }
 
 /** Symbol rows for the blobs currently indexed. */
 export async function readSymbols(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') return readSqliteRows(root, 'select path, name, kind, line, sig, exported from symbols order by path, line, name, kind');
-  return readJsonl(root, 'symbols');
+  if (backend === 'sqlite') {
+    const { rows, error } = await readSqliteRows(root, 'select path, name, kind, line, sig, exported from symbols order by path, line, name, kind');
+    return withReadError(rows, error);
+  }
+  const { rows, error } = await readJsonl(root, 'symbols');
+  return withReadError(rows, error);
 }
 
 /** Edges currently indexed. An import edge's src is the file that imports. */
 export async function readEdges(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') return readSqliteRows(root, 'select src, dst, kind, weight from edges order by src, dst, kind');
-  return readJsonl(root, 'edges');
+  if (backend === 'sqlite') {
+    const { rows, error } = await readSqliteRows(root, 'select src, dst, kind, weight from edges order by src, dst, kind');
+    return withReadError(rows, error);
+  }
+  const { rows, error } = await readJsonl(root, 'edges');
+  return withReadError(rows, error);
 }
 
 /** FTS rows currently indexed: one row per section, first section first. */
 export async function readFts(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') return readSqliteRows(root, 'select kind, ref, body from fts order by ref, kind, rowid');
-  return readJsonl(root, 'fts');
+  if (backend === 'sqlite') {
+    const { rows, error } = await readSqliteRows(root, 'select kind, ref, body from fts order by ref, kind, rowid');
+    return withReadError(rows, error);
+  }
+  const { rows, error } = await readJsonl(root, 'fts');
+  return withReadError(rows, error);
 }
 
 /** Stored vector embeddings, decoded as Float32Array per path. */
 export async function readEmbeddings(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
   if (backend === 'sqlite') {
-    const raw = await readSqliteRows(root, 'select path, blob, model, dims, vec from embeddings order by path');
-    return raw.map((row) => {
+    const { rows: raw, error } = await readSqliteRows(root, 'select path, blob, model, dims, vec from embeddings order by path');
+    const rows = raw.map((row) => {
       const vec = decodeVectorBlob(row.vec);
       return {
         path: row.path,
@@ -412,8 +438,10 @@ export async function readEmbeddings(root, opts = {}) {
         vec,
       };
     });
+    return withReadError(rows, error);
   }
-  return readJsonl(root, 'embeddings');
+  const { rows, error } = await readJsonl(root, 'embeddings');
+  return withReadError(rows, error);
 }
 
 /** Result rows per query branch: many sections share a path. */
@@ -446,33 +474,41 @@ export async function searchFtsBm25(root, task, opts = {}) {
     const ascii = terms.filter((t) => !isCjkToken(t));
     const runs = [...new Set(cjkRuns(foldText(task)))];
     const hits = [];
+    let error = null;
     if (runs.length > 0) {
-      hits.push(...await ftsBranch(root, 'fts_tri', [...runs, ...ascii]));
+      const tri = await ftsBranch(root, 'fts_tri', [...runs, ...ascii]);
+      hits.push(...tri.rows);
+      error = tri.error;
     }
     if (ascii.length > 0) {
       const seen = new Set(hits.map((row) => row.path));
-      for (const row of await ftsBranch(root, 'fts', ascii)) {
+      const fts = await ftsBranch(root, 'fts', ascii);
+      for (const row of fts.rows) {
         if (!seen.has(row.path)) {
           seen.add(row.path);
           hits.push(row);
         }
       }
+      error = error ?? fts.error;
     }
-    if (hits.length > 0) return dedupePaths(hits).slice(0, FTS_LIMIT);
+    if (hits.length > 0) return withReadError(dedupePaths(hits).slice(0, FTS_LIMIT), error);
   }
   const ftsRows = opts.fts ?? await readFts(root, { backend });
-  return scoreFtsBm25(ftsRows, task).slice(0, FTS_LIMIT);
+  return withReadError(scoreFtsBm25(ftsRows, task).slice(0, FTS_LIMIT), ftsRows.error);
 }
 
 async function ftsBranch(root, table, terms) {
-  if (terms.length === 0) return [];
+  if (terms.length === 0) return { rows: [], error: null };
   const matchExpr = terms.map((t) => `"${t}"`).join(' OR ');
-  const rows = await readSqliteRows(
+  const { rows, error } = await readSqliteRows(
     root,
     `select kind, ref as path, -bm25(${table}) as score from ${table} where ${table} match ? order by score desc, path asc limit ?`,
     [matchExpr, FTS_LIMIT],
   );
-  return rows.map((row) => ({ kind: row.kind, path: row.path, score: Number(row.score) || 0 }));
+  return {
+    rows: rows.map((row) => ({ kind: row.kind, path: row.path, score: Number(row.score) || 0 })),
+    error,
+  };
 }
 
 /**

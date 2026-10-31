@@ -28,6 +28,7 @@ import {
   rrfFuse,
 } from '../src/index/map.mjs';
 import { loadGraph, mapCommand } from '../src/commands/map.mjs';
+import { SQLITE_FILE } from '../src/index/persist.mjs';
 import {
   buildFtsBody,
   decodeVectorBlob,
@@ -45,6 +46,27 @@ const FILES = [
   { path: 'src/other.mjs' },
   { path: 'src/alone.mjs' },
 ];
+
+test('loadGraph without build names a broken index instead of serving it as cold (Q44)', async () => {
+  // A present index that cannot be read is `broken`, not `cold`: the caller
+  // reports a damaged index instead of answering "nothing here".
+  const root = await mkdtemp(join(tmpdir(), 'idx-map-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 1;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    await reindex(root);
+    const indexFile = join(root, SQLITE_FILE);
+    await writeFile(indexFile, 'not an index');
+    const broken = await loadGraph(root, { build: false });
+    assert.equal(broken.broken, true, 'the damaged index is named');
+    assert.equal(broken.files.length, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('loadGraph without build reports a stale index instead of hiding it (Q42)', async () => {
   // The prompt hook and the MCP surface may not build; what they may do is

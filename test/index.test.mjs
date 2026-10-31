@@ -5,9 +5,10 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { git } from './fixture.mjs';
 import {
@@ -21,7 +22,7 @@ import {
   searchFtsBm25,
   tokenizeText,
 } from '../src/index/store.mjs';
-import { JSONL_FILE, SQLITE_FILE } from '../src/index/persist.mjs';
+import { JSONL_FILE, SQLITE_FILE, indexFileFor } from '../src/index/persist.mjs';
 import { indexCommand } from '../src/commands/repoindex.mjs';
 
 async function repo() {
@@ -108,6 +109,96 @@ for (const backend of ['sqlite', 'jsonl']) {
       assert.equal(await isIndexStale(root, { backend }), true);
       await reindex(root, { backend });
       assert.equal(await isIndexStale(root, { backend }), false);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test('a database at a newer version is served from a sidecar, never overwritten (sqlite, Q44)', async () => {
+  // An older simt meeting a newer database used to rewrite it, and two pinned
+  // versions flip-flopped the same file (ADR-059). The foreign file now stays
+  // with its owner; this version reads and writes its own sidecar.
+  const root = await repo();
+  try {
+    await reindex(root, { backend: 'sqlite' });
+    const file = join(root, SQLITE_FILE);
+    const newer = new DatabaseSync(file);
+    newer.exec('pragma user_version = 5');
+    newer.exec(`update meta set value = '5' where key = 'schema'`);
+    newer.close();
+    await reindex(root, { backend: 'sqlite' });
+    const intact = new DatabaseSync(file);
+    assert.equal(Number(intact.prepare('pragma user_version').get().user_version), 5, 'the newer database is untouched');
+    assert.equal(intact.prepare(`select value from meta where key = 'schema'`).get().value, '5');
+    intact.close();
+    const sidecar = indexFileFor(root, 'sqlite', '5');
+    assert.ok((await stat(sidecar)).size > 0, 'this version built its sidecar');
+    const rows = await readFiles(root, { backend: 'sqlite' });
+    assert.ok(rows.length > 0, 'reads are served from the sidecar, not the foreign file');
+    assert.equal(rows.error, undefined);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a jsonl file at another version goes to the sidecar (jsonl, Q44)', async () => {
+  const root = await repo();
+  try {
+    await reindex(root, { backend: 'jsonl' });
+    const file = join(root, JSONL_FILE);
+    const original = await readFile(file, 'utf8');
+    const bumped = original.replace('"value":"4"', '"value":"5"');
+    assert.notEqual(bumped, original, 'the version line was bumped');
+    await writeFile(file, bumped);
+    await reindex(root, { backend: 'jsonl' });
+    assert.ok((await readFile(file, 'utf8')).includes('"value":"5"'), 'the foreign file is untouched');
+    const sidecar = indexFileFor(root, 'jsonl', '5');
+    assert.ok((await stat(sidecar)).size > 0, 'this version built its sidecar');
+    const rows = await readFiles(root, { backend: 'jsonl' });
+    assert.ok(rows.length > 0, 'reads are served from the sidecar');
+    assert.equal(rows.error, undefined);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a v3 database is migrated in place to v4 (sqlite, Q44)', async () => {
+  // The 3 -> 4 step is the FTS recreation the per-write wipe used to perform
+  // silently; it now runs as a named migration and stamps user_version.
+  const root = await repo();
+  try {
+    await reindex(root, { backend: 'sqlite' });
+    const file = join(root, SQLITE_FILE);
+    const db = new DatabaseSync(file);
+    db.exec('drop table fts');
+    db.exec('create virtual table fts using fts5(kind, ref, body)');
+    db.exec('pragma user_version = 3');
+    db.exec(`update meta set value = '3' where key = 'schema'`);
+    db.close();
+    await reindex(root, { backend: 'sqlite' });
+    const after = new DatabaseSync(file);
+    const sql = after.prepare(`select sql from sqlite_master where name = 'fts'`).get().sql;
+    assert.ok(sql.includes('UNINDEXED'), 'the migration recreated the FTS table');
+    assert.equal(Number(after.prepare('pragma user_version').get().user_version), 4);
+    after.close();
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+for (const backend of ['sqlite', 'jsonl']) {
+  test(`a corrupt index file is named, not read as an empty index (${backend}, Q44)`, async () => {
+    // "Locked", "no such column" and "corrupt" used to all answer `[]`, so a
+    // damaged index looked like a cold one.
+    const root = await repo();
+    try {
+      await reindex(root, { backend });
+      const file = join(root, backend === 'sqlite' ? SQLITE_FILE : JSONL_FILE);
+      await writeFile(file, 'not an index');
+      const rows = await readFiles(root, { backend });
+      assert.equal(rows.length, 0);
+      assert.equal(rows.error?.code, 'INDEX_CORRUPT', 'the failure is named');
     } finally {
       await rm(root, { recursive: true, force: true });
     }

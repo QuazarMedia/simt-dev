@@ -494,7 +494,7 @@ so, and print the exact command in `hooks status`.
   `accepted: false`. Parse the status word instead of the markup.
 - ADR-021's title is "One surface per repo", but its own Consequences have three of four
   pilots on `opencode,cursor`. Retitle to "one surface by default".
-- `docs/decisions/README.md:71` says `simt init`, the wrong binary name. Its README title for
+- `docs/decisions-index.md:71` says `simt init`, the wrong binary name. Its README title for
   ADR-021 differs from the record's heading.
 - Plan 0002 §11 uses `simt --help`, `simt graph lint` and `simt check`. Step 5 claims "`eval`
   corpus passes" and §10 lists `test/fixtures/` and `test/gold/`, none of which exist. §10's

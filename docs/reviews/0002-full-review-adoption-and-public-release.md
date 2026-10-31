@@ -469,7 +469,7 @@ derive the list from the workspace registry rather than hand-keeping it.
   was taken from a partial reading of the set.
 - The dates run out of order: ADR-019 to ADR-021 are 2026-10-07, ADR-022 is 2026-10-08, and
   ADR-023 to ADR-026 are 2026-10-06.
-- `docs/decisions/README.md:76` still says `simt init`, and plan 0002 says `simt graph lint` /
+- `docs/decisions-index.md:76` still says `simt init`, and plan 0002 says `simt graph lint` /
   `simt check` at lines 57, 201 and 317.
 
 **S20.** All five 0001 test families are still missing. The pack-install end-to-end test is the

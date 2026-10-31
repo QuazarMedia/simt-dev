@@ -89,6 +89,18 @@ export async function installCommand(args, flags) {
 
   const found = await locateSource(pick.source, { workspaceRoot: ws.root, root });
   if (!found.path) {
+    // A repo-side candidate with the wrong size is a third reason, and it needs
+    // its own wording: the file is on the reader's disk, so "this repo does not
+    // hold it" would send them looking for a file that is already there. The
+    // variant path calls the same failure an impostor (chooseSource).
+    const impostor = found.candidates.find((c) => c.how === 'repo');
+    if (impostor) {
+      return fail(
+        `${skill.name}: ${root}/${pick.source.path} exists but is not the declared body (${pick.source.bytes} bytes declared)`,
+        EXIT.USAGE,
+        `run: ${CLI} graph lint --workspace <path>  to see what the registry expects, or delete the local copy`,
+      );
+    }
     // Two reasons land here and they need different wording: no workspace at all,
     // or a workspace that should hold this body and does not. An install that
     // cannot read a body has failed, so this is never a degraded mode - the

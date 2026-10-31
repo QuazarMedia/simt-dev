@@ -265,10 +265,13 @@ export async function loadRegistry(path = null, flags = {}) {
  * broken registry rather than a wrong pointer, which is exactly backwards.
  */
 function holdsAnyRepo(registry, root) {
+  // Every repo the registry names, vendored or not: the question is whether this
+  // directory is a workspace at all. Filtering out vendored sources made the check
+  // unsatisfiable the moment the last non-vendored skill left the registry - an
+  // all-vendored registry names repos just the same, and a home folder holds none
+  // of them.
   const named = new Set(
-    (registry.skills ?? [])
-      .filter((s) => !s.vendored)
-      .flatMap((s) => (s.sources ?? []).map((x) => x.repo)).filter(Boolean),
+    (registry.skills ?? []).flatMap((s) => (s.sources ?? []).map((x) => x.repo)).filter(Boolean),
   );
   for (const repo of named) {
     if (existsSync(join(root, repo))) return true;

@@ -442,10 +442,14 @@ test('rules why does not name an estate repository', async () => {
 
 test('every repository the skill registry names is denied by the leak guard', async () => {
   const graph = JSON.parse(await readFile(join(ROOT, 'graph/skills.graph.json'), 'utf8'));
+  // Every source, vendored or not: a vendored skill names repos the same way, and an
+  // all-vendored registry would leave the guard with nothing to be checked against.
+  // The tool's own name is excluded because the guard deliberately lets it through -
+  // the tool references itself, and redacting it would break the sentence (ADR-080).
   const repos = new Set(
     (graph.skills ?? [])
-      .filter((skill) => !skill.vendored)
-      .flatMap((skill) => (skill.sources ?? []).map((source) => source.repo)),
+      .flatMap((skill) => (skill.sources ?? []).map((source) => source.repo))
+      .filter((repo) => repo !== 'simt-dev'),
   );
   assert.ok(repos.size > 0, 'the registry named no repositories to derive the guard from');
   for (const repo of repos) {

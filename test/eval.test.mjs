@@ -120,13 +120,14 @@ test('eval: the brief a reader gets says why, through the shipped binary (S04)',
 test('eval: `skills find` applies the same selection rule (S04)', async () => {
   // `find` ranks with no repo, so its only rule could have been left as `score > 0` and
   // nothing would have noticed: reverting it that way passes the whole suite, which is
-  // what this test was written after. The mutation is observable - "secrets" returns four
-  // matches with the weak rule and three without - so the rule is pinned here rather than
-  // assumed to have travelled with the import.
+  // what this test was written after. The mutation is observable - "d1" returns one
+  // match with the minimum-score rule and two without - so the rule is pinned here
+  // rather than assumed to have travelled with the import.
   //
   // The word is chosen because it lands strictly between 0 and MIN_SCORE for exactly one
-  // skill: `wrangler` scores 8 through its summary and nothing else.
-  const { stdout } = await exec('node', [BIN, 'skills', 'find', 'secrets']);
-  assert.match(stdout, /^3 matches for "secrets"/m);
+  // skill: `wrangler` scores 8 through its summary, and `cloudflare` scores 40 through
+  // the keyword `d1` it declares.
+  const { stdout } = await exec('node', [BIN, 'skills', 'find', 'd1']);
+  assert.match(stdout, /^1 match for "d1"/m);
   assert.doesNotMatch(stdout, /^wrangler\s/m);
 });

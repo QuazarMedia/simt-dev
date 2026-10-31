@@ -270,7 +270,9 @@ test('the command is reachable by name, with the flag it documents', async () =>
   const code = await dispatch(['tokens', '--root', root, '--json']);
   assert.equal(code, 0);
 
-  const help = await exec('node', [BIN, 'help']);
+  // `tokens` is an advanced command, so it is documented on the page that lists the
+  // advanced tier rather than the core page (review 0003 Q61).
+  const help = await exec('node', [BIN, 'help', '--all']);
   assert.match(help.stdout, /tokens \[--repos\]/);
   assert.match(help.stdout, /--repos\s+tokens: measure every repository/);
 });

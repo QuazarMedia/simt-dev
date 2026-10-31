@@ -16,69 +16,10 @@ import {
   jsonIndentDefault,
 } from '../output/index.mjs';
 import { help } from './help.mjs';
-import { lintCommand } from './graph.mjs';
-import {
-  indexCommand as skillsIndex,
-  findCommand as skillsFind,
-  briefCommand as skillsBrief,
-  showCommand as skillsShow,
-  whyCommand as skillsWhy,
-  evalCommand as skillsEval,
-} from './skills.mjs';
-import { briefCommand } from './brief.mjs';
-import { syncCommand, checkCommand } from './sync.mjs';
-import { initCommand } from './init.mjs';
-import { ciCommand } from './ci.mjs';
-import { hooksCommand } from './hooks.mjs';
-import { agentHookCommand, agentHooksCommand } from './agenthook.mjs';
-import { agentsCommand } from './agent.mjs';
-import { compareCommand } from './compare.mjs';
-import { upgradeCommand } from './upgrade.mjs';
-import { mcpCommand } from './mcp.mjs';
-import { pluginCommand } from './plugin.mjs';
-import { packCommand } from './pack.mjs';
-import { installCommand } from './skillsinstall.mjs';
-import { compileCommand } from './skillscompile.mjs';
-import { decisionsCommand as rulesDecisions, listCommand as rulesList, showCommand as rulesShow, whyCommand as rulesWhy } from './rules.mjs';
-import { tokensCommand } from './tokens.mjs';
-import { harnessCommand, harnessLoadersCommand } from './harness.mjs';
-import {
-  benchMineCommand,
-  benchRunCommand,
-  benchReportCommand,
-  benchAblateCommand,
-  benchProbesCommand,
-  benchVariantsCommand,
-  benchCriticCommand,
-  benchExportCommand,
-  benchImportCommand,
-} from './bench.mjs';
-import { planCommand } from './plan.mjs';
-import { sliceCommand } from './slice.mjs';
-import { leaseCommand } from './lease.mjs';
-import { sharedPlanCommand, sharedInstallCommand } from './shared.mjs';
-import { runDoctor } from './doctor.mjs';
-import { statusCommand } from './status.mjs';
-import { evidenceCommand } from './evidence.mjs';
-import { indexCommand } from './repoindex.mjs';
-import { mapCommand } from './map.mjs';
-import { testsCommand } from './tests.mjs';
-import { whyCommand } from './why.mjs';
-import { gateCommand } from './gate.mjs';
-import { impactCommand } from './impact.mjs';
-import { lessonsCaptureCommand, lessonsListCommand, lessonsReviewCommand } from './lessons.mjs';
-import { decideCommand } from './decide.mjs';
-import { explainCommand } from './explain.mjs';
-import { undoCommand } from './undo.mjs';
-import { prBodyCommand } from './prbody.mjs';
-import { ignoreCommand } from './ignore.mjs';
-import { completionsCommand } from './completions.mjs';
-import { reviewCommand } from './review.mjs';
-import { localDoctorCommand } from './local.mjs';
-import { distillCommand } from './distill.mjs';
 import { GROUP_DEFAULTS, SPEC_PATHS } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI } from '../name.mjs';
+
 
 /**
  * Groups whose subcommand may be omitted, and the default for each. Read from the spec
@@ -97,121 +38,193 @@ export const GROUPS = GROUP_DEFAULTS;
  * an agent choosing a command — the one consumer with no way to discover the omission
  * except by guessing.
  *
- * Module scope so `test/cli.test.mjs` can assert help against it. Module scope is also
- * just correct: nothing in the map depends on the call.
+ * Module scope so `test/cli.test.mjs` can assert help against it. Each value is a
+ * loader rather than a handler: dispatch awaits the one the matched path names, so a
+ * command pays for its own module graph and not for the other seventy-five (review 0003
+ * Q64). A loader that never resolves is a command that cannot run, and `test/spec.test.mjs`
+ * still holds the key set against the spec.
  */
 export const IMPLEMENTED = {
-  brief: (args, flags) => briefCommand(args, flags, COMMANDS),
-  doctor: runDoctor,
+  brief: async () => {
+    const { briefCommand } = await import('./brief.mjs');
+    return (args, flags) => briefCommand(args, flags, COMMANDS);
+  },
+  doctor: async () => (await import('./doctor.mjs')).runDoctor,
   // Plan 0003 R48. A bare command: the only mode is `--line`, so there is no
   // group and no default subcommand to resolve.
-  status: statusCommand,
-  'graph lint': lintCommand,
-  'skills index': skillsIndex,
-  'skills find': skillsFind,
-  'skills brief': skillsBrief,
-  'skills show': skillsShow,
-  'skills why': skillsWhy,
-  'skills eval': skillsEval,
-  'skills install': installCommand,
-  'skills compile': compileCommand,
-  'rules decisions': rulesDecisions,
-  'rules list': rulesList,
-  'rules show': rulesShow,
-  'rules why': rulesWhy,
-  sync: syncCommand,
-  check: checkCommand,
-  'plan status': (args, flags) => planCommand('status', args, flags),
-  'plan next': (args, flags) => planCommand('next', args, flags),
-  'plan done': (args, flags) => planCommand('done', args, flags),
+  status: async () => (await import('./status.mjs')).statusCommand,
+  'graph lint': async () => (await import('./graph.mjs')).lintCommand,
+  'skills index': async () => (await import('./skills.mjs')).indexCommand,
+  'skills find': async () => (await import('./skills.mjs')).findCommand,
+  'skills brief': async () => (await import('./skills.mjs')).briefCommand,
+  'skills show': async () => (await import('./skills.mjs')).showCommand,
+  'skills why': async () => (await import('./skills.mjs')).whyCommand,
+  'skills eval': async () => (await import('./skills.mjs')).evalCommand,
+  'skills install': async () => (await import('./skillsinstall.mjs')).installCommand,
+  'skills compile': async () => (await import('./skillscompile.mjs')).compileCommand,
+  'rules decisions': async () => (await import('./rules.mjs')).decisionsCommand,
+  'rules list': async () => (await import('./rules.mjs')).listCommand,
+  'rules show': async () => (await import('./rules.mjs')).showCommand,
+  'rules why': async () => (await import('./rules.mjs')).whyCommand,
+  sync: async () => (await import('./sync.mjs')).syncCommand,
+  check: async () => (await import('./sync.mjs')).checkCommand,
+  'plan status': async () => {
+    const { planCommand } = await import('./plan.mjs');
+    return (args, flags) => planCommand('status', args, flags);
+  },
+  'plan next': async () => {
+    const { planCommand } = await import('./plan.mjs');
+    return (args, flags) => planCommand('next', args, flags);
+  },
+  'plan done': async () => {
+    const { planCommand } = await import('./plan.mjs');
+    return (args, flags) => planCommand('done', args, flags);
+  },
   // Plan 0003 R53. A group: `start` isolates the work on a branch with its brief,
   // `finish` runs the gates, commits and records the evidence, and `abandon`
   // (review 0003 Q23) takes the slice back down. All three take the slice id
   // as a positional.
-  'slice start': (args, flags) => sliceCommand('start', args, flags),
-  'slice finish': (args, flags) => sliceCommand('finish', args, flags),
-  'slice abandon': (args, flags) => sliceCommand('abandon', args, flags),
-  'shared plan': sharedPlanCommand,
-  'shared install': sharedInstallCommand,
-  evidence: evidenceCommand,
-  index: indexCommand,
-  map: mapCommand,
-  tests: testsCommand,
-  why: (args, flags) => whyCommand(args, flags, COMMANDS),
-  gate: gateCommand,
-  impact: (args, flags) => impactCommand(args, flags, COMMANDS),
-  'lessons capture': lessonsCaptureCommand,
-  'lessons list': lessonsListCommand,
-  'lessons review': lessonsReviewCommand,
-  decide: decideCommand,
+  'slice start': async () => {
+    const { sliceCommand } = await import('./slice.mjs');
+    return (args, flags) => sliceCommand('start', args, flags);
+  },
+  'slice finish': async () => {
+    const { sliceCommand } = await import('./slice.mjs');
+    return (args, flags) => sliceCommand('finish', args, flags);
+  },
+  'slice abandon': async () => {
+    const { sliceCommand } = await import('./slice.mjs');
+    return (args, flags) => sliceCommand('abandon', args, flags);
+  },
+  'shared plan': async () => (await import('./shared.mjs')).sharedPlanCommand,
+  'shared install': async () => (await import('./shared.mjs')).sharedInstallCommand,
+  evidence: async () => (await import('./evidence.mjs')).evidenceCommand,
+  index: async () => (await import('./repoindex.mjs')).indexCommand,
+  map: async () => (await import('./map.mjs')).mapCommand,
+  tests: async () => (await import('./tests.mjs')).testsCommand,
+  why: async () => {
+    const { whyCommand } = await import('./why.mjs');
+    return (args, flags) => whyCommand(args, flags, COMMANDS);
+  },
+  gate: async () => (await import('./gate.mjs')).gateCommand,
+  impact: async () => {
+    const { impactCommand } = await import('./impact.mjs');
+    return (args, flags) => impactCommand(args, flags, COMMANDS);
+  },
+  'lessons capture': async () => (await import('./lessons.mjs')).lessonsCaptureCommand,
+  'lessons list': async () => (await import('./lessons.mjs')).lessonsListCommand,
+  'lessons review': async () => (await import('./lessons.mjs')).lessonsReviewCommand,
+  decide: async () => (await import('./decide.mjs')).decideCommand,
   // Plan 0003 R46. A bare command: the code is a positional, so there is no
   // group and no default subcommand to resolve.
-  explain: explainCommand,
+  explain: async () => (await import('./explain.mjs')).explainCommand,
   // Plan 0003 R49. A bare command: restoring the last journaled set needs no
   // subcommand, so there is no group and no default to resolve.
-  undo: undoCommand,
+  undo: async () => (await import('./undo.mjs')).undoCommand,
   // Plan 0003 R55. A bare command: the body is derived from the tree, the
   // ledger and the last check, so there is no subcommand to resolve and no
   // write to confirm.
-  'pr-body': prBodyCommand,
+  'pr-body': async () => (await import('./prbody.mjs')).prBodyCommand,
   // Plan 0003 R52. A bare command: the one list is `.simtignore`, so there is no
   // group and no default subcommand to resolve.
-  ignore: ignoreCommand,
+  ignore: async () => (await import('./ignore.mjs')).ignoreCommand,
   // Plan 0003 R54. A bare command: paths claim, no paths list, so the argument itself
   // is the mode and there is no group to resolve.
-  lease: leaseCommand,
-  distill: distillCommand,
+  lease: async () => (await import('./lease.mjs')).leaseCommand,
+  distill: async () => (await import('./distill.mjs')).distillCommand,
   // R25 machinery needs the runnable command names for Affects command tokens,
   // same wiring `why` and `impact` get through their lambdas.
-  review: (args, flags) => reviewCommand(args, flags, COMMANDS),
-  'local doctor': localDoctorCommand,
-  'evidence check': (args, flags) => evidenceCommand(['check', ...args], flags),
-  init: initCommand,
-  ci: ciCommand,
-  'hooks install': (args, flags) => hooksCommand('install', args, flags),
-  'hooks status': (args, flags) => hooksCommand('status', args, flags),
-  'hooks run': (args, flags) => hooksCommand('run', args, flags),
-  'agent-hook': agentHookCommand,
-  'agent-hooks install': (args, flags) => agentHooksCommand('install', args, flags),
-  'agent-hooks status': (args, flags) => agentHooksCommand('status', args, flags),
+  review: async () => {
+    const { reviewCommand } = await import('./review.mjs');
+    return (args, flags) => reviewCommand(args, flags, COMMANDS);
+  },
+  'local doctor': async () => (await import('./local.mjs')).localDoctorCommand,
+  'evidence check': async () => {
+    const { evidenceCommand } = await import('./evidence.mjs');
+    return (args, flags) => evidenceCommand(['check', ...args], flags);
+  },
+  init: async () => (await import('./init.mjs')).initCommand,
+  ci: async () => (await import('./ci.mjs')).ciCommand,
+  'hooks install': async () => {
+    const { hooksCommand } = await import('./hooks.mjs');
+    return (args, flags) => hooksCommand('install', args, flags);
+  },
+  'hooks status': async () => {
+    const { hooksCommand } = await import('./hooks.mjs');
+    return (args, flags) => hooksCommand('status', args, flags);
+  },
+  'hooks run': async () => {
+    const { hooksCommand } = await import('./hooks.mjs');
+    return (args, flags) => hooksCommand('run', args, flags);
+  },
+  'agent-hook': async () => (await import('./agenthook.mjs')).agentHookCommand,
+  'agent-hooks install': async () => {
+    const { agentHooksCommand } = await import('./agenthook.mjs');
+    return (args, flags) => agentHooksCommand('install', args, flags);
+  },
+  'agent-hooks status': async () => {
+    const { agentHooksCommand } = await import('./agenthook.mjs');
+    return (args, flags) => agentHooksCommand('status', args, flags);
+  },
   // ADR-111. The one agent this tool ships, written into each harness's own agents
   // directory. A group like `agent-hooks`: `install` writes, `status` reads.
-  'agents install': (args, flags) => agentsCommand('install', args, flags),
-  'agents status': (args, flags) => agentsCommand('status', args, flags),
-  compare: compareCommand,
-  tokens: tokensCommand,
-  'harness detect': harnessCommand,
-  'harness loaders': harnessLoadersCommand,
-  'bench mine': benchMineCommand,
-  'bench run': benchRunCommand,
-  'bench report': benchReportCommand,
-  'bench ablate': benchAblateCommand,
-  'bench probes': benchProbesCommand,
-  'bench variants': benchVariantsCommand,
+  'agents install': async () => {
+    const { agentsCommand } = await import('./agent.mjs');
+    return (args, flags) => agentsCommand('install', args, flags);
+  },
+  'agents status': async () => {
+    const { agentsCommand } = await import('./agent.mjs');
+    return (args, flags) => agentsCommand('status', args, flags);
+  },
+  compare: async () => (await import('./compare.mjs')).compareCommand,
+  tokens: async () => (await import('./tokens.mjs')).tokensCommand,
+  'harness detect': async () => (await import('./harness.mjs')).harnessCommand,
+  'harness loaders': async () => (await import('./harness.mjs')).harnessLoadersCommand,
+  'bench mine': async () => (await import('./bench.mjs')).benchMineCommand,
+  'bench run': async () => (await import('./bench.mjs')).benchRunCommand,
+  'bench report': async () => (await import('./bench.mjs')).benchReportCommand,
+  'bench ablate': async () => (await import('./bench.mjs')).benchAblateCommand,
+  'bench probes': async () => (await import('./bench.mjs')).benchProbesCommand,
+  'bench variants': async () => (await import('./bench.mjs')).benchVariantsCommand,
   // plan 0003 R39. The critic's acceptance bench measures BLOCK-precision and
   // recall over a labelled set; until it reports its floor, the critic entries
   // stay advisory and no gate reads them. COMMANDS rides along so the brief
   // resolves Affects command tokens the way `simt why` does.
-  'bench critic': (args, flags) => benchCriticCommand(args, flags, COMMANDS),
+  'bench critic': async () => {
+    const { benchCriticCommand } = await import('./bench.mjs');
+    return (args, flags) => benchCriticCommand(args, flags, COMMANDS);
+  },
   // review 0003 Q48. Sealed corpus transfer: export writes one signed JSON
   // document carrying every task and both hidden patches; import verifies the
   // seal before it touches the vault.
-  'bench export': benchExportCommand,
-  'bench import': benchImportCommand,
-  upgrade: upgradeCommand,
-  mcp: mcpCommand,
+  'bench export': async () => (await import('./bench.mjs')).benchExportCommand,
+  'bench import': async () => (await import('./bench.mjs')).benchImportCommand,
+  upgrade: async () => (await import('./upgrade.mjs')).upgradeCommand,
+  mcp: async () => (await import('./mcp.mjs')).mcpCommand,
   // plan 0003 R43. A bare command: the kind is a positional, so there is no group and
   // no default subcommand to resolve.
-  plugin: pluginCommand,
+  plugin: async () => (await import('./plugin.mjs')).pluginCommand,
   // Plan 0003 R51. A bare command: the shell is a positional. `COMMANDS` rides in
   // from here so the engine keeps no second copy of the registry it completes.
-  completions: (args, flags) => completionsCommand(args, flags, COMMANDS),
+  completions: async () => {
+    const { completionsCommand } = await import('./completions.mjs');
+    return (args, flags) => completionsCommand(args, flags, COMMANDS);
+  },
   // Plan 0003 R45. A group, not a bare command: `new` and `publish` write (or
   // publish) and `lint` reads, and the dispatcher routes all three through one
   // subcommand switch the way `hooks` does.
-  'pack new': (args, flags) => packCommand('new', args, flags),
-  'pack lint': (args, flags) => packCommand('lint', args, flags),
-  'pack publish': (args, flags) => packCommand('publish', args, flags),
+  'pack new': async () => {
+    const { packCommand } = await import('./pack.mjs');
+    return (args, flags) => packCommand('new', args, flags);
+  },
+  'pack lint': async () => {
+    const { packCommand } = await import('./pack.mjs');
+    return (args, flags) => packCommand('lint', args, flags);
+  },
+  'pack publish': async () => {
+    const { packCommand } = await import('./pack.mjs');
+    return (args, flags) => packCommand('publish', args, flags);
+  },
 };
 
 /**
@@ -261,9 +274,13 @@ export async function dispatch(argv) {
   }
 
   const args = positional.slice(offset);
-  const run = IMPLEMENTED[path];
-  if (run) return run(args, flags);
-  return fail(`unknown command \`${path}\``, EXIT.USAGE);
+  const load = IMPLEMENTED[path];
+  if (!load) return fail(`unknown command \`${path}\``, EXIT.USAGE);
+  // Import only the module the matched path needs. The registry used to pull every
+  // command's module graph - detection, projection, the bench corpus - before dispatch
+  // began, which cost 36.5 ms on a `status --line` that reads one file (review 0003 Q64).
+  const run = await load();
+  return run(args, flags);
 }
 
 /**

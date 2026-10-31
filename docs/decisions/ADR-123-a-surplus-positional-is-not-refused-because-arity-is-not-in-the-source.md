@@ -22,13 +22,19 @@ is the command's most ordinary call). The source tells you where an argument is 
 it does not tell you what the command *accepts*, and for the five commands whose reading
 happens elsewhere the two answers differ.
 
-## Decision
+## Ruling
 
-Dispatch enforces what a spec row can state truthfully: the flags a command reads, the
-values a closed set accepts, and that a single-valued flag is given once. It does not
-enforce a positional maximum, and a surplus positional is accepted exactly as it was. A
-command that wants to refuse one refuses it itself, in its own words, as `map` already
-did for an unknown level before `--level` became a declared set.
+### 1. Dispatch does not enforce a maximum number of positionals
+
+Dispatch enforces what a spec row can state truthfully: the flags a command reads, the values a closed set accepts, and that a single-valued flag is given once. It does not enforce a positional maximum, and a surplus positional is accepted exactly as it was before the rule was attempted.
+
+### 2. A command that refuses a surplus positional says so itself, in its own words
+
+
+
+### 3. The withdrawn arity is recorded here rather than carried as a spec field
+
+
 
 ## Consequences
 

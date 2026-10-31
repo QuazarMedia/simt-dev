@@ -134,3 +134,4 @@ in [architecture/history.md](architecture/history.md).
 | [120](decisions/ADR-120-a-pre-push-whose-tree-is-already-proven-green-skips-the-test-gate-on-that-evidence.md) | a pre-push whose tree is already proven green skips the test gate on that evidence | accepted · 2026-10-31 |
 | [122](decisions/ADR-122-the-shims-move-into-the-state-directory-and-the-legacy-directory-removes-itself.md) | the shims move into the state directory, and the legacy directory removes itself | accepted · 2026-10-31 |
 | [123](decisions/ADR-123-a-surplus-positional-is-not-refused-because-arity-is-not-in-the-source.md) | a surplus positional is not refused, because a command's arity is not in its source | accepted · 2026-10-31 |
+| [124](decisions/ADR-124-the-manifest-has-a-schema-in-the-tool-and-its-unknown-keys-stay-the-repositorys.md) | the manifest has a schema in the tool, and its unknown keys stay the repository's | accepted · 2026-10-31 |

@@ -122,7 +122,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=bacbb5ae3846dad9f4e2455341137f07c6d845c8 -->
+<!-- simt:sha=a8ad2c0f213f507c4dfc58ae90e9a7c89b0dc765 -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->
@@ -322,6 +322,12 @@ one-line commit needs none of them.
 "Before" and "After" are a short state summary, not a diff: enough to see what moved,
 not enough to need the patch. Cite a decision record where one settles the change, and
 never claim a test in the body that was not run on this tree.
+
+The message ends with a trailer on its own line, after the body - attribution to the
+tool, in the form git renders as a co-author. It is part of the message, not a
+section, so it stays even when every section is dropped:
+
+    Co-Authored-By: Simt Dev <noreply@simt.space>
 
 ### Order
 

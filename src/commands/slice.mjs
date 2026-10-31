@@ -125,6 +125,14 @@ function subjectFor(type, id, title) {
   return `${type}(${id.toLowerCase()}): ${description}`;
 }
 
+/**
+ * The trailer of every commit this tool writes: attribution to the tool, in the
+ * form git renders as a co-author. The slice-commit rule ends every message it
+ * defines with the same line, so a commit the tool writes and one an agent
+ * writes from the rule agree on attribution.
+ */
+export const CO_AUTHOR = 'Co-Authored-By: Simt Dev <noreply@simt.space>';
+
 /** Resolve one named slice through `plan next`, which already knows missing and ambiguous. */
 async function resolveSlice(main, id) {
   const found = await planNext(main, id);
@@ -550,12 +558,13 @@ async function finishSlice(root, id, flags) {
   }
 
   let sha = null;
+  const message = `${subject}\n\n${CO_AUTHOR}`;
   try {
-    await git(root, ['commit', '-m', subject]);
+    await git(root, ['commit', '-m', message]);
     sha = await git(root, ['rev-parse', 'HEAD']);
   } catch (error) {
     const detail = String(error.stderr ?? error.message ?? error).trim().split('\n')[0];
-    return fail(`the gates passed but the commit failed: ${detail}`, EXIT.FAIL, `run: git -C ${root} commit -m ${JSON.stringify(subject)}`);
+    return fail(`the gates passed but the commit failed: ${detail}`, EXIT.FAIL, `run: git -C ${root} commit -m ${JSON.stringify(message)}`);
   }
 
   const row = await planDone(main, id, { sha, test, dryRun: false });

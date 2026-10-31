@@ -206,6 +206,10 @@ test('finish commits with a Conventional subject from the title and records SHA 
 
   const sha = await g(['-C', wt, 'rev-parse', 'HEAD']);
   assert.equal(await g(['-C', wt, 'log', '-1', '--format=%s']), 'feat(a1): wire the gate');
+  // The trailer is attribution, not a section: the commit the tool writes ends
+  // with it, the way the slice-commit rule says every message ends.
+  const body = await g(['-C', wt, 'log', '-1', '--format=%b']);
+  assert.match(body, /Co-Authored-By: Simt Dev <noreply@simt\.space>/, 'the commit carries the co-author trailer');
   assert.ok(finished.stdout.includes(sha), `the report does not name the commit:\n${finished.stdout}`);
   assert.match(finished.stdout, /PASSED/);
   assert.match(finished.stdout, /record\s+docs\/plans\/0001\.md line \d+/);

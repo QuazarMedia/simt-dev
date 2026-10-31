@@ -27,7 +27,7 @@ set, or the resolution scores.
 | ID | Slice | Phase | Depends on | Size | Needs ADR | Success metric | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | H1 | Co-Authored-By trailer in the commit template and in `slice finish` commits | 1 | — | S | — | trailer in rule text, in `slice finish` commits, in the regenerated region; `node --test test/slice.test.mjs test/rules.test.mjs` green | Queued | |
-| H2 | Shims move to `.simt/hooks`; `core.hooksPath` follows; the old directory cleans up on install | 1 | — | M | ADR-122 | `hooks install --yes` in a repo with a legacy `.simt-hooks/` re-routes and removes it; `node --test test/hooks.test.mjs test/agenthooks.test.mjs` green; full suite green | Queued | |
+| H2 | Shims move to `.simt/hooks`; `core.hooksPath` follows; the old directory cleans up on install | 1 | — | M | new record | `hooks install --yes` in a repo with a legacy `.simt-hooks/` re-routes and removes it; `node --test test/hooks.test.mjs test/agenthooks.test.mjs` green; full suite green | Queued | |
 | H3 | Journal migrates legacy sets on write, restoring `undo` reach | 1 | — | S | — | a repo with only `.simt/journal` gets its sets moved into `.simt/local/journal` on the next write; `node --test test/undo.test.mjs` green; this checkout's 35 legacy sets reachable | Queued | |
 
 ## H1 — Co-Authored-By trailer
@@ -69,10 +69,11 @@ the trailer; focused tests green.
   A file without a marker leaves the directory in place, untouched. This is
   what makes the move self-healing in the fourteen repositories that already
   carry `.simt-hooks/`.
-- ADR-122 records the move (the location is what the tool believes — where
-  git reads its hooks in every repository). It does not supersede a record:
-  no standing ADR settles the directory's location; ADR-056 measures it,
-  ADR-018 governs routing, and both keep their rulings intact.
+- A new decision record settles the move (the location is what the tool
+  believes — where git reads its hooks in every repository). It does not
+  supersede a record: no standing ADR settles the directory's location;
+  ADR-056 measures it, ADR-018 governs routing, and both keep their rulings
+  intact.
 - `README.md` and `CHANGELOG.md` name the directory; update both.
 - This checkout migrates in place: `simt hooks install --yes` re-renders the
   shims at the new path, repoints `core.hooksPath`, and removes

@@ -99,7 +99,10 @@ test('packaging: the launcher imports nothing outside the standard library', asy
   const source = await readFile(new URL(`../python/${entry[1].replaceAll('.', '/')}.py`, import.meta.url), 'utf8');
   assert.match(source, /^def main\(/m, `${entry[1]} must define main()`);
 
-  const allowed = new Set(['os', 'shutil', 'sys', 'json', 'nodejs_wheel']);
+  // `subprocess` is the Q54 version query (`subprocess.run` before the execv);
+  // it is stdlib, and the spawn path itself remains `os.execv`, so the import
+  // does not change what the launcher is.
+  const allowed = new Set(['os', 'shutil', 'sys', 'json', 'subprocess', 'nodejs_wheel']);
   const found = [...source.matchAll(/^import (\w+)|^from (\w+) import /gm)].map((m) => m[1] ?? m[2]);
   const surprising = found.filter((name) => !allowed.has(name));
   assert.deepEqual(surprising, [], `the launcher imports a third-party module: ${surprising.join(', ')}`);

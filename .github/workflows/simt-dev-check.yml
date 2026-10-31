@@ -18,16 +18,14 @@
 # step that cannot run fails the job.
 name: simt-dev own gate
 
-# Pull requests only, and that is a decision rather than a default.
-#
-# A gate that runs on every push re-runs itself for every commit that pushes a
-# branch forward, including the ones nobody asked it about, and its verdict has to
-# be cleared before the next one lands. `pull_request` asks one question — may this
-# merge — and answers it once. `main` here is the branch protection list, not a
-# trigger: the gate that has to pass is the one the pull request runs, and the one
-# on `main` is whatever CI the repository already has there.
+# Pull requests ask whether a change may merge; a push to `main` asks whether
+# what already merged is sound. This repository merges locally, so a merge never
+# opens a pull request — without the second trigger the commit that lands on
+# `main` is the one no gate ran on.
 on:
   pull_request:
+  push:
+    branches: [main]
 
 # Read-only is enough to check a repo, and a gate job does not need to write to it.
 permissions:
@@ -46,7 +44,7 @@ jobs:
       matrix:
         os: ['ubuntu-latest', 'macos-latest']
         node: ['22.20.0', '24', '26']
-    timeout-minutes: 5
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

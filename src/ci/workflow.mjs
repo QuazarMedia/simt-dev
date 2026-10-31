@@ -167,7 +167,7 @@ function checkoutFull() {
  *  to. The own gate also varies the platforms and the Node versions, because this
  *  package is the one whose floor and whose ADR-012 claim have to hold on more than
  *  the minimum. */
-function skeleton(name, steps, { matrix = null } = {}) {
+function skeleton(name, steps, { matrix = null, timeoutMinutes = 5, gateMain = false } = {}) {
   const axes = matrix
     ? Object.entries(matrix)
         .map(([axis, values]) => `        ${axis}: [${values.map((v) => `'${v}'`).join(', ')}]`)
@@ -182,9 +182,22 @@ function skeleton(name, steps, { matrix = null } = {}) {
   // it is written escaped, the same way the `concurrency` line below spells its own two.
   const runner = matrix?.os ? '\${{ matrix.os }}' : 'ubuntu-latest';
   const job = matrix?.node ? '\${{ matrix.os }} node \${{ matrix.node }}' : name;
-  return `name: ${name}
-
-# Pull requests only, and that is a decision rather than a default.
+  // Two trigger blocks, because the two copies answer different questions. An
+  // adopting repository merges through pull requests, which is where its gate runs.
+  // This repository merges locally, so a merge never opens a pull request: without a
+  // push trigger the commit that lands on `main` is the one no gate ever ran on
+  // (review 0003 Q57). Each block ships only in the copy whose claim it states.
+  const trigger = gateMain
+    ? `# Pull requests ask whether a change may merge; a push to \`main\` asks whether
+# what already merged is sound. This repository merges locally, so a merge never
+# opens a pull request — without the second trigger the commit that lands on
+# \`main\` is the one no gate ran on.
+on:
+  pull_request:
+  push:
+    branches: [main]
+`
+    : `# Pull requests only, and that is a decision rather than a default.
 #
 # A gate that runs on every push re-runs itself for every commit that pushes a
 # branch forward, including the ones nobody asked it about, and its verdict has to
@@ -194,7 +207,10 @@ function skeleton(name, steps, { matrix = null } = {}) {
 # on \`main\` is whatever CI the repository already has there.
 on:
   pull_request:
+`;
+  return `name: ${name}
 
+${trigger}
 # Read-only is enough to check a repo, and a gate job does not need to write to it.
 permissions:
   contents: read
@@ -207,7 +223,7 @@ jobs:
   check:
     name: ${job}
     runs-on: ${runner}
-${strategy}    timeout-minutes: 5
+${strategy}    timeout-minutes: ${timeoutMinutes}
     steps:
 ${steps}`;
 }
@@ -282,7 +298,14 @@ export function renderWorkflow({ own = false, npm = true, manager = null, versio
       // sentence was false in the one repository that could have made it true, and no
       // check read it - the package declares `os` for npm to enforce, and nothing here
       // ever ran a test on a second platform.
-      { matrix: { os: ['ubuntu-latest', 'macos-latest'], node: [floor, '24', '26'] } },
+      // The slowest leg (macOS, full suite plus the registry lint) ran 4 min 28 s
+      // against a 5-minute timeout, so the timeout that was meant to bound a hang
+      // was about to fail a passing run instead. 15 leaves the hang bounded and the
+      // run alone; the sharding that would make it short again is Q92, not this row.
+      //
+      // `gateMain` because this repository merges locally: `pull_request` alone left
+      // the one commit that reached `main` ungated (review 0003 Q57).
+      { matrix: { os: ['ubuntu-latest', 'macos-latest'], node: [floor, '24', '26'] }, timeoutMinutes: 15, gateMain: true },
     )}\n`;
   }
 

@@ -129,9 +129,10 @@ function subjectFor(type, id, title) {
  * The trailer of every commit this tool writes: attribution to the tool, in the
  * form git renders as a co-author. The slice-commit rule ends every message it
  * defines with the same line, so a commit the tool writes and one an agent
- * writes from the rule agree on attribution.
+ * writes from the rule agree on attribution. Module-local: one caller needs no
+ * export, and an export is a promise to a caller (deadcode).
  */
-export const CO_AUTHOR = 'Co-Authored-By: Simt Dev <noreply@simt.space>';
+const CO_AUTHOR = 'Co-Authored-By: Simt Dev <noreply@simt.space>';
 
 /** Resolve one named slice through `plan next`, which already knows missing and ambiguous. */
 async function resolveSlice(main, id) {

@@ -1,5 +1,5 @@
 import { emit, emitJson, fail, jsonFailMode } from '../output/index.mjs';
-import { SPEC, SPEC_PATHS } from './spec.mjs';
+import { SPEC, SPEC_PATHS, tierOf } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI, MANIFEST_FILE, STATE_DIR } from '../name.mjs';
 import { SESSION_ENV } from '../agenthooks/policy.mjs';
@@ -146,7 +146,7 @@ ${CLI} lessons list            deterministic lesson candidates in .simt/local/le
                            and promoted lessons in docs/lessons/*.md (reads nothing else)
 ${CLI} lessons capture         scan the ledger and git history for new candidates (the write half of list)
 ${CLI} lessons review [<id>]   promote a lesson candidate to docs/lessons/NNNN-<slug>.md
-                           (dry-run unless --yes; writes Appendix A frontmatter)
+                           (dry-run unless --yes; writes the lesson frontmatter)
 ${CLI} explain <CODE>        what a check finding means: the decision behind it, how
                            to fix it, and a concrete trigger (DRIFT, UNMANAGED,
                            PACK-DIGEST-MISMATCH, ...; case-insensitive)
@@ -169,7 +169,7 @@ ${CLI} distill <skill|doc>     a budgeted proposal summary of a skill body or do
                            from the configured chat model instead; the cache is
                            keyed by source digest and budget, --refresh regenerates)
 ${CLI} review [--local]        an ADR-008 verdict skeleton for the staged diff,
-                           the brief listing everything that governs it (R25)
+                           the brief listing everything that governs it
                            (deterministic without --local: the brief and its
                            governing ids only; --local proposes from the
                            configured chat model and writes
@@ -382,6 +382,40 @@ export async function help(argv, dispatched) {
     emitJson(SPEC.map(specRow), { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 });
     return 0;
   }
+  // `--all` prints every command and every flag; the default page lists the core tier and
+  // says where the rest is. A reader asking "what can this do" needs the shape, not 23 KB
+  // of flag reference (review 0003 Q61).
+  if (flags.all === true) {
+    emit(
+      [
+        'simt-dev - shared agent rules, skills and gates for a repo ecosystem',
+        '',
+        `usage: ${CLI} <command> [args] [flags]`,
+        '',
+        'commands:',
+        COMMANDS,
+        '',
+        'flags:',
+        FLAGS,
+        '',
+        PRINCIPLES,
+        '',
+        `rulings  ${CLI} rules list   the decisions behind the rules you just read`,
+      ].join('\n'),
+      { maxBytes: flags.maxBytes ?? 0 },
+    );
+    return 0;
+  }
+  // One line per group and one per bare command: listing every subcommand with its
+  // summary does not fit in the 2 KB a reader will actually read (review 0003 Q61).
+  const groups = new Map();
+  const bare = [];
+  for (const row of SPEC) {
+    if (tierOf(row.path) !== 'core') continue;
+    const [head, sub] = row.path.split(' ');
+    if (sub === undefined) bare.push(row);
+    else groups.set(head, [...(groups.get(head) ?? []), sub]);
+  }
   emit(
     [
       'simt-dev - shared agent rules, skills and gates for a repo ecosystem',
@@ -389,17 +423,11 @@ export async function help(argv, dispatched) {
       `usage: ${CLI} <command> [args] [flags]`,
       '',
       'commands:',
-      COMMANDS,
+      ...[...groups].map(([group, subs]) => `  ${CLI} ${group} <${subs.join('|')}>`),
+      ...bare.map((row) => `  ${CLI} ${row.path.padEnd(8)} ${row.summary.length > 46 ? `${row.summary.slice(0, 43)}...` : row.summary}`),
       '',
-      'flags:',
-      FLAGS,
-      '',
-      PRINCIPLES,
-      '',
-      // The plans ship inside the installed package but have no command that surfaces
-      // them, so naming the path would again be advice the reader cannot take. They
-      // are an implementation record; the rulings are the part a reader can act on.
-      `rulings  ${CLI} rules list   the decisions behind the rules you just read`,
+      `more      ${CLI} help --all (every command and flag), ${CLI} help <command>`,
+      `rulings   ${CLI} rules list (the decisions behind the rules)`,
     ].join('\n'),
     { maxBytes: flags.maxBytes ?? 0 },
   );

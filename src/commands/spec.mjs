@@ -114,6 +114,21 @@ export const SPEC = [
   { path: 'why', summary: 'what governs a file: decisions, rules, skills, gates and lessons' },
 ];
 
+
+/**
+ * Which tier a command belongs to, decided by its group: the commands a reader reaches
+ * for while working are core and appear in `--help`; the rest are advanced and appear
+ * under `help --all`. A tier is a presentation fact, not a permission, so a command
+ * cannot be missing from both pages - `test/help.test.mjs` checks that every path is on
+ * one of them (review 0003 Q61).
+ */
+const CORE_GROUPS = new Set(['brief', 'check', 'gate', 'graph', 'hooks', 'impact', 'init', 'map', 'plan', 'rules', 'skills', 'slice', 'status', 'sync', 'tests', 'why']);
+
+/** The tier a path is listed under: `core` or `advanced`. */
+export function tierOf(path) {
+  return CORE_GROUPS.has(path.split(' ')[0]) ? 'core' : 'advanced';
+}
+
 /** The dispatchable paths, sorted - the answer to "what can this binary do". */
 export const SPEC_PATHS = SPEC.map((row) => row.path).sort();
 

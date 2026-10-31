@@ -142,7 +142,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q41 | Multi-line JS imports missing; `./x.js` never resolves to `x.ts`; two extractors | P1 | F | index | S | — | Complete | 0d43d0a4d9c71c06519198b0bdfe68254de2143c · test: node --test test/extract.test.mjs test/mapping.test.mjs |
 | Q42 | A stale index is served with no warning | P1 | F | index | S | — | Complete | d6549291b11f06cebc1cfc2ead16bff3ea9ff4b0 · test: node --test test/index.test.mjs test/map.test.mjs |
 | Q43 | FTS drops text past 24k chars / 600 tokens and all non-Latin text; `kind`/`ref` searchable; no LIMIT | P1 | F | index | M | Q44 | Complete | 7027dd6 · test: node --test test/index.test.mjs |
-| Q44 | Index DB has no versioning/migration; read errors look like an empty index | P1 | A | index | M | — | Queued | |
+| Q44 | Index DB has no versioning/migration; read errors look like an empty index | P1 | A | index | M | — | Complete | 6cfcf2c3798d16e10f6c7982d49eaacb3e703eb9 · test: node --test test/index.test.mjs test/map.test.mjs |
 | Q45 | `bench variants` ranks on a NaN cost and locks the winner | P1 | F | bench | S | — | Complete | 0f28a74dcb49f62e25d2a3138f8cae4ca2eea91c · test: node --test test/variants.test.mjs |
 | Q46 | Bench stats: reps paired as independent, missing cost = $0, harness/model pooled, no multiplicity control | P1 | F | bench | M | Q45 | Complete | cd6a9edda0ba4b1fc7dba80f097cb8c659df806c · test: node --test test/bench.test.mjs test/variants.test.mjs test/advice.test.mjs test/deadcode.test.mjs |
 | Q47 | Bench timeouts don't kill grandchildren and aren't recorded; one failure aborts the batch | P1 | F | bench | S | Q72 | Queued | |

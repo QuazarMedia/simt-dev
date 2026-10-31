@@ -269,6 +269,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // the ruling is ABOUT the graph file, and a decision that membership in it is a
   // statement about the package, not about existence, without naming
   // `graph/skills.graph.json` would not be an argument a maintainer can act on.
+  // ADR-122 joined for the same reason once more: the ruling is ABOUT the shims'
+  // location, and a decision that they move into the state directory and the legacy
+  // directory removes itself without naming the directory the routing points at
+  // would not be an argument a maintainer can act on.
   assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-023',
@@ -290,6 +294,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
     'ADR-110',
     'ADR-111',
     'ADR-112',
+    'ADR-122',
   ]);
 });
 

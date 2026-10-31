@@ -125,6 +125,11 @@ function renderZsh({ top, groups }) {
     '# source this after compinit: `source <(simt completions zsh)`.',
     '_simt() {',
     '  local cur prev',
+    // compsys sets `words` and `CURRENT` before the function runs; without the
+    // assignment `cur` and `prev` stay empty, so the flag and value-flag cases
+    // below never match and zsh completes only positionals (review 0003 Q51).
+    '  cur=${words[CURRENT]}',
+    '  prev=${words[CURRENT-1]}',
     '  local -a top flags subs',
     `  top=( ${top.join(' ')} )`,
     `  flags=( ${FLAGS.join(' ')} )`,

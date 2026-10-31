@@ -13,6 +13,7 @@
 // foreign hook is found by asking git rather than by reading config.
 
 import { mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises';
+import { repoContext } from '../context.mjs';
 import { commitJournal, journaledGitConfig, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { invalidateCheckCache } from '../status.mjs';
@@ -31,8 +32,11 @@ import { packageVersion, hasNpm } from '../package-version.mjs';
 
 export async function hooksCommand(sub, args, flags) {
   const root = flags.root ?? args[0] ?? process.cwd();
-  if (sub === 'install') return installHooks(root, flags);
-  if (sub === 'status') return hooksStatus(root, flags);
+  // One context for the subcommand: install and status each ask about the same
+  // repository, and `doctor --fix` asks alongside them (review 0003 Q67).
+  const ctx = repoContext(root);
+  if (sub === 'install') return installHooks(root, flags, ctx);
+  if (sub === 'status') return hooksStatus(root, flags, ctx);
   if (sub === 'run') return runHook(args, flags);
   return fail(`unknown hooks subcommand ${sub}`, EXIT.USAGE, `run: ${CLI} hooks status`);
 }
@@ -41,10 +45,11 @@ export async function hooksCommand(sub, args, flags) {
 async function runHook(args, flags) {
   const event = args[0];
   const root = flags.root ?? process.cwd();
+  const ctx = repoContext(root);
   if (!EVENTS.includes(event)) {
     return fail(`unknown hook event ${event}`, EXIT.USAGE, `known events: ${EVENTS.join(', ')}`);
   }
-  const { manifest, exists, error } = await readManifest(root);
+  const { manifest, exists, error } = await ctx.manifest();
   if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
   if (!exists) {
     return fail(`${root} has no ${MANIFEST_FILE}; the hook cannot know its gate list`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
@@ -135,7 +140,7 @@ async function relativeTarget(root, target) {
  *   caller enforces in its own voice (`takeover`, and the `wanted`/`obsolete`
  *   emptiness the command refuses on)
  */
-export async function planHooksInstall(root, { manifest, exists }) {
+export async function planHooksInstall(root, { manifest, exists }, ctx = null) {
   const declaresGate = (event) => wantsShim(manifest, exists, event);
   const state = await readHooksState(root, { declaresGate });
   const current = state.current;
@@ -159,8 +164,10 @@ export async function planHooksInstall(root, { manifest, exists }) {
     } catch {
       // Unreadable here leaves the npm default; the manifest path reports it.
     }
-    const { fingerprint } = await import('../resolve/fingerprint.mjs');
-    const detected = await fingerprint(root);
+    // The dynamic import stays: a hook run must not pull the fingerprint module in
+    // just by loading this one. A caller that already holds a context passes it and
+    // the walk is shared (review 0003 Q67).
+    const detected = ctx ? await ctx.fingerprint() : await (await import('../resolve/fingerprint.mjs')).fingerprint(root);
     manager = resolveNodeRunner({ facts: detected.facts, packageManager }).id;
   }
 
@@ -437,8 +444,8 @@ export async function plannedDiffs(root, planned) {
   return pairs;
 }
 
-async function installHooks(root, flags) {
-  const { manifest, exists, error } = await readManifest(root);
+async function installHooks(root, flags, ctx = repoContext(root)) {
+  const { manifest, exists, error } = await ctx.manifest();
   if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
   if (!exists) {
     return fail(`${root} has no ${MANIFEST_FILE}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
@@ -465,7 +472,7 @@ async function installHooks(root, flags) {
     routed,
     takeover,
     legacy,
-  } = await planHooksInstall(root, { manifest, exists });
+  } = await planHooksInstall(root, { manifest, exists }, ctx);
 
   // Read through `writeMode` like every other writer, and only now: this command
   // used to consult `flags.yes` and `flags.dryRun` directly and write when neither
@@ -750,8 +757,8 @@ function describeGates(manifest, key) {
   }).join(', ');
 }
 
-async function hooksStatus(root, flags) {
-  const { manifest, exists, error } = await readManifest(root);
+async function hooksStatus(root, flags, ctx = repoContext(root)) {
+  const { manifest, exists, error } = await ctx.manifest();
   if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
 
   const state = await readHooksState(root, { declaresGate: (e) => wantsShim(manifest, exists, e) });

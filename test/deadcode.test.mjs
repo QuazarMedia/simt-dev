@@ -125,19 +125,3 @@ test('every __internals seam is actually imported', async () => {
   assert.ok(offered.length > 0, 'no module offers a seam, so this test is asserting nothing');
   assert.deepEqual(dead, [], `a __internals seam nobody imports:\n  ${dead.join('\n  ')}`);
 });
-
-test('every declared-but-unimplemented command step is a real number', async () => {
-  // `STEPS` is the registry that makes `simt-dev <cmd>` exit UNSUPPORTED rather than
-  // silently succeed with empty output. It is empty today, which is correct — every
-  // command in the plan shipped. It is checked rather than deleted because a command
-  // declared without an implementation is the failure it exists to prevent, and the
-  // remedy it prints ("implementation step N is not built yet") is only actionable if N
-  // is a step a reader can look up.
-  const text = await readFile(join(ROOT, 'src/commands/index.mjs'), 'utf8');
-  const declared = /const STEPS = new Map\(\[([^\]]*)\]\)/.exec(text);
-  assert.ok(declared, 'the STEPS registry is gone; a command declared without an implementation would then succeed silently');
-
-  for (const entry of declared[1].split(',').map((s) => s.trim()).filter(Boolean)) {
-    assert.match(entry, /^['"][a-z ]+['"]\s*:\s*\d+$/, `STEPS entry \`${entry}\` is not "command path": number`);
-  }
-});

@@ -249,7 +249,8 @@ export async function dispatch(argv) {
   // Help is shown only when explicitly asked for. An unknown command must fail with
   // a usage code, not print 40 lines of prose and exit 0 — an agent that mistyped
   // needs to be told so, not handed a wall of text it may misread as output.
-  if (flags.help || flags.version || positional[0] === 'help') {
+  // `-h` is the alias a reader types first, and it used to reach `unknown command '-h'`.
+  if (flags.help || flags.version || positional[0] === 'help' || positional[0] === '-h') {
     return help(argv);
   }
 

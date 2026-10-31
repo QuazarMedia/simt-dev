@@ -106,6 +106,44 @@ test('an absent repeatable flag is an empty list, not a stringified undefined', 
   assert.deepEqual(listFlag([]), []);
 });
 
+// --- one command at a time (Q61) ---------------------------------------------
+
+/**
+ * Every command has a page, and the page fits.
+ *
+ * The defect this replaces: `simt help explain`, `simt explain --help` and `simt skills
+ * --help` all printed the same 23 KB, so naming a command did not narrow anything. A
+ * reader asking about one command got 40 screens of the rest.
+ */
+test('help: every spec path has a page that fits and says what the command is', async () => {
+  const { commandPage } = await import('../src/commands/help.mjs');
+  const { SPEC } = await import('../src/commands/spec.mjs');
+  for (const row of SPEC) {
+    const page = commandPage(row.path);
+    assert.ok(page.includes(`simt ${row.path}`), `${row.path} is missing from its own page`);
+    assert.ok(page.includes(row.summary.split(' ').slice(0, 3).join(' ')), `${row.path} does not carry its summary`);
+    assert.ok(Buffer.byteLength(page) <= 1536, `${row.path}: ${Buffer.byteLength(page)} bytes`);
+  }
+});
+
+test('help: -h is the same request as --help', async () => {
+  // It used to answer `unknown command '-h'`, which is the spelling a reader types first.
+  const { stdout } = await exec('node', [BIN, '-h'], { maxBuffer: 8 << 20 });
+  assert.match(stdout, /usage:/);
+});
+
+test('help: one command is one page, not the whole surface', async () => {
+  const { stdout } = await exec('node', [BIN, 'help', 'gate'], { maxBuffer: 8 << 20 });
+  assert.match(stdout, /^simt gate /);
+  assert.ok(Buffer.byteLength(stdout) <= 1536, `${Buffer.byteLength(stdout)} bytes`);
+});
+
+test('help: --json emits the spec a UI reads', async () => {
+  const { stdout } = await exec('node', [BIN, 'help', '--json'], { maxBuffer: 8 << 20 });
+  const doc = JSON.parse(stdout);
+  assert.deepEqual(doc.map((row) => row.path), COMMANDS);
+});
+
 test('no flag is in more than one of the three flag tables', () => {
   // They are consulted in order and a name in two of them resolves by position rather
   // than by declaration, so an overlap is a silent behavioural change rather than a

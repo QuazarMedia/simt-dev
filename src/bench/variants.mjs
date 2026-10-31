@@ -21,11 +21,20 @@ import { CANARY_ALPHA, DEFAULT_CANARY_SIZE, DEL_R_TOLERANCE, shouldEscalateCanar
 import {
   DEFAULT_BOOTSTRAP_SAMPLES,
   DEFAULT_BOOTSTRAP_SEED,
+  collapseArmByTask,
   compareArms,
   evaluateRunRecord,
   loadPrices,
   loadRunRecords,
 } from './report.mjs';
+
+/**
+ * Harnesses that grade, not answer: `gold` applies the oracle patch and `noop` does
+ * nothing (`src/bench/adapters.json`, `kind: "builtin"`). Their runs measure the
+ * grader, not the rule text, so they must never close a variant experiment by
+ * writing a lock entry (Q45). A test asserts this set matches the adapter table.
+ */
+export const BUILTIN_HARNESSES = new Set(['gold', 'noop']);
 
 /**
  * Discover every `simt-variants` slot across applicable rules for `root`.
@@ -166,24 +175,23 @@ export async function applyVariantInWorkspace(workDir, variant) {
   }
 }
 
+/**
+ * Mean per-task R and C for one arm's evaluated runs.
+ *
+ * `collapseArmByTask` is the shared per-task aggregation: the evaluated rows carry
+ * the cost in `C`, and the old body summed `costUsd` — a field the rows never had —
+ * so C was NaN and the cost rank degenerated to a key tie-break (Q45).
+ */
 function summarizeEvaluated(evaluated) {
-  if (evaluated.length === 0) {
-    return { n: 0, R: 0, C: 0 };
-  }
-  const byTask = new Map();
-  for (const row of evaluated) {
-    const list = byTask.get(row.task) ?? [];
-    list.push(row);
-    byTask.set(row.task, list);
-  }
+  const tasks = collapseArmByTask(evaluated);
+  if (tasks.length === 0) return { n: 0, R: 0, C: 0 };
   let sumR = 0;
   let sumC = 0;
-  for (const list of byTask.values()) {
-    sumR += list.reduce((a, x) => a + x.R, 0) / list.length;
-    sumC += list.reduce((a, x) => a + x.costUsd, 0) / list.length;
+  for (const t of tasks) {
+    sumR += t.R;
+    sumC += t.C;
   }
-  const n = byTask.size;
-  return { n, R: sumR / n, C: sumC / n };
+  return { n: tasks.length, R: sumR / tasks.length, C: sumC / tasks.length };
 }
 
 /**
@@ -339,6 +347,7 @@ export async function selectRuleVariants(
         reason,
         measured: true,
         winner: winnerKey,
+        locked: true,
         model: lockedEntry.model ?? resolvedModel,
         harness: lockedEntry.harness ?? harness,
         dR: Number(lockedEntry.dR ?? 0),
@@ -385,6 +394,7 @@ export async function selectRuleVariants(
         reason,
         measured: false,
         winner: slot.baseline,
+        locked: false,
         model: resolvedModel,
         harness,
         dR: 0,
@@ -427,17 +437,33 @@ export async function selectRuleVariants(
       }
     }
 
-    const lockEntry = {
-      winner: best.key,
-      variant: best.key,
-      model: resolvedModel,
-      harness,
-      dR,
-      dC,
-      n,
-      p,
-    };
-    nextVariantsLock[slot.slotId] = lockEntry;
+    // A non-baseline winner locks only when it is significant AND non-inferior
+    // (Q45): p below the canary alpha, and dR within the deletion tolerance.
+    // Anything else locks the baseline: the experiment ran, and its conclusion is
+    // "keep what we had" - recorded, so the next run on this model and harness
+    // reads it as closed instead of re-measuring.
+    const significant =
+      best.key !== slot.baseline &&
+      best.comparison !== null &&
+      p < CANARY_ALPHA &&
+      dR >= -DEL_R_TOLERANCE;
+    const winnerKey = significant ? best.key : slot.baseline;
+
+    // Built-in harnesses grade, they do not answer: their runs must not close the
+    // experiment, so no lock entry is written for them and the next run re-measures
+    // (Q45). The result still reports the measured best, flagged `locked: false`.
+    if (!BUILTIN_HARNESSES.has(harness)) {
+      nextVariantsLock[slot.slotId] = {
+        winner: winnerKey,
+        variant: winnerKey,
+        model: resolvedModel,
+        harness,
+        dR,
+        dC,
+        n,
+        p,
+      };
+    }
 
     results.push({
       slotId: slot.slotId,
@@ -448,7 +474,14 @@ export async function selectRuleVariants(
       reopened,
       reason,
       measured: true,
-      ...lockEntry,
+      winner: BUILTIN_HARNESSES.has(harness) ? best.key : winnerKey,
+      locked: significant && !BUILTIN_HARNESSES.has(harness),
+      model: resolvedModel,
+      harness,
+      dR,
+      dC,
+      n,
+      p,
     });
   }
 

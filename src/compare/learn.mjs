@@ -14,18 +14,23 @@
 // rounding).
 
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { mapCapped, DEFAULT_CONCURRENCY } from './parallel.mjs';
 
 import { policiesFor } from '../agenthooks/policy.mjs';
+import { DEL_R_TOLERANCE, parseAblationArmName } from '../bench/ablate.mjs';
 import { compareArms, evaluateRunRecord, loadPrices, loadRunRecords } from '../bench/report.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { readLedger } from '../ledger/index.mjs';
 import { readLessonCandidates } from '../memory/lessons.mjs';
+import { STATE_DIR } from '../name.mjs';
 import { readManifest } from '../projection/manifest.mjs';
+import { localRel, readStateFile } from '../state.mjs';
 
-const DEL_R_TOLERANCE = 0.01;
+const ABLATION_REL = localRel('bench', 'ablation.json');
+// Where pre-Q19 checkouts keep the file: the writer's path before the move to
+// machine-local state (review 0003 Q50).
+const ABLATION_REL_LEGACY = join(STATE_DIR, 'bench', 'ablation.json');
 
 const POLICY_BY_ID = new Map(policiesFor('pre-tool-use').map((p) => [p.id, p]));
 const POLICY_BY_ADR = new Map(policiesFor('pre-tool-use').map((p) => [p.adr, p]));
@@ -164,21 +169,17 @@ export function classifyRuleViolations(candidate) {
   return [...found.values()];
 }
 
-function parseAblatedSectionArm(arm) {
-  const raw = String(arm ?? '');
-  if (raw.startsWith('no-core-')) {
-    const slug = raw.slice('no-core-'.length);
-    return { sectionId: `core:${slug}`, arm: raw, kind: 'core', targetId: slug, affects: ['rules/core.md'] };
+async function readExplicitNoValueSections(repoPath) {
+  const { text } = await readStateFile(repoPath, ABLATION_REL, [ABLATION_REL_LEGACY]).catch(() => ({
+    text: null,
+  }));
+  if (text === null) return [];
+  try {
+    const raw = JSON.parse(text);
+    return Array.isArray(raw?.sections) ? raw.sections : Array.isArray(raw) ? raw : [];
+  } catch {
+    return [];
   }
-  if (raw.startsWith('no-profile-')) {
-    const id = raw.slice('no-profile-'.length);
-    return { sectionId: `profile:${id}`, arm: raw, kind: 'profile', targetId: id, affects: [`rules/stacks/${id}.md`] };
-  }
-  if (raw.startsWith('no-process-')) {
-    const id = raw.slice('no-process-'.length);
-    return { sectionId: `process:${id}`, arm: raw, kind: 'process', targetId: id, affects: [`rules/mdc/${id}.mdc`] };
-  }
-  return null;
 }
 
 async function collectRepoAblationRecords(repoPath) {
@@ -188,21 +189,6 @@ async function collectRepoAblationRecords(repoPath) {
   ]);
   if (records.length === 0) return [];
   return records.map((rec) => evaluateRunRecord(rec, prices));
-}
-
-async function readExplicitNoValueSections(repoPath) {
-  // Ablation output moved to machine-local state; the old path is a fallback
-  // for one release (review 0003 Q19).
-  for (const rel of ['.simt/local/bench/ablation.json', '.simt/ablation.json']) {
-    try {
-      const raw = JSON.parse(await readFile(join(repoPath, rel), 'utf8'));
-      const list = Array.isArray(raw?.sections) ? raw.sections : Array.isArray(raw) ? raw : [];
-      return list;
-    } catch {
-      // Next candidate.
-    }
-  }
-  return [];
 }
 
 function formatAffectsList(affects) {
@@ -397,7 +383,7 @@ export async function learnAcrossEstate(repos) {
       const tagged = { ...row, task: `${repoName}:${row.task}` };
       if (row.arm === 'current') {
         currentRunsAll.push(tagged);
-      } else if (parseAblatedSectionArm(row.arm)) {
+      } else if (parseAblationArmName(row.arm)) {
         const list = ablationByArm.get(row.arm) ?? [];
         list.push({ row: tagged, repoName });
         ablationByArm.set(row.arm, list);
@@ -455,7 +441,7 @@ export async function learnAcrossEstate(repos) {
   const noValueMap = new Map();
 
   for (const [arm, entries] of [...ablationByArm.entries()].sort((a, b) => a[0].localeCompare(b[0]))) {
-    const parsed = parseAblatedSectionArm(arm);
+    const parsed = parseAblationArmName(arm);
     if (!parsed || currentRunsAll.length === 0) continue;
     const ablatedRuns = entries.map((e) => e.row);
     const cmp = compareArms(arm, ablatedRuns, 'current', currentRunsAll);
@@ -463,11 +449,11 @@ export async function learnAcrossEstate(repos) {
     const dR = round4(cmp.deltas.R);
     const dC = round4(cmp.deltas.C);
     if (dR <= DEL_R_TOLERANCE && dC > 0) {
-      noValueMap.set(parsed.sectionId, {
-        sectionId: parsed.sectionId,
-        kind: parsed.kind,
-        targetId: parsed.targetId,
-        affects: parsed.affects,
+      noValueMap.set(parsed.ablate.sectionId, {
+        sectionId: parsed.ablate.sectionId,
+        kind: parsed.ablate.kind,
+        targetId: parsed.ablate.targetId,
+        affects: [parsed.ablate.sectionId],
         dR,
         dC,
         tasks: cmp.pairedTasks,
@@ -484,12 +470,6 @@ export async function learnAcrossEstate(repos) {
     const isCandidate = sec.deletionCandidate === true || (sec.measured !== false && dR <= DEL_R_TOLERANCE && dC > 0);
     if (!isCandidate) continue;
     const [kind = 'core', targetId = sectionId] = sectionId.split(':');
-    const affects =
-      kind === 'profile'
-        ? [`rules/stacks/${targetId}.md`]
-        : kind === 'process'
-          ? [`rules/mdc/${targetId}.mdc`]
-          : ['rules/core.md'];
     const existing = noValueMap.get(sectionId);
     if (existing) {
       existing.repos = [...new Set([...existing.repos, repoName])].sort();
@@ -498,7 +478,7 @@ export async function learnAcrossEstate(repos) {
         sectionId,
         kind,
         targetId,
-        affects,
+        affects: [sectionId],
         dR,
         dC,
         tasks: Number(sec.tasks ?? 1),
@@ -624,7 +604,7 @@ export async function learnAcrossEstate(repos) {
 
   for (const s of noValueRules) {
     const rawEntry = noValueMap.get(s.sectionId);
-    const affects = rawEntry?.affects ?? ['rules/core.md'];
+    const affects = rawEntry?.affects ?? [s.sectionId];
     const draftId = nextDraftId();
     const title = `Prune or demote zero-value section "${s.sectionId}" (dR=${s.dR}, dC=+$${s.dC})`;
     const context =

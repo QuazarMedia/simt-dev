@@ -1131,3 +1131,61 @@ test('R36: compare aggregates ledgers, hook denials, and zero-value rules across
   assert.ok(renderAdrDraft({ draftId: 'ADR-DRAFT-001', category: 'test', title: 'T', context: 'C', rulings: ['R'] }).includes('Status: draft'));
   assert.ok(renderLearningLines(learnForward, { force: true }).some((l) => l.includes('Status: draft')));
 });
+
+// Q50: the ablation file must be found at the writer's machine-local path and at the
+// legacy `.simt/bench/ablation.json` (the old fallback `.simt/ablation.json` was never
+// written), and the no-value ADR drafts must cite section ids, not rule paths that only
+// resolve in simt-dev.
+test('Q50: compare reads ablation from the local and legacy bench paths, and no-value drafts cite section ids', async () => {
+  const ws = await scratch();
+  const repoLegacy = await gitRepo('legacy', { 'README.md': 'l\n' }, ws);
+  const repoLocal = await gitRepo('local', { 'README.md': 'm\n' }, ws);
+
+  // Pre-Q19 location: the writer's path before the move to machine-local state.
+  await mkdir(join(repoLegacy, '.simt', 'bench'), { recursive: true });
+  await writeFile(
+    join(repoLegacy, '.simt', 'bench', 'ablation.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        sections: [{ sectionId: 'core:legacy-section', dR: 0, dC: 0.03, measured: true, deletionCandidate: true, tasks: 8 }],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  // Current writer location.
+  await mkdir(join(repoLocal, '.simt', 'local', 'bench'), { recursive: true });
+  await writeFile(
+    join(repoLocal, '.simt', 'local', 'bench', 'ablation.json'),
+    `${JSON.stringify(
+      {
+        schemaVersion: 1,
+        sections: [
+          { sectionId: 'process:intake-questions', dR: -0.01, dC: 0.01, measured: true, deletionCandidate: true, tasks: 6 },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  const out = await exec('node', [BIN, 'compare', '--root', ws, '--json'], { maxBuffer: 16 << 20 });
+  const { learning } = JSON.parse(out.stdout);
+
+  // One section per path: the legacy file must be read, not skipped for `.simt/ablation.json`.
+  assert.deepEqual(learning.noValueRules.map((s) => s.sectionId).sort(), [
+    'core:legacy-section',
+    'process:intake-questions',
+  ]);
+
+  const noValueDrafts = learning.adrDrafts.filter((d) => d.category === 'no-value-rule');
+  assert.equal(noValueDrafts.length, 2);
+  const byTarget = new Map(noValueDrafts.map((d) => [d.target, d]));
+  assert.match(byTarget.get('core:legacy-section').markdown, /simt-affects: \["core:legacy-section"\]/);
+  assert.match(byTarget.get('process:intake-questions').markdown, /simt-affects: \["process:intake-questions"\]/);
+  for (const draft of noValueDrafts) {
+    assert.doesNotMatch(draft.markdown, /rules\//, 'no-value drafts must cite section ids, not simt-dev rule paths');
+  }
+});

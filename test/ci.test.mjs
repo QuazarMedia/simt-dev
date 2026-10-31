@@ -557,13 +557,13 @@ test('the own copy runs a gate this repository can actually pass', async () => {
   const own = renderWorkflow({ own: true });
   assert.doesNotMatch(own, /run: \|/);
   assert.match(own, /run: npm test/);
-  assert.match(own, /run: node bin\/simt\.mjs graph lint/);
+  assert.match(own, /run: npm run lint/);
   // Every command it names has to exist in this repository, and that is checkable:
   // the two are the same checks `.githooks/pre-push` already runs before a push.
   const hook = await readFile(join(PACKAGE_ROOT, '.githooks', 'pre-push'), 'utf8');
   assert.match(hook, /npm test/);
-  assert.match(hook, /graph lint/);
-  for (const script of ['test', 'lint']) {
+  assert.match(hook, /npm run lint/);
+  for (const script of ['test', 'lint', 'build:sea', 'verify:wheel']) {
     assert.match(await readFile(join(PACKAGE_ROOT, 'package.json'), 'utf8'), new RegExp(`"${script}":`));
   }
 });

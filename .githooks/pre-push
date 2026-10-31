@@ -59,7 +59,7 @@ else
   # `npm test` already runs the shipped-content guards: running that file again here
   # was a second copy of one check, and two copies are two things to keep in step.
   check tests "npm test must pass before pushing" npm test --silent
-  check "graph lint" "the skill registry is inconsistent" node bin/simt.mjs graph lint
+  check "lint" "the skill registry is inconsistent" npm run lint --silent
 fi
 
 if [ -n "$FAILED" ]; then

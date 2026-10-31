@@ -70,11 +70,6 @@ test('registry: deferred is derived, never chosen', () => {
   }
 });
 
-test('registry: milestone-commit is the only alias and it terminates', () => {
-  const aliases = real.skills.filter((s) => s.aliasOf);
-  assert.deepEqual(aliases.map((s) => `${s.name}->${s.aliasOf}`), ['milestone-commit->slice-commit']);
-});
-
 test('lint: detects a duplicate skill name', () => {
   const g = clone();
   g.skills.push({ ...g.skills[0] });
@@ -143,8 +138,8 @@ test('lint: detects a cycle in requires', () => {
   const g = clone();
   // Two nodes that do not already require each other, so the only error the
   // cycle check can legitimately report is the cycle itself.
-  const a = g.skills.find((s) => s.name === 'add-screen-or-overlay');
-  const b = g.skills.find((s) => s.name === 'build-test-verify');
+  const a = g.skills.find((s) => s.name === 'wrangler');
+  const b = g.skills.find((s) => s.name === 'cloudflare');
   a.requires = [b.name];
   b.requires = [a.name];
   assert.ok(codes(g).some((e) => e.includes('requires cycle')));
@@ -193,23 +188,55 @@ test('lint: missing skills is one shape error, never secondary noise (Q35)', () 
 
 test('lint: detects alias-of-alias instead of a chain', () => {
   const g = clone();
-  const alias = g.skills.find((s) => s.aliasOf);
-  g.skills.find((s) => s.name === alias.aliasOf).aliasOf = alias.name;
+  // No shipped skill is an alias any more, so the chain is built from probe
+  // nodes: a -> b -> (a real skill).
+  const leaf = (name) => ({
+    name,
+    summary: 'a probe node',
+    capabilities: [g.capabilities[0].id],
+    stack: ['node'],
+    paths: ['src/probe.ts'],
+    keywords: ['probe'],
+    bytes: 10,
+  });
+  const a = leaf('a-alias');
+  const b = leaf('b-alias');
+  a.aliasOf = b.name;
+  b.aliasOf = g.skills[0].name;
+  g.skills.push(a, b);
   assert.ok(codes(g).some((e) => e.includes('alias-of-alias')));
 });
 
 test('lint: detects a variant outside the parent stack', () => {
   const g = clone();
-  const skill = g.skills.find((s) => s.variants);
-  skill.variants[0].stack.push('python');
+  const skill = {
+    name: 'v-probe',
+    summary: 'a probe node',
+    capabilities: [g.capabilities[0].id],
+    stack: ['node'],
+    paths: ['src/probe.ts'],
+    keywords: ['probe'],
+    bytes: 100,
+    variants: [{ id: 'wide', stack: ['node', 'python'], bytes: 50 }],
+  };
+  g.skills.push(skill);
   assert.ok(codes(g).some((e) => e.includes('not in the parent node')));
 });
 
 test('lint: detects sibling members sharing an identical stack', () => {
   const g = clone();
-  const group = g.siblingGroups[0];
-  const [first, second] = group.members.map((m) => g.skills.find((s) => s.name === m));
-  second.stack = [...first.stack];
+  const leaf = (name) => ({
+    name,
+    summary: 'a probe node',
+    capabilities: [g.capabilities[0].id],
+    stack: ['node'],
+    paths: ['src/probe.ts'],
+    keywords: ['probe'],
+    bytes: 10,
+    variantOf: 'sib-probe',
+  });
+  g.skills.push(leaf('sib-a'), leaf('sib-b'));
+  g.siblingGroups.push({ name: 'sib-probe', members: ['sib-a', 'sib-b'] });
   assert.ok(codes(g).some((e) => e.includes('must be discriminated by stack')));
 });
 

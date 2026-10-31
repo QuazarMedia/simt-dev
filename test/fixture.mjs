@@ -124,7 +124,7 @@ const REPO_PROFILES = {
  * somebody else's documentation.
  */
 const FILE_SPLITS = {
-  'add-country-galaxy': ['SKILL.md', 'checklist.md'],
+  'wrangler': ['SKILL.md', 'checklist.md'],
 };
 
 /** Any repo the registry names that carries no profile of its own. */

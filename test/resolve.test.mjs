@@ -89,14 +89,14 @@ test('resolve: forcing a skill overrides the stack gate', () => {
 
 test('resolve: path signals outrank task keywords', () => {
   // The diff is ground truth; what the user typed is not.
-  const path = scoreSkill(byName.get('d1-safe-change'), {
+  const path = scoreSkill(byName.get('wrangler'), {
     repoStack: ['cloudflare-workers'],
     taskTokens: [],
-    paths: ['migrations/0042_add_galaxy.sql'],
+    paths: ['wrangler.jsonc'],
   });
-  const keyword = scoreSkill(byName.get('d1-safe-change'), {
+  const keyword = scoreSkill(byName.get('wrangler'), {
     repoStack: ['cloudflare-workers'],
-    taskTokens: ['migration'],
+    taskTokens: ['wrangler'],
     paths: [],
   });
   assert.ok(path.score > keyword.score, `${path.score} !> ${keyword.score}`);
@@ -121,50 +121,10 @@ test('resolve: closure pulls in requires even when they scored zero', () => {
 });
 
 test('resolve: closure terminates on the real registry', () => {
-  const { selected } = rankSkills(skills, { repoStack: ['cloudflare-workers'], taskTokens: tokenize('commit'), paths: [] });
+  const { selected } = rankSkills(skills, { repoStack: ['cloudflare-workers'], taskTokens: tokenize('wrangler'), paths: [] });
   const expanded = closure(selected, skills);
   assert.ok(expanded.length > 0);
   assert.ok(expanded.length <= skills.length, 'closure grew beyond the registry');
-});
-
-test('resolve: milestone-commit resolves to slice-commit', () => {
-  const target = resolveAlias('milestone-commit', skills);
-  assert.equal(target.name, 'slice-commit');
-});
-
-test('resolve: a dependency is counted against the budget like anything else', () => {
-  // The defect. Both budget loops tested `entry.via.size > 0` and, if so, inlined the
-  // dependency whatever it weighed — on the reasoning that "a skill that is useless
-  // without its dependency is worse than a large context, because it silently misleads".
-  // The premise is right and the conclusion does not follow: a dependency over budget
-  // still costs bytes, and the honest answer is a deferred skill with a reason.
-  //
-  // Measured against the shipped registry: `--skill parallel-feature-team --budget 2000`
-  // resolved 13,503 bytes of skills — 6.7x the budget, with nothing in the output saying so.
-  const { selected } = rankSkills(
-    skills,
-    { repoStack: ['gradle'], taskTokens: tokenize('commit'), paths: [] },
-    { forced: ['parallel-feature-team'] },
-  );
-  const expanded = closure(selected, skills);
-  const team = expanded.find((e) => e.skill.name === 'parallel-feature-team');
-  assert.ok(team, 'the corpus must contain a skill with a dependency, or this test is vacuous');
-  assert.ok(team.skill.requires.length > 0);
-
-  const { picked, deferred, used } = selectWithinBudget(expanded, { budget: 2000 });
-  assert.ok(used <= 2000, `${used} bytes resolved against a 2000-byte budget`);
-  // The group that does not fit is deferred together rather than partially: a parent
-  // shown without the thing it requires is the misleading state the closure exists to
-  // avoid, and it is now avoided by dropping the parent instead of ignoring the budget.
-  const names = new Set(picked.map((e) => e.skill.name));
-  for (const e of deferred) {
-    for (const parent of e.via) {
-      assert.ok(
-        !names.has(parent),
-        `${parent} was inlined while its dependency ${e.skill.name} was deferred`,
-      );
-    }
-  }
 });
 
 test('resolve: a dependency that does not fit takes its parent', () => {
@@ -222,7 +182,7 @@ test('resolve: the reported total is the bytes actually paid', () => {
 });
 
 test('resolve: resolveAlias leaves a real name alone', () => {
-  assert.equal(resolveAlias('d1-safe-change', skills).name, 'd1-safe-change');
+  assert.equal(resolveAlias('wrangler', skills).name, 'wrangler');
 });
 
 test('resolve: matchesGlob handles ** and * the way the registry uses them', () => {
@@ -330,12 +290,12 @@ test('resolve: every keyword the registry declares is reachable (S03)', () => {
 
 test('resolve: the path signal now reaches the skills that declare a leading ** (S02)', () => {
   // The end of the chain: the matcher being correct is worth nothing if the signal
-  // does not arrive. complete-testing declares a leading-star test glob, so a diff
-  // that is one test file must select it - which it could not while the glob was dead.
-  const changed = scoreSkill(byName.get('complete-testing'), {
+  // does not arrive. firebase-auth-basics declares a leading-star auth glob, so a diff
+  // that is one auth file must select it - which it could not while the glob was dead.
+  const changed = scoreSkill(byName.get('firebase-auth-basics'), {
     repoStack: ['node'],
     taskTokens: [],
-    paths: ['src/checkout/order.spec.ts'],
+    paths: ['src/auth/login.ts'],
   });
   assert.ok(changed.reasons.some((r) => r.startsWith('path:')), `no path reason: ${changed.reasons}`);
 });
@@ -343,12 +303,12 @@ test('resolve: the path signal now reaches the skills that declare a leading ** 
 test('resolve: the summary signal is weak enough not to dominate', () => {
   // If shared summary words outweighed a real path match, every skill that
   // mentions "skill" or "commit" would outrank the one for the actual diff.
-  const real = scoreSkill(byName.get('d1-safe-change'), {
+  const real = scoreSkill(byName.get('wrangler'), {
     repoStack: ['cloudflare-workers'],
     taskTokens: [],
-    paths: ['migrations/x.sql'],
+    paths: ['wrangler.jsonc'],
   });
-  const weak = scoreSkill(byName.get('d1-safe-change'), {
+  const weak = scoreSkill(byName.get('wrangler'), {
     repoStack: ['cloudflare-workers'],
     taskTokens: ['review'],
     paths: [],
@@ -377,11 +337,11 @@ test('resolve: `skills find "durable object"` reports the keyword (S03)', async 
   assert.match(stdout, /keyword:durable object/);
 });
 
-test('resolve: `skills brief --task "d1 migration"` reports the keyword (S03)', async () => {
-  // The same finding's second claim: `d1` tokenized away entirely, so the single most
-  // specific word in the task could not select anything.
-  const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'd1 migration', '--root', ROOT]);
-  assert.match(stdout, /keyword:d1/);
+test('resolve: `skills brief --task "simt dry-run"` reports the keyword (S03)', async () => {
+  // The same finding's second claim: the specific words in the task must select
+  // through the keyword signal and name themselves in the reason the agent acts on.
+  const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'simt dry-run', '--root', ROOT]);
+  assert.match(stdout, /keyword:simt/);
 });
 // --- S04: stack is compatibility, not evidence ---------------------------------
 //

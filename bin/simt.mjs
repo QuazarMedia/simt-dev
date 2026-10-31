@@ -1,60 +1,24 @@
 #!/usr/bin/env node
-// simt-dev - developer and agent tooling for the SIMT ecosystem.
+// The entry point, and the one place the runtime floor is enforced.
 //
-// POSIX only (ADR-012). package.json declares os: [darwin, linux], so npm refuses
-// the install elsewhere rather than letting a hook fail obscurely.
+// `package.json` declares `engines.node >= 22.20.0`, and npm only warns: an older
+// runtime used to reach the CLI and fail somewhere inside the module graph — a syntax
+// error or a missing API — instead of the one sentence that says what to install
+// (review 0003 Q54). Nothing but this tiny module is imported before the check, so the
+// message is what a reader gets; the CLI is imported only once the floor holds.
+//
+// 5 is EXIT.UNSUPPORTED. `output/index.mjs` is the CLI graph this file exists to avoid
+// loading before the check, so the literal is repeated here and asserted by
+// `test/node-version.test.mjs`.
 
-import { parse, rawJsonFlag } from '../src/argv.mjs';
-import { EXIT, fail, jsonFailMode, jsonIndentDefault } from '../src/output/index.mjs';
+import { MIN_NODE, satisfiesMinimum } from '../src/node-version.mjs';
 
-try {
-  const argv = process.argv.slice(2);
-  const parsed = parse(argv);
-  if (!parsed.ok) {
-    // The flags do not exist yet, so the JSON mode is read off the raw words:
-    // a parse failure under `--json` is a JSON document on stdout, not text on
-    // stderr with an empty stdout (Q11, ADR-070 ruling 4).
-    jsonFailMode(rawJsonFlag(argv));
-    process.exit(fail(parsed.error.message, parsed.error.code));
-  }
-  const { flags, positional } = parsed.value;
-
-  // Set before anything can fail: `no command given` under `--json` is a JSON
-  // document too, and a failure that prints as text with an empty stdout breaks
-  // the same ruling the parse failure above honours (Q11, ADR-070 ruling 4).
-  jsonIndentDefault(flags.pretty === true);
-  jsonFailMode(flags.json === true);
-
-  // No arguments at all is a usage error, not a silent help dump: an agent that
-  // ran the wrong thing should be told so rather than handed 40 lines of prose.
-  if (positional.length === 0 && !flags.help && !flags.version) {
-    process.exit(fail('no command given', EXIT.USAGE));
-  }
-
-  // The one command that runs on somebody else's hot path, and therefore the one that
-  // does not load the registry. `agent-hook` is called before every tool call an agent
-  // makes, so its latency is a product requirement rather than a nicety (plan 0003
-  // R15), and the registry's imports - detection, projection, the bench corpus - cost
-  // tens of milliseconds before the command itself starts. Measured on the machine
-  // this was written on: 127.7 ms through the registry against 91.5 ms with only this
-  // module's imports, where the bare runtime is 86.9 ms of it.
-  //
-  // Only the exact spelling the renderers write takes this path. Anything else -
-  // including `agent-hook --help` - loads the registry, so help stays the one list of
-  // every command and this shortcut cannot become a second, thinner command surface.
-  if (positional[0] === 'agent-hook' && !flags.help && !flags.version) {
-    const { agentHookCommand } = await import('../src/commands/agenthook.mjs');
-    process.exit((await agentHookCommand(positional.slice(1), flags)) ?? EXIT.OK);
-  }
-
-  const { dispatch } = await import('../src/commands/index.mjs');
-  const code = (await dispatch(argv)) ?? EXIT.OK;
-  // Assigned, not forced: a large document on stdout (a `--json --diff` over a
-  // skill-sized body exceeds the 64 KiB pipe buffer) is still draining when the
-  // command resolves, and `process.exit()` cuts it — exit 0 with half a JSON
-  // document on stdout. Letting the loop empty first makes the exit honest
-  // (plan 0003 R50; the S10 contract asserts the document parses).
-  process.exitCode = code;
-} catch (error) {
-  process.exit(fail(error?.message ?? String(error), EXIT.FAIL));
+if (!satisfiesMinimum(process.versions.node)) {
+  process.stderr.write(
+    `ERROR 5 simt-dev needs Node >= ${MIN_NODE}; this is ${process.versions.node}\n` +
+      `REMEDY install Node ${MIN_NODE} or newer, then rerun: simt --version\n`,
+  );
+  process.exit(5);
 }
+
+await import('../src/cli.mjs');

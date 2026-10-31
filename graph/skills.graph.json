@@ -1631,6 +1631,40 @@
           "role": "canonical"
         }
       ]
+    },
+    {
+      "name": "simt-commands",
+      "summary": "Command reference for simt-dev: mutating vs read-only commands, and a scenario-to-command mapping for the agent",
+      "capabilities": [
+        "knowledge"
+      ],
+      "stack": [
+        "node"
+      ],
+      "paths": [
+        "agents/**",
+        "src/agents/**",
+        "skills/**"
+      ],
+      "keywords": [
+        "simt",
+        "command",
+        "reference",
+        "dry-run",
+        "agent",
+        "install"
+      ],
+      "bytes": 4161,
+      "sources": [
+        {
+          "repo": "simt-dev",
+          "path": "skills/simt-commands",
+          "bytes": 4161,
+          "role": "canonical"
+        }
+      ],
+      "note": "Ships with simt-dev; installed by agents install alongside the agent file.",
+      "vendored": true
     }
   ],
   "siblingGroups": [

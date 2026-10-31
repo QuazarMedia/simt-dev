@@ -443,7 +443,9 @@ test('rules why does not name an estate repository', async () => {
 test('every repository the skill registry names is denied by the leak guard', async () => {
   const graph = JSON.parse(await readFile(join(ROOT, 'graph/skills.graph.json'), 'utf8'));
   const repos = new Set(
-    (graph.skills ?? []).flatMap((skill) => (skill.sources ?? []).map((source) => source.repo)),
+    (graph.skills ?? [])
+      .filter((skill) => !skill.vendored)
+      .flatMap((skill) => (skill.sources ?? []).map((source) => source.repo)),
   );
   assert.ok(repos.size > 0, 'the registry named no repositories to derive the guard from');
   for (const repo of repos) {
@@ -861,7 +863,7 @@ function estateNamesInFile(label, text) {
     .flatMap((line, i) => (estateNameIn(line) ? [`${label}:${i + 1}  ${JSON.stringify(estateNameIn(line))}`] : []));
 }
 
-const SHIPPED_ROOTS = ['bin', 'src', 'rules', 'docs/decisions', 'templates', 'agents'];
+const SHIPPED_ROOTS = ['bin', 'src', 'rules', 'docs/decisions', 'templates', 'agents', 'skills'];
 const SHIPPED_FILES = ['CHANGELOG.md', 'README.md', 'LICENSE', 'package.json'];
 
 /**

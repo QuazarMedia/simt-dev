@@ -46,7 +46,7 @@ import {
 import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
-import { planAgents, writeAgentPlan } from '../agents/render.mjs';
+import { planAgents, writeAgentPlan, writeSkillFile } from '../agents/render.mjs';
 import { computeLock } from '../projection/lock.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { reindex, SQLITE_FILE } from '../index/store.mjs';
@@ -108,6 +108,11 @@ export async function initCommand(positional, flags) {
   const manifest = buildManifest({ root, stack: detected.stack, sha, version, existing: current, capability, facts: detected.facts });
   const findings = await scanRepo(root);
   const summary = summarise(findings);
+  // Every repo-file write is journaled, so `undo` can restore this run (R49).
+  // Created before `plan()` because the skill file must be on disk when
+  // `installedSkills` reads the directory for the region's disclosure section.
+  const journal = [];
+  await writeSkillFile(root, journal);
   const projected = await plan(root, flags);
   const region = projected.targets[0];
   const mdcProblems = projected.mdcProblems ?? [];
@@ -471,7 +476,6 @@ export async function initCommand(positional, flags) {
 
   // Every repo-file write below is journaled, so `undo` can restore this run
   // (R49). Pointer symlinks carry no bytes and are not journaled.
-  const journal = [];
   await writeManifest(root, manifest, journal);
   note(`wrote    ${MANIFEST_FILE} (${manifestAction})`);
 

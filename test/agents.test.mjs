@@ -101,7 +101,7 @@ test('install writes one file per harness that documents an agents directory', a
 
   const install = cli(['agents', 'install', '--root', root, '--yes']);
   assert.equal(install.code, 0, install.text);
-  assert.match(install.text, /WROTE    6 agent file\(s\)/);
+  assert.match(install.text, /WROTE    7 agent file\(s\)/);
   for (const row of adapters()) {
     const text = await readFile(join(root, agentPath(row.id)), 'utf8');
     assert.ok(text.length > 0, `${row.id} was not written`);
@@ -110,7 +110,7 @@ test('install writes one file per harness that documents an agents directory', a
   // A second install is a no-op, which is what makes it safe to run from a script.
   const again = cli(['agents', 'install', '--root', root, '--yes']);
   assert.equal(again.code, 0, again.text);
-  assert.equal(again.text.match(/UNCHANGED/g)?.length, adapters().length, again.text);
+  assert.equal(again.text.match(/UNCHANGED/g)?.length, adapters().length + 1, again.text); // 6 agents + 1 skill
 });
 
 test('install reports the harnesses that document no agents file, rather than staying quiet', async () => {
@@ -119,7 +119,7 @@ test('install reports the harnesses that document no agents file, rather than st
   const payload = JSON.parse(json.stdout);
   assert.equal(payload.ok, true);
   assert.equal(payload.filesWritten, true);
-  assert.equal(payload.written.length, adapters().length);
+  assert.equal(payload.written.length, adapters().length + 1); // 6 agents + 1 skill
   const noFile = payload.notWritten.filter((n) => n.state === 'none').map((n) => n.id).sort();
   assert.deepEqual(noFile, ['copilot', 'deepseek'], 'the two harnesses that document no agents file are named');
   // The plan carries the file facts and not the rendered bytes.

@@ -266,7 +266,9 @@ export async function loadRegistry(path = null, flags = {}) {
  */
 function holdsAnyRepo(registry, root) {
   const named = new Set(
-    (registry.skills ?? []).flatMap((s) => (s.sources ?? []).map((x) => x.repo)).filter(Boolean),
+    (registry.skills ?? [])
+      .filter((s) => !s.vendored)
+      .flatMap((s) => (s.sources ?? []).map((x) => x.repo)).filter(Boolean),
   );
   for (const repo of named) {
     if (existsSync(join(root, repo))) return true;
@@ -581,6 +583,10 @@ async function lintSourcesOnDisk(registry, workspaceRoot) {
   const warnings = [];
 
   for (const skill of registry.skills ?? []) {
+    // A vendored skill ships with the package; its source is the package root,
+    // not a workspace member. Verifying it against the workspace filesystem is
+    // the wrong check (the path will not exist there by design).
+    if (skill.vendored) continue;
     for (const source of skill.sources ?? []) {
       const at = `${skill.name}: ${source.repo}/${source.path}`;
       if (!source.repo || !source.path) continue;

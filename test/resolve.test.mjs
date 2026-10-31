@@ -633,7 +633,7 @@ test('resolve: MCP `skills_find` and the CLI answer the local repo identically (
       env: offEnv(),
     });
     const doc = JSON.parse(stdout);
-    const { schemaVersion, ok, command, workspace, ...commandAnswer } = doc;
+    const { schemaVersion, ok, command, exitCode, workspace, ...commandAnswer } = doc;
     assert.deepEqual(mcp, commandAnswer);
   } finally {
     await rm(root, { recursive: true, force: true });

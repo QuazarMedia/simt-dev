@@ -9,7 +9,7 @@
 // a reader's session.
 //
 // The envelope is the transport, not the answer: the CLI's `schemaVersion`,
-// `ok`/`command`, and the fields only one surface carries (`sha` on the MCP
+// `ok`/`command`/`exitCode`, and the fields only one surface carries (`sha` on the MCP
 // list, `root` on the CLI list, the workspace display note on CLI find).
 // Everything else must be identical, field for field.
 import assert from 'node:assert/strict';
@@ -41,7 +41,7 @@ async function cli(...args) {
 
 /** The CLI document minus the transport: what the answer is, not how it arrived. */
 function answer(doc, ...drop) {
-  const { schemaVersion, ok, command, ...rest } = doc;
+  const { schemaVersion, ok, command, exitCode, ...rest } = doc;
   for (const key of drop) delete rest[key];
   return rest;
 }

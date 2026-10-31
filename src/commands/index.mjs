@@ -8,6 +8,8 @@
 
 import {
   EXIT,
+  jsonCaptureStart,
+  jsonCaptureTake,
   jsonCommand,
   emit,
   emitJson,
@@ -355,7 +357,21 @@ export async function dispatch(argv) {
   }
 
   const run = await load();
-  return run(args, flags);
+  if (!isJson(flags)) return run(args, flags);
+  // Capture, then write once: the envelope names an exit code that does not exist until
+  // the command returns, and a document written before it is a document that can lie.
+  jsonCaptureStart();
+  const code = await run(args, flags);
+  const docs = jsonCaptureTake() ?? [];
+  const [only] = docs;
+  if (docs.length === 1 && only.value !== null && typeof only.value === 'object' && !Array.isArray(only.value)) {
+    emitJson({ ...only.value, ok: only.value.ok ?? code === 0, exitCode: code }, { pretty: only.pretty, maxBytes: only.maxBytes });
+    return code;
+  }
+  // A stream of documents (NDJSON) has no single place for one exit code; each is written
+  // as the command produced it, and the process exit status still carries the code.
+  for (const doc of docs) emitJson(doc.value, { pretty: doc.pretty, maxBytes: doc.maxBytes });
+  return code;
 }
 
 /**

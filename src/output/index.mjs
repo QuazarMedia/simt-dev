@@ -224,6 +224,23 @@ export function jsonCommand(path) {
   canonicalCommand = path ?? null;
 }
 
+// A document cannot name the exit code before the command has returned one. The
+// dispatcher captures what a command emits, then writes it once with the code attached;
+// writing first is how `ok: false` shipped alongside exit 0 (review 0003 Q65).
+let captured = null;
+
+/** Collect documents instead of writing them, so the dispatcher can add the exit code. */
+export function jsonCaptureStart() {
+  captured = [];
+}
+
+/** The captured documents and a reset, or an empty list when nothing was captured. */
+export function jsonCaptureTake() {
+  const docs = captured;
+  captured = null;
+  return docs;
+}
+
 /** Record a warning for the document this run prints. */
 export function warn(message) {
   accumulated = [...accumulated, message];
@@ -258,6 +275,10 @@ export function emitJson(value, { stream = process.stdout, pretty = prettyDefaul
     canonicalCommand !== null && carried !== null && typeof carried === 'object' && !Array.isArray(carried)
       ? { ...carried, command: canonicalCommand }
       : carried;
+  if (captured !== null) {
+    captured.push({ value: stamped, pretty, maxBytes });
+    return true;
+  }
   const payload = withSchemaVersion(stamped);
   const text = `${stringifyJson(payload, pretty)}\n`;
   // JSON is never byte-truncated: a cut document parses as a lie, and exit 0 calls it

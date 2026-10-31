@@ -280,7 +280,7 @@ function summarizeRows(rows) {
  * Group evaluated runs for one arm by task so multi-repetition tasks form one task unit
  * for task-level means and bootstrap resampling.
  */
-function collapseArmByTask(evaluatedRuns) {
+export function collapseArmByTask(evaluatedRuns) {
   const byTask = new Map();
   for (const run of evaluatedRuns) {
     const list = byTask.get(run.task) ?? [];

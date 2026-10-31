@@ -717,6 +717,62 @@ test('classifyPush: an empty ref list fails closed', async () => {
   assert.match(verdict.reason, /no readable ref list/);
 });
 
+test('dispatcher: a tag on an already-pushed commit skips the test gate', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const { root, head } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  // The branch was pushed first, so the remote already has `head`; the tag names it.
+  await git(['update-ref', 'refs/remotes/origin/main', head], { cwd: root });
+  await git(['tag', 'v1.0', head], { cwd: root });
+  const tagSha = (await exec('git', ['rev-parse', 'v1.0'], { cwd: root })).stdout.trim();
+  const pushed = `refs/tags/v1.0 ${tagSha} refs/tags/v1.0 ${'0'.repeat(40)}\n`;
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.failed, false);
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'skipped');
+  assert.match(gate.detail, /1 tag\(s\) already delivered/);
+});
+
+test('dispatcher: a tag whose commit no pushed ref contains runs the test gate', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const { root, head } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  // No remote-tracking ref is known, so the tag's commit cannot be confirmed as
+  // already delivered; the gate does not assume a tag is harmless.
+  await git(['tag', 'v1.0', head], { cwd: root });
+  const tagSha = (await exec('git', ['rev-parse', 'v1.0'], { cwd: root })).stdout.trim();
+  const pushed = `refs/tags/v1.0 ${tagSha} refs/tags/v1.0 ${'0'.repeat(40)}\n`;
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: a tag riding a docs-only branch push skips the test gate', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const { root, base, head } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  // The tag names the commit the branch is delivering in this same push.
+  await git(['tag', 'v1.0', head], { cwd: root });
+  const tagSha = (await exec('git', ['rev-parse', 'v1.0'], { cwd: root })).stdout.trim();
+  const pushed = `refs/heads/main ${head} refs/heads/main ${base}\nrefs/tags/v1.0 ${tagSha} refs/tags/v1.0 ${'0'.repeat(40)}\n`;
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.failed, false);
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'skipped');
+  assert.match(gate.detail, /1 commit\(s\) touching 1 file\(s\)/);
+  assert.match(gate.detail, /1 tag\(s\) already delivered/);
+});
+
+test('dispatcher: an annotated tag is dereferenced to its commit before classification', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
+  const { root, head } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
+  await git(['update-ref', 'refs/remotes/origin/main', head], { cwd: root });
+  // An annotated tag's pre-push sha is the tag OBJECT, not the commit; the
+  // classifier must resolve it to the commit it seals.
+  await git(['tag', '-a', 'v1.0', '-m', 'release', head], { cwd: root });
+  const tagSha = (await exec('git', ['rev-parse', 'v1.0'], { cwd: root })).stdout.trim();
+  assert.notEqual(tagSha, head, 'the tag object sha differs from the commit sha');
+  const pushed = `refs/tags/v1.0 ${tagSha} refs/tags/v1.0 ${'0'.repeat(40)}\n`;
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'skipped');
+});
+
 test('dispatcher: an unknown event fails rather than passing silently', async () => {
   const root = await fixture({});
   const result = await runGates('post-merge', { root, manifest: { gates: {} } });

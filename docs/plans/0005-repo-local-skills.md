@@ -41,7 +41,7 @@ All skills already exist in their target repos. S1 is a verification no-op.
 | id | state | evidence |
 |---|---|---|
 | S1 | Complete | f94c93a · test: verified 31 repo-specific skills on disk in mapped repos |
-| S2 | In progress | — |
+| S2 | Complete | 4133dba3c5067c0ee9fc907f17a9ebbc37737c8b · test: npm run test |
 | S3 | queued | — |
 | S4 | queued | — |
 | S5 | queued | — |

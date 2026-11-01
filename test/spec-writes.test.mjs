@@ -15,6 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { SPEC } from '../src/commands/spec.mjs';
+import { git } from './fixture.mjs';
 
 const exec = promisify(execFile);
 const BIN = fileURLToPath(new URL('../bin/simt.mjs', import.meta.url));
@@ -48,7 +49,10 @@ test('a row that declares no writes leaves a repository alone', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'simt-writes-'));
   await exec('git', ['init', '-q', dir]);
   await exec('node', [BIN, 'init', '--yes', '--root', dir], { cwd: dir });
-  const commit = async () => exec('git', ['-C', dir, 'add', '-A'], { cwd: dir }).then(() => exec('git', ['-C', dir, 'commit', '-q', '-m', 'staged'], { cwd: dir }));
+  // The commit goes through the fixture's git, which carries an identity: a runner
+  // derives an empty name from its passwd entry, and a bare `git commit` dies with
+  // "empty ident name" before the test under assertion has started.
+  const commit = async () => exec('git', ['-C', dir, 'add', '-A'], { cwd: dir }).then(() => git(['-C', dir, 'commit', '-q', '-m', 'staged'], { cwd: dir }));
   await commit();
   const status = async () => (await exec('git', ['-C', dir, 'status', '--porcelain'], { cwd: dir })).stdout.trim();
 

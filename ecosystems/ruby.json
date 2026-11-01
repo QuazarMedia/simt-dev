@@ -1,0 +1,23 @@
+{
+  "id": "ruby",
+  "facts": ["has-gemfile"],
+  "tool": "bundle",
+  "manifestOrder": 6,
+  "gates": {
+    "preCommit": ["format"],
+    "prePush": ["test"],
+    "commands": {
+      "format": "bundle exec rubocop",
+      "test": "bundle exec rspec"
+    }
+  },
+  "card": {
+    "focused": [
+      { "order": 11, "kind": "Ruby", "condition": { "fact": "has-gemfile" }, "template": "bundle exec rspec {file}" }
+    ]
+  },
+  "dependabot": [
+    { "order": 7, "fact": "has-gemfile", "value": "bundler", "manifest": "Gemfile" }
+  ],
+  "languages": [{ "lang": "ruby", "exts": [".rb"] }]
+}

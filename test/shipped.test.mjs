@@ -867,7 +867,7 @@ function estateNamesInFile(label, text) {
     .flatMap((line, i) => (estateNameIn(line) ? [`${label}:${i + 1}  ${JSON.stringify(estateNameIn(line))}`] : []));
 }
 
-const SHIPPED_ROOTS = ['bin', 'src', 'rules', 'docs/decisions', 'templates', 'agents', 'skills'];
+const SHIPPED_ROOTS = ['bin', 'src', 'rules', 'docs/decisions', 'templates', 'agents', 'skills', 'ecosystems'];
 const SHIPPED_FILES = ['CHANGELOG.md', 'README.md', 'LICENSE', 'package.json'];
 
 /**

@@ -5,22 +5,13 @@
 // and an import graph, and it is the same result on every machine.
 
 import { cmp } from '../util/sort.mjs';
+// Q70: the extension table is the records' `languages[].exts` (ADR-013: content is data,
+// the engine is code). A new language lands in a record, not a row the extractor edits.
+import { languageExts } from '../ecosystem/records.mjs';
 
 const IDENT = '[A-Za-z_$][\\w$]*';
 
-const EXTS = {
-  javascript: ['.js', '.mjs', '.cjs', '.jsx', '.ts', '.tsx'],
-  typescript: ['.ts', '.tsx', '.js', '.mjs', '.jsx'],
-  kotlin: ['.kt', '.kts'],
-  java: ['.java'],
-  python: ['.py'],
-  go: ['.go'],
-  rust: ['.rs'],
-  swift: ['.swift'],
-  dart: ['.dart'],
-  ruby: ['.rb'],
-  csharp: ['.cs'],
-};
+const EXTS = languageExts();
 
 /**
  * Symbols and import specifiers in one blob.

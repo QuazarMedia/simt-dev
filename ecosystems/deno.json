@@ -1,0 +1,21 @@
+{
+  "id": "deno",
+  "facts": ["has-deno-config"],
+  "tool": "deno",
+  "manifestOrder": 5,
+  "gates": {
+    "preCommit": ["format", "lint"],
+    "prePush": ["test", "typecheck"],
+    "commands": {
+      "format": "deno fmt --check",
+      "lint": "deno lint",
+      "test": "deno test",
+      "typecheck": "deno check ."
+    }
+  },
+  "card": {
+    "focused": [
+      { "order": 10, "kind": "Deno", "condition": { "fact": "has-deno-config" }, "template": "deno test {file}" }
+    ]
+  }
+}

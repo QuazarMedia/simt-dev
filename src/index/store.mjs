@@ -14,6 +14,10 @@ import { readManifest } from '../projection/manifest.mjs';
 import { readLocalConfig } from '../local/config.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { extract, resolveImports } from './extract.mjs';
+// Q70: the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
+// names the extensions that RESOLVE to a language (JavaScript claims `.ts` for extraction
+// but not for resolution), so a record's extraction and resolution cannot desynchronize.
+import { languageResolver } from '../ecosystem/records.mjs';
 import {
   FTS_SCHEMA,
   FTS_TRI_SCHEMA,
@@ -42,11 +46,7 @@ const MARKERS = ['package.json', 'pyproject.toml', 'go.mod', 'Cargo.toml', 'pom.
 // so the 65 MiB test exercises the skip, not the tokenize path.
 const BLOB_CAP = 16 * 1024 * 1024;
 
-const LANG = {
-  js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
-  ts: 'typescript', tsx: 'typescript', kt: 'kotlin', kts: 'kotlin', java: 'java',
-  py: 'python', go: 'go', rs: 'rust', swift: 'swift', dart: 'dart', rb: 'ruby', cs: 'csharp',
-};
+const LANG = languageResolver();
 
 /** `sqlite` when this process can open a database and create an FTS5 table. */
 // Probed once per process: the check builds both FTS schemas in a memory

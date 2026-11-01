@@ -1,0 +1,23 @@
+{
+  "id": "elixir",
+  "facts": ["has-mix"],
+  "tool": "mix",
+  "manifestOrder": 8,
+  "gates": {
+    "preCommit": ["format"],
+    "prePush": ["test"],
+    "commands": {
+      "format": "mix format --check-formatted",
+      "test": "mix test"
+    }
+  },
+  "card": {
+    "build": { "order": 5, "condition": { "fact": "has-mix" }, "command": "mix compile" },
+    "focused": [
+      { "order": 13, "kind": "Elixir", "condition": { "fact": "has-mix" }, "template": "mix test {file}" }
+    ]
+  },
+  "dependabot": [
+    { "order": 18, "fact": "has-mix", "value": "mix", "manifest": "mix.exs" }
+  ]
+}

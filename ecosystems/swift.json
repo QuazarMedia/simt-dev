@@ -1,0 +1,25 @@
+{
+  "id": "swift",
+  "facts": ["has-swift-package"],
+  "tool": "swift",
+  "manifestOrder": 4,
+  "gates": {
+    "preCommit": ["format"],
+    "prePush": ["test", "typecheck"],
+    "commands": {
+      "format": "swift format lint -r .",
+      "test": "swift test",
+      "typecheck": "swift build"
+    }
+  },
+  "card": {
+    "build": { "order": 4, "condition": { "fact": "has-swift-package" }, "command": "swift build" },
+    "focused": [
+      { "order": 9, "kind": "Swift", "condition": { "fact": "has-swift-package" }, "template": "swift test --filter {test}" }
+    ]
+  },
+  "dependabot": [
+    { "order": 17, "fact": "has-swift-package", "value": "swift", "manifest": "Package.swift" }
+  ],
+  "languages": [{ "lang": "swift", "exts": [".swift"] }]
+}

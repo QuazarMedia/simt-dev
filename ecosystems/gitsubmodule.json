@@ -1,0 +1,6 @@
+{
+  "id": "gitsubmodule",
+  "dependabot": [
+    { "order": 14, "fact": "has-submodules", "value": "gitsubmodule", "manifest": ".gitmodules" }
+  ]
+}

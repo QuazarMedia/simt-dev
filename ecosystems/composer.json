@@ -1,0 +1,6 @@
+{
+  "id": "composer",
+  "dependabot": [
+    { "order": 8, "fact": "has-composer", "value": "composer", "manifest": "composer.json" }
+  ]
+}

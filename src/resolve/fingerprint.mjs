@@ -313,12 +313,6 @@ export async function fingerprint(root) {
     }
   }
 
-  // two repositories both carry a wear/ module; only one of them is the wearable.
-  if (names.has('wear') && (await isDir(join(root, 'wear')))) {
-    stack.add('wear-os');
-    evidence.push('wear/');
-  }
-
   // Either spelling: a repository that adopted this tool has one of the two on disk,
   // and a fingerprint that missed the manifest would silently lose the repo's own
   // declared stack - which is the one input no amount of marker reading can replace.
@@ -547,7 +541,6 @@ export const STACK_TAGS = new Set([
   ...MARKERS.map(([tag]) => tag),
   ...EXTENSION_TAGS.values(),
   ...DEP_TAGS.values(),
-  'wear-os', // derived from a wear/ module, not a marker file
 ]);
 
 /** Every fact `fingerprint()` can emit, derived for the same reason as above. */

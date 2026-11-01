@@ -1,0 +1,24 @@
+{
+  "id": "dart",
+  "facts": ["has-pubspec"],
+  "tool": "dart",
+  "manifestOrder": 7,
+  "gates": {
+    "preCommit": ["format", "lint"],
+    "prePush": ["test"],
+    "commands": {
+      "format": "dart format --output=none --set-exit-if-changed .",
+      "lint": "dart analyze",
+      "test": "dart test"
+    }
+  },
+  "card": {
+    "focused": [
+      { "order": 12, "kind": "Dart", "condition": { "fact": "has-pubspec" }, "template": "dart test {file}" }
+    ]
+  },
+  "dependabot": [
+    { "order": 16, "fact": "has-pubspec", "value": "pub", "manifest": "pubspec.yaml" }
+  ],
+  "languages": [{ "lang": "dart", "exts": [".dart"] }]
+}

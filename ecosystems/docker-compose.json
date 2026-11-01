@@ -1,0 +1,6 @@
+{
+  "id": "docker-compose",
+  "dependabot": [
+    { "order": 11, "fact": "has-compose", "value": "docker-compose", "manifest": "compose file" }
+  ]
+}

@@ -24,8 +24,7 @@ import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/i
 import { MANIFEST, readManifest } from '../projection/manifest.mjs';
 import { CHAIN_MARKER, EVENTS, HOOKS_DIR, HOOKS_DIR_LEGACY, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderEvidenceShim, renderShim } from '../hooks/shim.mjs';
 import { GATE_KEY, gateCount, readHooksPath, readHooksState, wantsShim } from '../compare/hooksstate.mjs';
-import { GATES } from '../hooks/gates.mjs';
-import { gateNames } from '../hooks/gates.mjs';
+import { gateNames, getGate } from '../hooks/gates.mjs';
 import { renderGateReport, runGates } from '../hooks/dispatcher.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
@@ -757,7 +756,7 @@ function describeGates(manifest, key) {
   const list = manifest?.gates?.[key];
   if (!Array.isArray(list) || list.length === 0) return '(none declared)';
   return list.map((name) => {
-    const gate = GATES[name];
+    const gate = getGate(name, manifest?.gates?.commands);
     return gate ? name : `${name} (UNKNOWN - the hook will fail)`;
   }).join(', ');
 }
@@ -826,7 +825,7 @@ async function hooksStatus(root, flags, ctx = repoContext(root)) {
     lines.push('', 'would run:');
     for (const key of ['preCommit', 'prePush']) {
       for (const name of manifest?.gates?.[key] ?? []) {
-        const known = GATES[name];
+        const known = getGate(name, commands);
         // A declared command wins for every kind, so the status must say so too —
         // printing "run script" for a gate the dispatcher will shell out to `./gradlew`
         // for is the same one-question-two-answers defect ADR-018 was written about.
@@ -845,7 +844,7 @@ async function hooksStatus(root, flags, ctx = repoContext(root)) {
     if (undeclared.length > 0) {
       lines.push('', `declared but never run: ${undeclared.join(', ')}`);
     }
-    const unknown = [...(manifest?.gates?.preCommit ?? []), ...(manifest?.gates?.prePush ?? [])].filter((n) => !GATES[n]);
+    const unknown = [...(manifest?.gates?.preCommit ?? []), ...(manifest?.gates?.prePush ?? [])].filter((n) => !getGate(n, commands));
     if (unknown.length > 0) {
       lines.push('', `unknown gates (the hook will fail): ${unknown.join(', ')}`);
       lines.push(`known gates: ${gateNames().join(', ')}`);
@@ -877,8 +876,9 @@ function collectProblems({ exists, current, installed, manifest, foreign = [] })
   if (exists) {
     for (const key of ['preCommit', 'prePush']) {
       for (const name of manifest?.gates?.[key] ?? []) {
-        if (!GATES[name]) problems.push(`gate "${name}" in ${key} is not a known gate`);
-        else if (GATES[name].kind === 'command' && !manifest?.gates?.commands?.[name]) {
+        const gate = getGate(name, manifest?.gates?.commands);
+        if (!gate) problems.push(`gate "${name}" in ${key} is not a known gate`);
+        else if (gate.kind === 'command' && !manifest?.gates?.commands?.[name]) {
           problems.push(`gate "${name}" in ${key} is a command gate with no declared command; the hook will fail`);
         }
       }

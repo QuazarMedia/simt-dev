@@ -40,61 +40,30 @@ import { join } from 'node:path';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { isOwnRepo, WORKFLOWS_DIR } from './workflow.mjs';
 import { CLI } from '../name.mjs';
+// Q70: the Dependabot entries are the records' `dependabot` facet, not a table in this
+// file. Adding an ecosystem is a new file under `ecosystems/`, not a row here.
+import { dependabotEntries } from '../ecosystem/records.mjs';
 
 /** The one file this module writes. */
 export const DEPENDABOT_FILE = '.github/dependabot.yml';
 
 /**
- * fact -> the `package-ecosystem` value Dependabot documents for it.
+ * fact/stack -> the `package-ecosystem` value Dependabot documents for it.
  *
- * The fact names are already in the fingerprint vocabulary and already carry
- * evidence, so this table adds no new observation vocabulary: it says which
- * Dependabot value watches which observable manifest. Facts absent from this
- * table are not ecosystems Dependabot updates, and adding one is a new ruling
- * about the estate rather than a code detail.
+ * Read from the ecosystem records (ADR-013: content is data, the engine is code), not
+ * written here. `dependabotEntries(root)` returns the rows in their declared order; `root`
+ * lets a repository's own `.simt/ecosystems/` supply an entry the shipped set does not have,
+ * so adding an ecosystem is a new file, not a row in a table the engine edits.
  *
- * Several facts map to one value on purpose. `has-pyproject` and
- * `has-requirements` are two ways of declaring python dependencies and
- * Dependabot reads both under `pip`; emitting two `pip` entries would be a
- * duplicate the config rejects or silently collapses, and the reader would have
- * no way to tell which one won.
- *
- * A `stack` tag is used where no fact exists and one is needed. npm is the
- * clearest case: `node` is a stack tag in `fingerprint.mjs` and `typescript` is
- * a dependency name, so a repo's package manager is either of those and adding
- * `has-node-manifest` would be a third name for one observation - the exact
- * duplication that table's own header rules out. `gradle` is the same shape:
- * the stack tag already names the build file. Every other entry below is a
- * real `has-*` fact.
- *
- * `has-build-system` is deliberately NOT mapped: Makefile, CMakeLists and
- * meson.build are build files, not dependency manifests, and Dependabot has no
- * ecosystem that reads them. Mapping it to `maven` would be a lie of exactly the
- * kind the detection-driven ruling exists to prevent.
+ * The fact names are already in the fingerprint vocabulary and already carry evidence, so
+ * the records add no new observation vocabulary: each entry says which Dependabot value
+ * watches which observable manifest. Several facts map to one value on purpose — `has-pyproject`
+ * and `has-requirements` are two ways of declaring python dependencies and Dependabot reads
+ * both under `pip`; emitting two `pip` entries would be a duplicate the config rejects. A
+ * `stack` tag stands in where no fact exists (`node`, `gradle`). `has-build-system` is
+ * deliberately NOT mapped: Makefile, CMakeLists and meson.build are build files, not
+ * dependency manifests, and Dependabot has no ecosystem that reads them.
  */
-const ECOSYSTEMS = [
-  { stack: 'node', value: 'npm', manifest: 'package.json' },
-  { stack: 'typescript', value: 'npm', manifest: 'package.json' },
-  { fact: 'has-pyproject', value: 'pip', manifest: 'pyproject.toml' },
-  { fact: 'has-requirements', value: 'pip', manifest: 'requirements.txt' },
-  { fact: 'has-go-mod', value: 'gomod', manifest: 'go.mod' },
-  { fact: 'has-cargo-toml', value: 'cargo', manifest: 'Cargo.toml' },
-  { fact: 'has-gemfile', value: 'bundler', manifest: 'Gemfile' },
-  { fact: 'has-composer', value: 'composer', manifest: 'composer.json' },
-  { fact: 'has-maven-pom', value: 'maven', manifest: 'pom.xml' },
-  { fact: 'has-dockerfile', value: 'docker', manifest: 'Dockerfile' },
-  { fact: 'has-compose', value: 'docker-compose', manifest: 'compose file' },
-  { fact: 'has-terraform', value: 'terraform', manifest: '*.tf' },
-  { stack: 'gradle', value: 'gradle', manifest: 'build.gradle' },
-  { fact: 'has-submodules', value: 'gitsubmodule', manifest: '.gitmodules' },
-  { fact: 'has-nuget', value: 'nuget', manifest: '*.csproj' },
-  { fact: 'has-pubspec', value: 'pub', manifest: 'pubspec.yaml' },
-  { fact: 'has-swift-package', value: 'swift', manifest: 'Package.swift' },
-  { fact: 'has-mix', value: 'mix', manifest: 'mix.exs' },
-  { fact: 'has-uv-lock', value: 'uv', manifest: 'uv.lock' },
-  { fact: 'has-bun-lock', value: 'bun', manifest: 'bun.lock' },
-  { fact: 'has-devcontainer', value: 'devcontainers', manifest: 'devcontainer.json' },
-];
 
 /**
  * The ecosystems this tree has a manifest for, in a stable order.
@@ -108,11 +77,11 @@ const ECOSYSTEMS = [
  * @param {Iterable<string>} [stack] emitted stack tags
  * @returns {{value: string, manifest: string}[]}
  */
-export function ecosystems(facts, stack = []) {
+export function ecosystems(facts, stack = [], root = null) {
   const seenFacts = new Set(facts);
   const seenStack = new Set(stack);
   const out = [];
-  for (const row of ECOSYSTEMS) {
+  for (const row of dependabotEntries(root)) {
     const found = row.fact ? seenFacts.has(row.fact) : seenStack.has(row.stack);
     if (!found || out.some((e) => e.value === row.value)) continue;
     out.push({ value: row.value, manifest: row.manifest });
@@ -174,8 +143,8 @@ function entry({ value }) {
  * @param {{stack?: Iterable<string>, own?: boolean}} [options]
  * @returns {string} YAML, LF-terminated
  */
-export function renderDependabot(facts, { stack = [], own = false } = {}) {
-  const found = ecosystems(facts, stack);
+export function renderDependabot(facts, { stack = [], own = false, root = null } = {}) {
+  const found = ecosystems(facts, stack, root);
   const entries = [entry({ value: 'github-actions' }), ...found.map(entry)];
   return `${header(own)}version: 2
 updates:
@@ -221,18 +190,19 @@ export async function planDependabot(root) {
   // "the file differs" instead of "the file differs from what this repo should get",
   // and those are different questions when a manifest appeared since.
   const { facts, stack } = await fingerprint(root);
-  const watched = ecosystems(facts, stack).map((e) => e.value);
+  const watched = ecosystems(facts, stack, root).map((e) => e.value);
   // Carried on the plan so the writer renders from the same observation this
   // comparison used. Re-detecting at write time would make `ci` and `check`
   // disagree whenever a manifest appeared between the two calls, and the file
-  // would be written from facts nobody ever saw in the plan.
-  const detection = { facts, stack };
+  // would be written from facts nobody ever saw in the plan. `root` rides along so
+  // the writer renders the records a repository's own `.simt/ecosystems/` overrides.
+  const detection = { facts, stack, root };
 
   if (exists) {
     // Both sides of the comparison, for the same reason as the workflow plan: a reader
     // told the file differs can be shown how, and re-rendering for a diff would let
     // the two answers disagree.
-    const desired = renderDependabot(facts, { stack, own: true });
+    const desired = renderDependabot(facts, { stack, own: true, root });
     const current = own ? text === desired : true;
     return {
       file: DEPENDABOT_FILE,

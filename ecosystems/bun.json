@@ -1,0 +1,6 @@
+{
+  "id": "bun",
+  "dependabot": [
+    { "order": 20, "fact": "has-bun-lock", "value": "bun", "manifest": "bun.lock" }
+  ]
+}

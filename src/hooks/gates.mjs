@@ -101,8 +101,18 @@ export const GATES = {
   },
 };
 
-export function getGate(name) {
-  return GATES[name] ?? null;
+export function getGate(name, commands = {}) {
+  const declared = GATES[name];
+  if (declared) return declared;
+  // Q70: a command the repository declared under gates.commands is a valid gate even when
+  // no central row knows it. The manifest is the source of truth for a repo's gates, and
+  // a name that resolves to a declared command must not read as unknown. Synthesized, not
+  // added to GATES: the central table stays the estate's gates, the record supplies the rest.
+  const cmd = commands?.[name];
+  if (typeof cmd === 'string' && cmd.trim() !== '') {
+    return { name, kind: 'command', adr: 'ADR-010', why: 'declared by the repository under gates.commands' };
+  }
+  return null;
 }
 
 export function gateNames() {

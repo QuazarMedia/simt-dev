@@ -1,0 +1,6 @@
+{
+  "id": "docker",
+  "dependabot": [
+    { "order": 10, "fact": "has-dockerfile", "value": "docker", "manifest": "Dockerfile" }
+  ]
+}

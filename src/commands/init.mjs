@@ -460,6 +460,7 @@ export async function initCommand(positional, flags) {
         after: renderDependabot(payload.dependabot.facts, {
           stack: payload.dependabot.stack,
           own: payload.dependabot.own,
+          root: payload.dependabot.root,
         }),
       });
     }
@@ -590,6 +591,7 @@ export async function initCommand(positional, flags) {
       renderDependabot(payload.dependabot.facts, {
         stack: payload.dependabot.stack,
         own: payload.dependabot.own,
+        root: payload.dependabot.root,
       }),
     );
     note(
@@ -955,7 +957,7 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
   // produced by two hand-written renderers.
   const db = payload.dependabot;
   if (db && db.action === 'create') {
-    lines.push(`  ${'create'.padEnd(9)} ${db.file}  ${renderDependabot(db.facts, { stack: db.stack, own: db.own }).length} bytes`);
+    lines.push(`  ${'create'.padEnd(9)} ${db.file}  ${renderDependabot(db.facts, { stack: db.stack, own: db.own, root: db.root }).length} bytes`);
     lines.push(
       db.own
         ? `            watches ${db.ecosystems.join(', ')}; ${CLI} ci --yes refreshes this copy when the template changes`

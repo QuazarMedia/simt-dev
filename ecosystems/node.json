@@ -1,0 +1,25 @@
+{
+  "id": "node",
+  "card": {
+    "focused": [
+      {
+        "order": 14,
+        "kind": "Node",
+        "condition": { "stack": "node" },
+        "template": {
+          "static": "node --test {file}",
+          "ifScriptMatches": "vitest|jest",
+          "dynamic": "{runner} test -- {file}"
+        }
+      }
+    ]
+  },
+  "dependabot": [
+    { "order": 1, "stack": "node", "value": "npm", "manifest": "package.json" },
+    { "order": 2, "stack": "typescript", "value": "npm", "manifest": "package.json" }
+  ],
+  "languages": [
+    { "lang": "javascript", "exts": [".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx"], "canonical": [".js", ".mjs", ".cjs", ".jsx"] },
+    { "lang": "typescript", "exts": [".ts", ".tsx", ".js", ".mjs", ".jsx"], "canonical": [".ts", ".tsx"] }
+  ]
+}

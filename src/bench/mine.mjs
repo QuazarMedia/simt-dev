@@ -22,8 +22,16 @@ import { CONFIG_DIR, STATE_DIR } from '../name.mjs';
 import { SCHEMA_VERSION } from '../output/index.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { packageVersion } from '../package-version.mjs';
+// Q70: the per-language test-file patterns are the records' `testConventions` (ADR-013),
+// not hardcoded regexes in this file. A new language's test convention lands in a record.
+import { testConventions } from '../ecosystem/records.mjs';
 
 const exec = promisify(execFile);
+
+// The `testConventions` records' `base` sources, compiled once. De-duplicated because a
+// language may share a pattern with a sibling (the JVM pattern matches both `.java` and
+// `.kt`); a duplicate RegExp is the same check run twice.
+const LANG_TEST_PATTERNS = [...new Set(testConventions().flatMap((c) => c.base ?? []))].map((src) => new RegExp(src));
 
 /** Default target task count when mining a repository's history. */
 export const DEFAULT_MINE_TARGET = 20;
@@ -70,8 +78,7 @@ export function isTestPath(relPath) {
 
   if (/\.(?:test|spec)\.[A-Za-z0-9]+$/.test(base)) return true;
   if (/_(?:test|spec)\.[A-Za-z0-9]+$/.test(base)) return true;
-  if (/^test_[^/]+\.py$/.test(base)) return true;
-  if (/Tests?\.(?:java|kt)$/.test(base)) return true;
+  if (LANG_TEST_PATTERNS.some((re) => re.test(base))) return true;
 
   return false;
 }

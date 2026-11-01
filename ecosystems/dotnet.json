@@ -1,0 +1,25 @@
+{
+  "id": "dotnet",
+  "facts": ["has-nuget"],
+  "tool": "dotnet",
+  "manifestOrder": 3,
+  "gates": {
+    "preCommit": ["format"],
+    "prePush": ["test", "typecheck"],
+    "commands": {
+      "format": "dotnet format --verify-no-changes",
+      "test": "dotnet test",
+      "typecheck": "dotnet build -warnaserror"
+    }
+  },
+  "card": {
+    "build": { "order": 3, "condition": { "fact": "has-nuget" }, "command": "dotnet build" },
+    "focused": [
+      { "order": 8, "kind": ".NET", "condition": { "fact": "has-nuget" }, "template": "dotnet test --filter {test}" }
+    ]
+  },
+  "dependabot": [
+    { "order": 15, "fact": "has-nuget", "value": "nuget", "manifest": "*.csproj" }
+  ],
+  "languages": [{ "lang": "csharp", "exts": [".cs"] }]
+}

@@ -23,7 +23,7 @@ import { mkdtemp, readFile, rm, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, matchesGlob, resolve, sep } from 'node:path';
 
-import { GATES } from './gates.mjs';
+import { GATES, getGate } from './gates.mjs';
 import { resolveGate } from './resolve.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 import { CLI } from '../name.mjs';
@@ -504,8 +504,8 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
   let formatted = [];
 
   for (const name of declared) {
-    const gate = GATES[name];
-    if (gate === undefined) {
+    const gate = getGate(name, commands);
+    if (gate === null) {
       results.push({
         name,
         status: 'failed',

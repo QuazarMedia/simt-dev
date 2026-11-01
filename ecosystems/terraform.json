@@ -1,0 +1,6 @@
+{
+  "id": "terraform",
+  "dependabot": [
+    { "order": 12, "fact": "has-terraform", "value": "terraform", "manifest": "*.tf" }
+  ]
+}

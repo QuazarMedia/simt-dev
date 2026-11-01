@@ -21,7 +21,7 @@
 import { constants as fsConstants } from 'node:fs';
 import { access, readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { ECOSYSTEMS } from '../projection/manifest.mjs';
+import { ecosystemGateRows } from '../ecosystem/records.mjs';
 import { loadManifest } from '../manifest/schema.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 
@@ -82,7 +82,7 @@ async function executableFile(path) {
 /**
  * Can this machine run the ecosystem's program?
  *
- * Two kinds of evidence, matching the two kinds of tool in `ECOSYSTEMS`: a binary on
+ * Two kinds of evidence, matching the two kinds of tool in the ecosystem records: a binary on
  * PATH, probed directory by directory the way the shell would find it, and a file the
  * repository commits (the Maven wrapper), probed in place the way `gradlew` is probed.
  * Either answer that is not a positive YES is NO: a seed that guesses a toolchain is
@@ -158,7 +158,9 @@ export async function readCapability(root) {
   // file in the repo cannot: a Cargo.toml without cargo installed is an ecosystem that
   // is here but whose gates would all fail closed. The probe is per-row, because a row
   // that marks its tool `file` lives in the repository, not on PATH.
-  for (const eco of ECOSYSTEMS) {
+  // Q70: the rows come from the records, and `root` lets a repository's own
+  // `.simt/ecosystems/` add a tool the shipped set does not probe.
+  for (const eco of ecosystemGateRows(root)) {
     if (await probeTool(root, eco)) capability.tools.push(eco.tool);
   }
 

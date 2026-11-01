@@ -1,0 +1,23 @@
+{
+  "id": "maven",
+  "facts": ["has-maven-pom"],
+  "tool": "mvnw",
+  "file": true,
+  "manifestOrder": 9,
+  "gates": {
+    "prePush": ["test"],
+    "commands": { "test": "./mvnw -q verify" }
+  },
+  "card": {
+    "focused": [
+      { "order": 3, "kind": "Maven", "condition": { "fact": "has-maven-pom" }, "template": "./mvnw test -Dtest={class}" }
+    ]
+  },
+  "dependabot": [
+    { "order": 9, "fact": "has-maven-pom", "value": "maven", "manifest": "pom.xml" }
+  ],
+  "languages": [
+    { "lang": "java", "exts": [".java"], "testConventions": { "base": ["Tests?\\.(?:java|kt)$"] } },
+    { "lang": "kotlin", "exts": [".kt", ".kts"], "testConventions": { "base": ["Tests?\\.(?:java|kt)$"] } }
+  ]
+}

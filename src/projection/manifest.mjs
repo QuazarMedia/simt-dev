@@ -27,6 +27,10 @@ import { getGate } from '../hooks/gates.mjs';
 // Q31: the one Node runner table. This module and the card, capability,
 // dispatcher and CI workflow all spell `<manager> run <script>` from it.
 import { runScript } from '../ecosystem/node-runner.mjs';
+// Q70: the ecosystem records. A new ecosystem is a new file under `ecosystems/`, not a
+// row added to this table. records.mjs imports nothing from this package, so this edge
+// cannot cycle.
+import { ecosystemGateRows } from '../ecosystem/records.mjs';
 
 // Imported as well as re-exported: a bare `export { X as Y } from` binds nothing here,
 // and the manifest name is used a dozen times below in remedy strings that name this
@@ -97,88 +101,24 @@ const TAG_GATES = [
  * The ecosystems that produce a fact rather than a stack tag, and what a fresh
  * adoption of one should declare.
  *
- * A row proposes gates the way `GATES_BY_STACK` does, and the fact it keys on is
- * the same signal a profile's `simt-applies` names, so one marker file reaches
+ * Read from the ecosystem records (ADR-013: content is data, the engine is code), not
+ * written here. A row proposes gates the way `GATES_BY_STACK` does, and the fact it keys
+ * on is the same signal a profile's `simt-applies` names, so one marker file reaches
  * both: the region this repo reads and the gates its commits run.
  *
- * `commands` is what a FRESH manifest declares for each proposed gate, and it is
- * written only when the probe in `readCapability` found `tool` where this row says
- * it lives. A declared gate that cannot run blocks every commit, so a command is
- * never declared on the faith of a marker file: the marker says the ecosystem is
- * here, the probe says its program can run (ADR-017). A command the repo already
- * declared wins over the seed, because a seed is a default and a declaration is a
- * choice.
+ * `commands` is what a FRESH manifest declares for each proposed gate, and it is written
+ * only when the probe in `readCapability` found `tool` where the record says it lives.
+ * A declared gate that cannot run blocks every commit, so a command is never declared on
+ * the faith of a marker file: the marker says the ecosystem is here, the probe says its
+ * program can run (ADR-017). A command the repo already declared wins over the seed.
  *
- * `file` marks a tool that is a file in the repository rather than a binary on
- * PATH: the Maven wrapper, probed the way this tool already probes `gradlew`.
+ * `file` marks a tool that is a file in the repository rather than a binary on PATH: the
+ * Maven wrapper, probed the way this tool already probes `gradlew`.
+ *
+ * The shipped set, read without a root, is what the const-iterating tests pin; a
+ * repository's own `.simt/ecosystems/` overrides arrive through the views' `root` argument.
  */
-export const ECOSYSTEMS = [
-  {
-    fact: 'has-cargo-toml',
-    tool: 'cargo',
-    preCommit: ['format', 'lint'],
-    prePush: ['test'],
-    commands: { format: 'cargo fmt --check', lint: 'cargo clippy -- -D warnings', test: 'cargo test' },
-  },
-  {
-    fact: 'has-go-mod',
-    tool: 'go',
-    preCommit: ['format', 'lint'],
-    prePush: ['test'],
-    commands: { format: 'test -z "$(gofmt -l .)"', lint: 'go vet ./...', test: 'go test ./...' },
-  },
-  {
-    fact: 'has-nuget',
-    tool: 'dotnet',
-    preCommit: ['format'],
-    prePush: ['test', 'typecheck'],
-    commands: { format: 'dotnet format --verify-no-changes', test: 'dotnet test', typecheck: 'dotnet build -warnaserror' },
-  },
-  {
-    fact: 'has-swift-package',
-    tool: 'swift',
-    preCommit: ['format'],
-    prePush: ['test', 'typecheck'],
-    commands: { format: 'swift format lint -r .', test: 'swift test', typecheck: 'swift build' },
-  },
-  {
-    fact: 'has-deno-config',
-    tool: 'deno',
-    preCommit: ['format', 'lint'],
-    prePush: ['test', 'typecheck'],
-    commands: { format: 'deno fmt --check', lint: 'deno lint', test: 'deno test', typecheck: 'deno check .' },
-  },
-  {
-    fact: 'has-gemfile',
-    tool: 'bundle',
-    preCommit: ['format'],
-    prePush: ['test'],
-    commands: { format: 'bundle exec rubocop', test: 'bundle exec rspec' },
-  },
-  {
-    fact: 'has-pubspec',
-    tool: 'dart',
-    preCommit: ['format', 'lint'],
-    prePush: ['test'],
-    commands: { format: 'dart format --output=none --set-exit-if-changed .', lint: 'dart analyze', test: 'dart test' },
-  },
-  {
-    fact: 'has-mix',
-    tool: 'mix',
-    preCommit: ['format'],
-    prePush: ['test'],
-    commands: { format: 'mix format --check-formatted', test: 'mix test' },
-  },
-  // The wrapper is a file the repository commits, not a program on PATH. A repo with
-  // a pom.xml and no wrapper cannot run `./mvnw -q verify`, so the probe is the file.
-  {
-    fact: 'has-maven-pom',
-    tool: 'mvnw',
-    file: true,
-    prePush: ['test'],
-    commands: { test: './mvnw -q verify' },
-  },
-];
+export const ECOSYSTEMS = ecosystemGateRows();
 
 /**
  * Can this repo actually run the gate?
@@ -349,10 +289,10 @@ function runnerName(runner) {
  *
  * @returns {{gates: {preCommit: string[], prePush: string[]}, dropped: {gate: string, why: string}[], commands: Record<string,string>}}
  */
-export function planGates(stack = [], capability = null, facts = []) {
-  const proposed = defaultGates(stack, facts);
+export function planGates(stack = [], capability = null, facts = [], root = null) {
+  const proposed = defaultGates(stack, facts, root);
   if (!capability) return { gates: proposed, dropped: [], commands: {} };
-  const seeds = ecosystemCommands(facts, capability);
+  const seeds = ecosystemCommands(facts, capability, root);
   // A command the repo already declared wins over a seed: the seed is a default,
   // the declaration is a choice, and a default overwriting a choice is a re-init
   // that edits the repo's mind.
@@ -360,7 +300,7 @@ export function planGates(stack = [], capability = null, facts = []) {
   const dropped = [];
   const runnable = (list) =>
     list.filter((name) => {
-      const gate = getGate(name);
+      const gate = getGate(name, effective.commands);
       const verdict = gateRunnable(gate, effective);
       if (!verdict.runnable) {
         dropped.push({ gate: name, why: verdict.why, remedy: gateRemedy(gate, { runner: capability.runner }) });
@@ -385,7 +325,7 @@ export function planGates(stack = [], capability = null, facts = []) {
  *
  * Pure, so `planGates` and `buildManifest` answer with one implementation.
  */
-function ecosystemCommands(facts = [], capability = null) {
+function ecosystemCommands(facts = [], capability = null, root = null) {
   if (!capability?.tools?.length) return {};
   // A Node runner (npm/pnpm/yarn/bun) already answers "how do I test and format"
   // with its own package.json scripts, and a seed only wins over those scripts when
@@ -398,7 +338,7 @@ function ecosystemCommands(facts = [], capability = null) {
   if (['npm', 'pnpm', 'yarn', 'bun'].includes(capability.runner)) return {};
   const present = new Set(facts);
   const commands = {};
-  for (const eco of ECOSYSTEMS) {
+  for (const eco of ecosystemGateRows(root)) {
     if (!present.has(eco.fact)) continue;
     if (!capability.tools.includes(eco.tool)) continue;
     for (const [gate, command] of Object.entries(eco.commands)) {
@@ -418,13 +358,13 @@ function ecosystemCommands(facts = [], capability = null) {
  * than a visible one.
  */
 export function buildManifest({ root, stack = [], sha, version, existing = null, capability = null, surfaces = undefined, facts = [] }) {
-  const gates = defaultGates(stack, facts);
+  const gates = defaultGates(stack, facts, root);
   const limits = defaultLimits();
 
   // A re-init must never silently weaken a repo's own declaration: existing
   // limits and gates win over defaults, and only the projection stamp is refreshed.
   const limitsFinal = existing?.limits ? { ...limits, ...existing.limits } : limits;
-  const planned = planGates(stack, capability, facts);
+  const planned = planGates(stack, capability, facts, root);
   // The seeds land only on a FRESH manifest. On an existing one the repo's
   // declaration is the answer, and adding commands under it would be a re-init
   // writing into a field the reader owns — the same rule as the gates above.
@@ -558,7 +498,7 @@ export function unrunnableGates(manifest, capability) {
   for (const name of declared) {
     if (seen.has(name)) continue;
     seen.add(name);
-    const gate = getGate(name);
+    const gate = getGate(name, capability.commands);
     const verdict = gateRunnable(gate, capability);
     if (verdict.runnable) continue;
     findings.push({
@@ -578,7 +518,7 @@ function defaultLimits() {
 }
 
 /** ADR-006: coverage stays null. Set it only if the repo has a real numeric gate. */
-function defaultGates(stack, facts = []) {
+function defaultGates(stack, facts = [], root = null) {
   // Tags and facts are one signal set for gate purposes: a row in `GATES_BY_STACK`
   // keys on a tag, a row in `ECOSYSTEMS` on a fact, and the two never name each
   // other's vocabulary (facts are `has-*`, tags are not), so one union cannot
@@ -592,7 +532,7 @@ function defaultGates(stack, facts = []) {
       gates.prePush.push(...row.prePush);
     }
   }
-  for (const row of ECOSYSTEMS) {
+  for (const row of ecosystemGateRows(root)) {
     if (signals.has(row.fact)) {
       // A row proposes what it has: the Maven row has no preCommit gates, so a
       // missing key is "none", not a defect. Spreading undefined throws.

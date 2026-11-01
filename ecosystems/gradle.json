@@ -1,0 +1,13 @@
+{
+  "id": "gradle",
+  "card": {
+    "build": { "order": 6, "condition": { "stack": "gradle" }, "command": "./gradlew build" },
+    "focused": [
+      { "order": 1, "kind": "Android", "condition": { "fact": "has-android-manifest" }, "template": "./gradlew :{module}:testDebugUnitTest --tests {class}" },
+      { "order": 2, "kind": "JVM", "condition": { "stack": "gradle" }, "template": "./gradlew test --tests {class}" }
+    ]
+  },
+  "dependabot": [
+    { "order": 13, "stack": "gradle", "value": "gradle", "manifest": "build.gradle" }
+  ]
+}

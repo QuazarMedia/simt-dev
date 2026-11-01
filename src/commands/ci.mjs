@@ -38,7 +38,7 @@ import { commandRoot } from '../repo-root.mjs';
 function targets() {
   return [
     { key: 'workflow', file: WORKFLOW_FILE, plan: planWorkflow, render: () => renderWorkflow({ own: true }) },
-    { key: 'dependabot', file: DEPENDABOT_FILE, plan: planDependabot, render: (plan) => renderDependabot(plan.facts ?? [], { stack: plan.stack ?? [], own: true }) },
+    { key: 'dependabot', file: DEPENDABOT_FILE, plan: planDependabot, render: (plan) => renderDependabot(plan.facts ?? [], { stack: plan.stack ?? [], own: true, root: plan.root }) },
   ];
 }
 

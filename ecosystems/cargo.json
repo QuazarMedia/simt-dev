@@ -1,0 +1,25 @@
+{
+  "id": "cargo",
+  "facts": ["has-cargo-toml"],
+  "tool": "cargo",
+  "manifestOrder": 1,
+  "gates": {
+    "preCommit": ["format", "lint"],
+    "prePush": ["test"],
+    "commands": {
+      "format": "cargo fmt --check",
+      "lint": "cargo clippy -- -D warnings",
+      "test": "cargo test"
+    }
+  },
+  "card": {
+    "build": { "order": 1, "condition": { "fact": "has-cargo-toml" }, "command": "cargo build" },
+    "focused": [
+      { "order": 5, "kind": "Rust", "condition": { "fact": "has-cargo-toml" }, "template": "cargo test {name}" }
+    ]
+  },
+  "dependabot": [
+    { "order": 6, "fact": "has-cargo-toml", "value": "cargo", "manifest": "Cargo.toml" }
+  ],
+  "languages": [{ "lang": "rust", "exts": [".rs"] }]
+}

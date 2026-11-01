@@ -22,7 +22,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { ECOSYSTEMS } from '../projection/manifest.mjs';
+import { cardBuilds, cardFocused, cardFallbacks, ecosystemGateRows, evalTemplate, matches } from '../ecosystem/records.mjs';
 import { resolveNodeRunner, runScript } from '../ecosystem/node-runner.mjs';
 
 /**
@@ -53,59 +53,35 @@ const VERBS = CARD_VERBS;
 const DROP_ORDER = ['format', 'typecheck', 'lint', 'build'];
 
 /**
- * Build commands for ecosystems whose build entrypoint is not a package script. Keyed by
- * a marker fact or stack tag, whichever the ecosystem is identified by. `npm` is handled
- * before this table, because a Node repository states its own build script and stating it
- * again here would be a second answer to the same question.
+ * Build commands for ecosystems whose build entrypoint is not a package script. The rows are
+ * the records' `card.build` facet, in first-match-wins order; `npm` is handled before this
+ * table, because a Node repository states its own build script and stating it again here
+ * would be a second answer to the same question.
  */
-const BUILDS = [
-  { fact: 'has-cargo-toml', command: 'cargo build' },
-  { fact: 'has-go-mod', command: 'go build ./...' },
-  { fact: 'has-nuget', command: 'dotnet build' },
-  { fact: 'has-swift-package', command: 'swift build' },
-  { fact: 'has-mix', command: 'mix compile' },
-  { stack: 'gradle', command: './gradlew build' },
-];
+function buildRows(root) {
+  return cardBuilds(root);
+}
 
 /**
- * One focused-test template per path kind. Entries are ordered, and the FIRST match wins,
- * so a repository that carries more than one marker gets the more specific template:
- * `has-uv-lock` before `has-pyproject`, `has-android-manifest` before the plain `gradle`
- * tag, `has-deno-config` before the Node fallback. A duplicate template for the same path
- * kind would be two answers, and the second is the wrong one.
+ * One focused-test template per path kind. The rows are the records' `card.focused` facet,
+ * in first-match-wins order: a repository that carries more than one marker gets the more
+ * specific template — `has-uv-lock` before `has-pyproject`, `has-android-manifest` before
+ * the plain `gradle` tag, `has-deno-config` before the Node fallback. A duplicate template
+ * for the same path kind would be two answers, and the second is the wrong one.
+ *
+ * The Node row is the one whose shape depends on the repo's own runner: a repository whose
+ * test script is vitest or jest takes a file argument through the script; one with no such
+ * script gets the built-in runner, which is the only answer that needs nothing installed to
+ * already be true. `<manager> test -- <file>` is the ADR-010 shape (never `npx`) — that
+ * choice is the template's `dynamic` form in the record, resolved by `evalTemplate`.
  */
-const FOCUSED = [
-  { kind: 'Android', when: (s, f) => f.has('has-android-manifest'), template: () => './gradlew :{module}:testDebugUnitTest --tests {class}' },
-  { kind: 'JVM', when: (s) => s.has('gradle'), template: () => './gradlew test --tests {class}' },
-  { kind: 'Maven', when: (s, f) => f.has('has-maven-pom'), template: () => './mvnw test -Dtest={class}' },
-  { kind: 'Go package', when: (s, f) => f.has('has-go-mod'), template: () => 'go test ./{pkg} -run {Test}' },
-  { kind: 'Rust', when: (s, f) => f.has('has-cargo-toml'), template: () => 'cargo test {name}' },
-  { kind: 'Python', when: (s, f) => f.has('has-uv-lock'), template: () => 'uv run -m pytest {file}::{test}' },
-  { kind: 'Python', when: (s, f) => f.has('has-pyproject') || f.has('has-requirements'), template: () => 'pytest {file}::{test}' },
-  { kind: '.NET', when: (s, f) => f.has('has-nuget'), template: () => 'dotnet test --filter {test}' },
-  { kind: 'Swift', when: (s, f) => f.has('has-swift-package'), template: () => 'swift test --filter {test}' },
-  { kind: 'Deno', when: (s, f) => f.has('has-deno-config'), template: () => 'deno test {file}' },
-  { kind: 'Ruby', when: (s, f) => f.has('has-gemfile'), template: () => 'bundle exec rspec {file}' },
-  { kind: 'Dart', when: (s, f) => f.has('has-pubspec'), template: () => 'dart test {file}' },
-  { kind: 'Elixir', when: (s, f) => f.has('has-mix'), template: () => 'mix test {file}' },
-  {
-    kind: 'Node',
-    when: (s) => s.has('node'),
-    // The repo's own runner decides the shape. A repository whose test script is vitest
-    // or jest takes a file argument through the script; one with no such script gets the
-    // built-in runner, which is the only answer that needs nothing installed to already
-    // be true. `<manager> test -- <file>` is the ADR-010 shape (never `npx`).
-    template: (s, f, scripts, runner) => {
-      const test = scripts?.test ?? '';
-      if (!/vitest|jest/.test(test)) return 'node --test {file}';
-      const run = runner?.run ?? 'npm';
-      return `${run} test -- {file}`;
-    },
-  },
-];
+function focusedRows(root) {
+  return cardFocused(root);
+}
 
 /**
- * Verbs for ecosystems the gate table does not seed, used by the card alone.
+ * Verbs for ecosystems the gate table does not seed, used by the card alone. The rows are
+ * the records' `card.fallback` facet.
  *
  * Python is the case, and it is not an oversight that the tool seeds no Python gate: the
  * runner genuinely varies (uv, poetry, tox, nox, a project wrapper), so a seeded gate would
@@ -116,10 +92,9 @@ const FOCUSED = [
  * test. Without a lockfile the card names the plain runner, which is what the python
  * profile assumes when it says "no `pytest.skip`".
  */
-const CARD_FALLBACKS = [
-  { when: (s, f) => f.has('has-uv-lock'), commands: { test: 'uv run -m pytest' } },
-  { when: (s, f) => f.has('has-pyproject') || f.has('has-requirements'), commands: { test: 'pytest' } },
-];
+function fallbackRows(root) {
+  return cardFallbacks(root);
+}
 
 /** A non-empty string, or null. Guards JSON that is present but not a command. */
 function text(value) {
@@ -165,7 +140,7 @@ async function readScripts(root) {
  * repository has declared nothing. The last is the same table the tool seeds gates from,
  * so the card and the gate list cannot name two different commands for one repository.
  */
-function resolveVerb(verb, { manifest, facts, stack, scripts, runner }) {
+function resolveVerb(verb, { manifest, facts, stack, scripts, runner, root }) {
   const declared = text(manifest?.gates?.commands?.[verb]);
   if (declared) return declared;
 
@@ -179,20 +154,19 @@ function resolveVerb(verb, { manifest, facts, stack, scripts, runner }) {
 
   if (verb === 'build') {
     if (text(scripts?.build)) return runScript(runner?.id ?? 'npm', 'build');
-    for (const row of BUILDS) {
-      if (row.fact && facts.has(row.fact)) return row.command;
-      if (row.stack && stack.has(row.stack)) return row.command;
+    for (const row of buildRows(root)) {
+      if (matches(row.condition, { facts, stack })) return row.command;
     }
     return null;
   }
 
-  for (const eco of ECOSYSTEMS) {
+  for (const eco of ecosystemGateRows(root)) {
     if (!facts.has(eco.fact)) continue;
     const command = text(eco.commands?.[verb]);
     if (command) return command;
   }
-  for (const row of CARD_FALLBACKS) {
-    if (!row.when(stack, facts, scripts)) continue;
+  for (const row of fallbackRows(root)) {
+    if (!matches(row.condition, { facts, stack })) continue;
     const command = text(row.commands?.[verb]);
     if (command) return command;
   }
@@ -246,17 +220,17 @@ export async function commandCard({ root, manifest = null, stack = [], facts = [
 
   const lines = [];
   for (const verb of VERBS) {
-    const command = resolveVerb(verb, { manifest, facts: factSet, stack: stackSet, scripts, runner: effective });
+    const command = resolveVerb(verb, { manifest, facts: factSet, stack: stackSet, scripts, runner: effective, root });
     if (command) lines.push({ label: verb, command, verb });
   }
-  for (const entry of FOCUSED) {
-    if (!entry.when(stackSet, factSet, scripts)) continue;
+  for (const entry of focusedRows(root)) {
+    if (!matches(entry.condition, { facts: factSet, stack: stackSet })) continue;
     // One template per path kind: `has-uv-lock` and `has-pyproject` both match a uv repo,
     // and two Python lines would be two answers with the second one wrong.
     if (lines.some((l) => l.kind === entry.kind)) continue;
     lines.push({
       label: `focused test (${entry.kind})`,
-      command: entry.template(stackSet, factSet, scripts, effective),
+      command: evalTemplate(entry.template, { scripts, runner: effective }),
       kind: entry.kind,
       verb: 'focused',
     });

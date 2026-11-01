@@ -1,0 +1,25 @@
+{
+  "id": "go",
+  "facts": ["has-go-mod"],
+  "tool": "go",
+  "manifestOrder": 2,
+  "gates": {
+    "preCommit": ["format", "lint"],
+    "prePush": ["test"],
+    "commands": {
+      "format": "test -z \"$(gofmt -l .)\"",
+      "lint": "go vet ./...",
+      "test": "go test ./..."
+    }
+  },
+  "card": {
+    "build": { "order": 2, "condition": { "fact": "has-go-mod" }, "command": "go build ./..." },
+    "focused": [
+      { "order": 4, "kind": "Go package", "condition": { "fact": "has-go-mod" }, "template": "go test ./{pkg} -run {Test}" }
+    ]
+  },
+  "dependabot": [
+    { "order": 5, "fact": "has-go-mod", "value": "gomod", "manifest": "go.mod" }
+  ],
+  "languages": [{ "lang": "go", "exts": [".go"] }]
+}

@@ -1,0 +1,6 @@
+{
+  "id": "uv",
+  "dependabot": [
+    { "order": 19, "fact": "has-uv-lock", "value": "uv", "manifest": "uv.lock" }
+  ]
+}

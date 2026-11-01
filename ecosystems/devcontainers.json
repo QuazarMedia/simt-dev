@@ -1,0 +1,6 @@
+{
+  "id": "devcontainers",
+  "dependabot": [
+    { "order": 21, "fact": "has-devcontainer", "value": "devcontainers", "manifest": "devcontainer.json" }
+  ]
+}

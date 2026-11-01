@@ -1,0 +1,20 @@
+{
+  "id": "python",
+  "card": {
+    "focused": [
+      { "order": 6, "kind": "Python", "condition": { "fact": "has-uv-lock" }, "template": "uv run -m pytest {file}::{test}" },
+      { "order": 7, "kind": "Python", "condition": { "facts": ["has-pyproject", "has-requirements"] }, "template": "pytest {file}::{test}" }
+    ],
+    "fallback": [
+      { "order": 1, "condition": { "fact": "has-uv-lock" }, "commands": { "test": "uv run -m pytest" } },
+      { "order": 2, "condition": { "facts": ["has-pyproject", "has-requirements"] }, "commands": { "test": "pytest" } }
+    ]
+  },
+  "dependabot": [
+    { "order": 3, "fact": "has-pyproject", "value": "pip", "manifest": "pyproject.toml" },
+    { "order": 4, "fact": "has-requirements", "value": "pip", "manifest": "requirements.txt" }
+  ],
+  "languages": [
+    { "lang": "python", "exts": [".py"], "testConventions": { "base": ["^test_[^/]+\\.py$"] } }
+  ]
+}

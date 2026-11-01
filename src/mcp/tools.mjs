@@ -530,7 +530,7 @@ export const TOOLS = [
     outputSchema: output.doctor,
     name: 'doctor',
     description:
-      'Classify a repository: stack tags, emitted facts with the file that proved each, and manifest presence. Call this first when the repo is unknown.',
+      'Classify a repository: stack tags, emitted facts with the file that proved each, and manifest presence. Call this first when the repo is unknown. Read-only: the fixes `doctor --fix` applies, and the preview `--diff` only shows alongside it, are not available over MCP.',
     inputSchema: rootArg,
     async run(args) {
       const root = rootOf(args);

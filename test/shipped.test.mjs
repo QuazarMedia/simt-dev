@@ -985,7 +985,7 @@ test('a source comment cites a reason or an ADR, never a plan row', async () => 
       const trimmed = line.trimStart();
       const isComment = trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*');
       if (!isComment) continue;
-      if (/\((?:see )?(?:plan|review) \d{4}/i.test(line)) {
+      if (/\((?:see )?(?:(?:plan|review) \d{4}|R\d{2}|Q\d{2})/i.test(line)) {
         offenders.push(`${file.replace(`${ROOT}/`, '')}:${i + 1}`);
       }
     }

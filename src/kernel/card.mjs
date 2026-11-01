@@ -38,7 +38,7 @@ export const CARD_LIMIT_BYTES = 600;
  * is a priority as well as a sequence: the most universally true verb comes first.
  *
  * Exported because a second reader has to agree with it: a rule may declare `card:<verb>`
- * as the evidence that makes its line redundant (R09), and a copy of this list living in
+ * as the evidence that makes its line redundant , and a copy of this list living in
  * the filter would let the card name a verb the filter called unknown.
  */
 export const CARD_VERBS = ['build', 'test', 'lint', 'format', 'typecheck'];

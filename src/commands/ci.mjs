@@ -124,7 +124,7 @@ export async function ciCommand(positional, flags) {
   }
 
   // The `--diff` pairs, read before anything is written so the before side is
-  // true in preview and in apply alike (R50).
+  // true in preview and in apply alike .
   const renders = new Map(targets().map(({ key, render }) => [key, render]));
   const diffs =
     flags.diff === true
@@ -145,14 +145,14 @@ export async function ciCommand(positional, flags) {
   }
 
   if (!mode.apply) {
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
     note('');
     note(mode.dryRun ? 'dry-run  nothing written' : `dry-run  nothing written; apply with: ${CLI} ci --yes`);
     return EXIT.OK;
   }
 
-  // Journaled so `undo` restores this run (R49). The renderer takes the plan because
+  // Journaled so `undo` restores this run . The renderer takes the plan because
   // detection-driven content is a function of this repo's facts: a dependabot config
   // rendered without them would watch nothing, which is the same silent-nothing the
   // detection ruling exists to stop.
@@ -177,7 +177,7 @@ export async function ciCommand(positional, flags) {
       {},
     );
   }
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   return EXIT.OK;
 }

@@ -127,7 +127,7 @@ export const TOOLS_READ = [
       const facts = await skillsShowFacts(root, args?.name, args ?? {});
       // The schema promises `body: null` when there is no body, and this used to hand the
       // prose that says so to the field a client tests for null: a caller checking `body`
-      // for null read a paragraph as a body (Q56). The prose moves to `reason`, which is
+      // for null read a paragraph as a body . The prose moves to `reason`, which is
       // where a model looks for what to do about it.
       const missing = typeof facts.bodyText === 'string' && facts.bodyText.startsWith('(body unavailable');
       return {

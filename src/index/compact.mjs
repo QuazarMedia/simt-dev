@@ -1,4 +1,4 @@
-// Compaction for output this tool itself produced (R18, ADR-095).
+// Compaction for output this tool itself produced (ADR-095).
 //
 // Failures stay whole: the name, the assertion and the location are in the
 // block that is printed. Passing tests become a count. A stream that is not

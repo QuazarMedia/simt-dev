@@ -1,7 +1,7 @@
 // The `simt pr-body` engine.
 //
 // A pull request body assembled from what the tool already knows, rather than
-// what its author remembers to write: the evidence block from the ledger (R17),
+// what its author remembers to write: the evidence block from the ledger ,
 // the decision records the diff touches, the gate state from the last check,
 // and the residual risk in ADR-008's verdict vocabulary. Read-only throughout:
 // it names the tree, reads the ledger, reads the check cache and diffs names,

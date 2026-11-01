@@ -231,7 +231,7 @@ export async function nextDecisionNumber(decisionsDir) {
   return { number: next, id: `ADR-${String(next).padStart(3, '0')}` };
 }
 
-/** Collect affected repository paths from the working tree / staged diff (R25, R34). */
+/** Collect affected repository paths from the working tree / staged diff . */
 export async function diffAffectedPaths(root) {
   const paths = new Set();
   const addLines = (stdout) => {

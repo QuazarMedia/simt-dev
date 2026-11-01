@@ -107,7 +107,7 @@ export async function initCommand(positional, flags) {
   const manifest = buildManifest({ root, stack: detected.stack, sha, version, existing: current, capability, facts: detected.facts });
   const findings = await scanRepo(root);
   const summary = summarise(findings);
-  // Every repo-file write is journaled, so `undo` can restore this run (R49).
+  // Every repo-file write is journaled, so `undo` can restore this run .
   // Created before `plan()` because the skill file must be on disk when
   // `installedSkills` reads the directory for the region's disclosure section.
   const journal = [];
@@ -145,7 +145,7 @@ export async function initCommand(positional, flags) {
   // there is no manifest on disk yet, so the lock `plan` computed is the one for a repo
   // that has none - and the adoption would be red on `check --frozen` the moment the
   // manifest lands. Recompute it with the manifest about to write, so the bytes in the
-  // plan, the diff and the write are the same (Q29). A re-init preserves every lock
+  // plan, the diff and the write are the same . A re-init preserves every lock
   // input, so its `plan` bytes are already right and are left alone. After the
   // surfaces line: that is the last mutation of the manifest, and the digest must
   // cover the bytes that land on disk, not an earlier draft of them.
@@ -158,7 +158,7 @@ export async function initCommand(positional, flags) {
 
   const adoption = exists || Boolean(region?.exists);
   // One decider for `--yes --dry-run`: the inline copy used to agree with it today,
-  // but a second copy of the same arithmetic is where the next bypass grows (Q09).
+  // but a second copy of the same arithmetic is where the next bypass grows .
   const { dryRun, apply } = writeMode(flags);
 
   const manifestAction = exists ? 'update' : 'create';
@@ -418,7 +418,7 @@ export async function initCommand(positional, flags) {
   }
 
   // The `--diff` pairs, read before anything is written so the before side is
-  // true in preview and in apply alike (R50). The after-bytes reuse the exact
+  // true in preview and in apply alike . The after-bytes reuse the exact
   // render calls the apply path below writes, so the diff shows the write
   // rather than a second opinion about it. Pointers carry no bytes, so the
   // plan lines naming the link targets are already their whole story.
@@ -479,7 +479,7 @@ export async function initCommand(positional, flags) {
     if (!apply) emitJson(payload);
   } else {
     emit(render(payload, manifest, { npm, manager, version }));
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
   }
   if (!apply) {
@@ -528,7 +528,7 @@ export async function initCommand(positional, flags) {
   }
 
   // Every repo-file write below is journaled, so `undo` can restore this run
-  // (R49). Pointer symlinks carry no bytes and are not journaled.
+  // . Pointer symlinks carry no bytes and are not journaled.
   await writeManifest(root, manifest, journal);
   note(`wrote    ${MANIFEST_FILE} (${manifestAction})`);
 
@@ -669,7 +669,7 @@ export async function initCommand(positional, flags) {
   }
   await commitJournal(root, 'init', journal);
   // The tree changed, so the last `check` no longer describes it: the line
-  // goes back to "no cache" rather than reporting the tree as it was (R48).
+  // goes back to "no cache" rather than reporting the tree as it was .
   await invalidateCheckCache(root);
   payload.written = true;
 

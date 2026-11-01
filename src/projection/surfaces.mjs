@@ -58,7 +58,7 @@ import { harnessPointers, harnessScopeKeys, harnessSurfaces } from '../harness/r
 /**
  * Surfaces, in the order the writer emits them.
  *
- * The rows are data records under `harnesses/` (Q71): a surface is a fact about a vendor,
+ * The rows are data records under `harnesses/` : a surface is a fact about a vendor,
  * and a new one arrives as a new file, not a table edit (ADR-013). The engine attaches
  * the one facet a record cannot carry — `ruleFrontmatter`, a function — by id below,
  * and nothing else.
@@ -239,7 +239,7 @@ export const SURFACE_IDS = SURFACES.map((s) => s.id);
  */
 export const CANDIDATE_DIRS = [
   {
-    // The one candidate with verified facts (R42): Gemini CLI's configuration reference
+    // The one candidate with verified facts : Gemini CLI's configuration reference
     // was live and read on 2026-10-26, so presence now carries provenance instead of
     // the default "a reader may be configured here". AGENTS.md is loaded only when
     // settings.json `context.fileName` names it - the context file is GEMINI.md

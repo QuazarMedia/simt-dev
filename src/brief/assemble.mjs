@@ -250,7 +250,7 @@ export async function assembleBrief({
     why: ['a cheap packet and an exact answer are different questions'],
   });
   for (const path of likely) {
-    // The packet's own edges, walked by the same function `tests` uses (Q77).
+    // The packet's own edges, walked by the same function `tests` uses .
     const found = coverage({ files, imports: edges.filter((edge) => edge.kind === 'import') }, [path], {
       transitive: false,
     });

@@ -119,7 +119,7 @@ export async function upgradeCommand(positional, flags) {
   const summary = summariseUpgrade(plans);
 
   // The `--diff` pairs, read before anything is written so the before side is
-  // true in preview and in apply alike (R50). Labels carry the repo name: one
+  // true in preview and in apply alike . Labels carry the repo name: one
   // run diffs N repositories, and a bare filename would not say which. The
   // manifest after-bytes are built the same way the apply path builds them —
   // chosen keys kept, `$comment` refreshed, pin moved — so the diff shows the
@@ -178,7 +178,7 @@ export async function upgradeCommand(positional, flags) {
         // and three stale `.mdc` rules, and restamping only the first leaves `check` red
         // straight after a successful upgrade.
         // One journal set per repo: a set belongs to one repository, and an
-        // `undo` in one consumer must never reach into another (R49).
+        // `undo` in one consumer must never reach into another .
         const journal = [];
         const { targets } = await plan(p.path);
         const targetChanges = [];
@@ -207,7 +207,7 @@ export async function upgradeCommand(positional, flags) {
         );
         await commitJournal(p.path, 'upgrade', journal);
         // The pin and regions moved: the last `check` of this repo no longer
-        // describes it (R48). Gated on the journal: an untouched repo keeps
+        // describes it . Gated on the journal: an untouched repo keeps
         // its record.
         if (journal.length > 0) await invalidateCheckCache(p.path);
         applied.push(p.name);
@@ -244,7 +244,7 @@ export async function upgradeCommand(positional, flags) {
   }
 
   emit(render(plans, summary, { root, shape: found.shape, source: target.source, sha, applied, failed }));
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
 
   for (const w of found.worktrees) {

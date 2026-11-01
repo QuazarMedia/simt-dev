@@ -8,7 +8,7 @@
 // remedy and whether that remedy is flagged safe, and `--fix` applies only the
 // safe ones while listing the rest with the reason each needs a human:
 //
-//   - safe means local, idempotent and journaled (the R49 journal is the undo).
+//   - safe means local, idempotent and journaled (the journal is the undo).
 //     `sync`'s manifest repair, a hooks install over routing this tool already
 //     owns, and the journal's own .gitignore entry all qualify.
 //   - safe is necessary but not sufficient: the fix must also be a REPAIR, not
@@ -225,7 +225,7 @@ function findingLines(findings, { fixMode, applying }) {
   });
 }
 
-// --- core: the config health both the CLI and the MCP `doctor` tool answer from (Q15)
+// --- core: the config health both the CLI and the MCP `doctor` tool answer from 
 //
 // The MCP tool returned the fingerprint alone: stack, facts and manifest, and none
 // of the findings the command reports. The command below renders these facts for
@@ -350,7 +350,7 @@ export async function runDoctor(positional, flags) {
       ...findingLines(findings, { fixMode, applying: mode.apply }),
     ].join('\n'),
   );
-  // After the report: the report says what, the diff shows it (R50). Only the
+  // After the report: the report says what, the diff shows it . Only the
   // fix plan is diffed, so without --fix there is nothing to show.
   if (fixMode && flags.diff === true) emitDiffs(findings.flatMap((f) => f.diffs ?? []), flags);
   if (failedFix) {

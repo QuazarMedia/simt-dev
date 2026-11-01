@@ -8,7 +8,7 @@
 //
 // The graph loads once at open: files, symbols, edges. FTS bodies run in
 // SQLite (`search` delegates to `searchFtsBm25`) and stored vectors are not
-// loaded at all: a map without `--embed` does not touch them (Q76).
+// loaded at all: a map without `--embed` does not touch them .
 
 import { coverage } from './coverage.mjs';
 import { governs } from './govern.mjs';
@@ -110,7 +110,7 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
       }),
 
     /**
-     * Rank the repository's files for a task string (R22): graph proximity
+     * Rank the repository's files for a task string : graph proximity
      * fused with the BM25 rows.
      * @param {string} task
      * @param {{limit?: number, embed?: boolean, allowRemote?: boolean}} [options]
@@ -127,7 +127,7 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
       }),
 
     /**
-     * The tests that exercise `paths` (Q77): the import closure when
+     * The tests that exercise `paths` : the import closure when
      * `transitive` (default true), the stored test edges otherwise.
      * @param {Iterable<string>} paths
      * @param {{transitive?: boolean, cochange?: boolean}} [options]
@@ -140,7 +140,7 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
       }),
 
     /**
-     * Who a change to `file` reaches (Q77): the reverse import closure and
+     * Who a change to `file` reaches : the reverse import closure and
      * the tests that import it.
      * @param {string} file
      * @param {{limit?: number}} [options]
@@ -153,7 +153,7 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
       }),
 
     /**
-     * What governs `file` (Q77): the records in `corpus` whose Affects line
+     * What governs `file` : the records in `corpus` whose Affects line
      * names it, plus the rules, skills, gates and lessons whose path lists
      * match.
      * @param {string} file

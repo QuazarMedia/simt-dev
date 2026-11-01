@@ -2,7 +2,7 @@
 //
 // Shape copied from `ci`: the plan is printed first, nothing is written
 // without `--yes`, `--diff` shows the same plan as unified diffs and `undo`
-// restores the set (R49). Three of the four targets are generated from the
+// restores the set . Three of the four targets are generated from the
 // list; `.claude/settings.json` is merged, never replaced — see src/ignore.mjs
 // for why that distinction exists.
 
@@ -111,7 +111,7 @@ export async function ignoreCommand(args, flags) {
   if (!isJson(flags)) emit(lines.join('\n'));
 
   if (!mode.apply) {
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
     if (isJson(flags)) {
       emitJson(payload(false));
@@ -122,7 +122,7 @@ export async function ignoreCommand(args, flags) {
     return EXIT.OK;
   }
 
-  // Journaled so `undo` restores this run (R49). Every note writes to stderr,
+  // Journaled so `undo` restores this run . Every note writes to stderr,
   // so the `--json` document remains the only bytes on stdout.
   await applyPlan(
     root,
@@ -136,7 +136,7 @@ export async function ignoreCommand(args, flags) {
   for (const t of changed) note(`wrote    ${t.path} (${t.action})`);
 
   if (isJson(flags)) emitJson(payload(true));
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   return EXIT.OK;
 }

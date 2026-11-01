@@ -214,7 +214,7 @@ export async function readResource(uri, root = process.cwd()) {
   const text = redactInternalPaths(redactEstate(raw)).trim();
   // `bytes` is not a `ResourceContents` field: a client validating the result against
   // the specification sees an unexpected property, and the length is `text.length` away
-  // (Q56).
+  // .
   return { uri, mimeType: 'text/markdown', text };
 }
 

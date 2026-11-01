@@ -245,7 +245,7 @@ export async function sharedInstallCommand(_args, flags) {
   }
 
   // The `--diff` pairs, read before anything is written so the before side is
-  // true in preview and in apply alike (R50). Home-directory copies through the
+  // true in preview and in apply alike . Home-directory copies through the
   // same `injectShared` the write applies, manifest declarations through
   // `manifestText`; paste targets carry no file and are printed in full below.
   let diffs = [];
@@ -266,7 +266,7 @@ export async function sharedInstallCommand(_args, flags) {
   }
 
   // `--yes --dry-run` is a rehearsal, not consent: only writeMode decides, so the
-  // `--dry-run` promise holds for the one command that writes into `$HOME` (Q09).
+  // `--dry-run` promise holds for the one command that writes into `$HOME` .
   const { dryRun, apply } = writeMode(flags);
   if (!apply) {
     // Nothing above this line writes, and nothing below it runs without the reader's
@@ -308,7 +308,7 @@ export async function sharedInstallCommand(_args, flags) {
         dryRun ? 'dry-run  nothing written' : `nothing written; re-run with: ${CLI} shared install --yes`,
       ].join('\n'),
     );
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
     return EXIT.FAIL;
   }
@@ -355,7 +355,7 @@ export async function sharedInstallCommand(_args, flags) {
   }
   lines.push(`verify   ${CLI} doctor  reports the copy as current, and ${CLI} tokens --repos --root . reports what is left`);
   emit(lines.join('\n'));
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   return EXIT.OK;
 }

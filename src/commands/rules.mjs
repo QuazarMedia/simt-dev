@@ -167,7 +167,7 @@ async function selectionFor(rules, root, ctx = repoContext(root)) {
   return { selected: new Set(selected.map((r) => r.id)), notes };
 }
 
-// --- cores: one computation for the CLI and the MCP tools (Q15) ----------------
+// --- cores: one computation for the CLI and the MCP tools  ----------------
 //
 // `rules_list` and `rules_why` in the MCP surface rebuilt this catalogue from the
 // same modules with narrower loads: the MCP list missed the per-surface rules and
@@ -253,7 +253,7 @@ export async function rulesWhyFacts(root, what, { all = false, ctx = null } = {}
     const record = decisions.find((x) => x.id === id) ?? null;
     // Was 'list them with: ls docs/decisions/' - a path relative to simt-dev's own
     // tree, which resolves to nothing in the repo the reader is standing in. The
-    // remedy must be a command they can run (Q34: the decisions list, not the
+    // remedy must be a command they can run (the decisions list, not the
     // rules list - the reader asked about a decision, not a rule).
     if (!record) rulesFailure(`no decision record ${id}`, `list the known decisions with: ${CLI} rules decisions`, EXIT.USAGE);
     const replacement = record.supersededBy ? decisions.find((x) => x.id === record.supersededBy) : null;

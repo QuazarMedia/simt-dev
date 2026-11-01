@@ -71,7 +71,7 @@ async function installAgents(root, flags) {
   }
 
   // The `--diff` pairs, read before anything is written so the before side is
-  // true in preview and in apply alike (R50).
+  // true in preview and in apply alike .
   const diffs =
     flags.diff === true
       ? await Promise.all(
@@ -104,12 +104,12 @@ async function installAgents(root, flags) {
         `PLAN     nothing written; apply with: ${CLI} agents install --yes`,
       ].join('\n'),
     );
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
     return EXIT.OK;
   }
 
-  // Journaled so `undo` restores this run (R49).
+  // Journaled so `undo` restores this run .
   const journal = [];
   const written = await writeAgentPlan(root, journal, plan);
   await commitJournal(root, 'agents install', journal);
@@ -136,7 +136,7 @@ async function installAgents(root, flags) {
       `WROTE    ${written.length} agent file(s)`,
     ].join('\n'),
   );
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   for (const o of others) note(`note     ${o.id}: not written - ${o.note}`);
   if (written.length === 0) note('note     every documented agents file already carried this agent');

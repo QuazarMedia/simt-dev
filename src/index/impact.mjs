@@ -1,4 +1,4 @@
-// Who a change reaches (R23, ADR-096).
+// Who a change reaches (ADR-096).
 //
 // Reverse dependents, the tests that import them, the owners a CODEOWNERS
 // line names, and another repository that references a contract this change

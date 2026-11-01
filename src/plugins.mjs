@@ -32,7 +32,7 @@ import { desiredRegion } from './projection/rules.mjs';
 import { harnessPlugins } from './harness/records.mjs';
 import { PACKAGE_NAME, BIN_REL } from './name.mjs';
 
-// The plugin layouts, as records (Q71): where each kind's runtime, entry point and hooks
+// The plugin layouts, as records : where each kind's runtime, entry point and hooks
 // document land. A new kind is a new record, not a branch in each helper below.
 const PLUGINS = harnessPlugins();
 const pluginOf = (kind) => PLUGINS.find((r) => r.id === kind);
@@ -43,7 +43,7 @@ export const PLUGIN_KINDS = PLUGINS.map((r) => r.id);
 /**
  * The package this code ships in: the runtime a generated package copies. Resolved
  * from the module URL, not from the consumer's cwd, so `plugin` built with
- * `--root <consumer>` still ships this tool rather than the consumer's files (Q03).
+ * `--root <consumer>` still ships this tool rather than the consumer's files .
  */
 function packageRoot() {
   return dirname(dirname(fileURLToPath(import.meta.url)));
@@ -156,7 +156,7 @@ export async function buildPackage(kind, { root = process.cwd(), out, apply = fa
   ];
 
   // The `--diff` before-sides, read before anything is written so the diff is
-  // true in preview and in apply alike (R50). Always captured: the files are a
+  // true in preview and in apply alike . Always captured: the files are a
   // handful of small generated configs. The runtime copy below is excluded — it
   // is a mechanical copy of this tool's own sources, not planned content, and
   // diffing it would reprint the tool into the review.

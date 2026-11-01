@@ -566,7 +566,7 @@ export async function publishPack(dir, { apply = false } = {}) {
  * Write scaffold files into a directory that must not already exist.
  *
  * `root` is the repository the journal set belongs to — usually the scaffold's
- * own parent, so `undo` runs where the files live. Recorded (R49) because a
+ * own parent, so `undo` runs where the files live. Recorded  because a
  * scaffold is repo files like any other write.
  */
 export async function writeScaffold(dir, files, root = dirname(dir)) {

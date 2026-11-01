@@ -8,7 +8,7 @@
 // spec stop agreeing in either direction.
 //
 // The fields that only some consumers need (`tier`, `writes`, `args`, `flags`) arrive
-// with the slices that read them: help (Q61), validation (Q62), MCP (Q66). A field no
+// with the slices that read them: help , validation , MCP . A field no
 // code reads is a field that drifts, and a wrong `writes` claim is worse than none.
 //
 // `defaultFor` marks the subcommand a bare group resolves to. It sits on the row that

@@ -1,4 +1,4 @@
-// `simt impact` reports who a file or an export reaches (R23, ADR-096).
+// `simt impact` reports who a file or an export reaches (ADR-096).
 //
 // Importers, the tests that cover them, the decisions and rules that govern
 // the file, the CODEOWNERS line, and — when a workspace is configured —

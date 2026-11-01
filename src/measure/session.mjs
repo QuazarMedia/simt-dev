@@ -1,4 +1,4 @@
-// Local session transcript attribution for `simt tokens --session <path>` (R06, ADR-075).
+// Local session transcript attribution for `simt tokens --session <path>` (ADR-075).
 //
 // Splits a recorded Claude Code or Codex JSONL/JSON session transcript into `rules`,
 // `fileReads` and `toolOutput` using only the local file on disk. Remote URLs are
@@ -47,7 +47,7 @@ function textOfContent(content) {
 
 /**
  * Split a local Claude Code or Codex session transcript into `rules`, `fileReads` and
- * `toolOutput` (R06, ADR-075).
+ * `toolOutput` (ADR-075).
  */
 export async function measureSession(transcriptPath) {
   if (typeof transcriptPath !== 'string' || transcriptPath.trim() === '') {

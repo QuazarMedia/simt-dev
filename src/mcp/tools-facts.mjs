@@ -216,7 +216,7 @@ export const TOOLS_FACTS = [
       // A repository with no index is not a failed call. Every surface points here first,
       // so the one tool told to be the entry point must answer in a repository that has
       // never been indexed - it falls back to the skill packet, which is read from the
-      // package rather than the tree, and names the command that unlocks the rest (Q56).
+      // package rather than the tree, and names the command that unlocks the rest .
       if (result.cold) {
         const task = typeof args?.task === 'string' ? args.task : '';
         const facts = await skillsBriefFacts(root, { ...(args ?? {}), task });
@@ -266,7 +266,7 @@ export const TOOLS_FACTS = [
     description:
       'Ask a declared code-graph server one structural question; the answer names the server. Starts only servers simt.json names; none declared is an error.',
     // This tool spawns the repo manifest's `command`, so it is not read-only: a client
-    // that cached its answer as one would replay a process spawn as a pure read (Q13).
+    // that cached its answer as one would replay a process spawn as a pure read .
     annotations: { readOnlyHint: false, openWorldHint: true },
     inputSchema: {
       type: 'object',
@@ -299,7 +299,7 @@ export const TOOLS_FACTS = [
         });
       }
       // A model-supplied root can point at a directory with a crafted manifest, and a
-      // repo manifest alone must not authorise a spawn on the operator's machine (Q13).
+      // repo manifest alone must not authorise a spawn on the operator's machine .
       const ws = await resolveWorkspace(args ?? {});
       const user = await readUserConfig();
       const denied = federationAccess({

@@ -1,4 +1,4 @@
-// `simt map` ranks the files a task is most likely to touch (R22, ADR-091).
+// `simt map` ranks the files a task is most likely to touch (ADR-091).
 // The cache is refreshed from the git index on every read: `reindex` skips unchanged
 // blobs, so a current repository pays for one `git ls-files -s`, not a walk of the
 // tree. A map of stale files is a wrong answer, and the commands that read with
@@ -104,7 +104,7 @@ async function recall(root, flags) {
  * The callers that build are commands a person typed: `map`, `brief`, `slice`.
  *
  * `build: false` refuses the refresh and answers with `cold: true` when the index is
- * empty. The callers that pass it are the prompt-submit hook (R29) and the MCP
+ * empty. The callers that pass it are the prompt-submit hook  and the MCP
  * surface: a delivered packet that walked the whole repository would make a person's
  * first prompt in a fresh clone wait, and a prompt that takes a minute to appear is
  * how a hook gets uninstalled. The next prompt gets the packet, and a command a

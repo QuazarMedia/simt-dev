@@ -1,4 +1,4 @@
-// `simt lease [<paths>...]`: claim files for one session, or read the claims (R54).
+// `simt lease [<paths>...]`: claim files for one session, or read the claims .
 // `lease release` and `lease renew` end and extend the holder's own claims: the
 // denial tells a blocked session to ask the holder to release the path, so the
 // holder needs a command that does it.
@@ -63,7 +63,7 @@ export async function leaseCommand(args, flags) {
 
   const wanted = [];
   const seen = new Set();
-  // A trailing slash asks for the directory (Q74): one claim covering every path under it.
+  // A trailing slash asks for the directory : one claim covering every path under it.
   const kinds = new Map();
   // The claim is stored in the one spelling the hook's comparison will produce:
   // a claim taken as `src/Keep.mjs` and an edit that spells `src/keep.mjs` must
@@ -86,7 +86,7 @@ export async function leaseCommand(args, flags) {
   // canonicalised before it is compared: a claim written before the resolver
   // existed must still conflict with a claim taken for the same file.
   // A claim and a target overlap when either covers the other: claiming `src/` while
-  // `src/a.mjs` is held is the conflict the directory claim exists to catch (Q74).
+  // `src/a.mjs` is held is the conflict the directory claim exists to catch .
   const overlaps = (l) =>
     wanted.some(
       (rel) =>
@@ -152,7 +152,7 @@ export async function leaseCommand(args, flags) {
   }
   const { mine, path } = claimed;
   // Coordination state a hook acts on belongs in the log a UI can tail, not only in a
-  // file a person has to open (Q73).
+  // file a person has to open .
   await noteEvent(root, {
     kind: 'lease.acquired',
     session,

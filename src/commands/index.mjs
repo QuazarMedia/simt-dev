@@ -38,7 +38,7 @@ import { packageVersion } from '../package-version.mjs';
 export const GROUPS = GROUP_DEFAULTS;
 
 /** path -> the flags the spec declares for it. The parser knows every flag; this is
- * what one command reads, and the difference is what the caller is told (Q62). */
+ * what one command reads, and the difference is what the caller is told . */
 const DECLARED = new Map(SPEC.map((row) => [row.path, new Set(row.flags ?? [])]));
 
 /** Flags dispatch reads for every command: the envelope and the guard rails. */
@@ -374,7 +374,7 @@ async function dispatchInState(argv) {
   // caller's intent discarded with nothing to notice. A flag the spec does not declare
   // for this path is named on stderr and still runs for one release; the next release
   // makes it EXIT.USAGE. `--json` has no warnings array yet, so the JSON half of the
-  // window waits on the envelope (Q65).
+  // window waits on the envelope .
   const declared = DECLARED.get(path);
   const refusing = refusesAt(DEPRECATION_RELEASE, packageVersion());
   for (const key of Object.keys(flags)) {

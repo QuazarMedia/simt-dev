@@ -285,7 +285,7 @@ function scan(text, onLine) {
 /**
  * Import specifiers in a script, including an import that spans lines.
  *
- * Single-line regexes missed the case the review caught (Q41): an import whose
+ * Single-line regexes missed the case the review caught : an import whose
  * `from` lands several lines below the `import`. Buffering until the closing
  * quote (or `;`) sees the whole statement before deciding what it names.
  * Moved here from `tests.mjs` so the index and the test mapping read the same

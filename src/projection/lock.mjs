@@ -34,7 +34,7 @@ const MANIFEST_KEYS = ['mode', 'budget', 'shared', 'surfaces', 'gates'];
  *   body that was written and not a body for a different set of surfaces
  * @param {object} [manifest] the manifest to digest, in place of the one on disk. A
  *   writer that is about to write a manifest (a fresh `init`) passes it here so the
- *   lock records the state the repo will have, not the state it has (Q29).
+ *   lock records the state the repo will have, not the state it has .
  */
 export async function computeLock(root, flags = {}, manifest = undefined) {
   const variants =

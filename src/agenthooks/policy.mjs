@@ -28,8 +28,8 @@ import { HOOKS_DIR, HOOKS_PATH_KEY } from '../hooks/shim.mjs';
  * `pre-tool-use` is a decision: a payload in, a deny or nothing out, and exit 2 means
  * block. `prompt-submit` is a delivery: the same payload shape in, context out, and it
  * never denies anything — a hook that could stop a person's prompt would be a hook whose
- * own bug is a person who cannot type (R29). `post-tool-use` recalls a lesson as one
- * paragraph when a tool call fails with a signature matching `docs/lessons/*.md` (R33).
+ * own bug is a person who cannot type . `post-tool-use` recalls a lesson as one
+ * paragraph when a tool call fails with a signature matching `docs/lessons/*.md` .
  */
 export const EVENTS = ['pre-tool-use', 'prompt-submit', 'post-tool-use'];
 
@@ -38,7 +38,7 @@ export const ALLOW_ENV = 'SIMT_ALLOW';
 
 /**
  * The environment variable that names the session a claim was filed under and the
- * session an edit is asked for (R54).
+ * session an edit is asked for .
  *
  * One name in both places on purpose: a denial is only explainable if the session the
  * hook protected is the same name `simt lease` recorded, and two spellings would drift

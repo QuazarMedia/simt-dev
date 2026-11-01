@@ -22,7 +22,7 @@ export const SCHEMA_V = '5';
 // (ASCII fold, kind and ref searchable), and a v4 `fts` table cannot grow the
 // node_id column the v5 layout needs. The preamble creates them only when they
 // are missing (a cold build); the 3 -> 4 and 4 -> 5 migrations below drop and
-// recreate them, which is the versioned replacement for the per-write wipe (Q44).
+// recreate them, which is the versioned replacement for the per-write wipe .
 export const FTS_SCHEMA = 'create virtual table if not exists fts using fts5(body, node_id UNINDEXED, kind UNINDEXED, tokenize = "unicode61 remove_diacritics 2")';
 export const FTS_TRI_SCHEMA = 'create virtual table if not exists fts_tri using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "trigram")';
 
@@ -71,7 +71,7 @@ const MIGRATIONS = [
   // in the store. `edges` and `fts` are built under `_v5` names and swapped in
   // after the copy, because the v4 tables of those names still hold data.
   // fts_tri keeps its (kind, ref, body) shape - the CJK trigram path is
-  // untouched (Q43).
+  // untouched .
   {
     from: 4,
     to: 5,
@@ -285,7 +285,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
   await mkdir(dirname(file), { recursive: true });
   // A cold build goes to a temp file that is renamed over the target: three
   // concurrent cold runs used to interleave schema creation and leave a locked,
-  // table-less database behind (Q08). Each writer builds its own complete file
+  // table-less database behind . Each writer builds its own complete file
   // and the rename is atomic, so the last writer wins with a whole index.
   let cold = false;
   try {
@@ -325,7 +325,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       on conflict(kind, path) do update set revision = excluded.revision, lang = excluded.lang,
         bytes = excluded.bytes, props = excluded.props`);
     const sourceIdOf = db.prepare(`select id from sources where kind = 'blob' and path = ?`);
-    // `prepare` compiles only the FIRST statement in a string (Q76): a
+    // `prepare` compiles only the FIRST statement in a string : a
     // multi-statement delete prepared as one ran only its head, and the
     // surviving `file:` node collided with the next insert on `nodes.key`.
     const dropDependents = [
@@ -358,7 +358,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     }
     for (const path of removed) {
       for (const st of dropSource) st.run(path);
-      // fts_tri is still path-keyed: the trigram table keeps its v4 shape (Q43).
+      // fts_tri is still path-keyed: the trigram table keeps its v4 shape .
       db.prepare('delete from fts_tri where ref = ?').run(path);
     }
     for (const row of next) {
@@ -442,7 +442,7 @@ function corruptIndexError(cause) {
 
 /**
  * A contended index write is a retryable race, not a broken repository: name it
- * so the command maps its own remedy instead of blaming the git checkout (Q08).
+ * so the command maps its own remedy instead of blaming the git checkout .
  */
 function asIndexError(error) {
   const code = error?.code ?? error?.errno;
@@ -692,7 +692,7 @@ export async function readTreeDigest(root, backend) {
 
 export async function countSqlite(root) {
   // One open, three counts: the v4 layout paid a full open/close per metric,
-  // and a read that only wants the counts was buying three connections (Q76).
+  // and a read that only wants the counts was buying three connections .
   const { rows } = await readSqliteRows(
     root,
     `select

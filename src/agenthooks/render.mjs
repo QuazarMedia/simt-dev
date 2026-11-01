@@ -13,7 +13,7 @@
 //   gemini       .gemini/settings.json   BeforeTool      {"hooks":{E:[{matcher,hooks:[h]}]}}
 //   opencode     .opencode/plugins/      execute.before  a JS plugin the tool owns whole
 //
-// The prompt-submit event (R29) is a second table, and it is shorter because the vendors
+// The prompt-submit event  is a second table, and it is shorter because the vendors
 // are: four of the six document a prompt event that can put text into the model's context,
 // and a delivery is the only thing this tool does there. None takes a matcher — all
 // document that field for tool events, and a matcher a harness ignores is a matcher the
@@ -36,7 +36,7 @@
 // this module takes its paths from — a harness this tool did not verify is a harness it
 // does not write to.
 //
-// The paths are not written here. They come from the reader table (R14) because that is
+// The paths are not written here. They come from the reader table  because that is
 // where each one was verified against its vendor page, and a second copy of a verified
 // fact is a copy that drifts the first time a vendor moves the file.
 //
@@ -187,7 +187,7 @@ function patchFiles(text) {
 // The payload a hook reads: where the tool name and its input sit, and the keys that
 // name a command and a file. A record cannot carry a function, so the engine reads the
 // record's keys and applies them: a harness that puts a field somewhere new is a new
-// record, not a new branch here (Q71).
+// record, not a new branch here .
 function pick(obj, keys) {
   if (!obj || typeof obj !== 'object') return null;
   for (const k of keys) {
@@ -249,7 +249,7 @@ function applyText(value, text) {
   return value;
 }
 
-// The hooks dialect per harness, as records (Q71): the data a config document and a
+// The hooks dialect per harness, as records : the data a config document and a
 // decision are shaped by, with the page each shape was read from. What a record cannot
 // carry is attached here — `root` and `extract` read the record's payload keys, and
 // `deny`, `prompt.context` and `post.context` apply its templates. Module-internal on

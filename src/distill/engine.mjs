@@ -7,7 +7,7 @@
 //     skeleton plus the first content of each section, cut to the budget. No
 //     model, no network, byte-stable: the same text at the same budget produces
 //     the same bytes forever (P1, P4).
-//   - `local`: the configured local chat model (R37) proposes a abstractive
+//   - `local`: the configured local chat model  proposes a abstractive
 //     summary. It is opt-in (`--local`), loopback-only by default, and its output
 //     is verified against the source before anything is written.
 //

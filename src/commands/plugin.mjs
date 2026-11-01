@@ -31,7 +31,7 @@ export async function pluginCommand(args, flags) {
   const root = commandRoot(flags);
   const plan = await buildPackage(kind, { root, out, apply });
 
-  // The `--diff` pairs: the generated files, created or refreshed (R50). The
+  // The `--diff` pairs: the generated files, created or refreshed . The
   // before-sides ride on the plan from `buildPackage`, read before anything was
   // written, so the diff is true in preview and in apply alike.
   const diffs =
@@ -70,7 +70,7 @@ export async function pluginCommand(args, flags) {
         : `PLAN     nothing written; apply with: ${CLI} plugin ${kind} --out ${out} --yes`,
     ].join('\n'),
   );
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   return EXIT.OK;
 }

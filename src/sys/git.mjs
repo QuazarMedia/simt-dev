@@ -1,4 +1,4 @@
-// The one git runner (Q72).
+// The one git runner .
 //
 // Thirty modules imported `child_process` and grew their own `git()`: some threw, some
 // returned null, some trimmed, some split on NUL, and each of them decided for itself

@@ -1,8 +1,8 @@
-// Ranked repo map and hybrid retrieval (R22, R28, ADR-091).
+// Ranked repo map and hybrid retrieval (ADR-091).
 //
 // PageRank over import and call edges, personalised to the task, fused with
 // FTS5 BM25 (`bm25()`) and resolver signals via reciprocal-rank fusion (RRF).
-// Optional local vector embeddings (stored as SQLite blobs via R37) are scored
+// Optional local vector embeddings (stored as SQLite blobs via) are scored
 // by brute-force cosine similarity and stay off by default unless they raise
 // gold-file recall@10 by at least 10 percentage points (+0.10).
 
@@ -110,7 +110,7 @@ export function rankByCosine(embeddings, queryVector) {
  * Rank files for one task. No task text ranks the whole graph. A task ranks the
  * files it mentions and the files one import or call away from those, and when
  * FTS / BM25 rows or optional vector embeddings are supplied, fuses BM25 +
- * graph proximity + resolver signals via reciprocal-rank fusion (R28).
+ * graph proximity + resolver signals via reciprocal-rank fusion .
  *
  * @param {{
  *   files: {path: string}[],
@@ -403,7 +403,7 @@ function pageRank(nodes, links, scores) {
     // Dangling nodes (no outgoing edges) spread their rank over the whole
     // distribution. Accumulating their mass first makes that one pass over j
     // instead of one pass per dangling node - the no-task rank of a 30k-file
-    // repo used to go quadratic here (Q76).
+    // repo used to go quadratic here .
     let danglingMass = 0;
     for (let i = 0; i < n; i += 1) {
       const outs = links[i];

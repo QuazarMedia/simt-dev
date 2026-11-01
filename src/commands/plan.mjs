@@ -156,7 +156,7 @@ async function runDone(root, id, sha, flags) {
     dryRun: !mode.apply,
   });
   if (result.error) return fail(result.error, EXIT.USAGE, result.remedy);
-  // The `--diff` pair: the one changed tracker row (R50). The sides ride on the
+  // The `--diff` pair: the one changed tracker row . The sides ride on the
   // result from `planDone`, captured pre-write, so the diff is true in preview
   // and in apply alike. When nothing changed the sides are equal and the diff
   // renders empty.
@@ -180,7 +180,7 @@ async function runDone(root, id, sha, flags) {
   if (result.evidenceRecorded) lines.push(`evidence ${result.sha}${result.test ? `  test: ${result.test}` : ''}`);
   else if (result.evidenceNote) lines.push(`note     ${result.evidenceNote}`);
   emit(lines.join('\n'));
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   return EXIT.OK;
 }

@@ -1,4 +1,4 @@
-// `simt tests [path]` lists the tests that exercise a file (R24, ADR-092).
+// `simt tests [path]` lists the tests that exercise a file (ADR-092).
 //
 // The index already stores imports, but a test import that spans lines is not
 // one of them. Test files are read back from their blobs, once, in a single

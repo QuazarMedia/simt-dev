@@ -1,8 +1,8 @@
 // The local critic.
 //
 // `simt review` builds the critic's brief — the staged diff plus everything that
-// governs it (R25) — with no model and no socket. `simt review --local` is its first
-// consumer: it sends the brief to the endpoint named in the manifest (R37) and asks
+// governs it  — with no model and no socket. `simt review --local` is its first
+// consumer: it sends the brief to the endpoint named in the manifest  and asks
 // for an ADR-008 verdict skeleton, then verifies the verdict vocabulary and every
 // cited id against that brief before the reply becomes a proposal under
 // `.simt/reviews/`. A proposal a human never reads is a dead file, which is the
@@ -32,7 +32,7 @@ import { git } from '../sys/git.mjs';
 import { LOCAL_DIR } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
 
-// Locked on-disk beneath machine-local state, like the distilled cache (R38) —
+// Locked on-disk beneath machine-local state, like the distilled cache  —
 // proposals keyed by content digest, never projected and never committed.
 const REVIEW_DIR = join(LOCAL_DIR, 'reviews');
 const ENGINE_REVIEW_LOCAL = 'review-local';
@@ -104,7 +104,7 @@ export function buildReviewPrompt(diff, items, budget) {
 }
 
 /**
- * Everything a staged diff is governed by (R25), one entry per id.
+ * Everything a staged diff is governed by , one entry per id.
  *
  * ADR-008 is always in the brief because the verdict cites the vocabulary itself
  * even when no Affects line names the diff — that is one record, looked up by id,

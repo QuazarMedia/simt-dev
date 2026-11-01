@@ -1,4 +1,4 @@
-// What governs a file (R25, ADR-093).
+// What governs a file (ADR-093).
 //
 // A decision governs the files its Affects line names. The line is prose, so the
 // only tokens that count are the ones in backticks, joined across the lines the
@@ -15,8 +15,8 @@ const HEADING = /^#{1,6}\s/;
 const TOOL = /^(?:simt-dev|simt)\b/;
 
 /**
- * Affected tokens of a decision record: reads `simt-affects:` frontmatter first (R34),
- * falling back to backticked tokens of the `Affects:` paragraph (R25).
+ * Affected tokens of a decision record: reads `simt-affects:` frontmatter first ,
+ * falling back to backticked tokens of the `Affects:` paragraph .
  */
 export function affectsTokens(text) {
   const fm = parseDecisionFrontmatter(text);
@@ -139,7 +139,7 @@ export function scopeHits(file, { rules = [], skills = [], gates = [], lessons =
  *
  * `why`, `impact` and the critic each assembled this themselves, with different corpora
  * and - in `why`'s case - a hard-coded list of this repository's own rule directories
- * (Q77). The corpus is now the caller's, so a receiving repository's directories are the
+ * . The corpus is now the caller's, so a receiving repository's directories are the
  * ones read.
  *
  * @param {string} file

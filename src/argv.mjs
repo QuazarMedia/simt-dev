@@ -87,7 +87,7 @@ export const BOOL_FLAGS = new Set([
   // is a different question.
   'changed',
   // local doctor: allow non-loopback model URLs. Off by default because nothing leaves
-  // the machine unless explicitly overridden (ADR-075, plan 0003 R37).
+  // the machine unless explicitly overridden (ADR-075, plan 0003).
   'allow-remote',
   // index / map / brief: opt into local vector embeddings configured under local.embed
   //. Off by default unless recall@10 gains at least 10 points.
@@ -233,7 +233,7 @@ export const REPEATABLE_FLAGS = new Set(['skill', 'arm', 'compare', 'supersedes'
 /**
  * Whether a raw argv asks for JSON, read before parsing succeeds.
  *
- * A parse failure is still a result the caller may need as JSON (Q11), but the
+ * A parse failure is still a result the caller may need as JSON , but the
  * parsed flags do not exist yet — so the dispatcher reads the spelling straight
  * off argv. Only the exact `--json` spelling counts, and nothing past `--` does:
  * a positional that happens to read `--json` is a path, not a flag.
@@ -252,7 +252,7 @@ export function rawJsonFlag(argv) {
  * @returns {{ok: true, value: object} | {ok: false, error: {message: string, code: number}}}
  *
  * A failure is data, never output: reporting it is the caller's job, because only
- * the caller knows whether `--json` was asked for (Q11). Nothing here prints.
+ * the caller knows whether `--json` was asked for . Nothing here prints.
  */
 export function parse(argv) {
   const flags = {};

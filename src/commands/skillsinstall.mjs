@@ -179,7 +179,7 @@ export async function installCommand(args, flags) {
   // after the write it describes.
   const mode = writeMode(flags);
   // The `--diff` pairs, read before anything is written so the before side is
-  // true in preview and in apply alike (R50). Built before the early returns
+  // true in preview and in apply alike . Built before the early returns
   // below so the shared `report()` can carry the field in every mode.
   const diffs = flags.diff === true ? await skillDiffs(root, { src, dest, destRel: payload.dest, flat: measured.flat, name, record, repo }) : [];
   const report = () => {
@@ -236,13 +236,13 @@ export async function installCommand(args, flags) {
   // "nothing written" and then wrote. It belongs on the path that does not write.
   if (!mode.apply) {
     note(`note    dry-run  nothing written; apply with: ${CLI} skills install ${name} --yes`);
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
     report();
     return EXIT.OK;
   }
 
-  // Every repo write below is journaled, so `undo` restores this run (R49).
+  // Every repo write below is journaled, so `undo` restores this run .
   const journal = [];
   await mkdir(dirname(join(dest, 'SKILL.md')), { recursive: true });
   try {
@@ -270,7 +270,7 @@ export async function installCommand(args, flags) {
   }
   note(`note    ${name} is now repo-local and is excluded from central-drift accounting`);
   await commitJournal(root, 'skills install', journal);
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   report();
   return EXIT.OK;

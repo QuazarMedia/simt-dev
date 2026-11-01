@@ -279,7 +279,7 @@ export async function syncCommand(positional, flags) {
   const manifestChanged = manifestPlan !== null;
 
   // The `--diff` pairs, read before anything is written so the before side is
-  // true in preview and in apply alike (R50). Pointers carry no bytes, so the
+  // true in preview and in apply alike . Pointers carry no bytes, so the
   // plan line naming the link target is already the whole story for them.
   const diffs =
     flags.diff === true
@@ -318,7 +318,7 @@ export async function syncCommand(positional, flags) {
   // this file does not own, and it was one commit out of date before anyone ran it.
   if (mode.apply) {
     // Every repo-file write below is journaled, so `undo` can restore this run
-    // (R49). Pointer symlinks carry no bytes and are not journaled.
+    // . Pointer symlinks carry no bytes and are not journaled.
     const journal = [];
     // The manifest first, with the rest: a gate that refuses on a stale stamp should
     // not be able to read a half-finished write, and the manifest is the file every
@@ -342,7 +342,7 @@ export async function syncCommand(positional, flags) {
     await commitJournal(root, 'sync', journal);
     // The regions moved, so the last `check` no longer describes this tree.
     // Invalidated rather than refreshed: `sync` does not run gates, checkers
-    // or decisions lint, so it cannot know what the gate would now say (R48).
+    // or decisions lint, so it cannot know what the gate would now say .
     // Gated on the journal: a no-op apply changed nothing, and the record is
     // still true.
     if (journal.length > 0) await invalidateCheckCache(root);
@@ -412,7 +412,7 @@ export async function syncCommand(positional, flags) {
       );
     }
     emit(lines.join('\n'));
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
   }
 
@@ -539,7 +539,7 @@ async function gateCwdFindings(root, manifest) {
   return findings;
 }
 
-// --- core: the gate both the CLI and the MCP `check` tool answer from (Q15) ----
+// --- core: the gate both the CLI and the MCP `check` tool answer from  ----
 //
 // The MCP tool rebuilt a smaller gate from `checkTargets` alone: no manifest,
 // no gates, no pin, no lock, no declared checkers — 3 findings where the command
@@ -663,7 +663,7 @@ export async function checkCommand(positional, flags) {
     root,
     findings,
     // Uniform with every writer's `--json --diff`: the gate carries no file
-    // plan, so its diff is always empty — pinned, not excused (R50).
+    // plan, so its diff is always empty — pinned, not excused .
     ...diffField([], flags),
   };
 

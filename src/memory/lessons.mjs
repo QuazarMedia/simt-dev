@@ -6,7 +6,7 @@
 //      hash of the normalised first error line);
 //   2. `revert`: reverted commits (`Revert "..."` / `This reverts commit <sha>`);
 //   3. `review-block`: ADR-008 `BLOCK` review findings;
-//   4. `hook-denial`: agent-time hook denials (R15).
+//   4. `hook-denial`: agent-time hook denials .
 //
 // `simt lessons review` promotes a candidate to `docs/lessons/NNNN-<slug>.md` with the
 // Appendix A frontmatter (`simt-trigger`, `simt-evidence`, `simt-expires`).
@@ -337,7 +337,7 @@ export async function recordFailThenFix(root, { failEntry, passEntry, failOutput
     paths: resolvedPaths,
     fixDiff: resolvedDiff,
   });
-  // The lessons file is the reader's view; the log is what a UI can tail (Q73).
+  // The lessons file is the reader's view; the log is what a UI can tail .
   await noteEvent(root, {
     kind: 'lesson.captured',
     subject: passEntry?.cmd ?? failEntry?.cmd ?? null,
@@ -488,7 +488,7 @@ export async function recordReviewBlock(root, finding) {
 }
 
 /**
- * Record an agent-time hook denial (R15) in `.simt/lessons.jsonl`.
+ * Record an agent-time hook denial  in `.simt/lessons.jsonl`.
  *
  * @param {string} root
  * @param {{harness?: string, event?: string, policies?: string[], messages?: string[], command?: string, writes?: string[]}} denial
@@ -724,7 +724,7 @@ export async function promoteLesson(root, options = {}) {
   const markdown = renderLessonMarkdown(target, { ...options, paths, expires: options.expires ?? defaultExpires() });
 
   // The `--diff` before-side, read before anything is written so the diff is true
-  // in preview and in apply alike (R50). Always a creation in practice — the
+  // in preview and in apply alike . Always a creation in practice — the
   // number is fresh — but a hand-placed file at the same path would be
   // overwritten, and a diff that claimed a creation there would lie about it.
   let before = null;

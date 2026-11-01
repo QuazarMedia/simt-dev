@@ -159,7 +159,7 @@ export async function includesOwnIdentity(root) {
  * break. Two of the repositories here had exactly that, and both worked only because
  * the sibling checkout happened to exist at the expected relative path.
  *
- * A caller-supplied journal records the key so `undo` restores the routing (R49);
+ * A caller-supplied journal records the key so `undo` restores the routing ;
  * without one the write stays unrecorded, as `commitJournal` needs it
  *. The journaled path sets through `journaledGitConfig`, which records one
  * key's before and after - the single-value case, and the only shape this tool
@@ -228,7 +228,7 @@ export function gitignoreWithIdentity(text) {
  * it means nothing, and appending a duplicate of an entry that is already present
  * is how a file ends up listed twice.
  *
- * A caller-supplied journal records the edit so `undo` restores it (R49); without
+ * A caller-supplied journal records the edit so `undo` restores it ; without
  * one the write stays unrecorded, as `commitJournal` needs it.
  *
  * @param {string} root

@@ -34,7 +34,7 @@ export async function undoCommand(positional, flags) {
   // The `--diff` pairs: what the tree holds now against what the restore
   // would put back. A null before is a file the run created (or a key it
   // set from unset), so the restore deletes it — the after side is empty
-  // (R50).
+  // .
   const diffs =
     flags.diff === true
       ? await Promise.all(
@@ -62,7 +62,7 @@ export async function undoCommand(positional, flags) {
         `would restore ${files} file(s)${keys > 0 ? ` and ${keys} git config key(s)` : ''}; apply with: ${CLI} undo --yes`,
       ].join('\n'),
     );
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
     return EXIT.OK;
   }
@@ -88,7 +88,7 @@ export async function undoCommand(positional, flags) {
     return EXIT.FAIL;
   }
   // The tree is back to before the run, so a `check` from after the run no
-  // longer describes it — the line goes back to "no cache" (R48). A restored
+  // longer describes it — the line goes back to "no cache" . A restored
   // set always restored something, so there is nothing to gate on.
   await invalidateCheckCache(root);
   if (isJson(flags)) {
@@ -98,7 +98,7 @@ export async function undoCommand(positional, flags) {
   emit(
     [`undone    ${result.set}`, ...result.restored.map((p) => `restored  ${p}`)].join('\n'),
   );
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   return EXIT.OK;
 }

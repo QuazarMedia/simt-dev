@@ -1,4 +1,4 @@
-// `simt gate` runs the tests a change reaches (R16, ADR-094).
+// `simt gate` runs the tests a change reaches (ADR-094).
 //
 // Paths name the change. `--changed` reads the diff instead. The tests are the
 // ones that import a changed file, directly or through other files, and the
@@ -187,8 +187,8 @@ async function writeRaw(root, body) {
     const dir = join(root, dirname(rel));
     await mkdir(dir, { recursive: true });
     await writeFile(join(root, rel), body);
-    // Keep the newest few: raw gate output is machine-local state (Q19), and a file per
-    // run with no bound is a directory that grows on every command (Q83).
+    // Keep the newest few: raw gate output is machine-local state , and a file per
+    // run with no bound is a directory that grows on every command .
     const kept = await readdir(dir).catch(() => []);
     const logs = kept.filter((name) => /^gate-\d+\.log$/.test(name)).sort().reverse();
     for (const name of logs.slice(RAW_LOG_KEEP)) await unlink(join(dir, name)).catch(() => {});

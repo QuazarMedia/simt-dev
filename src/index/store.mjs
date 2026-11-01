@@ -42,7 +42,7 @@ const MARKERS = ['package.json', 'pyproject.toml', 'go.mod', 'Cargo.toml', 'pom.
 
 // A tracked blob larger than this is recorded with its size and counted in
 // `skipped`, not streamed and tokenized: a 65 MiB file is indexed as a row, and
-// tokenizing it would buy nothing (Q76). The cap sits under that file on purpose
+// tokenizing it would buy nothing . The cap sits under that file on purpose
 // so the 65 MiB test exercises the skip, not the tokenize path.
 const BLOB_CAP = 16 * 1024 * 1024;
 
@@ -50,7 +50,7 @@ const LANG = languageResolver();
 
 /** `sqlite` when this process can open a database and create an FTS5 table. */
 // Probed once per process: the check builds both FTS schemas in a memory
-// database, and every read path used to pay for that (Q76).
+// database, and every read path used to pay for that .
 let backendProbe;
 async function probeBackend() {
   backendProbe ??= (async () => {
@@ -547,7 +547,7 @@ async function ftsBranch(root, table, terms) {
   if (terms.length === 0) return { rows: [], error: null };
   const matchExpr = terms.map((t) => `"${t}"`).join(' OR ');
   // `fts` is the v5 node-keyed table: the path comes back through the node key.
-  // `fts_tri` keeps its v4 (kind, ref, body) shape for the CJK trigram path (Q43),
+  // `fts_tri` keeps its v4 (kind, ref, body) shape for the CJK trigram path ,
   // so it is queried the old way.
   const sql = table === 'fts'
     ? `select f.kind as kind, substr(n.key, 6) as path, -bm25(f) as score

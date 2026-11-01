@@ -1,4 +1,4 @@
-// One append-only event log for everything this tool observes about itself (Q73).
+// One append-only event log for everything this tool observes about itself .
 //
 // The stores that record what happened - the evidence ledger, the lessons file, the lease
 // file, the check cache - were five files with three version keys and no shared shape, so

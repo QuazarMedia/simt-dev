@@ -252,7 +252,7 @@ export async function readLocalConfig(root, { allowRemote = false } = {}) {
 }
 
 /**
- * The guard every model consumer shares (R37's distill, R39's critic and bench).
+ * The guard every model consumer shares (distill, critic and bench).
  *
  * A `--local`-shaped call without a usable chat endpoint is a configuration
  * error, never a silent fallback to the deterministic path: a caller who asked

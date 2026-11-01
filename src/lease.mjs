@@ -38,7 +38,7 @@ export const DEFAULT_TTL_SECONDS = 3600;
  * A v1 record in the v2 shape.
  *
  * v1 stored `{path, session, harness, expiresAt}`; v2 stores a resource, a holder, a
- * fencing token and an acquisition time (Q74). The reader accepts both because a claim
+ * fencing token and an acquisition time . The reader accepts both because a claim
  * file written by the previous release is still a claim the hook must honour, and
  * refusing it would silently un-lease every held path on upgrade.
  */
@@ -92,7 +92,7 @@ function normaliseLease(entry) {
  * Whether a claim covers a repository-relative path.
  *
  * A `dir` claim covers everything under it, which is what makes "this session owns
- * `src/index/`" one claim instead of forty (Q74). The prefix test includes the separator
+ * `src/index/`" one claim instead of forty . The prefix test includes the separator
  * so `src/index` does not cover `src/indexer`.
  */
 export function leaseCovers(lease, rel) {
@@ -104,7 +104,7 @@ export function leaseCovers(lease, rel) {
 /**
  * The store the lease commands read and write through.
  *
- * A file today; a remote store and a server clock later (Q74). Everything above this line
+ * A file today; a remote store and a server clock later . Everything above this line
  * is a function of the records, not of the file, so the second implementation changes
  * where `read` and `write` point and nothing else.
  */
@@ -216,7 +216,7 @@ export function activeLeases({ leases } = { leases: [] }, now = Date.now()) {
 export async function writeLeases(root, leases) {
   const path = join(root, LEASE_FILE);
   // v2 on disk: a resource, a holder and a fence, sorted by resource id so two writes of
-  // the same claims produce the same bytes (Q74).
+  // the same claims produce the same bytes .
   const records = leases
     .map(toV2)
     .map((l) => ({

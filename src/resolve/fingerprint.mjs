@@ -322,7 +322,7 @@ export async function fingerprint(root) {
       ? MANIFEST_LEGACY
       : null;
   // One reader, so a file that does not parse is a missing declaration rather than an
-  // object whose only key is "error" pretending to be this repo manifest (Q69).
+  // object whose only key is "error" pretending to be this repo manifest .
   const manifest = manifestName === null ? null : (await loadManifest(root)).manifest;
 
   const stackList = [...stack].sort();

@@ -149,7 +149,7 @@ function generatedSpanBytes(text) {
 
 /**
  * Whether a rule file loads unconditionally at session start according to the
- * reader's loader row (R14).
+ * reader's loader row .
  *
  * A file with no frontmatter block at all is treated as unconditional (e.g. a
  * `.claude/rules/*.md` file or a bare `.mdc`); a file that declares frontmatter is

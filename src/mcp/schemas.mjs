@@ -58,7 +58,7 @@ export const ERROR_SHAPE = {
 export const output = {
   doctor: {
     // The `doctor --json` document minus its envelope: the same findings, the
-    // same workspace answer, the same fingerprint. (Q15)
+    // same workspace answer, the same fingerprint. 
     type: 'object',
     properties: {
       root: { type: 'string' },
@@ -141,7 +141,7 @@ export const output = {
     required: ['skills', 'totalBytes', 'entries'],
   },
   // The `skills brief --json` document minus its envelope, or the `--all` one.
-  // The CLI keeps its field names; this adopts them. (Q15)
+  // The CLI keeps its field names; this adopts them. 
   skills_brief: {
     anyOf: [
       {
@@ -207,7 +207,7 @@ export const output = {
     ],
   },
   // The `skills show --json` document minus its envelope, plus the body text the
-  // command prints below the metadata. (Q15)
+  // command prints below the metadata. 
   skills_show: {
     type: 'object',
     properties: {
@@ -258,7 +258,7 @@ export const output = {
     },
     required: ['query', 'results'],
   },
-  // The `skills why --json` document minus its envelope. (Q15)
+  // The `skills why --json` document minus its envelope. 
   skills_why: {
     type: 'object',
     properties: {
@@ -316,7 +316,7 @@ export const output = {
     },
     required: ['sha', 'rules'],
   },
-  // The `rules why --json` document minus its envelope, either direction. (Q15)
+  // The `rules why --json` document minus its envelope, either direction. 
   rules_why: {
     type: 'object',
     properties: {

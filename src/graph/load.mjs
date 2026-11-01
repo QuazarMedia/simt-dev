@@ -122,7 +122,7 @@ async function defaultRegistry(flags) {
  * directory, whose manifest declares the workspace the variable may point into
  * (ADR-119). A single
  * first-call-wins promise served one caller's workspace to every later caller with
- * different flags (Q14) — `skills_index({workspace: ws})` followed by
+ * different flags  — `skills_index({workspace: ws})` followed by
  * `skills_index({})` answered `ws` twice. Callers with the same inputs still share
  * the one resolution, which is where the cost was.
  */

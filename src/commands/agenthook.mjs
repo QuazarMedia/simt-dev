@@ -113,7 +113,7 @@ export async function agentHookCommand(args, flags) {
   // repository root the facts resolve against: an agent editing `keep.mjs` from `src/`
   // means `src/keep.mjs`, and a path joined to the wrong base is a path the lease file
   // will never meet.
-  // Writes are `{path, ...edit}` rows (Q17): the path resolves against the harness
+  // Writes are `{path, ...edit}` rows : the path resolves against the harness
   // cwd, the edit detail travels untouched so the region check sees the old_string.
   const writesAbsolute = writes.map((w) => {
     const path = typeof w === 'string' ? w : w?.path;
@@ -293,7 +293,7 @@ async function installHooks(root, flags) {
   const { plan, shim, others, promptLine, refused } = planned;
 
   // The `--diff` pairs, read before anything is written so the before side is
-  // true in preview and in apply alike (R50).
+  // true in preview and in apply alike .
   const diffs =
     flags.diff === true
       ? await Promise.all(
@@ -332,7 +332,7 @@ async function installHooks(root, flags) {
           :        `PLAN     nothing written; apply with: ${CLI} agent-hooks install --yes`,
       ].join('\n'),
     );
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
     return refused.length > 0 ? EXIT.FAIL : EXIT.OK;
   }
@@ -344,7 +344,7 @@ async function installHooks(root, flags) {
     return fail(`refused to write ${refused.map((p) => `${p.path} (${p.error})`).join('; ')}`, EXIT.FAIL);
   }
 
-  // Journaled so `undo` restores this run (R49).
+  // Journaled so `undo` restores this run .
   const journal = [];
   const { written, shimWritten } = await applyAgentHooks(root, journal, { plan, shim, owner: 'agent-hooks install' });
   await commitJournal(root, 'agent-hooks install', journal);
@@ -382,7 +382,7 @@ async function installHooks(root, flags) {
       `WROTE    ${written.length} hooks file(s)${shimWritten ? ' and the shim' : ''}; each one runs the ${AGENT_HOOK_SHIM} shim before the tool call`,
     ].join('\n'),
   );
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   for (const o of others) note(`note     ${o.id}: not written - ${o.note}`);
   for (const n of notes) note(`note     ${n}`);

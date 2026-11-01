@@ -10,7 +10,7 @@
 // for terminals, these return JSON for a model, and the two copies had already
 // drifted: MCP `check` reported 3 findings where the command reports 77, the MCP
 // `doctor` was a fingerprint with none of the findings, `rules_list` missed the
-// per-surface rules, and the skills payloads disagreed on field names (Q15). The
+// per-surface rules, and the skills payloads disagreed on field names . The
 // CLI keeps its field names; the tools adopt them. What is shared is the whole
 // answer, because two answers to one question is what ADR-035 rules out.
 //

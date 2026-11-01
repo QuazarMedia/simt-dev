@@ -126,7 +126,7 @@ export function federationServers(manifest) {
  * Whether the MCP server may ask repo-declared servers on this call.
  *
  * Pure: everything it reads comes in through the arguments, so the same call always
- * gives the same answer. Two gates, both closed by default (Q13):
+ * gives the same answer. Two gates, both closed by default :
  *
  * 1. The `root` a model supplies must sit inside the server's own ground — its cwd or
  *    the resolved workspace root. A root anywhere else is a directory with a crafted

@@ -1,4 +1,4 @@
-// Which tests a change should run, from one place (Q77).
+// Which tests a change should run, from one place .
 //
 // Four callers used to answer this question four ways: `tests` walked the stored test
 // edges directly, `gate` walked the import graph transitively over a re-read worktree,

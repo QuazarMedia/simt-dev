@@ -136,7 +136,7 @@ export async function lessonsReviewCommand(args, flags) {
   const title = flags.task ? String(flags.task) : undefined;
   const expires = typeof flags.expires === 'string' && flags.expires.trim() !== '' ? flags.expires.trim() : undefined;
 
-  // Journaled so `undo` restores the promoted file (R49); committed only when
+  // Journaled so `undo` restores the promoted file ; committed only when
   // the run actually wrote, which commitJournal already guarantees.
   const journal = [];
   const result = await promoteLesson(root, {
@@ -153,7 +153,7 @@ export async function lessonsReviewCommand(args, flags) {
     return fail(result.error, EXIT.FAIL, `record a session failure-then-fix or run: ${CLI} lessons`);
   }
 
-  // The `--diff` pair: the promoted lesson file, created or refreshed (R50). The
+  // The `--diff` pair: the promoted lesson file, created or refreshed . The
   // before-side rides on the result from `promoteLesson`, read before anything
   // was written, so the diff is true in preview and in apply alike.
   const diffs =
@@ -187,7 +187,7 @@ export async function lessonsReviewCommand(args, flags) {
   ];
 
   emit(lines.join('\n'));
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   if (!mode.apply) {
     note(`note    dry-run  nothing written; apply with: ${CLI} lessons review --yes`);

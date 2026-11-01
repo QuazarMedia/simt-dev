@@ -48,7 +48,7 @@ function packageRootDir() {
 /**
  * The short commit this checkout is at, or null outside a git checkout (an
  * installed tarball or wheel has no `.git`). Read-only and best-effort: a
- * version string must never fail because the VCS is absent (Q05).
+ * version string must never fail because the VCS is absent .
  */
 export function checkoutSha() {
   try {
@@ -67,7 +67,7 @@ export function checkoutSha() {
  * What `--version` prints: the package version, plus the checkout SHA when run
  * from a source tree past its tag. A `main` 26 commits past v0.6.2 reporting
  * bare `0.6.2` is the drift Q05 closes: the number alone claims a release the
- * bytes are not (Q05).
+ * bytes are not .
  */
 export function describeVersion() {
   const version = packageVersion();

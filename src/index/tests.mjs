@@ -1,4 +1,4 @@
-// Which tests exercise a source file (R24, ADR-092).
+// Which tests exercise a source file (ADR-092).
 //
 // Three precise signals, and one historical one kept apart. An import from a
 // test file, a conventional name beside that test, and a coverage record that

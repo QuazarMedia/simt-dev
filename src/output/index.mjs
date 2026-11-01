@@ -234,7 +234,7 @@ function stringifyJson(value, pretty) {
  * Shrink a payload to a byte ceiling by emptying its longest arrays first.
  *
  * Byte-cutting JSON produces a document that parses or exits non-zero, never both —
- * `why --json --max-bytes 120` used to exit 0 with half a token on stdout (Q10). An
+ * `why --json --max-bytes 120` used to exit 0 with half a token on stdout . An
  * importer owns nothing here: the trimmed arrays are named in `truncated`, so a reader
  * knows exactly which list lost how many items, and the document still parses.
  *
@@ -402,7 +402,7 @@ export function emitJson(value, { stream = process.stdout, pretty = state().pret
   const text = `${stringifyJson(payload, pretty)}\n`;
   // JSON is never byte-truncated: a cut document parses as a lie, and exit 0 calls it
   // true. Arrays shrink with a `truncated` record naming what lost how much, and a
-  // document no trimming can fit becomes a `MAX_BYTES` error envelope (Q10, ADR-105).
+  // document no trimming can fit becomes a `MAX_BYTES` error envelope (ADR-105).
   if (maxBytes > 0 && Buffer.byteLength(text) > maxBytes) {
     const fitted = fitJsonArrays(payload, maxBytes, pretty);
     if (fitted !== null) {

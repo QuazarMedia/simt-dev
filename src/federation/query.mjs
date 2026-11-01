@@ -1,4 +1,4 @@
-// The federation query: one structural question per task, one answer per server (0003 R26).
+// The federation query: one structural question per task, one answer per server (0003).
 //
 // The slice is narrow on purpose. When a repository names external code-graph servers, the
 // brief delegates a single structural question to each and cites where the answer came from,

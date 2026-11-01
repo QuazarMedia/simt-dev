@@ -4,7 +4,7 @@
 // paragraph an earlier root had already loaded, and could only say so by reading seven
 // repositories by hand. This command is that reading, and it is the figure plan 0003's
 // later slices are measured against: the context budget (S38 P7), the kernel split
-// (R07) and the workspace dedupe (R11) all need a number that moves when the
+//  and the workspace dedupe  all need a number that moves when the
 // projection moves, or they are opinions.
 //
 // Three decisions keep the figure honest:

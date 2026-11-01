@@ -14,7 +14,7 @@ try {
   if (!parsed.ok) {
     // The flags do not exist yet, so the JSON mode is read off the raw words:
     // a parse failure under `--json` is a JSON document on stdout, not text on
-    // stderr with an empty stdout (Q11, ADR-070 ruling 4).
+    // stderr with an empty stdout (ADR-070 ruling 4).
     jsonFailMode(rawJsonFlag(argv));
     process.exit(fail(parsed.error.message, parsed.error.code));
   }
@@ -22,7 +22,7 @@ try {
 
   // Set before anything can fail: `no command given` under `--json` is a JSON
   // document too, and a failure that prints as text with an empty stdout breaks
-  // the same ruling the parse failure above honours (Q11, ADR-070 ruling 4).
+  // the same ruling the parse failure above honours (ADR-070 ruling 4).
   jsonIndentDefault(flags.pretty === true);
   jsonFailMode(flags.json === true);
 

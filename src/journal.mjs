@@ -288,7 +288,7 @@ export async function ignoreJournal(root, journal = null) {
   }
   const next = journalIgnoreNext(text);
   if (next === null) return;
-  // A caller-supplied journal records the edit so `undo` restores it (R47);
+  // A caller-supplied journal records the edit so `undo` restores it ;
   // without one the write stays unrecorded, as `commitJournal` needs it.
   if (journal) await journaledWriteFile(root, journal, ignorePath, next);
   else await writeFile(ignorePath, next);
@@ -405,7 +405,7 @@ export async function commitJournal(root, command, acc, { at = Date.now() } = {}
   await writeFile(tmp, body, 'utf8');
   await rename(tmp, join(dir, id));
   // The log is the record; the journal set is what `undo` restores from. Written after the
-  // set, so the event describes what landed rather than what was intended (Q73).
+  // set, so the event describes what landed rather than what was intended .
   await noteEvent(root, {
     kind: 'write.committed',
     subject: command,
@@ -613,7 +613,7 @@ export async function undoLastJournalSet(root) {
   const [id] = await listJournalSets(root);
   if (!id) return { empty: true };
   const result = await undoJournalSet(root, id);
-  // The set is gone from disk, so the log is now the only record it existed (Q73).
+  // The set is gone from disk, so the log is now the only record it existed .
   await noteEvent(root, { kind: 'write.undone', subject: id, data: { restored: result?.restored?.length ?? 0 } });
   return { set: id, ...result };
 }

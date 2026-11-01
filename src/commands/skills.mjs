@@ -53,7 +53,7 @@ export function listFlag(value) {
     .filter(Boolean);
 }
 
-// --- cores: one computation for the CLI and the MCP tools (Q15) ----------------
+// --- cores: one computation for the CLI and the MCP tools  ----------------
 //
 // `skills_brief`, `skills_find`, `skills_show` and `skills_why` in the MCP
 // surface used to rebuild these answers from the same modules with different

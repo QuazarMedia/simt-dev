@@ -36,7 +36,7 @@ const TRAILER = /^(signed-off-by|co-authored-by|reviewed-by|acked-by|tested-by|f
  *
  * The private index exists so `git add -A` cannot stage the author's work. Building it from
  * nothing meant every path was hashed on every gate run, commit-msg check, `evidence` call
- * and `pr-body`: on a 20k-file tree that is the whole cost of the command (Q75). Seeding it
+ * and `pr-body`: on a 20k-file tree that is the whole cost of the command . Seeding it
  * from the index git already maintains turns the hash into a no-op for every unchanged
  * path, and the `add -A` afterwards only has the worktree diff left to do.
  *
@@ -69,7 +69,7 @@ export async function treeId(root) {
   const index = join(dir, 'index');
   const env = { ...process.env, GIT_INDEX_FILE: index };
   try {
-    // Seed before the add: the add then only hashes what actually changed (Q75).
+    // Seed before the add: the add then only hashes what actually changed .
     await seedIndex(root, index);
     // Machine-local state is a record of the tree, so it cannot be part of the
     // tree it names. `git add -A` would take it once the file exists, and the
@@ -152,7 +152,7 @@ export async function recordRun(root, { cmd, exit, ms, output, gate = null, kind
   };
   await mkdir(join(root, '.simt', 'local'), { recursive: true });
   await appendFile(join(root, LEDGER_FILE), `${JSON.stringify(line)}\n`);
-  // The same record in the log every other store writes to (Q73): a tailing consumer has
+  // The same record in the log every other store writes to : a tailing consumer has
   // one file to follow, and a ledger line lost to rotation is still recoverable here.
   await appendEvent(root, {
     kind: 'gate.finished',
@@ -185,7 +185,7 @@ export async function recordRun(root, { cmd, exit, ms, output, gate = null, kind
  *
  * `recordRun` and every evidence check read the whole file, and the file grows without a
  * bound: a repository that runs a suite a hundred times a day pays for a year of lines on
- * every commit (Q75). A tail read answers the only question those callers ask - what
+ * every commit . A tail read answers the only question those callers ask - what
  * happened recently on which trees - in bounded time.
  *
  * The first line of the slice is dropped unless the slice starts at byte 0, because a byte
@@ -231,7 +231,7 @@ export async function readLedgerTail(root, { entries = 200, bytes = 128 * 1024 }
  * Keep the ledger bounded: past `maxLines`, the older half moves to `<ledger>.1`.
  *
  * Rotation rather than deletion because the ledger is evidence: an archived line is still
- * readable, and the event log holds the same record independently (Q73). Keeping half
+ * readable, and the event log holds the same record independently . Keeping half
  * rather than `maxLines` means rotation happens every `maxLines/2` appends instead of on
  * every one.
  */

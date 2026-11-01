@@ -365,7 +365,7 @@ async function legacyHooksScan(root) {
 export async function applyHooksInstall(root, planned, journal) {
   const { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, manager, version, routed, wants, current, legacy } =
     planned;
-  // Shim and evidence bytes are journaled so `undo` restores them (R49), with
+  // Shim and evidence bytes are journaled so `undo` restores them , with
   // the executable bit they are written with: a shim the run chmodded is one
   // change, and `undo` must restore the mode it found, not just the bytes.
   // The `core.hooksPath` routing below is journaled as a `git-config` entry
@@ -458,7 +458,7 @@ async function installHooks(root, flags, ctx = repoContext(root)) {
     return fail(`${root} has no ${MANIFEST_FILE}; gates must be declared before hooks can run them`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
   }
 
-  // One computation, two callers (R47): the write set is derived once in
+  // One computation, two callers : the write set is derived once in
   // `planHooksInstall` and shared with `doctor --fix`, so a fix applies exactly
   // the bytes this command would write. Reporting stays here.
   const {
@@ -605,7 +605,7 @@ async function installHooks(root, flags, ctx = repoContext(root)) {
   }
 
   // The `--diff` pairs, read before anything is written so the before side is
-  // true in preview and in apply alike (R50).
+  // true in preview and in apply alike .
   const diffs =
     flags.diff === true
       ? await plannedDiffs(root, { wanted, chained, obsolete, evidenceSource, evidenceFile, npm, manager, version })
@@ -645,12 +645,12 @@ async function installHooks(root, flags, ctx = repoContext(root)) {
         manifest,
       ),
     );
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
     return EXIT.OK;
   }
 
-  // Same bytes, two callers (R47): the write itself lives in `applyHooksInstall`
+  // Same bytes, two callers : the write itself lives in `applyHooksInstall`
   // and is shared with `doctor --fix`, so a fix installs what the command would.
   const journal = [];
   await applyHooksInstall(
@@ -660,7 +660,7 @@ async function installHooks(root, flags, ctx = repoContext(root)) {
   );
   await commitJournal(root, 'hooks install', journal);
   // Shims and routing changed, so the hooks slot of the last `check` is stale
-  // (R48). Gated on the journal: an already-current install changes nothing.
+  // . Gated on the journal: an already-current install changes nothing.
   if (journal.length > 0) await invalidateCheckCache(root);
 
   const notes = [];
@@ -733,7 +733,7 @@ async function installHooks(root, flags, ctx = repoContext(root)) {
       manifest,
     ),
   );
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   for (const n of notes) note(`note     ${n}`);
   note(`note     never committed or pushed (ADR-001); review, then commit yourself`);

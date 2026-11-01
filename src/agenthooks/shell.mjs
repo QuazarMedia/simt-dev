@@ -1,7 +1,7 @@
 // The shell command a hook is about to run, read the way a shell reads it.
 //
 // A policy that greps the payload's command string for `git push` is a policy an agent
-// can route around: the review that found it (0003, Q01) counted twenty-five spellings
+// can route around: the review that found it (0003) counted twenty-five spellings
 // the regex let through - `git -C . push`, `sh -c 'git push'`, `$(git push)`, `(git push)`,
 // the alias `git p`, `git send-pack`, `--amen`, `+main`. Every one of them is the same
 // act, and a reader of this file should be able to see that the act is what is matched.

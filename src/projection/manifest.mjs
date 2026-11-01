@@ -252,7 +252,7 @@ export function declaredBudget(manifest) {
  * Non-blocking by design, and that is the honest answer rather than a convenient one:
  * the plan's own wording is that `check` reports `BUDGET-CUT` and nothing is cut, because
  * cutting requires a kernel to pack lines into and the kernel does not exist yet
- * (R07, blocked on the R02 evaluation). A gate that failed here would fail every
+ * (blocked on the evaluation). A gate that failed here would fail every
  * repository in the estate on a number this tool has not yet earned the right to enforce.
  *
  * The finding names what is over and what is NOT cut, because a reader who is told only
@@ -477,7 +477,7 @@ export async function writeManifest(root, manifest, journal = null) {
   const fresh = join(root, MANIFEST);
   if (existsSync(previous) && !existsSync(fresh)) await rename(previous, fresh);
   // A journaled manifest is one `undo` can restore, like every other repo file a
-  // command writes (R49). Callers that span repos or the repo boundary (shared,
+  // command writes . Callers that span repos or the repo boundary (shared,
   // bench) pass nothing and keep the old behaviour exactly.
   if (journal) await journaledWriteFile(root, journal, fresh, manifestText(manifest));
   else await writeFile(fresh, manifestText(manifest));

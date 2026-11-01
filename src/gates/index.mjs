@@ -187,7 +187,7 @@ function gateRemedy(gate, { existing = false, runner = null } = {}) {
  * `undefined` means "the caller did not report a runner", and every Node manager
  * (`npm`, `pnpm`, `yarn`, `bun`) spells gates as `<manager> run <script>` with
  * scripts living in the same `package.json`. Only a positively identified
- * non-Node runner changes the wording. (Q31: pnpm is Node-shaped, not foreign.)
+ * non-Node runner changes the wording. (pnpm is Node-shaped, not foreign.)
  */
 function isForeignRunner(runner) {
   if (runner == null) return false;

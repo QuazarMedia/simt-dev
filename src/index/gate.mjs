@@ -1,4 +1,4 @@
-// Which tests a change should run (R16, ADR-094).
+// Which tests a change should run (ADR-094).
 //
 // A test is selected when an import reaches a changed file, directly or through
 // other files. The walk follows importers, so a test that imports a module that

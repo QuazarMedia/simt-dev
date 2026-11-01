@@ -133,7 +133,7 @@ export async function handle(request, tools, { packageVersion, state, root, sign
   // The envelope is checked before anything reads it. `jsonrpc:"2.0"` and an id that is
   // a string, a number or absent are the three things every revision requires of a
   // request. An object id used to be echoed back unchanged, which leaves the client
-  // holding an answer it cannot match to anything it sent (Q56).
+  // holding an answer it cannot match to anything it sent .
   if (request.jsonrpc !== '2.0') {
     return error(null, RPC.REQUEST, 'request must carry jsonrpc:"2.0"');
   }
@@ -230,7 +230,7 @@ export async function handle(request, tools, { packageVersion, state, root, sign
       // The schema in `tools/list` is the schema this server enforces. A tool that
       // declares `required:['name']` and runs happily on `{}` answers a question nobody
       // asked, and the answer looks like a real one - `skills_show` with no name used to
-      // be a lookup for the string "undefined" (Q56). Bad arguments are the client's
+      // be a lookup for the string "undefined" . Bad arguments are the client's
       // mistake, so they are a protocol error and not a tool result.
       const invalid = check(args, tool.inputSchema);
       if (invalid !== null) {
@@ -336,7 +336,7 @@ export async function handle(request, tools, { packageVersion, state, root, sign
 // One entry point, named the way a client names it. This used to spell the CLI command
 // (`simt skills brief`) while the tool description called itself THE entry point and the
 // prompt pointed at `brief` - three answers to "where do I start", and the one a model
-// read first was the only one it could not call (Q56).
+// read first was the only one it could not call .
 const INSTRUCTIONS =
   'Read-only. Every answer is JSON. Call `skills_brief` first: it returns the pre-assembled skill set for a task, plus what it deliberately left out and why, and it needs no index. Call `brief` for the repository packet once the index exists.';
 
@@ -449,7 +449,7 @@ function describe(tool, version) {
  * to one question, and the unannounced one was the larger. A truncated payload is not the
  * payload, so the structured block says so in its own shape - a model validating against
  * `outputSchema` reads a complete-looking object as complete and the missing part as
- * absent, which is the one reading truncation must never produce (Q56). */
+ * absent, which is the one reading truncation must never produce . */
 function bounded(payload) {
   const text = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
   const limit = typeof payload === 'object' && payload !== null ? payload.maxBytes : 0;
@@ -515,7 +515,7 @@ export async function serve(tools, { input = process.stdin, output = process.std
       // readline has already buffered this line, so the cap bounds what is parsed and
       // answered rather than what is read. That is still the difference between a request
       // the server refuses by name and one it takes apart for minutes: a 40 MB line used
-      // to reach `JSON.parse` and take the process with it (Q56).
+      // to reach `JSON.parse` and take the process with it .
       if (Buffer.byteLength(line) > MAX_LINE_BYTES) {
         output.write(
           `${JSON.stringify(error(null, RPC.REQUEST, `request is larger than ${MAX_LINE_BYTES} bytes`))}\n`,
@@ -527,7 +527,7 @@ export async function serve(tools, { input = process.stdin, output = process.std
       // not JSON has no id to answer to, so it is a parse error with `id: null`; a
       // throw inside `handle` belongs to the request it was answering, so it keeps
       // that request's id — answering it as a parse error hangs the client that is
-      // still waiting for its answer (Q12).
+      // still waiting for its answer .
       let response;
       let message;
       try {

@@ -104,7 +104,7 @@ export async function desiredRegion(root, flags) {
       `command card: dropped ${card.dropped.join(', ')} to stay within ${CARD_LIMIT_BYTES} bytes`,
     );
   }
-  // Inferability (R09). A marked line leaves when the repository proves the evidence it
+  // Inferability . A marked line leaves when the repository proves the evidence it
   // names. `shipped` is a separate list from `packed` because they are separate decisions:
   // the kernel is about which classes cost a reader nothing to skip, and this is about
   // which lines the reader already knows.

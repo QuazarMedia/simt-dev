@@ -107,7 +107,7 @@ async function packNew(args, flags) {
   const files = scaffoldPack({ name, source });
   const { apply, dryRun } = writeMode(flags);
   // A scaffold always creates into a directory that must not exist, so every
-  // before side is empty and each pair is a whole file (R50).
+  // before side is empty and each pair is a whole file .
   const diffs = flags.diff === true ? files.map((f) => ({ path: `${name}/${f.path}`, before: null, after: f.text })) : [];
 
   if (isJson(flags)) {
@@ -135,7 +135,7 @@ async function packNew(args, flags) {
         dryRun ? 'DRY-RUN  no files written' : `PLAN     nothing written; apply with: ${CLI} pack new ${name} --source ${source} --yes`,
       ].join('\n'),
     );
-    // After the report: the report says what, the diff shows it (R50).
+    // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
     return EXIT.OK;
   }
@@ -154,7 +154,7 @@ async function packNew(args, flags) {
       `WROTE    ${files.length} scaffold file(s); write the rule, then: ${CLI} pack lint ${dir}`,
     ].join('\n'),
   );
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   return EXIT.OK;
 }

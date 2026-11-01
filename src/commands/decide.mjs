@@ -51,7 +51,7 @@ export async function decideCommand(args, flags) {
   const parsedPaths = parsePathList(flags.paths);
   const explicitPaths = flags.paths !== undefined ? parsedPaths : undefined;
 
-  // Journaled so `undo` restores the scaffold (R49); committed only when the
+  // Journaled so `undo` restores the scaffold ; committed only when the
   // run actually wrote, which commitJournal already guarantees.
   const journal = [];
   const res = await scaffoldDecision(root, {
@@ -78,7 +78,7 @@ export async function decideCommand(args, flags) {
   }
 
   // A scaffold always creates: the number is free by construction, so the
-  // before side is empty and the pair is the whole file (R50).
+  // before side is empty and the pair is the whole file .
   const diffs = flags.diff === true ? [{ path: res.relPath, before: null, after: res.text }] : [];
 
   if (isJson(flags)) {
@@ -123,7 +123,7 @@ export async function decideCommand(args, flags) {
   ];
 
   emit(lines.join('\n'));
-  // After the report: the report says what, the diff shows it (R50).
+  // After the report: the report says what, the diff shows it .
   emitDiffs(diffs, flags);
   return EXIT.OK;
 }

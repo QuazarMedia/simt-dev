@@ -6,7 +6,7 @@
 // marking one of them must not take its neighbours with it.
 //
 // `import-direction` records nothing about which way an import may point. The
-// index has the edges (R21). A direction still has to be named before the prose
+// index has the edges . A direction still has to be named before the prose
 // can leave, or the line would say Enforced and nothing would be enforcing it.
 
 import { readFile, stat } from 'node:fs/promises';

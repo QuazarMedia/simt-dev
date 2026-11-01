@@ -164,7 +164,7 @@ export async function plan(root, flags = {}) {
   // like every other: `plan` produces it, so preview, `--diff`, the journal, the idle
   // test and `init` all inherit it. Computing it here rather than in `sync` is what makes
   // a deleted lock show up in the plan as a write instead of vanishing from it — the
-  // `sync` that printed "wrote simt-dev.lock.json" and then "nothing written" (Q29).
+  // `sync` that printed "wrote simt-dev.lock.json" and then "nothing written" .
   const lock = await computeLock(root, flags);
   const lockText = `${JSON.stringify(lock, null, 2)}\n`;
   let previousLockText = '';

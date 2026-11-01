@@ -1,4 +1,4 @@
-// `simt why [path]` lists what governs a file (R25, ADR-093).
+// `simt why [path]` lists what governs a file (ADR-093).
 //
 // With a path, one line per decision, rule, skill, gate and lesson. With no
 // path, the Affects tokens that name nothing this tree contains. The file list

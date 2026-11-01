@@ -4,7 +4,7 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.8.0] — 2026-11-01
 
 ### Added
 
@@ -16,6 +16,11 @@ All notable changes to this package are recorded here. The format follows
 - The ledger gets a seeded private index, a tail read and a rotation.
 - Ecosystem/language data records — runner, gates, card, test conventions, extraction, resolution — ship in every channel beside the harness records. — [ADR-013](docs/decisions/ADR-013-genericity-by-facts-and-local-profiles.md)
 - The release process is a repo-local skill the tool recognises and injects when a release task is in play.
+- Bare `simt status` is the repository snapshot — the last check, git hook routing, which harnesses decide tool calls, evidence for the tree on disk, active leases, tracker counts and the last journal set — while `--line` keeps its cached one line. Each slot is read through the module that owns it and carries its own error, so one unreadable file does not blank the answer.
+- `simt explain` answers the five policy ids a denial names (`push`, `rewrite`, `hooks-disable`, `generated`, `lease`), so a refusal can say `run: simt explain push`.
+- A spec row declares `aliases`, and an alias resolves to that row before the registry is consulted: `skills list`, `skills lint`, `skills select`, `harness cost`, `harness hook`, `harness install`, `harness plugin`, `plan start`, `plan finish` and `plan abandon` answer, and help keeps listing the path.
+- The bench has one registry per seam — arms, adapters, task schema, records and graders — and a record written by an earlier version is read as written rather than migrated.
+- Production reads test conventions without the bench: `src/testing/` and `src/measure/` are separable from it.
 
 ### Changed
 
@@ -25,11 +30,16 @@ All notable changes to this package are recorded here. The format follows
 - `agent-hooks install` folds into `init`, and help flags the prerequisites a command needs.
 - The plan tracker reads `docs/research`, and small work — fewer than three slices — skips the plan file.
 - The README's command list renders from the spec table, so it cannot drift from the commands the binary dispatches.
+- Bare `simt bench` summarises the vault (`bench report`) instead of mining into it: a reader who types a group name has asked a question, not given consent.
+- The projection gate reads the plan the writer built instead of rebuilding it, and gate planning lives in `src/gates/index.mjs`, so the manifest module keeps only its writer. — [ADR-013](docs/decisions/ADR-013-genericity-by-facts-and-local-profiles.md)
+- No source or test module is over 1,000 lines with one exclusion (the generated skill registry), and the ceiling's remaining long files — rules, MCP tools and schemas, the hooks tests, `init` — are split rather than excused.
+- The tolerated-flag window moves to 0.9.0. It named 0.8.0, and closing it here would refuse flags that work: the spec has not yet declared every flag some command honours (`ci --dry-run` among them). A window that closes over an incomplete declaration list turns working invocations into usage errors, so it closes when the list is complete.
 
 ### Fixed
 
 - A v2 lease write keeps the flat aliases and caller fields a v1 reader expects.
 - The lesson event is emitted where the record is written, so it lands in the event log.
+- `simt status` no longer refuses a bare invocation: the answer it declined to give was five commands away.
 
 ## [0.7.1] — 2026-11-01
 

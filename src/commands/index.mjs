@@ -273,7 +273,7 @@ export async function resolveCommand(path) {
 }
 
 /** The release that turns the tolerated flag into a usage error (review 0003 Q62). */
-export const DEPRECATION_RELEASE = '0.8.0';
+export const DEPRECATION_RELEASE = '0.9.0';
 
 /**
  * Whether a tolerance that ends at `removedIn` has ended, comparing the way versions

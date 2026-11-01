@@ -6,6 +6,18 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-11-01
+
+### Added
+
+- `simt --help` answers one command at a time from the spec table, and a core page that fits a terminal; `--all` prints everything.
+- Every command declares the flags it reads in one spec table that owns the command list, the group defaults and the MCP tool surface; the parser accepts exactly what the table declares.
+- The `simt.json` manifest has a schema in the tool: the loader names an unknown key, and the keys the tool generates come from the table, so a repository's own keys stay the repository's. — [ADR-124](docs/decisions/ADR-124-the-manifest-has-a-schema-in-the-tool-and-its-unknown-keys-stay-the-repositorys.md)
+- The `simt.lock.json` lock records its own format version, and namespaces register the keys they own.
+- The read commands are a library imported by name: `check`, `fingerprint`, `skills`, `doctor` and `rules` read the repository through one shared context, so a read that asked five questions walks the tree once. — [ADR-125](docs/decisions/ADR-125-a-shared-context-belongs-to-a-read-and-a-writer-reads-directly.md)
+- The `Co-Authored-By` trailer is written into the commit template and into `slice finish` commits.
+- `SIMT_DEV_WORKSPACE` points into a workspace the repository declared. — [ADR-119](docs/decisions/ADR-119-the-environment-variable-points-into-a-workspace-the-repo-declared.md)
+
 ### Changed
 
 The git shims move from the top-level `.simt-hooks/` directory into the state
@@ -29,6 +41,28 @@ journal write now moves the legacy sets into the current directory, and the
 fallback directory goes with its last file: a name present in both keeps
 both records when the bytes differ, and a crash mid-move is finished by the
 next write, so the migration is idempotent.
+
+- The CLI loads only the command module the matched path needs, so a run pays for one command, not the registry.
+- The `--json` envelope carries the canonical command path and the run's exit code, and `ok` agrees with the exit code.
+- Run warnings travel in the JSON document, not only on stderr, and run notices are named distinctly from the warnings count the commands already report.
+- A pre-push whose tree already passed the full suite skips the test gate on that evidence and says so, naming the push kind; the hook runs in a clone, and main is gated with a timeout that fits the run. — [ADR-120](docs/decisions/ADR-120-a-pre-push-whose-tree-is-already-proven-green-skips-the-test-gate-on-that-evidence.md)
+- The decisions index is rendered from the decision records and leaves the shipped records directory, so it cannot drift from what the records say.
+- The bench corpus is keyed on history, append-only, and portable as a sealed document; a re-mine no longer silently replaces it, and the Gradle and Maven graders read nothing from the corpus. — [ADR-118](docs/decisions/ADR-118-the-bench-corpus-is-keyed-on-history-is-append-only-and-is-portable-as-a-sealed-document.md)
+- The publish workflow's version input may be `latest`, resolved before the guard runs, and the darwin release targets build on supported macOS 15 runners. — [ADR-117](docs/decisions/ADR-117-the-darwin-release-builds-on-supported-macos-15-runners-and-a-re-run-is-idempotent.md)
+- The npm tarball excludes the decisions index, and the shipped surface is linted before publish.
+
+### Fixed
+
+- The parser refuses a value a flag does not accept, a second value for a flag that is not repeatable, and the tolerated flags once the release that removes them ships.
+- The tool no longer lets a repository-local `user.*` setting shadow the shared `git.config` identity.
+- The MCP protocol validates the envelope and the arguments it advertised.
+- A gate is bounded in time, and its output is read as a tail, so a hung gate cannot hang the hook.
+- The runtime floor is checked before the CLI loads, so a Node that is too old fails before the tool does.
+- `simt brief` names only what this tool can resolve.
+- `simt packs`: a preview stays offline, a link is pinned or refused, and the positional argument wins over the flag.
+- `simt bench`: a run cannot outlive its deadline, a failed run is a record, and the small bugs report what they measured.
+- `simt ledger` names the tree when `.gitignore` ignores the state directory.
+- The upgrade verdict and the exit code are one thing, so `ok` and the exit code cannot disagree.
 
 ## [0.7.0] — 2026-10-31
 

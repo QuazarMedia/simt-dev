@@ -23,9 +23,10 @@ add `--yes` and hope.
 
 `brief`, `why`, `tests`, `gate`, `impact`, `map`, `check`, `status`,
 `plan status|next`, `rules *`, `agents status`, `agent-hooks status`,
-`hooks status`, `evidence`, `pr-body`, `explain`, `graph lint`,
-`skills index|brief|show|why|find`, `index`, `review`, `tokens`,
-`harness *`, `compare`, `distill`, `bench report|critic`, `pack lint`,
+`hooks status`, `evidence`, `evidence check`, `pr-body`, `explain`,
+`graph lint`, `skills index|brief|show|why|find|compile|eval`, `index`,
+`review`, `tokens`, `harness *`, `compare`, `distill`, `docs readme`,
+`local doctor`, `shared plan`, `bench report|critic`, `pack lint`,
 `mcp`, `completions`, `lessons list|capture`
 
 ## Command reference
@@ -42,6 +43,7 @@ Pick the command by what you need, not by what you remember:
 | Find files a task touches | `simt map --task "<text>"` | `--level outline\|names\|signatures` |
 | Read tracker state | `simt plan status` | Counts per tracker file |
 | Get the next slice | `simt plan next [<id>]` | Smallest ready slice, ~1 KB |
+| Stay inside a tier or a wave | `simt plan next --tier L --wave 1` | Either filter, or both at once |
 | Mark a slice done | `simt plan done <id> <sha> --test "<cmd>" --yes` | Dry-run without `--yes` |
 | Start a slice in a worktree | `simt slice start <id> --yes` | Branch `slice/<id>`, brief beside it |
 | Finish a slice | `simt slice finish <id> --yes` | Gates, commit, record SHA |
@@ -68,3 +70,21 @@ Pick the command by what you need, not by what you remember:
 | Undo last writes | `simt undo --yes` | Only if every file is untouched |
 | Claim files for a session | `simt lease [<paths>...] --yes` | TTL; pre-edit hook refuses |
 | Measure token cost | `simt tokens` | Bytes a reader loads at session start |
+| Snapshot the repository | `simt status` | `--line` prints the last check's line |
+| Check what a commit claims | `simt evidence check <msg-file>` | A run this tree does not have |
+| Compare sibling repositories | `simt compare` | Adoption and drift matrix |
+| Check local model endpoints | `simt local doctor` | `--allow-remote` to probe |
+| See what a shared install would write | `simt shared plan` | `shared install --yes` writes it |
+| Render the README command list | `simt docs readme` | From the spec; `--yes` writes it |
+| Compile a skill | `simt skills compile [<name>]` | Agent Skills standard |
+| Score the registry | `simt skills eval [corpus]` | Against recorded transcripts |
+| Refresh the workflows | `simt ci` | This package's own `.github` |
+
+## Tiers and waves
+
+A tracker may carry a tier column (headers `Tier`, `Model tier`, `Class`, `Effort`). The tag
+is the cell's first word without its notes, so `L (S)` is an L slice with an S reviewer.
+`--tier <name>` answers the next ready slice in that class, `--wave <name>` the next ready one
+in that wave (the plan's wave tables), and both together apply as one filter. A filter that
+matches nothing says so — `no queued slices in tier S` — and never falls back to the whole
+tracker.

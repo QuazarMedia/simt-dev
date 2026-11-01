@@ -80,6 +80,14 @@ Two corollaries that are easy to get wrong:
   hand. The command is the implementation of that task: a hand edit bypasses the writer and
   leaves the file in a shape the next run calls drift, and working on a writer without
   running it is how a fix ships unexercised.
+- **Pick the next slice the tracker's way.** `node bin/simt.mjs plan next` answers the next
+  ready slice; `--tier <class>` and `--wave <name>` keep it inside one class or one wave, and
+  a filter that matches nothing says so rather than falling back to the whole tracker. A slice
+  is tagged by writing its class in the tracker's `Tier` column — `L (S)` is an L slice with
+  an S reviewer, because the tag is the cell's first word.
+- **Verify with the commands that exist.** `node bin/simt.mjs gate --changed` names the tests a
+  change reaches, `evidence` the runs recorded against this tree, `status` the snapshot, and
+  `review` the staged diff against the estate rules. None of them replaces running the test.
 - **Commit locally and report the SHA. Push only on explicit approval** (ADR-001). Never
   push on a user's behalf unless asked for it, and never reach for `--no-verify`.
 - **Do not refactor outside the blast radius** (ADR-002). A second real use inside the change

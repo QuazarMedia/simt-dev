@@ -21,6 +21,11 @@ did not take.
 
 - Read the tracker with `simt plan status` and `simt plan next`. `next` names
   the smallest slice that is independently valuable, in dependency order.
+- When the tracker carries a tier or the plan carries waves, `simt plan next
+  --tier <class>` or `--wave <name>` keeps the slice inside one, and both
+  together apply as one filter. The tag is the tier cell's first word, so
+  `L (S)` is an L slice with an S reviewer. A filter that matches nothing says
+  so instead of answering from the whole tracker.
 - Resolve the open material decisions for that slice before building: ask 1–5
   questions, recommended option first, and only where the authority documents
   leave a real choice. Apply documented defaults without asking — operational
@@ -61,6 +66,16 @@ conversation. Write it before you build:
   with a Conventional Commits subject drawn from the row, and records the SHA.
 - Record the slice complete with `simt plan done <id> <sha> --test "<command>"`,
   carrying the evidence for the test you ran.
+
+## Verify before you claim
+
+- `simt gate --changed` names the tests the change reaches; run those through
+  the repository's own runner and report the exact command.
+- `simt evidence` lists the runs recorded against the tree on disk, and
+  `simt evidence check <msg-file>` refuses a message claiming a run this tree
+  does not have.
+- `simt review` drafts the staged-diff verdict: `BLOCK`,
+  `APPROVE WITH RESIDUAL RISK` (naming what went unreviewed) or `APPROVE`.
 
 ## Dry run
 

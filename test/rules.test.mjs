@@ -246,6 +246,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
       leaking.push(d.id);
     }
   }
+  // ADR-021 joined when the repository began shipping `.agents/skills/release-process`:
+  // the ruling is about which surfaces a repo gets, and the directory it names became a
+  // path in this checkout. The ruling is unchanged; what changed is that its evidence
+  // now exists here, which is the distinction the count is meant to make visible.
   // ADR-080 joined for the same reason as ADR-058 and its addition is this line: the
   // record is ABOUT the vocabulary and has to name the modules that own it, so the paths
   // are its evidence rather than decoration. ADR-081 and ADR-082 name the directories
@@ -280,6 +284,7 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // act on.
 assert.deepEqual(leaking, [
     'ADR-016',
+    'ADR-021',
     'ADR-023',
     'ADR-026',
     'ADR-033',
@@ -300,7 +305,7 @@ assert.deepEqual(leaking, [
     'ADR-111',
     'ADR-112',
     'ADR-124',
-  ]);
+]);
 });
 
 test('a status line is scrubbed, and a command that travels is not (S54)', () => {

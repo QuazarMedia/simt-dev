@@ -37,7 +37,6 @@ export async function prBodyCommand(args, flags) {
         verdict: report.verdict,
         unreviewed: report.unreviewed,
       },
-      { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 },
     );
     return EXIT.OK;
   }

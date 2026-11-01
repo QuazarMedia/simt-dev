@@ -42,7 +42,6 @@ export async function gateCommand(args, flags) {
       if (isJson(flags)) {
         emitJson(
           { ok: true, command: 'gate', root, selected: [], unmatched: [], graph: 'resolved', verdict: 'nothing-selected', code: 0 },
-          { pretty: flags.pretty === true, maxBytes: flags.maxBytes ?? 0 },
         );
       } else {
         emit('selected  0\nverdict  nothing-selected');

@@ -80,7 +80,7 @@ ${CLI} completions <shell>    print a bash, zsh or fish completion script
                            (generated from the command registry, so every command
                            completes; deterministic bytes; stdout only - redirect
                            or source it)
-${CLI} plan status             count tracker rows
+${CLI} plan status             count rows and the share done
                            (${MANIFEST_FILE} key plans when set, otherwise
                            the ${DEFAULT_TEMPLATE} template:
                            ${DEFAULT_DIRECTORIES.join(' and ')})

@@ -34,7 +34,8 @@ async function runStatus(root, flags) {
   const lines = [`repo     ${root}`, `template ${result.template}`, `dirs     ${result.directories.join(', ')}`];
   if (result.documents.length === 0) lines.push(`(no tracker in ${result.directories.join(' or ')})`);
   for (const doc of result.documents) {
-    lines.push(`${doc.name}  slices=${doc.slices}  ${formatCounts(doc.counts, result.stateOrder)}`);
+    const share = doc.progress.percent === null ? '' : `  progress=${doc.progress.percent}%`;
+    lines.push(`${doc.name}  slices=${doc.slices}  ${formatCounts(doc.counts, result.stateOrder)}${share}`);
     // Only when the tracker carries a tier column at all: an untagged count on a table
     // with no tier column is every slice, and says nothing about the plan.
     const tiers = formatCounts(doc.tiers);
@@ -45,6 +46,10 @@ async function runStatus(root, flags) {
     if (lanes !== '') lines.push(`  lanes  ${lanes}${doc.unlaned > 0 ? `  unlaned=${doc.unlaned}` : ''}`);
   }
   lines.push('', `total    ${formatCounts(result.totals, result.stateOrder) || '-'}`);
+  // The percent is rounded, so done and remaining travel with it: 99% of 150 rows and 99%
+  // of 1500 are different amounts of work, and the counts are what say which one it is.
+  const { percent, done, remaining } = result.progress;
+  if (percent !== null) lines.push(`progress ${percent}%  done=${done}  remaining=${remaining}`);
   // A tracker with neither a tier column nor a wave table gets neither line: an empty
   // heading reads as "the tool looked and found something worth saying".
   const tierLine = formatCounts(result.tiers);

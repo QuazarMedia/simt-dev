@@ -585,6 +585,30 @@ export async function planLabels(root) {
   };
 }
 
+/**
+ * How much of a tracker is done, from the states the tracker declares.
+ *
+ * Done is a position, not a list of names: everything at or after the first state that
+ * satisfies a dependency counts. In the shipped template that is Complete and Accepted,
+ * so a slice accepted without a separate row saying complete is not reported as
+ * outstanding work - and a tracker that renames its states still measures itself.
+ */
+function progressOf(counts, format) {
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  const from = format.order.findIndex((id) => format.satisfies.has(id));
+  let done = 0;
+  for (const [state, count] of Object.entries(counts)) {
+    if (from >= 0 && format.order.indexOf(state) >= from) done += count;
+  }
+  return {
+    total,
+    done,
+    remaining: total - done,
+    // A tracker with no rows has no share to report; `null` rather than a flattering 100.
+    percent: total === 0 ? null : Math.round((done / total) * 100),
+  };
+}
+
 export async function planStatus(root) {
   const loaded = await loadPlanState(root);
   if (loaded.error) return loaded;
@@ -639,7 +663,20 @@ export async function planStatus(root) {
       const label = laneLabels.get(slice.laneKey);
       lanes[label] = (lanes[label] ?? 0) + 1;
     }
-    return { name: doc.name, path: doc.path, kind: doc.kind, number: doc.number, slices: own.length, counts, tiers, untagged, waves, lanes, unlaned };
+    return {
+      name: doc.name,
+      path: doc.path,
+      kind: doc.kind,
+      number: doc.number,
+      slices: own.length,
+      counts,
+      progress: progressOf(counts, format),
+      tiers,
+      untagged,
+      waves,
+      lanes,
+      unlaned,
+    };
   });
   const totals = {};
   const tierTotals = {};
@@ -658,6 +695,7 @@ export async function planStatus(root) {
     stateOrder: format.order,
     documents,
     totals,
+    progress: progressOf(totals, format),
     tiers: tierTotals,
     untagged: documents.reduce((sum, doc) => sum + doc.untagged, 0),
     waves: waveTotals,

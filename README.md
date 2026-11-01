@@ -204,7 +204,7 @@ simt pack publish [dir] --yes                                          # publish
 simt plan done <id> [<sha>] --yes                                      # mark one tracker row complete, with its SHA and its evidence
 simt plan labels                                                       # the header each tracker column matched, and the labels this repository configured
 simt plan next [<id>] [--tier <name>] [--wave <name>] [--lane <name>]  # one ready slice's section, or the one named, inside a tier, a wave or a lane
-simt plan status                                                       # count the tracker rows, with the tiers, waves and lanes the tracker carries
+simt plan status                                                       # count the tracker rows, the share of the plan done, and its tiers, waves and lanes
 
 # plugin
 simt plugin <claude|gemini|cursor|opencode>                            # generate a harness package from the same tables the hooks use

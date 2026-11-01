@@ -166,6 +166,43 @@ test('plan status counts by document', async () => {
   assert.ok(payload.ready > 0);
 });
 
+const PROGRESS = `# t
+
+| ID | Slice | Depends on | State |
+| --- | --- | --- | --- |
+| B1 | first | — | Complete | |
+| B2 | second | B1 | Accepted | |
+| B3 | third | B2 | Queued | |
+| B4 | fourth | B3 | To review | |
+`;
+
+/**
+ * The question a reader asks of a tracker is "how much is left", and the state counts
+ * alone made them do the arithmetic. Done is read from the tracker's own states: every
+ * state at or after the one that satisfies a dependency - Complete and Accepted in the
+ * shipped template - so an accepted slice is not counted as outstanding work.
+ */
+test('plan status reports the share of a plan that is done and what remains', async () => {
+  const root = await repo({ 'docs/plans/0099.md': PROGRESS });
+  const { stdout } = cli(['plan', 'status', '--root', root]);
+  assert.match(stdout, /progress\s+50%\s+done=2\s+remaining=2/);
+  assert.match(stdout, /progress=50%/);
+  const payload = JSON.parse(cli(['plan', 'status', '--json', '--root', root]).stdout);
+  assert.deepEqual(payload.progress, { total: 4, done: 2, remaining: 2, percent: 50 });
+  assert.deepEqual(payload.documents[0].progress, payload.progress);
+});
+
+test('plan status counts only the states the tracker says are done', async () => {
+  // Half of COUNTED is complete; its other row is queued, so the share is 50, not 100.
+  const half = await repo({ 'docs/plans/0099.md': COUNTED });
+  const { progress } = JSON.parse(cli(['plan', 'status', '--json', '--root', half]).stdout);
+  assert.deepEqual(progress, { total: 2, done: 1, remaining: 1, percent: 50 });
+  // A slice waiting on a reviewer is finished but not accepted: it is still remaining.
+  const reviewed = await repo({ 'docs/plans/0099.md': REVIEWED });
+  const waiting = JSON.parse(cli(['plan', 'status', '--json', '--root', reviewed]).stdout);
+  assert.deepEqual(waiting.progress, { total: 3, done: 0, remaining: 3, percent: 0 });
+});
+
 test('plan next on this repository returns one section, not the document', async () => {
   const root = await repo({ 'docs/plans/0099.md': COUNTED });
   const result = cli(['plan', 'next', '--json', '--root', root]);

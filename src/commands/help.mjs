@@ -335,6 +335,10 @@ const FLAGS = `--json                 structured output (compact; one document, 
                         reviewer); a tier no slice carries answers with nothing ready
 --wave <name>           plan next: stay inside one wave, read from the wave tables the
                         template names; with --tier, the slice must be in both
+--lane <name>           plan next: stay inside one lane, read from the slice's Lane
+                        column (the first word). A lane is a subsystem whose files no
+                        other lane owns, so two agents can take two lanes at once and
+                        not edit the same file
 --type <name>           slice finish: the Conventional Commits type (default: feat)
 --id <name>             slice start: the slice id when -- starts one from a prompt
                         (default: a slug of the prompt text)

@@ -692,3 +692,42 @@ test('plan status groups a tier by its first word, and reads a dash as no tier',
   assert.deepEqual(payload.documents[0].tiers, { L: 1, S: 1 });
   assert.equal(payload.documents[0].untagged, 1);
 });
+
+const LANES = `# plan
+
+## 3. Tracker
+
+| ID | State | Slice | Lane | Tier | Depends on |
+| --- | --- | --- | --- | --- | --- |
+| N1 | Queued | kernel | core | L | — |
+| N2 | Queued | pipeline | kernel | L | — |
+| N3 | Queued | wording | capture | S | — |
+`;
+
+test('plan next --lane returns the next slice in one subsystem, and both filters apply together', async () => {
+  const root = await repo({ 'docs/plans/0099.md': LANES });
+  const core = cli(['plan', 'next', '--lane', 'core', '--root', root]);
+  assert.match(core.stdout, /slice\s+N1/);
+  assert.match(core.stdout, /lane\s+core/);
+  // A lane is matched by its first word, so a cell reading `capture (motion)` is capture.
+  const capture = cli(['plan', 'next', '--lane', 'capture', '--root', root]);
+  assert.match(capture.stdout, /slice\s+N3/);
+  // N3 is the only S slice and it is in capture, so S in core is empty - and says so.
+  const both = cli(['plan', 'next', '--lane', 'core', '--tier', 'S', '--root', root]);
+  assert.doesNotMatch(both.stdout, /^slice/m);
+  assert.match(both.stdout, /no queued slices in tier S and lane core/);
+  // A lane nobody uses names itself rather than falling back to every slice.
+  const none = cli(['plan', 'next', '--lane', 'audio', '--root', root]);
+  assert.match(none.stdout, /no queued slices in lane audio/);
+});
+
+test('plan status and plan labels report the lanes a tracker carries', async () => {
+  const root = await repo({ 'docs/plans/0099.md': LANES });
+  const status = cli(['plan', 'status', '--root', root]);
+  assert.match(status.stdout, /lanes\s+capture=1 core=1 kernel=1/);
+  const labels = cli(['plan', 'labels', '--root', root]);
+  assert.match(labels.stdout, /lane:\s+lane/);
+  const payload = JSON.parse(cli(['plan', 'status', '--json', '--root', root]).stdout);
+  assert.deepEqual(payload.documents[0].lanes, { core: 1, kernel: 1, capture: 1 });
+  assert.equal(payload.documents[0].unlaned, 0);
+});

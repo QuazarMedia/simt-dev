@@ -43,7 +43,7 @@ Pick the command by what you need, not by what you remember:
 | Find files a task touches | `simt map --task "<text>"` | `--level outline\|names\|signatures` |
 | Read tracker state | `simt plan status` | Counts per tracker file |
 | Get the next slice | `simt plan next [<id>]` | Smallest ready slice, ~1 KB |
-| Stay inside a tier or a wave | `simt plan next --tier L --wave 1` | Either filter, or both at once |
+| Stay inside a tier, wave or lane | `simt plan next --tier L --wave 1 --lane core` | Any filter, or all three at once |
 | See what the tool read from a tracker | `simt plan labels` | Matched headers, unmatched columns |
 | Mark a slice done | `simt plan done <id> <sha> --test "<cmd>" --yes` | Dry-run without `--yes` |
 | Start a slice in a worktree | `simt slice start <id> --yes` | Branch `slice/<id>`, brief beside it |
@@ -81,7 +81,7 @@ Pick the command by what you need, not by what you remember:
 | Score the registry | `simt skills eval [corpus]` | Against recorded transcripts |
 | Refresh the workflows | `simt ci` | This package's own `.github` |
 
-## Tiers and waves
+## Tiers, waves and lanes
 
 A tracker may carry a tier column (headers `Tier`, `Model tier`, `Class`, `Effort`). The tag
 is the cell's first word without its notes, so `L (S)` is an L slice with an S reviewer.
@@ -89,3 +89,9 @@ is the cell's first word without its notes, so `L (S)` is an L slice with an S r
 in that wave (the plan's wave tables), and both together apply as one filter. A filter that
 matches nothing says so — `no queued slices in tier S` — and never falls back to the whole
 tracker.
+
+A lane is the subsystem a slice's files belong to (headers `Lane`, `Stream`, `Workstream`,
+`Track`), read by the same first-word rule. Lanes are meant to own disjoint file sets, which
+is what makes concurrency safe: `--lane core` and `--lane capture` handed to two agents
+touch different files, while two slices in one lane do not. `--wheel`… there is no wheel;
+combine `--lane` with `--tier` or `--wave` when a lane should also stay inside a class.

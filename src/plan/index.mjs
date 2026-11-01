@@ -97,11 +97,11 @@ function docNumber(name) {
  * The tag is the first word of the cell without notes, lowercased: a filter is about
  * which class does the work, and the reviewer is a second fact, not the first.
  */
-function tierKeyOf(cell, none = null) {
+function keyOf(cell, none = null) {
   const plain = stripNotes(cell);
   if (plain === '') return '';
-  // A dash in a tier column is the same statement the dependency column makes with one:
-  // no tier. Without this it becomes a class named "—", counted beside the real ones.
+  // A dash in a tier or a lane column is the same statement the dependency column makes
+  // with one: none. Without this it becomes a class named "—", counted beside the real ones.
   if (none !== null && none.has(plain.toLowerCase())) return '';
   return plain.split(/\s+/)[0].toLowerCase();
 }
@@ -214,6 +214,7 @@ function trackerRows(fmt, table) {
   const titleIdx = findColumn(columns, fmt.titleHeaders);
   const evidenceIdx = findColumn(columns, fmt.evidenceHeaders);
   const tierIdx = findColumn(columns, fmt.tierHeaders);
+  const laneIdx = findColumn(columns, fmt.laneHeaders);
   const rows = [];
   for (const row of table.rows) {
     const id = clean(row.cells[idIdx] ?? '');
@@ -225,6 +226,7 @@ function trackerRows(fmt, table) {
       stateIdx,
       depsIdx,
       tierIdx,
+      laneIdx,
       titleIdx: titleIdx === idIdx ? -1 : titleIdx,
       evidenceIdx,
       columnCount: columns.length,
@@ -446,7 +448,9 @@ function linkSlices(docs, fmt) {
         state: fmt.readState(stateRaw),
         dependsOn: row.depsIdx >= 0 ? clean(row.cells[row.depsIdx] ?? '') : '',
         tier: row.tierIdx >= 0 ? clean(row.cells[row.tierIdx] ?? '') : '',
-        tierKey: row.tierIdx >= 0 ? tierKeyOf(row.cells[row.tierIdx] ?? '', fmt.empty) : '',
+        tierKey: row.tierIdx >= 0 ? keyOf(row.cells[row.tierIdx] ?? '', fmt.empty) : '',
+        lane: row.laneIdx >= 0 ? clean(row.cells[row.laneIdx] ?? '') : '',
+        laneKey: row.laneIdx >= 0 ? keyOf(row.cells[row.laneIdx] ?? '', fmt.empty) : '',
         waves: wavesOf(doc, row.id),
         idIdx: row.idIdx,
         stateIdx: row.stateIdx,
@@ -529,6 +533,7 @@ export async function planLabels(root) {
   const known = {
     id: format.idHeaders,
     tier: format.tierHeaders,
+    lane: format.laneHeaders,
     state: format.stateHeaders,
     depends: format.dependsHeaders,
     title: format.titleHeaders,
@@ -602,15 +607,33 @@ export async function planStatus(root) {
       const hits = wave.ids.filter((id) => tracked.has(id)).length;
       if (hits > 0) waves[key] = (waves[key] ?? 0) + hits;
     }
-    return { name: doc.name, path: doc.path, kind: doc.kind, number: doc.number, slices: own.length, counts, tiers, untagged, waves };
+    // Lanes count the same way tiers do, and are read the same way: a lane is a
+    // subsystem, so the count answers "how much work does this file set own".
+    const lanes = {};
+    const laneLabels = new Map();
+    let unlaned = 0;
+    for (const slice of own) {
+      if (slice.laneKey === '') {
+        unlaned += 1;
+        continue;
+      }
+      if (!laneLabels.has(slice.laneKey)) {
+        laneLabels.set(slice.laneKey, slice.lane.trim().split(/\s+/)[0] || slice.laneKey);
+      }
+      const label = laneLabels.get(slice.laneKey);
+      lanes[label] = (lanes[label] ?? 0) + 1;
+    }
+    return { name: doc.name, path: doc.path, kind: doc.kind, number: doc.number, slices: own.length, counts, tiers, untagged, waves, lanes, unlaned };
   });
   const totals = {};
   const tierTotals = {};
   const waveTotals = {};
+  const laneTotals = {};
   for (const doc of documents) {
     for (const [state, count] of Object.entries(doc.counts)) totals[state] = (totals[state] ?? 0) + count;
     for (const [tier, count] of Object.entries(doc.tiers)) tierTotals[tier] = (tierTotals[tier] ?? 0) + count;
     for (const [wave, count] of Object.entries(doc.waves)) waveTotals[wave] = (waveTotals[wave] ?? 0) + count;
+    for (const [lane, count] of Object.entries(doc.lanes)) laneTotals[lane] = (laneTotals[lane] ?? 0) + count;
   }
   return {
     root,
@@ -622,6 +645,8 @@ export async function planStatus(root) {
     tiers: tierTotals,
     untagged: documents.reduce((sum, doc) => sum + doc.untagged, 0),
     waves: waveTotals,
+    lanes: laneTotals,
+    unlaned: documents.reduce((sum, doc) => sum + doc.unlaned, 0),
     ready: slices.filter((slice) => slice.ready).length,
   };
 }
@@ -635,6 +660,7 @@ function publicSlice(slice) {
     title: slice.title,
     state: slice.state,
     tier: slice.tier === '' ? null : slice.tier,
+    lane: slice.lane === '' ? null : slice.lane,
     waves: slice.waves,
     dependsOn: slice.dependsOn,
     unknownDependencies: slice.unknownDeps,
@@ -645,8 +671,18 @@ function publicSlice(slice) {
 
 function inTier(slice, tier) {
   if (tier === null || tier === undefined || String(tier).trim() === '') return true;
-  const want = tierKeyOf(String(tier));
+  const want = keyOf(String(tier));
   return want !== '' && slice.tierKey === want;
+}
+
+/**
+ * A lane is a subsystem with a file set of its own, so two slices in different lanes can
+ * run at once: the filter exists to hand one agent a lane without handing it a conflict.
+ */
+function inLane(slice, lane) {
+  if (lane === null || lane === undefined || String(lane).trim() === '') return true;
+  const want = keyOf(String(lane));
+  return want !== '' && slice.laneKey === want;
 }
 
 function inWave(slice, wave) {
@@ -655,14 +691,15 @@ function inWave(slice, wave) {
   return slice.waves.some((key) => want.includes(key));
 }
 
-function scopeNote(tier, wave) {
+function scopeNote({ tier, wave, lane }) {
   const parts = [];
   if (tier !== null && tier !== undefined && String(tier).trim() !== '') parts.push(`tier ${tier}`);
   if (wave !== null && wave !== undefined && String(wave).trim() !== '') parts.push(`wave ${wave}`);
+  if (lane !== null && lane !== undefined && String(lane).trim() !== '') parts.push(`lane ${lane}`);
   return parts.length === 0 ? '' : ` in ${parts.join(' and ')}`;
 }
 
-export async function planNext(root, id = null, { tier = null, wave = null } = {}) {
+export async function planNext(root, id = null, { tier = null, wave = null, lane = null } = {}) {
   const loaded = await loadPlanState(root);
   if (loaded.error) return loaded;
   const { slices, format } = loaded;
@@ -672,12 +709,12 @@ export async function planNext(root, id = null, { tier = null, wave = null } = {
     if (hits.length > 1) return { root, ...ambiguous(id, hits) };
     return { root, next: publicSlice(hits[0]), reason: null };
   }
-  const scope = (slice) => inTier(slice, tier) && inWave(slice, wave);
+  const scope = (slice) => inTier(slice, tier) && inWave(slice, wave) && inLane(slice, lane);
   const ready = slices.filter((slice) => slice.ready && scope(slice)).sort(compareSlice);
   if (ready.length > 0) return { root, next: publicSlice(ready[0]), reason: null };
   const waiting = slices.filter((slice) => slice.state === format.ready && scope(slice)).sort(compareSlice);
   const label = (format.stateNames[format.order.indexOf(format.ready)] ?? format.ready).toLowerCase();
-  const where = scopeNote(tier, wave);
+  const where = scopeNote({ tier, wave, lane });
   const reason = waiting.length === 0 ? `no ${label} slices${where}` : `no ${label} slice has its dependencies complete${where}`;
   return {
     root,
@@ -685,6 +722,7 @@ export async function planNext(root, id = null, { tier = null, wave = null } = {
     reason,
     tier: tier ?? null,
     wave: wave ?? null,
+    lane: lane ?? null,
     blocked: waiting.map((slice) => ({
       id: slice.id,
       doc: slice.docName,

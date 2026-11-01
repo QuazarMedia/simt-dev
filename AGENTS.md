@@ -84,7 +84,9 @@ Two corollaries that are easy to get wrong:
   ready slice; `--tier <class>` and `--wave <name>` keep it inside one class or one wave, and
   a filter that matches nothing says so rather than falling back to the whole tracker. A slice
   is tagged by writing its class in the tracker's `Tier` column — `L (S)` is an L slice with
-  an S reviewer, because the tag is the cell's first word.
+  an S reviewer, because the tag is the cell's first word. `--lane <name>` keeps it inside
+  one subsystem: lanes are meant to own disjoint file sets, so two agents may take two lanes
+  at once, and never two slices of one lane.
 - **Verify with the commands that exist.** `node bin/simt.mjs gate --changed` names the tests a
   change reaches, `evidence` the runs recorded against this tree, `status` the snapshot, and
   `review` the staged diff against the estate rules. None of them replaces running the test.

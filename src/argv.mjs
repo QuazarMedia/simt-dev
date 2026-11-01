@@ -136,6 +136,8 @@ export const VALUE_FLAGS = new Set([
   // plan next: stay inside one tier, or one wave, or both. A value, not a switch,
   // because the answer to "which tier" is the whole question.
   'tier',
+  'lane',
+  // plan next: a subsystem with a file set of its own, so two lanes can run at once.
   'wave',
   'workspace',
   'root',

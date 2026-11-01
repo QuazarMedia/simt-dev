@@ -41,6 +41,8 @@ async function runStatus(root, flags) {
     if (tiers !== '') lines.push(`  tiers  ${tiers}${doc.untagged > 0 ? `  untagged=${doc.untagged}` : ''}`);
     const waves = formatCounts(doc.waves);
     if (waves !== '') lines.push(`  waves  ${waves}`);
+    const lanes = formatCounts(doc.lanes);
+    if (lanes !== '') lines.push(`  lanes  ${lanes}${doc.unlaned > 0 ? `  unlaned=${doc.unlaned}` : ''}`);
   }
   lines.push('', `total    ${formatCounts(result.totals, result.stateOrder) || '-'}`);
   // A tracker with neither a tier column nor a wave table gets neither line: an empty
@@ -49,6 +51,8 @@ async function runStatus(root, flags) {
   if (tierLine !== '') lines.push(`tiers    ${tierLine}${result.untagged > 0 ? `  untagged=${result.untagged}` : ''}`);
   const waveLine = formatCounts(result.waves);
   if (waveLine !== '') lines.push(`waves    ${waveLine}`);
+  const laneLine = formatCounts(result.lanes);
+  if (laneLine !== '') lines.push(`lanes    ${laneLine}${result.unlaned > 0 ? `  unlaned=${result.unlaned}` : ''}`);
   lines.push(`ready    ${result.ready}`);
   emit(lines.join('\n'));
   return EXIT.OK;
@@ -94,7 +98,7 @@ async function runLabels(root, flags) {
 }
 
 async function runNext(root, id, flags) {
-  const result = await planNext(root, id, { tier: flags.tier ?? null, wave: flags.wave ?? null });
+  const result = await planNext(root, id, { tier: flags.tier ?? null, wave: flags.wave ?? null, lane: flags.lane ?? null });
   if (result.error) return fail(result.error, EXIT.USAGE, result.remedy);
   if (isJson(flags)) {
     emitJson({ ok: true, command: 'plan next', ...result });
@@ -118,6 +122,7 @@ async function runNext(root, id, flags) {
     `slice    ${next.id}  ${next.doc}`,
     `state    ${next.state}`,
     ...(next.tier ? [`tier     ${next.tier}`] : []),
+    ...(next.lane ? [`lane     ${next.lane}`] : []),
     ...(next.waves?.length ? [`wave     ${next.waves.join(", ")}`] : []),
     `depends  ${next.dependsOn || '(none)'}`,
     `bytes    ${next.sectionBytes}`,

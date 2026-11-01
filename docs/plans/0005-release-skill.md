@@ -64,7 +64,7 @@ The authority docs leave no material decision open:
 | id | slice | state | evidence |
 | --- | --- | --- | --- |
 | S1 | the skill body | Complete | ca2864ed51782af205768f97c4d1acd30ee78b1b · test: frontmatter parses; 4202 bytes under the 20k deferral budget; every cited path, command and ADR resolves in-repo |
-| S2 | the tool recognises and injects it | queued | — |
+| S2 | the tool recognises and injects it | Complete | f2331ada47515a18f807e7f5ffc8b33c91bb04b3 · test: skills find release ranks release-process (name:release); skills brief --task 'release 0.7.2' selects it within budget and inlines the body; skills show release-process prints it; sync --yes renders the Disclosure line; check reports the region CURRENT; manifestProblems(simt.json) = [] |
 | S3 | the recognition is pinned by a test | queued | — |
 
 ## S1 — the skill body

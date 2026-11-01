@@ -21,7 +21,7 @@
 
 import { basename, resolve } from 'node:path';
 
-import { EXIT, emit, emitJson, fail, isJson, note } from '../output/index.mjs';
+import { EXIT, fail, note, present } from '../output/index.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { buildRows, resolveConcurrency, summarise } from '../compare/row.mjs';
@@ -78,50 +78,50 @@ export async function compareCommand(positional, flags) {
     directories: found.directories.length,
   });
 
-  if (isJson(flags)) {
-    emitJson({
-      ok: !rows.some((r) => r.problems.length > 0),
-      command: 'compare',
-      root: summary.root,
-      shape: summary.shape,
-      source: summary.source,
-      expectedSha: summary.expectedSha,
-      // Spread, not a hand-listed copy. A copy is a second place to forget: a field
-      // added to `summarise` renders in the text output and silently vanishes from
-      // `--json`, which is the combination automation trusts most. That is not
-      // hypothetical — `withOwnHooks` and `staleRuleFiles` both did it, and both
-      // were caught only because a test asserts the two shapes agree.
-      summary: {
-        repos: summary.repos,
-        adopted: summary.adopted,
-        unmanaged: summary.unmanaged,
-        broken: summary.broken,
-        drifted: summary.drifted,
-        current: summary.current,
-        noRegion: summary.noRegion,
-        malformed: summary.malformed,
-        staleRuleFiles: summary.staleRuleFiles,
-        packageRegions: summary.packageRegions,
-        stalePackages: summary.stalePackages,
-        hooksRouted: summary.hooksRouted,
-        withProblems: summary.withProblems,
-        withOwnHooks: summary.withOwnHooks,
-        shas: summary.shas,
-      },
-      rows,
-      learning,
-      worktrees: found.worktrees.map((w) => ({
-        name: w.name,
-        path: w.path,
-        owner: w.ownerName,
-        ownerMatchesDirName: w.ownerMatches,
-      })),
-      directories: found.directories.map((d) => basename(d)),
-    });
+  const payload = {
+    ok: !rows.some((r) => r.problems.length > 0),
+    command: 'compare',
+    root: summary.root,
+    shape: summary.shape,
+    source: summary.source,
+    expectedSha: summary.expectedSha,
+    // Spread, not a hand-listed copy. A copy is a second place to forget: a field
+    // added to `summarise` renders in the text output and silently vanishes from
+    // `--json`, which is the combination automation trusts most. That is not
+    // hypothetical — `withOwnHooks` and `staleRuleFiles` both did it, and both
+    // were caught only because a test asserts the two shapes agree.
+    summary: {
+      repos: summary.repos,
+      adopted: summary.adopted,
+      unmanaged: summary.unmanaged,
+      broken: summary.broken,
+      drifted: summary.drifted,
+      current: summary.current,
+      noRegion: summary.noRegion,
+      malformed: summary.malformed,
+      staleRuleFiles: summary.staleRuleFiles,
+      packageRegions: summary.packageRegions,
+      stalePackages: summary.stalePackages,
+      hooksRouted: summary.hooksRouted,
+      withProblems: summary.withProblems,
+      withOwnHooks: summary.withOwnHooks,
+      shas: summary.shas,
+    },
+    rows,
+    learning,
+    worktrees: found.worktrees.map((w) => ({
+      name: w.name,
+      path: w.path,
+      owner: w.ownerName,
+      ownerMatchesDirName: w.ownerMatches,
+    })),
+    directories: found.directories.map((d) => basename(d)),
+  };
+
+  if (present(payload, () => render(rows, summary, found, learning), flags) === 'json') {
     return rows.some((r) => r.problems.length > 0) ? EXIT.FAIL : EXIT.OK;
   }
 
-  emit(render(rows, summary, found, learning));
   if (summary.shape === 'repo') {
     note('note     one repository compared; pass --root at a workspace directory to compare its siblings');
   } else if (target.source === 'none') {

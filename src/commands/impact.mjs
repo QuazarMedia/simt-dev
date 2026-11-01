@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
+import { EXIT, fail, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { discover } from '../compare/discover.mjs';
 import { extract } from '../index/extract.mjs';
@@ -64,11 +64,7 @@ export async function impactCommand(args, flags, commands = []) {
     consumers: consumers.references,
     truncated,
   };
-  if (isJson(flags)) {
-    emitJson(payload);
-    return EXIT.OK;
-  }
-  emit(render(payload));
+  present(payload, () => render(payload), flags);
   return EXIT.OK;
 }
 

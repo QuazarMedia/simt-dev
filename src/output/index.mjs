@@ -92,6 +92,26 @@ export function writeMode(flags) {
  * Truncation is always announced with an explicit line, never a silent ellipsis:
  * an agent that cannot tell a truncated answer from a complete one will guess.
  */
+/**
+ * Answer one command's result on the surface the caller asked for.
+ *
+ * Every command that has both a document and a text report was choosing between them by
+ * hand, in the same five lines, in more than a dozen files - and a command that chose
+ * slightly differently printed a report where a caller had asked for JSON, which is how a
+ * script gets prose (review 0003 Q63).
+ *
+ * The renderer is a thunk because the surface is decided first: a command asked for JSON
+ * must not pay to render text nobody reads, and a caller cannot forget the branch.
+ */
+export function present(payload, renderText, flags) {
+  if (isJson(flags)) {
+    emitJson(payload);
+    return 'json';
+  }
+  emit(renderText());
+  return 'text';
+}
+
 export function emit(text, { maxBytes = maxBytesDefault, stream = process.stdout } = {}) {
   const body = text.endsWith('\n') ? text : `${text}\n`;
   const bytes = Buffer.byteLength(body);

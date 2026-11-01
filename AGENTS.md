@@ -124,7 +124,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=1a75dafceba39c61224b2dd919284963b8ed4220 -->
+<!-- simt:sha=e3aed24eabcc9e94f6cfd4f7b75b247f575fd60a -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->
@@ -289,7 +289,7 @@ the list to reach it, and never split one decision into several questions to fit
 
 ### Small work (no plan file)
 
-When the whole of the work is small — fewer than five slices — do not create a plan file.
+When the whole of the work is small — fewer than three slices — do not create a plan file.
 Plan it and implement it directly, in a single slice: state the slice and its acceptance
 checks, resolve any material decisions, and build it. The `docs/plans/*` tracker table and
 its `NNNN-slug.md` deliverable are for work that spans multiple slices; a single slice has

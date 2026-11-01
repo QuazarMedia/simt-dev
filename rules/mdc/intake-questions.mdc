@@ -43,7 +43,7 @@ the list to reach it, and never split one decision into several questions to fit
 
 ## Small work (no plan file)
 
-When the whole of the work is small — fewer than five slices — do not create a plan file.
+When the whole of the work is small — fewer than three slices — do not create a plan file.
 Plan it and implement it directly, in a single slice: state the slice and its acceptance
 checks, resolve any material decisions, and build it. The `{{plansGlob}}` tracker table and
 its `NNNN-slug.md` deliverable are for work that spans multiple slices; a single slice has

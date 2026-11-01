@@ -23,7 +23,7 @@ All notable changes to this package are recorded here. The format follows
 - The harness facet data — the surfaces each harness loads, its pointer files, its loader chain, its hook dialect and payload keys, its plugin components — moves out of the engine modules into `harnesses/`: one JSON record per harness, shipped in the tarball, the wheel and the sdist alongside the rule bodies. The views read the record by id, so a new harness is a record, not a table edit across four modules. — [ADR-013](docs/decisions/ADR-013-genericity-by-facts-and-local-profiles.md)
 - The git and process plumbing is one module: one runner behind identity, hooks, the store and `tracked()`, a bounded `spawnBounded`, and shared frontmatter and tokenizer helpers.
 - `agent-hooks install` folds into `init`, and help flags the prerequisites a command needs.
-- The plan tracker reads `docs/research`, and small work — fewer than five slices — skips the plan file.
+- The plan tracker reads `docs/research`, and small work — fewer than three slices — skips the plan file.
 - The README's command list renders from the spec table, so it cannot drift from the commands the binary dispatches.
 
 ### Fixed

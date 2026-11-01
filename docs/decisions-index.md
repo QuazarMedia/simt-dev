@@ -137,3 +137,4 @@ in [architecture/history.md](architecture/history.md).
 | [124](decisions/ADR-124-the-manifest-has-a-schema-in-the-tool-and-its-unknown-keys-stay-the-repositorys.md) | the manifest has a schema in the tool, and its unknown keys stay the repository's | accepted · 2026-10-31 |
 | [125](decisions/ADR-125-a-shared-context-belongs-to-a-read-and-a-writer-reads-directly.md) | a shared context belongs to a read, and a writer reads directly | accepted · 2026-10-31 |
 | [126](decisions/ADR-126-the-mcp-surface-stays-a-reader-so-there-is-no-write-path-to-build.md) | the MCP surface stays a reader, so there is no write path to build | accepted · 2026-11-01 |
+| [127](decisions/ADR-127-the-mcp-tool-list-is-written-by-hand-and-roots-is-not-asked-for.md) | the MCP tool list is written by hand and held to the spec, and roots is not asked for | accepted · 2026-11-01 |

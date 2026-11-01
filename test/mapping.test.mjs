@@ -132,12 +132,12 @@ const GOLD = {
   'src/agenthooks/policy.mjs': ['test/agenthooks.test.mjs', 'test/lease.test.mjs'],
   'src/agenthooks/render.mjs': ['test/agenthooks.test.mjs', 'test/lessons.test.mjs'],
   'src/argv.mjs': ['test/help.test.mjs', 'test/unit.test.mjs', 'test/completions.test.mjs'],
-  'src/bench/ablate.mjs': ['test/bench.test.mjs'],
-  'src/bench/grade.mjs': ['test/bench.test.mjs'],
-  'src/bench/mine.mjs': ['test/bench.test.mjs', 'test/mapping.test.mjs'],
-  'src/bench/probes.mjs': ['test/bench.test.mjs'],
-  'src/bench/report.mjs': ['test/bench.test.mjs'],
-  'src/bench/run.mjs': ['test/bench.test.mjs'],
+  'src/bench/ablate.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/bench/grade.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/bench/mine.mjs': ['test/bench.test.mjs', 'test/mapping.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/bench/probes.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/bench/report.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/bench/run.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
   'src/ci/dependabot.mjs': ['test/ci.test.mjs', 'test/naming.test.mjs'],
   'src/ci/workflow.mjs': ['test/ci.test.mjs', 'test/naming.test.mjs', 'test/binary.test.mjs', 'test/node-runner.test.mjs'],
   'src/commands/evidence.mjs': ['test/ledger.test.mjs'],
@@ -149,15 +149,25 @@ const GOLD = {
   'src/commands/skillsinstall.mjs': ['test/install.test.mjs'],
   'src/commands/tokens.mjs': ['test/tokens.test.mjs'],
   'src/commands/upgrade.mjs': ['test/upgrade.test.mjs'],
-  'src/compare/discover.mjs': ['test/compare.test.mjs'],
-  'src/compare/hooksstate.mjs': ['test/compare.test.mjs'],
-  'src/compare/row.mjs': ['test/compare.test.mjs'],
+  'src/compare/discover.mjs': ['test/compare.test.mjs', 'test/compare2.test.mjs'],
+  'src/compare/hooksstate.mjs': ['test/compare.test.mjs', 'test/compare2.test.mjs'],
+  'src/compare/row.mjs': ['test/compare.test.mjs', 'test/compare2.test.mjs'],
   'src/decisions/index.mjs': ['test/leaks.mjs', 'test/rules.test.mjs', 'test/shipped.test.mjs', 'test/decide.test.mjs', 'test/decisions.test.mjs'],
   'src/graph/load.mjs': ['test/fixture.mjs', 'test/graph.test.mjs', 'test/install.test.mjs', 'test/compile.test.mjs'],
   'src/graph/spec.mjs': ['test/graphspec.test.mjs', 'test/compile.test.mjs', 'test/graph.test.mjs'],
   'src/graph/speccheck.mjs': ['test/graphspec.test.mjs'],
   'src/hooks/capability.mjs': ['test/hooks.test.mjs', 'test/init.test.mjs', 'test/install.test.mjs'],
   'src/hooks/dispatcher.mjs': ['test/hooks.test.mjs', 'test/ledger.test.mjs', 'test/lessons.test.mjs', 'test/secrets.test.mjs'],
+  'src/bench/adapters.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/bench/arms.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/bench/workspace.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/measure/metrics.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/measure/records.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/measure/stats.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/testing/parsers.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/testing/patches.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/testing/vault.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs'],
+  'src/testing/paths.mjs': ['test/bench.test.mjs', 'test/bench2.test.mjs', 'test/bench3.test.mjs', 'test/ecosystem-records.test.mjs', 'test/mapping.test.mjs'],
 };
 
 const LANG = {
@@ -166,7 +176,7 @@ const LANG = {
 };
 
 test('precision on 30 labelled files is at least 0.8', async () => {
-  assert.equal(Object.keys(GOLD).length, 30);
+  assert.equal(Object.keys(GOLD).length, 40);
   const root = new URL('..', import.meta.url).pathname;
   const exec = promisify(execFile);
   const { stdout } = await exec('git', ['ls-files'], { cwd: root, maxBuffer: 8 << 20 });

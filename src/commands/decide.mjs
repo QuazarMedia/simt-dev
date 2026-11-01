@@ -23,7 +23,7 @@ export async function decideCommand(args, flags) {
     if (isJson(flags)) {
       emitJson({
         ok: res.ok,
-        command: 'decide --check',
+        command: 'decide lint',
         root,
         findings: res.findings,
       });

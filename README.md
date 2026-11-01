@@ -133,7 +133,8 @@ simt compare                                                           # the ado
 simt completions <bash|zsh|fish>                                       # print a bash, zsh or fish completion script generated from this spec
 
 # decide
-simt decide "<title>" --yes                                            # scaffold a numbered decision record with its frontmatter
+simt decide lint                                                       # check every decision record for the structure a supersession needs
+simt decide new "<title>" --yes                                        # scaffold a numbered decision record with its frontmatter
 
 # distill
 simt distill <skill|doc>                                               # turn a repository into a skill or rule proposal

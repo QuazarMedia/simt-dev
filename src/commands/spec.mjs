@@ -48,7 +48,11 @@ export const SPEC = [
   { path: 'ci', summary: "refresh simt-dev's own .github workflow and Dependabot files", flags: ["check","diff"], },
   { path: 'compare', mcp: { name: 'compare', flags: [] }, summary: 'the adoption and drift matrix across every sibling repository', flags: ["learn"], },
   { path: 'completions', usage: '<bash|zsh|fish>', summary: 'print a bash, zsh or fish completion script generated from this spec', flags: [], },
-  { path: 'decide', usage: '"<title>" --yes', summary: 'scaffold a numbered decision record with its frontmatter', writes: 'repo', flags: ["yes","check","diff","dry-run","paths","supersedes","task"], },
+  { path: 'decide lint', summary: 'check every decision record for the structure a supersession needs', flags: ["check","diff"], },
+  // The scaffold is the group's default, and it reads the rest of the line as its title:
+  // `decide "a title"` is a title, never a subcommand, which is why the group declares
+  // that its default takes arguments.
+  { path: 'decide new', usage: '"<title>" --yes', summary: 'scaffold a numbered decision record with its frontmatter', writes: 'repo', defaultFor: 'decide', flags: ["yes","check","diff","dry-run","paths","supersedes","task"], },
   { path: 'distill', usage: '<skill|doc>', summary: 'turn a repository into a skill or rule proposal', flags: [], },
   { path: 'docs readme', summary: 'render the README command list from the spec', writes: 'repo', defaultFor: 'docs', flags: ["yes","diff"], },
   { path: 'doctor', usage: '[--fix]', mcp: { name: 'doctor', flags: [] }, summary: 'report what is wrong with this installation', writes: 'repo', flags: ["yes","diff","fix"], },

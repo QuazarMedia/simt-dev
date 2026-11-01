@@ -160,7 +160,9 @@ ${CLI} lessons review [<id>]   promote a lesson candidate to docs/lessons/NNNN-<
 ${CLI} explain <CODE>        what a check finding means: the decision behind it, how
                            to fix it, and a concrete trigger (DRIFT, UNMANAGED,
                            PACK-DIGEST-MISMATCH, ...; case-insensitive)
-${CLI} decide [<title>]        scaffold an ADR with the next free number, a Status: line,
+${CLI} decide lint             check every record for the structure a supersession needs
+                           (the same question as --check, which is its alias)
+${CLI} decide new [<title>]    scaffold an ADR with the next free number, a Status: line,
                            a rulings skeleton, and structured simt-affects +
                            simt-supersedes frontmatter (dry-run unless --yes;
                            --check lints ADRs for prose-only partial supersessions)

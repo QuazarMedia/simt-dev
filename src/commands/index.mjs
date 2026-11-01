@@ -140,7 +140,13 @@ export const IMPLEMENTED = {
   'lessons capture': async () => (await import('./lessons.mjs')).lessonsCaptureCommand,
   'lessons list': async () => (await import('./lessons.mjs')).lessonsListCommand,
   'lessons review': async () => (await import('./lessons.mjs')).lessonsReviewCommand,
-  decide: async () => (await import('./decide.mjs')).decideCommand,
+  'decide new': async () => (await import('./decide.mjs')).decideCommand,
+  // `decide lint` is the check that used to be `decide --check`. It routes through the
+  // same handler with the flag set, so the two spellings cannot answer differently.
+  'decide lint': async () => {
+    const { decideCommand } = await import('./decide.mjs');
+    return (args, flags) => decideCommand(args, { ...flags, check: true });
+  },
   // A bare command: the code is a positional, so there is no
   // group and no default subcommand to resolve.
   explain: async () => (await import('./explain.mjs')).explainCommand,
@@ -370,14 +376,14 @@ async function dispatchInState(argv) {
   }
 
   const [first, second] = positional;
-  const path = commandPath(first, second);
-  // Arguments after the command path. A group consumed two tokens (`graph lint`),
-  // a bare command one, so the offset depends on the shape that resolved.
-  const offset = GROUPS.has(first) && second !== undefined ? 2 : 1;
-
-  if (path === null) {
+  const resolution = resolveCommandPath(first, second);
+  if (resolution === null) {
     return fail(`unknown command \`${[first, second].filter(Boolean).join(' ')}\``, EXIT.USAGE);
   }
+  // Arguments after the command path. A group consumed two tokens (`graph lint`); a group
+  // whose default reads the rest of the line (`decide "<title>"`) consumed one.
+  const { path, consumed } = resolution;
+  const offset = consumed;
 
   // One path, stated once, by the only code that knows which one resolved.
   jsonCommand(path);
@@ -445,24 +451,43 @@ async function dispatchInState(argv) {
  * one dispatch key, so an alias cannot load a different handler or escape the flag
  * declaration the path carries.
  */
-function commandPath(first, second) {
+/**
+ * Groups whose default subcommand reads the rest of the line as its own argument.
+ *
+ * `decide` scaffolds from a title, so `simt decide "<title>"` has to keep working now that
+ * `decide lint` makes it a group. Naming the group here is the difference between a
+ * declared shape and a guess: for every other group a second token that names no
+ * subcommand stays the error it already was, so `simt skills nonsense` cannot silently
+ * become `simt skills index`.
+ */
+const GROUP_DEFAULT_TAKES_ARGUMENTS = new Set(['decide']);
+
+/**
+ * The path a pair of positionals resolves to, and how many tokens that path consumed.
+ *
+ * The count is part of the answer: a group default that reads the rest of the line takes
+ * one token (`decide "a title"`), every other form takes the tokens it matched. Deriving
+ * the argument slice anywhere else would be a second opinion about which shape resolved.
+ */
+function resolveCommandPath(first, second) {
   if (first === undefined) return null;
-  if (!GROUPS.has(first)) return ALIASES.get(first) ?? first;
+  if (!GROUPS.has(first)) return { path: ALIASES.get(first) ?? first, consumed: 1 };
 
   const group = GROUPS.get(first);
-  if (second === undefined) return `${first} ${group}`;
+  if (second === undefined) return { path: `${first} ${group}`, consumed: 1 };
   // Reject a second token that is not a subcommand of this group, rather than
   // silently routing `simt skills nonsense` to the default subcommand.
   //
-  // Read from IMPLEMENTED rather than from a second list. The list existed because
-  // there was no way to enumerate what dispatch could run — `IMPLEMENTED` was an
-  // object literal inside `dispatch()` — and a hand-kept copy of it had already
-  // drifted: it carried `doctor`, which `commandPath` can never match, because
-  // `doctor` is not a group and this branch is only reached when `GROUPS.has(first)`.
-  // Two lists of the same fact is the defect S15 was about in the help text.
+  // Read from IMPLEMENTED rather than from a second list, because a hand-kept copy of it
+  // had already drifted: one carried `doctor`, which this branch can never match, since
+  // `doctor` is not a group. Two lists of the same fact is the defect the help text was
+  // fixed for.
   const key = `${first} ${second}`;
-  if (key in IMPLEMENTED) return key;
-  return ALIASES.get(key) ?? null;
+  if (key in IMPLEMENTED) return { path: key, consumed: 2 };
+  const alias = ALIASES.get(key);
+  if (alias !== undefined) return { path: alias, consumed: 2 };
+  if (GROUP_DEFAULT_TAKES_ARGUMENTS.has(first)) return { path: `${first} ${group}`, consumed: 1 };
+  return null;
 }
 
 function parseOrExit(argv) {

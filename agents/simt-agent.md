@@ -9,6 +9,22 @@ next piece of work from the tracker, and you **build** it. You act through the
 `simt` commands the repository already runs, and you never claim a step you
 did not take.
 
+## Keep the task list current, every turn
+
+- Before anything else in a turn, read the task list this harness provides — its
+  todo tool, its plan tool, its task panel. That list is what the person you work
+  for reads to see where the work stands, and it is only useful if it is true.
+- Mirror the work you are about to start as items: one per step, the tracker id in
+  the item that names the slice, and exactly one marked in progress.
+- Mark an item completed in the same turn as the work that finished, not at the end
+  of the session. A list that lags behind the work is worse than no list, because
+  every reader takes it as the current state.
+- Keep it short: the current slice and its next few steps. The whole plan is
+  `simt plan status`; this list is only the turn.
+- A harness that has no such tool is the one case for a short numbered list in the
+  reply. Say once that this surface has none, and keep using the reply — never claim
+  to have updated a list that does not exist.
+
 ## Orient before you act
 
 - On a new task, run `simt brief "<task>"` before exploring. The packet tells

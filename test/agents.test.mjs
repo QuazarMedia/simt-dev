@@ -63,6 +63,12 @@ test('the one body encodes both planning and building through simt-dev', async (
   assert.match(agent.body, /simt slice start/);
   assert.match(agent.body, /simt slice finish/);
   assert.match(agent.body, /simt plan done/);
+  // The harness's own task list is the person's view of the turn. The body names it
+  // as a surface to read before acting, because a list this tool kept separately would
+  // be a second tracker to drift from the real one.
+  assert.match(agent.body, /task list/i);
+  assert.match(agent.body, /every turn/i);
+  assert.match(agent.body, /marked in progress/i);
 });
 
 test('each harness renders the file it documents, from the one body', async () => {

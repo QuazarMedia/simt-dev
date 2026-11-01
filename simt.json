@@ -13,12 +13,8 @@
       "excludeTextFiles": true,
       "exclude": [
         "graph/skills.graph.json",
-        "src/bench/run.mjs",
-        "src/memory/lessons.mjs",
         "src/projection/rules.mjs",
-        "test/compare.test.mjs",
-        "test/hooks.test.mjs",
-        "test/init.test.mjs"
+        "test/hooks.test.mjs"
       ]
     }
   },

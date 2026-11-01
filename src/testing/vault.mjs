@@ -23,7 +23,7 @@ import { CONFIG_DIR } from '../name.mjs';
  * the absolute-path digest: a root with no history has no better identity, and the vault
  * path must never fail because git is absent.
  */
-export function repoIdentifier(root) {
+function repoIdentifier(root) {
   const full = resolve(root);
   const name = basename(full).replace(/[^A-Za-z0-9._-]/g, '-') || 'repo';
   try {

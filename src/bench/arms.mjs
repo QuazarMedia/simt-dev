@@ -156,7 +156,7 @@ const ARM_TRANSFORMS = {
     run: (workDir) => stripBareArm(workDir),
   },
   current: {
-    describe: 'the repository as `simt sync` leaves it',
+    describe: 'the repository as `simt init` leaves it',
     run: (workDir) => applyProjectionMode(workDir, 'full'),
   },
   kernel: {

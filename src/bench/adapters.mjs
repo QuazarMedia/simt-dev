@@ -13,6 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { CLI } from '../name.mjs';
 import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
 
 const BENCH_DIR = dirname(fileURLToPath(import.meta.url));
@@ -430,7 +431,7 @@ export async function executeAdapter(
     .filter((part) => part.length > 0)
     .join('\n\n');
   const delivery = adapter.prompt.delivery;
-  const promptFile = delivery === 'file' ? join(workDir, adapter.prompt.file ?? '.simt-prompt.md') : null;
+  const promptFile = delivery === 'file' ? join(workDir, adapter.prompt.file ?? `.-prompt.md`) : null;
   if (promptFile !== null) {
     const { writeFile } = await import('node:fs/promises');
     await writeFile(promptFile, `${prompt}\n`, 'utf8');

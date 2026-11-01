@@ -31,7 +31,7 @@ let junitCounter = 0;
  */
 function junitReportPath() {
   junitCounter += 1;
-  return join(tmpdir(), `simt-junit-${process.pid}-${junitCounter}.xml`);
+  return join(tmpdir(), `${CLI}-junit-${process.pid}-${junitCounter}.xml`);
 }
 
 /**

@@ -44,7 +44,7 @@ const DECLARED = new Map(SPEC.map((row) => [row.path, new Set(row.flags ?? [])])
 /** path -> the values a flag of that path accepts, where the set is closed. */
 const VALUES = new Map(SPEC.map((row) => [row.path, row.values ?? {}]));
 
-const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
+export const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
 
 /**
  * Every command this binary dispatches, in one place.
@@ -250,6 +250,23 @@ export const IMPLEMENTED = {
     return (args, flags) => packCommand('publish', args, flags);
   },
 };
+
+/**
+ * Resolve one command path to its handler, its declared flags and its closed value sets.
+ *
+ * The library surface needs the same answer `dispatch` gets and must not build a second
+ * registry to get it: a command reachable from the CLI and absent from `run` is the drift
+ * `test/spec.test.mjs` exists to catch, and it would be invisible here (review 0003 Q63).
+ */
+export async function resolveCommand(path) {
+  const load = IMPLEMENTED[path];
+  if (!load) return null;
+  return {
+    run: await load(),
+    declared: DECLARED.get(path) ?? new Set(),
+    values: VALUES.get(path) ?? {},
+  };
+}
 
 /** The release that turns the tolerated flag into a usage error (review 0003 Q62). */
 export const DEPRECATION_RELEASE = '0.8.0';

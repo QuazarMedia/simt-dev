@@ -56,6 +56,11 @@ export function fail(message, code = EXIT.FAIL, remedy) {
   // a reader in a consumer repo got a remedy naming a file that does not exist
   // where they are. Every remedy here is something the reader can run.
   const resolved = remedy ?? REMEDY[code] ?? `run: ${CLI} --help`;
+  // A library caller asked for a result, not a line on a terminal it does not own.
+  if (sink !== null) {
+    sink.error = { message, remedy: resolved, exitCode: code };
+    return code;
+  }
   if (jsonFailure) {
     emitJson({ ok: false, error: message, remedy: resolved, exitCode: code });
     return code;
@@ -114,6 +119,10 @@ export function present(payload, renderText, flags) {
 
 export function emit(text, { maxBytes = maxBytesDefault, stream = process.stdout } = {}) {
   const body = text.endsWith('\n') ? text : `${text}\n`;
+  if (sink !== null) {
+    sink.text.push(fitText(body, maxBytes));
+    return true;
+  }
   const bytes = Buffer.byteLength(body);
   if (maxBytes > 0 && bytes > maxBytes) {
     const slice = Buffer.from(body).subarray(0, maxBytes).toString('utf8');
@@ -246,6 +255,54 @@ function fitJsonArrays(payload, maxBytes, pretty) {
  */
 let accumulated = [];
 
+/**
+ * The output sink for a library call, or null for a process (review 0003 Q63).
+ *
+ * `run(command, input)` answers with the text, the documents, the notes and the failure a
+ * command produced instead of writing them. The alternative - threading a `result` return
+ * through seventy command modules - is the rewrite that never finishes, and the printing
+ * commands have no return value to thread: they `return EXIT.OK` after calling `emit`.
+ *
+ * A sink is per call and never nested. The dispatcher keeps its own JSON capture below and
+ * is not this: a sink answers "what did the command produce", the capture answers "hold the
+ * document until the exit code exists".
+ */
+let sink = null;
+
+/** Collect a command's output instead of writing it, and answer with what it produced. */
+export async function withSink(body) {
+  if (sink !== null) throw new Error('an output sink is already open');
+  const collecting = { text: [], documents: [], notes: [], error: null };
+  sink = collecting;
+  try {
+    const code = await body();
+    return {
+      code: code ?? EXIT.OK,
+      text: collecting.text.join(''),
+      documents: collecting.documents,
+      notes: collecting.notes,
+      error: collecting.error,
+    };
+  } finally {
+    sink = null;
+  }
+}
+
+/**
+ * The same cut `emit` makes on a stream, applied to a string: the ceiling is a promise
+ * whichever surface reads it, and a library caller that got bytes past the limit it asked
+ * for would be paying for what the flag exists to refuse.
+ */
+function fitText(body, maxBytes) {
+  const bytes = Buffer.byteLength(body);
+  if (maxBytes <= 0 || bytes <= maxBytes) return body;
+  const slice = Buffer.from(body).subarray(0, maxBytes).toString('utf8');
+  const cut = slice.lastIndexOf('\n');
+  return cut > 0
+    ? `${slice.slice(0, cut)}\nTRUNCATED ${bytes - maxBytes} bytes omitted, rerun with --max-bytes 0\n`
+    : `${slice}TRUNCATED ${bytes - maxBytes} bytes omitted, rerun with --max-bytes 0\n`;
+}
+
 // The path the dispatcher resolved. A command should not restate it: the ones that did
 // restated it wrongly (`plugin` printed `plugin claude`, `sync` printed `sync --check`),
 // and a document whose `command` disagrees with the argv that produced it is worse than
@@ -308,6 +365,10 @@ export function emitJson(value, { stream = process.stdout, pretty = prettyDefaul
     canonicalCommand !== null && carried !== null && typeof carried === 'object' && !Array.isArray(carried)
       ? { ...carried, command: canonicalCommand }
       : carried;
+  if (sink !== null) {
+    sink.documents.push(withSchemaVersion(stamped));
+    return true;
+  }
   if (captured !== null) {
     captured.push({ value: stamped });
     return true;
@@ -347,5 +408,9 @@ export function emitJson(value, { stream = process.stdout, pretty = prettyDefaul
  * diagnostics that accompany a real result, never for the result itself.
  */
 export function note(message, { stream = process.stderr } = {}) {
+  if (sink !== null) {
+    sink.notes.push(message);
+    return;
+  }
   stream.write(`${message}\n`);
 }

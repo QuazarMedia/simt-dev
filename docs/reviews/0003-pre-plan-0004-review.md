@@ -172,7 +172,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q70 | Ecosystem/language data records (runner, gates, card, test conventions, extraction, resolution) | P2 | A | genericity | L | Q69 | Queued | |
 | Q71 | Harness data records (surface, pointer, loader, hook dialect, payload keys, plugin) | P2 | A | genericity | M | — | Queued | |
 | Q72 | Shared utilities: one git/process module, `spawnBounded`, frontmatter, tokenizer, small helpers | P2 | A | sys | M | — | Queued | |
-| Q73 | One local-state directory and one append-only event log for ledger/journal/leases/lessons/check | P2 | A | state | M | Q19 | Queued | |
+| Q73 | One local-state directory and one append-only event log for ledger/journal/leases/lessons/check | P2 | A | state | M | Q19 | Complete | `625923e`; `src/state/events.mjs` appends one envelope (`v`, ULID `id`, `ts`, `kind`, `session`, `harness`, `tree`, `subject`, `data`) to `.simt/local/events.jsonl` with `O_APPEND`, and `readEvents` reports a damaged line instead of answering "empty"; emitted by journal commits and undos, gate runs, lease acquire/release and lesson captures; a kind outside `EVENT_KINDS` throws rather than sitting in the log unread; the ledger, lease and lessons files remain the projections readers already use, and every event is in the log as well |
 | Q74 | Lease v2: resource kinds, fencing token, renew/release, `LeaseStore` interface (W37 seed) | P2 | A | lease | M | Q20, Q73 | Queued | |
 | Q75 | Ledger v2: gate kind, index tree, rotation, fast `treeId` (W28 seed) | P2 | A | ledger | M | Q73 | Queued | |
 | Q76 | Index storage v4: generic nodes/edges with ownership, `openIndex()` API, indexes, O(n) PageRank | P2 | A | index | L | Q44 | Queued | |

@@ -582,7 +582,7 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W09 | Portable work profiles | 1 | W08, W05 | S | E4 | actionable rendered rules; hard gates kept | Queued | |
 | W10 | Capability cards | 1 | W07 | S | E2 | declared/available/authorized separated | Queued | |
 | W11 | Intent routing | 1 | W08, W10 | M | E3 | labelled intent evidence; no inferred effects | Queued | |
-| W12 | Section extraction | 2 | W08 | M | E5 | late/Unicode sections recovered | Queued | |
+| W12 | Section extraction | 2 | W08 | M | E5 | late/Unicode sections recovered | Complete | c227e48 · test: node --test test/knowledge-sections.test.mjs |
 | W13 | Claims and typed edges | 2 | W12 | L | E5 | exact declared lineage; proposals isolated | Queued | |
 | W14 | Temporal authority | 2 | W13 | M | E5 | historical/applicable/conflict cases exact | Queued | |
 | W15 | Source observations | 2 | W14, W10 | M | E6 | bounded opt-in refresh; no implicit sockets | Queued | |

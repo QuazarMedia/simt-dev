@@ -20,6 +20,7 @@ import { readImportEdges } from '../index/gate.mjs';
 import { langOf, packageOf } from '../index/store.mjs';
 import { localRel } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { gitPaths } from '../sys/git.mjs';
 
 const exec = promisify(execFile);
 
@@ -200,8 +201,7 @@ async function tracked(root) {
   try {
     // `-z`: without it git C-quotes a non-ASCII path (`src/\303\274n...`) and
     // the reader's real filename never matches it (review 0003 Q39).
-    const { stdout } = await exec('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 16 << 20 });
-    return { files: stdout.split('\0').filter(Boolean) };
+    return { files: await gitPaths(root, ['ls-files']) };
   } catch (error) {
     return {
       error: fail(

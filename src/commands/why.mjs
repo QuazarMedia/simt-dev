@@ -24,6 +24,7 @@ import {
 import { splitFrontmatter } from '../memory/decide.mjs';
 import { listPromotedLessons } from '../memory/lessons.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { gitPaths } from '../sys/git.mjs';
 
 const exec = promisify(execFile);
 
@@ -69,8 +70,7 @@ export async function tracked(root) {
   try {
     // `-z`: without it git C-quotes a non-ASCII path and the reader's real
     // filename never matches it (review 0003 Q39).
-    const { stdout } = await exec('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 16 << 20 });
-    return { files: stdout.split('\0').filter(Boolean) };
+    return { files: await gitPaths(root, ['ls-files']) };
   } catch (error) {
     return {
       error: fail(

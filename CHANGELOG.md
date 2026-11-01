@@ -6,9 +6,30 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Every writer runs through one plan/apply engine: `init`, `sync`, `ci`, `ignore`, `rules decisions`, `pack new`, `upgrade`, `hooks install`, `agent-hooks install` and the agent plan derive create/update/remove from the bytes, journal one set per run, and a rehearsal reports the plan and writes nothing.
+- An append-only event log every store writes to (`.simt/local/events.jsonl`): journal commits and undos, gate runs, lease acquire/release and lesson captures all land in it; the ledger, lease and lessons files remain the projections readers already use.
+- Lease schema v2: a claim names a resource (a file, or a directory and its subtree), its holder, and a fencing token that increments per acquisition, with renew and release; a v1 lease file is read as path resources rather than dropped.
+- The MCP list methods answer one page and name the cursor for the next; a subscription request is refused with its reason, and a cancelled call is answered with its interruption. The surface stays a reader. — [ADR-126](docs/decisions/ADR-126-the-mcp-surface-stays-a-reader-so-there-is-no-write-path-to-build.md)
+- Index storage v4: generic nodes and edges with ownership, an `openIndex()` API, and O(n) PageRank; one `coverage()` and one `governs()` sit behind every reader that answers from the index.
+- The ledger gets a seeded private index, a tail read and a rotation.
+- Ecosystem/language data records — runner, gates, card, test conventions, extraction, resolution — ship in every channel beside the harness records. — [ADR-013](docs/decisions/ADR-013-genericity-by-facts-and-local-profiles.md)
+- The release process is a repo-local skill the tool recognises and injects when a release task is in play.
+
 ### Changed
 
+- `run(command, input)` answers with what the command produced — text, documents, notes, warnings, failure and exit code — instead of printing it, and one call carries one presentation state, not one per process.
 - The harness facet data — the surfaces each harness loads, its pointer files, its loader chain, its hook dialect and payload keys, its plugin components — moves out of the engine modules into `harnesses/`: one JSON record per harness, shipped in the tarball, the wheel and the sdist alongside the rule bodies. The views read the record by id, so a new harness is a record, not a table edit across four modules. — [ADR-013](docs/decisions/ADR-013-genericity-by-facts-and-local-profiles.md)
+- The git and process plumbing is one module: one runner behind identity, hooks, the store and `tracked()`, a bounded `spawnBounded`, and shared frontmatter and tokenizer helpers.
+- `agent-hooks install` folds into `init`, and help flags the prerequisites a command needs.
+- The plan tracker reads `docs/research`, and small work — fewer than five slices — skips the plan file.
+- The README's command list renders from the spec table, so it cannot drift from the commands the binary dispatches.
+
+### Fixed
+
+- A v2 lease write keeps the flat aliases and caller fields a v1 reader expects.
+- The lesson event is emitted where the record is written, so it lands in the event log.
 
 ## [0.7.1] — 2026-11-01
 

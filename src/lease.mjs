@@ -47,7 +47,10 @@ export function toV2(entry) {
   if (entry !== null && typeof entry === 'object' && entry.resource !== undefined && entry.holder !== undefined) {
     return entry;
   }
+  // `...entry` keeps the fields a caller put on its own claim - a slice claim carries
+  // `kind: 'slice'` and the slice id - which the schema does not name but must not drop.
   return {
+    ...entry,
     resource: { kind: 'path', id: entry.path },
     holder: { session: entry.session, harness: entry.harness ?? null },
     fence: Number.isInteger(entry.fence) ? entry.fence : 1,
@@ -218,6 +221,10 @@ export async function writeLeases(root, leases) {
   const records = leases
     .map(toV2)
     .map((l) => ({
+      // Additive, not a rename: the pre-edit hook, the slice claim and the tests read
+      // `path` and `session` straight off the file, and a v2 writer that stopped writing
+      // them would break every one of those readers at once.
+      ...l,
       resource: l.resource,
       holder: { session: l.holder.session, harness: l.holder.harness ?? null },
       fence: l.fence,

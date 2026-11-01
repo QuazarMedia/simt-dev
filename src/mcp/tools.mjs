@@ -530,7 +530,7 @@ export const TOOLS = [
     outputSchema: output.doctor,
     name: 'doctor',
     description:
-      'Classify a repository: stack tags, emitted facts with the file that proved each, and manifest presence. Call this first when the repo is unknown. Read-only: the fixes `doctor --fix` applies, and the preview `--diff` only shows alongside it, are not available over MCP.',
+      'Classify a repository: stack tags, the facts with the file that proved each, and manifest presence. Call this first when the repo is unknown. Read-only: `--fix` and `--diff` stay on the command.',
     inputSchema: rootArg,
     async run(args) {
       const root = rootOf(args);
@@ -579,7 +579,7 @@ export const TOOLS = [
     outputSchema: output.skills_brief,
     name: 'skills_brief',
     description:
-      'THE entry point. Resolve the skill set for a task: selected with why, deferred, and not selected with reason - the reasons let you override the resolver instead of guessing at it.',
+      'THE entry point. Resolve the skill set for a task: selected with why, deferred, and not selected with the reason to override.',
     inputSchema: {
       type: 'object',
       properties: {

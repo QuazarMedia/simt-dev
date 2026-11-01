@@ -318,6 +318,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
                          project root down to the working directory cost more here)
 --arm <spec>            bench run: arm to evaluate (bare, current, kernel, brief,
                          or name=path/to/arm.json; repeatable)
+--agent                 hooks install / status: write or report each harness's own
+                        hooks file instead of the git hooks; agent-hooks is its alias
 --harness <id>          bench run: adapter to invoke (claude, codex, gemini, opencode,
                          cursor, aider, gold, noop; default: gold);
                          agent-hook: which dialect to answer in (claude, cursor,

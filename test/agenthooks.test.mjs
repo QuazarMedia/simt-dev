@@ -401,6 +401,59 @@ test('install merges into the file a harness already owns', async () => {
   assert.equal(again.text.match(/UNCHANGED/g)?.length, adapters().length + 1, again.text);
 });
 
+/**
+ * `--agent` is the same run as the standalone command, not a second implementation.
+ *
+ * The two surfaces drifted because they were two code paths: `hooks install` wrote git
+ * hooks and `agent-hooks install` wrote harness hooks, so a reader who found only the
+ * first concluded the tool never wrote theirs. The flag delegates, so the plan is
+ * identical and only the name of the run differs.
+ */
+test('hooks install --agent plans the same bytes as agent-hooks install', async () => {
+  const root = await repo();
+  const viaName = cli(['agent-hooks', 'install', '--root', root, '--json']);
+  const viaFlag = cli(['hooks', 'install', '--agent', '--root', root, '--json']);
+  assert.equal(viaName.code, 0, viaName.text);
+  assert.equal(viaFlag.code, 0, viaFlag.text);
+  const named = JSON.parse(viaName.stdout);
+  const flagged = JSON.parse(viaFlag.stdout);
+  // `command` is the dispatch path, not the spelling: the envelope names what ran, and
+  // the remedy below is what speaks in the words the caller typed.
+  assert.equal(named.command, 'agent-hooks install');
+  assert.equal(flagged.command, 'hooks install');
+  const { command: _named, ...namedPlan } = named;
+  const { command: _flagged, ...flaggedPlan } = flagged;
+  assert.deepEqual(flaggedPlan, namedPlan);
+});
+
+test('hooks status --agent reports the harnesses, naming the command that was typed', async () => {
+  const root = await repo();
+  const viaFlag = cli(['hooks', 'status', '--agent', '--root', root]);
+  assert.equal(viaFlag.code, 0, viaFlag.text);
+  // The hint a reader acts on has to be the spelling they already type, or it sends them
+  // to a command they have never run.
+  assert.match(viaFlag.text, /install: simt hooks install --agent --yes/);
+  const json = JSON.parse(cli(['hooks', 'status', '--agent', '--root', root, '--json']).stdout);
+  assert.equal(json.command, 'hooks status');
+  const aliasJson = JSON.parse(cli(['agent-hooks', 'status', '--root', root, '--json']).stdout);
+  assert.equal(aliasJson.command, 'agent-hooks status');
+  assert.deepEqual(json.harnesses, aliasJson.harnesses);
+});
+
+test('hooks install --agent previews with a remedy in the spelling that was typed', async () => {
+  const root = await repo();
+  const preview = cli(['hooks', 'install', '--agent', '--root', root]);
+  assert.equal(preview.code, 0, preview.text);
+  assert.match(preview.text, /apply with: simt hooks install --agent --yes/);
+});
+
+test('--agent on a subcommand that writes no harness hooks is a usage error', async () => {
+  const root = await repo();
+  const result = cli(['hooks', 'run', 'pre-push', '--agent', '--root', root]);
+  assert.equal(result.code, 2, result.text);
+  assert.match(result.text, /applies to install and status/);
+});
+
 test('install refuses to touch a config it cannot read, and says which', async () => {
   const root = await repo({ '.cursor/hooks.json': '{ not json\n' });
   const preview = cli(['agent-hooks', 'install', '--root', root]);

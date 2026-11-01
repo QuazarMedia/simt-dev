@@ -168,10 +168,10 @@ export async function agentHookCommand(args, flags) {
   return row.denyExit;
 }
 
-export async function agentHooksCommand(sub, args, flags) {
+export async function agentHooksCommand(sub, args, flags, { command = null, install = 'agent-hooks install' } = {}) {
   const root = commandRoot(flags, args);
-  if (sub === 'install') return installHooks(root, flags);
-  if (sub === 'status') return hooksStatus(root, flags);
+  if (sub === 'install') return installHooks(root, flags, command ?? 'agent-hooks install');
+  if (sub === 'status') return hooksStatus(root, flags, command ?? 'agent-hooks status', install);
   return fail(`unknown agent-hooks subcommand ${sub}`, EXIT.USAGE, `run: ${CLI} agent-hooks status`);
 }
 
@@ -284,7 +284,7 @@ export async function applyAgentHooks(root, journal, { plan, shim, owner }) {
   return { written, shimWritten };
 }
 
-async function installHooks(root, flags) {
+async function installHooks(root, flags, command = 'agent-hooks install') {
   const mode = writeMode(flags);
   const planned = await planAgentHooks(root, { harness: flags.harness });
   if (planned.error) {
@@ -308,7 +308,7 @@ async function installHooks(root, flags) {
     if (isJson(flags)) {
       emitJson({
         ok: refused.length === 0,
-        command: 'agent-hooks install',
+        command,
         root,
         dryRun: true,
         plan: plan.map(({ text, ...rest }) => rest),
@@ -329,7 +329,7 @@ async function installHooks(root, flags) {
         '',
         refused.length > 0
           ? `REFUSED  ${refused.length} config file(s) could not be read; nothing written`
-          :        `PLAN     nothing written; apply with: ${CLI} agent-hooks install --yes`,
+          :        `PLAN     nothing written; apply with: ${CLI} ${command} --yes`,
       ].join('\n'),
     );
     // After the report: the report says what, the diff shows it .
@@ -359,7 +359,7 @@ async function installHooks(root, flags) {
   if (isJson(flags)) {
     emitJson({
       ok: true,
-      command: 'agent-hooks install',
+      command,
       root,
       plan: plan.map(({ text, ...rest }) => rest),
       shim: { ...shim.row, written: shimWritten },
@@ -390,7 +390,7 @@ async function installHooks(root, flags) {
   return EXIT.OK;
 }
 
-async function hooksStatus(root, flags) {
+async function hooksStatus(root, flags, command = 'agent-hooks status', install = 'agent-hooks install') {
   const rows = [];
   const problems = [];
   // The plugin file this tool owns whole is compared against what `install` would write
@@ -459,7 +459,7 @@ async function hooksStatus(root, flags) {
   }
 
   if (isJson(flags)) {
-    emitJson({ ok: problems.length === 0, command: 'agent-hooks status', root, harnesses: rows, problems });
+    emitJson({ ok: problems.length === 0, command, root, harnesses: rows, problems });
     return problems.length === 0 ? EXIT.OK : EXIT.FAIL;
   }
 
@@ -467,7 +467,7 @@ async function hooksStatus(root, flags) {
   for (const r of rows) {
     const state = { present: 'PRESENT ', absent: 'ABSENT  ', unreadable: 'INVALID ', drift: 'DRIFT   ', none: 'NO FILE ', other: 'NOT OURS' }[r.state];
     lines.push(`${state} ${r.id.padEnd(12)} ${r.path ?? '(no hooks file is documented)'}`);
-    if (r.state === 'absent') lines.push(`          ${' '.repeat(12)} install: ${CLI} agent-hooks install --yes`);
+    if (r.state === 'absent') lines.push(`          ${' '.repeat(12)} install: ${CLI} ${install} --yes`);
     // The second event is a separate answer to a separate question: a harness can carry
     // the tool hook and not the delivery, and a reader who is told "PRESENT" would
     // otherwise conclude the packet arrives on every prompt.

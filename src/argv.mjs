@@ -26,6 +26,10 @@ import { EXIT } from './output/index.mjs';
 // mean something, which it could not while three accepted flags had no description.
 
 export const BOOL_FLAGS = new Set([
+  // hooks install|status: write or report each harness's own hooks file instead of the
+  // git hooks. It is a flag rather than a second command because the plan, the report
+  // and the journal entry are the same run, and `agent-hooks install` is its alias.
+  'agent',
   // bench ablate: compare across harness, model and experiment groups. The command
   // read `flags.crossGroup` while the parser accepted no such flag, so the override
   // existed only in the error message that told the reader to pass it

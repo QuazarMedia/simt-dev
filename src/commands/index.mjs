@@ -190,13 +190,26 @@ export const IMPLEMENTED = {
     return (args, flags) => hooksCommand('run', args, flags);
   },
   'agent-hook': async () => (await import('./agenthook.mjs')).agentHookCommand,
+  // The alias spelling of `hooks install --agent` / `hooks status --agent`. It routes
+  // through the same command so the two spellings cannot drift, and it says which one was
+  // typed in the report and the remedy.
   'agent-hooks install': async () => {
-    const { agentHooksCommand } = await import('./agenthook.mjs');
-    return (args, flags) => agentHooksCommand('install', args, flags);
+    const { hooksCommand } = await import('./hooks.mjs');
+    return (args, flags) =>
+      hooksCommand('install', args, flags, {
+        agent: true,
+        command: 'agent-hooks install',
+        install: 'agent-hooks install',
+      });
   },
   'agent-hooks status': async () => {
-    const { agentHooksCommand } = await import('./agenthook.mjs');
-    return (args, flags) => agentHooksCommand('status', args, flags);
+    const { hooksCommand } = await import('./hooks.mjs');
+    return (args, flags) =>
+      hooksCommand('status', args, flags, {
+        agent: true,
+        command: 'agent-hooks status',
+        install: 'agent-hooks install',
+      });
   },
   // ADR-111. The one agent this tool ships, written into each harness's own agents
   // directory. A group like `agent-hooks`: `install` writes, `status` reads.

@@ -162,9 +162,9 @@ simt harness detect [--user]                                           # which h
 simt harness loaders [--table]                                         # the instruction files each harness loads, and what they cost
 
 # hooks
-simt hooks install --yes                                               # install the shared dispatcher and report what it would run
+simt hooks install --yes                                               # install the shared dispatcher; --agent writes each harness hooks file
 simt hooks run <event>                                                 # run one git event's gates now, as git would
-simt hooks status                                                      # what each git event routes to, and whether it is wired
+simt hooks status                                                      # what each git event routes to; --agent reports each harness instead
 
 # ignore
 simt ignore [--yes] [--diff]                                           # render the one ignore list into every harness ignore file

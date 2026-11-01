@@ -32,7 +32,25 @@ import { packageVersion, hasNpm } from '../package-version.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { readIfExists } from '../util/fs.mjs';
 
-export async function hooksCommand(sub, args, flags) {
+export async function hooksCommand(sub, args, flags, { agent = false, command = null, install = null } = {}) {
+  // `--agent` is the same write as `agent-hooks install|status`, reached from the command
+  // a reader who is looking at git hooks already has. One implementation, two spellings,
+  // and the report names the spelling that was typed: a remedy that tells the reader to
+  // run a command they did not type reads as a different tool's advice.
+  if (agent || flags.agent === true) {
+    if (sub !== 'install' && sub !== 'status') {
+      return fail(
+        `--agent writes each harness's own hooks file, so it applies to install and status, not ${sub}`,
+        EXIT.USAGE,
+        `run: ${CLI} hooks status`,
+      );
+    }
+    const { agentHooksCommand } = await import('./agenthook.mjs');
+    return agentHooksCommand(sub, args, flags, {
+      command: command ?? `hooks ${sub} --agent`,
+      install: install ?? 'hooks install --agent',
+    });
+  }
   const root = commandRoot(flags, args);
   // One context for the subcommand: install and status each ask about the same
   // repository, and `doctor --fix` asks alongside them.

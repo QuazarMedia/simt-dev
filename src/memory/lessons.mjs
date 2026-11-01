@@ -387,7 +387,7 @@ export async function recordFailThenFix(root, { failEntry, passEntry, failOutput
     resolvedDiff ??= treeDiff.diff;
   }
 
-  return appendLessonCandidate(root, {
+  const record = await appendLessonCandidate(root, {
     kind: 'fail-then-fix',
     cmd: passEntry?.cmd ?? failEntry?.cmd ?? null,
     signature,
@@ -397,6 +397,13 @@ export async function recordFailThenFix(root, { failEntry, passEntry, failOutput
     paths: resolvedPaths,
     fixDiff: resolvedDiff,
   });
+  // The lessons file is the reader's view; the log is what a UI can tail (Q73).
+  await noteEvent(root, {
+    kind: 'lesson.captured',
+    subject: passEntry?.cmd ?? failEntry?.cmd ?? null,
+    data: { id: record?.id ?? null, signature, tree: fixTree },
+  });
+  return record;
 }
 
 /**

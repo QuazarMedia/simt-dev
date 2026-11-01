@@ -19,6 +19,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, readFile, symlink } from 'node:fs/promises';
 import { commitJournal, ignoreJournal, journaledWriteFile } from '../journal.mjs';
+import { applyPlan, change } from '../write/plan.mjs';
 import { invalidateCheckCache } from '../status.mjs';
 import { dirname, join } from 'node:path';
 
@@ -548,26 +549,32 @@ export async function initCommand(positional, flags) {
   // scaffolds the manifest and one region but leaves the `.mdc` rules for a later
   // `sync` produces a repo whose `check` fails on files the user was never told
   // about — which reads as a broken adoption rather than an unfinished one.
+  //
+  // The malformed guard runs before anything is applied. A target this run cannot write
+  // has to stop the run, not leave the earlier targets written and the late one reported.
+  const badTarget = projected.targets.find((t) => t.action === 'malformed');
+  if (badTarget) {
+    // Checked before any write above; reaching here means the guard moved.
+    return fail(
+      `${badTarget.file}: ${badTarget.reason}`,
+      EXIT.FAIL,
+      `fix the markers at ${badTarget.file}:${badTarget.line}, then rerun: ${CLI} init --yes`,
+    );
+  }
+  // `before` is read, not inferred from `target.action`: the engine derives create from
+  // missing before-bytes, and a writer that passes its own action is the bug it removes.
+  const targetChanges = await Promise.all(
+    projected.targets
+      .filter((t) => t.action !== 'unchanged')
+      .map(async (t) =>
+        change({ path: t.path, before: await readBefore(t.path), after: t.text, owner: 'init', reason: t.action }),
+      ),
+  );
+  // The caller's journal, committed once below with the manifest and identity writes.
+  await applyPlan(root, targetChanges, { mode: { apply: true }, journal, commit: false });
   for (const target of projected.targets) {
-    if (target.action === 'unchanged') {
-      note(`current  ${target.file} (already up to date)`);
-      continue;
-    }
-    if (target.action === 'malformed') {
-      // Checked before any write above; reaching here means the guard moved.
-      return fail(
-        `${target.file}: ${target.reason}`,
-        EXIT.FAIL,
-        `fix the markers at ${target.file}:${target.line}, then rerun: ${CLI} init --yes`,
-      );
-    }
-    // A per-rule target lives in `.cursor/rules/`, `.claude/rules/`,
-    // `.agents/rules/` or `.github/instructions/` — four directories a repo that had
-    // no such configuration at all will not have. Creating them is part of adopting,
-    // not a detail of writing the file.
-    await mkdir(dirname(target.path), { recursive: true });
-    await journaledWriteFile(root, journal, target.path, target.text);
-    note(`wrote    ${target.file} (${target.action})`);
+    if (target.action === 'unchanged') note(`current  ${target.file} (already up to date)`);
+    else note(`wrote    ${target.file} (${target.action})`);
   }
 
   // Pointers, after the file they point at exists. A regular file already at one of

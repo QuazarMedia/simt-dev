@@ -48,18 +48,24 @@ export function pending(changes) {
  * `pending`: a rehearsal and a real run answer the same question with the same plan, and
  * the only difference is whether the bytes moved. With it, every change is journaled into
  * one set under `label`, so `undo` restores the run rather than one file of it.
+ *
+ * A writer whose run is more than one plan - `init` writes a manifest, an identity and a
+ * set of targets and commits once - passes its own `journal` and `commit: false`. The
+ * entries land in the caller's set, so the run stays one undoable step rather than one
+ * step per plan.
  */
-export async function applyPlan(root, changes, { mode, label } = {}) {
+export async function applyPlan(root, changes, { mode, label, journal: shared, commit = true } = {}) {
   const todo = pending(changes);
   if (todo.length === 0) return { applied: false, written: [], pending: [], journal: [] };
   if (!mode?.apply) return { applied: false, written: [], pending: todo.map((c) => c.path), journal: [] };
 
-  const journal = [];
+  const journal = shared ?? [];
+  const first = journal.length;
   for (const c of todo) {
     const path = isAbsolute(c.path) ? c.path : join(root, c.path);
     if (c.kind === 'remove') await journaledRemoveFile(root, journal, path);
     else await journaledWriteFile(root, journal, path, c.after);
   }
-  await commitJournal(root, label, journal);
+  if (commit && journal.length > first) await commitJournal(root, label, journal);
   return { applied: true, written: todo.map((c) => c.path), pending: [], journal };
 }

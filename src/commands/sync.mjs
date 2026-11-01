@@ -29,7 +29,8 @@ import { surfacesLine } from '../projection/surfaces.mjs';
 import { CLI, LOCK_FILE, MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { assertVersionPin, packageVersion } from '../package-version.mjs';
 import { resolvePacks } from '../packs.mjs';
-import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { commitJournal } from '../journal.mjs';
+import { applyPlan, change } from '../write/plan.mjs';
 import { buildCacheRecord, hooksSummary, invalidateCheckCache, writeCheckCache } from '../status.mjs';
 import { computeLock, readLock } from '../projection/lock.mjs';
 import { runDeclaredChecks } from '../kernel/checks.mjs';
@@ -326,19 +327,18 @@ export async function syncCommand(positional, flags) {
       await writeManifest(root, manifestPlan.manifest, journal);
       note(`wrote    ${manifestPlan.file} (generated field(s) ${manifestPlan.stale.join(', ')})`);
     }
-    for (const t of changed) {
-      // Three of the four rule surfaces live in directories that do not exist yet in a
-      // repository that has only ever been written to by hand. `init` grew its own
-      // mkdir; `sync` did not, so the first `sync` after a surface was added failed with
-      // ENOENT on the second target and had already written the first. The parent is
-      // derived from the target, never from the surface table, so a future surface with a
-      // deeper path needs no change here. The lock is one of these targets (Q29): it
-      // reaches this loop like every other file, so a deleted lock is a write the plan
-      // shows and the journal records.
-      await mkdir(dirname(t.path), { recursive: true });
-      await journaledWriteFile(root, journal, t.path, t.text);
-      note(`wrote    ${t.file}`);
-    }
+    // The parent is derived from the target, never from the surface table, so a future
+    // surface with a deeper path needs no change here. Three of the four rule surfaces
+    // live in directories that do not exist yet in a repository that has only ever been
+    // written to by hand, and the first `sync` after a surface was added failed with
+    // ENOENT on the second target having already written the first.
+    const targetChanges = await Promise.all(
+      changed.map(async (t) =>
+        change({ path: t.path, before: await readBefore(t.path), after: t.text, owner: 'sync', reason: 'the region is stale' }),
+      ),
+    );
+    await applyPlan(root, targetChanges, { mode, journal, commit: false });
+    for (const t of changed) note(`wrote    ${t.file}`);
     await commitJournal(root, 'sync', journal);
     // The regions moved, so the last `check` no longer describes this tree.
     // Invalidated rather than refreshed: `sync` does not run gates, checkers

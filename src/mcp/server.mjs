@@ -24,6 +24,7 @@ import { createInterface } from 'node:readline';
 import { CLI } from '../name.mjs';
 import { getPrompt, PROMPTS } from './prompts.mjs';
 import { RESOURCE_TEMPLATES, listResources, readResource } from './resources.mjs';
+import { paginate } from './paginate.mjs';
 import { check } from './schema.mjs';
 
 /**
@@ -207,11 +208,15 @@ export async function handle(request, tools, { packageVersion, state, root, sign
       }
       return reply({});
 
-    case 'tools/list':
+    case 'tools/list': {
+      const page = paginate(tools, params?.cursor);
+      if (page === null) return badCursor(id);
       return reply({
-        tools: tools.map((t) => describe(t, v)),
+        tools: page.items.map((t) => describe(t, v)),
+        ...nextPage(page),
         ...(cacheable(v) ? LIST_CACHE : {}),
       });
+    }
 
     case 'tools/call': {
       const name = params?.name;
@@ -265,16 +270,22 @@ export async function handle(request, tools, { packageVersion, state, root, sign
       }
     }
 
-    case 'resources/list':
+    case 'resources/list': {
+      const page = paginate(await listResources(root), params?.cursor);
+      if (page === null) return badCursor(id);
       return reply(
-        cacheable(v) ? { resources: await listResources(root), ...LIST_CACHE } : { resources: await listResources(root) },
+        cacheable(v) ? { resources: page.items, ...nextPage(page), ...LIST_CACHE } : { resources: page.items, ...nextPage(page) },
       );
-    case 'resources/templates/list':
+    }
+    case 'resources/templates/list': {
+      const page = paginate(RESOURCE_TEMPLATES, params?.cursor);
+      if (page === null) return badCursor(id);
       return reply(
         cacheable(v)
-          ? { resourceTemplates: RESOURCE_TEMPLATES, ...LIST_CACHE }
-          : { resourceTemplates: RESOURCE_TEMPLATES },
+          ? { resourceTemplates: page.items, ...nextPage(page), ...LIST_CACHE }
+          : { resourceTemplates: page.items, ...nextPage(page) },
       );
+    }
     case 'resources/read': {
       // The code for a resource that is not there CHANGED, and a server that answers
       // with one code to both revisions is a server that is wrong to whichever half of
@@ -288,10 +299,13 @@ export async function handle(request, tools, { packageVersion, state, root, sign
         cacheable(v) ? { contents: [found], ...LIST_CACHE } : { contents: [found] },
       );
     }
-    case 'prompts/list':
+    case 'prompts/list': {
+      const page = paginate(PROMPTS, params?.cursor);
+      if (page === null) return badCursor(id);
       return reply(
-        cacheable(v) ? { prompts: PROMPTS, ...LIST_CACHE } : { prompts: PROMPTS },
+        cacheable(v) ? { prompts: page.items, ...nextPage(page), ...LIST_CACHE } : { prompts: page.items, ...nextPage(page) },
       );
+    }
     case 'prompts/get': {
       const name = params?.name;
       // `getPrompt` returns null only for a prompt this server does not have: its
@@ -304,6 +318,16 @@ export async function handle(request, tools, { packageVersion, state, root, sign
       if (found === null) return error(id, RPC.METHOD, `no prompt named "${String(name)}"; call prompts/list first`);
       return reply(found);
     }
+    case 'resources/subscribe':
+    case 'resources/unsubscribe':
+      // A named refusal, not `unknown method`. The capability block above says `resources:
+      // {}` - no subscriptions - so a well-behaved client never asks; one that asks anyway
+      // is asking a protocol question and deserves the reason rather than a message that
+      // reads as a typo and sends it hunting for a spelling.
+      return isNotification
+        ? null
+        : error(id, RPC.METHOD, `${method} is not supported: this server has no change source; resources/list is always current`);
+
     default:
       return isNotification ? null : error(id, RPC.METHOD, `unknown method "${method}"`);
   }
@@ -381,6 +405,22 @@ function decorate(value, version, { packageVersion }) {
     ...value,
     _meta: { [META.SERVER_INFO]: serverInfo(packageVersion) },
   };
+}
+
+/** The cursor field, present only when there is a next page. */
+function nextPage(page) {
+  return page.nextCursor === null ? {} : { nextCursor: page.nextCursor };
+}
+
+/**
+ * A cursor this server did not issue.
+ *
+ * A protocol error, not an empty page: an empty page reads as "the list ended", which is
+ * a different fact from "your cursor is stale" and leads the client to show a partial
+ * estate as a complete one.
+ */
+function badCursor(id) {
+  return error(id, RPC.INVALID_PARAMS, 'invalid cursor: omit it to start at the first page');
 }
 
 function describe(tool, version) {

@@ -151,9 +151,9 @@ test('mcp: an unknown method is a protocol error, not silence', async () => {
   // Something this server has never heard of. It used to assert `resources/list` here,
   // which is the assertion that had to die when resources landed: a method this server
   // does not implement, not one it does.
-  const r = await handle(req('resources/subscribe', { uri: 'simt://rules/core' }), TOOLS);
+  const r = await handle(req('resources/watch', { uri: 'simt://rules/core' }), TOOLS);
   assert.equal(r.error.code, RPC.METHOD);
-  assert.match(r.error.message, /unknown method "resources\/subscribe"/);
+  assert.match(r.error.message, /unknown method "resources\/watch"/);
 });
 
 test('mcp: a malformed request is a request error', async () => {
@@ -451,10 +451,27 @@ test('mcp: the resources capability is declared without subscriptions', async ()
   assert.equal(r.result.capabilities.resources.listChanged, undefined);
 });
 
+/**
+ * Every resource a revision lists, walking `nextCursor` as a client must.
+ *
+ * The listing paginates (review 0003 Q66). A test that reads one reply sees the first page
+ * and mistakes it for the estate, which is exactly the mistake a client makes and the one
+ * the cursor exists to prevent.
+ */
+async function listedResources(version, opts) {
+  const all = [];
+  let cursor;
+  for (;;) {
+    const reply = await handle(at(version, 'resources/list', cursor === undefined ? {} : { cursor }), TOOLS, opts);
+    all.push(...reply.result.resources);
+    if (!reply.result.nextCursor) return all;
+    cursor = reply.result.nextCursor;
+  }
+}
+
 test('mcp: every revision lists rules, decisions, the kernel and the next slice', async () => {
   for (const version of SUPPORTED_VERSIONS) {
-    const r = await handle(at(version, 'resources/list'), TOOLS);
-    const { resources } = r.result;
+    const resources = await listedResources(version);
     assert.ok(resources.length > 20, `${version} listed ${resources.length}`);
     // Sorted, so a client diffing two listings sees a change rather than a reshuffle.
     assert.deepEqual(resources.map((x) => x.uri), [...resources.map((x) => x.uri)].sort());
@@ -512,8 +529,7 @@ test('mcp: a rule is readable, with its frontmatter reconstructed', async () => 
 });
 
 test('mcp: a decision record is readable and carries no estate name', async () => {
-  const listed = await handle(at('2026-07-28', 'resources/list'), TOOLS);
-  const first = listed.result.resources.find((x) => x.uri.startsWith('simt://decisions/'));
+  const first = (await listedResources('2026-07-28')).find((x) => x.uri.startsWith('simt://decisions/'));
   const r = await handle(at('2026-07-28', 'resources/read', { uri: first.uri }), TOOLS);
   const [content] = r.result.contents;
   assert.equal(content.mimeType, 'text/markdown');
@@ -527,8 +543,7 @@ test('mcp: the kernel resource is the region in kernel mode, whatever the repo d
   // (the default, and the only measured-safe mode), and the read still renders the
   // kernel: the declared mode governs what `sync` writes to disk, not what a read path
   // may ask for (ADR-002).
-  const listed = await handle(at('2026-07-28', 'resources/list'), TOOLS);
-  const entry = listed.result.resources.find((x) => x.uri === 'simt://kernel');
+  const entry = (await listedResources('2026-07-28')).find((x) => x.uri === 'simt://kernel');
   assert.ok(entry, 'the kernel resource is always listed');
   assert.ok(Number.isInteger(entry.size) && entry.size > 0, `listed size ${entry?.size}`);
 
@@ -555,8 +570,7 @@ test('mcp: plan/next is listed and readable exactly when a slice is ready', asyn
   // with every slice landed: the pairing a client relies on is that the listing and the
   // read come from the same source of truth and agree in both directions.
   const result = await planNext(process.cwd(), null);
-  const listed = await handle(at('2026-07-28', 'resources/list'), TOOLS);
-  const entry = listed.result.resources.find((x) => x.uri === 'simt://plan/next');
+  const entry = (await listedResources('2026-07-28')).find((x) => x.uri === 'simt://plan/next');
   if (result.error || !result.next) {
     assert.equal(entry, undefined, 'no slice was ready, yet plan/next was listed');
     return;
@@ -577,11 +591,11 @@ test('mcp: plan/next is not found in a repository without a plan, per revision',
   assert.equal(newest.error.code, RPC.RESOURCE_NOT_FOUND);
   const oldest = await handle(at('2025-06-18', 'resources/read', { uri: 'simt://plan/next' }), TOOLS, opts);
   assert.equal(oldest.error.code, RPC.RESOURCE_NOT_FOUND_LEGACY);
-  const listed = await handle(at('2026-07-28', 'resources/list'), TOOLS, opts);
-  assert.equal(listed.result.resources.find((x) => x.uri === 'simt://plan/next'), undefined);
+  const listedAll = await listedResources('2026-07-28', opts);
+  assert.equal(listedAll.find((x) => x.uri === 'simt://plan/next'), undefined);
   // The kernel rides along, because it renders read-only facts about any directory -
   // and with a size, because a listing without one is a budget a client cannot make.
-  const kernel = listed.result.resources.find((x) => x.uri === 'simt://kernel');
+  const kernel = listedAll.find((x) => x.uri === 'simt://kernel');
   assert.ok(kernel && kernel.size > 0, 'the kernel resource must render for any root');
 });
 
@@ -941,4 +955,16 @@ test('mcp: brief reads the index and never builds one', async () => {
   const packet = warm.result.structuredContent;
   assert.match(packet.text, /src\/keep\.mjs/, 'the packet names the file the task mentions');
   assert.ok(packet.bytes > 0 && packet.bytes <= 2048, `packet was ${packet.bytes} bytes`);
+});
+test('mcp: subscribing is refused with the reason, and never advertised', async () => {
+  // Two facts that have to agree: the capability says no subscriptions, and a client that
+  // asks anyway is told why. Advertising it and never sending an update, or refusing it as
+  // "unknown method", both leave the client worse off than a named refusal.
+  for (const method of ['resources/subscribe', 'resources/unsubscribe']) {
+    const r = await handle(req(method, { uri: 'simt://kernel' }), TOOLS);
+    assert.equal(r.error.code, RPC.METHOD);
+    assert.match(r.error.message, /no change source/);
+  }
+  const init = await handle(at('2026-07-28', 'initialize'), TOOLS);
+  assert.equal(init.result.capabilities.resources.subscribe, undefined, 'no subscription capability may be promised');
 });

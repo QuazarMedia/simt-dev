@@ -100,13 +100,13 @@ async function scan(root, { mcp = false } = {}) {
   const rows = [];
   for (const s of SURFACES) {
     for (const dir of s.configDirs ?? []) {
-      if (await present(root, dir)) {
+      if (await isDirectory(root, dir)) {
         rows.push(row(dir, s.label, { id: s.id, verified: s.verified ?? null, readsAgentsMd: s.readsAgentsMd, rule: s.rule }));
       }
     }
   }
   for (const c of CANDIDATE_DIRS) {
-    if (await present(root, c.dir)) {
+    if (await isDirectory(root, c.dir)) {
       rows.push(row(c.dir, c.harness, { readsAgentsMd: c.readsAgentsMd ?? null, readsAgentsMdNote: c.readsAgentsMdNote ?? null, verified: c.verified ?? null }));
     }
   }
@@ -115,7 +115,7 @@ async function scan(root, { mcp = false } = {}) {
   return { root, rows };
 }
 
-async function present(root, dir) {
+async function isDirectory(root, dir) {
   try {
     return (await stat(join(root, dir))).isDirectory();
   } catch {

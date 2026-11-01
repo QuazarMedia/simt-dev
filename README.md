@@ -91,87 +91,176 @@ truncated or substituted download never becomes the command.
 
 ## What `simt` does
 
+<!-- simt:commands:begin -->
+<!-- Rendered from the spec by `simt docs readme --yes`; do not edit by hand. -->
+
 ```sh
-# Adopt, inspect, and maintain a repository
-simt init                           # adopt or scaffold; prints a plan; --yes writes
-simt doctor [--fix]                 # stack, facts, evidence, and config health (--fix applies safe remedies, journaled)
-simt check [--frozen]               # projection drift, manifest, lock, and declared checkers
-simt sync [--explain] --yes         # regenerate the projection
-simt upgrade --yes                  # move every consumer in the workspace to this SHA
+# agent-hook
+simt agent-hook <event> --harness            # the harness entry point: decide one tool call, or deliver the prompt packet
 
-# Orient on a task and query the local code and governance graph
-simt brief "<task>"                 # one <= 2 KB packet: kind, commands, files, tests, ADRs, skills, lessons
-simt index [--embed]                # files, symbols, edges, FTS5 tokens (+ optional local embeddings)
-simt map --task "<task>"            # hybrid BM25 + PageRank + resolver file ranking (outline|names|signatures)
-simt impact <file|symbol>           # importers, covering tests, governance, and cross-repo consumers
-simt tests <path> [--cochange]      # tests covering a file via imports, naming, coverage, or co-change
-simt gate --changed                 # run only the tests the current diff reaches, with compacted output
-simt why [path]                     # ADRs, rules, skills, gates, and lessons governing a path
+# agent-hooks
+simt agent-hooks install --yes               # write this repository's policies into each harness hooks file
+simt agent-hooks status                      # what each harness will run, and what is not trusted yet
 
-# Rules, skills, decisions, and lessons
-simt rules list [--root <path>]     # rule catalogue and what applies to a repository
-simt rules show <id>                # read one rule body (including rules deferred in kernel mode)
-simt rules why <id|ADR-NNN> [--all] # the decision that settled a rule, and whether it still stands
-simt explain <CODE> [--json]      # what a check finding means, why it is reported, and how to fix it
-simt decide "<title>" --yes         # scaffold the next ADR with structured simt-affects / simt-supersedes
-simt lessons list                   # fail-to-fix, revert, review-block, and hook-denial candidates
-simt lessons review <id> --yes      # promote a candidate to docs/lessons/NNNN-<slug>.md
-simt skills index                   # tier-0 catalogue: every skill, one line each
-simt skills brief --task "<task>"   # tier-1 ranked skill selection within budget
-simt skills show <name>             # tier-2 skill body on demand (respects --max-bytes)
-simt skills why <name>              # the signal chain that selected or rejected a skill
-simt skills find <query>            # search skills by capability and keyword
-simt skills install <name> --yes    # pin a skill into the repository
-simt skills compile [<name>]        # compile to Agent Skills layout, split > 5,000-token bodies, report triggers
-simt skills eval [corpus]           # measure resolver precision and recall against a gold corpus
-simt graph lint [--spec agentskills]# verify the skill registry against skills on disk
+# agents
+simt agents install --yes                    # write the Simt-Agent into each harness agents file
+simt agents status                           # what each harness carries, and what is not installed yet
 
-# Dual gates (git time and agent tool-call time) and execution evidence
-simt hooks install --yes            # install the shared POSIX git hook dispatcher
-simt hooks status                   # what each git event routes to, and whether it is wired
-simt hooks run <event>              # run pre-commit or pre-push gates now, as git would
-simt agent-hooks install --yes      # write pre/post-tool and prompt-submit hooks for active harnesses
-simt agent-hooks status             # what each harness will run, and whether Codex trusts it
-simt agent-hook <event> --harness   # evaluate pre-tool-use, post-tool-use, or prompt-submit
-simt evidence                       # gate and test runs recorded against the current git tree
-simt evidence check <msg-file>      # verify a commit message does not claim unrecorded passing runs
-simt pr-body [--base <ref>]         # a PR body: the evidence block for this tree, changed
-                                    # decisions, gate state, and residual risk in ADR-008 vocabulary
+# bench
+simt bench ablate --yes                      # measure one arm of the brief against its ablation
+simt bench critic                            # score the review critic against the labelled bench set
+simt bench export --yes                      # write the sealed bench corpus as one signed document
+simt bench import                            # verify a sealed corpus and load it into the vault
+simt bench mine --yes                        # mine tasks out of a repository history
+simt bench probes --yes                      # run the deterministic probes against a workspace
+simt bench report [--compare a b]            # summarise the runs recorded in the vault
+simt bench run --yes                         # run agents against the mined tasks
+simt bench variants --yes                    # run one task across its variant prompts
 
-# Plans, context metering, workspace learning, benchmarks, local models, and MCP
-simt plan status                    # count queued, in-progress, complete, and accepted tracker rows
-simt plan next [<id>]               # print the next ready slice section (~1 KB)
-simt plan done <id> [<sha>] --yes   # mark a tracker row complete with its commit SHA and test command
-simt status --line                  # one-line gate state from the last check, for prompts (< 50 ms)
-simt undo --yes                     # restore the last journaled set of writes, if untouched since
-simt slice start <id> --yes         # a worktree on branch slice/<id> with the brief preloaded; row In progress
-simt slice finish <id> --yes        # run the pre-commit gates, commit a Conventional subject from the
-                                    # row's title, and record the SHA and --test command on the row
-simt lease [<paths>] --session      # claim files for this session (--ttl, default 1h) or list claims;
-                                    # the pre-edit hook refuses another session's edit until the TTL
-simt tokens [--repos] [--session]   # measure bytes loaded at session start or split a transcript
-simt harness detect [--user]        # detect configured harnesses at repo and user level
-simt harness loaders [--table]      # what each harness loads, in what order, and where its cap truncates
-simt shared plan                    # rules repeated across a workspace and the bytes saved by sharing
-simt shared install --yes           # write shared rules once at user level and record the repo delta
-simt compare                        # workspace matrix, violated rules, noisy/slow gates, and ADR drafts
-simt local doctor [--allow-remote]  # probe configured OpenAI-compatible local chat and embed endpoints
-simt bench mine --yes               # mine verified fail-to-pass tasks from git history into the vault
-simt bench run --yes                # evaluate arms (bare, current, kernel, brief) in isolated exports
-simt bench report [--compare a b]   # resolved rate, quality, cost, CPI, bootstrap CIs, McNemar/Wilcoxon
-simt bench ablate --yes             # leave-one-out rule ablation ranked by value per KB
-simt bench probes --yes             # 12 deterministic rule-compliance probes
-simt bench variants --yes           # evaluate simt-variants slots and lock winners in simt.lock.json
-simt review [--local]               # an advisory ADR-008 verdict skeleton over the staged diff
-simt distill <skill|doc>            # a budgeted proposal summary with line citations, for a person to merge
-simt pack new <name> --source <spec> # scaffold a versioned pack: pack.json, bench.json, one rule
-simt pack lint [dir] [--require-measured] # validate a pack and state its measured ΔR
-simt pack publish [dir] --yes       # publish an npm-sourced pack (git packs name the tag-and-push)
-simt mcp [--list]                   # serve the 15 read-only tools over stdio JSON-RPC
-simt completions <bash|zsh|fish>    # a completion script generated from the command registry
-simt ignore [--yes] [--diff]        # render the one .simtignore list into .cursorignore,
-                                    # .aiderignore, .geminiignore and Claude's permissions.deny
+# brief
+simt brief "<task>"                          # the packet for a task: rules, skills and the files it names, within a budget
+
+# check
+simt check                                   # report stale or missing generated regions and every check finding
+
+# ci
+simt ci                                      # refresh simt-dev's own .github workflow and Dependabot files
+
+# compare
+simt compare                                 # the adoption and drift matrix across every sibling repository
+
+# completions
+simt completions <bash|zsh|fish>             # print a bash, zsh or fish completion script generated from this spec
+
+# decide
+simt decide "<title>" --yes                  # scaffold a numbered decision record with its frontmatter
+
+# distill
+simt distill <skill|doc>                     # turn a repository into a skill or rule proposal
+
+# docs
+simt docs readme                             # render the README command list from the spec
+
+# doctor
+simt doctor [--fix]                          # report what is wrong with this installation
+
+# evidence
+simt evidence                                # the runs recorded against the tree on disk
+simt evidence check <msg-file>               # a commit message claiming a run this tree does not have
+
+# explain
+simt explain <CODE>                          # what one check finding code means, and how to fix it
+
+# gate
+simt gate --changed                          # the tests a change reaches, and only those
+
+# graph
+simt graph lint [--spec agentskills]         # check the skill registry against the skills on disk
+
+# harness
+simt harness detect [--user]                 # which harness is installed, and what it carries
+simt harness loaders [--table]               # the instruction files each harness loads, and what they cost
+
+# hooks
+simt hooks install --yes                     # install the shared dispatcher and report what it would run
+simt hooks run <event>                       # run one git event's gates now, as git would
+simt hooks status                            # what each git event routes to, and whether it is wired
+
+# ignore
+simt ignore [--yes] [--diff]                 # render the one ignore list into every harness ignore file
+
+# impact
+simt impact <file|symbol>                    # who a change reaches: importers, their tests and the contract
+
+# index
+simt index [--embed]                         # rebuild the local file index from git blob hashes
+
+# init
+simt init [path]                             # adopt this repository: manifest, region, hooks and toolchain pins
+
+# lease
+simt lease [<paths>] --session               # claim files for one session, or list the claims
+
+# lessons
+simt lessons capture                         # scan the ledger and history for new lesson candidates
+simt lessons list                            # deterministic lesson candidates and the promoted lessons
+simt lessons review <id> --yes               # promote one lesson candidate into docs/lessons
+
+# local
+simt local doctor [--allow-remote]           # the local model endpoints, and whether they answer
+
+# map
+simt map --task "<task>"                     # the files a task is most likely to touch, within a byte budget
+
+# mcp
+simt mcp [--list]                            # serve the read-only MCP surface over stdio
+
+# pack
+simt pack lint [dir] [--require-measured]    # lint a rule pack in the working directory
+simt pack new <name> --source <spec>         # scaffold a rule pack
+simt pack publish [dir] --yes                # publish a rule pack
+
+# plan
+simt plan done <id> [<sha>] --yes            # mark one tracker row complete, with its SHA and its evidence
+simt plan next [<id>]                        # one ready slice's section, or the one named
+simt plan status                             # count the tracker rows
+
+# plugin
+simt plugin <claude|gemini|cursor|opencode>  # generate a harness package from the same tables the hooks use
+
+# pr-body
+simt pr-body [--base <ref>]                  # the pull request body: evidence, decisions, gate state and residual risk
+
+# review
+simt review [--local]                        # review the staged diff against the estate rules
+
+# rules
+simt rules decisions                         # every known decision, and which layer each came from
+simt rules list [--root <path>]              # the rule catalogue, marked with what applies to this repository
+simt rules show <id>                         # one rule body
+simt rules why <id|ADR-NNN> [--all]          # the decision that settled a rule, and whether it is still in force
+
+# shared
+simt shared install --yes                    # install the shared rules into a reader home directory
+simt shared plan                             # what the shared install would write, and where
+
+# skills
+simt skills brief --task "<task>"            # the packet for a task, read from the skill registry
+simt skills compile [<name>]                 # compile a skill to the Agent Skills standard
+simt skills eval [corpus]                    # score the skill registry against transcripts
+simt skills find <query>                     # skills that match a query
+simt skills index                            # rebuild the skill index
+simt skills install <name> --yes             # install skills into the workspace
+simt skills show <name>                      # one skill packet
+simt skills why <name>                       # which skill covers a task
+
+# slice
+simt slice abandon <id>                      # remove a slice worktree, delete its branch, and return the row
+simt slice finish <id> --yes                 # run the gates, commit the slice and record its evidence
+simt slice start <id> --yes                  # give a slice its own worktree, branch and brief
+
+# status
+simt status --line                           # gate state from the last check
+
+# sync
+simt sync [--explain] --yes                  # re-render the generated regions from the rule content
+
+# tests
+simt tests <path> [--cochange]               # the tests that exercise a file
+
+# tokens
+simt tokens [--repos] [--session]            # count tokens per instruction file and per skill
+
+# undo
+simt undo --yes                              # restore the last journaled set of writes, if untouched
+
+# upgrade
+simt upgrade --yes                           # replace this installation with the pinned release
+
+# why
+simt why [path]                              # what governs a file: decisions, rules, skills, gates and lessons
 ```
+<!-- simt:commands:end -->
 
 `init`, `sync`, `upgrade`, `hooks install`, `agent-hooks install`, `shared install`,
 `skills install`, `plan done`, `lessons review`, `decide`, `ignore`, `pack new`,

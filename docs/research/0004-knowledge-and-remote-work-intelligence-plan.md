@@ -572,7 +572,7 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | ID | Slice | Phase | Depends on | Size | Needs ADR | Success metric | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | W01 | Predecessor and compatibility audit | 0 | plan 0003 R38, R39, R40, R41, R42, R43, R44, R45, R46, R47, R48, R49, R50, R51, R52, R53, R54, R55 | S | — | all R evidence disposed; isolated baseline | Complete | c43c29c · test: node --test test/work-compat.test.mjs |
-| W02 | Outcome corpus | 0 | W01 | M | E1 | 30 tasks/stratum canary; gold/noop controls | Queued | |
+| W02 | Outcome corpus | 0 | W01 | M | E1 | 30 tasks/stratum canary; gold/noop controls | Complete | 5926406 · test: node --test test/work-corpus.test.mjs |
 | W03 | External-world simulator | 0 | W02 | L | E1 | deterministic faults at every boundary | Queued | |
 | W04 | Stratified metrics | 0 | W02, W03 | M | E1 | exact calculations; honest intervals | Queued | |
 | W05 | Adversarial probes | 0 | W03 | M | E2 | all forbidden-effect probes rejected | Queued | |

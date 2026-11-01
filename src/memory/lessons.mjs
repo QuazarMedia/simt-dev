@@ -11,6 +11,7 @@
 // `simt lessons review` promotes a candidate to `docs/lessons/NNNN-<slug>.md` with the
 // Appendix A frontmatter (`simt-trigger`, `simt-evidence`, `simt-expires`).
 
+import { noteEvent } from '../state/events.mjs';
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { mkdir, open, readdir, readFile, writeFile } from 'node:fs/promises';
@@ -371,7 +372,8 @@ async function diffBetweenTrees(root, fromRef, toRef) {
  * @param {{failEntry: object, passEntry: object, failOutput?: string, fixDiff?: string, paths?: string[]}} params
  * @returns {Promise<object>}
  */
-export async function recordFailThenFix(root, { failEntry, passEntry, failOutput, fixDiff, paths }) {
+export async function recordFailThenFix(root, { failEntry, passEntry, failOutput, fixDiff, paths 
+}) {
   const rawError = failOutput ?? failEntry?.errorLine ?? failEntry?.summary ?? failEntry?.cmd ?? '';
   const errorLine = normaliseErrorLine(failEntry?.errorLine ?? firstErrorLine(rawError));
   const signature = failEntry?.signature ?? errorSignature(errorLine);
@@ -386,7 +388,7 @@ export async function recordFailThenFix(root, { failEntry, passEntry, failOutput
     resolvedDiff ??= treeDiff.diff;
   }
 
-  return appendLessonCandidate(root, {
+  const record = await appendLessonCandidate(root, {
     kind: 'fail-then-fix',
     cmd: passEntry?.cmd ?? failEntry?.cmd ?? null,
     signature,
@@ -396,6 +398,13 @@ export async function recordFailThenFix(root, { failEntry, passEntry, failOutput
     paths: resolvedPaths,
     fixDiff: resolvedDiff,
   });
+  // The lessons file is the reader's view; the log is what a UI can tail (Q73).
+  await noteEvent(root, {
+    kind: 'lesson.captured',
+    subject: passEntry?.cmd ?? failEntry?.cmd ?? null,
+    data: { id: record?.id ?? null, signature, tree: fixTree },
+  });
+  return record;
 }
 
 /**

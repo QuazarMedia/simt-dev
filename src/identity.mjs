@@ -24,14 +24,12 @@
 // one; a repository that already tracks it is left that way, because removing a
 // tracked file is not something an adopting command should do silently.
 
-import { execFile } from 'node:child_process';
 import { readFile, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
 import { journaledGitConfig, journaledWriteFile } from './journal.mjs';
+import { gitText } from './sys/git.mjs';
 
-const exec = promisify(execFile);
 
 /** The file, at the repository root. Named for what it is: a git config fragment. */
 export const IDENTITY_FILE = 'git.config';
@@ -50,14 +48,7 @@ export const INCLUDE_KEY = 'include.path';
  * @param {string[]} args
  * @returns {Promise<string|null>}
  */
-async function git(cwd, args) {
-  try {
-    const { stdout } = await exec('git', args, { cwd });
-    return stdout.trim();
-  } catch {
-    return null;
-  }
-}
+const git = (cwd, args) => gitText(cwd, args, { allowFailure: true });
 
 /**
  * Who last committed here.

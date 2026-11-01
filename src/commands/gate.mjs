@@ -15,10 +15,12 @@ import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs
 import { CLI } from '../name.mjs';
 import { detectTestRunner } from '../bench/mine.mjs';
 import { compactOutput } from '../index/compact.mjs';
-import { readImportEdges, selectTests } from '../index/gate.mjs';
+import { coverage } from '../index/coverage.mjs';
+import { readImportEdges } from '../index/gate.mjs';
 import { langOf, packageOf } from '../index/store.mjs';
 import { localRel } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { gitPaths } from '../sys/git.mjs';
 
 const exec = promisify(execFile);
 
@@ -65,7 +67,7 @@ export async function gateCommand(args, flags) {
   const files = new Set(listed.files);
   for (const file of changed) files.add(file);
   const edges = await readImportEdges(root, files);
-  const selected = selectTests(changed, edges);
+  const selected = coverage({ imports: edges }, changed);
   // Q40: the selection explains itself. `unmatched` names explicit paths the
   // tracked tree does not carry (untracked but present, so the run proceeds);
   // `graph` is `unresolved` when a language has edges but none of them reaches
@@ -199,8 +201,7 @@ async function tracked(root) {
   try {
     // `-z`: without it git C-quotes a non-ASCII path (`src/\303\274n...`) and
     // the reader's real filename never matches it (review 0003 Q39).
-    const { stdout } = await exec('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 16 << 20 });
-    return { files: stdout.split('\0').filter(Boolean) };
+    return { files: await gitPaths(root, ['ls-files']) };
   } catch (error) {
     return {
       error: fail(

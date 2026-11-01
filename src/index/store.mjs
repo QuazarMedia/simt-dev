@@ -8,6 +8,8 @@ import { execFile, spawn } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
+import { git as gitRaw } from '../sys/git.mjs';
+
 import { readManifest } from '../projection/manifest.mjs';
 import { readLocalConfig } from '../local/config.mjs';
 import { localEmbed } from '../local/client.mjs';
@@ -590,20 +592,10 @@ export async function packageOf(root, filePath, cache) {
   }
 }
 
-function git(root, args, input) {
-  return new Promise((resolve, reject) => {
-    const child = execFile('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (error, stdout, stderr) => {
-      if (error) reject(Object.assign(error, { stdout, stderr }));
-      else resolve(stdout);
-    });
-    if (input !== undefined) {
-      child.stdin.end(input);
-    }
-  });
-}
+
 
 async function lsFiles(root) {
-  const stdout = await git(root, ['ls-files', '-s', '-z']);
+  const stdout = await gitRaw(root, ['ls-files', '-s', '-z']);
   const rows = [];
   for (const rec of stdout.split('\0')) {
     if (rec === '') continue;
@@ -738,7 +730,9 @@ async function blobSizes(root, blobs) {
   const unique = [...new Set(blobs)];
   const sizes = new Map();
   if (unique.length === 0) return sizes;
-  const stdout = await git(root, ['cat-file', '--batch-check=%(objectname) %(objectsize)'], `${unique.join('\n')}\n`);
+  const stdout = await gitRaw(root, ['cat-file', '--batch-check=%(objectname) %(objectsize)'], {
+    input: `${unique.join('\n')}\n`,
+  });
   for (const line of stdout.split('\n')) {
     if (line === '') continue;
     const sp = line.indexOf(' ');

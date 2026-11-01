@@ -19,17 +19,12 @@
 // ADR-012 dropped Windows, but nothing here is POSIX-specific; the worktree
 // handling is the only subtlety and it is the same on every platform.
 
-import { execFile } from 'node:child_process';
 import { readdir, stat } from 'node:fs/promises';
 import { isAbsolute, join, resolve } from 'node:path';
-import { promisify } from 'node:util';
 
-const exec = promisify(execFile);
+import { gitText } from '../sys/git.mjs';
 
-async function git(root, args) {
-  const { stdout } = await exec('git', args, { cwd: root });
-  return stdout.trim();
-}
+const git = (root, args) => gitText(root, args);
 
 /**
  * The directory git runs hooks from, and which of the two rules produced it.

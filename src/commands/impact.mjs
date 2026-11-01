@@ -22,10 +22,11 @@ import {
   ownersOf,
   relatedContracts,
 } from '../index/impact.mjs';
-import { decisionHits, scopeHits, sortHits, sourceRoots } from '../index/govern.mjs';
+import { governs, sourceRoots } from '../index/govern.mjs';
 import { decisionRecords, ruleScopes } from './why.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { gitPaths } from '../sys/git.mjs';
 
 const exec = promisify(execFile);
 const TEXT_EXT = new Set(['js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'json', 'yaml', 'yml', 'md', 'toml', 'xml', 'py', 'go', 'kt', 'java', 'rs']);
@@ -88,8 +89,7 @@ async function governance(root, file, files, commands) {
   const records = await decisionRecords(root);
   const rules = await ruleScopes(root);
   const ctx = { files, commands: new Set(commands), roots: sourceRoots(files) };
-  const { hits } = decisionHits(records, file, ctx);
-  return sortHits([...hits, ...scopeHits(file, { rules })]);
+  return governs(file, { records, rules, ctx });
 }
 
 async function readOwners(root, file) {
@@ -190,8 +190,7 @@ async function tracked(root) {
   try {
     // `-z`: without it git C-quotes a non-ASCII path and the reader's real
     // filename never matches it (review 0003 Q39).
-    const { stdout } = await exec('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 16 << 20 });
-    return { files: stdout.split('\0').filter(Boolean) };
+    return { files: await gitPaths(root, ['ls-files']) };
   } catch (error) {
     return {
       error: fail(

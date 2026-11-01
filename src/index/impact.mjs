@@ -6,7 +6,7 @@
 // answer a reader can use.
 
 import { isTestPath } from '../bench/mine.mjs';
-import { selectTests } from './gate.mjs';
+import { coverage } from './coverage.mjs';
 
 const IMPACT_LIMIT = 64;
 
@@ -50,7 +50,7 @@ export function dependents(file, imports, limit = IMPACT_LIMIT) {
     }
   }
   importers.sort();
-  const tests = selectTests([file], imports).filter((path) => path !== file);
+  const tests = coverage({ imports }, [file]).filter((path) => path !== file);
   const shown = tests.length > limit ? tests.slice(0, limit) : tests;
   if (tests.length > limit) truncated = true;
   return { importers, tests: shown, truncated };

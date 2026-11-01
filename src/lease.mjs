@@ -25,7 +25,7 @@ export const LEASE_FILE = localRel('leases.json');
 const LEASE_FILE_LEGACY = '.simt/leases.json';
 
 /** The schema the file is written with; a reader that does not know it refuses. */
-const LEASE_SCHEMA = 1;
+const LEASE_SCHEMA = 2;
 
 /**
  * How long a claim lives when the caller does not say.
@@ -34,6 +34,89 @@ const LEASE_SCHEMA = 1;
  * crashed mid-edit does not hold a path for the rest of the day.
  */
 export const DEFAULT_TTL_SECONDS = 3600;
+
+/**
+ * A v1 record in the v2 shape.
+ *
+ * v1 stored `{path, session, harness, expiresAt}`; v2 stores a resource, a holder, a
+ * fencing token and an acquisition time (Q74). The reader accepts both because a claim
+ * file written by the previous release is still a claim the hook must honour, and
+ * refusing it would silently un-lease every held path on upgrade.
+ */
+export function toV2(entry) {
+  if (entry !== null && typeof entry === 'object' && entry.resource !== undefined && entry.holder !== undefined) {
+    return entry;
+  }
+  // `...entry` keeps the fields a caller put on its own claim - a slice claim carries
+  // `kind: 'slice'` and the slice id - which the schema does not name but must not drop.
+  return {
+    ...entry,
+    resource: { kind: 'path', id: entry.path },
+    holder: { session: entry.session, harness: entry.harness ?? null },
+    fence: Number.isInteger(entry.fence) ? entry.fence : 1,
+    acquiredAt: typeof entry.acquiredAt === 'number' ? entry.acquiredAt : null,
+    expiresAt: entry.expiresAt,
+  };
+}
+
+/**
+ * The v2 record flattened into the fields every reader of this tool already uses.
+ *
+ * Keeping `path`, `session`, `harness` and `expiresAt` on the in-memory entry is not
+ * backwards compatibility theatre: the hook, the command and four call sites compare
+ * those fields, and rewriting all of them to reach through `resource.id` would be a
+ * second change riding on a schema change.
+ */
+export function flattenLease(entry) {
+  const v2 = toV2(entry);
+  return {
+    ...v2,
+    path: v2.resource.id,
+    session: v2.holder.session,
+    harness: v2.holder.harness ?? null,
+    expiresAt: v2.expiresAt,
+  };
+}
+
+/** A record that is worth honouring, or null. A bad expiry would hold a path forever. */
+function normaliseLease(entry) {
+  if (entry === null || typeof entry !== 'object') return null;
+  const v2 = entry.resource !== undefined ? entry : toV2(entry);
+  const id = v2?.resource?.id;
+  const session = v2?.holder?.session;
+  if (typeof id !== 'string' || typeof session !== 'string' || !Number.isFinite(v2.expiresAt)) return null;
+  if (v2.resource.kind !== 'path' && v2.resource.kind !== 'dir') return null;
+  return flattenLease(v2);
+}
+
+/**
+ * Whether a claim covers a repository-relative path.
+ *
+ * A `dir` claim covers everything under it, which is what makes "this session owns
+ * `src/index/`" one claim instead of forty (Q74). The prefix test includes the separator
+ * so `src/index` does not cover `src/indexer`.
+ */
+export function leaseCovers(lease, rel) {
+  const resource = toV2(lease).resource;
+  if (resource.kind === 'dir') return rel === resource.id || rel.startsWith(`${resource.id}/`);
+  return rel === resource.id;
+}
+
+/**
+ * The store the lease commands read and write through.
+ *
+ * A file today; a remote store and a server clock later (Q74). Everything above this line
+ * is a function of the records, not of the file, so the second implementation changes
+ * where `read` and `write` point and nothing else.
+ */
+export function fileLeaseStore(root) {
+  return {
+    root,
+    read: () => readLeases(root),
+    write: (leases) => writeLeases(root, leases),
+    withLock: (fn) => withLeaseLock(root, fn),
+  };
+}
 
 /**
  * The one spelling a path has for lease matching: repository-relative, symlinks
@@ -105,10 +188,7 @@ export async function readLeases(root) {
     }
     // A malformed entry is dropped rather than trusted: an expiry that is not a number
     // would otherwise live forever, which is the opposite of what a TTL promises.
-    const leases = parsed.leases.filter(
-      (l) => l !== null && typeof l === 'object' && typeof l.path === 'string' &&
-        typeof l.session === 'string' && Number.isFinite(l.expiresAt),
-    );
+    const leases = parsed.leases.map(normaliseLease).filter((l) => l !== null);
     return { path, leases, error: null };
   } catch (error) {
     return { path, leases: [], error: `${LEASE_FILE} is not valid JSON (${error.message})` };
@@ -136,8 +216,23 @@ export function activeLeases({ leases } = { leases: [] }, now = Date.now()) {
  */
 export async function writeLeases(root, leases) {
   const path = join(root, LEASE_FILE);
-  const sorted = [...leases].sort((a, b) => a.path.localeCompare(b.path));
-  const body = `${JSON.stringify({ schemaVersion: LEASE_SCHEMA, leases: sorted }, null, 2)}\n`;
+  // v2 on disk: a resource, a holder and a fence, sorted by resource id so two writes of
+  // the same claims produce the same bytes (Q74).
+  const records = leases
+    .map(toV2)
+    .map((l) => ({
+      // Additive, not a rename: the pre-edit hook, the slice claim and the tests read
+      // `path` and `session` straight off the file, and a v2 writer that stopped writing
+      // them would break every one of those readers at once.
+      ...l,
+      resource: l.resource,
+      holder: { session: l.holder.session, harness: l.holder.harness ?? null },
+      fence: l.fence,
+      acquiredAt: l.acquiredAt,
+      expiresAt: l.expiresAt,
+    }))
+    .sort((a, b) => a.resource.id.localeCompare(b.resource.id));
+  const body = `${JSON.stringify({ schemaVersion: LEASE_SCHEMA, leases: records }, null, 2)}\n`;
   await mkdir(dirname(path), { recursive: true });
   // Atomic against a concurrent writer and a concurrent reader: a half-written
   // claim file fails closed for every edit (review 0003 Q20).

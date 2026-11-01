@@ -16,16 +16,15 @@ import { FORMATTABLE, GATES } from '../hooks/gates.mjs';
 import { loadManifest } from '../manifest/schema.mjs';
 import { decisionsDir } from '../decisions/dir.mjs';
 import {
-  decisionHits,
-  scopeHits,
+  governs,
   scopePaths,
-  sortHits,
   sourceRoots,
   unresolvedAffects,
 } from '../index/govern.mjs';
 import { splitFrontmatter } from '../memory/decide.mjs';
 import { listPromotedLessons } from '../memory/lessons.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { gitPaths } from '../sys/git.mjs';
 
 const exec = promisify(execFile);
 
@@ -43,8 +42,7 @@ export async function whyCommand(args, flags, commands = []) {
   if (!target) return reportUnresolved(root, flags, unresolvedAffects(records, ctx));
   if (!files.has(target)) return fail(`not in the tree: ${target}`, EXIT.USAGE, `pass a path git tracks`);
   const corpus = await loadCorpus(root);
-  const { hits } = decisionHits(records, target, ctx);
-  const items = sortHits([...hits, ...scopeHits(target, corpus)]);
+  const items = governs(target, { records, ...corpus, ctx });
   const payload = { ok: true, command: 'why', root, path: target, items };
   if (isJson(flags)) {
     emitJson(payload);
@@ -72,8 +70,7 @@ export async function tracked(root) {
   try {
     // `-z`: without it git C-quotes a non-ASCII path and the reader's real
     // filename never matches it (review 0003 Q39).
-    const { stdout } = await exec('git', ['ls-files', '-z'], { cwd: root, maxBuffer: 16 << 20 });
-    return { files: stdout.split('\0').filter(Boolean) };
+    return { files: await gitPaths(root, ['ls-files']) };
   } catch (error) {
     return {
       error: fail(

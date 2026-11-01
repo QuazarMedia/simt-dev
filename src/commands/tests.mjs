@@ -14,7 +14,8 @@ import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs
 import { CLI } from '../name.mjs';
 import { isTestPath } from '../bench/mine.mjs';
 import { blobTexts, isIndexStale, langOf, readEdges, readFiles, reindex } from '../index/store.mjs';
-import { HISTORY, importsOf, parseCoverage, testEdges, testsFor } from '../index/tests.mjs';
+import { coverage } from '../index/coverage.mjs';
+import { HISTORY, importsOf, parseCoverage, testEdges } from '../index/tests.mjs';
 import { commandRoot } from '../repo-root.mjs';
 
 const exec = promisify(execFile);
@@ -36,7 +37,7 @@ export async function testsCommand(args, flags) {
   const loaded = await loadFiles(root);
   if (loaded.error) return loaded.error;
   const { files } = loaded;
-  const [stored, texts, coverage, commits] = await Promise.all([
+  const [stored, texts, reports, commits] = await Promise.all([
     readEdges(root),
     testBlobs(root, files),
     coverageTexts(root),
@@ -50,13 +51,16 @@ export async function testsCommand(args, flags) {
     if (!text) continue;
     imports.push(...importsOf(file.path, text, langOf(file.path), paths));
   }
-  const edges = testEdges({ files, imports, coverage, commits });
+  const edges = testEdges({ files, imports, coverage: reports, commits });
   const target = args[0];
   if (!target) return summarise(root, flags, edges);
   if (!paths.has(target)) {
     return fail(`not in the index: ${target}`, EXIT.USAGE, `pass a path ${CLI} index knows`);
   }
-  const tests = testsFor(target, edges, { cochange: flags.cochange === true });
+  const tests = coverage({ files, imports, coverage: reports, commits }, [target], {
+    transitive: false,
+    cochange: flags.cochange === true,
+  });
   const payload = { ok: true, command: 'tests', root, path: target, tests };
   if (isJson(flags)) {
     emitJson(payload);

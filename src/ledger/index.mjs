@@ -7,9 +7,9 @@
 
 import { createHash } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { appendFile, mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 import {
@@ -19,6 +19,7 @@ import {
   recordFailThenFix,
 } from '../memory/lessons.mjs';
 import { TREE_EXCLUDES, localRel, readStateFile } from '../state.mjs';
+import { appendEvent } from '../state/events.mjs';
 
 const exec = promisify(execFile);
 
@@ -34,6 +35,33 @@ const CLAIM =
 const TRAILER = /^(signed-off-by|co-authored-by|reviewed-by|acked-by|tested-by|fixes|closes)\s*:/i;
 
 /**
+ * Copy the repository's real index into a private one, and answer its path or null.
+ *
+ * The private index exists so `git add -A` cannot stage the author's work. Building it from
+ * nothing meant every path was hashed on every gate run, commit-msg check, `evidence` call
+ * and `pr-body`: on a 20k-file tree that is the whole cost of the command (Q75). Seeding it
+ * from the index git already maintains turns the hash into a no-op for every unchanged
+ * path, and the `add -A` afterwards only has the worktree diff left to do.
+ *
+ * A repository with no index yet (a fresh `git init`) is not an error: there is nothing to
+ * copy, and the add builds it from empty exactly as before.
+ *
+ * @param {string} root
+ * @param {string} target the private index file to populate
+ * @returns {Promise<string|null>} the source index, or null when there is none
+ */
+export async function seedIndex(root, target) {
+  try {
+    const { stdout } = await exec('git', ['rev-parse', '--git-path', 'index'], { cwd: root });
+    const from = resolve(root, String(stdout ?? '').trim());
+    await copyFile(from, target);
+    return from;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The tree of everything in the worktree, without staging any of it.
  *
  * @param {string} root
@@ -44,6 +72,8 @@ export async function treeId(root) {
   const index = join(dir, 'index');
   const env = { ...process.env, GIT_INDEX_FILE: index };
   try {
+    // Seed before the add: the add then only hashes what actually changed (Q75).
+    await seedIndex(root, index);
     // Machine-local state is a record of the tree, so it cannot be part of the
     // tree it names. `git add -A` would take it once the file exists, and the
     // line would prove a tree that stopped existing when the line was written
@@ -116,8 +146,10 @@ export async function recordRun(root, { cmd, exit, ms, output, gate = null, kind
     ...(typeof gate === 'string' ? { gate } : {}),
     ...(typeof kind === 'string' ? { kind } : {}),
     cmd,
+    command: cmd,
     exit,
     ms,
+    wallMs: ms,
     outputDigest: `sha256-${createHash('sha256').update(output).digest('hex')}`,
     summary: summarise(output, exit),
     ...(exit !== 0
@@ -129,6 +161,14 @@ export async function recordRun(root, { cmd, exit, ms, output, gate = null, kind
   };
   await mkdir(join(root, '.simt', 'local'), { recursive: true });
   await appendFile(join(root, LEDGER_FILE), `${JSON.stringify(line)}\n`);
+  // The same record in the log every other store writes to (Q73): a tailing consumer has
+  // one file to follow, and a ledger line lost to rotation is still recoverable here.
+  await appendEvent(root, {
+    kind: 'gate.finished',
+    tree: worktreeTree,
+    subject: typeof cmd === 'string' ? cmd : null,
+    data: { ...(gate === null ? {} : { gate }), ...(kind === null ? {} : { kind }), line },
+  });
 
   if (exit === 0 && typeof cmd === 'string') {
     let pendingFail = null;
@@ -145,7 +185,82 @@ export async function recordRun(root, { cmd, exit, ms, output, gate = null, kind
     }
   }
 
+  await rotateLedger(root).catch(() => {});
   return line;
+}
+
+/**
+ * Read only the end of the ledger.
+ *
+ * `recordRun` and every evidence check read the whole file, and the file grows without a
+ * bound: a repository that runs a suite a hundred times a day pays for a year of lines on
+ * every commit (Q75). A tail read answers the only question those callers ask - what
+ * happened recently on which trees - in bounded time.
+ *
+ * The first line of the slice is dropped unless the slice starts at byte 0, because a byte
+ * offset lands mid-line and half a JSON object is not evidence.
+ */
+export async function readLedgerTail(root, { entries = 200, bytes = 128 * 1024 } = {}) {
+  const path = join(root, LEDGER_FILE);
+  let text = '';
+  let partial = false;
+  try {
+    const st = await stat(path);
+    const start = Math.max(0, st.size - bytes);
+    partial = start > 0;
+    const handle = await open(path, 'r');
+    try {
+      const buffer = Buffer.alloc(st.size - start);
+      await handle.read(buffer, 0, buffer.length, start);
+      text = buffer.toString('utf8');
+    } finally {
+      await handle.close();
+    }
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return { entries: [], errors: [], partial: false };
+  }
+  const lines = text.split('\n').filter((line) => line.trim() !== '');
+  if (partial && lines.length > 0) lines.shift();
+  const parsed = [];
+  const errors = [];
+  for (const raw of lines) {
+    try {
+      const line = JSON.parse(raw);
+      if (typeof line.tree === 'string' && typeof line.exit === 'number') parsed.push(line);
+      else errors.push('a line has no tree or exit');
+    } catch (error) {
+      errors.push(`a line does not parse (${error.message})`);
+    }
+  }
+  return { entries: parsed.slice(-entries), errors, partial };
+}
+
+/**
+ * Keep the ledger bounded: past `maxLines`, the older half moves to `<ledger>.1`.
+ *
+ * Rotation rather than deletion because the ledger is evidence: an archived line is still
+ * readable, and the event log holds the same record independently (Q73). Keeping half
+ * rather than `maxLines` means rotation happens every `maxLines/2` appends instead of on
+ * every one.
+ */
+export async function rotateLedger(root, { maxLines = 5000 } = {}) {
+  const path = join(root, LEDGER_FILE);
+  let text;
+  try {
+    text = await readFile(path, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return { rotated: false };
+    throw error;
+  }
+  const lines = text.split('\n').filter((line) => line.trim() !== '');
+  if (lines.length <= maxLines) return { rotated: false };
+  const keep = Math.max(1, Math.floor(maxLines / 2));
+  const archived = lines.slice(0, lines.length - keep);
+  const kept = lines.slice(lines.length - keep);
+  await writeFile(join(root, `${LEDGER_FILE}.1`), `${archived.join('\n')}\n`, 'utf8');
+  await writeFile(path, `${kept.join('\n')}\n`, 'utf8');
+  return { rotated: true, archived: archived.length, kept: kept.length };
 }
 
 /** Every well-formed line. A line that does not parse is returned as an error so a

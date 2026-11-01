@@ -1,6 +1,6 @@
 // `simt skills install` - pin a skill into a repo as a local copy.
 //
-// Plan 0002 section 8.3: installed skills are recorded in `simt-dev.json`
+// section 8.3: installed skills are recorded in `simt-dev.json`
 // `localSkills` and are excluded from central-drift accounting. The point is a
 // deliberate pin - a repo-specific procedure the central registry should not
 // carry, or a version pinned ahead of a rollout - not a bulk copy. So there is

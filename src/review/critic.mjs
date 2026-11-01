@@ -13,7 +13,7 @@
 // construction; no gate reads it. The row's own promotion rule names the test:
 // precision at least 0.8 on a labelled set of historical diffs. Until
 // `simt bench critic` measures that, every report says the gate has not been
-// earned, the same honesty ADR-076 asked of R38's metric note.
+// earned, the same honesty ADR-076 asked of the metric note.
 
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -24,7 +24,7 @@ import { readLocalConfig, chatEndpoint } from '../local/config.mjs';
 import { localChat } from '../local/client.mjs';
 import { decisionRecords, loadCorpus, tracked } from '../commands/why.mjs';
 import { governs, sourceRoots } from '../index/govern.mjs';
-// `digestOf`, `promptHash` and `proposalFrontmatter` landed with R38's engine and
+// `digestOf`, `promptHash` and `proposalFrontmatter` landed with the engine and
 // the critic is their second real user; sharing them beats a third copy (ADR-002).
 import { digestOf, promptHash, proposalFrontmatter } from '../distill/engine.mjs';
 import { git } from '../sys/git.mjs';

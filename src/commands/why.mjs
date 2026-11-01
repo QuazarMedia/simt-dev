@@ -79,7 +79,7 @@ export async function tracked(root) {
 }
 
 export async function decisionRecords(root) {
-  // Q55: the repository's own records, wherever it keeps them — not a hard-coded path.
+  // the repository's own records, wherever it keeps them — not a hard-coded path.
   const dir = join(root, await decisionsDir(root));
   let names = [];
   try {

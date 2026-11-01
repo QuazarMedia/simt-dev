@@ -21,7 +21,7 @@
 //
 // Everything here is a pure function of its arguments: no clock, no network, no PATH. Two
 // machines given the same repository and the same budget cut the same rules in the same
-// order, which is R08's second accept criterion and the only reason a pull request can
+// order, which is the second accept criterion and the only reason a pull request can
 // diff the result.
 
 import { CLI, MANIFEST_FILE } from '../name.mjs';

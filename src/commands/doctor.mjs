@@ -4,7 +4,7 @@
 // Deliberately shipped early — it needs no registry, no rules and no projection,
 // and it makes the tool useful before any content exists.
 //
-// Plan 0003 R47 adds the findings table and `--fix`. Every finding carries its
+// adds the findings table and `--fix`. Every finding carries its
 // remedy and whether that remedy is flagged safe, and `--fix` applies only the
 // safe ones while listing the rest with the reason each needs a human:
 //
@@ -168,7 +168,7 @@ async function collectFindings(root, { result, ws, shared, withDiffs = false, ct
 
   if (shared.declared && shared.state !== 'current') {
     // The copy lives outside the repository (a reader's home directory), which
-    // R49 deliberately leaves unjournaled: `undo` must never reach past the
+    // deliberately leaves unjournaled: `undo` must never reach past the
     // repo root, so a fix with no undo path is listed, never applied.
     findings.push({
       id: 'shared-copy',

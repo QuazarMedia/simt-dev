@@ -17,7 +17,7 @@
 // The focused-test entries are TEMPLATES. `{file}`, `{pkg}`, `{Test}` and `{class}` are
 // placeholders the reader fills from the file they are editing, and the label names the
 // path kind so a template is never mistaken for a command that can be pasted as-is.
-// Refining which test a given `{file}` maps to is R24's job, not R10's.
+// Refining which test a given `{file}` maps to is the job, not the.
 
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -106,7 +106,7 @@ async function readScripts(root) {
   try {
     const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
     const scripts = pkg && typeof pkg.scripts === 'object' && pkg.scripts ? pkg.scripts : {};
-    // Q31: the runner is committed evidence (lockfile, then `packageManager`),
+    // the runner is committed evidence (lockfile, then `packageManager`),
     // never an assumption of npm — the card, the gates and CI read one answer.
     const lockfiles = [];
     for (const file of ['pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'package-lock.json']) {
@@ -212,7 +212,7 @@ export async function commandCard({ root, manifest = null, stack = [], facts = [
   const factSet = new Set(facts);
   const stackSet = new Set(stack);
   const { scripts, runner } = await readScripts(root);
-  // Q31: the lockfile facts name the runner even when `readScripts` saw no
+  // the lockfile facts name the runner even when `readScripts` saw no
   // lockfile (a fixture with a bare package.json keeps npm; a pnpm checkout
   // resolves pnpm from its fact). Facts win inside the resolver already.
   const { resolveNodeRunner: resolveRunner } = await import('../ecosystem/node-runner.mjs');

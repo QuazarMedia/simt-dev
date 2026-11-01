@@ -301,7 +301,7 @@ export function renderWorkflow({ own = false, npm = true, manager = null, versio
       // The slowest leg (macOS, full suite plus the registry lint) ran 4 min 28 s
       // against a 5-minute timeout, so the timeout that was meant to bound a hang
       // was about to fail a passing run instead. 15 leaves the hang bounded and the
-      // run alone; the sharding that would make it short again is Q92, not this row.
+      // run alone; sharding the slowest leg is a later change, not this one.
       //
       // `gateMain` because this repository merges locally: `pull_request` alone left
       // the one commit that reached `main` ungated.
@@ -310,7 +310,7 @@ export function renderWorkflow({ own = false, npm = true, manager = null, versio
   }
 
   const v = version ?? packageVersion();
-  // Q31: the install step names the repo's own manager. `manager` wins over the
+  // the install step names the repo's own manager. `manager` wins over the
   // legacy `npm` boolean so old callers keep their bytes; a Node repo installs
   // with its lockfile's frozen command, anything else takes the release binary.
   // The resolver row also decides setup-node (bun ships its own runtime).
@@ -369,7 +369,7 @@ chmod +x ${LOCAL_BIN}`, 10),
     [
       uses('checkout'),
       // The binary branch has no setup-node: see the install step above.
-      // Q31: bun ships its own runtime, so only managers that need Node get it.
+      // bun ships its own runtime, so only managers that need Node get it.
       ...(nodeInstall && nodeInstall.setupNode ? [setupNode(nodeFloor())] : []),
       ...install,
       `      - name: ${CLI} check`,

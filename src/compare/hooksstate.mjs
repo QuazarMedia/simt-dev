@@ -164,7 +164,7 @@ async function describeShim(path, root) {
       const chain = await readChainedShim(path);
       stale = chain === null || content !== renderChainedShim(chain.event, chain.target);
     } else {
-      // Q31: the comparison renders with the repo's own manager, or a pnpm repo
+      // the comparison renders with the repo's own manager, or a pnpm repo
       // reads as stale the moment this tool ships — the same one-answer rule as
       // the install path above.
       stale = content !== renderShim(basename(path), { npm: await hasNpm(root), manager: await nodeManagerFor(root), version: packageVersion() });

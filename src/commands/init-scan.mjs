@@ -29,7 +29,7 @@ async function scanRepo(root) {
 
 /**
  * The opt-in escape hatch before the first write, taken when --backup is passed
- * (ADR-063 amended plan 0002 §8.2 item 3 from "always" to on request). Both operations
+ * (ADR-063). Both operations
  * are best-effort: a repo that is not a git repo, or has no commits yet, must still be
  * adoptable. Failure is reported as a note rather than blocking, because refusing
  * to initialise an unborn repo would be worse than proceeding without a backup.

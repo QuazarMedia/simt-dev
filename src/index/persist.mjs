@@ -190,7 +190,7 @@ const EDGES_DDL = `create table if not exists edges(
   primary key(src_id, kind, dst_key)
 );`;
 
-// Q76: the v4 layout had no index on the edge endpoints or the node owners -
+// the v4 layout had no index on the edge endpoints or the node owners -
 // the dependent, impact and coverage walks each paid a full scan per file.
 // Executed after `migrateDb`, not in the preamble: on a v3 database the v3
 // `edges` table survives `if not exists` until the 4 -> 5 step swaps in the
@@ -257,7 +257,7 @@ export function treeDigest(listed) {
 export async function writeSqlite(root, next, removed, symbols, edges, fts, embeddings = [], tree = '') {
   const { DatabaseSync } = await import('node:sqlite');
   // The canonical file is written when it is this version's or older (the
-  // migration upgrades the older one in place, review 0003 Q44): a database at
+  // migration upgrades the older one in place,): a database at
   // a newer version stays with its owner, and the build goes to the sidecar
   // this version owns.
   let file = join(root, SQLITE_FILE);

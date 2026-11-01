@@ -105,8 +105,7 @@ export async function agentHookCommand(args, flags) {
   // payload's cwd is what the harness reports. The answer is then resolved to the
   // repository's top level: a harness reports the directory it happens to be in, and an
   // agent works from subdirectories, so every repository-relative fact (the lease file,
-  // `.gitmodules`) must resolve against the root git itself uses, not the cwd (review
-  // 0003 Q16).
+  // `.gitmodules`) must resolve against the root git itself uses, not the cwd.
   const { root: payloadRoot, command, writes, session: payloadSession } = factsFrom(row, payload, { root: flags.root });
   const root = repoRoot(payloadRoot);
   // A relative write path is relative to the directory the harness is in, not to the

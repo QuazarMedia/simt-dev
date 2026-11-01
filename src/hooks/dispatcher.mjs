@@ -469,7 +469,7 @@ export async function runGates(event, { root, manifest, pushed }) {
  */
 async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, skipTest = null }) {
   const pkg = await readPkg(root);
-  // Q31: the runner is committed evidence (lockfile, then `packageManager`),
+  // the runner is committed evidence (lockfile, then `packageManager`),
   // resolved once per hook run so every script gate spawns the same manager.
   let runner = null;
   if (pkg) {

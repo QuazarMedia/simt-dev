@@ -53,7 +53,7 @@ export async function gateCommand(args, flags) {
     }
     return fail(`nothing changed`, EXIT.USAGE, `pass a path, or ${CLI} gate --changed`);
   }
-  // Q40: an explicit path that is neither tracked nor on disk names nothing the
+  // an explicit path that is neither tracked nor on disk names nothing the
   // gate could select from. That is a usage error, not an empty selection: the
   // old answer (`ok: true`, no tests, exit 0) was indistinguishable from "this
   // change is safe" and trained the reader to trust it.
@@ -69,12 +69,12 @@ export async function gateCommand(args, flags) {
   for (const file of changed) files.add(file);
   const edges = await readImportEdges(root, files);
   const selected = coverage({ imports: edges }, changed);
-  // Q40: the selection explains itself. `unmatched` names explicit paths the
+  // the selection explains itself. `unmatched` names explicit paths the
   // tracked tree does not carry (untracked but present, so the run proceeds);
   // `graph` is `unresolved` when a language has edges but none of them reaches
   // a tracked file (the Kotlin estate: thousands of specs, zero resolutions);
   // `verdict` says the empty set out loud instead of leaving `selected: []` to
-  // be read as either safe or blind. `ok` stays as is until W27's opt-in.
+  // be read as either safe or blind. `ok` stays as is until a versioned opt-in.
   const unmatched = changed.filter((p) => !listed.files.includes(p));
   const graph = graphState(edges, files);
   if (selected.length === 0) {

@@ -1,8 +1,8 @@
 // simt tokens - what a reader loads, counted.
 //
-// Review 0002 S38 put the estate's always-on context at 90 KB per turn, 72% of it a
+// put the estate's always-on context at 90 KB per turn, 72% of it a
 // paragraph an earlier root had already loaded, and could only say so by reading seven
-// repositories by hand. This command is that reading, and it is the figure plan 0003's
+// repositories by hand. This command is that reading, and it is the figure
 // later slices are measured against: the context budget (S38 P7), the kernel split
 //  and the workspace dedupe  all need a number that moves when the
 // projection moves, or they are opinions.

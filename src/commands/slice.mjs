@@ -8,7 +8,7 @@
 // the declared gates run through the shared dispatcher first, because a command that
 // commits for you may not assume a hook is installed to stop it, then the commit
 // carries a Conventional subject built from the row's own title, and only then does
-// the tracker learn the SHA and the test command that closed it — the R31 row
+// the tracker learn the SHA and the test command that closed it — the tracker
 // machinery, called, never reimplemented.
 //
 // Two orders here are contracts rather than preferences:

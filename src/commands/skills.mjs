@@ -685,7 +685,7 @@ const DEFAULT_CORPUS = join(PACKAGE_ROOT, 'test', 'fixtures', 'eval-corpus.json'
 /**
  * `simt skills eval [corpus]` - measure the resolver against the gold corpus.
  *
- * Plan 0002 section 9: "Reports precision and recall and fails on regression." The
+ * section 9: "Reports precision and recall and fails on regression." The
  * corpus states, per case, which skills must come back (`select`) and which must not
  * (`reject`); a case that names no selection is exhaustive, and anything it returns is
  * a miss. The exit code rests on `clean`, because the two ratios can both read 1.0

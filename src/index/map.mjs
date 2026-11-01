@@ -264,7 +264,7 @@ export async function embedTaskQuery(root, task, { embed = false, allowRemote = 
  * not evidence the map missed the file (ADR-076).
  *
  * When `embed: true` (or stored embeddings are provided), also evaluates recall@10
- * with embeddings fused in and enforces the R28 acceptance gate: embeddings stay off
+ * with embeddings fused in and enforces the acceptance gate: embeddings stay off
  * by default unless they raise gold-file recall@10 by at least 10 percentage points
  * (`EMBED_RECALL_GAIN_BAR = 0.1`).
  *
@@ -360,7 +360,7 @@ export async function measureRecall(root, opts = {}) {
   const baseRecall = sum / tasks;
   const embedRecall = checkEmbed && embedEvaluated > 0 ? embedSum / tasks : null;
   const embedDelta = embedRecall === null ? null : embedRecall - baseRecall;
-  // R28 acceptance gate: embeddings stay off by default unless they raise
+  // acceptance gate: embeddings stay off by default unless they raise
   // gold-file recall@10 by at least 10 points (+0.10).
   const embedAccepted = embedDelta !== null && embedDelta + 1e-9 >= EMBED_RECALL_GAIN_BAR;
   return {

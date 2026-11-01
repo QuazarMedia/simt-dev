@@ -14,7 +14,7 @@
 // read that file, and a reader who wanted a failing command could not tell the
 // difference between "no channel" and "broken".
 //
-// R42 added the MCP registration files to the same answer. They are reported from the
+// added the MCP registration files to the same answer. They are reported from the
 // loader table (one source of paths, with `verified` naming the vendor page) because a
 // detection question deserves the same provenance rule the loader table set: a row with
 // no source is a guess in a report.
@@ -92,7 +92,7 @@ export async function harnessCommand(positional, flags) {
  * note in the output rather than a second failure mode nobody asked for.
  *
  * `{ mcp: true }` (repo scans only) adds the MCP registration files the loader table
- * records - single-sourced from `loaders.mjs` because that is the whole point of R42:
+ * records - single-sourced from `loaders.mjs` because one source is the whole point:
  * the evidence is data the tool already verified once, not a second list of paths to
  * keep in step by hand. It is file stat and nothing else: present, labelled, cited.
  */

@@ -93,7 +93,7 @@ async function changedPaths(root, base) {
  * reported with what it has rather than dropping the row.
  */
 async function changedDecisions(root, paths) {
-  // Q55: the prefix is the repository's own decisions directory, not a literal.
+  // the prefix is the repository's own decisions directory, not a literal.
   const relDir = await decisionsDir(root);
   const absDir = join(root, relDir);
   const names = paths.filter((p) => p.startsWith(`${relDir}/`) && p.toLowerCase().endsWith('.md'));

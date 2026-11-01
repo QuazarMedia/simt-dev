@@ -74,7 +74,7 @@ export async function initCommand(positional, flags) {
   // a repository without node_modules obtains the binary in CI.
   const version = packageVersion();
   const npm = await hasNpm(root);
-  // Q31: the CI install step and the plan row that names it read the same
+  // the CI install step and the plan row that names it read the same
   // resolver as the card and the gates — lockfile first, `packageManager` next.
   // `manager` is the Node manager id or null (no package.json: binary channel).
   let manager = null;
@@ -492,7 +492,7 @@ export async function initCommand(positional, flags) {
     return EXIT.OK;
   }
 
-  // The escape hatch is opt-in (ADR-063): plan 0002 §8.2 item 3 said "always", and the
+  // The escape hatch is opt-in (ADR-063): §8.2 item 3 said "always", and the
   // tool complied, but consumers kept reporting the branch switch as a surprise. The
   // default now writes in place on the branch the reader already has — `git diff` still
   // shows the full adoption, and nothing is tagged or branched. `--backup` restores the
@@ -859,7 +859,7 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
         ? `            this repository is simt-dev's own; ${CLI} ci --yes refreshes this copy when the gate changes`
         : `            runs ${CLI} check where a pull request is merged; yours to edit after this`,
     );
-    // Q31: the workflow installs simt-dev as a devDependency, so the plan states
+    // the workflow installs simt-dev as a devDependency, so the plan states
     // the install the reader must run — `<pm> add -D`, never a bare npm guess.
     if (!payload.ci.own && manager) {
       const addDev = { npm: `npm i -D ${PACKAGE_NAME}`, pnpm: `pnpm add -D ${PACKAGE_NAME}`, yarn: `yarn add -D ${PACKAGE_NAME}`, bun: `bun add -d ${PACKAGE_NAME}` }[manager];

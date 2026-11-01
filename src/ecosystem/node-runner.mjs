@@ -8,7 +8,7 @@
 // remedies proposing npm gates it could never run.
 //
 // One data table, one resolver, every consumer. The table is records, not
-// code, so the Q70 ecosystem work can adopt it without a second answer: a
+// code, so a new ecosystem can adopt it without a second answer: a
 // future `ecosystems/<id>.json` row carries the same fields and this resolver
 // stays the shape of the lookup.
 //

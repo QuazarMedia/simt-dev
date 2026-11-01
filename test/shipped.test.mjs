@@ -985,7 +985,10 @@ test('a source comment cites a reason or an ADR, never a plan row', async () => 
       const trimmed = line.trimStart();
       const isComment = trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*');
       if (!isComment) continue;
-      if (/\((?:see )?(?:(?:plan|review) \d{4}|R\d{2}|Q\d{2})/i.test(line)) {
+      // A reference is a plan or review row wherever it appears in the comment: the
+      // parenthesised form passed while `Plan 0003 R48. A bare command:` stayed, and that
+      // pointer resolves to nothing once the plan is archived just the same.
+      if (/\b(?:plan|review)\s+000\d\b|\b[RQ]\d{2}\b/i.test(line)) {
         offenders.push(`${file.replace(`${ROOT}/`, '')}:${i + 1}`);
       }
     }

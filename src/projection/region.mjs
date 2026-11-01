@@ -71,8 +71,8 @@ export async function desiredRegion(root, flags) {
 
 // The kernel. In `kernel` mode only the hard and command classes are packed into the
   // region and every other rule is deferred to `rules show <id>`, which is what makes
-  // R08's accept criterion reachable at all: a budget cannot be met by a projection that
-  // never tries. `full` is the default and stays it until R02 has measured that a
+  // the accept criterion reachable at all: a budget cannot be met by a projection that
+  // never tries. `full` is the default and stays it until a measurement shows that a
   // kernel does not lose compliance, because nobody has measured it yet.
   //
   // A rule with no stated class is deferred, not packed. The two mistakes are not
@@ -233,7 +233,7 @@ export async function desiredRegion(root, flags) {
 
   // The budget, and the bytes held back for what loads beside the region.
   //
-  // Read from the manifest rather than from the plan's spelling of it. Plan 0003 R08
+  // Read from the manifest rather than from the plan's spelling of it.
   // wrote `projection.budget.bytes`, and ADR-072 moved the key to the top level because
   // `projection` is a generated key `upgrade` replaces wholesale - a budget that reset
   // itself on upgrade would reset the reader's context size without anyone asking. The

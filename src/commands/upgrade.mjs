@@ -6,7 +6,7 @@
 // into a generated region, and each carries a stamp of the simt-dev that produced it. So
 // one commit makes every consumer behind at once, and the naive fix - "go run sync in
 // each repo" - is 16 commands, 16 diffs, 16 reviews, and no way to see the set as a set.
-// Plan 0001 named this exact risk ("simt-dev churn cascades into 16 repos") and answered
+// named this exact risk ("simt-dev churn cascades into 16 repos") and answered
 // it with `upgrade --all`: one operation, one reviewable diff.
 //
 // Four commitments:

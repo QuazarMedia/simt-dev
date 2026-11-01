@@ -5,7 +5,7 @@
 // 2. Flags every skill body over 5,000 tokens (20,000 bytes at 4 B/token) with a
 //    deterministic split plan, and splits markdown bodies by section into `references/`
 //    so `SKILL.md` stays within the 5,000-token and 500-line budget.
-// 3. Reads R02 transcripts and run records to determine whether the agent opened a skill
+// 3. Reads bench transcripts and run records to determine whether the agent opened a skill
 //    when the task's gold patch touched its declared `paths`, reporting trigger recall
 //    and precision per skill.
 // 4. Builds offline, proposal-only description improvements with provenance (`model`,
@@ -329,7 +329,7 @@ export function matchSkillsForPaths(skills = [], touchedPaths = []) {
   return [...new Set(matched)].sort();
 }
 
-/** Extract the sorted list of skill names opened by an agent from an R02 transcript. */
+/** Extract the sorted list of skill names opened by an agent from a bench transcript. */
 export function extractOpenedSkills(transcriptInput, knownSkillNames = null) {
   const known = knownSkillNames ? new Set(knownSkillNames) : null;
   const opened = new Set();
@@ -362,7 +362,7 @@ export function extractOpenedSkills(transcriptInput, knownSkillNames = null) {
   return [...opened].sort();
 }
 
-/** Compute per-skill trigger recall/precision across R02 runs and attach split plans. */
+/** Compute per-skill trigger recall/precision across bench runs and attach split plans. */
 export function evaluateSkillTriggers(registry, runs = [], { bodiesBySkill = new Map(), goldPathsByTask = new Map() } = {}) {
   const skills = [...(registry?.skills ?? [])].sort((a, b) => a.name.localeCompare(b.name));
   const knownNames = new Set(skills.map((s) => s.name));

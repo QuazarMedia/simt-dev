@@ -250,8 +250,7 @@ export async function readReports(paths) {
  *
  * A report inside the workspace belongs to the workspace and is removed with it. A report
  * this package directed to the temporary directory has no other owner, and leaving it
- * there is how a repository ended up with `.bench-junit.xml` beside its sources (review
- * 0003 Q79).
+ * there is how a repository ended up with `.bench-junit.xml` beside its sources.
  *
  * @param {string[]} paths
  */

@@ -1,7 +1,7 @@
 // One reader's view of one repository: which files it loads before the first message,
 // in what order, and what the cap leaves out.
 //
-// This is the consumer R14 was built for. Before the loader table, `simt tokens` counted
+// This is what the loader table was built for. Before it, `simt tokens` counted
 // the files a surface WRITES — which is why it recursed six levels into `.agents/rules/`
 // and reported bytes Antigravity never reads, and why it could not see a repository that
 // is inside 32 KiB in every file and past it once Codex merges the chain.

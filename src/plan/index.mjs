@@ -5,9 +5,9 @@
 // the repository's template (src/plan/template.mjs). The tracker template
 // delivered with the tool reads docs/plans, docs/research and docs/reviews and treats `done`
 // as complete.
-// A dependency may name another document (`review 0002 S41`) or one of its
-// waves (`review 0002 Wave 0`). Ids that follow a document prefix stay in that
-// document: `review 0002 S41, S50` is two slices of the review. A parenthetical
+// A dependency may name another document (``) or one of its
+// waves (` Wave 0`). Ids that follow a document prefix stay in that
+// document: `, S50` is two slices of the review. A parenthetical
 // is a note, not a dependency — `S47 (optional)` waits on S47, and the pack
 // test named beside S01 is not a ninth wave member. The words `review` and
 // `wave` are the delivered template's; another template names its own.
@@ -370,7 +370,7 @@ function findDoc(docs, word, number, fmt) {
   const kind = fmt.byWord.get(word.toLowerCase());
   if (!kind) return null;
   const hits = docs.filter((doc) => doc.kind === kind && doc.number === number);
-  // Two documents with the same number would make `review 0002` a guess.
+  // Two documents with the same number would make `` a guess.
   // Missing is an unknown dependency, which blocks, and a guess would unblock
   // a slice against the wrong tracker.
   return hits.length === 1 ? hits[0] : null;

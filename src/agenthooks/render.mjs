@@ -32,7 +32,7 @@
 // fires once when the session is created, which is a different lifetime from the brief a
 // task needs. Gemini CLI was replaced by Antigravity CLI on 2026-06-18, which is the row
 // that covers the successor; the gemini row stays because the extension is still documented
-// and installable and R43 ships a package for it, and its hooks file is in the reader table
+// and installable and a package ships for it, and its hooks file is in the reader table
 // this module takes its paths from — a harness this tool did not verify is a harness it
 // does not write to.
 //

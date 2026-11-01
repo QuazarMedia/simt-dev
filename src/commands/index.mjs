@@ -72,7 +72,7 @@ export const IMPLEMENTED = {
     return (args, flags) => briefCommand(args, flags, COMMANDS);
   },
   doctor: async () => (await import('./doctor.mjs')).runDoctor,
-  // Plan 0003 R48. A bare command: the only mode is `--line`, so there is no
+  // A bare command: the only mode is `--line`, so there is no
   // group and no default subcommand to resolve.
   status: async () => (await import('./status.mjs')).statusCommand,
   'graph lint': async () => (await import('./graph.mjs')).lintCommand,
@@ -106,7 +106,7 @@ export const IMPLEMENTED = {
     const { planCommand } = await import('./plan.mjs');
     return (args, flags) => planCommand('done', args, flags);
   },
-  // Plan 0003 R53. A group: `start` isolates the work on a branch with its brief,
+  // A group: `start` isolates the work on a branch with its brief,
   // `finish` runs the gates, commits and records the evidence, and `abandon`
   // takes the slice back down. All three take the slice id
   // as a positional.
@@ -141,30 +141,30 @@ export const IMPLEMENTED = {
   'lessons list': async () => (await import('./lessons.mjs')).lessonsListCommand,
   'lessons review': async () => (await import('./lessons.mjs')).lessonsReviewCommand,
   decide: async () => (await import('./decide.mjs')).decideCommand,
-  // Plan 0003 R46. A bare command: the code is a positional, so there is no
+  // A bare command: the code is a positional, so there is no
   // group and no default subcommand to resolve.
   explain: async () => (await import('./explain.mjs')).explainCommand,
-  // Plan 0003 R49. A bare command: restoring the last journaled set needs no
+  // A bare command: restoring the last journaled set needs no
   // subcommand, so there is no group and no default to resolve.
   undo: async () => (await import('./undo.mjs')).undoCommand,
-  // Plan 0003 R55. A bare command: the body is derived from the tree, the
+  // A bare command: the body is derived from the tree, the
   // ledger and the last check, so there is no subcommand to resolve and no
   // write to confirm.
   'pr-body': async () => (await import('./prbody.mjs')).prBodyCommand,
-  // Plan 0003 R52. A bare command: the one list is `.simtignore`, so there is no
+  // A bare command: the one list is `.simtignore`, so there is no
   // group and no default subcommand to resolve.
   ignore: async () => (await import('./ignore.mjs')).ignoreCommand,
-  // Plan 0003 R54. A bare command: paths claim, no paths list, so the argument itself
+  // A bare command: paths claim, no paths list, so the argument itself
   // is the mode and there is no group to resolve.
   lease: async () => (await import('./lease.mjs')).leaseCommand,
-  // Review 0003 Q60. The README's command list is the last copy of the command table
+  // The README's command list is the last copy of the command table
   // the spec owns; the renderer lives in src/docs so a test can hold the file to it.
   'docs readme': async () => {
     const { docsCommand } = await import('./docs.mjs');
     return (args, flags) => docsCommand('readme', args, flags);
   },
   distill: async () => (await import('./distill.mjs')).distillCommand,
-  // R25 machinery needs the runnable command names for Affects command tokens,
+  // machinery needs the runnable command names for Affects command tokens,
   // same wiring `why` and `impact` get through their lambdas.
   review: async () => {
     const { reviewCommand } = await import('./review.mjs');
@@ -231,7 +231,7 @@ export const IMPLEMENTED = {
   'bench ablate': async () => (await import('./bench.mjs')).benchAblateCommand,
   'bench probes': async () => (await import('./bench.mjs')).benchProbesCommand,
   'bench variants': async () => (await import('./bench.mjs')).benchVariantsCommand,
-  // plan 0003 R39. The critic's acceptance bench measures BLOCK-precision and
+  //. The critic's acceptance bench measures BLOCK-precision and
   // recall over a labelled set; until it reports its floor, the critic entries
   // stay advisory and no gate reads them. COMMANDS rides along so the brief
   // resolves Affects command tokens the way `simt why` does.
@@ -239,23 +239,23 @@ export const IMPLEMENTED = {
     const { benchCriticCommand } = await import('./bench.mjs');
     return (args, flags) => benchCriticCommand(args, flags, COMMANDS);
   },
-  // review 0003 Q48. Sealed corpus transfer: export writes one signed JSON
+  //. Sealed corpus transfer: export writes one signed JSON
   // document carrying every task and both hidden patches; import verifies the
   // seal before it touches the vault.
   'bench export': async () => (await import('./bench.mjs')).benchExportCommand,
   'bench import': async () => (await import('./bench.mjs')).benchImportCommand,
   upgrade: async () => (await import('./upgrade.mjs')).upgradeCommand,
   mcp: async () => (await import('./mcp.mjs')).mcpCommand,
-  // plan 0003 R43. A bare command: the kind is a positional, so there is no group and
+  //. A bare command: the kind is a positional, so there is no group and
   // no default subcommand to resolve.
   plugin: async () => (await import('./plugin.mjs')).pluginCommand,
-  // Plan 0003 R51. A bare command: the shell is a positional. `COMMANDS` rides in
+  // A bare command: the shell is a positional. `COMMANDS` rides in
   // from here so the engine keeps no second copy of the registry it completes.
   completions: async () => {
     const { completionsCommand } = await import('./completions.mjs');
     return (args, flags) => completionsCommand(args, flags, COMMANDS);
   },
-  // Plan 0003 R45. A group, not a bare command: `new` and `publish` write (or
+  // A group, not a bare command: `new` and `publish` write (or
   // publish) and `lint` reads, and the dispatcher routes all three through one
   // subcommand switch the way `hooks` does.
   'pack new': async () => {
@@ -384,7 +384,7 @@ async function dispatchInState(argv) {
 
   const args = positional.slice(offset);
 
-  // Review 0003 Q62, deprecation window. The parser accepts every flag for every
+  // deprecation window. The parser accepts every flag for every
   // command, so `status --frozen` ran, ignored the flag and reported success - the
   // caller's intent discarded with nothing to notice. A flag the spec does not declare
   // for this path is named on stderr and still runs for one release; the next release
@@ -410,7 +410,7 @@ async function dispatchInState(argv) {
   // began, which cost 36.5 ms on a `status --line` that reads one file.
   // A closed set is refused before the command runs, so the caller learns the valid
   // values from the refusal and every reader of the spec sees the same set (review
-  // 0003 Q62). Unset is not the same as invalid: the default stays the command's.
+  // Unset is not the same as invalid: the default stays the command's.
   for (const [flag, allowed] of Object.entries(VALUES.get(path) ?? {})) {
     const value = flags[flag.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
     if (value !== undefined && !allowed.includes(value)) {

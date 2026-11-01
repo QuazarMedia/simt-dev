@@ -278,7 +278,7 @@ export function chatEndpoint(config) {
       exit: fail(
         `--local needs a usable local chat endpoint: ${detail}`,
         EXIT.CONFIG,
-        `configure local.chat in ${MANIFEST_FILE} (plan 0003 R37), or run without --local for the deterministic path`,
+        `configure local.chat in ${MANIFEST_FILE}, or run without --local for the deterministic path`,
       ),
     };
   }

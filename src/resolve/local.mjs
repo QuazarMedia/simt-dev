@@ -1,7 +1,7 @@
 // Repo-local skills as resolver nodes.
 //
 // The registry is what simt-dev ships; the skill directories a repo holds are what
-// that repo owns. After plan 0005 S2 the registry is small and generic, so a skill
+// that repo owns. After S2 the registry is small and generic, so a skill
 // that lives only in a repo was invisible to `skills find` and `skills brief`, and
 // the NOT SELECTED block points a reader at `skills show` by name - a remedy that
 // 404s for a name the registry does not declare.

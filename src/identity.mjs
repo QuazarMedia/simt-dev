@@ -202,8 +202,7 @@ export async function identityIgnored(root) {
 /**
  * The .gitignore bytes with the identity entry appended, or null when it is
  * already there. One owner for the edit's shape: `ignoreIdentity` writes it and
- * `init --diff` previews it, so the two cannot disagree about the bytes (review
- * 0003 Q30).
+ * `init --diff` previews it, so the two cannot disagree about the bytes.
  *
  * @param {string} text the current bytes, '' when the file is absent
  * @returns {string|null}

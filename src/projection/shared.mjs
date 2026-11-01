@@ -1,6 +1,6 @@
 // The shared half of a workspace's rules, and the user-level files that carry it.
 //
-// Review 0002 S38 measured seven repositories carrying 90 KB of always-on rules of
+// measured seven repositories carrying 90 KB of always-on rules of
 // which 64 KB — 72% — was a paragraph an earlier root had already loaded. The fix is not
 // a smaller region; it is carrying the repeated half once, in a file every reader in the
 // estate loads before they open a repository.
@@ -25,7 +25,7 @@
 //      with the reader's own session. That also means `sync` never reads `$HOME`, which
 //      `harness.mjs`'s comment forbids for anything a projection depends on.
 //
-//   4. THE TARGET LIST IS THE LOADER TABLE'S, not a second list of paths. Plan 0003 R11
+//   4. THE TARGET LIST IS THE LOADER TABLE'S, not a second list of paths.
 //      named `~/.codex/AGENTS.md`, `~/.claude/CLAUDE.md` and `~/.gemini/GEMINI.md`; the
 //      table (`src/projection/loaders.mjs`, every row citing a vendor document) records
 //      `~/.claude/rules/*.md` and `~/.gemini/config/rules/*.md` instead, and records no
@@ -378,7 +378,7 @@ export async function sharedCoverage(path, rules) {
  *
  * Counted ONCE per file and counted at all, which is the whole reason this exists: a
  * report that measured seven regions and ignored the file the rules moved into would
- * show a 72% saving that the reader's context never saw. The accept criterion for R11 is
+ * show a 72% saving that the reader's context never saw. The accept criterion is
  * a number, and a number that leaves out the copy is not the reader's number.
  *
  * The whole file is counted, not the span between the markers, because the prose a reader

@@ -106,7 +106,7 @@ async function probeTool(root, eco) {
 export async function readCapability(root) {
   const capability = { scripts: {}, binaries: [], commands: {}, tools: [], runner: null, error: null };
 
-  // Q31: a package.json names a Node repo, but not which manager it installs
+  // a package.json names a Node repo, but not which manager it installs
   // with. The lockfile on disk wins over the `packageManager` field (the field
   // can disagree; `checkToolchain` reports that), and the field wins over the
   // npm default — so a `packageManager: pnpm@9` repo resolves pnpm before its
@@ -158,7 +158,7 @@ export async function readCapability(root) {
   // file in the repo cannot: a Cargo.toml without cargo installed is an ecosystem that
   // is here but whose gates would all fail closed. The probe is per-row, because a row
   // that marks its tool `file` lives in the repository, not on PATH.
-  // Q70: the rows come from the records, and `root` lets a repository's own
+  // the rows come from the records, and `root` lets a repository's own
   // `.simt/ecosystems/` add a tool the shipped set does not probe.
   for (const eco of ecosystemGateRows(root)) {
     if (await probeTool(root, eco)) capability.tools.push(eco.tool);

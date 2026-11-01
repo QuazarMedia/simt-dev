@@ -24,10 +24,10 @@ import { journaledWriteFile } from '../journal.mjs';
 // answers to "can this repo run that gate", which is precisely the kind of drift this
 // file exists to prevent elsewhere.
 import { getGate } from '../hooks/gates.mjs';
-// Q31: the one Node runner table. This module and the card, capability,
+// the one Node runner table. This module and the card, capability,
 // dispatcher and CI workflow all spell `<manager> run <script>` from it.
 import { runScript } from '../ecosystem/node-runner.mjs';
-// Q70: the ecosystem records. A new ecosystem is a new file under `ecosystems/`, not a
+// the ecosystem records. A new ecosystem is a new file under `ecosystems/`, not a
 // row added to this table. records.mjs imports nothing from this package, so this edge
 // cannot cycle.
 import { ecosystemGateRows } from '../ecosystem/records.mjs';

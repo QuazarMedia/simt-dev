@@ -122,7 +122,7 @@ export async function listResources(root = process.cwd()) {
   const [rules, mdc, { decisions }, region, plan] = await Promise.all([
     loadRules(null),
     loadMdcRules(),
-    // Q55: the shipped records through the shared cache (root locates the cache
+    // the shipped records through the shared cache (root locates the cache
     // file; the directory stays the package's own, which is what is served).
     loadDecisionsCached({ root, dir: DECISIONS_DIR, all: true }),
     kernelRegion(root),

@@ -294,7 +294,7 @@ function compile(body, source, root) {
       doneWrite,
       // The display a command moves a row to when work on it starts: the state
       // carrying the `started` role, or null when no state claims it (review
-      // 0003 Q23). A null here is not an error — the caller falls back to the
+      // A null here is not an error — the caller falls back to the
       // in-progress spelling it can read, and `plan done` fails closed on a
       // word the template never defined.
       startedWrite: roles.get('started') ?? null,

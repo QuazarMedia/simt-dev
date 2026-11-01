@@ -148,7 +148,7 @@ export const TOOLS_FACTS = [
   {
     outputSchema: output.pr_body,
     name: 'pr_body',
-    // R41's 2 KB description budget is shared, not per tool: this sentence was
+    // the 2 KB description budget is shared, not per tool: this sentence was
     // paid for by shortening `brief` and `federation_query`, and the test on the
     // total holds every future tool to the same trade.
     description:

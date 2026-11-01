@@ -15,7 +15,7 @@ export async function decideCommand(args, flags) {
   const root = commandRoot(flags);
 
   if (flags.check === true) {
-    // Q55: one resolution — the manifest key, then the detected directory —
+    // one resolution — the manifest key, then the detected directory —
     // and the cutoff from the same config, never a hard-coded number or path.
     const relDir = await decisionsDir(root);
     const res = await lintDecisions(join(root, relDir), { historicalCutoff: await decisionsCutoff(root) });

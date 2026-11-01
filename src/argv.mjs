@@ -56,7 +56,7 @@ export const BOOL_FLAGS = new Set([
   // default because the adoption writes them by default.
   'agents',
   'list',
-  // tokens: measure every repository under the root, not just the one. Plan 0003 R06
+  // tokens: measure every repository under the root, not just the one.
   // names this flag `--workspace`, and that name has been a VALUE flag since plan
   // 0002 - it is where the skill sources live. One flag with two meanings is the
   // silent-ignore defect this file's header refuses, so the meter's switch is named
@@ -95,7 +95,7 @@ export const BOOL_FLAGS = new Set([
   // is a different question.
   'changed',
   // local doctor: allow non-loopback model URLs. Off by default because nothing leaves
-  // the machine unless explicitly overridden (ADR-075, plan 0003).
+  // the machine unless explicitly overridden (ADR-075).
   'allow-remote',
   // index / map / brief: opt into local vector embeddings configured under local.embed
   //. Off by default unless recall@10 gains at least 10 points.
@@ -151,7 +151,7 @@ export const VALUE_FLAGS = new Set([
   'root',
   // skills/graph: which registry to read. A value rather than a boolean because
   // "a registry" without a path would have to guess, and the guess is the
-  // defect Q37 exists to remove.
+  // defect a guess would reintroduce.
   'registry',
   // compare: how many repository rows to build at once.
   // A count, not a switch, because "parallel" without a cap is the burst this
@@ -185,7 +185,7 @@ export const VALUE_FLAGS = new Set([
   'reps',
   'regrade',
   'compare',
-  // plan done: the test command that proves the slice. Plan 0003 R31.
+  // plan done: the test command that proves the slice.
   'test',
   'state',
   // slice finish: the Conventional Commits type for the commit it makes. A value,

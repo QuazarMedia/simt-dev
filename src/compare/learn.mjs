@@ -30,7 +30,7 @@ import { readManifest } from '../projection/manifest.mjs';
 import { localRel, readStateFile } from '../state.mjs';
 
 const ABLATION_REL = localRel('bench', 'ablation.json');
-// Where pre-Q19 checkouts keep the file: the writer's path before the move to
+// Where an older checkout keeps the file: the writer's path before the move to
 // machine-local state.
 const ABLATION_REL_LEGACY = join(STATE_DIR, 'bench', 'ablation.json');
 

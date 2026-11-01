@@ -103,7 +103,7 @@ export const GENERATED_KEYS_OF = new Set(KEYS.filter((entry) => entry.generated 
  * Namespaces a consumer registered against this table.
  *
  * A namespace is a sub-object of the manifest that another part of the tool owns -
- * plan 0004's `work` is the first. It registers its keys here rather than editing the
+ * `work` is the first. It registers its keys here rather than editing the
  * table, so adding one touches two files and no reader has to learn a second shape
  */
 const NAMESPACES = new Map();

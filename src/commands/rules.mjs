@@ -194,7 +194,7 @@ function rulesFailure(message, remedy, exitCode) {
  * @returns {{ok: boolean, decisions: object[], errors: string[], origins: Record<string,'repo'|'package'>}}
  */
 async function loadDecisionsFor(root, all) {
-  // Q55: one resolution (manifest key, then detection) and the shared cache,
+  // one resolution (manifest key, then detection) and the shared cache,
   // so `rules why` answers from the repository's own records without re-parsing
   // every record on every call. No root means the package's own records.
   const pkg = await loadDecisionsCached({ root, dir: DECISIONS_DIR, all });

@@ -9,7 +9,7 @@
 // `project_doc_max_bytes` — so a repository can be inside the limit on every single file
 // and past it as a chain. Antigravity scans `.agents/rules/` flat and ignores nested
 // files. Three of those facts change what a byte count means, and none of them is in
-// the surface table, which is why R06 had to be blocked on this one.
+// the surface table, which is why the byte count had to be blocked on this one.
 //
 // WHAT THIS TABLE IS NOT. It is not a second opinion about any harness, and it does not
 // re-verify `surfaces.mjs`: a path that appears here and there is one fact written twice

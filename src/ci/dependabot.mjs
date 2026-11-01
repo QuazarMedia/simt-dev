@@ -40,7 +40,7 @@ import { join } from 'node:path';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { isOwnRepo, WORKFLOWS_DIR } from './workflow.mjs';
 import { CLI } from '../name.mjs';
-// Q70: the Dependabot entries are the records' `dependabot` facet, not a table in this
+// the Dependabot entries are the records' `dependabot` facet, not a table in this
 // file. Adding an ecosystem is a new file under `ecosystems/`, not a row here.
 import { dependabotEntries } from '../ecosystem/records.mjs';
 

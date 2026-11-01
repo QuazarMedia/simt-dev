@@ -19,11 +19,9 @@
 //   - Nothing under `.simt/` is journaled, one named exception: the shim
 //     directory. The journal recording itself is recursion; the ledger, index
 //     and candidates are evidence and caches, and restoring those to an earlier
-//     byte-shape would corrupt R17 rather than repair anything. The shims are
-//     the opposite of that: git's routing points at them, and the undo that
-// restores the routing must restore the shims with it
-//. `journaledWriteFile` performs the
-//     other writes unrecorded.
+//     byte-shape would corrupt the undo rather than repair anything. The shims are
+//     the opposite of that: git's routing points at them, and the undo that//     restores the routing must restore the shims with it.
+//     `journaledWriteFile` performs the other writes unrecorded.
 //   - Only regular files. Symlinks carry no bytes for beforeBytes to hold, and
 //     the record shape is file bytes — pointer changes are reported by the
 //     command as before and are not undone. Removals are journaled as entries
@@ -438,7 +436,7 @@ export async function journalHygiene(root) {
 export async function listJournalSets(root) {
   // The pre-move directory is a fallback for one release;
   // the sets in it move into the current directory on the next write
-  // (`migrateLegacyJournal`, plan 0005 H3), so the fallback only serves a
+  // (`migrateLegacyJournal`, H3), so the fallback only serves a
   // repo that has not written since the move.
   let names;
   try {

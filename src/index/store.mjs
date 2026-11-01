@@ -14,7 +14,7 @@ import { readManifest } from '../projection/manifest.mjs';
 import { readLocalConfig } from '../local/config.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { extract, resolveImports } from './extract.mjs';
-// Q70: the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
+// the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
 // names the extensions that RESOLVE to a language (JavaScript claims `.ts` for extraction
 // but not for resolution), so a record's extraction and resolution cannot desynchronize.
 import { languageResolver } from '../ecosystem/records.mjs';

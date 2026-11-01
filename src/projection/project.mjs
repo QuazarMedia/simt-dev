@@ -384,7 +384,7 @@ export async function checkTargets(root, flags = {}) {
   // dependency-updates config fail for the same reason and are fixed the same way,
   // and listing them separately is how the second copy of this rule gets written.
   const workflowPlan = await planWorkflow(root);
-  // Q31: a workflow that exists but cannot resolve simt-dev by any path the
+  // a workflow that exists but cannot resolve simt-dev by any path the
   // locator tries is a green tick on a gate that never runs. The locator tries
   // `$SIMT_DEV_BIN`, the pinned devDependency, the release binary and `simt`
   // on PATH, in that order; only the middle two are committed evidence this

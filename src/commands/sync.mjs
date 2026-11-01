@@ -66,7 +66,7 @@ export const SYNC_NON_BLOCKING = new Set([
   'budget-cut',
   'file-lines-warn',
   'check-unbuilt',
-  // Review 0003 Q28: the tsconfig strictness findings. The base file is repo-owned —
+  // the tsconfig strictness findings. The base file is repo-owned —
   // init no longer writes it, so neither can `sync` — and both findings' remedies are
   // a decision about the repo's own compiler policy, not a missing file. Blocking on
   // them would fail every fresh TypeScript adoption over a file the tool does not write.
@@ -109,7 +109,7 @@ export const SYNC_NON_BLOCKING = new Set([
 // (ADR-083). It says the projection was cut to fit a ceiling this repository set, so the
 // remedy is a decision about the number — and a cut the repository asked for by declaring
 // a budget is the tool working, not a repository in need of a file.
-// `inert` and `inconsistent` are here for review 0003 Q28: the base file is repo-owned,
+// `inert` and `inconsistent` are here for: the base file is repo-owned,
 // so the gate reports the state of the repo's own compiler policy without failing it.
 // A fresh TypeScript adoption has neither file in a state the tool can repair, and a
 // gate that reddens on a policy decision is one the repo satisfies by choosing, not by
@@ -617,7 +617,7 @@ export async function checkRepo(root, opts = {}) {
   const { selected } = select(rules.filter((r) => r.error === null), fp.stack ?? [], fp.facts ?? []);
   findings.push(...(await runDeclaredChecks(root, selected, manifest ?? null)));
 
-  // Q55: one resolution shared with `decide --check`, so the two commands
+  // one resolution shared with `decide --check`, so the two commands
   // cannot disagree about whose records these are or which are historical.
   const relDecisionsDir = await decisionsDir(root);
   const decisionLint = await lintDecisions(join(root, relDecisionsDir), {

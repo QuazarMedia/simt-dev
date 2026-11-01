@@ -12,7 +12,7 @@ import { MANIFEST_FILE } from '../name.mjs';
 //            genuinely repo-specific - ConnectIQ memory budgets, codegen
 //            drift, i18n completeness - because the central dispatcher cannot
 //            know what monkeyc or a Kotlin script path looks like in one repo
-//            and something else in another. Plan 0001 section 3.2 keeps repo
+//            and something else in another. section 3.2 keeps repo
 //            commands and paths local; this is that ruling in code.
 //   builtin  run inside this binary, with nothing to resolve on disk. For a
 //            check whose whole value is that a fresh clone has it: the staged-
@@ -104,7 +104,7 @@ export const GATES = {
 export function getGate(name, commands = {}) {
   const declared = GATES[name];
   if (declared) return declared;
-  // Q70: a command the repository declared under gates.commands is a valid gate even when
+  // a command the repository declared under gates.commands is a valid gate even when
   // no central row knows it. The manifest is the source of truth for a repo's gates, and
   // a name that resolves to a declared command must not read as unknown. Synthesized, not
   // added to GATES: the central table stays the estate's gates, the record supplies the rest.

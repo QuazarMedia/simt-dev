@@ -110,7 +110,7 @@ export function gateRunnable(gate, capability = {}) {
   }
   if (gate.kind === 'script') {
     const script = gate.script ?? gate.name;
-    // Q31: the runnable sentence names the repo's own runner, never a bare npm
+    // the runnable sentence names the repo's own runner, never a bare npm
     // assumption — the card, the dispatcher and this check read one resolver.
     const spell = runScript(capability.runner ?? 'npm', script);
     if (capability.scripts?.[script]) return { runnable: true, why: `runs: ${spell}` };
@@ -153,7 +153,7 @@ function gateRemedy(gate, { existing = false, runner = null } = {}) {
   const name = gate?.name ?? 'the gate';
   const npmShaped = gate?.kind === 'staged' || gate?.kind === 'script';
   const foreign = isForeignRunner(runner);
-  // Q31: a missing tool in a Node repo names the repo's own installer —
+  // a missing tool in a Node repo names the repo's own installer —
   // `pnpm add -D`, not `npm i -D` — and anything elsewhere keeps the honest
   // undo: name the program under `gates.commands`.
   const addDev = { npm: 'npm i -D', pnpm: 'pnpm add -D', yarn: 'yarn add -D', bun: 'bun add -d' }[runner] ?? null;
@@ -278,7 +278,7 @@ function ecosystemCommands(facts = [], capability = null, root = null) {
   // Seeding there would replace a choice with a default; the reader's escape hatch
   // is declaring gates.commands by hand, which a seed would lose to anyway. Pure
   // ecosystem repos have runner 'cargo'/'go'/... and seed normally.
-  // Q31: every Node manager skips seeding — pnpm is not "foreign", it is Node.
+  // every Node manager skips seeding — pnpm is not "foreign", it is Node.
   if (['npm', 'pnpm', 'yarn', 'bun'].includes(capability.runner)) return {};
   const present = new Set(facts);
   const commands = {};

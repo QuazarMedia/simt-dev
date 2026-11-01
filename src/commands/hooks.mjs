@@ -172,7 +172,7 @@ export async function planHooksInstall(root, { manifest, exists }, ctx = null) {
   // install where there is no node_modules to pin in.
   const version = packageVersion();
   const npm = await hasNpm(root);
-  // Q31: installed shims name the repo's own installer in their remedy.
+  // installed shims name the repo's own installer in their remedy.
   // Lockfile first, `packageManager` next, npm default — the one resolver.
   let manager = null;
   if (npm) {
@@ -502,7 +502,7 @@ async function installHooks(root, flags, ctx = repoContext(root)) {
   // Read through `writeMode` like every other writer, and only now: this command
   // used to consult `flags.yes` and `flags.dryRun` directly and write when neither
   // said otherwise, which made it the last writer still writing by default after
-  // ADR-035 and ADR-036 had settled that none of them may. Review 0002's S24
+  // ADR-035 and ADR-036 had settled that none of them may. S24
   // listed it among the writers that "all preview first"; that was wrong, and the
   // migration script in the same review tells an operator to run `hooks install`
   // for a plan and then `--yes` - advice that printed a plan and wrote anyway.

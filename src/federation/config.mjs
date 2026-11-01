@@ -4,7 +4,7 @@
 // opt-in is a `federation` block in the repository's own manifest. Nothing here probes a
 // harness config, scans for a server that might exist, or opens a socket the manifest did
 // not ask for — a repository that declared nothing pays nothing and reads nothing. Where
-// a harness would keep the same names is R42's several slices away, and it is a different
+// a harness would keep the same names is the several slices away, and it is a different
 // question: this one is "what did the repository commit", not "what did the editor
 // configure".
 //

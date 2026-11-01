@@ -23,7 +23,7 @@ import { CLI } from '../name.mjs';
 import { PREFIX_ARGUING, TOOL_WORDS } from '../toolwords.mjs';
 import { LOCAL_DIR } from '../state.mjs';
 import { packageVersion } from '../package-version.mjs';
-// Q55: read lazily (see commandVerbs). The registry imports the `decide`
+// read lazily (see commandVerbs). The registry imports the `decide`
 // command, which imports this module, so touching COMMANDS during module
 // evaluation would read an initialising binding on one of the two load
 // orders. Every use below happens at runtime, when both sides are loaded.
@@ -90,7 +90,7 @@ export function redactInternalPaths(text) {
   return String(text ?? '').replace(internalPathPattern(), 'a file in this tool');
 }
 
-// Q55: four digits and more are real record numbers, not a typo. The old `\d{3}`
+// four digits and more are real record numbers, not a typo. The old `\d{3}`
 // silently dropped every citation past ADR-999, and lexical sorting put ADR-1000
 // before ADR-999 in every listing that trusted string order.
 const ADR_IN_TEXT = /\bADR-(\d{3,})\b/g;
@@ -627,7 +627,7 @@ const section = (name) => {
  * them - which is what this file used to do. Detection of those now depends on a name
  * never being written into shipped text, rather than on a check.
  */
-// Q55: one shape, two flags. The estate-name pattern used to be written out twice
+// one shape, two flags. The estate-name pattern used to be written out twice
 // (`ESTATE_NAME` and `ESTATE`), so a shape fixed in one kept matching in the other.
 const ESTATE_SOURCE = '\\b(?:simt-(?!dev\\b)[\\w-]+|repo-\\d{2})\\b';
 
@@ -660,7 +660,7 @@ export function redactEstate(text) {
  * Only a real verb follows, which is what keeps `simt-dev.json`, `simt-dev-check.yml` and
  * `simt-dev's` untouched - those are the project's artefacts and the project keeps its name.
  */
-// Q55: the verbs a record may quote are the commands this binary dispatches,
+// the verbs a record may quote are the commands this binary dispatches,
 // not a hand list. The list used to miss `pack`, `plugin` and `lease`, so a record
 // quoting one read as prose instead of a runnable command.
 let verbAlternation = null;

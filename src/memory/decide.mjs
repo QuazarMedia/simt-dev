@@ -436,7 +436,7 @@ function prosePartialSupersessions(body) {
  *
  * `historicalCutoff` exempts the first N records from the frontmatter requirement:
  * they predate it, and demanding it retroactively would fail a history nobody can
- * rewrite without rewriting history. Q55: the number lives in the repository's
+ * rewrite without rewriting history. The number lives in the repository's
  * config (`decisions.historicalCutoff`, resolved by the caller), never in code.
  */
 export function lintDecision(text, { file = 'ADR-000.md', historicalCutoff = 0 } = {}) {

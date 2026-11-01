@@ -1,6 +1,6 @@
 // Gold-corpus evaluation: run each case through the resolver and score it.
 //
-// Plan 0002 section 9: "A resolver that is not measured is a resolver that is merely
+// section 9: "A resolver that is not measured is a resolver that is merely
 // felt." The corpus (test/fixtures/eval-corpus.json) states, for real repository signals
 // and tasks, which skills must come back and which must not. Two callers must never
 // disagree about the score - `simt skills eval` reports it to a reader, and

@@ -1,8 +1,7 @@
 // The distiller's orchestrator: one target in, one proposal out.
 //
-// R37 gave this repository a local model client, and R38 is the first consumer of
-// it: distillation is the cheapest thing a local model can do that the
-// deterministic engine cannot — abstractive compression — and the one that most
+// Distillation is the cheapest thing a local model can do that the deterministic
+// engine cannot — abstractive compression — and the one that most
 // needs the guardrails here, because its output is the kind a reader would paste
 // into a pack and forget to check.
 //

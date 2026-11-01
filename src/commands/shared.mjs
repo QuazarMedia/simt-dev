@@ -1,6 +1,6 @@
 // `simt shared` - carry a workspace's repeated rules once, in the reader's home directory.
 //
-// Plan 0003 R11. The estate measured 90 KB of always-on rules across seven repositories
+// The estate measured 90 KB of always-on rules across seven repositories
 // with 72% of it a paragraph an earlier root had already loaded, and the
 // plan's answer was to install the repeated part once per harness and let each region carry
 // a delta.

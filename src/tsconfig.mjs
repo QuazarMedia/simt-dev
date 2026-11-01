@@ -122,7 +122,7 @@ export function readJsonc(text) {
 /**
  * What this repo's base file is, and what `init` will do about it.
  *
- * There is no `refresh`, and since review 0003 Q28 there is no `create` either: the
+ * There is no `refresh`, and since there is no `create` either: the
  * file is the repo's to write, and a floor the tool created was one nothing extended.
  * `init`'s whole contribution is now to say so in the plan — a file that appears after
  * the run without being in the plan is a silent write, and "init will not write this"

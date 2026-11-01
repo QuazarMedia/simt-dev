@@ -167,7 +167,7 @@ export async function resolveGate(gate, { root, pkg, staged, commands, runner = 
         remedy: `add "${script}" to scripts, or remove "${name}" from ${MANIFEST_FILE} gates`,
       };
     }
-    // Q31: script gates run through the repo's own manager — `pnpm run`, not
+    // script gates run through the repo's own manager — `pnpm run`, not
     // `npm run`, in a pnpm checkout. The default stays npm for callers that do
     // not report one (older capabilities, hand-built contexts).
     const { runScriptArgv, runScript } = await import('../ecosystem/node-runner.mjs');

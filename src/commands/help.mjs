@@ -45,7 +45,7 @@ ${CLI} skills install <name>  pin a skill into the repo as a local override
                            --variant or --from rather than a guess)
 ${CLI} skills compile [<name>] compile a skill to Agent Skills standard, flag bodies
                            over 5000 tokens with a split plan, and report per-skill
-                           trigger recall and precision from R02 transcripts
+                           trigger recall and precision from bench transcripts
 
 ${CLI} rules list             the rule catalogue (--root marks what applies to a repo)
 ${CLI} rules show <id>        one rule body
@@ -399,7 +399,7 @@ export async function help(argv, dispatched) {
     return 0;
   }
   // A reader who names one command gets that command, not the whole surface (review
-  // 0003 Q61): `simt help gate` and `simt gate --help` both printed 23 KB, so the one
+  // `simt help gate` and `simt gate --help` both printed 23 KB, so the one
   // fact being asked for was 40 screens down.
   const asked = commandFromHelp(positional);
   if (asked !== null) {

@@ -161,8 +161,7 @@ export const DEFAULT_SURFACES = ['opencode'];
  *
  * An empty selection folds too: with no surface carrying a rule path, the region is
  * the only channel a rule has, and the old answer (no surface folds, so nothing
- * folds) wrote every process rule nowhere while `check` reported current (review
- * 0003 Q27).
+ * folds) wrote every process rule nowhere while `check` reported current.
  *
  * Asked in exactly two places that must agree: `desiredRegion` folds the bodies in,
  * and `mdcTargets` writes the files. Asking it twice is how ADR-020's fold decision
@@ -227,7 +226,7 @@ export const SURFACE_IDS = SURFACES.map((s) => s.id);
  * this repository", never "this harness is installed" and never "its rules are not
  * being loaded".
  *
- * The exception that proves the rule is `.gemini`: R42 read Gemini CLI's
+ * The exception that proves the rule is `.gemini`: somebody read Gemini CLI's
  * configuration docs, so its entry carries readsAgentsMd and a `verified` the same way
  * a surface row does. Everyone else stays a bare name until somebody reads their
  * vendor pages — the bar for facts here is a document, not an ML search snippet, and

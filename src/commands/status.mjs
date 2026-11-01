@@ -5,7 +5,7 @@
 // `git rev-parse HEAD`, so it answers in milliseconds while `check` itself takes the time
 // projection takes. Bare `status` is the aggregate a UI's home view asks for - last
 // check, git hooks, agent hooks, evidence for the tree on disk, active leases, tracker
-// state, the last journal set - and it was a usage error until review 0003 Q82.
+// state, the last journal set - and it was a usage error until.
 //
 // The line's cache lives in `status.mjs`; the aggregate lives in `status-snapshot.mjs`.
 // Both report the gate *as of the last check* rather than measuring: a status command

@@ -646,7 +646,7 @@ test('plan labels: reports the labels the template gives, beside the ones a docu
   const { stdout } = cli(['plan', 'labels', '--root', root]);
   assert.match(stdout, /template tracker/);
   assert.match(stdout, /tier\s+tier, model tier, class, effort/);
-  assert.match(stdout, /states\s+Queued, In progress, Complete, Accepted/);
+  assert.match(stdout, /states\s+Queued, In progress, To review, Complete, Accepted/);
   assert.match(stdout, /tier:\s+tier/);
 });
 
@@ -730,4 +730,44 @@ test('plan status and plan labels report the lanes a tracker carries', async () 
   const payload = JSON.parse(cli(['plan', 'status', '--json', '--root', root]).stdout);
   assert.deepEqual(payload.documents[0].lanes, { core: 1, kernel: 1, capture: 1 });
   assert.equal(payload.documents[0].unlaned, 0);
+});
+
+const REVIEWED = `# plan
+
+## 3. Tracker
+
+| ID | State | Slice | Reviewer | Depends on |
+| --- | --- | --- | --- | --- |
+| R1 | To review | kernel work | android-reviewer | — |
+| R2 | Queued | follow-up | — | R1 |
+| R3 | Queued | docs | — | — |
+`;
+
+test('a slice waiting on a review is not ready work and does not satisfy a dependency', async () => {
+  const root = await repo({ 'docs/plans/0099.md': REVIEWED });
+  const status = cli(['plan', 'status', '--root', root]);
+  assert.match(status.stdout, /review=1/);
+  // R2 depends on R1, which is finished but unreviewed, so the next slice is R3.
+  const next = cli(['plan', 'next', '--root', root]);
+  assert.match(next.stdout, /slice\s+R3/);
+  assert.match(next.stdout, /awaiting review:/);
+  assert.match(next.stdout, /R1\s+0099\.md\s+reviewer: android-reviewer/);
+  const labels = cli(['plan', 'labels', '--root', root]);
+  assert.match(labels.stdout, /reviewer:\s+reviewer/);
+});
+
+test('plan next names the reviewer of the slice it returns, and --state hands one to review', async () => {
+  const reviewed = await repo({ 'docs/plans/0099.md': REVIEWED });
+  const payload = JSON.parse(cli(['plan', 'next', '--json', '--root', reviewed]).stdout);
+  assert.equal(payload.next.reviewer, null);
+  assert.deepEqual(payload.awaitingReview, [{ id: 'R1', doc: '0099.md', reviewer: 'android-reviewer' }]);
+
+  const owned = await repo({
+    'docs/plans/0099.md': '# plan\n\n| ID | State | Slice | Reviewer |\n| --- | --- | --- | --- |\n| A1 | Queued | kernel | gpt-5 |\n',
+  });
+  assert.match(cli(['plan', 'next', '--root', owned]).stdout, /reviewer\s+gpt-5/);
+  // A model and a person are both reviewers, so the column holds free text; the state is
+  // reached by any of its words, which is how a finished slice is handed over.
+  const dry = cli(['plan', 'done', 'A1', '--state', 'to review', '--root', owned]);
+  assert.match(dry.stdout, /Queued -> To review/);
 });

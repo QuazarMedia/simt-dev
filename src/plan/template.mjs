@@ -21,7 +21,7 @@ export const DEFAULT_TEMPLATE = 'tracker';
 
 const KNOWN = new Set(['$comment', 'name', 'directories', 'id', 'columns', 'states', 'ready', 'dependency', 'wave', 'section']);
 const ID_KEYS = new Set(['pattern', 'headers']);
-const COLUMN_KEYS = new Set(['state', 'depends', 'title', 'evidence', 'tier', 'lane']);
+const COLUMN_KEYS = new Set(['state', 'depends', 'title', 'evidence', 'tier', 'lane', 'reviewer']);
 const DIRECTORY_KEYS = new Set(['kind', 'word', 'path']);
 const STATE_KEYS = new Set(['id', 'write', 'read', 'satisfies', 'role']);
 const DEPENDENCY_KEYS = new Set(['empty', 'separators', 'notes', 'group']);
@@ -150,6 +150,9 @@ function compileStates(source, value) {
   const known = new Set();
   const satisfies = new Set();
   const roles = new Map();
+  // The role a state plays, mapped to the state's id as well as its display: a command that
+  // asks "which slices await review" needs the id it compares against, not the words.
+  const roleIds = new Map();
   const order = [];
   const stateNames = [];
   for (let i = 0; i < value.length; i += 1) {
@@ -170,6 +173,7 @@ function compileStates(source, value) {
     if (typeof entry.role === 'string') {
       if (roles.has(entry.role)) return bad(source, `role ${entry.role} is claimed twice`);
       roles.set(entry.role, entry.write.trim());
+      roleIds.set(entry.role, entry.id);
     }
     const display = entry.write.trim();
     const aliases = new Set([entry.id, display.toLowerCase()]);
@@ -191,7 +195,7 @@ function compileStates(source, value) {
     else if (entry.satisfies != null && entry.satisfies !== false) return bad(source, `${where}.satisfies must be true or false`);
   }
   if (satisfies.size === 0) return bad(source, 'one state must have satisfies true, or nothing can ever be ready');
-  return { read, write, known, satisfies, roles, order, stateNames };
+  return { read, write, known, satisfies, roles, roleIds, order, stateNames };
 }
 
 function compile(body, source, root) {
@@ -231,6 +235,8 @@ function compile(body, source, root) {
   if (tierHeaders.error) return tierHeaders;
   const laneHeaders = headers(source, body.columns.lane, 'columns.lane', { allowEmpty: true });
   if (laneHeaders.error) return laneHeaders;
+  const reviewerHeaders = headers(source, body.columns.reviewer, 'columns.reviewer', { allowEmpty: true });
+  if (reviewerHeaders.error) return reviewerHeaders;
   const waveLabel = headers(source, body.wave.label, 'wave.label');
   if (waveLabel.error) return waveLabel;
   const waveMembers = headers(source, body.wave.members, 'wave.members');
@@ -275,7 +281,7 @@ function compile(body, source, root) {
 
   const byWord = new Map(directories.directories.map((dir) => [dir.word, dir.kind]));
   const doneWrite = body.states.find((entry) => entry.satisfies === true).write.trim();
-  const { read, write, roles } = states;
+  const { read, write, roles, roleIds } = states;
 
   return {
     format: {
@@ -292,6 +298,7 @@ function compile(body, source, root) {
       // in-progress spelling it can read, and `plan done` fails closed on a
       // word the template never defined.
       startedWrite: roles.get('started') ?? null,
+      roleIds,
       stateNames: states.stateNames,
       satisfies: states.satisfies,
       known: states.known,
@@ -306,6 +313,7 @@ function compile(body, source, root) {
       evidenceHeaders: evidenceHeaders.names,
       tierHeaders: tierHeaders.names,
       laneHeaders: laneHeaders.names,
+      reviewerHeaders: reviewerHeaders.names,
       waveLabel: waveLabel.names,
       waveMembers: waveMembers.names,
       crossRe,

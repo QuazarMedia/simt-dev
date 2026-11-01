@@ -81,7 +81,7 @@ Pick the command by what you need, not by what you remember:
 | Score the registry | `simt skills eval [corpus]` | Against recorded transcripts |
 | Refresh the workflows | `simt ci` | This package's own `.github` |
 
-## Tiers, waves and lanes
+## Tiers, waves, lanes and reviewers
 
 A tracker may carry a tier column (headers `Tier`, `Model tier`, `Class`, `Effort`). The tag
 is the cell's first word without its notes, so `L (S)` is an L slice with an S reviewer.
@@ -95,3 +95,9 @@ A lane is the subsystem a slice's files belong to (headers `Lane`, `Stream`, `Wo
 is what makes concurrency safe: `--lane core` and `--lane capture` handed to two agents
 touch different files, while two slices in one lane do not. Combine `--lane` with `--tier` or `--wave` when a lane must also stay inside a
 class or a wave.
+
+A `Reviewer` column (headers `Reviewer`, `Reviewed by`, `Review by`, `Reviewer profile`) names
+who reviews the slice — a model id or a person, as free text, because the tool has no reason
+to know which. The `To review` state means the work is finished and not accepted: it is not
+ready work, and nothing depending on it is ready either. `plan next` lists what is waiting
+under `awaiting review:`, and `simt plan done <id> --state "to review"` hands a slice over.

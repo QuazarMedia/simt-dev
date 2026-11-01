@@ -31,6 +31,18 @@ function clean(cell) {
   return String(cell ?? '').replace(/\*\*/g, '').trim();
 }
 
+/**
+ * A free-text cell where a dash is the template's way of writing "none".
+ *
+ * `—`, `-` and `n/a` sit in a table to say the column does not apply. Printing one as a
+ * value - `reviewer —`, `tier —` - reads as a reviewer or a tier called dash.
+ */
+function optionalOf(cell, none) {
+  const text = clean(cell);
+  if (text === '') return '';
+  return none.has(text.toLowerCase()) ? '' : text;
+}
+
 function normHeader(cell) {
   return clean(cell).toLowerCase().replace(/\s+/g, ' ');
 }
@@ -215,6 +227,7 @@ function trackerRows(fmt, table) {
   const evidenceIdx = findColumn(columns, fmt.evidenceHeaders);
   const tierIdx = findColumn(columns, fmt.tierHeaders);
   const laneIdx = findColumn(columns, fmt.laneHeaders);
+  const reviewerIdx = findColumn(columns, fmt.reviewerHeaders);
   const rows = [];
   for (const row of table.rows) {
     const id = clean(row.cells[idIdx] ?? '');
@@ -227,6 +240,7 @@ function trackerRows(fmt, table) {
       depsIdx,
       tierIdx,
       laneIdx,
+      reviewerIdx,
       titleIdx: titleIdx === idIdx ? -1 : titleIdx,
       evidenceIdx,
       columnCount: columns.length,
@@ -447,10 +461,11 @@ function linkSlices(docs, fmt) {
         stateRaw,
         state: fmt.readState(stateRaw),
         dependsOn: row.depsIdx >= 0 ? clean(row.cells[row.depsIdx] ?? '') : '',
-        tier: row.tierIdx >= 0 ? clean(row.cells[row.tierIdx] ?? '') : '',
+        tier: row.tierIdx >= 0 ? optionalOf(row.cells[row.tierIdx] ?? '', fmt.empty) : '',
         tierKey: row.tierIdx >= 0 ? keyOf(row.cells[row.tierIdx] ?? '', fmt.empty) : '',
-        lane: row.laneIdx >= 0 ? clean(row.cells[row.laneIdx] ?? '') : '',
+        lane: row.laneIdx >= 0 ? optionalOf(row.cells[row.laneIdx] ?? '', fmt.empty) : '',
         laneKey: row.laneIdx >= 0 ? keyOf(row.cells[row.laneIdx] ?? '', fmt.empty) : '',
+        reviewer: row.reviewerIdx >= 0 ? optionalOf(row.cells[row.reviewerIdx] ?? '', fmt.empty) : '',
         waves: wavesOf(doc, row.id),
         idIdx: row.idIdx,
         stateIdx: row.stateIdx,
@@ -534,6 +549,7 @@ export async function planLabels(root) {
     id: format.idHeaders,
     tier: format.tierHeaders,
     lane: format.laneHeaders,
+    reviewer: format.reviewerHeaders,
     state: format.stateHeaders,
     depends: format.dependsHeaders,
     title: format.titleHeaders,
@@ -661,6 +677,7 @@ function publicSlice(slice) {
     state: slice.state,
     tier: slice.tier === '' ? null : slice.tier,
     lane: slice.lane === '' ? null : slice.lane,
+    reviewer: slice.reviewer === '' ? null : slice.reviewer,
     waves: slice.waves,
     dependsOn: slice.dependsOn,
     unknownDependencies: slice.unknownDeps,
@@ -710,8 +727,19 @@ export async function planNext(root, id = null, { tier = null, wave = null, lane
     return { root, next: publicSlice(hits[0]), reason: null };
   }
   const scope = (slice) => inTier(slice, tier) && inWave(slice, wave) && inLane(slice, lane);
+  // Slices whose implementation is finished and whose review is not: not ready work, and
+  // not complete either - which is why a slice depending on one stays blocked. Reported
+  // beside the answer, because "nothing ready" and "nothing ready, one waiting on a
+  // reviewer" are different states for the reader deciding what to do next.
+  const reviewState = format.roleIds.get('review') ?? null;
+  const awaiting = reviewState === null ? [] : slices.filter((slice) => slice.state === reviewState && scope(slice));
+  const awaitingReview = () => awaiting.map((slice) => ({
+    id: slice.id,
+    doc: slice.docName,
+    reviewer: slice.reviewer === '' ? null : slice.reviewer,
+  }));
   const ready = slices.filter((slice) => slice.ready && scope(slice)).sort(compareSlice);
-  if (ready.length > 0) return { root, next: publicSlice(ready[0]), reason: null };
+  if (ready.length > 0) return { root, next: publicSlice(ready[0]), reason: null, awaitingReview: awaitingReview() };
   const waiting = slices.filter((slice) => slice.state === format.ready && scope(slice)).sort(compareSlice);
   const label = (format.stateNames[format.order.indexOf(format.ready)] ?? format.ready).toLowerCase();
   const where = scopeNote({ tier, wave, lane });
@@ -723,6 +751,7 @@ export async function planNext(root, id = null, { tier = null, wave = null, lane
     tier: tier ?? null,
     wave: wave ?? null,
     lane: lane ?? null,
+    awaitingReview: awaitingReview(),
     blocked: waiting.map((slice) => ({
       id: slice.id,
       doc: slice.docName,

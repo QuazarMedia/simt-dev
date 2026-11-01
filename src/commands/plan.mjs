@@ -97,6 +97,17 @@ async function runLabels(root, flags) {
   return EXIT.OK;
 }
 
+// What is waiting on a person or a model, and who. Printed with the answer rather than by a
+// second command: the reader deciding what to do next needs both facts at once.
+function awaitingLines(result) {
+  if (!result.awaitingReview?.length) return [];
+  return [
+    '',
+    'awaiting review:',
+    ...result.awaitingReview.map((row) => `  ${row.id}  ${row.doc}${row.reviewer ? `  reviewer: ${row.reviewer}` : ''}`),
+  ];
+}
+
 async function runNext(root, id, flags) {
   const result = await planNext(root, id, { tier: flags.tier ?? null, wave: flags.wave ?? null, lane: flags.lane ?? null });
   if (result.error) return fail(result.error, EXIT.USAGE, result.remedy);
@@ -113,6 +124,7 @@ async function runNext(root, id, flags) {
         lines.push(`  ${row.id}  ${row.doc}  depends on: ${row.dependsOn || '(none)'}${unknown}`);
       }
     }
+    lines.push(...awaitingLines(result));
     emit(lines.join('\n'));
     return EXIT.OK;
   }
@@ -123,11 +135,13 @@ async function runNext(root, id, flags) {
     `state    ${next.state}`,
     ...(next.tier ? [`tier     ${next.tier}`] : []),
     ...(next.lane ? [`lane     ${next.lane}`] : []),
+    ...(next.reviewer ? [`reviewer ${next.reviewer}`] : []),
     ...(next.waves?.length ? [`wave     ${next.waves.join(", ")}`] : []),
     `depends  ${next.dependsOn || '(none)'}`,
     `bytes    ${next.sectionBytes}`,
     '',
     next.section || '(no section for this id)',
+    ...awaitingLines(result),
   ];
   emit(head.join('\n'));
   return EXIT.OK;

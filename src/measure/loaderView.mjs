@@ -20,12 +20,13 @@
 //      measurement of the syntax, not a recursive parse of the file that would need a
 //      frontmatter-aware Markdown parser this package does not have (ADR-012).
 
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { LOADERS, caps } from '../projection/loaders.mjs';
 import { extractFrontmatter } from '../projection/targets.mjs';
 import { BYTES_PER_TOKEN } from './context.mjs';
+import { bytes, filesUnder, frontmatter, readText } from './fs.mjs';
 
 /**
  * The longest directory walk any of these readers documents.
@@ -35,29 +36,6 @@ import { BYTES_PER_TOKEN } from './context.mjs';
  */
 const MAX_DEPTH = 8;
 
-/** UTF-8 byte length. `String.length` counts UTF-16 units and undercounts every
- *  non-ASCII character, and a rule file with an em dash in it is ordinary. */
-function bytes(text) {
-  return Buffer.byteLength(text);
-}
-
-/** Frontmatter as a flat object. One block, no nesting — all a rule file carries. */
-function frontmatter(text) {
-  const block = extractFrontmatter(text);
-  const out = {};
-  if (!block) return out;
-  for (const line of block.split('\n').slice(1)) {
-    if (line.trim() === '---') break;
-    const at = line.indexOf(':');
-    if (at < 1) continue;
-    out[line.slice(0, at).trim()] = line
-      .slice(at + 1)
-      .trim()
-      .replace(/^["']|["']$/g, '');
-  }
-  return out;
-}
-
 /**
  * Files under a directory in a stable order.
  *
@@ -65,36 +43,6 @@ function frontmatter(text) {
  * ignoring them is not one whose docs were read, and a `.md` inside `.agents/rules/` is
  * a rule.
  */
-async function filesUnder(dir, depth = 0, prefix = '') {
-  let entries;
-  try {
-    entries = await readdir(dir, { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const out = [];
-  for (const entry of [...entries].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
-    const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
-    if (entry.isDirectory()) {
-      if (depth >= MAX_DEPTH) continue;
-      out.push(...(await filesUnder(join(dir, entry.name), depth + 1, rel)));
-    } else if (entry.isFile()) {
-      out.push(rel);
-    }
-  }
-  return out;
-}
-
-async function readText(path) {
-  try {
-    return await readFile(path, 'utf8');
-  } catch {
-    // Absence is the expected answer for a reader configured in a repository that has
-    // not written the file yet, and a permission error is not a byte count either.
-    return null;
-  }
-}
-
 async function exists(root, rel) {
   try {
     return (await stat(join(root, rel))).isFile();
@@ -144,7 +92,7 @@ async function resolveEntry(root, entry) {
     }
     case 'flat': {
       const out = [];
-      for (const rel of await filesUnder(join(root, entry.dir))) {
+      for (const rel of await filesUnder(join(root, entry.dir), { maxDepth: MAX_DEPTH })) {
         if (rel.includes('/')) continue;
         if (entry.suffix && !rel.endsWith(entry.suffix)) continue;
         out.push(...(await hit(`${entry.dir}/${rel}`)));

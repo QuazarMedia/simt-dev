@@ -21,7 +21,7 @@
 //   4. Write anything. `compare` is read-only for the same reason - a measurement
 //      that can change what it measures is not a measurement.
 
-import { lstat, readFile, readdir } from 'node:fs/promises';
+import { lstat, readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 import { resolveSurfaces } from '../projection/surfaces.mjs';
@@ -35,6 +35,7 @@ import {
 import { extractFrontmatter } from '../projection/targets.mjs';
 import { readLimitFindings } from '../projection/project.mjs';
 import { loader } from '../projection/loaders.mjs';
+import { bytes, filesUnder, frontmatter, readText } from './fs.mjs';
 import { expandClaudeImports, viewOf } from './loaderView.mjs';
 import { TOOLS } from '../mcp/tools.mjs';
 
@@ -79,23 +80,6 @@ export function paragraphs(text) {
     .filter((block) => block.length > 0);
 }
 
-/** UTF-8 byte length. `text.length` counts UTF-16 units, which undercounts every
- *  non-ASCII character - and a rule file with an em dash in it is ordinary. */
-function bytes(text) {
-  return Buffer.byteLength(text);
-}
-
-async function readText(path) {
-  try {
-    return await readFile(path, 'utf8');
-  } catch {
-    // ENOENT is the expected answer for a surface a repo selected but has not written
-    // yet, and a permission error is not a byte count either. Both mean "nothing to
-    // measure here", which the caller states as zero rather than as a failure.
-    return null;
-  }
-}
-
 /**
  * Files under a directory a surface declares, in a stable order.
  *
@@ -105,29 +89,6 @@ async function readText(path) {
  * guess about nesting; it is the bound that keeps a stray `node_modules` inside a
  * tool-owned directory from turning a byte count into an unbounded walk.
  */
-async function filesUnder(root, dir, suffix, depth = 0, maxDepth = 6) {
-  let entries;
-  try {
-    entries = await readdir(join(root, dir), { withFileTypes: true });
-  } catch {
-    return [];
-  }
-  const names = entries.map((e) => e.name).sort();
-  const out = [];
-  for (const name of names) {
-    if (name.startsWith('.')) continue;
-    const entry = entries.find((e) => e.name === name);
-    const path = `${dir}/${name}`;
-    if (entry.isDirectory()) {
-      if (depth >= maxDepth) continue;
-      out.push(...(await filesUnder(root, `${path}`, suffix, depth + 1, maxDepth)));
-    } else if (entry.isFile() && (!suffix || name.endsWith(suffix))) {
-      out.push(path);
-    }
-  }
-  return out;
-}
-
 /** True when `rel` under `root` is a regular file and not a symlink. */
 async function isRegularFile(root, rel) {
   try {
@@ -166,23 +127,6 @@ function isAlwaysOnRule(surfaceId, ruleEntry, text) {
     return Object.entries(ruleEntry.frontmatter).every(([k, v]) => meta[k] === v);
   }
   return true;
-}
-
-/** Frontmatter keys, as an object. One block, no nesting - which is all a SKILL.md has. */
-function frontmatter(text) {
-  const block = extractFrontmatter(text);
-  const out = {};
-  if (!block) return out;
-  for (const line of block.split('\n').slice(1)) {
-    if (line === '---') break;
-    const at = line.indexOf(':');
-    if (at < 1) continue;
-    out[line.slice(0, at).trim()] = line
-      .slice(at + 1)
-      .trim()
-      .replace(/^["']|["']$/g, '');
-  }
-  return out;
 }
 
 /** Every document a selected surface puts in front of a reader, with what it costs.
@@ -273,7 +217,8 @@ async function documentsFor(root, surface) {
     // Antigravity scans `.agents/rules/` flat (`tree: 'flat'`) and ignores nested
     // directories; Cursor, Claude and Copilot walk subdirectories (`tree: 'nested'`).
     const maxDepth = ruleEntry?.tree === 'flat' ? 0 : 6;
-    for (const file of await filesUnder(root, dir, `.${suffix}`, 0, maxDepth)) {
+    for (const rel of await filesUnder(join(root, dir), { suffix: `.${suffix}`, maxDepth, skipDotfiles: true })) {
+      const file = `${dir}/${rel}`;
       const text = await readText(join(root, file));
       if (text === null) continue;
       if (!isAlwaysOnRule(surface.id, ruleEntry, text)) continue;
@@ -296,7 +241,8 @@ async function documentsFor(root, surface) {
     const dirs = [...new Set([surface.skills, ...(surface.documentedSkillsPaths ?? [])])];
     const seen = new Set();
     for (const dir of dirs) {
-      for (const file of await filesUnder(root, dir, '.md')) {
+      for (const rel of await filesUnder(join(root, dir), { suffix: '.md', skipDotfiles: true })) {
+        const file = `${dir}/${rel}`;
         if (!basename(file).startsWith('SKILL')) continue;
         const text = await readText(join(root, file));
         if (text === null) continue;

@@ -28,6 +28,7 @@
     "agents",
     "skills",
     "ecosystems",
+    "harnesses",
     "docs/decisions",
     "CHANGELOG.md"
   ],

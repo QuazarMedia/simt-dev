@@ -53,8 +53,15 @@
 //      unverified assumption into every repo that adopted it, which is the exact
 //      failure this table exists to prevent.
 
+import { harnessPointers, harnessScopeKeys, harnessSurfaces } from '../harness/records.mjs';
+
 /**
  * Surfaces, in the order the writer emits them.
+ *
+ * The rows are data records under `harnesses/` (Q71): a surface is a fact about a vendor,
+ * and a new one arrives as a new file, not a table edit (ADR-013). The engine attaches
+ * the one facet a record cannot carry — `ruleFrontmatter`, a function — by id below,
+ * and nothing else.
  *
  * `kind`:
  *   - `region`  a generated region inside a file the repo may also write by hand
@@ -80,180 +87,35 @@
  * `ruleFrontmatter` returns the keys that editor reads BEFORE any rule text. A
  * surface that needs none returns '' and the projected file starts at the body.
  */
-export const SURFACES = [
-  {
-    // THE STANDARD SURFACE. One repo, one editor, one file — unless the agent or the
-    // repo's owner names another. This row exists because "write a file for every IDE
-    // we know" is not support: it gives a repo that lives in opencode three rule
-    // directories and two symlinks it will never open, and it means every rule change
-    // lands in four places instead of one. ADR-020 wrote all four; ADR-021 writes one
-    // and asks.
-    id: 'opencode',
-    label: 'opencode (AGENTS.md + .agents/skills)',
-    readers:
-      'OpenCode v2, and AGENTS.md is also read natively by Codex, Cursor, Windsurf, Zed, Amp, Jules, Copilot CLI and the DeepSeek harness; Claude Code falls back to it, Antigravity and Gemini CLI accept GEMINI.md as an equal name',
-    primary: 'AGENTS.md',
-    kind: 'region',
-    // OpenCode v2 documents no per-rule directory. It reads AGENTS.md only — every
-    // file from the workspace up to the project root, combined — and it does not fall
-    // back to CLAUDE.md. So `foldRules`: this surface carries every rule inside the
-    // one generated region, and the other rows are how a rule reaches an editor that
-    // cannot read AGENTS.md. Writing .opencode/rules/*.md would be a guess, and a
-    // guessed path is the failure this table exists to prevent.
-    rule: null,
-    foldRules: true,
-    readsAgentsMd: 'all',
-    configDirs: ['.opencode'],
-    skills: '.agents/skills',
-    documentedSkillsPaths: ['.opencode/skills', '.claude/skills', '.agents/skills'],
-    // Codex concatenates AGENTS.md from the root down and stops at
-    // project_doc_max_bytes. The default is 32 KiB. A region that ends past it is
-    // never read, and nothing else in check notices. Other readers of this file
-    // publish no such limit.
-    readLimits: [
-      {
-        reader: 'Codex',
-        bytes: 32768,
-        verified: 'Codex project_doc_max_bytes defaults to 32 KiB',
-      },
-    ],
-    verified:
-      'OpenCode v2 instructions and skills docs (opencode.ai/v2/docs, read 2026-10-14) — AGENTS.md only, combined from the workspace up to the project root; CLAUDE.md is not a fallback; skills at .opencode/skills/, .claude/skills/ and .agents/skills/<name>/SKILL.md, with the model shown name and description',
-    note:
-      '.agents/skills is one of the three skill locations opencode documents, so the same directory serves the standard surface without a symlink.',
-  },
-  {
-    id: 'cursor',
-    label: 'Cursor rules',
-    readers: 'Cursor',
-    primary: null,
-    kind: 'file',
-    rule: '.cursor/rules/{name}.mdc',
-    readsAgentsMd: 'all',
-    configDirs: ['.cursor'],
-    // `documentedKeys` is the set the vendor's own docs name for this surface, and
-    // `ruleFrontmatter` must emit nothing outside it. A key invented here would be
-    // inert at best; on Antigravity an unrecognised value silently discards the
-    // rule. The guard lives in test/shipped.test.mjs, and this row is its evidence.
-    documentedKeys: ['description', 'alwaysApply', 'globs'],
-    // ADR-021 ruled that "a Cursor reader getting .mdc files does not serve them",
-    // because Cursor had no documented channel for AGENTS.md. It does, and has:
-    // cursor.com/docs/context/rules calls AGENTS.md "a simple alternative to
-    // .cursor/rules" and documents support in the project root and subdirectories.
-    // So a folded rule reaches a Cursor reader twice - once inside the region, once
-    // in the .mdc - and the second copy is 28 KB of pure repetition across the five
-    // repos that select both surfaces.
-    //
-    // The caveat belongs here rather than in the ADR body, because it is a fact about
-    // a product and products move: a Cursor bug report records AGENTS.md NOT being
-    // read in worktree agents by default, fixed in 3.9. A reader below that version
-    // gets the .mdc copy and a reader above it does not need it.
-    readsPrimary: true,
-    // Filled into a substitution only when every selected surface names the same
-    // value. One body is written for all of them, so a Cursor name must not land
-    // in a file Claude Code also reads.
-    substitutions: { askTool: 'Use the interactive `AskQuestion` tool' },
-    ruleFrontmatter: (rule) => [
-      `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
-      // `globs` only appears when the rule declares a scope. Cursor attaches a rule
-      // with no globs on the strength of `alwaysApply` alone, so emitting either
-      // unquoted patterns on an eager rule or no globs at all on a scoped one is
-      // asking for the wrong loading behaviour.
-      ...(rule.scope ? [`globs: ${rule.scope.map((g) => `"${g}"`).join(', ')}`] : []),
-      `alwaysApply: ${rule.alwaysApply ? 'true' : 'false'}`,
-    ],
-    verified:
-      'Cursor project rules (.cursor/rules/*.mdc, description + alwaysApply + globs); alwaysApply: false with globs is "auto-attached when a matching file is in context", and the docs warn that alwaysApply: false with no description is manual @-mention only',
-    note: 'The only surface that reads `.mdc`. Every other row here is a plain `.md` or a symlink.',
-  },
-  {
-    id: 'claude',
-    label: 'Claude Code rules',
-    readers: 'Claude Code',
-    primary: null,
-    kind: 'file',
-    rule: '.claude/rules/{name}.md',
-    // `some`, not `none`. It reads AGENTS.md - the same docs say CLAUDE.md is used only
-    // when no AGENTS.md exists - but only on that condition, so a repository that has a
-    // hand-written CLAUDE.md is read by neither. That is why this row still needs its
-    // own channel and a pointer: the fallback is not a channel, it is the absence of
-    // one, and a reader who relied on it would be relying on the reader deleting a
-    // file they wrote.
-    readsAgentsMd: 'some',
-    readsAgentsMdNote:
-      'CLAUDE.md is read first; AGENTS.md is read only when there is no CLAUDE.md, which is why the pointer exists',
-    configDirs: ['.claude'],
-    // Intentionally no `paths:`. See decision 3 in the header.
-    documentedKeys: ['paths', 'description'],
-    ruleFrontmatter: () => [],
-    // The claude-md pointer makes CLAUDE.md a symlink to AGENTS.md (ADR-021 ruling 1),
-    // and Claude reads CLAUDE.md in preference to AGENTS.md. So the folded region
-    // arrives through the pointer and a rule file alongside it is the same text twice.
-    readsPrimary: true,
-    substitutions: { askTool: 'Use the interactive `AskUserQuestion` tool' },
-    verified: 'Claude Code, "Organize rules with .claude/rules/" — recursive discovery, symlinks supported, no `paths` loads at session start',
-    note:
-      'CLAUDE.md is a separate pointer surface (see POINTERS). A rule file without frontmatter loads eagerly, which is what an always-on rule wants.',
-  },
-  {
-    id: 'antigravity',
-    label: 'Antigravity workspace rules',
-    readers: 'Antigravity IDE, Antigravity CLI',
-    primary: null,
-    kind: 'file',
-    rule: '.agents/rules/{name}.md',
-    readsAgentsMd: 'all',
-    configDirs: ['.agents'],
-    // `trigger` is REQUIRED here and an unrecognised value discards the rule with no
-    // message, which is why the value is mapped rather than passed through.
-    documentedKeys: ['trigger', 'description', 'globs', 'glob'],
-    // The gemini-md pointer's own `verified` cites the same Antigravity docs: "workspace
-    // rules are AGENTS.md or GEMINI.md in the root or any subdirectory". Either name
-    // reaches the reader, so a .agents/rules file repeats text the region already
-    // carries. Both channels are documented as alternatives to each other, which is
-    // what makes them duplicates rather than a fallback.
-    readsPrimary: true,
-    ruleFrontmatter: (rule) => [
-      // `trigger: glob` carries the patterns, and they are quoted because YAML reads a
-      // value starting with `*` as an alias anchor — the Antigravity docs require it, and
-      // an invalid frontmatter block is discarded with no message at all.
-      `trigger: ${rule.scope ? 'glob' : rule.alwaysApply ? 'always_on' : 'model_decision'}`,
-      ...(rule.scope ? [`globs: ${rule.scope.map((g) => `"${g}"`).join(', ')}`] : []),
-      `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
-    ],
-    verified:
-      'Google Antigravity docs, "Rules" — .agents/rules/*.md, YAML frontmatter with trigger: always_on | model_decision | glob | manual; missing or invalid frontmatter silently discards the rule; trigger: glob takes comma-separated globs, which the docs require to be quoted so YAML does not read a leading * as an alias anchor; a 24 KB per-file limit and a 20,000-token budget for always_on rules, with automatic demotion to pointers past it',
-    note:
-      'This is why frontmatter is mandatory here and why the trigger value is not guessed: an unrecognised trigger means the rule is dropped with no message.',
-  },
-  {
-    id: 'copilot',
-    label: 'GitHub Copilot instructions',
-    readers: 'GitHub Copilot chat, Copilot CLI, Copilot code review, Copilot cloud agent',
-    primary: null,
-    kind: 'file',
-    rule: '.github/instructions/{name}.instructions.md',
-    // Copilot is why the column is three values and not two. Its CLI reads AGENTS.md
-    // and its editor and code review do not, so the row both needs its own channel and
-    // cannot be described as "reads AGENTS.md" without a reader reading that claim as
-    // "this repo is covered for Copilot", which for two of its three readers it is not.
-    readsAgentsMd: 'some',
-    readsAgentsMdNote:
-      'Copilot CLI reads AGENTS.md; the editor, code review and the cloud agent do not',
-    configDirs: ['.github'],
-    documentedKeys: ['applyTo', 'excludeAgent'],
-    ruleFrontmatter: (rule) => [`applyTo: ${rule.scope ? `"${rule.scope.join(',')}"` : '"**"'}`],
-    verified:
-      'GitHub docs, "Adding repository custom instructions" — .github/instructions/NAME.instructions.md with applyTo globs; `applyTo: "**"` is the documented example, and a comma-separated pattern list is how more than one is named',
-    // NOT marked readsPrimary, and this row is the reason the flag is per-surface
-    // rather than global. The reader is split: Copilot CLI reads AGENTS.md, the
-    // editor and code review do not. A per-rule file here is not duplication for two
-    // of the three, and dropping it would remove the process rules from a chat that
-    // had no other channel to them.
-    note:
-      'Copilot reads AGENTS.md itself through Copilot CLI, but the editor and code review do not; this is the channel they use.',
-  },
-];
+// `ruleFrontmatter` is the one facet a record cannot carry: it is a function, and JSON
+// carries data. Attached by id, so a surface that needs none (opencode) keeps the row
+// exactly as the record wrote it.
+const RULE_FRONTMATTER = {
+  cursor: (rule) => [
+    `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
+    // `globs` only appears when the rule declares a scope. Cursor attaches a rule
+    // with no globs on the strength of `alwaysApply` alone, so emitting either
+    // unquoted patterns on an eager rule or no globs at all on a scoped one is
+    // asking for the wrong loading behaviour.
+    ...(rule.scope ? [`globs: ${rule.scope.map((g) => `"${g}"`).join(', ')}`] : []),
+    `alwaysApply: ${rule.alwaysApply ? 'true' : 'false'}`,
+  ],
+  // Intentionally no `paths:`. See decision 3 in the header.
+  claude: () => [],
+  antigravity: (rule) => [
+    // `trigger: glob` carries the patterns, and they are quoted because YAML reads a
+    // value starting with `*` as an alias anchor — the Antigravity docs require it, and
+    // an invalid frontmatter block is discarded with no message at all.
+    `trigger: ${rule.scope ? 'glob' : rule.alwaysApply ? 'always_on' : 'model_decision'}`,
+    ...(rule.scope ? [`globs: ${rule.scope.map((g) => `"${g}"`).join(', ')}`] : []),
+    `description: ${rule.description ?? `Canonical ${rule.id} rule managed by simt-dev`}`,
+  ],
+  copilot: (rule) => [`applyTo: ${rule.scope ? `"${rule.scope.join(',')}"` : '"**"'}`],
+};
+
+export const SURFACES = harnessSurfaces().map((row) =>
+  RULE_FRONTMATTER[row.id] ? { ...row, ruleFrontmatter: RULE_FRONTMATTER[row.id] } : row,
+);
 
 /**
  * Pointers: files that must exist and must carry no content.
@@ -263,37 +125,7 @@ export const SURFACES = [
  * that fails loudly, whereas a stale copy is a file full of confidently wrong
  * rules that nobody notices for a release.
  */
-export const POINTERS = [
-  {
-    id: 'claude-md',
-    // A pointer belongs to the surface that needs it, never to every repo.
-    // ADR-020 wrote both of these unconditionally, which meant that narrowing to
-    // one surface under ADR-021 still created a CLAUDE.md nobody asked for — the
-    // same over-writing that ruling set out to stop, one file down.
-    surface: 'claude',
-    path: 'CLAUDE.md',
-    to: 'AGENTS.md',
-    readers: 'Claude Code',
-    verified:
-      'Claude Code memory docs: "A symlink also works" — `ln -s AGENTS.md CLAUDE.md`; Claude reads CLAUDE.md by default and AGENTS.md only as a fallback',
-    note:
-      'Claude Code reads CLAUDE.md and ignores AGENTS.md when both exist. A pointer is what makes one file answer for both without a second copy.',
-  },
-  {
-    id: 'gemini-md',
-    surface: 'antigravity',
-    path: 'GEMINI.md',
-    to: 'AGENTS.md',
-    readers: 'Gemini CLI, Antigravity',
-    verified:
-      'Google Antigravity docs, "Rules": workspace rules are AGENTS.md or GEMINI.md in the root or any subdirectory; Copilot CLI also discovers GEMINI.md. ' +
-      'Gemini CLI, read today: its own docs (core memory index, and the configuration reference) say the memory service loads GEMINI.md hierarchically from the working directory up to the project root and the home directory and also into subdirectories, and that `context.fileName` in settings.json "accepts either a single string or an array of strings" naming the context file(s) to load, default undefined',
-    note:
-      'Covers Gemini CLI and gives Antigravity a second, equally-native name for the same file. ' +
-      'A repository can also point Gemini CLI at AGENTS.md itself with `context.fileName: ["AGENTS.md"]` and need no pointer at all, ' +
-      'which is the reason there is no separate Gemini CLI row here: this pointer and a native row would be two ways to hand one reader the same rule.',
-  },
-];
+export const POINTERS = harnessPointers();
 
 /**
  * The global standard: what a repo gets when it has not chosen.
@@ -362,7 +194,7 @@ export function canScope(surface) {
 }
 
 /** Surface ids whose scoping key was read in the vendor's own documentation. */
-const SCOPE_KEYS = new Set(['cursor', 'antigravity', 'copilot']);
+const SCOPE_KEYS = harnessScopeKeys();
 
 /**
  * Surfaces whose reader already loads the primary document, so a per-rule file for
@@ -488,10 +320,11 @@ export function surface(id) {
 
 /** The absolute-ish path a rule takes on a surface, given the rule's bare name. */
 /** Assemble YAML frontmatter lines into a block. Lives here because this is the
- *  lowest module that owns frontmatter: surfaces.mjs imports nothing, so both
- *  the `.mdc` renderer and the per-surface projector can share one implementation
- *  without either importing the other. Two copies of these four lines is the
- *  "third copy of the same logic is a defect" case with a third-copy count of two. */
+ *  lowest module that owns frontmatter: surfaces.mjs imports neither of its consumers
+ *  (its only import is the data records), so both the `.mdc` renderer and the
+ *  per-surface projector can share one implementation without either importing the
+ *  other. Two copies of these four lines is the "third copy of the same logic is a
+ *  defect" case with a third-copy count of two. */
 export function frontmatterBlock(lines) {
   if (lines.length === 0) return '';
   return ['---', ...lines, '---'].join('\n');

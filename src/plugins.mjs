@@ -29,10 +29,16 @@ import { fileURLToPath } from 'node:url';
 import { readBefore } from './diff.mjs';
 import { hookDocument } from './agenthooks/render.mjs';
 import { desiredRegion } from './projection/rules.mjs';
+import { harnessPlugins } from './harness/records.mjs';
 import { PACKAGE_NAME, BIN_REL } from './name.mjs';
 
+// The plugin layouts, as records (Q71): where each kind's runtime, entry point and hooks
+// document land. A new kind is a new record, not a branch in each helper below.
+const PLUGINS = harnessPlugins();
+const pluginOf = (kind) => PLUGINS.find((r) => r.id === kind);
+
 /** The kinds `simt plugin` builds, in the order the help line names them. */
-export const PLUGIN_KINDS = ['claude', 'gemini', 'cursor', 'opencode'];
+export const PLUGIN_KINDS = PLUGINS.map((r) => r.id);
 
 /**
  * The package this code ships in: the runtime a generated package copies. Resolved
@@ -45,37 +51,37 @@ function packageRoot() {
 
 /** Where the runtime copy lands inside a package, relative to the package root. */
 function runtimeDir(kind) {
-  return kind === 'cursor' ? join('.cursor', 'simt') : '.';
+  return pluginOf(kind).runtimeDir;
 }
 
 /** The entry point a package's config names: its own copy of the runtime, not PATH. */
 function entryPoint(kind) {
-  const bin = join(runtimeDir(kind), BIN_REL);
+  const { runtimeDir: dir, rootVar } = pluginOf(kind);
+  const bin = join(dir, BIN_REL);
   // The vendor's own variables must survive as literal text in the generated config, so
   // they are escaped here: an unescaped ${...} would interpolate a JS binding that does
   // not exist and ship the string "undefined" into the package.
-  if (kind === 'claude') return `node "\${CLAUDE_PLUGIN_ROOT}/${bin}"`;
-  if (kind === 'gemini') return `node "\${extensionPath}/${bin}"`;
+  if (rootVar) return `node "\${${rootVar}}/${bin}"`;
   // Cursor runs from the repository root, so a relative path is the honest one.
   return `node ${bin}`;
 }
 
 /** The project root a package's hook resolves against, from the vendor's env var. */
 function rootFlag(kind) {
-  if (kind === 'claude') return ` --root "$CLAUDE_PROJECT_DIR"`;
-  if (kind === 'cursor') return ` --root "$CURSOR_PROJECT_DIR"`;
-  // Gemini documents no project-dir env var, but its base input carries cwd, which the
-  // adapter reads; passing a flag the vendor never sets would only expand to "".
-  return '';
+  const { projectVar } = pluginOf(kind);
+  if (!projectVar) {
+    // Gemini documents no project-dir env var, but its base input carries cwd, which the
+    // adapter reads; passing a flag the vendor never sets would only expand to "".
+    return '';
+  }
+  return ` --root "$${projectVar}"`;
 }
 
-/** Where the hooks document lands inside a package, relative to the package root. */
+/** Where the hooks document lands inside a package, relative to the package root.
+ *  OpenCode is the one whose document is a file the tool loads whole (its root
+ *  `server` file) rather than a hooks config to merge. */
 function hooksPath(kind) {
-  if (kind === 'cursor') return join('.cursor', 'hooks.json');
-  // OpenCode loads a local plugin directory's root `server` file as the plugin, so the
-  // generated document is that file at the root rather than a hooks config to merge.
-  if (kind === 'opencode') return 'server.js';
-  return join('hooks', 'hooks.json');
+  return pluginOf(kind).hooksPath;
 }
 
 const json = (value) => `${JSON.stringify(value, null, 2)}\n`;

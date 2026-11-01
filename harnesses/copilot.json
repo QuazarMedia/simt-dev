@@ -1,0 +1,88 @@
+{
+  "id": "copilot",
+  "loaderOrder": 7,
+  "surfaceOrder": 5,
+  "surface": {
+    "id": "copilot",
+    "label": "GitHub Copilot instructions",
+    "readers": "GitHub Copilot chat, Copilot CLI, Copilot code review, Copilot cloud agent",
+    "primary": null,
+    "kind": "file",
+    "rule": ".github/instructions/{name}.instructions.md",
+    "readsAgentsMd": "some",
+    "readsAgentsMdNote": "Copilot CLI reads AGENTS.md; the editor, code review and the cloud agent do not",
+    "configDirs": [
+      ".github"
+    ],
+    "documentedKeys": [
+      "applyTo",
+      "excludeAgent"
+    ],
+    "verified": "GitHub docs, \"Adding repository custom instructions\" — .github/instructions/NAME.instructions.md with applyTo globs; `applyTo: \"**\"` is the documented example, and a comma-separated pattern list is how more than one is named",
+    "note": "Copilot reads AGENTS.md itself through Copilot CLI, but the editor and code review do not; this is the channel they use."
+  },
+  "loader": {
+    "id": "copilot",
+    "label": "GitHub Copilot",
+    "readers": "Copilot CLI, Copilot chat, Copilot code review, Copilot cloud agent",
+    "surface": "copilot",
+    "start": [
+      {
+        "scope": "project",
+        "path": ".github/copilot-instructions.md",
+        "tree": "single",
+        "atStart": true,
+        "why": "GitHub Copilot docs, adding repository instructions: .github/copilot-instructions.md applies to every request in the repository"
+      },
+      {
+        "scope": "project",
+        "path": ".github/instructions/**/*.instructions.md",
+        "tree": "nested",
+        "dir": ".github/instructions",
+        "suffix": ".instructions.md",
+        "frontmatter": {
+          "applyTo": "**"
+        },
+        "atStart": true,
+        "why": "GitHub Copilot docs: a path-specific file is applied when a file matching applyTo is in context, and applyTo: \"**\" matches every file at session start"
+      },
+      {
+        "scope": "project",
+        "path": "AGENTS.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "GitHub Copilot docs, agent instructions: one or more AGENTS.md anywhere in the repository, the nearest to the file in play wins, or a single CLAUDE.md or GEMINI.md at the root"
+      }
+    ],
+    "alsoReads": [
+      {
+        "what": ".github/instructions/**/*.instructions.md",
+        "atStart": false,
+        "why": "GitHub Copilot docs: applyTo globs select the files, and excludeAgent keeps the file away from code review or the cloud agent"
+      }
+    ],
+    "order": "personal instructions, then repository instructions, then organization instructions",
+    "cap": null,
+    "capNote": "no byte cap published for Copilot instructions",
+    "imports": {
+      "syntax": null,
+      "depth": 0,
+      "why": "no import syntax documented for Copilot instruction files"
+    },
+    "nested": "nearest wins — AGENTS.md files anywhere in the repository are candidates and the nearest one to the file in play is used; .github/instructions/ may hold subdirectories",
+    "skills": [],
+    "skillsNote": "no project skill directory is documented for Copilot",
+    "hooks": null,
+    "hooksNote": "no hooks file is documented for Copilot in any first-party page checked on 2026-10-14",
+    "agents": null,
+    "agentsNote": "no file-based agents are documented for Copilot in any first-party page checked on 2026-10-30",
+    "mcp": {
+      "path": ".vscode/mcp.json",
+      "key": null,
+      "verified": "GitHub Copilot MCP docs (read 2026-10-14): the VS Code extension reads .vscode/mcp.json; Copilot CLI reads .mcp.json, .github/mcp.json or ~/.copilot/mcp-config.json; a repository-level configuration entered on github.com is not a file at all"
+    },
+    "verified": "GitHub Copilot documentation (docs.github.com/en/copilot, read 2026-10-14) — repository-wide instructions live at .github/copilot-instructions.md; path-specific instructions live at .github/instructions/**/NAME.instructions.md with applyTo globs and an optional excludeAgent; agent instructions are one or more AGENTS.md anywhere in the repository, nearest wins, or a single root CLAUDE.md or GEMINI.md; no byte cap is published",
+    "note": "Which Copilot reader consumes these differs — the cloud agent and code review are documented as reading repository and path-specific instructions — so the row is one reader with a split, the same split `surfaces.mjs` records on the copilot row."
+  },
+  "scopeKey": true
+}

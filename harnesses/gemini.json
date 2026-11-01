@@ -1,0 +1,122 @@
+{
+  "id": "gemini",
+  "loaderOrder": 6,
+  "loader": {
+    "id": "gemini",
+    "label": "Gemini CLI",
+    "readers": "Gemini CLI (google-gemini/gemini-cli)",
+    "surface": null,
+    "start": [
+      {
+        "scope": "project",
+        "path": "GEMINI.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "Gemini CLI context docs (docs/cli/gemini-md/): GEMINI.md is collected from the working directory upward through parent directories until the first directory holding a boundary marker (.git by default) or home"
+      },
+      {
+        "scope": "user",
+        "path": "~/.gemini/GEMINI.md",
+        "tree": "single",
+        "atStart": true,
+        "why": "Gemini CLI context docs: the user-global ~/.gemini/GEMINI.md opens the concatenation, before any project file"
+      }
+    ],
+    "alsoReads": [
+      {
+        "what": "the context file under another name — settings.json context.fileName, a string or an array",
+        "atStart": true,
+        "why": "Gemini CLI configuration docs: context.fileName renames the context file (a string or an array), so an installation listing AGENTS.md there reads AGENTS.md as its GEMINI.md"
+      },
+      {
+        "what": "GEMINI.md (or the renamed context file) in subdirectories below the working directory",
+        "atStart": false,
+        "why": "Gemini CLI context docs: directories a tool touches are scanned for a context file up to a trusted root, bounded by context.discoveryMaxDirs (200) - not at session start"
+      }
+    ],
+    "order": "user-global ~/.gemini/GEMINI.md first, then the project chain general to specific - project-root side first (upward traversal stops at the first directory holding a boundary marker, .git by default) down through each directory to the working directory - then just-in-time files a tool touch discovered; the whole result is one concatenation with origin separators",
+    "cap": null,
+    "capNote": "no byte cap is published for the merged Gemini CLI context (checked 2026-10-26)",
+    "imports": {
+      "syntax": "@path",
+      "depth": 5,
+      "why": "Gemini CLI context docs: @path imports resolve relative or absolute to a maximum depth of 5, with cycles prevented by skipping files already on the stack"
+    },
+    "nested": "general to specific, all loaded — unlike Codex, every context file on the walk contributes; a nearer file cannot hide a parent one, it just concatenates after it; subdirectory files wait for a tool touch",
+    "skills": [],
+    "skillsNote": "no project skill directory is documented for Gemini CLI; extensions are the distribution mechanism, and they are tooling not context",
+    "hooks": {
+      "path": ".gemini/settings.json",
+      "verified": "Gemini CLI hooks reference (geminicli.com/docs/hooks/reference/, read 2026-10-26): a project .gemini/settings.json carries a top-level hooks object whose events are arrays of {matcher, hooks:[{type:\"command\",command,timeout? (milliseconds)}]} — the same shape Claude and Codex use; BeforeTool denies with {decision:\"deny\",reason}, BeforeAgent and AfterTool inject via hookSpecificOutput.additionalContext"
+    },
+    "agents": {
+      "dir": ".gemini/agents",
+      "ext": ".md",
+      "verified": "Gemini CLI subagents docs (geminicli.com/docs/core/subagents, read 2026-10-30): project subagents are markdown files with name and description frontmatter under .gemini/agents/"
+    },
+    "mcp": {
+      "path": ".gemini/settings.json",
+      "key": "mcpServers",
+      "verified": "Gemini CLI configuration docs (docs/reference/configuration/, read 2026-10-26): a project .gemini/settings.json (a user ~/.gemini/settings.json merged behind it, objects merged key by key) carries a top-level mcpServers object whose entries name a command, a url or an httpUrl"
+    },
+    "verified": "Gemini CLI context and configuration docs (geminicli.com/docs/cli/gemini-md/ and docs/reference/configuration/, read 2026-10-26) — settings live at project .gemini/settings.json and user ~/.gemini/settings.json, merged for objects; the context is user ~/.gemini/GEMINI.md plus the context file (GEMINI.md unless context.fileName renames it, an array is allowed) from the working directory upward through parents to the first .git or home, with @path imports to depth 5; server registration is the mcpServers object in those same settings files; no byte cap is published",
+    "note": "The configuration reference this table once recorded as 404ing is live again as of 2026-10-26, which is why the row is full instead of thin. What still shapes a byte count is the pair of absences the docs confirm rather than deny: no cap, and no promise that AGENTS.md is read at all — context.fileName decides that, and it may name anything."
+  },
+  "hooks": {
+    "id": "gemini",
+    "event": "BeforeTool",
+    "matcher": "run_shell_command|write_file|replace",
+    "timeout": 10000,
+    "denyExit": 0,
+    "verified": "geminicli.com/docs/hooks/reference/, read 2026-10-26",
+    "prompt": {
+      "event": "BeforeAgent",
+      "verified": "geminicli.com/docs/hooks/reference/, read 2026-10-26",
+      "delivery": {
+        "hookSpecificOutput": {
+          "additionalContext": "__SIMT_TEXT__"
+        }
+      }
+    },
+    "post": {
+      "event": "AfterTool",
+      "verified": "geminicli.com/docs/hooks/reference/, read 2026-10-26",
+      "delivery": {
+        "hookSpecificOutput": {
+          "additionalContext": "__SIMT_TEXT__"
+        }
+      }
+    },
+    "deny": {
+      "decision": "deny",
+      "reason": "__SIMT_TEXT__"
+    }
+  },
+  "payload": {
+    "toolKey": "tool_name",
+    "inputKey": "tool_input",
+    "shellTools": [
+      "run_shell_command"
+    ],
+    "commandKey": "command",
+    "writeTools": [
+      "write_file",
+      "replace"
+    ],
+    "pathKeys": [
+      "file_path"
+    ],
+    "rootKeys": [
+      [
+        "cwd"
+      ]
+    ]
+  },
+  "pluginOrder": 2,
+  "plugin": {
+    "rootVar": "extensionPath",
+    "projectVar": null,
+    "hooksPath": "hooks/hooks.json",
+    "runtimeDir": "."
+  }
+}

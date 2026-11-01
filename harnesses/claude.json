@@ -1,0 +1,206 @@
+{
+  "id": "claude",
+  "loaderOrder": 2,
+  "surfaceOrder": 3,
+  "surface": {
+    "id": "claude",
+    "label": "Claude Code rules",
+    "readers": "Claude Code",
+    "primary": null,
+    "kind": "file",
+    "rule": ".claude/rules/{name}.md",
+    "readsAgentsMd": "some",
+    "readsAgentsMdNote": "CLAUDE.md is read first; AGENTS.md is read only when there is no CLAUDE.md, which is why the pointer exists",
+    "configDirs": [
+      ".claude"
+    ],
+    "documentedKeys": [
+      "paths",
+      "description"
+    ],
+    "readsPrimary": true,
+    "substitutions": {
+      "askTool": "Use the interactive `AskUserQuestion` tool"
+    },
+    "verified": "Claude Code, \"Organize rules with .claude/rules/\" — recursive discovery, symlinks supported, no `paths` loads at session start",
+    "note": "CLAUDE.md is a separate pointer surface (see POINTERS). A rule file without frontmatter loads eagerly, which is what an always-on rule wants."
+  },
+  "pointerOrder": 1,
+  "pointer": {
+    "id": "claude-md",
+    "surface": "claude",
+    "path": "CLAUDE.md",
+    "to": "AGENTS.md",
+    "readers": "Claude Code",
+    "verified": "Claude Code memory docs: \"A symlink also works\" — `ln -s AGENTS.md CLAUDE.md`; Claude reads CLAUDE.md by default and AGENTS.md only as a fallback",
+    "note": "Claude Code reads CLAUDE.md and ignores AGENTS.md when both exist. A pointer is what makes one file answer for both without a second copy."
+  },
+  "loader": {
+    "id": "claude",
+    "label": "Claude Code",
+    "readers": "Claude Code",
+    "surface": "claude",
+    "start": [
+      {
+        "scope": "project",
+        "path": "CLAUDE.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "Claude Code memory docs: CLAUDE.md and CLAUDE.local.md are discovered from the working directory and every directory above it, and all discovered files are concatenated"
+      },
+      {
+        "scope": "project",
+        "path": "CLAUDE.local.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "Claude Code memory docs: CLAUDE.local.md is loaded at each level, after CLAUDE.md from that level"
+      },
+      {
+        "scope": "project",
+        "path": "AGENTS.md",
+        "tree": "chain",
+        "atStart": true,
+        "absent": [
+          "CLAUDE.md",
+          "CLAUDE.local.md"
+        ],
+        "why": "Claude Code memory docs: AGENTS.md is read directly, but only when there is no CLAUDE.md or CLAUDE.local.md in the working directory or above it"
+      },
+      {
+        "scope": "project",
+        "path": ".claude/rules/{name}.md",
+        "tree": "nested",
+        "dir": ".claude/rules",
+        "suffix": ".md",
+        "atStart": true,
+        "why": "Claude Code memory docs: project rules under .claude/rules/ are discovered recursively and loaded at session start when unscoped"
+      },
+      {
+        "scope": "user",
+        "path": "~/.claude/rules/*.md",
+        "tree": "flat",
+        "dir": ".claude/rules",
+        "atStart": true,
+        "why": "Claude Code memory docs: user-level rules in ~/.claude/rules/ load before project rules"
+      },
+      {
+        "scope": "project",
+        "path": ".claude/skills/{name}/SKILL.md",
+        "tree": "nested",
+        "dir": ".claude/skills",
+        "suffix": "/SKILL.md",
+        "atStart": true,
+        "metadata": true,
+        "why": "Claude Code memory docs: skills are discovered under .claude/skills"
+      }
+    ],
+    "alsoReads": [
+      {
+        "what": "MEMORY.md (auto memory)",
+        "atStart": true,
+        "why": "Claude Code memory docs: auto memory loads the first 200 lines or 25 KB, whichever comes first"
+      }
+    ],
+    "order": "filesystem root down to the working directory, CLAUDE.md before CLAUDE.local.md at each level",
+    "cap": {
+      "bytes": 4194304,
+      "scope": "file",
+      "config": "none — a fixed limit",
+      "why": "Claude Code memory docs: \"Claude Code loads a CLAUDE.md file of up to 4 MiB in full and skips a larger file\""
+    },
+    "imports": {
+      "syntax": "@path",
+      "depth": 4,
+      "why": "Claude Code memory docs: `@path/to/import` is expanded at launch, resolved relative to the importing file, to a maximum depth of four hops; parsing skips code spans and fenced blocks, `@` inside backticks is literal, quoted paths are not imported, and an import outside the working directory prompts for approval"
+    },
+    "nested": "on demand — a subdirectory CLAUDE.md loads when Claude reads, writes or edits a file in that directory",
+    "skills": [
+      ".claude/skills"
+    ],
+    "hooks": {
+      "path": ".claude/settings.json",
+      "verified": "Claude Code hooks docs, hook locations: project settings at .claude/settings.json and .claude/settings.local.json, user settings at ~/.claude/settings.json"
+    },
+    "agents": {
+      "dir": ".claude/agents",
+      "ext": ".md",
+      "verified": "Claude Code subagents docs (code.claude.com/docs/en/sub-agents, read 2026-10-30): project subagents are markdown files with name and description frontmatter under .claude/agents/"
+    },
+    "mcp": {
+      "path": ".mcp.json",
+      "key": null,
+      "verified": "Claude Code MCP docs (read 2026-10-14): project-scoped servers live in .mcp.json in the project root; local and user scope live in ~/.claude.json"
+    },
+    "verified": "Claude Code memory docs (docs.claude.com/en/docs/claude-code/memory, read 2026-10-14) — CLAUDE.md and CLAUDE.local.md are concatenated from every directory above the working directory, subdirectory files load on demand, `@path` imports expand to four hops, a CLAUDE.md larger than 4 MiB is skipped, and AGENTS.md is read only when no CLAUDE.md exists above the working directory",
+    "note": "The AGENTS.md row carries an `absent` condition because the vendor documents it as one. A repository holding both files is read by Claude Code for the CLAUDE.md alone, which is why the pointer surface exists."
+  },
+  "hooks": {
+    "id": "claude",
+    "event": "PreToolUse",
+    "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit",
+    "denyExit": 2,
+    "verified": "docs.claude.com/en/docs/claude-code/hooks, read 2026-10-16",
+    "prompt": {
+      "event": "UserPromptSubmit",
+      "verified": "code.claude.com/docs/en/hooks, read 2026-10-19",
+      "delivery": {
+        "hookSpecificOutput": {
+          "hookEventName": "UserPromptSubmit",
+          "additionalContext": "__SIMT_TEXT__"
+        }
+      }
+    },
+    "post": {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "verified": "code.claude.com/docs/en/hooks, read 2026-10-19",
+      "delivery": {
+        "hookSpecificOutput": {
+          "hookEventName": "PostToolUse",
+          "additionalContext": "__SIMT_TEXT__"
+        }
+      }
+    },
+    "deny": {
+      "hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": "__SIMT_TEXT__"
+      }
+    }
+  },
+  "payload": {
+    "toolKey": "tool_name",
+    "inputKey": "tool_input",
+    "shellTools": [
+      "Bash"
+    ],
+    "commandKey": "command",
+    "writeTools": [
+      "Edit",
+      "Write",
+      "MultiEdit",
+      "NotebookEdit"
+    ],
+    "pathKeys": [
+      "file_path"
+    ],
+    "pathOverrides": {
+      "NotebookEdit": [
+        "notebook_path"
+      ]
+    },
+    "rootKeys": [
+      [
+        "cwd"
+      ]
+    ]
+  },
+  "pluginOrder": 1,
+  "plugin": {
+    "rootVar": "CLAUDE_PLUGIN_ROOT",
+    "projectVar": "CLAUDE_PROJECT_DIR",
+    "hooksPath": "hooks/hooks.json",
+    "runtimeDir": "."
+  }
+}

@@ -1,0 +1,136 @@
+{
+  "id": "codex",
+  "loaderOrder": 3,
+  "loader": {
+    "id": "codex",
+    "label": "Codex CLI",
+    "readers": "Codex CLI, Codex IDE extension",
+    "surface": null,
+    "start": [
+      {
+        "scope": "project",
+        "path": "AGENTS.override.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "Codex AGENTS.md docs: each directory from the project root to the working directory is checked for AGENTS.override.md first, then AGENTS.md, then the configured fallback filenames, and at most one file per directory is used"
+      },
+      {
+        "scope": "project",
+        "path": "AGENTS.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "Codex AGENTS.md docs: AGENTS.md is the second precedence in the same per-directory search"
+      },
+      {
+        "scope": "user",
+        "path": "~/.codex/AGENTS.override.md",
+        "tree": "single",
+        "atStart": true,
+        "why": "Codex AGENTS.md docs: the global file is AGENTS.override.md if non-empty, otherwise AGENTS.md; CODEX_HOME overrides the home directory"
+      },
+      {
+        "scope": "user",
+        "path": "~/.codex/AGENTS.md",
+        "tree": "single",
+        "atStart": true,
+        "why": "Codex AGENTS.md docs: AGENTS.md is the global fallback when AGENTS.override.md is empty or absent"
+      }
+    ],
+    "alsoReads": [
+      {
+        "what": "project_doc_fallback_filenames",
+        "atStart": true,
+        "why": "Codex config reference: an array of additional filenames checked per directory after AGENTS.override.md and AGENTS.md"
+      },
+      {
+        "what": "model_instructions_file",
+        "atStart": true,
+        "why": "Codex config reference: a file that replaces AGENTS.md as the project instructions source"
+      }
+    ],
+    "order": "project root down to the working directory, merged in that order and joined with blank lines",
+    "cap": {
+      "bytes": 32768,
+      "scope": "chain",
+      "config": "project_doc_max_bytes",
+      "why": "Codex AGENTS.md docs: empty files are skipped and Codex stops adding files once the combined size reaches project_doc_max_bytes, which defaults to 32 KiB"
+    },
+    "imports": {
+      "syntax": null,
+      "depth": 0,
+      "why": "no import syntax documented for AGENTS.md; a reference to another file is an instruction to the model, not an include"
+    },
+    "nested": "cumulative — every directory from the project root to the working directory is merged, and the cap applies to the merge",
+    "skills": [],
+    "skillsNote": "no skill directory is documented for Codex, so the cell is empty rather than borrowed from another reader",
+    "hooks": {
+      "path": ".codex/hooks.json",
+      "verified": "Codex hooks docs: <repo>/.codex/hooks.json or ~/.codex/hooks.json, or inline [hooks] tables in config.toml"
+    },
+    "agents": {
+      "dir": ".codex/agents",
+      "ext": ".toml",
+      "verified": "Codex custom agents docs (developers.openai.com/codex/subagents, read 2026-10-30): standalone TOML files under .codex/agents/ defining name, description and developer_instructions"
+    },
+    "mcp": {
+      "path": ".codex/config.toml",
+      "key": "mcp_servers",
+      "verified": "Codex MCP docs (read 2026-10-14): MCP configuration is stored in config.toml, ~/.codex/config.toml by default"
+    },
+    "verified": "Codex AGENTS.md documentation and configuration reference (developers.openai.com/codex, read 2026-10-14) — the project scope walks from the project root to the working directory, taking at most one file per directory in the order AGENTS.override.md, AGENTS.md, project_doc_fallback_filenames; the merge runs root to cwd and stops adding files at project_doc_max_bytes, 32 KiB by default",
+    "note": "This is the row that made the table worth building: `cap.scope` is `chain`, so a repository can be inside 32 KiB in every file and still lose the tail of its deepest instruction file to the merge."
+  },
+  "hooks": {
+    "id": "codex",
+    "event": "PreToolUse",
+    "matcher": "Bash|apply_patch",
+    "denyExit": 2,
+    "verified": "developers.openai.com/codex/hooks, read 2026-10-16",
+    "trust": "Codex skips a hook nobody has trusted: review it with /hooks, or the entry stays inert.",
+    "prompt": {
+      "event": "UserPromptSubmit",
+      "verified": "developers.openai.com/codex/hooks, read 2026-10-19",
+      "delivery": {
+        "hookSpecificOutput": {
+          "hookEventName": "UserPromptSubmit",
+          "additionalContext": "__SIMT_TEXT__"
+        }
+      }
+    },
+    "post": {
+      "event": "PostToolUse",
+      "matcher": "Bash",
+      "verified": "developers.openai.com/codex/hooks, read 2026-10-19",
+      "delivery": {
+        "hookSpecificOutput": {
+          "hookEventName": "PostToolUse",
+          "additionalContext": "__SIMT_TEXT__"
+        }
+      }
+    },
+    "deny": {
+      "hookSpecificOutput": {
+        "hookEventName": "PreToolUse",
+        "permissionDecision": "deny",
+        "permissionDecisionReason": "__SIMT_TEXT__"
+      }
+    }
+  },
+  "payload": {
+    "toolKey": "tool_name",
+    "inputKey": "tool_input",
+    "shellTools": [
+      "Bash"
+    ],
+    "commandKey": "command",
+    "writeTools": [
+      "apply_patch"
+    ],
+    "writesFrom": "patch",
+    "rootKeys": [
+      [
+        "cwd"
+      ]
+    ]
+  }
+}

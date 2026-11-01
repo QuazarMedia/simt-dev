@@ -1,0 +1,173 @@
+{
+  "id": "opencode",
+  "loaderOrder": 1,
+  "surfaceOrder": 1,
+  "surface": {
+    "id": "opencode",
+    "label": "opencode (AGENTS.md + .agents/skills)",
+    "readers": "OpenCode v2, and AGENTS.md is also read natively by Codex, Cursor, Windsurf, Zed, Amp, Jules, Copilot CLI and the DeepSeek harness; Claude Code falls back to it, Antigravity and Gemini CLI accept GEMINI.md as an equal name",
+    "primary": "AGENTS.md",
+    "kind": "region",
+    "rule": null,
+    "foldRules": true,
+    "readsAgentsMd": "all",
+    "configDirs": [
+      ".opencode"
+    ],
+    "skills": ".agents/skills",
+    "documentedSkillsPaths": [
+      ".opencode/skills",
+      ".claude/skills",
+      ".agents/skills"
+    ],
+    "readLimits": [
+      {
+        "reader": "Codex",
+        "bytes": 32768,
+        "verified": "Codex project_doc_max_bytes defaults to 32 KiB"
+      }
+    ],
+    "verified": "OpenCode v2 instructions and skills docs (opencode.ai/v2/docs, read 2026-10-14) — AGENTS.md only, combined from the workspace up to the project root; CLAUDE.md is not a fallback; skills at .opencode/skills/, .claude/skills/ and .agents/skills/<name>/SKILL.md, with the model shown name and description",
+    "note": ".agents/skills is one of the three skill locations opencode documents, so the same directory serves the standard surface without a symlink."
+  },
+  "loader": {
+    "id": "opencode",
+    "label": "OpenCode v2",
+    "readers": "OpenCode v2",
+    "surface": "opencode",
+    "start": [
+      {
+        "scope": "project",
+        "path": "AGENTS.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "OpenCode v2 instructions docs: every AGENTS.md from the workspace directory up to the project root is loaded and combined; V2 recognizes AGENTS.md only and does not fall back to CLAUDE.md"
+      },
+      {
+        "scope": "user",
+        "path": "~/.config/opencode/AGENTS.md",
+        "tree": "single",
+        "atStart": true,
+        "why": "OpenCode v2 instructions docs: the global file is loaded first, before the project chain"
+      },
+      {
+        "scope": "project",
+        "path": ".claude/skills/{name}/SKILL.md",
+        "tree": "nested",
+        "dir": ".claude/skills",
+        "suffix": "/SKILL.md",
+        "atStart": true,
+        "metadata": true,
+        "why": "OpenCode v2 skills docs: .claude/skills is a project compatibility source, registered before .agents/skills"
+      },
+      {
+        "scope": "project",
+        "path": ".agents/skills/{name}/SKILL.md",
+        "tree": "nested",
+        "dir": ".agents/skills",
+        "suffix": "/SKILL.md",
+        "atStart": true,
+        "metadata": true,
+        "why": "OpenCode v2 skills docs: .agents/skills is a project compatibility source; the model is shown the id, name and description, not the body"
+      },
+      {
+        "scope": "project",
+        "path": ".opencode/skills/{name}/SKILL.md",
+        "tree": "nested",
+        "dir": ".opencode/skills",
+        "suffix": "/SKILL.md",
+        "atStart": true,
+        "metadata": true,
+        "why": "OpenCode v2 skills docs: .opencode/skills is the project source and outranks .agents/skills and .claude/skills for the same id"
+      }
+    ],
+    "alsoReads": [
+      {
+        "what": "AGENTS.md below the workspace",
+        "atStart": false,
+        "why": "OpenCode v2 instructions docs: instruction files below the workspace load when the agent reads or lists that area, not at session start"
+      },
+      {
+        "what": "opencode.json `instructions` array",
+        "atStart": false,
+        "why": "OpenCode v2 instructions docs: the config schema accepts an instructions array, but V2 does not resolve its files, globs or URLs"
+      }
+    ],
+    "order": "global ~/.config/opencode/AGENTS.md, then project AGENTS.md files from the workspace directory up to the project root (nearest first); files are combined, not overridden",
+    "cap": null,
+    "capNote": "no byte cap published for AGENTS.md; V2 accepts an instructions array and does not load it, so there is no fetch timeout to apply",
+    "imports": {
+      "syntax": null,
+      "depth": 0,
+      "why": "OpenCode v2 instructions docs: an AGENTS.md reference to another file is not an include; V2 loads AGENTS.md files by discovery, not by @path expansion"
+    },
+    "nested": "cumulative up to the project root at session start; files below the workspace load when that area is read",
+    "skills": [
+      ".agents/skills",
+      ".opencode/skills",
+      ".claude/skills"
+    ],
+    "hooks": {
+      "path": ".opencode/plugins/simt-dev.js",
+      "verified": "OpenCode v2 plugins docs: direct .ts and .js files and immediate plugin packages are loaded from every discovered .opencode/plugins/ directory, and the plugins array in opencode.json(c)"
+    },
+    "agents": {
+      "dir": ".opencode/agents",
+      "ext": ".md",
+      "verified": "OpenCode v2 agents docs (opencode.ai/v2/docs/agents, read 2026-10-30): subagents are markdown files with a description frontmatter under .opencode/agents/"
+    },
+    "mcp": {
+      "path": "opencode.json",
+      "key": "mcp.servers",
+      "verified": "OpenCode v2 MCP servers docs (read 2026-10-14): servers are named under mcp.servers; V2 does not place server names directly under mcp"
+    },
+    "verified": "OpenCode v2 instructions, skills, plugins and MCP docs (opencode.ai/v2/docs, read 2026-10-14) — V2 loads AGENTS.md only, combining the global file with every project AGENTS.md from the workspace up to the project root; CLAUDE.md is not a fallback; the instructions array is accepted and not loaded; skills advertise name and description from .opencode/skills, .claude/skills and .agents/skills",
+    "note": "This row is OpenCode v2. V1 read CLAUDE.md when AGENTS.md was absent and loaded the instructions array; V2 does neither, so a meter that still did would bill bytes this reader does not pay."
+  },
+  "hooks": {
+    "id": "opencode",
+    "event": "execute.before",
+    "matcher": "shell|write|edit",
+    "file": true,
+    "denyExit": 2,
+    "verified": "opencode.ai/v2/docs/build/plugins/server, read 2026-10-29",
+    "prompt": {
+      "event": "prompt",
+      "verified": "opencode.ai/v2/docs/build/plugins/server, read 2026-10-29",
+      "delivery": {
+        "text": "__SIMT_TEXT__"
+      }
+    },
+    "post": null,
+    "deny": {
+      "reason": "__SIMT_TEXT__"
+    }
+  },
+  "payload": {
+    "toolKey": "tool",
+    "inputKey": "input",
+    "shellTools": [
+      "shell"
+    ],
+    "commandKey": "command",
+    "writeTools": [
+      "write",
+      "edit"
+    ],
+    "pathKeys": [
+      "path"
+    ],
+    "rootKeys": [
+      [
+        "cwd"
+      ]
+    ]
+  },
+  "pluginOrder": 4,
+  "plugin": {
+    "rootVar": null,
+    "projectVar": null,
+    "hooksPath": "server.js",
+    "runtimeDir": "."
+  }
+}

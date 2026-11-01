@@ -34,6 +34,14 @@ test('a command whose work needs a corpus is advanced even when its group is cor
   assert.equal(tierOf('pack new'), 'advanced');
 });
 
+test('the tests command declares the gate spelling it now answers', () => {
+  const row = SPEC.find((entry) => entry.path === 'tests');
+  assert.ok(row.flags.includes('run'), 'tests does not declare --run');
+  assert.ok(row.flags.includes('changed'), 'tests --run cannot reach the gate without --changed');
+  assert.match(row.usage, /--run/);
+  assert.equal(GROUP_DEFAULTS.has('tests'), false, 'tests is not a group and gained no default');
+});
+
 test('the merged spellings stay one command each', () => {
   assert.equal(ALIASES.get('evidence show'), 'evidence');
   // The four that answer "why" keep their own paths; the merge lives in the handler.

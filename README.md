@@ -247,7 +247,7 @@ simt status [--line]                                                   # the rep
 simt sync --yes                                                        # re-render the generated regions from the rule content
 
 # tests
-simt tests <path> [--cochange]                                         # the tests that exercise a file
+simt tests <path> [--cochange]  |  --run [--changed]                   # the tests that exercise a file, or - with --run - the ones a change reaches
 
 # tokens
 simt tokens [--repos] [--session]                                      # count tokens per instruction file and per skill

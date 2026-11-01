@@ -94,6 +94,9 @@ export const BOOL_FLAGS = new Set([
   // Off by default because a path is the change the caller named, and the diff
   // is a different question.
   'changed',
+  // tests: `--run` asks the gate's question — the tests a change reaches — under the
+  // name that already means tests, so a reader does not have to learn a second verb.
+  'run',
   // local doctor: allow non-loopback model URLs. Off by default because nothing leaves
   // the machine unless explicitly overridden (ADR-075).
   'allow-remote',

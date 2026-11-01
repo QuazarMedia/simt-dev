@@ -29,6 +29,11 @@ const COVERAGE_PATHS = [
 ];
 
 export async function testsCommand(args, flags) {
+  // `simt tests --run` is the gate's question - which of these the change reaches - asked
+  // under the name that already means "tests". The handler is imported rather than
+  // reimplemented: two selections that disagree is the defect this row exists to prevent,
+  // and the gate keeps the sentence its own output makes about an empty selection.
+  if (flags.run === true) return (await import('./gate.mjs')).gateCommand(args, flags);
   if (args.length > 1) return fail(`unknown tests argument ${args[1]}`, EXIT.USAGE, `run: ${CLI} tests [path]`);
   const root = commandRoot(flags);
   const loaded = await loadFiles(root);

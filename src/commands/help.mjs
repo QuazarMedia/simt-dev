@@ -122,14 +122,19 @@ ${CLI} compare                org-wide matrix across every sibling repo
                            repos that have not adopted yet;
                            --concurrency <n> caps the rows built at once)
 ${CLI} index                   rebuild the local file index from git blob hashes
-${CLI} why [path]            what governs a file: a decision whose Affects line names
-                           it, a rule whose scope matches it, a skill, a gate
-                           or a lesson. With no path, the Affects tokens this
-                           tree cannot resolve (UNRESOLVED-AFFECTS)
-${CLI} tests [path]          the tests that exercise a file: an import, the conventional
+${CLI} why <subject>         what governs a path: a decision whose Affects line names
+                           it, a rule whose scope matches it, a skill, a gate or
+                           a lesson. A subject is also ADR-NNN, rule:<id>,
+                           skill:<name> or a finding code, and each answers
+                           through the command that owned that question. With no
+                           subject, the Affects tokens this tree cannot resolve
+                           (UNRESOLVED-AFFECTS)
+${CLI} tests <path>          the tests that exercise a file: an import, the conventional
                            source beside the test, or a coverage record that
                            names both (--cochange adds files that only share
-                           commits, and only those)
+                           commits, and only those). --run asks the gate's
+                           question instead: the tests a change reaches, which
+                           --changed reads from the diff
 ${CLI} gate [path...]        the tests a change reaches, and only those
                            (--changed reads the diff instead of the paths)
 ${CLI} impact <file|symbol>  who a change reaches: importers, their tests,

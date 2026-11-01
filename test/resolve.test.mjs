@@ -570,6 +570,24 @@ test('resolve: a weak local match is NOT SELECTED, with the score named (S3)', a
   }
 });
 
+test('resolve: an agent tasked with a release gets the repo\'s release skill (S3)', async () => {
+  // The acceptance case for the release-process skill: a repo that owns a release
+  // skill must offer it to the agent handed a release, the way the d1 case above
+  // offers a schema skill.
+  const root = await localSkillsRepo({
+    'release-process': skillMd('release-process', 'Use when releasing: cutting a version, tagging, or publishing.'),
+  });
+  try {
+    const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'release 1.2.3', '--root', root], {
+      env: offEnv(),
+    });
+    assert.match(stdout, /RESOLVED 1 skill/);
+    assert.match(stdout, /release-process-BODY-42/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('resolve: a local copy of a registry skill ranks once (S3)', async () => {
   // Keeping both the registry entry and its installed copy would rank one skill twice
   // and print two lines an agent reads as two skills. The registry entry is canonical.

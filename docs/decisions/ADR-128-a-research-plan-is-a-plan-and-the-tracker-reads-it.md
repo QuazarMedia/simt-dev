@@ -1,6 +1,6 @@
 ---
 simt-affects: ["templates/plan/tracker.json", "src/plan/index.mjs", "src/projection/manifest.mjs", "test/rules.test.mjs", "test/plan.test.mjs"]
-simt-supersedes: ["ADR-082"]
+simt-supersedes: [{ adr: "ADR-082", ruling: 1 }]
 ---
 
 # ADR-128 — A research plan is a plan, and the tracker reads it

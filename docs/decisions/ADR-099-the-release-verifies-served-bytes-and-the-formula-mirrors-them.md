@@ -1,6 +1,6 @@
 ---
 simt-affects: [".github/workflows/publish.yml", "scripts/build-sea.mjs", "scripts/verify-release-asset.mjs", "Formula/simt-dev.rb"]
-simt-supersedes: [{ adr: "ADR-098", ruling: 3, kind: "narrowed" }]
+simt-supersedes: [{ adr: "ADR-098", ruling: 3, kind: "narrowed" }, { adr: "ADR-117", ruling: 1, kind: "superseded" }]
 ---
 
 # ADR-099 — the release verifies served bytes, and the formula mirrors them

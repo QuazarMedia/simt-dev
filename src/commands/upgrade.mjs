@@ -26,7 +26,8 @@
 //      default resolved the workspace and a dry run inside one repo planned all sixteen.
 
 import { mkdir } from 'node:fs/promises';
-import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { commitJournal } from '../journal.mjs';
+import { applyPlan, change } from '../write/plan.mjs';
 import { invalidateCheckCache } from '../status.mjs';
 
 import { basename, dirname, resolve } from 'node:path';
@@ -179,12 +180,14 @@ export async function upgradeCommand(positional, flags) {
         // `undo` in one consumer must never reach into another (R49).
         const journal = [];
         const { targets } = await plan(p.path);
+        const targetChanges = [];
         for (const t of targets) {
           if (t.action === 'unchanged' || t.action === 'malformed') continue;
-          await mkdir(dirname(t.path), { recursive: true });
-          await journaledWriteFile(p.path, journal, t.path, t.text);
+          targetChanges.push(change({ path: t.path, before: await readBefore(t.path), after: t.text, owner: 'upgrade', reason: t.action }));
           writtenFiles.add(t.file);
         }
+        // The caller's journal, committed once when the workspace walk ends.
+        await applyPlan(p.path, targetChanges, { mode: { apply: true }, journal, commit: false });
         const { manifest } = await readManifest(p.path);
         // Preserve what the repo chose; refresh what simt-dev generates. $comment is
         // ours - it describes this file's provenance - so carrying the previous copy

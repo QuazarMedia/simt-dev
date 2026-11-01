@@ -22,11 +22,22 @@ import { commitJournal, journaledRemoveFile, journaledWriteFile } from '../journ
  * One change to one path.
  *
  * `kind: 'remove'` is a deletion, and `after` is then null. `owner` and `reason` are for
- * the report a person reads: which writer owns the file and why it is changing.
+ * the report a person reads: which writer owns the file and why it is changing. `mode` is
+ * permission bits for a file that must be executable, and rides on the same entry so
+ * `undo` restores the mode it found.
  */
-export function change({ path, kind = 'file', before, after, owner, reason }) {
+export function change({ path, kind = 'file', before, after, owner, reason, mode }) {
   if (kind !== 'file' && kind !== 'remove') throw new Error(`unknown change kind: ${kind}`);
-  return { path, kind, before, after, owner: owner ?? null, reason: reason ?? null, action: actionOf(kind, before, after) };
+  return {
+    path,
+    kind,
+    before,
+    after,
+    owner: owner ?? null,
+    reason: reason ?? null,
+    mode,
+    action: actionOf(kind, before, after),
+  };
 }
 
 function actionOf(kind, before, after) {
@@ -64,7 +75,7 @@ export async function applyPlan(root, changes, { mode, label, journal: shared, c
   for (const c of todo) {
     const path = isAbsolute(c.path) ? c.path : join(root, c.path);
     if (c.kind === 'remove') await journaledRemoveFile(root, journal, path);
-    else await journaledWriteFile(root, journal, path, c.after);
+    else await journaledWriteFile(root, journal, path, c.after, c.mode === undefined ? {} : { mode: c.mode });
   }
   if (commit && journal.length > first) await commitJournal(root, label, journal);
   return { applied: true, written: todo.map((c) => c.path), pending: [], journal };

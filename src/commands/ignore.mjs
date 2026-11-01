@@ -11,7 +11,7 @@ import { join } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { applyPlan, change } from '../write/plan.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { CLAUDE_SETTINGS, IGNORE_FILE, parseIgnoreList, planIgnore } from '../ignore.mjs';
 import { commandRoot } from '../repo-root.mjs';
@@ -125,12 +125,16 @@ export async function ignoreCommand(args, flags) {
 
   // Journaled so `undo` restores this run (R49). Every note writes to stderr,
   // so the `--json` document remains the only bytes on stdout.
-  const journal = [];
-  for (const t of changed) {
-    await journaledWriteFile(root, journal, join(root, t.path), t.after);
-    note(`wrote    ${t.path} (${t.action})`);
-  }
-  await commitJournal(root, 'ignore', journal);
+  await applyPlan(
+    root,
+    await Promise.all(
+      changed.map(async (t) =>
+        change({ path: t.path, before: await readBefore(join(root, t.path)), after: t.after, owner: 'ignore', reason: t.action }),
+      ),
+    ),
+    { mode: { apply: true }, label: 'ignore' },
+  );
+  for (const t of changed) note(`wrote    ${t.path} (${t.action})`);
 
   if (isJson(flags)) emitJson(payload(true));
   // After the report: the report says what, the diff shows it (R50).

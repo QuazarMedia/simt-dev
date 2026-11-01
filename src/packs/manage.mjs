@@ -15,7 +15,8 @@
 
 import { execFile } from 'node:child_process';
 import { mkdir, readdir, readFile, stat } from 'node:fs/promises';
-import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { applyPlan, change } from '../write/plan.mjs';
+import { readBefore } from '../diff.mjs';
 import { createHash } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
@@ -577,10 +578,14 @@ export async function writeScaffold(dir, files, root = dirname(dir)) {
     if (error?.message?.startsWith('refusing to scaffold')) throw error;
   }
   const journal = [];
-  for (const file of files) {
-    const abs = join(dir, file.path);
-    await mkdir(dirname(abs), { recursive: true });
-    await journaledWriteFile(root, journal, abs, file.text);
-  }
-  await commitJournal(root, 'pack new', journal);
+  await applyPlan(
+    root,
+    await Promise.all(
+      files.map(async (file) => {
+        const abs = join(dir, file.path);
+        return change({ path: abs, before: await readBefore(abs), after: file.text, owner: 'pack new', reason: 'the pack is being created' });
+      }),
+    ),
+    { mode: { apply: true }, label: 'pack new' },
+  );
 }

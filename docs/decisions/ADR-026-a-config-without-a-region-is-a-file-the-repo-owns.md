@@ -5,7 +5,7 @@ Status: accepted · 2026-10-06
 `src/commands/help.mjs`, `src/projection/project.mjs`, `test/ci.test.mjs`.
 **Narrows:** ADR-025 rulings 1 and 2. **Extends:** ADR-023 (bytes copied, written once),
 ADR-024 (simt-dev's own copies are refreshed by `simt-dev ci`). Settles the Dependabot
-item §3.1 row 8 of `docs/plans/0001-centralise-agent-rules.md` named as still missing.
+item §3.1 row 8 of `docs/research/0001-centralise-agent-rules.md` named as still missing.
 
 ## Context
 

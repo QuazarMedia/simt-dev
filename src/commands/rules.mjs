@@ -19,6 +19,7 @@ import { repoContext } from '../context.mjs';
 import { join } from 'node:path';
 import { renderDecisionsIndex } from '../decisions/index-doc.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
+import { readBefore } from '../diff.mjs';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { loadRules, select } from '../projection/project.mjs';
 import { loadMdcRules } from '../projection/mdc.mjs';

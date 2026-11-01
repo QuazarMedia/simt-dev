@@ -71,9 +71,12 @@ const WAVE = `# review
 test('a document without a tracker is not an index', async () => {
   const state = await loadPlanState(ROOT);
   const names = state.docs.map((doc) => doc.name);
+  assert.ok(names.includes('0001-release-skill.md'));
+  // docs/research is tracked like docs/plans: a different kind of plan.
   assert.ok(names.includes('0002-simt-dev-cli.md'));
   assert.ok(names.includes('0003-intelligence-amplifier-research-plan.md'));
   assert.ok(names.includes('0002-full-review-adoption-and-public-release.md'));
+  // Tracked directories, no tracker table.
   assert.ok(!names.includes('0001-centralise-agent-rules.md'));
   assert.ok(!names.includes('0001-release-readiness-review.md'));
 });

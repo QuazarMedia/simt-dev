@@ -2,7 +2,7 @@
 
 Status: open · 2026-10-28
 Reviewed at: `9904b69` on `main` (clean, level with `origin/main`), plans 0001–0003 complete (R01–R55 all Complete).
-Companion: `docs/plans/0004-knowledge-and-remote-work-intelligence-plan.md`, which this review gates.
+Companion: `docs/research/0004-knowledge-and-remote-work-intelligence-plan.md`, which this review gates.
 
 **Verdict: do not start W01 yet.** The design holds and the suite is green (1373/1373, twice, from a
 clone with no siblings, no flakes). But plan 0004 extends exactly the parts that are weakest today:

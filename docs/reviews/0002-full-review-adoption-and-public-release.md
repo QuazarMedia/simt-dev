@@ -8,7 +8,7 @@ blocking row: 12 of 14 repositories route their hooks and `check` exits 0 in all
 three that cannot gate themselves say so in their own commits. A public release is unblocked —
 `simt-dev@0.2.0` is published and byte-verified on npm, PyPI and Homebrew (ADR-008 vocabulary),
 and every repository that adopts it now holds a 0.2.0 binary and pins it.
-Companion: `docs/plans/0003-intelligence-amplifier-research-plan.md`, the R&D plan this review
+Companion: `docs/research/0003-intelligence-amplifier-research-plan.md`, the R&D plan this review
 feeds
 
 This review re-verified every review 0001 slice at `4c27514`, carried the open ones into a single

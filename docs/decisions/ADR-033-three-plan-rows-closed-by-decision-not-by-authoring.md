@@ -1,7 +1,7 @@
 # ADR-033 — three plan rows closed by decision, not by authoring
 
 Status: accepted · 2026-10-08
-**Affects:** `docs/plans/0001-centralise-agent-rules.md` §3.1 row 3, §6 phase 6, §6 phase 7.
+**Affects:** `docs/research/0001-centralise-agent-rules.md` §3.1 row 3, §6 phase 6, §6 phase 7.
 Ships no rule text. **Refuses:** the seven agent policies row 3 asks for, the twin collapse
 phase 6 asks for, and untracking the two committed `local.properties` files phase 7 does not
 mention but whose existence made the sweep look unfinished.

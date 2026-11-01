@@ -124,7 +124,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=a8ad2c0f213f507c4dfc58ae90e9a7c89b0dc765 -->
+<!-- simt:sha=1a75dafceba39c61224b2dd919284963b8ed4220 -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->
@@ -286,6 +286,14 @@ the list to reach it, and never split one decision into several questions to fit
 - Ask the user, offering choices with the recommended one first.
 - If that is not available, present numbered choices with `(recommended)` on the first option.
 - Do not ask operational or procedural choices; apply the best documented option.
+
+### Small work (no plan file)
+
+When the whole of the work is small — fewer than five slices — do not create a plan file.
+Plan it and implement it directly, in a single slice: state the slice and its acceptance
+checks, resolve any material decisions, and build it. The `docs/plans/*` tracker table and
+its `NNNN-slug.md` deliverable are for work that spans multiple slices; a single slice has
+nothing to track. The slice-commit procedure still applies to the one commit it produces.
 
 ### Required First Turn
 

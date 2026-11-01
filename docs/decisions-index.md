@@ -93,7 +93,7 @@ in [architecture/history.md](architecture/history.md).
 | [079](decisions/ADR-079-the-rules-are-enforced-at-the-tool-call-from-one-policy-table.md) | The rules are enforced at the tool call, from one policy table every harness renders | accepted · 2026-10-16 · filed as R15 (plan 0003) |
 | [080](decisions/ADR-080-the-tools-own-names-are-not-repositories-and-neither-reader-decides-by-shape.md) | The tool's own names are not repositories, and neither reader decides by shape | accepted · 2026-10-16 · settles what rules why calls a repository |
 | [081](decisions/ADR-081-a-tracker-is-read-through-the-repositorys-template.md) | A tracker is read through the repository's template | accepted · 2026-10-16 · rulings 1 and 2 superseded by ADR-082 |
-| [082](decisions/ADR-082-the-tracker-override-is-a-manifest-key.md) | The tracker override is a manifest key, and init keeps what it did not write | accepted · 2026-10-16 · supersedes ADR-081 rulings 1 and 2 |
+| [082](decisions/ADR-082-the-tracker-override-is-a-manifest-key.md) | The tracker override is a manifest key, and init keeps what it did not write | accepted · 2026-10-16 · supersedes ADR-081 rulings 1 and 2 · ruling 1 superseded by ADR-128 |
 | [083](decisions/ADR-083-a-budget-is-met-by-cutting-the-kernel-and-hard-is-the-floor.md) | A budget is met by cutting the kernel, and the hard constraints are the floor | accepted · 2026-10-17 · filed as R08 (plan 0003) · ruling 7 narrowed by ADR-084 |
 | [084](decisions/ADR-084-a-workspace-carries-its-repeated-rules-once.md) | A workspace carries its repeated rules once, and the region does not read the reader's home | accepted · 2026-10-17 · filed as R11 (plan 0003) |
 | [085](decisions/ADR-085-the-region-ends-with-the-names-it-kept-out.md) | The region ends with the names of what it kept out | accepted · 2026-10-18 · filed as R12 (plan 0003) |
@@ -138,3 +138,4 @@ in [architecture/history.md](architecture/history.md).
 | [125](decisions/ADR-125-a-shared-context-belongs-to-a-read-and-a-writer-reads-directly.md) | a shared context belongs to a read, and a writer reads directly | accepted · 2026-10-31 |
 | [126](decisions/ADR-126-the-mcp-surface-stays-a-reader-so-there-is-no-write-path-to-build.md) | the MCP surface stays a reader, so there is no write path to build | accepted · 2026-11-01 |
 | [127](decisions/ADR-127-the-mcp-tool-list-is-written-by-hand-and-roots-is-not-asked-for.md) | the MCP tool list is written by hand and held to the spec, and roots is not asked for | accepted · 2026-11-01 |
+| [128](decisions/ADR-128-a-research-plan-is-a-plan-and-the-tracker-reads-it.md) | A research plan is a plan, and the tracker reads it | accepted · 2026-11-01 · supersedes ADR-082 ruling 1 |

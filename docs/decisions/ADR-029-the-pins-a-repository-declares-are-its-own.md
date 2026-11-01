@@ -3,7 +3,7 @@
 Status: accepted · 2026-10-07
 **Affects:** `src/toolchain.mjs`, `src/projection/project.mjs`, `test/toolchain.test.mjs`.
 **Settles:** the `packageManager`/`engines`/`.nvmrc` items of §3.1 row 5 of
-`docs/plans/0001-centralise-agent-rules.md`. **Extends:** ADR-026 ruling 9 (absence and
+`docs/research/0001-centralise-agent-rules.md`. **Extends:** ADR-026 ruling 9 (absence and
 disagreement are reportable; content is not) to a file this tool authors no part of.
 
 ## Context

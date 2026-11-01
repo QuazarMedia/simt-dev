@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { citations, byId, DECISIONS_DIR, loadDecisions, redactInternalPaths } from '../src/decisions/index.mjs';
+import { citations, byId, loadDecisions, redactInternalPaths } from '../src/decisions/index.mjs';
 import { initCommand } from '../src/commands/init.mjs';
 import { loadRules, select } from '../src/projection/project.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
@@ -18,6 +18,13 @@ import { MANIFEST_FILE, STATE_DIR } from '../src/name.mjs';
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
+
+async function templateDirectories() {
+  const template = JSON.parse(
+    await readFile(resolve(HERE, '..', 'templates', 'plan', 'tracker.json'), 'utf8'),
+  );
+  return template.directories;
+}
 
 async function run(args) {
   try {
@@ -146,6 +153,8 @@ test('every partial supersession in the corpus is found, with its kind and its r
   // is superseded, and the parser reads the claim there.
   // ADR-014 joined when ADR-119 landed: its status line now states that ruling 1's
   // precedence is superseded, and the parser reads the claim there.
+  // ADR-082 joined when ADR-128 landed: its status line now states that ruling 1
+  // is superseded, and the parser reads the claim there.
   assert.deepEqual(shapes, [
     'ADR-009',
     'ADR-014',
@@ -160,6 +169,7 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-073',
     'ADR-077',
     'ADR-081',
+    'ADR-082',
     'ADR-083',
     'ADR-086',
     'ADR-088',
@@ -281,7 +291,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
     // ADR-124 joined because the ruling is ABOUT the manifest module: a decision that
   // the keys are declared once and that an unparseable file is no manifest, without
   // naming the module that declares them, would not be an argument a maintainer can
-  // act on.
+  // act on. ADR-128 joined for the same reason once more: the ruling is ABOUT the
+  // delivered template, and a decision that the research directory is data, not a
+  // special case, without naming the file that carries it would not be an argument
+  // a maintainer can act on.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -305,6 +318,7 @@ assert.deepEqual(leaking, [
     'ADR-111',
     'ADR-112',
     'ADR-124',
+    'ADR-128',
 ]);
 });
 
@@ -644,25 +658,25 @@ test('every ADR cited in docs/ is a record that exists', async () => {
   // the only property that keeps a review honest as records are written.
   const { decisions } = await loadDecisions();
   const known = new Set(decisions.map((d) => d.id));
-  for (const dir of ['plans', 'reviews']) {
-    for (const name of await readdir(resolve(HERE, '..', 'docs', dir))) {
+  for (const dir of await templateDirectories()) {
+    for (const name of await readdir(resolve(HERE, '..', dir.path))) {
       if (!name.endsWith('.md')) continue;
-      const path = join(DECISIONS_DIR, '..', dir, name);
+      const path = join(HERE, '..', dir.path, name);
       for (const id of citations(await readFile(path, 'utf8'))) {
-        assert.ok(known.has(id), `${dir}/${name} cites ${id}, which is not a record`);
+        assert.ok(known.has(id), `${dir.path}/${name} cites ${id}, which is not a record`);
       }
     }
   }
 });
 
 test('the doc reference sweep is not vacuous', async () => {
-  // A sweep that matched nothing would pass forever. docs/plans and docs/reviews
-  // are the two directories that cite records; both must cite some.
+  // A sweep that matched nothing would pass forever. Every directory the tracker
+  // reads cites records; each must cite some.
   let cited = 0;
-  for (const dir of ['plans', 'reviews']) {
-    for (const name of await readdir(resolve(HERE, '..', 'docs', dir))) {
+  for (const dir of await templateDirectories()) {
+    for (const name of await readdir(resolve(HERE, '..', dir.path))) {
       if (!name.endsWith('.md')) continue;
-      cited += citations(await readFile(join(DECISIONS_DIR, '..', dir, name), 'utf8')).length;
+      cited += citations(await readFile(join(HERE, '..', dir.path, name), 'utf8')).length;
     }
   }
   assert.ok(cited > 0, 'no document cites a record; the sweep above proves nothing');

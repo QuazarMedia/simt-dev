@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "The SIMT skill registry. Hand-authored and reviewable; structure is declared, never inferred (docs/plans/0002-simt-dev-cli.md section 3.1). Resolution is deterministic: same repo + same task = same answer.",
+  "description": "The SIMT skill registry. Hand-authored and reviewable; structure is declared, never inferred (docs/research/0002-simt-dev-cli.md section 3.1). Resolution is deterministic: same repo + same task = same answer.",
   "deferredThreshold": 20000,
   "conventions": {
     "variants": "One node, several bodies, discriminated by stack. Used when the SAME skill name exists in several repos with genuinely different content (the 8 duplicated Social names).",

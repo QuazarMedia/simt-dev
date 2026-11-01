@@ -3,6 +3,7 @@
   "name": "tracker",
   "directories": [
     { "kind": "plans", "word": "plan", "path": "docs/plans" },
+    { "kind": "research", "word": "research", "path": "docs/research" },
     { "kind": "reviews", "word": "review", "path": "docs/reviews" }
   ],
   "id": {

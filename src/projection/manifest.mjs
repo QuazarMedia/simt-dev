@@ -61,7 +61,7 @@ export const MANIFEST_COMMENT = {
     `Written and maintained by simt-dev. \`${CLI} sync --yes\` regenerates the projected rules.`,
     `\`${CLI} init\` refreshes the SHA and keeps every key it does not write, so a value you add here survives a re-init.`,
     `\`plans\` is such a key: it selects the tracker template and the directories \`${CLI} plan\` reads.`,
-    'Omit it and the tracker template applies, which reads docs/plans and docs/reviews.',
+    'Omit it and the tracker template applies, which reads docs/plans, docs/research and docs/reviews.',
   ].join(' '),
 };
 

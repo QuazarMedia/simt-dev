@@ -1,6 +1,6 @@
 # ADR-082 — The tracker override is a manifest key, and init keeps what it did not write
 
-Status: **accepted** · 2026-10-16 · supersedes ADR-081 rulings 1 and 2
+Status: **accepted** · 2026-10-16 · supersedes ADR-081 rulings 1 and 2 · ruling 1 superseded by ADR-128
 
 ## Context
 

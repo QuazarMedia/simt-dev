@@ -1,6 +1,6 @@
-# Plan 0005 — the release process as a repo-local skill
+# Plan 0001 — the release process as a repo-local skill
 
-Status: **queued** · created 2026-11-01 · baseline `d69c98e`
+Status: **implemented** · created 2026-11-01 · baseline `d69c98e`
 Depends on: the v0.7.1 release (done — tag pushed, publish run green, staged on npm).
 
 ## Scope

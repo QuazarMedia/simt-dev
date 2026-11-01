@@ -8,7 +8,7 @@ history belongs in a file no command rewrites.
 ADR-001 to ADR-010 resolve the contradictions found across the 16 repos in the 2026-10-05
 audit; each record names the repos whose text it replaces. ADR-011 and ADR-012 are the
 platform decision for the CLI described in
-[plan 0002](../plans/0002-simt-dev-cli.md), and they are a worked example of the
+[plan 0002](../research/0002-simt-dev-cli.md), and they are a worked example of the
 supersession rule above: 011 was accepted, 012 reversed it the same day, and 011's record was
 kept rather than rewritten because the cost table it contains is the evidence 012 relies on.
 ADR-013 is the same rule applied to the tool rather than to the repos: the mechanism carries

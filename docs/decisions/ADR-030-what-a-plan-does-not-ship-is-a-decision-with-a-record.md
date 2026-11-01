@@ -1,7 +1,7 @@
 # ADR-030 — what a plan does not ship is a decision with a record, not a silence
 
 Status: accepted · 2026-10-07
-**Affects:** `docs/plans/0001-centralise-agent-rules.md` §3.1 row 5 and row 7. Ships no
+**Affects:** `docs/research/0001-centralise-agent-rules.md` §3.1 row 5 and row 7. Ships no
 code. **Refuses:** the commitlint baseline and the shared ESLint block named in row 5 and
 row 7, and records why in the plan itself rather than leaving the rows to imply that two
 mechanisms are merely unwritten.

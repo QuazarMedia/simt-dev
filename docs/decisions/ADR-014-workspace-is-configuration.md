@@ -133,7 +133,7 @@ a feature; `rules why` is the provenance mechanism the whole one-canonical-home 
 on, and it cannot depend on a git checkout being present.
 
 `docs/plans` ships with it, because every non-zero exit prints a remedy pointing at
-`docs/plans/0002-simt-dev-cli.md section 11`.
+`docs/research/0002-simt-dev-cli.md section 11`.
 
 ### 6. "Absent", "wrong" and "moved" are three different facts
 

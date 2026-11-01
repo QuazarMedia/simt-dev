@@ -4,7 +4,7 @@
 // Same data, different rendering. Nothing here emits ANSI, prompts, spinners or
 // boxes, because a prompt is a hang for an agent and a spinner is noise in a log.
 //
-// See docs/plans/0002-simt-dev-cli.md section 6.
+// See docs/research/0002-simt-dev-cli.md section 6.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 

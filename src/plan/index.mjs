@@ -3,7 +3,7 @@
 // An agent resuming a long plan should read one slice, not the document. Which
 // directories are read, which columns count, and which words count as done are
 // the repository's template (src/plan/template.mjs). The tracker template
-// delivered with the tool reads docs/plans and docs/reviews and treats `done`
+// delivered with the tool reads docs/plans, docs/research and docs/reviews and treats `done`
 // as complete.
 // A dependency may name another document (`review 0002 S41`) or one of its
 // waves (`review 0002 Wave 0`). Ids that follow a document prefix stay in that

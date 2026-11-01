@@ -41,6 +41,14 @@ the list to reach it, and never split one decision into several questions to fit
 - If that is not available, present numbered choices with `(recommended)` on the first option.
 - Do not ask operational or procedural choices; apply the best documented option.
 
+## Small work (no plan file)
+
+When the whole of the work is small — fewer than five slices — do not create a plan file.
+Plan it and implement it directly, in a single slice: state the slice and its acceptance
+checks, resolve any material decisions, and build it. The `{{plansGlob}}` tracker table and
+its `NNNN-slug.md` deliverable are for work that spans multiple slices; a single slice has
+nothing to track. The slice-commit procedure still applies to the one commit it produces.
+
 ## Required First Turn
 
 1. State the smallest independently valuable slice, the owning repo, the active plan

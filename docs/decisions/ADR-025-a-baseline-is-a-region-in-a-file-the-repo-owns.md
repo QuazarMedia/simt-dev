@@ -4,7 +4,7 @@ Status: accepted · 2026-10-06 · rulings 1 and 2 narrowed by ADR-026 · ruling 
 **Affects:** `src/projection/baselines.mjs`, `src/projection/markers.mjs`,
 `src/projection/project.mjs`, `src/commands/init.mjs`, `test/baselines.test.mjs`,
 `test/leaks.mjs`, `test/surfaces.test.mjs`. Settles §3.1 row 5 and row 7 of
-`docs/plans/0001-centralise-agent-rules.md` for the files it names, and leaves the rest ruled
+`docs/research/0001-centralise-agent-rules.md` for the files it names, and leaves the rest ruled
 out by name rather than outstanding.
 
 Rulings 1 and 2 did not survive whole: ADR-026 rules that a config whose grammar cannot

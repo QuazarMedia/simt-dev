@@ -1,6 +1,6 @@
 // Command registry and dispatch.
 //
-// Every command named in docs/plans/0002-simt-dev-cli.md section 5 is registered
+// Every command named in docs/research/0002-simt-dev-cli.md section 5 is registered
 // here from day one. A command that is declared but not yet implemented exits
 // UNSUPPORTED with a pointer to its implementation step; it never silently
 // succeeds. An agent that calls `simt compare` on an unreleased build must get a

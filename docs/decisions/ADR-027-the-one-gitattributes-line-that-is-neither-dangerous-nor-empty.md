@@ -5,7 +5,7 @@ Status: accepted · 2026-10-06
 `test/baselines.test.mjs`, `test/surfaces.test.mjs`.
 **Supersedes:** ADR-025 ruling 9, which ruled `.gitattributes` out for now and required this
 record. Settles the `.gitattributes` item in §3.1 row 5 of
-`docs/plans/0001-centralise-agent-rules.md`.
+`docs/research/0001-centralise-agent-rules.md`.
 
 ## Context
 

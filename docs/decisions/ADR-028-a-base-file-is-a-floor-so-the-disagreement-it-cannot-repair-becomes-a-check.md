@@ -5,7 +5,7 @@ Status: accepted · 2026-10-07
 `test/tsconfig.test.mjs`. **Narrows:** ADR-026 ruling 2 (ownership does not depend on
 content being mergeable) by applying it to a file whose mechanism is `extends` rather than
 a copied byte range. Settles the `tsconfig.base.json` item of §3.1 row 5 and row 7 of
-`docs/plans/0001-centralise-agent-rules.md`.
+`docs/research/0001-centralise-agent-rules.md`.
 
 ## Context
 

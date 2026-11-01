@@ -649,3 +649,20 @@ test('plan labels: reports the labels the template gives, beside the ones a docu
   assert.match(stdout, /states\s+Queued, In progress, Complete, Accepted/);
   assert.match(stdout, /tier:\s+tier/);
 });
+
+test('plan status reports the tiers and waves a tracker carries, and stays quiet without them', async () => {
+  const tiered = await repo({ 'docs/plans/0099.md': TIERED });
+  const { stdout } = cli(['plan', 'status', '--root', tiered]);
+  assert.match(stdout, /tiers\s+L=2 S=1/);
+  assert.match(stdout, /waves\s+0=2 1=1/);
+  const payload = JSON.parse(cli(['plan', 'status', '--json', '--root', tiered]).stdout);
+  assert.deepEqual(payload.documents[0].tiers, { S: 1, L: 2 });
+  assert.deepEqual(payload.documents[0].waves, { 0: 2, 1: 1 });
+  assert.equal(payload.untagged, 0);
+
+  // A tracker with no tier column and no wave table gets neither line.
+  const plain = await repo({ 'docs/plans/0099.md': COUNTED });
+  const quiet = cli(['plan', 'status', '--root', plain]);
+  assert.doesNotMatch(quiet.stdout, /^  tiers/m);
+  assert.doesNotMatch(quiet.stdout, /^  waves/m);
+});

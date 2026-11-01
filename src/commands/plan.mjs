@@ -35,8 +35,20 @@ async function runStatus(root, flags) {
   if (result.documents.length === 0) lines.push(`(no tracker in ${result.directories.join(' or ')})`);
   for (const doc of result.documents) {
     lines.push(`${doc.name}  slices=${doc.slices}  ${formatCounts(doc.counts, result.stateOrder)}`);
+    // Only when the tracker carries a tier column at all: an untagged count on a table
+    // with no tier column is every slice, and says nothing about the plan.
+    const tiers = formatCounts(doc.tiers);
+    if (tiers !== '') lines.push(`  tiers  ${tiers}${doc.untagged > 0 ? `  untagged=${doc.untagged}` : ''}`);
+    const waves = formatCounts(doc.waves);
+    if (waves !== '') lines.push(`  waves  ${waves}`);
   }
   lines.push('', `total    ${formatCounts(result.totals, result.stateOrder) || '-'}`);
+  // A tracker with neither a tier column nor a wave table gets neither line: an empty
+  // heading reads as "the tool looked and found something worth saying".
+  const tierLine = formatCounts(result.tiers);
+  if (tierLine !== '') lines.push(`tiers    ${tierLine}${result.untagged > 0 ? `  untagged=${result.untagged}` : ''}`);
+  const waveLine = formatCounts(result.waves);
+  if (waveLine !== '') lines.push(`waves    ${waveLine}`);
   lines.push(`ready    ${result.ready}`);
   emit(lines.join('\n'));
   return EXIT.OK;

@@ -569,11 +569,39 @@ export async function planStatus(root) {
     const own = slices.filter((slice) => slice.docPath === doc.path);
     const counts = {};
     for (const slice of own) counts[slice.state] = (counts[slice.state] ?? 0) + 1;
-    return { name: doc.name, path: doc.path, kind: doc.kind, number: doc.number, slices: own.length, counts };
+    // A tier counts under the tag the tracker wrote, so `L (S)` is one L slice and the
+    // line reads against the table without the reader translating case.
+    const tiers = {};
+    let untagged = 0;
+    for (const slice of own) {
+      if (slice.tierKey === '') {
+        untagged += 1;
+        continue;
+      }
+      const label = slice.tier === '' ? slice.tierKey : slice.tier;
+      tiers[label] = (tiers[label] ?? 0) + 1;
+    }
+    // A wave row counts the slices it names that this tracker actually tracks: a table may
+    // name an id that was renamed, and an untracked name is not a slice.
+    const tracked = new Set(own.map((slice) => slice.id));
+    const waves = {};
+    for (const wave of doc.waves) {
+      // One row is one wave. Its label yields several keys (`0` and `0foundation`), which
+      // is what `--wave` matches against; counting under each would report the row twice.
+      const key = wave.keys[0];
+      if (key === undefined) continue;
+      const hits = wave.ids.filter((id) => tracked.has(id)).length;
+      if (hits > 0) waves[key] = (waves[key] ?? 0) + hits;
+    }
+    return { name: doc.name, path: doc.path, kind: doc.kind, number: doc.number, slices: own.length, counts, tiers, untagged, waves };
   });
   const totals = {};
+  const tierTotals = {};
+  const waveTotals = {};
   for (const doc of documents) {
     for (const [state, count] of Object.entries(doc.counts)) totals[state] = (totals[state] ?? 0) + count;
+    for (const [tier, count] of Object.entries(doc.tiers)) tierTotals[tier] = (tierTotals[tier] ?? 0) + count;
+    for (const [wave, count] of Object.entries(doc.waves)) waveTotals[wave] = (waveTotals[wave] ?? 0) + count;
   }
   return {
     root,
@@ -582,6 +610,9 @@ export async function planStatus(root) {
     stateOrder: format.order,
     documents,
     totals,
+    tiers: tierTotals,
+    untagged: documents.reduce((sum, doc) => sum + doc.untagged, 0),
+    waves: waveTotals,
     ready: slices.filter((slice) => slice.ready).length,
   };
 }

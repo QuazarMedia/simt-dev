@@ -12,9 +12,7 @@
       "error": 1000,
       "excludeTextFiles": true,
       "exclude": [
-        "graph/skills.graph.json",
-        "src/projection/rules.mjs",
-        "test/hooks.test.mjs"
+        "graph/skills.graph.json"
       ]
     }
   },

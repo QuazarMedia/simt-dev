@@ -20,12 +20,14 @@ import { bodyFile, sourcePath } from '../resolve/body.mjs';
 import { unknownSkills, scoreCorpus } from '../resolve/eval.mjs';
 import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { tokenize, rankSkills, closure, selectWithinBudget, resolveAlias, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
+import { rankSkills, closure, selectWithinBudget, resolveAlias, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
+import { tokenize } from '../text/tokens.mjs';
 import { localSkillNodes } from '../resolve/local.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { CLI } from '../name.mjs';
 import { parsePathList } from '../argv.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { gitText } from '../sys/git.mjs';
 
 export { parsePathList };
 
@@ -34,11 +36,8 @@ const DEFAULT_BUDGET = 20480;
 /** git status paths, so path signals come from the real diff. */
 export async function dirtyPaths(root) {
   try {
-    const { execFile } = await import('node:child_process');
-    const { promisify } = await import('node:util');
-    const run = promisify(execFile);
-    const { stdout } = await run('git', ['-C', root, 'status', '--porcelain=v1'], { maxBuffer: 8 << 20 });
-    return stdout
+    const stdout = await gitText(root, ['status', '--porcelain=v1'], { maxBuffer: 8 << 20 });
+    return (stdout ?? '')
       .split('\n')
       .filter(Boolean)
       .map((line) => line.slice(3).trim())

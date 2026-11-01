@@ -39,6 +39,7 @@ import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { nameProblems } from '../graph/spec.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { parseFrontmatter } from '../text/frontmatter.mjs';
 
 /**
  * Where skills live in this repo. The estate already has a convention - a
@@ -498,13 +499,13 @@ async function dirEntries(root) {
  */
 export async function wrapFlat(src, name) {
   const text = await readFile(src, 'utf8');
-  const fm = /^---\n([\s\S]*?)\n---\n?/.exec(text);
-  if (!fm) return `---\nname: ${name}\n---\n\n${text.trim()}\n`;
-  const keys = fm[1]
+  const { front, block } = parseFrontmatter(text);
+  if (front === null) return `---\nname: ${name}\n---\n\n${text.trim()}\n`;
+  const keys = front
     .split('\n')
     .filter((l) => !/^name:/.test(l))
     .join('\n');
-  return `---\nname: ${name}\n${keys}\n---\n\n${text.slice(fm[0].length).trim()}\n`;
+  return `---\nname: ${name}\n${keys}\n---\n\n${text.slice(block.length).trim()}\n`;
 }
 
 async function fileSha(path) {

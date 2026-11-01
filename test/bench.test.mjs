@@ -31,7 +31,7 @@ import {
   writeCorpusDocument,
 } from '../src/bench/corpus.mjs';
 import { extractPatchFiles, gradeWorkspace } from '../src/bench/grade.mjs';
-import { spawnBounded } from '../src/bench/process.mjs';
+import { spawnBounded } from '../src/sys/proc.mjs';
 import {
   BUILTIN_ARMS,
   adapterIsolation,

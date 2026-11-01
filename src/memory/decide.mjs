@@ -3,14 +3,12 @@
 // frontmatter first for `rules why` and `why`, and fail lint on partial
 // supersessions stated only in prose.
 
-import { execFile } from 'node:child_process';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 import { recordCreatedFile } from '../journal.mjs';
 import { decisionsDir } from '../decisions/dir.mjs';
-
-const exec = promisify(execFile);
+import { parseFrontmatter } from '../text/frontmatter.mjs';
+import { gitText } from '../sys/git.mjs';
 
 export const DECISION_KEYS = ['simt-affects', 'simt-supersedes'];
 
@@ -37,13 +35,6 @@ function unquote(value) {
   return (t.startsWith('"') && t.endsWith('"')) || (t.startsWith("'") && t.endsWith("'"))
     ? t.slice(1, -1)
     : t;
-}
-
-/** Strip leading YAML frontmatter (`---\n...\n---`) from a markdown document. */
-export function splitFrontmatter(text) {
-  const raw = String(text ?? '');
-  const match = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(raw);
-  return match ? { front: match[1], body: raw.slice(match[0].length) } : { front: null, body: raw };
 }
 
 function parseInlineStringList(inner) {
@@ -93,7 +84,7 @@ function normaliseSupersedesEntry(obj, errors) {
 
 /** Parse `simt-affects` and `simt-supersedes` from an ADR's YAML frontmatter. */
 export function parseDecisionFrontmatter(text) {
-  const { front } = splitFrontmatter(text);
+  const { front } = parseFrontmatter(text);
   if (front === null) {
     return { hasFrontmatter: false, hasAffects: false, hasSupersedes: false, affects: [], supersedes: [], errors: [] };
   }
@@ -255,7 +246,7 @@ export async function diffAffectedPaths(root) {
     ['diff', '--name-only'],
   ]) {
     try {
-      const { stdout } = await exec('git', args, { cwd: root });
+      const stdout = await gitText(root, args);
       addLines(stdout);
     } catch {
       // Ignore if not a git repo or HEAD absent.
@@ -263,7 +254,7 @@ export async function diffAffectedPaths(root) {
   }
   if (paths.size === 0) {
     try {
-      const { stdout } = await exec('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD'], { cwd: root });
+      const stdout = await gitText(root, ['diff-tree', '--no-commit-id', '--name-only', '-r', 'HEAD']);
       addLines(stdout);
     } catch {
       // Ignore.
@@ -455,7 +446,7 @@ export function lintDecision(text, { file = 'ADR-000.md', historicalCutoff = 0 }
   const num = id ? Number(id.replace(/^ADR-/, '')) : null;
 
   const fm = parseDecisionFrontmatter(text);
-  const { body } = splitFrontmatter(text);
+  const { body } = parseFrontmatter(text);
   const findings = fm.errors.map((err) => ({
     file,
     id,

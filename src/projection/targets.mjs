@@ -19,6 +19,7 @@ import { diff, parse, inject } from './markers.mjs';
 import { ruleName } from './mdc.mjs';
 import { foldsRules, frontmatterBlock, POINTERS, rulePath, SURFACES } from './surfaces.mjs';
 import { foldChecks } from '../kernel/checks.mjs';
+import { frontmatterBlock as extractBlock, stripFrontmatter } from '../text/frontmatter.mjs';
 
 /**
  * A managed rule file is a GENERATED FILE, unlike AGENTS.md.
@@ -276,8 +277,7 @@ export async function pointerState(root, pointer) {
 export { rulePath };
 
 export function extractFrontmatter(text) {
-  const m = /^---\n[\s\S]*?\n---\n?/.exec(text);
-  return m ? m[0].trimEnd() : null;
+  return extractBlock(text);
 }
 
 /**
@@ -296,10 +296,10 @@ export function extractFrontmatter(text) {
  */
 function swapFrontmatter(text, frontmatter) {
   if (frontmatter === '') return text;
-  const m = /^---\n[\s\S]*?\n---/.exec(text);
-  return m === null ? `${frontmatter}\n${text}` : `${frontmatter}${text.slice(m[0].length)}`;
+  const block = extractBlock(text);
+  return block === null ? `${frontmatter}\n${text}` : `${frontmatter}${text.slice(block.length)}`;
 }
 
 function bodyAfterFrontmatter(text) {
-  return text.replace(/^---\n[\s\S]*?\n---\n*/, '');
+  return stripFrontmatter(text);
 }

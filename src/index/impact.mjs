@@ -7,6 +7,7 @@
 
 import { isTestPath } from '../bench/mine.mjs';
 import { coverage } from './coverage.mjs';
+import { cmp } from '../util/sort.mjs';
 
 const IMPACT_LIMIT = 64;
 
@@ -179,8 +180,3 @@ function glob(pattern, text) {
   return new RegExp(`^${body}$`).test(text);
 }
 
-function cmp(a, b) {
-  if (a < b) return -1;
-  if (a > b) return 1;
-  return 0;
-}

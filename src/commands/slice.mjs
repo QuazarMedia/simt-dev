@@ -26,10 +26,8 @@
 // slice's code: editing the same row in both places would make every merge of a
 // finished slice a conflict on the one line that records it.
 
-import { execFile } from 'node:child_process';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
-import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { planDone, planNext } from '../plan/index.mjs';
@@ -53,8 +51,7 @@ import { readManifest } from '../projection/manifest.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { LOCAL_DIR } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
-
-const exec = promisify(execFile);
+import { git, gitText } from '../sys/git.mjs';
 
 /**
  * The state a started slice moves to: the template's `started`-role state, not
@@ -77,11 +74,6 @@ async function startedState(main) {
  */
 const TYPE = /^[a-z]+(?:\([a-z0-9][a-z0-9._-]*\))?!?$/;
 
-async function git(root, args) {
-  const { stdout } = await exec('git', ['-C', root, ...args], { maxBuffer: 32 << 20 });
-  return stdout.trim();
-}
-
 /**
  * The checkout that owns the tracker: the main worktree when `root` is a linked one.
  *
@@ -93,7 +85,7 @@ async function git(root, args) {
  */
 async function mainCheckout(root) {
   try {
-    const common = await git(root, ['rev-parse', '--git-common-dir']);
+    const common = await gitText(root, ['rev-parse', '--git-common-dir']);
     return dirname(resolve(root, common));
   } catch {
     return root;
@@ -584,7 +576,7 @@ async function finishSlice(root, id, flags) {
   // The commit lands on the slice branch or not at all: finishing from `main`
   // commits main's tree under the slice's subject, which is the defect this
   // guard closes (review 0003 Q23).
-  const head = await git(root, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => null);
+  const head = await gitText(root, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => null);
   if (head !== branch) {
     return fail(
       `not on the slice branch: HEAD is ${head ?? 'unknown'}, expected ${branch}`,
@@ -662,7 +654,7 @@ async function finishSlice(root, id, flags) {
   const message = `${subject}\n\n${CO_AUTHOR}`;
   try {
     await git(root, ['commit', '-m', message]);
-    sha = await git(root, ['rev-parse', 'HEAD']);
+    sha = await gitText(root, ['rev-parse', 'HEAD']);
   } catch (error) {
     const detail = String(error.stderr ?? error.message ?? error).trim().split('\n')[0];
     return fail(`the gates passed but the commit failed: ${detail}`, EXIT.FAIL, `run: git -C ${root} commit -m ${JSON.stringify(message)}`);
@@ -785,7 +777,7 @@ async function abandonSlice(root, id, flags) {
   // Abandoning from inside the worktree would pull the floor out: the shell's
   // own directory is the thing being removed. Compared through git, not through
   // strings, because the caller's spelling of the path may differ in symlinks.
-  const top = await git(root, ['rev-parse', '--show-toplevel']).catch(() => null);
+  const top = await gitText(root, ['rev-parse', '--show-toplevel']).catch(() => null);
   if (top !== null && (top === worktree || top.startsWith(`${worktree}/`))) {
     return fail(
       `cannot abandon ${id} from inside its worktree`,

@@ -6,17 +6,9 @@ import { runGates } from '../hooks/dispatcher.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { detectTestRunner, readReports } from './mine.mjs';
-import { spawnBounded } from './process.mjs';
+import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
 
 const DEFAULT_GRADE_TIMEOUT_MS = 45_000;
-
-function sanitizedEnv(extra = {}) {
-  const env = { ...process.env, SIMT_DEV_WORKSPACE: 'off', ...extra };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith('NODE_TEST')) delete env[key];
-  }
-  return env;
-}
 
 function runCmd(cmd, args, { cwd, env, input = null, timeoutMs = DEFAULT_GRADE_TIMEOUT_MS } = {}) {
   return spawnBounded(cmd, args, { cwd, env: env ?? sanitizedEnv(), input, timeoutMs });

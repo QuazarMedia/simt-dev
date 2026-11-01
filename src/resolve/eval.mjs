@@ -6,7 +6,8 @@
 // disagree about the score - `simt skills eval` reports it to a reader, and
 // test/eval.test.mjs asserts it in CI - so the arithmetic lives here once (ADR-002).
 
-import { rankSkills, tokenize } from './resolve.mjs';
+import { rankSkills } from './resolve.mjs';
+import { tokenize } from '../text/tokens.mjs';
 
 /** The skill names the resolver selects for one case's declared signals and task. */
 function selectForCase(registry, c) {

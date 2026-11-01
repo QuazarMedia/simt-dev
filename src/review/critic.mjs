@@ -16,9 +16,7 @@
 // earned, the same honesty ADR-076 asked of R38's metric note.
 
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
 import { join, resolve } from 'node:path';
-import { promisify } from 'node:util';
 
 import { EXIT, fail } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
@@ -29,8 +27,7 @@ import { governs, sourceRoots } from '../index/govern.mjs';
 // `digestOf`, `promptHash` and `proposalFrontmatter` landed with R38's engine and
 // the critic is their second real user; sharing them beats a third copy (ADR-002).
 import { digestOf, promptHash, proposalFrontmatter } from '../distill/engine.mjs';
-
-const exec = promisify(execFile);
+import { git } from '../sys/git.mjs';
 
 import { LOCAL_DIR } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
@@ -224,11 +221,11 @@ export async function reviewTarget(args, flags, { write = true, commands = [] } 
   let names;
   try {
     const [diff, changed] = await Promise.all([
-      exec('git', ['diff', '--staged'], { cwd: root, maxBuffer: 64 << 20 }),
-      exec('git', ['diff', '--staged', '--name-only'], { cwd: root, maxBuffer: 8 << 20 }),
+      git(root, ['diff', '--staged'], { maxBuffer: 64 << 20 }),
+      git(root, ['diff', '--staged', '--name-only'], { maxBuffer: 8 << 20 }),
     ]);
-    patch = diff.stdout;
-    names = changed.stdout.split('\n').filter(Boolean);
+    patch = diff;
+    names = changed.split('\n').filter(Boolean);
   } catch (error) {
     return fail(
       `could not read the staged diff here (${error.message})`,
@@ -442,7 +439,7 @@ export async function criticBench(root, { labelsPath, flags, commands = [] }) {
 async function peer(root, sha, flags, endpoint, commands) {
   let diff;
   try {
-    diff = (await exec('git', ['show', '--unified=2', sha], { cwd: root, maxBuffer: 64 << 20 })).stdout;
+    diff = await git(root, ['show', '--unified=2', sha], { maxBuffer: 64 << 20 });
   } catch (error) {
     return { failed: true, exitMessage: error.message };
   }

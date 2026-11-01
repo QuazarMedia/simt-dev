@@ -18,7 +18,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
-import { matchesGlob, syntheticPathFor, tokenize } from '../resolve/resolve.mjs';
+import { matchesGlob, syntheticPathFor } from '../resolve/resolve.mjs';
+import { tokenize } from '../text/tokens.mjs';
 import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
 
 /**

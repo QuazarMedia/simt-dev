@@ -26,7 +26,7 @@ import { dirname, join, resolve } from 'node:path';
 
 import { LOCAL_DIR } from '../state.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
-import { spawnBounded } from './process.mjs';
+import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
 import { adapterIsolation, executeAdapter, loadAdapters, materialiseArm, parseArmSpec } from './run.mjs';
 
 /**
@@ -41,14 +41,6 @@ export const CALIBRATION_HARNESSES = new Set(['gold', 'noop', 'violator']);
 
 /** How long one agent-backed probe may run before its workspace is reclaimed. */
 const PROBE_AGENT_TIMEOUT_MS = 120_000;
-
-function sanitizedEnv(extra = {}) {
-  const env = { ...process.env, SIMT_DEV_WORKSPACE: 'off', ...extra };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith('NODE_TEST')) delete env[key];
-  }
-  return env;
-}
 
 /** The deadline for one workspace-side git or node command inside a probe. */
 const PROBE_COMMAND_TIMEOUT_MS = 120_000;

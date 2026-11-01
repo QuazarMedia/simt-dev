@@ -4,10 +4,8 @@
 // the file, the CODEOWNERS line, and — when a workspace is configured —
 // another repository that references a contract this change touches.
 
-import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
-import { promisify } from 'node:util';
 
 import { EXIT, fail, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
@@ -28,7 +26,6 @@ import { resolveWorkspace } from '../workspace.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { gitPaths } from '../sys/git.mjs';
 
-const exec = promisify(execFile);
 const TEXT_EXT = new Set(['js', 'mjs', 'cjs', 'jsx', 'ts', 'tsx', 'json', 'yaml', 'yml', 'md', 'toml', 'xml', 'py', 'go', 'kt', 'java', 'rs']);
 const READ_CAP = 256 * 1024;
 const FILE_CAP = 2000;

@@ -42,6 +42,7 @@ import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { installedSkills } from './disclosure.mjs';
 import { PACK_DIR, resolvePacks } from '../packs.mjs';
 import { discoverPackages } from '../monorepo.mjs';
+import { parseFrontmatter as splitBlock, stripFrontmatter as stripBlock } from '../text/frontmatter.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const ROOT = resolve(HERE, '..', '..');
@@ -1386,10 +1387,10 @@ function demoteHeadings(text) {
 }
 
 function parseFrontmatter(text) {
-  const m = /^---\n([\s\S]*?)\n---\n?/.exec(text);
-  if (!m) return {};
+  const { front } = splitBlock(text);
+  if (front === null) return {};
   const out = {};
-  for (const line of m[1].split('\n')) {
+  for (const line of front.split('\n')) {
     const kv = /^([a-zA-Z-]+):\s*(.*)$/.exec(line);
     if (!kv) continue;
     const [, key, raw] = kv;
@@ -1418,8 +1419,7 @@ function parseFrontmatter(text) {
 function stripFrontmatter(text) {
   // The frontmatter strip must also swallow the blank lines that follow it, or
   // the H1 strip's `^` anchor lands on a newline and silently matches nothing.
-  return text
-    .replace(/^---\n[\s\S]*?\n---\n*/, '')
+  return stripBlock(text)
     .replace(/^#\s+.*\n+/, '')
     .trim();
 }

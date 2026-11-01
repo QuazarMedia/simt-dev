@@ -5,10 +5,8 @@
 // batch. Coverage is read only from a fixed list of paths. History is the last
 // 200 non-merge commits, which is a map and not the whole changelog.
 
-import { execFile } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
@@ -17,8 +15,7 @@ import { blobTexts, isIndexStale, langOf, readEdges, readFiles, reindex } from '
 import { coverage } from '../index/coverage.mjs';
 import { HISTORY, importsOf, parseCoverage, testEdges } from '../index/tests.mjs';
 import { commandRoot } from '../repo-root.mjs';
-
-const exec = promisify(execFile);
+import { git } from '../sys/git.mjs';
 
 const COVERAGE_PATHS = [
   'coverage/lcov.info',
@@ -129,10 +126,9 @@ async function coverageTexts(root) {
 async function history(root) {
   let stdout = '';
   try {
-    ({ stdout } = await exec('git', ['log', '-n', String(HISTORY), '--no-merges', '--name-only', '--pretty=format:%x1e'], {
-      cwd: root,
+    stdout = await git(root, ['log', '-n', String(HISTORY), '--no-merges', '--name-only', '--pretty=format:%x1e'], {
       maxBuffer: 16 << 20,
-    }));
+    });
   } catch {
     return [];
   }

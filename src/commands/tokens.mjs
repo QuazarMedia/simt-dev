@@ -35,15 +35,10 @@ import {
 } from '../measure/context.mjs';
 import { measureSession } from '../measure/session.mjs';
 import { sharedTotals } from '../projection/shared.mjs';
-
-/** `1234567`, never `1,234,567`. `toLocaleString` output depends on the locale, and
- *  this command exists so two machines produce two numbers a pull request can diff. */
-function plain(n) {
-  return String(n);
-}
+import { plainNumber } from '../util/fs.mjs';
 
 function files(n) {
-  return n === 1 ? '1 file' : `${plain(n)} files`;
+  return n === 1 ? '1 file' : `${plainNumber(n)} files`;
 }
 
 export async function tokensCommand(positional, flags) {
@@ -68,10 +63,10 @@ export async function tokensCommand(positional, flags) {
     }
     const lines = [
       `tokens   ${session.path}  (session)`,
-      `rules       ${plain(session.rules.bytes)} B  ~${plain(session.rules.tokens)} tokens  (${plain(session.rules.share)}%)`,
-      `file reads  ${plain(session.fileReads.bytes)} B  ~${plain(session.fileReads.tokens)} tokens  (${plain(session.fileReads.share)}%)`,
-      `tool output ${plain(session.toolOutput.bytes)} B  ~${plain(session.toolOutput.tokens)} tokens  (${plain(session.toolOutput.share)}%)`,
-      `total       ${plain(session.total.bytes)} B  ~${plain(session.total.tokens)} tokens`,
+      `rules       ${plainNumber(session.rules.bytes)} B  ~${plainNumber(session.rules.tokens)} tokens  (${plainNumber(session.rules.share)}%)`,
+      `file reads  ${plainNumber(session.fileReads.bytes)} B  ~${plainNumber(session.fileReads.tokens)} tokens  (${plainNumber(session.fileReads.share)}%)`,
+      `tool output ${plainNumber(session.toolOutput.bytes)} B  ~${plainNumber(session.toolOutput.tokens)} tokens  (${plainNumber(session.toolOutput.share)}%)`,
+      `total       ${plainNumber(session.total.bytes)} B  ~${plainNumber(session.total.tokens)} tokens`,
     ];
     emit(lines.join('\n'));
     return EXIT.OK;
@@ -140,27 +135,27 @@ export async function tokensCommand(positional, flags) {
 
   const lines = [];
   if (flags.repos) {
-    lines.push(`tokens   ${root}  ${plain(summary.roots)} repositories  (${target.source})`);
+    lines.push(`tokens   ${root}  ${plainNumber(summary.roots)} repositories  (${target.source})`);
     for (const row of rows) {
-      const budget = row.budget.over ? `  over budget by ${plain(row.budget.overBy)} B` : '';
+      const budget = row.budget.over ? `  over budget by ${plainNumber(row.budget.overBy)} B` : '';
       lines.push(
-        `${row.name}  generated ${plain(row.generatedBytes)} B  duplicate ${plain(row.redundancy.duplicateBytes)} B  unique ${plain(row.redundancy.uniqueBytes)} B${budget}`,
+        `${row.name}  generated ${plainNumber(row.generatedBytes)} B  duplicate ${plainNumber(row.redundancy.duplicateBytes)} B  unique ${plainNumber(row.redundancy.uniqueBytes)} B${budget}`,
       );
       for (const finding of row.findings) lines.push(`note     ${row.name}: ${finding}`);
     }
     const share =
       summary.generatedBytes === 0 ? 0 : Math.round((summary.duplicateBytes / summary.generatedBytes) * 100);
     lines.push(
-      `totals   generated ${plain(summary.generatedBytes)} B  duplicate ${plain(summary.duplicateBytes)} B (${plain(share)}% of generated)  unique ${plain(summary.uniqueBytes)} B  repeat ${plain(summary.repeatBytes)} B  ~${plain(summary.tokens)} tokens`,
+      `totals   generated ${plainNumber(summary.generatedBytes)} B  duplicate ${plainNumber(summary.duplicateBytes)} B (${plainNumber(share)}% of generated)  unique ${plainNumber(summary.uniqueBytes)} B  repeat ${plainNumber(summary.repeatBytes)} B  ~${plainNumber(summary.tokens)} tokens`,
     );
     // Only when there is a copy to count. The line a reader sees most is the one that
     // says what their whole estate loads, and adding a second number to it that is
     // usually zero is how a report stops being read.
     if (summary.sharedBytes > 0) {
       lines.push(
-        `shared   ${plain(summary.sharedBytes)} B carried once in ${plain(summary.sharedFiles.length)} user-level file(s)  estate total ${plain(summary.estateBytes)} B`,
+        `shared   ${plainNumber(summary.sharedBytes)} B carried once in ${plainNumber(summary.sharedFiles.length)} user-level file(s)  estate total ${plainNumber(summary.estateBytes)} B`,
       );
-      for (const f of summary.sharedFiles) lines.push(`  ${f.path}  ${plain(f.bytes)} B  ${plain(f.rules)} rule(s)`);
+      for (const f of summary.sharedFiles) lines.push(`  ${f.path}  ${plainNumber(f.bytes)} B  ${plainNumber(f.rules)} rule(s)`);
     }
   } else {
     const row = rows[0];
@@ -168,29 +163,29 @@ export async function tokensCommand(positional, flags) {
     lines.push(`state    ${row.adoption}  surfaces ${row.surfaces.length === 0 ? '(AGENTS.md only)' : row.surfaces.join(', ')}`);
     for (const channel of row.channels) {
       lines.push(
-        `${channel.channel.padEnd(9)}${files(channel.files)}  ${plain(channel.generatedBytes)} B generated  ${plain(channel.readerBytes)} B read`,
+        `${channel.channel.padEnd(9)}${files(channel.files)}  ${plainNumber(channel.generatedBytes)} B generated  ${plainNumber(channel.readerBytes)} B read`,
       );
     }
-    const verdict = row.budget.over ? `over by ${plain(row.budget.overBy)} B` : 'within budget';
+    const verdict = row.budget.over ? `over by ${plainNumber(row.budget.overBy)} B` : 'within budget';
     lines.push(
-      `always-on ${plain(row.generatedBytes)} B generated  ~${plain(row.generatedTokens)} tokens  budget ${plain(row.budget.bytes)} B  ${verdict}`,
+      `always-on ${plainNumber(row.generatedBytes)} B generated  ~${plainNumber(row.generatedTokens)} tokens  budget ${plainNumber(row.budget.bytes)} B  ${verdict}`,
     );
     // The same reason as the `--repos` line, and it matters more here: measuring one
     // repository is the default, so a reader who owns the workspace copy and never saw it
     // counted would read a saving their own session does not get.
     if (summary.sharedBytes > 0) {
       lines.push(
-        `shared   ${plain(summary.sharedBytes)} B carried once in ${plain(summary.sharedFiles.length)} user-level file(s)  always-on for you: ${plain(summary.estateBytes)} B`,
+        `shared   ${plainNumber(summary.sharedBytes)} B carried once in ${plainNumber(summary.sharedFiles.length)} user-level file(s)  always-on for you: ${plainNumber(summary.estateBytes)} B`,
       );
-      for (const f of summary.sharedFiles) lines.push(`  ${f.path}  ${plain(f.bytes)} B  ${plain(f.rules)} rule(s)`);
+      for (const f of summary.sharedFiles) lines.push(`  ${f.path}  ${plainNumber(f.bytes)} B  ${plainNumber(f.rules)} rule(s)`);
     }
     lines.push(
-      `redundant ${plain(row.redundancy.duplicateBytes)} B repeats an earlier repository  ${plain(row.redundancy.repeatBytes)} B repeats an earlier document here  ${plain(row.redundancy.uniqueBytes)} B unique of ${plain(row.redundancy.blockBytes)} B counted in blocks`,
+      `redundant ${plainNumber(row.redundancy.duplicateBytes)} B repeats an earlier repository  ${plainNumber(row.redundancy.repeatBytes)} B repeats an earlier document here  ${plainNumber(row.redundancy.uniqueBytes)} B unique of ${plainNumber(row.redundancy.blockBytes)} B counted in blocks`,
     );
     for (const finding of row.findings) lines.push(`note     ${finding}`);
   }
   lines.push(
-    `mcp      tools/list ${plain(mcp.bytes)} B of ${plain(mcp.tools)} tools  (the same for every repository, so it is not in any total)`,
+    `mcp      tools/list ${plainNumber(mcp.bytes)} B of ${plainNumber(mcp.tools)} tools  (the same for every repository, so it is not in any total)`,
   );
 
   emit(lines.join('\n'));

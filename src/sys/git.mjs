@@ -16,7 +16,10 @@ import { execFile } from 'node:child_process';
 /** How much stdout one git call may buffer before the call is refused. */
 const GIT_MAX_BUFFER = 32 << 20;
 
-/** A failed git call, carrying the arguments and git's own stderr. */
+/** A failed git call, carrying the arguments and git's own stderr.
+ *  `stdout` is kept too: a call that fails part-way (a `diff` in a tree with no HEAD)
+ *  can still have printed, and a caller that salvages the partial output must not lose
+ *  it to the wrap. */
 class GitError extends Error {
   constructor(args, cause) {
     const stderr = String(cause?.stderr ?? '').trim();
@@ -24,6 +27,7 @@ class GitError extends Error {
     this.name = 'GitError';
     this.args = args;
     this.stderr = stderr;
+    this.stdout = cause?.stdout;
     this.code = cause?.code;
   }
 }
@@ -36,15 +40,19 @@ class GitError extends Error {
  *
  * @param {string} root
  * @param {string[]} args
- * @param {{allowFailure?: boolean, maxBuffer?: number, input?: string}} [options]
+ * @param {{allowFailure?: boolean, maxBuffer?: number, input?: string, env?: NodeJS.ProcessEnv}} [options]
  * @returns {Promise<string|null>} stdout, or null when `allowFailure` and the call failed
  */
-export function git(root, args, { allowFailure = false, maxBuffer = GIT_MAX_BUFFER, input } = {}) {
+export function git(
+  root,
+  args,
+  { allowFailure = false, maxBuffer = GIT_MAX_BUFFER, input, env = process.env } = {},
+) {
   return new Promise((resolve, reject) => {
     const child = execFile(
       'git',
       ['-c', 'core.quotePath=false', ...args],
-      { cwd: root, encoding: 'utf8', maxBuffer },
+      { cwd: root, encoding: 'utf8', maxBuffer, env },
       (error, stdout, stderr) => {
         if (error) {
           if (allowFailure) resolve(null);

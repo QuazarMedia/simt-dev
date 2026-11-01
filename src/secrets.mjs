@@ -23,10 +23,7 @@
 //     is documentation, and a gate that blocks it teaches the exact `--no-verify`
 //     habit the dispatcher's fail-closed rule exists to prevent.
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
-const exec = promisify(execFile);
+import { git } from './sys/git.mjs';
 
 /** The length at which a token is worth measuring, and the entropy it must reach. */
 const ENTROPY_MIN_LENGTH = 32;
@@ -294,24 +291,19 @@ export async function scanStaged(root, options = {}) {
     // program that prints nothing, `-diff` in `.gitattributes` and genuinely binary
     // files make git print no text at all, a textconv rewrites the bytes on the way
     // out, `diff.mnemonicPrefix` renames the header prefixes the attribution below
-    // reads, and C-quoting mangles a non-ASCII name. The scan asks git for the staged
-    // bytes with its own flags and ignores what the repository asked for.
-    ({ stdout } = await exec(
-      'git',
-      [
-        '-c', 'core.quotePath=false',
-        'diff',
-        '--cached',
-        '--no-ext-diff',
-        '--no-textconv',
-        '--text',
-        '--unified=0',
-        '--no-color',
-        '--src-prefix=a/',
-        '--dst-prefix=b/',
-      ],
-      { cwd: root, maxBuffer: 32 * 1024 * 1024 },
-    ));
+    // reads. The scan asks git for the staged bytes with its own flags and ignores
+    // what the repository asked for.
+    stdout = await git(root, [
+      'diff',
+      '--cached',
+      '--no-ext-diff',
+      '--no-textconv',
+      '--text',
+      '--unified=0',
+      '--no-color',
+      '--src-prefix=a/',
+      '--dst-prefix=b/',
+    ]);
   } catch (error) {
     const stderr = String(error.stderr ?? '').trim();
     const reason = (stderr || String(error.message ?? error)).split('\n')[0];

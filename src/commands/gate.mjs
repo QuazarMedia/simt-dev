@@ -21,6 +21,7 @@ import { langOf, packageOf } from '../index/store.mjs';
 import { localRel } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { gitPaths } from '../sys/git.mjs';
+import { cmp } from '../util/sort.mjs';
 
 const exec = promisify(execFile);
 
@@ -215,9 +216,9 @@ async function tracked(root) {
 
 async function changedFiles(root) {
   try {
-    const { stdout } = await exec('git', ['diff', '--name-only', '-z', 'HEAD'], { cwd: root, maxBuffer: 8 << 20 });
-    const untracked = await exec('git', ['ls-files', '--others', '--exclude-standard', '-z'], { cwd: root, maxBuffer: 8 << 20 });
-    return { files: [...new Set([...stdout.split('\0'), ...untracked.stdout.split('\0')].filter(Boolean))].sort() };
+    const files = await gitPaths(root, ['diff', '--name-only', 'HEAD'], { maxBuffer: 8 << 20 });
+    const untracked = await gitPaths(root, ['ls-files', '--others', '--exclude-standard'], { maxBuffer: 8 << 20 });
+    return { files: [...new Set([...files, ...untracked])].sort() };
   } catch (error) {
     return {
       error: fail(
@@ -229,8 +230,3 @@ async function changedFiles(root) {
   }
 }
 
-function cmp(a, b) {
-  if (a < b) return -1;
-  if (a > b) return 1;
-  return 0;
-}

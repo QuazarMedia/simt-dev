@@ -25,11 +25,12 @@ import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { PACKAGE_ROOT } from '../workspace.mjs';
-import { splitFrontmatter } from '../memory/decide.mjs';
+import { parseFrontmatter } from '../text/frontmatter.mjs';
 import { LOADERS } from '../projection/loaders.mjs';
 import { journaledWriteFile } from '../journal.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
 import { readBefore } from '../diff.mjs';
+import { readIfExists } from '../util/fs.mjs';
 
 /** The one agent this tool ships, and the filename stem every harness shares. */
 const AGENT_FILE = 'simt-agent.md';
@@ -151,7 +152,7 @@ function parseSimpleFront(front) {
  */
 export async function loadAgent() {
   const raw = await readFile(join(PACKAGE_ROOT, 'agents', AGENT_FILE), 'utf8');
-  const { front, body } = splitFrontmatter(raw);
+  const { front, body } = parseFrontmatter(raw);
   const meta = parseSimpleFront(front ?? '');
   if (!meta.name || !meta.description) {
     throw new Error(`${AGENT_FILE} must declare a name and a description in its frontmatter`);
@@ -213,15 +214,6 @@ export function rendered(adapterRow, agent, existing) {
   if (existing === null) return { text, action: 'created' };
   if (existing === text) return { text, action: 'unchanged' };
   return { text, action: 'updated' };
-}
-
-/** Read a file as UTF-8, or null when it is not there. */
-async function readIfExists(path) {
-  try {
-    return await readFile(path, 'utf8');
-  } catch {
-    return null;
-  }
 }
 
 /**

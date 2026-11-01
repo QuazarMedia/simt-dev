@@ -9,17 +9,14 @@
 // misconfigured the command needs to be able to ask what it exposes without hanging, and
 // a command that only speaks when spoken to cannot answer that.
 
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { TOOLS } from '../mcp/tools.mjs';
 import { PROTOCOL_VERSION, SUPPORTED_VERSIONS, serve } from '../mcp/server.mjs';
 import { CLI } from '../name.mjs';
+import { packageVersion } from '../package-version.mjs';
 
 export async function mcpCommand(positional, flags) {
-  const { version } = await packageVersion();
+  const version = packageVersion();
 
   if (flags.list === true) {
     if (isJson(flags)) {
@@ -61,17 +58,5 @@ export async function mcpCommand(positional, flags) {
     return await serve(TOOLS, { packageVersion: version });
   } catch (error) {
     return fail(`mcp transport failed: ${error.message}`, EXIT.FAIL, `run: ${CLI} mcp --list to check the surface loads`);
-  }
-}
-
-async function packageVersion() {
-  try {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const pkg = JSON.parse(await readFile(join(here, '..', '..', 'package.json'), 'utf8'));
-    return { version: pkg.version };
-  } catch {
-    // A missing version must not stop the server: the client already knows which
-    // build it launched, and a hard failure here would look like a protocol bug.
-    return { version: 'unknown' };
   }
 }

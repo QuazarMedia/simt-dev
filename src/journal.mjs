@@ -41,18 +41,15 @@
 // a second `undo` naturally targets the set before it, and the untouched-check
 // refuses when the two sets overlap on a file the first undo already restored.
 
-import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmod, cp, mkdir, readFile, readdir, rename, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
-import { promisify } from 'node:util';
 
 import { noteEvent } from './state/events.mjs';
 import { STATE_DIR } from './name.mjs';
 import { LOCAL_DIR } from './state.mjs';
 import { HOOKS_DIR } from './hooks/shim.mjs';
-
-const exec = promisify(execFile);
+import { git, gitText } from './sys/git.mjs';
 
 const JOURNAL_DIR = join(LOCAL_DIR, 'journal');
 const JOURNAL_DIR_LEGACY = '.simt/journal';
@@ -223,8 +220,7 @@ export async function journaledRemoveFile(root, acc, path) {
 /** Read one git config value in a repo, or null when unset. */
 export async function readGitValue(root, key) {
   try {
-    const { stdout } = await exec('git', ['config', '--get', key], { cwd: root });
-    return stdout.replace(/\n$/, '');
+    return await gitText(root, ['config', '--get', key]);
   } catch (error) {
     if (error.code === 1) return null;
     throw error;
@@ -247,9 +243,9 @@ export async function journaledGitConfig(root, acc, key, value) {
   const before = await readGitValue(root, key);
   if (before === value) return null;
   if (value === null) {
-    await exec('git', ['config', '--unset', key], { cwd: root });
+    await git(root, ['config', '--unset', key]);
   } else {
-    await exec('git', ['config', key, value], { cwd: root });
+    await git(root, ['config', key, value]);
   }
   const entry = { kind: 'git-config', key, before, after: value };
   acc.push(entry);
@@ -537,9 +533,7 @@ function entryBytes(entry) {
 /** Restore one entry: bytes and permission bits for files, the value for config. */
 async function restoreEntry(root, entry) {
   if (entry.kind === 'git-config') {
-    await exec('git', entry.before === null ? ['config', '--unset', entry.key] : ['config', entry.key, entry.before], {
-      cwd: root,
-    });
+    await git(root, entry.before === null ? ['config', '--unset', entry.key] : ['config', entry.key, entry.before]);
     return;
   }
   const abs = join(root, entry.path);

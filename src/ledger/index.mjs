@@ -6,11 +6,9 @@
 // no longer proves anything about what is on disk now.
 
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
 import { appendFile, copyFile, mkdir, mkdtemp, open, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { promisify } from 'node:util';
 
 import {
   errorSignature,
@@ -20,11 +18,10 @@ import {
 } from '../memory/lessons.mjs';
 import { TREE_EXCLUDES, localRel, readStateFile } from '../state.mjs';
 import { appendEvent } from '../state/events.mjs';
+import { LEDGER_FILE_LEGACY, LEDGER_FILE_REL } from '../name.mjs';
+import { git, gitText } from '../sys/git.mjs';
 
-const exec = promisify(execFile);
-
-export const LEDGER_FILE = localRel('ledger.jsonl');
-const LEDGER_FILE_LEGACY = '.simt/ledger.jsonl';
+export const LEDGER_FILE = localRel(LEDGER_FILE_REL);
 
 /** Phrases that claim a run happened. `unverified` and `not verified` are removed
  *  first, because both contain the word and neither is a claim. Trailers
@@ -52,8 +49,8 @@ const TRAILER = /^(signed-off-by|co-authored-by|reviewed-by|acked-by|tested-by|f
  */
 export async function seedIndex(root, target) {
   try {
-    const { stdout } = await exec('git', ['rev-parse', '--git-path', 'index'], { cwd: root });
-    const from = resolve(root, String(stdout ?? '').trim());
+    const stdout = await gitText(root, ['rev-parse', '--git-path', 'index']);
+    const from = resolve(root, stdout ?? '');
     await copyFile(from, target);
     return from;
   } catch {
@@ -85,9 +82,8 @@ export async function treeId(root) {
     // carry only the paths git does not already ignore.
     const ignored = await ignoredSet(root, TREE_EXCLUDES);
     const excludes = TREE_EXCLUDES.filter((p) => !ignored.has(p)).map((p) => `:(exclude)${p}`);
-    await exec('git', ['add', '-A', '--', '.', ...excludes], { cwd: root, env });
-    const { stdout } = await exec('git', ['write-tree'], { cwd: root, env });
-    return stdout.trim();
+    await git(root, ['add', '-A', '--', '.', ...excludes], { env });
+    return await gitText(root, ['write-tree'], { env });
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -104,10 +100,7 @@ export async function treeId(root) {
  */
 async function ignoredSet(root, paths) {
   try {
-    // Paths as argv, not `--stdin`: `promisify(execFile)` drops the `input`
-    // option, so a stdin-fed `check-ignore` waits for input that never comes
-    // and the promise never settles.
-    const { stdout } = await exec('git', ['check-ignore', ...paths], { cwd: root });
+    const stdout = await git(root, ['check-ignore', ...paths]);
     return new Set(String(stdout).split('\n').filter(Boolean));
   } catch {
     // `check-ignore` exits 1 when nothing is ignored - the common case, not an
@@ -125,8 +118,7 @@ async function ignoredSet(root, paths) {
  *  Null when git cannot answer; the caller then falls back to the worktree tree. */
 export async function indexTreeId(root) {
   try {
-    const { stdout } = await exec('git', ['write-tree'], { cwd: root });
-    const tree = String(stdout ?? '').trim();
+    const tree = await gitText(root, ['write-tree']);
     return /^[0-9a-f]{40}$/.test(tree) ? tree : null;
   } catch {
     return null;

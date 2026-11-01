@@ -24,6 +24,7 @@ import { promisify } from 'node:util';
 import { PACK_DIR, packDigest, packNameProblem } from '../packs.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
+import { parseFrontmatter } from '../text/frontmatter.mjs';
 
 const exec = promisify(execFile);
 
@@ -312,10 +313,10 @@ export async function lintPack(dir, { requireMeasured = false, declared = null }
       fail(rel, 'pack-rule-unreadable', 'the file cannot be read', 'restore it or remove it from the pack');
       continue;
     }
-    const frontmatter = /^---\n([\s\S]*?)\n---\n?/.exec(text);
+    const { front } = parseFrontmatter(text);
     // Multiline: the id sits on its own line inside the frontmatter block, and
     // without `m` the anchors hold the whole block instead of the line.
-    const id = frontmatter === null ? null : /^simt-id:\s*(.+?)\s*$/m.exec(frontmatter[1])?.[1] ?? null;
+    const id = front === null ? null : /^simt-id:\s*(.+?)\s*$/m.exec(front)?.[1] ?? null;
     if (id === null) {
       fail(rel, 'pack-rule-without-id', 'the rule has no `simt-id`: without one nothing selects it and nothing explains it', 'give the rule a `simt-id` in its frontmatter');
     }

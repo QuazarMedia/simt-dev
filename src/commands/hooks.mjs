@@ -31,6 +31,7 @@ import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { readIfExists } from '../util/fs.mjs';
 
 export async function hooksCommand(sub, args, flags) {
   const root = commandRoot(flags, args);
@@ -884,12 +885,4 @@ function collectProblems({ exists, current, installed, manifest, foreign = [] })
     }
   }
   return problems;
-}
-
-async function readIfExists(path) {
-  try {
-    return await readFile(path, 'utf8');
-  } catch {
-    return null;
-  }
 }

@@ -1,13 +1,18 @@
-// One bounded child process, for everything the bench runs (review 0003 Q47).
+// One bounded child process and the environment a child inherits, for everything
+// that runs one (review 0003 Q47, Q72).
 //
-// `child.kill('SIGKILL')` kills the process the bench started and leaves its
+// `child.kill('SIGKILL')` kills the process the caller started and leaves its
 // grandchildren running: an adapter that ran `(sleep 15 &); sleep 60` kept the pipe open
-// and the bench waited 62.6 s against a 2 s timeout, then graded the result. A detached
+// and the caller waited 62.6 s against a 2 s timeout, then graded the result. A detached
 // child is its own process group, so the deadline kills the group, destroys the streams
 // and settles. A run cannot outlive its own deadline, whatever it spawned.
 //
-// Output is bounded so a runaway agent cannot decide the bench's memory: past the cap the
-// oldest chunk is dropped and `truncated` says so, rather than the spawn failing.
+// Output is bounded so a runaway child cannot decide the caller's memory: past the cap
+// the oldest chunk is dropped and `truncated` says so, rather than the spawn failing.
+//
+// This module used to live in `src/bench/` because the bench was its only caller. The
+// bench is not the only thing that runs a child it does not trust, and a second copy of
+// the deadline logic is a second way for a run to outlive its deadline.
 
 import { spawn } from 'node:child_process';
 
@@ -125,4 +130,22 @@ export function spawnBounded(
 
     child.stdin?.end(input ?? undefined);
   });
+}
+
+/**
+ * What a spawned child is allowed to inherit from the operator's shell.
+ *
+ * Three bench modules grew this identically, and the differences between what a child
+ * needs and what the shell carries are the whole point: `SIMT_DEV_WORKSPACE` is forced
+ * off so a child cannot resolve THIS repository's workspace, and the `NODE_TEST*`
+ * variables are dropped because they steer `node --test` at a test directory the child
+ * does not have. Nothing here names a credential or a state directory: those come from
+ * the caller's own `extra`.
+ */
+export function sanitizedEnv(extra = {}) {
+  const env = { ...process.env, SIMT_DEV_WORKSPACE: 'off', ...extra };
+  for (const key of Object.keys(env)) {
+    if (key.startsWith('NODE_TEST')) delete env[key];
+  }
+  return env;
 }

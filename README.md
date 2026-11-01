@@ -259,7 +259,7 @@ simt undo --yes                                                        # restore
 simt upgrade --yes                                                     # replace this installation with the pinned release
 
 # why
-simt why [path]                                                        # what governs a file: decisions, rules, skills, gates and lessons
+simt why [<subject>]                                                   # what governs a path, rule, decision, skill or finding code
 ```
 <!-- simt:commands:end -->
 

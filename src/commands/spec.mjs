@@ -52,7 +52,7 @@ export const SPEC = [
   { path: 'distill', usage: '<skill|doc>', summary: 'turn a repository into a skill or rule proposal', flags: [], },
   { path: 'docs readme', summary: 'render the README command list from the spec', writes: 'repo', defaultFor: 'docs', flags: ["yes","diff"], },
   { path: 'doctor', usage: '[--fix]', mcp: { name: 'doctor', flags: [] }, summary: 'report what is wrong with this installation', writes: 'repo', flags: ["yes","diff","fix"], },
-  { path: 'evidence', summary: 'the runs recorded against the tree on disk', flags: [], },
+  { path: 'evidence', summary: 'the runs recorded against the tree on disk', aliases: ['evidence show'], flags: [], },
   { path: 'evidence check', usage: '<msg-file>', summary: 'a commit message claiming a run this tree does not have', flags: [], },
   { path: 'explain', usage: '<CODE>', summary: 'what one check finding code means, and how to fix it', flags: [], },
   { path: 'gate', usage: '--changed', summary: 'the tests a change reaches, and only those', flags: ["changed"], },
@@ -115,7 +115,7 @@ export const SPEC = [
   { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', aliases: ['harness cost'], flags: ["repos","session"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff"], },
   { path: 'upgrade', usage: '--yes', summary: 'replace this installation with the pinned release', writes: 'repo', flags: ["yes","all","diff","workspace"], },
-  { path: 'why', usage: '[path]', summary: 'what governs a file: decisions, rules, skills, gates and lessons', flags: [], },
+  { path: 'why', usage: '[<subject>]', summary: 'what governs a path, rule, decision, skill or finding code', flags: [], },
 ];
 
 
@@ -128,8 +128,16 @@ export const SPEC = [
  */
 const CORE_GROUPS = new Set(['brief', 'check', 'gate', 'graph', 'hooks', 'impact', 'init', 'map', 'plan', 'rules', 'skills', 'slice', 'status', 'sync', 'tests', 'why']);
 
+/**
+ * A command whose group is core and whose own work is not: the two that need a corpus, a
+ * registry build or a model call to answer at all. They stay reachable and leave the core
+ * page, because a tier is where a command is listed, not whether it exists.
+ */
+const ADVANCED_PATHS = new Set(['skills compile', 'skills eval']);
+
 /** The tier a path is listed under: `core` or `advanced`. */
 export function tierOf(path) {
+  if (ADVANCED_PATHS.has(path)) return 'advanced';
   return CORE_GROUPS.has(path.split(' ')[0]) ? 'core' : 'advanced';
 }
 

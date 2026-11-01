@@ -97,9 +97,12 @@ function docNumber(name) {
  * The tag is the first word of the cell without notes, lowercased: a filter is about
  * which class does the work, and the reviewer is a second fact, not the first.
  */
-function tierKeyOf(cell) {
+function tierKeyOf(cell, none = null) {
   const plain = stripNotes(cell);
   if (plain === '') return '';
+  // A dash in a tier column is the same statement the dependency column makes with one:
+  // no tier. Without this it becomes a class named "—", counted beside the real ones.
+  if (none !== null && none.has(plain.toLowerCase())) return '';
   return plain.split(/\s+/)[0].toLowerCase();
 }
 
@@ -443,7 +446,7 @@ function linkSlices(docs, fmt) {
         state: fmt.readState(stateRaw),
         dependsOn: row.depsIdx >= 0 ? clean(row.cells[row.depsIdx] ?? '') : '',
         tier: row.tierIdx >= 0 ? clean(row.cells[row.tierIdx] ?? '') : '',
-        tierKey: row.tierIdx >= 0 ? tierKeyOf(row.cells[row.tierIdx] ?? '') : '',
+        tierKey: row.tierIdx >= 0 ? tierKeyOf(row.cells[row.tierIdx] ?? '', fmt.empty) : '',
         waves: wavesOf(doc, row.id),
         idIdx: row.idIdx,
         stateIdx: row.stateIdx,
@@ -572,13 +575,19 @@ export async function planStatus(root) {
     // A tier counts under the tag the tracker wrote, so `L (S)` is one L slice and the
     // line reads against the table without the reader translating case.
     const tiers = {};
+    const labels = new Map();
     let untagged = 0;
     for (const slice of own) {
       if (slice.tierKey === '') {
         untagged += 1;
         continue;
       }
-      const label = slice.tier === '' ? slice.tierKey : slice.tier;
+      // Grouped by the class, shown as the author wrote it once: `S (L)` and `S` are the
+      // same class, and reporting them apart would split one tier into two counts.
+      if (!labels.has(slice.tierKey)) {
+        labels.set(slice.tierKey, slice.tier.trim().split(/\s+/)[0] || slice.tierKey);
+      }
+      const label = labels.get(slice.tierKey);
       tiers[label] = (tiers[label] ?? 0) + 1;
     }
     // A wave row counts the slices it names that this tracker actually tracks: a table may

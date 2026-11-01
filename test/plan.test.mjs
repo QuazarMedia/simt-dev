@@ -666,3 +666,29 @@ test('plan status reports the tiers and waves a tracker carries, and stays quiet
   assert.doesNotMatch(quiet.stdout, /^  tiers/m);
   assert.doesNotMatch(quiet.stdout, /^  waves/m);
 });
+
+const GROUPED = `# plan
+
+| Wave | Slices |
+| --- | --- |
+| **0: foundation** | G1, G2 |
+| **1: polish** | G3 |
+
+## 3. Tracker
+
+| ID | State | Slice | Tier |
+| --- | --- | --- | --- |
+| G1 | Queued | kernel | L |
+| G2 | Queued | wording | S (L) |
+| G3 | Queued | probes | — |
+`;
+
+test('plan status groups a tier by its first word, and reads a dash as no tier', async () => {
+  const root = await repo({ 'docs/plans/0099.md': GROUPED });
+  const { stdout } = cli(['plan', 'status', '--root', root]);
+  assert.match(stdout, /tiers\s+L=1 S=1  untagged=1/);
+  assert.match(stdout, /waves\s+0=2 1=1/);
+  const payload = JSON.parse(cli(['plan', 'status', '--json', '--root', root]).stdout);
+  assert.deepEqual(payload.documents[0].tiers, { L: 1, S: 1 });
+  assert.equal(payload.documents[0].untagged, 1);
+});

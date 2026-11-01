@@ -5,7 +5,7 @@
 // `build` on are ones a person typed at a terminal, where a few hundred
 // milliseconds is not a bar to meet.
 
-import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { isIndexStale, readEdges, readEmbeddings, readFiles, readFts, readSymbols, reindex, searchFtsBm25 } from '../index/store.mjs';
 import {
@@ -91,11 +91,7 @@ async function recall(root, flags) {
     return fail(`could not measure recall (${error.message})`, EXIT.UNSUPPORTED, `run ${CLI} index in a git repository`);
   }
   const payload = { ok: true, command: 'map', root, recall: result };
-  if (isJson(flags)) {
-    emitJson(payload);
-    return EXIT.OK;
-  }
-  emit(formatRecall(result));
+  present(payload, () => formatRecall(result), flags);
   return EXIT.OK;
 }
 

@@ -11,7 +11,7 @@ import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { detectTestRunner } from '../bench/mine.mjs';
 import { compactOutput } from '../index/compact.mjs';
@@ -173,11 +173,7 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     raw,
     runs,
   };
-  if (isJson(flags)) {
-    emitJson(payload);
-    return code === 0 ? EXIT.OK : EXIT.FAIL;
-  }
-  emit(text.filter((line) => line !== undefined).join('\n'));
+  present(payload, () => text.filter((line) => line !== undefined).join('\n'), flags);
   return code === 0 ? EXIT.OK : EXIT.FAIL;
 }
 

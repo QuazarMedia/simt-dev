@@ -10,7 +10,7 @@
 // only mode this command has is `--line`, and running something else by
 // default would invent a second answer to what the status is.
 
-import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { currentHead, readCheckCache, renderStatusLine } from '../status.mjs';
 import { commandRoot } from '../repo-root.mjs';
@@ -26,11 +26,7 @@ export async function statusCommand(args, flags) {
     // Informational, not a failure: a repository that never ran `check` — or
     // one a writer just invalidated — has no state to report, and a prompt
     // that errored until the first check would train its reader to ignore it.
-    if (isJson(flags)) {
-      emitJson({ ok: true, command: 'status', root, line: null, cached: false, stale: false });
-      return EXIT.OK;
-    }
-    emit('simt no cache - run check');
+    present({ ok: true, command: 'status', root, line: null, cached: false, stale: false }, () => 'simt no cache - run check', flags);
     return EXIT.OK;
   }
 

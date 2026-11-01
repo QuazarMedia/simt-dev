@@ -5,7 +5,7 @@
 // `$fpath`. A report line above it would be a report line in the user's shell
 // config.
 
-import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
+import { EXIT, fail, present } from '../output/index.mjs';
 import { SHELLS, renderCompletions } from '../completions.mjs';
 
 export async function completionsCommand(args, flags, commands) {
@@ -18,10 +18,6 @@ export async function completionsCommand(args, flags, commands) {
   }
 
   const script = renderCompletions(shell, commands);
-  if (isJson(flags)) {
-    emitJson({ ok: true, command: 'completions', shell, script });
-    return EXIT.OK;
-  }
-  emit(script);
+  present({ ok: true, command: 'completions', shell, script }, () => script, flags);
   return EXIT.OK;
 }

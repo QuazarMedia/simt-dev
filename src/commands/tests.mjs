@@ -10,7 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { isTestPath } from '../bench/mine.mjs';
 import { blobTexts, isIndexStale, langOf, readEdges, readFiles, reindex } from '../index/store.mjs';
@@ -75,11 +75,7 @@ function summarise(root, flags, edges) {
     else if (edge.kind === 'cochange') cochange += 1;
   }
   const payload = { ok: true, command: 'tests', root, test, cochange };
-  if (isJson(flags)) {
-    emitJson(payload);
-    return EXIT.OK;
-  }
-  emit(`test      ${test}\ncochange  ${cochange}`);
+  present(payload, () => `test      ${test}\ncochange  ${cochange}`, flags);
   return EXIT.OK;
 }
 

@@ -6,7 +6,7 @@
 
 import { readFile } from 'node:fs/promises';
 
-import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import {
@@ -98,10 +98,6 @@ async function checkClaim(root, file, flags) {
   }
   const detail = 'the message claims a run this tree does not have';
   const remedy = `run the command, then commit, or take the claim out of the message`;
-  if (isJson(flags)) {
-    emitJson({ ...payload, detail, remedy }, { pretty: flags.pretty === true });
-    return mode === 'block' ? EXIT.FAIL : EXIT.OK;
-  }
-  emit(`${mode === 'block' ? 'BLOCKED' : 'WARNING'}  ${detail}\n         remedy: ${remedy}`);
+  present({ ...payload, detail, remedy }, () => `${mode === 'block' ? 'BLOCKED' : 'WARNING'}  ${detail}\n         remedy: ${remedy}`, flags);
   return mode === 'block' ? EXIT.FAIL : EXIT.OK;
 }

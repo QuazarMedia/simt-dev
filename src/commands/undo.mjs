@@ -11,7 +11,7 @@
 // the rest around a hand edit would silently merge two authors' intentions.
 // Like every other writer this command previews without `--yes`.
 
-import { EXIT, emit, emitJson, isJson, writeMode } from '../output/index.mjs';
+import { EXIT, emit, emitJson, isJson, writeMode, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { beforeText, entryLabel, listJournalSets, readGitValue, readJournalSet, undoLastJournalSet } from '../journal.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
@@ -25,11 +25,7 @@ export async function undoCommand(positional, flags) {
 
   const [id] = await listJournalSets(root);
   if (!id) {
-    if (isJson(flags)) {
-      emitJson({ ok: true, command: 'undo', root, set: null, restored: [], dryRun: !mode.apply });
-      return EXIT.OK;
-    }
-    emit('nothing to undo: no journaled writes');
+    present({ ok: true, command: 'undo', root, set: null, restored: [], dryRun: !mode.apply }, () => 'nothing to undo: no journaled writes', flags);
     return EXIT.OK;
   }
 
@@ -73,11 +69,7 @@ export async function undoCommand(positional, flags) {
 
   const result = await undoLastJournalSet(root);
   if (result.empty) {
-    if (isJson(flags)) {
-      emitJson({ ok: true, command: 'undo', root, set: null, restored: [] });
-      return EXIT.OK;
-    }
-    emit('nothing to undo: no journaled writes');
+    present({ ok: true, command: 'undo', root, set: null, restored: [] }, () => 'nothing to undo: no journaled writes', flags);
     return EXIT.OK;
   }
   if (result.refused) {

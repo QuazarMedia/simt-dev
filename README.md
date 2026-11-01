@@ -240,7 +240,7 @@ simt slice finish <id> --yes                 # run the gates, commit the slice a
 simt slice start <id> --yes  |  -- "<text>"  # give a slice its worktree, branch and brief; -- starts one from a prompt, no row
 
 # status
-simt status --line                           # gate state from the last check
+simt status [--line]                         # the repository snapshot, or one line of the last check
 
 # sync
 simt sync [--explain] --yes                  # re-render the generated regions from the rule content

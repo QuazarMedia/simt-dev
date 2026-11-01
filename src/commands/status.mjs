@@ -1,26 +1,38 @@
-// `simt status --line`
+// `simt status [--line]`
 //
-// One line from the last `check`, for shell prompts, tmux and agent status
-// lines: `simt PASS ✓rules ✓hooks 3/3gates`. The line is the gate state *as
-// of the last check* — it reads only `.simt/check.json` plus one
-// `git rev-parse HEAD`, so it answers in milliseconds while `check` itself
-// takes the time projection takes.
+// Two questions, one command. `--line` is for shell prompts, tmux and agent status lines:
+// one line from the last `check`, read only from `.simt/check.json` plus one
+// `git rev-parse HEAD`, so it answers in milliseconds while `check` itself takes the time
+// projection takes. Bare `status` is the aggregate a UI's home view asks for - last
+// check, git hooks, agent hooks, evidence for the tree on disk, active leases, tracker
+// state, the last journal set - and it was a usage error until review 0003 Q82.
 //
-// Bare `status` is a usage error, the way `plan` without a subcommand is: the
-// only mode this command has is `--line`, and running something else by
-// default would invent a second answer to what the status is.
+// The line's cache lives in `status.mjs`; the aggregate lives in `status-snapshot.mjs`.
+// Both report the gate *as of the last check* rather than measuring: a status command
+// that ran the gate would cost what the gate costs, and a prompt that waited for it is a
+// prompt nobody reads.
 
-import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
+import { EXIT, emit, emitJson, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { currentHead, readCheckCache, renderStatusLine } from '../status.mjs';
+import { renderSnapshot, statusSnapshot } from '../status-snapshot.mjs';
 import { commandRoot } from '../repo-root.mjs';
 
 export async function statusCommand(args, flags) {
   const root = commandRoot(flags, args);
-  if (flags.line !== true) {
-    return fail('status needs --line', EXIT.USAGE, `run: ${CLI} status --line --root ${root}`);
-  }
+  if (flags.line === true) return statusLine(root, flags);
 
+  const snapshot = await statusSnapshot(root);
+  const code = snapshot.ok ? EXIT.OK : EXIT.FAIL;
+  if (isJson(flags)) {
+    emitJson(snapshot);
+    return code;
+  }
+  emit(renderSnapshot(snapshot));
+  return code;
+}
+
+async function statusLine(root, flags) {
   const record = await readCheckCache(root);
   if (record === null) {
     // Informational, not a failure: a repository that never ran `check` — or

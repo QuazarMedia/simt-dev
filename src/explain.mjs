@@ -15,6 +15,7 @@
  * @type {Record<string, CodeRow>}
  */
 export const EXPLAIN_CODES = {
+
   absent: {
     what: 'The file the gate reads does not exist: no AGENTS.md at the repository root, so there is no region to compare.',
     why: 'ADR-025: the region is the baseline in a file the repository owns. Absence is the pre-adoption state — there is nothing to verify against yet, which is why the gate reports it instead of passing a repository it never inspected.',
@@ -93,6 +94,18 @@ export const EXPLAIN_CODES = {
     fix: 'Point gates.cwd at a directory inside this repository, or remove it.',
     example: 'gates.cwd.test set to "../shared" in a monorepo member.',
   },
+  generated: {
+    what: 'The path carries bytes this tool generates, so a write there is discarded by the next sync instead of applied.',
+    why: 'ADR-036: the region is generated text and the repository owns the prose around it. An edit inside the markers is an edit the next writer overwrites, which is why the hook refuses the write and names the source rather than letting the work disappear quietly.',
+    fix: 'Edit the source the region comes from - the rule body, or this repository manifest - then run: simt sync --yes.',
+    example: 'A hand edit inside the simt region of AGENTS.md: the write is refused with this code.',
+  },
+  'hooks-disable': {
+    what: 'The command removes or reroutes the git hooks the gates run in: core.hooksPath is unset or repointed, or the hooks directory is deleted.',
+    why: 'ADR-104: the gates run from the hooks, so a quiet reroute turns every declared gate into a suggestion while check still reports the repository as adopted. The policy reports it before the command runs, not after the gates have stopped.',
+    fix: 'If the reroute is deliberate, run: simt hooks install --yes afterwards, so the gates keep running.',
+    example: 'git config core.hooksPath .git/hooks: refused, naming the config key that matched.',
+  },
   inconsistent: {
     what: 'The project\u2019s tsconfig spells `moduleResolution` in a form the TypeScript parser accepts but the documentation does not, so it compiles and quietly disagrees with every repository that spells it the documented way.',
     why: 'The parser is case-insensitive, which is the whole reason a workspace drifts on this key: both spellings work, so nothing ever said the other one did not. Consistency with the documentation is the only spelling checkable in one repository at a time \u2014 consistency with the other repositories would need a workspace, and `check` runs in a repository on its own.',
@@ -122,6 +135,12 @@ export const EXPLAIN_CODES = {
     why: 'Review 0003 Q55: byId keeps one silently, and a reader of the other gets a decision the tooling cannot resolve. Failing names both files while the collision is still a rename, not a rewrite of history.',
     fix: 'Renumber the newer record to a free number, then rerun the check.',
     example: 'ADR-002-first.md and ADR-002-second.md: DUPLICATE-DECISION-ID names both.',
+  },
+  lease: {
+    what: 'The path is leased by another session, so a write here collides with work happening right now.',
+    why: 'ADR-101: two sessions editing one file is the conflict no merge repairs. The lease makes the collision visible before the edit, and the report names the holder and the expiry so a wait is a number rather than a guess.',
+    fix: 'Wait for the lease TTL, edit a different file, or ask the holder to release the claim.',
+    example: 'A write to a file another session holds until 12:04: the message names the holder and the time.',
   },
   'lock-absent': {
     what: 'No lock is recorded: the projection was never locked, so there is nothing `--frozen` can compare against.',
@@ -213,6 +232,12 @@ export const EXPLAIN_CODES = {
     fix: 'Declare simt-supersedes: [{ adr: "ADR-MMM", ruling: N }] in the record\u2019s frontmatter.',
     example: 'A status line "ruling 2 narrowed by ADR-024" with empty frontmatter: the lint names the raw clause.',
   },
+  push: {
+    what: 'The command pushes: a remote mutation, which needs explicit approval before it runs.',
+    why: 'ADR-001: a push can deploy, migrate, or rewrite a branch the remote treats as production, and the agent that ran the tests is not the one who decides to publish them.',
+    fix: 'Ask for approval first; commit locally and report the SHA in the meantime.',
+    example: 'git push origin main: refused before it runs, with the approval line to ask for.',
+  },
   reformatted: {
     what: 'The manifest\u2019s content is what simt-dev would write, but the bytes differ: another formatter owns this file\u2019s shape.',
     why: 'ADR-050: a formatter that rewrites the file on every run and a tool that rewrites it back would fight forever, with init as the only repair — which re-runs adoption to change one file\u2019s formatting. Comparing content-to-content isolates the real question: does another tool own this file.',
@@ -224,6 +249,12 @@ export const EXPLAIN_CODES = {
     why: 'ADR-088: required-file is a declared checker, and a declaration nobody verifies is a wish. The gate fails because the rule\u2019s author already decided this file is load-bearing.',
     fix: 'Add the file, or amend the rule if the requirement moved on.',
     example: 'A rule requiring SECURITY.md in a repo without one.',
+  },
+  rewrite: {
+    what: 'The command amends, rebases, resets --hard, force-pushes or passes --no-verify: each one rewrites history or skips a declared gate.',
+    why: 'ADR-017: the gates are the contract, and every one of these forms is the escape that turns them into a suggestion. A skipped gate leaves no trace for the next reader, which is why the policy refuses rather than warns.',
+    fix: 'Commit a new commit instead, or ask for approval before rewriting history.',
+    example: 'git commit --amend, git reset --hard, git push --force: each reports this code and the flag that matched.',
   },
   'stale-generated-field': {
     what: 'Generated manifest fields do not match what simt-dev writes: the projection SHA, the stack, or the version pin drifted without a re-run.',

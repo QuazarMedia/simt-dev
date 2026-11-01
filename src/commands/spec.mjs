@@ -107,7 +107,7 @@ export const SPEC = [
   // `start` is the default because with the id it is missing it fails with a usage error
   // before anything is created - the one default here that cannot mutate.
   { path: 'slice start', usage: '<id> --yes  |  -- "<text>"', summary: 'give a slice its worktree, branch and brief; -- starts one from a prompt, no row', defaultFor: 'slice', flags: ["id","session","test","type"], },
-  { path: 'status', usage: '--line', summary: 'gate state from the last check', flags: ["line"], },
+  { path: 'status', usage: '[--line]', summary: 'the repository snapshot, or one line of the last check', flags: ["line"], },
   { path: 'sync', usage: '[--explain] --yes', summary: 're-render the generated regions from the rule content', writes: 'repo', flags: ["yes","check","diff","dry-run"], },
   { path: 'tests', usage: '<path> [--cochange]', summary: 'the tests that exercise a file', flags: ["cochange"], },
   { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', flags: ["repos","session"], },

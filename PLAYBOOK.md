@@ -13,7 +13,7 @@ through `simt mcp`.
 | About to edit a file | `simt why <file>` | `simt impact <file>` for blast radius |
 | Need to know what tests to run | `simt tests <file>` | `simt gate --changed` to run them |
 | Rule violation or error | `simt lessons list` | `simt rules why <rule-id>` for the decision |
-| Working from a plan | `simt plan next` | `simt plan done <id> <sha> --yes` when finished |
+| Working from a plan | `simt plan next` | `--tier <class>` / `--wave <name>` to stay inside one; `simt plan done <id> <sha> --yes` when finished |
 | Before committing | `simt check` | `simt evidence` to verify test claims |
 | Opening a pull request | `simt pr-body` | `--base <ref>` to diff against another fork point |
 | Repository adoption | `simt init --yes` | `simt doctor` to verify stack detection |
@@ -39,7 +39,9 @@ through `simt mcp`.
 2. **Pull the next tracker slice when working from a plan.** Instead of reading a multi-thousand-line
    plan in `docs/plans/` or `docs/reviews/`, run `simt plan next` (or MCP `plan_next`) to
    load only the next queued slice (~1 KB) whose dependencies are already `Complete` or
-   `Accepted`.
+   `Accepted`. Add `--tier <class>` or `--wave <name>` to keep the answer inside one class
+   or one wave; a filter that matches nothing says so rather than answering from the whole
+   tracker.
 
 **When to use `--json` format.** When piping output to other tools or when the agent needs
 structured data, add `--json` to any read-only command. For example, `simt brief "<task>" --json`

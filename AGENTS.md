@@ -444,5 +444,6 @@ misses half of the failure they exist to catch.
 ## Disclosure
 
 - release-process — Use when releasing simt-dev: cutting a version, writing the changelog, bumping the version, tagging, the publish and publish-channels workflows, npm staging, the PyPI and Homebrew channels, or deprecating a version.
+- simt-commands — Command reference for simt-dev: which commands are mutating vs read-only, and a scenario-to-command mapping for the agent.
 
 <!-- simt:end -->

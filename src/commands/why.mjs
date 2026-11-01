@@ -5,10 +5,8 @@
 // is `git ls-files`. The index is not rebuilt: governance is the records, and
 // writing the cache to answer a question would change the tree.
 
-import { execFile } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
@@ -21,12 +19,10 @@ import {
   sourceRoots,
   unresolvedAffects,
 } from '../index/govern.mjs';
-import { splitFrontmatter } from '../memory/decide.mjs';
+import { parseFrontmatter } from '../text/frontmatter.mjs';
 import { listPromotedLessons } from '../memory/lessons.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { gitPaths } from '../sys/git.mjs';
-
-const exec = promisify(execFile);
 
 const RULE_DIRS = ['rules', 'rules/stacks', 'rules/mdc', '.simt/profiles'];
 
@@ -96,7 +92,7 @@ export async function decisionRecords(root) {
   const records = [];
   for (const name of names) {
     const text = await readFile(join(dir, name), 'utf8');
-    const { body } = splitFrontmatter(text);
+    const { body } = parseFrontmatter(text);
     const id = /^ADR-\d{3,}/i.exec(name)[0].toUpperCase();
     const heading = /^#\s+(.*)$/m.exec(body)?.[1] ?? id;
     const title = heading.replace(/^ADR-\d{3,}\s*[—–-]\s*/i, '').trim();

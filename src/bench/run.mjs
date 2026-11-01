@@ -15,7 +15,7 @@ import { plan } from '../projection/project.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { gradeWorkspace } from './grade.mjs';
 import { resolveVaultDir } from './mine.mjs';
-import { spawnBounded } from './process.mjs';
+import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
 import { loadTasks } from './tasks.mjs';
 import { ablateSectionInWorkspace, parseAblationArmName } from './ablate.mjs';
 import { applyVariantInWorkspace, parseVariantArmName } from './variants.mjs';
@@ -42,14 +42,6 @@ export async function loadAdapters() {
   const raw = JSON.parse(await readFile(ADAPTERS_PATH, 'utf8'));
   cachedAdapters = raw.adapters;
   return cachedAdapters;
-}
-
-function sanitizedEnv(extra = {}) {
-  const env = { ...process.env, SIMT_DEV_WORKSPACE: 'off', ...extra };
-  for (const key of Object.keys(env)) {
-    if (key.startsWith('NODE_TEST')) delete env[key];
-  }
-  return env;
 }
 
 /**

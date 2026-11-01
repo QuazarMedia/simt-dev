@@ -15,10 +15,14 @@ import { createHash } from 'node:crypto';
 import { checkSkill, nameProblems, readFrontmatter } from './spec.mjs';
 import { matchesGlob } from '../resolve/resolve.mjs';
 
-export const BODY_TOKEN_BUDGET = 5000;
-export const BYTES_PER_TOKEN = 4;
-export const BODY_BYTE_BUDGET = BODY_TOKEN_BUDGET * BYTES_PER_TOKEN;
-export const BODY_LINE_BUDGET = 500;
+import {
+  BODY_BYTE_BUDGET,
+  BODY_LINE_BUDGET,
+  BODY_TOKEN_BUDGET,
+  BYTES_PER_TOKEN,
+} from './spec.mjs';
+
+export { BODY_BYTE_BUDGET, BODY_LINE_BUDGET, BODY_TOKEN_BUDGET, BYTES_PER_TOKEN };
 
 const TARGET_MAIN_BYTES = 12_000;
 const TARGET_MAIN_LINES = 350;

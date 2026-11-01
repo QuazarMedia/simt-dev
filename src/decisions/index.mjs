@@ -28,7 +28,8 @@ import { packageVersion } from '../package-version.mjs';
 // evaluation would read an initialising binding on one of the two load
 // orders. Every use below happens at runtime, when both sides are loaded.
 import { COMMANDS } from '../commands/index.mjs';
-import { PARTIAL_CLAUSE, parseDecisionFrontmatter, splitFrontmatter } from '../memory/decide.mjs';
+import { PARTIAL_CLAUSE, parseDecisionFrontmatter } from '../memory/decide.mjs';
+import { parseFrontmatter } from '../text/frontmatter.mjs';
 import { affectsTokens } from '../index/govern.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -189,7 +190,7 @@ export function citations(text) {
  */
 export function parseDecision(file, text, { all = false } = {}) {
   const fm = parseDecisionFrontmatter(text);
-  const { body } = splitFrontmatter(text);
+  const { body } = parseFrontmatter(text);
   const fileId = /^ADR-(\d{3,})/i.exec(file)?.[0]?.toUpperCase();
   const heading = /^#\s+(.*)$/m.exec(body)?.[1] ?? null;
   const headId = heading ? /^(ADR-\d{3,})/i.exec(heading)?.[1]?.toUpperCase() : null;

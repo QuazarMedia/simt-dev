@@ -8,6 +8,7 @@
 
 import { isTestPath } from '../bench/mine.mjs';
 import { extract, resolveImports } from './extract.mjs';
+import { cmp } from '../util/sort.mjs';
 
 export { scriptSpecifiers } from './extract.mjs';
 
@@ -251,11 +252,6 @@ function byEdge(a, b) {
   return cmp(a.kind, b.kind) || cmp(a.src, b.src) || cmp(a.dst, b.dst);
 }
 
-function cmp(a, b) {
-  if (a < b) return -1;
-  if (a > b) return 1;
-  return 0;
-}
 
 /** Imports in a file, resolved against the tracked tree. One path now: `extract`
  * reads scripts with `scriptSpecifiers`, so gate, impact and the index agree on

@@ -4,6 +4,8 @@
 // line at a time: an export, a definition, an import. That is enough for a map
 // and an import graph, and it is the same result on every machine.
 
+import { cmp } from '../util/sort.mjs';
+
 const IDENT = '[A-Za-z_$][\\w$]*';
 
 const EXTS = {
@@ -261,9 +263,6 @@ function byEdge(a, b) {
   return cmp(a.src, b.src) || cmp(a.dst, b.dst) || cmp(a.kind, b.kind);
 }
 
-function cmp(a, b) {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
 
 function sigOf(line) {
   return line.trim().slice(0, 200);

@@ -46,6 +46,13 @@ export const LOCK_LEGACY = 'simt-dev.lock.json';
  * markers, and the provenance header inside them. It follows the command, like the
  * manifest: the region is the command's footprint in a file the repo owns.
  */
+/** The ledger's pre-STATE_DIR home. Read, never written: state written under the old
+ *  name is still read by the ledger and the lesson sources. */
+export const LEDGER_FILE_LEGACY = '.simt/ledger.jsonl';
+
+/** The ledger the evidence is appended to, under the config directory. */
+export const LEDGER_FILE_REL = 'ledger.jsonl';
+
 export const MARKER_PREFIX = 'simt';
 
 /** What the region was namespaced under, and still is in every adopted repo. */

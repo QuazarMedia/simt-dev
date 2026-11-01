@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import {
-  tokenize,
   scoreSkill,
   rankSkills,
   closure,
@@ -18,6 +17,7 @@ import {
   stackCompatible,
   syntheticPathFor,
 } from '../src/resolve/resolve.mjs';
+import { tokenize } from '../src/text/tokens.mjs';
 import { nearMatches } from '../src/resolve/near.mjs';
 import { TOOLS } from '../src/mcp/tools.mjs';
 

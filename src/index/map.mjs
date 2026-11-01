@@ -22,6 +22,8 @@ import {
   scoreFtsBm25,
   searchFtsBm25,
 } from './store.mjs';
+import { cmp } from '../util/sort.mjs';
+import { INDEX_STOP as STOP } from '../text/tokens.mjs';
 
 export const ITERATIONS = 20;
 export const DAMPING = 0.85;
@@ -29,14 +31,6 @@ export const RRF_K = 40;
 export const EMBED_RECALL_GAIN_BAR = 0.1;
 const TOP = 10;
 export const DEFAULT_BUDGET = 2048;
-
-const STOP = new Set([
-  'this', 'that', 'with', 'from', 'have', 'been', 'into', 'only', 'when', 'what',
-  'which', 'their', 'about', 'after', 'before', 'where', 'there', 'these', 'those',
-  'would', 'could', 'should', 'every', 'other', 'than', 'then', 'them', 'they',
-  'your', 'will', 'does', 'file', 'files', 'test', 'tests', 'line', 'lines', 'code',
-  'also', 'just', 'more', 'some', 'such', 'each', 'same', 'over', 'used', 'using',
-]);
 
 /**
  * Reciprocal-rank fusion (RRF) over multiple ranked lists.
@@ -629,8 +623,3 @@ function round6(value) {
   return Math.round(value * 1e6) / 1e6;
 }
 
-function cmp(a, b) {
-  if (a < b) return -1;
-  if (a > b) return 1;
-  return 0;
-}

@@ -29,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parse } from './markers.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
+import { parseFrontmatter as splitBlock, stripFrontmatter as stripBlock } from '../text/frontmatter.mjs';
 
 // ROOT is computed here rather than imported: project.mjs is the caller of every
 // function below, so importing it back would create a cycle for the sake of one
@@ -134,9 +135,8 @@ export async function loadMdcRules() {
  *  rather than skipped, because a silently-dropped substitution projects a rule
  *  containing a literal `{{placeholder}}`. */
 function parseSubstitutions(text) {
-  const m = /^---\n([\s\S]*?)\n---/.exec(text);
-  if (!m) return [];
-  const block = m[1];
+  const { front: block } = splitBlock(text);
+  if (block === null) return [];
   if (!/^simt-substitutions:/m.test(block)) return [];
 
   const out = [];
@@ -168,10 +168,10 @@ function parseSubstitutions(text) {
 }
 
 function parseFrontmatter(text) {
-  const m = /^---\n([\s\S]*?)\n---\n?/.exec(text);
-  if (!m) return {};
+  const { front } = splitBlock(text);
+  if (front === null) return {};
   const out = {};
-  for (const line of m[1].split('\n')) {
+  for (const line of front.split('\n')) {
     // `simt-substitutions:` opens a nested block this parser cannot represent, so
     // it and its list items are skipped here and read by parseSubstitutions.
     if (/^\s*-\s/.test(line)) continue;
@@ -201,8 +201,7 @@ function unquote(s) {
 }
 
 function stripFrontmatter(text) {
-  return text
-    .replace(/^---\n[\s\S]*?\n---\n*/, '')
+  return stripBlock(text)
     .replace(/^#\s+.*\n+/, '')
     .trim();
 }

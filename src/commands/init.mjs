@@ -15,8 +15,6 @@
 //   6. write               only with --yes
 // Never commits, never pushes (ADR-001).
 
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { mkdir, readFile, symlink } from 'node:fs/promises';
 import { commitJournal, ignoreJournal, journaledWriteFile } from '../journal.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
@@ -58,8 +56,7 @@ import { packageVersion, hasNpm } from '../package-version.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 import { PACKAGE_NAME } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
-
-const run = promisify(execFile);
+import { git as sysGit } from '../sys/git.mjs';
 
 const BACKUP_TAG = 'backup-before-simt-dev';
 const ADOPT_BRANCH = 'simt-dev/adopt';
@@ -788,8 +785,8 @@ async function establishEscapeHatch(root) {
 
 async function git(cwd, args) {
   try {
-    const { stdout, stderr } = await run('git', args, { cwd });
-    return { ok: true, stdout, stderr };
+    const stdout = await sysGit(cwd, args);
+    return { ok: true, stdout, stderr: '' };
   } catch (error) {
     return { ok: false, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
   }

@@ -25,15 +25,12 @@
 //     booleans are stored, never findings, so a huge gate still leaves a
 //     ~200-byte file and a killed `check` never leaves half a document.
 
-import { execFile } from 'node:child_process';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
 import { readHooksState, wantsShim } from './compare/hooksstate.mjs';
 import { LOCAL_DIR } from './state.mjs';
-
-const exec = promisify(execFile);
+import { gitText } from './sys/git.mjs';
 
 const CACHE_FILE = join(LOCAL_DIR, 'check.json');
 const CACHE_FILE_LEGACY = '.simt/check.json';
@@ -47,8 +44,7 @@ const CACHE_VERSION = 1;
  */
 export async function currentHead(root) {
   try {
-    const { stdout } = await exec('git', ['rev-parse', 'HEAD'], { cwd: root });
-    return stdout.trim() || null;
+    return await gitText(root, ['rev-parse', 'HEAD']);
   } catch {
     return null;
   }

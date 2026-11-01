@@ -2,12 +2,11 @@
 // content: it is gitignored, and a second run with the same blobs writes the same
 // rows (ADR-089).
 
-import { execFile } from 'node:child_process';
-
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { JSONL_FILE, SQLITE_FILE, reindex } from '../index/store.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { git } from '../sys/git.mjs';
 
 export async function indexCommand(args, flags) {
   if (args.length > 0) return fail(`unknown index argument ${args[0]}`, EXIT.USAGE, `run: ${CLI} index`);
@@ -51,10 +50,11 @@ export async function indexCommand(args, flags) {
   return EXIT.OK;
 }
 
-function isIgnored(root, file) {
-  return new Promise((resolve) => {
-    execFile('git', ['check-ignore', '-q', '--', file], { cwd: root }, (error) => {
-      resolve(!error);
-    });
-  });
+async function isIgnored(root, file) {
+  try {
+    await git(root, ['check-ignore', '-q', '--', file]);
+    return true;
+  } catch {
+    return false;
+  }
 }

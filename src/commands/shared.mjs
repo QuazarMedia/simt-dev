@@ -29,6 +29,7 @@ import {
 } from '../projection/shared.mjs';
 import { buildManifest, declaredShared, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { desiredRegion } from '../projection/rules.mjs';
+import { plainNumber } from '../util/fs.mjs';
 
 /**
  * Everything `plan` and `install` both need, computed once.
@@ -76,9 +77,9 @@ async function gather(flags) {
  */
 function divergentNote(d, total) {
   if (d.reason === 'coverage') {
-    return `${d.id}  carried by ${plain(d.roots.length)} of ${plain(total)} repositories, so each region keeps its own`;
+    return `${d.id}  carried by ${plainNumber(d.roots.length)} of ${plainNumber(total)} repositories, so each region keeps its own`;
   }
-  return `${d.id}  rendered differently in ${plain(d.roots.length)} repositories, so each region keeps its own`;
+  return `${d.id}  rendered differently in ${plainNumber(d.roots.length)} repositories, so each region keeps its own`;
 }
 
 /** Why a selected rule cannot leave any region, in the words its reason deserves. */
@@ -98,7 +99,7 @@ function excludedNote({ id, why }) {
 function capNote(target, bytes) {
   if (target.path === null || target.cap === null || bytes <= target.cap.bytes) return null;
   return [
-    `${target.surface}  ${plain(bytes)} B exceeds the ${plain(target.cap.bytes)} B it allows for ${target.cap.appliesTo}`,
+    `${target.surface}  ${plainNumber(bytes)} B exceeds the ${plainNumber(target.cap.bytes)} B it allows for ${target.cap.appliesTo}`,
     `  ${target.cap.why}`,
     `  the rules above that limit are not read; move rules this workspace does not share back into each region, or drop the shared copy for this surface`,
   ].join('\n');
@@ -157,10 +158,10 @@ export async function sharedPlanCommand(_args, flags) {
   }
 
   const lines = [
-    `shared   ${target.root}  ${plain(roots.length)} repositories  (${target.source})`,
-    `rules    ${plain(shared.length)} of ${plain(candidates)} ids carried once  ${plain(bytes)} B`,
+    `shared   ${target.root}  ${plainNumber(roots.length)} repositories  (${target.source})`,
+    `rules    ${plainNumber(shared.length)} of ${plainNumber(candidates)} ids carried once  ${plainNumber(bytes)} B`,
   ];
-  for (const r of shared) lines.push(`  ${r.id}  ${r.priority ?? 'unclassified'}  ${plain(Buffer.byteLength(r.rendered))} B  ${r.source}`);
+  for (const r of shared) lines.push(`  ${r.id}  ${r.priority ?? 'unclassified'}  ${plainNumber(Buffer.byteLength(r.rendered))} B  ${r.source}`);
   if (divergent.length > 0) {
     // Named, not summarised: a reader who expected a python rule here and did not get it
     // is owed the reason, and "divergent: 2" is not a reason.
@@ -171,9 +172,9 @@ export async function sharedPlanCommand(_args, flags) {
     lines.push(`left in every region  ${excluded.length} rule(s) no root can hand over:`);
     for (const e of excluded) lines.push(`  ${excludedNote(e)}`);
   }
-  lines.push(`saves    ${plain(save)} B across ${plain(roots.length)} regions`);
+  lines.push(`saves    ${plainNumber(save)} B across ${plainNumber(roots.length)} regions`);
   for (const r of rows) {
-    lines.push(`  ${r.name}  ${plain(r.bytes)} B  ${r.mode}  ${r.rules.length > 0 ? r.rules.join(', ') : '(carries nothing extra)'}`);
+    lines.push(`  ${r.name}  ${plainNumber(r.bytes)} B  ${r.mode}  ${r.rules.length > 0 ? r.rules.join(', ') : '(carries nothing extra)'}`);
   }
   lines.push('writes');
   for (const t of targets) {
@@ -297,7 +298,7 @@ export async function sharedInstallCommand(_args, flags) {
     }
     emit(
       [
-        `shared   ${plain(shared.length)} rule(s), ${plain(Buffer.byteLength(sharedBody(shared)))} B`,
+        `shared   ${plainNumber(shared.length)} rule(s), ${plainNumber(Buffer.byteLength(sharedBody(shared)))} B`,
         ...states.map((s) =>
           s.path === null
             ? `  paste     ${s.surface}  no user-level file is recorded for it`
@@ -326,8 +327,8 @@ export async function sharedInstallCommand(_args, flags) {
   }
 
   const lines = [
-    `shared   installed for ${plain(roots.length)} repositories`,
-    `rules    ${plain(shared.length)} carried once  ${shared.map((r) => r.id).join(', ')}`,
+    `shared   installed for ${plainNumber(roots.length)} repositories`,
+    `rules    ${plainNumber(shared.length)} carried once  ${shared.map((r) => r.id).join(', ')}`,
   ];
   for (const w of written) {
     // `inject`'s word for a file with no region in it is "added"; the word for a file
@@ -415,11 +416,6 @@ function describeShared(state, targets) {
     return `${targets.find((t) => t.state === 'unreadable').path} could not be read: ${targets.find((t) => t.state === 'unreadable').reason}`;
   }
   return `${targets.length} user-level file(s) carry every rule this repository handed over`;
-}
-
-/** `1234567`, never `1,234,567`: two machines must print the same bytes (ADR-013). */
-function plain(n) {
-  return String(n);
 }
 
 /** The directory name, for a line that has to name several repositories at once. */

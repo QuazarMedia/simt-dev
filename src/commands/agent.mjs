@@ -10,7 +10,6 @@
 // parse that can fail and no partial state, which is what makes this command
 // shorter than `agent-hooks install`.
 
-import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { commitJournal } from '../journal.mjs';
@@ -28,6 +27,7 @@ import {
   writeAgentPlan,
 } from '../agents/render.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { readIfExists } from '../util/fs.mjs';
 
 export async function agentsCommand(sub, args, flags) {
   const root = commandRoot(flags, args);
@@ -194,12 +194,4 @@ async function agentsStatus(root, flags) {
   }
   emit(lines.join('\n'));
   return problems.length === 0 ? EXIT.OK : EXIT.FAIL;
-}
-
-async function readIfExists(path) {
-  try {
-    return await readFile(path, 'utf8');
-  } catch {
-    return null;
-  }
 }

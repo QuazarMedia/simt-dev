@@ -6,7 +6,9 @@
 // and a lesson do the same with their own path list. Nothing here is stored: the
 // answer is the records on disk.
 
-import { parseDecisionFrontmatter, splitFrontmatter } from '../memory/decide.mjs';
+import { parseDecisionFrontmatter } from '../memory/decide.mjs';
+import { parseFrontmatter } from '../text/frontmatter.mjs';
+import { cmp } from '../util/sort.mjs';
 
 const SIBLING = /^\*{0,2}[A-Z][\w-]*(?:[ \t]+[\w-]+){0,3}:\*{0,2}(?:[ \t]|$)/;
 const HEADING = /^#{1,6}\s/;
@@ -18,7 +20,7 @@ const TOOL = /^(?:simt-dev|simt)\b/;
  */
 export function affectsTokens(text) {
   const fm = parseDecisionFrontmatter(text);
-  const { body } = splitFrontmatter(text);
+  const { body } = parseFrontmatter(text);
   const lines = String(body).split('\n');
   const start = lines.findIndex((line) => /^\s*\*{0,2}Affects:\*{0,2}/.test(line));
   const proseTokens = [];
@@ -238,7 +240,7 @@ function extension(file) {
 }
 
 function frontmatter(text) {
-  return splitFrontmatter(text).front ?? '';
+  return parseFrontmatter(text).front ?? '';
 }
 
 function quotedList(front, key) {
@@ -247,8 +249,3 @@ function quotedList(front, key) {
   return [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map((item) => item[1]);
 }
 
-function cmp(a, b) {
-  if (a < b) return -1;
-  if (a > b) return 1;
-  return 0;
-}

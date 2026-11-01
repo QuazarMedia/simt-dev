@@ -12,18 +12,15 @@
 // falls back to the working-tree diff against HEAD: a report that refused
 // without a base would be useless on a repository with a single branch.
 
-import { execFile } from 'node:child_process';
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
 import { readLedger, treeId } from './ledger/index.mjs';
 import { readCheckCache } from './status.mjs';
 import { readManifest } from './projection/manifest.mjs';
-import { splitFrontmatter } from './memory/decide.mjs';
+import { parseFrontmatter } from './text/frontmatter.mjs';
 import { decisionsDir } from './decisions/dir.mjs';
-
-const exec = promisify(execFile);
+import { git, gitText } from './sys/git.mjs';
 
 /**
  * The ref the body diffs against: the override when given, else the first
@@ -33,7 +30,7 @@ const exec = promisify(execFile);
 async function resolveBase(root, override = null) {
   if (override !== null && override !== undefined && String(override) !== '') {
     try {
-      await exec('git', ['rev-parse', '--verify', '--quiet', `${override}^{commit}`], { cwd: root });
+      await git(root, ['rev-parse', '--verify', '--quiet', `${override}^{commit}`]);
       return { base: String(override), error: null };
     } catch {
       return { base: null, error: `unknown base ${override}` };
@@ -41,7 +38,7 @@ async function resolveBase(root, override = null) {
   }
   for (const candidate of ['origin/main', 'main', 'origin/master', 'master']) {
     try {
-      await exec('git', ['merge-base', 'HEAD', candidate], { cwd: root });
+      await git(root, ['merge-base', 'HEAD', candidate]);
       return { base: candidate, error: null };
     } catch {
       // Not present or shares no history; the next candidate may.
@@ -66,8 +63,7 @@ async function changedPaths(root, base) {
   };
   if (base !== null) {
     try {
-      const { stdout } = await exec('git', ['diff', '--name-only', `${base}...HEAD`], {
-        cwd: root,
+      const stdout = await gitText(root, ['diff', '--name-only', `${base}...HEAD`], {
         maxBuffer: 16 << 20,
       });
       add(stdout);
@@ -81,7 +77,7 @@ async function changedPaths(root, base) {
     ['ls-files', '--others', '--exclude-standard'],
   ]) {
     try {
-      const { stdout } = await exec('git', args, { cwd: root, maxBuffer: 16 << 20 });
+      const stdout = await gitText(root, args, { maxBuffer: 16 << 20 });
       add(stdout);
     } catch {
       // Not a repository, or no commit yet: the body reports the absence.
@@ -113,7 +109,7 @@ async function changedDecisions(root, paths) {
     let status = 'unknown';
     try {
       const text = await readFile(join(root, name), 'utf8');
-      const { body } = splitFrontmatter(text);
+      const { body } = parseFrontmatter(text);
       const heading = /^#\s+(.*)$/m.exec(body)?.[1] ?? id;
       title = heading.replace(/^ADR-\d{3,}\s*[—–-]\s*/i, '').trim() || id;
       status = /^Status:\s*(.+)$/im.exec(body)?.[1].trim() ?? 'unknown';

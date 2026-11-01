@@ -9,14 +9,11 @@
 // index has the edges (R21). A direction still has to be named before the prose
 // can leave, or the line would say Enforced and nothing would be enforcing it.
 
-import { execFile } from 'node:child_process';
 import { readFile, stat } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
-import { promisify } from 'node:util';
 
 import { CLI } from '../name.mjs';
-
-const exec = promisify(execFile);
+import { git, gitPaths } from '../sys/git.mjs';
 
 export const CHECK_MARKER = 'simt-check';
 
@@ -360,8 +357,7 @@ function exempt(rel, prefixes) {
 
 async function tracked(root) {
   try {
-    const { stdout } = await exec('git', ['ls-files', '-z'], { cwd: root });
-    return stdout.split('\0').filter((p) => p !== '');
+    return await gitPaths(root, ['ls-files']);
   } catch {
     return null;
   }
@@ -370,8 +366,7 @@ async function tracked(root) {
 async function workDiff(root) {
   let text = '';
   try {
-    const { stdout } = await exec('git', ['diff', '--no-ext-diff', '--unified=0', 'HEAD'], { cwd: root, maxBuffer: 8 * 1024 * 1024 });
-    text = stdout;
+    text = await git(root, ['diff', '--no-ext-diff', '--unified=0', 'HEAD'], { maxBuffer: 8 * 1024 * 1024 });
   } catch (error) {
     if (error.code === 'ENOENT') return null;
     text = typeof error.stdout === 'string' ? error.stdout : '';
@@ -379,8 +374,7 @@ async function workDiff(root) {
   const files = parseDiff(text);
   let untracked = [];
   try {
-    const { stdout } = await exec('git', ['ls-files', '--others', '--exclude-standard', '-z'], { cwd: root });
-    untracked = stdout.split('\0').filter((p) => p !== '');
+    untracked = await gitPaths(root, ['ls-files', '--others', '--exclude-standard']);
   } catch {
     return { files };
   }

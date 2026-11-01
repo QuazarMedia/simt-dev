@@ -13,24 +13,20 @@
 
 import { noteEvent } from '../state/events.mjs';
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
 import { mkdir, open, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { promisify } from 'node:util';
 
 import { postDeliveryJson } from '../agenthooks/render.mjs';
 import { lessonPaths } from '../index/govern.mjs';
 import { recordCreatedFile } from '../journal.mjs';
 import { redactText } from '../secrets.mjs';
 import { localRel, readStateFile } from '../state.mjs';
-import { splitFrontmatter } from './decide.mjs';
-
-const exec = promisify(execFile);
+import { parseFrontmatter } from '../text/frontmatter.mjs';
+import { LEDGER_FILE_LEGACY, LEDGER_FILE_REL } from '../name.mjs';
+import { git } from '../sys/git.mjs';
 
 export const LESSONS_FILE = localRel('lessons.jsonl');
 const LESSONS_FILE_LEGACY = '.simt/lessons.jsonl';
-const LEDGER_REL = localRel('ledger.jsonl');
-const LEDGER_REL_LEGACY = '.simt/ledger.jsonl';
 export const LESSONS_DIR = 'docs/lessons';
 export const LESSON_KEYS = new Set(['simt-trigger', 'simt-evidence', 'simt-expires']);
 
@@ -344,21 +340,15 @@ async function diffBetweenTrees(root, fromRef, toRef) {
   }
   try {
     const [namesOut, diffOut] = await Promise.all([
-      exec('git', ['diff', '--name-only', fromRef, toRef, '--', '.', ':(exclude).simt'], {
-        cwd: root,
-        maxBuffer: 8 << 20,
-      }),
-      exec('git', ['diff', '--unified=3', fromRef, toRef, '--', '.', ':(exclude).simt'], {
-        cwd: root,
-        maxBuffer: 8 << 20,
-      }),
+      git(root, ['diff', '--name-only', fromRef, toRef, '--', '.', ':(exclude).simt'], { maxBuffer: 8 << 20 }),
+      git(root, ['diff', '--unified=3', fromRef, toRef, '--', '.', ':(exclude).simt'], { maxBuffer: 8 << 20 }),
     ]);
-    const paths = namesOut.stdout
+    const paths = namesOut
       .split('\n')
       .map((s) => s.trim())
       .filter(Boolean)
       .sort();
-    return { paths, diff: diffOut.stdout.trim() };
+    return { paths, diff: diffOut.trim() };
   } catch {
     return { paths: [], diff: '' };
   }
@@ -419,7 +409,7 @@ export async function captureFromLedger(root, entries = null) {
   let list = entries;
   if (!Array.isArray(list)) {
     try {
-      const { text } = await readStateFile(root, LEDGER_REL, [LEDGER_REL_LEGACY]);
+      const { text } = await readStateFile(root, localRel(LEDGER_FILE_REL), [LEDGER_FILE_LEGACY]);
       list = (text ?? '')
         .split('\n')
         .map((s) => s.trim())
@@ -462,12 +452,11 @@ export async function captureRevertedCommits(root, options = {}) {
   const limit = options.limit ?? 50;
   let stdout = '';
   try {
-    const res = await exec(
-      'git',
+    stdout = await git(
+      root,
       ['log', '--no-merges', `-n`, String(limit), '--format=%H%x00%s%x00%b%x1e'],
-      { cwd: root, maxBuffer: 8 << 20 },
+      { maxBuffer: 8 << 20 },
     );
-    stdout = res.stdout;
   } catch {
     return [];
   }
@@ -491,16 +480,16 @@ export async function captureRevertedCommits(root, options = {}) {
     let paths = [];
     let fixDiff = '';
     try {
-      const [namesRes, diffRes] = await Promise.all([
-        exec('git', ['diff-tree', '--no-commit-id', '--name-only', '-r', sha], { cwd: root, maxBuffer: 8 << 20 }),
-        exec('git', ['show', '--format=', '--unified=3', sha], { cwd: root, maxBuffer: 8 << 20 }),
+      const [namesOut, diffOut] = await Promise.all([
+        git(root, ['diff-tree', '--no-commit-id', '--name-only', '-r', sha], { maxBuffer: 8 << 20 }),
+        git(root, ['show', '--format=', '--unified=3', sha], { maxBuffer: 8 << 20 }),
       ]);
-      paths = namesRes.stdout
+      paths = namesOut
         .split('\n')
         .map((s) => s.trim())
         .filter(Boolean)
         .sort();
-      fixDiff = diffRes.stdout.trim();
+      fixDiff = diffOut.trim();
     } catch {
       // ignore diff failure
     }
@@ -643,7 +632,7 @@ export function renderLessonMarkdown(candidate, options = {}) {
  * @returns {object}
  */
 export function parseLessonFile(id, text, now = new Date()) {
-  const { front: rawFront, body: rawBody } = splitFrontmatter(text);
+  const { front: rawFront, body: rawBody } = parseFrontmatter(text);
   const front = rawFront ?? '';
   const body = rawBody.trim();
 

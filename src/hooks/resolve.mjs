@@ -12,7 +12,7 @@
 
 import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { join } from 'node:path';
+import { extname, join } from 'node:path';
 
 import { FORMATTABLE, GATES, gateNames } from './gates.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
@@ -139,7 +139,7 @@ export async function resolveGate(gate, { root, pkg, staged, commands, runner = 
         remedy: `run the repo install command, or remove "format" from ${MANIFEST_FILE} gates`,
       };
     }
-    const files = staged.filter((f) => FORMATTABLE.has(extname(f)));
+    const files = staged.filter((f) => FORMATTABLE.has(extname(f).toLowerCase()));
     if (files.length === 0) {
       return {
         ok: true,
@@ -200,9 +200,4 @@ export async function resolveGate(gate, { root, pkg, staged, commands, runner = 
     reason: `unknown gate kind "${gate.kind}"`,
     remedy: `this is a bug in simt-dev; )}', ')}`,
   };
-}
-
-function extname(path) {
-  const dot = path.lastIndexOf('.');
-  return dot > 0 ? path.slice(dot).toLowerCase() : '';
 }

@@ -9,6 +9,8 @@
 // error the reader cannot act on is a papercut that trains people to skip the gate, so
 // every message names the rule it broke and the fix.
 
+import { parseFrontmatter } from '../text/frontmatter.mjs';
+
 /** The one specification this knows, and the name `--spec` accepts. */
 export const SPEC = 'agentskills';
 
@@ -19,9 +21,10 @@ const SPEC_FIELDS = ['name', 'description', 'license', 'compatibility', 'metadat
 
 /** Tokens, not bytes, because the specification counts tokens and every number here is
  *  the same four-bytes-per-token estimate the context meter uses. */
-const BODY_TOKEN_BUDGET = 5000;
-const BODY_LINE_BUDGET = 500;
-const BYTES_PER_TOKEN = 4;
+export const BODY_TOKEN_BUDGET = 5000;
+export const BODY_LINE_BUDGET = 500;
+export const BYTES_PER_TOKEN = 4;
+export const BODY_BYTE_BUDGET = BODY_TOKEN_BUDGET * BYTES_PER_TOKEN;
 
 /** The `name` rules, as one predicate with the rule it enforces. */
 const NAME_RULES = {
@@ -167,10 +170,9 @@ export function checkSkill({ directoryName, fileName = 'SKILL.md', text, at }) {
 export function readFrontmatter(text) {
   const meta = {};
   const present = [];
-  const body = text.replace(/^﻿/, '');
-  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(body);
-  if (!match) return { meta, present, body };
-  const lines = match[1].split(/\r?\n/);
+  const { front, body } = parseFrontmatter(text.replace(/^﻿/, ''));
+  if (front === null) return { meta, present, body };
+  const lines = front.split(/\r?\n/);
 
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
@@ -215,7 +217,7 @@ export function readFrontmatter(text) {
     }
     meta[key] = scalar(raw);
   }
-  return { meta, present, body: body.slice(match[0].length) };
+  return { meta, present, body };
 }
 
 /** Strip the quoting and the trailing comment a scalar may carry. */

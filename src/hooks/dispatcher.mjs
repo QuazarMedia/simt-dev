@@ -18,11 +18,10 @@
 //   Report what did not run. The summary names every gate, its disposition and
 //   its reason, so "passed" can never be mistaken for "only some of it passed".
 
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join, matchesGlob, resolve, sep } from 'node:path';
-import { promisify } from 'node:util';
 
 import { GATES } from './gates.mjs';
 import { resolveGate } from './resolve.mjs';
@@ -32,8 +31,7 @@ import { MANIFEST_FILE } from '../name.mjs';
 import { assertVersionPin } from '../package-version.mjs';
 import { hasTestEvidence, readLedger, recordRun } from '../ledger/index.mjs';
 import { renderFindings, scanStaged } from '../secrets.mjs';
-
-const exec = promisify(execFile);
+import { git, gitPaths, gitText } from '../sys/git.mjs';
 
 /**
  * The default bound on one gate, in seconds, and the grace a killed gate gets before
@@ -194,15 +192,14 @@ export function parsePushedRefs(text) {
 async function tagCommitAccountedFor(root, tagSha, pushingTips) {
   let commit;
   try {
-    ({ stdout: commit } = await exec('git', ['rev-parse', `${tagSha}^{commit}`], { cwd: root }));
+    commit = await gitText(root, ['rev-parse', `${tagSha}^{commit}`]);
   } catch (error) {
     return { ok: false, reason: `the tag could not be resolved to a commit: ${String(error.stderr ?? error.message).trim()}` };
   }
-  commit = commit.trim();
 
   let remoteRefs;
   try {
-    ({ stdout: remoteRefs } = await exec('git', ['for-each-ref', 'refs/remotes/', '--format=%(refname)'], { cwd: root }));
+    remoteRefs = await gitText(root, ['for-each-ref', 'refs/remotes/', '--format=%(refname)']);
   } catch (error) {
     return { ok: false, reason: `the remote refs could not be listed: ${String(error.stderr ?? error.message).trim()}` };
   }
@@ -215,7 +212,7 @@ async function tagCommitAccountedFor(root, tagSha, pushingTips) {
   }
   for (const candidate of candidates) {
     try {
-      await exec('git', ['merge-base', '--is-ancestor', commit, candidate], { cwd: root });
+      await git(root, ['merge-base', '--is-ancestor', commit, candidate]);
       return { ok: true, reason: null };
     } catch {
       // not reachable from this ref; try the next candidate
@@ -257,17 +254,17 @@ export async function classifyPush(root, refs, { maxCommits, paths }) {
     }
     let count, names;
     try {
-      ({ stdout: count } = await exec('git', ['rev-list', '--count', `${remoteSha}..${localSha}`], { cwd: root }));
-      ({ stdout: names } = await exec('git', ['diff', '--name-only', '-z', `${remoteSha}..${localSha}`], { cwd: root }));
+      count = await gitText(root, ['rev-list', '--count', `${remoteSha}..${localSha}`]);
+      names = await gitPaths(root, ['diff', '--name-only', `${remoteSha}..${localSha}`]);
     } catch (error) {
       return { docsOnly: false, reason: `the push could not be diffed: ${String(error.stderr ?? error.message).trim()}` };
     }
-    commits += Number(count.trim());
-    // `-z` and no trimming: a path is NUL-terminated because a path can contain a
-    // newline, and git quotes such a name in the line-terminated form, so splitting on
-    // newlines compares a quoted path against an unquoted glob and never matches.
-    for (const name of names.split('\0')) {
-      if (name !== '') files.add(name);
+    commits += Number(count);
+    // NUL-separated paths because a path can contain a newline, and git quotes such a
+    // name in the line-terminated form, so splitting on newlines compares a quoted path
+    // against an unquoted glob and never matches.
+    for (const name of names) {
+      files.add(name);
     }
   }
 
@@ -339,11 +336,10 @@ async function resolveDocsOnlySkip(root, manifest, pushed) {
 async function resolveAlreadyPassedSkip(root) {
   let headTree;
   try {
-    ({ stdout: headTree } = await exec('git', ['rev-parse', 'HEAD^{tree}'], { cwd: root }));
+    headTree = await gitText(root, ['rev-parse', 'HEAD^{tree}']);
   } catch {
     return null;
   }
-  headTree = headTree.trim();
   if (!/^[0-9a-f]{40}$/.test(headTree)) return null;
   const { entries, errors } = await readLedger(root);
   if (errors.length > 0) return null;
@@ -727,7 +723,7 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
 async function materializeHeadWorktree(root) {
   const path = await mkdtemp(join(tmpdir(), 'head-gate-'));
   try {
-    await exec('git', ['worktree', 'add', '--detach', path, 'HEAD'], { cwd: root });
+    await git(root, ['worktree', 'add', '--detach', path, 'HEAD']);
   } catch (error) {
     await rm(path, { recursive: true, force: true }).catch(() => {});
     return { path: null, error: `git worktree add failed: ${String(error.stderr ?? error.message).trim()}` };
@@ -752,9 +748,9 @@ async function materializeHeadWorktree(root) {
  * @param {string} path the worktree to remove
  */
 async function removeHeadWorktree(root, path) {
-  await exec('git', ['worktree', 'remove', '--force', path], { cwd: root }).catch(async () => {
+  await git(root, ['worktree', 'remove', '--force', path]).catch(async () => {
     await rm(path, { recursive: true, force: true }).catch(() => {});
-    await exec('git', ['worktree', 'prune'], { cwd: root }).catch(() => {});
+    await git(root, ['worktree', 'prune']).catch(() => {});
   });
 }
 
@@ -877,10 +873,9 @@ async function readPkg(root) {
 /** Staged paths, or [] when git cannot answer (an unborn branch, for instance). */
 export async function stagedFiles(root) {
   try {
-    // `-z`: git quotes a path containing a newline or a quote in the line form, and a
-    // quoted name is not the path the index holds, so it never matches a staged blob.
-    const { stdout } = await exec('git', ['diff', '--cached', '--name-only', '-z', '--diff-filter=ACMR'], { cwd: root });
-    return stdout.split('\0').filter(Boolean);
+    // NUL-separated: git quotes a path containing a newline or a quote in the line form,
+    // and a quoted name is not the path the index holds, so it never matches a staged blob.
+    return await gitPaths(root, ['diff', '--cached', '--name-only', '--diff-filter=ACMR']);
   } catch {
     return [];
   }
@@ -896,8 +891,7 @@ export async function stagedFiles(root) {
  */
 async function unstagedFiles(root) {
   try {
-    const { stdout } = await exec('git', ['diff', '--name-only', '-z'], { cwd: root });
-    return new Set(stdout.split('\0').filter(Boolean));
+    return new Set(await gitPaths(root, ['diff', '--name-only']));
   } catch {
     return new Set();
   }
@@ -907,7 +901,7 @@ async function unstagedFiles(root) {
 async function stagedBlobs(root, files) {
   if (files.length === 0) return new Map();
   try {
-    const { stdout } = await exec('git', ['ls-files', '-s', '--', ...files], { cwd: root });
+    const stdout = await git(root, ['ls-files', '-s', '--', ...files]);
     const blobs = new Map();
     for (const line of stdout.split('\n')) {
       const [meta, ...rest] = line.split('\t');
@@ -932,7 +926,7 @@ async function restage(root, files) {
   if (files.length === 0) return { restaged: [], error: null };
   const before = await stagedBlobs(root, files);
   try {
-    await exec('git', ['add', '--', ...files], { cwd: root });
+    await git(root, ['add', '--', ...files]);
   } catch (error) {
     return { restaged: [], error: String(error.stderr ?? error.message ?? error).trim() };
   }

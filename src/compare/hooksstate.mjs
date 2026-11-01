@@ -6,16 +6,15 @@
 // duplicated-source-of-truth problem the tool exists to remove. `compare` reads it
 // for N repos, so it must not shell out per repo per event.
 
-import { execFile } from 'node:child_process';
 import { readFile, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { promisify } from 'node:util';
 
 import { CHAIN_MARKER, EVENTS, HOOKS_DIR, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderShim } from '../hooks/shim.mjs';
 import { foreignHooks, resolveHooksDir } from '../hooks/where.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
+import { gitText } from '../sys/git.mjs';
 
 /**
  * The Node manager id for this repository, or null without a package.json.
@@ -33,8 +32,6 @@ async function nodeManagerFor(root) {
   }
   return resolveNodeRunner({ facts: detected.facts, packageManager }).id;
 }
-
-const exec = promisify(execFile);
 
 /**
  * The chained shim at `path`, read back out of the file itself.
@@ -120,8 +117,7 @@ export function wantsShim(manifest, exists, event) {
 /** `core.hooksPath`, or null when unset or the repo is not a git repo. */
 export async function readHooksPath(root) {
   try {
-    const { stdout } = await exec('git', ['config', '--get', HOOKS_PATH_KEY], { cwd: root });
-    const value = stdout.trim();
+    const value = await gitText(root, ['config', '--get', HOOKS_PATH_KEY]);
     return value === '' ? null : value;
   } catch {
     return null;

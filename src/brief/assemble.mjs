@@ -48,12 +48,14 @@ import { searchFtsBm25 } from '../index/store.mjs';
 import { coverage } from '../index/coverage.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { closure, rankSkills, selectWithinBudget, tokenize } from '../resolve/resolve.mjs';
+import { closure, rankSkills, selectWithinBudget } from '../resolve/resolve.mjs';
+import { tokenize } from '../text/tokens.mjs';
 import { loadGraph } from '../commands/map.mjs';
 import { dirtyPaths, parsePathList } from '../commands/skills.mjs';
 import { decisionRecords, lessonScopes } from '../commands/why.mjs';
 import { readFederation } from '../federation/config.mjs';
 import { consult } from '../federation/query.mjs';
+import { gitText } from '../sys/git.mjs';
 
 /**
  * How many ranked files the packet may consider as candidates for other sections.
@@ -93,17 +95,11 @@ const MAP_FACTOR = 8;
  * only the candidate list; the region parser decides.
  */
 async function generatedRegions(root) {
-  const { execFile } = await import('node:child_process');
-  const { promisify } = await import('node:util');
   const { readFile } = await import('node:fs/promises');
   let candidates;
   try {
-    const { stdout } = await promisify(execFile)(
-      'git',
-      ['grep', '-lF', '--', `${'simt'}:begin`],
-      { cwd: root, maxBuffer: 8 << 20 },
-    );
-    candidates = stdout.split('\n').filter((line) => line.length > 0).sort();
+    const stdout = await gitText(root, ['grep', '-lF', '--', `${'simt'}:begin`], { maxBuffer: 8 << 20 });
+    candidates = (stdout ?? '').split('\n').filter((line) => line.length > 0).sort();
   } catch {
     // No match is exit 1, and a directory that is not a repository fails too. Both mean
     // the same thing to a reader: no generated region was found to warn about.

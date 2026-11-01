@@ -9,6 +9,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { LOCAL_DIR } from '../state.mjs';
+import { cmp } from '../util/sort.mjs';
 
 export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
 export const JSONL_FILE = join(LOCAL_DIR, 'index.jsonl');
@@ -720,6 +721,3 @@ function byEdge(a, b) {
   return cmp(a.src, b.src) || cmp(a.dst, b.dst) || cmp(a.kind, b.kind);
 }
 
-function cmp(a, b) {
-  return a < b ? -1 : a > b ? 1 : 0;
-}

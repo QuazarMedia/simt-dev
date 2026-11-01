@@ -94,3 +94,14 @@ test('a gate keeps its exit code, its notes and its text in the result', async (
     await rm(root, { recursive: true, force: true });
   }
 });
+
+test('two commands in one process keep their own documents', async () => {
+  const [status, plan] = await Promise.all([
+    run('status', { flags: { line: true, json: true }, root: process.cwd() }),
+    run('plan status', { flags: { json: true }, root: process.cwd() }),
+  ]);
+  // Under a process-wide envelope the second call's command path overwrote the first, so
+  // one document described an invocation that did not produce it.
+  assert.equal(renderJson(status).command, 'status');
+  assert.equal(renderJson(plan).command, 'plan status');
+});

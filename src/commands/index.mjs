@@ -21,6 +21,7 @@ import {
   jsonFailMode,
   jsonIndentDefault,
   maxBytesLimit,
+  withOutputState,
 } from '../output/index.mjs';
 import { help } from './help.mjs';
 import { GROUP_DEFAULTS, SPEC, SPEC_PATHS } from './spec.mjs';
@@ -298,7 +299,18 @@ export function refusesAt(removedIn, version) {
  */
 export const COMMANDS = SPEC_PATHS;
 
+/**
+ * Dispatch one argv.
+ *
+ * The state is per call: an MCP server and the tests both dispatch more than once in a
+ * process, and a shared envelope let one run's ceiling, notices and command path land in
+ * another run's document (review 0003 Q63/Q65).
+ */
 export async function dispatch(argv) {
+  return withOutputState(() => dispatchInState(argv));
+}
+
+async function dispatchInState(argv) {
   const { flags, positional, parseError } = parseOrExit(argv);
   // One run, one set of notices: a process can dispatch repeatedly (review 0003 Q62).
   clearWarnings();

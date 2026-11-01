@@ -16,7 +16,7 @@
 // answers the CLI had. A caller that wants neither reads the fields a command exported
 // (`src/api.mjs`).
 
-import { EXIT, clearWarnings, jsonCommand, jsonFailMode, jsonIndentDefault, maxBytesLimit, warnings, withSink } from './output/index.mjs';
+import { EXIT, clearWarnings, jsonCommand, jsonFailMode, jsonIndentDefault, maxBytesLimit, warnings, withOutputState, withSink } from './output/index.mjs';
 import { CLI } from './name.mjs';
 import { GLOBAL_FLAGS, resolveCommand } from './commands/index.mjs';
 
@@ -68,7 +68,7 @@ export async function run(command, { args = [], flags = {}, root } = {}) {
   jsonFailMode(flags.json === true);
 
   const effective = root === undefined ? flags : { root, ...flags };
-  const produced = await withSink(() => resolved.run(args, effective));
+  const produced = await withOutputState(() => withSink(() => resolved.run(args, effective)));
   return {
     command,
     ok: produced.code === EXIT.OK,

@@ -18,7 +18,7 @@ import { readdir } from 'node:fs/promises';
 import { repoContext } from '../context.mjs';
 import { join } from 'node:path';
 import { renderDecisionsIndex } from '../decisions/index-doc.mjs';
-import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { applyPlan, change } from '../write/plan.mjs';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { loadRules, select } from '../projection/project.mjs';
 import { loadMdcRules } from '../projection/mdc.mjs';
@@ -529,9 +529,12 @@ export async function decisionsCommand(args, flags) {
   // table - the index is not internal state even though it is generated.
   if (flags.yes === true) {
     const rootDir = root ?? process.cwd();
-    const journal = [];
-    await journaledWriteFile(rootDir, journal, join(rootDir, 'docs', 'decisions-index.md'), renderDecisionsIndex(rows));
-    await commitJournal(rootDir, 'rules decisions', journal);
+    const index = join(rootDir, 'docs', 'decisions-index.md');
+    await applyPlan(
+      rootDir,
+      [change({ path: index, before: await readBefore(index), after: renderDecisionsIndex(rows), owner: 'rules decisions', reason: 'the index follows the decision files' })],
+      { mode: { apply: true }, label: 'rules decisions' },
+    );
     emit(`wrote docs/decisions-index.md (${rows.length} decisions)`);
     return EXIT.OK;
   }

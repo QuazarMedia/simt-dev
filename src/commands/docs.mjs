@@ -9,7 +9,7 @@ import { join } from 'node:path';
 
 import { EXIT, fail, present, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { applyPlan, change } from '../write/plan.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { BEGIN, END, README_FILE, renderCommandBlock, replaceBlock } from '../docs/commands.mjs';
@@ -74,9 +74,10 @@ export async function docsCommand(sub, args, flags) {
     return EXIT.OK;
   }
 
-  const journal = [];
-  await journaledWriteFile(root, journal, path, after);
-  await commitJournal(root, 'docs readme', journal);
+  await applyPlan(root, [change({ path, before, after, owner: 'docs readme', reason: 'the command list follows the spec' })], {
+    mode,
+    label: 'docs readme',
+  });
   present(
     { ...payload, ...diffField(diff, flags) },
     () => `write  ${README_FILE}  (${Buffer.byteLength(after)} bytes)`,

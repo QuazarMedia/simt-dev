@@ -28,6 +28,8 @@ import { PACKAGE_ROOT } from '../workspace.mjs';
 import { splitFrontmatter } from '../memory/decide.mjs';
 import { LOADERS } from '../projection/loaders.mjs';
 import { journaledWriteFile } from '../journal.mjs';
+import { applyPlan, change } from '../write/plan.mjs';
+import { readBefore } from '../diff.mjs';
 
 /** The one agent this tool ships, and the filename stem every harness shares. */
 const AGENT_FILE = 'simt-agent.md';
@@ -252,13 +254,16 @@ export async function planAgents(root, { harness } = {}) {
  * Skips files that are already unchanged. Returns the paths written.
  */
 export async function writeAgentPlan(root, journal, plan) {
-  const written = [];
-  for (const p of plan.filter((x) => x.action !== 'unchanged')) {
-    await mkdir(join(root, dirname(p.path)), { recursive: true });
-    await journaledWriteFile(root, journal, join(root, p.path), p.text);
-    written.push(p.path);
-  }
-  return written;
+  const changes = await Promise.all(
+    plan
+      .filter((x) => x.action !== 'unchanged')
+      .map(async (p) => {
+        const path = join(root, p.path);
+        return change({ path, before: await readBefore(path), after: p.text, owner: 'agents', reason: p.action });
+      }),
+  );
+  await applyPlan(root, changes, { mode: { apply: true }, journal, commit: false });
+  return plan.filter((x) => x.action !== 'unchanged').map((p) => p.path);
 }
 
 /**

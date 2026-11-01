@@ -6,7 +6,47 @@
 //
 // See docs/plans/0002-simt-dev-cli.md section 6.
 
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import { CLI } from '../name.mjs';
+
+/**
+ * One call's presentation state (review 0003 Q63, Q65).
+ *
+ * This was seven module-level `let`s - the JSON failure mode, the indent default, the byte
+ * ceiling, the accumulated notices, the canonical command, the capture, the sink - and a
+ * process could hold only one of each. `dispatch` and the tests both run more than one
+ * command in a process, and an MCP server runs them concurrently: the second run's ceiling,
+ * notices and command path landed in the first run's document, which is a document
+ * describing an invocation that did not produce it.
+ *
+ * Async-local rather than threaded through a parameter: `emit` is called by seventy command
+ * modules that have no context to pass, and changing every signature is the rewrite that
+ * never lands. A store is per call and inherited by everything that call awaits.
+ */
+const stores = new AsyncLocalStorage();
+
+/** What a run that never opened a store gets: the process defaults before any flag. */
+const processState = () => ({
+  jsonFailure: false,
+  pretty: process.stdout.isTTY === true,
+  maxBytes: 0,
+  warnings: [],
+  command: null,
+  captured: null,
+  sink: null,
+});
+
+const fallback = processState();
+
+function state() {
+  return stores.getStore() ?? fallback;
+}
+
+/** Give `body` its own presentation state, so two calls in one process cannot collide. */
+export function withOutputState(body) {
+  return stores.run(processState(), body);
+}
 /** Stable machine codes. A non-zero exit always carries one of these. */
 export const EXIT = {
   OK: 0,
@@ -40,10 +80,8 @@ const REMEDY = {
  * The default answers "plain text" because that is what every run before the flags
  * were parsed is, and those runs happen before anybody could have asked.
  */
-let jsonFailure = false;
-
 export function jsonFailMode(on = false) {
-  jsonFailure = on;
+  state().jsonFailure = on;
 }
 
 /**
@@ -56,7 +94,12 @@ export function fail(message, code = EXIT.FAIL, remedy) {
   // a reader in a consumer repo got a remedy naming a file that does not exist
   // where they are. Every remedy here is something the reader can run.
   const resolved = remedy ?? REMEDY[code] ?? `run: ${CLI} --help`;
-  if (jsonFailure) {
+  // A library caller asked for a result, not a line on a terminal it does not own.
+  if (state().sink !== null) {
+    state().sink.error = { message, remedy: resolved, exitCode: code };
+    return code;
+  }
+  if (state().jsonFailure) {
     emitJson({ ok: false, error: message, remedy: resolved, exitCode: code });
     return code;
   }
@@ -112,8 +155,12 @@ export function present(payload, renderText, flags) {
   return 'text';
 }
 
-export function emit(text, { maxBytes = maxBytesDefault, stream = process.stdout } = {}) {
+export function emit(text, { maxBytes = state().maxBytes, stream = process.stdout } = {}) {
   const body = text.endsWith('\n') ? text : `${text}\n`;
+  if (state().sink !== null) {
+    state().sink.text.push(fitText(body, maxBytes));
+    return true;
+  }
   const bytes = Buffer.byteLength(body);
   if (maxBytes > 0 && bytes > maxBytes) {
     const slice = Buffer.from(body).subarray(0, maxBytes).toString('utf8');
@@ -149,23 +196,19 @@ export const SCHEMA_VERSION = 1;
  * important. The default answers "is a person reading", which is the right answer
  * before anybody sets it.
  */
-let prettyDefault = process.stdout.isTTY === true;
-
 // The byte ceiling is one flag with one reader: the envelope. Commands used to pass
 // `flags.maxBytes ?? 0` at seventy-eight call sites, which is seventy-eight chances to pass
 // a different number, or to forget and answer past the ceiling the caller set (review 0003
 // Q65). A ceiling of zero or a value that is not a number is no ceiling, the same way the
 // flag itself is read.
-let maxBytesDefault = 0;
-
 /** Set the byte ceiling every emit and every document inherits, from `--max-bytes`. */
 export function maxBytesLimit(bytes) {
   const value = Number(bytes);
-  maxBytesDefault = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  state().maxBytes = Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
 }
 
 export function jsonIndentDefault(pretty = process.stdout.isTTY === true) {
-  prettyDefault = pretty;
+  state().pretty = pretty;
 }
 
 /**
@@ -244,39 +287,79 @@ function fitJsonArrays(payload, maxBytes, pretty) {
  * has to succeed or fail the same way, so the note belongs IN the result, and the text
  * mode keeps the stderr line it already had (review 0003 Q62).
  */
-let accumulated = [];
+/**
+ * The output sink for a library call, or null for a process (review 0003 Q63).
+ *
+ * `run(command, input)` answers with the text, the documents, the notes and the failure a
+ * command produced instead of writing them. The alternative - threading a `result` return
+ * through seventy command modules - is the rewrite that never finishes, and the printing
+ * commands have no return value to thread: they `return EXIT.OK` after calling `emit`.
+ *
+ * A sink is per call and never nested. The dispatcher keeps its own JSON capture below and
+ * is not this: a sink answers "what did the command produce", the capture answers "hold the
+ * document until the exit code exists".
+ */
+/** Collect a command's output instead of writing it, and answer with what it produced. */
+export async function withSink(body) {
+  if (state().sink !== null) throw new Error('an output sink is already open');
+  const collecting = { text: [], documents: [], notes: [], error: null };
+  state().sink = collecting;
+  try {
+    const code = await body();
+    return {
+      code: code ?? EXIT.OK,
+      text: collecting.text.join(''),
+      documents: collecting.documents,
+      notes: collecting.notes,
+      error: collecting.error,
+    };
+  } finally {
+    state().sink = null;
+  }
+}
+
+/**
+ * The same cut `emit` makes on a stream, applied to a string: the ceiling is a promise
+ * whichever surface reads it, and a library caller that got bytes past the limit it asked
+ * for would be paying for what the flag exists to refuse.
+ */
+function fitText(body, maxBytes) {
+  const bytes = Buffer.byteLength(body);
+  if (maxBytes <= 0 || bytes <= maxBytes) return body;
+  const slice = Buffer.from(body).subarray(0, maxBytes).toString('utf8');
+  const cut = slice.lastIndexOf('\n');
+  return cut > 0
+    ? `${slice.slice(0, cut)}\nTRUNCATED ${bytes - maxBytes} bytes omitted, rerun with --max-bytes 0\n`
+    : `${slice}TRUNCATED ${bytes - maxBytes} bytes omitted, rerun with --max-bytes 0\n`;
+}
 
 // The path the dispatcher resolved. A command should not restate it: the ones that did
 // restated it wrongly (`plugin` printed `plugin claude`, `sync` printed `sync --check`),
 // and a document whose `command` disagrees with the argv that produced it is worse than
 // one with no `command` at all (review 0003 Q65).
-let canonicalCommand = null;
-
 /** Set the command path every JSON document will carry, or clear it with null. */
 export function jsonCommand(path) {
-  canonicalCommand = path ?? null;
+  state().command = path ?? null;
 }
 
 // A document cannot name the exit code before the command has returned one. The
 // dispatcher captures what a command emits, then writes it once with the code attached;
 // writing first is how `ok: false` shipped alongside exit 0 (review 0003 Q65).
-let captured = null;
-
 /** Collect documents instead of writing them, so the dispatcher can add the exit code. */
 export function jsonCaptureStart() {
-  captured = [];
+  state().captured = [];
 }
 
 /** The captured documents and a reset, or an empty list when nothing was captured. */
 export function jsonCaptureTake() {
-  const docs = captured;
-  captured = null;
+  const docs = state().captured;
+  state().captured = null;
   return docs;
 }
 
 /** Record a warning for the document this run prints. */
 export function warn(message) {
-  accumulated = [...accumulated, message];
+  state().warnings.push(message);
 }
 
 /**
@@ -288,28 +371,32 @@ export function warn(message) {
  * Q62).
  */
 export function clearWarnings() {
-  accumulated = [];
+  state().warnings = [];
 }
 
 /** The warnings this run has recorded, in order. */
 export function warnings() {
-  return accumulated;
+  return state().warnings;
 }
 
-export function emitJson(value, { stream = process.stdout, pretty = prettyDefault, maxBytes = maxBytesDefault } = {}) {
+export function emitJson(value, { stream = process.stdout, pretty = state().pretty, maxBytes = state().maxBytes } = {}) {
   // `notices`, not `warnings`: `status` already reports a warning COUNT under that key,
   // and a document cannot mean two things by one name. The collision is named here
   // rather than bent into either shape (review 0003 Q62).
   const carried =
-    accumulated.length > 0 && value !== null && typeof value === 'object' && !Array.isArray(value) && value.notices === undefined
-      ? { ...value, notices: accumulated }
+    state().warnings.length > 0 && value !== null && typeof value === 'object' && !Array.isArray(value) && value.notices === undefined
+      ? { ...value, notices: state().warnings }
       : value;
   const stamped =
-    canonicalCommand !== null && carried !== null && typeof carried === 'object' && !Array.isArray(carried)
-      ? { ...carried, command: canonicalCommand }
+    state().command !== null && carried !== null && typeof carried === 'object' && !Array.isArray(carried)
+      ? { ...carried, command: state().command }
       : carried;
-  if (captured !== null) {
-    captured.push({ value: stamped });
+  if (state().sink !== null) {
+    state().sink.documents.push(withSchemaVersion(stamped));
+    return true;
+  }
+  if (state().captured !== null) {
+    state().captured.push({ value: stamped });
     return true;
   }
   const payload = withSchemaVersion(stamped);
@@ -347,5 +434,9 @@ export function emitJson(value, { stream = process.stdout, pretty = prettyDefaul
  * diagnostics that accompany a real result, never for the result itself.
  */
 export function note(message, { stream = process.stderr } = {}) {
+  if (state().sink !== null) {
+    state().sink.notes.push(message);
+    return;
+  }
   stream.write(`${message}\n`);
 }

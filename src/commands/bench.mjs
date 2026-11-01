@@ -233,7 +233,7 @@ export async function benchReportCommand(positional, flags) {
     );
   }
 
-  const root = resolve(flags.root ?? pos[0] ?? process.cwd());
+  const root = resolve(commandRoot(flags, pos));
   const arms = listFlag(flags.arm);
 
   let report;

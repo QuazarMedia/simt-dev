@@ -6,16 +6,18 @@
 // same question must not get three answers, and they cannot disagree if they are
 // reading one function's return value.
 //
-// This is the read half only. The commands that write (`init`, `sync`, `hooks
-// install`, `skills install`, `upgrade`) still print their plans from the command
-// module, because their output is a diff a person reviews before it is applied
-// (ADR-001). They migrate in the next slice, when `run(ctx, input)` exists to carry
-// a plan back to a caller that can show it.
+// The write half arrives through `run(command, input)`: a writer still renders its plan
+// from the command module, because a person reviews that diff before it is applied
+// (ADR-001), but a library caller now gets that plan back as text and documents instead
+// of having it printed at a terminal it does not own. `run` resolves the same registry
+// and calls the same handler `dispatch` does, so the two surfaces cannot answer
+// differently.
 //
 // The exports map in package.json points `import 'simt-dev'` here, and keeps
 // `./src/*` because the plugin runtime and the harness shims import deep paths.
 // Removing that subpath would break them to make the surface look tidier.
 
+export { run, renderText, renderJson } from './run.mjs';
 export { checkRepo, checkTargets, checkTarget, frozenFindings } from './commands/sync.mjs';
 export { diagnose, serialisedFindings } from './commands/doctor.mjs';
 export { rulesCatalogue, rulesWhyFacts } from './commands/rules.mjs';

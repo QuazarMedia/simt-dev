@@ -21,6 +21,7 @@ import {
   jsonFailMode,
   jsonIndentDefault,
   maxBytesLimit,
+  withOutputState,
 } from '../output/index.mjs';
 import { help } from './help.mjs';
 import { GROUP_DEFAULTS, SPEC, SPEC_PATHS } from './spec.mjs';
@@ -44,7 +45,7 @@ const DECLARED = new Map(SPEC.map((row) => [row.path, new Set(row.flags ?? [])])
 /** path -> the values a flag of that path accepts, where the set is closed. */
 const VALUES = new Map(SPEC.map((row) => [row.path, row.values ?? {}]));
 
-const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
+export const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
 
 /**
  * Every command this binary dispatches, in one place.
@@ -251,6 +252,23 @@ export const IMPLEMENTED = {
   },
 };
 
+/**
+ * Resolve one command path to its handler, its declared flags and its closed value sets.
+ *
+ * The library surface needs the same answer `dispatch` gets and must not build a second
+ * registry to get it: a command reachable from the CLI and absent from `run` is the drift
+ * `test/spec.test.mjs` exists to catch, and it would be invisible here (review 0003 Q63).
+ */
+export async function resolveCommand(path) {
+  const load = IMPLEMENTED[path];
+  if (!load) return null;
+  return {
+    run: await load(),
+    declared: DECLARED.get(path) ?? new Set(),
+    values: VALUES.get(path) ?? {},
+  };
+}
+
 /** The release that turns the tolerated flag into a usage error (review 0003 Q62). */
 export const DEPRECATION_RELEASE = '0.8.0';
 
@@ -281,7 +299,18 @@ export function refusesAt(removedIn, version) {
  */
 export const COMMANDS = SPEC_PATHS;
 
+/**
+ * Dispatch one argv.
+ *
+ * The state is per call: an MCP server and the tests both dispatch more than once in a
+ * process, and a shared envelope let one run's ceiling, notices and command path land in
+ * another run's document (review 0003 Q63/Q65).
+ */
 export async function dispatch(argv) {
+  return withOutputState(() => dispatchInState(argv));
+}
+
+async function dispatchInState(argv) {
   const { flags, positional, parseError } = parseOrExit(argv);
   // One run, one set of notices: a process can dispatch repeatedly (review 0003 Q62).
   clearWarnings();

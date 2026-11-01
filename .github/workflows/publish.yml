@@ -46,10 +46,8 @@ name: publish
 
 on:
   push:
-    # Paused while the rewritten tags are re-pointed: an empty list matches
-    # nothing, so a v* tag push starts no publish run. Restore `- 'v*'` when
-    # the twelve re-pointed tags have landed on the remote.
-    tags: []
+    tags:
+      - 'v*'
 
 concurrency:
   # Serial rather than cancel: two tags pushed in quick succession would

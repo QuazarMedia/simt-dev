@@ -45,7 +45,7 @@ import { commandCard } from '../kernel/card.mjs';
 import { decisionHits, scopeHits, sourceRoots } from '../index/govern.mjs';
 import { embedTaskQuery, rankFiles, renderMap } from '../index/map.mjs';
 import { searchFtsBm25 } from '../index/store.mjs';
-import { testEdges, testsFor } from '../index/tests.mjs';
+import { coverage } from '../index/coverage.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { closure, rankSkills, selectWithinBudget, tokenize } from '../resolve/resolve.mjs';
@@ -251,13 +251,15 @@ export async function assembleBrief({
   }
 
   const likely = ranked.slice(0, LIKELY_FILES).map((row) => row.path);
-  const known = testEdges({ files, imports: edges.filter((edge) => edge.kind === 'import') });
   const untested = [];
   packet.add('TESTS', `the index knows direct importers; \`${CLI} tests <path>\` is the authority for multi-line and dynamic imports`, {
     why: ['a cheap packet and an exact answer are different questions'],
   });
   for (const path of likely) {
-    const found = testsFor(path, known);
+    // The packet's own edges, walked by the same function `tests` uses (Q77).
+    const found = coverage({ files, imports: edges.filter((edge) => edge.kind === 'import') }, [path], {
+      transitive: false,
+    });
     if (found.length === 0) untested.push(path);
     else packet.add('TESTS', `${path} -> ${found.join(' ')}`, { why: ['the test imports it, or sits beside it'] });
   }

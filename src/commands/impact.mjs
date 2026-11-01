@@ -22,7 +22,7 @@ import {
   ownersOf,
   relatedContracts,
 } from '../index/impact.mjs';
-import { decisionHits, scopeHits, sortHits, sourceRoots } from '../index/govern.mjs';
+import { governs, sourceRoots } from '../index/govern.mjs';
 import { decisionRecords, ruleScopes } from './why.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { commandRoot } from '../repo-root.mjs';
@@ -88,8 +88,7 @@ async function governance(root, file, files, commands) {
   const records = await decisionRecords(root);
   const rules = await ruleScopes(root);
   const ctx = { files, commands: new Set(commands), roots: sourceRoots(files) };
-  const { hits } = decisionHits(records, file, ctx);
-  return sortHits([...hits, ...scopeHits(file, { rules })]);
+  return governs(file, { records, rules, ctx });
 }
 
 async function readOwners(root, file) {

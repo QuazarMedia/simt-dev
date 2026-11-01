@@ -131,7 +131,27 @@ export function scopeHits(file, { rules = [], skills = [], gates = [], lessons =
   return hits;
 }
 
-export function sortHits(hits) {
+/**
+ * What governs one file: decisions whose Affects line names it, then the rules, skills,
+ * gates and lessons whose path lists match, in one stable order.
+ *
+ * `why`, `impact` and the critic each assembled this themselves, with different corpora
+ * and - in `why`'s case - a hard-coded list of this repository's own rule directories
+ * (Q77). The corpus is now the caller's, so a receiving repository's directories are the
+ * ones read.
+ *
+ * @param {string} file
+ * @param {{records?: {id: string, title: string, text: string}[], ctx: {files: Set<string>,
+ *   commands: Set<string>, roots: string[]}, rules?: object[], skills?: object[],
+ *   gates?: object[], lessons?: object[], commands?: Record<string, string>}} corpus
+ */
+export function governs(file, corpus) {
+  const { records = [], ctx, ...scopes } = corpus;
+  const { hits } = decisionHits(records, file, ctx);
+  return sortHits([...hits, ...scopeHits(file, scopes)]);
+}
+
+function sortHits(hits) {
   const order = { decision: 0, rule: 1, skill: 2, gate: 3, lesson: 4 };
   return [...hits].sort((a, b) => (order[a.kind] - order[b.kind]) || cmp(a.id, b.id));
 }

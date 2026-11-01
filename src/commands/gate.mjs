@@ -15,7 +15,8 @@ import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs
 import { CLI } from '../name.mjs';
 import { detectTestRunner } from '../bench/mine.mjs';
 import { compactOutput } from '../index/compact.mjs';
-import { readImportEdges, selectTests } from '../index/gate.mjs';
+import { coverage } from '../index/coverage.mjs';
+import { readImportEdges } from '../index/gate.mjs';
 import { langOf, packageOf } from '../index/store.mjs';
 import { localRel } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
@@ -65,7 +66,7 @@ export async function gateCommand(args, flags) {
   const files = new Set(listed.files);
   for (const file of changed) files.add(file);
   const edges = await readImportEdges(root, files);
-  const selected = selectTests(changed, edges);
+  const selected = coverage({ imports: edges }, changed);
   // Q40: the selection explains itself. `unmatched` names explicit paths the
   // tracked tree does not carry (untracked but present, so the run proceeds);
   // `graph` is `unresolved` when a language has edges but none of them reaches

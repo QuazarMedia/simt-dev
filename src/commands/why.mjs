@@ -16,10 +16,8 @@ import { FORMATTABLE, GATES } from '../hooks/gates.mjs';
 import { loadManifest } from '../manifest/schema.mjs';
 import { decisionsDir } from '../decisions/dir.mjs';
 import {
-  decisionHits,
-  scopeHits,
+  governs,
   scopePaths,
-  sortHits,
   sourceRoots,
   unresolvedAffects,
 } from '../index/govern.mjs';
@@ -43,8 +41,7 @@ export async function whyCommand(args, flags, commands = []) {
   if (!target) return reportUnresolved(root, flags, unresolvedAffects(records, ctx));
   if (!files.has(target)) return fail(`not in the tree: ${target}`, EXIT.USAGE, `pass a path git tracks`);
   const corpus = await loadCorpus(root);
-  const { hits } = decisionHits(records, target, ctx);
-  const items = sortHits([...hits, ...scopeHits(target, corpus)]);
+  const items = governs(target, { records, ...corpus, ctx });
   const payload = { ok: true, command: 'why', root, path: target, items };
   if (isJson(flags)) {
     emitJson(payload);

@@ -25,7 +25,7 @@ import { CLI } from '../name.mjs';
 import { readLocalConfig, chatEndpoint } from '../local/config.mjs';
 import { localChat } from '../local/client.mjs';
 import { decisionRecords, loadCorpus, tracked } from '../commands/why.mjs';
-import { decisionHits, scopeHits, sortHits, sourceRoots } from '../index/govern.mjs';
+import { governs, sourceRoots } from '../index/govern.mjs';
 // `digestOf`, `promptHash` and `proposalFrontmatter` landed with R38's engine and
 // the critic is their second real user; sharing them beats a third copy (ADR-002).
 import { digestOf, promptHash, proposalFrontmatter } from '../distill/engine.mjs';
@@ -119,8 +119,7 @@ async function governingItems(root, files, commands = []) {
   const ctx = { files: fileSet, commands: new Set(commands), roots: sourceRoots(files) };
   const items = new Map();
   for (const file of files) {
-    const { hits } = decisionHits(records, file, ctx);
-    for (const hit of sortHits([...hits, ...scopeHits(file, corpus)])) {
+    for (const hit of governs(file, { records, ...corpus, ctx })) {
       if (!items.has(hit.id)) items.set(hit.id, hit);
     }
   }

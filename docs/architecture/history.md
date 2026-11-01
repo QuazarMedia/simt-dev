@@ -47,7 +47,7 @@ and `upgrade` named a cause that was false. Where git could not answer at all th
 as though the two were versions. The stamp now identifies the content that leaves the package,
 which is the one thing every install can compute.
 
-ADR-033 is the same instinct applied to a plan instead of a tool. Closing plan 0001 meant auditing
+Closing plan 0001 applied the same instinct to a plan instead of a tool. It meant auditing
 each row against the tree, and three rows asked for things that had never been decided: seven agent
 policies with no surviving source anywhere in the estate, a skill-collapse step that a mechanism
 landed two hours after the plan was written already answered, and two `local.properties` files that

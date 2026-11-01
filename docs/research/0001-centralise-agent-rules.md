@@ -15,7 +15,7 @@ Row state, checked against the tree at `4aaa441` rather than against this table'
 | --- | --- | --- |
 | 1 always-on rules | **done** | `rules/core.md` (the `simt-core` of this row) and three `.mdc` rules: `intake-questions`, `test-gate`, `preview-postflight`. `slice-commit.mdc` is a fourth file, from row 2 |
 | 2 process skills | **done** | `slice-commit`, `bug-commit`, `complete-testing`, `parallel-feature-team` all in `graph/skills.graph.json` |
-| 3 agent policies | **done, 4 of 8** | `rules/core.md` carries the minimum viable team, never weakening a security control, anti-overclaim with report-what-you-left-alone, and the stated agent budget that never converts a failure into an approval. The other four — the 70/30 split, the 12-state coverage list, the matrix-trigger heuristic and strict review budget — are recorded unmade in ADR-033; there is no source for them anywhere in the estate, and writing them would put invented doctrine in front of every adopted repo |
+| 3 agent policies | **done, 4 of 8** | `rules/core.md` carries the minimum viable team, never weakening a security control, anti-overclaim with report-what-you-left-alone, and the stated agent budget that never converts a failure into an approval. The other four — the 70/30 split, the 12-state coverage list, the matrix-trigger heuristic and strict review budget — are unmade; there is no source for them anywhere in the estate, and writing them would put invented doctrine in front of every adopted repo |
 | 4 stack profiles | **done, 7 files for 8 ecosystems** | `jvm-android.md` carries this row's Kotlin/Gradle/Compose *and* JVM; `react-web.md` carries React/RTL/WCAG *and* LESS/CSS; `node.md` is this row's TypeScript-strict. `container.md` is a seventh this row did not ask for — ADR-013's `has-dockerfile` fact. No ecosystem in the row is unserved |
 | 5 tooling baselines | **done** | `.editorconfig` (ADR-025), `.gitattributes` (ADR-027), `tsconfig.base.json` (ADR-028), Dependabot (ADR-026), `packageManager`/`engines`/`.nvmrc` as three checks and no file (ADR-029). Commitlint and the shared ESLint block are refused by ADR-030; the shared Prettier config is **unruled** — ADR-048 withdrew ADR-025's `singleQuote`, which was inert, and recorded why a shared `quote_type = single` reformats two of the five repositories that run Prettier |
 | 6 shared hook library | **done** | `src/hooks/` — dispatcher, per-repo gate list, POSIX shim generator — with 59 tests |
@@ -303,7 +303,7 @@ phase expects, all byte-identical and all a personal author identity rather than
 so deleting 10 changed nothing but the tree. `simt-garmin/README.md` carried a line claiming the
 copy was in use; it now points at the canonical one.
 
-The skill twins are **superseded, not collapsed** (ADR-033). This phase's instruction predates
+The skill twins are **superseded, not collapsed**. This phase's instruction predates
 `graph/skills.graph.json`'s `sources.role` vocabulary, which landed at `a9983c8` two hours after
 this plan was written. All three resolvers install only the `canonical` source, so a `duplicate` or
 `variant` copy is a declared state that resolution never reads. `add-country-galaxy` — the one pair
@@ -325,7 +325,7 @@ gained an `intake-questions.mdc` it never had.
 two migration docs, a dead script constant in `simt-landing`, and `simt-goto`'s Claude launch
 config. The remaining matches are verbatim captured build output, generated Connect IQ and ProGuard
 artifacts that would be rewritten on the next build, and two `local.properties` files that are
-committed deliberately and stay that way (ADR-033).
+committed deliberately and stay that way.
 
 simt-app's orphaned git-lfs `pre-push` is **fixed, and this phase named it wrong**: it was the
 tracked `hooks/pre-push` deleted at `ca0e803b4`, not the fuller `scripts/hooks/pre-push`, which was

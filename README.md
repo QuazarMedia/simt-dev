@@ -328,7 +328,7 @@ on top of `0.6.0`:
   for parallel agents, and `simt pr-body` assembled from the evidence ledger.
 
 The last two rows of review `0002` (`S38` workspace token cost, `S39` estate policy
-as a pack) are closed by ruling in ADR-102: the instrument, the declaration and the
+as a pack) are closed by ruling: the instrument, the declaration and the
 non-blocking finding shipped, the blocking gate and the registry-carrying pack were
 refused by ruling, and the estate-side move is recorded as whose commit it waits on.
 Everything in plans `0001`–`0003` and reviews `0001`–`0002` is Complete or Accepted.

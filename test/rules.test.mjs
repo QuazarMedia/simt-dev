@@ -300,7 +300,6 @@ assert.deepEqual(leaking, [
     'ADR-021',
     'ADR-023',
     'ADR-026',
-    'ADR-033',
     'ADR-035',
     'ADR-041',
     'ADR-055',

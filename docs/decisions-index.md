@@ -44,7 +44,6 @@ in [architecture/history.md](architecture/history.md).
 | [030](decisions/ADR-030-what-a-plan-does-not-ship-is-a-decision-with-a-record.md) | what a plan does not ship is a decision with a record, not a silence | accepted · 2026-10-07 |
 | [031](decisions/ADR-031-the-suite-stages-the-environment-it-needs.md) | the suite stages the environment it needs, because a test that inherits the author's directory is not evidence | accepted · 2026-10-08 |
 | [032](decisions/ADR-032-provenance-is-a-content-digest-not-a-commit.md) | provenance is a digest of the content that leaves this package, not a commit id | accepted · 2026-10-08 · ruling 1 narrowed by ADR-054 |
-| [033](decisions/ADR-033-three-plan-rows-closed-by-decision-not-by-authoring.md) | three plan rows closed by decision, not by authoring | accepted · 2026-10-08 |
 | [034](decisions/ADR-034-a-staged-tool-refuses-a-partially-staged-file.md) | A staged tool refuses a partially staged file rather than staging around it | accepted · 2026-10-08 · affects every repo with a pre-commit hook |
 | [035](decisions/ADR-035-one-write-decision-and-one-json-document.md) | One place decides whether a run may write, and one document says whether it did | accepted · 2026-10-08 · affects every command that writes or reports |
 | [036](decisions/ADR-036-a-writer-that-writes-says-so-and-the-instructions-naming-it-move-with-it.md) | A command that writes says so, and every instruction that names it moves with it | accepted · 2026-10-08 · affects sync, every remedy naming it, and the generated-region note shipped into every consumer repository |
@@ -113,7 +112,6 @@ in [architecture/history.md](architecture/history.md).
 | [099](decisions/ADR-099-the-release-verifies-served-bytes-and-the-formula-mirrors-them.md) | the release verifies served bytes, and the formula mirrors them | accepted · 2026-10-27 · narrows ADR-098 ruling 3 · ruling 1 superseded by ADR-117 |
 | [100](decisions/ADR-100-a-staged-diff-is-the-last-gate-before-history-and-it-runs-inside-the-tool.md) | a staged diff is the last gate before history, and it runs inside the tool | accepted · 2026-10-27 |
 | [101](decisions/ADR-101-a-file-lease-belongs-to-one-session-and-the-pre-edit-hook-refuses-another.md) | a file lease belongs to one session, and the pre-edit hook refuses another's edit | accepted · 2026-10-28 |
-| [102](decisions/ADR-102-the-two-queued-review-rows-are-closed-by-ruling.md) | the two rows review 0002 left queued are closed by ruling | accepted · 2026-10-28 |
 | [103](decisions/ADR-103-co-projected-duplicates-merge-down.md) | duplicates stand alone, fingerprints generalize, references spell out | accepted · 2026-10-28 |
 | [104](decisions/ADR-104-the-pre-tool-use-policy-reads-the-command-the-way-a-shell-reads-it.md) | the pre-tool-use policy reads the command the way a shell reads it | accepted · 2026-10-28 |
 | [105](decisions/ADR-105-the-json-ceiling-shrinks-arrays-and-never-cuts-bytes.md) | the JSON ceiling shrinks arrays and never cuts bytes | accepted · 2026-10-29 · filed as review 0003 Q10 |

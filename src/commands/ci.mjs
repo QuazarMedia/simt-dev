@@ -18,9 +18,8 @@
 // commands owns which file would be learning about ownership twice to learn nothing
 // new, and the next .github file would arrive with a third command to remember.
 
-import { mkdir, readFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
-import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { readFile } from 'node:fs/promises';
+import { applyPlan, change } from '../write/plan.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 
 import { EXIT, emit, emitJson, isJson, note, writeMode } from '../output/index.mjs';
@@ -153,19 +152,18 @@ export async function ciCommand(positional, flags) {
     return EXIT.OK;
   }
 
-  // Journaled so `undo` restores this run (R49).
-  const journal = [];
+  // Journaled so `undo` restores this run (R49). The renderer takes the plan because
+  // detection-driven content is a function of this repo's facts: a dependabot config
+  // rendered without them would watch nothing, which is the same silent-nothing the
+  // detection ruling exists to stop.
+  const changes = [];
   for (const { key, plan, render } of targets()) {
     const p = plans.find((x) => x.key === key);
     if (p.action === 'unchanged') continue;
-    await mkdir(dirname(p.path), { recursive: true });
-    // The renderer takes the plan because detection-driven content is a function of
-    // this repo's facts: a dependabot config rendered without them would watch
-    // nothing, which is the same silent-nothing the detection ruling exists to stop.
-    await journaledWriteFile(root, journal, p.path, render(p));
-    note(`wrote    ${p.file} (${p.action}; the template and this copy now agree)`);
+    changes.push(change({ path: p.path, before: await readBefore(p.path), after: render(p), owner: 'ci', reason: 'the template and this copy now agree' }));
   }
-  await commitJournal(root, 'ci', journal);
+  await applyPlan(root, changes, { mode, label: 'ci' });
+  for (const c of changes) note(`wrote    ${c.path.replace(`${root}/`, '')} (${c.action}; ${c.reason})`);
   if (isJson(flags)) {
     emitJson(
       {

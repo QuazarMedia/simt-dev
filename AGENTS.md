@@ -425,4 +425,8 @@ Return `BLOCK` when:
 The last two are complementary, not alternatives. A reviewer that checks only one of them
 misses half of the failure they exist to catch.
 
+## Disclosure
+
+- release-process — Use when releasing simt-dev: cutting a version, writing the changelog, bumping the version, tagging, the publish and publish-channels workflows, npm staging, the PyPI and Homebrew channels, or deprecating a version.
+
 <!-- simt:end -->

@@ -39,7 +39,9 @@
       ]
     }
   },
-  "localSkills": [],
+  "localSkills": [
+    "release-process"
+  ],
   "workspace": "..",
   "decisions": {
     "historicalCutoff": 96

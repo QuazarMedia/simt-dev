@@ -930,6 +930,11 @@ export async function planDone(root, id, { sha = null, test = null, state = null
   };
 }
 
+// Reading a tracker cell this module does not map to a named field — an ADR reference, a
+// success metric — needs the same pipe and code-span rules the parser uses, and a second
+// splitter would disagree with this one the first time a cell contained a pipe.
+export { splitRow, findColumn };
+
 export function formatCounts(counts, order = []) {
   const keys = rankCounts(counts, order);
   return keys.map((key) => `${key}=${counts[key]}`).join(' ');

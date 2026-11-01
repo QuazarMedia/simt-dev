@@ -14,8 +14,25 @@ export const TASK_SCHEMA_VERSION = 2;
 /** Gold-file counts that separate the strata. Declared here, so a report can name one. */
 const STRATUM_LIMITS = Object.freeze({ small: 2, medium: 5 });
 
-/** The oracle kinds a grader registry can answer for. Only `tests` ships. */
-const ORACLE_TYPES = new Set(['tests']);
+/** The oracle kinds a grader registry can answer for. */
+const ORACLE_TYPES = new Set(['tests', 'outcome']);
+
+/**
+ * How an outcome oracle states what settles a task.
+ *
+ * A hidden test patch settles a source-code change. Work whose result is a document, a
+ * recipe or a remote object has no test to run, so it declares predicates over the
+ * artifacts and effects the task may produce — and the predicates are part of the
+ * oracle, not something a grader infers.
+ */
+export const OUTCOME_PREDICATE_KINDS = Object.freeze([
+  'artifact-contains',
+  'artifact-equals',
+  'artifact-matches',
+  'artifact-absent',
+]);
+
+const PREDICATE_KINDS = new Set(OUTCOME_PREDICATE_KINDS);
 
 /** What the agent may see. A repository task shows the checked-out tree at `base`. */
 const AGENT_VISIBLE_KINDS = new Set(['repository']);
@@ -94,6 +111,41 @@ export function normaliseTask(raw, { source = 'task' } = {}) {
   if (declaredV2 && type === 'tests' && f2p === null) {
     fail(source, 'a schema v2 task with a "tests" oracle lists its fail-to-pass ids in "f2p" (an empty list is a task nothing proves)');
   }
+  // An outcome task is settled by its predicates. Validated here rather than at grading
+  // time, so a corpus with an unreadable predicate is refused when it is written.
+  let predicates = null;
+  if (type === 'outcome') {
+    const raw = oracleRaw.predicates;
+    if (!Array.isArray(raw) || raw.length === 0) {
+      fail(source, 'an "outcome" oracle lists its predicates (an empty list is a task nothing proves)');
+    }
+    predicates = raw.map((entry, index) => {
+      if (entry === null || typeof entry !== 'object') fail(source, `oracle.predicates[${index}] must be an object`);
+      const kind = String(entry.kind ?? '');
+      if (!PREDICATE_KINDS.has(kind)) {
+        fail(source, `oracle.predicates[${index}].kind "${kind}" is not one this package grades; known: ${OUTCOME_PREDICATE_KINDS.join(', ')}`);
+      }
+      if (typeof entry.path !== 'string' || entry.path.trim() === '') {
+        fail(source, `oracle.predicates[${index}] names the artifact it reads in "path"`);
+      }
+      if (kind === 'artifact-matches') {
+        if (typeof entry.pattern !== 'string') fail(source, `oracle.predicates[${index}].pattern must be a string`);
+        try {
+          new RegExp(entry.pattern);
+        } catch (e) {
+          fail(source, `oracle.predicates[${index}].pattern does not compile: ${e.message}`);
+        }
+      } else if (kind !== 'artifact-absent' && typeof entry.value !== 'string') {
+        fail(source, `oracle.predicates[${index}].value must be the text the artifact has to carry`);
+      }
+      return { kind, path: entry.path, ...(entry.value === undefined ? {} : { value: entry.value }), ...(entry.pattern === undefined ? {} : { pattern: entry.pattern }) };
+    });
+  }
+  const allowedEffects = oracleRaw.allowedEffects === undefined ? [] : stringList(oracleRaw.allowedEffects);
+  if (allowedEffects === null) fail(source, 'field "oracle.allowedEffects" must be an array of effect names');
+  if (type === 'outcome' && oracleRaw.mutationRequired !== undefined && typeof oracleRaw.mutationRequired !== 'boolean') {
+    fail(source, 'field "oracle.mutationRequired" must be true or false');
+  }
 
   const visibleRaw = raw.agentVisible && typeof raw.agentVisible === 'object' ? raw.agentVisible : {};
   const visibleKind = String(visibleRaw.kind ?? 'repository');
@@ -117,7 +169,12 @@ export function normaliseTask(raw, { source = 'task' } = {}) {
     prompt: prompt ?? '',
     stratum: raw.stratum ?? stratumOf(gold),
     agentVisible: { ...visibleRaw, kind: visibleKind },
-    oracle: { ...oracleRaw, type, tests: { f2p: f2p ?? [], p2p: p2p ?? [] } },
+    oracle: {
+      ...oracleRaw,
+      type,
+      tests: { f2p: f2p ?? [], p2p: p2p ?? [] },
+      ...(predicates === null ? {} : { predicates, mutationRequired: oracleRaw.mutationRequired === true, allowedEffects }),
+    },
     f2p: f2p ?? [],
     p2p: p2p ?? [],
     gold,

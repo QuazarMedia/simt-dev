@@ -135,11 +135,11 @@ simt completions <bash|zsh|fish>             # print a bash, zsh or fish complet
 # decide
 simt decide "<title>" --yes                  # scaffold a numbered decision record with its frontmatter
 
-# docs
-simt docs readme                             # render the README command list from the spec
-
 # distill
 simt distill <skill|doc>                     # turn a repository into a skill or rule proposal
+
+# docs
+simt docs readme                             # render the README command list from the spec
 
 # doctor
 simt doctor [--fix]                          # report what is wrong with this installation

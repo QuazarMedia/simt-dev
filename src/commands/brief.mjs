@@ -69,7 +69,6 @@ export async function briefCommand(args, flags, commands = []) {
         explain: flags.explain === true ? explainPacket(items, { cut }) : undefined,
         text: packed.text,
       },
-      { pretty: flags.pretty === true, maxBytes: Number(flags.maxBytes ?? 0) || 0 },
     );
     return EXIT.OK;
   }

@@ -201,6 +201,46 @@ export function parseExistingFrontmatter(text) {
   return fields;
 }
 
+/** Reply budget for a critic pass: the diff cap is the argument, the token budget follows. */
+function maxTokensFor(budget) {
+  return budget === 0 ? 2048 : Math.min(2048, Math.max(256, Math.ceil(budget / 4)));
+}
+
+/**
+ * One critic pass: governance, prompt, model, verified verdict.
+ *
+ * `review --local` and `bench critic` are the two callers, and they had drifted: the bench
+ * read history with `git show --unified=2`, so the prompt it measured carried the commit
+ * message and five lines of context while the command sends three and no message. A
+ * precision measured on a different prompt is a number about a different critic. Everything
+ * that decides the answer lives here; the diff is the caller's only input.
+ *
+ * `items` and `prompt` are accepted when the caller already computed them (the staged path
+ * needs the prompt for its cache key before it knows whether to call a model at all).
+ */
+async function critique({ root, diff, files = [], items = null, prompt = null, commands = [], endpoint, budget, allowRemote }) {
+  const governing = items ?? (await governingItems(root, files, commands));
+  const briefIds = new Set(governing.map((item) => item.id));
+  const text = prompt ?? buildReviewPrompt(diff, governing, budget);
+  const chat = await localChat(endpoint.chat, {
+    system: REVIEW_SYSTEM,
+    prompt: text,
+    temperature: 0,
+    maxTokens: maxTokensFor(budget),
+    allowRemote,
+  });
+  const base = { items: governing, briefIds, prompt: text, budget };
+  if (!chat.ok) return { ...base, ok: false, error: chat.error };
+  const reply = String(chat.content).trim();
+  return {
+    ...base,
+    ok: true,
+    reply,
+    check: parseVerdictReply(reply, briefIds),
+    provenance: `${ENGINE_REVIEW_LOCAL}:${chat.model} (prompt ${promptHash(text)})`,
+  };
+}
+
 /**
  * Returns either the report object (ok) or an exit code (fail) — the same shape
  * the command layer returns, so a failure passes through unchanged.
@@ -302,28 +342,19 @@ export async function reviewTarget(args, flags, { write = true, commands = [] } 
   const endpoint = chatEndpoint(config);
   if (endpoint.exit !== undefined) return endpoint.exit;
 
-  const chat = await localChat(endpoint.chat, {
-    system: REVIEW_SYSTEM,
-    prompt,
-    temperature: 0,
-    maxTokens: budget === 0 ? 2048 : Math.min(2048, Math.max(256, Math.ceil(budget / 4))),
-    allowRemote,
-  });
-  if (!chat.ok) {
+  const pass = await critique({ root, diff: patch, items, prompt, endpoint, budget, allowRemote });
+  if (!pass.ok) {
     // A command-contract number: the chat guard's sentinel stays inside the
     // engine boundary only; anything leaving reviewTarget is numeric or a report,
     // matching how distillTarget unwraps its engine sentinels.
     return fail(
-      `local chat failed: ${chat.error}`,
+      `local chat failed: ${pass.error}`,
       EXIT.FAIL,
       'fix the endpoint, or remove --local for the deterministic brief',
     );
   }
-  const reply = String(chat.content).trim();
-  const check = parseVerdictReply(reply, briefIds);
+  const { reply, check, provenance } = pass;
   const faults = [...check.faults];
-
-  const provenance = `${ENGINE_REVIEW_LOCAL}:${chat.model} (prompt ${promptHash(prompt)})`;
   const proposal =
     proposalFrontmatter({
       source: 'staged diff',
@@ -437,9 +468,12 @@ export async function criticBench(root, { labelsPath, flags, commands = [] }) {
 
 /** One critic pass over one historical commit — the staged-diff machinery at that sha. */
 async function peer(root, sha, flags, endpoint, commands) {
+  // The same diff the staged path sends: three context lines and no commit message.
+  // `--unified=2` included the message, so the labelled set measured a prompt production
+  // never sends - the bench's precision was about a critic that does not exist.
   let diff;
   try {
-    diff = await git(root, ['show', '--unified=2', sha], { maxBuffer: 64 << 20 });
+    diff = await git(root, ['show', '--format=', '--unified=3', sha], { maxBuffer: 64 << 20 });
   } catch (error) {
     return { failed: true, exitMessage: error.message };
   }
@@ -448,19 +482,18 @@ async function peer(root, sha, flags, endpoint, commands) {
   const names = [...diff.matchAll(/^diff --git a\/(\S+) b\/(\S+)/gm)].map((match) => match[2]);
   if (names.length === 0) return { failed: true, exitMessage: 'the commit carries no file diff' };
 
-  const items = await governingItems(root, names, commands);
-  const briefIds = new Set(items.map((item) => item.id));
   const budget = Number.isInteger(flags.budget) ? flags.budget : DEFAULT_BUDGET;
-  const prompt = buildReviewPrompt(diff, items, budget);
-  const chat = await localChat(endpoint.chat, {
-    system: REVIEW_SYSTEM,
-    prompt,
-    temperature: 0,
-    maxTokens: budget === 0 ? 2048 : Math.min(2048, Math.max(256, Math.ceil(budget / 4))),
+  const pass = await critique({
+    root,
+    diff,
+    files: names,
+    commands,
+    endpoint,
+    budget,
     allowRemote: flags.allowRemote === true,
   });
-  if (!chat.ok) return { failed: true, exitMessage: chat.error };
-  return parseVerdictReply(String(chat.content).trim(), briefIds);
+  if (!pass.ok) return { failed: true, exitMessage: pass.error };
+  return pass.check;
 }
 
 async function readLabels(root, labelsPath) {

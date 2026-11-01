@@ -61,7 +61,7 @@ async function usesOutside(name, file, corpus) {
 }
 
 test('no exported binding in src/ has no caller', async () => {
-  const [srcFiles, testFiles] = await Promise.all([walk(join(ROOT, 'src')), walk(join(ROOT, 'test'))]);
+  const [srcFiles, testFiles] = await Promise.all([walkSources(), walk(join(ROOT, 'test'))]);
   const binFiles = (await readdir(join(ROOT, 'bin')))
     .filter((n) => n.endsWith('.mjs'))
     .map((n) => join(ROOT, 'bin', n));
@@ -100,7 +100,7 @@ test('every __internals seam is actually imported', async () => {
   // whether the word `__internals` appeared anywhere else, which passed for all four:
   // three other files import their own seam, so the word is always present. The mutant
   // that put a seam back in `hooks/gates.mjs` sailed through it.
-  const [srcFiles, testFiles] = await Promise.all([walk(join(ROOT, 'src')), walk(join(ROOT, 'test'))]);
+  const [srcFiles, testFiles] = await Promise.all([walkSources(), walk(join(ROOT, 'test'))]);
   const corpus = [];
   for (const file of [...srcFiles, ...testFiles]) {
     corpus.push([file, await readFile(file, 'utf8')]);
@@ -125,3 +125,13 @@ test('every __internals seam is actually imported', async () => {
   assert.ok(offered.length > 0, 'no module offers a seam, so this test is asserting nothing');
   assert.deepEqual(dead, [], `a __internals seam nobody imports:\n  ${dead.join('\n  ')}`);
 });
+
+/**
+ * The source set this test reads: the core tree and the optional packages.
+ *
+ * The bench left `src/` for `packages/bench` (review 0003 Q79): it still calls
+ * `measure/records.mjs`, so an export used only by the bench is used, not dead.
+ */
+async function walkSources() {
+  return [...(await walk(join(ROOT, 'src'))), ...(await walk(join(ROOT, 'packages')))];
+}

@@ -7,8 +7,8 @@ import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
-import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
-import { LOCAL_DIR } from '../state.mjs';
+import { sanitizedEnv, spawnBounded } from '../../../src/sys/proc.mjs';
+import { LOCAL_DIR } from '../../../src/state.mjs';
 
 export const PROBE_AGENT_TIMEOUT_MS = 120_000;
 export const PROBE_COMMAND_TIMEOUT_MS = 120_000;

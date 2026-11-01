@@ -8,7 +8,7 @@ import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { DEFAULT_MINE_TARGET, listCandidates, mineTasks, patchStats } from '../src/bench/mine.mjs';
+import { DEFAULT_MINE_TARGET, listCandidates, mineTasks, patchStats } from '../packages/bench/src/mine.mjs';
 import { isTestPath } from '../src/testing/paths.mjs';
 import { detectTestRunner } from '../src/testing/runners.mjs';
 import { resolveVaultDir } from '../src/testing/vault.mjs';
@@ -27,15 +27,15 @@ import {
   verifyCorpusDocument,
   writeCorpusDocument,
 } from '../src/measure/corpus.mjs';
-import { gradeWorkspace } from '../src/bench/grade.mjs';
+import { gradeWorkspace } from '../packages/bench/src/grade.mjs';
 import { extractPatchFiles } from '../src/testing/patches.mjs';
 import { spawnBounded } from '../src/sys/proc.mjs';
-import { BUILTIN_ARMS, materialiseArm, parseArmSpec } from '../src/bench/arms.mjs';
-import { adapterIsolation, agentEnv, loadAdapters, parseAdapterUsage } from '../src/bench/adapters.mjs';
-import { regradeRun, runBench } from '../src/bench/run.mjs';
-import { prepareIsolatedWorkspace } from '../src/bench/workspace.mjs';
-import { buildBenchReport } from '../src/bench/report.mjs';
-import { formatReportMarkdown } from '../src/bench/render.mjs';
+import { BUILTIN_ARMS, materialiseArm, parseArmSpec } from '../packages/bench/src/arms.mjs';
+import { adapterIsolation, agentEnv, loadAdapters, parseAdapterUsage } from '../packages/bench/src/adapters.mjs';
+import { regradeRun, runBench } from '../packages/bench/src/run.mjs';
+import { prepareIsolatedWorkspace } from '../packages/bench/src/workspace.mjs';
+import { buildBenchReport } from '../packages/bench/src/report.mjs';
+import { formatReportMarkdown } from '../packages/bench/src/render.mjs';
 import { loadRunRecords } from '../src/measure/records.mjs';
 import {
   computeRunCost,
@@ -71,7 +71,7 @@ import {
   removeTopSectionFromBody,
   shouldEscalateCanary,
   slugifyHeading,
-} from '../src/bench/ablate.mjs';
+} from '../packages/bench/src/ablate.mjs';
 import {
   CALIBRATION_HARNESSES,
   PROBES,
@@ -83,7 +83,7 @@ import {
   prepareProbeWorkspace,
   readLedgerEntries,
   runBenchProbes,
-} from '../src/bench/probes.mjs';
+} from '../packages/bench/src/probes.mjs';
 import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

@@ -1,0 +1,12 @@
+{
+  "name": "simt-bench",
+  "private": true,
+  "version": "0.0.0",
+  "description": "The optional benchmark package for simt-dev: task mining, agent runs, grading and statistical reports. Installed only by repositories that measure an agent.",
+  "type": "module",
+  "license": "Apache-2.0",
+  "main": "src/commands.mjs",
+  "files": [
+    "src"
+  ]
+}

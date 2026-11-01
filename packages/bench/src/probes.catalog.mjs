@@ -7,7 +7,7 @@ import { existsSync } from 'node:fs';
 import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { parse as parseRegion } from '../projection/markers.mjs';
+import { parse as parseRegion } from '../../../src/projection/markers.mjs';
 import { appendLedgerEntry, extractTranscriptCommands, readLedgerEntries, runGit, runNode } from './probe-ledger.mjs';
 
 export const PROBES = [

@@ -10,23 +10,23 @@
 import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
-import { MANIFEST_FILE, STATE_DIR } from '../name.mjs';
-import { LOCAL_DIR } from '../state.mjs';
-import { readManifest } from '../projection/manifest.mjs';
-import { inject, parse as parseRegion } from '../projection/markers.mjs';
-import { loadMdcRules, renderMdc, ruleName } from '../projection/mdc.mjs';
-import { plan } from '../projection/project.mjs';
-import { isEligible, loadRules, readDeclared, ruleValues, select } from '../projection/rules.mjs';
-import { resolveSurfaces, rulePath, SURFACES } from '../projection/surfaces.mjs';
-import { fingerprint } from '../resolve/fingerprint.mjs';
-import { evaluateRunRecord, loadPrices } from '../measure/metrics.mjs';
-import { loadRunRecords } from '../measure/records.mjs';
+import { MANIFEST_FILE, STATE_DIR } from '../../../src/name.mjs';
+import { LOCAL_DIR } from '../../../src/state.mjs';
+import { readManifest } from '../../../src/projection/manifest.mjs';
+import { inject, parse as parseRegion } from '../../../src/projection/markers.mjs';
+import { loadMdcRules, renderMdc, ruleName } from '../../../src/projection/mdc.mjs';
+import { plan } from '../../../src/projection/project.mjs';
+import { isEligible, loadRules, readDeclared, ruleValues, select } from '../../../src/projection/rules.mjs';
+import { resolveSurfaces, rulePath, SURFACES } from '../../../src/projection/surfaces.mjs';
+import { fingerprint } from '../../../src/resolve/fingerprint.mjs';
+import { evaluateRunRecord, loadPrices } from '../../../src/measure/metrics.mjs';
+import { loadRunRecords } from '../../../src/measure/records.mjs';
 import {
   DEFAULT_BOOTSTRAP_SAMPLES,
   DEFAULT_BOOTSTRAP_SEED,
   compareArms,
   holmAdjust,
-} from '../measure/stats.mjs';
+} from '../../../src/measure/stats.mjs';
 
 export const DEFAULT_CANARY_SIZE = 10;
 export const DEL_R_TOLERANCE = 0.01;

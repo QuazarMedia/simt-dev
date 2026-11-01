@@ -2,14 +2,14 @@ import { existsSync } from 'node:fs';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { runGates } from '../hooks/dispatcher.mjs';
-import { packageVersion } from '../package-version.mjs';
-import { readManifest } from '../projection/manifest.mjs';
+import { runGates } from '../../../src/hooks/dispatcher.mjs';
+import { packageVersion } from '../../../src/package-version.mjs';
+import { readManifest } from '../../../src/projection/manifest.mjs';
 import { registerOracle } from './graders.mjs';
-import { cleanupReports, readReports } from '../testing/parsers.mjs';
-import { extractPatchFiles } from '../testing/patches.mjs';
-import { detectTestRunner } from '../testing/runners.mjs';
-import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
+import { cleanupReports, readReports } from '../../../src/testing/parsers.mjs';
+import { extractPatchFiles } from '../../../src/testing/patches.mjs';
+import { detectTestRunner } from '../../../src/testing/runners.mjs';
+import { sanitizedEnv, spawnBounded } from '../../../src/sys/proc.mjs';
 
 const DEFAULT_GRADE_TIMEOUT_MS = 45_000;
 

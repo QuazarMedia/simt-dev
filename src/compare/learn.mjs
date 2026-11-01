@@ -18,7 +18,7 @@ import { basename, join } from 'node:path';
 import { mapCapped, DEFAULT_CONCURRENCY } from './parallel.mjs';
 
 import { policiesFor } from '../agenthooks/policy.mjs';
-import { DEL_R_TOLERANCE, parseAblationArmName } from '../bench/ablate.mjs';
+import { DEL_R_TOLERANCE, parseAblationArmName } from '../../packages/bench/src/ablate.mjs';
 import { evaluateRunRecord, loadPrices } from '../measure/metrics.mjs';
 import { loadRunRecords } from '../measure/records.mjs';
 import { compareArms } from '../measure/stats.mjs';

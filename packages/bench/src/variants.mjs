@@ -9,24 +9,24 @@
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
-import { extractVariantsFromRule, readLockedVariants } from '../kernel/variants.mjs';
-import { LOCK_FILE, MANIFEST_FILE, STATE_DIR } from '../name.mjs';
-import { writeLockVariants } from '../projection/lock.mjs';
-import { readManifest } from '../projection/manifest.mjs';
-import { loadMdcRules } from '../projection/mdc.mjs';
-import { plan } from '../projection/project.mjs';
-import { isEligible, loadRules, readDeclared, select } from '../projection/rules.mjs';
-import { fingerprint } from '../resolve/fingerprint.mjs';
+import { extractVariantsFromRule, readLockedVariants } from '../../../src/kernel/variants.mjs';
+import { LOCK_FILE, MANIFEST_FILE, STATE_DIR } from '../../../src/name.mjs';
+import { writeLockVariants } from '../../../src/projection/lock.mjs';
+import { readManifest } from '../../../src/projection/manifest.mjs';
+import { loadMdcRules } from '../../../src/projection/mdc.mjs';
+import { plan } from '../../../src/projection/project.mjs';
+import { isEligible, loadRules, readDeclared, select } from '../../../src/projection/rules.mjs';
+import { fingerprint } from '../../../src/resolve/fingerprint.mjs';
 import { CANARY_ALPHA, DEFAULT_CANARY_SIZE, DEL_R_TOLERANCE, shouldEscalateCanary } from './ablate.mjs';
-import { evaluateRunRecord, loadPrices } from '../measure/metrics.mjs';
-import { loadRunRecords } from '../measure/records.mjs';
+import { evaluateRunRecord, loadPrices } from '../../../src/measure/metrics.mjs';
+import { loadRunRecords } from '../../../src/measure/records.mjs';
 import {
   DEFAULT_BOOTSTRAP_SAMPLES,
   DEFAULT_BOOTSTRAP_SEED,
   collapseArmByTask,
   compareArms,
   holmAdjust,
-} from '../measure/stats.mjs';
+} from '../../../src/measure/stats.mjs';
 
 /**
  * Harnesses that grade, not answer: `gold` applies the oracle patch and `noop` does

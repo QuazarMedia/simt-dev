@@ -36,9 +36,9 @@ import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-import { LOCAL_DIR } from '../state.mjs';
-import { parse as parseRegion } from '../projection/markers.mjs';
-import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
+import { LOCAL_DIR } from '../../../src/state.mjs';
+import { parse as parseRegion } from '../../../src/projection/markers.mjs';
+import { sanitizedEnv, spawnBounded } from '../../../src/sys/proc.mjs';
 import { adapterIsolation, executeAdapter, loadAdapters } from './adapters.mjs';
 import { materialiseArm, parseArmSpec } from './arms.mjs';
 

@@ -10,12 +10,12 @@ import { existsSync } from 'node:fs';
 import { lstat, mkdir, readdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 
-import { assembleBrief } from '../brief/assemble.mjs';
-import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
-import { MANIFEST_FILE } from '../name.mjs';
-import { readManifest } from '../projection/manifest.mjs';
-import { plan } from '../projection/project.mjs';
-import { parse as parseRegion } from '../projection/markers.mjs';
+import { assembleBrief } from '../../../src/brief/assemble.mjs';
+import { DEFAULT_BRIEF_BYTES } from '../../../src/brief/packet.mjs';
+import { MANIFEST_FILE } from '../../../src/name.mjs';
+import { readManifest } from '../../../src/projection/manifest.mjs';
+import { plan } from '../../../src/projection/project.mjs';
+import { parse as parseRegion } from '../../../src/projection/markers.mjs';
 import { ablateSectionInWorkspace, parseAblationArmName } from './ablate.mjs';
 import { applyVariantInWorkspace, parseVariantArmName } from './variants.mjs';
 

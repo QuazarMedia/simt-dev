@@ -14,7 +14,7 @@ import {
   parseVariantArmName,
   selectRuleVariants,
   variantArmName,
-} from '../src/bench/variants.mjs';
+} from '../packages/bench/src/variants.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { checkCommand, frozenFindings } from '../src/commands/sync.mjs';
 import {
@@ -539,7 +539,7 @@ test('selectRuleVariants never writes a lock entry from a built-in harness', asy
 
 test('BUILTIN_HARNESSES matches the builtin adapters in adapters.json', async () => {
   const adapters = JSON.parse(
-    await readFile(new URL('../src/bench/adapters.json', import.meta.url), 'utf8'),
+    await readFile(new URL('../packages/bench/src/adapters.json', import.meta.url), 'utf8'),
   );
   const builtins = new Set(
     Object.values(adapters.adapters)

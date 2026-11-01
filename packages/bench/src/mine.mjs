@@ -18,14 +18,14 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { STATE_DIR } from '../name.mjs';
-import { readManifest } from '../projection/manifest.mjs';
-import { packageVersion } from '../package-version.mjs';
-import { TASK_SCHEMA_VERSION, normaliseTask } from '../measure/task-schema.mjs';
-import { isTestPath } from '../testing/paths.mjs';
-import { cleanupReports, dedupeSorted, readReports } from '../testing/parsers.mjs';
-import { detectTestRunner } from '../testing/runners.mjs';
-import { resolveVaultDir } from '../testing/vault.mjs';
+import { STATE_DIR } from '../../../src/name.mjs';
+import { readManifest } from '../../../src/projection/manifest.mjs';
+import { packageVersion } from '../../../src/package-version.mjs';
+import { TASK_SCHEMA_VERSION, normaliseTask } from '../../../src/measure/task-schema.mjs';
+import { isTestPath } from '../../../src/testing/paths.mjs';
+import { cleanupReports, dedupeSorted, readReports } from '../../../src/testing/parsers.mjs';
+import { detectTestRunner } from '../../../src/testing/runners.mjs';
+import { resolveVaultDir } from '../../../src/testing/vault.mjs';
 
 const exec = promisify(execFile);
 export const DEFAULT_MINE_TARGET = 20;

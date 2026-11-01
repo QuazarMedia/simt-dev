@@ -13,8 +13,8 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CLI } from '../name.mjs';
-import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
+import { CLI } from '../../../src/name.mjs';
+import { sanitizedEnv, spawnBounded } from '../../../src/sys/proc.mjs';
 
 const BENCH_DIR = dirname(fileURLToPath(import.meta.url));
 const ADAPTERS_PATH = join(BENCH_DIR, 'adapters.json');

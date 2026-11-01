@@ -10,9 +10,9 @@ import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promis
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { STATE_DIR } from '../name.mjs';
-import { LOCAL_DIR } from '../state.mjs';
-import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
+import { STATE_DIR } from '../../../src/name.mjs';
+import { LOCAL_DIR } from '../../../src/state.mjs';
+import { sanitizedEnv, spawnBounded } from '../../../src/sys/proc.mjs';
 import { materialiseArm } from './arms.mjs';
 
 const DEFAULT_GIT_TIMEOUT_MS = 120_000;

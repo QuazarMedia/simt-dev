@@ -152,7 +152,7 @@ export async function assembleBrief({
   const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(`${STATE_DIR}/`));
   const scope = named ? parsePathList(paths) : dirty;
 
-  const graph = await loadGraph(root, { build });
+  const graph = await loadGraph(root, { build, task, embed: flags?.embed === true });
   if (graph.error) return { error: graph.error };
   if (graph.cold) return { cold: true };
   const graphStale = graph.stale === true;

@@ -405,15 +405,24 @@ function pageRank(nodes, links, scores) {
   let rank = pers.slice();
   for (let iter = 0; iter < ITERATIONS; iter += 1) {
     const next = pers.map((value) => (1 - DAMPING) * value);
+    // Dangling nodes (no outgoing edges) spread their rank over the whole
+    // distribution. Accumulating their mass first makes that one pass over j
+    // instead of one pass per dangling node - the no-task rank of a 30k-file
+    // repo used to go quadratic here (Q76).
+    let danglingMass = 0;
     for (let i = 0; i < n; i += 1) {
       const outs = links[i];
       if (outs.length === 0) {
-        for (let j = 0; j < n; j += 1) next[j] += DAMPING * rank[i] * pers[j];
+        danglingMass += rank[i];
       } else {
         let sum = 0;
         for (const [, weight] of outs) sum += weight;
         for (const [j, weight] of outs) next[j] += (DAMPING * rank[i] * weight) / sum;
       }
+    }
+    if (danglingMass > 0) {
+      const share = DAMPING * danglingMass;
+      for (let j = 0; j < n; j += 1) next[j] += share * pers[j];
     }
     rank = next;
   }

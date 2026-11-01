@@ -14,14 +14,21 @@ export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
 export const JSONL_FILE = join(LOCAL_DIR, 'index.jsonl');
 const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
 const JSONL_FILE_LEGACY = '.simt/index.jsonl';
-export const SCHEMA_V = '4';
+export const SCHEMA_V = '5';
 
 // The FTS tables carry their tokenizer in their definition, so `if not exists`
 // cannot migrate them: a v3 database would keep tokenizing new rows the v3 way
-// (ASCII fold, kind and ref searchable). The 3 -> 4 migration below recreates
-// them, which is the versioned replacement for the per-write wipe (Q44).
-export const FTS_SCHEMA = 'create virtual table fts using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "unicode61 remove_diacritics 2")';
-export const FTS_TRI_SCHEMA = 'create virtual table fts_tri using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "trigram")';
+// (ASCII fold, kind and ref searchable), and a v4 `fts` table cannot grow the
+// node_id column the v5 layout needs. The preamble creates them only when they
+// are missing (a cold build); the 3 -> 4 and 4 -> 5 migrations below drop and
+// recreate them, which is the versioned replacement for the per-write wipe (Q44).
+export const FTS_SCHEMA = 'create virtual table if not exists fts using fts5(body, node_id UNINDEXED, kind UNINDEXED, tokenize = "unicode61 remove_diacritics 2")';
+export const FTS_TRI_SCHEMA = 'create virtual table if not exists fts_tri using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "trigram")';
+
+// The v4 `fts` shape. The 3 -> 4 step recreates the table with THIS shape so a
+// v3 database emerges looking exactly like a genuine v4 one - the 4 -> 5 step
+// then copies its `ref` column, which the v5 shape no longer has.
+const FTS_V4_SCHEMA = 'create virtual table fts using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "unicode61 remove_diacritics 2")';
 
 // A database written by a *newer* simt is never opened for write, and never
 // read blind (review 0003 Q44): the mismatched canonical file stays with its
@@ -53,9 +60,56 @@ const MIGRATIONS = [
     to: 4,
     apply: (db) => {
       db.exec('drop table if exists fts');
-      db.exec(FTS_SCHEMA);
+      db.exec(FTS_V4_SCHEMA);
       db.exec('drop table if exists fts_tri');
       db.exec(FTS_TRI_SCHEMA);
+    },
+  },
+  // v4 is per-kind tables (files/symbols/edges/embeddings); v5 is the entity
+  // layout (sources/nodes/edges/vectors) with the read shapes restored as SQL
+  // in the store. `edges` and `fts` are built under `_v5` names and swapped in
+  // after the copy, because the v4 tables of those names still hold data.
+  // fts_tri keeps its (kind, ref, body) shape - the CJK trigram path is
+  // untouched (Q43).
+  {
+    from: 4,
+    to: 5,
+    apply: (db) => {
+      db.exec(TABLES);
+      db.exec(EDGES_DDL.replaceAll('edges(', 'edges_v5('));
+      db.exec(FTS_SCHEMA.replaceAll('exists fts ', 'exists fts_v5 '));
+      db.exec(`insert into sources(kind, path, revision, lang, bytes, status, props)
+        select 'blob', path, blob, lang, bytes, 'indexed', json_object('pkg', coalesce(pkg, '')) from files`);
+      db.exec(`insert into nodes(key, kind, source_id)
+        select 'file:' || path, 'file', id from sources where kind = 'blob'`);
+      db.exec(`insert into nodes(key, kind, source_id, name, line, props)
+        select 'sym:' || s.path || '#' || s.name || '@' || coalesce(s.line, 0), 'symbol', src.id,
+               s.name, s.line, json_object('kind', coalesce(s.kind, 'symbol'), 'sig', coalesce(s.sig, ''), 'exported', coalesce(s.exported, 0))
+        from symbols s join sources src on src.kind = 'blob' and src.path = s.path`);
+      db.exec(`insert into edges_v5(src_id, kind, dst_key, dst_id, weight, owner_source_id, trust)
+        select sn.id, e.kind, e.dst, dn.id, e.weight, src.id, 'observed'
+        from edges e
+        join sources src on src.kind = 'blob' and src.path = e.src
+        join nodes sn on sn.source_id = src.id and sn.kind = 'file'
+        left join sources dst on dst.kind = 'blob' and dst.path = e.dst
+        left join nodes dn on dn.source_id = dst.id and dn.kind = 'file'`);
+      db.exec(`insert into vectors(node_id, model, dims, vec)
+        select n.id, em.model, em.dims, em.vec
+        from embeddings em
+        join sources s on s.kind = 'blob' and s.path = em.path
+        join nodes n on n.source_id = s.id and n.kind = 'file'`);
+      db.exec(`insert into fts_v5(body, node_id, kind)
+        select f.body, n.id, f.kind
+        from fts f
+        join sources s on s.kind = 'blob' and s.path = f.ref
+        join nodes n on n.source_id = s.id and n.kind = 'file'`);
+      db.exec('drop table files');
+      db.exec('drop table symbols');
+      db.exec('drop table embeddings');
+      db.exec('drop table edges');
+      db.exec('drop table fts');
+      db.exec('alter table edges_v5 rename to edges');
+      db.exec('alter table fts_v5 rename to fts');
     },
   },
 ];
@@ -67,20 +121,88 @@ const MIGRATIONS = [
  * each is idempotent on an already-migrated table set.
  */
 function migrateDb(db) {
-  const at = Number(db.prepare('pragma user_version').get()?.user_version ?? 0);
-  for (const step of MIGRATIONS) {
-    if (at === 0 || (at >= step.from && at < step.to)) step.apply(db);
+  let at = Number(db.prepare('pragma user_version').get()?.user_version ?? 0);
+  // `user_version 0` is ambiguous: a cold build has no legacy tables at all,
+  // and a pre-stamp database still holds the v3 shape. The 4 -> 5 step copies
+  // FROM the v4 tables (`files`, `symbols`, ...), so a cold build must not run
+  // it - the 3 -> 4 step would leave its `fts` in the v4 shape behind.
+  const legacy =
+    at !== 0 ||
+    db.prepare(`select count(*) as n from sqlite_master where type = 'table' and name in ('files', 'symbols', 'embeddings')`).get().n > 0;
+  if (legacy) {
+    for (const step of MIGRATIONS) {
+      if (at === 0 || (at >= step.from && at < step.to)) {
+        step.apply(db);
+        at = step.to; // the next step sees the version this one left behind
+      }
+    }
   }
   db.exec(`pragma user_version = ${Number(SCHEMA_V)}`);
 }
 
-const SCHEMA = `
-create table if not exists files(path text primary key, blob text, lang text, bytes int, pkg text);
-create table if not exists symbols(id integer primary key, path text, name text, kind text, line int, sig text, exported int);
-create table if not exists edges(src text, dst text, kind text, weight real);
-create table if not exists embeddings(path text primary key, blob text, model text, dims int, vec blob);
+const TABLES = `
+create table if not exists sources(
+  id integer primary key,
+  kind text not null default 'blob',
+  path text not null,
+  revision text,
+  lang text,
+  bytes integer,
+  status text not null default 'indexed',
+  props text,
+  unique(kind, path)
+);
+create table if not exists nodes(
+  id integer primary key,
+  key text not null unique,
+  kind text,
+  source_id integer,
+  name text,
+  line integer,
+  span_start integer,
+  span_end integer,
+  digest text,
+  trust text not null default 'observed',
+  props text
+);
+create table if not exists vectors(
+  node_id integer primary key,
+  model text,
+  dims integer,
+  vec blob
+);
 create table if not exists meta(key text primary key, value text);
 `;
+
+// The v5 edges table. Named `edges_v5` in the 4 -> 5 migration, because the
+// v4 database still holds an `edges` table of a different shape until the
+// copy below is done.
+const EDGES_DDL = `create table if not exists edges(
+  src_id integer,
+  kind text,
+  dst_key text,
+  dst_id integer,
+  weight real,
+  owner_source_id integer,
+  trust text,
+  props text,
+  primary key(src_id, kind, dst_key)
+);`;
+
+// Q76: the v4 layout had no index on the edge endpoints or the node owners -
+// the dependent, impact and coverage walks each paid a full scan per file.
+// Executed after `migrateDb`, not in the preamble: on a v3 database the v3
+// `edges` table survives `if not exists` until the 4 -> 5 step swaps in the
+// v5 shape, and `idx_edges_dst` needs the `dst_id` column that only the v5
+// table has.
+const INDEXES = `
+create index if not exists idx_edges_dst on edges(dst_id, kind);
+create index if not exists idx_edges_owner on edges(owner_source_id);
+create index if not exists idx_nodes_source on nodes(source_id);
+create index if not exists idx_nodes_kind_name on nodes(kind, name);
+`;
+
+const SCHEMA = `${TABLES}\n${EDGES_DDL}\n`;
 
 export function encodeVectorBlob(vec) {
   if (!Array.isArray(vec) && !(vec instanceof Float32Array)) return Buffer.alloc(0);
@@ -186,55 +308,95 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     db.exec('pragma busy_timeout = 5000');
     db.exec('pragma synchronous = normal');
     db.exec(SCHEMA);
+    db.exec(FTS_SCHEMA);
+    db.exec(FTS_TRI_SCHEMA);
     db.exec('begin immediate');
     migrateDb(db);
-    const upsert = db.prepare(`insert into files(path, blob, lang, bytes, pkg) values (?, ?, ?, ?, ?)
-      on conflict(path) do update set blob = excluded.blob, lang = excluded.lang, bytes = excluded.bytes, pkg = excluded.pkg`);
-    const dropSymbols = db.prepare('delete from symbols where path = ?');
-    // An importer owns its outgoing edges: re-extracting a changed file drops
-    // only `src = ?`, so the unchanged importers' edges pointing into it survive
-    // (Q07). A removed file's incoming edges dangle, so they drop with it.
-    const dropEdges = db.prepare('delete from edges where src = ?');
-    const dropIncoming = db.prepare('delete from edges where dst = ?');
-    const dropFts = db.prepare('delete from fts where ref = ?');
-    const dropTri = db.prepare('delete from fts_tri where ref = ?');
-    const dropEmbed = db.prepare('delete from embeddings where path = ?');
-    const dropFile = db.prepare('delete from files where path = ?');
-    const addSymbol = db.prepare('insert into symbols(path, name, kind, line, sig, exported) values (?, ?, ?, ?, ?, ?)');
-    const addEdge = db.prepare('insert into edges(src, dst, kind, weight) values (?, ?, ?, ?)');
-    const addFts = db.prepare('insert into fts(kind, ref, body) values (?, ?, ?)');
+    // The `edges` table is v5-shaped now on every path: the preamble created
+    // it on a cold build, the migration swapped it in on a legacy one.
+    db.exec(INDEXES);
+    // One source row per file, keyed (kind, path): the revision is the git blob
+    // sha, so an unchanged blob keeps its row, and the file's node, vectors,
+    // edges and fts rows all hang off it. `props` carries what the v5 columns
+    // do not name - the package directory, which the files read shape serves.
+    const upsertSource = db.prepare(`insert into sources(kind, path, revision, lang, bytes, status, props)
+      values('blob', ?, ?, ?, ?, 'indexed', ?)
+      on conflict(kind, path) do update set revision = excluded.revision, lang = excluded.lang,
+        bytes = excluded.bytes, props = excluded.props`);
+    const sourceIdOf = db.prepare(`select id from sources where kind = 'blob' and path = ?`);
+    // `prepare` compiles only the FIRST statement in a string (Q76): a
+    // multi-statement delete prepared as one ran only its head, and the
+    // surviving `file:` node collided with the next insert on `nodes.key`.
+    const dropDependents = [
+      db.prepare('delete from vectors where node_id in (select id from nodes where source_id = ?)'),
+      db.prepare('delete from fts where node_id in (select id from nodes where source_id = ?)'),
+      db.prepare('delete from edges where owner_source_id = ?'),
+      db.prepare('delete from nodes where source_id = ?'),
+    ];
+    const addFileNode = db.prepare(`insert into nodes(key, kind, source_id, trust) values('file:' || ?, 'file', ?, 'observed')`);
+    const addSymbol = db.prepare(`insert into nodes(key, kind, source_id, name, line, props)
+      values('sym:' || ? || '#' || ? || '@' || ?, 'symbol', ?, ?, ?, ?)`);
+    const addEdge = db.prepare(`insert into edges(src_id, kind, dst_key, dst_id, weight, owner_source_id, trust)
+      values (?, ?, ?, ?, ?, ?, 'observed')`);
+    const addFts = db.prepare('insert into fts(body, node_id, kind) values (?, ?, ?)');
     const addTri = db.prepare('insert into fts_tri(kind, ref, body) values (?, ?, ?)');
-    const upsertEmbed = db.prepare(`insert into embeddings(path, blob, model, dims, vec) values (?, ?, ?, ?, ?)
-      on conflict(path) do update set blob = excluded.blob, model = excluded.model, dims = excluded.dims, vec = excluded.vec`);
+    const upsertVector = db.prepare(`insert into vectors(node_id, model, dims, vec) values (?, ?, ?, ?)
+      on conflict(node_id) do update set model = excluded.model, dims = excluded.dims, vec = excluded.vec`);
+    const dropSource = [
+      db.prepare(`delete from vectors where node_id in (select id from nodes where source_id in (select id from sources where kind = 'blob' and path = ?))`),
+      db.prepare(`delete from fts where node_id in (select id from nodes where source_id in (select id from sources where kind = 'blob' and path = ?))`),
+      db.prepare(`delete from edges where owner_source_id in (select id from sources where kind = 'blob' and path = ?)`),
+      db.prepare('delete from edges where dst_key = ?'),
+      db.prepare(`delete from nodes where source_id in (select id from sources where kind = 'blob' and path = ?)`),
+      db.prepare(`delete from sources where kind = 'blob' and path = ?`),
+    ];
     for (const row of next) {
-      upsert.run(row.path, row.blob, row.lang, row.bytes, row.pkg);
-      dropSymbols.run(row.path);
-      dropEdges.run(row.path);
-      dropFts.run(row.path);
-      dropTri.run(row.path);
-      dropEmbed.run(row.path);
+      const sourceId = sourceIdOf.get(row.path)?.id;
+      if (sourceId !== undefined) for (const st of dropDependents) st.run(sourceId);
+      upsertSource.run(row.path, row.blob, row.lang, row.bytes, JSON.stringify({ pkg: row.pkg ?? '' }));
     }
     for (const path of removed) {
-      dropFile.run(path);
-      dropSymbols.run(path);
-      dropEdges.run(path);
-      dropIncoming.run(path);
-      dropFts.run(path);
-      dropTri.run(path);
-      dropEmbed.run(path);
+      for (const st of dropSource) st.run(path);
+      // fts_tri is still path-keyed: the trigram table keeps its v4 shape (Q43).
+      db.prepare('delete from fts_tri where ref = ?').run(path);
     }
-    for (const row of symbols) addSymbol.run(row.path, row.name, row.kind, row.line, row.sig, row.exported);
-    for (const row of edges) addEdge.run(row.src, row.dst, row.kind, row.weight);
+    for (const row of next) {
+      addFileNode.run(row.path, sourceIdOf.get(row.path).id);
+    }
+    // The ids a changed file's rows hang off were just rebuilt; an unchanged
+    // file's rows keep their old ids. One query maps every path to both.
+    const ids = new Map();
+    for (const r of db.prepare(`select s.path, s.id as source_id, n.id as node_id
+      from sources s join nodes n on n.source_id = s.id and n.kind = 'file'
+      where s.kind = 'blob'`).all()) {
+      ids.set(r.path, { sourceId: r.source_id, nodeId: r.node_id });
+    }
+    for (const row of symbols) {
+      const entry = ids.get(row.path);
+      if (!entry) continue;
+      addSymbol.run(row.path, row.name, row.line, entry.sourceId, row.name, row.line,
+        JSON.stringify({ kind: row.kind ?? 'symbol', sig: row.sig ?? '', exported: row.exported ? 1 : 0 }));
+    }
+    for (const row of edges) {
+      const src = ids.get(row.src);
+      if (!src) continue;
+      const dst = ids.get(row.dst);
+      addEdge.run(src.nodeId, row.kind, row.dst, dst ? dst.nodeId : null, row.weight, src.sourceId);
+    }
     for (const row of fts) {
-      addFts.run(row.kind, row.ref, row.body);
+      const entry = ids.get(row.ref);
+      if (!entry) continue;
+      addFts.run(row.body, entry.nodeId, row.kind);
       // The trigram table carries folded raw text for CJK-bearing sections
       // only; an ASCII-only section is already reachable through `fts`.
       if (row.raw) addTri.run(row.kind, row.ref, row.raw);
     }
     for (const row of embeddings) {
+      const entry = ids.get(row.path);
+      if (!entry) continue;
       const vecBlob = Buffer.isBuffer(row.vec) || row.vec instanceof Uint8Array ? row.vec : encodeVectorBlob(row.vec);
       const dims = Number.isInteger(row.dims) ? row.dims : Math.floor(vecBlob.byteLength / 4);
-      upsertEmbed.run(row.path, row.blob ?? '', row.model ?? '', dims, vecBlob);
+      upsertVector.run(entry.nodeId, row.model ?? '', dims, vecBlob);
     }
     const upsertMeta = db.prepare(
       'insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value',
@@ -529,13 +691,20 @@ export async function readTreeDigest(root, backend) {
 }
 
 export async function countSqlite(root) {
-  const symbols = await readSqliteRows(root, 'select count(*) as n from symbols');
-  const edges = await readSqliteRows(root, 'select count(*) as n from edges');
-  const embeddings = await readSqliteRows(root, 'select count(*) as n from embeddings');
+  // One open, three counts: the v4 layout paid a full open/close per metric,
+  // and a read that only wants the counts was buying three connections (Q76).
+  const { rows } = await readSqliteRows(
+    root,
+    `select
+      (select count(*) from nodes where kind = 'symbol') as symbols,
+      (select count(*) from edges) as edges,
+      (select count(*) from vectors) as embeddings`,
+  );
+  const row = rows[0] ?? {};
   return {
-    symbols: Number(symbols.rows[0]?.n ?? 0),
-    edges: Number(edges.rows[0]?.n ?? 0),
-    embeddings: Number(embeddings.rows[0]?.n ?? 0),
+    symbols: Number(row.symbols ?? 0),
+    edges: Number(row.edges ?? 0),
+    embeddings: Number(row.embeddings ?? 0),
   };
 }
 

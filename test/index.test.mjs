@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { git } from './fixture.mjs';
@@ -18,11 +18,13 @@ import {
   readEdges,
   readFiles,
   readFts,
+  readSymbols,
   reindex,
   searchFtsBm25,
   tokenizeText,
 } from '../src/index/store.mjs';
 import { JSONL_FILE, SQLITE_FILE, indexFileFor } from '../src/index/persist.mjs';
+import { openIndex } from '../src/index/open.mjs';
 import { indexCommand } from '../src/commands/repoindex.mjs';
 
 async function repo() {
@@ -124,15 +126,15 @@ test('a database at a newer version is served from a sidecar, never overwritten 
     await reindex(root, { backend: 'sqlite' });
     const file = join(root, SQLITE_FILE);
     const newer = new DatabaseSync(file);
-    newer.exec('pragma user_version = 5');
-    newer.exec(`update meta set value = '5' where key = 'schema'`);
+    newer.exec('pragma user_version = 6');
+    newer.exec(`update meta set value = '6' where key = 'schema'`);
     newer.close();
     await reindex(root, { backend: 'sqlite' });
     const intact = new DatabaseSync(file);
-    assert.equal(Number(intact.prepare('pragma user_version').get().user_version), 5, 'the newer database is untouched');
-    assert.equal(intact.prepare(`select value from meta where key = 'schema'`).get().value, '5');
+    assert.equal(Number(intact.prepare('pragma user_version').get().user_version), 6, 'the newer database is untouched');
+    assert.equal(intact.prepare(`select value from meta where key = 'schema'`).get().value, '6');
     intact.close();
-    const sidecar = indexFileFor(root, 'sqlite', '5');
+    const sidecar = indexFileFor(root, 'sqlite', '6');
     assert.ok((await stat(sidecar)).size > 0, 'this version built its sidecar');
     const rows = await readFiles(root, { backend: 'sqlite' });
     assert.ok(rows.length > 0, 'reads are served from the sidecar, not the foreign file');
@@ -148,12 +150,12 @@ test('a jsonl file at another version goes to the sidecar (jsonl, Q44)', async (
     await reindex(root, { backend: 'jsonl' });
     const file = join(root, JSONL_FILE);
     const original = await readFile(file, 'utf8');
-    const bumped = original.replace('"value":"4"', '"value":"5"');
+    const bumped = original.replace('"value":"5"', '"value":"6"');
     assert.notEqual(bumped, original, 'the version line was bumped');
     await writeFile(file, bumped);
     await reindex(root, { backend: 'jsonl' });
-    assert.ok((await readFile(file, 'utf8')).includes('"value":"5"'), 'the foreign file is untouched');
-    const sidecar = indexFileFor(root, 'jsonl', '5');
+    assert.ok((await readFile(file, 'utf8')).includes('"value":"6"'), 'the foreign file is untouched');
+    const sidecar = indexFileFor(root, 'jsonl', '6');
     assert.ok((await stat(sidecar)).size > 0, 'this version built its sidecar');
     const rows = await readFiles(root, { backend: 'jsonl' });
     assert.ok(rows.length > 0, 'reads are served from the sidecar');
@@ -163,24 +165,36 @@ test('a jsonl file at another version goes to the sidecar (jsonl, Q44)', async (
   }
 });
 
-test('a v3 database is migrated in place to v4 (sqlite, Q44)', async () => {
-  // The 3 -> 4 step is the FTS recreation the per-write wipe used to perform
-  // silently; it now runs as a named migration and stamps user_version.
+test('a v3 database is migrated in place through v4 to v5 (sqlite, Q44, Q76)', async () => {
+  // The 3 -> 4 step recreates the FTS table; the 4 -> 5 step copies its rows by
+  // the `ref` column. If 3 -> 4 created the table in the v5 shape, the copy
+  // reads a column that is not there and the whole build fails.
   const root = await repo();
   try {
-    await reindex(root, { backend: 'sqlite' });
     const file = join(root, SQLITE_FILE);
+    await mkdir(dirname(file), { recursive: true });
     const db = new DatabaseSync(file);
-    db.exec('drop table fts');
-    db.exec('create virtual table fts using fts5(kind, ref, body)');
-    db.exec('pragma user_version = 3');
-    db.exec(`update meta set value = '3' where key = 'schema'`);
+    db.exec(`
+      create table files(path text primary key, blob text, lang text, bytes int, pkg text);
+      create table symbols(id integer primary key, path text, name text, kind text, line int, sig text, exported int);
+      create table edges(src text, dst text, kind text, weight real);
+      create table embeddings(path text primary key, blob text, model text, dims int, vec blob);
+      create table meta(key text primary key, value text);
+      create virtual table fts using fts5(kind, ref, body);
+      insert into meta(key, value) values ('schema', '3');
+      pragma user_version = 3;
+      insert into files(path, blob, lang, bytes, pkg) values ('apps/web/src/a.ts', 'deadbeef', 'typescript', 19, 'apps/web');
+      insert into symbols(path, name, kind, line, sig, exported) values ('apps/web/src/a.ts', 'a', 'function', 1, 'const a = 1;', 1);
+      insert into edges(src, dst, kind, weight) values ('apps/web/src/a.ts', 'README', 'import', 1);
+      insert into fts(kind, ref, body) values ('code', 'apps/web/src/a.ts', 'legacy body text');
+    `);
     db.close();
     await reindex(root, { backend: 'sqlite' });
     const after = new DatabaseSync(file);
+    assert.equal(Number(after.prepare('pragma user_version').get().user_version), 5, 'the chain ended at the current schema');
     const sql = after.prepare(`select sql from sqlite_master where name = 'fts'`).get().sql;
-    assert.ok(sql.includes('UNINDEXED'), 'the migration recreated the FTS table');
-    assert.equal(Number(after.prepare('pragma user_version').get().user_version), 4);
+    assert.ok(sql.includes('node_id'), 'the FTS table is the v5 shape');
+    assert.ok(after.prepare('select count(*) as n from fts').get().n > 0, 'the FTS rows survived the 3 -> 4 -> 5 chain');
     after.close();
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -331,4 +345,84 @@ test('sections of one file collapse to one hit and results stop at 200 (Q43)', a
   const ranked = await searchFtsBm25('/nonexistent', 'target', { backend: 'jsonl', fts: rows });
   assert.equal(ranked.length, 200);
   assert.equal(ranked.filter((row) => row.path === 'multi.js').length, 1);
+});
+
+test('a fresh build is the v5 entity layout, and the read shapes are SQL (sqlite, Q76)', async () => {
+  const root = await repo();
+  try {
+    await reindex(root, { backend: 'sqlite' });
+    const file = join(root, SQLITE_FILE);
+    const db = new DatabaseSync(file);
+    const names = db
+      .prepare(`select name from sqlite_master where type in ('table', 'view') and name not like 'sqlite_%'`)
+      .all()
+      .map((row) => row.name);
+    for (const name of ['sources', 'nodes', 'edges', 'vectors', 'meta', 'fts']) {
+      assert.ok(names.includes(name), `the ${name} table is present`);
+    }
+    assert.equal(Number(db.prepare('pragma user_version').get().user_version), 5, 'the schema is stamped v5');
+    const ftsSql = db.prepare(`select sql from sqlite_master where name = 'fts'`).get().sql;
+    assert.ok(ftsSql.includes('node_id'), 'fts rows point at the file node, not a path string');
+    const kinds = db.prepare(`select distinct kind from nodes`).all().map((row) => row.kind);
+    assert.ok(kinds.includes('symbol'), 'symbols are nodes in the entity layout');
+    db.close();
+    const rows = await readFiles(root, { backend: 'sqlite' });
+    assert.equal(rows.find((row) => row.path === 'apps/web/src/a.ts').pkg, 'apps/web');
+    const symbols = await readSymbols(root, { backend: 'sqlite' });
+    assert.ok(symbols.length > 0, 'symbol rows are read back');
+    assert.deepEqual(Object.keys(symbols[0]).sort(), ['exported', 'kind', 'line', 'name', 'path', 'sig']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('openIndex answers with pure data and a structured error when closed (Q76)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'a.mjs'), 'export const alpha = 1;\n');
+    await writeFile(join(root, 'a.test.mjs'), "import { alpha } from './src/a.mjs';\nconsole.log(alpha);\n");
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    const ix = await openIndex(root);
+    assert.equal(ix.ok, true, 'the index opened');
+    const status = await ix.status();
+    assert.equal(status.ok, true);
+    assert.equal(status.data.stale, false);
+    assert.equal(status.data.counts.files, 2);
+    const search = await ix.search('alpha');
+    assert.equal(search.ok, true);
+    assert.ok(search.data.some((row) => row.path === 'src/a.mjs'), 'the BM25 row names the file');
+    const ranked = await ix.rank('');
+    assert.equal(ranked.ok, true);
+    assert.equal(ranked.data.length, 2, 'every file ranks, best first');
+    const cov = await ix.coverage(['src/a.mjs']);
+    assert.equal(cov.ok, true);
+    assert.deepEqual(cov.data, ['a.test.mjs']);
+    const imp = await ix.impact('src/a.mjs');
+    assert.equal(imp.ok, true);
+    assert.deepEqual(imp.data.importers, [], 'a test importer is not an importer');
+    assert.deepEqual(imp.data.tests, ['a.test.mjs']);
+    const gov = await ix.governs('src/a.mjs', { ctx: { files: new Set(), commands: new Set(), roots: [] } });
+    assert.equal(gov.ok, true);
+    assert.deepEqual(gov.data, []);
+    ix.close();
+    const afterClose = await ix.status();
+    assert.equal(afterClose.ok, false);
+    assert.equal(afterClose.error.code, 'E_CLOSED');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('openIndex in a directory that is not a repository answers E_BUILD (Q76)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  try {
+    const ix = await openIndex(root);
+    assert.equal(ix.ok, false);
+    assert.equal(ix.error.code, 'E_BUILD');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

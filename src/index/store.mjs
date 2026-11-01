@@ -36,6 +36,12 @@ export { JSONL_FILE, SQLITE_FILE, decodeVectorBlob, encodeVectorBlob };
 
 const MARKERS = ['package.json', 'pyproject.toml', 'go.mod', 'Cargo.toml', 'pom.xml'];
 
+// A tracked blob larger than this is recorded with its size and counted in
+// `skipped`, not streamed and tokenized: a 65 MiB file is indexed as a row, and
+// tokenizing it would buy nothing (Q76). The cap sits under that file on purpose
+// so the 65 MiB test exercises the skip, not the tokenize path.
+const BLOB_CAP = 16 * 1024 * 1024;
+
 const LANG = {
   js: 'javascript', mjs: 'javascript', cjs: 'javascript', jsx: 'javascript',
   ts: 'typescript', tsx: 'typescript', kt: 'kotlin', kts: 'kotlin', java: 'java',
@@ -43,17 +49,23 @@ const LANG = {
 };
 
 /** `sqlite` when this process can open a database and create an FTS5 table. */
+// Probed once per process: the check builds both FTS schemas in a memory
+// database, and every read path used to pay for that (Q76).
+let backendProbe;
 async function probeBackend() {
-  try {
-    const { DatabaseSync } = await import('node:sqlite');
-    const db = new DatabaseSync(':memory:');
-    db.exec(FTS_SCHEMA);
-    db.exec(FTS_TRI_SCHEMA);
-    db.close();
-    return 'sqlite';
-  } catch {
-    return 'jsonl';
-  }
+  backendProbe ??= (async () => {
+    try {
+      const { DatabaseSync } = await import('node:sqlite');
+      const db = new DatabaseSync(':memory:');
+      db.exec(FTS_SCHEMA);
+      db.exec(FTS_TRI_SCHEMA);
+      db.close();
+      return 'sqlite';
+    } catch {
+      return 'jsonl';
+    }
+  })();
+  return backendProbe;
 }
 
 export function ftsKindOf(filePath, lang = '') {
@@ -226,7 +238,10 @@ export async function reindex(root, opts = {}) {
     changed.push(entry);
   }
   const sizes = await blobSizes(root, changed.map((entry) => entry.blob));
-  const texts = await blobTexts(root, changed.map((entry) => entry.blob));
+  // Over-cap blobs are recorded with their size and counted in `skipped`, not
+  // streamed and tokenized: their row is written, their text is never read.
+  const textBlobs = changed.map((entry) => entry.blob).filter((blob) => (sizes.get(blob) ?? 0) <= BLOB_CAP);
+  const texts = await blobTexts(root, textBlobs);
   const adapter = await resolveAdapter(root, opts);
   const paths = new Set(listed.map((entry) => entry.path));
   const next = [];
@@ -385,7 +400,14 @@ function withReadError(rows, error) {
 export async function readFiles(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
   if (backend === 'sqlite') {
-    const { rows, error } = await readSqliteRows(root, 'select path, blob, lang, bytes, pkg from files order by path');
+    // The v5 layout keys files as `sources` rows; the git blob sha is `revision`
+    // and the package directory rides in `props`, which the v4 `files` table
+    // named `pkg`.
+    const { rows, error } = await readSqliteRows(
+      root,
+      `select s.path as path, s.revision as blob, s.lang as lang, s.bytes as bytes,
+        json_extract(s.props, '$.pkg') as pkg from sources s where s.kind = 'blob' order by s.path`,
+    );
     return withReadError(rows, error);
   }
   const { rows, error } = await readJsonl(root, 'files');
@@ -396,7 +418,14 @@ export async function readFiles(root, opts = {}) {
 export async function readSymbols(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
   if (backend === 'sqlite') {
-    const { rows, error } = await readSqliteRows(root, 'select path, name, kind, line, sig, exported from symbols order by path, line, name, kind');
+    const { rows, error } = await readSqliteRows(
+      root,
+      `select s.path as path, n.name as name, json_extract(n.props, '$.kind') as kind,
+        n.line as line, json_extract(n.props, '$.sig') as sig,
+        json_extract(n.props, '$.exported') as exported
+        from nodes n join sources s on s.id = n.source_id and s.kind = 'blob'
+        where n.kind = 'symbol' order by s.path, n.line, n.name, n.kind`,
+    );
     return withReadError(rows, error);
   }
   const { rows, error } = await readJsonl(root, 'symbols');
@@ -407,7 +436,14 @@ export async function readSymbols(root, opts = {}) {
 export async function readEdges(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
   if (backend === 'sqlite') {
-    const { rows, error } = await readSqliteRows(root, 'select src, dst, kind, weight from edges order by src, dst, kind');
+    // Paths come back from the node key (`file:<path>`) and the stable `dst_key`:
+    // node ids are regenerated when a file changes, so a path is the only key
+    // that survives a reindex of one endpoint.
+    const { rows, error } = await readSqliteRows(
+      root,
+      `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight
+        from edges e join nodes ns on ns.id = e.src_id order by src, dst, kind`,
+    );
     return withReadError(rows, error);
   }
   const { rows, error } = await readJsonl(root, 'edges');
@@ -418,7 +454,11 @@ export async function readEdges(root, opts = {}) {
 export async function readFts(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
   if (backend === 'sqlite') {
-    const { rows, error } = await readSqliteRows(root, 'select kind, ref, body from fts order by ref, kind, rowid');
+    const { rows, error } = await readSqliteRows(
+      root,
+      `select f.kind as kind, substr(n.key, 6) as ref, f.body as body
+        from fts f join nodes n on n.id = f.node_id order by ref, kind, f.rowid`,
+    );
     return withReadError(rows, error);
   }
   const { rows, error } = await readJsonl(root, 'fts');
@@ -429,7 +469,12 @@ export async function readFts(root, opts = {}) {
 export async function readEmbeddings(root, opts = {}) {
   const backend = opts.backend ?? await probeBackend();
   if (backend === 'sqlite') {
-    const { rows: raw, error } = await readSqliteRows(root, 'select path, blob, model, dims, vec from embeddings order by path');
+    const { rows: raw, error } = await readSqliteRows(
+      root,
+      `select substr(n.key, 6) as path, s.revision as blob, v.model as model, v.dims as dims, v.vec as vec
+        from vectors v join nodes n on n.id = v.node_id
+        join sources s on s.id = n.source_id and s.kind = 'blob' order by path`,
+    );
     const rows = raw.map((row) => {
       const vec = decodeVectorBlob(row.vec);
       return {
@@ -502,11 +547,15 @@ export async function searchFtsBm25(root, task, opts = {}) {
 async function ftsBranch(root, table, terms) {
   if (terms.length === 0) return { rows: [], error: null };
   const matchExpr = terms.map((t) => `"${t}"`).join(' OR ');
-  const { rows, error } = await readSqliteRows(
-    root,
-    `select kind, ref as path, -bm25(${table}) as score from ${table} where ${table} match ? order by score desc, path asc limit ?`,
-    [matchExpr, FTS_LIMIT],
-  );
+  // `fts` is the v5 node-keyed table: the path comes back through the node key.
+  // `fts_tri` keeps its v4 (kind, ref, body) shape for the CJK trigram path (Q43),
+  // so it is queried the old way.
+  const sql = table === 'fts'
+    ? `select f.kind as kind, substr(n.key, 6) as path, -bm25(f) as score
+       from fts f join nodes n on n.id = f.node_id
+       where f match ? order by score desc, path asc limit ?`
+    : `select kind, ref as path, -bm25(${table}) as score from ${table} where ${table} match ? order by score desc, path asc limit ?`;
+  const { rows, error } = await readSqliteRows(root, sql, [matchExpr, FTS_LIMIT]);
   return {
     rows: rows.map((row) => ({ kind: row.kind, path: row.path, score: Number(row.score) || 0 })),
     error,

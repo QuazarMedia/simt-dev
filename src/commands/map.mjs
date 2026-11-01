@@ -32,9 +32,9 @@ export async function mapCommand(args, flags) {
   if (!Number.isInteger(budget) || budget < 0) {
     return fail(`budget must be a non-negative integer`, EXIT.USAGE, `run: ${CLI} map --budget 2048`);
   }
-  const loaded = await loadGraph(root);
-  if (loaded.error) return loaded.error;
   const task = typeof flags.task === 'string' ? flags.task : '';
+  const loaded = await loadGraph(root, { task, embed: flags.embed === true });
+  if (loaded.error) return loaded.error;
   const bm25 = task.trim().length > 0 ? await searchFtsBm25(root, task, { fts: loaded.fts }) : [];
   const queryVector =
     flags.embed === true && loaded.embeddings.length > 0
@@ -109,8 +109,12 @@ async function recall(root, flags) {
  * first prompt in a fresh clone wait, and a prompt that takes a minute to appear is
  * how a hook gets uninstalled. The next prompt gets the packet, and a command a
  * person typed at a terminal always builds what it needs.
+ *
+ * FTS bodies and stored vectors load only when the caller names them (review 0003
+ * Q76): BM25 runs in SQLite, so the graph read pays for files, symbols and edges
+ * and nothing more.
  */
-export async function loadGraph(root, { build = true } = {}) {
+export async function loadGraph(root, { build = true, task = '', embed = false } = {}) {
   if (build) {
     try {
       await reindex(root);
@@ -124,12 +128,13 @@ export async function loadGraph(root, { build = true } = {}) {
       };
     }
   }
+  const wantFts = String(task ?? '').trim().length > 0;
   const [files, symbols, edges, fts, embeddings] = await Promise.all([
     readFiles(root),
     readSymbols(root),
     readEdges(root),
-    readFts(root),
-    readEmbeddings(root),
+    wantFts ? readFts(root) : Promise.resolve([]),
+    embed === true ? readEmbeddings(root) : Promise.resolve([]),
   ]);
   // A present index that cannot be read is named, not served as empty
   // (review 0003 Q44): `cold` is "nothing here", `broken` is "something is

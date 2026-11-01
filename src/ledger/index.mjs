@@ -19,6 +19,7 @@ import {
   recordFailThenFix,
 } from '../memory/lessons.mjs';
 import { TREE_EXCLUDES, localRel, readStateFile } from '../state.mjs';
+import { appendEvent } from '../state/events.mjs';
 
 const exec = promisify(execFile);
 
@@ -129,6 +130,14 @@ export async function recordRun(root, { cmd, exit, ms, output, gate = null, kind
   };
   await mkdir(join(root, '.simt', 'local'), { recursive: true });
   await appendFile(join(root, LEDGER_FILE), `${JSON.stringify(line)}\n`);
+  // The same record in the log every other store writes to (Q73): a tailing consumer has
+  // one file to follow, and a ledger line lost to rotation is still recoverable here.
+  await appendEvent(root, {
+    kind: 'gate.finished',
+    tree: worktreeTree,
+    subject: typeof cmd === 'string' ? cmd : null,
+    data: { ...(gate === null ? {} : { gate }), ...(kind === null ? {} : { kind }), line },
+  });
 
   if (exit === 0 && typeof cmd === 'string') {
     let pendingFail = null;

@@ -25,6 +25,7 @@ import {
   writeLeases,
 } from '../lease.mjs';
 import { coreIgnoreCase } from '../repo-root.mjs';
+import { noteEvent } from '../state/events.mjs';
 import { SESSION_ENV } from '../agenthooks/policy.mjs';
 import { CLI } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
@@ -129,6 +130,15 @@ export async function leaseCommand(args, flags) {
     );
   }
   const { mine, path } = claimed;
+  // Coordination state a hook acts on belongs in the log a UI can tail, not only in a
+  // file a person has to open (Q73).
+  await noteEvent(root, {
+    kind: 'lease.acquired',
+    session,
+    harness: harness ?? null,
+    subject: mine.map((l) => l.path).join(','),
+    data: { ttl, fence: mine[0]?.fence ?? null },
+  });
 
   if (isJson(flags)) {
     emitJson({ ok: true, command: 'lease', root, session, ttl, dryRun: false, leases: mine, file: path });
@@ -216,6 +226,12 @@ async function releaseLeases(root, args, flags) {
     else emit(lines.join('\n'));
     return EXIT.OK;
   }
+  await noteEvent(root, {
+    kind: 'lease.released',
+    session,
+    subject: released.dropped.map((l) => l.path).join(','),
+    data: { released: released.dropped.length },
+  });
   for (const l of released.dropped) note(`note     released ${l.path} (was held by ${l.session})`);
   if (isJson(flags)) emitJson({ ok: true, command: 'lease release', root, dryRun: false, session, leases: released.dropped });
   else {

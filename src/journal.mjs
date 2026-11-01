@@ -47,6 +47,7 @@ import { chmod, cp, mkdir, readFile, readdir, rename, rmdir, stat, unlink, write
 import { dirname, join, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 
+import { noteEvent } from './state/events.mjs';
 import { STATE_DIR } from './name.mjs';
 import { LOCAL_DIR } from './state.mjs';
 import { HOOKS_DIR } from './hooks/shim.mjs';
@@ -407,6 +408,14 @@ export async function commitJournal(root, command, acc, { at = Date.now() } = {}
   const tmp = join(dir, `${id}.tmp-${process.pid}`);
   await writeFile(tmp, body, 'utf8');
   await rename(tmp, join(dir, id));
+  // The log is the record; the journal set is what `undo` restores from. Written after the
+  // set, so the event describes what landed rather than what was intended (Q73).
+  await noteEvent(root, {
+    kind: 'write.committed',
+    subject: command,
+    tree: null,
+    data: { entries: entries.length, paths: entries.map((entry) => entry.path) },
+  });
   return id;
 }
 
@@ -610,5 +619,7 @@ export async function undoLastJournalSet(root) {
   const [id] = await listJournalSets(root);
   if (!id) return { empty: true };
   const result = await undoJournalSet(root, id);
+  // The set is gone from disk, so the log is now the only record it existed (Q73).
+  await noteEvent(root, { kind: 'write.undone', subject: id, data: { restored: result?.restored?.length ?? 0 } });
   return { set: id, ...result };
 }

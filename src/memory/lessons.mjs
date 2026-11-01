@@ -371,7 +371,8 @@ async function diffBetweenTrees(root, fromRef, toRef) {
  * @param {{failEntry: object, passEntry: object, failOutput?: string, fixDiff?: string, paths?: string[]}} params
  * @returns {Promise<object>}
  */
-export async function recordFailThenFix(root, { failEntry, passEntry, failOutput, fixDiff, paths }) {
+export async function recordFailThenFix(root, { failEntry, passEntry, failOutput, fixDiff, paths 
+}) {
   const rawError = failOutput ?? failEntry?.errorLine ?? failEntry?.summary ?? failEntry?.cmd ?? '';
   const errorLine = normaliseErrorLine(failEntry?.errorLine ?? firstErrorLine(rawError));
   const signature = failEntry?.signature ?? errorSignature(errorLine);

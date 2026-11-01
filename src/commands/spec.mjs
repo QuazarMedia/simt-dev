@@ -79,6 +79,7 @@ export const SPEC = [
   { path: 'pack new', usage: '<name> --source <spec>', summary: 'scaffold a rule pack', flags: ["diff","require-measured","source"], },
   { path: 'pack publish', usage: '[dir] --yes', summary: 'publish a rule pack', flags: ["diff","require-measured","source"], },
   { path: 'plan done', usage: '<id> [<sha>] --yes', mcp: { name: 'plan_done', flags: ['state', 'test'] }, summary: 'mark one tracker row complete, with its SHA and its evidence', flags: ["diff","state","test"], },
+  { path: 'plan labels', summary: 'the header each tracker column matched, and the labels this repository configured', flags: [] },
   { path: 'plan next', usage: '[<id>] [--tier <name>] [--wave <name>]', mcp: { name: 'plan_next', flags: [] }, summary: "one ready slice's section, or the one named, inside a tier or a wave", flags: ["diff","state","test","tier","wave"], },
   { path: 'plan status', summary: 'count the tracker rows', defaultFor: 'plan', flags: ["diff","state","test"], },
   { path: 'plugin', usage: '<claude|gemini|cursor|opencode>', summary: 'generate a harness package from the same tables the hooks use', aliases: ['harness plugin'], flags: ["diff","out"], },

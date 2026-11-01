@@ -44,6 +44,7 @@ Pick the command by what you need, not by what you remember:
 | Read tracker state | `simt plan status` | Counts per tracker file |
 | Get the next slice | `simt plan next [<id>]` | Smallest ready slice, ~1 KB |
 | Stay inside a tier or a wave | `simt plan next --tier L --wave 1` | Either filter, or both at once |
+| See what the tool read from a tracker | `simt plan labels` | Matched headers, unmatched columns |
 | Mark a slice done | `simt plan done <id> <sha> --test "<cmd>" --yes` | Dry-run without `--yes` |
 | Start a slice in a worktree | `simt slice start <id> --yes` | Branch `slice/<id>`, brief beside it |
 | Finish a slice | `simt slice finish <id> --yes` | Gates, commit, record SHA |

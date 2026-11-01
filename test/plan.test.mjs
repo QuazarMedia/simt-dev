@@ -611,3 +611,41 @@ test('a template names its own tier column, and the tag is optional', async () =
   assert.equal((await planNext(plain)).next.id, 'B1');
   assert.equal((await planNext(plain, null, { tier: 'S' })).next, null);
 });
+
+const SIZING = `# plan
+
+| ID | State | Slice | Sizing |
+| --- | --- | --- | --- |
+| A1 | Queued | work | S |
+| A2 | Queued | more | L |
+`;
+
+test('plan labels: names the column a table left unmatched, and the manifest key that fixes it', async () => {
+  const root = await repo({ 'docs/plans/0099.md': SIZING });
+  const first = cli(['plan', 'labels', '--root', root]);
+  assert.equal(first.code, 0, first.stderr);
+  assert.match(first.stdout, /unmatched\s+sizing/);
+  assert.match(first.stdout, /plans\.columns/);
+
+  // The same table with the column named in the manifest: the tool reads it, and the
+  // filter that could only answer "nothing" now answers.
+  const configured = await repo({
+    'docs/plans/0099.md': SIZING,
+    'simt.json': JSON.stringify({ plans: { columns: { tier: ['sizing'] } } }),
+  });
+  const second = cli(['plan', 'labels', '--root', configured]);
+  assert.equal(second.code, 0, second.stderr);
+  assert.match(second.stdout, /tier:\s+sizing/);
+  assert.doesNotMatch(second.stdout, /unmatched/);
+  const next = cli(['plan', 'next', '--tier', 'S', '--root', configured]);
+  assert.match(next.stdout, /slice\s+A1/);
+});
+
+test('plan labels: reports the labels the template gives, beside the ones a document used', async () => {
+  const root = await repo({ 'docs/plans/0099.md': TIERED });
+  const { stdout } = cli(['plan', 'labels', '--root', root]);
+  assert.match(stdout, /template tracker/);
+  assert.match(stdout, /tier\s+tier, model tier, class, effort/);
+  assert.match(stdout, /states\s+Queued, In progress, Complete, Accepted/);
+  assert.match(stdout, /tier:\s+tier/);
+});

@@ -94,6 +94,10 @@ export const IMPLEMENTED = {
     const { planCommand } = await import('./plan.mjs');
     return (args, flags) => planCommand('status', args, flags);
   },
+  'plan labels': async () => {
+    const { planCommand } = await import('./plan.mjs');
+    return (args, flags) => planCommand('labels', args, flags);
+  },
   'plan next': async () => {
     const { planCommand } = await import('./plan.mjs');
     return (args, flags) => planCommand('next', args, flags);

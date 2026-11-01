@@ -36,6 +36,7 @@ export const DEFAULT_DIRECTORIES = Array.isArray(DEFAULT_BODY?.directories)
   ? DEFAULT_BODY.directories.map((dir) => dir.path)
   : [];
 
+
 function readJson(path) {
   try {
     return JSON.parse(readFileSync(path, 'utf8'));

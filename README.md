@@ -202,6 +202,7 @@ simt pack publish [dir] --yes                          # publish a rule pack
 
 # plan
 simt plan done <id> [<sha>] --yes                      # mark one tracker row complete, with its SHA and its evidence
+simt plan labels                                       # the header each tracker column matched, and the labels this repository configured
 simt plan next [<id>] [--tier <name>] [--wave <name>]  # one ready slice's section, or the one named, inside a tier or a wave
 simt plan status                                       # count the tracker rows
 

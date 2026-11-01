@@ -85,6 +85,8 @@ ${CLI} plan status             count tracker rows
                            the ${DEFAULT_TEMPLATE} template:
                            ${DEFAULT_DIRECTORIES.join(' and ')})
 ${CLI} plan next [<id>]        one ready slice's section, or the one named; ~1 KB
+${CLI} plan labels             which header each tracker column matched, and
+                           the ones it could not place
 ${CLI} plan done <id> [<sha>]  mark one row; dry-run unless --yes
 ${CLI} slice start <id>     give a slice its own worktree and branch, preload the
                            brief, and mark the row started (dry-run unless

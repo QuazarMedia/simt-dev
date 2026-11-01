@@ -1,9 +1,10 @@
 import { relative } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
-import { formatCounts, planDone, planNext, planStatus } from '../plan/index.mjs';
+import { formatCounts, planDone, planLabels, planNext, planStatus } from '../plan/index.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
 import { CLI } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
 
 // Preview unless --yes, and --dry-run wins even then. A tracker row marked done
 // for a commit that was never written is a claim the next reader will believe.
@@ -11,13 +12,14 @@ import { commandRoot } from '../repo-root.mjs';
 export async function planCommand(sub, args, flags) {
   const root = commandRoot(flags);
   if (sub === 'status') return runStatus(root, flags);
+  if (sub === 'labels') return runLabels(root, flags);
   if (sub === 'next') return runNext(root, args[0] ?? null, flags);
   if (sub === 'done') {
     if (!args[0]) return fail('plan done needs a slice id', EXIT.USAGE, `run: ${CLI} plan next`);
     return runDone(root, args[0], args[1] ?? null, flags);
   }
   if (!sub) {
-    return fail('plan needs a subcommand', EXIT.USAGE, `run: ${CLI} plan status  |  ${CLI} plan next  |  ${CLI} plan done <id>`);
+    return fail('plan needs a subcommand', EXIT.USAGE, `run: ${CLI} plan status  |  ${CLI} plan next  |  ${CLI} plan labels  |  ${CLI} plan done <id>`);
   }
   return fail(`unknown plan subcommand ${sub}`, EXIT.USAGE, `run: ${CLI} plan status`);
 }
@@ -36,6 +38,45 @@ async function runStatus(root, flags) {
   }
   lines.push('', `total    ${formatCounts(result.totals, result.stateOrder) || '-'}`);
   lines.push(`ready    ${result.ready}`);
+  emit(lines.join('\n'));
+  return EXIT.OK;
+}
+
+// What the tool read, and what it could read. A tracker whose `Sizing` column carries the
+// tier answers `plan next --tier L` with "no queued slices in tier L", which is also the
+// answer when there is no L slice at all; this is the command that tells them apart, and
+// the one an agent runs before editing a table the tool does not understand.
+async function runLabels(root, flags) {
+  const result = await planLabels(root);
+  if (result.error) return fail(result.error, EXIT.USAGE, result.remedy);
+  if (isJson(flags)) {
+    emitJson({ ok: true, command: 'plan labels', ...result });
+    return EXIT.OK;
+  }
+  const keys = Object.keys(result.columns);
+  const width = Math.max(...keys.map((key) => key.length), 'wave'.length);
+  const lines = [
+    `repo     ${root}`,
+    `template ${result.template}  (${result.source})`,
+    `dirs     ${result.directories.join(', ')}`,
+    '',
+  ];
+  for (const key of keys) {
+    lines.push(`  ${key.padEnd(width)}  ${result.columns[key].join(', ') || '(none)'}`);
+  }
+  lines.push(`  ${'wave'.padEnd(width)}  ${result.wave.label.join(', ')} / ${result.wave.members.join(', ')}`);
+  lines.push(`  ${'states'.padEnd(width)}  ${result.states.join(', ')}`);
+  for (const doc of result.documents) {
+    lines.push('', doc.name, `  header     ${doc.columns.join(' | ')}`);
+    const hits = Object.entries(doc.matched)
+      .filter(([, value]) => value !== null)
+      .map(([key, value]) => `${key}: ${value}`);
+    lines.push(`  matched    ${hits.join('  ') || '(none)'}`);
+    if (doc.unmatched.length > 0) {
+      lines.push(`  unmatched  ${doc.unmatched.join(', ')}`);
+      lines.push(`  fix        name it under plans.columns in ${MANIFEST_FILE}: ${keys.join(', ')}`);
+    }
+  }
   emit(lines.join('\n'));
   return EXIT.OK;
 }

@@ -270,11 +270,18 @@ function parseDocument(fmt, text) {
   flush();
   const rows = [];
   const waves = [];
+  const trackers = [];
   for (const table of tables) {
-    if (isTracker(fmt, table)) rows.push(...trackerRows(fmt, table));
-    else waves.push(...waveRows(fmt, table));
+    if (isTracker(fmt, table)) {
+      rows.push(...trackerRows(fmt, table));
+      // The header row, kept for `plan labels`: which column a key matched is a
+      // fact about this document, and every other caller works from the cells.
+      trackers.push(table.columns);
+    } else {
+      waves.push(...waveRows(fmt, table));
+    }
   }
-  return { headings, rows, waves };
+  return { headings, rows, waves, trackers };
 }
 
 function sectionFor(doc, id) {
@@ -499,6 +506,58 @@ function ambiguous(id, hits) {
     error: `${id} appears in ${hits.length} documents: ${names}`,
     remedy: `run: ${CLI} plan status`,
     candidates: hits.map((hit) => hit.docName),
+  };
+}
+
+/**
+ * Which header each tracker column matched, and what this repository configured.
+ *
+ * The question it answers: a tracker with a `Sizing` column and no `plans` key reports no
+ * tier for any slice, and `plan next --tier L` then answers "no queued slices in tier L" —
+ * exactly what a tracker with no L slices answers. Those two states are indistinguishable
+ * from the result, and only one of them is fixable by naming the column in `simt.json`.
+ * This report names the unmatched column and the key it could be given, so an agent that
+ * cannot make the tool read a table can fix the config instead of the code.
+ */
+export async function planLabels(root) {
+  const loaded = await loadPlanState(root);
+  if (loaded.error) return loaded;
+  const { docs, format } = loaded;
+  const known = {
+    id: format.idHeaders,
+    tier: format.tierHeaders,
+    state: format.stateHeaders,
+    depends: format.dependsHeaders,
+    title: format.titleHeaders,
+    evidence: format.evidenceHeaders,
+  };
+  const documents = docs.map((doc) => {
+    const columns = doc.trackers[0] ?? [];
+    const matched = {};
+    const used = new Set();
+    for (const [key, headers] of Object.entries(known)) {
+      const index = findColumn(columns, headers);
+      matched[key] = index >= 0 ? columns[index] : null;
+      if (index >= 0) used.add(index);
+    }
+    return {
+      name: doc.name,
+      path: doc.path,
+      columns,
+      matched,
+      unmatched: columns.filter((_, index) => !used.has(index)),
+    };
+  });
+  return {
+    root,
+    template: format.name,
+    source: format.source,
+    configured: format.source.endsWith(' plans'),
+    directories: format.directories.map((dir) => dir.path),
+    columns: known,
+    wave: { label: format.waveLabel, members: format.waveMembers },
+    states: format.stateNames,
+    documents,
   };
 }
 

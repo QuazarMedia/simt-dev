@@ -518,16 +518,25 @@ function wrapped(text) {
 }
 
 /**
- * One command's page: what it is, and where the rest of the answers are. The flags a
- * single command declares arrive with the spec's `flags` field (Q62); until then the
- * page points at the global list rather than inventing one per command.
+ * One command's page: what it is, what it takes, and where the rest of the answers are.
+ *
+ * The page prints the row's own `usage` and the flags that row declares. It used to print
+ * `[args] [flags]` and the global list for every command, so `simt help plan next` never
+ * showed `--tier` or `--wave` even after the spec declared them: the page was complete
+ * about what a command is and silent about what it takes.
  */
+const GLOBAL_FLAGS = new Set(['json', 'pretty', 'root', 'max-bytes']);
+
 export function commandPage(path) {
   const row = SPEC.find((r) => r.path === path);
   if (row === undefined) return '';
-  const lines = [`${CLI} ${path} [args] [flags]`, '', ...wrapped(row.summary), ''];
+  const usage = row.usage === undefined ? '' : ` ${row.usage}`;
+  const lines = [`${CLI} ${path}${usage}`, '', ...wrapped(row.summary), ''];
   if (row.defaultFor !== undefined) lines.push(`default  ${CLI} ${row.defaultFor} runs this command`);
-  lines.push(`flags    --json --pretty --root --max-bytes, and every global flag`);
+  const own = (row.flags ?? []).filter((flag) => !GLOBAL_FLAGS.has(flag));
+  lines.push(own.length === 0
+    ? `flags    no flags of its own; the global flags apply (${CLI} --help)`
+    : `flags    ${own.map((flag) => `--${flag}`).join(' ')}, and every global flag (${CLI} --help)`);
   lines.push(`all      ${CLI} --help   every command, and every flag it takes`);
   return `${lines.join('\n')}\n`;
 }

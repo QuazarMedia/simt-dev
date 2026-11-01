@@ -90,6 +90,29 @@ function docNumber(name) {
   return match ? Number(match[1]) : null;
 }
 
+/**
+ * The capability class a slice is tagged with (review: tiers).
+ *
+ * A cell may read "S (L)" - a primary tier and the reviewer's - and may carry a note.
+ * The tag is the first word of the cell without notes, lowercased: a filter is about
+ * which class does the work, and the reviewer is a second fact, not the first.
+ */
+function tierKeyOf(cell) {
+  const plain = stripNotes(cell);
+  if (plain === '') return '';
+  return plain.split(/\s+/)[0].toLowerCase();
+}
+
+/** The wave labels a slice belongs to, from the wave tables the template names. */
+function wavesOf(doc, id) {
+  const keys = new Set();
+  for (const wave of doc.waves) {
+    if (!wave.ids.includes(id)) continue;
+    for (const key of wave.keys) keys.add(key);
+  }
+  return [...keys];
+}
+
 function sliceKey(path, id) {
   return `${path}\0${id}`;
 }
@@ -187,6 +210,7 @@ function trackerRows(fmt, table) {
   const depsIdx = findColumn(columns, fmt.dependsHeaders);
   const titleIdx = findColumn(columns, fmt.titleHeaders);
   const evidenceIdx = findColumn(columns, fmt.evidenceHeaders);
+  const tierIdx = findColumn(columns, fmt.tierHeaders);
   const rows = [];
   for (const row of table.rows) {
     const id = clean(row.cells[idIdx] ?? '');
@@ -197,6 +221,7 @@ function trackerRows(fmt, table) {
       idIdx,
       stateIdx,
       depsIdx,
+      tierIdx,
       titleIdx: titleIdx === idIdx ? -1 : titleIdx,
       evidenceIdx,
       columnCount: columns.length,
@@ -410,6 +435,9 @@ function linkSlices(docs, fmt) {
         stateRaw,
         state: fmt.readState(stateRaw),
         dependsOn: row.depsIdx >= 0 ? clean(row.cells[row.depsIdx] ?? '') : '',
+        tier: row.tierIdx >= 0 ? clean(row.cells[row.tierIdx] ?? '') : '',
+        tierKey: row.tierIdx >= 0 ? tierKeyOf(row.cells[row.tierIdx] ?? '') : '',
+        waves: wavesOf(doc, row.id),
         idIdx: row.idIdx,
         stateIdx: row.stateIdx,
         evidenceIdx: row.evidenceIdx,
@@ -507,6 +535,8 @@ function publicSlice(slice) {
     path: slice.docPath,
     title: slice.title,
     state: slice.state,
+    tier: slice.tier === '' ? null : slice.tier,
+    waves: slice.waves,
     dependsOn: slice.dependsOn,
     unknownDependencies: slice.unknownDeps,
     section,
@@ -514,7 +544,26 @@ function publicSlice(slice) {
   };
 }
 
-export async function planNext(root, id = null) {
+function inTier(slice, tier) {
+  if (tier === null || tier === undefined || String(tier).trim() === '') return true;
+  const want = tierKeyOf(String(tier));
+  return want !== '' && slice.tierKey === want;
+}
+
+function inWave(slice, wave) {
+  if (wave === null || wave === undefined || String(wave).trim() === '') return true;
+  const want = keysOf(String(wave));
+  return slice.waves.some((key) => want.includes(key));
+}
+
+function scopeNote(tier, wave) {
+  const parts = [];
+  if (tier !== null && tier !== undefined && String(tier).trim() !== '') parts.push(`tier ${tier}`);
+  if (wave !== null && wave !== undefined && String(wave).trim() !== '') parts.push(`wave ${wave}`);
+  return parts.length === 0 ? '' : ` in ${parts.join(' and ')}`;
+}
+
+export async function planNext(root, id = null, { tier = null, wave = null } = {}) {
   const loaded = await loadPlanState(root);
   if (loaded.error) return loaded;
   const { slices, format } = loaded;
@@ -524,15 +573,19 @@ export async function planNext(root, id = null) {
     if (hits.length > 1) return { root, ...ambiguous(id, hits) };
     return { root, next: publicSlice(hits[0]), reason: null };
   }
-  const ready = slices.filter((slice) => slice.ready).sort(compareSlice);
+  const scope = (slice) => inTier(slice, tier) && inWave(slice, wave);
+  const ready = slices.filter((slice) => slice.ready && scope(slice)).sort(compareSlice);
   if (ready.length > 0) return { root, next: publicSlice(ready[0]), reason: null };
-  const waiting = slices.filter((slice) => slice.state === format.ready).sort(compareSlice);
+  const waiting = slices.filter((slice) => slice.state === format.ready && scope(slice)).sort(compareSlice);
   const label = (format.stateNames[format.order.indexOf(format.ready)] ?? format.ready).toLowerCase();
-  const reason = waiting.length === 0 ? `no ${label} slices` : `no ${label} slice has its dependencies complete`;
+  const where = scopeNote(tier, wave);
+  const reason = waiting.length === 0 ? `no ${label} slices${where}` : `no ${label} slice has its dependencies complete${where}`;
   return {
     root,
     next: null,
     reason,
+    tier: tier ?? null,
+    wave: wave ?? null,
     blocked: waiting.map((slice) => ({
       id: slice.id,
       doc: slice.docName,

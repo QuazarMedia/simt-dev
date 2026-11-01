@@ -545,3 +545,69 @@ test('a plans key that cannot be read is not silently the default', async () => 
   assert.notEqual(badPattern.code, 0);
   assert.match(badPattern.stderr, /id\.pattern/);
 });
+
+const TIERED = `# plan
+
+| Wave | Slices |
+| --- | --- |
+| **0: foundation** | A1, A2 |
+| **1: polish** | A3 |
+
+## 3. Tracker
+
+| ID | State | Slice | Tier | Depends on |
+| --- | --- | --- | --- | --- |
+| A1 | Queued | foundation work | S | — |
+| A2 | Queued | mechanical work | L | — |
+| A3 | Queued | polish work | L | A2 |
+`;
+
+test('a Tier column tags a slice, and plan next can stay inside one tier', async () => {
+  const root = await repo({ 'docs/plans/0099-tiers.md': TIERED });
+  const any = cli(['plan', 'next', '--root', root]);
+  assert.match(any.stdout, /slice\s+A1/);
+
+  const low = cli(['plan', 'next', '--tier', 'L', '--root', root]);
+  assert.equal(low.code, 0, low.stderr);
+  assert.match(low.stdout, /slice\s+A2/);
+  assert.match(low.stdout, /tier\s+L/);
+
+  // A tier nobody carries is answered, not ignored: silence would read as "any".
+  const nothing = cli(['plan', 'next', '--tier', 'X', '--root', root]);
+  assert.equal(nothing.code, 0, nothing.stderr);
+  assert.match(nothing.stdout, /in tier X/);
+});
+
+test('plan next filters by wave, and by wave and tier together', async () => {
+  const root = await repo({ 'docs/plans/0099-tiers.md': TIERED });
+
+  // Wave 1 holds A3, which waits on A2: the filter narrows the answer to that wave.
+  const waveOne = cli(['plan', 'next', '--wave', '1', '--root', root]);
+  assert.equal(waveOne.code, 0, waveOne.stderr);
+  assert.match(waveOne.stdout, /wave 1/);
+  assert.match(waveOne.stdout, /A3/);
+
+  const both = cli(['plan', 'next', '--wave', '0', '--tier', 'L', '--root', root]);
+  assert.match(both.stdout, /slice\s+A2/);
+
+  const crossed = cli(['plan', 'next', '--wave', '1', '--tier', 'S', '--root', root]);
+  assert.match(crossed.stdout, /in tier S and wave 1/);
+});
+
+test('a template names its own tier column, and the tag is optional', async () => {
+  const root = await repo({
+    'simt.json': `${JSON.stringify({ plans: { columns: { tier: ['class'] } } })}\n`,
+    'docs/plans/0001.md': `| ID | State | Class |\n| --- | --- | --- |\n| Z1 | Queued | S |\n| Z2 | Queued | L (S) |\n`,
+  });
+  const state = await loadPlanState(root);
+  assert.deepEqual(state.format.tierHeaders, ['class']);
+  // "L (S)" is an L slice with an S reviewer; the primary class is what filters.
+  const low = await planNext(root, null, { tier: 'L' });
+  assert.equal(low.next.id, 'Z2');
+  assert.equal(low.next.tier, 'L (S)');
+
+  // A tracker with no tier column still works, and a tier filter matches nothing.
+  const plain = await repo({ 'docs/plans/0001.md': `| ID | State |\n| --- | --- |\n| B1 | Queued |\n| B2 | Queued |\n` });
+  assert.equal((await planNext(plain)).next.id, 'B1');
+  assert.equal((await planNext(plain, null, { tier: 'S' })).next, null);
+});

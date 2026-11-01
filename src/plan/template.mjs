@@ -21,7 +21,7 @@ export const DEFAULT_TEMPLATE = 'tracker';
 
 const KNOWN = new Set(['$comment', 'name', 'directories', 'id', 'columns', 'states', 'ready', 'dependency', 'wave', 'section']);
 const ID_KEYS = new Set(['pattern', 'headers']);
-const COLUMN_KEYS = new Set(['state', 'depends', 'title', 'evidence']);
+const COLUMN_KEYS = new Set(['state', 'depends', 'title', 'evidence', 'tier']);
 const DIRECTORY_KEYS = new Set(['kind', 'word', 'path']);
 const STATE_KEYS = new Set(['id', 'write', 'read', 'satisfies', 'role']);
 const DEPENDENCY_KEYS = new Set(['empty', 'separators', 'notes', 'group']);
@@ -226,6 +226,8 @@ function compile(body, source, root) {
   if (titleHeaders.error) return titleHeaders;
   const evidenceHeaders = headers(source, body.columns.evidence, 'columns.evidence', { allowEmpty: true });
   if (evidenceHeaders.error) return evidenceHeaders;
+  const tierHeaders = headers(source, body.columns.tier, 'columns.tier', { allowEmpty: true });
+  if (tierHeaders.error) return tierHeaders;
   const waveLabel = headers(source, body.wave.label, 'wave.label');
   if (waveLabel.error) return waveLabel;
   const waveMembers = headers(source, body.wave.members, 'wave.members');
@@ -299,6 +301,7 @@ function compile(body, source, root) {
       dependsHeaders: dependsHeaders.names,
       titleHeaders: titleHeaders.names,
       evidenceHeaders: evidenceHeaders.names,
+      tierHeaders: tierHeaders.names,
       waveLabel: waveLabel.names,
       waveMembers: waveMembers.names,
       crossRe,

@@ -134,6 +134,10 @@ export const VALUE_FLAGS = new Set([
   'paths',
   'skill',
   'task',
+  // plan next: stay inside one tier, or one wave, or both. A value, not a switch,
+  // because the answer to "which tier" is the whole question.
+  'tier',
+  'wave',
   'workspace',
   'root',
   // skills/graph: which registry to read. A value rather than a boolean because

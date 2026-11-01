@@ -328,6 +328,11 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --compare <a> <b>       bench report: compare two arms with deltas and p-values
 --test <cmd>            plan done / slice finish: the test command that closes the row
 --state <name>          plan done: target state (default: Complete)
+--tier <name>           plan next: stay inside one tier, read from the slice's Tier
+                        column (the first word, so "L (S)" is an L slice with an S
+                        reviewer); a tier no slice carries answers with nothing ready
+--wave <name>           plan next: stay inside one wave, read from the wave tables the
+                        template names; with --tier, the slice must be in both
 --type <name>           slice finish: the Conventional Commits type (default: feat)
 --id <name>             slice start: the slice id when -- starts one from a prompt
                         (default: a slug of the prompt text)

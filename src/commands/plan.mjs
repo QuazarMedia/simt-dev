@@ -41,7 +41,7 @@ async function runStatus(root, flags) {
 }
 
 async function runNext(root, id, flags) {
-  const result = await planNext(root, id);
+  const result = await planNext(root, id, { tier: flags.tier ?? null, wave: flags.wave ?? null });
   if (result.error) return fail(result.error, EXIT.USAGE, result.remedy);
   if (isJson(flags)) {
     emitJson({ ok: true, command: 'plan next', ...result });
@@ -64,6 +64,8 @@ async function runNext(root, id, flags) {
     `repo     ${root}`,
     `slice    ${next.id}  ${next.doc}`,
     `state    ${next.state}`,
+    ...(next.tier ? [`tier     ${next.tier}`] : []),
+    ...(next.waves?.length ? [`wave     ${next.waves.join(", ")}`] : []),
     `depends  ${next.dependsOn || '(none)'}`,
     `bytes    ${next.sectionBytes}`,
     '',

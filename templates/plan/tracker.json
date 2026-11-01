@@ -1,5 +1,5 @@
 {
-  "$comment": "Tracker format delivered with the tool. A repository replaces any section with the plans key in simt.json; a section it omits stays as written here. directories are the only places read, and each word is what a dependency uses to name that place (\"review 0002 S41\"). Headers are tried in the order written. Only a state marked satisfies unblocks a slice that depends on it. ready is the state plan next returns. dependency.group matches a wave of rows; wave names that table's columns.",
+  "$comment": "Tracker format delivered with the tool. A repository replaces any section with the plans key in simt.json; a section it omits stays as written here. directories are the only places read, and each word is what a dependency uses to name that place (\"review 0002 S41\"). Headers are tried in the order written. Only a state marked satisfies unblocks a slice that depends on it. ready is the state plan next returns. dependency.group matches a wave of rows; wave names that table's columns. Tier is optional: a slice tagged with one lets plan next stay inside that class, and wave filters by the group tables, alone or with a tier.",
   "name": "tracker",
   "directories": [
     { "kind": "plans", "word": "plan", "path": "docs/plans" },
@@ -11,6 +11,7 @@
     "headers": ["id", "#", "step", "item", "slice", "task"]
   },
   "columns": {
+    "tier": ["tier", "model tier", "class", "effort"],
     "state": ["state", "status", "done when"],
     "depends": ["depends on", "depends", "dependency", "dependencies", "deps", "needs"],
     "title": ["slice", "deliverable", "title", "summary", "description", "content"],

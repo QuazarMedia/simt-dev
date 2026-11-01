@@ -4,6 +4,18 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A tracker slice may carry a **tier** — an optional `columns.tier` in the plan template
+  (`Tier`, `Model tier`, `Class`, `Effort`) — and `simt plan next --tier <name>` returns
+  the next ready slice inside that class instead of the next one anywhere. The tag is the
+  cell's first word without notes, so `L (S)` is an L slice with an S reviewer.
+- `simt plan next --wave <name>` filters by the wave tables the template already names,
+  and the two combine: `--wave 0 --tier L` is a slice that is in both. A filter that
+  matches nothing says which one it applied rather than falling back to every slice.
+
 ## [0.8.0] — 2026-11-01
 
 ### Added

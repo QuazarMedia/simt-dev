@@ -21,13 +21,14 @@
  * @property {string} path the dispatch key: `status`, or `group subcommand`
  * @property {string} summary one phrase, printed by help and by the generated docs
  * @property {string} [defaultFor] the group whose bare form resolves to this row
+ * @property {string[]} [aliases] spellings that resolve to this row, never listed in help
  * @property {string} [mcp] the MCP tool name that answers this row, when one does
  */
 
 /** @type {SpecRow[]} */
 export const SPEC = [
-  { path: 'agent-hook', usage: '<event> --harness', summary: 'the harness entry point: decide one tool call, or deliver the prompt packet', flags: ["diff","harness"], },
-  { path: 'agent-hooks install', usage: '--yes', summary: "write this repository's policies into each harness hooks file", writes: 'repo', flags: ["yes","diff","harness"], },
+  { path: 'agent-hook', usage: '<event> --harness', summary: 'the harness entry point: decide one tool call, or deliver the prompt packet', aliases: ['harness hook'], flags: ["diff","harness"], },
+  { path: 'agent-hooks install', usage: '--yes', summary: "write this repository's policies into each harness hooks file", writes: 'repo', aliases: ['harness install'], flags: ["yes","diff","harness"], },
   { path: 'agent-hooks status', summary: 'what each harness will run, and what is not trusted yet', defaultFor: 'agent-hooks', flags: ["diff","harness"], },
   { path: 'agents install', usage: '--yes', summary: 'write the Simt-Agent into each harness agents file', writes: 'repo', flags: ["yes","diff","harness"], },
   // A group like `agent-hooks`: `install` writes the agent file into each harness's own
@@ -37,9 +38,9 @@ export const SPEC = [
   { path: 'bench critic', summary: 'score the review critic against the labelled bench set', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench export', usage: '--yes', summary: 'write the sealed bench corpus as one signed document', writes: 'repo', flags: ["yes","all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench import', summary: 'verify a sealed corpus and load it into the vault', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
-  { path: 'bench mine', usage: '--yes', summary: 'mine tasks out of a repository history', writes: 'repo', defaultFor: 'bench', flags: ["yes","all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
+  { path: 'bench mine', usage: '--yes', summary: 'mine tasks out of a repository history', writes: 'repo', flags: ["yes","all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench probes', usage: '--yes', summary: 'run the deterministic probes against a workspace', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
-  { path: 'bench report', usage: '[--compare a b]', summary: 'summarise the runs recorded in the vault', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
+  { path: 'bench report', usage: '[--compare a b]', summary: 'summarise the runs recorded in the vault', defaultFor: 'bench', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench run', usage: '--yes', summary: 'run agents against the mined tasks', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench variants', usage: '--yes', summary: 'run one task across its variant prompts', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'brief', usage: '"<task>"', mcp: { name: 'brief', flags: ['budget', 'paths', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","paths","task"], },
@@ -55,7 +56,7 @@ export const SPEC = [
   { path: 'evidence check', usage: '<msg-file>', summary: 'a commit message claiming a run this tree does not have', flags: [], },
   { path: 'explain', usage: '<CODE>', summary: 'what one check finding code means, and how to fix it', flags: [], },
   { path: 'gate', usage: '--changed', summary: 'the tests a change reaches, and only those', flags: ["changed"], },
-  { path: 'graph lint', usage: '[--spec agentskills]', summary: 'check the skill registry against the skills on disk', defaultFor: 'graph', flags: ["spec"], },
+  { path: 'graph lint', usage: '[--spec agentskills]', summary: 'check the skill registry against the skills on disk', defaultFor: 'graph', aliases: ['skills lint'], flags: ["spec"], },
   { path: 'harness detect', usage: '[--user]', summary: 'which harness is installed, and what it carries', defaultFor: 'harness', flags: ["at","reader","table","user"], },
   { path: 'harness loaders', usage: '[--table]', summary: 'the instruction files each harness loads, and what they cost', flags: ["at","reader","table","user"], },
   { path: 'hooks install', usage: '--yes', summary: 'install the shared dispatcher and report what it would run', writes: 'repo', flags: ["yes","diff","dry-run"], },
@@ -80,7 +81,7 @@ export const SPEC = [
   { path: 'plan done', usage: '<id> [<sha>] --yes', mcp: { name: 'plan_done', flags: ['state', 'test'] }, summary: 'mark one tracker row complete, with its SHA and its evidence', flags: ["diff","state","test"], },
   { path: 'plan next', usage: '[<id>]', mcp: { name: 'plan_next', flags: [] }, summary: "one ready slice's section, or the one named", flags: ["diff","state","test"], },
   { path: 'plan status', summary: 'count the tracker rows', defaultFor: 'plan', flags: ["diff","state","test"], },
-  { path: 'plugin', usage: '<claude|gemini|cursor|opencode>', summary: 'generate a harness package from the same tables the hooks use', flags: ["diff","out"], },
+  { path: 'plugin', usage: '<claude|gemini|cursor|opencode>', summary: 'generate a harness package from the same tables the hooks use', aliases: ['harness plugin'], flags: ["diff","out"], },
   { path: 'pr-body', usage: '[--base <ref>]', mcp: { name: 'pr_body', flags: ['base'] }, summary: 'the pull request body: evidence, decisions, gate state and residual risk', flags: ["base"], },
   { path: 'review', usage: '[--local]', summary: 'review the staged diff against the estate rules', flags: [], },
   { path: 'rules decisions', summary: 'every known decision, and which layer each came from', writes: 'repo', flags: ["yes","all"], },
@@ -93,24 +94,24 @@ export const SPEC = [
   // where", and `install` - the subcommand that touches a reader's home directory - is
   // the one that needs `--yes` before it does anything.
   { path: 'shared plan', summary: 'what the shared install would write, and where', writes: 'repo', defaultFor: 'shared', flags: ["yes","diff"], },
-  { path: 'skills brief', usage: '--task "<task>"', mcp: { name: 'skills_brief', flags: ['all', 'task'] }, summary: 'the packet for a task, read from the skill registry', flags: ["all", "plan", "task"], },
+  { path: 'skills brief', usage: '--task "<task>"', mcp: { name: 'skills_brief', flags: ['all', 'task'] }, summary: 'the packet for a task, read from the skill registry', aliases: ['skills select'], flags: ["all", "plan", "task"], },
   { path: 'skills compile', usage: '[<name>]', summary: 'compile a skill to the Agent Skills standard', flags: [], },
   { path: 'skills eval', usage: '[corpus]', summary: 'score the skill registry against transcripts', flags: ["all","plan"], },
   { path: 'skills find', usage: '<query>', mcp: { name: 'skills_find', flags: [] }, summary: 'skills that match a query', flags: ["all","plan"], },
-  { path: 'skills index', mcp: { name: 'skills_index', flags: [] }, summary: 'rebuild the skill index', defaultFor: 'skills', flags: ["all","plan"], },
+  { path: 'skills index', mcp: { name: 'skills_index', flags: [] }, summary: 'rebuild the skill index', defaultFor: 'skills', aliases: ['skills list'], flags: ["all","plan"], },
   { path: 'skills install', usage: '<name> --yes', summary: 'install skills into the workspace', writes: 'repo', flags: ["yes","diff","from","variant"], },
   { path: 'skills show', usage: '<name>', mcp: { name: 'skills_show', flags: [] }, summary: 'one skill packet', flags: ["all","plan"], },
   { path: 'skills why', usage: '<name>', mcp: { name: 'skills_why', flags: [] }, summary: 'which skill covers a task', flags: ["all","plan"], },
-  { path: 'slice abandon', usage: '<id>', summary: 'remove a slice worktree, delete its branch, and return the row', flags: ["session","test","type"], },
-  { path: 'slice finish', usage: '<id> --yes', summary: 'run the gates, commit the slice and record its evidence', writes: 'repo', flags: ["yes","session","test","type"], },
+  { path: 'slice abandon', usage: '<id>', summary: 'remove a slice worktree, delete its branch, and return the row', aliases: ['plan abandon'], flags: ["session","test","type"], },
+  { path: 'slice finish', usage: '<id> --yes', summary: 'run the gates, commit the slice and record its evidence', writes: 'repo', aliases: ['plan finish'], flags: ["yes","session","test","type"], },
   // Plan 0003 R53. Both halves write, so a bare `slice` has no read to default to.
   // `start` is the default because with the id it is missing it fails with a usage error
   // before anything is created - the one default here that cannot mutate.
-  { path: 'slice start', usage: '<id> --yes  |  -- "<text>"', summary: 'give a slice its worktree, branch and brief; -- starts one from a prompt, no row', defaultFor: 'slice', flags: ["id","session","test","type"], },
+  { path: 'slice start', usage: '<id> --yes  |  -- "<text>"', summary: 'give a slice its worktree, branch and brief; -- starts one from a prompt, no row', defaultFor: 'slice', aliases: ['plan start'], flags: ["id","session","test","type"], },
   { path: 'status', usage: '[--line]', summary: 'the repository snapshot, or one line of the last check', flags: ["line"], },
   { path: 'sync', usage: '[--explain] --yes', summary: 're-render the generated regions from the rule content', writes: 'repo', flags: ["yes","check","diff","dry-run"], },
   { path: 'tests', usage: '<path> [--cochange]', summary: 'the tests that exercise a file', flags: ["cochange"], },
-  { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', flags: ["repos","session"], },
+  { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', aliases: ['harness cost'], flags: ["repos","session"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff"], },
   { path: 'upgrade', usage: '--yes', summary: 'replace this installation with the pinned release', writes: 'repo', flags: ["yes","all","diff","workspace"], },
   { path: 'why', usage: '[path]', summary: 'what governs a file: decisions, rules, skills, gates and lessons', flags: [], },
@@ -150,3 +151,17 @@ export const SPEC_PATHS = SPEC.map((row) => row.path).sort();
 
 /** group -> the subcommand its bare form resolves to. */
 export const GROUP_DEFAULTS = new Map(SPEC.filter((row) => row.defaultFor !== undefined).map((row) => [row.defaultFor, row.path.split(' ')[1]]));
+
+/**
+ * The spellings this binary answers that are not paths (review 0003 Q81).
+ *
+ * A rename costs every script and every habit a reader already has, so a new name
+ * arrives as an alias instead of a replacement: the path stays the dispatch key, help
+ * lists the path, and the alias resolves before the registry is consulted. An alias is
+ * deliberately absent from help and from the generated docs — the point of a second
+ * spelling is that the reader who already knows it can type it, not that a new reader
+ * has to choose between two names for one command.
+ */
+export const ALIASES = new Map(
+  SPEC.flatMap((row) => (row.aliases ?? []).map((alias) => [alias, row.path])),
+);

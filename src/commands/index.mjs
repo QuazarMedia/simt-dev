@@ -24,7 +24,7 @@ import {
   withOutputState,
 } from '../output/index.mjs';
 import { help } from './help.mjs';
-import { GROUP_DEFAULTS, SPEC, SPEC_PATHS } from './spec.mjs';
+import { ALIASES, GROUP_DEFAULTS, SPEC, SPEC_PATHS } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
@@ -421,10 +421,14 @@ async function dispatchInState(argv) {
  * Normalise argv into a registry key, or null when unrecognised.
  * A group with an omitted subcommand resolves to that group's default, so
  * `simt skills` is `simt skills index`.
+ *
+ * An alias resolves here rather than as a second registry entry: the spec path stays the
+ * one dispatch key, so an alias cannot load a different handler or escape the flag
+ * declaration the path carries (review 0003 Q81).
  */
 function commandPath(first, second) {
   if (first === undefined) return null;
-  if (!GROUPS.has(first)) return first;
+  if (!GROUPS.has(first)) return ALIASES.get(first) ?? first;
 
   const group = GROUPS.get(first);
   if (second === undefined) return `${first} ${group}`;
@@ -438,10 +442,8 @@ function commandPath(first, second) {
   // `doctor` is not a group and this branch is only reached when `GROUPS.has(first)`.
   // Two lists of the same fact is the defect S15 was about in the help text.
   const key = `${first} ${second}`;
-  if (!(key in IMPLEMENTED)) {
-    return null;
-  }
-  return key;
+  if (key in IMPLEMENTED) return key;
+  return ALIASES.get(key) ?? null;
 }
 
 function parseOrExit(argv) {

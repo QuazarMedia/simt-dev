@@ -7,12 +7,19 @@
 // default must point at a path that exists.
 
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { test } from 'node:test';
 
-import { GROUP_DEFAULTS, SPEC, SPEC_PATHS } from '../src/commands/spec.mjs';
+import { ALIASES, GROUP_DEFAULTS, SPEC, SPEC_PATHS } from '../src/commands/spec.mjs';
 import { COMMANDS, GROUPS, IMPLEMENTED } from '../src/commands/index.mjs';
 import { BOOL_FLAGS, REPEATABLE_FLAGS, VALUE_FLAGS } from '../src/argv.mjs';
+
+const HERE = dirname(fileURLToPath(import.meta.url));
+const exec = promisify(execFile);
 
 test('spec: the registry and the spec name the same commands, both directions', () => {
   assert.deepEqual(SPEC_PATHS, Object.keys(IMPLEMENTED).sort());
@@ -162,3 +169,50 @@ test('spec: no command module derives the repository root itself', () => {
   }
   assert.deepEqual(offenders, []);
 });
+
+test('spec: a bare group resolves to the read, not the writer', () => {
+  // A reader who types a group name has asked a question, not given consent. A row that
+  // writes still previews without --yes, so the property that holds for every default is
+  // the weaker one; the ruling that changed a default is asserted directly (review 0003
+  // Q81: bare `simt bench` mined tasks into the vault).
+  assert.equal(GROUP_DEFAULTS.get('bench'), 'report', 'bare bench must summarise, not mine');
+});
+
+test('spec: every alias resolves to a path, and none shadows one', () => {
+  // An alias is a second spelling of a dispatch key, never a second key: one that
+  // shadowed a path would make the registry and the argv disagree about what ran, and
+  // one that pointed at nothing would be a spelling that fails after the docs promise it
+  // (review 0003 Q81).
+  for (const [alias, path] of ALIASES) {
+    assert.ok(!SPEC_PATHS.includes(alias), `${alias} is both an alias and a path`);
+    assert.ok(SPEC_PATHS.includes(path), `${alias} points at ${path}, which is not a path`);
+  }
+});
+
+test('spec: an alias dispatches, and no alias spelling reaches help', async () => {
+  const helped = await runCli(['--help']);
+  assert.equal(helped.code, 0, helped.stderr);
+  for (const [alias] of ALIASES) {
+    assert.ok(!helped.stdout.includes(alias), `${alias} is listed in --help`);
+  }
+  // `skills lint` is an alias of a read that holds in this repository, so exercising it
+  // costs one registry read and writes nothing: a name that resolves and then fails is a
+  // name that does not resolve.
+  const lint = await runCli(['skills', 'lint', '--json']);
+  assert.equal(lint.code, 0, lint.stderr);
+  assert.doesNotMatch(lint.stderr, /unknown command/);
+  const cost = await runCli(['harness', 'cost', '--json']);
+  assert.doesNotMatch(cost.stderr, /unknown command/);
+});
+
+async function runCli(args) {
+  try {
+    const { stdout, stderr } = await exec(process.execPath, [resolve(HERE, '..', 'bin', 'simt.mjs'), ...args], {
+      maxBuffer: 32 << 20,
+      env: { ...process.env, NO_COLOR: '1', SIMT_DEV_WORKSPACE: 'off' },
+    });
+    return { code: 0, stdout, stderr };
+  } catch (error) {
+    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
+  }
+}

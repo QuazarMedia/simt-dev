@@ -25,7 +25,8 @@
 import { existsSync } from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join } from 'node:path';
-import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { commitJournal } from '../journal.mjs';
+import { applyPlan, change } from '../write/plan.mjs';
 import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../agenthooks/shim.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 
@@ -303,19 +304,25 @@ async function installHooks(root, flags) {
   // Journaled so `undo` restores this run (R49).
   const journal = [];
   const written = [];
+  const hookChanges = [];
   for (const p of plan.filter((x) => x.action !== 'unchanged')) {
-    await mkdir(join(root, dirname(p.path)), { recursive: true });
-    await journaledWriteFile(root, journal, join(root, p.path), p.text);
+    const path = join(root, p.path);
+    hookChanges.push(
+      change({ path, before: await readBefore(path), after: p.text, owner: 'agent-hooks install', reason: p.action }),
+    );
     written.push(p);
   }
   // The shim is a file like the configs: unchanged installs leave it alone, and a
   // changed one is journaled so `undo` removes or restores it with the configs.
   let shimWritten = false;
   if (shimAction !== 'unchanged') {
-    await mkdir(join(root, dirname(AGENT_HOOK_SHIM)), { recursive: true });
-    await journaledWriteFile(root, journal, join(root, AGENT_HOOK_SHIM), shimText, { mode: 0o755 });
+    const shimPath = join(root, AGENT_HOOK_SHIM);
+    hookChanges.push(
+      change({ path: shimPath, before: await readBefore(shimPath), after: shimText, owner: 'agent-hooks install', reason: shimAction, mode: 0o755 }),
+    );
     shimWritten = true;
   }
+  await applyPlan(root, hookChanges, { mode: { apply: true }, journal, commit: false });
   await commitJournal(root, 'agent-hooks install', journal);
 
   const notes = [];

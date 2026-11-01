@@ -14,7 +14,8 @@
 
 import { mkdir, readFile, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { repoContext } from '../context.mjs';
-import { commitJournal, journaledGitConfig, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
+import { commitJournal, journaledGitConfig, journaledRemoveFile } from '../journal.mjs';
+import { applyPlan, change } from '../write/plan.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { invalidateCheckCache } from '../status.mjs';
 import { isAbsolute, join, relative } from 'node:path';
@@ -374,26 +375,31 @@ export async function applyHooksInstall(root, planned, journal) {
   const wrote = [];
   const removed = [];
   await mkdir(join(root, HOOKS_DIR), { recursive: true });
+  const hookChanges = [];
   for (const event of wanted) {
     const path = join(root, fileFor(event));
-    await journaledWriteFile(root, journal, path, renderShim(event, { npm, manager, version }), { mode: 0o755 });
+    hookChanges.push(change({ path, before: await readBefore(path), after: renderShim(event, { npm, manager, version }), owner: 'hooks install', reason: event, mode: 0o755 }));
     wrote.push(fileFor(event));
   }
   for (const c of chained) {
     const path = join(root, fileFor(c.event));
-    await journaledWriteFile(root, journal, path, renderChainedShim(c.event, c.target), { mode: 0o755 });
+    hookChanges.push(change({ path, before: await readBefore(path), after: renderChainedShim(c.event, c.target), owner: 'hooks install', reason: c.event, mode: 0o755 }));
     wrote.push(fileFor(c.event));
   }
   for (const h of obsolete) {
-    await journaledRemoveFile(root, journal, join(root, fileFor(h.event)));
+    const obsoletePath = join(root, fileFor(h.event));
+    hookChanges.push(
+      change({ path: obsoletePath, kind: 'remove', before: await readBefore(obsoletePath), after: null, owner: 'hooks install', reason: h.event }),
+    );
     wrote.push(fileFor(h.event));
   }
   // After the chain loop, so a chained commit-msg cannot replace the claim check.
   if (evidenceSource) {
     const path = join(root, evidenceFile);
-    await journaledWriteFile(root, journal, path, evidenceSource, { mode: 0o755 });
+    hookChanges.push(change({ path, before: await readBefore(path), after: evidenceSource, owner: 'hooks install', reason: 'the evidence shim', mode: 0o755 }));
     wrote.push(evidenceFile);
   }
+  await applyPlan(root, hookChanges, { mode: { apply: true }, journal, commit: false });
   // `core.hooksPath` tells git to read ONE directory for EVERY event, so leaving it
   // pointing at a directory of no shims stops the repository's own hooks - the ones in
   // `.git/hooks` that predate this tool - from running, silently. Unsetting it is the
@@ -416,6 +422,7 @@ export async function applyHooksInstall(root, planned, journal) {
     await rm(join(root, HOOKS_DIR_LEGACY), { recursive: true });
   }
   return { wrote, removed };
+
 }
 
 /**

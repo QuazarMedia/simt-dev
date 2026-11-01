@@ -15,6 +15,28 @@ All notable changes to this package are recorded here. The format follows
 - `simt plan next --wave <name>` filters by the wave tables the template already names,
   and the two combine: `--wave 0 --tier L` is a slice that is in both. A filter that
   matches nothing says which one it applied rather than falling back to every slice.
+- A tracker slice may carry a **lane** — an optional `columns.lane` (`Lane`, `Stream`,
+  `Workstream`, `Track`), read by the same first-word rule — and `simt plan next --lane
+  <name>` keeps the answer inside one subsystem, so two agents can take two lanes whose
+  file sets do not overlap. `simt plan labels` reports which header each column matched.
+- A **`Reviewer` column** and the **`To review`** state: a slice whose implementation is
+  finished but not accepted is named beside the next answer instead of being handed out
+  as ready work, and nothing depending on it is ready yet.
+- `simt plan status` reports the share of each tracker that is done and what remains, as
+  a percent beside the per-state counts.
+- `simt hooks install --agent` and `simt hooks status --agent` write and report each
+  harness's own hooks file; `agent-hooks install|status` answer as the same run under
+  their own spelling, and the remedy names the spelling the caller typed.
+- `simt help <group>` prints that group's subcommands rather than the whole surface, and
+  `-h` is answered wherever it appears on a command line.
+- The shipped agent keeps the harness's own task list current every turn, and says so
+  once when the surface has no such tool instead of claiming an update.
+
+### Fixed
+
+- `simt review --local`, `simt check --frozen` and `simt compare --learn` were documented
+  and implemented but undeclared in the command spec, so naming one warned that the
+  command does not take it; `simt sync` advertised `--explain`, which nothing read.
 
 ## [0.8.0] — 2026-11-01
 
@@ -191,7 +213,7 @@ next write, so the migration is idempotent.
 
 - **Hybrid retrieval fuses BM25, the code graph, and the resolver** — `simt index` indexes full-text tokens across `code`, `docs`, `skills`, `decisions` and `lessons` into the SQLite FTS5 `fts` table (with an Okapi BM25 fallback when the index is JSON-lines). — [ADR-091](docs/decisions/ADR-091-the-map-ranks-files-a-task-mentions.md)
 
-- **A local model adapter that opens zero sockets until named** — `simt local doctor` probes the OpenAI-compatible `local.chat` and `local.embed` endpoints declared in `simt.json` (`/v1/models`, `/v1/chat/completions`, `/v1/embeddings` for Ollama, `llama-server`, LM Studio and MLX servers) and reports rea — [ADR-075](docs/decisions/ADR-075-nothing-leaves-the-machine.md), [ADR-090](docs/decisions/ADR-090-an-optional-adapter-is-off-until-named.md)
+- **A local model adapter that opens zero sockets until named** — `simt local doctor` probes the OpenAI-compatible `local.chat` and `local.embed` endpoints declared in `simt.json` (`/v1/models`, `/v1/chat/completions`, `/v1/embeddings` for Ollama, `llama-server`, LM Studio and MLX servers) and reports readiness — [ADR-075](docs/decisions/ADR-075-nothing-leaves-the-machine.md), [ADR-090](docs/decisions/ADR-090-an-optional-adapter-is-off-until-named.md)
 
 - **Estate learning and ADR drafts across a workspace** — `simt compare --learn` aggregates benchmark uplift (`ΔR`, `ΔC`) per rule section across adopted sibling repositories, promotes lessons repeated across at least two repositories as shared candidates, and flags gates that fail more than 20% o
 

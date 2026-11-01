@@ -79,6 +79,10 @@ export const BOOL_FLAGS = new Set([
   // written one yet is not drift, and a gate that failed for the absence would be
   // red on every repository this package already adopted.
   'frozen',
+  // compare: show the estate learning block even when no ledger run, hook denial or
+  // no-value section would have surfaced it. The changelog documented the flag before
+  // the parser accepted it, so the one reader who followed it got a usage warning.
+  'learn',
   // map: report gold-file recall@10 instead of rendering the ranking. Off by
   // default because the ranking is the answer a task asked for, and the recall
   // figure needs the hidden benchmark patches.

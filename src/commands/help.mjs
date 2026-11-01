@@ -365,6 +365,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
                         reproduce (off by default: mining is append-only; a
                         re-mine adds, it does not replace the corpus)
 --refresh               distill / review: regenerate a proposal that is already cached
+--learn                 compare: show the estate learning block even when no ledger
+                        run, hook denial or no-value section would surface it
 --local                 distill / review: propose the answer from the configured
                          local chat model (local.chat); off by default, which
                          uses the deterministic path instead

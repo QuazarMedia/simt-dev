@@ -118,7 +118,7 @@ export async function compareCommand(positional, flags) {
     directories: found.directories.map((d) => basename(d)),
   };
 
-  if (present(payload, () => render(rows, summary, found, learning), flags) === 'json') {
+  if (present(payload, () => render(rows, summary, found, learning, flags), flags) === 'json') {
     return rows.some((r) => r.problems.length > 0) ? EXIT.FAIL : EXIT.OK;
   }
 
@@ -150,7 +150,7 @@ export async function compareCommand(positional, flags) {
  * the longest value, and an agent cannot tell which column is which without
  * counting spaces.
  */
-function render(rows, summary, found, learning = null) {
+function render(rows, summary, found, learning = null, flags = {}) {
   const lines = [
     // `workspace` and `repo` are the same field with different names, and the name is the
     // honest one: a reader who sees "workspace" and gets one repo was told a lie. `root`
@@ -208,7 +208,10 @@ function render(rows, summary, found, learning = null) {
     lines.push('');
   }
 
-  const learningLines = renderLearningLines(learning);
+  // `--learn` forces the block the ledger would otherwise suppress for a quiet estate:
+  // the flag is the reader saying "show me what is there even when nothing crossed a
+  // threshold", and the changelog has documented it since it shipped.
+  const learningLines = renderLearningLines(learning, { force: flags.learn === true });
   if (learningLines.length > 0) {
     lines.push(...learningLines, '');
   }

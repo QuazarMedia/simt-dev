@@ -41,7 +41,7 @@ Pick the command by what you need, not by what you remember:
 | Find tests a change reaches | `simt gate [path...]` | `--changed` reads the diff |
 | See who a change affects | `simt impact <file\|symbol>` | Importers, tests, contracts |
 | Find files a task touches | `simt map --task "<text>"` | `--level outline\|names\|signatures` |
-| Read tracker state | `simt plan status` | Counts per tracker file |
+| Read tracker state | `simt plan status` | Counts per tracker file, and the share done |
 | Get the next slice | `simt plan next [<id>]` | Smallest ready slice, ~1 KB |
 | Stay inside a tier, wave or lane | `simt plan next --tier L --wave 1 --lane core` | Any filter, or all three at once |
 | See what the tool read from a tracker | `simt plan labels` | Matched headers, unmatched columns |
@@ -58,7 +58,7 @@ Pick the command by what you need, not by what you remember:
 | Adopt a repo | `simt init [path] --yes` | `--backup` tags the pre-adoption commit |
 | Install the agent | `simt agents install --yes` | `--harness <id>` for one |
 | Check agent status | `simt agents status` | Present, absent, drift, no-file |
-| Install hooks | `simt hooks install --yes` | Shared dispatcher |
+| Install hooks | `simt hooks install --yes` | Shared dispatcher; `--agent` writes each harness hooks file |
 | Run a hook event | `simt hooks run <event>` | As git would |
 | Install agent hooks | `simt agent-hooks install --yes` | Per-harness policies |
 | Diagnose config | `simt doctor [--fix]` | `--fix` applies safe remedies |

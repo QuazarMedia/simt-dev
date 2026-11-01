@@ -41,9 +41,10 @@ Pick the command by what you need, not by what you remember:
 | Find tests a change reaches | `simt gate [path...]` | `--changed` reads the diff |
 | See who a change affects | `simt impact <file\|symbol>` | Importers, tests, contracts |
 | Find files a task touches | `simt map --task "<text>"` | `--level outline\|names\|signatures` |
-| Read tracker state | `simt plan status` | Counts per tracker file |
+| Read tracker state | `simt plan status` | Counts per tracker file, and the share done |
 | Get the next slice | `simt plan next [<id>]` | Smallest ready slice, ~1 KB |
-| Stay inside a tier or a wave | `simt plan next --tier L --wave 1` | Either filter, or both at once |
+| Stay inside a tier, wave or lane | `simt plan next --tier L --wave 1 --lane core` | Any filter, or all three at once |
+| See what the tool read from a tracker | `simt plan labels` | Matched headers, unmatched columns |
 | Mark a slice done | `simt plan done <id> <sha> --test "<cmd>" --yes` | Dry-run without `--yes` |
 | Start a slice in a worktree | `simt slice start <id> --yes` | Branch `slice/<id>`, brief beside it |
 | Finish a slice | `simt slice finish <id> --yes` | Gates, commit, record SHA |
@@ -57,7 +58,7 @@ Pick the command by what you need, not by what you remember:
 | Adopt a repo | `simt init [path] --yes` | `--backup` tags the pre-adoption commit |
 | Install the agent | `simt agents install --yes` | `--harness <id>` for one |
 | Check agent status | `simt agents status` | Present, absent, drift, no-file |
-| Install hooks | `simt hooks install --yes` | Shared dispatcher |
+| Install hooks | `simt hooks install --yes` | Shared dispatcher; `--agent` writes each harness hooks file |
 | Run a hook event | `simt hooks run <event>` | As git would |
 | Install agent hooks | `simt agent-hooks install --yes` | Per-harness policies |
 | Diagnose config | `simt doctor [--fix]` | `--fix` applies safe remedies |
@@ -80,7 +81,7 @@ Pick the command by what you need, not by what you remember:
 | Score the registry | `simt skills eval [corpus]` | Against recorded transcripts |
 | Refresh the workflows | `simt ci` | This package's own `.github` |
 
-## Tiers and waves
+## Tiers, waves, lanes and reviewers
 
 A tracker may carry a tier column (headers `Tier`, `Model tier`, `Class`, `Effort`). The tag
 is the cell's first word without its notes, so `L (S)` is an L slice with an S reviewer.
@@ -88,3 +89,15 @@ is the cell's first word without its notes, so `L (S)` is an L slice with an S r
 in that wave (the plan's wave tables), and both together apply as one filter. A filter that
 matches nothing says so — `no queued slices in tier S` — and never falls back to the whole
 tracker.
+
+A lane is the subsystem a slice's files belong to (headers `Lane`, `Stream`, `Workstream`,
+`Track`), read by the same first-word rule. Lanes are meant to own disjoint file sets, which
+is what makes concurrency safe: `--lane core` and `--lane capture` handed to two agents
+touch different files, while two slices in one lane do not. Combine `--lane` with `--tier` or `--wave` when a lane must also stay inside a
+class or a wave.
+
+A `Reviewer` column (headers `Reviewer`, `Reviewed by`, `Review by`, `Reviewer profile`) names
+who reviews the slice — a model id or a person, as free text, because the tool has no reason
+to know which. The `To review` state means the work is finished and not accepted: it is not
+ready work, and nothing depending on it is ready either. `plan next` lists what is waiting
+under `awaiting review:`, and `simt plan done <id> --state "to review"` hands a slice over.

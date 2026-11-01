@@ -242,6 +242,7 @@ ${CLI} pack publish [dir] [--yes]
                            publish an npm-sourced pack to the registry
                            (dry-run unless --yes; skips a version already live;
                            a git-sourced pack names the tag-and-push instead)
+${CLI} docs readme --yes      render the README command list from the spec
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;

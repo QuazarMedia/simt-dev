@@ -149,6 +149,12 @@ export const IMPLEMENTED = {
   // Plan 0003 R54. A bare command: paths claim, no paths list, so the argument itself
   // is the mode and there is no group to resolve.
   lease: async () => (await import('./lease.mjs')).leaseCommand,
+  // Review 0003 Q60. The README's command list is the last copy of the command table
+  // the spec owns; the renderer lives in src/docs so a test can hold the file to it.
+  'docs readme': async () => {
+    const { docsCommand } = await import('./docs.mjs');
+    return (args, flags) => docsCommand('readme', args, flags);
+  },
   distill: async () => (await import('./distill.mjs')).distillCommand,
   // R25 machinery needs the runnable command names for Affects command tokens,
   // same wiring `why` and `impact` get through their lambdas.

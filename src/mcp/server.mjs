@@ -318,6 +318,16 @@ export async function handle(request, tools, { packageVersion, state, root, sign
       if (found === null) return error(id, RPC.METHOD, `no prompt named "${String(name)}"; call prompts/list first`);
       return reply(found);
     }
+    case 'resources/subscribe':
+    case 'resources/unsubscribe':
+      // A named refusal, not `unknown method`. The capability block above says `resources:
+      // {}` - no subscriptions - so a well-behaved client never asks; one that asks anyway
+      // is asking a protocol question and deserves the reason rather than a message that
+      // reads as a typo and sends it hunting for a spelling.
+      return isNotification
+        ? null
+        : error(id, RPC.METHOD, `${method} is not supported: this server has no change source; resources/list is always current`);
+
     default:
       return isNotification ? null : error(id, RPC.METHOD, `unknown method "${method}"`);
   }

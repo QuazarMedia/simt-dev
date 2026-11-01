@@ -151,9 +151,9 @@ test('mcp: an unknown method is a protocol error, not silence', async () => {
   // Something this server has never heard of. It used to assert `resources/list` here,
   // which is the assertion that had to die when resources landed: a method this server
   // does not implement, not one it does.
-  const r = await handle(req('resources/subscribe', { uri: 'simt://rules/core' }), TOOLS);
+  const r = await handle(req('resources/watch', { uri: 'simt://rules/core' }), TOOLS);
   assert.equal(r.error.code, RPC.METHOD);
-  assert.match(r.error.message, /unknown method "resources\/subscribe"/);
+  assert.match(r.error.message, /unknown method "resources\/watch"/);
 });
 
 test('mcp: a malformed request is a request error', async () => {
@@ -955,4 +955,16 @@ test('mcp: brief reads the index and never builds one', async () => {
   const packet = warm.result.structuredContent;
   assert.match(packet.text, /src\/keep\.mjs/, 'the packet names the file the task mentions');
   assert.ok(packet.bytes > 0 && packet.bytes <= 2048, `packet was ${packet.bytes} bytes`);
+});
+test('mcp: subscribing is refused with the reason, and never advertised', async () => {
+  // Two facts that have to agree: the capability says no subscriptions, and a client that
+  // asks anyway is told why. Advertising it and never sending an update, or refusing it as
+  // "unknown method", both leave the client worse off than a named refusal.
+  for (const method of ['resources/subscribe', 'resources/unsubscribe']) {
+    const r = await handle(req(method, { uri: 'simt://kernel' }), TOOLS);
+    assert.equal(r.error.code, RPC.METHOD);
+    assert.match(r.error.message, /no change source/);
+  }
+  const init = await handle(at('2026-07-28', 'initialize'), TOOLS);
+  assert.equal(init.result.capabilities.resources.subscribe, undefined, 'no subscription capability may be promised');
 });

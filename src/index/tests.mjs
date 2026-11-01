@@ -6,7 +6,7 @@
 // the tree is not a guess. Co-change is a different kind: files that land in
 // the same commit are not, by that fact, a test.
 
-import { isTestPath } from '../bench/mine.mjs';
+import { isTestPath } from '../testing/paths.mjs';
 import { extract, resolveImports } from './extract.mjs';
 import { cmp } from '../util/sort.mjs';
 

@@ -8,29 +8,27 @@ import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
+import { DEFAULT_MINE_TARGET, listCandidates, mineTasks, patchStats } from '../src/bench/mine.mjs';
+import { isTestPath } from '../src/testing/paths.mjs';
+import { detectTestRunner } from '../src/testing/runners.mjs';
+import { resolveVaultDir } from '../src/testing/vault.mjs';
 import {
-  DEFAULT_MINE_TARGET,
-  detectTestRunner,
-  isTestPath,
-  listCandidates,
-  mineTasks,
   parseCargoTestOutput,
   parseGoTestJson,
   parseJunitXml,
   parseTapOutput,
   parseVitestJson,
-  patchStats,
   readReports,
-  resolveVaultDir,
-} from '../src/bench/mine.mjs';
+} from '../src/testing/parsers.mjs';
 import {
   CORPUS_KIND,
   CORPUS_SCHEMA_VERSION,
   buildCorpusDocument,
   verifyCorpusDocument,
   writeCorpusDocument,
-} from '../src/bench/corpus.mjs';
-import { extractPatchFiles, gradeWorkspace } from '../src/bench/grade.mjs';
+} from '../src/measure/corpus.mjs';
+import { gradeWorkspace } from '../src/bench/grade.mjs';
+import { extractPatchFiles } from '../src/testing/patches.mjs';
 import { spawnBounded } from '../src/sys/proc.mjs';
 import { BUILTIN_ARMS, materialiseArm, parseArmSpec } from '../src/bench/arms.mjs';
 import { adapterIsolation, agentEnv, loadAdapters, parseAdapterUsage } from '../src/bench/adapters.mjs';
@@ -38,14 +36,14 @@ import { regradeRun, runBench } from '../src/bench/run.mjs';
 import { prepareIsolatedWorkspace } from '../src/bench/workspace.mjs';
 import { buildBenchReport } from '../src/bench/report.mjs';
 import { formatReportMarkdown } from '../src/bench/render.mjs';
-import { loadRunRecords } from '../src/bench/records.mjs';
+import { loadRunRecords } from '../src/measure/records.mjs';
 import {
   computeRunCost,
   computeRunQuality,
   evaluateRunRecord,
   isRunResolved,
   loadPrices,
-} from '../src/bench/metrics.mjs';
+} from '../src/measure/metrics.mjs';
 import {
   DEFAULT_BOOTSTRAP_SAMPLES,
   DEFAULT_BOOTSTRAP_SEED,
@@ -57,7 +55,7 @@ import {
   mcnemarTest,
   signTest,
   wilcoxonSignedRank,
-} from '../src/bench/stats.mjs';
+} from '../src/measure/stats.mjs';
 import {
   CANARY_ALPHA,
   DEFAULT_CANARY_SIZE,

@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { isTestPath } from '../src/bench/mine.mjs';
+import { isTestPath } from '../src/testing/paths.mjs';
 import { git } from './fixture.mjs';
 import {
   cochangeEdges,

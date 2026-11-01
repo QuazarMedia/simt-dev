@@ -8,7 +8,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { isTestPath } from '../bench/mine.mjs';
+import { isTestPath } from '../testing/paths.mjs';
 import { langOf } from './store.mjs';
 import { importsOf } from './tests.mjs';
 

@@ -32,7 +32,7 @@ import { ecosystems } from '../src/ci/dependabot.mjs';
 import { GATES, getGate } from '../src/hooks/gates.mjs';
 import { gateRunnable } from '../src/projection/manifest.mjs';
 import { fingerprint, STACK_TAGS } from '../src/resolve/fingerprint.mjs';
-import { isTestPath } from '../src/bench/mine.mjs';
+import { isTestPath } from '../src/testing/paths.mjs';
 
 async function tmpRoot() {
   return await mkdtemp(join(tmpdir(), 'ecosystem-records-'));

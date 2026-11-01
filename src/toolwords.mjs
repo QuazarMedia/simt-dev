@@ -23,7 +23,7 @@ import { LESSON_KEYS } from './memory/lessons.mjs';
 import { DECISION_KEYS } from './memory/decide.mjs';
 import { PROMPT_WORDS } from './mcp/prompts.mjs';
 import { AGENT_STEM, SKILL_STEM } from './agents/render.mjs';
-import { CORPUS_KIND } from './bench/corpus.mjs';
+import { CORPUS_KIND } from './measure/corpus.mjs';
 
 /**
  * `simt-` names that belong to this tool and never to a repository.

@@ -14,9 +14,9 @@ import {
   evaluateSkillTriggers,
   proposeSkillDescription,
 } from '../graph/compile.mjs';
-import { loadRunRecords } from '../bench/records.mjs';
-import { extractPatchFiles } from '../bench/grade.mjs';
-import { resolveVaultDir } from '../bench/mine.mjs';
+import { loadRunRecords } from '../measure/records.mjs';
+import { extractPatchFiles } from '../testing/patches.mjs';
+import { resolveVaultDir } from '../testing/vault.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { nearMatches } from '../resolve/near.mjs';
 import { resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';

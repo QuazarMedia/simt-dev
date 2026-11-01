@@ -6,29 +6,15 @@ import { runGates } from '../hooks/dispatcher.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { registerOracle } from './graders.mjs';
-import { detectTestRunner, readReports } from './mine.mjs';
+import { cleanupReports, readReports } from '../testing/parsers.mjs';
+import { extractPatchFiles } from '../testing/patches.mjs';
+import { detectTestRunner } from '../testing/runners.mjs';
 import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
 
 const DEFAULT_GRADE_TIMEOUT_MS = 45_000;
 
 function runCmd(cmd, args, { cwd, env, input = null, timeoutMs = DEFAULT_GRADE_TIMEOUT_MS } = {}) {
   return spawnBounded(cmd, args, { cwd, env: env ?? sanitizedEnv(), input, timeoutMs });
-}
-
-/**
- * Extract repository-relative file paths touched by a unified git diff.
- *
- * @param {Buffer|string} patch
- * @returns {string[]}
- */
-export function extractPatchFiles(patch) {
-  const text = Buffer.isBuffer(patch) ? patch.toString('utf8') : String(patch ?? '');
-  const files = new Set();
-  for (const line of text.split('\n')) {
-    const match = /^diff --git a\/(.+?) b\/(.+)$/.exec(line);
-    if (match) files.add(match[2]);
-  }
-  return [...files].sort();
 }
 
 async function resetFilesToHead(workDir, initialHead, files) {
@@ -159,6 +145,9 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
   // grader resolved on an empty parse.
   const reportText = await readReports(execSpec.reportPaths);
   const parsed = runner.parse(runRes.stdout.toString('utf8'), reportText);
+  // A report directed to the temporary directory belongs to this run; a report inside the
+  // workspace goes with the workspace (review 0003 Q79).
+  await cleanupReports(execSpec.reportPaths);
   const testRun = {
     code: runRes.code,
     timedOut: runRes.timedOut,

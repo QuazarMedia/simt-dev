@@ -10,7 +10,7 @@ import { join } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { isTestPath } from '../bench/mine.mjs';
+import { isTestPath } from '../testing/paths.mjs';
 import { blobTexts, isIndexStale, langOf, readEdges, readFiles, reindex } from '../index/store.mjs';
 import { coverage } from '../index/coverage.mjs';
 import { HISTORY, importsOf, parseCoverage, testEdges } from '../index/tests.mjs';

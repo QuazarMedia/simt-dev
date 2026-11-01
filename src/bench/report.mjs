@@ -11,8 +11,8 @@
 // it one would report a run nobody made.
 import { resolve } from 'node:path';
 
-import { evaluateRunRecord, loadPrices } from './metrics.mjs';
-import { readRunRecords } from './records.mjs';
+import { evaluateRunRecord, loadPrices } from '../measure/metrics.mjs';
+import { readRunRecords } from '../measure/records.mjs';
 import { formatReportMarkdown } from './render.mjs';
 import {
   DEFAULT_BOOTSTRAP_SAMPLES,
@@ -21,7 +21,7 @@ import {
   collapseArmByTask,
   compareArms,
   summarizeRows,
-} from './stats.mjs';
+} from '../measure/stats.mjs';
 
 /** The report's own schema stamp: a consumer can refuse a document it does not know. */
 const REPORT_SCHEMA = 'simt.bench.report/2';

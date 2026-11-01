@@ -18,15 +18,15 @@ import { plan } from '../projection/project.mjs';
 import { isEligible, loadRules, readDeclared, select } from '../projection/rules.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { CANARY_ALPHA, DEFAULT_CANARY_SIZE, DEL_R_TOLERANCE, shouldEscalateCanary } from './ablate.mjs';
-import { evaluateRunRecord, loadPrices } from './metrics.mjs';
-import { loadRunRecords } from './records.mjs';
+import { evaluateRunRecord, loadPrices } from '../measure/metrics.mjs';
+import { loadRunRecords } from '../measure/records.mjs';
 import {
   DEFAULT_BOOTSTRAP_SAMPLES,
   DEFAULT_BOOTSTRAP_SEED,
   collapseArmByTask,
   compareArms,
   holmAdjust,
-} from './stats.mjs';
+} from '../measure/stats.mjs';
 
 /**
  * Harnesses that grade, not answer: `gold` applies the oracle patch and `noop` does

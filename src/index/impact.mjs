@@ -5,7 +5,7 @@
 // touches. The walk stops at a fixed count: an unbounded report is not an
 // answer a reader can use.
 
-import { isTestPath } from '../bench/mine.mjs';
+import { isTestPath } from '../testing/paths.mjs';
 import { coverage } from './coverage.mjs';
 import { cmp } from '../util/sort.mjs';
 

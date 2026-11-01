@@ -13,7 +13,7 @@ import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { detectTestRunner } from '../bench/mine.mjs';
+import { detectTestRunner } from '../testing/runners.mjs';
 import { compactOutput } from '../index/compact.mjs';
 import { coverage } from '../index/coverage.mjs';
 import { readImportEdges } from '../index/gate.mjs';

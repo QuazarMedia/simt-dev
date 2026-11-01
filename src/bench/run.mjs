@@ -27,16 +27,16 @@ import { gradeWithOracle } from './graders.mjs';
 // Importing the tests grader registers the oracle it grades for; the runner asks the
 // registry rather than the module, so a second oracle needs no change here.
 import './grade.mjs';
-import { resolveVaultDir } from './mine.mjs';
+import { resolveVaultDir } from '../testing/vault.mjs';
 import {
   RECORD_SCHEMA_VERSION,
   corpusDigestOf,
   experimentOf,
   runIdFor,
   runRecord,
-} from './records.mjs';
-import { DEFAULT_BOOTSTRAP_SEED } from './stats.mjs';
-import { loadTasks, readTask } from './tasks.mjs';
+} from '../measure/records.mjs';
+import { DEFAULT_BOOTSTRAP_SEED } from '../measure/stats.mjs';
+import { loadTasks, readTask } from '../measure/tasks.mjs';
 import { mapPool, prepareBaseTree, prepareIsolatedWorkspace } from './workspace.mjs';
 
 const DEFAULT_REPS = 3;

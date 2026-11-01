@@ -9,7 +9,8 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { isTestPath, resolveVaultDir } from '../bench/mine.mjs';
+import { isTestPath } from '../testing/paths.mjs';
+import { resolveVaultDir } from '../testing/vault.mjs';
 import { readLocalConfig } from '../local/config.mjs';
 import { localEmbed } from '../local/client.mjs';
 import {

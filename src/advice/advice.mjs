@@ -21,9 +21,9 @@
 // records or a prices table price the tokens, total tokens otherwise. Ordering by a number
 // that does not exist for any run would be nondeterminism, not economics.
 import { classifyTask } from '../brief/kind.mjs';
-import { computeRunCost, isRunResolved, loadPrices } from '../bench/metrics.mjs';
-import { loadRunRecords } from '../bench/records.mjs';
-import { loadTasks } from '../bench/tasks.mjs';
+import { computeRunCost, isRunResolved, loadPrices } from '../measure/metrics.mjs';
+import { loadRunRecords } from '../measure/records.mjs';
+import { loadTasks } from '../measure/tasks.mjs';
 import { CONFIG_DIR } from '../name.mjs';
 
 /**

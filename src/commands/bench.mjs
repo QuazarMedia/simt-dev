@@ -11,7 +11,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { CLI } from '../name.mjs';
 import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
 import { DEFAULT_MINE_TARGET, mineTasks } from '../bench/mine.mjs';
-import { buildCorpusDocument, verifyCorpusDocument, writeCorpusDocument } from '../bench/corpus.mjs';
+import { buildCorpusDocument, verifyCorpusDocument, writeCorpusDocument } from '../measure/corpus.mjs';
 import { regradeRun, runBench } from '../bench/run.mjs';
 import { buildBenchReport } from '../bench/report.mjs';
 import { formatRecall, measureRecall } from '../index/map.mjs';

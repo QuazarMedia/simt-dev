@@ -18,7 +18,7 @@ import { dirname, join, resolve } from 'node:path';
 
 import { STATE_DIR } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
-import { resolveVaultDir } from './mine.mjs';
+import { resolveVaultDir } from '../testing/vault.mjs';
 
 /** The document kind stamp, so a reader can refuse a file that is not a corpus. */
 export const CORPUS_KIND = 'simt-bench-corpus';

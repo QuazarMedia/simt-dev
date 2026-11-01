@@ -1,6 +1,6 @@
 // simt mcp - serve the tool surface over MCP on stdio.
 //
-// Optional by design (plan 0002 section 5): it adds a transport, not a capability, and
+// Optional by design: it adds a transport, not a capability, and
 // the CLI stays the primary interface because it works in CI, in a hook and in a bare
 // shell. What this command must NOT become is a second implementation - it wires the same
 // modules the commands use into a line protocol and does nothing else.

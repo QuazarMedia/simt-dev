@@ -1,4 +1,4 @@
-// The distiller's orchestrator (plan 0003 R38): one target in, one proposal out.
+// The distiller's orchestrator: one target in, one proposal out.
 //
 // R37 gave this repository a local model client, and R38 is the first consumer of
 // it: distillation is the cheapest thing a local model can do that the
@@ -123,7 +123,7 @@ async function runEngine(kind, text, budget, context) {
   const { root, allowRemote, name } = context;
   const config = await readLocalConfig(root, { allowRemote });
   // The shared guard arrived from `local/config.mjs` when the critic became the
-  // second real user of the same rules (plan 0003 R39, ADR-002).
+  // second real user of the same rules.
   const endpoint = chatEndpoint(config);
   if (endpoint.exit !== undefined) return endpoint;
 

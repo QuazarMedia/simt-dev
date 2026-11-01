@@ -6,7 +6,7 @@
 // the parse, the key access, and whatever default the caller invented - and a
 // manifest with `"mode": "kernal"` reached the projection as a mode it had never
 // heard of. A typo in one key silently changed behaviour, because nothing in the
-// tool had ever said what the keys are (review 0003 Q69).
+// tool had ever said what the keys are.
 //
 // Every shape below was read off the manifest this repository carries, not from
 // memory: the first draft of this table called `limits.fileLines` a positive integer
@@ -105,7 +105,6 @@ export const GENERATED_KEYS_OF = new Set(KEYS.filter((entry) => entry.generated 
  * A namespace is a sub-object of the manifest that another part of the tool owns -
  * plan 0004's `work` is the first. It registers its keys here rather than editing the
  * table, so adding one touches two files and no reader has to learn a second shape
- * (review 0003 Q69).
  */
 const NAMESPACES = new Map();
 
@@ -181,7 +180,7 @@ export function manifestProblems(manifest) {
  * `manifest` is null when there is no file and when the file does not parse, because
  * a caller that receives a half-read object cannot tell which it has - and the one
  * caller that did (`fingerprint`) returned `{error}` in place of a manifest, so a
- * broken file looked like a declaration of a key called `error` (review 0003 Q69).
+ * broken file looked like a declaration of a key called `error`.
  * `exists` and `problems` are what tell the two apart, and neither is optional.
  *
  * @returns {Promise<{manifest: object|null, exists: boolean, version: number, problems: string[], path: string}>}

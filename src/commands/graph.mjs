@@ -3,7 +3,7 @@
 // Implementation sequence step 2. This command is the reason hand-authoring the
 // registry is safe: 38 nodes across 6 repos is bookkeeping that rots silently.
 //
-// Output is line-oriented and bounded (plan 0002 section 6). A lint failure names
+// Output is line-oriented and bounded. A lint failure names
 // the offending node, the file it disagrees with, and both numbers.
 
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
@@ -35,7 +35,7 @@ export async function lintCommand(positional, flags) {
   // The pass runs only when asked for (`--spec`) and only against a verified
   // registry: without it the default lint reported 37 warnings for a pass the
   // payload claimed never ran (`spec: null`), and `ok` stayed true over errors
-  // the spec pass had just found (review 0003 Q35).
+  // the spec pass had just found.
   let specReport = { errors: [], warnings: [], checked: 0 };
   if (spec !== null) {
     if (registry && verified && workspace?.root) {

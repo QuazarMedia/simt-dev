@@ -6,7 +6,7 @@
 // every tool call on Cursor (its hook fails closed). The fix is a shim beside
 // the git shims, resolved the same way: `.simt/hooks/agent-hook` locates the
 // dispatcher with the shared `renderLocator` block and hands over, so every
-// harness config names the shim and never the bare binary (review 0003 Q21).
+// harness config names the shim and never the bare binary.
 //
 // The shim passes its own arguments through (`agent-hook "$@"`), so one file
 // serves every event and every harness: the config entry decides the event and

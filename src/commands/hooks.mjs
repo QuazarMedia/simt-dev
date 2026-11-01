@@ -35,7 +35,7 @@ import { readIfExists } from '../util/fs.mjs';
 export async function hooksCommand(sub, args, flags) {
   const root = commandRoot(flags, args);
   // One context for the subcommand: install and status each ask about the same
-  // repository, and `doctor --fix` asks alongside them (review 0003 Q67).
+  // repository, and `doctor --fix` asks alongside them.
   const ctx = repoContext(root);
   if (sub === 'install') return installHooks(root, flags, ctx);
   if (sub === 'status') return hooksStatus(root, flags, ctx);
@@ -129,7 +129,7 @@ async function relativeTarget(root, target) {
 }
 
 /**
- * What `hooks install` would write, computed without writing or reporting (plan 0003 R47).
+ * What `hooks install` would write, computed without writing or reporting.
  *
  * `installHooks` and `doctor --fix` share this rather than each deriving the write
  * set: the set nothing else here touches (obsolete shims, chained foreign hooks)
@@ -168,7 +168,7 @@ export async function planHooksInstall(root, { manifest, exists }, ctx = null) {
     }
     // The dynamic import stays: a hook run must not pull the fingerprint module in
     // just by loading this one. A caller that already holds a context passes it and
-    // the walk is shared (review 0003 Q67).
+    // the walk is shared.
     const detected = ctx ? await ctx.fingerprint() : await (await import('../resolve/fingerprint.mjs')).fingerprint(root);
     manager = resolveNodeRunner({ facts: detected.facts, packageManager }).id;
   }
@@ -352,7 +352,7 @@ async function legacyHooksScan(root) {
 }
 
 /**
- * Write a planned install: shims, chains, removals, and the git routing (plan 0003 R47).
+ * Write a planned install: shims, chains, removals, and the git routing.
  *
  * The caller's journal records the file writes, and the caller commits it under
  * its own command name — `hooks install` here, `doctor --fix` there — so `undo`
@@ -370,8 +370,7 @@ export async function applyHooksInstall(root, planned, journal) {
   // change, and `undo` must restore the mode it found, not just the bytes.
   // The `core.hooksPath` routing below is journaled as a `git-config` entry
   // for the same reason — unwinding the shims while the config still points
-  // at their directory silently stops the repository's own hooks (review 0003
-  // Q22).
+  // at their directory silently stops the repository's own hooks
   const wrote = [];
   const removed = [];
   await mkdir(join(root, HOOKS_DIR), { recursive: true });
@@ -428,7 +427,7 @@ export async function applyHooksInstall(root, planned, journal) {
 /**
  * The `--diff` pairs for a planned install: current disk against what the
  * install would write, re-rendered from the same inputs `applyHooksInstall`
- * writes (plan 0003 R50). Read-only, so preview and apply share it, and
+ * writes. Read-only, so preview and apply share it, and
  * `doctor --fix` reuses it rather than deriving a second answer.
  */
 export async function plannedDiffs(root, planned) {

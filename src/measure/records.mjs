@@ -3,7 +3,7 @@
 // A v1 record said what an arm scored and nothing about the conditions it scored under.
 // Two records from different rule text, different corpora or different harness versions
 // were indistinguishable, so a report could compare them and call the difference an
-// effect (review 0003 Q78). The record now carries the experiment that produced it, and
+// effect. The record now carries the experiment that produced it, and
 // the run id names the model whenever a model other than the harness default was used:
 // two models driven through one harness used to overwrite each other's run directory.
 //

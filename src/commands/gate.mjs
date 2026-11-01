@@ -181,7 +181,7 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
 }
 
 async function writeRaw(root, body) {
-  // Raw gate output is machine-local state (review 0003 Q19).
+  // Raw gate output is machine-local state.
   try {
     const rel = localRel('gate', `gate-${Date.now()}.log`);
     const dir = join(root, dirname(rel));
@@ -201,7 +201,7 @@ async function writeRaw(root, body) {
 async function tracked(root) {
   try {
     // `-z`: without it git C-quotes a non-ASCII path (`src/\303\274n...`) and
-    // the reader's real filename never matches it (review 0003 Q39).
+    // the reader's real filename never matches it.
     return { files: await gitPaths(root, ['ls-files']) };
   } catch (error) {
     return {

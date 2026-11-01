@@ -181,7 +181,7 @@ export function citations(text) {
 
 /**
  * Parse one ADR markdown document, reading structured `simt-affects` and
- * `simt-supersedes` frontmatter first (plan 0003 R34).
+ * `simt-supersedes` frontmatter first.
  *
  * @param {string} file filename (e.g. `ADR-097-example.md`)
  * @param {string} text raw markdown content

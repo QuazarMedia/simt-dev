@@ -1,7 +1,6 @@
 // Pure helpers for a lesson record: its slug, its capped fix diff, and evidence equality.
 //
 // They touch no file and no clock, which is why they are separable from the store
-// (review 0003 Q80).
 
 
 export function slugify(text) {
@@ -50,7 +49,6 @@ export function sameEvidence(a = [], b = []) {
  * The stored text is redacted before anything else: candidates keep the raw
  * commands that failed, and a command can carry a token. Redaction runs before
  * the signature is hashed so the same failure redacts to the same signature
- * (review 0003 Q36).
  *
  * @param {string} root
  * @param {object} candidate

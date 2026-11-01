@@ -186,7 +186,7 @@ function skeleton(name, steps, { matrix = null, timeoutMinutes = 5, gateMain = f
   // adopting repository merges through pull requests, which is where its gate runs.
   // This repository merges locally, so a merge never opens a pull request: without a
   // push trigger the commit that lands on `main` is the one no gate ever ran on
-  // (review 0003 Q57). Each block ships only in the copy whose claim it states.
+  //. Each block ships only in the copy whose claim it states.
   const trigger = gateMain
     ? `# Pull requests ask whether a change may merge; a push to \`main\` asks whether
 # what already merged is sound. This repository merges locally, so a merge never
@@ -304,7 +304,7 @@ export function renderWorkflow({ own = false, npm = true, manager = null, versio
       // run alone; the sharding that would make it short again is Q92, not this row.
       //
       // `gateMain` because this repository merges locally: `pull_request` alone left
-      // the one commit that reached `main` ungated (review 0003 Q57).
+      // the one commit that reached `main` ungated.
       { matrix: { os: ['ubuntu-latest', 'macos-latest'], node: [floor, '24', '26'] }, timeoutMinutes: 15, gateMain: true },
     )}\n`;
   }

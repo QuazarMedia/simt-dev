@@ -1,4 +1,4 @@
-// `simt review [--local]` (plan 0003 R39).
+// `simt review [--local]`.
 //
 // The critic's report layer: the deterministic path prints the brief (staged diff
 // plus what governs it); `--local` adds the model verdict, which always arrives as

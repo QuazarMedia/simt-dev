@@ -159,7 +159,7 @@ export async function loadRegistry(path = null, flags = {}) {
   // pick - and are reported as such. A named path that is missing is a different fact: the
   // reader pointed at a file that is not there, and it names that path.
   //
-  // Resolution order for the registry itself (review 0003 Q37): positional path,
+  // Resolution order for the registry itself: positional path,
   // then `--registry`, then `SIMT_REGISTRY`, then the default tiers above.
   const explicit =
     path ?? flags?.registry ?? process.env.SIMT_REGISTRY ?? process.env.SIMT_DEV_REGISTRY ?? null;
@@ -299,7 +299,7 @@ export function lintRegistry(registry) {
   // Every check below assumes arrays of objects. A registry that fails the shape
   // is already fully described by the shape error; continuing past it only
   // trades one true error for a crash (`for..of` over `undefined`) or a pile of
-  // secondary noise, so the lint stops here (review 0003 Q35).
+  // secondary noise, so the lint stops here.
   if (!Array.isArray(registry.capabilities) || capabilities.size === 0) {
     err('capabilities: missing or empty');
   }
@@ -473,7 +473,7 @@ function checkRequires(at, skill, index, err) {
   // breadth-first walk shared one `seen` set across branches, so a diamond
   // (a requires b and c; both require d) reported d's second visit as a cycle.
   // Only a dependency already on the current path is a cycle; a node reached
-  // through two branches is sharing, not looping (review 0003 Q35).
+  // through two branches is sharing, not looping.
   const visit = (name, path) => {
     const stack = [...path, name];
     for (const dep of index.get(name)?.requires ?? []) {

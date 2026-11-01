@@ -1,9 +1,9 @@
 // `simt undo [--yes] [--json]`
 //
-// Restore the last journaled set of writes (plan 0003 R49): every file the last
+// Restore the last journaled set of writes: every file the last
 // writing run changed goes back to its pre-run bytes, files the run created
 // are deleted, and git config keys the run set go back to their pre-run
-// values (review 0003 Q22). A run that wrote nothing leaves no set, so there
+// values. A run that wrote nothing leaves no set, so there
 // is nothing to restore and the command says so.
 //
 // The safety is the journal's, not the flag's: when any file in the set no

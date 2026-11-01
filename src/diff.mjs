@@ -1,4 +1,4 @@
-// Unified diffs of the plan (plan 0003 R50).
+// Unified diffs of the plan.
 //
 // Every writer accepts `--diff` and prints what it would change — or, with
 // `--yes`, what it changed — as unified diffs, one per file. The engine is

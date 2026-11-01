@@ -45,7 +45,7 @@ import { commandRoot } from '../repo-root.mjs';
  * findings with `safe: true` carry one; an unsafe finding is a report and a
  * manual remedy, never a function waiting for a flag.
  */
-// `withDiffs` previews the safe fixes as `--diff` pairs (plan 0003 R50). Read at
+// `withDiffs` previews the safe fixes as `--diff` pairs. Read at
 // finding creation, before any fix is applied, so the before side is true in
 // preview and in apply alike. Only safe findings carry pairs: an unsafe finding
 // is never applied, so there is no write to preview.
@@ -235,7 +235,7 @@ function findingLines(findings, { fixMode, applying }) {
 // See the module header: classification first, because everything else is a guess without it.
 export async function diagnose(root, args = {}) {
   // One context for the whole diagnosis, so a caller that already holds one (a UI, a
-  // harness, an MCP request) does not pay for a second fingerprint (review 0003 Q67).
+  // harness, an MCP request) does not pay for a second fingerprint.
   const ctx = args.ctx ?? repoContext(root);
   const result = await ctx.fingerprint();
   // Which source answered the workspace question, and where it looked. A tool

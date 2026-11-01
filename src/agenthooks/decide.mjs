@@ -72,7 +72,7 @@ function applies(row, facts, env) {
   if (row.inspects === 'write') {
     // A file carrying a region denies only an edit that touches it: an Edit outside
     // the markers, a Write that keeps the region bytes, or a patch whose hunks miss
-    // the span is the author's own text (review 0003 Q17). No edit detail means the
+    // the span is the author's own text. No edit detail means the
     // location is unknown, which still denies.
     return (facts.writes ?? []).some(
       (w) => w.generated !== null && w.generated !== undefined && w.touches !== false,

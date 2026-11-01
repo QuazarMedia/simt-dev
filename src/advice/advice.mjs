@@ -1,4 +1,4 @@
-// Model and effort advice, read from the repository's own bench history (plan 0003 R40).
+// Model and effort advice, read from the repository's own bench history.
 //
 // The mapping the design row asks for — task features to the cheapest tier that resolved
 // similar tasks — is data, not opinion: the records `bench run` stored on disk already say
@@ -219,7 +219,7 @@ export function advise(features, history) {
 }
 
 /**
- * The brief's door into advice (plan 0003 R40): history on disk in, advice out, or null
+ * The brief's door into advice: history on disk in, advice out, or null
  * when the history has no runs at all — a brief in a repository without bench history
  * carries every other section and no made-up opinion about models.
  *

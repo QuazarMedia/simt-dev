@@ -1,4 +1,4 @@
-// Machine-local state lives here, not in the tree (review 0003 Q19).
+// Machine-local state lives here, not in the tree.
 //
 // Everything this tool writes for itself — the ledger, the check cache, the
 // index, leases, the journal, briefs, gate logs, bench runs — used to live

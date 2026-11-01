@@ -171,7 +171,7 @@ const ORIGIN_RANK = { central: 0, pack: 1, local: 2 };
 export const PROFILE_KEYS = new Set(['simt-id', 'simt-title', 'simt-applies', 'simt-fallback', 'simt-scope', 'simt-priority']);
 
 /**
- * Priority classes, packed in this order (plan 0003 R07).
+ * Priority classes, packed in this order.
  *
  * A class is not a severity, it is a promise about what a reader loses by not having
  * the line. A hard constraint is one whose absence produces a defect; a command is one
@@ -756,7 +756,7 @@ export function render(selected) {
  * The projection mode this repository declared, or `full`.
  *
  * Absent means `full`, and `full` is the default rather than a fallback: no measurement
- * yet says a kernel does not lose compliance (plan 0003 R02), so the mode that changes
+ * yet says a kernel does not lose compliance, so the mode that changes
  * what a reader gets cannot be the one nobody chose.
  */
 export async function projectionMode(root) {

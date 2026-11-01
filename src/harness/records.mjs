@@ -5,7 +5,7 @@
 // file; the engine — this loader and the views over it — never changes shape to make a
 // product work. The surface row, the reader row, the hook dialect and the plugin layout
 // of one harness land together in one file and cannot drift apart, which is the failure
-// the five-module spread they used to occupy made routine (review 0003 Q71).
+// the five-module spread they used to occupy made routine.
 //
 // Records are sparse: a facet is present only when the harness has one. DeepSeek has a
 // reader row and nothing else; Copilot has a surface row, a reader row and a scoping key;

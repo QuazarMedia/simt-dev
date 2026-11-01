@@ -1,4 +1,4 @@
-// Capped parallelism for estate-wide work (review 0003 Q38).
+// Capped parallelism for estate-wide work.
 //
 // Two callers need it - row building and estate learning - and a third copy of
 // the same worker pool would be the defect ADR-002 names, so it lives here.

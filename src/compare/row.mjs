@@ -12,7 +12,7 @@
 // the case a hand audit misses: the repo LOOKS done. That is why these are four
 // columns and not one status.
 //
-// Ordering within a row is fixed. Output design (plan 0002 section 6) requires one
+// Ordering within a row is fixed. Output design requires one
 // fact per line in a stable field order so two runs diff cleanly; a row that
 // reordered its columns would make every comparison between two runs unreadable.
 

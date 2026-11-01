@@ -112,7 +112,7 @@ export async function agentHookCommand(args, flags) {
   // A relative write path is relative to the directory the harness is in, not to the
   // repository root the facts resolve against: an agent editing `keep.mjs` from `src/`
   // means `src/keep.mjs`, and a path joined to the wrong base is a path the lease file
-  // will never meet (review 0003 Q16).
+  // will never meet.
   // Writes are `{path, ...edit}` rows (Q17): the path resolves against the harness
   // cwd, the edit detail travels untouched so the region check sees the old_string.
   const writesAbsolute = writes.map((w) => {
@@ -123,7 +123,7 @@ export async function agentHookCommand(args, flags) {
   const facts = await factsFor(root, { command, writes: writesAbsolute });
   // Harness hook processes rarely carry SIMT_SESSION, so the payload's own
   // session id is the fallback: without it an agent is blocked by its own
-  // lease (review 0003 Q20). The environment still wins when it names one.
+  // lease. The environment still wins when it names one.
   const session =
     typeof process.env[SESSION_ENV] === 'string' && process.env[SESSION_ENV] !== ''
       ? process.env[SESSION_ENV]
@@ -146,7 +146,7 @@ export async function agentHookCommand(args, flags) {
   // A denial is recorded only for a repository that adopted the tool: hook
   // denials in a never-adopted repo are noise about someone else's policy, and
   // that is how an unadopted checkout accumulated 23 candidates nobody would
-  // ever promote (review 0003 Q36). The manifest is the adoption mark.
+  // ever promote. The manifest is the adoption mark.
   if (root && (existsSync(join(root, MANIFEST_FILE)) || existsSync(join(root, MANIFEST_LEGACY)))) {
     try {
       const { recordHookDenial } = await import('../memory/lessons.mjs');
@@ -249,7 +249,7 @@ export async function planAgentHooks(root, { harness }) {
   const refused = plan.filter((p) => p.error);
 
   // The shim every harness config points at: without it the entries above name a
-  // binary no harness has on PATH (review 0003 Q21).
+  // binary no harness has on PATH.
   const shimText = renderAgentHookShim({ npm: (await readIfExists(join(root, 'package.json'))) !== null });
   const shimBefore = await readBefore(join(root, AGENT_HOOK_SHIM));
   const shimAction = shimBefore === null ? 'create' : shimBefore === shimText ? 'unchanged' : 'update';

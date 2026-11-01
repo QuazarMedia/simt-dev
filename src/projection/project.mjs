@@ -38,7 +38,7 @@ import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 import { LOCAL_BIN } from '../distribute/release.mjs';
 
 /**
- * A checked-in gate workflow the locator cannot resolve (review 0003 Q31).
+ * A checked-in gate workflow the locator cannot resolve.
  *
  * Returns a finding, or null when some resolution path can still succeed. Only
  * committed evidence counts: the pinned devDependency, the release binary, and
@@ -212,7 +212,7 @@ export async function plan(root, flags = {}) {
  * Build the write target for one AGENTS.md. `root` is the repository: `regionOpts`
  * reads its manifest, because placement is a repository-level decision that holds for
  * every package's region too. `dir` is where the file lives, which differs from
- * `root` only for a nested monorepo package (review 0003 Q26).
+ * `root` only for a nested monorepo package.
  *
  * @param {string} root repo root
  * @param {string} dir directory the target file lives in

@@ -1,6 +1,6 @@
 // `simt skills compile [<name>]` - compile skills to Agent Skills standard, flag bodies
 // over 5k tokens with a progressive-disclosure split plan, and report per-skill trigger
-// recall and precision from R02 transcripts (plan 0003 R30).
+// recall and precision from R02 transcripts.
 
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';

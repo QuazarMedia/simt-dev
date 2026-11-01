@@ -18,7 +18,7 @@ import { gitText } from '../sys/git.mjs';
 
 /**
  * The Node manager id for this repository, or null without a package.json.
- * Lockfile first, `packageManager` next — the one resolver (review 0003 Q31).
+ * Lockfile first, `packageManager` next — the one resolver.
  */
 async function nodeManagerFor(root) {
   if (!(await hasNpm(root))) return null;

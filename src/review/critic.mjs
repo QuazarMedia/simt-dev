@@ -1,4 +1,4 @@
-// The local critic (plan 0003 R39, ADR-090, ADR-008).
+// The local critic.
 //
 // `simt review` builds the critic's brief — the staged diff plus everything that
 // governs it (R25) — with no model and no socket. `simt review --local` is its first
@@ -312,7 +312,7 @@ export async function reviewTarget(args, flags, { write = true, commands = [] } 
   if (!chat.ok) {
     // A command-contract number: the chat guard's sentinel stays inside the
     // engine boundary only; anything leaving reviewTarget is numeric or a report,
-    // matching how distillTarget unwraps its engine sentinels (plan 0003 R38).
+    // matching how distillTarget unwraps its engine sentinels.
     return fail(
       `local chat failed: ${chat.error}`,
       EXIT.FAIL,
@@ -379,7 +379,7 @@ export function verdictBinary(labelVerdict, criticVerdict) {
 }
 
 /**
- * `simt bench critic` (plan 0003 R39's acceptance).
+ * `simt bench critic`.
  *
  * Reads a labelled set of historical diffs — one `{sha, verdict}` pair per line,
  * the verdict a human assigned under ADR-008 — runs the critic over each diff

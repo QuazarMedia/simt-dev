@@ -1,4 +1,4 @@
-// A zero-dependency scan of the staged diff for secrets (plan 0003 R52).
+// A zero-dependency scan of the staged diff for secrets.
 //
 // Two finding sources, deliberately both. A pattern library catches the shapes
 // vendors publish — an AWS key id, a private key header, a token prefix — and
@@ -32,7 +32,7 @@ export const ENTROPY_MIN_BITS = 4.5;
 /**
  * A value is a placeholder when the WHOLE value is placeholder-shaped, not when
  * it contains a placeholder word: a real secret may contain "example" and still
- * be a secret, and the substring test blocked exactly that commit (review 0003 Q24).
+ * be a secret, and the substring test blocked exactly that commit.
  */
 const PLACEHOLDER_WORD = /^(?:example|sample|placeholder|changeme|change[-_]?me|dummy|fake|redacted|notasecret|undefined|null|none|true|false|x+)$/i;
 const PLACEHOLDER_SLOT = /^(?:<[^<>]*>|\{\{?[a-z0-9_.-]+\}\}?|your[-_][a-z0-9_-]*|my[-_][a-z0-9_-]*)$/i;
@@ -62,7 +62,7 @@ function isPlaceholder(value) {
 const PATTERNS = [
   { id: 'aws-access-key-id', re: /\b(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}\b/g },
   // The type word is not the discriminator, "PRIVATE KEY" is: RSA, EC, DSA,
-  // OPENSSH, PGP and ENCRYPTED all carry the same header shape (review 0003 Q24).
+  // OPENSSH, PGP and ENCRYPTED all carry the same header shape.
   { id: 'private-key-block', re: /-----BEGIN [A-Z0-9 ]*PRIVATE KEY(?: BLOCK)?-----/g },
   { id: 'github-token', re: /\b(?:ghp|gho|ghu|ghs|ghr)_[A-Za-z0-9]{36}\b|\bgithub_pat_[A-Za-z0-9_]{22,}\b/g },
   { id: 'gitlab-token', re: /\bglpat-[A-Za-z0-9_-]{20,}\b/g },
@@ -73,7 +73,7 @@ const PATTERNS = [
   { id: 'openai-style-key', re: /\bsk-[A-Za-z0-9_-]{20,}\b/g },
   { id: 'jwt', re: /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g },
   // The key name is prefix-aware — DB_PASSWORD, aws_secret_access_key — and the
-  // value may be quoted or bare, because .env and YAML do not quote (review 0003 Q24).
+  // value may be quoted or bare, because.env and YAML do not quote.
   {
     id: 'assigned-secret',
     re: /\b[A-Za-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|client[_-]?secret)\b\s*[:=]\s*(?:"([^"]{8,})"|'([^']{8,})'|([A-Za-z0-9+/=_-]{8,}))/gi,
@@ -93,7 +93,7 @@ const ENTROPY_CANDIDATE = /[A-Za-z0-9+/=_-]{32,}/g;
 /**
  * Subresource-integrity hashes: `sha256-<base64>` and kin. A deterministic
  * digest of file content, present in every lockfile and build manifest —
- * high-entropy bytes that are never a secret (review 0003 Q24).
+ * high-entropy bytes that are never a secret.
  */
 const SRI_HASH = /^sha(1|256|384|512)-[A-Za-z0-9+/]+={0,2}$/;
 
@@ -126,7 +126,7 @@ function redact(value) {
  * Every secret span in the text: pattern matches in library order, then entropy
  * over whatever no pattern claimed. One function because the gate report and
  * the redactor must agree on what a secret is: two matchers drift, and the
- * drift is a token one of them stores (review 0003 Q36).
+ * drift is a token one of them stores.
  *
  * @param {string} text
  * @returns {{start: number, end: number, kind: string, preview: string, entropy?: number}[]}
@@ -196,7 +196,7 @@ export function scanText(text) {
  * text byte-identical. Lesson candidates store the commands that failed, and a
  * command can carry a token (`curl -H "Authorization: Bearer …"`); storing it
  * verbatim writes the secret into a JSONL file that is then read, rendered and
- * injected into prompts (review 0003 Q36).
+ * injected into prompts.
  *
  * @param {string} text
  * @returns {string} the text with secret values replaced
@@ -211,7 +211,7 @@ export function redactText(text) {
 }
 
 /**
- * Lockfiles are skipped by default (review 0003 Q24): their high-entropy bytes
+ * Lockfiles are skipped by default: their high-entropy bytes
  * are integrity hashes and version pins, and a dependency bump is a commit the
  * gate must not block. The SRI allow-list above covers the same shapes wherever
  * they appear outside a lockfile.
@@ -273,7 +273,7 @@ function globToRegExp(glob) {
  *
  * @param {string} root repository root
  * @param {{ignore?: string[]}} [options] `ignore` is the manifest's
- *   `gates.secretScan.ignore`: globs of repository paths to skip (review 0003 Q24)
+ * `gates.secretScan.ignore`: globs of repository paths to skip
  * @returns {Promise<{findings: {file: string, line: number, kind: string,
  *   preview: string, entropy?: number}[], lines: number, error: string|null}>}
  *   `error` is set only when git itself could not answer; callers fail closed on
@@ -287,7 +287,7 @@ export async function scanStaged(root, options = {}) {
   let stdout;
   try {
     // Every flag here defeats a way a repository can keep the scan from seeing its
-    // own staged bytes (review 0003 Q02): `diff.external` routes the diff to a
+    // own staged bytes: `diff.external` routes the diff to a
     // program that prints nothing, `-diff` in `.gitattributes` and genuinely binary
     // files make git print no text at all, a textconv rewrites the bytes on the way
     // out, `diff.mnemonicPrefix` renames the header prefixes the attribution below

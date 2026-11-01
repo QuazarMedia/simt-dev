@@ -1,4 +1,4 @@
-// The per-run memo a command reads its repository through (review 0003 Q67).
+// The per-run memo a command reads its repository through.
 //
 // `check` did the same work twice in one run: `fingerprint(root)` at two sites, a
 // manifest read that `manifestDrift` repeated, and a rules load that every consumer

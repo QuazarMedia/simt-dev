@@ -1,5 +1,5 @@
 // One bounded child process and the environment a child inherits, for everything
-// that runs one (review 0003 Q47, Q72).
+// that runs one.
 //
 // `child.kill('SIGKILL')` kills the process the caller started and leaves its
 // grandchildren running: an adapter that ran `(sleep 15 &); sleep 60` kept the pipe open

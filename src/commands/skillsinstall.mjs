@@ -555,7 +555,7 @@ function rel(root, path) {
 
 /**
  * The `--diff` pairs for an install: the skill files plus the manifest record
- * (plan 0003 R50). The manifest pair needs the same object the write applies,
+ *. The manifest pair needs the same object the write applies,
  * so the plan is shared with `recordLocal` rather than derived twice.
  */
 async function skillDiffs(root, { src, dest, destRel, flat, name, record, repo }) {
@@ -586,7 +586,7 @@ async function skillDiffs(root, { src, dest, destRel, flat, name, record, repo }
 }
 
 /**
- * What `recordLocal` will write, computed without writing (plan 0003 R50).
+ * What `recordLocal` will write, computed without writing.
  * The diff shares this so the pair shows the same object the write applies.
  */
 async function planLocalRecord(root, record, name, repo) {

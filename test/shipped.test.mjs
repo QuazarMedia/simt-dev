@@ -973,3 +973,22 @@ test('every exemption from the estate-name rule is still needed, and says why', 
     assert.ok(present.has(file), `${file} is exempt but no longer exists`);
   }
 });
+
+test('a source comment cites a reason or an ADR, never a plan row', async () => {
+  // ADR references ship and resolve through `simt rules why ADR-NNN`; `(plan 0003 R40)`
+  // resolves to nothing once the plan is archived, and a reader following it in a
+  // published file finds no such document (review 0003 Q86).
+  const offenders = [];
+  for (const file of await collect(join(ROOT, 'src'))) {
+    const text = await readFile(file, 'utf8');
+    for (const [i, line] of text.split('\n').entries()) {
+      const trimmed = line.trimStart();
+      const isComment = trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*');
+      if (!isComment) continue;
+      if (/\((?:see )?(?:plan|review) \d{4}/i.test(line)) {
+        offenders.push(`${file.replace(`${ROOT}/`, '')}:${i + 1}`);
+      }
+    }
+  }
+  assert.deepEqual(offenders, []);
+});

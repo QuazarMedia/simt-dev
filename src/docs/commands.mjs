@@ -1,4 +1,4 @@
-// The README's command list, rendered from the spec (review 0003 Q60).
+// The README's command list, rendered from the spec.
 //
 // The README carried the fifth copy of the command list this review found. The other
 // four now come from `spec.mjs`; this one could not, because a README line is a sentence

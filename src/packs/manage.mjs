@@ -1,4 +1,4 @@
-// Pack management (plan 0003 R45): new, lint, publish, and the bench summary.
+// Pack management: new, lint, publish, and the bench summary.
 //
 // A pack is vendored bytes (ADR-065): the adopting repository carries them under
 // `.simt/packs/<name>/` and pins a digest in its manifest, and nothing in the
@@ -515,7 +515,7 @@ export async function publishPack(dir, { apply = false } = {}) {
 
   // A preview is a preview. The registry read below is the one network call in this
   // command, and running it to print a plan made `pack publish` — a preview by default
-  // — a network operation that failed offline without `--yes` (review 0003 Q58).
+  // — a network operation that failed offline without `--yes`.
   if (!apply) {
     return {
       pack: linted.pack,

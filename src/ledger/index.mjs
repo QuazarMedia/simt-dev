@@ -26,7 +26,7 @@ export const LEDGER_FILE = localRel(LEDGER_FILE_REL);
 /** Phrases that claim a run happened. `unverified` and `not verified` are removed
  *  first, because both contain the word and neither is a claim. Trailers
  *  (Signed-off-by and friends) are ignored, because they describe the commit,
- *  not the run (review 0003 Q18). */
+ * not the run. */
 const CLAIM =
   /\btests?\s+pass(?:ed|ing)?\b|\btest\s+suite\s+(?:is\s+)?green\b|\bsuite\s+is\s+green\b|\bnpm\s+test\s+pass(?:es|ed)?\b|\bverified\b/i;
 const TRAILER = /^(signed-off-by|co-authored-by|reviewed-by|acked-by|tested-by|fixes|closes)\s*:/i;
@@ -74,7 +74,6 @@ export async function treeId(root) {
     // Machine-local state is a record of the tree, so it cannot be part of the
     // tree it names. `git add -A` would take it once the file exists, and the
     // line would prove a tree that stopped existing when the line was written
-    // (review 0003 Q19).
     //
     // Where .gitignore already keeps a path out of the index, the pathspec
     // would name an ignored path, and `git add` refuses it ("use -f") - and -f
@@ -258,7 +257,7 @@ export async function rotateLedger(root, { maxLines = 5000 } = {}) {
 /** Every well-formed line. A line that does not parse is returned as an error so a
  *  damaged ledger cannot look empty. */
 export async function readLedger(root) {
-  // The pre-move path is a fallback for one release (review 0003 Q19).
+  // The pre-move path is a fallback for one release.
   const { text } = await readStateFile(root, LEDGER_FILE, [LEDGER_FILE_LEGACY]);
   if (text === null) return { entries: [], errors: [] };
   const entries = [];
@@ -279,7 +278,7 @@ export async function readLedger(root) {
   return { entries, errors };
 }
 
-/** Whether the entry counts as a test-kind run (review 0003 Q18). v1 lines
+/** Whether the entry counts as a test-kind run. v1 lines
  *  carry no kind, so a command naming test counts; v2 lines use the recorded kind. */
 function isTestKind(entry) {
   if (typeof entry?.kind === 'string') return entry.kind === 'test';
@@ -293,7 +292,7 @@ function isTestKind(entry) {
  * way `hasTestEvidence` cancels a test pass — a gate that passed, then
  * failed, proves nothing about the tree. Entries without an `indexTree`
  * predate the staged-tree record and never match: a pass on an unknown tree
- * is not evidence for this one (review 0003 Q23).
+ * is not evidence for this one.
  */
 export function passEntryForGate(entries, gate, tree) {
   const scoped = (entries ?? []).filter((e) => e?.gate === gate && e?.indexTree === tree);

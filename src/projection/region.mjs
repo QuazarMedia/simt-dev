@@ -92,7 +92,7 @@ export async function desiredRegion(root, flags) {
     else packed.push(r);
   }
   // The command card leads the region. The exact commands for this repository are the
-  // bytes a reader cannot infer from rules that are identical everywhere (plan 0003 R10),
+  // bytes a reader cannot infer from rules that are identical everywhere,
   // so they go first — above even the core rules. It is derived from committed evidence
   // only, in one place, so `plan` and `checkTarget` cannot disagree about it and two
   // machines render it byte-identically.

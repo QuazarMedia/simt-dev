@@ -44,7 +44,7 @@ export async function packCommand(sub, args, flags) {
  *
  * The positional wins, as this always said it did. The code read `--root` first,
  * so `pack lint .simt/packs/a --root ../b` judged `b` while the prose and the
- * command's own usage promised `a` (review 0003 Q58).
+ * command's own usage promised `a`.
  */
 function packDir(args, flags) {
   return resolve(args[0] ?? commandRoot(flags));

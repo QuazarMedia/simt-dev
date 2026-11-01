@@ -1,4 +1,4 @@
-// The command spec: one row per path this binary dispatches (review 0003 Q60).
+// The command spec: one row per path this binary dispatches.
 //
 // The list of commands existed in four places that disagreed - the dispatch map, a
 // hand-written `--help` template, the completions table and the README - so a command
@@ -123,7 +123,7 @@ export const SPEC = [
  * for while working are core and appear in `--help`; the rest are advanced and appear
  * under `help --all`. A tier is a presentation fact, not a permission, so a command
  * cannot be missing from both pages - `test/help.test.mjs` checks that every path is on
- * one of them (review 0003 Q61).
+ * one of them.
  */
 const CORE_GROUPS = new Set(['brief', 'check', 'gate', 'graph', 'hooks', 'impact', 'init', 'map', 'plan', 'rules', 'skills', 'slice', 'status', 'sync', 'tests', 'why']);
 
@@ -153,7 +153,7 @@ export const SPEC_PATHS = SPEC.map((row) => row.path).sort();
 export const GROUP_DEFAULTS = new Map(SPEC.filter((row) => row.defaultFor !== undefined).map((row) => [row.defaultFor, row.path.split(' ')[1]]));
 
 /**
- * The spellings this binary answers that are not paths (review 0003 Q81).
+ * The spellings this binary answers that are not paths.
  *
  * A rename costs every script and every habit a reader already has, so a new name
  * arrives as an alias instead of a replacement: the path stays the dispatch key, help

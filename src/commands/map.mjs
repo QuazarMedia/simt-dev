@@ -47,7 +47,7 @@ export async function mapCommand(args, flags) {
   const rendered = renderMap(ranked, loaded.symbols, { level, budget });
   // What the ranking is an answer to. `graph-only` says no file or symbol mentioned the
   // task and the list is the graph hub; reading that as a hit is how `map --task
-  // zebracorn` looked useful (review 0003 Q52).
+  // zebracorn` looked useful.
   const matched = ranked.filter((row) => (row.score ?? 0) > 0).length;
   const basis = task.trim().length === 0 ? 'no-task' : matched > 0 ? 'matched' : 'graph-only';
   const payload = {
@@ -110,8 +110,8 @@ async function recall(root, flags) {
  * how a hook gets uninstalled. The next prompt gets the packet, and a command a
  * person typed at a terminal always builds what it needs.
  *
- * FTS bodies and stored vectors load only when the caller names them (review 0003
- * Q76): BM25 runs in SQLite, so the graph read pays for files, symbols and edges
+ * FTS bodies and stored vectors load only when the caller names them
+ *: BM25 runs in SQLite, so the graph read pays for files, symbols and edges
  * and nothing more.
  */
 export async function loadGraph(root, { build = true, task = '', embed = false } = {}) {
@@ -137,14 +137,14 @@ export async function loadGraph(root, { build = true, task = '', embed = false }
     embed === true ? readEmbeddings(root) : Promise.resolve([]),
   ]);
   // A present index that cannot be read is named, not served as empty
-  // (review 0003 Q44): `cold` is "nothing here", `broken` is "something is
+  //: `cold` is "nothing here", `broken` is "something is
   // here and the read failed".
   const broken = !build && Boolean(files.error);
   if (!build && files.length === 0) {
     return { files: [], symbols: [], edges: [], fts: [], embeddings: [], cold: true, broken, stale: false };
   }
-  // A caller that may not build still learns the index is old (review 0003
-  // Q42): the digest compare costs one `git ls-files -s`, and the freshness
+  // A caller that may not build still learns the index is old
+  //: the digest compare costs one `git ls-files -s`, and the freshness
   // signal is what lets a UI distrust the packet instead of quoting it.
   const stale = !build && files.length > 0 && (await isIndexStale(root));
   return { files, symbols, edges, fts, embeddings, stale, broken };

@@ -2,7 +2,7 @@
 //
 // Detection reads the repository's own manifest, never a guess from a directory name: the
 // runner that is installed is the runner a contributor runs. This module is
-// production-facing because `simt gate` runs the repository's tests (review 0003 Q79);
+// production-facing because `simt gate` runs the repository's tests;
 // the bench uses the same answer, so a benchmarked run and a gated run cannot disagree
 // about what `test` means.
 import { existsSync } from 'node:fs';
@@ -25,7 +25,7 @@ let junitCounter = 0;
  * A JUnit report path this process owns.
  *
  * The report used to be written beside the sources as `.bench-junit.xml`, so running the
- * gate in a Python repository left a file in the package directory (review 0003 Q79). It
+ * gate in a Python repository left a file in the package directory. It
  * belongs to the run, so it lives in the temporary directory and `cleanupReports` removes
  * it once the run has been read.
  */
@@ -69,8 +69,7 @@ export async function detectTestRunner(root, testFiles) {
       };
     }
     // Jest emits the same `testResults`/`assertionResults` JSON shape as Vitest (Vitest
-    // copied it), so the JSON parser serves both (review 0003 Q48: a Jest repository fell
-    // through to `node --test` and parsed TAP out of JSON).
+    // copied it), so the JSON parser serves both
     if (deps.jest || /\bjest\b/.test(testScript)) {
       const bin = join('node_modules', '.bin', 'jest');
       return {
@@ -175,7 +174,7 @@ export async function detectTestRunner(root, testFiles) {
       buildExec: (worktree) => ({
         cmd: 'mvn',
         args: ['test', ...arg],
-        // Surefire writes one XML per class here (review 0003 Q48).
+        // Surefire writes one XML per class here.
         reportPaths: [join(worktree, 'target', 'surefire-reports')],
       }),
       parse: (_stdout, reportText) => parseJunitXml(reportText ?? ''),

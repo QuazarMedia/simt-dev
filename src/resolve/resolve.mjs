@@ -1,6 +1,6 @@
 // Skill resolution: turn a repo and a task into a ranked, explained selection.
 //
-// Deterministic by construction (plan 0002 principle 1). No embeddings, no model
+// Deterministic by construction. No embeddings, no model
 // call, no network: the same repo plus the same task always yields the same
 // answer in the same order. A rules system whose behaviour changes when the model
 // changes is not a rules system.

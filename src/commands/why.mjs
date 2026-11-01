@@ -65,7 +65,7 @@ function reportUnresolved(root, flags, unresolved) {
 export async function tracked(root) {
   try {
     // `-z`: without it git C-quotes a non-ASCII path and the reader's real
-    // filename never matches it (review 0003 Q39).
+    // filename never matches it.
     return { files: await gitPaths(root, ['ls-files']) };
   } catch (error) {
     return {

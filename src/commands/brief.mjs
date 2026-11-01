@@ -1,4 +1,4 @@
-// `simt brief "<task>"` — print the packet (plan 0003 R27).
+// `simt brief "<task>"` — print the packet.
 //
 // What this is for: an agent that has to explore a repository to find out how to run its
 // tests, which files the task will touch and what governs them spends turns discovering

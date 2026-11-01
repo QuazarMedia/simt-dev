@@ -4,7 +4,7 @@
 // must still see a usable first page. This server has never paginated, which was fine
 // while every list fit in one reply and stops being fine the moment a workspace brings
 // dozens of repositories into `resources/list`: a client that renders what it is given
-// then silently shows a subset of the estate (review 0003 Q66).
+// then silently shows a subset of the estate.
 //
 // The cursor is the offset, rendered as a string. The specification calls it opaque, and
 // the client must not parse it, but it has to be stable across calls: an index into a list

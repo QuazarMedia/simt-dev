@@ -1,8 +1,8 @@
-// Shell completions, generated from the command registry (plan 0003 R51).
+// Shell completions, generated from the command registry.
 //
 // The inputs are the two tables that already exist and are already checked:
 // `COMMANDS` — the same list the dispatcher routes and `--help` is asserted
-// against (review 0002 S15) — and the flag tables in argv.mjs. A command added
+// against — and the flag tables in argv.mjs. A command added
 // to `IMPLEMENTED` therefore completes in all three shells with no second
 // edit, which is exactly the property S15 demanded of `--help`.
 //
@@ -127,7 +127,7 @@ function renderZsh({ top, groups }) {
     '  local cur prev',
     // compsys sets `words` and `CURRENT` before the function runs; without the
     // assignment `cur` and `prev` stay empty, so the flag and value-flag cases
-    // below never match and zsh completes only positionals (review 0003 Q51).
+    // below never match and zsh completes only positionals.
     '  cur=${words[CURRENT]}',
     '  prev=${words[CURRENT-1]}',
     '  local -a top flags subs',

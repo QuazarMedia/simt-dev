@@ -77,8 +77,7 @@ export function ftsKindOf(filePath, lang = '') {
 }
 
 /**
- * The one fold for the FTS pipeline (review 0003 Q43; sharing it everywhere is
- * Q72's slice, which also owns the trigram decision recorded below).
+ * The one fold for the FTS pipeline
  *
  * NFKC before NFKD so compatibility variants fold first (half-width katakana
  * to full-width) and combining marks strip after (München -> munchen), then
@@ -273,7 +272,7 @@ export async function reindex(root, opts = {}) {
   }
   const removed = previous.filter((row) => !paths.has(row.path)).map((row) => row.path);
   // The tree this build vouches for, stored beside the rows so a later read
-  // can compare digests instead of re-reading blobs (review 0003 Q42).
+  // can compare digests instead of re-reading blobs.
   const embedBuild = await buildEmbeddings(root, listed, fts, {
     backend,
     force,
@@ -305,7 +304,7 @@ export async function reindex(root, opts = {}) {
 }
 
 /**
- * Whether the stored index predates the current tree (review 0003 Q42).
+ * Whether the stored index predates the current tree.
  *
  * One `git ls-files -s` and one meta read: no blob is re-read, so the check
  * costs ~100 ms and every read path can afford it. False when no build has
@@ -387,7 +386,7 @@ async function buildEmbeddings(root, listed, changedFts, { backend, force, embed
 }
 
 /**
- * Read wrappers return arrays with the read error attached (review 0003 Q44):
+ * Read wrappers return arrays with the read error attached:
  * callers that iterate are untouched, and callers that report - map among
  * them - can tell a broken index from an empty one.
  */

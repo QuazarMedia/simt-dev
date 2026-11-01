@@ -1,5 +1,5 @@
 // A marked line is enforced by a checker, so the projection keeps its name and not
-// its prose (plan 0003 R19, ADR-088).
+// its prose.
 //
 // The unit is one list item, including the wrapped lines under it. A blank-line
 // block would be the whole section: the core rules are consecutive bullets, and

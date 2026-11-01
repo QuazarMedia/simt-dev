@@ -1,6 +1,5 @@
 // `simt decide` — scaffold an ADR with the next free number, a Status: line,
 // a rulings skeleton, and structured `simt-affects` + `simt-supersedes` frontmatter
-// (plan 0003 R34).
 
 import { join } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';

@@ -69,7 +69,7 @@ import { harnessLoaders } from '../harness/records.mjs';
  *
  * `order` is concatenation order as the vendor states it, in words.
  */
-// The rows are the records' loader facets (review 0003 Q71): one file per harness under
+// The rows are the records' loader facets: one file per harness under
 // `harnesses/`, read by src/harness/records.mjs. The order is the records' loaderOrder,
 // which is the order this table used to spell out, so a truncated report loses the same
 // rows it always lost.

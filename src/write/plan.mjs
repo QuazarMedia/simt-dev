@@ -1,4 +1,4 @@
-// One change record, and the one function that applies it (review 0003 Q68).
+// One change record, and the one function that applies it.
 //
 // Fourteen writers hand-roll the same five steps: read the before bytes, decide create or
 // update, write through the journal, commit the set, print the diff. They do not all do

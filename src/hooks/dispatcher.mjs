@@ -545,7 +545,7 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
     if (resolution.builtin !== undefined) {
       const startedBuiltin = Date.now();
       // The manifest's per-builtin options, where a builtin has any: the secret
-      // scan takes its ignore globs from gates.secretScan (review 0003 Q24).
+      // scan takes its ignore globs from gates.secretScan.
       const outcome = await runBuiltinGate(resolution.builtin, { root, staged, options: manifest?.gates?.secretScan });
       try {
         await recordRun(ledgerRoot, {
@@ -639,7 +639,7 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
     try {
       const cmd = typeof resolution.command === 'string' ? resolution.command : resolution.argv.join(' ');
       // The evidence claim needs the gate and its kind: a passing secret-scan is
-      // not a passing test run (review 0003 Q18). Coverage proves tests; anything
+      // not a passing test run. Coverage proves tests; anything
       // else keeps its own kind or the gate name.
       const kind =
         name === 'test' || name === 'coverage' ? 'test' : name === 'lint' ? 'lint' : name === 'format' ? 'format' : (gate.kind ?? name);

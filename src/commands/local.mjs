@@ -1,4 +1,4 @@
-// `simt local doctor` — probe configured local model endpoints (plan 0003 R37).
+// `simt local doctor` — probe configured local model endpoints.
 //
 // Reads `local: { chat: { url, model }, embed: { url, model } }` from `simt.json`.
 // When `local` is unset, opens no socket and exits 0. Refuses non-loopback URLs

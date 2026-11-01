@@ -1,4 +1,4 @@
-// Federation configuration: the servers a repository names, and nothing else (plan 0003 R26).
+// Federation configuration: the servers a repository names, and nothing else.
 //
 // A brief is deterministic by default. Federation is the one opt-in exception, and the
 // opt-in is a `federation` block in the repository's own manifest. Nothing here probes a

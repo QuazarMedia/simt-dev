@@ -28,8 +28,7 @@ import { EXIT } from './output/index.mjs';
 export const BOOL_FLAGS = new Set([
   // bench ablate: compare across harness, model and experiment groups. The command
   // read `flags.crossGroup` while the parser accepted no such flag, so the override
-  // existed only in the error message that told the reader to pass it (review 0003
-  // Q62, found by the spec-vs-parser drift test).
+  // existed only in the error message that told the reader to pass it
   'cross-group',
   'json',
   'all',
@@ -69,7 +68,7 @@ export const BOOL_FLAGS = new Set([
   // the one that answers "what does this reader do", which does not depend on the repo.
   'table',
   // sync: name every line the inferability filter dropped and the evidence behind it
-  // (plan 0003 R09). Off by default because a count is enough to act on; the per-line
+  //. Off by default because a count is enough to act on; the per-line
   // detail is what an author needs, and a reader is not an author.
   'explain',
   // check: the lock must match. Off by default because a repository that has not
@@ -91,20 +90,20 @@ export const BOOL_FLAGS = new Set([
   // the machine unless explicitly overridden (ADR-075, plan 0003 R37).
   'allow-remote',
   // index / map / brief: opt into local vector embeddings configured under local.embed
-  // (plan 0003 R28, R37). Off by default unless recall@10 gains at least 10 points.
+  //. Off by default unless recall@10 gains at least 10 points.
   'embed',
   // distill: regenerate a proposal that is already cached. Off by default because
   // the cache is the point - the same source at the same budget is the same answer,
-  // and re-reading it is cheaper than re-deriving it (plan 0003 R38).
+  // and re-reading it is cheaper than re-deriving it.
   'refresh',
   // pack lint: reject a pack whose bench summary is missing or unmeasured.
   // Off by default because a scaffold is born unmeasured - `pack new` writes a
   // bench.json marked unmeasured, and a lint that failed it on arrival would make
-  // every new pack red before its author wrote the rule (plan 0003 R45).
+  // every new pack red before its author wrote the rule.
   'require-measured',
   // bench mine: restore the old "reflect exactly this history" semantics by
   // deleting task files the current history does not reproduce. Off by default
-  // because mining is append-only (review 0003 Q48).
+  // because mining is append-only.
   'replace',
   // distill: propose the summary from the configured local chat model instead of
   // the deterministic outline. Off by default: no model in the default path (P1),
@@ -126,7 +125,7 @@ export const BOOL_FLAGS = new Set([
 
 export const VALUE_FLAGS = new Set([
   'budget',
-  // bench critic: the labelled set of historical diffs to score (plan 0003 R39).
+  // bench critic: the labelled set of historical diffs to score.
   // A path, not a switch, because the labels themselves come from a human under
   // ADR-008 — the tool never annotates for them.
   'labels',
@@ -142,9 +141,9 @@ export const VALUE_FLAGS = new Set([
   'root',
   // skills/graph: which registry to read. A value rather than a boolean because
   // "a registry" without a path would have to guess, and the guess is the
-  // defect Q37 exists to remove (review 0003).
+  // defect Q37 exists to remove.
   'registry',
-  // compare: how many repository rows to build at once (review 0003 Q38).
+  // compare: how many repository rows to build at once.
   // A count, not a switch, because "parallel" without a cap is the burst this
   // flag exists to prevent.
   'concurrency',
@@ -182,13 +181,13 @@ export const VALUE_FLAGS = new Set([
   // slice finish: the Conventional Commits type for the commit it makes. A value,
   // not a boolean, because a row title cannot say whether the slice was a feat, a
   // fix or a chore, and deriving it from the words would be a guess no reader of
-  // the message could argue with (plan 0003 R53).
+  // the message could argue with.
   'type',
   // lease: how long the claim lasts, in seconds. A value, because "a lease is short"
   // is not a number any reader can act on, and an expiry nobody chose is an expiry
-  // nobody can plan around (plan 0003 R54, ADR-101).
+  // nobody can plan around.
   // lessons capture: how long a captured candidate stays eligible. A value, because a
-  // default would be a deadline nobody chose (review 0003 Q62, found by the drift test).
+  // default would be a deadline nobody chose.
   'expires',
   'ttl',
   // map: outline (paths), names (exported symbols) or signatures (the line).
@@ -198,7 +197,7 @@ export const VALUE_FLAGS = new Set([
   'supersedes',
   // pack new: where the pack's bytes come from. Required, because a pack without
   // a source is bytes nobody can obtain again - and a source nobody can act on
-  // is refused by lint rather than blessed (plan 0003 R45).
+  // is refused by lint rather than blessed.
   'source',
   // plugin: where the generated package lands. A value rather than a boolean because
   // "generate a package" with no destination would have to guess, and a guess about where
@@ -320,7 +319,7 @@ export function parse(argv) {
         } else if (flags[key] !== undefined) {
           // `--root a --root b` kept `b`, so half of what the caller asked for vanished
           // with no error and no way to tell which half. Only a flag declared repeatable
-          // accumulates (review 0003 Q62); a second value for any other is a usage error.
+          // accumulates; a second value for any other is a usage error.
           return {
             ok: false,
             error: usage(

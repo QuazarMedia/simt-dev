@@ -32,7 +32,7 @@ import { packageVersion } from '../package-version.mjs';
 
 /**
  * Groups whose subcommand may be omitted, and the default for each. Read from the spec
- * (review 0003 Q60) rather than kept here: this was the second copy of a fact the spec
+ * rather than kept here: this was the second copy of a fact the spec
  * owns, and the reason for each default now sits on the row that declares it.
  */
 export const GROUPS = GROUP_DEFAULTS;
@@ -62,8 +62,8 @@ export const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version'
  *
  * Module scope so `test/cli.test.mjs` can assert help against it. Each value is a
  * loader rather than a handler: dispatch awaits the one the matched path names, so a
- * command pays for its own module graph and not for the other seventy-five (review 0003
- * Q64). A loader that never resolves is a command that cannot run, and `test/spec.test.mjs`
+ * command pays for its own module graph and not for the other seventy-five
+ *. A loader that never resolves is a command that cannot run, and `test/spec.test.mjs`
  * still holds the key set against the spec.
  */
 export const IMPLEMENTED = {
@@ -104,7 +104,7 @@ export const IMPLEMENTED = {
   },
   // Plan 0003 R53. A group: `start` isolates the work on a branch with its brief,
   // `finish` runs the gates, commits and records the evidence, and `abandon`
-  // (review 0003 Q23) takes the slice back down. All three take the slice id
+  // takes the slice back down. All three take the slice id
   // as a positional.
   'slice start': async () => {
     const { sliceCommand } = await import('./slice.mjs');
@@ -260,7 +260,7 @@ export const IMPLEMENTED = {
  *
  * The library surface needs the same answer `dispatch` gets and must not build a second
  * registry to get it: a command reachable from the CLI and absent from `run` is the drift
- * `test/spec.test.mjs` exists to catch, and it would be invisible here (review 0003 Q63).
+ * `test/spec.test.mjs` exists to catch, and it would be invisible here.
  */
 export async function resolveCommand(path) {
   const load = IMPLEMENTED[path];
@@ -272,7 +272,7 @@ export async function resolveCommand(path) {
   };
 }
 
-/** The release that turns the tolerated flag into a usage error (review 0003 Q62). */
+/** The release that turns the tolerated flag into a usage error. */
 export const DEPRECATION_RELEASE = '0.9.0';
 
 /**
@@ -307,7 +307,7 @@ export const COMMANDS = SPEC_PATHS;
  *
  * The state is per call: an MCP server and the tests both dispatch more than once in a
  * process, and a shared envelope let one run's ceiling, notices and command path land in
- * another run's document (review 0003 Q63/Q65).
+ * another run's document.
  */
 export async function dispatch(argv) {
   return withOutputState(() => dispatchInState(argv));
@@ -315,7 +315,7 @@ export async function dispatch(argv) {
 
 async function dispatchInState(argv) {
   const { flags, positional, parseError } = parseOrExit(argv);
-  // One run, one set of notices: a process can dispatch repeatedly (review 0003 Q62).
+  // One run, one set of notices: a process can dispatch repeatedly.
   clearWarnings();
   // Cleared per run for the same reason the notices are: a process can dispatch twice.
   jsonCommand(null);
@@ -331,7 +331,7 @@ async function dispatchInState(argv) {
   jsonIndentDefault(flags.pretty === true);
   // The envelope owns both presentation flags. A command that decided its own ceiling or
   // its own indentation could disagree with the flag the caller passed, and the caller has
-  // no way to see which one won (review 0003 Q65).
+  // no way to see which one won.
   maxBytesLimit(flags.maxBytes);
   jsonFailMode(flags.json === true);
 
@@ -346,7 +346,7 @@ async function dispatchInState(argv) {
   if (flags.help || flags.version || positional[0] === 'help' || positional[0] === '-h') {
     // The argv is parsed once, here, and help renders what that parse produced: it used
     // to parse the same argv again, so `simt --help` paid for two parses and could in
-    // principle answer a different question than the dispatcher asked (review 0003 Q83).
+    // principle answer a different question than the dispatcher asked.
     return help(argv, { flags, positional, parseError });
   }
 
@@ -388,7 +388,7 @@ async function dispatchInState(argv) {
   if (!load) return fail(`unknown command \`${path}\``, EXIT.USAGE);
   // Import only the module the matched path needs. The registry used to pull every
   // command's module graph - detection, projection, the bench corpus - before dispatch
-  // began, which cost 36.5 ms on a `status --line` that reads one file (review 0003 Q64).
+  // began, which cost 36.5 ms on a `status --line` that reads one file.
   // A closed set is refused before the command runs, so the caller learns the valid
   // values from the refusal and every reader of the spec sees the same set (review
   // 0003 Q62). Unset is not the same as invalid: the default stays the command's.
@@ -424,7 +424,7 @@ async function dispatchInState(argv) {
  *
  * An alias resolves here rather than as a second registry entry: the spec path stays the
  * one dispatch key, so an alias cannot load a different handler or escape the flag
- * declaration the path carries (review 0003 Q81).
+ * declaration the path carries.
  */
 function commandPath(first, second) {
   if (first === undefined) return null;

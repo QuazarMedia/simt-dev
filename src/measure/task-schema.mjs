@@ -2,7 +2,7 @@
 //
 // Schema v1 was whatever the miner happened to write: nothing validated a field, a task
 // said nothing about how hard it is or what the agent may see, and the grader assumed the
-// only oracle in the world was a hidden test patch (review 0003 Q78). A field that is not
+// only oracle in the world was a hidden test patch. A field that is not
 // checked is a guess about what it means, and an oracle that is not declared cannot be
 // swapped for a different kind of task.
 //

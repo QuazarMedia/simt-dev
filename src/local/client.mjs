@@ -1,4 +1,4 @@
-// Zero-dependency OpenAI-compatible client for local model servers (plan 0003 R37):
+// Zero-dependency OpenAI-compatible client for local model servers:
 // Ollama, llama.cpp `llama-server`, LM Studio and MLX servers over `http://127.0.0.1:<port>/v1/...`.
 //
 // Two hard invariants (ADR-075, ADR-090):
@@ -21,7 +21,7 @@ function guardEndpoint(endpoint, { allowRemote = false } = {}) {
   // `url` and `model` are validated once, where the config is read
   // (`local/config.mjs`): an endpoint that reaches this function has both. What is left
   // here is the one rule the config cannot enforce - a loopback-only default - and that
-  // is why this function still exists (review 0003 Q83).
+  // is why this function still exists.
   const rawUrl = typeof endpoint.url === 'string' ? endpoint.url.trim() : '';
   const model = typeof endpoint.model === 'string' ? endpoint.model.trim() : '';
   const apiKey = typeof endpoint.apiKey === 'string' && endpoint.apiKey.length > 0 ? endpoint.apiKey : null;

@@ -183,7 +183,7 @@ function rulesFailure(message, remedy, exitCode) {
 
 /**
  * The merged decision index: the package's shipped records underlay the
- * repository's own, which win on an id collision (review 0003 Q34).
+ * repository's own, which win on an id collision.
  *
  * Before this, a consumer with its own ADR-001/002 read `rules why core` as
  * settled by *their* ADR-001 while the package's ADR-003…009 — the ones the
@@ -503,7 +503,7 @@ function adrDirection(facts, flags) {
  * `simt rules decisions`: every known decision record, both layers.
  *
  * The shipped records underlay the repository's own, which win on a number
- * collision (review 0003 Q34). The column that matters is `origin`: a reader in
+ * collision. The column that matters is `origin`: a reader in
  * a consumer repository must be able to tell the package's ADR-001 from their
  * own, because they are two records that happen to share a number.
  */
@@ -524,7 +524,7 @@ export async function decisionsCommand(args, flags) {
       file: d.file,
     }));
 
-  // The index is output, not authorship (review 0003 Q91): the table is rendered from
+  // The index is output, not authorship: the table is rendered from
   // the same records this command lists, so a new ADR cannot leave it behind. The
   // write is journaled like every other repo-file write, so `undo` restores the old
   // table - the index is not internal state even though it is generated.

@@ -1,4 +1,4 @@
-// Line extractors for the languages the index maps (plan 0003 R21, ADR-090).
+// Line extractors for the languages the index maps.
 //
 // A structural parser is more accurate and is not a dependency. These read one
 // line at a time: an export, a definition, an import. That is enough for a map
@@ -47,7 +47,7 @@ export function extract(filePath, text, lang) {
 /**
  * Import specifiers become edges. A relative one points at a tracked file when
  * one matches; a non-relative one goes through the language's namespace
- * strategy below (review 0003 Q40).
+ * strategy below.
  */
 export function resolveImports(filePath, imports, files, lang) {
   const have = files instanceof Set ? files : new Set(files);
@@ -91,7 +91,7 @@ function indexDirs(have, ext) {
 }
 
 /**
- * One strategy per namespace language (review 0003 Q40).
+ * One strategy per namespace language.
  *
  * Outside JS/TS, imports name namespaces: `com.foo.Bar`, `pkg.mod`,
  * `example.com/mod/pkg`, `crate::a::b`, `A.B.C`. Each builder maps the spec
@@ -179,7 +179,7 @@ function dirHit(spec, dirs) {
 }
 
 /**
- * An explicit extension that names the sibling language (review 0003 Q41).
+ * An explicit extension that names the sibling language.
  *
  * TypeScript sources import their compiled shape (`./b.js` for `b.ts`), and
  * Node's ESM resolution requires it; the tracked tree holds the source, so

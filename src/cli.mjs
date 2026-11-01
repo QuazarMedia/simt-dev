@@ -3,7 +3,7 @@
 // It lives here rather than in `bin/` because a static import in the entry point is
 // evaluated before the entry point's own code: the version check could not run first,
 // and an old Node failed inside the module graph instead of saying which version it
-// needed (review 0003 Q54).
+// needed.
 
 import { parse, rawJsonFlag } from './argv.mjs';
 import { EXIT, fail, jsonFailMode, jsonIndentDefault } from './output/index.mjs';
@@ -38,7 +38,6 @@ try {
   // skill-sized body exceeds the 64 KiB pipe buffer) is still draining when the
   // command resolves, and `process.exit()` cuts it — exit 0 with half a JSON
   // document on stdout. Letting the loop empty first makes the exit honest
-  // (plan 0003 R50; the S10 contract asserts the document parses).
   process.exitCode = code;
 } catch (error) {
   process.exit(fail(error?.message ?? String(error), EXIT.FAIL));

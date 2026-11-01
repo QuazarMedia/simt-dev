@@ -1,5 +1,4 @@
 // Rule text variant parsing, validation, and deterministic projection folding
-// (plan 0003 R35).
 //
 // A rule line or list item may carry `<!-- simt-variants: <slot> <spec> -->`.
 // When unlocked, projection uses the baseline variant (`a`, or the line's own

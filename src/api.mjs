@@ -1,4 +1,4 @@
-// The library surface: the read commands as data (review 0003 Q63).
+// The library surface: the read commands as data.
 //
 // Every function here is the one the CLI and the MCP tools already call. Nothing in
 // this file renders: a caller that wants text, JSON or an MCP result renders these

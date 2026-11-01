@@ -1,4 +1,4 @@
-// The decisions index document, rendered from the records (review 0003 Q91).
+// The decisions index document, rendered from the records.
 //
 // The file was 590 hand-written lines: a table of every ADR kept in step by whoever
 // remembered. It agreed with the records until it did not, and nothing read it, so

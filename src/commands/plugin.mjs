@@ -4,7 +4,7 @@
 // repository, so a package and a repository install cannot drift apart. A dry run prints
 // the plan and writes nothing; --yes copies the runtime and writes every generated file.
 // The package is self-contained — it carries its own copy of the runtime — so it installs
-// into a clean profile that has never seen this tool (plan 0003 R43).
+// into a clean profile that has never seen this tool.
 
 import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';

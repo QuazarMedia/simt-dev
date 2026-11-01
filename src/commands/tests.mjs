@@ -83,7 +83,7 @@ function summarise(root, flags, edges) {
 async function loadFiles(root) {
   let files = await readFiles(root);
   // An empty index has nothing to answer from; a stale one has yesterday's
-  // tree (review 0003 Q42). Either way the refresh is incremental, so a
+  // tree. Either way the refresh is incremental, so a
   // current repository pays for one `git ls-files -s`, not a rebuild.
   if (files.length === 0 || (await isIndexStale(root))) {
     try {

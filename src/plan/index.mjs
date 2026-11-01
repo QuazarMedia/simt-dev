@@ -1,4 +1,4 @@
-// Plan and tracker index (plan 0003 R31).
+// Plan and tracker index.
 //
 // An agent resuming a long plan should read one slice, not the document. Which
 // directories are read, which columns count, and which words count as done are
@@ -127,7 +127,7 @@ function sliceKey(path, id) {
  *
  * A pipe inside a code span is content, not a separator: an evidence cell may
  * carry a command line with a pipe in it, and splitting there shifts every
- * later cell left by one (review 0003 Q25). Backticks toggle the span; a
+ * later cell left by one. Backticks toggle the span; a
  * `\|` escape is content in either mode.
  */
 function splitRow(line) {
@@ -686,7 +686,7 @@ export async function planDone(root, id, { sha = null, test = null, state = null
   }
 
   // The rebuilt line keeps the original's ending: a CRLF file must not gain
-  // one LF-terminated line among its CRLF lines (review 0003 Q25).
+  // one LF-terminated line among its CRLF lines.
   const eol = original.endsWith('\r') ? '\r' : '';
   const rebuilt = `| ${cells.join(' | ')} |${eol}`;
   const changedCells = splitRow(original).join('\0') !== cells.join('\0');
@@ -708,7 +708,7 @@ export async function planDone(root, id, { sha = null, test = null, state = null
     line: found.index + 1,
     from,
     to: cells[slice.stateIdx],
-    // The `--diff` sides for the one changed row (plan 0003 R50). The full file
+    // The `--diff` sides for the one changed row. The full file
     // is not carried: one table row is the whole write, and a context-less hunk
     // over the row says exactly what changed. Captured pre-write, so the diff
     // is true in preview and in apply alike.

@@ -409,7 +409,7 @@ export async function help(argv, dispatched) {
   const bannerLines = banner === null ? [] : ['', banner, ''];
   // `--all` prints every command and every flag; the default page lists the core tier and
   // says where the rest is. A reader asking "what can this do" needs the shape, not 23 KB
-  // of flag reference (review 0003 Q61).
+  // of flag reference.
   if (flags.all === true) {
     emit(
       [
@@ -431,7 +431,7 @@ export async function help(argv, dispatched) {
     return 0;
   }
   // One line per group and one per bare command: listing every subcommand with its
-  // summary does not fit in the 2 KB a reader will actually read (review 0003 Q61).
+  // summary does not fit in the 2 KB a reader will actually read.
   const groups = new Map();
   const bare = [];
   for (const row of SPEC) {

@@ -255,7 +255,7 @@ function byEdge(a, b) {
 
 /** Imports in a file, resolved against the tracked tree. One path now: `extract`
  * reads scripts with `scriptSpecifiers`, so gate, impact and the index agree on
- * what a file imports (review 0003 Q41). */
+ * what a file imports. */
 export function importsOf(testPath, text, lang, files) {
   return resolveImports(testPath, extract(testPath, text, lang).imports, files, lang);
 }

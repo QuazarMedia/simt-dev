@@ -442,7 +442,7 @@ export async function syncCommand(positional, flags) {
  *                    stale: string[], previousBytes: number}|null>}
  */
 /**
- * The manifest-only repair `sync` applies before rewriting regions (plan 0003 R47).
+ * The manifest-only repair `sync` applies before rewriting regions.
  *
  * Exported so `doctor --fix` applies exactly this repair instead of deriving its
  * own: the generated fields have one author, and a fix that patched them any

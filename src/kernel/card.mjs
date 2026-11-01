@@ -1,5 +1,5 @@
 // The command card: the exact commands for THIS repository, at the top of the
-// projected region (plan 0003 R10).
+// projected region.
 //
 // The card holds the bytes a reader cannot infer. "Run the tests" is useless advice in a
 // repository whose test command is `./gradlew :app:testDebugUnitTest`; the runner, the
@@ -9,8 +9,8 @@
 // scripts, and the marker files that name its ecosystem.
 //
 // It reads committed evidence ONLY. It must never consult PATH or `node_modules`, because
-// the projected region is required to be byte-identical on two machines (plan 0003 P4,
-// R13) and a card that named whichever linter happened to be installed would differ
+// the projected region is required to be byte-identical on two machines
+// and a card that named whichever linter happened to be installed would differ
 // between a laptop and CI for no reason a diff could explain. Runnability is a property
 // of the machine; a command is a property of the repository.
 //
@@ -26,7 +26,7 @@ import { cardBuilds, cardFocused, cardFallbacks, ecosystemGateRows, evalTemplate
 import { resolveNodeRunner, runScript } from '../ecosystem/node-runner.mjs';
 
 /**
- * The card's ceiling in bytes (plan 0003 R10). Over it, the least valuable lines are
+ * The card's ceiling in bytes. Over it, the least valuable lines are
  * dropped rather than the ceiling raised: the point of the card is the bytes a reader
  * most needs, and an unbounded card is a second copy of the rules.
  */

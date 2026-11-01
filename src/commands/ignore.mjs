@@ -1,5 +1,4 @@
 // `simt ignore` — render the one ignore list into every reader's dialect
-// (plan 0003 R52).
 //
 // Shape copied from `ci`: the plan is printed first, nothing is written
 // without `--yes`, `--diff` shows the same plan as unified diffs and `undo`

@@ -1,4 +1,4 @@
-// Decision assistant (plan 0003 R34): scaffold ADRs with structured frontmatter
+// Decision assistant: scaffold ADRs with structured frontmatter
 // (`simt-affects` from the diff and `simt-supersedes: [{adr, ruling}]`), parse
 // frontmatter first for `rules why` and `why`, and fail lint on partial
 // supersessions stated only in prose.
@@ -432,7 +432,7 @@ function prosePartialSupersessions(body) {
 }
 
 /**
- * Lint a single ADR document for structured supersession conformance (plan 0003 R34).
+ * Lint a single ADR document for structured supersession conformance.
  *
  * `historicalCutoff` exempts the first N records from the frontmatter requirement:
  * they predate it, and demanding it retroactively would fail a history nobody can

@@ -7,7 +7,7 @@
 //
 // This module lives outside `src/bench/` because the index, the gate and the map all ask
 // this question. Production code importing it from the bench made the bench a
-// requirement for commands that never run a benchmark (review 0003 Q79).
+// requirement for commands that never run a benchmark.
 import { testConventions } from '../ecosystem/records.mjs';
 
 /**

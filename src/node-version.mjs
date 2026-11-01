@@ -1,4 +1,4 @@
-// The runtime floor, in one place both entry points read (review 0003 Q54).
+// The runtime floor, in one place both entry points read.
 //
 // `package.json` declares `engines.node` and `pyproject.toml` declares a python
 // version; both are advisory to the installer, so an older runtime reached the CLI

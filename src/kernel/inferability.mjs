@@ -1,11 +1,10 @@
 // The inferability filter: a rule line the repository already proves does not ship
-// (plan 0003 R09).
 //
 // The costliest byte in a projection is the one the reader already knows. A Go repository
 // with one runner does not need to be told to use it; a repository whose manifest declares
 // a format gate does not need to be told how it indents. The evidence is committed — the
 // marker files, the declared gates, the command card — so the same repository filters the
-// same way on every machine (plan 0003 P4, R13).
+// same way on every machine.
 //
 // Nothing is dropped by guesswork. A rule author marks the line with
 // `<!-- simt-inferable-when: <expression> -->`, naming the evidence that makes it

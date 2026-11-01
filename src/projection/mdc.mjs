@@ -209,7 +209,7 @@ function stripFrontmatter(text) {
 /**
  * The default a signal set selects: the first per-signal default whose signal is
  * present, else the plain default. Signals carry detection facts as well as stack
- * tags, because a Go repository is selected on a fact, not a stack (review 0003 Q32).
+ * tags, because a Go repository is selected on a fact, not a stack.
  */
 function pickDefault(sub, signals) {
   const perSignal = sub.perSignal ?? {};

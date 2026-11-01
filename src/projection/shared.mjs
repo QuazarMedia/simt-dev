@@ -309,7 +309,7 @@ export async function sharedState(path, rules, meta) {
  */
 // Exported so `shared install --diff` previews the same bytes the write applies:
 // a diff rendered from a second implementation of this injection would be a
-// second opinion about what "current" means (plan 0003 R50).
+// second opinion about what "current" means.
 export function injectShared(before, rules, meta) {
   return inject(before, sharedBody(rules), meta, { compose: composeShared });
 }

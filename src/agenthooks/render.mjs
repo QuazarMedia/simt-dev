@@ -61,7 +61,7 @@ const TIMEOUT_SECONDS = 10;
  *
  * The shim, never the bare binary: a harness does not share the shell's PATH,
  * so a config naming `simt` runs nothing on Claude and blocks everything on
- * Cursor (review 0003 Q21). `--harness` stays explicit rather than detected
+ * Cursor. `--harness` stays explicit rather than detected
  * from the payload: a hook that guessed would answer in the wrong harness's
  * dialect when a payload arrived in an unexpected shape, and the harness would
  * read a decision it does not understand as no decision at all.
@@ -137,7 +137,7 @@ function writeOf(path, input) {
  * a move guards.
  *
  * Each entry keeps its hunk text: without it the generated-region check cannot
- * tell an edit outside the region from one inside it (review 0003 Q17), and
+ * tell an edit outside the region from one inside it, and
  * every patch would deny as though it touched the region.
  */
 function patchWrites(text) {
@@ -288,7 +288,7 @@ export function adapter(id) {
 /**
  * The session a payload claims, when it names one. Harness hook processes rarely
  * carry `SIMT_SESSION`, so an agent is session `''` and is blocked by its own
- * lease — the payload's own session id is the fallback (review 0003 Q20).
+ * lease — the payload's own session id is the fallback.
  */
 export function payloadSession(payload) {
   if (!payload || typeof payload !== 'object') return null;
@@ -412,7 +412,7 @@ function group(row, event = EVENTS[0], command = hookCommand(row.id, event)) {
     // failClosed is set because a hooks file this tool wrote should not silently
     // degrade to fail-open on its own crash: the vendor's default turns a broken hook
     // into an absent one, and the whole point of writing it is that it runs.
-    // It is set only because the command is the repo shim (review 0003 Q21):
+    // It is set only because the command is the repo shim:
     // failClosed on a bare-PATH binary would block every tool call on the machines
     // where the binary is not installed, which is exactly the machines the shim exists for.
     return { command, timeout, matcher: row.matcher, failClosed: true };

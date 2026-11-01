@@ -228,7 +228,7 @@ export async function fingerprint(root) {
 
   // One walk answers every `glob` fact. Each candidate used to walk the tree again, so
   // a repository with seven globs paid for seven identical walks - the same directories,
-  // in the same order, for the same answer (review 0003 Q67).
+  // in the same order, for the same answer.
   let nested = null;
   const nestedPaths = async () => (nested ??= await listNested(root));
 

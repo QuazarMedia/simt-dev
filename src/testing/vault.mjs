@@ -4,12 +4,10 @@
 // bench run is graded against must not be readable from the workspace it is measuring.
 // It is keyed on the repository's root commit, which is identical in every clone and
 // survives remote renames, so the corpus a bench was mined from is found on another
-// machine (review 0003 Q48: an absolute-path key made the committed corpus unrunnable
-// from any other checkout).
+// machine
 //
 // This lives under `src/testing/` because the map measures recall against the same
 // patches and the index asks whether a path is a test — neither of them runs a benchmark
-// (review 0003 Q79).
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { homedir, platform as osPlatform } from 'node:os';

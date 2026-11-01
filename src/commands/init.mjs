@@ -135,7 +135,7 @@ export async function initCommand(positional, flags) {
   // manifest already carries with a real value. A fresh adoption with neither gets
   // no surfaces of its own - "absent" means the global standard applies, and writing
   // today's default into every fresh manifest would freeze it for every release after
-  // (review 0003 Q30). With a declared array, `projected.surfaces` is that same array
+  //. With a declared array, `projected.surfaces` is that same array
   // resolved, so the assignment records rather than rewrites.
   if (flags.surfaces !== undefined || Array.isArray(existing?.surfaces)) {
     manifest.surfaces = projected.surfaces;
@@ -198,7 +198,7 @@ export async function initCommand(positional, flags) {
   const identity = await resolveIdentity(root);
   // The .gitignore edit and the include repoint are writes too, so they get plan
   // lines of their own: a line the run does not print is a write the reader
-  // approves from the diff afterwards (review 0003 Q30). The before-bytes are read
+  // approves from the diff afterwards. The before-bytes are read
   // once here and reused by the --diff pair below, so the preview's before side is
   // the same bytes the plan's verb was decided from.
   let gitignoreBefore = null;
@@ -548,7 +548,7 @@ export async function initCommand(positional, flags) {
     // entries fold to one (first before, last after), so undo restores the pre-run
     // bytes — or removes the file — in one step. If the journal line landed after,
     // unrecorded, the file would no longer match the recorded after-bytes and undo
-    // would refuse (review 0003 Q30). The `ignoreJournal` inside `commitJournal`
+    // would refuse. The `ignoreJournal` inside `commitJournal`
     // below is then a no-op.
     await ignoreJournal(root, journal);
     await ignoreIdentity(root, journal);
@@ -753,7 +753,7 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
     lines.push(`  ${verb.padEnd(9)} ${id.file}${detail ? `\n            ${detail}` : ''}`);
     // The two side writes of the same action, each with its own line: a dry run that
     // says `created git.config` and stops is a plan missing two of its three writes
-    // (review 0003 Q30). The include line mirrors the apply note byte for byte, so
+    //. The include line mirrors the apply note byte for byte, so
     // preview and run cannot tell the reader two different stories.
     if (id.gitignore !== null) {
       lines.push(
@@ -895,7 +895,7 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
     lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);
   }
 
-  // One state, and it is the point: init no longer creates the file (review 0003 Q28),
+  // One state, and it is the point: init no longer creates the file,
   // so the plan line says what it will not write and why, instead of a floor appearing
   // after the run without being in the plan. An existing base file is repo-owned and
   // left exactly as it is, which needs no line because nothing changes.

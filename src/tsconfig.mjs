@@ -2,7 +2,7 @@
 //
 // ADR-026's mechanism — a config whose grammar has no comments is a whole file the
 // repo owns from the first commit — pointed at the file ADR-025 ruled out by name.
-// `init` used to create it (review 0003 Q28 stopped that): a floor the tool writes
+// `init` used to create it: a floor the tool writes
 // into a fresh repo is a file nothing extends, because the repo's own `tsconfig.json`
 // is the repo's to write — and a base that nothing points at is a floor with no
 // effect, which `check` then reported as drift on every fresh adoption.
@@ -18,7 +18,7 @@
 //      the documentation does not. The parser is case-insensitive, which is the whole
 //      reason the estate drifted: both spellings work, so nothing ever said so.
 //
-// Both are non-blocking findings (review 0003 Q28): the base file is repo-owned, and
+// Both are non-blocking findings: the base file is repo-owned, and
 // a gate that fails a repository over a policy decision is a gate whose remedy is a
 // choice, not a command. An existing base file stays exactly as the repo wrote it:
 // this tool does not own its bytes, so a repo that edited them is not drift.
@@ -160,7 +160,7 @@ export async function planTsconfigBase(root) {
       reason: null,
     };
   }
-  // Absent is a skip in every case: init no longer creates the file (review 0003 Q28),
+  // Absent is a skip in every case: init no longer creates the file,
   // so the plan states what it will not write and why, rather than leaving a floor
   // behind that nothing extends.
   return {
@@ -204,7 +204,7 @@ export async function checkTsconfig(root) {
   // own those bytes (ADR-026), so a repo that edited them is not drift — and a finding that
   // compared them would report somebody's work as an error. Only the question of whether
   // `tsconfig.json` points at the base is this tool's to ask. A missing base file raises
-  // no finding at all (review 0003 Q28): writing one is the repo's decision, and a gate
+  // no finding at all: writing one is the repo's decision, and a gate
   // whose remedy is a policy choice is a gate nothing can satisfy.
   let own = null;
   try {

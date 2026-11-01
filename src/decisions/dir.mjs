@@ -1,4 +1,4 @@
-// The one answer to "where are this repository's decision records" (review 0003 Q55).
+// The one answer to "where are this repository's decision records".
 //
 // Before this, every reader hard-coded `docs/decisions` while detection already
 // knew four spellings (`docs/decisions`, `docs/adr`, `docs/adrs`, `adr`), so a

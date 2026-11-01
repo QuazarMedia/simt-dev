@@ -1,4 +1,4 @@
-// The brief packet: one document inside a byte ceiling (plan 0003 R27).
+// The brief packet: one document inside a byte ceiling.
 //
 // This module is pure. It reads no filesystem, no environment, no clock and no locale —
 // a packet built twice from the same items is the same bytes, which is the property the
@@ -15,7 +15,7 @@ import { packToBudget } from '../kernel/budget.mjs';
 export const DEFAULT_BRIEF_BYTES = 2048;
 
 /**
- * The most this tool will ever inject into somebody else's prompt (plan 0003 R29).
+ * The most this tool will ever inject into somebody else's prompt.
  *
  * The same number as the default and a different fact: the default is what a packet packs
  * to, and this is the bar the delivery slice was accepted against. A repository may lower
@@ -50,7 +50,7 @@ const SECTIONS = ['TASK', 'ADVICE', 'COMMANDS', 'FILES', 'TESTS', 'DECISIONS', '
 const SECTION_VALUE = {
   CAUTIONS: 1,
   // Bench evidence, but advice rather than fact: losing it costs an opinion, not a
-  // command or a path to check (plan 0003 R40).
+  // command or a path to check.
   ADVICE: 2,
   LESSONS: 2,
   SKILLS: 3,

@@ -1,4 +1,4 @@
-// `simt distill <skill|doc>` (plan 0003 R38).
+// `simt distill <skill|doc>`.
 //
 // A budgeted summary with citations to source line ranges, written to
 // `.simt/distilled/` as a proposal a human merges. The deterministic engine
@@ -28,7 +28,7 @@ export async function distillCommand(args, flags) {
       `budget    ${result.budget} bytes`,
       `citations ${result.citations}`,
       // A cached proposal predates this field; `?? []` keeps the report from crashing on
-      // the file the command wrote one release ago (review 0003 Q52).
+      // the file the command wrote one release ago.
       ...(result.verified === true ? [] : (result.faults ?? []).map((f) => `unverified ${f}`)),
       `proposal  ${result.proposal.path}  (${result.proposal.state}, ${result.proposal.bytes} bytes)`,
     ].join('\n'),

@@ -1,4 +1,4 @@
-// The aggregate behind bare `simt status` (review 0003 Q82).
+// The aggregate behind bare `simt status`.
 //
 // `status --line` answers one question in milliseconds: the gate state as of the last
 // check. Bare `status` was a usage error, and its comment justified that by claiming

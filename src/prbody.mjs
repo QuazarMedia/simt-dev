@@ -1,4 +1,4 @@
-// The `simt pr-body` engine (plan 0003 R55).
+// The `simt pr-body` engine.
 //
 // A pull request body assembled from what the tool already knows, rather than
 // what its author remembers to write: the evidence block from the ledger (R17),

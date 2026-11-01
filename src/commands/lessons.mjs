@@ -1,5 +1,5 @@
 // `simt lessons [list|review]` — deterministic lesson candidates and promotion to
-// `docs/lessons/NNNN-<slug>.md` (plan 0003 R32).
+// `docs/lessons/NNNN-<slug>.md`.
 
 import { resolve } from 'node:path';
 
@@ -26,7 +26,7 @@ export async function lessonsListCommand(args, flags) {
   const root = resolve(commandRoot(flags));
   // Pure: listing must not capture. Capture used to run here, so `list` wrote
   // to the store it was reading and a read-only question had write side
-  // effects. Capturing is `lessons capture` now (review 0003 Q36).
+  // effects. Capturing is `lessons capture` now.
   const [{ candidates, errors }, promoted] = await Promise.all([
     readLessonCandidates(root),
     listPromotedLessons(root, { includeExpired: true }),
@@ -91,7 +91,7 @@ export async function lessonsListCommand(args, flags) {
  *
  * Scans the ledger for fail-then-fix sequences and git history for reverts,
  * and appends any new candidates. A command that writes says so in its name;
- * `list` and `review` previews do not (review 0003 Q36).
+ * `list` and `review` previews do not.
  */
 export async function lessonsCaptureCommand(args, flags) {
   if (args.length > 0) {

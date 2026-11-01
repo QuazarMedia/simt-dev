@@ -1,5 +1,4 @@
-// File leases: one path, one session, for the length of a TTL (plan 0003 R54,
-// ADR-101).
+// File leases: one path, one session, for the length of a TTL
 //
 // The data is deliberately dumb: one JSON file beside the index, absolute expiry
 // timestamps, no lock. Sessions claim paths with `simt lease <paths>` and the
@@ -125,8 +124,8 @@ export function fileLeaseStore(root) {
  *
  * A payload that reaches a file through a symlinked directory spells it one way,
  * the claim recorded for the file spells it the other, and on a case-insensitive
- * volume the two spellings that differ in case are the same file (review 0003
- * Q16). Both sides of a comparison go through this, so a claim and an edit meet
+ * volume the two spellings that differ in case are the same file
+ *. Both sides of a comparison go through this, so a claim and an edit meet
  * in the same spelling whatever road each one took to get there.
  *
  * The real path of the deepest existing ancestor is joined with the remainder,
@@ -173,7 +172,7 @@ export function canonicalLeasePath(root, input, { ignoreCase = false } = {}) {
  */
 export async function readLeases(root) {
   const path = join(root, LEASE_FILE);
-  // The pre-move path is a fallback for one release (review 0003 Q19).
+  // The pre-move path is a fallback for one release.
   let text;
   try {
     ({ text } = await readStateFile(root, LEASE_FILE, [LEASE_FILE_LEGACY]));
@@ -235,7 +234,7 @@ export async function writeLeases(root, leases) {
   const body = `${JSON.stringify({ schemaVersion: LEASE_SCHEMA, leases: records }, null, 2)}\n`;
   await mkdir(dirname(path), { recursive: true });
   // Atomic against a concurrent writer and a concurrent reader: a half-written
-  // claim file fails closed for every edit (review 0003 Q20).
+  // claim file fails closed for every edit.
   const tmp = `${path}.tmp-${process.pid}`;
   await writeFile(tmp, body, 'utf8');
   await rename(tmp, path);
@@ -252,7 +251,7 @@ const LOCK_WAIT_MS = 10_000;
  *
  * Twelve concurrent claims stored seven before this: every claimant read the
  * same file, each wrote back only what it had seen. Re-reading under the lock
- * closes that race (review 0003 Q20).
+ * closes that race.
  */
 export async function withLeaseLock(root, fn) {
   const lockPath = join(root, `${LEASE_FILE}.lock`);

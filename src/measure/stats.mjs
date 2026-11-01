@@ -2,11 +2,11 @@
 //
 // Every estimator here is deterministic: the bootstrap draws come from a seeded PRNG and
 // the exact tests enumerate rather than sample, so a report a pull request diffs is the
-// same report on the next machine (plan 0004 P1).
+// same report on the next machine.
 //
 // Reps of a task are not independent tasks. Pairing happens at the task level only: the
 // old run-level pairing paired (task, rep) records whenever both arms shared a key, so one
-// task with ten reps produced ten "paired runs" and an inflated p-value (review 0003 Q46).
+// task with ten reps produced ten "paired runs" and an inflated p-value.
 export const DEFAULT_BOOTSTRAP_SAMPLES = 1000;
 export const DEFAULT_BOOTSTRAP_SEED = 0x51772026;
 
@@ -34,7 +34,7 @@ export function mean(values) {
  *
  * `C` is null when any row's cost is missing — a partial cost must not read as a complete
  * one. `CPI` is total cost divided by resolved outcomes, and is undefined when none
- * resolve, never zero and never a favourable finite score (plan 0004 §1).
+ * resolve, never zero and never a favourable finite score.
  *
  * @param {object[]} rows
  * @returns {{R: number, Q: number, C: number|null, CPI: number|null, turns: number,
@@ -129,7 +129,7 @@ function percentilePair(sortedValues) {
  *
  * When any task's cost is missing the cost intervals are undefined, not degenerate:
  * dropping the undefined resamples quietly narrowed the interval to the tasks that
- * happened to price out (review 0003 Q46).
+ * happened to price out.
  *
  * @param {object[]} taskRows
  * @param {{samples?: number, seed?: number}} [options]
@@ -261,7 +261,7 @@ export function mcnemarTest(pairs) {
 }
 
 /**
- * Non-inferiority margin for resolution rate (plan 0004 §1): the candidate is
+ * Non-inferiority margin for resolution rate: the candidate is
  * non-inferior only when the one-sided 95% lower bound of ΔR stays above -2 pp.
  */
 export const NON_INFERIORITY_MARGIN = -0.02;
@@ -396,7 +396,7 @@ export function wilcoxonSignedRank(pairs) {
 /**
  * Pair two arms at the task level and compute deltas, paired bootstrap 95% CIs, an exact
  * sign test on task-mean R, a Wilcoxon signed-rank test on task-mean C, and a one-sided
- * non-inferiority verdict (plan 0004 §1, review 0003 Q46).
+ * non-inferiority verdict.
  *
  * `verdict`:
  *   'insufficient-tasks' — fewer than MIN_PAIRD_TASKS paired tasks

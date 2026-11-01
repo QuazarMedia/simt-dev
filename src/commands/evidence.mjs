@@ -81,7 +81,7 @@ async function checkClaim(root, file, flags) {
     return EXIT.OK;
   }
   // A commit records the index, not the worktree: `git add -p` can commit bytes
-  // the worktree tree never had (review 0003 Q18). Match on the staged tree, with
+  // the worktree tree never had. Match on the staged tree, with
   // the worktree tree as the fallback when git cannot name the index.
   let tree;
   try {

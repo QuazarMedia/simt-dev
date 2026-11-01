@@ -57,7 +57,7 @@ import { git, gitText } from '../sys/git.mjs';
  * The state a started slice moves to: the template's `started`-role state, not
  * a hard-coded word. A repository that renamed its states still starts slices,
  * and one that deleted the in-progress state fails closed in `plan done` on a
- * word its own template never defined (review 0003 Q23).
+ * word its own template never defined.
  */
 async function startedState(main) {
   const loaded = await loadFormat(main);
@@ -94,7 +94,7 @@ async function mainCheckout(root) {
 
 /**
  * The branch and worktree a slice owns. Both derive from the id: one id, one spelling.
- * The worktree lives under machine-local state (review 0003 Q19): a worktree inside
+ * The worktree lives under machine-local state: a worktree inside
  * the checkout would be recorded as an embedded gitlink and would change the tree id.
  */
 function places(main, id) {
@@ -187,7 +187,7 @@ function sliceSession(flags) {
 /**
  * The slice's lease path, in the spelling the pre-edit hook compares: the
  * worktree directory, repository-relative. Entries carry `kind: 'slice'` so a
- * later schema (review 0003 Q74) can tell slice claims from path claims; the
+ * later schema can tell slice claims from path claims; the
  * v1 reader keeps the extra fields without understanding them.
  */
 function sliceLeaseRel(main, worktree) {
@@ -305,7 +305,7 @@ async function startSlice(root, id, flags, prompt) {
   const { branch, worktree } = places(main, id);
   // The brief lives beside the worktree, not in it: a file inside the worktree
   // is untracked content in the slice's own tree, and the tree id must name
-  // the code, not the briefing (review 0003 Q19, Q23).
+  // the code, not the briefing.
   const briefPath = join(main, LOCAL_DIR, 'briefs', `${id.toLowerCase()}.md`);
   const leaseRel = sliceLeaseRel(main, worktree);
   const session = sliceSession(flags);
@@ -460,7 +460,7 @@ async function startSlice(root, id, flags, prompt) {
  * already proves: a gate with a passing entry on exactly this staged tree, and
  * no later failure for the same gate on the same tree, does not run again.
  * That is the double gate the review verified — the dispatcher, then the
- * commit hook — and the seed of the gate-run cache (review 0003 Q23).
+ * commit hook — and the seed of the gate-run cache.
  *
  * Fail-closed throughout: no tree, no ledger, a version mismatch, or an
  * unknown gate all mean the gate runs. An entry recorded under another binary
@@ -575,7 +575,7 @@ async function finishSlice(root, id, flags) {
 
   // The commit lands on the slice branch or not at all: finishing from `main`
   // commits main's tree under the slice's subject, which is the defect this
-  // guard closes (review 0003 Q23).
+  // guard closes.
   const head = await gitText(root, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => null);
   if (head !== branch) {
     return fail(
@@ -718,7 +718,7 @@ async function finishSlice(root, id, flags) {
  * removed, the branch deleted, and the tracker row returns to the ready
  * state — abandonment is a state the tracker can see, not a worktree that
  * silently rots. Preview names everything that would be destroyed; `--yes`
- * is the consent to destroy it (review 0003 Q23).
+ * is the consent to destroy it.
  */
 async function abandonSlice(root, id, flags) {
   const mode = writeMode(flags);

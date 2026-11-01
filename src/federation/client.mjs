@@ -1,4 +1,4 @@
-// The federation client: one stdio MCP conversation, spoken directly (plan 0003 R26).
+// The federation client: one stdio MCP conversation, spoken directly.
 //
 // simt-dev carries no runtime dependency, and an external code-graph server speaks MCP over
 // stdio, which is newline-delimited JSON-RPC. That is a shape small enough to speak without

@@ -1,4 +1,4 @@
-// `simt pr-body [--base <ref>]` (plan 0003 R55).
+// `simt pr-body [--base <ref>]`.
 //
 // The report layer over `src/prbody.mjs`: a markdown PR body on stdout, one
 // JSON document under `--json`. Read-only like `evidence` and `review` — it

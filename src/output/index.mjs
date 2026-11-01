@@ -11,7 +11,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { CLI } from '../name.mjs';
 
 /**
- * One call's presentation state (review 0003 Q63, Q65).
+ * One call's presentation state.
  *
  * This was seven module-level `let`s - the JSON failure mode, the indent default, the byte
  * ceiling, the accumulated notices, the canonical command, the capture, the sink - and a
@@ -141,7 +141,7 @@ export function writeMode(flags) {
  * Every command that has both a document and a text report was choosing between them by
  * hand, in the same five lines, in more than a dozen files - and a command that chose
  * slightly differently printed a report where a caller had asked for JSON, which is how a
- * script gets prose (review 0003 Q63).
+ * script gets prose.
  *
  * The renderer is a thunk because the surface is decided first: a command asked for JSON
  * must not pay to render text nobody reads, and a caller cannot forget the branch.
@@ -198,8 +198,8 @@ export const SCHEMA_VERSION = 1;
  */
 // The byte ceiling is one flag with one reader: the envelope. Commands used to pass
 // `flags.maxBytes ?? 0` at seventy-eight call sites, which is seventy-eight chances to pass
-// a different number, or to forget and answer past the ceiling the caller set (review 0003
-// Q65). A ceiling of zero or a value that is not a number is no ceiling, the same way the
+// a different number, or to forget and answer past the ceiling the caller set
+//. A ceiling of zero or a value that is not a number is no ceiling, the same way the
 // flag itself is read.
 /** Set the byte ceiling every emit and every document inherits, from `--max-bytes`. */
 export function maxBytesLimit(bytes) {
@@ -285,10 +285,10 @@ function fitJsonArrays(payload, maxBytes, pretty) {
  * The same reason stderr is separate from stdout: a caller reading a document cannot
  * see a note printed beside it. A command that ignored half of what it was asked still
  * has to succeed or fail the same way, so the note belongs IN the result, and the text
- * mode keeps the stderr line it already had (review 0003 Q62).
+ * mode keeps the stderr line it already had.
  */
 /**
- * The output sink for a library call, or null for a process (review 0003 Q63).
+ * The output sink for a library call, or null for a process.
  *
  * `run(command, input)` answers with the text, the documents, the notes and the failure a
  * command produced instead of writing them. The alternative - threading a `result` return
@@ -336,7 +336,7 @@ function fitText(body, maxBytes) {
 // The path the dispatcher resolved. A command should not restate it: the ones that did
 // restated it wrongly (`plugin` printed `plugin claude`, `sync` printed `sync --check`),
 // and a document whose `command` disagrees with the argv that produced it is worse than
-// one with no `command` at all (review 0003 Q65).
+// one with no `command` at all.
 /** Set the command path every JSON document will carry, or clear it with null. */
 export function jsonCommand(path) {
   state().command = path ?? null;
@@ -344,7 +344,7 @@ export function jsonCommand(path) {
 
 // A document cannot name the exit code before the command has returned one. The
 // dispatcher captures what a command emits, then writes it once with the code attached;
-// writing first is how `ok: false` shipped alongside exit 0 (review 0003 Q65).
+// writing first is how `ok: false` shipped alongside exit 0.
 /** Collect documents instead of writing them, so the dispatcher can add the exit code. */
 export function jsonCaptureStart() {
   state().captured = [];
@@ -367,8 +367,7 @@ export function warn(message) {
  *
  * The collector is per process and a process can dispatch more than once - the MCP
  * server and the tests both do. Without this, one command's notice appeared in the
- * next command's document, which parity between the two surfaces caught (review 0003
- * Q62).
+ * next command's document, which parity between the two surfaces caught
  */
 export function clearWarnings() {
   state().warnings = [];
@@ -382,7 +381,7 @@ export function warnings() {
 export function emitJson(value, { stream = process.stdout, pretty = state().pretty, maxBytes = state().maxBytes } = {}) {
   // `notices`, not `warnings`: `status` already reports a warning COUNT under that key,
   // and a document cannot mean two things by one name. The collision is named here
-  // rather than bent into either shape (review 0003 Q62).
+  // rather than bent into either shape.
   const carried =
     state().warnings.length > 0 && value !== null && typeof value === 'object' && !Array.isArray(value) && value.notices === undefined
       ? { ...value, notices: state().warnings }

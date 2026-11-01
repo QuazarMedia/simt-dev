@@ -1,5 +1,5 @@
 // Budgeted compilation: which kernel lines may be cut so a repository's declared budget
-// is met (plan 0003 R08).
+// is met.
 //
 // A budget nobody enforces is a number in a JSON file. ADR-072 shipped the number and
 // reported it; what it could not do is meet it, because meeting a budget means something

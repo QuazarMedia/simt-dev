@@ -1,4 +1,4 @@
-// Local model configuration in `simt.json` / `simt-dev.json` (plan 0003 R37, ADR-075, ADR-090).
+// Local model configuration in `simt.json` / `simt-dev.json`.
 //
 // Local models are optional and off by default. When `local` is absent from the manifest,
 // no socket is ever opened. When configured:

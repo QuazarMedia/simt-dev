@@ -1,4 +1,4 @@
-// `run(command, input)` - one command, as a result (review 0003 Q63).
+// `run(command, input)` - one command, as a result.
 //
 // The CLI prints and returns an exit code; that is right for a terminal and useless for a
 // library, an MCP tool or a harness that wants the answer. Rather than rewrite seventy

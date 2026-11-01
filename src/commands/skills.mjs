@@ -2,7 +2,7 @@
 //
 // Implementation sequence steps 4 and 5.
 //
-// Output design (plan 0002 section 6): one fact per line, fixed field order, no
+// Output design: one fact per line, fixed field order, no
 // wrapping, no ANSI on any stream, bounded by --max-bytes with an explicit
 // TRUNCATED line. The NOT SELECTED block is as important as the resolved block -
 // the agent can see what exists and why it was excluded, and override in one
@@ -79,7 +79,7 @@ async function skillsRegistry(args) {
 
 /**
  * The named skill: the registry first, then the repo's own skills, because a skill
- * the repo installed is addressable by the same name (plan 0005 S3). The local lookup
+ * the repo installed is addressable by the same name. The local lookup
  * costs a fingerprint plus a directory scan, so it runs only when the registry did
  * not answer.
  */
@@ -116,7 +116,7 @@ function skillFacts(skill) {
 export async function skillsBriefFacts(root, args = {}) {
   const registry = await skillsRegistry(args);
   // One context per call: a second question about the same repository inside this
-  // command costs nothing (review 0003 Q67).
+  // command costs nothing.
   const ctx = args.ctx ?? repoContext(root);
   const repo = await ctx.fingerprint();
   const { note: workspace, root: workspaceRoot } = await announceWorkspace(args);
@@ -129,7 +129,7 @@ export async function skillsBriefFacts(root, args = {}) {
   const repoFacts = { root, stack: repoStack, facts: repo.facts };
 
   // The repo's own skills rank alongside the registry, so every command agrees on
-  // the names a reader in this repo can address (plan 0005 S3).
+  // the names a reader in this repo can address.
   const pool = [...registry.skills, ...(await localSkillNodes(root, registry, repoStack))];
 
   // A brief with no task and no paths resolves on stack alone, which produces a

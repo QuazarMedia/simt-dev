@@ -1,4 +1,4 @@
-// The one Node runner resolver every consumer reads (review 0003 Q31).
+// The one Node runner resolver every consumer reads.
 //
 // Before this, four tables answered "how does this repo run a script" and
 // disagreed: the card printed `npm run`, the dispatcher spawned `npm run`,

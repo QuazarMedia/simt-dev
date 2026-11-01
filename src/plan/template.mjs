@@ -314,7 +314,7 @@ function compile(body, source, root) {
         // A cell may carry a note after the state — "In progress (since Monday)".
         // The state is the longest alias that prefixes the text: "in progress"
         // must win over a shorter alias it starts, and a word no state claims
-        // is unknown, not a state (review 0003 Q25).
+        // is unknown, not a state.
         let best = '';
         for (const alias of read.keys()) {
           if (alias.length > best.length && plain.startsWith(alias)) best = alias;

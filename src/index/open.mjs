@@ -1,4 +1,4 @@
-// The index as a handle (review 0003 Q76).
+// The index as a handle.
 //
 // `openIndex` returns a handle whose methods answer with pure data — rows and
 // counts, no exit codes, no formatted lines — and with a structured error,

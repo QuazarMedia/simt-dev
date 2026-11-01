@@ -1,6 +1,6 @@
 // Where a skill's body lives, and how a path the registry names becomes a file.
 //
-// Extracted from src/commands/skills.mjs when the distiller (plan 0003 R38) became
+// Extracted from src/commands/skills.mjs when the distiller became
 // the second real caller: two commands that resolve the same body differently would
 // print two answers to one question, and ADR-002 refuses the third copy rather than
 // the second use.

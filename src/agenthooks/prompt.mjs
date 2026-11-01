@@ -67,7 +67,7 @@ export async function deliverPrompt(row, payload, { root: flagRoot } = {}) {
   // The root is the same dialect fact for both events, so it is read the same way —
   // and resolved to the repository's top level the same way: the manifest, like the
   // lease file, is a repository-relative fact, and a prompt submitted from a
-  // subdirectory must find it (review 0003 Q16).
+  // subdirectory must find it.
   // `--root` outranks the payload here as it does on the decision path: a packaged hook
   // runs from the plugin directory, so the payload's cwd would name the wrong repository
   // and find no manifest, which delivered nothing and looked like an opt-out.

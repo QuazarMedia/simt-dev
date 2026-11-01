@@ -128,7 +128,7 @@ export function buildManifest({ root, stack = [], sha, version, existing = null,
     // ADR-073: `full` projects every selected rule; `kernel` projects only the hard
     // constraints and defers the rest to `rules show`. Absent means `full`, and the
     // default stays `full` because nobody has yet measured whether a kernel loses
-    // compliance (plan 0003 R02) — a mode chosen by default would be a bet the
+    // compliance — a mode chosen by default would be a bet the
     // repository never made. Declared, not generated, for the same reason as `budget`.
     ...(existing?.mode === undefined ? {} : { mode: existing.mode }),
     // ADR-084: the rules this repository hands to the workspace's user-level copy, and
@@ -313,7 +313,7 @@ export const GENERATED_KEYS = GENERATED_KEYS_OF;
 
 // The sub-keys of `projection` this tool writes. `projection` is a generated key, but
 // not wholesale: the repository owns sub-keys this writer does not emit (`place` is the
-// one that shipped), and a repair that replaces the object deletes them (review 0003 Q26).
+// one that shipped), and a repair that replaces the object deletes them.
 const PROJECTION_KEYS = new Set(['simtDevSha', 'version']);
 
 /** The `projection` object a manifest carries; anything that is not an object is nothing. */
@@ -400,7 +400,7 @@ export async function manifestDrift(root, stack, sha) {
     if (!(key in expected)) return false;
     // `projection` compares on the sub-keys this tool writes: a sub-key the repo
     // chose (`place`) is not a stale field, and reporting it is what made `sync`
-    // delete the one setting that was not stale (review 0003 Q26).
+    // delete the one setting that was not stale.
     const actual = key === 'projection' ? generatedProjection(manifest[key]) : manifest[key];
     return JSON.stringify(actual) !== JSON.stringify(expected[key]);
   });
@@ -458,7 +458,7 @@ export function manifestText(manifest) {
 
 /**
  * The manifest in the shape the callers already read, now answered by the one loader
- * (review 0003 Q69). `error` is the unreadable-file case only: a manifest with a value
+ *. `error` is the unreadable-file case only: a manifest with a value
  * the schema cannot use is still a manifest, and refusing it here would turn every
  * reader into a second validator.
  *

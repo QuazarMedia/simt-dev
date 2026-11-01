@@ -77,7 +77,7 @@ export async function packDigest(dir, { exclude = [] } = {}) {
       } else if (entry.isSymbolicLink()) {
         // A link is not vendored bytes, and the loader follows it: the old walk skipped
         // links while the projection read through them, so a rule reached by a link was
-        // projected without being covered by the pin (review 0003 Q58). A link to a
+        // projected without being covered by the pin. A link to a
         // file is hashed through its target, because `readFile` below follows it. A link
         // to a directory is refused: recursing would let a pack's digest describe a tree
         // it does not carry.

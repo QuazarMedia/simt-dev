@@ -1,12 +1,12 @@
 // Derived per-run metrics: what a record costs, and how good it is.
 //
-// Split from the statistics beside it (review 0003 Q78): a metric is a function of one
+// Split from the statistics beside it: a metric is a function of one
 // record, a statistical test is a function of a population of them, and a reader looking
 // for the cost model should not have to open the bootstrap.
 //
 // The cost model distinguishes three answers because a missing cost must never read as a
 // zero cost: `priced` from the token table, `reported` by the harness, `missing` when
-// neither exists (review 0003 Q46).
+// neither exists.
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
@@ -56,7 +56,7 @@ function isFlatPriceObject(obj) {
  * @returns {Promise<null|{kind: 'flat'|'map', entry?: object, entries?: object}>}
  */
 export async function loadPrices(root) {
-  // The pre-move path is a fallback for one release (review 0003 Q19).
+  // The pre-move path is a fallback for one release.
   const pricesPath = join(resolve(root), LOCAL_DIR, 'bench', 'prices.json');
   const legacyPath = join(resolve(root), '.simt', 'bench', 'prices.json');
   let rawText;

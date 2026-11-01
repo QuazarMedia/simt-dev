@@ -1,4 +1,4 @@
-// What a task is, and which part of the command card that kind needs (plan 0003 R27).
+// What a task is, and which part of the command card that kind needs.
 //
 // A classification nobody can audit is an opinion. Every branch below names the pattern
 // it matched and the field it matched in, and `--explain` prints exactly that, so "why is
@@ -6,7 +6,7 @@
 //
 // Nothing here reads a clock, the environment or the network. The same task text and the
 // same paths give the same kind on every machine, which is the first property the packet
-// needs: byte-stable input, byte-stable output (plan 0003 P4).
+// needs: byte-stable input, byte-stable output.
 
 /** The four kinds a brief knows. */
 const KINDS = ['bugfix', 'feature', 'refactor', 'docs'];

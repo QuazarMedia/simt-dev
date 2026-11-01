@@ -1,4 +1,4 @@
-// Estate learning through `compare` (plan 0003 R36).
+// Estate learning through `compare`.
 //
 // Aggregates `.simt/ledger.jsonl`, `.simt/lessons.jsonl`, and ablation/bench
 // records across workspace repositories to surface:
@@ -31,7 +31,7 @@ import { localRel, readStateFile } from '../state.mjs';
 
 const ABLATION_REL = localRel('bench', 'ablation.json');
 // Where pre-Q19 checkouts keep the file: the writer's path before the move to
-// machine-local state (review 0003 Q50).
+// machine-local state.
 const ABLATION_REL_LEGACY = join(STATE_DIR, 'bench', 'ablation.json');
 
 const POLICY_BY_ID = new Map(policiesFor('pre-tool-use').map((p) => [p.id, p]));
@@ -265,7 +265,7 @@ export function renderAdrDraft({
  * }>}
  */
 /**
- * Digest-keyed memo of estate learning (review 0003 Q38).
+ * Digest-keyed memo of estate learning.
  *
  * The bootstrap comparisons below are pure over the records on disk, so a
  * second `compare` with unchanged inputs recomputes nothing. Keyed by digest,

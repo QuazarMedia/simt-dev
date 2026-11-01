@@ -4,7 +4,7 @@
 // that exists after the change; a deletion names `/dev/null` and contributes no path.
 // The grader uses it to measure the blast radius, and the skills compiler uses it to ask
 // which files a stored run touched — neither should have to import the bench's grader to
-// read a diff header (review 0003 Q79).
+// read a diff header.
 
 /**
  * Extract repository-relative file paths touched by a unified git diff.

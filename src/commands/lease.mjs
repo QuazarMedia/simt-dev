@@ -1,7 +1,7 @@
 // `simt lease [<paths>...]`: claim files for one session, or read the claims (R54).
 // `lease release` and `lease renew` end and extend the holder's own claims: the
 // denial tells a blocked session to ask the holder to release the path, so the
-// holder needs a command that does it (review 0003 Q20).
+// holder needs a command that does it.
 //
 // The claim is the half of ADR-101 a session does by hand: `lease src/a.mjs --session
 // alpha` records that alpha is working on the path until a TTL expires, the pre-edit
@@ -38,7 +38,7 @@ export async function leaseCommand(args, flags) {
   const root = commandRoot(flags);
   const [sub, ...rest] = args;
   // The denial tells a blocked session to ask the holder to release the path,
-  // so releasing is a subcommand, not a missing flag (review 0003 Q20).
+  // so releasing is a subcommand, not a missing flag.
   if (sub === 'release') return releaseLeases(root, rest, flags);
   if (sub === 'renew') return renewLeases(root, rest, flags);
 
@@ -126,7 +126,7 @@ export async function leaseCommand(args, flags) {
 
   // The read-modify-write happens under the lock: twelve concurrent claims
   // stored seven before this, because every claimant read the same file and
-  // each wrote back only what it had seen (review 0003 Q20).
+  // each wrote back only what it had seen.
   const claimed = await withLeaseLock(root, async () => {
     const read = await readLeases(root);
     if (read.error !== null) return { error: read.error, path: read.path };

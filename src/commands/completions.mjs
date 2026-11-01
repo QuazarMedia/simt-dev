@@ -1,4 +1,4 @@
-// `simt completions <shell>` — print a completion script (plan 0003 R51).
+// `simt completions <shell>` — print a completion script.
 //
 // The script goes to stdout and nothing else does, because the install is a
 // redirect: `source <(simt completions bash)`, or the zsh file dropped onto

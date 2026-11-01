@@ -1,4 +1,4 @@
-// Deterministic lesson candidate ledger and promotion to `docs/lessons/NNNN-<slug>.md` (plan 0003 R32).
+// Deterministic lesson candidate ledger and promotion to `docs/lessons/NNNN-<slug>.md`.
 //
 // Four deterministic candidate sources write to `.simt/lessons.jsonl`:
 //   1. `fail-then-fix`: a gate or test that fails and then passes in one session,
@@ -54,7 +54,7 @@ export function defaultExpires(from = new Date()) {
 /**
  * Whether a `simt-expires` value has passed. Unparseable values are NOT expired:
  * a malformed date is a data error the reader should see, and hiding the lesson
- * would turn it into a silent one (review 0003 Q36).
+ * would turn it into a silent one.
  *
  * @param {string|null|undefined} expires
  * @param {Date} [now]
@@ -165,7 +165,7 @@ function extractKeywords(text, paths = []) {
   return [...words];
 }
 export async function readLessonCandidates(root) {
-  // The pre-move path is a fallback for one release (review 0003 Q19).
+  // The pre-move path is a fallback for one release.
   let text;
   try {
     ({ text } = await readStateFile(root, LESSONS_FILE, [LESSONS_FILE_LEGACY]));
@@ -222,7 +222,7 @@ async function appendCandidateLine(root, record) {
  * two processes appending concurrently computed the same next index, and a
  * hand-edited or truncated file renumbered everything after it. The hash covers
  * the fields that make a candidate distinct, so the same candidate always maps
- * to the same id and two different ones never share it (review 0003 Q36).
+ * to the same id and two different ones never share it.
  *
  * @param {{kind: string, signature: string, evidence: string[], cmd: string|null}} parts
  * @returns {string}
@@ -534,7 +534,7 @@ export async function recordHookDenial(root, denial) {
 export function renderLessonMarkdown(candidate, options = {}) {
   // No `**` fallback: a trigger with no paths is a promotion the caller
   // refused, not a lesson about everything. `promoteLesson` rejects those;
-  // this renders exactly the paths it was given (review 0003 Q36).
+  // this renders exactly the paths it was given.
   const paths =
     Array.isArray(options.paths) && options.paths.length > 0
       ? options.paths
@@ -628,8 +628,8 @@ export function parseLessonFile(id, text, now = new Date()) {
  *
  * `simt-expires` is read here, once, so every consumer — recall, `why`, the
  * hook, the bench, `lessons list` — agrees on what has expired. Nothing was
- * reading the field, so expired lessons kept firing indefinitely (review 0003
- * Q36). Pass `includeExpired` to see the retired ones with `expired: true`.
+ * reading the field, so expired lessons kept firing indefinitely
+ *. Pass `includeExpired` to see the retired ones with `expired: true`.
  *
  * @param {string} root
  * @param {{includeExpired?: boolean, now?: Date}} [options]
@@ -677,7 +677,7 @@ async function nextLessonNumber(root) {
  *
  * Capture is not promotion's business: `promoteLesson` used to scan the ledger
  * first, so a preview (`review` without `--yes`) wrote to the store it was
- * only reading. Capture is an explicit `lessons capture` now (review 0003 Q36).
+ * only reading. Capture is an explicit `lessons capture` now.
  *
  * @param {string} root
  * @param {{id?: string, apply?: boolean, paths?: string[], expires?: string, title?: string, journal?: object[]}} [options]
@@ -755,7 +755,7 @@ export async function promoteLesson(root, options = {}) {
 }
 
 /**
- * Format a promoted lesson as a single paragraph for after-tool hook injection (plan 0003 R33).
+ * Format a promoted lesson as a single paragraph for after-tool hook injection.
  *
  * @param {object} lesson
  * @returns {string}
@@ -913,7 +913,7 @@ export function matchLessonByOutput(lessons, payloadOrOutput) {
 
 /**
  * Recall and inject a matching lesson as one paragraph when an after-tool hook (`post-tool-use`)
- * sees failing output whose signature matches a promoted lesson in `docs/lessons/*.md` (plan 0003 R33).
+ * sees failing output whose signature matches a promoted lesson in `docs/lessons/*.md`.
  *
  * @param {object} row harness adapter row from `src/agenthooks/render.mjs`
  * @param {object} payload hook stdin JSON payload

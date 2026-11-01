@@ -1,4 +1,4 @@
-// The finding-code table behind `simt explain <CODE>` (plan 0003 R46).
+// The finding-code table behind `simt explain <CODE>`.
 //
 // Every status `simt check` can emit, one row each: what the reader is looking
 // at, which decision settled that it is a finding (the `why` an agent needs

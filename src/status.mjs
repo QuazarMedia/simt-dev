@@ -1,4 +1,4 @@
-// The `--line` status cache (plan 0003 R48).
+// The `--line` status cache.
 //
 // `status --line` is for shell prompts, tmux and agent status lines: it must
 // answer in well under 50 ms, which rules out everything `check` does (rule
@@ -85,7 +85,7 @@ export async function writeCheckCache(root, record) {
 
 /** The last record `check` wrote, or null when it never ran (or a writer invalidated it). */
 export async function readCheckCache(root) {
-  // The pre-move path is a fallback for one release (review 0003 Q19).
+  // The pre-move path is a fallback for one release.
   let raw;
   try {
     raw = await readFile(cachePath(root), 'utf8').catch(async (error) => {

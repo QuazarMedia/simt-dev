@@ -22,7 +22,7 @@
 //      silently behind is the failure `compare` exists to surface, and this command must
 //      not be the thing that creates it.
 //   5. With no root named, it upgrades THIS repository only. The workspace is a claim
-//      about scope, so it needs `--all` or an explicit root (review 0003 Q33): the old
+// about scope, so it needs `--all` or an explicit root: the old
 //      default resolved the workspace and a dry run inside one repo planned all sixteen.
 
 import { mkdir } from 'node:fs/promises';
@@ -222,7 +222,7 @@ export async function upgradeCommand(positional, flags) {
 
   // One verdict, stated once. `ok` used to be `skipped === 0`, so a workspace with a
   // repo that never adopted answered ok:false and exited 0: the document and the process
-  // disagreed, and a caller had no way to tell which one was the answer (review 0003 Q65).
+  // disagreed, and a caller had no way to tell which one was the answer.
   const code = exitFor(plans, failed);
   const payload = {
     ok: code === EXIT.OK,

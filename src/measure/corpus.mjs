@@ -1,4 +1,4 @@
-// Sealed export / import of the mined benchmark corpus (review 0003 Q48).
+// Sealed export / import of the mined benchmark corpus.
 //
 // The vault is keyed on the repository's root commit, outside every checkout, so
 // a clone of the repository cannot read the hidden test patches the miner wrote:
@@ -138,7 +138,7 @@ export async function writeCorpusDocument(root, doc, { env = process.env, apply 
       await writeFile(join(tasksDir, `${entry.id}.json`), `${JSON.stringify(entry.task, null, 2)}\n`, 'utf8');
       const taskVault = join(vaultRoot, entry.id);
       // An imported corpus restores an answer key, so it gets the same 0700 the miner
-      // gives one (review 0003 Q49): the import must not be the cheaper way in.
+      // gives one: the import must not be the cheaper way in.
       await mkdir(taskVault, { recursive: true, mode: 0o700 });
       await chmod(taskVault, 0o700).catch(() => {});
       await writeFile(join(taskVault, 'test.patch'), Buffer.from(entry.testPatch, 'base64'));

@@ -1,7 +1,7 @@
-// Skill compiler, progressive-disclosure splitter, and trigger report (plan 0003 R30).
+// Skill compiler, progressive-disclosure splitter, and trigger report.
 //
 // 1. Compiles a skill into the Agent Skills layout (`<name>/SKILL.md` + `references/*.md`)
-//    with frontmatter that passes `checkSkill` (review 0002 S44, ADR-069).
+// with frontmatter that passes `checkSkill`.
 // 2. Flags every skill body over 5,000 tokens (20,000 bytes at 4 B/token) with a
 //    deterministic split plan, and splits markdown bodies by section into `references/`
 //    so `SKILL.md` stays within the 5,000-token and 500-line budget.

@@ -1,4 +1,4 @@
-// One ignore list, four readers' dialects (plan 0003 R52).
+// One ignore list, four readers' dialects.
 //
 // Cursor, Aider, Gemini and Claude each want the same fact — "the agent must
 // not load these paths" — in a different place: three gitignore-style files and

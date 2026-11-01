@@ -4,7 +4,7 @@
 // happens to be in subdirectories: an agent that was told to work in `src/` edits
 // from there, and every repository-relative comparison that resolves against the
 // payload's cwd — the lease file, `.gitmodules`, the manifest — compares against
-// the wrong root and silently stops matching (review 0003 Q16). The root this
+// the wrong root and silently stops matching. The root this
 // module answers is the one git itself would use, so a lease taken at the top
 // level matches an edit made three directories down.
 //
@@ -58,7 +58,7 @@ export function repoRoot(cwd) {
  * which directory `--root .` and a bare positional mean, and thirty-four commands had
  * their own copy of it. The copies drifted - some resolved the answer, some did not; some
  * read `args[0]`, some `positional[0]` - so the same argv could name two directories
- * depending on which command read it (review 0003 Q65).
+ * depending on which command read it.
  *
  * The answer is returned verbatim, not resolved: a caller that wants an absolute path
  * says so, and a command that reports the root it was given still reports what the reader

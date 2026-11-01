@@ -1,6 +1,6 @@
 // `simt bench ...` when the bench is not part of this installation.
 //
-// The bench left the core package (review 0003 Q79/Q84): it is ~5k lines that measure an
+// The bench left the core package: it is ~5k lines that measure an
 // agent against a mined corpus, and a repository that wants the rules and the gate should
 // not carry them. The commands themselves live in `packages/bench/src/commands.mjs`, and
 // this module loads that on demand - so a checkout keeps working exactly as before, and an

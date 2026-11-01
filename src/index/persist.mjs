@@ -32,7 +32,7 @@ export const FTS_TRI_SCHEMA = 'create virtual table if not exists fts_tri using 
 const FTS_V4_SCHEMA = 'create virtual table fts using fts5(kind UNINDEXED, ref UNINDEXED, body, tokenize = "unicode61 remove_diacritics 2")';
 
 // A database written by a *newer* simt is never opened for write, and never
-// read blind (review 0003 Q44): the mismatched canonical file stays with its
+// read blind: the mismatched canonical file stays with its
 // owner, and this version reads and writes a sidecar named after itself, so
 // two pinned versions stop rewriting one file past each other (the ADR-059
 // flip-flop). An *older* database is read and written in place, and the
@@ -239,7 +239,7 @@ function tmpFor(file) {
 
 /**
  * What the index was built from, so a reader can tell a current tree from an
- * old one without re-reading any blob (review 0003 Q42).
+ * old one without re-reading any blob.
  *
  * The digest covers the `git ls-files -s` listing the build consumed: same
  * bytes in, same digest out. Stored beside `schema` in `meta`, written on every
@@ -432,7 +432,7 @@ async function storedVersion(file) {
   }
 }
 
-/** A damaged index file is named, not silent (review 0003 Q44). */
+/** A damaged index file is named, not silent. */
 function corruptIndexError(cause) {
   const corrupt = new Error('the index file is corrupt; run the index build to replace it');
   corrupt.code = 'INDEX_CORRUPT';
@@ -461,7 +461,6 @@ function asIndexError(error) {
 /**
  * The jsonl file this version writes to: the canonical file when it is this
  * version's or unreadable, the sidecar when it belongs to another version
- * (review 0003 Q44).
  */
 async function jsonlTargetFile(root) {
   const base = join(root, JSONL_FILE);
@@ -546,7 +545,7 @@ export async function writeJsonl(root, previous, next, removed, symbols, edges, 
 }
 
 export async function readJsonl(root, table) {
-  // The pre-move path is a fallback for one release (review 0003 Q19).
+  // The pre-move path is a fallback for one release.
   let text;
   try {
     text = await readFile(join(root, JSONL_FILE), 'utf8');
@@ -567,7 +566,7 @@ export async function readJsonl(root, table) {
   } catch (error) {
     return { rows: [], error: corruptIndexError(error) };
   }
-  // A file a newer version owns is not read blind (review 0003 Q44): this
+  // A file a newer version owns is not read blind: this
   // version's sidecar is read instead, and a sidecar that has not been built
   // yet is cold, not broken. An older file is read in place; the next write
   // rewrites it at the current schema.
@@ -612,12 +611,12 @@ export async function readJsonl(root, table) {
 
 /**
  * The sqlite file a read opens: the canonical file when it is this version's
- * or older, the sidecar when it belongs to a newer one (review 0003 Q44),
+ * or older, the sidecar when it belongs to a newer one,
  * null when no index for this version exists. Throws when a present file
  * cannot be read as a database - corrupt, not cold.
  */
 async function resolveSqliteFile(root) {
-  // The pre-move path is a fallback for one release (review 0003 Q19).
+  // The pre-move path is a fallback for one release.
   let file = join(root, SQLITE_FILE);
   try {
     await stat(file);
@@ -646,7 +645,7 @@ async function resolveSqliteFile(root) {
  * Read rows from the index. Returns `{ rows, error }`: a missing index is
  * `{ rows: [], error: null }` (cold), a present index that cannot be read is
  * an empty row set with a named error - "locked", "no such column" and
- * "corrupt" used to all look like "no results" (review 0003 Q44).
+ * "corrupt" used to all look like "no results".
  */
 export async function readSqliteRows(root, sql, params = []) {
   let DatabaseSync;

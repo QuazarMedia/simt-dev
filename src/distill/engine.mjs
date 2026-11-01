@@ -1,4 +1,4 @@
-// The distiller's engines (plan 0003 R38).
+// The distiller's engines.
 //
 // `simt distill` writes a budgeted summary of a skill body or doc, with every claim
 // citing the source line range it rests on. Two engines produce that shape:
@@ -180,7 +180,6 @@ export function proposalFrontmatter({ source, digest, engine, budget, prompt, ve
     verified === false ? 'verified: false' : 'verified: true',
     // The faults belong to the proposal, not only to the report that wrote it: a cached
     // proposal re-read without them reported `verified:false` and nothing to fix
-    // (review 0003 Q52).
     Array.isArray(faults) && faults.length > 0 ? `faults: ${JSON.stringify(faults)}` : null,
     'status: proposal',
     '---',

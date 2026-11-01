@@ -16,7 +16,7 @@
 //      state, not a defect, and a command that went red for it would train people
 //      to ignore it.
 //
-// Output is one fact per line in fixed field order (plan 0002 section 6): a
+// Output is one fact per line in fixed field order: a
 // human can read the table, an agent can grep it, and two runs diff cleanly.
 
 import { basename, resolve } from 'node:path';
@@ -63,7 +63,7 @@ export async function compareCommand(positional, flags) {
   // Parallel with a cap, in discovery order. 16 fingerprint+region computations
   // each spawn a git process; unbounded parallelism is a burst of subprocesses
   // with no speedup, and sequential builds are what took 48 s over MCP for 17
-  // repos (review 0003 Q38). The cap keeps the burst bounded while overlapping
+  // repos. The cap keeps the burst bounded while overlapping
   // the spawn wait; the rows still come back in input order, so two runs diff
   // cleanly and determinism of the output is untouched.
   const rows = await buildRows(found.repos, context, { concurrency: resolveConcurrency(flags) });

@@ -1,4 +1,4 @@
-// The package generator (plan 0003 R43): one command builds a Claude Code plugin, a
+// The package generator: one command builds a Claude Code plugin, a
 // Gemini CLI extension, or a Cursor bundle, and all three are generated from the same
 // tables `agent-hooks install` writes into a repository. A package and a repository
 // install therefore cannot drift apart: the hooks document, the MCP registration and

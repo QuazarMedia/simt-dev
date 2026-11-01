@@ -160,8 +160,8 @@ export async function includesOwnIdentity(root) {
  * the sibling checkout happened to exist at the expected relative path.
  *
  * A caller-supplied journal records the key so `undo` restores the routing (R49);
- * without one the write stays unrecorded, as `commitJournal` needs it (review 0003
- * Q30). The journaled path sets through `journaledGitConfig`, which records one
+ * without one the write stays unrecorded, as `commitJournal` needs it
+ *. The journaled path sets through `journaledGitConfig`, which records one
  * key's before and after - the single-value case, and the only shape this tool
  * writes.
  *
@@ -184,7 +184,7 @@ export async function includeOwnIdentity(root, journal = null) {
 /**
  * Whether .gitignore already names the identity file. The plan needs the answer
  * before anything is written: a line the run does not print is a write the reader
- * approves from the diff afterwards (review 0003 Q30).
+ * approves from the diff afterwards.
  *
  * @param {string} root
  * @returns {Promise<boolean>}
@@ -229,7 +229,7 @@ export function gitignoreWithIdentity(text) {
  * is how a file ends up listed twice.
  *
  * A caller-supplied journal records the edit so `undo` restores it (R49); without
- * one the write stays unrecorded, as `commitJournal` needs it (review 0003 Q30).
+ * one the write stays unrecorded, as `commitJournal` needs it.
  *
  * @param {string} root
  * @param {Array} [journal]

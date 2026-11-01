@@ -84,7 +84,7 @@ export function parseTapOutput(text) {
 
 /**
  * Parse Vitest `--reporter=json` output. Jest emits the same
- * `testResults`/`assertionResults` shape, so one parser serves both (review 0003 Q48).
+ * `testResults`/`assertionResults` shape, so one parser serves both.
  *
  * @param {string} text
  * @returns {{passed: string[], failed: string[]}}
@@ -220,8 +220,7 @@ async function listXml(dir) {
 
 /**
  * Read every JUnit XML a run left behind, from report files or report *directories*
- * (review 0003 Q48: Gradle writes one XML per class under `build/test-results/test/`,
- * Maven under `target/surefire-reports/`; reading a single file saw none of them).
+ *
  *
  * @param {string[]} paths report files and/or directories
  * @returns {Promise<string>} the concatenated XML, '' when nothing is there

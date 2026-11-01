@@ -400,7 +400,7 @@ export function inject(text, body, meta, opts = {}) {
   // legitimately moves bytes outside the markers, so the two files differ for a
   // reason unrelated to the seam. Position is the test there instead: a region below
   // the file's own settings has been moved, and the move is what `where: 'top'`
-  // exists to repair (review 0003 Q26).
+  // exists to repair.
   const settled = unchanged && (where === 'top' ? state.before.trim() === '' : spliced === text);
   if (settled) return { ...seen, text, action: 'unchanged' };
 

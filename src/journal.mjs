@@ -1,4 +1,4 @@
-// The write journal and `undo` (plan 0003 R49, entry kinds review 0003 Q22).
+// The write journal and `undo`.
 //
 // Every write a command performs is recorded as one entry in the run's set:
 // `file` entries hold the pre-run bytes as base64 with the pre-run permission
@@ -21,8 +21,8 @@
 //     and candidates are evidence and caches, and restoring those to an earlier
 //     byte-shape would corrupt R17 rather than repair anything. The shims are
 //     the opposite of that: git's routing points at them, and the undo that
-//     restores the routing must restore the shims with it (review 0003 Q22;
-//     ADR-122 moved them under STATE_DIR). `journaledWriteFile` performs the
+// restores the routing must restore the shims with it
+//. `journaledWriteFile` performs the
 //     other writes unrecorded.
 //   - Only regular files. Symlinks carry no bytes for beforeBytes to hold, and
 //     the record shape is file bytes — pointer changes are reported by the
@@ -56,7 +56,7 @@ const JOURNAL_DIR_LEGACY = '.simt/journal';
 const SET_SUFFIX = '.json';
 const UNDONE_SUFFIX = '.undone.json';
 /** A crashed `undo` leaves its intent behind under this suffix; the next undo
- * of the same set resumes it instead of starting over (review 0003 Q22). A
+ * of the same set resumes it instead of starting over. A
  * marker is history, not a set, so the set listing excludes it. */
 const UNDOING_SUFFIX = '.undoing.json';
 /** Sets that predate entry kinds store `beforeBytes` as utf8 text and carry no
@@ -140,7 +140,7 @@ export async function journaledWriteFile(root, acc, path, text, { mode } = {}) {
   await mkdir(dirname(path), { recursive: true });
   // tmp + rename, the way this module writes its own set files: a crash
   // mid-write leaves the old bytes in place, never a half-written file
-  // (review 0003 Q25). The mode lands on the tmp, so the rename carries it.
+  //. The mode lands on the tmp, so the rename carries it.
   const tmp = `${path}.tmp-${process.pid}`;
   await writeFile(tmp, text, 'utf8');
   if (mode !== undefined) await chmod(tmp, mode);
@@ -230,8 +230,8 @@ export async function readGitValue(root, key) {
 /**
  * Set (or, with `value: null`, unset) one git config key and record it as a
  * `git-config` entry, so `undo` restores the routing a run changed — a shim
- * without its `core.hooksPath` is a hook that no longer runs (review 0003
- * Q22). A set to the value already there records nothing: there is no state
+ * without its `core.hooksPath` is a hook that no longer runs
+ *. A set to the value already there records nothing: there is no state
  * to restore.
  *
  * @returns {Promise<object|null>} the entry, or null when nothing changed
@@ -257,16 +257,16 @@ export async function journaledGitConfig(root, acc, key, value) {
  * the exact line, never append a duplicate. Called by commitJournal so every
  * writer command is covered at once rather than each one remembering.
  * Exported so `doctor --fix` repairs a missing entry with the same bytes a
- * writer would have left (plan 0003 R47).
+ * writer would have left.
  */
 /**
  * The .gitignore bytes `ignoreJournal` would write for `text`, or null when
  * `text` already ignores machine-local state. One owner for the line
  * spelling: `ignoreJournal` writes it, `journalHygiene` reads whether it is
  * there, and `doctor --fix --diff` previews it — all through this function so
- * the three cannot disagree about what counts as ignored (plan 0003 R50).
+ * the three cannot disagree about what counts as ignored.
  *
- * The ignored line is the whole local area (review 0003 Q19), not just the
+ * The ignored line is the whole local area, not just the
  * journal: every machine-local write lives under it, and one line covers them.
  */
 export function journalIgnoreNext(text) {
@@ -332,13 +332,13 @@ function coalesceEntries(acc) {
 }
 
 /**
- * Move the sets that predate the move into `.simt/local/journal` (review 0003
- * Q19's fallback directory) into the current directory, and take the legacy
+ * Move the sets that predate the move into `.simt/local/journal`
+ * into the current directory, and take the legacy
  * directory down when the move empties it. While the current directory is
  * absent, `listJournalSets` falls back to the legacy one; once it exists, the
  * two are disjoint and the legacy sets are invisible to `undo` — a repo that
  * accumulated history under the old path loses it on its first write after the
- * move (plan 0005 H3). `commitJournal` is the only writer, so the migration
+ * move. `commitJournal` is the only writer, so the migration
  * rides on it and heals on the next journal activity. Every legacy set
  * predates every current set — the current directory is created by this
  * writer — so the move cannot disturb recency order. A name present in both
@@ -416,7 +416,7 @@ export async function commitJournal(root, command, acc, { at = Date.now() } = {}
 }
 
 /**
- * The `journal-unignored` finding's facts (plan 0003 R47): the sets on disk and
+ * The `journal-unignored` finding's facts: the sets on disk and
  * whether .gitignore names the directory. One owner for the line spelling —
  * `ignoreJournal` writes it, this reads it — so the two cannot disagree about
  * what counts as ignored.
@@ -436,7 +436,7 @@ export async function journalHygiene(root) {
 
 /** Set ids newest-first, undone sets excluded. */
 export async function listJournalSets(root) {
-  // The pre-move directory is a fallback for one release (review 0003 Q19);
+  // The pre-move directory is a fallback for one release;
   // the sets in it move into the current directory on the next write
   // (`migrateLegacyJournal`, plan 0005 H3), so the fallback only serves a
   // repo that has not written since the move.

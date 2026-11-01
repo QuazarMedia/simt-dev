@@ -168,6 +168,70 @@ test('help: -h is the same request as --help', async () => {
   assert.match(stdout, /usage:/);
 });
 
+/** The binary, resolved with what it printed and its exit code - a failing spawn is a
+ * result here, not a thrown test, because the assertion is about the failure. */
+function run(args) {
+  return exec('node', [BIN, ...args], { maxBuffer: 8 << 20 }).then(
+    ({ stdout }) => ({ code: 0, out: stdout }),
+    (error) => ({ code: error.code ?? 1, out: `${error.stdout ?? ''}${error.stderr ?? ''}` }),
+  );
+}
+
+/**
+ * `-h` means help wherever it appears, and every command answers it with its own page.
+ *
+ * The defect this exists for: the alias was matched only at the first positional word,
+ * so `simt check -h` ran the check with `-h` as an argument, `simt plan next -h` looked
+ * for a slice by that name, and `simt hooks install -h` used `-h` as the root path. The
+ * suite missed it because its one `-h` test passed `-h` as the whole command line, which
+ * was the one shape that worked.
+ */
+test('help: every spec path answers --help and -h with its own page', async () => {
+  const { SPEC } = await import('../src/commands/spec.mjs');
+  const queue = SPEC.flatMap((row) => ['--help', '-h'].map((flag) => [row.path, flag]));
+  const broken = [];
+  // Bounded fan-out: 150 node spawns at once is a resource test, not a help test.
+  let next = 0;
+  const worker = async () => {
+    while (next < queue.length) {
+      const [path, flag] = queue[next++];
+      const { code, out } = await run([...path.split(' '), flag]);
+      if (code !== 0 || !out.startsWith(`simt ${path}`)) {
+        broken.push(`${path} ${flag} (exit ${code}): ${out.split('\n')[0].slice(0, 80)}`);
+      }
+    }
+  };
+  await Promise.all(Array.from({ length: 8 }, worker));
+  broken.sort();
+  assert.deepEqual(broken, [], `commands that do not answer a help flag:\n${broken.join('\n')}`);
+});
+
+/**
+ * A bare group is a question about the group, and its answer is the group's subcommands.
+ *
+ * The defect this exists for: `simt plan --help`, `simt hooks --help` and every other
+ * group printed the whole top-level page, so the commands the reader had just named were
+ * absent from the page and 40 screens of the rest were in their place.
+ */
+test('help: a bare group lists its own subcommands, not the whole surface', async () => {
+  const { SPEC } = await import('../src/commands/spec.mjs');
+  const { CLI } = await import('../src/name.mjs');
+  const groups = [
+    ...new Set(SPEC.filter((row) => row.path.includes(' ')).map((row) => row.path.split(' ')[0])),
+    // A group whose name is also a bare command is answered by the command's own page.
+  ].filter((group) => !SPEC.some((row) => row.path === group));
+  for (const group of groups) {
+    const { code, out } = await run([group, '--help']);
+    assert.equal(code, 0, `${group} --help exited ${code}`);
+    assert.ok(out.startsWith(`${CLI} ${group} <subcommand>`), `${group}: ${out.split('\n')[0]}`);
+    for (const row of SPEC.filter((r) => r.path.startsWith(`${group} `))) {
+      assert.ok(out.includes(row.path.slice(group.length + 1)), `${group} omits ${row.path}`);
+    }
+    assert.doesNotMatch(out, /shared agent rules, skills and gates/, `${group} printed the top-level page`);
+    assert.ok(Buffer.byteLength(out) <= 2048, `${group}: ${Buffer.byteLength(out)} bytes`);
+  }
+});
+
 test('help: one command is one page, not the whole surface', async () => {
   const { stdout } = await exec('node', [BIN, 'help', 'gate'], { maxBuffer: 8 << 20 });
   assert.match(stdout, /^simt gate /);

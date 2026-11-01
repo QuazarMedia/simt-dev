@@ -366,7 +366,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --local                 distill / review: propose the answer from the configured
                          local chat model (local.chat); off by default, which
                          uses the deterministic path instead
---help                  this text
+--help, -h              this text, or one command's own page: simt <command> -h
 --version               the version, and the SHA it was built from`;
 
 const PRINCIPLES = `design rules:
@@ -399,7 +399,7 @@ export async function help(argv, dispatched) {
   // fact being asked for was 40 screens down.
   const asked = commandFromHelp(positional);
   if (asked !== null) {
-    emit(commandPage(asked));
+    emit(SPEC_PATHS.includes(asked) ? commandPage(asked) : groupPage(asked));
     return 0;
   }
   if (flags.json === true) {
@@ -492,12 +492,47 @@ async function version() {
   return `${describeVersion()}\n`;
 }
 
-/** The command a help request names, or null when it names none. */
+/**
+ * The command or group a help request names, or null when it names neither.
+ *
+ * A group used to match nothing here and fell through to the top-level page, so
+ * `simt plan --help` answered a different question than the one asked — with 23 KB
+ * instead of the group's own commands.
+ */
 function commandFromHelp(positional) {
-  const words = positional[0] === 'help' ? positional.slice(1) : positional;
+  const asked = positional[0] === 'help' ? positional.slice(1) : positional;
+  const words = asked.filter((word) => word !== '-h');
   const two = words.slice(0, 2).join(' ');
   if (SPEC_PATHS.includes(two)) return two;
-  return SPEC_PATHS.includes(words[0]) ? words[0] : null;
+  if (SPEC_PATHS.includes(words[0])) return words[0];
+  return groupRows(words[0]).length === 0 ? null : words[0];
+}
+
+/** The rows of one group, in spec order. */
+function groupRows(group) {
+  return SPEC.filter((row) => row.path.startsWith(`${group} `));
+}
+
+/**
+ * One group's page: its subcommands, one per line, and how to read any one of them.
+ *
+ * It states each subcommand's summary because that is the choice the reader is making;
+ * the page that used to answer a bare group listed every command in the tool and left
+ * them to guess which of the forty belonged to the group they typed.
+ */
+function groupPage(group) {
+  const rows = groupRows(group);
+  if (rows.length === 0) return '';
+  const names = rows.map((row) => row.path.slice(group.length + 1));
+  const width = Math.max(...names.map((name) => name.length));
+  const lines = [`${CLI} ${group} <subcommand>`, ''];
+  for (const [index, row] of rows.entries()) {
+    lines.push(`  ${names[index].padEnd(width)}  ${row.summary}`);
+  }
+  const fallback = rows.find((row) => row.defaultFor === group);
+  if (fallback !== undefined) lines.push('', `default  ${CLI} ${group} runs ${CLI} ${fallback.path}`);
+  lines.push('', `more     ${CLI} ${group} <subcommand> --help   that command's own page`);
+  return `${lines.join('\n')}\n`;
 }
 
 /** One spec row as the JSON a UI or a harness reads. */

@@ -346,8 +346,10 @@ async function dispatchInState(argv) {
   // Help is shown only when explicitly asked for. An unknown command must fail with
   // a usage code, not print 40 lines of prose and exit 0 — an agent that mistyped
   // needs to be told so, not handed a wall of text it may misread as output.
-  // `-h` is the alias a reader types first, and it used to reach `unknown command '-h'`.
-  if (flags.help || flags.version || positional[0] === 'help' || positional[0] === '-h') {
+  // `-h` is the alias a reader types first. Matched anywhere in the positional words,
+  // not just first: `simt check -h` used to run the check with `-h` as an argument and
+  // `simt plan next -h` looked for a slice by that name, both instead of printing a page.
+  if (flags.help || flags.version || positional[0] === 'help' || positional.includes('-h')) {
     // The argv is parsed once, here, and help renders what that parse produced: it used
     // to parse the same argv again, so `simt --help` paid for two parses and could in
     // principle answer a different question than the dispatcher asked.

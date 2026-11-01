@@ -20,6 +20,8 @@ import {
   DEFAULT_TTL_SECONDS,
   activeLeases,
   canonicalLeasePath,
+  flattenLease,
+  leaseCovers,
   readLeases,
   withLeaseLock,
   writeLeases,
@@ -61,6 +63,8 @@ export async function leaseCommand(args, flags) {
 
   const wanted = [];
   const seen = new Set();
+  // A trailing slash asks for the directory (Q74): one claim covering every path under it.
+  const kinds = new Map();
   // The claim is stored in the one spelling the hook's comparison will produce:
   // a claim taken as `src/Keep.mjs` and an edit that spells `src/keep.mjs` must
   // be the same claim on a case-insensitive volume, so the stored path is
@@ -74,19 +78,36 @@ export async function leaseCommand(args, flags) {
     if (!seen.has(rel)) {
       seen.add(rel);
       wanted.push(rel);
+      kinds.set(rel, String(arg).endsWith('/') ? 'dir' : 'path');
     }
   }
 
   // Older claim files hold the pre-canonical spelling, so a stored path is
   // canonicalised before it is compared: a claim written before the resolver
   // existed must still conflict with a claim taken for the same file.
-  const keyOf = (l) => canonicalLeasePath(root, l.path, { ignoreCase }) ?? l.path;
-  const newClaim = (expiresAt) =>
-    wanted.map((path) => ({ path, session, expiresAt, ...(harness === null ? {} : { harness }) }));
+  // A claim and a target overlap when either covers the other: claiming `src/` while
+  // `src/a.mjs` is held is the conflict the directory claim exists to catch (Q74).
+  const overlaps = (l) =>
+    wanted.some(
+      (rel) =>
+        leaseCovers(l, rel) ||
+        (kinds.get(rel) === 'dir' && (l.path === rel || l.path.startsWith(`${rel}/`))),
+    );
+  const newClaim = (expiresAt, held) =>
+    wanted.map((path) => {
+      const fences = held.filter((l) => leaseCovers(l, path)).map((l) => Number(l.fence) || 0);
+      return flattenLease({
+        resource: { kind: kinds.get(path) ?? 'path', id: path },
+        holder: { session, harness },
+        fence: 1 + (fences.length === 0 ? 0 : Math.max(...fences)),
+        acquiredAt: Date.now(),
+        expiresAt,
+      });
+    });
 
   const mode = writeMode(flags);
   if (!mode.apply) {
-    const mine = newClaim(Date.now() + ttl * 1000);
+    const mine = newClaim(Date.now() + ttl * 1000, []);
     const apply = `run: ${CLI} lease ${wanted.map((p) => JSON.stringify(p)).join(' ')} --session ${session} --yes`;
     if (isJson(flags)) {
       emitJson({ ok: true, command: 'lease', root, dryRun: true, session, ttl, leases: mine, remedy: apply });
@@ -110,12 +131,12 @@ export async function leaseCommand(args, flags) {
     const read = await readLeases(root);
     if (read.error !== null) return { error: read.error, path: read.path };
     const held = activeLeases(read);
-    const conflicts = held.filter((l) => seen.has(keyOf(l)) && l.session !== session);
+    const conflicts = held.filter((l) => overlaps(l) && l.session !== session);
     if (conflicts.length > 0) return { conflicts };
     // Keep every other live claim, refresh ours, and let an expired one fall out:
     // the write is also the only sweep the file ever gets.
-    const others = held.filter((l) => !seen.has(keyOf(l)));
-    const mine = newClaim(Date.now() + ttl * 1000);
+    const others = held.filter((l) => !overlaps(l));
+    const mine = newClaim(Date.now() + ttl * 1000, held);
     const path = await writeLeases(root, [...others, ...mine]);
     return { mine, path };
   });
@@ -162,6 +183,7 @@ function resolveTargets(root, args, session, verb) {
   const ignoreCase = coreIgnoreCase(root);
   const wanted = [];
   const seen = new Set();
+  const kinds = new Map();
   for (const arg of args) {
     const rel = canonicalLeasePath(root, arg, { ignoreCase });
     if (rel === null) {
@@ -170,9 +192,10 @@ function resolveTargets(root, args, session, verb) {
     if (!seen.has(rel)) {
       seen.add(rel);
       wanted.push(rel);
+      kinds.set(rel, String(arg).endsWith('/') ? 'dir' : 'path');
     }
   }
-  return { wanted, seen, ignoreCase };
+  return { wanted, seen, ignoreCase, kinds };
 }
 
 function claimSession(flags) {
@@ -188,23 +211,28 @@ async function releaseLeases(root, args, flags) {
   if (sessionError !== undefined) return sessionError;
   const resolved = resolveTargets(root, args, session, 'release');
   if (resolved.error !== undefined) return resolved.error;
-  const { wanted, seen, ignoreCase } = resolved;
-  const keyOf = (l) => canonicalLeasePath(root, l.path, { ignoreCase }) ?? l.path;
+  const { wanted, seen, ignoreCase, kinds } = resolved;
+  const overlaps = (l) =>
+    wanted.some(
+      (rel) =>
+        leaseCovers(l, rel) ||
+        (kinds.get(rel) === 'dir' && (l.path === rel || l.path.startsWith(`${rel}/`))),
+    );
   const mode = writeMode(flags);
 
   const released = await withLeaseLock(root, async () => {
     const read = await readLeases(root);
     if (read.error !== null) return { error: read.error, path: read.path };
     const held = activeLeases(read);
-    const foreign = held.filter((l) => seen.has(keyOf(l)) && l.session !== session);
+    const foreign = held.filter((l) => overlaps(l) && l.session !== session);
     if (foreign.length > 0) {
       return {
         conflicts: foreign.map((c) => `${c.path} is leased by ${c.session} until ${ISO(c.expiresAt)}`).join('; '),
       };
     }
-    const dropped = held.filter((l) => seen.has(keyOf(l)));
+    const dropped = held.filter((l) => overlaps(l));
     if (!mode.apply) return { preview: dropped };
-    const kept = held.filter((l) => !seen.has(keyOf(l)));
+    const kept = held.filter((l) => !overlaps(l));
     const path = await writeLeases(root, kept);
     return { dropped, path };
   });
@@ -252,27 +280,32 @@ async function renewLeases(root, args, flags) {
   if (sessionError !== undefined) return sessionError;
   const resolved = resolveTargets(root, args, session, 'renew');
   if (resolved.error !== undefined) return resolved.error;
-  const { wanted, seen, ignoreCase } = resolved;
+  const { wanted, seen, ignoreCase, kinds } = resolved;
   const ttl = flags.ttl === undefined ? DEFAULT_TTL_SECONDS : Number(flags.ttl);
   if (!Number.isInteger(ttl) || ttl < 1) {
     return fail(`--ttl must be a positive number of seconds, received ${flags.ttl}`, EXIT.USAGE, `example: run: ${CLI} lease renew <paths> --ttl 900`);
   }
-  const keyOf = (l) => canonicalLeasePath(root, l.path, { ignoreCase }) ?? l.path;
+  const overlaps = (l) =>
+    wanted.some(
+      (rel) =>
+        leaseCovers(l, rel) ||
+        (kinds.get(rel) === 'dir' && (l.path === rel || l.path.startsWith(`${rel}/`))),
+    );
   const mode = writeMode(flags);
 
   const renewed = await withLeaseLock(root, async () => {
     const read = await readLeases(root);
     if (read.error !== null) return { error: read.error, path: read.path };
     const held = activeLeases(read);
-    const foreign = held.filter((l) => seen.has(keyOf(l)) && l.session !== session);
+    const foreign = held.filter((l) => overlaps(l) && l.session !== session);
     if (foreign.length > 0) {
       return {
         conflicts: foreign.map((c) => `${c.path} is leased by ${c.session} until ${ISO(c.expiresAt)}`).join('; '),
       };
     }
     const expiresAt = Date.now() + ttl * 1000;
-    const mine = held.map((l) => (seen.has(keyOf(l)) ? { ...l, expiresAt } : l));
-    const touched = held.filter((l) => seen.has(keyOf(l)));
+    const mine = held.map((l) => (overlaps(l) ? { ...l, expiresAt } : l));
+    const touched = held.filter((l) => overlaps(l));
     if (!mode.apply) return { preview: touched.map((l) => ({ ...l, expiresAt })) };
     const path = await writeLeases(root, mine);
     return { touched: touched.map((l) => ({ ...l, expiresAt })), path };

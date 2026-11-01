@@ -66,7 +66,20 @@ const editPayload = (file, root) =>
 const edit = (root, file, options) => cli(['agent-hook', 'pre-tool-use', '--harness', 'claude'], { input: editPayload(file, root), ...options });
 
 const leasePath = (root) => join(root, LEASE_FILE);
-const readClaims = async (root) => JSON.parse(await readFile(leasePath(root), 'utf8'));
+// v2 on disk, v1's field names in memory: the assertions below are about claims and who
+// holds them, and reaching through `resource.id` in every one would test the schema in
+// twenty places instead of the behaviour in each (Q74).
+const readClaims = async (root) => {
+  const document = JSON.parse(await readFile(leasePath(root), 'utf8'));
+  return {
+    ...document,
+    leases: document.leases.map((l) =>
+      l.resource === undefined
+        ? l
+        : { ...l, path: l.resource.id, session: l.holder.session, harness: l.holder.harness },
+    ),
+  };
+};
 
 test('a claim is written by name and TTL, previewed until --yes, and listable by anyone', async () => {
   const root = await repo();
@@ -81,7 +94,7 @@ test('a claim is written by name and TTL, previewed until --yes, and listable by
   assert.equal(taken.code, 0, taken.stderr);
   assert.match(taken.stdout, /LEASED   src\/keep\.mjs  until \d{4}-/);
   const claims = await readClaims(root);
-  assert.equal(claims.schemaVersion, 1);
+  assert.equal(claims.schemaVersion, 2);
   assert.equal(claims.leases.length, 1);
   assert.equal(claims.leases[0].session, 'alpha');
   assert.ok(claims.leases[0].expiresAt > Date.now(), 'the expiry is in the future');

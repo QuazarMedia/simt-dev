@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { runGates } from '../hooks/dispatcher.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { readManifest } from '../projection/manifest.mjs';
+import { registerOracle } from './graders.mjs';
 import { detectTestRunner, readReports } from './mine.mjs';
 import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
 
@@ -196,3 +197,7 @@ export async function gradeWorkspace(workDir, task, { vaultRoot, initialHead, ti
     agentPatch: diffPatchRes.stdout,
   };
 }
+
+// A task whose hidden test patch decides it declares the `tests` oracle; the registry is
+// how the runner asks for that verdict without knowing this function exists.
+registerOracle('tests', gradeWorkspace);

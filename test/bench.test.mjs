@@ -32,38 +32,32 @@ import {
 } from '../src/bench/corpus.mjs';
 import { extractPatchFiles, gradeWorkspace } from '../src/bench/grade.mjs';
 import { spawnBounded } from '../src/sys/proc.mjs';
+import { BUILTIN_ARMS, materialiseArm, parseArmSpec } from '../src/bench/arms.mjs';
+import { adapterIsolation, agentEnv, loadAdapters, parseAdapterUsage } from '../src/bench/adapters.mjs';
+import { regradeRun, runBench } from '../src/bench/run.mjs';
+import { prepareIsolatedWorkspace } from '../src/bench/workspace.mjs';
+import { buildBenchReport } from '../src/bench/report.mjs';
+import { formatReportMarkdown } from '../src/bench/render.mjs';
+import { loadRunRecords } from '../src/bench/records.mjs';
 import {
-  BUILTIN_ARMS,
-  adapterIsolation,
-  agentEnv,
-  loadAdapters,
-  materialiseArm,
-  parseAdapterUsage,
-  parseArmSpec,
-  prepareIsolatedWorkspace,
-  regradeRun,
-  runBench,
-} from '../src/bench/run.mjs';
+  computeRunCost,
+  computeRunQuality,
+  evaluateRunRecord,
+  isRunResolved,
+  loadPrices,
+} from '../src/bench/metrics.mjs';
 import {
   DEFAULT_BOOTSTRAP_SAMPLES,
   DEFAULT_BOOTSTRAP_SEED,
   MIN_PAIRD_TASKS,
   NON_INFERIORITY_MARGIN,
   bootstrapArmCi,
-  buildBenchReport,
   compareArms,
-  computeRunCost,
-  computeRunQuality,
-  evaluateRunRecord,
-  formatReportMarkdown,
   holmAdjust,
-  isRunResolved,
-  loadPrices,
-  loadRunRecords,
   mcnemarTest,
   signTest,
   wilcoxonSignedRank,
-} from '../src/bench/report.mjs';
+} from '../src/bench/stats.mjs';
 import {
   CANARY_ALPHA,
   DEFAULT_CANARY_SIZE,
@@ -449,7 +443,7 @@ test('mineTasks validates RED and GOLD twice, drops non-RED commits, and writes 
   assert.equal(firstRun.tasks.length, 1);
 
   const [task] = firstRun.tasks;
-  assert.equal(task.schemaVersion, 1);
+  assert.equal(task.schemaVersion, 2);
   // 12 hex chars: the 7-char form could not disambiguate two tasks mined from
   // the same commit (review 0003 Q48); the committed corpus keeps its 7-char
   // ids and is covered by the corpus test below.
@@ -493,7 +487,9 @@ test('simt-dev has at least 20 verified tasks in .simt/bench/tasks matching Appe
   for (const file of files) {
     const raw = await readFile(join(tasksDir, file), 'utf8');
     const task = JSON.parse(raw);
-    assert.equal(task.schemaVersion, 1, `${file}: missing schemaVersion 1`);
+    // v1 and v2 both read: a corpus mined before schema v2 is still a corpus this
+    // reader accepts, and `simt bench mine` writes v2 from here on.
+    assert.ok([1, 2].includes(task.schemaVersion), `${file}: no known schemaVersion (${task.schemaVersion})`);
     assert.equal(`${task.id}.json`, file, `${file}: id does not match filename`);
     assert.match(task.id, /^t-[0-9a-f]{7}-01$/);
     assert.match(task.base, /^[0-9a-f]{40}$/);
@@ -1034,7 +1030,7 @@ test('bench run: gold adapter resolves 100%, noop resolves 0%, and re-grading re
   assert.equal(goldResult.applied, true);
   assert.equal(goldResult.runs.length, 2);
   for (const run of goldResult.runs) {
-    assert.equal(run.schemaVersion, 1);
+    assert.equal(run.schemaVersion, 2);
     assert.equal(run.task, task.id);
     assert.equal(run.resolved, true, `gold adapter must resolve 100% (arm=${run.arm})`);
     assert.equal(run.gatesPassed, true);

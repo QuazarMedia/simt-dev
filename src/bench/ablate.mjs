@@ -19,15 +19,14 @@ import { plan } from '../projection/project.mjs';
 import { isEligible, loadRules, readDeclared, ruleValues, select } from '../projection/rules.mjs';
 import { resolveSurfaces, rulePath, SURFACES } from '../projection/surfaces.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
+import { evaluateRunRecord, loadPrices } from './metrics.mjs';
+import { loadRunRecords } from './records.mjs';
 import {
   DEFAULT_BOOTSTRAP_SAMPLES,
   DEFAULT_BOOTSTRAP_SEED,
   compareArms,
-  evaluateRunRecord,
   holmAdjust,
-  loadPrices,
-  loadRunRecords,
-} from './report.mjs';
+} from './stats.mjs';
 
 export const DEFAULT_CANARY_SIZE = 10;
 export const DEL_R_TOLERANCE = 0.01;

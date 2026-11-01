@@ -1,165 +1,207 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "adapters": {
     "claude": {
       "id": "claude",
       "label": "Claude Code",
-      "kind": "cli",
+      "kind": "agent",
       "bin": "claude",
-      "template": "claude -p \"{prompt}\" --output-format json --max-turns {turns}",
-      "args": ["-p", "{prompt}", "--output-format", "json", "--max-turns", "{turns}"],
-      "modelArgs": ["--model", "{model}"],
-      "format": "json",
+      "prompt": {
+        "delivery": "argv",
+        "args": ["-p", "{prompt}", "--output-format", "json", "--max-turns", "{turns}"],
+        "modelArgs": ["--model", "{model}"]
+      },
+      "env": { "allow": ["ANTHROPIC_API_KEY"] },
       "isolation": "env",
-      "env": ["ANTHROPIC_API_KEY"],
-      "usageSource": "usage.*, total_cost_usd, num_turns",
-      "fields": {
-        "input": ["usage.input_tokens", "usage.input"],
-        "cacheWrite": ["usage.cache_creation_input_tokens", "usage.cacheWrite"],
-        "cacheRead": ["usage.cache_read_input_tokens", "usage.cacheRead"],
-        "output": ["usage.output_tokens", "usage.output"],
-        "turns": ["num_turns", "usage.turns"],
-        "toolCalls": ["num_tool_calls", "tool_calls", "usage.toolCalls"],
-        "costUsd": ["total_cost_usd", "cost_usd", "costUsd"]
-      }
+      "timeoutMs": 120000,
+      "usage": {
+        "format": "json",
+        "fields": {
+          "input": ["usage.input_tokens", "usage.input"],
+          "cacheWrite": ["usage.cache_creation_input_tokens", "usage.cacheWrite"],
+          "cacheRead": ["usage.cache_read_input_tokens", "usage.cacheRead"],
+          "output": ["usage.output_tokens", "usage.output"],
+          "turns": ["num_turns", "usage.turns"],
+          "toolCalls": ["num_tool_calls", "tool_calls", "usage.toolCalls"],
+          "costUsd": ["total_cost_usd", "cost_usd", "costUsd"]
+        }
+      },
+      "transcript": { "sources": ["stdout"] }
     },
     "codex": {
       "id": "codex",
       "label": "Codex",
-      "kind": "cli",
+      "kind": "agent",
       "bin": "codex",
-      "template": "codex exec --json \"{prompt}\"",
-      "args": ["exec", "--json", "{prompt}"],
-      "modelArgs": ["--model", "{model}"],
-      "format": "jsonl",
+      "prompt": {
+        "delivery": "argv",
+        "args": ["exec", "--json", "{prompt}"],
+        "modelArgs": ["--model", "{model}"]
+      },
+      "env": { "allow": ["OPENAI_API_KEY"] },
       "isolation": "env",
-      "env": ["OPENAI_API_KEY"],
-      "usageSource": "token events in JSONL",
-      "fields": {
-        "input": ["usage.input_tokens", "input_tokens", "usage.input"],
-        "cacheWrite": ["usage.cache_creation_input_tokens", "usage.cache_write_input_tokens", "cache_write_input_tokens"],
-        "cacheRead": ["usage.cached_input_tokens", "usage.cache_read_input_tokens", "cached_input_tokens"],
-        "output": ["usage.output_tokens", "output_tokens", "usage.output"],
-        "turns": ["turns", "num_turns"],
-        "toolCalls": ["tool_calls", "num_tool_calls"],
-        "costUsd": ["total_cost_usd", "cost_usd", "cost"]
-      }
+      "timeoutMs": 120000,
+      "usage": {
+        "format": "jsonl",
+        "fields": {
+          "input": ["usage.input_tokens", "input_tokens", "usage.input"],
+          "cacheWrite": ["usage.cache_creation_input_tokens", "usage.cache_write_input_tokens", "cache_write_input_tokens"],
+          "cacheRead": ["usage.cached_input_tokens", "usage.cache_read_input_tokens", "cached_input_tokens"],
+          "output": ["usage.output_tokens", "output_tokens", "usage.output"],
+          "turns": ["turns", "num_turns"],
+          "toolCalls": ["tool_calls", "num_tool_calls"],
+          "costUsd": ["total_cost_usd", "cost_usd", "cost"]
+        },
+        "events": {
+          "turns": [{ "type": "turn.completed" }],
+          "toolCalls": [
+            { "type": "item.completed", "item.type": ["command_execution", "tool_call", "mcp_tool_call"] }
+          ]
+        }
+      },
+      "transcript": { "sources": ["stdout"] }
     },
     "gemini": {
       "id": "gemini",
       "label": "Gemini CLI",
-      "kind": "cli",
+      "kind": "agent",
       "bin": "gemini",
-      "template": "gemini -p \"{prompt}\" --output-format json",
-      "args": ["-p", "{prompt}", "--output-format", "json"],
-      "modelArgs": ["--model", "{model}"],
-      "format": "json",
+      "prompt": {
+        "delivery": "argv",
+        "args": ["-p", "{prompt}", "--output-format", "json"],
+        "modelArgs": ["--model", "{model}"]
+      },
+      "env": { "allow": ["GEMINI_API_KEY", "GOOGLE_API_KEY"] },
       "isolation": "env",
-      "env": ["GEMINI_API_KEY", "GOOGLE_API_KEY"],
-      "usageSource": "stats block",
-      "fields": {
-        "input": ["stats.inputTokens", "stats.tokens.prompt", "stats.prompt_tokens", "usage.input_tokens"],
-        "cacheWrite": ["stats.cacheWriteTokens", "stats.tokens.cacheWrite", "usage.cache_creation_input_tokens"],
-        "cacheRead": ["stats.cachedTokens", "stats.tokens.cached", "usage.cache_read_input_tokens"],
-        "output": ["stats.outputTokens", "stats.tokens.candidates", "stats.completion_tokens", "usage.output_tokens"],
-        "turns": ["stats.turns", "stats.totalTurns", "num_turns"],
-        "toolCalls": ["stats.toolCalls", "stats.tools.totalCalls", "num_tool_calls"],
-        "costUsd": ["stats.totalCostUsd", "stats.costUsd", "total_cost_usd"]
-      }
+      "timeoutMs": 120000,
+      "usage": {
+        "format": "json",
+        "fields": {
+          "input": ["stats.inputTokens", "stats.tokens.prompt", "stats.prompt_tokens", "usage.input_tokens"],
+          "cacheWrite": ["stats.cacheWriteTokens", "stats.tokens.cacheWrite", "usage.cache_creation_input_tokens"],
+          "cacheRead": ["stats.cachedTokens", "stats.tokens.cached", "usage.cache_read_input_tokens"],
+          "output": ["stats.outputTokens", "stats.tokens.candidates", "stats.completion_tokens", "usage.output_tokens"],
+          "turns": ["stats.turns", "stats.totalTurns", "num_turns"],
+          "toolCalls": ["stats.toolCalls", "stats.tools.totalCalls", "num_tool_calls"],
+          "costUsd": ["stats.totalCostUsd", "stats.costUsd", "total_cost_usd"]
+        },
+        "totals": [
+          {
+            "root": "stats.models",
+            "keys": { "input": "tokens.prompt", "cacheRead": "tokens.cached", "output": "tokens.candidates" }
+          }
+        ]
+      },
+      "transcript": { "sources": ["stdout"] }
     },
     "opencode": {
       "id": "opencode",
       "label": "opencode",
-      "kind": "cli",
+      "kind": "agent",
       "bin": "opencode",
-      "template": "opencode run \"{prompt}\"",
-      "args": ["run", "--format", "json", "{prompt}"],
-      "modelArgs": ["--model", "{model}"],
-      "format": "jsonl",
+      "prompt": {
+        "delivery": "argv",
+        "args": ["run", "--format", "json", "{prompt}"],
+        "modelArgs": ["--model", "{model}"]
+      },
+      "env": { "allow": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"] },
       "isolation": "env",
-      "env": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
-      "usageSource": "session export",
-      "fields": {
-        "input": ["tokens.input", "usage.input_tokens", "part.tokens.input"],
-        "cacheWrite": ["tokens.cache.write", "usage.cache_creation_input_tokens", "part.tokens.cache.write"],
-        "cacheRead": ["tokens.cache.read", "usage.cache_read_input_tokens", "part.tokens.cache.read"],
-        "output": ["tokens.output", "usage.output_tokens", "part.tokens.output"],
-        "turns": ["turns", "num_turns"],
-        "toolCalls": ["toolCalls", "num_tool_calls"],
-        "costUsd": ["cost", "part.cost", "total_cost_usd"]
-      }
+      "timeoutMs": 120000,
+      "usage": {
+        "format": "jsonl",
+        "fields": {
+          "input": ["tokens.input", "usage.input_tokens", "part.tokens.input"],
+          "cacheWrite": ["tokens.cache.write", "usage.cache_creation_input_tokens", "part.tokens.cache.write"],
+          "cacheRead": ["tokens.cache.read", "usage.cache_read_input_tokens", "part.tokens.cache.read"],
+          "output": ["tokens.output", "usage.output_tokens", "part.tokens.output"],
+          "turns": ["turns", "num_turns"],
+          "toolCalls": ["toolCalls", "num_tool_calls"],
+          "costUsd": ["cost", "part.cost", "total_cost_usd"]
+        },
+        "events": {
+          "turns": [{ "type": "step_finish" }, { "event": "message_send" }],
+          "toolCalls": [{ "type": "tool_use" }]
+        }
+      },
+      "transcript": { "sources": ["stdout"] }
     },
     "cursor": {
       "id": "cursor",
       "label": "Cursor CLI",
-      "kind": "cli",
+      "kind": "agent",
       "bin": "cursor-agent",
-      "template": "cursor-agent -p \"{prompt}\" --output-format json",
-      "args": ["-p", "{prompt}", "--output-format", "json"],
-      "modelArgs": ["--model", "{model}"],
-      "format": "json",
+      "prompt": {
+        "delivery": "argv",
+        "args": ["-p", "{prompt}", "--output-format", "json"],
+        "modelArgs": ["--model", "{model}"]
+      },
+      "env": { "allow": ["CURSOR_API_KEY"] },
       "isolation": "env",
-      "env": ["CURSOR_API_KEY"],
-      "usageSource": "result JSON",
-      "fields": {
-        "input": ["usage.input_tokens", "usage.input", "stats.inputTokens"],
-        "cacheWrite": ["usage.cache_creation_input_tokens", "usage.cacheWrite", "stats.cacheWriteTokens"],
-        "cacheRead": ["usage.cache_read_input_tokens", "usage.cacheRead", "stats.cachedTokens"],
-        "output": ["usage.output_tokens", "usage.output", "stats.outputTokens"],
-        "turns": ["num_turns", "turns", "usage.turns"],
-        "toolCalls": ["num_tool_calls", "tool_calls", "usage.toolCalls", "toolCalls"],
-        "costUsd": ["total_cost_usd", "costUsd", "cost_usd"]
-      }
+      "timeoutMs": 120000,
+      "usage": {
+        "format": "json",
+        "fields": {
+          "input": ["usage.input_tokens", "usage.input", "stats.inputTokens"],
+          "cacheWrite": ["usage.cache_creation_input_tokens", "usage.cacheWrite", "stats.cacheWriteTokens"],
+          "cacheRead": ["usage.cache_read_input_tokens", "usage.cacheRead", "stats.cachedTokens"],
+          "output": ["usage.output_tokens", "usage.output", "stats.outputTokens"],
+          "turns": ["num_turns", "turns", "usage.turns"],
+          "toolCalls": ["num_tool_calls", "tool_calls", "usage.toolCalls", "toolCalls"],
+          "costUsd": ["total_cost_usd", "costUsd", "cost_usd"]
+        }
+      },
+      "transcript": { "sources": ["stdout"] }
     },
     "aider": {
       "id": "aider",
       "label": "Aider",
-      "kind": "cli",
+      "kind": "agent",
       "bin": "aider",
-      "template": "aider --message \"{prompt}\" --yes-always",
-      "args": ["--message", "{prompt}", "--yes-always", "--analytics-log", "{analyticsLog}"],
-      "modelArgs": ["--model", "{model}"],
-      "format": "analytics-log",
+      "prompt": {
+        "delivery": "argv",
+        "args": ["--message", "{prompt}", "--yes-always", "--analytics-log", "{analyticsLog}"],
+        "modelArgs": ["--model", "{model}"]
+      },
+      "env": { "allow": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"] },
       "isolation": "env",
-      "env": ["OPENAI_API_KEY", "ANTHROPIC_API_KEY"],
-      "usageSource": "--analytics-log file",
-      "fields": {
-        "input": ["prompt_tokens", "properties.prompt_tokens", "usage.input_tokens"],
-        "cacheWrite": ["cache_creation_input_tokens", "properties.cache_write_tokens"],
-        "cacheRead": ["cache_read_input_tokens", "properties.cache_read_tokens"],
-        "output": ["completion_tokens", "properties.completion_tokens", "usage.output_tokens"],
-        "turns": ["turns", "properties.turns"],
-        "toolCalls": ["tool_calls", "properties.tool_calls"],
-        "costUsd": ["cost", "total_cost", "properties.cost", "properties.total_cost"]
-      }
+      "timeoutMs": 120000,
+      "usage": {
+        "format": "analytics-log",
+        "fields": {
+          "input": ["prompt_tokens", "properties.prompt_tokens", "usage.input_tokens"],
+          "cacheWrite": ["cache_creation_input_tokens", "properties.cache_write_tokens"],
+          "cacheRead": ["cache_read_input_tokens", "properties.cache_read_tokens"],
+          "output": ["completion_tokens", "properties.completion_tokens", "usage.output_tokens"],
+          "turns": ["turns", "properties.turns"],
+          "toolCalls": ["tool_calls", "properties.tool_calls"],
+          "costUsd": ["cost", "total_cost", "properties.cost", "properties.total_cost"]
+        }
+      },
+      "transcript": { "sources": ["stdout", "analytics"] }
     },
     "gold": {
       "id": "gold",
       "label": "Gold Oracle",
-      "kind": "builtin",
+      "kind": "oracle",
+      "oracle": { "from": "vault" },
       "bin": null,
-      "template": null,
-      "args": [],
-      "modelArgs": [],
-      "format": "builtin",
+      "prompt": { "delivery": "argv", "args": [], "modelArgs": [] },
+      "env": { "allow": [] },
       "isolation": "none",
-      "env": [],
-      "usageSource": "vault gold.patch",
-      "fields": {}
+      "usage": { "format": "none", "fields": {}, "fixed": { "turns": 1, "toolCalls": 1 } },
+      "transcript": { "sources": [] }
     },
     "noop": {
       "id": "noop",
       "label": "No-op Baseline",
-      "kind": "builtin",
+      "kind": "oracle",
+      "oracle": { "from": "none" },
       "bin": null,
-      "template": null,
-      "args": [],
-      "modelArgs": [],
-      "format": "builtin",
+      "prompt": { "delivery": "argv", "args": [], "modelArgs": [] },
+      "env": { "allow": [] },
       "isolation": "none",
-      "env": [],
-      "usageSource": "none",
-      "fields": {}
+      "usage": { "format": "none", "fields": {} },
+      "transcript": { "sources": [] }
     }
   }
 }

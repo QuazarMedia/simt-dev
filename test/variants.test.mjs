@@ -543,7 +543,7 @@ test('BUILTIN_HARNESSES matches the builtin adapters in adapters.json', async ()
   );
   const builtins = new Set(
     Object.values(adapters.adapters)
-      .filter((a) => a.kind === 'builtin')
+      .filter((a) => a.kind === 'oracle')
       .map((a) => a.id)
       .sort(),
   );

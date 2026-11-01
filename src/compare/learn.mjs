@@ -19,7 +19,9 @@ import { mapCapped, DEFAULT_CONCURRENCY } from './parallel.mjs';
 
 import { policiesFor } from '../agenthooks/policy.mjs';
 import { DEL_R_TOLERANCE, parseAblationArmName } from '../bench/ablate.mjs';
-import { compareArms, evaluateRunRecord, loadPrices, loadRunRecords } from '../bench/report.mjs';
+import { evaluateRunRecord, loadPrices } from '../bench/metrics.mjs';
+import { loadRunRecords } from '../bench/records.mjs';
+import { compareArms } from '../bench/stats.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { readLedger } from '../ledger/index.mjs';
 import { readLessonCandidates } from '../memory/lessons.mjs';

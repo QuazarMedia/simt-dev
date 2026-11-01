@@ -18,20 +18,19 @@ import { plan } from '../projection/project.mjs';
 import { isEligible, loadRules, readDeclared, select } from '../projection/rules.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { CANARY_ALPHA, DEFAULT_CANARY_SIZE, DEL_R_TOLERANCE, shouldEscalateCanary } from './ablate.mjs';
+import { evaluateRunRecord, loadPrices } from './metrics.mjs';
+import { loadRunRecords } from './records.mjs';
 import {
   DEFAULT_BOOTSTRAP_SAMPLES,
   DEFAULT_BOOTSTRAP_SEED,
   collapseArmByTask,
   compareArms,
-  evaluateRunRecord,
   holmAdjust,
-  loadPrices,
-  loadRunRecords,
-} from './report.mjs';
+} from './stats.mjs';
 
 /**
  * Harnesses that grade, not answer: `gold` applies the oracle patch and `noop` does
- * nothing (`src/bench/adapters.json`, `kind: "builtin"`). Their runs measure the
+ * nothing (`src/bench/adapters.json`, `kind: "oracle"`). Their runs measure the
  * grader, not the rule text, so they must never close a variant experiment by
  * writing a lock entry (Q45). A test asserts this set matches the adapter table.
  */

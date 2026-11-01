@@ -19,9 +19,9 @@ import { basename, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
 import { CONFIG_DIR, STATE_DIR } from '../name.mjs';
-import { SCHEMA_VERSION } from '../output/index.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { packageVersion } from '../package-version.mjs';
+import { TASK_SCHEMA_VERSION, normaliseTask } from './task-schema.mjs';
 // Q70: the per-language test-file patterns are the records' `testConventions` (ADR-013),
 // not hardcoded regexes in this file. A new language's test convention lands in a record.
 import { testConventions } from '../ecosystem/records.mjs';
@@ -804,7 +804,7 @@ async function validateCandidate(
 
   return {
     task: {
-      schemaVersion: SCHEMA_VERSION,
+      schemaVersion: TASK_SCHEMA_VERSION,
       id,
       base: candidate.base,
       sourceCommit: candidate.sha,
@@ -975,7 +975,13 @@ export async function mineTasks(
           };
         }
       }
-      await writeFile(taskPath, `${JSON.stringify(entry.task, null, 2)}\n`, 'utf8');
+      // The miner is the writer, so it writes the schema a reader validates: a task file
+      // that only becomes valid on load is a file two readers can disagree about.
+      await writeFile(
+        taskPath,
+        `${JSON.stringify(normaliseTask(entry.task, { source: taskPath }), null, 2)}\n`,
+        'utf8',
+      );
 
       const taskVault = join(vaultRoot, entry.task.id);
       await mkdir(taskVault, { recursive: true, mode: 0o700 });

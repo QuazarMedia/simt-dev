@@ -14,7 +14,7 @@ import {
   evaluateSkillTriggers,
   proposeSkillDescription,
 } from '../graph/compile.mjs';
-import { loadRunRecords } from '../bench/report.mjs';
+import { loadRunRecords } from '../bench/records.mjs';
 import { extractPatchFiles } from '../bench/grade.mjs';
 import { resolveVaultDir } from '../bench/mine.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';

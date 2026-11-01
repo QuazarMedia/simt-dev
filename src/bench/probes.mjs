@@ -27,7 +27,8 @@ import { dirname, join, resolve } from 'node:path';
 import { LOCAL_DIR } from '../state.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { sanitizedEnv, spawnBounded } from '../sys/proc.mjs';
-import { adapterIsolation, executeAdapter, loadAdapters, materialiseArm, parseArmSpec } from './run.mjs';
+import { adapterIsolation, executeAdapter, loadAdapters } from './adapters.mjs';
+import { materialiseArm, parseArmSpec } from './arms.mjs';
 
 /**
  * Harnesses that script a workspace instead of driving an agent.

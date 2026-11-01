@@ -1,0 +1,99 @@
+{
+  "id": "deepseek",
+  "loaderOrder": 8,
+  "loader": {
+    "id": "deepseek",
+    "label": "DeepSeek harness",
+    "readers": "DeepSeek harness",
+    "surface": null,
+    "chainMerge": "all",
+    "dedupe": "trim",
+    "start": [
+      {
+        "scope": "project",
+        "path": "AGENTS.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "DeepSeek harness agent-instructions docs: AGENTS.md is the first base candidate in each directory from the project root down to the session working directory"
+      },
+      {
+        "scope": "project",
+        "path": "CLAUDE.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "DeepSeek harness agent-instructions docs: CLAUDE.md is the second base candidate and loads beside AGENTS.md unless the two are identical after trimming"
+      },
+      {
+        "scope": "project",
+        "path": "AGENTS.local.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "DeepSeek harness agent-instructions docs: AGENTS.local.md is a local overlay loaded after the base candidates in the same directory"
+      },
+      {
+        "scope": "project",
+        "path": "CLAUDE.local.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "DeepSeek harness agent-instructions docs: CLAUDE.local.md is the second local overlay, under the same per-directory trim dedup"
+      },
+      {
+        "scope": "user",
+        "path": "~/.dsh/AGENTS.md",
+        "tree": "single",
+        "atStart": true,
+        "why": "DeepSeek harness agent-instructions docs: the user-global file is $DSH_HOME/AGENTS.md, defaulting to ~/.dsh/AGENTS.md"
+      },
+      {
+        "scope": "user",
+        "path": "~/.agents/AGENTS.md",
+        "tree": "single",
+        "atStart": true,
+        "why": "DeepSeek harness agent-instructions docs: the shared agents root is $DSH_AGENTS_HOME or ~/.agents, and a copy that matches the harness-home file collapses behind it"
+      }
+    ],
+    "alsoReads": [
+      {
+        "what": "AGENTS.md below the session working directory",
+        "atStart": false,
+        "why": "DeepSeek harness agent-instructions docs: a successful read, write or edit that reaches a deeper directory loads that directory's instruction file on the next request; shell navigation does not"
+      }
+    ],
+    "order": "user-global ~/.dsh/AGENTS.md, then ~/.agents/AGENTS.md, then every project candidate from the project root down to the working directory, broad to specific; within one directory, base files then local overlays",
+    "cap": {
+      "bytes": 65536,
+      "scope": "chain",
+      "config": "maxBytes",
+      "drop": "broader",
+      "why": "DeepSeek harness agent-instructions docs: dsh-base sets maxBytes to 65536, and rendering drops whole broader files before truncating the most specific one"
+    },
+    "alsoCaps": [
+      {
+        "bytes": 1048576,
+        "scope": "file",
+        "appliesTo": "one source file before rendering",
+        "config": "maxSourceBytes",
+        "why": "DeepSeek harness agent-instructions docs: maxSourceBytes defaults to 1048576, and a larger source file is ignored rather than truncated into the chain"
+      }
+    ],
+    "imports": {
+      "syntax": null,
+      "depth": 0,
+      "why": "DeepSeek harness agent-instructions docs: @path imports are not interpreted; a reference inside an instruction file is not an include"
+    },
+    "nested": "on touch — the baseline is the root-to-cwd chain; a deeper AGENTS.md loads after a successful read, write or edit in that directory, not because the shell changed directory",
+    "skills": [],
+    "skillsNote": "the agent-instructions package does not document a project skill directory; shared agent configuration lives at ~/.agents, which is user scope and is not measured here",
+    "hooks": null,
+    "hooksNote": "DeepSeek harness hooks docs: the Claude Code and Codex bridges take an explicit configPath, and project-local hooks.json discovery is still marked TODO, so no repository path is loaded by default",
+    "agents": null,
+    "agentsNote": "no file-based agents are documented for the DeepSeek harness in any first-party page checked on 2026-10-30",
+    "mcp": {
+      "path": null,
+      "key": "@deepseek-ai/dsh-mcp-client",
+      "verified": "DeepSeek harness MCP docs: a server is a profile plugin row (@deepseek-ai/dsh-mcp-client), not a project file this tool can project"
+    },
+    "verified": "DeepSeek harness agent-instructions package (deepseek-ai/deepseek-harness packages/context/agent-instructions/README.md, read 2026-10-14) — the baseline loads ~/.dsh/AGENTS.md, ~/.agents/AGENTS.md, then AGENTS.md and CLAUDE.md plus the local overlays from the project root down to the working directory; trimmed duplicates in one directory collapse; dsh-base caps the rendered baseline at 65536 bytes and ignores a source file over 1048576 bytes",
+    "note": "A drifted CLAUDE.md beside AGENTS.md is loaded in full. A symlink or a byte-identical copy is not. That is why this reader does not share Codex's one-file-per-directory rule."
+  }
+}

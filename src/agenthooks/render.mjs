@@ -48,6 +48,7 @@
 
 import { CLI } from '../name.mjs';
 import { LOADERS } from '../projection/loaders.mjs';
+import { harnessHooks, harnessPayloads } from '../harness/records.mjs';
 import { renderOpencodePlugin } from './opencode.mjs';
 import { EVENTS } from './policy.mjs';
 import { AGENT_HOOK_SHIM } from './shim.mjs';
@@ -183,188 +184,93 @@ function patchFiles(text) {
   return files.filter((f) => f.path !== '');
 }
 
-const ADAPTERS = {
-  claude: {
-    id: 'claude',
-    event: 'PreToolUse',
-    matcher: 'Bash|Edit|Write|MultiEdit|NotebookEdit',
-    denyExit: 2,
-    verified: 'docs.claude.com/en/docs/claude-code/hooks, read 2026-10-16',
-    root: (p) => p.cwd,
-    extract: (p) => ({
-      command: p.tool_name === 'Bash' ? (p.tool_input?.command ?? null) : null,
-      // NotebookEdit spells its target `notebook_path`, not `file_path`: a key list
-      // that misses it is a lease the notebook can walk straight through (review
-      // 0003 Q16). Edit details travel with the path so the generated-region
-      // check can tell an edit outside the region from one inside it (Q17).
-      writes: ['Edit', 'Write', 'MultiEdit'].includes(p.tool_name)
-        ? [writeOf(p.tool_input?.file_path, p.tool_input)].filter(Boolean)
-        : p.tool_name === 'NotebookEdit'
-          ? [writeOf(p.tool_input?.notebook_path, p.tool_input)].filter(Boolean)
-          : [],
-    }),
-    deny: (message) => ({
-      hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: message },
-    }),
-    // The delivery door. `additionalContext` is documented for this event and is
-    // wrapped into the conversation at the point the hook fired, which is why the
-    // packet goes here rather than into a system prompt: the cached prefix survives.
-    prompt: {
-      event: 'UserPromptSubmit',
-      verified: 'code.claude.com/docs/en/hooks, read 2026-10-19',
-      context: (text) => ({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } }),
-    },
-    post: {
-      event: 'PostToolUse',
-      matcher: 'Bash',
-      verified: 'code.claude.com/docs/en/hooks, read 2026-10-19',
-      context: (text) => ({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: text } }),
-    },
-  },
-  codex: {
-    id: 'codex',
-    event: 'PreToolUse',
-    matcher: 'Bash|apply_patch',
-    denyExit: 2,
-    verified: 'developers.openai.com/codex/hooks, read 2026-10-16',
-    // Codex is the one harness that will not run a hook until a person has approved the
-    // exact definition, keyed by its hash — so an install that does not say this leaves
-    // the repository with a hook that never fires and no way to tell why.
-    trust: 'Codex skips a hook nobody has trusted: review it with /hooks, or the entry stays inert.',
-    root: (p) => p.cwd,
-    extract: (p) => ({
-      command: p.tool_name === 'Bash' ? (p.tool_input?.command ?? null) : null,
-      // apply_patch carries its targets inside the patch text, one header line per file;
-      // a move names its destination on the `+++` line after `*** Move File:`, and the
-      // destination is the file the move writes (review 0003 Q16).
-      writes:
-        p.tool_name === 'apply_patch'
-          ? patchWrites(String(p.tool_input?.command ?? ''))
-          : [], // entries carry {path, patch} so the region check maps hunks (Q17)
-    }),
-    deny: (message) => ({
-      hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: message },
-    }),
-    prompt: {
-      event: 'UserPromptSubmit',
-      verified: 'developers.openai.com/codex/hooks, read 2026-10-19',
-      context: (text) => ({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: text } }),
-    },
-    post: {
-      event: 'PostToolUse',
-      matcher: 'Bash',
-      verified: 'developers.openai.com/codex/hooks, read 2026-10-19',
-      context: (text) => ({ hookSpecificOutput: { hookEventName: 'PostToolUse', additionalContext: text } }),
-    },
-  },
-  cursor: {
-    id: 'cursor',
-    event: 'preToolUse',
-    matcher: 'Shell|Write|Edit',
-    denyExit: 2,
-    verified: 'cursor.com/docs/agent/hooks, read 2026-10-16',
-    root: (p) => p.working_directory ?? p.cwd,
-    extract: (p) => ({
-      command: p.tool_name === 'Shell' ? (p.tool_input?.command ?? null) : null,
-      writes: ['Write', 'Edit'].includes(p.tool_name)
-        ? [writeOf(p.tool_input?.file_path ?? p.tool_input?.path, p.tool_input)].filter(Boolean)
+// The payload a hook reads: where the tool name and its input sit, and the keys that
+// name a command and a file. A record cannot carry a function, so the engine reads the
+// record's keys and applies them: a harness that puts a field somewhere new is a new
+// record, not a new branch here (Q71).
+function pick(obj, keys) {
+  if (!obj || typeof obj !== 'object') return null;
+  for (const k of keys) {
+    const v = obj[k];
+    if (v !== undefined && v !== null) return v;
+  }
+  return null;
+}
+
+function extractOf(spec) {
+  return (p) => {
+    const payload = p ?? {};
+    // antigravity nests the call under `toolCall`; the rest name the tool at the top
+    // level. `toolNameKey` is present only on the nested shape, so its presence is
+    // the detector.
+    const nested = spec.toolNameKey !== undefined;
+    const call = nested ? (payload[spec.toolKey] ?? {}) : null;
+    const toolName = nested ? call[spec.toolNameKey] : payload[spec.toolKey];
+    const input = nested ? (call[spec.inputSubKey] ?? {}) : (payload[spec.inputKey] ?? {});
+    return {
+      command: (spec.shellTools ?? []).includes(toolName) ? (input[spec.commandKey] ?? null) : null,
+      // apply_patch carries its targets inside the patch text (writesFrom: "patch");
+      // every other write tool names its file through the path keys.
+      writes: (spec.writeTools ?? []).includes(toolName)
+        ? spec.writesFrom === 'patch'
+          ? patchWrites(String(input[spec.commandKey] ?? ''))
+          : [writeOf(pick(input, spec.pathOverrides?.[toolName] ?? spec.pathKeys), input)].filter(Boolean)
         : [],
-    }),
-    deny: (message) => ({ permission: 'deny', user_message: message, agent_message: message }),
-    // beforeSubmitPrompt is documented as continue/block and nothing else, so there is no
-    // key to deliver a packet in. Writing the entry anyway would put a command that reads
-    // a repository on the path of every prompt a person types, to say nothing.
-    prompt: null,
-    post: null,
-  },
-  antigravity: {
-    id: 'antigravity',
-    event: 'PreToolUse',
-    matcher: 'run_command|write_to_file|replace_file_content|multi_replace_file_content',
-    // The page documents the decision JSON and not an exit code, so the denial travels
-    // in the JSON only: a non-zero exit whose meaning the vendor has not stated is not
-    // a block, it is a guess that happens to be loud.
-    denyExit: 0,
-    verified: 'antigravity.google/docs/hooks, read 2026-10-16',
-    root: (p) => p.workspacePaths?.[0] ?? p.cwd,
-    extract: (p) => {
-      const call = p.toolCall ?? {};
-      const args = call.args ?? {};
-      return {
-        command: call.name === 'run_command' ? (args.CommandLine ?? null) : null,
-        writes: ['write_to_file', 'replace_file_content', 'multi_replace_file_content'].includes(call.name)
-          ? [writeOf(args.TargetFile, args)].filter(Boolean)
-          : [], // CodeContent/old/new travel with the path for the region check (Q17)
-      };
+    };
+  };
+}
+
+// The record's `rootKeys`: a list of accessor paths, first non-null wins. The caller
+// applies its `?? process.cwd()` floor (factsFrom).
+function rootOf(spec) {
+  return (p) => {
+    for (const path of spec.rootKeys ?? []) {
+      let v = p;
+      for (const seg of path) v = v?.[seg];
+      if (v !== undefined && v !== null) return v;
+    }
+    return null;
+  };
+}
+
+// The `__SIMT_TEXT__` sentinel in a record's deny and delivery templates: the text a
+// decision or a delivery carries is substituted for it, and JSON.stringify downstream
+// escapes whatever it carries.
+const TEXT = '__SIMT_TEXT__';
+
+function applyText(value, text) {
+  if (typeof value === 'string') return value === TEXT ? text : value;
+  if (Array.isArray(value)) return value.map((v) => applyText(v, text));
+  if (value && typeof value === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(value)) out[k] = applyText(v, text);
+    return out;
+  }
+  return value;
+}
+
+// The hooks dialect per harness, as records (Q71): the data a config document and a
+// decision are shaped by, with the page each shape was read from. What a record cannot
+// carry is attached here — `root` and `extract` read the record's payload keys, and
+// `deny`, `prompt.context` and `post.context` apply its templates. Module-internal on
+// purpose: `adapters()` and `adapter()` are the only doors in, and both check the
+// reader table, so an id with no hooks file is no adapter.
+const HOOKS = harnessHooks();
+const PAYLOADS = harnessPayloads();
+
+const ADAPTERS = Object.fromEntries(
+  Object.entries(HOOKS).map(([id, h]) => [
+    id,
+    {
+      ...h,
+      root: rootOf(PAYLOADS[id]),
+      extract: extractOf(PAYLOADS[id]),
+      deny: (message) => applyText(h.deny, message),
+      ...(h.prompt ? { prompt: { ...h.prompt, context: (text) => applyText(h.prompt.delivery, text) } } : {}),
+      ...(h.post ? { post: { ...h.post, context: (text) => applyText(h.post.delivery, text) } } : {}),
     },
-    deny: (message) => ({ decision: 'deny', reason: message }),
-    // No prompt event is documented for this harness's hooks file, and a guessed event
-    // name is a hook that never fires while its config says it does.
-    prompt: null,
-    post: null,
-  },
-  gemini: {
-    id: 'gemini',
-    event: 'BeforeTool',
-    matcher: 'run_shell_command|write_file|replace',
-    // The vendor's timeout unit is milliseconds (default 60000), not the seconds every
-    // other row uses; a bare 10 here would be a ten-millisecond budget, which is a hook
-    // that never finishes. The row carries its own value so the shared constant stays
-    // honest for the four vendors that measure in seconds.
-    timeout: 10000,
-    // The reference documents the decision JSON and an exit-2 system block; the denial
-    // travels in the JSON, as antigravity does.
-    denyExit: 0,
-    verified: 'geminicli.com/docs/hooks/reference/, read 2026-10-26',
-    root: (p) => p.cwd,
-    extract: (p) => ({
-      command: p.tool_name === 'run_shell_command' ? (p.tool_input?.command ?? null) : null,
-      writes: ['write_file', 'replace'].includes(p.tool_name)
-        ? [writeOf(p.tool_input?.file_path, p.tool_input)].filter(Boolean)
-        : [],
-    }),
-    deny: (message) => ({ decision: 'deny', reason: message }),
-    // BeforeAgent appends text to the prompt for this turn only — the same lifetime as a
-    // brief. The documented output has no hookEventName field, unlike Claude's.
-    prompt: {
-      event: 'BeforeAgent',
-      verified: 'geminicli.com/docs/hooks/reference/, read 2026-10-26',
-      context: (text) => ({ hookSpecificOutput: { additionalContext: text } }),
-    },
-    // AfterTool appends to the tool result; its input carries tool_response, which is
-    // what the lesson recall reads.
-    post: {
-      event: 'AfterTool',
-      verified: 'geminicli.com/docs/hooks/reference/, read 2026-10-26',
-      context: (text) => ({ hookSpecificOutput: { additionalContext: text } }),
-    },
-  },
-  opencode: {
-    id: 'opencode',
-    event: 'execute.before',
-    matcher: 'shell|write|edit',
-    // The plugin is a file the tool owns whole, not a config entry to merge:
-    // `file` routes `rendered` and `hookDocument` to its source (opencode.mjs).
-    file: true,
-    // A thrown error is the block; exit 2 is how the entry point signals it,
-    // and the reason the plugin throws is what `deny` prints.
-    denyExit: 2,
-    verified: 'opencode.ai/v2/docs/build/plugins/server, read 2026-10-29',
-    root: (p) => p.cwd,
-    extract: (p) => ({
-      command: p.tool === 'shell' ? (p.input?.command ?? null) : null,
-      writes: ['write', 'edit'].includes(p.tool) ? [writeOf(p.input?.path, p.input)].filter(Boolean) : [],
-    }),
-    deny: (message) => ({ reason: message }),
-    // session.hook('prompt') admits the prompt; the packet goes in front of it.
-    prompt: {
-      event: 'prompt',
-      verified: 'opencode.ai/v2/docs/build/plugins/server, read 2026-10-29',
-      context: (text) => ({ text }),
-    },
-    post: null,
-  },
-};
+  ]),
+);
 
 /** The six adapters, in the order the reader table lists them. */
 export function adapters() {

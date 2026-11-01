@@ -1,0 +1,140 @@
+{
+  "id": "cursor",
+  "loaderOrder": 4,
+  "surfaceOrder": 2,
+  "surface": {
+    "id": "cursor",
+    "label": "Cursor rules",
+    "readers": "Cursor",
+    "primary": null,
+    "kind": "file",
+    "rule": ".cursor/rules/{name}.mdc",
+    "readsAgentsMd": "all",
+    "configDirs": [
+      ".cursor"
+    ],
+    "documentedKeys": [
+      "description",
+      "alwaysApply",
+      "globs"
+    ],
+    "readsPrimary": true,
+    "substitutions": {
+      "askTool": "Use the interactive `AskQuestion` tool"
+    },
+    "verified": "Cursor project rules (.cursor/rules/*.mdc, description + alwaysApply + globs); alwaysApply: false with globs is \"auto-attached when a matching file is in context\", and the docs warn that alwaysApply: false with no description is manual @-mention only",
+    "note": "The only surface that reads `.mdc`. Every other row here is a plain `.md` or a symlink."
+  },
+  "loader": {
+    "id": "cursor",
+    "label": "Cursor",
+    "readers": "Cursor",
+    "surface": "cursor",
+    "start": [
+      {
+        "scope": "project",
+        "path": ".cursor/rules/{name}.mdc",
+        "tree": "nested",
+        "dir": ".cursor/rules",
+        "suffix": ".mdc",
+        "frontmatter": {
+          "alwaysApply": "true"
+        },
+        "atStart": true,
+        "why": "Cursor rules docs: alwaysApply: true alone means the rule is always included; alwaysApply: false attaches on a matching file, on a description match, or only on an @-mention"
+      },
+      {
+        "scope": "project",
+        "path": "AGENTS.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "Cursor rules docs: AGENTS.md is supported in the project root and in subdirectories, combined with parent files, with the more specific one winning"
+      }
+    ],
+    "alsoReads": [
+      {
+        "what": ".cursor/rules/*.mdc with alwaysApply: false",
+        "atStart": false,
+        "why": "Cursor rules docs: globs auto-attach on a matching file, a description lets the model decide, and a rule with neither loads only on an @-mention"
+      },
+      {
+        "what": "team and user rules",
+        "atStart": true,
+        "why": "Cursor rules docs: precedence is Team Rules, then Project Rules, then User Rules; the latter two are configured in the app, not in a file this tool can project"
+      }
+    ],
+    "order": "team rules, then project rules, then user rules",
+    "cap": null,
+    "capNote": "no byte cap published; the docs recommend keeping rules under 500 lines, which is guidance and not a limit the reader enforces",
+    "imports": {
+      "syntax": null,
+      "depth": 0,
+      "why": "Cursor rules docs: an @file in a rule body is not inlined — \"the file's contents are not inlined into the prompt\""
+    },
+    "nested": "cumulative — nested AGENTS.md files are combined with their parents and the more specific one wins; .cursor/rules/ may hold folders",
+    "skills": [],
+    "skillsNote": "no project skill directory is documented for Cursor",
+    "hooks": {
+      "path": ".cursor/hooks.json",
+      "verified": "Cursor agent hooks docs: <project-root>/.cursor/hooks.json and ~/.cursor/hooks.json"
+    },
+    "agents": {
+      "dir": ".cursor/agents",
+      "ext": ".md",
+      "verified": "Cursor subagents docs (cursor.com/docs/subagents, read 2026-10-30): project subagents are markdown files with name and description frontmatter under .cursor/agents/"
+    },
+    "mcp": {
+      "path": ".cursor/mcp.json",
+      "key": null,
+      "verified": "Cursor MCP docs (read 2026-10-14): \"Create .cursor/mcp.json in your project\""
+    },
+    "verified": "Cursor rules documentation (cursor.com/docs/context/rules, read 2026-10-14) — only .cursor/rules/*.mdc is read, a plain .md there is ignored; alwaysApply decides whether a rule costs bytes at start; @file references in a rule body are not inlined; AGENTS.md is read in the project root and in subdirectories, combined with parents",
+    "note": "A rule with alwaysApply: false is listed under alsoReads rather than start, because it costs nothing until something matches."
+  },
+  "scopeKey": true,
+  "hooks": {
+    "id": "cursor",
+    "event": "preToolUse",
+    "matcher": "Shell|Write|Edit",
+    "denyExit": 2,
+    "verified": "cursor.com/docs/agent/hooks, read 2026-10-16",
+    "prompt": null,
+    "post": null,
+    "deny": {
+      "permission": "deny",
+      "user_message": "__SIMT_TEXT__",
+      "agent_message": "__SIMT_TEXT__"
+    }
+  },
+  "payload": {
+    "toolKey": "tool_name",
+    "inputKey": "tool_input",
+    "shellTools": [
+      "Shell"
+    ],
+    "commandKey": "command",
+    "writeTools": [
+      "Write",
+      "Edit"
+    ],
+    "pathKeys": [
+      "file_path",
+      "path"
+    ],
+    "rootKeys": [
+      [
+        "working_directory"
+      ],
+      [
+        "cwd"
+      ]
+    ]
+  },
+  "pluginOrder": 3,
+  "plugin": {
+    "rootVar": null,
+    "projectVar": "CURSOR_PROJECT_DIR",
+    "hooksPath": ".cursor/hooks.json",
+    "runtimeDir": ".cursor/simt"
+  }
+}

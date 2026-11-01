@@ -1,0 +1,162 @@
+{
+  "id": "antigravity",
+  "loaderOrder": 5,
+  "surfaceOrder": 4,
+  "surface": {
+    "id": "antigravity",
+    "label": "Antigravity workspace rules",
+    "readers": "Antigravity IDE, Antigravity CLI",
+    "primary": null,
+    "kind": "file",
+    "rule": ".agents/rules/{name}.md",
+    "readsAgentsMd": "all",
+    "configDirs": [
+      ".agents"
+    ],
+    "documentedKeys": [
+      "trigger",
+      "description",
+      "globs",
+      "glob"
+    ],
+    "readsPrimary": true,
+    "verified": "Google Antigravity docs, \"Rules\" — .agents/rules/*.md, YAML frontmatter with trigger: always_on | model_decision | glob | manual; missing or invalid frontmatter silently discards the rule; trigger: glob takes comma-separated globs, which the docs require to be quoted so YAML does not read a leading * as an alias anchor; a 24 KB per-file limit and a 20,000-token budget for always_on rules, with automatic demotion to pointers past it",
+    "note": "This is why frontmatter is mandatory here and why the trigger value is not guessed: an unrecognised trigger means the rule is dropped with no message."
+  },
+  "pointerOrder": 2,
+  "pointer": {
+    "id": "gemini-md",
+    "surface": "antigravity",
+    "path": "GEMINI.md",
+    "to": "AGENTS.md",
+    "readers": "Gemini CLI, Antigravity",
+    "verified": "Google Antigravity docs, \"Rules\": workspace rules are AGENTS.md or GEMINI.md in the root or any subdirectory; Copilot CLI also discovers GEMINI.md. Gemini CLI, read today: its own docs (core memory index, and the configuration reference) say the memory service loads GEMINI.md hierarchically from the working directory up to the project root and the home directory and also into subdirectories, and that `context.fileName` in settings.json \"accepts either a single string or an array of strings\" naming the context file(s) to load, default undefined",
+    "note": "Covers Gemini CLI and gives Antigravity a second, equally-native name for the same file. A repository can also point Gemini CLI at AGENTS.md itself with `context.fileName: [\"AGENTS.md\"]` and need no pointer at all, which is the reason there is no separate Gemini CLI row here: this pointer and a native row would be two ways to hand one reader the same rule."
+  },
+  "loader": {
+    "id": "antigravity",
+    "label": "Antigravity",
+    "readers": "Antigravity IDE, Antigravity CLI",
+    "surface": "antigravity",
+    "start": [
+      {
+        "scope": "project",
+        "path": ".agents/rules/{name}.md",
+        "tree": "flat",
+        "dir": ".agents/rules",
+        "suffix": ".md",
+        "frontmatter": {
+          "trigger": "always_on"
+        },
+        "atStart": true,
+        "why": "Antigravity rules docs: trigger is one of always_on, model_decision, glob, manual; model_decision injects only the path and description"
+      },
+      {
+        "scope": "project",
+        "path": "AGENTS.md",
+        "tree": "chain",
+        "atStart": true,
+        "why": "Antigravity rules docs: AGENTS.md, GEMINI.md and .agents/AGENTS.md in the root or any subdirectory are always-on workspace rules, and they take no frontmatter"
+      },
+      {
+        "scope": "user",
+        "path": "~/.gemini/config/rules/*.md",
+        "tree": "flat",
+        "dir": ".gemini/config/rules",
+        "atStart": true,
+        "why": "Antigravity rules docs: global modular rules at ~/.gemini/config/rules/*.md, alongside ~/.gemini/AGENTS.md and ~/.gemini/config/AGENTS.md"
+      }
+    ],
+    "alsoReads": [
+      {
+        "what": ".agents/rules/*.md with trigger: model_decision",
+        "atStart": false,
+        "why": "Antigravity rules docs: progressive disclosure — the path and description are injected and the body is opened on demand"
+      },
+      {
+        "what": ".agents/rules/*.md in nested directories",
+        "atStart": false,
+        "why": "Antigravity rules docs: .agents/rules/ is scanned flat — nested files are ignored unless registered in .agents/rules.json"
+      }
+    ],
+    "order": "rules are cumulative across the global, workspace and directory scopes; directory scope is resolved by walking up from the edited file to the workspace root",
+    "cap": {
+      "bytes": 24000,
+      "scope": "file",
+      "config": "none — a fixed limit",
+      "why": "Antigravity rules docs: a rule file is truncated at 24,000 bytes, counted after @[label](path) includes are expanded"
+    },
+    "alsoCaps": [
+      {
+        "bytes": 20000,
+        "scope": "tokens",
+        "appliesTo": "global plus always_on rules combined",
+        "why": "Antigravity rules docs: past a 20,000-token budget the largest rules are demoted to a pointer line, \"- <path>: <description>\""
+      }
+    ],
+    "imports": {
+      "syntax": "@[label](path)",
+      "depth": 0,
+      "why": "Antigravity rules docs: @[label](path) inlines the file before the size limits are checked, with its frontmatter stripped; a bare @filename only rewrites to a canonical absolute path"
+    },
+    "nested": "cumulative — a rule applies to its directory and every subdirectory; the .agents/rules/ scan itself is flat",
+    "skills": [],
+    "skillsNote": "no skill directory is documented for Antigravity",
+    "hooks": {
+      "path": ".agents/hooks.json",
+      "verified": "Antigravity hooks docs: workspace level .agents/hooks.json, global ~/.gemini/config/hooks.json"
+    },
+    "agents": {
+      "dir": ".agents/agents",
+      "ext": ".md",
+      "verified": "Google Antigravity subagents docs (antigravity.google/docs/subagents, read 2026-10-30): project subagents are markdown files with name and description frontmatter under .agents/agents/"
+    },
+    "mcp": {
+      "path": ".agents/mcp_config.json",
+      "key": null,
+      "verified": "Antigravity MCP docs (read 2026-10-14): \"Configured in your workspace under .agents/mcp_config.json\""
+    },
+    "verified": "Google Antigravity rules documentation (antigravity.google/docs/rules/, read 2026-10-14) — rules are cumulative across global, workspace and directory scope; .agents/rules/*.md requires frontmatter with trigger, and an invalid block silently discards the rule; the directory is scanned flat and nested files are ignored unless registered in .agents/rules.json; each rule file is truncated at 24,000 bytes after includes are expanded, and global plus always_on rules share a 20,000-token budget past which the largest are demoted to pointers",
+    "note": "The flat scan is the fact that made the meter wrong before this table existed: a recursive walk of .agents/rules/ counts bytes for files Antigravity never reads."
+  },
+  "scopeKey": true,
+  "hooks": {
+    "id": "antigravity",
+    "event": "PreToolUse",
+    "matcher": "run_command|write_to_file|replace_file_content|multi_replace_file_content",
+    "denyExit": 0,
+    "verified": "antigravity.google/docs/hooks, read 2026-10-16",
+    "prompt": null,
+    "post": null,
+    "deny": {
+      "decision": "deny",
+      "reason": "__SIMT_TEXT__"
+    }
+  },
+  "payload": {
+    "toolKey": "toolCall",
+    "toolNameKey": "name",
+    "inputSubKey": "args",
+    "shellTools": [
+      "run_command"
+    ],
+    "commandKey": "CommandLine",
+    "writeTools": [
+      "write_to_file",
+      "replace_file_content",
+      "multi_replace_file_content"
+    ],
+    "pathKeys": [
+      "TargetFile"
+    ],
+    "rootKeys": [
+      [
+        "workspacePaths",
+        0
+      ],
+      [
+        "cwd"
+      ]
+    ]
+  }
+}

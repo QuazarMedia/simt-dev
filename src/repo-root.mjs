@@ -65,8 +65,20 @@ export function repoRoot(cwd) {
  * typed. `repoRoot` answers the different question of which repository that directory
  * belongs to.
  */
+/**
+ * The root a caller named, or undefined when they named none.
+ *
+ * Absent is not the current directory here. `upgrade` walks a workspace and only limits
+ * itself to one project when the caller said which; collapsing "no root" into cwd made a
+ * bare `simt upgrade` plan a single project instead of the workspace, which is the defect
+ * the two-step resolution exists to prevent.
+ */
+export function namedRoot(flags = {}, positional = []) {
+  return flags.root ?? positional[0];
+}
+
 export function commandRoot(flags = {}, positional = []) {
-  return flags.root ?? positional[0] ?? process.cwd();
+  return namedRoot(flags, positional) ?? process.cwd();
 }
 
 /**

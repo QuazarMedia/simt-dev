@@ -21,6 +21,8 @@
 // confidently wrong.
 
 import { readFile } from 'node:fs/promises';
+
+import { namedRoot } from './repo-root.mjs';
 import { existsSync } from 'node:fs';
 import { homedir, platform as osPlatform } from 'node:os';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
@@ -311,7 +313,7 @@ function absolute(p, base = process.cwd()) {
  * answers it from the filesystem rather than from a guess.
  */
 export async function targetRoot(flags = {}, positional = []) {
-  const explicit = flags.root ?? positional[0];
+  const explicit = namedRoot(flags, positional);
   if (explicit) {
     return { root: absolute(explicit), source: 'flag', detail: explicit, ws: null };
   }

@@ -33,6 +33,7 @@ import { invalidateCheckCache } from '../status.mjs';
 import { basename, dirname, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
+import { namedRoot } from '../repo-root.mjs';
 import { provenanceDigest, plan } from '../projection/project.mjs';
 import { MANIFEST, MANIFEST_COMMENT, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
@@ -43,7 +44,7 @@ import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 
 export async function upgradeCommand(positional, flags) {
-  const explicit = flags.root ?? positional[0];
+  const explicit = namedRoot(flags, positional);
 
   // `--all` is a claim about SCOPE, so it is checked rather than inferred. "All" of
   // nothing is a contradiction, and defaulting it to the current directory would make

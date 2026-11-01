@@ -7,7 +7,7 @@
 // default must point at a path that exists.
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 
 import { GROUP_DEFAULTS, SPEC, SPEC_PATHS } from '../src/commands/spec.mjs';
@@ -104,4 +104,61 @@ test('spec: a summary is one phrase, not a placeholder', () => {
     assert.ok(row.summary.length > 10 && row.summary.length <= 95, `${row.path}: ${row.summary.length} chars`);
     assert.doesNotMatch(row.summary, /\.$/, `${row.path} ends with a period`);
   }
+});
+
+test('spec: no MCP tool can reach a write, and the writes tier is what says so', () => {
+  // `writes` is the field that makes the tool list safe: `src/mcp/tools.mjs` exposes a
+  // command to a model, and a model cannot review a diff it was never shown (ADR-126).
+  //
+  // The rule is not "a row with an MCP name may not write" - `doctor` writes, under
+  // `--fix`, and its tool is a reader because the tool is handed no flags at all. The rule
+  // is that no tool may be handed the flag that writes: an empty `mcp.flags` on a writing
+  // row is the proof, and a flag list naming `yes` or `fix` is the defect.
+  const WRITING = new Set(['yes', 'fix']);
+  for (const row of SPEC) {
+    if (row.mcp === undefined) continue;
+    const handed = row.mcp.flags ?? [];
+    assert.deepEqual(
+      handed.filter((flag) => WRITING.has(flag)),
+      [],
+      `${row.path} hands ${JSON.stringify(row.mcp.flags)} to its MCP tool`,
+    );
+    if (row.writes !== undefined) {
+      assert.deepEqual(handed, [], `${row.path} writes and gives its MCP tool anything to pass`);
+    }
+  }
+});
+
+test('spec: the writes tier is declared exactly where --yes is', () => {
+  // The two lists were empty when this test was written, which is the state to keep: a
+  // command that takes `--yes` writes something, and a command that writes is applied by
+  // `--yes`. Either one alone is a claim the other half does not hold.
+  assert.deepEqual(
+    SPEC.filter((r) => (r.flags ?? []).includes('yes') && r.writes === undefined).map((r) => r.path),
+    [],
+    'these take --yes without declaring writes',
+  );
+  assert.deepEqual(
+    SPEC.filter((r) => r.writes !== undefined && !(r.flags ?? []).includes('yes')).map((r) => r.path),
+    [],
+    'these declare writes without taking --yes',
+  );
+});
+
+test('spec: no command module derives the repository root itself', () => {
+  // Thirty-four copies of `flags.root ?? positional[0] ?? process.cwd()` disagreed about
+  // resolution and about which positional they read, so the same argv could name two
+  // directories depending on which command read it (review 0003 Q65). `commandRoot` is the
+  // one answer; `?? null` is exempt because `rules` passes null deliberately to ask for
+  // "whatever the loader's default is", which is not a root resolution.
+  const offenders = [];
+  for (const file of readdirSync(new URL('../src/commands', import.meta.url))) {
+    if (!file.endsWith('.mjs')) continue;
+    const source = readFileSync(new URL(`../src/commands/${file}`, import.meta.url), 'utf8');
+    for (const match of source.matchAll(/flags\.root \?\? ([^\n;]+)/g)) {
+      if (match[1].startsWith('null')) continue;
+      offenders.push(`${file}: flags.root ?? ${match[1].trim()}`);
+    }
+  }
+  assert.deepEqual(offenders, []);
 });

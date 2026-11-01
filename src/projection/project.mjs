@@ -29,9 +29,9 @@ import { diff, parse, inject, BEGIN, END } from './markers.mjs';
 import { budgetFinding, readManifest } from './manifest.mjs';
 import { budgetCutFinding } from '../kernel/budget.mjs';
 import { measureRoot } from '../measure/context.mjs';
-import { loadMdcRules, renderMdc } from './mdc.mjs';
+import { loadMdcRules } from './mdc.mjs';
 import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
-import { pointerState, pointerTargets, ruleTargets, scopedTargets } from './targets.mjs';
+import { pointerState, pointerTargets, scopedTargets } from './targets.mjs';
 import { CLI, LOCK_FILE, LOCK_LEGACY, PACKAGE_NAME } from '../name.mjs';
 import { MANIFEST_FILE, WORKFLOW_FILE_NAME } from '../name.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
@@ -101,21 +101,7 @@ async function workflowResolvable(root) {
   };
 }
 import { computeLock } from './lock.mjs';
-import {
-  desiredRegion,
-  provenanceDigest,
-  isEligible,
-  loadRules,
-  packageRegions,
-  LOCAL_PROFILE_DIR,
-  mdcTargets,
-  readDeclared,
-  ruleValues,
-  render,
-  ROOT,
-  select,
-  SUBSTITUTIONS_KEY,
-} from './rules.mjs';
+import { desiredRegion, provenanceDigest, isEligible, loadRules, packageRegions, LOCAL_PROFILE_DIR, mdcTargets, readDeclared, render, select, SUBSTITUTIONS_KEY } from './rules.mjs';
 
 /** The one file every repo gets. Chosen deliberately: AGENTS.md is read by the
  *  most agents, including ones that ignore .cursor/ entirely. */
@@ -130,7 +116,6 @@ function regionVerdict(action) {
     ? { status: 'current', detail: null }
     : { status: 'drift', detail: `region is ${action}; run: ${CLI} sync --yes` };
 }
-
 
 /**
  * @param {string} root repo root
@@ -236,10 +221,12 @@ async function targetFor(root, dir, body, meta, label = PRIMARY_TARGET) {
   const path = join(dir, PRIMARY_TARGET);
   let existing = '';
   let exists = true;
+  let readError = null;
   try {
     existing = await readFile(path, 'utf8');
-  } catch {
+  } catch (error) {
     exists = false;
+    readError = error.code ?? String(error);
   }
 
   const result = inject(existing, body, meta, await regionOpts(root));
@@ -248,6 +235,7 @@ async function targetFor(root, dir, body, meta, label = PRIMARY_TARGET) {
     // document once per package, and a plan that printed `AGENTS.md` twice with no
     // directory on either line would leave the reader unable to tell which is which.
     file: label,
+    kind: 'region',
     path,
     exists,
     action: result.action,
@@ -261,6 +249,7 @@ async function targetFor(root, dir, body, meta, label = PRIMARY_TARGET) {
     line: result.line,
     bytes: Buffer.byteLength(result.text),
     previousBytes: Buffer.byteLength(existing),
+    readError,
     sha: meta.sha,
     body,
     text: result.text,
@@ -268,33 +257,123 @@ async function targetFor(root, dir, body, meta, label = PRIMARY_TARGET) {
   };
 }
 
+/**
+ * The findings one write target produces, read off the target itself.
+ *
+ * This is what makes "the gate equals the writer" true by construction rather than by
+ * two implementations happening to agree. `plan` builds every file this tool writes,
+ * each through the same `inject` call; the gate asks each target what it would have
+ * done instead of rebuilding the file and comparing. The version this replaced rebuilt
+ * the region itself with a second `diff` call, and a second construction is invisible
+ * while it agrees — the only way to notice is the disagreement some future edit
+ * produces, reported as drift on a tree `sync` has just written.
+ *
+ * Returns an array: a baseline whose region has moved down the file is both current and
+ * misplaced, and both findings name the same file.
+ *
+ * @param {object} target one entry from `plan(root).targets`
+ * @returns {object[]} findings, in the order they should be printed
+ */
+function targetFindings(target) {
+  if (target === undefined) return [];
+  // The lock is written here and compared by the frozen check, not reported as drift;
+  // a pointer is a symlink the writer makes, reported by its own loop below.
+  if (target.kind === 'lock' || target.kind === 'pointer') return [];
+
+  if (target.kind === 'baseline') {
+    if (target.action === 'malformed') {
+      return [{ file: target.file, status: 'malformed', detail: target.reason, line: target.line }];
+    }
+    if (!target.exists) {
+      return [
+        {
+          file: target.file,
+          status: 'absent',
+          detail: `no baseline file; run: ${CLI} sync --yes`,
+          remedy: `${CLI} sync --yes`,
+        },
+      ];
+    }
+    const state = parse(target.previous, target.style);
+    if (state.status === 'absent') {
+      return [
+        {
+          file: target.file,
+          status: 'unmanaged',
+          detail: `the file exists with no simt-dev region; run: ${CLI} sync --yes`,
+          remedy: `${CLI} sync --yes`,
+        },
+      ];
+    }
+    const off = misplaced(state, target.style);
+    return [
+      { file: target.file, ...regionVerdict(target.action), recordedSha: state.sha ?? null },
+      ...(off ? [{ file: target.file, status: 'misplaced', ...off }] : []),
+    ];
+  }
+
+  const surface = target.surface ? { surface: target.surface } : {};
+
+  if (!target.exists) {
+    if (target.readError !== null && target.readError !== undefined && target.readError !== 'ENOENT') {
+      return [{ file: target.file, status: 'unreadable', detail: target.readError }];
+    }
+    return [
+      target.surface
+        ? {
+            file: target.file,
+            ...surface,
+            status: 'absent',
+            detail: `no ${target.surface} rule here; run: ${CLI} sync --yes`,
+          }
+        : { file: target.file, status: 'absent', detail: `no AGENTS.md; run: ${CLI} sync --yes` },
+    ];
+  }
+
+  const state = parse(target.previous, target.style);
+  if (state.status === 'malformed') {
+    return [{ file: target.file, ...surface, status: 'malformed', detail: state.reason, line: state.line }];
+  }
+  if (state.status === 'absent') {
+    return [
+      {
+        file: target.file,
+        ...surface,
+        status: 'unmanaged',
+        detail: `no generated region; run: ${CLI} sync --yes`,
+      },
+    ];
+  }
+  const finding = { file: target.file, ...surface, ...regionVerdict(target.action), recordedSha: state.sha ?? null };
+  // Only a region can say what it expected to find: a rule file's marker carries a
+  // source list instead, and inventing the field here would describe a shape it never has.
+  if (target.kind === 'region') finding.expectedSha = target.sha;
+  return [finding];
+}
+
 /** Check one repo without writing. Returns findings rather than an exit code,
  *  so commands/check decides severity and commands/sync decides whether to act. */
 export async function checkTargets(root, flags = {}) {
+  const projection = await plan(root, flags);
   const findings = [];
-  const primary = await checkPrimary(root, flags);
-  findings.push(primary);
-  if (primary.status !== 'absent' && primary.status !== 'unreadable' && primary.status !== 'malformed') {
-    let text = '';
-    try {
-      text = await readFile(join(root, PRIMARY_TARGET), 'utf8');
-    } catch {
-      text = '';
-    }
-    findings.push(...readLimitFindings(text, PRIMARY_TARGET));
-  }
+  // The plan's own targets, in the order a reader meets them: the root region, then the
+  // packages. Nothing here rebuilds a file.
+  const primary = projection.targets.find((t) => t.kind === 'region' && t.file === PRIMARY_TARGET);
+  findings.push(...targetFindings(primary));
+  findings.push(...readLimitFindings(primary.previous ?? '', PRIMARY_TARGET));
 
   // Every package of a monorepo is a projection root in its own right, so the gate
   // covers it the way it covers the root. A nested region that drifts is as stale as
-  // the root's region, and the reader working in that package reads only that file.
+  // the root region, and the reader working in that package reads only that file.
   //
   // Gated on the root having a region at all: a monorepo that has not adopted has no
   // nested regions either, and reporting one as absent would describe a half-adoption
   // that nobody performed.
-  const { regions: packageBodies } = await packageRegions(root, flags);
-  for (const region of packageBodies) {
-    const file = `${region.path}/${PRIMARY_TARGET}`;
-    findings.push({ ...(await checkRegion(root, join(root, region.path), region.body, region.meta)), file, profiles: region.profiles });
+  const profilesOf = new Map(projection.packages.map((p) => [p.path + '/' + PRIMARY_TARGET, p.profiles]));
+  for (const target of projection.targets.filter((t) => t.kind === 'region' && t.file !== PRIMARY_TARGET)) {
+    for (const finding of targetFindings(target)) {
+      findings.push({ ...finding, profiles: profilesOf.get(target.file) });
+    }
   }
 
   // The gate has to run where the merge happens, not only on the machine of whoever
@@ -410,35 +489,9 @@ export async function checkTargets(root, flags = {}) {
   const sha = await provenanceDigest();
   const notes = [];
 
-  // The profiles that left the region, gated through the same construction that wrote
-  // them. Without this loop a scoped file is planned and written but never checked, so a
-  // repository that edits or deletes one shows a clean `check` and a stale reader — the
-  // exact asymmetry the region-versus-file gate exists to prevent.
-  const scopedRules = desired.scoped ?? [];
-  if (desired.narrowing === true) {
-    for (const target of (await scopedTargets(root, scopedRules, sha, resolved, notes)).targets) {
-      if (!target.exists) {
-        findings.push({
-          file: target.file,
-          surface: target.surface,
-          status: 'absent',
-          detail: `no ${target.surface} rule here; run: ${CLI} sync --yes`,
-        });
-        continue;
-      }
-      // The writer's own verdict, from the same inject call `plan` will make. A second
-      // construction here would be a third place computing the same file, which is the
-      // defect this whole function exists to avoid.
-      const action = target.action;
-      findings.push({
-        file: target.file,
-        surface: target.surface,
-        ...regionVerdict(action),
-        recordedSha: parse(target.previous).sha ?? null,
-      });
-    }
-  }
-
+  // A rule with a defect is a gate failure even when its files happen to be correct,
+  // because the next `sync` will not reproduce it. The defect is a property of the
+  // rule; the verdict on a file is below, and it is the writer's own.
   for (const rule of rules) {
     if (rule.error !== null) {
       findings.push({
@@ -446,106 +499,20 @@ export async function checkTargets(root, flags = {}) {
         status: 'invalid',
         detail: rule.error,
       });
-      continue;
     }
-    // The writer's own construction, not a second one: a body rendered without the
-    // surface-agreed substitutions would make `check` report drift on a tree that
-    // `init` just wrote (S45's askTool).
-    const { body, problems } = renderMdc(
-      rule,
-      ruleValues(rule, declared.values[rule.id] ?? {}, resolved.surfaces),
-      signals,
-    );
-    if (problems.length > 0) {
-      findings.push({
-        file: rule.target,
-        status: 'invalid',
-        detail: problems[0],
-      });
-      continue;
-    }
+  }
 
-    for (const target of (await ruleTargets(root, rule, body, sha, resolved, notes)).targets) {
-      const rel = target.file;
-      if (!target.exists) {
-        findings.push({
-          file: rel,
-          surface: target.surface,
-          status: 'absent',
-          detail: `no ${target.surface} rule here; run: ${CLI} sync --yes`,
-        });
-        continue;
-      }
-      const state = parse(target.previous);
-      if (state.status === 'malformed') {
-        findings.push({
-          file: rel,
-          surface: target.surface,
-          status: 'malformed',
-          detail: state.reason,
-          line: state.line,
-        });
-        continue;
-      }
-      if (state.status === 'absent') {
-        findings.push({
-          file: rel,
-          surface: target.surface,
-          status: 'unmanaged',
-          detail: `no generated region; run: ${CLI} sync --yes`,
-        });
-        continue;
-      }
-      // `target.action` is `ruleTargets`' own verdict, produced by the same inject
-      // call `plan` will make. This used to reconstruct a reference here — existing
-      // frontmatter plus a fresh inject — which was a THIRD construction of the same
-      // file inside the one function whose entire job is to say whether the other two
-      // agree. It happened to agree, which is what makes this duplication dangerous:
-      // it is only detectable by the disagreement some future edit produces.
-      const action = target.action;
-      findings.push({
-        file: rel,
-        surface: target.surface,
-        ...regionVerdict(action),
-        recordedSha: state.sha ?? null,
-      });
-    }
+  // Every rule file the plan would write, in the plan's order: the surfaces' files,
+  // then the profiles that narrowed out of the region.
+  for (const target of projection.targets.filter((t) => t.surface)) {
+    findings.push(...targetFindings(target));
   }
 
   // Baselines are checked against the same construction `sync` writes from, and they
   // block for the same reason the rule files block: an adopting repo whose baseline was
   // deleted or reverted is a repo whose editors have quietly stopped agreeing.
-  for (const t of (await baselineTargets(root, await provenanceDigest())).targets) {
-    if (t.action === 'malformed') {
-      findings.push({ file: t.file, status: 'malformed', detail: t.reason, line: t.line });
-      continue;
-    }
-    if (!t.exists) {
-      findings.push({
-        file: t.file,
-        status: 'absent',
-        detail: `no baseline file; run: ${CLI} sync --yes`,
-        remedy: `${CLI} sync --yes`,
-      });
-      continue;
-    }
-    const state = parse(t.previous, t.style);
-    if (state.status === 'absent') {
-      findings.push({
-        file: t.file,
-        status: 'unmanaged',
-        detail: `the file exists with no simt-dev region; run: ${CLI} sync --yes`,
-        remedy: `${CLI} sync --yes`,
-      });
-      continue;
-    }
-    findings.push({
-      file: t.file,
-      ...regionVerdict(t.action),
-      recordedSha: state.sha ?? null,
-    });
-    const off = misplaced(state, t.style);
-    if (off) findings.push({ file: t.file, status: 'misplaced', ...off });
+  for (const target of projection.targets.filter((t) => t.kind === 'baseline')) {
+    findings.push(...targetFindings(target));
   }
 
   // Managed rule files this run would NOT write, found by scanning the rule
@@ -665,72 +632,10 @@ async function orphanedRuleFiles(root, resolved) {
 }
 
 export async function checkTarget(root, flags = {}) {
-  const findings = await checkPrimary(root, flags);
-  return findings;
+  const projection = await plan(root, flags);
+  return targetFindings(projection.targets.find((t) => t.kind === 'region' && t.file === PRIMARY_TARGET))[0];
 }
 
-async function checkPrimary(root, flags = {}) {
-  const { body, meta } = await desiredRegion(root, flags);
-  return checkRegion(root, root, body, meta);
-}
-
-/**
- * One region, compared against what this simt-dev would write for it.
- *
- * `dir` is the projection root that owns the document: the repository for the root
- * region, a package for a nested one. `regionOpts` is read from the repository
- * either way, because placement is a repository-level decision.
- */
-async function checkRegion(root, dir, body, meta) {
-  const path = join(dir, PRIMARY_TARGET);
-  let existing = '';
-  try {
-    existing = await readFile(path, 'utf8');
-  } catch (e) {
-    // Only ENOENT is absence. A bare `catch` here once reported "no AGENTS.md" for a
-    // repo that has one, because the failure was a ReferenceError from a missing
-    // import — the gate answered confidently about a file it had never read. A check
-    // that is wrong about existence is worse than one that crashes.
-    if (e.code !== 'ENOENT') {
-      return { file: PRIMARY_TARGET, status: 'unreadable', detail: e.code ?? String(e) };
-    }
-    return { file: PRIMARY_TARGET, status: 'absent', detail: `no AGENTS.md; run: ${CLI} sync --yes` };
-  }
-  const state = parse(existing);
-  if (state.status === 'malformed') {
-    return {
-      file: PRIMARY_TARGET,
-      status: 'malformed',
-      detail: state.reason,
-      line: state.line,
-    };
-  }
-  if (state.status === 'absent') {
-    return { file: PRIMARY_TARGET, status: 'unmanaged', detail: `no generated region; run: ${CLI} sync --yes` };
-  }
-  const d = diff(existing, body, meta, await regionOpts(root));
-  return {
-    file: PRIMARY_TARGET,
-    ...regionVerdict(d.action),
-    recordedSha: state.sha ?? null,
-    expectedSha: meta.sha,
-  };
-}
-/**
- * The bytes of always-on projection this repository carries, or null if it has not
- * adopted at all.
- *
- * Delegates to the meter rather than counting here, and that is the whole of the
- * design. A first version summed the region plus the rule files this function already
- * compares, which sounds cheaper and is wrong: the meter also counts the managed skills
- * and the `.mdc` files a reader loads, so the gate and the report came to different
- * totals for one repository. Two definitions of one budget is the defect ADR-034 was
- * filed about, rebuilt one layer up. The meter is the definition; the gate quotes it.
- *
- * The cost is that `check` now reads the documents the meter reads, which it did not
- * do before. That is a real cost, paid knowingly: the alternative is a gate that fails
- * on a number the report does not print, which is worse than a slower gate.
- */
 async function alwaysOnBytes(root) {
   const { exists } = await readManifest(root);
   if (!exists) return null;

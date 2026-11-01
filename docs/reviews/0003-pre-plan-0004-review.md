@@ -182,7 +182,7 @@ repo). The estate repositories were not written to. `npm test` ran twice from a 
 | Q80 | Split modules over the repo's own 1000-line ceiling (src and tests) | P2 | A | structure | M | Q60, Q68 | Complete | 6b8723f · test: npm test — 1766/1766 |
 | **Wave 3 — cleanup, merges, docs, tests** | | | | | | | | |
 | Q81 | Command taxonomy: 42 → ~22 top-level words, with aliases | P2 | C | cli | M | Q60, Q62 | Queued | |
-| Q82 | `status` becomes the aggregate snapshot; `explain` covers policy ids | P2 | C | cli | S | Q81 | Queued | |
+| Q82 | `status` becomes the aggregate snapshot; `explain` covers policy ids | P2 | C | cli | S | Q81 | Complete | ec512c8 · test: npm test - 1766/1766, 0 fail |
 | Q83 | Remove dead code (STEPS map, unreachable entries, double dispatch, unused helpers, dead columns) | P3 | C | cleanup | S | Q60 | Complete | bfb468a; node --test test/local.test.mjs test/unit.test.mjs test/shipped.test.mjs and test/hooks.test.mjs test/deadcode.test.mjs test/compare.test.mjs; STEPS and its branch, knownGates, unresolved, the registry schema field, the ignored defaultLimits argument, unbounded gate logs, the double help parse and the duplicated endpoint validation all gone; the pkg column the review called stale is asserted by test/index.test.mjs and stays |
 | Q84 | Retire or demote low-value features from earlier plans (see table) | P2 | C | cleanup | M | — | Queued | |
 | Q85 | Merge the two context meters; merge `review` and `bench critic` into one `critique()` | P2 | C | measure | M | — | Queued | |

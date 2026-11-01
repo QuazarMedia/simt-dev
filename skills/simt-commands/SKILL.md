@@ -93,5 +93,5 @@ tracker.
 A lane is the subsystem a slice's files belong to (headers `Lane`, `Stream`, `Workstream`,
 `Track`), read by the same first-word rule. Lanes are meant to own disjoint file sets, which
 is what makes concurrency safe: `--lane core` and `--lane capture` handed to two agents
-touch different files, while two slices in one lane do not. `--wheel`… there is no wheel;
-combine `--lane` with `--tier` or `--wave` when a lane should also stay inside a class.
+touch different files, while two slices in one lane do not. Combine `--lane` with `--tier` or `--wave` when a lane must also stay inside a
+class or a wave.

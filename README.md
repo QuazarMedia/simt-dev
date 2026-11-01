@@ -176,7 +176,7 @@ simt impact <file|symbol>                    # who a change reaches: importers, 
 simt index [--embed]                         # rebuild the local file index from git blob hashes
 
 # init
-simt init [path]                             # adopt this repository: manifest, region, hooks and toolchain pins
+simt init [path]                             # adopt this repository: manifest, region, hooks, agents and agent-hooks
 
 # lease
 simt lease [<paths>] --session               # claim files for one session, or list the claims
@@ -237,7 +237,7 @@ simt skills why <name>                       # which skill covers a task
 # slice
 simt slice abandon <id>                      # remove a slice worktree, delete its branch, and return the row
 simt slice finish <id> --yes                 # run the gates, commit the slice and record its evidence
-simt slice start <id> --yes                  # give a slice its own worktree, branch and brief
+simt slice start <id> --yes  |  -- "<text>"  # give a slice its worktree, branch and brief; -- starts one from a prompt, no row
 
 # status
 simt status --line                           # gate state from the last check

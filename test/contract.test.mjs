@@ -73,7 +73,7 @@ async function run(args, env = {}) {
  * so a row pointed at the wrong fixture would have been asserting a BLOCKED
  * refusal while claiming to test the write.
  */
-async function consumer({ stack = 'python' } = {}) {
+async function consumer({ stack = 'python', noAgents = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-contract-'));
   await git(['init', '-q', '.'], { cwd: root });
   if (stack === 'node') {
@@ -87,7 +87,10 @@ async function consumer({ stack = 'python' } = {}) {
   }
   await git(['add', '-A'], { cwd: root });
   await git(['commit', '-qm', 'init'], { cwd: root });
-  const adopted = await run(['init', '--root', root, '--yes']);
+  // `--no-agents` adopts without the agent files and hooks, for the writers that test
+  // installing them: a repo init has already adopted carries them, and the install
+  // has nothing left to write or diff.
+  const adopted = await run(['init', '--root', root, '--yes', ...(noAgents ? ['--no-agents'] : [])]);
   assert.equal(adopted.code, 0, adopted.stderr);
   // `init` writes files it does not stage: `simt-dev.json`, and `.editorconfig` and
   // `.gitattributes` when the repo has none. `skills brief` treats an untracked path
@@ -315,6 +318,9 @@ const WRITERS = [
   {
     name: 'agent-hooks install',
     authorise: ['--yes'],
+    // Adopt with --no-agents so init did not write the hooks this command installs:
+    // otherwise the fresh consumer already carries them and the install has no diff.
+    noAgents: true,
     verify: async (root) => readFile(join(root, '.claude/settings.json'), 'utf8').catch(() => null),
   },
   {
@@ -355,7 +361,7 @@ for (const writer of WRITERS) {
     const install = writer.source ? ['skills', 'install', 'graphify', '--from', writer.source] : [writer.name];
 
     for (const mode of ['unauthorised', 'dry-run']) {
-      const root = await consumer({ stack: writer.stack });
+      const root = await consumer({ stack: writer.stack, noAgents: writer.noAgents });
       t.after(() => rm(root, { recursive: true, force: true }));
       if (writer.needsStalePin) await stalePin(root);
       if (writer.needsStaleRegion) await staleRegion(root);
@@ -429,7 +435,7 @@ for (const writer of WRITERS) {
 for (const writer of WRITERS) {
   test(`${writer.name} --diff shows the plan and writes nothing`, async (t) => {
     const install = writer.source ? ['skills', 'install', 'graphify', '--from', writer.source] : [writer.name];
-    const root = await consumer({ stack: writer.stack });
+    const root = await consumer({ stack: writer.stack, noAgents: writer.noAgents });
     t.after(() => rm(root, { recursive: true, force: true }));
     if (writer.needsStalePin) await stalePin(root);
     if (writer.needsStaleRegion) await staleRegion(root);

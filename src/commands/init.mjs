@@ -48,6 +48,7 @@ import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
 import { planAgents, writeAgentPlan, writeSkillFile } from '../agents/render.mjs';
+import { applyAgentHooks, planAgentHooks } from './agenthook.mjs';
 import { computeLock } from '../projection/lock.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 import { reindex, SQLITE_FILE } from '../index/store.mjs';
@@ -172,10 +173,29 @@ export async function initCommand(positional, flags) {
   const ci = await planWorkflow(root);
   const dependabot = await planDependabot(root);
   const tsconfigBase = await planTsconfigBase(root);
+  // `--no-agents` opts out of the agent files and the agent-hooks in one flag: they are
+  // the two halves of the same decision — which harnesses this adoption speaks to — and
+  // splitting them into two flags would let a reader ask for the files without the hooks
+  // and end up with an agent the repository's own gate does not enforce. The parser's
+  // `no-` convention delivers it as the positive `agents` set to false.
+  const noAgents = flags.agents === false;
   // ADR-111. The one agent this tool ships, planned with the rest so the operator sees
   // it in the same preview that lists everything else. Written in the apply path with
-  // everything else, journaled the same way.
-  const agentPlan = await planAgents(root);
+  // everything else, journaled the same way. `--harness` narrows it to one reader, the
+  // same axis as the agent-hooks below, so the files and the hooks speak to the same set
+  // of harnesses (the rule surfaces are a separate axis: `--surfaces`).
+  const agentPlan = noAgents ? [] : await planAgents(root, { harness: flags.harness });
+  // The agent-hooks entry, absorbed into this run so the adoption enforces its own
+  // projection while the agent works. Planned with the rest for the same reason, and
+  // written into this run's journal (committed with the rest, not a second journal).
+  // `--harness` narrows it to the same reader the agent files are narrowed to.
+  let agentHooks = null;
+  if (!noAgents) {
+    agentHooks = await planAgentHooks(root, { harness: flags.harness });
+    if (agentHooks.error) {
+      return fail(agentHooks.error, EXIT.USAGE, agentHooks.remedy);
+    }
+  }
   // Per-developer, and planned with the rest so the operator sees it in the same
   // preview that lists everything else. `exists` short-circuits the write: a
   // repository that already has one keeps it exactly as it is.
@@ -257,6 +277,18 @@ export async function initCommand(positional, flags) {
     // plans strip their rendered bytes; the apply path writes from `agentPlan`, which
     // keeps it.
     agents: agentPlan.map(({ text, ...rest }) => rest),
+    // The agent-hooks entry the apply path will write, absorbed into this run so the
+    // adoption enforces its own projection while the agent works. `text` is stripped the
+    // same way; the apply path writes from `agentHooks`, which keeps it. `null` when
+    // `--no-agents` opted out of the hooks (and the agent files with them).
+    agentHooks: agentHooks
+      ? {
+          plan: agentHooks.plan.map(({ text, ...rest }) => rest),
+          shim: agentHooks.shim.row,
+          notWritten: agentHooks.others,
+          refused: agentHooks.refused.map(({ text, ...rest }) => rest),
+        }
+      : null,
     adoption,
     manifest: { file: MANIFEST, action: manifestAction, path: manifestFile },
     // Local state, not a repository file: gitignored, rebuildable from `git ls-files -s`,
@@ -348,6 +380,28 @@ export async function initCommand(positional, flags) {
       `${root} contradicts ${summary.byAdr.join(', ')}`,
       EXIT.FAIL,
       `edit the quoted lines, then rerun: ${CLI} init --yes | or accept: ${CLI} init --accept-conflicts --yes`,
+    );
+  }
+
+  // An unreadable hooks config is a refusal, not a failure to try harder: init inherits
+  // the standalone command's refusal and blocks the whole run, because writing the other
+  // hooks while one is unreadable would leave the adoption in a state where the report it
+  // just printed is no longer true. The remedy names the opt-out, because a repository
+  // that cannot be read by one harness can still be adopted without the agent layer.
+  if (agentHooks !== null && agentHooks.refused.length > 0) {
+    payload.ok = false;
+    payload.blockedBy = 'agent-hooks-refused';
+    if (isJson(flags)) {
+      emitJson(payload);
+    } else {
+      emit(render(payload, manifest, { npm, manager, version }));
+      note('');
+      note(`refused  ${agentHooks.refused.length} hooks config(s) could not be read; nothing written`);
+    }
+    return fail(
+      `${root} has a hooks config init cannot read: ${agentHooks.refused.map((p) => `${p.path} (${p.error})`).join('; ')}`,
+      EXIT.FAIL,
+      `fix or remove the named config file, then rerun: ${CLI} init --yes | or opt out of the agent layer: ${CLI} init --no-agents --yes`,
     );
   }
 
@@ -601,6 +655,20 @@ export async function initCommand(positional, flags) {
   // which keeps the rendered bytes the display payload strips.
   const agentWritten = await writeAgentPlan(root, journal, agentPlan);
   for (const f of agentWritten) note(`wrote    ${f} (agent)`);
+  // The agent-hooks entry, written into this run's journal and committed with the rest of
+  // the adoption. It is part of the adoption, not a second run: a second journal would
+  // make `undo` restore the hooks separately from the files they enforce, and the reader
+  // would not know the two moves belong together.
+  if (agentHooks !== null) {
+    const { written, shimWritten } = await applyAgentHooks(root, journal, {
+      plan: agentHooks.plan,
+      shim: agentHooks.shim,
+      owner: 'init',
+    });
+    for (const p of written) note(`wrote    ${p.path} (agent-hooks)`);
+    if (shimWritten) note(`wrote    ${agentHooks.shim.row.path} (agent-hooks shim)`);
+    if (written.length === 0 && !shimWritten) note('agent-hooks  every documented config already carried this tools entry');
+  }
   await commitJournal(root, 'init', journal);
   // The tree changed, so the last `check` no longer describes it: the line
   // goes back to "no cache" rather than reporting the tree as it was (R48).
@@ -835,6 +903,26 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
   // created, unchanged or updated and there is no byte delta to show.
   for (const a of payload.agents ?? []) {
     lines.push(`  ${a.action.padEnd(9)} ${a.path}  agent (ADR-111)`);
+  }
+
+  // The agent-hooks entry, absorbed into the run so the adoption enforces its own
+  // projection while the agent works. Printed with the same shape the standalone command
+  // uses: one line per config the tool writes, the shim, and the readers it narrows past.
+  // `--no-agents` suppresses the section and says so, because a line that appears after
+  // the run without being in the plan is the same silent write as any other.
+  if (payload.agentHooks === null) {
+    lines.push(`  ${'skip'.padEnd(9)} agent-hooks  opted out with --no-agents; the agent files are skipped with it`);
+  } else {
+    for (const p of payload.agentHooks.plan) {
+      lines.push(`  ${p.action.padEnd(9)} ${p.path}  agent-hooks${p.error ? `  (${p.error})` : ''}`);
+    }
+    const shim = payload.agentHooks.shim;
+    lines.push(`  ${shim.action.padEnd(9)} ${shim.path}  agent-hooks shim`);
+    for (const o of payload.agentHooks.notWritten ?? []) {
+      if (o.state === 'skipped') {
+        lines.push(`  ${'skip'.padEnd(9)} ${o.id}  ${o.note}`);
+      }
+    }
   }
 
   // The CI gate is listed as its own kind because it is the one plan entry whose

@@ -45,7 +45,10 @@ const DECLARED = new Map(SPEC.map((row) => [row.path, new Set(row.flags ?? [])])
 /** path -> the values a flag of that path accepts, where the set is closed. */
 const VALUES = new Map(SPEC.map((row) => [row.path, row.values ?? {}]));
 
-export const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
+// `dashdash` is the parser's record that `--` appeared, not a flag any reader typed:
+// it is an envelope fact like `root`, so the per-command declaration check skips it
+// and lets the one command that reads it (slice start) act on it.
+export const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes', 'dashdash']);
 
 /**
  * Every command this binary dispatches, in one place.

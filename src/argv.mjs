@@ -44,6 +44,14 @@ export const BOOL_FLAGS = new Set([
   'pretty',
   'accept-conflicts',
   'backup',
+  // init: opt out of the agent files and the agent-hooks in one flag. The parser's
+  // `no-` convention spells the flag as a negation of the positive `agents`, so the
+  // positive name is what belongs here and `init` reads `flags.agents === false` -
+  // the user-facing flag stays `--no-agents`. They are the two halves of the same
+  // decision - which harnesses the adoption speaks to - and the standalone agents /
+  // agent-hooks install commands remain for a repo that wants them later. Off by
+  // default because the adoption writes them by default.
+  'agents',
   'list',
   // tokens: measure every repository under the root, not just the one. Plan 0003 R06
   // names this flag `--workspace`, and that name has been a VALUE flag since plan
@@ -196,6 +204,10 @@ export const VALUE_FLAGS = new Set([
   // name only the author's branch knows, and the default (origin/main, then main)
   // is a guess the report states out loud rather than a question it asks.
   'base',
+  // slice start: the id for a prompt slice, overriding the slug derived from the
+  // prompt text. A value, because the derived slug is a guess a reader may want to
+  // pin, and a flag without a value would not say what to name the slice.
+  'id',
 ]);
 
 /**
@@ -241,6 +253,11 @@ export function parse(argv) {
   const flags = {};
   const positional = [];
   let passthrough = false;
+  // `--` is consumed as a separator, but its presence is a fact a command may need:
+  // `slice start -- "<text>"` reads the prompt as everything after the marker, and a
+  // positional that merely happens to sit there is a different command. Carried as a
+  // flag so it reaches the command the way every other parsed fact does.
+  let dashdash = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -251,6 +268,7 @@ export function parse(argv) {
     }
     if (arg === '--') {
       passthrough = true;
+      dashdash = true;
       continue;
     }
 
@@ -316,6 +334,7 @@ export function parse(argv) {
     return { ok: false, error: usage(`unknown flag --${raw}`) };
   }
 
+  if (dashdash) flags.dashdash = true;
   return { ok: true, value: { flags, positional } };
 }
 

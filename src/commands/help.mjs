@@ -4,6 +4,9 @@ import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI, MANIFEST_FILE, STATE_DIR } from '../name.mjs';
 import { SESSION_ENV } from '../agenthooks/policy.mjs';
 import { DEFAULT_DIRECTORIES, DEFAULT_TEMPLATE } from '../plan/template.mjs';
+import { commandRoot } from '../repo-root.mjs';
+import { readManifest } from '../projection/manifest.mjs';
+import { assertVersionPin } from '../package-version.mjs';
 
 const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into the ecosystem
                            (dry-run unless --yes; conflicts block without
@@ -295,6 +298,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --accept-conflicts      init: adopt rules that collide with hand-written ones
 --backup                init: tag the pre-adoption commit and branch onto
                         simt-dev/adopt before writing (the undo path)
+--no-agents             init: skip the agent files and the agent-hooks in one flag;
+                        the standalone agents / agent-hooks install commands remain
 --spec <name>           graph lint: also check every skill against a named
                         specification (one exists: agentskills)
 --user                  harness detect: also report the directories in your home
@@ -314,7 +319,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --harness <id>          bench run: adapter to invoke (claude, codex, gemini, opencode,
                          cursor, aider, gold, noop; default: gold);
                          agent-hook: which dialect to answer in (claude, cursor,
-                         codex, antigravity)
+                         codex, antigravity); agent-hooks / agents install: which
+                         reader to write (one, not all); init: narrows the agent
+                         files and the agent-hooks to one reader
 --model <id>            bench run: model identifier recorded and passed to the adapter
 --reps <n>              bench run: repetitions per task and arm (default: 3)
 --regrade <run>         bench run: re-grade a stored run from its archived agent patch
@@ -322,6 +329,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --test <cmd>            plan done / slice finish: the test command that closes the row
 --state <name>          plan done: target state (default: Complete)
 --type <name>           slice finish: the Conventional Commits type (default: feat)
+--id <name>             slice start: the slice id when -- starts one from a prompt
+                        (default: a slug of the prompt text)
 --ttl <seconds>         lease: how long a claim lasts (default: 3600)
 --level <name>          map: detail level (outline, names, signatures)
 --supersedes <spec>     decide: superseded ADR or ruling (ADR-NNN or ADR-NNN:<ruling>[:<kind>]; repeatable)
@@ -386,6 +395,13 @@ export async function help(argv, dispatched) {
     emitJson(SPEC.map(specRow));
     return 0;
   }
+  // The standard page is where a reader asks "what can this do, and where do I start".
+  // A repository that has not been adopted, or that pins a version this binary is not,
+  // has a prerequisite worth stating before the catalogue: no manifest means init is the
+  // first move, a stale pin means sync is the fix. Fully ready, the page stands on its
+  // own and the banner is nothing.
+  const banner = await prerequisiteBanner(flags, positional);
+  const bannerLines = banner === null ? [] : ['', banner, ''];
   // `--all` prints every command and every flag; the default page lists the core tier and
   // says where the rest is. A reader asking "what can this do" needs the shape, not 23 KB
   // of flag reference (review 0003 Q61).
@@ -395,7 +411,7 @@ export async function help(argv, dispatched) {
         'simt-dev - shared agent rules, skills and gates for a repo ecosystem',
         '',
         `usage: ${CLI} <command> [args] [flags]`,
-        '',
+        ...bannerLines,
         'commands:',
         COMMANDS,
         '',
@@ -424,7 +440,7 @@ export async function help(argv, dispatched) {
       'simt-dev - shared agent rules, skills and gates for a repo ecosystem',
       '',
       `usage: ${CLI} <command> [args] [flags]`,
-      '',
+      ...bannerLines,
       'commands:',
       ...[...groups].map(([group, subs]) => `  ${CLI} ${group} <${subs.join('|')}>`),
       ...bare.map((row) => `  ${CLI} ${row.path.padEnd(8)} ${row.summary.length > 46 ? `${row.summary.slice(0, 43)}...` : row.summary}`),
@@ -434,6 +450,30 @@ export async function help(argv, dispatched) {
     ].join('\n'),
   );
   return 0;
+}
+
+/**
+ * The prerequisite line for the standard help page, or null when the repository is fully
+ * ready. No manifest (or one that cannot be read) means the adoption has not happened and
+ * `init` is the first move; a manifest that pins a version the running binary is not means
+ * `sync` is the fix. These are the two states in which a reader opening help is about to
+ * run a command that would fail in a predictable way, so the page says so before it lists
+ * the commands.
+ */
+async function prerequisiteBanner(flags, positional) {
+  const root = commandRoot(flags, positional);
+  const { manifest, exists, error } = await readManifest(root);
+  if (!exists) {
+    return `prerequisite  no ${MANIFEST_FILE} here; run: ${CLI} init <path>`;
+  }
+  if (error !== null) {
+    return `prerequisite  ${MANIFEST_FILE} cannot be read (${error}); run: ${CLI} init <path>`;
+  }
+  const stale = assertVersionPin(manifest);
+  if (stale !== null) {
+    return `prerequisite  ${stale}; run: ${CLI} sync`;
+  }
+  return null;
 }
 
 async function version() {

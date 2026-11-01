@@ -126,7 +126,12 @@ test('help: --all still lists every command and every flag', async () => {
   const { stdout } = await exec('node', [BIN, 'help', '--all'], { maxBuffer: 16 << 20 });
   for (const path of COMMANDS) assert.ok(stdout.includes(`simt ${path}`), `${path} is on neither page`);
   for (const flag of [...VALUE_FLAGS, ...BOOL_FLAGS, ...REPEATABLE_FLAGS]) {
-    assert.ok(stdout.includes(`--${flag}`), `--${flag} is undocumented in --all`);
+    // A boolean flag parses under both spellings - `--X` and, through the parser's `no-`
+    // convention, `--no-X` - so either one on the page documents the flag.
+    assert.ok(
+      stdout.includes(`--${flag}`) || stdout.includes(`--no-${flag}`),
+      `--${flag} is undocumented in --all`,
+    );
   }
 });
 
@@ -191,8 +196,11 @@ test('every flag the parser accepts is described in --help', async () => {
   // a caller will reach for; a flag that works but is undescribed is a flag nobody
   // types, and a described flag that does not parse is a promise the CLI breaks.
   const text = await helpAll();
+  // A boolean flag parses under both spellings - `--X` and, through the parser's `no-`
+  // convention, `--no-X` - so either one in the text documents the flag. `agents` is
+  // reachable as `--no-agents`; listing a no-op `--agents` (the default) would be noise.
   const undocumented = [...VALUE_FLAGS, ...BOOL_FLAGS, ...REPEATABLE_FLAGS]
-    .filter((name) => !text.includes(`--${name}`))
+    .filter((name) => !text.includes(`--${name}`) && !text.includes(`--no-${name}`))
     .sort();
   assert.deepEqual(undocumented, [], `undocumented flags: ${undocumented.join(', ')}`);
 });

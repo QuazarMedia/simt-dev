@@ -180,18 +180,26 @@ export async function agentHooksCommand(sub, args, flags) {
 // `skipped` was an adapter the caller did not ask for (ADR-107).
 const OTHER_LABEL = { none: 'NO FILE ', other: 'NOT OURS', skipped: 'SKIPPED ' };
 
-async function installHooks(root, flags) {
-  const mode = writeMode(flags);
+/**
+ * The agent-hooks install, split from `installHooks` into the plan and the apply so
+ * `init` can run the same writes inside its own journal (ADR-002: a second real use).
+ *
+ * The plan is pure: it reads each documented config, renders the entry, and returns the
+ * shim the same way, so a preview and an apply describe the same set of files. A config
+ * this tool cannot parse lands in `refused` with its action set to `refused`, and the
+ * caller decides what that means — this command blocks on it, and `init` inherits the
+ * refusal because writing the other configs while one is unreadable would leave the
+ * repository in a state where the report it printed is no longer true.
+ */
+export async function planAgentHooks(root, { harness }) {
   // `--harness` narrows the install to one reader (ADR-107). The id is validated
   // against the same table the loop reads, so a typo fails before anything is
   // planned; the remedy names the ids the way `agent-hook` does.
-  const selected = flags.harness;
-  if (selected !== undefined && adapter(selected) === null) {
-    return fail(
-      `unknown harness \`${selected}\``,
-      EXIT.USAGE,
-      `--harness <id>, one of: ${adapters().map((a) => a.id).join(', ')}`,
-    );
+  if (harness !== undefined && adapter(harness) === null) {
+    return {
+      error: `unknown harness \`${harness}\``,
+      remedy: `--harness <id>, one of: ${adapters().map((a) => a.id).join(', ')}`,
+    };
   }
   // The delivery is a second entry in the same config, and a repository asks for it by
   // declaring a `brief` key rather than by having the entry. Read through a dynamic
@@ -203,7 +211,7 @@ async function installHooks(root, flags) {
     listPromotedLessons(root).catch(() => []),
   ]);
   const hasLessons = promotedLessons.length > 0;
-  const rows = selected === undefined ? adapters() : adapters().filter((r) => r.id === selected);
+  const rows = harness === undefined ? adapters() : adapters().filter((r) => r.id === harness);
   const plan = [];
   for (const row of rows) {
     const path = hookPath(row.id);
@@ -233,7 +241,7 @@ async function installHooks(root, flags) {
   for (const r of hookRows()) {
     if (r.path === null) others.push({ id: r.id, path: null, state: 'none', note: r.note });
     else if (adapter(r.id) === null) others.push({ id: r.id, path: r.path, state: 'other', note: r.note });
-    else if (selected !== undefined && r.id !== selected) {
+    else if (harness !== undefined && r.id !== harness) {
       others.push({ id: r.id, path: r.path, state: 'skipped', note: 'not requested; install without --harness to write every harness' });
     }
   }
@@ -241,13 +249,48 @@ async function installHooks(root, flags) {
   const refused = plan.filter((p) => p.error);
 
   // The shim every harness config points at: without it the entries above name a
-  // binary no harness has on PATH (review 0003 Q21). Its remedy installs the
-  // dependency the same way the git shims' does — a devDependency where the
-  // repository has a package.json, the release binary where it does not.
+  // binary no harness has on PATH (review 0003 Q21).
   const shimText = renderAgentHookShim({ npm: (await readIfExists(join(root, 'package.json'))) !== null });
   const shimBefore = await readBefore(join(root, AGENT_HOOK_SHIM));
   const shimAction = shimBefore === null ? 'create' : shimBefore === shimText ? 'unchanged' : 'update';
-  const shimRow = { id: 'shim', path: AGENT_HOOK_SHIM, action: shimAction };
+  const shim = { text: shimText, before: shimBefore, action: shimAction, row: { id: 'shim', path: AGENT_HOOK_SHIM, action: shimAction } };
+
+  return { plan, shim, others, promptLine, refused };
+}
+
+/**
+ * Write the planned agent-hooks entries and the shim into the caller's journal. Nothing
+ * is committed here: the caller commits its own journal under its own label, which is
+ * what separates this command's run (a standalone `agent-hooks install`) from `init`'s
+ * absorbed one (part of the adoption, committed with the rest of it).
+ */
+export async function applyAgentHooks(root, journal, { plan, shim, owner }) {
+  const written = [];
+  const hookChanges = [];
+  for (const p of plan.filter((x) => x.action !== 'unchanged')) {
+    const path = join(root, p.path);
+    hookChanges.push(change({ path, before: await readBefore(path), after: p.text, owner, reason: p.action }));
+    written.push(p);
+  }
+  // The shim is a file like the configs: unchanged installs leave it alone, and a
+  // changed one is journaled so `undo` removes or restores it with the configs.
+  let shimWritten = false;
+  if (shim.action !== 'unchanged') {
+    const shimPath = join(root, AGENT_HOOK_SHIM);
+    hookChanges.push(change({ path: shimPath, before: await readBefore(shimPath), after: shim.text, owner, reason: shim.action, mode: 0o755 }));
+    shimWritten = true;
+  }
+  await applyPlan(root, hookChanges, { mode: { apply: true }, journal, commit: false });
+  return { written, shimWritten };
+}
+
+async function installHooks(root, flags) {
+  const mode = writeMode(flags);
+  const planned = await planAgentHooks(root, { harness: flags.harness });
+  if (planned.error) {
+    return fail(planned.error, EXIT.USAGE, planned.remedy);
+  }
+  const { plan, shim, others, promptLine, refused } = planned;
 
   // The `--diff` pairs, read before anything is written so the before side is
   // true in preview and in apply alike (R50).
@@ -257,7 +300,7 @@ async function installHooks(root, flags) {
         plan
           .filter((p) => p.action !== 'unchanged')
           .map(async (p) => ({ path: p.path, before: await readBefore(join(root, p.path)), after: p.text }))
-          .concat(shimAction === 'unchanged' ? [] : [{ path: AGENT_HOOK_SHIM, before: shimBefore, after: shimText }]),
+          .concat(shim.action === 'unchanged' ? [] : [{ path: AGENT_HOOK_SHIM, before: shim.before, after: shim.text }]),
       )
       : [];
 
@@ -269,7 +312,7 @@ async function installHooks(root, flags) {
         root,
         dryRun: true,
         plan: plan.map(({ text, ...rest }) => rest),
-        shim: shimRow,
+        shim: shim.row,
         notWritten: others,
         filesWritten: false,
         ...diffField(diffs, flags),
@@ -280,7 +323,7 @@ async function installHooks(root, flags) {
       [
         `repo     ${root}`,
         ...plan.map((p) => `${p.action.toUpperCase().padEnd(9)} ${p.id.padEnd(12)} ${p.path}${p.error ? `  (${p.error})` : ''}`),
-        `${shimAction.toUpperCase().padEnd(9)} shim         ${AGENT_HOOK_SHIM}`,
+        `${shim.action.toUpperCase().padEnd(9)} shim         ${AGENT_HOOK_SHIM}`,
         ...others.map((o) => `${OTHER_LABEL[o.state]} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
         ...promptLine,
         '',
@@ -303,26 +346,7 @@ async function installHooks(root, flags) {
 
   // Journaled so `undo` restores this run (R49).
   const journal = [];
-  const written = [];
-  const hookChanges = [];
-  for (const p of plan.filter((x) => x.action !== 'unchanged')) {
-    const path = join(root, p.path);
-    hookChanges.push(
-      change({ path, before: await readBefore(path), after: p.text, owner: 'agent-hooks install', reason: p.action }),
-    );
-    written.push(p);
-  }
-  // The shim is a file like the configs: unchanged installs leave it alone, and a
-  // changed one is journaled so `undo` removes or restores it with the configs.
-  let shimWritten = false;
-  if (shimAction !== 'unchanged') {
-    const shimPath = join(root, AGENT_HOOK_SHIM);
-    hookChanges.push(
-      change({ path: shimPath, before: await readBefore(shimPath), after: shimText, owner: 'agent-hooks install', reason: shimAction, mode: 0o755 }),
-    );
-    shimWritten = true;
-  }
-  await applyPlan(root, hookChanges, { mode: { apply: true }, journal, commit: false });
+  const { written, shimWritten } = await applyAgentHooks(root, journal, { plan, shim, owner: 'agent-hooks install' });
   await commitJournal(root, 'agent-hooks install', journal);
 
   const notes = [];
@@ -338,7 +362,7 @@ async function installHooks(root, flags) {
       command: 'agent-hooks install',
       root,
       plan: plan.map(({ text, ...rest }) => rest),
-      shim: { ...shimRow, written: shimWritten },
+      shim: { ...shim.row, written: shimWritten },
       notWritten: others,
       written: written.map((p) => p.path),
       filesWritten: true,
@@ -351,7 +375,7 @@ async function installHooks(root, flags) {
     [
       `repo     ${root}`,
       ...plan.map((p) => `${p.action.toUpperCase().padEnd(9)} ${p.id.padEnd(12)} ${p.path}`),
-      `${shimAction.toUpperCase().padEnd(9)} shim         ${AGENT_HOOK_SHIM}`,
+      `${shim.action.toUpperCase().padEnd(9)} shim         ${AGENT_HOOK_SHIM}`,
       ...others.map((o) => `${OTHER_LABEL[o.state]} ${o.id.padEnd(12)} ${o.path ?? '(no hooks file is documented)'}`),
       ...promptLine,
       '',

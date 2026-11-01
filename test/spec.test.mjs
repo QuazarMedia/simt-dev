@@ -76,7 +76,7 @@ test('spec: a command declares every flag its own module reads', () => {
   const moduleOf = new Map(
     [...body.matchAll(/^  '?([a-z][a-z-]*(?: [a-z-]+)?)'?: [\s\S]*?await import\('\.\/([^']+)'\)/gm)].map((m) => [m[1], m[2]]),
   );
-  const GLOBAL = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes']);
+  const GLOBAL = new Set(['root', 'json', 'pretty', 'help', 'version', 'maxBytes', 'dashdash']);
   const byPath = new Map(SPEC.map((row) => [row.path, new Set(row.flags ?? [])]));
   const byModule = new Map();
   for (const [path, file] of moduleOf) byModule.set(file, [...(byModule.get(file) ?? []), path]);

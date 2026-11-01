@@ -27,7 +27,7 @@
 // finished slice a conflict on the one line that records it.
 
 import { execFile } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { promisify } from 'node:util';
 
@@ -143,6 +143,47 @@ async function resolveSlice(main, id) {
   return { slice: found.next };
 }
 
+/**
+ * The id for a prompt slice: a slug of the prompt text, capped so the branch and
+ * worktree names it feeds stay short. Whitespace and punctuation fold to one hyphen,
+ * and empty text falls back to `slice` rather than naming the slice after nothing.
+ */
+function slugify(text) {
+  const slug = String(text ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 48)
+    .replace(/-+$/g, '');
+  return slug === '' ? 'slice' : slug;
+}
+
+/**
+ * The record a prompt slice writes in place of a tracker row. A prompt slice is not in
+ * a plan, so `planDone` has no row to flip and `planNext` has no section to read; the
+ * record is the only place its existence is stated, and it is what `finish` and
+ * `abandon` fall back to when the tracker has no row for the id. It lives beside the
+ * briefs, under the local state directory, not in the tree the slice commits.
+ */
+function recordPath(main, id) {
+  return join(main, LOCAL_DIR, 'slices', `${id.toLowerCase()}.json`);
+}
+
+async function writeSliceRecord(main, id, record) {
+  const path = recordPath(main, id);
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(record, null, 2)}\n`, 'utf8');
+  return path;
+}
+
+async function readSliceRecord(main, id) {
+  try {
+    return JSON.parse(await readFile(recordPath(main, id), 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
 /** The session holding the slice, or null when the caller named none: a person
  *  at a terminal has no session, and starting without one proceeds unleased
  *  rather than refusing the work. */
@@ -221,9 +262,20 @@ async function releaseSlice(main, id, session) {
 export async function sliceCommand(sub, args, flags) {
   const root = commandRoot(flags);
   if (sub === 'start') {
+    // Prompt mode: `simt slice start -- "<text>"`. The `--` is the marker, so the
+    // positional after it is the prompt, not a tracker id — there is no row to start,
+    // and the id is derived from the text (or pinned with --id) rather than read.
+    if (flags.dashdash === true) {
+      const prompt = args[0];
+      if (prompt === undefined || prompt === '') {
+        return fail(`${CLI} slice start -- needs a prompt after --`, EXIT.USAGE, `run: ${CLI} slice start -- "<text>"`);
+      }
+      const id = flags.id ?? slugify(prompt);
+      return startSlice(root, id, flags, prompt);
+    }
     const id = args[0];
     if (!id) return fail(`${CLI} slice start needs a slice id`, EXIT.USAGE, `run: ${CLI} plan next`);
-    return startSlice(root, id, flags);
+    return startSlice(root, id, flags, null);
   }
   if (sub === 'finish') {
     const id = args[0];
@@ -242,12 +294,22 @@ export async function sliceCommand(sub, args, flags) {
   );
 }
 
-async function startSlice(root, id, flags) {
+async function startSlice(root, id, flags, prompt) {
   const mode = writeMode(flags);
   const main = await mainCheckout(root);
-  const resolved = await resolveSlice(main, id);
-  if (resolved.error) return fail(resolved.error, EXIT.USAGE, resolved.remedy);
-  const { title, doc } = resolved.slice;
+  const promptMode = prompt !== null;
+  // A prompt slice has no tracker row: the title is the prompt, and the record file —
+  // not `planDone` — is what `finish` and `abandon` will read.
+  let title;
+  let doc;
+  if (promptMode) {
+    title = prompt;
+    doc = prompt;
+  } else {
+    const resolved = await resolveSlice(main, id);
+    if (resolved.error) return fail(resolved.error, EXIT.USAGE, resolved.remedy);
+    ({ title, doc } = resolved.slice);
+  }
   const { branch, worktree } = places(main, id);
   // The brief lives beside the worktree, not in it: a file inside the worktree
   // is untracked content in the slice's own tree, and the tree id must name
@@ -256,17 +318,29 @@ async function startSlice(root, id, flags) {
   const leaseRel = sliceLeaseRel(main, worktree);
   const session = sliceSession(flags);
   const task = `${id}: ${String(title ?? '').trim()}`;
-  const apply = `run: ${CLI} slice start ${id} --yes`;
+  const apply = promptMode
+    ? `run: ${CLI} slice start -- ${JSON.stringify(prompt)} --yes`
+    : `run: ${CLI} slice start ${id} --yes`;
+  const record = recordPath(main, id);
 
-  const started = await startedState(main);
-  if (started.error) return fail(started.error, EXIT.USAGE, started.remedy);
   // The row first, dry, against the main checkout: it is the only part of `start`
   // that can refuse for a reason about the tracker rather than about git, and a
   // preview that discovers it late is a preview that half-described the work.
-  const preview = await planDone(main, id, { state: started.state, dryRun: true });
-  if (preview.error) return fail(preview.error, EXIT.USAGE, preview.remedy ?? `run: ${CLI} plan status`);
+  // A prompt slice has no row to flip, so there is nothing to preview here.
+  const started = promptMode ? { state: null } : await startedState(main);
+  if (started.error) return fail(started.error, EXIT.USAGE, started.remedy);
+  const preview = promptMode
+    ? null
+    : await planDone(main, id, { state: started.state, dryRun: true });
+  if (preview !== null && preview.error) return fail(preview.error, EXIT.USAGE, preview.remedy ?? `run: ${CLI} plan status`);
 
   const leaseLine = session === null ? 'lease    (no session: pass --session or set SIMT_SESSION to lease the slice)' : `lease    slice ${id} as ${session} (claimed on apply)`;
+  const stateLine = promptMode
+    ? `state    (no tracker row; recorded at ${relative(main, record)})`
+    : `state    ${preview.from} -> ${preview.to}`;
+  const stateJson = promptMode
+    ? { row: false, record: relative(main, record) }
+    : { from: preview.from, to: preview.to, changed: preview.wouldChange };
 
   if (!mode.apply) {
     if (isJson(flags)) {
@@ -281,7 +355,7 @@ async function startSlice(root, id, flags) {
         worktree: relative(main, worktree),
         brief: { path: relative(main, briefPath), bytes: null },
         lease: session === null ? null : { slice: id, path: leaseRel, session },
-        state: { from: preview.from, to: preview.to, changed: preview.wouldChange },
+        state: stateJson,
         remedy: apply,
       });
       return EXIT.OK;
@@ -293,7 +367,7 @@ async function startSlice(root, id, flags) {
       `worktree ${relative(main, worktree)}`,
       `brief    ${relative(main, briefPath)} (assembled on apply)`,
       leaseLine,
-      `state    ${preview.from} -> ${preview.to}`,
+      stateLine,
       `apply    ${apply}`,
     ];
     emit(lines.join('\n'));
@@ -342,9 +416,17 @@ async function startSlice(root, id, flags) {
   await mkdir(dirname(briefPath), { recursive: true });
   await writeFile(briefPath, packet.packed.text, 'utf8');
 
-  const row = await planDone(main, id, { state: started.state, dryRun: false });
-  if (row.error) {
-    return fail(`${branch} exists with its brief, but the tracker row was not updated: ${row.error}`, EXIT.FAIL, row.remedy ?? `run: ${CLI} plan status`);
+  // Normal slices flip the tracker row; prompt slices write the record file that stands
+  // in for it. Both are the "started" mark, and both land after the worktree exists so a
+  // failed `worktree add` leaves neither behind.
+  let row = null;
+  if (promptMode) {
+    await writeSliceRecord(main, id, { id, title, kind: 'prompt', createdAt: new Date().toISOString() });
+  } else {
+    row = await planDone(main, id, { state: started.state, dryRun: false });
+    if (row.error) {
+      return fail(`${branch} exists with its brief, but the tracker row was not updated: ${row.error}`, EXIT.FAIL, row.remedy ?? `run: ${CLI} plan status`);
+    }
   }
 
   const bytes = Buffer.byteLength(packet.packed.text);
@@ -360,7 +442,9 @@ async function startSlice(root, id, flags) {
       worktree: relative(main, worktree),
       brief: { path: relative(main, briefPath), bytes },
       lease,
-      state: { from: row.from, to: row.to, changed: row.changed },
+      state: promptMode
+        ? { row: false, record: relative(main, record) }
+        : { from: row.from, to: row.to, changed: row.changed },
     });
     return EXIT.OK;
   }
@@ -371,7 +455,9 @@ async function startSlice(root, id, flags) {
     `worktree ${relative(main, worktree)}`,
     `brief    ${relative(main, briefPath)}  ${bytes} bytes`,
     lease === null ? 'lease    (none)' : `lease    slice ${id} as ${session}`,
-    `state    ${row.from} -> ${row.to}`,
+    promptMode
+      ? `state    (no tracker row; recorded at ${relative(main, record)})`
+      : `state    ${row.from} -> ${row.to}`,
   ];
   emit(lines.join('\n'));
   return EXIT.OK;
@@ -423,8 +509,16 @@ async function finishSlice(root, id, flags) {
   const mode = writeMode(flags);
   const main = await mainCheckout(root);
   const resolved = await resolveSlice(main, id);
-  if (resolved.error) return fail(resolved.error, EXIT.USAGE, resolved.remedy);
-  const { title, doc } = resolved.slice;
+  // A prompt slice has no tracker row: the record file stands in for it, and the
+  // finish commits and releases the lease without flipping a row.
+  const record = resolved.error ? await readSliceRecord(main, id) : null;
+  if (resolved.error && record === null) {
+    return fail(resolved.error, EXIT.USAGE, resolved.remedy);
+  }
+  const promptMode = record !== null;
+  const title = promptMode ? record.title : resolved.slice.title;
+  const doc = promptMode ? record.title : resolved.slice.doc;
+  const recRel = relative(main, recordPath(main, id));
   const { branch, worktree } = places(main, id);
 
   const type = String(flags.type ?? 'feat');
@@ -448,8 +542,13 @@ async function finishSlice(root, id, flags) {
   const split = await splitGates(root, declared, manifest.manifest);
 
   if (!mode.apply) {
-    const row = await planDone(main, id, { sha: null, test, dryRun: true });
-    if (row.error) return fail(row.error, EXIT.USAGE, row.remedy ?? `run: ${CLI} plan status`);
+    let row = null;
+    if (!promptMode) {
+      row = await planDone(main, id, { sha: null, test, dryRun: true });
+      if (row.error) return fail(row.error, EXIT.USAGE, row.remedy ?? `run: ${CLI} plan status`);
+    }
+    const stateLine = promptMode ? `state    (no tracker row; recorded at ${recRel})` : `state    ${row.from} -> ${row.to}`;
+    const stateJson = promptMode ? { row: false, record: recRel } : { from: row.from, to: row.to, changed: row.wouldChange };
     const gateLine =
       declared.length === 0
         ? '(none declared)'
@@ -464,7 +563,7 @@ async function finishSlice(root, id, flags) {
         subject,
         staged,
         gates: { event: 'pre-commit', declared, skipped: split.skipped.map((s) => s.name) },
-        state: { from: row.from, to: row.to, changed: row.wouldChange },
+        state: stateJson,
         remedy: apply,
       });
       return EXIT.OK;
@@ -475,7 +574,7 @@ async function finishSlice(root, id, flags) {
       `gates    pre-commit  ${gateLine} (run on apply)`,
       `staged   ${staged.length} file(s)${staged.length === 0 ? '  (finish refuses without one)' : ''}`,
       `subject  ${subject}`,
-      `state    ${row.from} -> ${row.to}`,
+      stateLine,
       `apply    ${apply}`,
     ];
     emit(lines.join('\n'));
@@ -569,9 +668,12 @@ async function finishSlice(root, id, flags) {
     return fail(`the gates passed but the commit failed: ${detail}`, EXIT.FAIL, `run: git -C ${root} commit -m ${JSON.stringify(message)}`);
   }
 
-  const row = await planDone(main, id, { sha, test, dryRun: false });
-  if (row.error) {
-    return fail(`${sha} is committed, but the tracker row could not record it: ${row.error}`, EXIT.FAIL, row.remedy ?? `run: ${CLI} plan status`);
+  let row = null;
+  if (!promptMode) {
+    row = await planDone(main, id, { sha, test, dryRun: false });
+    if (row.error) {
+      return fail(`${sha} is committed, but the tracker row could not record it: ${row.error}`, EXIT.FAIL, row.remedy ?? `run: ${CLI} plan status`);
+    }
   }
 
   // The slice is done: its lease goes with it. A failure here is a note — the
@@ -590,8 +692,12 @@ async function finishSlice(root, id, flags) {
       commit: { sha, subject },
       gates: gates.gates,
       staged,
-      evidence: { recorded: row.evidenceRecorded, sha: row.sha, test: row.test, note: row.evidenceNote },
-      row: { file: relative(main, row.file), line: row.line, from: row.from, to: row.to, changed: row.changed },
+      ...(promptMode
+        ? { state: { row: false, record: recRel } }
+        : {
+            evidence: { recorded: row.evidenceRecorded, sha: row.sha, test: row.test, note: row.evidenceNote },
+            row: { file: relative(main, row.file), line: row.line, from: row.from, to: row.to, changed: row.changed },
+          }),
     });
     return EXIT.OK;
   }
@@ -602,11 +708,15 @@ async function finishSlice(root, id, flags) {
     `slice    ${id}  ${doc}`,
     ...renderGateReport('pre-commit', declared, gates),
     `commit   ${sha}  ${subject}`,
-    `state    ${row.from} -> ${row.to}`,
-    `record   ${relative(main, row.file)} line ${row.line}  (edited, not staged: commit it with the merge)`,
   ];
-  if (row.evidenceRecorded) lines.push(`evidence ${sha}${test ? `  test: ${test}` : ''}`);
-  else if (row.evidenceNote) lines.push(`note     ${row.evidenceNote}`);
+  if (promptMode) {
+    lines.push(`state    (no tracker row; recorded at ${recRel})`);
+  } else {
+    lines.push(`state    ${row.from} -> ${row.to}`);
+    lines.push(`record   ${relative(main, row.file)} line ${row.line}  (edited, not staged: commit it with the merge)`);
+    if (row.evidenceRecorded) lines.push(`evidence ${sha}${test ? `  test: ${test}` : ''}`);
+    else if (row.evidenceNote) lines.push(`note     ${row.evidenceNote}`);
+  }
   emit(lines.join('\n'));
   return EXIT.OK;
 }
@@ -622,17 +732,29 @@ async function abandonSlice(root, id, flags) {
   const mode = writeMode(flags);
   const main = await mainCheckout(root);
   const resolved = await resolveSlice(main, id);
-  if (resolved.error) return fail(resolved.error, EXIT.USAGE, resolved.remedy);
-  const { doc } = resolved.slice;
+  // A prompt slice has no tracker row: the record file stands in for it, and the
+  // abandon removes the record file where a tracked abandon would reset the row.
+  const record = resolved.error ? await readSliceRecord(main, id) : null;
+  if (resolved.error && record === null) {
+    return fail(resolved.error, EXIT.USAGE, resolved.remedy);
+  }
+  const promptMode = record !== null;
+  const doc = promptMode ? record.title : resolved.slice.doc;
+  const recRel = relative(main, recordPath(main, id));
   const { branch, worktree } = places(main, id);
   const session = sliceSession(flags);
   const apply = `run: ${CLI} slice abandon ${id} --yes`;
 
-  const loaded = await loadFormat(main);
-  if (loaded.error) return fail(loaded.error, EXIT.USAGE, loaded.remedy);
-  const readyDisplay = loaded.format.canonical(loaded.format.ready) ?? 'Queued';
-  const preview = await planDone(main, id, { state: readyDisplay, dryRun: true });
-  if (preview.error) return fail(preview.error, EXIT.USAGE, preview.remedy ?? `run: ${CLI} plan status`);
+  let preview = null;
+  if (!promptMode) {
+    const loaded = await loadFormat(main);
+    if (loaded.error) return fail(loaded.error, EXIT.USAGE, loaded.remedy);
+    const readyDisplay = loaded.format.canonical(loaded.format.ready) ?? 'Queued';
+    preview = await planDone(main, id, { state: readyDisplay, dryRun: true });
+    if (preview.error) return fail(preview.error, EXIT.USAGE, preview.remedy ?? `run: ${CLI} plan status`);
+  }
+  const stateLine = promptMode ? `state    (no tracker row; removing ${recRel})` : `state    ${preview.from} -> ${preview.to}`;
+  const stateJson = promptMode ? { row: false, record: recRel } : { from: preview.from, to: preview.to, changed: preview.wouldChange };
 
   if (!mode.apply) {
     if (isJson(flags)) {
@@ -644,7 +766,7 @@ async function abandonSlice(root, id, flags) {
         dryRun: true,
         branch,
         worktree: relative(main, worktree),
-        state: { from: preview.from, to: preview.to, changed: preview.wouldChange },
+        state: stateJson,
         remedy: apply,
       });
       return EXIT.OK;
@@ -653,7 +775,7 @@ async function abandonSlice(root, id, flags) {
       `repo     ${root}`,
       `slice    ${id}  ${doc}`,
       `remove   ${relative(main, worktree)} and branch ${branch} (on apply)`,
-      `state    ${preview.from} -> ${preview.to}`,
+      stateLine,
       `apply    ${apply}`,
     ];
     emit(lines.join('\n'));
@@ -688,13 +810,27 @@ async function abandonSlice(root, id, flags) {
     removed.push(`kept     ${branch} (${detail})`);
   }
 
-  const row = await planDone(main, id, { state: readyDisplay, dryRun: false });
-  if (row.error) {
-    return fail(
-      `the worktree is down, but the tracker row was not updated: ${row.error}`,
-      EXIT.FAIL,
-      row.remedy ?? `run: ${CLI} plan status`,
-    );
+  let row = null;
+  if (promptMode) {
+    // No row to reset; the record file is the only mark of the slice, and it goes.
+    try {
+      await unlink(recordPath(main, id));
+    } catch {
+      // A record that is already gone is not a second failure: the worktree and
+      // branch are what abandonment exists to take down.
+    }
+  } else {
+    const loaded = await loadFormat(main);
+    if (loaded.error) return fail(loaded.error, EXIT.USAGE, loaded.remedy);
+    const readyDisplay = loaded.format.canonical(loaded.format.ready) ?? 'Queued';
+    row = await planDone(main, id, { state: readyDisplay, dryRun: false });
+    if (row.error) {
+      return fail(
+        `the worktree is down, but the tracker row was not updated: ${row.error}`,
+        EXIT.FAIL,
+        row.remedy ?? `run: ${CLI} plan status`,
+      );
+    }
   }
 
   const released = await releaseSlice(main, id, session);
@@ -704,6 +840,7 @@ async function abandonSlice(root, id, flags) {
       : released.error
         ? `the slice lease could not be released (${released.error}); the TTL reaps it`
         : 'no slice lease was held';
+  const abandonStateJson = promptMode ? { row: false, record: recRel, removed: true } : { from: row.from, to: row.to, changed: row.changed };
   if (isJson(flags)) {
     emitJson({
       ok: true,
@@ -713,11 +850,17 @@ async function abandonSlice(root, id, flags) {
       branch,
       worktree: relative(main, worktree),
       lease: released.released === true ? { slice: id, session } : null,
-      state: { from: row.from, to: row.to, changed: row.changed },
+      state: abandonStateJson,
     });
     return EXIT.OK;
   }
-  const lines = [`repo     ${root}`, `slice    ${id}  ${doc}`, ...removed, `state    ${row.from} -> ${row.to}`, `lease    ${leaseLine}`];
+  const lines = [
+    `repo     ${root}`,
+    `slice    ${id}  ${doc}`,
+    ...removed,
+    promptMode ? `state    (no tracker row; removed ${recRel})` : `state    ${row.from} -> ${row.to}`,
+    `lease    ${leaseLine}`,
+  ];
   emit(lines.join('\n'));
   return EXIT.OK;
 }

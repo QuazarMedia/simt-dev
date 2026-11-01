@@ -64,7 +64,7 @@ export const SPEC = [
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff"], },
   { path: 'impact', usage: '<file|symbol>', summary: 'who a change reaches: importers, their tests and the contract', flags: [], },
   { path: 'index', usage: '[--embed]', summary: 'rebuild the local file index from git blob hashes', flags: ["allow-remote","embed"], },
-  { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, hooks and toolchain pins', writes: 'repo', flags: ["yes","accept-conflicts","backup","diff","surfaces"], },
+  { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, hooks, agents and agent-hooks', writes: 'repo', flags: ["yes","accept-conflicts","backup","diff","harness","agents","surfaces"], },
   { path: 'lease', usage: '[<paths>] --session', summary: 'claim files for one session, or list the claims', flags: ["harness","session","ttl"], },
   { path: 'lessons capture', summary: 'scan the ledger and history for new lesson candidates', flags: ["diff","expires","paths","task"], },
   { path: 'lessons list', summary: 'deterministic lesson candidates and the promoted lessons', defaultFor: 'lessons', flags: ["diff","expires","paths","task"], },
@@ -106,7 +106,7 @@ export const SPEC = [
   // Plan 0003 R53. Both halves write, so a bare `slice` has no read to default to.
   // `start` is the default because with the id it is missing it fails with a usage error
   // before anything is created - the one default here that cannot mutate.
-  { path: 'slice start', usage: '<id> --yes', summary: 'give a slice its own worktree, branch and brief', defaultFor: 'slice', flags: ["session","test","type"], },
+  { path: 'slice start', usage: '<id> --yes  |  -- "<text>"', summary: 'give a slice its worktree, branch and brief; -- starts one from a prompt, no row', defaultFor: 'slice', flags: ["id","session","test","type"], },
   { path: 'status', usage: '--line', summary: 'gate state from the last check', flags: ["line"], },
   { path: 'sync', usage: '[--explain] --yes', summary: 're-render the generated regions from the rule content', writes: 'repo', flags: ["yes","check","diff","dry-run"], },
   { path: 'tests', usage: '<path> [--cochange]', summary: 'the tests that exercise a file', flags: ["cochange"], },

@@ -54,6 +54,21 @@ Conventional Commits, imperative, a scope that names the subsystem. Commit local
 report the SHA. **Push only on explicit approval**, and say before asking whether the push
 triggers a deployment, a migration, or any other remote mutation.
 
+## How-tos
+
+Each one names the files a change touches and the test that holds it:
+
+- [add a command](docs/contributing/add-a-command.md)
+- [add a stack profile](docs/contributing/add-a-stack-profile.md)
+- [add an ecosystem](docs/contributing/add-an-ecosystem.md)
+- [add a harness](docs/contributing/add-a-harness.md)
+- [add an MCP tool](docs/contributing/add-an-mcp-tool.md)
+- [add a finding code](docs/contributing/add-a-finding-code.md)
+- [write a decision record](docs/contributing/write-an-adr.md)
+
+The architecture these assume is in [docs/architecture/overview.md](docs/architecture/overview.md);
+the reference pages are indexed from the [README](README.md#where-to-read-next).
+
 ## Release checklist
 
 1. `npm test` green on the tree being released, and the recorded evidence cited.

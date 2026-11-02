@@ -71,6 +71,8 @@ simt sync --yes                 # re-render the regions after a rule change
 | [docs/guides/workspace-shapes.md](docs/guides/workspace-shapes.md) | the optimal setup for each repository and workspace shape |
 | [docs/reference/modules.md](docs/reference/modules.md) | the module, CLI and MCP surface, and when an agent should use it |
 | [docs/reference/files-written.md](docs/reference/files-written.md) | every path it writes, every cache it keeps, and which are not content |
+| [docs/reference/exit-codes.md](docs/reference/exit-codes.md) | the exit code each command returns, and why a report is not a failure |
+| [docs/architecture/overview.md](docs/architecture/overview.md) | the module map, and the three rules that keep it that shape |
 | [docs/architecture/pipeline.md](docs/architecture/pipeline.md) | detection, selection, projection and the gates |
 | [docs/decisions-index.md](docs/decisions-index.md) | every ruling, numbered, with the layer it came from |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | hooks, the isolated test run, and the release checklist |

@@ -1,6 +1,6 @@
 # Review 0003 — simt-dev at `9904b69`: what to fix, merge and restructure before plan 0004
 
-Status: closed · 2026-11-02 (every row Complete)
+Status: **closed** — 91 row(s): 91 Complete · 2026-11-02
 Reviewed at: `9904b69` on `main` (clean, level with `origin/main`), plans 0001–0003 complete (R01–R55 all Complete).
 Companion: `docs/research/0004-knowledge-and-remote-work-intelligence-plan.md`, which this review gates.
 

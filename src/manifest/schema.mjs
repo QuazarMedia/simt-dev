@@ -24,6 +24,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
+import { WORK_VERSION, validateWork } from '../work/config.mjs';
 
 /** Absent means 1: the field arrived after the file did, and every file predates it. */
 const MANIFEST_VERSION = 1;
@@ -210,3 +211,25 @@ export async function loadManifest(root) {
     path,
   };
 }
+
+/** One key of the `work` namespace, reported through the same problem surface as the rest. */
+function workKeyProblem(key, value) {
+  const scoped = validateWork({ version: WORK_VERSION, [key]: value });
+  const found = scoped.problems.find((entry) => entry.path.startsWith(`work.${key}`));
+  return found === undefined ? null : `${found.message}; ${found.remedy}`;
+}
+
+// `work` is one object with rules across its fields - duplicate scope ids, two scopes on
+// one path - so it registers as a namespace rather than as separate top-level keys
+// (ADR-144). Registering here means every reader of the manifest gets the validation,
+// not only the code that happens to import the work module.
+registerNamespace('work', [
+  {
+    key: 'version',
+    since: '0.8.0',
+    check: (v) => (v === WORK_VERSION ? null : `must be ${WORK_VERSION}, not ${JSON.stringify(v)}; set "work": {"version": ${WORK_VERSION}} or remove the key`),
+  },
+  { key: 'scopes', since: '0.8.0', check: (v) => workKeyProblem('scopes', v) },
+  { key: 'targets', since: '0.8.0', check: (v) => workKeyProblem('targets', v) },
+  { key: 'adapters', since: '0.8.0', check: (v) => workKeyProblem('adapters', v) },
+]);

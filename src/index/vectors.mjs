@@ -1,7 +1,7 @@
 // The vector path: embeddings, one cosine score, one way to ask for a query vector.
 //
-// Review 0003 Q84 isolated this module for one reason: it is the only part of the map
-// that can open a socket. Everything here is called only when a caller passes
+// This module exists for one reason: it is the only part of the map that can open a
+// socket. Everything here is called only when a caller passes
 // `embed: true` - a `map`, `brief` or `slice` without the flag opens no socket, reads no
 // stored vector and sends no embedding request, and the graph read never carries a
 // vector. The acceptance bar lives beside the measurement in `map.mjs`

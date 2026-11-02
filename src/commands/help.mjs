@@ -109,9 +109,6 @@ ${CLI} lease [<paths>...]    claim files for one session and a TTL, or list the
                            release and renew end and extend your own claims)
 ${CLI} graph lint              check the skill registry against the skills on disk
                            (byte counts, dangling edges, unresolvable variants)
-${CLI} ci                     simt-dev's own .github files: create or refresh them
-                           (dry-run unless --yes; refreshes the templates' own copies
-                            and no repository else's)
 ${CLI} ignore [--yes]         render the one .simtignore list into .cursorignore,
                            .aiderignore, .geminiignore and Claude's
                            permissions.deny Read(...) entries (dry-run unless
@@ -286,7 +283,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
                         SIMT_CONCURRENCY; order-preserving whatever it is)
 --dry-run               report what would change, change nothing
 --yes                   assume yes; required in automation, never prompts
---check                 report drift and write nothing (sync, ci)
+--check                 report drift and write nothing (sync)
 --diff                  print the plan as unified diffs (every writer;
                         changes nothing about what the run writes)
 --line                  status: print the one-line gate summary from the last

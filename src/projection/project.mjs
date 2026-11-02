@@ -420,7 +420,7 @@ export async function checkTargets(root, flags = {}) {
         file: plan.file,
         status: 'drift',
         detail: plan.reason,
-        remedy: `${CLI} ci --yes`,
+        remedy: 'node scripts/ci.mjs --yes',
       });
     }
   }

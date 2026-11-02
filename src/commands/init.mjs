@@ -856,7 +856,7 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
     lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow({ own: payload.ci.own, npm, manager, version }).length} bytes`);
     lines.push(
       payload.ci.own
-        ? `            this repository is simt-dev's own; ${CLI} ci --yes refreshes this copy when the gate changes`
+        ? `            this repository is simt-dev's own; node scripts/ci.mjs --yes refreshes this copy when the gate changes`
         : `            runs ${CLI} check where a pull request is merged; yours to edit after this`,
     );
     // the workflow installs simt-dev as a devDependency, so the plan states
@@ -866,10 +866,10 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
       if (addDev) lines.push(`  ${'needs'.padEnd(9)} ${addDev}   (CI installs the pinned devDependency before it can run ${CLI} check)`);
     }
   } else if (payload.ci.action === 'refresh') {
-    // init does not write it. `simt ci` owns the template's own copy, and a
-    // second writer would be a second answer to who owns it.
+    // init does not write it. `node scripts/ci.mjs` owns the template's own copy, and
+    // a second writer would be a second answer to who owns it.
     lines.push(`  ${'refresh'.padEnd(9)} ${payload.ci.file}  ${payload.ci.reason}`);
-    lines.push(`            remedy: ${CLI} ci --yes   (init does not write simt-dev's own copy)`);
+    lines.push(`            remedy: node scripts/ci.mjs --yes   (init does not write simt-dev's own copy)`);
   } else if (payload.ci.action === 'skip') {
     lines.push(`  ${'skip'.padEnd(9)} ${payload.ci.file}  ${payload.ci.reason}`);
     lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);
@@ -884,12 +884,12 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
     lines.push(`  ${'create'.padEnd(9)} ${db.file}  ${renderDependabot(db.facts, { stack: db.stack, own: db.own, root: db.root }).length} bytes`);
     lines.push(
       db.own
-        ? `            watches ${db.ecosystems.join(', ')}; ${CLI} ci --yes refreshes this copy when the template changes`
+        ? `            watches ${db.ecosystems.join(', ')}; node scripts/ci.mjs --yes refreshes this copy when the template changes`
         : `            watches ${db.ecosystems.join(', ') || 'github actions'} - one per manifest this repo has; yours to edit after this`,
     );
   } else if (db && db.action === 'refresh') {
     lines.push(`  ${'refresh'.padEnd(9)} ${db.file}  ${db.reason}`);
-    lines.push(`            remedy: ${CLI} ci --yes   (init does not write simt-dev's own copy)`);
+    lines.push(`            remedy: node scripts/ci.mjs --yes   (init does not write simt-dev's own copy)`);
   } else if (db && db.action === 'skip') {
     lines.push(`  ${'skip'.padEnd(9)} ${db.file}  ${db.reason}`);
     lines.push(`            create ${WORKFLOWS_DIR}/ first if this repo is on GitHub Actions, then rerun init`);

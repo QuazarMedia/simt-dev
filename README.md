@@ -122,9 +122,6 @@ simt brief "<task>"                                                    # the pac
 # check
 simt check                                                             # report stale or missing generated regions and every check finding
 
-# ci
-simt ci                                                                # refresh simt-dev's own .github workflow and Dependabot files
-
 # workspace
 simt workspace compare                                                 # the adoption and drift matrix across every sibling repository
 simt workspace install --yes                                           # carry those rules once per reader, at user level
@@ -308,7 +305,7 @@ workflow for orienting, editing, implementing and closing a slice — lives in
 | **Skills & Disclosure** | `simt skills index\|brief\|show\|why\|find\|install\|compile\|eval`, `simt graph lint` | `skills_index`, `skills_find`, `skills_brief`, `skills_show`, `skills_why` | When a task requires domain workflows or reference docs without blowing the session token budget |
 | **Memory & Lessons** | `simt lessons list`, `simt lessons review <id> --yes` | — | After fixing a failing test/gate or hitting a hook denial, to inspect or promote reusable failure-to-fix lessons |
 | **Plans & Trackers** | `simt plan status`, `simt plan next [<id>]`, `simt plan done <id> [<sha>] --yes`, `simt slice start\|finish <id>`, `simt lease`, `simt pr-body`, `simt status --line`, `simt undo` | `plan_next`, `plan_done`, `pr_body` | When executing a phased implementation or review plan row by row |
-| **Adoption & Projection** | `simt init`, `simt doctor`, `simt check [--frozen]`, `simt sync`, `simt upgrade`, `simt ci` | `doctor`, `check` | When adopting a repo, diagnosing stack/config health, or verifying zero drift before commit |
+| **Adoption & Projection** | `simt init`, `simt doctor`, `simt check [--frozen]`, `simt sync`, `simt upgrade` | `doctor`, `check` | When adopting a repo, diagnosing stack/config health, or verifying zero drift before commit |
 | **Dual Gates & Evidence** | `simt hooks install\|status [--agent]\|run`, `simt agent-hooks install\|status`, `simt agent-hook`, `simt evidence [check]` | — | When installing git/agent hooks, running gates manually, or verifying test claims before committing |
 | **Context & Harnesses** | `simt tokens [--repos] [--session]`, `simt harness detect\|loaders`, `simt shared plan\|install` | — | When auditing startup token cost across harnesses (`claude`, `codex`, `cursor`, `opencode`, `antigravity`, `copilot`, `deepseek`) or deduplicating workspace rules |
 | **Workspace & Benchmarks** | `simt compare`, `simt bench mine\|run\|report\|ablate\|probes\|variants`, `simt local doctor`, `simt review [--local]`, `simt distill` | `compare` | When auditing an entire multi-repo estate, measuring rule uplift/cost, or probing local model endpoints |

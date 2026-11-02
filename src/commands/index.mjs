@@ -185,7 +185,6 @@ export const IMPLEMENTED = {
     return (args, flags) => evidenceCommand(['check', ...args], flags);
   },
   init: async () => (await import('./init.mjs')).initCommand,
-  ci: async () => (await import('./ci.mjs')).ciCommand,
   'hooks install': async () => {
     const { hooksCommand } = await import('./hooks.mjs');
     return (args, flags) => hooksCommand('install', args, flags);

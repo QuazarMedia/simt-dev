@@ -44,7 +44,6 @@ export const SPEC = [
   { path: 'bench run', usage: '--yes', summary: 'run agents against the mined tasks', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'brief', usage: '"<task>"', mcp: { name: 'brief', flags: ['budget', 'paths', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","paths","task"], },
   { path: 'check', mcp: { name: 'check', flags: [] }, summary: 'report stale or missing generated regions and every check finding', flags: ["check","diff","dry-run","frozen"], },
-  { path: 'ci', summary: "refresh simt-dev's own .github workflow and Dependabot files", flags: ["check","diff"], },
   { path: 'workspace compare', mcp: { name: 'compare', flags: [] }, summary: 'the adoption and drift matrix across every sibling repository', aliases: ['compare'], flags: ["learn"], },
   { path: 'completions', usage: '<bash|zsh|fish>', summary: 'print a bash, zsh or fish completion script generated from this spec', flags: [], },
   { path: 'decide lint', summary: 'check every decision record for the structure a supersession needs', flags: ["check","diff"], },

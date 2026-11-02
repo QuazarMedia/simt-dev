@@ -179,7 +179,6 @@ const JSON_COMMANDS = [
   { name: 'graph', args: () => ['graph'], env: async () => ({}) },
   { name: 'upgrade', args: (root) => ['upgrade', '--root', root], env: async () => ({}) },
   { name: 'init', args: (root) => ['init', '--root', root, '--yes'], env: async () => ({}) },
-  { name: 'ci', args: (root) => ['ci', '--root', root], env: async () => ({}) },
   { name: 'harness loaders', args: (root) => ['harness', 'loaders', '--root', root], env: async () => ({}) },
   { name: 'bench mine', args: (root) => ['bench', 'mine', '--root', root], env: async () => ({}) },
   { name: 'bench run', args: (root) => ['bench', 'run', '--root', root], env: async () => ({}) },

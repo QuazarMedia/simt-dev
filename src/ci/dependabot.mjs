@@ -21,7 +21,7 @@
 //     rewritten, their file from the first commit. A repo that wants a different
 //     cadence, a private registry or an `ignore` rule edits it, and the edit
 //     stays. simt-dev's own repository is the ADR-024 exception and is refreshed
-//     by `simt ci`.
+//     by `node scripts/ci.mjs` (ADR-133).
 //
 // The content is detection-driven, which is the ADR-013 shape: the ecosystems
 // listed are the ones this tree actually has a manifest for. Writing an `npm`
@@ -103,7 +103,7 @@ function header(own) {
 # Anywhere else this file is written once by \`${CLI} init\` and never touched again.
 #
 # To change which ecosystems are watched, change \`src/ci/dependabot.mjs\` in the same
-# commit and run \`${CLI} ci --yes\`. Editing this file by hand works until the
+# commit and run \`node scripts/ci.mjs --yes\`. Editing this file by hand works until the
 # next template change overwrites it.
 #
 # The entries below are the ecosystems this repository has a manifest for. A repo

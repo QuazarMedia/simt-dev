@@ -303,7 +303,7 @@ test('every command name the tool prints is the name this package ships', async 
     'src/commands/skillsinstall.mjs', 'src/commands/skillscompile.mjs',
     'src/commands/hooks.mjs', 'src/commands/agenthook.mjs', 'src/commands/upgrade.mjs',
     'src/commands/compare.mjs', 'src/commands/mcp.mjs', 'src/commands/graph.mjs',
-    'src/commands/ci.mjs', 'src/commands/tokens.mjs', 'src/commands/harness.mjs',
+    'src/commands/tokens.mjs', 'src/commands/harness.mjs',
     'src/commands/bench.mjs', 'src/commands/shared.mjs', 'src/commands/evidence.mjs',
     'src/commands/repoindex.mjs', 'src/commands/map.mjs', 'src/commands/tests.mjs',
     'src/commands/why.mjs', 'src/commands/gate.mjs', 'src/commands/impact.mjs',

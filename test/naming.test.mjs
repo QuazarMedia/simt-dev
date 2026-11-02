@@ -33,7 +33,7 @@ const SRC = join(HERE, '..', 'src');
 const pkg = JSON.parse(readFileSync(join(HERE, '..', 'package.json'), 'utf8'));
 
 const VERBS = [
-  'init', 'doctor', 'check', 'sync', 'upgrade', 'ci', 'compare',
+  'init', 'doctor', 'check', 'sync', 'upgrade', 'compare',
   'hooks', 'mcp', 'rules', 'skills', 'graph', 'tokens', 'harness', 'bench', 'plan', 'shared', 'evidence', 'index',
   'map', 'tests', 'why', 'gate', 'impact', 'local',
 ];

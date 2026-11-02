@@ -297,6 +297,9 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // a maintainer can act on. ADR-131 joined because the ruling is ABOUT where the vector
   // path lives: a decision that it is one module, reached only by a caller that asks for
   // embeddings, without naming the module would not be an argument a maintainer can act on.
+  // ADR-133 joined for the same reason once more: the ruling is ABOUT where the .github
+  // refresh lives, and a decision that a writer leaves the shipped surface without naming
+  // the script that replaces it would not be an argument a maintainer can act on.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -321,6 +324,7 @@ assert.deepEqual(leaking, [
     'ADR-124',
     'ADR-128',
     'ADR-131',
+    'ADR-133',
 ]);
 });
 

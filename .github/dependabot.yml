@@ -4,7 +4,7 @@
 # Anywhere else this file is written once by `simt init` and never touched again.
 #
 # To change which ecosystems are watched, change `src/ci/dependabot.mjs` in the same
-# commit and run `simt ci --yes`. Editing this file by hand works until the
+# commit and run `node scripts/ci.mjs --yes`. Editing this file by hand works until the
 # next template change overwrites it.
 #
 # The entries below are the ecosystems this repository has a manifest for. A repo

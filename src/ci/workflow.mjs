@@ -92,7 +92,7 @@ function header(own) {
 # this file is written once by \`${CLI} init\` and never touched again.
 #
 # To change what the gate does, change \`src/ci/workflow.mjs\` in the same commit and
-# run \`${CLI} ci --yes\`. Editing this file by hand works until the next template
+# run \`node scripts/ci.mjs --yes\`. Editing this file by hand works until the next template
 # change overwrites it.
 #
 # The steps below run what this repository declares - its tests and its registry lint,
@@ -292,7 +292,7 @@ export function renderWorkflow({ own = false, npm = true, manager = null, versio
         //
         // `--check`, and not the bare command: `ci` previews by default and exits 0,
         // so this step used to print the drift it exists to catch and pass anyway.
-        '        run: node bin/simt.mjs ci --check',
+        '        run: node scripts/ci.mjs --check',
       ].join('\n'),
       // ADR-012 says CI verifies on macOS and Linux. Until this matrix existed that
       // sentence was false in the one repository that could have made it true, and no

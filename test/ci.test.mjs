@@ -37,6 +37,8 @@ import { renderShim, EVENTS } from '../src/hooks/shim.mjs';
 import { BIN_ENV, CLI, PACKAGE_NAME } from '../src/name.mjs';
 import { renderLocator } from '../src/locate.mjs';
 import { PACKAGE_ROOT } from '../src/workspace.mjs';
+
+const CI = join(PACKAGE_ROOT, 'scripts', 'ci.mjs');
 import { EXIT } from '../src/output/index.mjs';
 import { assertClean } from './leaks.mjs';
 
@@ -55,7 +57,7 @@ const temps = [];
  */
 async function run(args, opts = {}) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+    const { stdout, stderr } = await exec('node', [CI, ...args], {
       ...opts,
       env: { ...process.env, NO_COLOR: '1', ...opts.env },
     });
@@ -443,7 +445,7 @@ test('simt-dev\'s own copy is current on disk, and check says so', async () => {
   assert.equal(
     onDisk,
     renderWorkflow({ own: true }),
-    `the committed copy in simt-dev\'s own repo is not what the renderer produces; run: ${CLI} ci --yes`,
+    `the committed copy in simt-dev\'s own repo is not what the renderer produces; run: node scripts/ci.mjs --yes`,
   );
   const plan = await planWorkflow(PACKAGE_ROOT);
   assert.equal(plan.action, 'unchanged');
@@ -465,7 +467,7 @@ test('the own copy explains the exception in its own bytes', async () => {
   const own = renderWorkflow({ own: true });
   assert.match(own, /refreshed by it/);
   assert.match(own, /a diff\n# here means the GATE changed/);
-  assert.match(own, cmd('{cli} ci --yes'));
+  assert.match(own, /node scripts\/ci\.mjs --yes/);
   // ...and must not claim the adopting repo's promise, which does not hold here.
   assert.doesNotMatch(own, /never rewrites it/);
 
@@ -645,11 +647,11 @@ test('a stale copy in simt-dev\'s own repository is reported, with the fix named
       env: { ...process.env, NO_COLOR: '1' },
     }).catch((e) => e);
     assert.match(red.stdout, /DRIFT\s+\.github\/workflows\/simt-dev-check\.yml/);
-    assert.match(red.stdout, cmd('remedy: {cli} ci --yes'));
+    assert.match(red.stdout, /remedy: node scripts\/ci\.mjs --yes/);
 
     // And the fix is the thing that clears it. `--yes` because `ci` writes like every
     // other writer in this tool: shown first, changed only when told.
-    await exec('node', [BIN, 'ci', '--yes'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } });
+    await exec('node', [CI, '--yes'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } });
     assert.equal(await readFile(path, 'utf8'), renderWorkflow({ own: true }));
     assert.equal((await planWorkflow(PACKAGE_ROOT)).action, 'unchanged');
   } finally {
@@ -665,12 +667,12 @@ test('the own gate\'s own copy is checked with a command that can fail', async (
   const yaml = renderWorkflow({ own: true });
   assert.match(
     yaml,
-    /run: node bin\/simt\.mjs ci --check/,
+    /run: node scripts\/ci\.mjs --check/,
     'the own gate must run the form that can fail, or the step is decoration',
   );
-  // And not both spellings: a bare `ci` left in the file would be the same step
-  // described twice, one of which still passes on drift.
-  assert.doesNotMatch(yaml, /run: node bin\/simt\.mjs ci$/m);
+  // And not both spellings: a bare script invocation left in the file would be the same
+  // step described twice, one of which still passes on drift.
+  assert.doesNotMatch(yaml, /run: node scripts\/ci\.mjs$/m);
 });
 
 test('`ci --check` exits non-zero on a stale copy and shows what changed', async () => {
@@ -682,12 +684,12 @@ test('`ci --check` exits non-zero on a stale copy and shows what changed', async
   try {
     // A current copy first: `--check` on a clean tree must be silent, or the step would
     // fail every push and be turned off, which is how a real gate gets deleted.
-    const clean = await run(['ci', '--check'], { cwd: PACKAGE_ROOT });
+    const clean = await run(['--check'], { cwd: PACKAGE_ROOT });
     assert.equal(clean.code, 0, clean.stdout + clean.stderr);
     assert.match(clean.stdout, /current\s+\.github\/workflows/);
 
     await writeFile(path, `${before}\n# a hand edit that drifts the copy\n`);
-    const stale = await run(['ci', '--check'], { cwd: PACKAGE_ROOT });
+    const stale = await run(['--check'], { cwd: PACKAGE_ROOT });
     assert.equal(stale.code, EXIT.FAIL, 'a stale copy must fail the step that exists to catch it');
     assert.match(stale.stdout, /a hand edit that drifts the copy/);
     // The diff is the reason `--check` is worth more than an exit code: the reader is
@@ -695,14 +697,14 @@ test('`ci --check` exits non-zero on a stale copy and shows what changed', async
     assert.match(stale.stdout, /^--- a\/\.github\/workflows\/simt-dev-check\.yml$/m);
     assert.match(stale.stdout, /^\+\+\+ b\/\.github\/workflows\/simt-dev-check\.yml$/m);
     assert.match(stale.stdout, /^-\# a hand edit that drifts the copy$/m);
-    assert.match(stale.stdout, cmd('apply with: {cli} ci --yes'));
+    assert.match(stale.stdout, /apply with: node scripts\/ci\.mjs --yes/);
 
     // And `--json --check` says the same thing, so a caller is not left reading prose.
-    const asJson = await run(['ci', '--check', '--json'], { cwd: PACKAGE_ROOT });
+    const asJson = await run(['--check', '--json'], { cwd: PACKAGE_ROOT });
     assert.equal(asJson.code, EXIT.FAIL);
     const doc = JSON.parse(asJson.stdout);
     assert.equal(doc.ok, false, 'ok must agree with the exit code (ADR-035)');
-    assert.match(doc.remedy, cmd('{cli} ci --yes'));
+    assert.match(doc.remedy, /node scripts\/ci\.mjs --yes/);
     // The plan carries both sides of the comparison so the verdict and the diff cannot
     // disagree; a JSON payload is not the place for two copies of a workflow file.
     assert.equal(doc.files.some((f) => 'source' in f || 'text' in f), false);
@@ -726,7 +728,7 @@ test('`ci --diff` shows the drift as unified diffs and writes nothing', async ()
   try {
     await writeFile(path, `${before}\n# a hand edit that drifts the copy\n`);
 
-    const text = await run(['ci', '--diff'], { cwd: PACKAGE_ROOT });
+    const text = await run(['--diff'], { cwd: PACKAGE_ROOT });
     assert.equal(text.code, 0, text.stdout + text.stderr);
     assert.match(text.stdout, /^diff --git a\/\.github\/workflows\/simt-dev-check\.yml/m);
     // The before side is the drift on disk and the after side is the render, so
@@ -735,7 +737,7 @@ test('`ci --diff` shows the drift as unified diffs and writes nothing', async ()
 
     // The same bytes in the document: a caller that cannot read them from JSON
     // has one question with two answers.
-    const asJson = await run(['ci', '--diff', '--json'], { cwd: PACKAGE_ROOT });
+    const asJson = await run(['--diff', '--json'], { cwd: PACKAGE_ROOT });
     assert.equal(asJson.code, 0, asJson.stdout + asJson.stderr);
     const doc = JSON.parse(asJson.stdout);
     assert.equal(typeof doc.diff, 'string', '--json --diff must carry a diff field');
@@ -762,10 +764,10 @@ test('`ci --json` emits exactly one document in every mode, including --dry-run'
   try {
     await writeFile(path, `${before}\n# a hand edit that drifts the copy\n`);
     for (const args of [
-      ['ci', '--json'],
-      ['ci', '--json', '--dry-run'],
-      ['ci', '--json', '--check'],
-      ['ci', '--json', '--yes', '--dry-run'],
+      ['--json'],
+      ['--json', '--dry-run'],
+      ['--json', '--check'],
+      ['--json', '--yes', '--dry-run'],
     ]) {
       const got = await run(args, { cwd: PACKAGE_ROOT });
       const label = args.join(' ');
@@ -782,7 +784,7 @@ test('`ci --json` emits exactly one document in every mode, including --dry-run'
 });
 
 test('ci writes the own copy, is dry-run by default, and says when it is current', async () => {
-  const { stdout } = await exec('node', [BIN, 'ci'], {
+  const { stdout } = await exec('node', [CI], {
     cwd: PACKAGE_ROOT,
     env: { ...process.env, NO_COLOR: '1' },
   });
@@ -792,7 +794,7 @@ test('ci writes the own copy, is dry-run by default, and says when it is current
   // file it would write is the same file, so this asserts the shape of the promise
   // rather than re-doing a write that would dirty the tree.
   const json = JSON.parse(
-    (await exec('node', [BIN, 'ci', '--json'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } })).stdout,
+    (await exec('node', [CI, '--json'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } })).stdout,
   );
   assert.equal(json.ok, true);
   assert.equal(json.action, 'unchanged');
@@ -810,7 +812,7 @@ test('ci refuses a repository that adopted simt-dev, and names the command that 
   // satisfied in this repository", which is exactly the situation, and it is the same
   // code ADR-035 requires `ok` to agree with.
   const root = await actionsRepo();
-  const refused = await run(['ci', '--yes'], { cwd: root });
+  const refused = await run(['--yes'], { cwd: root });
   assert.equal(refused.code, EXIT.UNSUPPORTED, refused.stderr);
   assert.match(refused.stdout, /owner\s+this repository, not simt-dev/);
   assert.match(refused.stderr, new RegExp(`remedy: \\s+${CLI} init --yes`));
@@ -819,7 +821,7 @@ test('ci refuses a repository that adopted simt-dev, and names the command that 
 
   // And the JSON document says the same thing as the exit code, which is the half of
   // the invariant that a text assertion cannot reach.
-  const asJson = await run(['ci', '--json'], { cwd: root });
+  const asJson = await run(['--json'], { cwd: root });
   assert.equal(asJson.code, EXIT.UNSUPPORTED);
   const doc = JSON.parse(asJson.stdout);
   assert.equal(doc.ok, false, 'a refusal reported as ok:true is a lie a caller cannot detect');
@@ -989,7 +991,7 @@ test('check reports a repo that runs Actions but watches nothing', async () => {
 });
 
 test('simt-dev refreshes both of its own copies, and writes only what changed', async () => {
-  const { stdout } = await exec('node', [BIN, 'ci'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } });
+  const { stdout } = await exec('node', [CI], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } });
   assert.match(stdout, /current\s+\.github\/workflows\/simt-dev-check\.yml/);
   assert.match(stdout, /current\s+\.github\/dependabot\.yml/);
 });

@@ -6,6 +6,8 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-02
+
 ### Added
 
 - A tracker slice may carry a **tier** — an optional `columns.tier` in the plan template
@@ -31,6 +33,29 @@ All notable changes to this package are recorded here. The format follows
   `-h` is answered wherever it appears on a command line.
 - The shipped agent keeps the harness's own task list current every turn, and says so
   once when the surface has no such tool instead of claiming an update.
+- `simt init --harness <id>` now selects one reader: the rules project to that surface,
+  only its agent file and hooks entry are written, and the manifest records the id in
+  `surfaces`. `agents install|status` and `agent-hooks install|status` follow that
+  declaration or the flag, and a repository with nothing selected gets a no-op naming both
+  remedies instead of six files nobody opened (ADR-141).
+- The bench ships an eleven-entry adversarial probe catalogue — source-instruction
+  widening, forged verifier receipts, wrong tenant, expired approval, mixed-scope
+  retrieval, stale revision, private-field-losing fallback, crash-after-commit, expired
+  lease, unavailable live verification — each with its own verdict and effect oracle, plus
+  assurance reported as `declared`, `observed`, `mediated` or `externally-enforced` with
+  the evidence that supports it (ADR-142).
+- Work facets describe a repository's artifact kinds, activities, execution loci and
+  declared verification capabilities beside its stack, additively: an incidental source
+  file adds a kind and removes no obligation (ADR-143).
+- The `work` manifest namespace is versioned and validated, and adoption writes no
+  `package.json`, `pyproject.toml` or gate a repository cannot run (ADR-144). Artifacts get
+  explicit identity that survives a rename, and scopes resolve by the most specific literal
+  path, refusing equal specificity rather than ordering it by listing (ADR-145).
+- Three opt-in work profiles — `work/knowledge`, `work/procedures` and
+  `work/remote-operations` — are selected only by an explicit `work` declaration, so a
+  knowledge repository is never told to run a software test it does not have, and a remote
+  operation keeps its target identity, compare-and-set, approval, idempotency and privacy
+  rules (ADR-146).
 
 ### Fixed
 

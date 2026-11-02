@@ -294,7 +294,9 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // act on. ADR-128 joined for the same reason once more: the ruling is ABOUT the
   // delivered template, and a decision that the research directory is data, not a
   // special case, without naming the file that carries it would not be an argument
-  // a maintainer can act on.
+  // a maintainer can act on. ADR-131 joined because the ruling is ABOUT where the vector
+  // path lives: a decision that it is one module, reached only by a caller that asks for
+  // embeddings, without naming the module would not be an argument a maintainer can act on.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -318,6 +320,7 @@ assert.deepEqual(leaking, [
     'ADR-112',
     'ADR-124',
     'ADR-128',
+    'ADR-131',
 ]);
 });
 

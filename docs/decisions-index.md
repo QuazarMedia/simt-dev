@@ -137,3 +137,4 @@ in [architecture/history.md](architecture/history.md).
 | [126](decisions/ADR-126-the-mcp-surface-stays-a-reader-so-there-is-no-write-path-to-build.md) | the MCP surface stays a reader, so there is no write path to build | accepted · 2026-11-01 |
 | [127](decisions/ADR-127-the-mcp-tool-list-is-written-by-hand-and-roots-is-not-asked-for.md) | the MCP tool list is written by hand and held to the spec, and roots is not asked for | accepted · 2026-11-01 |
 | [128](decisions/ADR-128-a-research-plan-is-a-plan-and-the-tracker-reads-it.md) | A research plan is a plan, and the tracker reads it | accepted · 2026-11-01 · supersedes ADR-082 ruling 1 |
+| [129](decisions/ADR-129-distill-is-documented-on-the-advanced-help-page-not-the-core-one.md) | Distill is documented on the advanced help page, not the core one | accepted · 2026-11-02 |

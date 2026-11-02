@@ -271,3 +271,18 @@ test('every flag the parser accepts is described in --help', async () => {
     .sort();
   assert.deepEqual(undocumented, [], `undocumented flags: ${undocumented.join(', ')}`);
 });
+
+/**
+ * The core page names the commands a first week runs, and `distill` is not one (Q84).
+ *
+ * It writes a proposal into `.simt/local/distilled/` for a human to merge and its quality
+ * bar has never been measured, so it holds no line on a page capped at 2 KB. Both
+ * directions are pinned: promoting it back to core, or dropping it from `--all`, fails here
+ * rather than passing because the other page happens to carry it (ADR-129).
+ */
+test('help: distill is on --all and off the core page', async () => {
+  const core = await help();
+  assert.ok(!core.includes('distill'), 'the core page spends its 2 KB on distill');
+  const all = await helpAll();
+  assert.ok(all.includes(`${'simt'} distill`), '--all no longer documents distill');
+});

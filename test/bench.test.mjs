@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 
 import { DEFAULT_MINE_TARGET, listCandidates, mineTasks, patchStats } from '../packages/bench/src/mine.mjs';
 import { isTestPath } from '../src/testing/paths.mjs';
-import { ensureGit } from './fixture.mjs';
+import { git as gitFixture } from './fixture.mjs';
 import { detectTestRunner } from '../src/testing/runners.mjs';
 import { resolveVaultDir } from '../src/testing/vault.mjs';
 import {
@@ -738,8 +738,23 @@ test('a sealed corpus export imports byte-for-byte, and a tampered seal is refus
 });
 
 test('CLI `simt bench mine` previews without --yes and supports --json', async () => {
-  await ensureGit(ROOT);
-  const { code, stdout } = await runCli(['bench', 'mine', '--root', ROOT]);
+  // A repository of its own: mining needs history, and this checkout's history — plus
+  // whether another test file has just committed in it — is not the contract under test.
+  const root = await mkdtemp(join(tmpdir(), 'simt-mine-'));
+  for (let i = 0; i < 3; i += 1) {
+    await mkdir(join(root, 'src'), { recursive: true });
+    await mkdir(join(root, 'test'), { recursive: true });
+    await writeFile(join(root, 'src', `m${i}.mjs`), `export const v${i} = ${i};\n`);
+    await writeFile(
+      join(root, 'test', `m${i}.test.mjs`),
+      `import { v${i} } from '../src/m${i}.mjs';\nconsole.log(v${i});\n`,
+    );
+    await gitFixture(['init', '-q', root]);
+    await gitFixture(['-C', root, 'add', '-A']);
+    await gitFixture(['-C', root, 'commit', '-qm', `change ${i}`]);
+  }
+  try {
+  const { code, stdout } = await runCli(['bench', 'mine', '--root', root]);
   assert.equal(code, 0);
   assert.match(stdout, /mode\s+preview/);
   assert.match(stdout, /remedy\s+run: simt bench mine --yes/);
@@ -753,6 +768,9 @@ test('CLI `simt bench mine` previews without --yes and supports --json', async (
   // The count belongs to the history, not to the contract: this repository's commit
   // count is an accident of when the test runs, and a source archive has one commit.
   assert.equal(typeof payload.candidates, 'number');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('loadAdapters and parseAdapterUsage map usage across claude, codex, gemini, opencode, cursor and aider', async () => {

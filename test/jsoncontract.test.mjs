@@ -92,7 +92,6 @@ const JSON_COMMANDS = {
   'bench report': { root: 'r' },
   'bench ablate': { root: 'r' },
   'bench probes': { root: 'r' },
-  'bench variants': { root: 'r' },
   check: [],
   'rules list': [],
   'hooks run': ['pre-commit'],

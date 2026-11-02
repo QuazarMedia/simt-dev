@@ -115,7 +115,6 @@ simt bench mine --yes                                                  # mine ta
 simt bench probes --yes                                                # run the deterministic probes against a workspace
 simt bench report [--compare a b]                                      # summarise the runs recorded in the vault
 simt bench run --yes                                                   # run agents against the mined tasks
-simt bench variants --yes                                              # run one task across its variant prompts
 
 # brief
 simt brief "<task>"                                                    # the packet for a task: rules, skills and the files it names, within a budget
@@ -297,7 +296,7 @@ workflow for orienting, editing, implementing and closing a slice — lives in
 | **Multi-repository workspace / estate** (sibling checkouts under a workspace directory or `SIMT_DEV_WORKSPACE`) | Run `simt compare` across the workspace root to inspect adoption, drift, pinned SHAs, hook routing, most-violated rules, noisy/slow gates (`NOISY-GATE`), zero-value rules, and proposed ADR drafts. Run `simt tokens --repos` and `simt shared plan`, then `simt shared install --yes` to move rules repeated across repos into user-level harness files (`~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, etc.). Vendor shared rule packs in `.simt/packs/<name>/` pinned by digest in `simt.json`, and upgrade the entire estate atomically with `simt upgrade --yes`. |
 | **Repositories with external code-graph MCP servers** | Declare external stdio MCP servers under `federation` in `simt.json` (`{ name, command, args, tool, argument, languages, timeoutMs }`). `simt brief "<task>"` and the MCP `federation_query` tool ask each server one bounded structural question and cite the server name in `FEDERATION`. |
 | **Offline or local-model-assisted workflows** (Ollama, `llama-server`, LM Studio, MLX) | By default, `simt` uses zero models and opens zero sockets (`ADR-075`, `ADR-090`). To opt in, add `local: { chat: { url, model }, embed: { url, model } }` in `simt.json` pointing at `http://127.0.0.1:<port>/v1`. Each role accepts an optional `apiKey` (sent as `Authorization: Bearer <key>`) for servers that require a token. Verify with `simt local doctor`, and build/query SQLite vector embeddings with `simt index --embed` and `simt map --embed` (non-loopback URLs are refused without `--allow-remote`). |
-| **Rule, skill, and benchmark maintainers** | Lint skills with `simt graph lint --spec agentskills`, compile and split > 5,000-token skills with `simt skills compile`, and score the resolver with `simt skills eval`. Mine git history tasks with `simt bench mine --yes`, run arms with `simt bench run --yes`, compare arms with `simt bench report --compare bare kernel`, run leave-one-out ablation with `simt bench ablate --yes`, run compliance probes with `simt bench probes --yes`, and lock winning `simt-variants` wordings with `simt bench variants --yes`. |
+| **Rule, skill, and benchmark maintainers** | Lint skills with `simt graph lint --spec agentskills`, compile and split > 5,000-token skills with `simt skills compile`, and score the resolver with `simt skills eval`. Mine git history tasks with `simt bench mine --yes`, run arms with `simt bench run --yes`, compare arms with `simt bench report --compare bare kernel`, and run compliance probes with `simt bench probes --yes`. |
 
 ## Module and MCP reference
 
@@ -342,7 +341,7 @@ history. All remain off until named and propose rather than write projected text
 | --- | --- |
 | `AGENTS.md` (and `<package>/AGENTS.md` in monorepos) | the projection, between `<!-- simt:begin -->` and `<!-- simt:end -->`. The old `simt-dev:` markers are still read, and a region migrates on its next write |
 | `simt.json` | the manifest: `gates`, `substitutions`, `budget`, `mode`, `shared`, `surfaces`, `plans`, `packs`, `federation`, `local` |
-| `simt.lock.json` | the digest of the inputs, the digest of the projection, and locked `variants` winners from `simt bench variants`. The old `simt-dev.lock.json` is still read, and a lock migrates on its next write |
+| `simt.lock.json` | the digest of the inputs, the digest of the projection, and locked `variants` winners an earlier selection run recorded; the runner is retired, and a locked entry is still honoured. The old `simt-dev.lock.json` is still read, and a lock migrates on its next write |
 | `.cursor/rules/*.mdc`, `.claude/rules/*.md`, `.agents/rules/*.md`, `.github/instructions/*.instructions.md` | one file per rule, and only for a harness that reads that directory |
 | `.editorconfig`, `.gitattributes` | baseline regions, placed first so a later setting still wins |
 | `.simt/hooks/` and `core.hooksPath` | the shared dispatcher. It fails closed |

@@ -239,7 +239,6 @@ export const IMPLEMENTED = {
   'bench report': async () => (await import('./bench.mjs')).benchReportCommand,
   'bench ablate': async () => (await import('./bench.mjs')).benchAblateCommand,
   'bench probes': async () => (await import('./bench.mjs')).benchProbesCommand,
-  'bench variants': async () => (await import('./bench.mjs')).benchVariantsCommand,
   //. The critic's acceptance bench measures BLOCK-precision and
   // recall over a labelled set; until it reports its floor, the critic entries
   // stay advisory and no gate reads them. COMMANDS rides along so the brief

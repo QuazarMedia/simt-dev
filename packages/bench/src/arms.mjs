@@ -17,7 +17,6 @@ import { readManifest } from '../../../src/projection/manifest.mjs';
 import { plan } from '../../../src/projection/project.mjs';
 import { parse as parseRegion } from '../../../src/projection/markers.mjs';
 import { ablateSectionInWorkspace, parseAblationArmName } from './ablate.mjs';
-import { applyVariantInWorkspace, parseVariantArmName } from './variants.mjs';
 
 /** The arms every repository has without writing a file. */
 export const BUILTIN_ARMS = new Set(['bare', 'current', 'kernel', 'brief']);
@@ -228,13 +227,6 @@ const ARM_KINDS = [
     materialise: (workDir, arm) => ablateSectionInWorkspace(workDir, arm.ablate),
   },
   {
-    kind: 'variant',
-    match: (spec) => parseVariantArmName(spec),
-    describe: (arm) =>
-      `rule slot \`${arm.variant?.slot ?? 'named'}\` set to \`${arm.variant?.variant ?? 'named'}\``,
-    materialise: (workDir, arm) => applyVariantInWorkspace(workDir, arm.variant),
-  },
-  {
     kind: 'builtin',
     match: (spec) => (BUILTIN_ARMS.has(spec) ? { name: spec, base: spec } : null),
     describe: (arm) => ARM_TRANSFORMS[arm.base].describe,
@@ -252,8 +244,8 @@ const ARM_KINDS = [
 /**
  * Parse an `--arm` specification into the arm it names.
  *
- * @param {string} rawSpec `bare`, `current`, `kernel`, `brief`, an ablation or variant
- *   name, or `name=path/to/arm.json`
+ * @param {string} rawSpec `bare`, `current`, `kernel`, `brief`, an ablation name, or
+ *   `name=path/to/arm.json`
  * @param {string} [cwd]
  * @returns {Promise<object>} `{name, kind, base, write, remove, env}`
  */
@@ -269,7 +261,6 @@ export async function parseArmSpec(rawSpec, cwd = process.cwd()) {
       kind: entry.kind,
       base: matched.base ?? null,
       ...(matched.ablate ? { ablate: matched.ablate } : {}),
-      ...(matched.variant ? { variant: matched.variant } : {}),
       ...(matched.source ? { source: matched.source } : {}),
       write: matched.write ?? {},
       remove: matched.remove ?? [],
@@ -311,11 +302,9 @@ export async function materialiseArm(workDir, armSpec, task = {}) {
     ARM_KINDS.find((candidate) => candidate.kind === armSpec.kind) ??
     (armSpec.ablate
       ? ARM_KINDS.find((candidate) => candidate.kind === 'ablation')
-      : armSpec.variant
-        ? ARM_KINDS.find((candidate) => candidate.kind === 'variant')
-        : base
-          ? ARM_KINDS.find((candidate) => candidate.kind === 'builtin')
-          : ARM_KINDS.find((candidate) => candidate.kind === 'custom'));
+      : base
+        ? ARM_KINDS.find((candidate) => candidate.kind === 'builtin')
+        : ARM_KINDS.find((candidate) => candidate.kind === 'custom'));
   const prefix = await entry.materialise(workDir, { ...armSpec, base }, task);
 
   for (const relPath of armSpec.remove ?? []) {

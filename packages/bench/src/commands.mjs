@@ -17,7 +17,6 @@ import { buildBenchReport } from './report.mjs';
 import { formatRecall, measureRecall } from '../../../src/index/map.mjs';
 import { ablateBench } from './ablate.mjs';
 import { runBenchProbes } from './probes.mjs';
-import { selectRuleVariants } from './variants.mjs';
 import { criticBench } from '../../../src/review/critic.mjs';
 import { listFlag } from '../../../src/commands/skills.mjs';
 import { commandRoot } from '../../../src/repo-root.mjs';
@@ -392,46 +391,6 @@ export async function benchProbesCommand(positional, flags) {
   return EXIT.OK;
 }
 
-export async function benchVariantsCommand(positional, flags) {
-  const root = resolve(commandRoot(flags, positional));
-  const { dryRun, apply } = writeMode(flags);
-  if (apply) {
-    const missing = requireHarness(flags, 'bench variants');
-    if (missing !== null) return missing;
-  }
-  let result;
-  try {
-    result = await selectRuleVariants(root, {
-      apply,
-      harness: flags.harness ?? 'gold',
-      model: flags.model,
-      reps: flags.reps ?? 1,
-      includeAll: flags.all === true,
-    });
-  } catch (error) {
-    return fail(
-      `${root}: ${error.message ?? error}`,
-      EXIT.CONFIG,
-      `mine tasks first with \`${CLI} bench mine --yes\` and rerun \`${CLI} bench variants --yes\``,
-    );
-  }
-  if (isJson(flags)) {
-    emitJson({ ok: true, command: 'bench variants', dryRun, ...result });
-    return EXIT.OK;
-  }
-  const lines = [
-    `bench    variants  ${result.root}`,
-    `mode     ${result.applied ? 'applied' : dryRun ? 'dry-run (writes nothing)' : 'preview / stored runs (pass --yes to execute canary and lock winners)'}`,
-    `harness  ${result.harness}  model=${result.model}`,
-    `slots    ${result.slots.length}  (canary: ${result.canaryTasks}/${result.totalTasks} tasks)`,
-    ...result.slots.map(
-      (s) => `slot     ${s.slotId}  status=${s.status}  winner=${s.winner}  dR=${s.dR}  dC=${s.dC}  n=${s.n}  p=${s.p}`,
-    ),
-  ];
-  if (!result.applied) lines.push(`remedy   run: ${CLI} bench variants --yes`);
-  emit(lines.join('\n'));
-  return EXIT.OK;
-}
 
 
 

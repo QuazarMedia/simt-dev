@@ -37,7 +37,6 @@ export const benchRunCommand = (args, flags) => run('benchRunCommand', args, fla
 export const benchReportCommand = (args, flags) => run('benchReportCommand', args, flags);
 export const benchAblateCommand = (args, flags) => run('benchAblateCommand', args, flags);
 export const benchProbesCommand = (args, flags) => run('benchProbesCommand', args, flags);
-export const benchVariantsCommand = (args, flags) => run('benchVariantsCommand', args, flags);
 export const benchExportCommand = (args, flags) => run('benchExportCommand', args, flags);
 export const benchImportCommand = (args, flags) => run('benchImportCommand', args, flags);
 // The critic resolves `Affects command:` tokens through the registry, so dispatch hands

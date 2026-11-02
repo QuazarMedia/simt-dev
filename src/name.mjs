@@ -33,7 +33,8 @@ export const MANIFEST_FILE = 'simt.json';
 export const MANIFEST_LEGACY = 'simt-dev.json';
 
 /** The projection lock: the input and output digests a frozen check compares, and the
- *  locked `variants` winners `simt bench variants` records (ADR-086). */
+ *  locked `variants` winners an earlier selection run recorded, still read and
+ *  honoured though the runner itself is retired (ADR-086, ADR-132). */
 export const LOCK_FILE = 'simt.lock.json';
 
 /** What the lock was called. Read, not written: an adopted repo's lock under the old

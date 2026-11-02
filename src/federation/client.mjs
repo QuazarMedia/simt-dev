@@ -33,6 +33,21 @@ const PROTOCOL_VERSION = '2025-06-18';
 /** The longest a single server may take before the client stops waiting, in milliseconds. */
 export const DEFAULT_TIMEOUT_MS = 5000;
 
+/**
+ * The most of one answer that reaches the packet, with a note saying what was cut.
+ *
+ * An external server answers a structural question with whatever it likes, and an answer
+ * rendered unbounded puts a whole source file into a brief that is read on every task. The
+ * number is small because the brief's packet is 2048 characters in total: an answer larger
+ * than this does not lose its tail, it costs the whole FEDERATION section its place.
+ */
+const MAX_ANSWER_CHARS = 600;
+
+function capped(text) {
+  if (text.length <= MAX_ANSWER_CHARS) return text;
+  return `${text.slice(0, MAX_ANSWER_CHARS)}... (${text.length - MAX_ANSWER_CHARS} more characters)`;
+}
+
 const CLIENT_INFO = { name: 'simt-dev', version: '1' };
 
 /** The first non-blank text part of a result, or null when the result carries none. */
@@ -80,7 +95,7 @@ export async function callTool({
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd });
+      child = spawn(command, args, { stdio: ['pipe', 'pipe', 'pipe'], cwd, detached: true });
     } catch (error) {
       resolve({ error: `could not start \`${command}\` (${error.message})` });
       return;
@@ -101,9 +116,15 @@ export async function callTool({
         // The pipe may already be gone; nothing to close in that case.
       }
       try {
-        child.kill('SIGKILL');
+        // The server may have forked helpers of its own, and killing only the direct child
+        // leaves them holding the pipes. Same group kill `spawnBounded` uses.
+        process.kill(-child.pid, 'SIGKILL');
       } catch {
-        // A process that has already exited cannot be killed again.
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // A process that has already exited cannot be killed again.
+        }
       }
       resolve(payload);
     };
@@ -166,11 +187,15 @@ export async function callTool({
     };
 
     (async () => {
-      await request('initialize', {
+      const greeting = await request('initialize', {
         protocolVersion: PROTOCOL_VERSION,
         capabilities: {},
         clientInfo: CLIENT_INFO,
       });
+      if (greeting.error !== undefined) {
+        finish({ error: `the server refused \`initialize\` (${reasonOf(greeting.error)})` });
+        return;
+      }
       notify('notifications/initialized', {});
       const answer = await request('tools/call', { name: tool, arguments: { [argument]: query } });
       if (answer.error !== undefined) {
@@ -182,7 +207,7 @@ export async function callTool({
         finish({ error: `\`${tool}\` returned no text` });
         return;
       }
-      finish({ text });
+      finish({ text: capped(text) });
     })().catch((error) => finish({ error: error.message }));
   });
 }

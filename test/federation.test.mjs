@@ -12,13 +12,13 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 import { promisify } from 'node:util';
 
-import { DEFAULT_TIMEOUT_MS } from '../src/federation/client.mjs';
+import { callTool, DEFAULT_TIMEOUT_MS } from '../src/federation/client.mjs';
 import { federationAccess, federationServers } from '../src/federation/config.mjs';
 import { CONFIG_DIR, CONFIG_FILE } from '../src/workspace.mjs';
 import { TOOLS } from '../src/mcp/tools.mjs';
@@ -313,4 +313,111 @@ test('the federation tool asks only the server it was named', async (t) => {
     assert.match(error.remedy, /fixture-graph/);
     return true;
   });
+});
+
+/** A server that refuses `initialize`: the client must report that, not the tool call after it. */
+const REFUSING_SERVER = `
+let buffer = '';
+process.stdin.on('data', (chunk) => {
+  buffer += chunk.toString('utf8');
+  let index = buffer.indexOf('\\n');
+  while (index !== -1) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    index = buffer.indexOf('\\n');
+    if (line.length === 0) continue;
+    const message = JSON.parse(line);
+    if (message.id === undefined) continue;
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: message.id, error: { code: -32602, message: 'unsupported protocol version' } }) + '\\n');
+  }
+});
+`;
+
+/** A server whose answer is far longer than a packet line can hold. */
+const VERBOSE_SERVER = `
+let buffer = '';
+process.stdin.on('data', (chunk) => {
+  buffer += chunk.toString('utf8');
+  let index = buffer.indexOf('\\n');
+  while (index !== -1) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    index = buffer.indexOf('\\n');
+    if (line.length === 0) continue;
+    const message = JSON.parse(line);
+    if (message.id === undefined) continue;
+    const text = message.method === 'tools/call' ? 'a'.repeat(5000) : { protocolVersion: '2025-06-18', capabilities: {}, serverInfo: { name: 'verbose', version: '1' } };
+    process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: message.id, result: typeof text === 'string' ? { content: [{ type: 'text', text }] } : text }) + '\\n');
+  }
+});
+`;
+
+/** A server that forks a helper of its own and then never answers. */
+const FORKING_SERVER = `
+import { spawn } from 'node:child_process';
+import { writeFileSync } from 'node:fs';
+const helper = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { stdio: 'ignore' });
+writeFileSync('helper.pid', String(helper.pid));
+process.stdin.resume();
+`;
+
+test('a server that refuses initialize is reported, not asked again (Q84)', async (t) => {
+  const root = await fixture({ servers: [{ name: 'refusing', command: process.execPath, args: ['refusing.mjs'], timeoutMs: 2000 }] });
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'refusing.mjs'), REFUSING_SERVER);
+
+  const { code, stdout } = await run(root, ['brief', 'fix the keep helper']);
+  assert.equal(code, 0);
+  assert.match(stdout, /federation: the .refusing. server did not answer/);
+  assert.match(stdout, /refused .initialize./);
+  assert.match(stdout, /unsupported protocol version/);
+});
+
+test('an oversized answer is capped, with the cut named (Q84)', async (t) => {
+  const root = await fixture(undefined);
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'verbose.mjs'), VERBOSE_SERVER);
+
+  // Straight at the client. Through the brief, the packet's own 2048-character budget cuts
+  // the whole section first, which says nothing about whether the cap works.
+  const answer = await callTool({
+    command: process.execPath,
+    args: ['verbose.mjs'],
+    cwd: root,
+    tool: 'query',
+    query: 'anything',
+    timeoutMs: DEFAULT_TIMEOUT_MS,
+  });
+  assert.match(answer.text, /^a{600}\.\.\. \(4400 more characters\)$/);
+});
+
+test('a server that forked a helper does not leave it running (Q84)', async (t) => {
+  const root = await fixture({ servers: [{ name: 'forking', command: process.execPath, args: ['forking.mjs'], timeoutMs: 500 }] });
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'forking.mjs'), FORKING_SERVER);
+
+  const { code, stdout } = await run(root, ['brief', 'fix the keep helper']);
+  assert.equal(code, 0);
+  assert.match(stdout, /federation: the .forking. server did not answer/);
+
+  const helperPid = Number(await readFile(join(root, 'helper.pid'), 'utf8'));
+  assert.ok(Number.isInteger(helperPid) && helperPid > 0, 'the fixture server did not report its helper');
+  let alive = true;
+  for (let attempt = 0; attempt < 40 && alive; attempt += 1) {
+    try {
+      process.kill(helperPid, 0);
+    } catch {
+      alive = false;
+      break;
+    }
+    await new Promise((wait) => setTimeout(wait, 50));
+  }
+  if (alive) {
+    try {
+      process.kill(helperPid, 'SIGKILL');
+    } catch {
+      // Nothing to clean up if it exited between the check and the kill.
+    }
+  }
+  assert.equal(alive, false, `the server's helper ${helperPid} outlived the brief`);
 });

@@ -6,7 +6,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { git } from './fixture.mjs';
+import { git, capture } from './fixture.mjs';
 import { tracked, whyCommand } from '../src/commands/why.mjs';
 
 const tick = String.fromCharCode(96);
@@ -80,24 +80,3 @@ test('why resolves a non-ASCII path instead of calling it missing (Q39)', async 
   }
 });
 
-async function capture(run) {
-  const chunks = [];
-  const errors = [];
-  const stdout = process.stdout.write;
-  const stderr = process.stderr.write;
-  process.stdout.write = (chunk) => {
-    chunks.push(String(chunk));
-    return true;
-  };
-  process.stderr.write = (chunk) => {
-    errors.push(String(chunk));
-    return true;
-  };
-  try {
-    const code = await run();
-    return { code, stdout: chunks.join(''), stderr: errors.join('') };
-  } finally {
-    process.stdout.write = stdout;
-    process.stderr.write = stderr;
-  }
-}

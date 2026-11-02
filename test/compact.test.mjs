@@ -14,6 +14,7 @@ import { promisify } from 'node:util';
 
 import { gateCommand } from '../src/commands/gate.mjs';
 import { compactOutput } from '../src/index/compact.mjs';
+import { capture } from './fixture.mjs';
 
 const exec = promisify(execFile);
 
@@ -175,24 +176,3 @@ function git(args) {
   return exec('git', ['-c', 'user.name=simt-dev tests', '-c', 'user.email=tests@example.com', '-c', 'commit.gpgsign=false', ...args], { maxBuffer: 16 << 20 });
 }
 
-async function capture(run) {
-  const chunks = [];
-  const errors = [];
-  const stdout = process.stdout.write;
-  const stderr = process.stderr.write;
-  process.stdout.write = (chunk) => {
-    chunks.push(String(chunk));
-    return true;
-  };
-  process.stderr.write = (chunk) => {
-    errors.push(String(chunk));
-    return true;
-  };
-  try {
-    const code = await run();
-    return { code, stdout: chunks.join(''), stderr: errors.join('') };
-  } finally {
-    process.stdout.write = stdout;
-    process.stderr.write = stderr;
-  }
-}

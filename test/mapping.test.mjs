@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { isTestPath } from '../src/testing/paths.mjs';
-import { git, trackedFiles } from './fixture.mjs';
+import { git, trackedFiles, capture } from './fixture.mjs';
 import {
   cochangeEdges,
   importsOf,
@@ -207,24 +207,3 @@ test('precision on 30 labelled files is at least 0.8', async () => {
   assert.ok(hit / predicted >= 0.8, `precision ${hit / predicted} on ${predicted} predictions`);
 });
 
-async function capture(run) {
-  const chunks = [];
-  const errors = [];
-  const stdout = process.stdout.write;
-  const stderr = process.stderr.write;
-  process.stdout.write = (chunk) => {
-    chunks.push(String(chunk));
-    return true;
-  };
-  process.stderr.write = (chunk) => {
-    errors.push(String(chunk));
-    return true;
-  };
-  try {
-    const code = await run();
-    return { code, stdout: chunks.join(''), stderr: errors.join('') };
-  } finally {
-    process.stdout.write = stdout;
-    process.stderr.write = stderr;
-  }
-}

@@ -11,7 +11,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { whyCommand } from '../src/commands/why.mjs';
-import { copyTree, ensureGit } from './fixture.mjs';
+import { copyTree, ensureGit, capture } from './fixture.mjs';
 import {
   affectsTokens,
   matchGlob,
@@ -73,24 +73,3 @@ test('why resolves an Affects token and names the decisions on the dispatcher', 
   assert.match(listed.stdout, /gate {6}format /);
 });
 
-async function capture(run) {
-  const chunks = [];
-  const errors = [];
-  const stdout = process.stdout.write;
-  const stderr = process.stderr.write;
-  process.stdout.write = (chunk) => {
-    chunks.push(String(chunk));
-    return true;
-  };
-  process.stderr.write = (chunk) => {
-    errors.push(String(chunk));
-    return true;
-  };
-  try {
-    const code = await run();
-    return { code, stdout: chunks.join(''), stderr: errors.join('') };
-  } finally {
-    process.stdout.write = stdout;
-    process.stderr.write = stderr;
-  }
-}

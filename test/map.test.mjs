@@ -12,7 +12,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { git } from './fixture.mjs';
+import { git, capture } from './fixture.mjs';
 import {
   DAMPING,
   EMBED_RECALL_GAIN_BAR,
@@ -378,24 +378,3 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   await rm(root, { recursive: true, force: true });
 });
 
-async function capture(run) {
-  const chunks = [];
-  const errors = [];
-  const stdout = process.stdout.write;
-  const stderr = process.stderr.write;
-  process.stdout.write = (chunk) => {
-    chunks.push(String(chunk));
-    return true;
-  };
-  process.stderr.write = (chunk) => {
-    errors.push(String(chunk));
-    return true;
-  };
-  try {
-    const code = await run();
-    return { code, stdout: chunks.join(''), stderr: errors.join('') };
-  } finally {
-    process.stdout.write = stdout;
-    process.stderr.write = stderr;
-  }
-}

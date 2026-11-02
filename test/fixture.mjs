@@ -303,3 +303,32 @@ export async function copyTree(from, to) {
     filter: (src) => !/(^|\/)(node_modules|dist|\.git|\.simt)(\/|$)/.test(src),
   });
 }
+
+
+/**
+ * Run a command body and collect what it writes, instead of letting it print.
+ *
+ * Seven test files carried their own copy of this. One copy meant four places could disagree
+ * about whether stderr was captured, and the copies drifted independently (Q92).
+ */
+export async function capture(run) {
+  const chunks = [];
+  const errors = [];
+  const stdout = process.stdout.write;
+  const stderr = process.stderr.write;
+  process.stdout.write = (chunk) => {
+    chunks.push(String(chunk));
+    return true;
+  };
+  process.stderr.write = (chunk) => {
+    errors.push(String(chunk));
+    return true;
+  };
+  try {
+    const code = await run();
+    return { code, stdout: chunks.join(''), stderr: errors.join('') };
+  } finally {
+    process.stdout.write = stdout;
+    process.stderr.write = stderr;
+  }
+}

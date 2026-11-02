@@ -21,7 +21,7 @@ ${CLI} check                  the gate: projection drift, manifest validity, pol
 ${CLI} sync [--yes]           regenerate the projection (idempotent)
                            (prints the plan and exits 1 on drift without --yes,
                            so it also works as a check)
-${CLI} upgrade                move every consumer to this simt-dev SHA, as one set
+${CLI} workspace upgrade      move every consumer to this simt-dev SHA, as one set
                            (dry-run unless --yes; moves a pin only - it never
                            adopts or repairs a repo; never commits or pushes)
 
@@ -117,7 +117,7 @@ ${CLI} ignore [--yes]         render the one .simtignore list into .cursorignore
                            permissions.deny Read(...) entries (dry-run unless
                            --yes; --diff prints the plan as unified diffs; the
                            Claude settings file is merged, never replaced)
-${CLI} compare                org-wide matrix across every sibling repo
+${CLI} workspace compare      org-wide matrix across every sibling repo
                            (read-only; exits non-zero on defects, not on
                            repos that have not adopted yet;
                            --concurrency <n> caps the rows built at once)
@@ -188,10 +188,10 @@ ${CLI} review [--local]        an ADR-008 verdict skeleton for the staged diff,
                            .simt/local/reviews/<digest>.md — a proposal a human
                            reads, verified against the verdict vocabulary and
                            the brief's ids; advisory always, never a gate)
-${CLI} shared plan            what a workspace's repeated rules cost to carry
+${CLI} workspace share        what a workspace's repeated rules cost to carry;
                            once: the shared set, its bytes, and every path that would be written
                            (read-only; touches nothing, not even your home directory)
-${CLI} shared install [--yes] carry those rules once per reader, at user level,
+${CLI} workspace install [--yes] carry those rules once per reader, at user level,
                            and declare the delta in each repo's manifest (dry-run unless
                            --yes; copies land in files the vendors' own docs name, and a reader
                            with no such file gets the block printed to paste; ${CLI} doctor

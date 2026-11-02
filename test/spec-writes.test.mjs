@@ -41,7 +41,7 @@ test('a row that declares no writes leaves a repository alone', async () => {
     ['slice finish', 'runs the declared gates and commits'],
     ['review run', 'reaches a model'],
     ['bench run', 'reaches a model'],
-    ['upgrade', 'reaches the network'],
+    ['workspace upgrade', 'reaches the network'],
     ['self-update', 'reaches the network'],
     ['agent-hook', 'reads a payload from stdin'],
     ['mcp', 'a long-lived transport'],

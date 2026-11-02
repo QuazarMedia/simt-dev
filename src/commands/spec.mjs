@@ -46,7 +46,7 @@ export const SPEC = [
   { path: 'brief', usage: '"<task>"', mcp: { name: 'brief', flags: ['budget', 'paths', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","paths","task"], },
   { path: 'check', mcp: { name: 'check', flags: [] }, summary: 'report stale or missing generated regions and every check finding', flags: ["check","diff","dry-run","frozen"], },
   { path: 'ci', summary: "refresh simt-dev's own .github workflow and Dependabot files", flags: ["check","diff"], },
-  { path: 'compare', mcp: { name: 'compare', flags: [] }, summary: 'the adoption and drift matrix across every sibling repository', flags: ["learn"], },
+  { path: 'workspace compare', mcp: { name: 'compare', flags: [] }, summary: 'the adoption and drift matrix across every sibling repository', aliases: ['compare'], flags: ["learn"], },
   { path: 'completions', usage: '<bash|zsh|fish>', summary: 'print a bash, zsh or fish completion script generated from this spec', flags: [], },
   { path: 'decide lint', summary: 'check every decision record for the structure a supersession needs', flags: ["check","diff"], },
   // The scaffold is the group's default, and it reads the rest of the line as its title:
@@ -93,12 +93,12 @@ export const SPEC = [
   { path: 'rules list', usage: '[--root <path>]', mcp: { name: 'rules_list', flags: [] }, summary: 'the rule catalogue, marked with what applies to this repository', defaultFor: 'rules', flags: ["all"], },
   { path: 'rules show', usage: '<id>', summary: 'one rule body', flags: ["all"], },
   { path: 'rules why', usage: '<id|ADR-NNN> [--all]', mcp: { name: 'rules_why', flags: [] }, summary: 'the decision that settled a rule, and whether it is still in force', flags: ["all"], },
-  { path: 'shared install', usage: '--yes', summary: 'install the shared rules into a reader home directory', writes: 'repo', flags: ["yes","diff"], },
-  // ADR-084. `shared` is the one group whose default writes nothing, and it is `plan`
-  // for the same reason `skills`'s is `index`: the read answers "what would this do, and
-  // where", and `install` - the subcommand that touches a reader's home directory - is
-  // the one that needs `--yes` before it does anything.
-  { path: 'shared plan', summary: 'what the shared install would write, and where', writes: 'repo', defaultFor: 'shared', flags: ["yes","diff"], },
+
+  // ADR-084. One path for what used to be `shared plan` and `shared install`: they
+  // differed only by `--yes`, and the read - "what would this do, and where" - is the
+  // form that runs without it.
+  { path: 'workspace share', summary: 'what repeated rules in a workspace cost to carry, and where they would go', writes: 'repo', defaultFor: 'workspace', aliases: ['shared plan'], flags: ["yes","diff"], },
+  { path: 'workspace install', usage: '--yes', summary: 'carry those rules once per reader, at user level', writes: 'repo', aliases: ['shared install'], flags: ["yes","diff"], },
   { path: 'skills brief', usage: '--task "<task>"', mcp: { name: 'skills_brief', flags: ['all', 'task'] }, summary: 'the packet for a task, read from the skill registry', aliases: ['skills select'], flags: ["all", "plan", "task"], },
   { path: 'skills compile', usage: '[<name>]', summary: 'compile a skill to the Agent Skills standard', flags: [], },
   { path: 'skills eval', usage: '[corpus]', summary: 'score the skill registry against transcripts', flags: ["all","plan"], },
@@ -118,7 +118,7 @@ export const SPEC = [
   { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed]', summary: 'the tests that exercise a file, or - with --run - the ones a change reaches', flags: ["cochange","run","changed"], },
   { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', aliases: ['harness cost'], flags: ["repos","session"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff"], },
-  { path: 'upgrade', usage: '--yes', summary: 'replace this installation with the pinned release', writes: 'repo', flags: ["yes","all","diff","workspace"], },
+  { path: 'workspace upgrade', usage: '--yes', summary: 'replace this installation with the pinned release', writes: 'repo', aliases: ['upgrade'], flags: ["yes","all","diff","workspace"], },
   { path: 'why', usage: '[<subject>]', summary: 'what governs a path, rule, decision, skill or finding code', flags: [], },
 ];
 

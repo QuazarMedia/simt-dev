@@ -126,8 +126,11 @@ simt check                                                             # report 
 # ci
 simt ci                                                                # refresh simt-dev's own .github workflow and Dependabot files
 
-# compare
-simt compare                                                           # the adoption and drift matrix across every sibling repository
+# workspace
+simt workspace compare                                                 # the adoption and drift matrix across every sibling repository
+simt workspace install --yes                                           # carry those rules once per reader, at user level
+simt workspace share                                                   # what repeated rules in a workspace cost to carry, and where they would go
+simt workspace upgrade --yes                                           # replace this installation with the pinned release
 
 # completions
 simt completions <bash|zsh|fish>                                       # print a bash, zsh or fish completion script generated from this spec
@@ -222,10 +225,6 @@ simt rules list [--root <path>]                                        # the rul
 simt rules show <id>                                                   # one rule body
 simt rules why <id|ADR-NNN> [--all]                                    # the decision that settled a rule, and whether it is still in force
 
-# shared
-simt shared install --yes                                              # install the shared rules into a reader home directory
-simt shared plan                                                       # what the shared install would write, and where
-
 # skills
 simt skills brief --task "<task>"                                      # the packet for a task, read from the skill registry
 simt skills compile [<name>]                                           # compile a skill to the Agent Skills standard
@@ -255,9 +254,6 @@ simt tokens [--repos] [--session]                                      # count t
 
 # undo
 simt undo --yes                                                        # restore the last journaled set of writes, if untouched
-
-# upgrade
-simt upgrade --yes                                                     # replace this installation with the pinned release
 
 # why
 simt why [<subject>]                                                   # what governs a path, rule, decision, skill or finding code

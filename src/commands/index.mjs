@@ -122,8 +122,11 @@ export const IMPLEMENTED = {
     const { sliceCommand } = await import('./slice.mjs');
     return (args, flags) => sliceCommand('abandon', args, flags);
   },
-  'shared plan': async () => (await import('./shared.mjs')).sharedPlanCommand,
-  'shared install': async () => (await import('./shared.mjs')).sharedInstallCommand,
+  // Two paths, not one: the preview that writes nothing exits 0, and the command that
+  // would act answers non-zero until it is allowed to. Folding them together lost that
+  // distinction, which is the one thing a caller scripting a rehearsal depends on.
+  'workspace share': async () => (await import('./shared.mjs')).sharedPlanCommand,
+  'workspace install': async () => (await import('./shared.mjs')).sharedInstallCommand,
   evidence: async () => (await import('./evidence.mjs')).evidenceCommand,
   index: async () => (await import('./repoindex.mjs')).indexCommand,
   map: async () => (await import('./map.mjs')).mapCommand,
@@ -227,7 +230,7 @@ export const IMPLEMENTED = {
     const { agentsCommand } = await import('./agent.mjs');
     return (args, flags) => agentsCommand('status', args, flags);
   },
-  compare: async () => (await import('./compare.mjs')).compareCommand,
+  'workspace compare': async () => (await import('./compare.mjs')).compareCommand,
   tokens: async () => (await import('./tokens.mjs')).tokensCommand,
   'harness detect': async () => (await import('./harness.mjs')).harnessCommand,
   'harness loaders': async () => (await import('./harness.mjs')).harnessLoadersCommand,
@@ -250,7 +253,7 @@ export const IMPLEMENTED = {
   // seal before it touches the vault.
   'bench export': async () => (await import('./bench.mjs')).benchExportCommand,
   'bench import': async () => (await import('./bench.mjs')).benchImportCommand,
-  upgrade: async () => (await import('./upgrade.mjs')).upgradeCommand,
+  'workspace upgrade': async () => (await import('./upgrade.mjs')).upgradeCommand,
   mcp: async () => (await import('./mcp.mjs')).mcpCommand,
   //. A bare command: the kind is a positional, so there is no group and
   // no default subcommand to resolve.
@@ -471,7 +474,15 @@ const GROUP_DEFAULT_TAKES_ARGUMENTS = new Set(['decide']);
  */
 function resolveCommandPath(first, second) {
   if (first === undefined) return null;
-  if (!GROUPS.has(first)) return { path: ALIASES.get(first) ?? first, consumed: 1 };
+  if (!GROUPS.has(first)) {
+    // A two-word alias whose first word is no longer a group: `shared plan` survives the
+    // move to `workspace share` because the pair is looked up before the single word. A
+    // spelling from before the merge costs a reader nothing, and the table that keeps it
+    // alive is the spec's own alias list rather than a branch here.
+    const pair = second === undefined ? undefined : ALIASES.get(`${first} ${second}`);
+    if (pair !== undefined) return { path: pair, consumed: 2 };
+    return { path: ALIASES.get(first) ?? first, consumed: 1 };
+  }
 
   const group = GROUPS.get(first);
   if (second === undefined) return { path: `${first} ${group}`, consumed: 1 };

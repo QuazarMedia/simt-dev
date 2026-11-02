@@ -241,7 +241,10 @@ test('help: one command is one page, not the whole surface', async () => {
 test('help: --json emits the spec a UI reads', async () => {
   const { stdout } = await exec('node', [BIN, 'help', '--json'], { maxBuffer: 8 << 20 });
   const doc = JSON.parse(stdout);
-  assert.deepEqual(doc.map((row) => row.path), COMMANDS);
+  // Compared as a set: the document follows the spec's own order, which is grouped by
+  // subject rather than alphabetical, and a UI parses the rows it needs. Order is not
+  // part of the contract; membership is, and a missing or extra path still fails here.
+  assert.deepEqual(doc.map((row) => row.path).sort(), [...COMMANDS].sort());
 });
 
 test('no flag is in more than one of the three flag tables', () => {

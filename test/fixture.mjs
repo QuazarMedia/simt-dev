@@ -262,6 +262,13 @@ export async function gitAvailable(root) {
 export async function ensureGit(root) {
   if (await gitAvailable(root)) return false;
   await git(['init', '-q', root]);
+  // A copy can carry state this tool wrote (`.simt/`), and `git add -A` would commit it,
+  // changing what every later test sees in `git ls-files`. The tree is what arrived, not
+  // what a previous test left in it.
+  await writeFile(
+    join(root, '.git', 'info', 'exclude'),
+    GENERATED_DIRS.map((name) => `${name}/`).join('\n') + '\n',
+  );
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'tree under test']);
   return true;

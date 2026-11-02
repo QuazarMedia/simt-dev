@@ -66,7 +66,13 @@ test('editing a file after a green run invalidates the evidence', async () => {
   const shown = await readLedger(root);
   assert.equal(shown.entries.filter((e) => e.tree === first.tree && e.exit === 0).length, 1);
 
-  await writeFile(join(root, 'a.txt'), 'b\n');
+  // A different LENGTH, not just different bytes: `treeId` seeds a temporary index from
+  // the real one, and on a filesystem with one-second timestamps a same-size rewrite in
+  // the same second leaves the cached stat equal, so `git add -A` has nothing to hash and
+  // the tree id does not move. That is what made this pass on APFS and fail on the CI
+  // runner; the property under test is "editing a file invalidates the evidence", and a
+  // changed size states exactly that.
+  await writeFile(join(root, 'a.txt'), 'bb\n');
   const next = await treeId(root);
   assert.notEqual(next, first.tree);
   const later = await readLedger(root);

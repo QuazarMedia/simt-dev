@@ -219,6 +219,31 @@ test('Q30: init --yes then undo restores the .gitignore and the include', async 
   await assert.rejects(() => readFile(join(root, IDENTITY_FILE), 'utf8'));
 });
 
+test('Q30: undo leaves a foreign include.path out of the local config', async () => {
+  // The journal records include.path's before-state and undo restores it. A
+  // merged-scope read would absorb an include.path that lives only in the global
+  // config, and undo would write that foreign value into the repo's local config -
+  // a key the run never created. Plant one in a temp global config and assert the
+  // local scope is clean after init + undo.
+  const root = await repo();
+  const globalCfg = join(root, 'global-gitconfig');
+  await writeFile(globalCfg, '[include]\n\tpath = /etc/gitconfig\n');
+  const prevGlobal = process.env.GIT_CONFIG_GLOBAL;
+  process.env.GIT_CONFIG_GLOBAL = globalCfg;
+  try {
+    await initCommand([], { root, yes: true });
+    assert.equal(await includesOwnIdentity(root), true);
+    const undone = await undoLastJournalSet(root);
+    assert.ok(!('refused' in undone && undone.refused), JSON.stringify(undone.refused));
+    const out = await exec('git', ['config', '--local', '--get-all', INCLUDE_KEY], { cwd: root }).then((r) => r.stdout, () => '');
+    const values = out.split('\n').map((v) => v.trim()).filter(Boolean);
+    assert.deepEqual(values, []);
+  } finally {
+    if (prevGlobal === undefined) delete process.env.GIT_CONFIG_GLOBAL;
+    else process.env.GIT_CONFIG_GLOBAL = prevGlobal;
+  }
+});
+
 test('Q30: a fresh manifest records no surfaces of its own', async () => {
   // Writing today's default into every fresh manifest would freeze it for every
   // release after: absent means the global standard applies.

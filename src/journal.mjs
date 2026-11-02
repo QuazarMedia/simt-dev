@@ -215,10 +215,17 @@ export async function journaledRemoveFile(root, acc, path) {
   }
 }
 
-/** Read one git config value in a repo, or null when unset. */
+/**
+ * Read one git config value from the repository's own local scope, or null when
+ * unset there. The journal writes to local (`git config key value`) and `undo`
+ * restores to local, so the before/after bookkeeping must read local too: a
+ * merged-scope read (`--get`) absorbs a value that lives only in global, system
+ * or the environment, and `undo` would then write that foreign value back into
+ * the repo's local config - a key the run never created.
+ */
 export async function readGitValue(root, key) {
   try {
-    return await gitText(root, ['config', '--get', key]);
+    return await gitText(root, ['config', '--local', '--get', key]);
   } catch (error) {
     if (error.code === 1) return null;
     throw error;

@@ -147,3 +147,4 @@ in [architecture/history.md](architecture/history.md).
 | [136](decisions/ADR-136-the-command-reference-is-generated-into-docs-and-the-front-page-is-bounded.md) | the command reference is generated into `docs/commands`, and the front page is a front page | accepted · 2026-11-02 |
 | [137](decisions/ADR-137-the-suite-has-two-tiers-and-the-tier-is-a-property-of-the-file.md) | the suite has two tiers, and the tier is a property of the file | accepted · 2026-11-02 |
 | [138](decisions/ADR-138-the-agent-hook-shim-records-the-interpreter-that-wrote-it.md) | the agent-hook shim records the interpreter that wrote it | accepted · 2026-11-02 |
+| [139](decisions/ADR-139-a-benchmark-gain-is-reported-beside-its-cost-and-coverage.md) | a benchmark gain is reported beside its cost and its coverage | accepted · 2026-11-02 |

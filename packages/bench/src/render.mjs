@@ -55,6 +55,19 @@ export function formatReportMarkdown(report) {
     );
   }
 
+  if (report.strataMetrics?.length > 0) {
+    lines.push('');
+    lines.push('### Strata (R_s: every required predicate, hard constraint and evidence requirement)');
+    lines.push('');
+    lines.push('| Stratum | Arms | Tasks | Runs | R_s | 95% CI (R_s) | Q | C ($) |');
+    lines.push('| --- | ---: | ---: | ---: | ---: | --- | ---: | ---: |');
+    for (const stratum of report.strataMetrics) {
+      lines.push(
+        `| ${stratum.stratum} | ${stratum.arms} | ${stratum.tasks} | ${stratum.runs} | ${fmtPct(stratum.R_s)} | [${fmtPct(stratum.ci95.R[0])}, ${fmtPct(stratum.ci95.R[1])}] | ${fmtNum(stratum.Q, 3)} | ${fmtUsd(stratum.C)} |`,
+      );
+    }
+  }
+
   if (report.excluded > 0) {
     lines.push('');
     lines.push(
@@ -105,6 +118,11 @@ export function formatReportMarkdown(report) {
       `Non-inferiority (ΔR lower bound > ${fmtSignedPct(cmp.nonInferiority.margin)}): ${fmtSignedPct(cmp.nonInferiority.bound)} — ${cmp.nonInferiority.met === true ? 'met' : cmp.nonInferiority.met === false ? 'not met' : 'not assessable'}`,
     );
     lines.push(`Verdict: ${cmp.verdict} (${cmp.pairedTasks} paired tasks)`);
+  }
+
+  if (report.disclosure) {
+    lines.push('');
+    lines.push(report.disclosure);
   }
 
   return lines.join('\n');

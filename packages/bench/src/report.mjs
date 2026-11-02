@@ -22,6 +22,7 @@ import {
   compareArms,
   summarizeRows,
 } from '../../../src/measure/stats.mjs';
+import { defaultEligibility, reportAccounting } from './accounting.mjs';
 
 /** The report's own schema stamp: a consumer can refuse a document it does not know. */
 const REPORT_SCHEMA = 'simt.bench.report/2';
@@ -190,6 +191,9 @@ export async function buildBenchReport(
     seeds: [...new Set(rawRecords.map((record) => record?.experiment?.seed).filter((value) => value != null))],
   };
 
+  const accounting = reportAccounting(filtered, { prices, samples, seed, exclusions: errored.length });
+  const regressed = filtered.filter((record) => Number(record.regressions ?? 0) > 0).length;
+
   const report = {
     reportSchema: REPORT_SCHEMA,
     root: resolvedRoot,
@@ -212,6 +216,8 @@ export async function buildBenchReport(
     arms,
     comparisons: comparison ? [comparison] : [],
     comparison,
+    ...accounting,
+    eligibility: defaultEligibility(comparison, { plan: accounting.samplePlan, regressions: regressed }),
   };
 
   return { ...report, markdown: formatReportMarkdown(report) };

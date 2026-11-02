@@ -14,6 +14,7 @@ import { SPEC } from '../commands/spec.mjs';
 import { CLI } from '../name.mjs';
 
 export const README_FILE = 'README.md';
+export const DOCS_DIR = 'docs/commands';
 export const BEGIN = '<!-- simt:commands:begin -->';
 export const END = '<!-- simt:commands:end -->';
 
@@ -41,7 +42,7 @@ export function renderCommandBlock() {
   if (lines[0] === '') lines.shift();
   return [
     BEGIN,
-    '<!-- Rendered from the spec by `simt docs readme --yes`; do not edit by hand. -->',
+    '<!-- Rendered from the spec by `simt docs commands --yes`; do not edit by hand. -->',
     '',
     '```sh',
     ...lines,
@@ -50,16 +51,69 @@ export function renderCommandBlock() {
   ].join('\n');
 }
 
+
+/** Escape a cell so a summary containing a pipe cannot break the table. */
+function cell(text) {
+  return String(text ?? '').replace(/\|/g, '\\|');
+}
+
 /**
- * Replace the region between the markers, or return null when the file carries none.
+ * The whole `docs/commands/` tree, rendered from the spec.
  *
- * Null rather than an appended block: a README without the markers has the list somewhere
- * else, and writing a second one beside it is the duplicated list this rendering exists
- * to remove.
+ * One page per group and an index that carries the flat list, so a reader who knows the
+ * command name and a reader who knows only what they want to do both land on a page the
+ * spec wrote. `README.md` used to carry the flat list, which made the front page 240 lines
+ * of reference before its first paragraph of prose.
  */
-export function replaceBlock(text, block) {
-  const start = text.indexOf(BEGIN);
-  const end = text.indexOf(END);
-  if (start === -1 || end === -1 || end < start) return null;
-  return `${text.slice(0, start)}${block}${text.slice(end + END.length)}`;
+export function renderCommandPages() {
+  const groups = new Map();
+  for (const row of SPEC) {
+    const group = row.path.split(' ')[0];
+    if (!groups.has(group)) groups.set(group, []);
+    groups.get(group).push(row);
+  }
+  const pages = new Map();
+  const index = [
+    '# Commands',
+    '',
+    'Rendered from the command spec by `simt docs commands --yes`; do not edit by hand.',
+    'Every path this binary dispatches is listed here, and nowhere else in the docs.',
+    '',
+    '| Group | Commands |',
+    '| --- | --- |',
+    ...[...groups].map(([group, rows]) => `| [${group}](${group}.md) | ${rows.length} |`),
+    '',
+    '## Every command',
+    '',
+    renderCommandBlock(),
+    '',
+  ].join('\n');
+  pages.set(`${DOCS_DIR}/README.md`, index);
+  for (const [group, rows] of groups) {
+    const body = [
+      `# simt ${group}`,
+      '',
+      `Rendered from the command spec by \`simt docs commands --yes\`; do not edit by hand.`,
+      '',
+      '| Command | Flags | What it does |',
+      '| --- | --- | --- |',
+      ...rows.map((row) => {
+        const invocation = `${CLI} ${row.path}${row.usage === undefined ? '' : ` ${row.usage}`}`;
+        const flags = (row.flags ?? []).map((flag) => `\`--${flag}\``).join(', ');
+        return `| \`${cell(invocation)}\` | ${flags || '—'} | ${cell(row.summary)} |`;
+      }),
+      '',
+      rowNote(rows),
+    ].join('\n');
+    pages.set(`${DOCS_DIR}/${group}.md`, body);
+  }
+  return pages;
+}
+
+/** The one sentence a group page owes a reader: what a write does, and whether it asks. */
+function rowNote(rows) {
+  const writes = rows.filter((row) => row.writes === 'repo');
+  if (writes.length === 0) return 'None of these write to the repository.';
+  const names = writes.map((row) => `\`simt ${row.path}\``).join(', ');
+  return `Writes to the repository: ${names}. Each prints its plan and writes nothing without \`--yes\`.`;
 }

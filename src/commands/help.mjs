@@ -250,7 +250,7 @@ ${CLI} pack publish [dir] [--yes]
                            a git-sourced pack names the tag-and-push instead)
 pack is experimental: frozen, no repository vendors one, and removal is a later
                            plan's decision (ADR-130)
-${CLI} docs readme --yes      render the README command list from the spec
+${CLI} docs commands --yes    render the command reference in docs/commands from the spec
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;

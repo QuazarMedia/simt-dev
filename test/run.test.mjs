@@ -47,11 +47,10 @@ test('a command that answers in JSON hands back the document', async () => {
 test('a writer previews into the result and writes nothing without --yes', async () => {
   const root = await mkdtemp(join(tmpdir(), 'simt-run-'));
   try {
-    await writeFile(join(root, README_FILE), `# t\n\n${BEGIN}\nold\n${END}\n`);
-    const result = await run('docs readme', { flags: { root } });
+    const result = await run('docs commands', { flags: { root } });
     assert.equal(result.code, 0);
     assert.match(renderText(result), /plan/);
-    assert.deepEqual(await readdir(root), [README_FILE], 'no file was written');
+    assert.deepEqual(await readdir(root), [], 'no file was written');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -60,11 +59,11 @@ test('a writer previews into the result and writes nothing without --yes', async
 test('the same writer applies when asked, through the same call', async () => {
   const root = await mkdtemp(join(tmpdir(), 'simt-run-'));
   try {
-    await writeFile(join(root, README_FILE), `# t\n\n${BEGIN}\nold\n${END}\n`);
-    const result = await run('docs readme', { flags: { root, yes: true } });
+    const result = await run('docs commands', { flags: { root, yes: true } });
     assert.equal(result.code, 0);
     assert.match(renderText(result), /write/);
-    assert.ok((await readFile(join(root, README_FILE), 'utf8')).includes('simt status'));
+    const page = await readFile(join(root, 'docs', 'commands', 'README.md'), 'utf8');
+    assert.ok(page.includes('simt status'));
   } finally {
     await rm(root, { recursive: true, force: true });
   }

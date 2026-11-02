@@ -331,6 +331,7 @@ assert.deepEqual(leaking, [
     'ADR-131',
     'ADR-133',
     'ADR-135',
+    'ADR-136',
 ]);
 });
 

@@ -4,7 +4,7 @@ Status: accepted · 2026-10-09
 **Affects:** `src/upgrade/plan.mjs`, `src/projection/markers.mjs`,
 `src/projection/project.mjs`, `src/projection/targets.mjs`, `src/projection/baselines.mjs`,
 `test/upgrade.test.mjs`, `test/markers.test.mjs`. Closes S26 of
-`docs/reviews/0002-full-review-adoption-and-public-release.md`.
+`docs/reviews/archive/0002-full-review-adoption-and-public-release.md`.
 
 ## Context
 

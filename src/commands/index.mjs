@@ -168,9 +168,9 @@ export const IMPLEMENTED = {
   lease: async () => (await import('./lease.mjs')).leaseCommand,
   // The README's command list is the last copy of the command table
   // the spec owns; the renderer lives in src/docs so a test can hold the file to it.
-  'docs readme': async () => {
+  'docs commands': async () => {
     const { docsCommand } = await import('./docs.mjs');
-    return (args, flags) => docsCommand('readme', args, flags);
+    return (args, flags) => docsCommand('commands', args, flags);
   },
   distill: async () => (await import('./distill.mjs')).distillCommand,
   // machinery needs the runnable command names for Affects command tokens,

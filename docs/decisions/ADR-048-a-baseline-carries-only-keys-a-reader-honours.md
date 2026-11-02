@@ -3,7 +3,7 @@
 Status: accepted · 2026-10-09 · amends ADR-025 (withdraws ruling 8, corrects its context)
 **Affects:** `src/projection/baselines.mjs`, `test/baselines.test.mjs`,
 `docs/research/0001-centralise-agent-rules.md`. Closes S30 of
-`docs/reviews/0002-full-review-adoption-and-public-release.md`.
+`docs/reviews/archive/0002-full-review-adoption-and-public-release.md`.
 
 ## Context
 

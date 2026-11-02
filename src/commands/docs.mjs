@@ -1,88 +1,90 @@
-// `simt docs readme` — put the README's command list back in step with the spec.
+// `simt docs commands` — put the command reference back in step with the spec.
 //
-// Shape copied from `ci` and `ignore`: the plan is printed first, nothing is written
-// without `--yes`, `--diff` shows the same plan as a unified diff, and `undo` restores
-// it. The rendering itself lives in `src/docs/commands.mjs` so a test can compare the
-// README against it without running this command.
+// The reference used to be a block in README.md, which put 240 lines of command list above
+// the first paragraph of prose and made every new command a README edit. It is now
+// `docs/commands/`: an index that carries the flat list and one page per group, all
+// rendered from `src/commands/spec.mjs`. Shape copied from the other writers: the plan is
+// printed first, nothing is written without `--yes`, `--diff` shows the same plan as a
+// unified diff, and `undo` restores it.
 
 import { join } from 'node:path';
 
 import { EXIT, fail, present, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { applyPlan, change } from '../write/plan.mjs';
+import { applyPlan, change, pending } from '../write/plan.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { commandRoot } from '../repo-root.mjs';
-import { BEGIN, END, README_FILE, renderCommandBlock, replaceBlock } from '../docs/commands.mjs';
+import { DOCS_DIR, renderCommandPages } from '../docs/commands.mjs';
 
 export async function docsCommand(sub, args, flags) {
-  if (sub !== 'readme') {
-    return fail(`unknown docs page \`${sub}\``, EXIT.USAGE, `run: ${CLI} docs readme`);
+  if (sub !== 'commands') {
+    return fail(
+      `unknown docs page \`${sub}\``,
+      EXIT.USAGE,
+      `run: ${CLI} docs commands`,
+    );
   }
   const root = commandRoot(flags);
-  const path = join(root, README_FILE);
-
-  let before;
-  try {
-    before = await readBefore(path);
-  } catch (error) {
-    return fail(
-      `${README_FILE} could not be read: ${error.message}`,
-      EXIT.FAIL,
-      `fix the file's permissions, then re-run: ${CLI} docs readme`,
+  const pages = renderCommandPages();
+  const changes = [];
+  for (const [path, after] of pages) {
+    let before;
+    try {
+      before = await readBefore(join(root, path));
+    } catch (error) {
+      return fail(
+        `${path} could not be read: ${error.message}`,
+        EXIT.FAIL,
+        `fix the file's permissions, then re-run: ${CLI} docs commands`,
+      );
+    }
+    changes.push(
+      change({
+        path,
+        before,
+        after,
+        owner: 'docs commands',
+        reason: 'the command reference follows the spec',
+      }),
     );
   }
-  if (before === null) {
-    return fail(`no ${README_FILE} in ${root}`, EXIT.FAIL, `run this where ${README_FILE} is`);
-  }
 
-  const after = replaceBlock(before, renderCommandBlock());
-  if (after === null) {
-    return fail(
-      `${README_FILE} carries no ${BEGIN} ... ${END} region`,
-      EXIT.FAIL,
-      `put the two marker lines where the command list belongs, then: ${CLI} docs readme --yes`,
-    );
-  }
-
+  const stale = pending(changes);
   const mode = writeMode(flags);
-  const action = after === before ? 'unchanged' : 'write';
   const payload = {
     ok: true,
     command: 'docs',
-    page: 'readme',
+    page: 'commands',
     root,
-    file: README_FILE,
-    action,
-    written: mode.apply && action === 'write',
+    files: [...pages.keys()],
+    action: stale.length === 0 ? 'unchanged' : 'write',
+    written: mode.apply && stale.length > 0,
   };
 
-  if (action === 'unchanged') {
-    present(payload, () => `current  ${README_FILE}`, flags);
+  if (stale.length === 0) {
+    present(payload, () => `current  ${DOCS_DIR}`, flags);
     return EXIT.OK;
   }
 
-  const diff = [{ path: README_FILE, before, after }];
   if (!mode.apply) {
-    // A rehearsal says which flag it is waiting for, because "not written" is the same
-    // sentence for `--dry-run` and for a missing `--yes`, and the two have different fixes.
     present(
-      { ...payload, ...diffField(diff, flags) },
-      () => `plan  ${README_FILE}: the command list follows the spec${mode.dryRun ? ' (--dry-run)' : ' (re-run with --yes to write)'}`,
+      { ...payload, ...diffField(changes, flags) },
+      () =>
+        `plan  ${DOCS_DIR}: ${stale.map((c) => c.path).join(', ')}${
+          mode.dryRun ? ' (--dry-run)' : ' (re-run with --yes to write)'
+        }`,
       flags,
     );
-    emitDiffs(diff, flags);
+    emitDiffs(changes, flags);
     return EXIT.OK;
   }
 
-  await applyPlan(root, [change({ path, before, after, owner: 'docs readme', reason: 'the command list follows the spec' })], {
-    mode,
-    label: 'docs readme',
-  });
+  await applyPlan(root, changes, { mode, label: 'docs commands' });
   present(
-    { ...payload, ...diffField(diff, flags) },
-    () => `write  ${README_FILE}  (${Buffer.byteLength(after)} bytes)`,
+    { ...payload, ...diffField(changes, flags) },
+    () => `write  ${DOCS_DIR}  (${stale.length} file${stale.length === 1 ? '' : 's'})`,
     flags,
   );
-  emitDiffs(diff, flags);
+  emitDiffs(changes, flags);
   return EXIT.OK;
 }

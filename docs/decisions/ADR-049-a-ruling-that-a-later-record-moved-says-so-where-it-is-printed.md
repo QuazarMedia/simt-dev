@@ -3,7 +3,7 @@
 Status: accepted · 2026-10-09
 **Affects:** `src/decisions/index.mjs`, `src/commands/rules.mjs`, `src/mcp/tools.mjs`,
 `test/rules.test.mjs`. Closes S31 of
-`docs/reviews/0002-full-review-adoption-and-public-release.md`.
+`docs/reviews/archive/0002-full-review-adoption-and-public-release.md`.
 
 ## Context
 

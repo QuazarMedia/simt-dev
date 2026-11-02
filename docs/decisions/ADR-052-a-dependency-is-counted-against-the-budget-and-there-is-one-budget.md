@@ -3,7 +3,7 @@
 Status: accepted · 2026-10-09
 **Affects:** `src/resolve/resolve.mjs`, `src/commands/skills.mjs`, `src/mcp/tools.mjs`,
 `test/resolve.test.mjs`, `test/mcp.test.mjs`. Closes S06 of
-`docs/reviews/0002-full-review-adoption-and-public-release.md`.
+`docs/reviews/archive/0002-full-review-adoption-and-public-release.md`.
 
 ## Context
 

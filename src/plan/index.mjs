@@ -332,7 +332,9 @@ function sectionFor(doc, id) {
 async function readKind(root, dir, fmt) {
   let names;
   try {
-    names = (await readdir(join(root, dir.path))).filter((name) => name.endsWith('.md')).sort();
+    // Recursive: a finished plan or review lives in `archive/`, and a tracker that stops
+    // reading it reports a smaller repository rather than a finished one (ADR-136).
+    names = (await readdir(join(root, dir.path), { recursive: true })).filter((name) => name.endsWith('.md')).sort();
   } catch {
     return [];
   }
@@ -346,13 +348,14 @@ async function readKind(root, dir, fmt) {
   const docs = [];
   for (const entry of loaded) {
     if (!entry) continue;
-    const [name, text] = entry;
+    const [rel, text] = entry;
+    const name = rel.split('/').pop();
     const parsed = parseDocument(fmt, text);
     if (parsed.rows.length === 0) continue;
     docs.push({
       kind: dir.kind,
       name,
-      path: join(root, dir.path, name),
+      path: join(root, dir.path, rel),
       number: docNumber(name),
       text,
       ...parsed,

@@ -1,7 +1,7 @@
 # Plan 0003 — simt-dev as an intelligence amplifier: research and development plan
 
 Status: **complete — 55 of 55 rows Complete** · created 2026-10-06 · state read at `ec231ef`
-Depends on: review 0002 Waves 0–1 (`docs/reviews/0002-full-review-adoption-and-public-release.md`),
+Depends on: review 0002 Waves 0–1 (`docs/reviews/archive/0002-full-review-adoption-and-public-release.md`),
 plan 0002
 Blocked by: every slice here is Queued, and R01 and R02 — the task miner and the agent runner
 that everything else measures against — sit in review 0002's Wave 0, which is itself Queued.

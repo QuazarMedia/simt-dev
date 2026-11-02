@@ -3,7 +3,7 @@
 Status: accepted · 2026-10-09
 **Affects:** `src/projection/project.mjs`, `src/projection/targets.mjs`,
 `src/commands/sync.mjs`, `test/surfaces.test.mjs`. Closes S09 of
-`docs/reviews/0002-full-review-adoption-and-public-release.md`.
+`docs/reviews/archive/0002-full-review-adoption-and-public-release.md`.
 
 ## Context
 

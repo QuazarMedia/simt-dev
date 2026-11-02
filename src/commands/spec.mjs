@@ -52,7 +52,7 @@ export const SPEC = [
   // that its default takes arguments.
   { path: 'decide new', usage: '"<title>" --yes', summary: 'scaffold a numbered decision record with its frontmatter', writes: 'repo', defaultFor: 'decide', flags: ["yes","check","diff","dry-run","paths","supersedes","task"], },
   { path: 'distill', usage: '<skill|doc>', summary: 'turn a repository into a skill or rule proposal', flags: [], },
-  { path: 'docs readme', summary: 'render the README command list from the spec', writes: 'repo', defaultFor: 'docs', flags: ["yes","diff"], },
+  { path: 'docs commands', summary: 'render the command reference in docs/commands from the spec', writes: 'repo', defaultFor: 'docs', flags: ["yes","diff"], },
   { path: 'doctor', usage: '[--fix]', mcp: { name: 'doctor', flags: [] }, summary: 'report what is wrong with this installation', writes: 'repo', flags: ["yes","diff","fix"], },
   { path: 'evidence', summary: 'the runs recorded against the tree on disk', aliases: ['evidence show'], flags: [], },
   { path: 'evidence check', usage: '<msg-file>', summary: 'a commit message claiming a run this tree does not have', flags: [], },

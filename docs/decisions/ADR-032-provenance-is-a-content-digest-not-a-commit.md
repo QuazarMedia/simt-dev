@@ -3,7 +3,7 @@
 Status: accepted · 2026-10-08 · ruling 1 narrowed by ADR-054
 **Affects:** `src/projection/rules.mjs`, `src/projection/markers.mjs`, `test/upgrade.test.mjs`,
 `test/install.test.mjs`, `test/project.test.mjs`. **Implements:** proposal P1 in
-`docs/reviews/0002-full-review-adoption-and-public-release.md` §10. **Relates to:**
+`docs/reviews/archive/0002-full-review-adoption-and-public-release.md` §10. **Relates to:**
 ADR-031 (a test that inherits the author's directory is not evidence) — the same defect found
 one layer down, in the tool rather than the suite — and ADR-015 (a source is content, not a
 location), which already argued that a declared skill's identity is its bytes.

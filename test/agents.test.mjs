@@ -17,21 +17,16 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { adapter, adapters, agentPath, loadAgent, rendered } from '../src/agents/render.mjs';
+import { keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = join(HERE, '..', 'bin', 'simt.mjs');
-
-const made = [];
-test.after(async () => {
-  const { rm } = await import('node:fs/promises');
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 /** A scratch directory to install into. `agents install` reads and writes files and
  *  does not run git, so a bare directory is the whole of the fixture. */
 async function repo(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-agents-'));
-  made.push(root);
+  keepTemp(root);
   for (const [name, text] of Object.entries(files)) {
     await mkdir(dirname(join(root, name)), { recursive: true });
     await writeFile(join(root, name), text);

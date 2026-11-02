@@ -6,24 +6,18 @@
 // fixture cases are the accept criterion from the review this was filed for.
 
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 
 import { SPEC, checkSkill, nameProblems } from '../src/graph/spec.mjs';
 import { lintSpec } from '../src/graph/speccheck.mjs';
-import { tempDir } from './fixture.mjs';
-
-const made = [];
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
+import { tempDir, keepTemp } from './fixture.mjs';
 
 async function scratch() {
   const dir = await tempDir('simt-spec-');
-  made.push(dir);
+  keepTemp(dir);
   return dir;
 }
 

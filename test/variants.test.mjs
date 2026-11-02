@@ -4,7 +4,7 @@
 // still read and honoured, which is the property the last test here holds.
 
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -20,19 +20,11 @@ import {
 import { readLock, writeLockVariants } from '../src/projection/lock.mjs';
 import { LOCK_FILE, LOCK_LEGACY } from '../src/name.mjs';
 import { desiredRegion } from '../src/projection/rules.mjs';
-import { git } from './fixture.mjs';
-
-const tempDirs = [];
-
-after(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
-  }
-});
+import { git, keepTemp } from './fixture.mjs';
 
 async function makeVariantRepo() {
   const root = await mkdtemp(join(tmpdir(), 'simt-variants-'));
-  tempDirs.push(root);
+  keepTemp(root);
   await git(['init', '-q', root]);
   await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
   await writeFile(

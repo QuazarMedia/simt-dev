@@ -9,11 +9,11 @@
 // through the binary rather than imported, so what is tested is what a reader runs.
 
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 
@@ -25,20 +25,15 @@ import { provenanceDigest } from '../src/projection/rules.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 import { packDigest, resolvePacks, PACK_DIR } from '../src/packs.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
-import { git, tempDir } from './fixture.mjs';
+import { git, tempDir, keepTemp } from './fixture.mjs';
 import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const exec = promisify(execFile);
-const made = [];
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 async function scratch(prefix = 'simt-packs-') {
   const dir = await tempDir(prefix);
-  made.push(dir);
+  keepTemp(dir);
   return dir;
 }
 

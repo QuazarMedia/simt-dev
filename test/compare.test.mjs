@@ -8,7 +8,7 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -25,14 +25,13 @@ import { GATES } from '../src/hooks/gates.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { git, cmd, tempDir } from './fixture.mjs';
+import { git, cmd, tempDir, keepTemp } from './fixture.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 
 const exec = promisify(execFile);
-const made = [];
 
 /** Run a command for its --json payload. */
 async function json(args) {
@@ -65,7 +64,7 @@ async function failingJson(args) {
 async function gitRepo(name, files = {}, into = null) {
   const parent = into ?? (await mkdtemp(join(tmpdir(), 'simt-compare-')));
   const root = join(parent, name);
-  made.push(root);
+  keepTemp(root);
   await mkdir(root, { recursive: true });
   await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
   for (const [file, content] of Object.entries(files)) {
@@ -94,7 +93,7 @@ function rowsOf(payload) {
 
 async function scratch() {
   const root = await tempDir('simt-compare-ws-');
-  made.push(root);
+  keepTemp(root);
   return root;
 }
 
@@ -115,10 +114,6 @@ const CONTEXT = {
   gates: new Set(Object.keys(GATES)),
   gateKinds: new Map(Object.entries(GATES).map(([n, g]) => [n, g.kind])),
 };
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 // --- discovery -------------------------------------------------------------
 
@@ -842,7 +837,7 @@ test('every finding check refuses on, this row reports', async () => {
 test('a repo is complete exactly when install has nothing left to write', async () => {
   const root = await (async () => {
     const d = await mkdtemp(join(tmpdir(), 'simt-compare-complete-'));
-    made.push(d);
+    keepTemp(d);
     await exec('git', ['init', '-q'], { cwd: d });
     await exec('git', ['config', 'user.email', 't@e.com'], { cwd: d });
     await exec('git', ['config', 'user.name', 'T'], { cwd: d });

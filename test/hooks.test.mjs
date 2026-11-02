@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -17,7 +17,7 @@ import { recordRun } from '../src/ledger/index.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 import { readCapability } from '../src/hooks/capability.mjs';
 import * as gateModule from '../src/projection/manifest.mjs';
-import { git, cmd } from './fixture.mjs';
+import { git, cmd, keepTemp } from './fixture.mjs';
 import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { simt as simtCli } from './fixture.mjs';
@@ -31,15 +31,10 @@ const run = (args) => simtCli(args, { maxBuffer: 16 << 20 }).then(({ code, stdou
 
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
-const temps = [];
-
-after(async () => {
-  for (const t of temps) await exec('rm', ['-rf', t]);
-});
 
 async function fixture({ scripts, manifest, files = {}, binaries = [], formatter = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-hooksd-'));
-  temps.push(root);
+  keepTemp(root);
   await exec('git', ['init', '-q', '.'], { cwd: root });
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fx', scripts: scripts ?? {} }, null, 2));
   for (const [name, body] of Object.entries(files)) {
@@ -169,7 +164,7 @@ test('chained shim: runs the repository hook and forwards git arguments', async 
   // deliberately does not, because pre-push's argv would be misread as command
   // arguments, but here the program on the other end is the repository's own hook.
   const root = await mkdtemp(join(tmpdir(), 'simt-chain-'));
-  temps.push(root);
+  keepTemp(root);
   const dir = join(root, 'hooks');
   await mkdir(dir, { recursive: true });
   const original = join(dir, 'post-commit');
@@ -191,7 +186,7 @@ test('chained shim: a missing hook fails loudly instead of passing', async () =>
   // looks exactly like a hook that passed. So a chained shim whose target is gone
   // refuses, naming the file it expected.
   const root = await mkdtemp(join(tmpdir(), 'simt-chain-'));
-  temps.push(root);
+  keepTemp(root);
   await exec('git', ['init', '-q'], { cwd: root });
 
   const shim = join(root, 'post-commit');
@@ -206,7 +201,7 @@ test('chained shim: is valid POSIX sh for an event this tool does not gate', asy
   // `renderShim` refuses an event outside EVENTS, which is the point of the two
   // functions being separate: chaining exists precisely for those events.
   const root = await mkdtemp(join(tmpdir(), 'simt-chain-'));
-  temps.push(root);
+  keepTemp(root);
   const path = join(root, 'post-merge');
   await writeFile(path, renderChainedShim('post-merge', 'hooks/post-merge'));
   await exec('sh', ['-n', path]);
@@ -226,7 +221,7 @@ test('shim: generated source is valid POSIX sh', async () => {
   // the worst possible moment. `sh -n` catches it before it ships.
   for (const event of EVENTS) {
     const path = join(await mkdtemp(join(tmpdir(), 'simt-shim-')), event);
-    temps.push(join(path, '..'));
+    keepTemp(join(path, '..'));
     await writeFile(path, renderShim(event));
     await exec('sh', ['-n', path]);
   }
@@ -266,7 +261,7 @@ test('shim: SIMT_DEV_BIN naming a .mjs entry point is run through node', async (
   // the documented override could not be used from a source checkout - the normal
   // case for anyone working on simt-dev itself.
   const root = await mkdtemp(join(tmpdir(), 'simt-shim-'));
-  temps.push(root);
+  keepTemp(root);
   await writeFile(join(root, MANIFEST_FILE), JSON.stringify({ gates: { preCommit: [], prePush: [] } }));
   await mkdir(join(root, '.git'), { recursive: true });
   await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
@@ -287,7 +282,7 @@ test('shim: SIMT_DEV_BIN naming a command line is refused, not half-executed', a
   // There is no safe way to split a command line in sh without eval. Guessing
   // would run the wrong program; refusing says exactly what to set instead.
   const root = await mkdtemp(join(tmpdir(), 'simt-shim-'));
-  temps.push(root);
+  keepTemp(root);
   await mkdir(join(root, '.git'), { recursive: true });
   await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
 
@@ -312,10 +307,10 @@ test('shim: a .mjs entry point without node on PATH says what to install', async
   // interactive shell), and `exec node` there failed with 127 and no remedy. The
   // shim is run here with a PATH that holds git and nothing else.
   const root = await mkdtemp(join(tmpdir(), 'simt-shim-'));
-  temps.push(root);
+  keepTemp(root);
   await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
   const only = await mkdtemp(join(tmpdir(), 'simt-path-'));
-  temps.push(only);
+  keepTemp(only);
   const git = (await exec('sh', ['-c', 'command -v git'])).stdout.trim();
   await exec('ln', ['-s', git, join(only, 'git')]);
 
@@ -340,7 +335,7 @@ test('shim: SIMT_DEV_BIN naming a path with a space is run, not refused', async 
   // A checkout under "~/My Projects" is a path, and the old refusal read its space as
   // a command line. A value that names a file is one program.
   const root = await mkdtemp(join(tmpdir(), 'simt-shim-'));
-  temps.push(root);
+  keepTemp(root);
   await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
   await writeFile(join(root, MANIFEST_FILE), JSON.stringify({ gates: { preCommit: [], prePush: [] } }));
   const spaced = join(root, 'with space');
@@ -547,7 +542,7 @@ test('agenthook: prompt-submit reads the repository --root names, not the payloa
   // which reads exactly like a repository that opted out.
   const root = await fixture({ manifest: { brief: {} } });
   const elsewhere = await mkdtemp(join(tmpdir(), 'simt-cwd-'));
-  temps.push(elsewhere);
+  keepTemp(elsewhere);
   const payload = join(root, 'payload.json');
   await writeFile(payload, JSON.stringify({ prompt: 'add a hook', cwd: elsewhere }));
   const { stdout, stderr } = await exec(

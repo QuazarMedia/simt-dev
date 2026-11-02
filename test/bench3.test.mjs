@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
@@ -84,23 +84,16 @@ import {
   readLedgerEntries,
   runBenchProbes,
 } from '../packages/bench/src/probes.mjs';
-import { git, tempDir } from './fixture.mjs';
+import { git, tempDir, keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const exec = promisify(execFile);
-const tempDirs = [];
-
-after(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
 
 async function scratch(prefix = 'simt-bench-') {
   const dir = await tempDir(prefix);
-  tempDirs.push(dir);
+  keepTemp(dir);
   return dir;
 }
 
@@ -374,7 +367,7 @@ test('bench probes (R05): 12 synthetic compliance probes each pass on compliance
   for (const probe of PROBES) {
     // Compliant run
     const wsComply = await prepareProbeWorkspace(probe);
-    tempDirs.push(wsComply.slotDir);
+    keepTemp(wsComply.slotDir);
     const complyOut = await probe.comply(wsComply.workDir, wsComply);
     const complyGrade = await gradeProbe(probe.id, {
       workDir: wsComply.workDir,
@@ -391,7 +384,7 @@ test('bench probes (R05): 12 synthetic compliance probes each pass on compliance
 
     // Violating run
     const wsViolate = await prepareProbeWorkspace(probe);
-    tempDirs.push(wsViolate.slotDir);
+    keepTemp(wsViolate.slotDir);
     const violateOut = await probe.violate(wsViolate.workDir, wsViolate);
     const violateGrade = await gradeProbe(probe.id, {
       workDir: wsViolate.workDir,

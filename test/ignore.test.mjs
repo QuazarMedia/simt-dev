@@ -10,7 +10,7 @@
 
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -18,18 +18,14 @@ import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 
 import { denyEntries, parseIgnoreList, renderClaudeSettings, renderTextIgnore } from '../src/ignore.mjs';
+import { keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 
-const made = [];
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
-
 async function scratch(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-ignore-'));
-  made.push(root);
+  keepTemp(root);
   for (const [path, body] of Object.entries(files)) {
     await mkdir(dirname(join(root, path)), { recursive: true });
     await writeFile(join(root, path), body);

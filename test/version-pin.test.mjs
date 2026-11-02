@@ -17,14 +17,9 @@ import { promisify } from 'node:util';
 import test, { after } from 'node:test';
 import { packageVersion, hasNpm, assertVersionPin, describeVersion, checkoutSha } from '../src/package-version.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
-import { simt as simtCli } from './fixture.mjs';
+import { simt as simtCli, keepTemp } from './fixture.mjs';
 
 const exec = promisify(execFile);
-const temps = [];
-
-after(async () => {
-  for (const t of temps) await exec('rm', ['-rf', t]);
-});
 
 /** Run the binary and report the outcome, exit code included (see ci.test.mjs). */
 const run = (args, opts = {}) => simtCli(args, { ...opts, env: { NO_COLOR: '1', ...opts.env } });
@@ -38,7 +33,7 @@ test('packageVersion is the running package version, never a guess', () => {
 
 test('hasNpm reports a package.json as npm, its absence as not', async () => {
   const root = await mkdtemp(join(tmpdir(), 'simt-ver-'));
-  temps.push(root);
+  keepTemp(root);
   assert.equal(await hasNpm(root), false, 'a repository without a package.json is not npm');
   await writeFile(join(root, 'package.json'), '{}\n');
   assert.equal(await hasNpm(root), true, 'a package.json makes it npm');
@@ -88,7 +83,7 @@ test('check fails a repository whose pin does not match the running binary', asy
   // name the one command that fixes it, because a stale global binary would run a
   // different gate than CI does.
   const root = await mkdtemp(join(tmpdir(), 'simt-ver-'));
-  temps.push(root);
+  keepTemp(root);
   await exec('git', ['init', '-q', '.'], { cwd: root });
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fx', private: true }, null, 2));
 

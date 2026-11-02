@@ -16,7 +16,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, symlink, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -25,19 +25,15 @@ import { fileURLToPath } from 'node:url';
 import { SESSION_ENV } from '../src/agenthooks/policy.mjs';
 import { LEASE_FILE } from '../src/lease.mjs';
 import { CLI } from '../src/name.mjs';
+import { keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = join(HERE, '..', 'bin', 'simt.mjs');
-const made = [];
-
-test.after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 /** One repository-shaped directory with a file worth claiming. */
 async function repo(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-lease-'));
-  made.push(root);
+  keepTemp(root);
   await mkdir(join(root, 'src'), { recursive: true });
   await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 1;\n');
   for (const [name, text] of Object.entries(files)) {

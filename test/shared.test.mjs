@@ -20,7 +20,7 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { after, test } from 'node:test';
@@ -35,20 +35,15 @@ import {
   writeSharedFile,
 } from '../src/projection/shared.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
-import { git, tempDir } from './fixture.mjs';
+import { git, tempDir, keepTemp } from './fixture.mjs';
 import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const exec = promisify(execFile);
-const made = [];
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 async function scratch(prefix = 'simt-shared-') {
   const dir = await tempDir(prefix);
-  made.push(dir);
+  keepTemp(dir);
   return dir;
 }
 

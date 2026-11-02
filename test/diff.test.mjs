@@ -21,30 +21,25 @@ import assert from 'node:assert/strict';
 import { after, test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { diffField, readBefore, renderDiffs, unifiedDiff } from '../src/diff.mjs';
-import { git, tempDir } from './fixture.mjs';
+import { git, tempDir, keepTemp } from './fixture.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const exec = promisify(execFile);
-const made = [];
 
 async function scratch(prefix) {
   const dir = await tempDir(prefix);
-  made.push(dir);
+  keepTemp(dir);
   return dir;
 }
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 /** Run the shipped binary. Never throws: the exit code is the thing under test. */
 const run = (args, env = {}) => simtCli(args, { maxBuffer: 64 << 20, env: { NO_COLOR: '1', SIMT_DEV_WORKSPACE: 'off', ...env } });

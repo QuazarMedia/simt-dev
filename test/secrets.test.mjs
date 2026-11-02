@@ -9,7 +9,7 @@
 // are asserted with the same weight as the positives.
 
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -17,7 +17,7 @@ import { after, test } from 'node:test';
 import { GATE_KINDS, GATES } from '../src/hooks/gates.mjs';
 import { runGates } from '../src/hooks/dispatcher.mjs';
 import { ENTROPY_MIN_BITS, entropy, renderFindings, scanStaged, scanText } from '../src/secrets.mjs';
-import { git } from './fixture.mjs';
+import { git, keepTemp } from './fixture.mjs';
 
 /**
  * Exactly 16 characters after the AKIA prefix: the shape AWS issues.
@@ -29,15 +29,10 @@ import { git } from './fixture.mjs';
  */
 const AWS_SENTINEL = ['AKIA', 'SIMTSENTINEL0123'].join('');
 
-const made = [];
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
-
 /** One git repository with an initial commit, so `git diff --cached` can answer. */
 async function repo(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-secrets-'));
-  made.push(root);
+  keepTemp(root);
   await git(['init', '-q', root]);
   await writeFile(join(root, 'base.txt'), 'benign\n');
   await git(['-C', root, 'add', 'base.txt']);

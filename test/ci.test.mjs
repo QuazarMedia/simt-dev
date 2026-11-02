@@ -14,7 +14,7 @@
 // edit something in a repository they do not have.
 
 import assert from 'node:assert/strict';
-import { cmd } from './fixture.mjs';
+import { cmd, keepTemp } from './fixture.mjs';
 import test, { after } from 'node:test';
 import { execFile } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
@@ -45,7 +45,6 @@ import { simt as simtCli } from './fixture.mjs';
 
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
-const temps = [];
 
 /**
  * Run the binary and report the outcome, exit code included.
@@ -58,10 +57,6 @@ const temps = [];
  */
 const run = (args, opts = {}) => simtCli(args, { ...opts, bin: CI, env: { NO_COLOR: '1', ...opts.env } });
 
-after(async () => {
-  for (const t of temps) await exec('rm', ['-rf', t]);
-});
-
 /**
  * A repo that already runs GitHub Actions.
  *
@@ -70,7 +65,7 @@ after(async () => {
  */
 async function actionsRepo(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-ci-'));
-  temps.push(root);
+  keepTemp(root);
   await exec('git', ['init', '-q', '.'], { cwd: root });
   // A repo that has completed adoption pins the tool before the gate can run from
   // node_modules. Without the pin, `check` correctly reports an unresolvable gate;
@@ -91,7 +86,7 @@ async function actionsRepo(files = {}) {
 /** A repo with no `.github` at all. */
 async function plainRepo() {
   const root = await mkdtemp(join(tmpdir(), 'simt-ci-'));
-  temps.push(root);
+  keepTemp(root);
   await exec('git', ['init', '-q', '.'], { cwd: root });
   await writeFile(
     join(root, 'package.json'),
@@ -245,7 +240,7 @@ test('the workflow is shell a POSIX sh will accept, running the gate it says it 
   assert.match(body.join('\n'), new RegExp(`${CLI} check|check --root`));
 
   const script = join(await mkdtemp(join(tmpdir(), 'simt-ci-sh-')), 'step.sh');
-  temps.push(join(script, '..'));
+  keepTemp(join(script, '..'));
   await writeFile(script, body.join('\n'));
   await exec('sh', ['-n', script]);
 });
@@ -318,7 +313,7 @@ test('init writes the release-binary install into a Gradle repo with no package.
   // workflow whose CI downloads the release binary the machine remedy names, not a node
   // install that would fail in this repo. The gate still runs from it.
   const root = await mkdtemp(join(tmpdir(), 'simt-ci-'));
-  temps.push(root);
+  keepTemp(root);
   await exec('git', ['init', '-q', '.'], { cwd: root });
   await mkdir(join(root, WORKFLOWS_DIR), { recursive: true });
   await writeFile(join(root, WORKFLOWS_DIR, 'build.yml'), 'name: build\n');
@@ -878,7 +873,7 @@ test('two manifests for one ecosystem produce one entry, not two', async () => {
 
 test('a Gradle repo with a submodule watches gradle and gitsubmodule', async () => {
   const root = await mkdtemp(join(tmpdir(), 'simt-dep-'));
-  temps.push(root);
+  keepTemp(root);
   await writeFile(join(root, 'build.gradle'), 'plugins {}\n');
   await writeFile(join(root, '.gitmodules'), '[submodule "app-ui"]\n\tpath = app-ui\n');
   const found = await fingerprint(root);

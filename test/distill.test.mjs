@@ -85,7 +85,6 @@ const DOC = [
 
 async function scratchDocRoot() {
   const root = await mkdtemp(join(tmpdir(), 'simt-distill-'));
-  process.once('exit', () => rm(root, { recursive: true, force: true }));
   await mkdir(join(root, 'docs'), { recursive: true });
   await writeFile(join(root, 'docs', 'notes.md'), `${DOC.join('\n')}\n`);
   return root;

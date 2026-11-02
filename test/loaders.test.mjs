@@ -17,29 +17,24 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import { promisify } from 'node:util';
 
 import { LOADERS, caps, loader } from '../src/projection/loaders.mjs';
 import { viewOf } from '../src/measure/loaderView.mjs';
-import { tempDir } from './fixture.mjs';
+import { tempDir, keepTemp } from './fixture.mjs';
 import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const exec = promisify(execFile);
-const made = [];
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 async function scratch(prefix = 'simt-loaders-') {
   const dir = await tempDir(prefix);
-  made.push(dir);
+  keepTemp(dir);
   return dir;
 }
 

@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
@@ -84,23 +84,16 @@ import {
   readLedgerEntries,
   runBenchProbes,
 } from '../packages/bench/src/probes.mjs';
-import { git, tempDir } from './fixture.mjs';
+import { git, tempDir, keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const exec = promisify(execFile);
-const tempDirs = [];
-
-after(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
 
 async function scratch(prefix = 'simt-bench-') {
   const dir = await tempDir(prefix);
-  tempDirs.push(dir);
+  keepTemp(dir);
   return dir;
 }
 
@@ -155,7 +148,7 @@ test('prepareIsolatedWorkspace creates a one-commit git export and materialiseAr
   // 1. Bare arm strips regions, removes .githooks and .mcp.json, and has 1 commit in rev-list --all.
   const bareSpec = await parseArmSpec('bare');
   const bareWs = await prepareIsolatedWorkspace(repo, baseSha, bareSpec, { id: 't-1', prompt: 'test prompt' });
-  tempDirs.push(bareWs.slotDir);
+  keepTemp(bareWs.slotDir);
 
   const revList = (await git(['rev-list', '--all'], { cwd: bareWs.workDir })).stdout
     .trim()
@@ -176,7 +169,7 @@ test('prepareIsolatedWorkspace creates a one-commit git export and materialiseAr
   // 2. Kernel arm projects kernel rules and names the ones the region does not carry.
   const kernelSpec = await parseArmSpec('kernel');
   const kernelWs = await prepareIsolatedWorkspace(repo, baseSha, kernelSpec, { id: 't-1', prompt: 'test prompt' });
-  tempDirs.push(kernelWs.slotDir);
+  keepTemp(kernelWs.slotDir);
   const kernelAgents = await readFile(join(kernelWs.workDir, 'AGENTS.md'), 'utf8');
   assert.match(kernelAgents, /## Rules not in this region/);
 
@@ -187,7 +180,7 @@ test('prepareIsolatedWorkspace creates a one-commit git export and materialiseAr
     id: 't-1',
     prompt: 'validate slice commit and run focused tests',
   });
-  tempDirs.push(briefWs.slotDir);
+  keepTemp(briefWs.slotDir);
   assert.match(briefWs.promptPrefix, /validate slice commit and run focused tests/);
   assert.equal(existsSync(join(briefWs.workDir, '.simt', 'local', 'brief.md')), false);
 
@@ -205,7 +198,7 @@ test('prepareIsolatedWorkspace creates a one-commit git export and materialiseAr
   const customSpec = await parseArmSpec(`my-arm=${armFile}`, repo);
   assert.equal(customSpec.name, 'my-arm');
   const customWs = await prepareIsolatedWorkspace(repo, baseSha, customSpec, { id: 't-1', prompt: 'p' });
-  tempDirs.push(customWs.slotDir);
+  keepTemp(customWs.slotDir);
   assert.equal(existsSync(join(customWs.workDir, 'AGENTS.md')), false);
   assert.equal(await readFile(join(customWs.workDir, 'CUSTOM_RULE.md'), 'utf8'), '# Custom Arm\n');
   assert.equal(customWs.env.BENCH_CUSTOM_FLAG, 'enabled');
@@ -396,7 +389,7 @@ test('bench run: gold adapter resolves 100%, noop resolves 0%, and re-grading re
   // 4. Direct gradeWorkspace check: an agent that edits an unrelated file and tampers with
   //    the test file has its test file reset to initialHead and outsideBlastRadius = 1.
   const ws = await prepareIsolatedWorkspace(repo, task.base, await parseArmSpec('bare'), task);
-  tempDirs.push(ws.slotDir);
+  keepTemp(ws.slotDir);
   await writeFile(join(ws.workDir, 'UNRELATED.txt'), 'extra file outside blast radius\n');
   await writeFile(join(ws.workDir, 'test', 'math.test.mjs'), '// agent tried to erase tests\n');
   const tamperedGrade = await gradeWorkspace(ws.workDir, task, {

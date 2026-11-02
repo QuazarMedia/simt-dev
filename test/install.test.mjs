@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { cp, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { loadRegistry, measureSkill } from '../src/graph/load.mjs';
 import { skillsDir, wrapFlat } from '../src/commands/skillsinstall.mjs';
 import { readManifest, MANIFEST } from '../src/projection/manifest.mjs';
-import { skillWorkspace, workspaceEnv, cmd } from './fixture.mjs';
+import { skillWorkspace, workspaceEnv, cmd, keepTemp } from './fixture.mjs';
 import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -24,11 +24,9 @@ const exec = promisify(execFile);
 // kept the gate red on every push (ADR-031).
 const { root: WORKSPACE } = await skillWorkspace();
 
-const temps = [];
-
 async function scratch(files = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'simt-install-'));
-  temps.push(dir);
+  keepTemp(dir);
   for (const [name, body] of Object.entries(files)) {
     const path = join(dir, name);
     await mkdir(dirname(path), { recursive: true });
@@ -49,10 +47,6 @@ async function singleRepoClone(skillName) {
   );
   return dir;
 }
-
-test.after(async () => {
-  for (const dir of temps) await rm(dir, { recursive: true, force: true });
-});
 
 // --- measureSkill: the bug a new command exposed ------------------------------
 

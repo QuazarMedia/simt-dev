@@ -27,13 +27,9 @@ import {
 } from '../src/identity.mjs';
 import { undoLastJournalSet } from '../src/journal.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
+import { keepTemp } from './fixture.mjs';
 
 const exec = promisify(execFile);
-const temps = [];
-
-after(async () => {
-  for (const t of temps) await exec('rm', ['-rf', t]);
-});
 
 async function capture(fn) {
   let output = '';
@@ -45,7 +41,7 @@ async function capture(fn) {
 
 async function repo({ commits = 1, name = 'Last Person', email = 'last@example.com' } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-identity-'));
-  temps.push(root);
+  keepTemp(root);
   await exec('git', ['init', '-q'], { cwd: root });
   await writeFile(join(root, 'package.json'), '{"name":"t"}\n');
   if (commits > 0) {
@@ -139,7 +135,7 @@ test('init: no identity anywhere writes no file and invents nothing', async () =
   // the code.
   const saved = { ...process.env };
   const empty = await mkdtemp(join(tmpdir(), 'simt-nohome-'));
-  temps.push(empty);
+  keepTemp(empty);
   process.env.HOME = empty;
   process.env.GIT_CONFIG_GLOBAL = '/dev/null';
   process.env.GIT_CONFIG_SYSTEM = '/dev/null';

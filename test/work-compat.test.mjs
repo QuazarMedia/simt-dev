@@ -12,18 +12,14 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { auditPredecessor, captureBaseline, compareBaselines, metricOf } from '../packages/bench/src/compat.mjs';
+import { keepTemp } from './fixture.mjs';
 
 const ROOT = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
-const made = [];
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 /** A tree with the files a case names. The audit reads docs; it does not need git. */
 async function repo(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-compat-'));
-  made.push(root);
+  keepTemp(root);
   for (const [rel, body] of Object.entries(files)) {
     const path = join(root, rel);
     await mkdir(dirname(path), { recursive: true });

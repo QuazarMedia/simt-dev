@@ -3,10 +3,10 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
@@ -25,23 +25,16 @@ import {
 } from '../src/graph/compile.mjs';
 import { loadRegistry } from '../src/graph/load.mjs';
 import { checkSkill } from '../src/graph/spec.mjs';
-import { tempDir } from './fixture.mjs';
+import { tempDir, keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const exec = promisify(execFile);
-const tempDirs = [];
-
-after(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
 
 async function scratch(prefix = 'simt-compile-') {
   const dir = await tempDir(prefix);
-  tempDirs.push(dir);
+  keepTemp(dir);
   return dir;
 }
 

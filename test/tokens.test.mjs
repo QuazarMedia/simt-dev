@@ -11,7 +11,7 @@
 // test of this command.
 
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,21 +25,16 @@ import { plan } from '../src/projection/project.mjs';
 import { buildManifest, manifestText, readManifest } from '../src/projection/manifest.mjs';
 import { compose } from '../src/projection/markers.mjs';
 import { ALWAYS_ON_BUDGET_BYTES } from '../src/measure/context.mjs';
-import { git, tempDir } from './fixture.mjs';
+import { git, tempDir, keepTemp } from './fixture.mjs';
 import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
-const made = [];
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 async function scratch(prefix = 'simt-tokens-') {
   const dir = await tempDir(prefix);
-  made.push(dir);
+  keepTemp(dir);
   return dir;
 }
 

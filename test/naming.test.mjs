@@ -24,7 +24,6 @@ import { tmpdir } from 'node:os';
 async function scratch(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-naming-'));
   for (const [name, body] of Object.entries(files)) await writeFile(join(root, name), body);
-  process.once('exit', () => rm(root, { recursive: true, force: true }));
   return root;
 }
 

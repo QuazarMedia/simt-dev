@@ -11,24 +11,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = join(HERE, '..', 'bin', 'simt.mjs');
 const ROOT = join(HERE, '..');
 
-const made = [];
-test.after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
-
 /** A throwaway directory, tracked for cleanup. */
 async function temp(name) {
   const dir = await mkdtemp(join(tmpdir(), name));
-  made.push(dir);
+  keepTemp(dir);
   return dir;
 }
 

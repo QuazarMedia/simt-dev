@@ -19,22 +19,17 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 
-import { git } from './fixture.mjs';
+import { git, keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const BIN = resolve(ROOT, 'bin', 'simt.mjs');
-const made = [];
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 function cli(args) {
   const result = spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8', maxBuffer: 16 << 20 });
@@ -69,7 +64,7 @@ const PLAN = `# plan
  */
 async function repo(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-slice-'));
-  made.push(root);
+  keepTemp(root);
   await mkdir(join(root, 'docs', 'plans'), { recursive: true });
   await writeFile(join(root, 'docs', 'plans', '0001.md'), PLAN);
   for (const [rel, body] of Object.entries(files)) {

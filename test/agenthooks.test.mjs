@@ -22,22 +22,16 @@ import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../src/agenthooks/shim.mjs
 import { EVENTS, POLICY_IDS } from '../src/agenthooks/policy.mjs';
 import { SQLITE_FILE } from '../src/index/persist.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
-import { git } from './fixture.mjs';
+import { git, keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = join(HERE, '..', 'bin', 'simt.mjs');
 const ROOT = join(HERE, '..');
 
-const made = [];
-test.after(async () => {
-  const { rm } = await import('node:fs/promises');
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
-
 /** A repository with a git directory, so `agent-hooks` has a root that is one. */
 async function repo(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-agent-'));
-  made.push(root);
+  keepTemp(root);
   for (const [name, text] of Object.entries(files)) {
     await mkdir(dirname(join(root, name)), { recursive: true });
     await writeFile(join(root, name), text);

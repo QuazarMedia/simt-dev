@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,15 +8,11 @@ import { after, test } from 'node:test';
 
 import { loadPlanState, planNext } from '../src/plan/index.mjs';
 import { CLI } from '../src/name.mjs';
+import { keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const BIN = resolve(ROOT, 'bin', 'simt.mjs');
-const made = [];
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 function cli(args) {
   const result = spawnSync(process.execPath, [BIN, ...args], { encoding: 'utf8' });
@@ -25,7 +21,7 @@ function cli(args) {
 
 async function repo(files) {
   const root = await mkdtemp(join(tmpdir(), 'simt-tracker-'));
-  made.push(root);
+  keepTemp(root);
   for (const [rel, body] of Object.entries(files)) {
     const path = join(root, rel);
     await mkdir(dirname(path), { recursive: true });

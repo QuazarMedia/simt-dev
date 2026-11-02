@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { PACKAGE_NAME } from '../src/name.mjs';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 
 import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_DIR_LEGACY, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
@@ -17,7 +17,7 @@ import { recordRun } from '../src/ledger/index.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 import { readCapability } from '../src/hooks/capability.mjs';
 import * as gateModule from '../src/projection/manifest.mjs';
-import { git, cmd } from './fixture.mjs';
+import { git, cmd, keepTemp } from './fixture.mjs';
 import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { simt as simtCli } from './fixture.mjs';
@@ -31,15 +31,10 @@ const run = (args) => simtCli(args, { maxBuffer: 16 << 20 }).then(({ code, stdou
 
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
-const temps = [];
-
-after(async () => {
-  for (const t of temps) await exec('rm', ['-rf', t]);
-});
 
 async function fixture({ scripts, manifest, files = {}, binaries = [], formatter = false } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-hooksd-'));
-  temps.push(root);
+  keepTemp(root);
   await exec('git', ['init', '-q', '.'], { cwd: root });
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'fx', scripts: scripts ?? {} }, null, 2));
   for (const [name, body] of Object.entries(files)) {

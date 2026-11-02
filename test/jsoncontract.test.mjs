@@ -11,28 +11,23 @@
 
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 
 import { IMPLEMENTED } from '../src/commands/index.mjs';
 import { SCHEMA_VERSION } from '../src/output/index.mjs';
-import { git } from './fixture.mjs';
+import { git, keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
-const made = [];
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 /** One empty git repository, so `compare` has a directory that holds one to answer for. */
 async function oneRepo() {
   const root = await mkdtemp(join(tmpdir(), 'simt-contract-root-'));
-  made.push(root);
+  keepTemp(root);
   await mkdir(join(root, 'r'), { recursive: true });
   await writeFile(join(root, 'r', 'README.md'), '# r\n');
   await git(['init', '-q', join(root, 'r')]);

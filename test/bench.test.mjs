@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 
 import { DEFAULT_MINE_TARGET, listCandidates, mineTasks, patchStats } from '../packages/bench/src/mine.mjs';
 import { isTestPath } from '../src/testing/paths.mjs';
-import { git as gitFixture, tempDir } from './fixture.mjs';
+import { git as gitFixture, tempDir, keepTemp } from './fixture.mjs';
 import { detectTestRunner } from '../src/testing/runners.mjs';
 import { resolveVaultDir } from '../src/testing/vault.mjs';
 import {
@@ -91,17 +91,10 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const exec = promisify(execFile);
-const tempDirs = [];
-
-after(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
 
 async function scratch(prefix = 'simt-bench-') {
   const dir = await tempDir(prefix);
-  tempDirs.push(dir);
+  keepTemp(dir);
   return dir;
 }
 

@@ -11,8 +11,9 @@
 // than copied out of sibling repositories.
 
 import { execFile } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { promisify } from 'node:util';
-import { cp, mkdir, mkdtemp, writeFile, readdir } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, writeFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -368,6 +369,22 @@ export async function simt(args, { env = {}, cwd, maxBuffer = 16 << 20, timeout,
   }
 }
 
+const TEMP_DIRS = [];
+
+// One cleanup owner, at process exit. A directory made by `tempDir` is removed whether the
+// test passed, failed or threw; a file that also makes one by hand registers it with
+// `keepTemp`. Before this, every file kept its own array and its own `after` hook, so a new
+// test that forgot the array leaked a directory and nothing said so.
+process.once('exit', () => {
+  for (const dir of TEMP_DIRS) rmSync(dir, { recursive: true, force: true });
+});
+
+export function keepTemp(...paths) {
+  TEMP_DIRS.push(...paths);
+}
+
 export async function tempDir(prefix = 'simt-') {
-  return mkdtemp(join(tmpdir(), prefix));
+  const dir = await mkdtemp(join(tmpdir(), prefix));
+  TEMP_DIRS.push(dir);
+  return dir;
 }

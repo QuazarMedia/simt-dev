@@ -12,7 +12,7 @@
 // a table of sources is not a behaviour the binary renders.
 
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile, chmod, symlink } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile, chmod, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -24,21 +24,16 @@ import { packDigest } from '../src/packs.mjs';
 import { BENCH_JSON, PACK_JSON, describeSourceProblem, describeVersionProblem, npmPackageOf, packRuleFiles, readPack } from '../src/packs/manage.mjs';
 import { buildManifest, manifestText } from '../src/projection/manifest.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
-import { tempDir } from './fixture.mjs';
+import { tempDir, keepTemp } from './fixture.mjs';
 import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
-const made = [];
-
-after(async () => {
-  for (const dir of made) await rm(dir, { recursive: true, force: true });
-});
 
 async function scratch(prefix = 'simt-packcli-') {
   const dir = await tempDir(prefix);
-  made.push(dir);
+  keepTemp(dir);
   return dir;
 }
 

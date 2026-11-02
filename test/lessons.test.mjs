@@ -3,7 +3,7 @@
 import assert from 'node:assert/strict';
 import { execFile, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { after, test } from 'node:test';
@@ -14,6 +14,7 @@ import { adapter } from '../src/agenthooks/render.mjs';
 import { runGates } from '../src/hooks/dispatcher.mjs';
 import { lessonPaths } from '../src/index/govern.mjs';
 import { readLedger, recordRun, treeId } from '../src/ledger/index.mjs';
+import { keepTemp } from './fixture.mjs';
 import {
   LESSONS_DIR,
   LESSONS_FILE,
@@ -43,13 +44,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const exec = promisify(execFile);
-const tempDirs = [];
-
-after(async () => {
-  for (const dir of tempDirs) {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
 
 function git(args, cwd) {
   return exec(
@@ -61,7 +55,7 @@ function git(args, cwd) {
 
 async function makeRepo() {
   const dir = await mkdtemp(join(tmpdir(), 'simt-lessons-'));
-  tempDirs.push(dir);
+  keepTemp(dir);
   await git(['init', '-q', dir]);
   await mkdir(join(dir, 'src', 'hooks'), { recursive: true });
   await writeFile(join(dir, 'src', 'hooks', 'dispatcher.mjs'), 'export const restage = false;\n', 'utf8');
@@ -621,7 +615,7 @@ test('R33: the brief includes lessons whose triggers match the task paths', asyn
 test('R33: bench shows fewer turns on recurring failure modes when the lesson is recalled', async () => {
   const root = await mkdtemp(join(tmpdir(), 'simt-lesson-bench-'));
   const vaultRoot = await mkdtemp(join(tmpdir(), 'simt-lesson-vault-'));
-  tempDirs.push(root, vaultRoot);
+  keepTemp(root, vaultRoot);
 
   await git(['init', '-q', root]);
   await writeFile(
@@ -717,7 +711,7 @@ test('R33: bench shows fewer turns on recurring failure modes when the lesson is
   // - With the recalled lesson (brief arm), it applies the exact fix on turn 1 (1 turn, 1 tool call).
   // - Without the lesson (bare arm), its first attempt triggers the recurring failure, and it fixes on turn 3 (3 turns, 3 tool calls).
   const binDir = await mkdtemp(join(tmpdir(), 'simt-lesson-bin-'));
-  tempDirs.push(binDir);
+  keepTemp(binDir);
   const claudeStub = join(binDir, 'claude');
   await writeFile(
     claudeStub,

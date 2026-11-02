@@ -4,6 +4,6 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 
 | Command | Flags | What it does |
 | --- | --- | --- |
-| `simt plugin <claude\|gemini\|cursor\|opencode>` | `--diff`, `--out` | generate a harness package from the same tables the hooks use |
+| `simt plugin <claude\|gemini\|cursor\|opencode>` | `--diff`, `--out`, `--yes` | generate a harness package from the same tables the hooks use |
 
-None of these write to the repository.
+Writes to the repository: `simt plugin`. Each prints its plan and writes nothing without `--yes`.

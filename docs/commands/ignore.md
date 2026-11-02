@@ -4,6 +4,6 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 
 | Command | Flags | What it does |
 | --- | --- | --- |
-| `simt ignore [--yes] [--diff]` | `--diff` | render the one ignore list into every harness ignore file |
+| `simt ignore [--yes] [--diff]` | `--diff`, `--yes` | render the one ignore list into every harness ignore file |
 
-None of these write to the repository.
+Writes to the repository: `simt ignore`. Each prints its plan and writes nothing without `--yes`.

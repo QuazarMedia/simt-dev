@@ -46,10 +46,13 @@ test('a flag the command does not take is carried in the JSON document too', asy
   const { promisify } = await import('node:util');
   const { fileURLToPath } = await import('node:url');
   const bin = fileURLToPath(new URL('../bin/simt.mjs', import.meta.url));
-  const { stdout } = await promisify(execFile)(process.execPath, [bin, 'status', '--line', '--frozen', '--json'], { maxBuffer: 16 << 20 }).catch((e) => e);
-  const doc = JSON.parse(stdout);
-  assert.ok(Array.isArray(doc.notices), 'no notices array in the document');
-  assert.match(doc.notices[0], /--frozen is not a flag of `status`/);
+  // The window is closed: `--frozen` was tolerated until 0.9.0 and is now a usage error,
+  // reported in the document a `--json` caller parses rather than only on stderr (ADR-014).
+  const error = await promisify(execFile)(process.execPath, [bin, 'status', '--line', '--frozen', '--json'], { maxBuffer: 16 << 20 }).catch((e) => e);
+  assert.equal(error.code, 2);
+  const doc = JSON.parse(error.stdout);
+  assert.equal(doc.ok, false);
+  assert.match(JSON.stringify(doc), /--frozen is not a flag of `status`/);
 });
 
 

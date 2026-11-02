@@ -4,6 +4,6 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 
 | Command | Flags | What it does |
 | --- | --- | --- |
-| `simt lease [<paths>] --session` | `--harness`, `--session`, `--ttl` | claim files for one session, or list the claims |
+| `simt lease [<paths>] --session` | `--harness`, `--session`, `--ttl`, `--yes` | claim files for one session, or list the claims |
 
-None of these write to the repository.
+Writes to the repository: `simt lease`. Each prints its plan and writes nothing without `--yes`.

@@ -59,6 +59,13 @@ All notable changes to this package are recorded here. The format follows
 
 ### Fixed
 
+- The deprecation window that ended at this release closed on a spec that had not
+  declared 26 flags the commands already implemented, so `plan done --yes`,
+  `sync --explain`, `skills compile --yes`, `upgrade --diff --dry-run`,
+  `pack new --dry-run`, `plugin --yes` and others became usage errors. Every one is now
+  declared on the path that reads it, and the reference in `docs/commands` is regenerated
+  from that spec. An undeclared flag is a usage error and says so in the JSON document,
+  not only on stderr.
 - `simt review --local`, `simt check --frozen` and `simt compare --learn` were documented
   and implemented but undeclared in the command spec, so naming one warned that the
   command does not take it; `simt sync` advertised `--explain`, which nothing read.

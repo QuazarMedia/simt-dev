@@ -754,20 +754,20 @@ test('CLI `simt bench mine` previews without --yes and supports --json', async (
     await gitFixture(['-C', root, 'commit', '-qm', `change ${i}`]);
   }
   try {
-  const { code, stdout } = await runCli(['bench', 'mine', '--root', root]);
-  assert.equal(code, 0);
-  assert.match(stdout, /mode\s+preview/);
-  assert.match(stdout, /remedy\s+run: simt bench mine --yes/);
+    const { code, stdout } = await runCli(['bench', 'mine', '--root', root]);
+    assert.equal(code, 0);
+    assert.match(stdout, /mode\s+preview/);
+    assert.match(stdout, /remedy\s+run: simt bench mine --yes/);
 
-  const jsonRes = await runCli(['bench', 'mine', '--root', ROOT, '--json']);
-  assert.equal(jsonRes.code, 0);
-  const payload = JSON.parse(jsonRes.stdout);
-  assert.equal(payload.ok, true);
-  assert.equal(payload.command, 'bench mine');
-  assert.equal(payload.applied, false);
-  // The count belongs to the history, not to the contract: this repository's commit
-  // count is an accident of when the test runs, and a source archive has one commit.
-  assert.equal(typeof payload.candidates, 'number');
+    const jsonRes = await runCli(['bench', 'mine', '--root', root, '--json']);
+    assert.equal(jsonRes.code, 0);
+    const payload = JSON.parse(jsonRes.stdout);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.command, 'bench mine');
+    assert.equal(payload.applied, false);
+    // The count belongs to the history, not to the contract: this repository's commit
+    // count is an accident of when the test runs, and a source archive has one commit.
+    assert.equal(typeof payload.candidates, 'number');
   } finally {
     await rm(root, { recursive: true, force: true });
   }

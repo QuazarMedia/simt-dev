@@ -249,7 +249,16 @@ export async function planAgentHooks(root, { harness }) {
 
   // The shim every harness config points at: without it the entries above name a
   // binary no harness has on PATH.
-  const shimText = renderAgentHookShim({ npm: (await readIfExists(join(root, 'package.json'))) !== null });
+  // The pair this install can prove works: the interpreter running it and its own entry
+  // point. Nothing above them resolves on a GUI harness's PATH, and a Cursor hook that
+  // cannot run fails closed on every tool call, so the shim needs one locator PATH cannot
+  // affect. Absent for a packaged or SEA binary, which is found on PATH or not at all.
+  const entry = process.argv[1];
+  const fallback =
+    typeof entry === 'string' && isAbsolute(entry) && entry.endsWith('.mjs')
+      ? { node: process.execPath, entry }
+      : null;
+  const shimText = renderAgentHookShim({ npm: (await readIfExists(join(root, 'package.json'))) !== null, fallback });
   const shimBefore = await readBefore(join(root, AGENT_HOOK_SHIM));
   const shimAction = shimBefore === null ? 'create' : shimBefore === shimText ? 'unchanged' : 'update';
   const shim = { text: shimText, before: shimBefore, action: shimAction, row: { id: 'shim', path: AGENT_HOOK_SHIM, action: shimAction } };

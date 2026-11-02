@@ -22,9 +22,16 @@ import { LOCAL_BIN } from './distribute/release.mjs';
  *   the shim says "the dispatcher", the workflow says the command
  * @param {string} [opts.remedy] the last line, which is the only part that differs
  *   between a hook (which can be opted out of) and a CI job (which cannot)
+ * @param {string} [opts.beforeGivingUp] sh inserted after the PATH search and before the
+ *   refusal. The agent-hook shim records the interpreter that wrote it, because a GUI
+ *   harness starts a hook with a PATH that carries neither nvm nor a local bin - often no
+ *   node either - and that is the one case PATH cannot answer.
  * @returns {string} POSIX sh source
  */
-export function renderLocator(command, { subject = CLI, remedy = `REMEDY run: npm i -D ${PACKAGE_NAME}` } = {}) {
+export function renderLocator(
+  command,
+  { subject = CLI, remedy = `REMEDY run: npm i -D ${PACKAGE_NAME}`, beforeGivingUp = '' } = {},
+) {
   // The remedy is emitted single-quoted (see the assignment at the bottom of the
   // block), so a quote in it would end that string and re-open the shell to
   // whatever follows. Refuse at render time: the failure is a template bug, and
@@ -103,7 +110,7 @@ fi
 if command -v ${CLI} >/dev/null 2>&1; then
   exec ${CLI} ${command}
 fi
-
+${beforeGivingUp}
 echo "${CLI}: cannot locate ${subject}." >&2
 # Every expansion in these diagnostics must carry a default. Under \`set -eu\` an
 # unbound variable aborts the shell, so an unguarded ${D}${BIN_ENV} here would

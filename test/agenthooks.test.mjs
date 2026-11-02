@@ -26,6 +26,9 @@ import { git, keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = join(HERE, '..', 'bin', 'simt.mjs');
+
+/** The shim an install writes in THIS checkout: it records the interpreter and entry point. */
+const installedShim = (opts = {}) => renderAgentHookShim({ ...opts, fallback: { node: process.execPath, entry: BIN } });
 const ROOT = join(HERE, '..');
 
 /** A repository with a git directory, so `agent-hooks` has a root that is one. */
@@ -373,7 +376,12 @@ test('install merges into the file a harness already owns', async () => {
   assert.match(install.text, /CREATE\s+shim\s+.simt\/hooks\/agent-hook/);
   // The shim is what the configs point at, so it is asserted the way a config is:
   // exact bytes, and executable, because a harness runs it, not node.
-  assert.equal(await readFile(join(root, AGENT_HOOK_SHIM), 'utf8'), renderAgentHookShim({ npm: false }));
+  assert.equal(
+    await readFile(join(root, AGENT_HOOK_SHIM), 'utf8'),
+    // The install records the interpreter that ran it, so the shim has one locator a GUI
+    // harness's PATH cannot take away (see the test below).
+    installedShim({ npm: false }),
+  );
   await access(join(root, AGENT_HOOK_SHIM), constants.X_OK);
 
   const claude = JSON.parse(await readFile(join(root, '.claude', 'settings.json'), 'utf8'));
@@ -393,6 +401,29 @@ test('install merges into the file a harness already owns', async () => {
   const again = cli(['agent-hooks', 'install', '--root', root, '--yes']);
   assert.equal(again.code, 0);
   assert.equal(again.text.match(/UNCHANGED/g)?.length, adapters().length + 1, again.text);
+});
+
+test('the shim runs where a GUI harness starts it: no nvm, no local bin, no node on PATH', async () => {
+  // Cursor's entry is `failClosed`, so a shim that cannot locate the dispatcher does not
+  // degrade to "no policy" - it blocks every shell command and every edit. That is the shape
+  // of the report this test exists for: hooks installed, Cursor unusable.
+  const root = await repo();
+  assert.equal(cli(['agent-hooks', 'install', '--root', root, '--yes']).code, 0);
+  const result = spawnSync(join(root, AGENT_HOOK_SHIM), ['pre-tool-use', '--harness', 'cursor'], {
+    cwd: root,
+    input: JSON.stringify({
+      conversation_id: 'c1',
+      hook_event_name: 'preToolUse',
+      tool_name: 'Shell',
+      tool_input: { command: 'ls' },
+      workspace_roots: [root],
+    }),
+    // The PATH of an app launched from the Dock: nothing from the user's shell profile.
+    env: { PATH: '/usr/bin:/bin', HOME: process.env.HOME ?? '' },
+    encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, `the shim refused to run: ${result.stderr}`);
+  assert.doesNotMatch(result.stderr, /cannot locate the agent hook/);
 });
 
 /**
@@ -525,7 +556,7 @@ test('install --harness writes one reader, and names the ones it skipped', async
   // The shim is what the config points at, so a one-harness install writes it too.
   assert.equal(
     await readFile(join(root, AGENT_HOOK_SHIM), 'utf8').catch(() => null),
-    renderAgentHookShim({ npm: false }),
+    installedShim({ npm: false }),
   );
   for (const row of adapters()) {
     if (row.id === 'claude') continue;
@@ -787,7 +818,7 @@ test('install migrates a pre-shim entry instead of stacking a second one', async
   const claude = JSON.parse(await readFile(join(root, hookPath('claude')), 'utf8'));
   assert.equal(claude.hooks.PreToolUse.length, 1, 'the old entry survived beside the new one');
   assert.equal(claude.hooks.PreToolUse[0].hooks[0].command, hookCommand('claude'));
-  assert.equal(await readFile(join(root, AGENT_HOOK_SHIM), 'utf8'), renderAgentHookShim({ npm: false }));
+  assert.equal(await readFile(join(root, AGENT_HOOK_SHIM), 'utf8'), installedShim({ npm: false }));
 });
 
 test('undo removes the shim with the configs it arrived with', async () => {

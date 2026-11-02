@@ -133,6 +133,9 @@ export const BOOL_FLAGS = new Set([
   // plan report is the compact answer and the diff is the verbose one; --diff
   // never changes what the run writes or its exit code, only what it shows.
   'diff',
+  // plan archive: close a document with rows still open. The refusal is the default
+  // because an archived unfinished plan stops being counted as work.
+  'force',
 ]);
 
 export const VALUE_FLAGS = new Set([

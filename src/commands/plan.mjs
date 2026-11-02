@@ -1,6 +1,7 @@
 import { relative } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
 import { formatCounts, planDone, planLabels, planNext, planStatus } from '../plan/index.mjs';
+import { planArchive } from '../plan/archive.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
 import { CLI } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
@@ -14,12 +15,16 @@ export async function planCommand(sub, args, flags) {
   if (sub === 'status') return runStatus(root, flags);
   if (sub === 'labels') return runLabels(root, flags);
   if (sub === 'next') return runNext(root, args[0] ?? null, flags);
+  if (sub === 'archive') {
+    if (!args[0]) return fail('plan archive needs a slice id or a document name', EXIT.USAGE, `run: ${CLI} plan status`);
+    return runArchive(root, args[0], flags);
+  }
   if (sub === 'done') {
     if (!args[0]) return fail('plan done needs a slice id', EXIT.USAGE, `run: ${CLI} plan next`);
     return runDone(root, args[0], args[1] ?? null, flags);
   }
   if (!sub) {
-    return fail('plan needs a subcommand', EXIT.USAGE, `run: ${CLI} plan status  |  ${CLI} plan next  |  ${CLI} plan labels  |  ${CLI} plan done <id>`);
+    return fail('plan needs a subcommand', EXIT.USAGE, `run: ${CLI} plan status  |  ${CLI} plan next  |  ${CLI} plan labels  |  ${CLI} plan done <id>  |  ${CLI} plan archive <id>`);
   }
   return fail(`unknown plan subcommand ${sub}`, EXIT.USAGE, `run: ${CLI} plan status`);
 }
@@ -149,6 +154,28 @@ async function runNext(root, id, flags) {
     ...awaitingLines(result),
   ];
   emit(head.join('\n'));
+  return EXIT.OK;
+}
+
+async function runArchive(root, id, flags) {
+  const mode = writeMode(flags);
+  const result = await planArchive(root, id, { dryRun: !mode.apply, force: Boolean(flags.force) });
+  if (result.error) return fail(result.error, EXIT.USAGE, result.remedy);
+  if (isJson(flags)) {
+    emitJson({ ok: true, command: 'plan archive', ...result });
+    return EXIT.OK;
+  }
+  const lines = [`repo     ${root}`, `document ${result.doc}  (${result.rows} row(s))`];
+  if (result.dryRun) {
+    lines.push(`dry-run  ${result.from} -> ${result.to}`);
+    lines.push(`status   ${result.status}`);
+    if (result.unfinished > 0) lines.push(`forced   ${result.unfinished} unfinished row(s) would be archived`);
+    if (result.remedy) lines.push(`apply    ${result.remedy}`);
+  } else {
+    lines.push(`archived ${result.from} -> ${result.to}`);
+    lines.push(`status   ${result.status}`);
+  }
+  emit(lines.join('\n'));
   return EXIT.OK;
 }
 

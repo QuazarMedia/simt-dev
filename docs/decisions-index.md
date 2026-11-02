@@ -148,3 +148,4 @@ in [architecture/history.md](architecture/history.md).
 | [137](decisions/ADR-137-the-suite-has-two-tiers-and-the-tier-is-a-property-of-the-file.md) | the suite has two tiers, and the tier is a property of the file | accepted · 2026-11-02 |
 | [138](decisions/ADR-138-the-agent-hook-shim-records-the-interpreter-that-wrote-it.md) | the agent-hook shim records the interpreter that wrote it | accepted · 2026-11-02 |
 | [139](decisions/ADR-139-a-benchmark-gain-is-reported-beside-its-cost-and-coverage.md) | a benchmark gain is reported beside its cost and its coverage | accepted · 2026-11-02 |
+| [140](decisions/ADR-140-archiving-is-a-command-and-it-refuses-what-it-cannot-close.md) | archiving is a command, and it refuses what it cannot close | accepted · 2026-11-02 |

@@ -86,6 +86,7 @@ export const SPEC = [
   { path: 'plan labels', summary: 'the header each tracker column matched, and the labels this repository configured', flags: [] },
   { path: 'plan next', usage: '[<id>] [--tier <name>] [--wave <name>] [--lane <name>]', mcp: { name: 'plan_next', flags: [] }, summary: "one ready slice's section, or the one named, inside a tier, a wave or a lane", flags: ["diff","state","test","tier","wave","lane"], },
   { path: 'plan status', summary: 'count the tracker rows, the share of the plan done, and its tiers, waves and lanes', defaultFor: 'plan', flags: ["diff","state","test"], },
+  { path: 'plan archive', usage: '<id>', summary: 'close a finished plan or review and move it to its archive/ directory', flags: ["force","yes"], },
   { path: 'plugin', usage: '<claude|gemini|cursor|opencode>', summary: 'generate a harness package from the same tables the hooks use', aliases: ['harness plugin'], flags: ["diff","out"], },
   { path: 'pr-body', usage: '[--base <ref>]', mcp: { name: 'pr_body', flags: ['base'] }, summary: 'the pull request body: evidence, decisions, gate state and residual risk', flags: ["base"], },
   { path: 'review', usage: '[--local]', summary: 'review the staged diff against the estate rules', flags: ["local"], },

@@ -116,8 +116,8 @@ Two corollaries that are easy to get wrong:
 | `src/mcp/` | A read-only JSON-RPC surface over the same logic the commands use |
 | `test/fixture.mjs` | The staged workspace and the identity-carrying `git`. Nothing in `test/` reads outside this checkout (ADR-031) |
 | `docs/decisions/` | Numbered rulings. Read these before changing what the tool believes |
-| `docs/plans/` | The four plans this was built from, with a state column per step |
-| `docs/reviews/` | The numbered reviews and the tracker each one leaves behind |
+| `docs/plans/` | The four plans this was built from, with a state column per step; finished ones live in `docs/plans/archive/` |
+| `docs/reviews/` | The numbered reviews and the tracker each one leaves behind; a finished one moves to `docs/reviews/archive/` with `simt plan archive` |
 | `src/commands/` | One module per command, the spec that names them, and the dispatch table |
 
 ## Why this repository adopts itself

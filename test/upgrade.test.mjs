@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, cp, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, cp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { planUpgrade, summariseUpgrade } from '../src/upgrade/plan.mjs';
 import { initCommand } from '../src/commands/init.mjs';
 import { upgradeCommand } from '../src/commands/upgrade.mjs';
-import { git, cmd, ensureGit } from './fixture.mjs';
+import { git, cmd, copyTree, ensureGit } from './fixture.mjs';
 import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
@@ -512,7 +512,10 @@ test('upgrade: simt-dev is its own consumer and round-trips without moving the s
   // move and must write nothing. Asserting the stamp did not move, rather than a
   // particular summary, keeps the test true for a `.git`-less copy of the source: the
   // property-not-accident discipline ADR-031 settled for this file.
-  const root = resolve(HERE, '..');
+  // Its own copy of the source, made a repository: the shared checkout must not gain a
+  // `.git` while other test files are reading its file list (Q92).
+  const root = await mkdtemp(join(tmpdir(), 'simt-self-'));
+  await copyTree(resolve(HERE, '..'), root);
   await ensureGit(root);
   const before = await readJson(join(root, MANIFEST_FILE));
   const { code } = await run(['upgrade', '--root', root, '--yes']);
@@ -523,6 +526,7 @@ test('upgrade: simt-dev is its own consumer and round-trips without moving the s
     before.projection.simtDevSha,
     'the stamp moved on a no-op upgrade',
   );
+  await rm(root, { recursive: true, force: true });
 });
 
 test('upgrade: a commit in the CONSUMER repo does not move the stamp', async () => {

@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 import { planUpgrade, summariseUpgrade } from '../src/upgrade/plan.mjs';
 import { initCommand } from '../src/commands/init.mjs';
 import { upgradeCommand } from '../src/commands/upgrade.mjs';
-import { git, cmd } from './fixture.mjs';
+import { git, cmd, ensureGit } from './fixture.mjs';
 import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
@@ -513,6 +513,7 @@ test('upgrade: simt-dev is its own consumer and round-trips without moving the s
   // particular summary, keeps the test true for a `.git`-less copy of the source: the
   // property-not-accident discipline ADR-031 settled for this file.
   const root = resolve(HERE, '..');
+  await ensureGit(root);
   const before = await readJson(join(root, MANIFEST_FILE));
   const { code } = await run(['upgrade', '--root', root, '--yes']);
   assert.equal(code, 0, `an upgrade over its own source is a no-op, got exit ${code}`);

@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { whyCommand } from '../src/commands/why.mjs';
+import { ensureGit } from './fixture.mjs';
 import {
   affectsTokens,
   matchGlob,
@@ -56,6 +57,7 @@ test('why resolves an Affects token and names the decisions on the dispatcher', 
   assert.deepEqual(scopePaths('---\nsimt-id: node\nsimt-applies: [node]\nsimt-scope: ["package.json", "**/*.mjs"]\n---\n'), ['package.json', '**/*.mjs']);
 
   const root = new URL('..', import.meta.url).pathname;
+  await ensureGit(root);
   const listed = await capture(() => whyCommand(['src/hooks/dispatcher.mjs'], { root }, commands));
   assert.equal(listed.code, 0);
   assert.match(listed.stdout, /decision {2}ADR-017 {2}A declared gate must be one the repo can actually run/);

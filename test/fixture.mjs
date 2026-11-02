@@ -12,7 +12,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -238,4 +238,52 @@ export async function skillWorkspace() {
  */
 export function workspaceEnv(root) {
   return { SIMT_DEV_WORKSPACE: root };
+}
+
+
+/** Whether `root` is inside a git work tree. A source archive is not. */
+export async function gitAvailable(root) {
+  try {
+    await git(['-C', root, 'rev-parse', '--git-dir']);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Give a tree that arrived without history a repository of its own.
+ *
+ * A source archive has no `.git`, and the tool refuses to answer outside a repository, so
+ * the tests that ask it about this tree used to fail from a tarball while passing in the
+ * checkout. Nothing about their assertions changes: these commands answer about one tree,
+ * and this makes that tree a repository without inventing history.
+ */
+export async function ensureGit(root) {
+  if (await gitAvailable(root)) return false;
+  await git(['init', '-q', root]);
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'tree under test']);
+  return true;
+}
+
+const GENERATED_DIRS = ['.git', 'node_modules', 'dist', '.simt'];
+
+/** The tracked file list, or a walk of the tree when there is no repository to ask. */
+export async function trackedFiles(root) {
+  if (await gitAvailable(root)) {
+    const { stdout } = await git(['-C', root, 'ls-files']);
+    return stdout.split('\n').filter(Boolean);
+  }
+  const out = [];
+  const walk = async (dir) => {
+    for (const entry of await readdir(join(root, dir), { withFileTypes: true })) {
+      if (GENERATED_DIRS.includes(entry.name)) continue;
+      const rel = dir === '' ? entry.name : `${dir}/${entry.name}`;
+      if (entry.isDirectory()) await walk(rel);
+      else out.push(rel);
+    }
+  };
+  await walk('');
+  return out.sort();
 }

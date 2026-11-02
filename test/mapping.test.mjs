@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { isTestPath } from '../src/testing/paths.mjs';
-import { git } from './fixture.mjs';
+import { git, trackedFiles } from './fixture.mjs';
 import {
   cochangeEdges,
   importsOf,
@@ -178,9 +178,8 @@ const LANG = {
 test('precision on 30 labelled files is at least 0.8', async () => {
   assert.equal(Object.keys(GOLD).length, 40);
   const root = new URL('..', import.meta.url).pathname;
-  const exec = promisify(execFile);
-  const { stdout } = await exec('git', ['ls-files'], { cwd: root, maxBuffer: 8 << 20 });
-  const files = stdout.split('\n').filter(Boolean);
+  // A source archive has no `.git`; the walk answers the same question about the tree.
+  const files = await trackedFiles(root);
   const paths = new Set(files);
   const imports = [];
   for (const file of files) {

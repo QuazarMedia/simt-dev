@@ -189,9 +189,15 @@ test('precision on 30 labelled files is at least 0.8', async () => {
     imports.push(...importsOf(file, text, LANG[ext] ?? '', paths));
   }
   const edges = testEdges({ files, imports });
+  // Labels are a claim about files that exist. Nine of these paths moved to
+  // `packages/bench/` and no longer resolve, and a stale label scored as a miss is a
+  // defect the resolver never made — worse, the count drifted with whatever else the tree
+  // happened to contain, which is why this failed only when four files ran together (Q92).
+  const measured = Object.entries(GOLD).filter(([source]) => files.includes(source));
+  assert.ok(measured.length >= 30, `only ${measured.length} labelled files resolve`);
   let hit = 0;
   let predicted = 0;
-  for (const [source, gold] of Object.entries(GOLD)) {
+  for (const [source, gold] of measured) {
     const got = testsFor(source, edges);
     const labelled = new Set(gold);
     hit += got.filter((testPath) => labelled.has(testPath)).length;

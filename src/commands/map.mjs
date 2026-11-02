@@ -10,12 +10,12 @@ import { CLI } from '../name.mjs';
 import { isIndexStale, readEdges, readEmbeddings, readFiles, readFts, readSymbols, reindex, searchFtsBm25 } from '../index/store.mjs';
 import {
   DEFAULT_BUDGET,
-  embedTaskQuery,
   formatRecall,
   measureRecall,
   rankFiles,
   renderMap,
 } from '../index/map.mjs';
+import { embedTaskQuery } from '../index/vectors.mjs';
 import { commandRoot } from '../repo-root.mjs';
 
 const LEVELS = new Set(['outline', 'names', 'signatures']);

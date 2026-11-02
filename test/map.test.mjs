@@ -18,15 +18,14 @@ import {
   EMBED_RECALL_GAIN_BAR,
   ITERATIONS,
   RRF_K,
-  cosineSimilarity,
   goldPaths,
   measureRecall,
-  rankByCosine,
   rankFiles,
   recallAt10,
   renderMap,
   rrfFuse,
 } from '../src/index/map.mjs';
+import { cosineSimilarity, rankByCosine } from '../src/index/vectors.mjs';
 import { loadGraph, mapCommand } from '../src/commands/map.mjs';
 import { SQLITE_FILE } from '../src/index/persist.mjs';
 import {

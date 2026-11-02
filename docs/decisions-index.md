@@ -139,3 +139,4 @@ in [architecture/history.md](architecture/history.md).
 | [128](decisions/ADR-128-a-research-plan-is-a-plan-and-the-tracker-reads-it.md) | A research plan is a plan, and the tracker reads it | accepted · 2026-11-01 · supersedes ADR-082 ruling 1 |
 | [129](decisions/ADR-129-distill-is-documented-on-the-advanced-help-page-not-the-core-one.md) | Distill is documented on the advanced help page, not the core one | accepted · 2026-11-02 |
 | [130](decisions/ADR-130-packs-are-experimental-and-frozen-until-a-repository-adopts-one.md) | Packs are experimental and frozen until a repository adopts one | accepted · 2026-11-02 |
+| [131](decisions/ADR-131-the-vector-path-is-one-module-and-only-embed-loads-it.md) | The vector path is one module, and only `--embed` loads it | accepted · 2026-11-02 |

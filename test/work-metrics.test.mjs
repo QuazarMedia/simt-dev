@@ -10,6 +10,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  CANARY_REPS,
+  CANARY_TASKS,
+  STRATA,
   aggregateCost,
   coverage,
   costComponents,
@@ -51,6 +54,13 @@ test('a verified outcome needs every predicate, not just the hidden tests', () =
   assert.equal(verifiedOutcome(record({ evidence: { current: false } })), false);
   // An oracle harness calibrates the grader; its numbers are never an arm's measurement.
   assert.equal(verifiedOutcome(record({ measured: false, status: 'ok' })), false);
+});
+
+test('the four strata the plan names are the vocabulary this module reports against', () => {
+  assert.deepEqual(STRATA, ['source', 'knowledge', 'remote', 'ui']);
+  for (const record_ of [record({ stratum: 'remote' }), record({ stratum: 'ui' })]) {
+    assert.ok(STRATA.includes(record_.stratum));
+  }
 });
 
 test('R_s is per stratum, and a repeat is folded into its task before the mean', () => {
@@ -153,7 +163,8 @@ test('the sample size is the plan formula, checked by hand', () => {
 });
 
 test('a thirty-task stratum is still a canary, and a shortfall is named', () => {
-  const rows = [{ stratum: 'source', tasks: 30, reps: 3, sd: 0.5 }];
+  assert.deepEqual([CANARY_TASKS, CANARY_REPS], [30, 3]);
+  const rows = [{ stratum: 'source', tasks: CANARY_TASKS, reps: CANARY_REPS, sd: 0.5 }];
   const [plan] = planSample(rows, { delta: 0.02 });
   assert.equal(plan.required, 3865);
   assert.equal(plan.shortfall, 3835);

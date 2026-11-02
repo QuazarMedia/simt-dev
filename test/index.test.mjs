@@ -1,6 +1,6 @@
 // The local index (R20, ADR-089).
 //
-// Two properties. The same blobs come back as the same rows, on both backends. A
+// Two properties. The same blobs come back as the same rows. A
 // one-file change rewrites that row and leaves the others, in under 300 ms.
 
 import assert from 'node:assert/strict';
@@ -23,7 +23,7 @@ import {
   searchFtsBm25,
   tokenizeText,
 } from '../src/index/store.mjs';
-import { JSONL_FILE, SQLITE_FILE, indexFileFor } from '../src/index/persist.mjs';
+import { SQLITE_FILE, indexFileFor } from '../src/index/persist.mjs';
 import { openIndex } from '../src/index/open.mjs';
 import { indexCommand } from '../src/commands/repoindex.mjs';
 
@@ -42,12 +42,12 @@ async function repo() {
   return root;
 }
 
-async function sameRows(root, backend) {
-  const first = await reindex(root, { backend });
-  const rows = await readFiles(root, { backend });
-  await rm(join(root, backend === 'sqlite' ? SQLITE_FILE : JSONL_FILE));
-  const second = await reindex(root, { backend });
-  const again = await readFiles(root, { backend });
+async function sameRows(root) {
+  const first = await reindex(root);
+  const rows = await readFiles(root);
+  await rm(join(root, SQLITE_FILE));
+  const second = await reindex(root);
+  const again = await readFiles(root);
   assert.deepEqual(again, rows);
   assert.equal(second.updated, rows.length);
   assert.equal(first.files, rows.length);
@@ -64,22 +64,16 @@ test('sqlite rows are a function of the blobs', async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-test('the jsonl fallback stores the same rows', async () => {
-  const root = await repo();
-  await sameRows(root, 'jsonl');
-  await rm(root, { recursive: true, force: true });
-});
-
 test('one changed file is the only row rewritten, in under 300 ms', async () => {
   const root = await repo();
-  await reindex(root, { backend: 'sqlite' });
-  const before = await readFiles(root, { backend: 'sqlite' });
+  await reindex(root);
+  const before = await readFiles(root);
   await writeFile(join(root, 'apps', 'web', 'src', 'f0.js'), 'export const n = 99;\n');
   await git(['-C', root, 'add', 'apps/web/src/f0.js']);
-  const again = await reindex(root, { backend: 'sqlite' });
+  const again = await reindex(root);
   assert.equal(again.updated, 1);
   assert.ok(again.ms < 300, `reindex took ${again.ms} ms`);
-  const after = await readFiles(root, { backend: 'sqlite' });
+  const after = await readFiles(root);
   const changed = after.filter((row, i) => row.blob !== before[i].blob);
   assert.deepEqual(changed.map((row) => row.path), ['apps/web/src/f0.js']);
   await rm(root, { recursive: true, force: true });
@@ -87,56 +81,54 @@ test('one changed file is the only row rewritten, in under 300 ms', async () => 
 
 test('a removed path leaves the index', async () => {
   const root = await repo();
-  await reindex(root, { backend: 'jsonl' });
+  await reindex(root);
   await git(['-C', root, 'rm', '-q', 'README']);
   await git(['-C', root, 'commit', '-qm', 'drop readme']);
-  const result = await reindex(root, { backend: 'jsonl' });
+  const result = await reindex(root);
   assert.equal(result.removed, 1);
-  const rows = await readFiles(root, { backend: 'jsonl' });
+  const rows = await readFiles(root);
   assert.equal(rows.some((row) => row.path === 'README'), false);
   await rm(root, { recursive: true, force: true });
 });
 
-for (const backend of ['sqlite', 'jsonl']) {
-  test(`the tree digest marks a removal stale until the next build (${backend}, Q42)`, async () => {
-    // The freshness signal is a digest compare, not a blob re-read: one
-    // `git ls-files -s` against the meta row the last build vouched for.
-    const root = await repo();
-    try {
-      assert.equal(await isIndexStale(root, { backend }), false, 'no build yet is cold, not stale');
-      await reindex(root, { backend });
-      assert.equal(await isIndexStale(root, { backend }), false);
-      await git(['-C', root, 'rm', '-q', 'README']);
-      await git(['-C', root, 'commit', '-qm', 'drop readme']);
-      assert.equal(await isIndexStale(root, { backend }), true);
-      await reindex(root, { backend });
-      assert.equal(await isIndexStale(root, { backend }), false);
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-}
+test(`the tree digest marks a removal stale until the next build (Q42)`, async () => {
+  // The freshness signal is a digest compare, not a blob re-read: one
+  // `git ls-files -s` against the meta row the last build vouched for.
+  const root = await repo();
+  try {
+    assert.equal(await isIndexStale(root), false, 'no build yet is cold, not stale');
+    await reindex(root);
+    assert.equal(await isIndexStale(root), false);
+    await git(['-C', root, 'rm', '-q', 'README']);
+    await git(['-C', root, 'commit', '-qm', 'drop readme']);
+    assert.equal(await isIndexStale(root), true);
+    await reindex(root);
+    assert.equal(await isIndexStale(root), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
-test('a database at a newer version is served from a sidecar, never overwritten (sqlite, Q44)', async () => {
+test('a database at a newer version is served from a sidecar, never overwritten (Q44)', async () => {
   // An older simt meeting a newer database used to rewrite it, and two pinned
   // versions flip-flopped the same file (ADR-059). The foreign file now stays
   // with its owner; this version reads and writes its own sidecar.
   const root = await repo();
   try {
-    await reindex(root, { backend: 'sqlite' });
+    await reindex(root);
     const file = join(root, SQLITE_FILE);
     const newer = new DatabaseSync(file);
     newer.exec('pragma user_version = 6');
     newer.exec(`update meta set value = '6' where key = 'schema'`);
     newer.close();
-    await reindex(root, { backend: 'sqlite' });
+    await reindex(root);
     const intact = new DatabaseSync(file);
     assert.equal(Number(intact.prepare('pragma user_version').get().user_version), 6, 'the newer database is untouched');
     assert.equal(intact.prepare(`select value from meta where key = 'schema'`).get().value, '6');
     intact.close();
-    const sidecar = indexFileFor(root, 'sqlite', '6');
+    const sidecar = indexFileFor(root, '6');
     assert.ok((await stat(sidecar)).size > 0, 'this version built its sidecar');
-    const rows = await readFiles(root, { backend: 'sqlite' });
+    const rows = await readFiles(root);
     assert.ok(rows.length > 0, 'reads are served from the sidecar, not the foreign file');
     assert.equal(rows.error, undefined);
   } finally {
@@ -144,28 +136,7 @@ test('a database at a newer version is served from a sidecar, never overwritten 
   }
 });
 
-test('a jsonl file at another version goes to the sidecar (jsonl, Q44)', async () => {
-  const root = await repo();
-  try {
-    await reindex(root, { backend: 'jsonl' });
-    const file = join(root, JSONL_FILE);
-    const original = await readFile(file, 'utf8');
-    const bumped = original.replace('"value":"5"', '"value":"6"');
-    assert.notEqual(bumped, original, 'the version line was bumped');
-    await writeFile(file, bumped);
-    await reindex(root, { backend: 'jsonl' });
-    assert.ok((await readFile(file, 'utf8')).includes('"value":"6"'), 'the foreign file is untouched');
-    const sidecar = indexFileFor(root, 'jsonl', '6');
-    assert.ok((await stat(sidecar)).size > 0, 'this version built its sidecar');
-    const rows = await readFiles(root, { backend: 'jsonl' });
-    assert.ok(rows.length > 0, 'reads are served from the sidecar');
-    assert.equal(rows.error, undefined);
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
-});
-
-test('a v3 database is migrated in place through v4 to v5 (sqlite, Q44, Q76)', async () => {
+test('a v3 database is migrated in place through v4 to v5 (Q44, Q76)', async () => {
   // The 3 -> 4 step recreates the FTS table; the 4 -> 5 step copies its rows by
   // the `ref` column. If 3 -> 4 created the table in the v5 shape, the copy
   // reads a column that is not there and the whole build fails.
@@ -189,7 +160,7 @@ test('a v3 database is migrated in place through v4 to v5 (sqlite, Q44, Q76)', a
       insert into fts(kind, ref, body) values ('code', 'apps/web/src/a.ts', 'legacy body text');
     `);
     db.close();
-    await reindex(root, { backend: 'sqlite' });
+    await reindex(root);
     const after = new DatabaseSync(file);
     assert.equal(Number(after.prepare('pragma user_version').get().user_version), 5, 'the chain ended at the current schema');
     const sql = after.prepare(`select sql from sqlite_master where name = 'fts'`).get().sql;
@@ -201,60 +172,56 @@ test('a v3 database is migrated in place through v4 to v5 (sqlite, Q44, Q76)', a
   }
 });
 
-for (const backend of ['sqlite', 'jsonl']) {
-  test(`a corrupt index file is named, not read as an empty index (${backend}, Q44)`, async () => {
-    // "Locked", "no such column" and "corrupt" used to all answer `[]`, so a
-    // damaged index looked like a cold one.
-    const root = await repo();
-    try {
-      await reindex(root, { backend });
-      const file = join(root, backend === 'sqlite' ? SQLITE_FILE : JSONL_FILE);
-      await writeFile(file, 'not an index');
-      const rows = await readFiles(root, { backend });
-      assert.equal(rows.length, 0);
-      assert.equal(rows.error?.code, 'INDEX_CORRUPT', 'the failure is named');
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-}
-
-for (const backend of ['sqlite', 'jsonl']) {
-  test(`reindexing a changed file keeps the edges pointing into it (${backend}, Q07)`, async () => {
-    // The importer owns its outgoing edges: editing src/a.mjs must not delete the
-    // test -> src edge, which belongs to the unchanged test file.
-    const root = await mkdtemp(join(tmpdir(), 'idx-'));
-    await git(['init', '-q', root]);
-    await mkdir(join(root, 'src'), { recursive: true });
-    await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 1;\n');
-    await writeFile(join(root, 'test.mjs'), "import { a } from './src/a.mjs';\nconsole.log(a);\n");
-    await git(['-C', root, 'add', '-A']);
-    await git(['-C', root, 'commit', '-qm', 'initial']);
-    await reindex(root, { backend });
-    const before = (await readEdges(root, { backend })).filter((e) => e.dst === 'src/a.mjs');
-    assert.ok(before.length > 0, 'the test -> src edge is indexed');
-    await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 2;\n');
-    await git(['-C', root, 'add', 'src/a.mjs']);
-    await git(['-C', root, 'commit', '-qm', 'bump']);
-    await reindex(root, { backend });
-    const after = (await readEdges(root, { backend })).filter((e) => e.dst === 'src/a.mjs');
-    assert.ok(after.length > 0, 'reindexing src/a.mjs kept the edge pointing into it');
+test(`a corrupt index file is named, not read as an empty index (Q44)`, async () => {
+  // "Locked", "no such column" and "corrupt" used to all answer `[]`, so a
+  // damaged index looked like a cold one.
+  const root = await repo();
+  try {
+    await reindex(root);
+    const file = join(root, SQLITE_FILE);
+    await writeFile(file, 'not an index');
+    const rows = await readFiles(root);
+    assert.equal(rows.length, 0);
+    assert.equal(rows.error?.code, 'INDEX_CORRUPT', 'the failure is named');
+  } finally {
     await rm(root, { recursive: true, force: true });
-  });
-}
+  }
+});
 
-test('concurrent cold indexes serialize instead of locking (sqlite, Q08)', async () => {
+test(`reindexing a changed file keeps the edges pointing into it (Q07)`, async () => {
+  // The importer owns its outgoing edges: editing src/a.mjs must not delete the
+  // test -> src edge, which belongs to the unchanged test file.
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  await git(['init', '-q', root]);
+  await mkdir(join(root, 'src'), { recursive: true });
+  await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 1;\n');
+  await writeFile(join(root, 'test.mjs'), "import { a } from './src/a.mjs';\nconsole.log(a);\n");
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'initial']);
+  await reindex(root);
+  const before = (await readEdges(root)).filter((e) => e.dst === 'src/a.mjs');
+  assert.ok(before.length > 0, 'the test -> src edge is indexed');
+  await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', root, 'add', 'src/a.mjs']);
+  await git(['-C', root, 'commit', '-qm', 'bump']);
+  await reindex(root);
+  const after = (await readEdges(root)).filter((e) => e.dst === 'src/a.mjs');
+  assert.ok(after.length > 0, 'reindexing src/a.mjs kept the edge pointing into it');
+  await rm(root, { recursive: true, force: true });
+});
+
+test('concurrent cold indexes serialize instead of locking (Q08)', async () => {
   // Three writers at once used to fail every run with `database is locked` and
   // leave a database with no tables. Cold builds now go to per-writer temp
   // files with an atomic rename, and incremental writes wait on the lock.
   const root = await repo();
   const runs = await Promise.all([
-    reindex(root, { backend: 'sqlite' }),
-    reindex(root, { backend: 'sqlite' }),
-    reindex(root, { backend: 'sqlite' }),
+    reindex(root),
+    reindex(root),
+    reindex(root),
   ]);
   for (const run of runs) assert.ok(run.files > 0, 'each concurrent run indexed the files');
-  const rows = await readFiles(root, { backend: 'sqlite' });
+  const rows = await readFiles(root);
   assert.ok(rows.length > 0, 'the database has tables and rows after concurrent writes');
   await rm(root, { recursive: true, force: true });
 });
@@ -269,9 +236,9 @@ test('tracked content past the old 64 MiB buffer still indexes', async () => {
   await writeFile(join(root, 'large.txt'), body);
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'big']);
-  const result = await reindex(root, { backend: 'jsonl' });
+  const result = await reindex(root);
   assert.equal(result.files, 1);
-  const rows = await readFiles(root, { backend: 'jsonl' });
+  const rows = await readFiles(root);
   assert.equal(rows[0].bytes, Buffer.byteLength(body));
   await rm(root, { recursive: true, force: true });
 });
@@ -303,37 +270,35 @@ test('whole documents index in sections past the old caps (Q43)', async () => {
   assert.ok(rows[0].body.includes('top'), 'symbol tokens ride on the first section');
 });
 
-for (const backend of ['sqlite', 'jsonl']) {
-  test(`kind and ref no longer match, CJK is retrievable, binaries are counted (${backend}, Q43)`, async () => {
-    const root = await mkdtemp(join(tmpdir(), 'idx-'));
-    try {
-      await git(['init', '-q', root]);
-      await mkdir(join(root, 'docs', 'decisions'), { recursive: true });
-      await mkdir(join(root, 'src'), { recursive: true });
-      await writeFile(join(root, 'docs', 'decisions', 'why.md'), 'hello world\n');
-      await writeFile(join(root, 'jp.md'), '日本語のドキュメントです\n');
-      await writeFile(join(root, 'src', 'greet.mjs'), 'Die Straße in München ist groß\n');
-      await writeFile(join(root, 'bin.dat'), Buffer.from([0x00, 0x01, 0x02, 0x00, 0x41]));
-      await git(['-C', root, 'add', '-A']);
-      await git(['-C', root, 'commit', '-qm', 'initial']);
-      const result = await reindex(root, { backend });
-      assert.equal(result.skipped, 1);
-      const fts = await readFts(root, { backend });
-      assert.ok(fts.every((row) => row.ref !== 'bin.dat'), 'the binary leaves no FTS row');
-      // The decisions file's body never says "decisions": kind and ref are
-      // UNINDEXED now, so only body terms match.
-      assert.deepEqual(await searchFtsBm25(root, 'decisions', { backend }), []);
-      const jp = await searchFtsBm25(root, '日本語', { backend });
-      assert.ok(jp.some((row) => row.path === 'jp.md'), 'the Japanese document is found');
-      const de = await searchFtsBm25(root, 'straße', { backend });
-      assert.ok(de.some((row) => row.path === 'src/greet.mjs'), 'the German document is found');
-      // ß folds on neither backend: the boundary is identical, not half-fixed.
-      assert.deepEqual(await searchFtsBm25(root, 'strasse', { backend }), []);
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-}
+test(`kind and ref no longer match, CJK is retrievable, binaries are counted (Q43)`, async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'docs', 'decisions'), { recursive: true });
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'docs', 'decisions', 'why.md'), 'hello world\n');
+    await writeFile(join(root, 'jp.md'), '日本語のドキュメントです\n');
+    await writeFile(join(root, 'src', 'greet.mjs'), 'Die Straße in München ist groß\n');
+    await writeFile(join(root, 'bin.dat'), Buffer.from([0x00, 0x01, 0x02, 0x00, 0x41]));
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    const result = await reindex(root);
+    assert.equal(result.skipped, 1);
+    const fts = await readFts(root);
+    assert.ok(fts.every((row) => row.ref !== 'bin.dat'), 'the binary leaves no FTS row');
+    // The decisions file's body never says "decisions": kind and ref are
+    // UNINDEXED now, so only body terms match.
+    assert.deepEqual(await searchFtsBm25(root, 'decisions'), []);
+    const jp = await searchFtsBm25(root, '日本語');
+    assert.ok(jp.some((row) => row.path === 'jp.md'), 'the Japanese document is found');
+    const de = await searchFtsBm25(root, 'straße');
+    assert.ok(de.some((row) => row.path === 'src/greet.mjs'), 'the German document is found');
+    // ß does not fold: the boundary is stated rather than half-fixed.
+    assert.deepEqual(await searchFtsBm25(root, 'strasse'), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 test('sections of one file collapse to one hit and results stop at 200 (Q43)', async () => {
   const rows = [];
@@ -342,15 +307,15 @@ test('sections of one file collapse to one hit and results stop at 200 (Q43)', a
     { kind: 'code', ref: 'multi.js', body: 'target section one' },
     { kind: 'code', ref: 'multi.js', body: 'target section two target' },
   );
-  const ranked = await searchFtsBm25('/nonexistent', 'target', { backend: 'jsonl', fts: rows });
+  const ranked = await searchFtsBm25('/nonexistent', 'target', { fts: rows });
   assert.equal(ranked.length, 200);
   assert.equal(ranked.filter((row) => row.path === 'multi.js').length, 1);
 });
 
-test('a fresh build is the v5 entity layout, and the read shapes are SQL (sqlite, Q76)', async () => {
+test('a fresh build is the v5 entity layout, and the read shapes are SQL (Q76)', async () => {
   const root = await repo();
   try {
-    await reindex(root, { backend: 'sqlite' });
+    await reindex(root);
     const file = join(root, SQLITE_FILE);
     const db = new DatabaseSync(file);
     const names = db
@@ -366,9 +331,9 @@ test('a fresh build is the v5 entity layout, and the read shapes are SQL (sqlite
     const kinds = db.prepare(`select distinct kind from nodes`).all().map((row) => row.kind);
     assert.ok(kinds.includes('symbol'), 'symbols are nodes in the entity layout');
     db.close();
-    const rows = await readFiles(root, { backend: 'sqlite' });
+    const rows = await readFiles(root);
     assert.equal(rows.find((row) => row.path === 'apps/web/src/a.ts').pkg, 'apps/web');
-    const symbols = await readSymbols(root, { backend: 'sqlite' });
+    const symbols = await readSymbols(root);
     assert.ok(symbols.length > 0, 'symbol rows are read back');
     assert.deepEqual(Object.keys(symbols[0]).sort(), ['exported', 'kind', 'line', 'name', 'path', 'sig']);
   } finally {

@@ -4,7 +4,7 @@
 
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { JSONL_FILE, SQLITE_FILE, reindex } from '../index/store.mjs';
+import { SQLITE_FILE, reindex } from '../index/store.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { git } from '../sys/git.mjs';
 
@@ -27,7 +27,7 @@ export async function indexCommand(args, flags) {
       'run this inside a git repository',
     );
   }
-  const file = result.backend === 'sqlite' ? SQLITE_FILE : JSONL_FILE;
+  const file = SQLITE_FILE;
   const ignored = await isIgnored(root, file);
   const payload = { ok: true, command: 'index', root, file, ignored, ...result };
   if (isJson(flags)) {
@@ -35,7 +35,6 @@ export async function indexCommand(args, flags) {
     return EXIT.OK;
   }
   const lines = [
-    `index    ${result.backend}`,
     `files    ${result.files}`,
     `updated  ${result.updated}`,
     `removed  ${result.removed}`,

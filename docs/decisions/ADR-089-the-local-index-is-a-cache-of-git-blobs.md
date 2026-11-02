@@ -18,10 +18,14 @@ happened to build it is not the store the plan describes.
 
 ## Rulings
 
+> Superseded in part by ADR-135 (2026-11-02): ruling 1, the JSON-lines fallback, is
+> withdrawn. The index has one format. The rulings below are the record of what was
+> decided, not the current contract.
+
 1. **The store is sqlite when this process can open it and create an FTS5 table.**
    The file is `.simt/local/index.sqlite`. The tables are the ones the plan names:
    files, symbols, edges, an FTS5 table, and meta. When the module is absent or FTS5
-   cannot be created, the same file rows are written to `.simt/local/index.jsonl`.
+   cannot be created, the same file rows are written to `.simt/index.jsonl` (withdrawn by ADR-135).
    Nothing is added to the dependency set.
 
 2. **A row is keyed by the git blob.** `git ls-files -s` supplies the path and the

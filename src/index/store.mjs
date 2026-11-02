@@ -1,8 +1,9 @@
-// The local index (ADR-089).
+// The local index (ADR-089, ADR-135).
 //
-// `node:sqlite` when this Node has it, including FTS5, and a JSON-lines file
-// otherwise. Either one is a cache: `git ls-files -s` can rebuild it, so a missing
-// file is not a lost database. A blob that has not changed is not read again.
+// `node:sqlite` with FTS5, and nothing else: the Node floor carries both, which is
+// what ADR-135 waited for before retiring the JSON-lines file. The index is a cache:
+// `git ls-files -s` can rebuild it, so a missing file is not a lost database. A blob
+// that has not changed is not read again.
 
 import { execFile, spawn } from 'node:child_process';
 import { stat } from 'node:fs/promises';
@@ -21,22 +22,19 @@ import { languageResolver } from '../ecosystem/records.mjs';
 import {
   FTS_SCHEMA,
   FTS_TRI_SCHEMA,
-  JSONL_FILE,
   SCHEMA_V,
   SQLITE_FILE,
   countSqlite,
   decodeVectorBlob,
   encodeVectorBlob,
-  readJsonl,
   readSchema,
   readSqliteRows,
   readTreeDigest,
   treeDigest,
-  writeJsonl,
   writeSqlite,
 } from './persist.mjs';
 
-export { JSONL_FILE, SQLITE_FILE, decodeVectorBlob, encodeVectorBlob };
+export { SQLITE_FILE, decodeVectorBlob, encodeVectorBlob };
 
 const MARKERS = ['package.json', 'pyproject.toml', 'go.mod', 'Cargo.toml', 'pom.xml'];
 
@@ -48,24 +46,33 @@ const BLOB_CAP = 16 * 1024 * 1024;
 
 const LANG = languageResolver();
 
-/** `sqlite` when this process can open a database and create an FTS5 table. */
-// Probed once per process: the check builds both FTS schemas in a memory
-// database, and every read path used to pay for that .
-let backendProbe;
-async function probeBackend() {
-  backendProbe ??= (async () => {
+const INDEX_NODE_FLOOR = '22.20.0';
+
+/**
+ * Fail, naming the floor, when this Node cannot open the index's tables.
+ *
+ * ADR-135 retired the JSON-lines fallback once the floor carried both
+ * `node:sqlite` and FTS5 (the CJK table needs the `trigram` tokenizer). A Node
+ * below it now says which one it needs, instead of writing a second format every
+ * other version reads differently. Checked once per process: the probe builds
+ * both FTS schemas in a memory database and every read path used to pay for it.
+ */
+let floorChecked;
+async function ensureIndexSupport() {
+  floorChecked ??= (async () => {
     try {
       const { DatabaseSync } = await import('node:sqlite');
       const db = new DatabaseSync(':memory:');
       db.exec(FTS_SCHEMA);
       db.exec(FTS_TRI_SCHEMA);
       db.close();
-      return 'sqlite';
-    } catch {
-      return 'jsonl';
+    } catch (error) {
+      throw new Error(
+        `the index needs node:sqlite with FTS5, which Node ${INDEX_NODE_FLOOR} carries: ${error.message}`,
+      );
     }
   })();
-  return backendProbe;
+  await floorChecked;
 }
 
 export function ftsKindOf(filePath, lang = '') {
@@ -114,7 +121,7 @@ function cjkRuns(text) {
 }
 
 /**
- * The one tokenizer for the FTS pipeline: index side, task side, both backends.
+ * The one tokenizer for the FTS pipeline: index side and task side.
  *
  * Non-CJK runs keep the caller's floor; CJK runs emit single characters
  * because unicode61 has no CJK segmentation - a run kept whole here would
@@ -217,17 +224,17 @@ export function ftsQueryTerms(task) {
  * Rebuild the index from the git index. Unchanged blobs are left as they are.
  *
  * @param {string} root
- * @param {{backend?: 'sqlite'|'jsonl', embed?: boolean, allowRemote?: boolean, fetchImpl?: typeof fetch}} [opts]
+ * @param {{embed?: boolean, allowRemote?: boolean, fetchImpl?: typeof fetch}} [opts]
  */
 export async function reindex(root, opts = {}) {
   const started = Date.now();
-  const backend = opts.backend ?? await probeBackend();
+  await ensureIndexSupport();
   const listed = await lsFiles(root);
-  const version = await readSchema(root, backend);
+  const version = await readSchema(root);
   // A cache written before symbols existed has the right blobs and the wrong
   // tables. Re-extract once, then an unchanged blob stays untouched.
   const force = version !== SCHEMA_V;
-  const previous = await readFiles(root, { backend });
+  const previous = await readFiles(root);
   const prior = new Map(previous.map((row) => [row.path, row]));
   const cache = new Map();
   const changed = [];
@@ -274,22 +281,15 @@ export async function reindex(root, opts = {}) {
   // The tree this build vouches for, stored beside the rows so a later read
   // can compare digests instead of re-reading blobs.
   const embedBuild = await buildEmbeddings(root, listed, fts, {
-    backend,
     force,
     embed: opts.embed === true,
     allowRemote: opts.allowRemote === true,
     fetchImpl: opts.fetchImpl,
   });
   const tree = treeDigest(listed);
-  let stored;
-  if (backend === 'sqlite') {
-    await writeSqlite(root, next, removed, symbols, edges, fts, embedBuild.rows, tree);
-    stored = await countSqlite(root);
-  } else {
-    stored = await writeJsonl(root, previous, next, removed, symbols, edges, fts, force, embedBuild.rows, tree);
-  }
+  await writeSqlite(root, next, removed, symbols, edges, fts, embedBuild.rows, tree);
+  const stored = await countSqlite(root);
   return {
-    backend,
     files: listed.length,
     updated: next.length,
     removed: removed.length,
@@ -315,8 +315,8 @@ export async function reindex(root, opts = {}) {
  * @returns {Promise<boolean>}
  */
 export async function isIndexStale(root, opts = {}) {
-  const backend = opts.backend ?? await probeBackend();
-  const stored = await readTreeDigest(root, backend);
+  await ensureIndexSupport();
+  const stored = await readTreeDigest(root);
   if (!stored) return false;
   let listed;
   try {
@@ -327,13 +327,13 @@ export async function isIndexStale(root, opts = {}) {
   return treeDigest(listed) !== stored;
 }
 
-async function buildEmbeddings(root, listed, changedFts, { backend, force, embed, allowRemote, fetchImpl }) {
+async function buildEmbeddings(root, listed, changedFts, { force, embed, allowRemote, fetchImpl }) {
   if (!embed) return { state: 'off', rows: [] };
   const localCfg = await readLocalConfig(root, { allowRemote });
   if (!localCfg.embed) return { state: 'off', rows: [] };
   if (localCfg.embed.blocked) return { state: 'refused-remote', rows: [] };
 
-  const existingEmbeds = force ? [] : await readEmbeddings(root, { backend });
+  const existingEmbeds = force ? [] : await readEmbeddings(root);
   const embedByPath = new Map(existingEmbeds.map((row) => [row.path, row]));
   // Sections share a ref; the embedding input is the file's first section.
   const ftsByPath = new Map();
@@ -353,7 +353,7 @@ async function buildEmbeddings(root, listed, changedFts, { backend, force, embed
   // Ensure FTS summaries are available for any entry that did not change in this pass.
   const needFts = missingEntries.some((entry) => !ftsByPath.has(entry.path));
   if (needFts) {
-    const storedFts = await readFts(root, { backend });
+    const storedFts = await readFts(root);
     for (const row of storedFts) {
       if (!ftsByPath.has(row.ref)) ftsByPath.set(row.ref, row.body);
     }
@@ -393,100 +393,73 @@ async function buildEmbeddings(root, listed, changedFts, { backend, force, embed
 function withReadError(rows, error) {
   if (error) rows.error = error;
   return rows;
-}
-
-/** File rows, sorted by path. The same blobs read back as the same rows. */
-export async function readFiles(root, opts = {}) {
-  const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') {
-    // The v5 layout keys files as `sources` rows; the git blob sha is `revision`
-    // and the package directory rides in `props`, which the v4 `files` table
-    // named `pkg`.
-    const { rows, error } = await readSqliteRows(
-      root,
-      `select s.path as path, s.revision as blob, s.lang as lang, s.bytes as bytes,
-        json_extract(s.props, '$.pkg') as pkg from sources s where s.kind = 'blob' order by s.path`,
-    );
-    return withReadError(rows, error);
-  }
-  const { rows, error } = await readJsonl(root, 'files');
+}/** File rows, sorted by path. The same blobs read back as the same rows. */
+export async function readFiles(root) {
+  // The v5 layout keys files as `sources` rows; the git blob sha is `revision`
+  // and the package directory rides in `props`, which the v4 `files` table
+  // named `pkg`.
+  const { rows, error } = await readSqliteRows(
+    root,
+    `select s.path as path, s.revision as blob, s.lang as lang, s.bytes as bytes,
+      json_extract(s.props, '$.pkg') as pkg from sources s where s.kind = 'blob' order by s.path`,
+  );
   return withReadError(rows, error);
 }
 
 /** Symbol rows for the blobs currently indexed. */
-export async function readSymbols(root, opts = {}) {
-  const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') {
-    const { rows, error } = await readSqliteRows(
-      root,
-      `select s.path as path, n.name as name, json_extract(n.props, '$.kind') as kind,
-        n.line as line, json_extract(n.props, '$.sig') as sig,
-        json_extract(n.props, '$.exported') as exported
-        from nodes n join sources s on s.id = n.source_id and s.kind = 'blob'
-        where n.kind = 'symbol' order by s.path, n.line, n.name, n.kind`,
-    );
-    return withReadError(rows, error);
-  }
-  const { rows, error } = await readJsonl(root, 'symbols');
+export async function readSymbols(root) {
+  const { rows, error } = await readSqliteRows(
+    root,
+    `select s.path as path, n.name as name, json_extract(n.props, '$.kind') as kind,
+      n.line as line, json_extract(n.props, '$.sig') as sig,
+      json_extract(n.props, '$.exported') as exported
+      from nodes n join sources s on s.id = n.source_id and s.kind = 'blob'
+      where n.kind = 'symbol' order by s.path, n.line, n.name, n.kind`,
+  );
   return withReadError(rows, error);
 }
 
 /** Edges currently indexed. An import edge's src is the file that imports. */
-export async function readEdges(root, opts = {}) {
-  const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') {
-    // Paths come back from the node key (`file:<path>`) and the stable `dst_key`:
-    // node ids are regenerated when a file changes, so a path is the only key
-    // that survives a reindex of one endpoint.
-    const { rows, error } = await readSqliteRows(
-      root,
-      `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight
-        from edges e join nodes ns on ns.id = e.src_id order by src, dst, kind`,
-    );
-    return withReadError(rows, error);
-  }
-  const { rows, error } = await readJsonl(root, 'edges');
+export async function readEdges(root) {
+  // Paths come back from the node key (`file:<path>`) and the stable `dst_key`:
+  // node ids are regenerated when a file changes, so a path is the only key
+  // that survives a reindex of one endpoint.
+  const { rows, error } = await readSqliteRows(
+    root,
+    `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight
+      from edges e join nodes ns on ns.id = e.src_id order by src, dst, kind`,
+  );
   return withReadError(rows, error);
 }
 
 /** FTS rows currently indexed: one row per section, first section first. */
-export async function readFts(root, opts = {}) {
-  const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') {
-    const { rows, error } = await readSqliteRows(
-      root,
-      `select f.kind as kind, substr(n.key, 6) as ref, f.body as body
-        from fts f join nodes n on n.id = f.node_id order by ref, kind, f.rowid`,
-    );
-    return withReadError(rows, error);
-  }
-  const { rows, error } = await readJsonl(root, 'fts');
+export async function readFts(root) {
+  const { rows, error } = await readSqliteRows(
+    root,
+    `select f.kind as kind, substr(n.key, 6) as ref, f.body as body
+      from fts f join nodes n on n.id = f.node_id order by ref, kind, f.rowid`,
+  );
   return withReadError(rows, error);
 }
 
 /** Stored vector embeddings, decoded as Float32Array per path. */
-export async function readEmbeddings(root, opts = {}) {
-  const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') {
-    const { rows: raw, error } = await readSqliteRows(
-      root,
-      `select substr(n.key, 6) as path, s.revision as blob, v.model as model, v.dims as dims, v.vec as vec
-        from vectors v join nodes n on n.id = v.node_id
-        join sources s on s.id = n.source_id and s.kind = 'blob' order by path`,
-    );
-    const rows = raw.map((row) => {
-      const vec = decodeVectorBlob(row.vec);
-      return {
-        path: row.path,
-        blob: row.blob ?? '',
-        model: row.model ?? '',
-        dims: Number.isInteger(row.dims) ? row.dims : vec.length,
-        vec,
-      };
-    });
-    return withReadError(rows, error);
-  }
-  const { rows, error } = await readJsonl(root, 'embeddings');
+export async function readEmbeddings(root) {
+  const { rows: raw, error } = await readSqliteRows(
+    root,
+    `select substr(n.key, 6) as path, s.revision as blob, v.model as model, v.dims as dims, v.vec as vec
+      from vectors v join nodes n on n.id = v.node_id
+      join sources s on s.id = n.source_id and s.kind = 'blob' order by path`,
+  );
+  const rows = raw.map((row) => {
+    const vec = decodeVectorBlob(row.vec);
+    return {
+      path: row.path,
+      blob: row.blob ?? '',
+      model: row.model ?? '',
+      dims: Number.isInteger(row.dims) ? row.dims : vec.length,
+      vec,
+    };
+  });
   return withReadError(rows, error);
 }
 
@@ -505,8 +478,9 @@ function dedupePaths(rows) {
 /**
  * Rank indexed documents against a task string using BM25.
  *
- * Uses SQLite FTS5 `bm25(fts)` when the sqlite backend is active on disk, and
- * falls back to an identical Okapi BM25 computation over `fts` rows otherwise.
+ * Uses SQLite FTS5 `bm25(fts)` when there are hits. A caller that hands in its
+ * own row set (`opts.fts`) is ranked by the identical Okapi BM25 computation, so
+ * the fold can be exercised without a database.
  * A query with CJK also consults the trigram table - unicode61 has no CJK
  * segmentation, so those runs are unqueryable there - and a mixed query
  * unions both tables, trigram hits first, because an ASCII-only table cannot
@@ -515,31 +489,29 @@ function dedupePaths(rows) {
 export async function searchFtsBm25(root, task, opts = {}) {
   const terms = ftsQueryTerms(task);
   if (terms.length === 0) return [];
-  const backend = opts.backend ?? await probeBackend();
-  if (backend === 'sqlite') {
-    const ascii = terms.filter((t) => !isCjkToken(t));
-    const runs = [...new Set(cjkRuns(foldText(task)))];
-    const hits = [];
-    let error = null;
-    if (runs.length > 0) {
-      const tri = await ftsBranch(root, 'fts_tri', [...runs, ...ascii]);
-      hits.push(...tri.rows);
-      error = tri.error;
-    }
-    if (ascii.length > 0) {
-      const seen = new Set(hits.map((row) => row.path));
-      const fts = await ftsBranch(root, 'fts', ascii);
-      for (const row of fts.rows) {
-        if (!seen.has(row.path)) {
-          seen.add(row.path);
-          hits.push(row);
-        }
-      }
-      error = error ?? fts.error;
-    }
-    if (hits.length > 0) return withReadError(dedupePaths(hits).slice(0, FTS_LIMIT), error);
+  await ensureIndexSupport();
+  const ascii = terms.filter((t) => !isCjkToken(t));
+  const runs = [...new Set(cjkRuns(foldText(task)))];
+  const hits = [];
+  let error = null;
+  if (runs.length > 0) {
+    const tri = await ftsBranch(root, 'fts_tri', [...runs, ...ascii]);
+    hits.push(...tri.rows);
+    error = tri.error;
   }
-  const ftsRows = opts.fts ?? await readFts(root, { backend });
+  if (ascii.length > 0) {
+    const seen = new Set(hits.map((row) => row.path));
+    const fts = await ftsBranch(root, 'fts', ascii);
+    for (const row of fts.rows) {
+      if (!seen.has(row.path)) {
+        seen.add(row.path);
+        hits.push(row);
+      }
+    }
+    error = error ?? fts.error;
+  }
+  if (hits.length > 0) return withReadError(dedupePaths(hits).slice(0, FTS_LIMIT), error);
+  const ftsRows = opts.fts ?? await readFts(root);
   return withReadError(scoreFtsBm25(ftsRows, task).slice(0, FTS_LIMIT), ftsRows.error);
 }
 
@@ -573,7 +545,7 @@ export function scoreFtsBm25(ftsRows, task) {
   const docs = ftsRows.map((row) => {
     const path = row.ref ?? row.path ?? '';
     // Body only: kind and ref are UNINDEXED on the sqlite side, so scoring
-    // them here would rank what the other backend cannot see.
+    // them here would rank what the index cannot see either.
     const words = tokenizeText(row.body ?? '', { min: 1 });
     const tf = new Map();
     for (const w of words) tf.set(w, (tf.get(w) ?? 0) + 1);

@@ -361,7 +361,7 @@ These are caches, gitignored, and rebuildable. They are not repository content:
 
 | Path | What |
 | --- | --- |
-| `.simt/index.sqlite` | files, symbols, import/call/test/governs/cochange edges, FTS5 `fts` tokens across `code`, `docs`, `skills`, `decisions` and `lessons`, and optional `embeddings` vector blobs. JSON-lines at `.simt/index.jsonl` when this Node cannot open `node:sqlite` with FTS5 |
+| `.simt/index.sqlite` | files, symbols, import/call/test/governs/cochange edges, FTS5 `fts` tokens across `code`, `docs`, `skills`, `decisions` and `lessons`, and optional `embeddings` vector blobs. One format: a Node too old for `node:sqlite` with FTS5 is refused by name, not given a second file to read |
 | `.simt/ledger.jsonl` | one line per gate or test the dispatcher actually ran, against one git tree, plus normalised failure signatures |
 | `.simt/lessons.jsonl` | deterministic lesson candidates captured from fail-to-fix pairs, reverts, `BLOCK` reviews, and hook denials |
 | `.simt/bench/` | mined tasks (`tasks/`), test patch vault (`vault/`), and benchmark runs (`runs/`) |

@@ -205,7 +205,6 @@ export function goldPaths(patch) {
  * @param {string} root
  * @param {{
  *   vaultRoot?: string,
- *   backend?: string,
  *   embed?: boolean,
  *   allowRemote?: boolean,
  *   fetchImpl?: typeof fetch,

@@ -154,7 +154,7 @@ test('simt map renders the ranking, and recall is unmeasured without a vault', a
   await writeFile(join(root, 'src', 'alone.mjs'), 'export const alone = 1;\n');
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'initial']);
-  await reindex(root, { backend: 'jsonl' });
+  await reindex(root);
 
   const ranked = await capture(() => mapCommand([], { root, task: 'change greet in src/keep.mjs', budget: '0' }));
   assert.equal(ranked.code, 0);
@@ -177,7 +177,7 @@ test('simt map renders the ranking, and recall is unmeasured without a vault', a
   const vault = join(root, 'vault');
   await mkdir(join(vault, 't-1'), { recursive: true });
   await writeFile(join(vault, 't-1', 'gold.patch'), 'diff --git a/src/keep.mjs b/src/keep.mjs\n');
-  const measured = await measureRecall(root, { vaultRoot: vault, backend: 'jsonl' });
+  const measured = await measureRecall(root, { vaultRoot: vault });
   assert.equal(measured.measured, true);
   assert.ok(measured.recall >= 0.6, `recall ${measured.recall}`);
 
@@ -220,7 +220,7 @@ test('a file added after the build is visible to map without a manual index (ADR
   await writeFile(join(root, 'src', 'keep.mjs'), 'export function greet() {}\n');
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'initial']);
-  await reindex(root, { backend: 'jsonl' });
+  await reindex(root);
 
   // The build is done; a file that lands afterwards is not in the cache yet.
   await writeFile(join(root, 'src', 'late.mjs'), 'export const late = 1;\n');
@@ -258,10 +258,10 @@ test('R28: hybrid retrieval fuses FTS5 bm25, graph proximity and resolver signal
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'initial']);
 
-  await reindex(root, { backend: 'sqlite' });
-  const ftsRows = await readFts(root, { backend: 'sqlite' });
+  await reindex(root);
+  const ftsRows = await readFts(root);
   assert.equal(ftsRows.length, 3);
-  const bm25Hits = await searchFtsBm25(root, 'fix xdgConfigHome lookup', { backend: 'sqlite' });
+  const bm25Hits = await searchFtsBm25(root, 'fix xdgConfigHome lookup');
   assert.ok(bm25Hits.length >= 1);
   assert.equal(bm25Hits[0].path, 'src/alpha.mjs');
 
@@ -307,7 +307,6 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
 
   // 1. Default reindex keeps embeddings off and opens no socket even when local.embed is configured.
   const defaultIdx = await reindex(root, {
-    backend: 'sqlite',
     fetchImpl: () => {
       throw new Error('default reindex must not call embed endpoint');
     },
@@ -327,13 +326,12 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
     }));
     return new Response(JSON.stringify({ model: 'nomic-embed-code', data }), { status: 200 });
   };
-  const embeddedIdx = await reindex(root, { backend: 'sqlite', embed: true, fetchImpl: stubFetch });
+  const embeddedIdx = await reindex(root, { embed: true, fetchImpl: stubFetch });
   assert.equal(embeddedIdx.embedState, 'embedded');
   assert.equal(embeddedIdx.embeddings, 13);
-  const storedVecs = await readEmbeddings(root, { backend: 'sqlite' });
+  const storedVecs = await readEmbeddings(root);
   assert.equal(storedVecs.length, 13);
   const cachedIdx = await reindex(root, {
-    backend: 'sqlite',
     embed: true,
     fetchImpl: () => {
       throw new Error('cached embeddings must not re-fetch unchanged blobs');
@@ -352,14 +350,13 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   await writeFile(join(vault, 't-sem', 'gold.patch'), 'diff --git a/src/mod11.mjs b/src/mod11.mjs\n');
 
   // Without embeddings, `src/mod11.mjs` is 12th alphabetically (outside top 10 -> recall 0).
-  const withoutEmbed = await measureRecall(root, { vaultRoot: vault, backend: 'sqlite' });
+  const withoutEmbed = await measureRecall(root, { vaultRoot: vault });
   assert.equal(withoutEmbed.baseRecall, 0);
   assert.equal(withoutEmbed.embeddingsDefault, 'off');
 
   // With embeddings that align `t-sem` with `src/mod11.mjs`, recall rises from 0.0 to 1.0 (+100 pts >= +10 pts).
   const withHelpfulEmbed = await measureRecall(root, {
     vaultRoot: vault,
-    backend: 'sqlite',
     embed: true,
     fetchImpl: stubFetch,
   });
@@ -371,7 +368,6 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   // With unhelpful embeddings (+0 pts < +10 pts), embedAccepted is false and recall stays at baseRecall.
   const withFlatEmbed = await measureRecall(root, {
     vaultRoot: vault,
-    backend: 'sqlite',
     embeddings: storedVecs,
     taskVectors: { 't-sem': [1, 0, 0, 0] },
   });

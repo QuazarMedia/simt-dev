@@ -1,8 +1,8 @@
-// The two on-disk forms of the index (ADR-089, ADR-090).
+// The on-disk form of the index (ADR-089, ADR-090, ADR-135).
 //
-// sqlite when this Node can open it, JSON-lines otherwise. Both store the same
-// rows. This file is the format; store.mjs is the walk that fills it. They are
-// split because the walk and the format together crossed the review trigger.
+// sqlite, with FTS5, on the Node floor that carries both. This file is the
+// format; store.mjs is the walk that fills it. They are split because the walk
+// and the format together crossed the review trigger.
 
 import { createHash } from 'node:crypto';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
@@ -12,9 +12,7 @@ import { LOCAL_DIR } from '../state.mjs';
 import { cmp } from '../util/sort.mjs';
 
 export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
-export const JSONL_FILE = join(LOCAL_DIR, 'index.jsonl');
 const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
-const JSONL_FILE_LEGACY = '.simt/index.jsonl';
 export const SCHEMA_V = '5';
 
 // The FTS tables carry their tokenizer in their definition, so `if not exists`
@@ -37,8 +35,8 @@ const FTS_V4_SCHEMA = 'create virtual table fts using fts5(kind UNINDEXED, ref U
 // two pinned versions stop rewriting one file past each other (the ADR-059
 // flip-flop). An *older* database is read and written in place, and the
 // migration brings it current.
-export function indexFileFor(root, backend, version) {
-  const base = backend === 'sqlite' ? SQLITE_FILE : JSONL_FILE;
+export function indexFileFor(root, version) {
+  const base = SQLITE_FILE;
   if (version === '' || version === SCHEMA_V) return join(root, base);
   const dot = base.lastIndexOf('.');
   return join(root, `${base.slice(0, dot)}.v${SCHEMA_V}${base.slice(dot)}`);
@@ -278,7 +276,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     } catch {
       version = SCHEMA_V; // unreadable: rebuild it in place, as a cold build would
     }
-    file = canonicalForWrite(version) ? file : indexFileFor(root, 'sqlite', version);
+    file = canonicalForWrite(version) ? file : indexFileFor(root, version);
   } else {
     file = join(root, SQLITE_FILE);
   }
@@ -459,157 +457,6 @@ function asIndexError(error) {
 }
 
 /**
- * The jsonl file this version writes to: the canonical file when it is this
- * version's or unreadable, the sidecar when it belongs to another version
- */
-async function jsonlTargetFile(root) {
-  const base = join(root, JSONL_FILE);
-  let text = null;
-  try {
-    text = await readFile(base, 'utf8');
-  } catch {
-    try {
-      text = await readFile(join(root, JSONL_FILE_LEGACY), 'utf8');
-    } catch {
-      return base; // no file: cold build goes to the canonical path
-    }
-  }
-  try {
-    for (const line of text.split('\n')) {
-      if (line === '') continue;
-      const row = JSON.parse(line);
-      if (row.table !== 'meta' || row.key !== 'schema') continue;
-      const value = row.value ?? '';
-      // Older files are rewritten in place at the current schema; a newer one
-      // stays with its owner and the build goes to the sidecar.
-      return canonicalForWrite(value) ? base : indexFileFor(root, 'jsonl', value);
-    }
-  } catch {
-    return base; // unreadable: rebuild it in place
-  }
-  return base;
-}
-
-export async function writeJsonl(root, previous, next, removed, symbols, edges, fts, force, embeddings = [], tree = '') {
-  const gone = new Set(removed);
-  const replaced = new Map(next.map((row) => [row.path, row]));
-  const drop = new Set([...replaced.keys(), ...gone]);
-  const files = [];
-  for (const row of previous) {
-    if (gone.has(row.path)) continue;
-    files.push(replaced.get(row.path) ?? row);
-    replaced.delete(row.path);
-  }
-  for (const row of replaced.values()) files.push(row);
-  files.sort(byPath);
-  const keptSymbols = force ? [] : (await readJsonl(root, 'symbols')).rows.filter((row) => !drop.has(row.path));
-  // Edge ownership mirrors the sqlite backend: a changed file loses only the edges
-  // it owns (src), while a removed file also drops the edges that pointed at it.
-  const keptEdges = force ? [] : (await readJsonl(root, 'edges')).rows.filter((row) => !drop.has(row.src) && !gone.has(row.dst));
-  const keptFts = force ? [] : (await readJsonl(root, 'fts')).rows.filter((row) => !drop.has(row.ref));
-  const newEmbedPaths = new Set(embeddings.map((row) => row.path));
-  const keptEmbeddings = force
-    ? []
-    : (await readJsonl(root, 'embeddings')).rows.filter((row) => !drop.has(row.path) && !newEmbedPaths.has(row.path));
-  const allSymbols = [...keptSymbols, ...symbols].sort(bySymbol);
-  const allEdges = [...keptEdges, ...edges].sort(byEdge);
-  const allFts = [...keptFts, ...fts].sort((a, b) => cmp(a.ref, b.ref));
-  const allEmbeddings = [...keptEmbeddings, ...embeddings].sort(byPath);
-  const file = await jsonlTargetFile(root);
-  await mkdir(dirname(file), { recursive: true });
-  // Written atomically: a concurrent reader never sees a half-written file.
-  const tmp = tmpFor(file);
-  const lines = [
-    JSON.stringify({ table: 'meta', key: 'schema', value: SCHEMA_V }),
-    JSON.stringify({ table: 'meta', key: 'tree', value: tree }),
-    ...files.map((row) => JSON.stringify({ table: 'files', path: row.path, blob: row.blob, lang: row.lang, bytes: row.bytes, pkg: row.pkg })),
-    ...allSymbols.map((row) => JSON.stringify({ table: 'symbols', path: row.path, name: row.name, kind: row.kind, line: row.line, sig: row.sig, exported: row.exported })),
-    ...allEdges.map((row) => JSON.stringify({ table: 'edges', src: row.src, dst: row.dst, kind: row.kind, weight: row.weight })),
-    ...allFts.map((row) => JSON.stringify({ table: 'fts', kind: row.kind, ref: row.ref, body: row.body })),
-    ...allEmbeddings.map((row) => {
-      const vecBlob = Buffer.isBuffer(row.vec) || row.vec instanceof Uint8Array ? Buffer.from(row.vec.buffer, row.vec.byteOffset, row.vec.byteLength) : encodeVectorBlob(row.vec);
-      const dims = Number.isInteger(row.dims) ? row.dims : Math.floor(vecBlob.byteLength / 4);
-      return JSON.stringify({
-        table: 'embeddings',
-        path: row.path,
-        blob: row.blob ?? '',
-        model: row.model ?? '',
-        dims,
-        vec: vecBlob.toString('base64'),
-      });
-    }),
-  ];
-  await writeFile(tmp, `${lines.join('\n')}\n`);
-  await rename(tmp, file);
-  return { symbols: allSymbols.length, edges: allEdges.length, embeddings: allEmbeddings.length };
-}
-
-export async function readJsonl(root, table) {
-  // The pre-move path is a fallback for one release.
-  let text;
-  try {
-    text = await readFile(join(root, JSONL_FILE), 'utf8');
-  } catch {
-    try {
-      text = await readFile(join(root, JSONL_FILE_LEGACY), 'utf8');
-    } catch {
-      return { rows: [], error: null };
-    }
-  }
-  let schema = '';
-  try {
-    for (const line of text.split('\n')) {
-      if (line === '') continue;
-      const row = JSON.parse(line);
-      if (row.table === 'meta' && row.key === 'schema') schema = row.value ?? '';
-    }
-  } catch (error) {
-    return { rows: [], error: corruptIndexError(error) };
-  }
-  // A file a newer version owns is not read blind: this
-  // version's sidecar is read instead, and a sidecar that has not been built
-  // yet is cold, not broken. An older file is read in place; the next write
-  // rewrites it at the current schema.
-  if (!canonicalForWrite(schema)) {
-    try {
-      text = await readFile(indexFileFor(root, 'jsonl', schema), 'utf8');
-    } catch {
-      return { rows: [], error: null };
-    }
-  }
-  const rows = [];
-  try {
-    for (const line of text.split('\n')) {
-      if (line === '') continue;
-      const row = JSON.parse(line);
-      if (row.table !== table) continue;
-      if (table === 'meta') rows.push({ key: row.key, value: row.value });
-      else if (table === 'files') rows.push({ path: row.path, blob: row.blob, lang: row.lang, bytes: row.bytes, pkg: row.pkg });
-      else if (table === 'symbols') rows.push({ path: row.path, name: row.name, kind: row.kind, line: row.line, sig: row.sig, exported: row.exported });
-      else if (table === 'edges') rows.push({ src: row.src, dst: row.dst, kind: row.kind, weight: row.weight });
-      else if (table === 'fts') rows.push({ kind: row.kind, ref: row.ref, body: row.body });
-      else if (table === 'embeddings') {
-        const vec = decodeVectorBlob(row.vec);
-        rows.push({
-          path: row.path,
-          blob: row.blob ?? '',
-          model: row.model ?? '',
-          dims: Number.isInteger(row.dims) ? row.dims : vec.length,
-          vec,
-        });
-      }
-    }
-  } catch (error) {
-    return { rows: [], error: corruptIndexError(error) };
-  }
-  if (table === 'symbols') rows.sort(bySymbol);
-  else if (table === 'edges') rows.sort(byEdge);
-  else if (table === 'fts') rows.sort((a, b) => cmp(a.ref, b.ref));
-  else rows.sort(byPath);
-  return { rows, error: null };
-}
-
-/**
  * The sqlite file a read opens: the canonical file when it is this version's
  * or older, the sidecar when it belongs to a newer one,
  * null when no index for this version exists. Throws when a present file
@@ -632,7 +479,7 @@ async function resolveSqliteFile(root) {
   // An older database is readable in place: its tables carry the same columns,
   // and the next write migrates it. Only a newer one is routed to a sidecar.
   if (canonicalForWrite(version)) return file;
-  const sidecar = indexFileFor(root, 'sqlite', version);
+  const sidecar = indexFileFor(root, version);
   try {
     await stat(sidecar);
     return sidecar;
@@ -671,23 +518,15 @@ export async function readSqliteRows(root, sql, params = []) {
   }
 }
 
-export async function readSchema(root, backend) {
-  if (backend === 'sqlite') {
-    const { rows } = await readSqliteRows(root, "select value from meta where key = 'schema'");
-    return rows[0]?.value ?? '';
-  }
-  const { rows } = await readJsonl(root, 'meta');
-  return rows.find((row) => row.key === 'schema')?.value ?? '';
+export async function readSchema(root) {
+  const { rows } = await readSqliteRows(root, "select value from meta where key = 'schema'");
+  return rows[0]?.value ?? '';
 }
 
 /** The tree the stored index was built from, or '' when no build has vouched for one. */
-export async function readTreeDigest(root, backend) {
-  if (backend === 'sqlite') {
-    const { rows } = await readSqliteRows(root, "select value from meta where key = 'tree'");
-    return rows[0]?.value ?? '';
-  }
-  const { rows } = await readJsonl(root, 'meta');
-  return rows.find((row) => row.key === 'tree')?.value ?? '';
+export async function readTreeDigest(root) {
+  const { rows } = await readSqliteRows(root, "select value from meta where key = 'tree'");
+  return rows[0]?.value ?? '';
 }
 
 export async function countSqlite(root) {
@@ -712,11 +551,5 @@ function byPath(a, b) {
   return cmp(a.path, b.path);
 }
 
-function bySymbol(a, b) {
-  return cmp(a.path, b.path) || a.line - b.line || cmp(a.name, b.name) || cmp(a.kind, b.kind);
-}
 
-function byEdge(a, b) {
-  return cmp(a.src, b.src) || cmp(a.dst, b.dst) || cmp(a.kind, b.kind);
-}
 

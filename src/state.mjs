@@ -58,7 +58,6 @@ export const TREE_EXCLUDES = [
   join(STATE_DIR, 'leases.json'),
   join(STATE_DIR, 'check.json'),
   join(STATE_DIR, 'index.sqlite'),
-  join(STATE_DIR, 'index.jsonl'),
   join(STATE_DIR, 'brief.md'),
   join(STATE_DIR, 'journal'),
   join(STATE_DIR, 'worktrees'),

@@ -197,20 +197,20 @@ test('the same blobs produce the same symbols, and one edit rewrites that file',
   await writeFile(join(root, 'b.ts'), 'export const b = 2;\n');
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'initial']);
-  await reindex(root, { backend: 'sqlite' });
-  const first = await readSymbols(root, { backend: 'sqlite' });
-  const edges = await readEdges(root, { backend: 'sqlite' });
+  await reindex(root);
+  const first = await readSymbols(root);
+  const edges = await readEdges(root);
   assert.ok(edges.some((edge) => edge.src === 'a.ts' && edge.dst === 'b.ts' && edge.kind === 'import'));
-  const again = await reindex(root, { backend: 'sqlite' });
+  const again = await reindex(root);
   assert.equal(again.updated, 0);
-  assert.deepEqual(await readSymbols(root, { backend: 'sqlite' }), first);
+  assert.deepEqual(await readSymbols(root), first);
   await writeFile(join(root, 'b.ts'), 'export const changed = 2;\n');
   await git(['-C', root, 'add', 'b.ts']);
-  const edited = await reindex(root, { backend: 'sqlite' });
+  const edited = await reindex(root);
   assert.equal(edited.updated, 1);
-  const names = (await readSymbols(root, { backend: 'sqlite' })).filter((row) => row.path === 'b.ts').map((row) => row.name);
+  const names = (await readSymbols(root)).filter((row) => row.path === 'b.ts').map((row) => row.name);
   assert.deepEqual(names, ['changed']);
-  assert.ok((await readSymbols(root, { backend: 'sqlite' })).some((row) => row.path === 'a.ts' && row.name === 'a'));
+  assert.ok((await readSymbols(root)).some((row) => row.path === 'a.ts' && row.name === 'a'));
   await rm(root, { recursive: true, force: true });
 });
 
@@ -222,7 +222,6 @@ test('a named parser fills the cache and leaves the file alone', async () => {
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'initial']);
   const result = await reindex(root, {
-    backend: 'jsonl',
     adapter: {
       extract() {
         return {
@@ -233,9 +232,9 @@ test('a named parser fills the cache and leaves the file alone', async () => {
     },
   });
   assert.equal(result.parsers, 'loaded');
-  const symbols = await readSymbols(root, { backend: 'jsonl' });
+  const symbols = await readSymbols(root);
   assert.deepEqual(symbols.map((row) => row.name), ['Exact']);
-  const edges = await readEdges(root, { backend: 'jsonl' });
+  const edges = await readEdges(root);
   assert.equal(edges[0].kind, 'call');
   assert.equal(await readFile(join(root, 'a.ts'), 'utf8'), source);
   await rm(root, { recursive: true, force: true });
@@ -248,9 +247,9 @@ test('a parser that is named and not installed leaves the built-in rows', async 
   await writeFile(join(root, 'simt.json'), `${JSON.stringify({ index: { parsers: 'not-installed-parsers' } })}\n`);
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'initial']);
-  const result = await reindex(root, { backend: 'sqlite' });
+  const result = await reindex(root);
   assert.equal(result.parsers, 'missing');
-  const names = (await readSymbols(root, { backend: 'sqlite' })).map((row) => row.name);
+  const names = (await readSymbols(root)).map((row) => row.name);
   assert.ok(names.includes('a'));
   await rm(root, { recursive: true, force: true });
 });

@@ -173,6 +173,9 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-083',
     'ADR-086',
     'ADR-088',
+    // ADR-089 joined when ADR-135 withdrew its ruling 1: the note on the superseded
+    // record is where the parser reads the claim, so the corpus lists it there.
+    'ADR-089',
     'ADR-097',
     'ADR-098',
     'ADR-099',
@@ -327,6 +330,7 @@ assert.deepEqual(leaking, [
     'ADR-128',
     'ADR-131',
     'ADR-133',
+    'ADR-135',
 ]);
 });
 

@@ -579,7 +579,7 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W06 | Orthogonal facets | 1 | W01 | M | E3 | mixed shapes explained; no lost code gates | Complete | 5814afa |
 | W07 | Work manifest and adoption | 1 | W06 | M | E3 | no fabricated runner; stable old schema | Complete | d0f6bf6 |
 | W08 | Artifact scopes and identity | 1 | W07 | M | E3 | exact scope/representation resolution | Complete | 197201b |
-| W09 | Portable work profiles | 1 | W08, W05 | S | E4 | actionable rendered rules; hard gates kept | Queued | |
+| W09 | Portable work profiles | 1 | W08, W05 | S | E4 | actionable rendered rules; hard gates kept | Complete | 0b15012 |
 | W10 | Capability cards | 1 | W07 | S | E2 | declared/available/authorized separated | Queued | |
 | W11 | Intent routing | 1 | W08, W10 | M | E3 | labelled intent evidence; no inferred effects | Queued | |
 | W12 | Section extraction | 2 | W08 | M | E5 | late/Unicode sections recovered | Complete | c227e48 · test: node --test test/knowledge-sections.test.mjs |

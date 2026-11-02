@@ -114,7 +114,10 @@ export const SPEC = [
   // before anything is created - the one default here that cannot mutate.
   { path: 'slice start', usage: '<id> --yes  |  -- "<text>"', summary: 'give a slice its worktree, branch and brief; -- starts one from a prompt, no row', defaultFor: 'slice', aliases: ['plan start'], flags: ["id","session","test","type"], },
   { path: 'status', usage: '[--line]', summary: 'the repository snapshot, or one line of the last check', flags: ["line"], },
-  { path: 'sync', usage: '--yes', summary: 're-render the generated regions from the rule content', writes: 'repo', flags: ["yes","check","diff","dry-run"], },
+  // `--check` is the spelling bare `sync` replaced: the command already reports before it
+  // writes, so the flag asked a question the default answer answers. It keeps working and
+  // says what replaced it, rather than disappearing from under a script.
+  { path: 'sync', usage: '--yes', summary: 're-render the generated regions from the rule content', writes: 'repo', deprecated: { check: 'sync' }, flags: ["yes","check","diff","dry-run"], },
   { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed]', summary: 'the tests that exercise a file, or - with --run - the ones a change reaches', flags: ["cochange","run","changed"], },
   { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', aliases: ['harness cost'], flags: ["repos","session"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff"], },

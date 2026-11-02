@@ -302,6 +302,16 @@ export async function resolveCommand(path) {
 export const DEPRECATION_RELEASE = '0.9.0';
 
 /**
+ * The spellings a command superseded, per path: flag -> the form that replaced it.
+ *
+ * A superseded spelling keeps working and says what replaced it, because the reader who
+ * has it in a script did not change anything and should not have to discover the rename
+ * from a failure. The note is one line on stderr and one field in the JSON document, so a
+ * caller can see it without reading prose.
+ */
+const DEPRECATED = new Map(SPEC.filter((row) => row.deprecated !== undefined).map((row) => [row.path, row.deprecated]));
+
+/**
  * Whether a tolerance that ends at `removedIn` has ended, comparing the way versions
  * are numbered rather than the way strings are ordered: 0.10.0 is later than 0.9.0, and
  * a string comparison says the opposite. An unreadable version refuses nothing - a build
@@ -412,6 +422,19 @@ async function dispatchInState(argv) {
     warn(message);
     if (!isJson(flags)) note(message);
   }
+  // A superseded flag is declared, so the loop above is silent about it; the note belongs
+  // here, where the path it belongs to is known.
+  const superseded = DEPRECATED.get(path) ?? {};
+  const renamed = new Map();
+  for (const [flag, use] of Object.entries(superseded)) {
+    const key = flag.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+    if (flags[key] === true) renamed.set(flag, use);
+  }
+  for (const [flag, use] of renamed) {
+    const message = `--${flag} is deprecated for \`${path}\`; \`${use}\` already answers it`;
+    warn(message);
+    if (!isJson(flags)) note(message);
+  }
   const load = IMPLEMENTED[path];
   if (!load) return fail(`unknown command \`${path}\``, EXIT.USAGE);
   // Import only the module the matched path needs. The registry used to pull every
@@ -436,7 +459,12 @@ async function dispatchInState(argv) {
   const docs = jsonCaptureTake() ?? [];
   const [only] = docs;
   if (docs.length === 1 && only.value !== null && typeof only.value === 'object' && !Array.isArray(only.value)) {
-    emitJson({ ...only.value, ok: only.value.ok ?? code === 0, exitCode: code });
+    emitJson({
+      ...only.value,
+      ok: only.value.ok ?? code === 0,
+      exitCode: code,
+      ...(renamed.size === 0 ? {} : { deprecated: Object.fromEntries(renamed) }),
+    });
     return code;
   }
   // A stream of documents (NDJSON) has no single place for one exit code; each is written

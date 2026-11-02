@@ -83,7 +83,7 @@ const JSON_COMMANDS = {
   // Reads the workspace, not a root; the fixture holds no workspace to read.
   'skills find': { noRoot: true, args: ['test'] },
   'graph lint': { noRoot: true },
-  compare: [],
+  'workspace compare': [],
   tokens: { root: 'r' },
   'harness detect': [],
   'harness loaders': [],
@@ -121,7 +121,7 @@ const JSON_COMMANDS = {
   impact: { root: 'r' },
   'lessons list': { root: 'r' },
   'lessons review': { root: 'r' },
-  decide: { root: 'r' },
+  'decide new': { root: 'r' },
   // No repository needed: the table is compiled in, and the code is positional.
   explain: ['DRIFT'],
   // No journaled writes on a fresh fixture: previews the empty undo, exit 0.
@@ -137,10 +137,10 @@ const JSON_COMMANDS = {
   // report, and the report is still one document, exit 0 (R55).
   'pr-body': { root: 'r' },
   'local doctor': { root: 'r' },
-  'shared plan': { root: '.' },
+  'workspace share': { root: '.' },
   // The preview, not the write: the write lands in the reader's home directory, and a
   // contract test must never do that.
-  'shared install': { root: '.' },
+  'workspace install': { root: '.' },
 };
 
 test('every command that emits json emits one compact document with a version', async () => {

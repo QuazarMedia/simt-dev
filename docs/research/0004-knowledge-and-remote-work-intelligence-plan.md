@@ -575,10 +575,10 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W02 | Outcome corpus | 0 | W01 | M | E1 | 30 tasks/stratum canary; gold/noop controls | Complete | 5926406 · test: node --test test/work-corpus.test.mjs |
 | W03 | External-world simulator | 0 | W02 | L | E1 | deterministic faults at every boundary | Complete | cc66d3d · test: node --test test/work-simulator.test.mjs |
 | W04 | Stratified metrics | 0 | W02, W03 | M | E1 | exact calculations; honest intervals | Complete | eebf8e6 |
-| W05 | Adversarial probes | 0 | W03 | M | E2 | all forbidden-effect probes rejected | Queued | |
-| W06 | Orthogonal facets | 1 | W01 | M | E3 | mixed shapes explained; no lost code gates | Queued | |
-| W07 | Work manifest and adoption | 1 | W06 | M | E3 | no fabricated runner; stable old schema | Queued | |
-| W08 | Artifact scopes and identity | 1 | W07 | M | E3 | exact scope/representation resolution | Queued | |
+| W05 | Adversarial probes | 0 | W03 | M | E2 | all forbidden-effect probes rejected | Complete | 7d0fffd |
+| W06 | Orthogonal facets | 1 | W01 | M | E3 | mixed shapes explained; no lost code gates | Complete | 5814afa |
+| W07 | Work manifest and adoption | 1 | W06 | M | E3 | no fabricated runner; stable old schema | Complete | d0f6bf6 |
+| W08 | Artifact scopes and identity | 1 | W07 | M | E3 | exact scope/representation resolution | Complete | 197201b |
 | W09 | Portable work profiles | 1 | W08, W05 | S | E4 | actionable rendered rules; hard gates kept | Queued | |
 | W10 | Capability cards | 1 | W07 | S | E2 | declared/available/authorized separated | Queued | |
 | W11 | Intent routing | 1 | W08, W10 | M | E3 | labelled intent evidence; no inferred effects | Queued | |

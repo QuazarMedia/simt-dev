@@ -5,6 +5,7 @@ One suite, on the repository's own runner:
 ```sh
 npm test                          # every file: node --test over test/*.test.mjs
 npm run test:unit                 # the files that never spawn the CLI, ~9 s
+npm run test:coverage             # that tier under node's coverage report
 node --test test/index.test.mjs   # one file
 ```
 
@@ -12,6 +13,12 @@ node --test test/index.test.mjs   # one file
 spawns the CLI is integration, a test that imports modules and calls them is unit. The split
 is asserted by `test/tiers.test.mjs`, so a new file joins its tier without anyone updating a
 list (ADR-137). `npm test` still runs both tiers, and it is what pre-push and CI run.
+
+Coverage is measured on the unit tier, because that is the only tier where the code under test
+runs in the same process as the test. An integration test spawns the CLI, and node's coverage
+report is per-process, so `npm run test:coverage` prints a floor for `src/` rather than a
+ceiling, and `simt.json`'s `limits.coverage` stays `null` until someone measures a number worth
+enforcing.
 
 ## What the suite is built on
 

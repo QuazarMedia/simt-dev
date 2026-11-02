@@ -520,7 +520,11 @@ test('upgrade: simt-dev is its own consumer and round-trips without moving the s
     before.projection.simtDevSha,
     'the stamp moved on a no-op upgrade',
   );
-  await rm(root, { recursive: true, force: true });
+  // A git tree that was just written is still being closed by the filesystem when the
+  // test tears it down: the first `rm` sees a directory the kernel has already emptied for
+  // every reader but has not finished unlinking, and ENOTEMPTY fails a test whose assertions
+  // all passed. Retrying is the fix rather than a retry of the whole test.
+  await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 });
 
 test('upgrade: a commit in the CONSUMER repo does not move the stamp', async () => {

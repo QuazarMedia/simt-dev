@@ -18,19 +18,23 @@ import { fileURLToPath } from 'node:url';
 
 import { adapter, adapters, agentPath, loadAgent, rendered } from '../src/agents/render.mjs';
 import { keepTemp } from './fixture.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = join(HERE, '..', 'bin', 'simt.mjs');
 
 /** A scratch directory to install into. `agents install` reads and writes files and
  *  does not run git, so a bare directory is the whole of the fixture. */
-async function repo(files = {}) {
+async function repo(files = {}, { surfaces = adapters().map((row) => row.id) } = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-agents-'));
   keepTemp(root);
   for (const [name, text] of Object.entries(files)) {
     await mkdir(dirname(join(root, name)), { recursive: true });
     await writeFile(join(root, name), text);
   }
+  // The harness set is the repository's declaration (ADR-141): a fixture that means "every
+  // harness" has to say so, because saying nothing now means saying nothing.
+  await writeFile(join(root, MANIFEST_FILE), `${JSON.stringify({ id: 'fixture', surfaces }, null, 2)}\n`);
   return root;
 }
 
@@ -192,4 +196,39 @@ test('a harness with no renderer is reported, not written', async () => {
     assert.equal(adapter(id), null, `${id} has no renderer`);
     assert.match(status.text, new RegExp(`NO FILE\\s+${id}`));
   }
+});
+
+test('a repository that declared no harness installs nothing and names both remedies', async () => {
+  const root = await repo({}, { surfaces: [] });
+  const preview = cli(['agents', 'install', '--root', root]);
+  assert.equal(preview.code, 0, preview.text);
+  assert.match(preview.text, /SKIP\s+no harness is selected/);
+  assert.match(preview.text, /add "surfaces"/);
+  assert.match(preview.text, /--harness <id>/);
+  assert.equal(await readFile(join(root, agentPath('claude')), 'utf8').catch(() => null), null);
+
+  const applied = cli(['agents', 'install', '--root', root, '--yes']);
+  assert.equal(applied.code, 0, applied.text);
+  assert.equal(await readFile(join(root, agentPath('claude')), 'utf8').catch(() => null), null, 'an empty scope still wrote a file');
+
+  const status = cli(['agents', 'status', '--root', root]);
+  assert.equal(status.code, 0, status.text);
+  assert.match(status.text, /NO SCOPE/);
+  assert.match(status.text, /remedy/);
+});
+
+test('declaring one surface installs one reader, and a flag overrides the declaration', async () => {
+  const root = await repo({}, { surfaces: ['codex'] });
+  const install = cli(['agents', 'install', '--root', root, '--yes']);
+  assert.equal(install.code, 0, install.text);
+  assert.match(install.text, /WROTE    2 agent file\(s\)/, 'one agent plus the companion skill');
+  assert.ok((await readFile(join(root, agentPath('codex')), 'utf8')).includes('developer_instructions'));
+  for (const row of adapters()) {
+    if (row.id === 'codex') continue;
+    assert.equal(await readFile(join(root, agentPath(row.id)), 'utf8').catch(() => null), null, `${row.id} was written from a declaration it was not in`);
+  }
+
+  const flagged = cli(['agents', 'install', '--root', root, '--harness', 'claude', '--yes']);
+  assert.equal(flagged.code, 0, flagged.text);
+  assert.ok((await readFile(join(root, agentPath('claude')), 'utf8')).startsWith('---\nname: Simt-Agent'));
 });

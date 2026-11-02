@@ -46,6 +46,7 @@ import {
   rendered,
 } from '../agenthooks/render.mjs';
 import { commandRoot } from '../repo-root.mjs';
+import { noScopeLine, resolveHarnessScope } from '../agents/scope.mjs';
 
 export async function agentHookCommand(args, flags) {
   const event = args[0];
@@ -190,7 +191,7 @@ const OTHER_LABEL = { none: 'NO FILE ', other: 'NOT OURS', skipped: 'SKIPPED ' }
  * refusal because writing the other configs while one is unreadable would leave the
  * repository in a state where the report it printed is no longer true.
  */
-export async function planAgentHooks(root, { harness }) {
+export async function planAgentHooks(root, { harness, harnesses = null } = {}) {
   // `--harness` narrows the install to one reader (ADR-107). The id is validated
   // against the same table the loop reads, so a typo fails before anything is
   // planned; the remedy names the ids the way `agent-hook` does.
@@ -210,7 +211,10 @@ export async function planAgentHooks(root, { harness }) {
     listPromotedLessons(root).catch(() => []),
   ]);
   const hasLessons = promotedLessons.length > 0;
-  const rows = harness === undefined ? adapters() : adapters().filter((r) => r.id === harness);
+  // The set is resolved by the caller (ADR-141): `--harness`, or the repository's own
+  // `surfaces` declaration. `harness` remains for a single-id caller.
+  const wanted = harnesses ?? (harness === undefined ? null : [harness]);
+  const rows = wanted === null ? adapters() : adapters().filter((r) => wanted.includes(r.id));
   const plan = [];
   for (const row of rows) {
     const path = hookPath(row.id);
@@ -240,8 +244,8 @@ export async function planAgentHooks(root, { harness }) {
   for (const r of hookRows()) {
     if (r.path === null) others.push({ id: r.id, path: null, state: 'none', note: r.note });
     else if (adapter(r.id) === null) others.push({ id: r.id, path: r.path, state: 'other', note: r.note });
-    else if (harness !== undefined && r.id !== harness) {
-      others.push({ id: r.id, path: r.path, state: 'skipped', note: 'not requested; install without --harness to write every harness' });
+    else if (wanted !== null && !wanted.includes(r.id)) {
+      others.push({ id: r.id, path: r.path, state: 'skipped', note: 'not selected; declare it in "surfaces" or pass --harness' });
     }
   }
 
@@ -294,7 +298,17 @@ export async function applyAgentHooks(root, journal, { plan, shim, owner }) {
 
 async function installHooks(root, flags, command = 'agent-hooks install') {
   const mode = writeMode(flags);
-  const planned = await planAgentHooks(root, { harness: flags.harness });
+  const scope = await resolveHarnessScope(root, flags);
+  if (scope.error) return fail(scope.error, EXIT.USAGE, scope.remedy);
+  if (scope.ids.length === 0) {
+    if (isJson(flags)) {
+      emitJson({ ok: true, command, root, harnesses: [], filesWritten: false, remedy: scope.remedy });
+      return EXIT.OK;
+    }
+    emit(noScopeLine(root, command));
+    return EXIT.OK;
+  }
+  const planned = await planAgentHooks(root, { harnesses: scope.ids });
   if (planned.error) {
     return fail(planned.error, EXIT.USAGE, planned.remedy);
   }
@@ -401,6 +415,8 @@ async function installHooks(root, flags, command = 'agent-hooks install') {
 async function hooksStatus(root, flags, command = 'agent-hooks status', install = 'agent-hooks install') {
   const rows = [];
   const problems = [];
+  const scope = await resolveHarnessScope(root, flags);
+  if (scope.error) return fail(scope.error, EXIT.USAGE, scope.remedy);
   // The plugin file this tool owns whole is compared against what `install` would write
   // right now, so status reads the same opt-in install reads: a file that matches the
   // preview is present, anything else is drift an install will rewrite.
@@ -408,6 +424,7 @@ async function hooksStatus(root, flags, command = 'agent-hooks status', install 
   const optIn = await promptOptIn(root);
 
   for (const row of adapters()) {
+    if (!scope.ids.includes(row.id)) continue;
     const path = hookPath(row.id);
     const existing = await readIfExists(join(root, path));
     if (row.file) {
@@ -464,6 +481,7 @@ async function hooksStatus(root, flags, command = 'agent-hooks status', install 
   for (const r of hookRows()) {
     if (r.path === null) rows.push({ id: r.id, path: null, state: 'none', entries: 0, note: r.note });
     else if (adapter(r.id) === null) rows.push({ id: r.id, path: r.path, state: 'other', entries: 0, note: r.note });
+    else if (!scope.ids.includes(r.id)) rows.push({ id: r.id, path: r.path, state: 'skipped', entries: 0, note: 'not selected; declare it in "surfaces" or pass --harness' });
   }
 
   if (isJson(flags)) {
@@ -471,9 +489,15 @@ async function hooksStatus(root, flags, command = 'agent-hooks status', install 
     return problems.length === 0 ? EXIT.OK : EXIT.FAIL;
   }
 
-  const lines = [`repo     ${root}`];
+  const lines = [`repo     ${root}`, `scope    ${scope.source === 'flag' ? `--harness ${scope.ids[0]}` : scope.source === 'surfaces' ? `"surfaces" (${scope.ids.join(', ')})` : 'none selected'}`];
+  if (scope.ids.length === 0) {
+    lines.push('NO SCOPE  no harness is selected, so nothing is reported as installed or absent here');
+    lines.push(`remedy   ${scope.remedy}`);
+    emit(lines.join('\n'));
+    return EXIT.OK;
+  }
   for (const r of rows) {
-    const state = { present: 'PRESENT ', absent: 'ABSENT  ', unreadable: 'INVALID ', drift: 'DRIFT   ', none: 'NO FILE ', other: 'NOT OURS' }[r.state];
+    const state = { present: 'PRESENT ', absent: 'ABSENT  ', unreadable: 'INVALID ', drift: 'DRIFT   ', none: 'NO FILE ', other: 'NOT OURS', skipped: 'SKIPPED ' }[r.state];
     lines.push(`${state} ${r.id.padEnd(12)} ${r.path ?? '(no hooks file is documented)'}`);
     if (r.state === 'absent') lines.push(`          ${' '.repeat(12)} install: ${CLI} ${install} --yes`);
     // The second event is a separate answer to a separate question: a harness can carry

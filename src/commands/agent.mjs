@@ -28,6 +28,7 @@ import {
 } from '../agents/render.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { readIfExists } from '../util/fs.mjs';
+import { noScopeLine, resolveHarnessScope } from '../agents/scope.mjs';
 
 export async function agentsCommand(sub, args, flags) {
   const root = commandRoot(flags, args);
@@ -46,16 +47,22 @@ async function installAgents(root, flags) {
   // `--harness` narrows the install to one reader (ADR-107). The id is validated
   // against the same table the loop reads, so a typo fails before anything is
   // planned; the remedy names the ids the way `agent-hook` does.
-  const selected = flags.harness;
-  if (selected !== undefined && adapter(selected) === null) {
-    return fail(
-      `unknown harness \`${selected}\``,
-      EXIT.USAGE,
-      `--harness <id>, one of: ${adapters().map((a) => a.id).join(', ')}`,
-    );
+  const scope = await resolveHarnessScope(root, flags);
+  if (scope.error) return fail(scope.error, EXIT.USAGE, scope.remedy);
+  // A repository that declared no harness has nothing to install for: guessing "all of
+  // them" is what this replaced, and it wrote six readers into a repository that asked
+  // for one (ADR-141). The remedy names both ways to select one.
+  if (scope.ids.length === 0) {
+    if (isJson(flags)) {
+      emitJson({ ok: true, command: 'agents install', root, harnesses: [], filesWritten: false, remedy: scope.remedy });
+      return EXIT.OK;
+    }
+    emit(noScopeLine(root, 'agents install'));
+    return EXIT.OK;
   }
+  const selected = scope.source === 'flag' ? scope.ids[0] : undefined;
 
-  const plan = await planAgents(root, { harness: selected });
+  const plan = await planAgents(root, { harnesses: scope.ids });
 
   // The readers this tool does not write a file for, reported rather than skipped in
   // silence: a command that writes six files and says nothing about the two harnesses
@@ -65,8 +72,15 @@ async function installAgents(root, flags) {
   for (const r of agentRows()) {
     if (r.path === null) others.push({ id: r.id, path: null, state: 'none', note: r.note });
     else if (adapter(r.id) === null) others.push({ id: r.id, path: r.path, state: 'other', note: r.note });
-    else if (selected !== undefined && r.id !== selected) {
-      others.push({ id: r.id, path: r.path, state: 'skipped', note: 'not requested; install without --harness to write every harness' });
+    else if (!scope.ids.includes(r.id)) {
+      others.push({
+        id: r.id,
+        path: r.path,
+        state: 'skipped',
+        note: scope.source === 'flag'
+          ? 'not requested; pass its id to --harness, or declare it in "surfaces"'
+          : 'not declared in "surfaces"; add it there or pass --harness',
+      });
     }
   }
 
@@ -148,11 +162,14 @@ async function agentsStatus(root, flags) {
   const agent = await loadAgent();
   const rows = [];
   const problems = [];
+  const scope = await resolveHarnessScope(root, flags);
+  if (scope.error) return fail(scope.error, EXIT.USAGE, scope.remedy);
 
   // The file this tool owns whole is compared against what `install` would write
   // right now, so status reads the same bytes install reads: a file that matches
   // the preview is present, anything else is drift an install will rewrite.
   for (const row of adapters()) {
+    if (!scope.ids.includes(row.id)) continue;
     const path = agentPath(row.id);
     const existing = await readIfExists(join(root, path));
     if (existing === null) {
@@ -174,6 +191,7 @@ async function agentsStatus(root, flags) {
   for (const r of agentRows()) {
     if (r.path === null) rows.push({ id: r.id, path: null, state: 'none', note: r.note });
     else if (adapter(r.id) === null) rows.push({ id: r.id, path: r.path, state: 'other', note: r.note });
+    else if (!scope.ids.includes(r.id)) rows.push({ id: r.id, path: r.path, state: 'skipped', note: 'not selected; declare it in "surfaces" or pass --harness' });
   }
 
   if (isJson(flags)) {
@@ -181,9 +199,15 @@ async function agentsStatus(root, flags) {
     return problems.length === 0 ? EXIT.OK : EXIT.FAIL;
   }
 
-  const lines = [`repo     ${root}`];
+  const lines = [`repo     ${root}`, `scope    ${scope.source === 'flag' ? `--harness ${scope.ids[0]}` : scope.source === 'surfaces' ? `"surfaces" (${scope.ids.join(', ')})` : 'none selected'}`];
+  if (scope.ids.length === 0) {
+    lines.push('NO SCOPE  no harness is selected, so nothing is reported as installed or absent here');
+    lines.push(`remedy   ${scope.remedy}`);
+    emit(lines.join('\n'));
+    return EXIT.OK;
+  }
   for (const r of rows) {
-    const state = { present: 'PRESENT ', absent: 'ABSENT  ', drift: 'DRIFT   ', none: 'NO FILE ', other: 'NOT OURS' }[r.state];
+    const state = { present: 'PRESENT ', absent: 'ABSENT  ', drift: 'DRIFT   ', none: 'NO FILE ', other: 'NOT OURS', skipped: 'SKIPPED ' }[r.state];
     lines.push(`${state} ${r.id.padEnd(12)} ${r.path ?? '(no agents file is documented)'}`);
     if (r.state === 'absent') lines.push(`          ${' '.repeat(12)} install: ${CLI} agents install --yes`);
     if (r.note) lines.push(`          ${' '.repeat(12)} ${r.note}`);

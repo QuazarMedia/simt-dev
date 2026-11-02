@@ -9,6 +9,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { constants } from 'node:fs';
 import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
@@ -22,6 +23,9 @@ import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../src/agenthooks/shim.mjs
 import { EVENTS, POLICY_IDS } from '../src/agenthooks/policy.mjs';
 import { SQLITE_FILE } from '../src/index/persist.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
+
+/** The harness set a fixture declares (ADR-141): without it an install writes nothing. */
+const HARNESSES = adapters().map((row) => row.id);
 import { git, keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -38,6 +42,11 @@ async function repo(files = {}) {
   for (const [name, text] of Object.entries(files)) {
     await mkdir(dirname(join(root, name)), { recursive: true });
     await writeFile(join(root, name), text);
+  }
+  // A fixture that installs hooks declares the harness set unless the test wrote its own
+  // manifest: saying nothing now means "no harness selected", not "all of them" (ADR-141).
+  if (!(MANIFEST_FILE in files)) {
+    await writeFile(join(root, MANIFEST_FILE), `${JSON.stringify({ id: 'fixture', surfaces: HARNESSES }, null, 2)}\n`);
   }
   return root;
 }
@@ -712,7 +721,7 @@ const DELIVER = (id, payload, options) => cli(['agent-hook', EVENTS[1], '--harne
  */
 async function served(optIn = { brief: {} }, { warm = true } = {}) {
   const root = await repo({
-    [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture', ...optIn }, null, 2)}\n`,
+    [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture', surfaces: HARNESSES, ...optIn }, null, 2)}\n`,
     'package.json': `${JSON.stringify({ name: 'fixture', version: '1.0.0', type: 'module', scripts: { test: 'node --test' } }, null, 2)}\n`,
     'README.md': '# fixture\n',
     'src/keep.mjs': 'export function keep(value) {\n  return value;\n}\n',
@@ -749,7 +758,7 @@ test('a delivery injects the packet into the prompt, in the harness dialect', as
 });
 
 test('a repository that has not opted in is delivered nothing, and the note says why', async () => {
-  const root = await repo({ [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture' }, null, 2)}\n` });
+  const root = await repo({ [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture', surfaces: HARNESSES }, null, 2)}\n` });
   const result = DELIVER('claude', prompt.claude('fix the keep helper', root));
   assert.equal(result.code, 0, result.text);
   assert.equal(result.stdout, '', 'a packet was delivered to a repository that never asked for one');
@@ -771,7 +780,7 @@ test('a delivery never builds the index it reads', async () => {
   // repository to build what it is about to read. So the cold case is asserted directly:
   // nothing delivered, and no index left behind for having tried.
   const root = await repo({
-    [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture', brief: {} }, null, 2)}\n`,
+    [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture', surfaces: HARNESSES, brief: {} }, null, 2)}\n`,
     'src/keep.mjs': 'export const keep = 1;\n',
   });
   await git(['init', '-q', root]);
@@ -795,7 +804,7 @@ test('install writes the prompt group only into a repository that opted in', asy
   const again = cli(['agent-hooks', 'install', '--root', asked, '--yes']);
   assert.equal(again.text.match(/UNCHANGED/g)?.length, adapters().length + 1, again.text);
 
-  const quiet = await repo({ [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture' }, null, 2)}\n` });
+  const quiet = await repo({ [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture', surfaces: HARNESSES }, null, 2)}\n` });
   const result = cli(['agent-hooks', 'install', '--root', quiet, '--yes']);
   assert.match(result.text, /PROMPT\s+not opted in/);
   const refused = JSON.parse(await readFile(join(quiet, hookPath('claude')), 'utf8'));
@@ -942,7 +951,7 @@ test('the opencode entry is a plugin file the tool owns whole, and install round
 });
 
 test('the opencode plugin carries the prompt hook only where the repository opted in', async () => {
-  const quiet = await repo({ [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture' }, null, 2)}\n` });
+  const quiet = await repo({ [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture', surfaces: HARNESSES }, null, 2)}\n` });
   cli(['agent-hooks', 'install', '--root', quiet, '--yes']);
   const quietText = await readFile(join(quiet, hookPath('opencode')), 'utf8');
   assert.doesNotMatch(quietText, /session\.hook\('prompt'/, 'the delivery was installed without an opt-in');
@@ -951,4 +960,23 @@ test('the opencode plugin carries the prompt hook only where the repository opte
   cli(['agent-hooks', 'install', '--root', asked, '--yes']);
   const askedText = await readFile(join(asked, hookPath('opencode')), 'utf8');
   assert.match(askedText, /session\.hook\('prompt'/, 'the opted-in repository got the delivery');
+});
+
+test('an empty surfaces list installs nothing and names both remedies', async () => {
+  const root = await repo({ [MANIFEST_FILE]: `${JSON.stringify({ id: 'fixture', surfaces: [] }, null, 2)}\n` });
+  const preview = cli(['agent-hooks', 'install', '--root', root]);
+  assert.equal(preview.code, 0, preview.text);
+  assert.match(preview.text, /SKIP\s+no harness is selected/);
+  assert.match(preview.text, /add "surfaces"/);
+  assert.match(preview.text, /--harness <id>/);
+  assert.equal(existsSync(join(root, hookPath('claude'))), false, 'an empty scope still wrote a config');
+
+  const status = cli(['agent-hooks', 'status', '--root', root]);
+  assert.equal(status.code, 0, status.text);
+  assert.match(status.text, /NO SCOPE/);
+
+  // The flag is the other way to select one, and it needs no declaration.
+  const forced = cli(['agent-hooks', 'install', '--root', root, '--harness', 'claude', '--yes']);
+  assert.equal(forced.code, 0, forced.text);
+  assert.equal(existsSync(join(root, hookPath('claude'))), true);
 });

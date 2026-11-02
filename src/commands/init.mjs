@@ -45,7 +45,8 @@ import {
 import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
-import { planAgents, writeAgentPlan, writeSkillFile } from '../agents/render.mjs';
+import { adapters, planAgents, writeAgentPlan, writeSkillFile } from '../agents/render.mjs';
+import { resolveHarnessScope } from '../agents/scope.mjs';
 import { applyAgentHooks, planAgentHooks } from './agenthook.mjs';
 import { computeLock } from '../projection/lock.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
@@ -59,6 +60,12 @@ import { commandRoot } from '../repo-root.mjs';
 import { git as sysGit } from '../sys/git.mjs';
 import { ADOPT_BRANCH, BACKUP_TAG, establishEscapeHatch, git, scanRepo } from './init-scan.mjs';
 
+
+// The harness ids `--harness` accepts, from the table the renderers read: a second list
+// in this file is the one that would go stale the day a reader is added.
+function harnessIds() {
+  return adapters().map((row) => row.id);
+}
 
 export async function initCommand(positional, flags) {
   const root = commandRoot(flags, positional);
@@ -99,6 +106,12 @@ export async function initCommand(positional, flags) {
   // a repository declared five and could run two, which would have blocked every
   // commit once hooks were installed.
   const capability = await readCapability(root);
+  // Which harness this adoption is for (ADR-141). With `--harness` the adoption is that
+  // reader's: the rules are projected to its surface and `surfaces` records the choice.
+  // Without it no harness is selected, so the agent files and the agent-hooks are not
+  // written at all - a fresh adoption used to install six readers nobody asked for.
+  const harnessScope = await resolveHarnessScope(root, flags);
+  if (harnessScope.error) return fail(harnessScope.error, EXIT.USAGE, harnessScope.remedy);
   // `facts` carries the ecosystem rows (has-cargo-toml, ...) — the same signal set that
   // selects this repo's profiles, so one marker file reaches both the region the reader
   // gets and the gates its commits run. Without it the ecosystem rows never fire here
@@ -112,7 +125,12 @@ export async function initCommand(positional, flags) {
   // `installedSkills` reads the directory for the region's disclosure section.
   const journal = [];
   await writeSkillFile(root, journal);
-  const projected = await plan(root, flags);
+  // The harness is also the rule surface: `--harness cursor` and `--surfaces cursor` are
+  // the same statement about this adoption, and the manifest records one list.
+  const projected = await plan(
+    root,
+    flags.harness !== undefined && flags.surfaces === undefined ? { ...flags, surfaces: flags.harness } : flags,
+  );
   const region = projected.targets[0];
   const mdcProblems = projected.mdcProblems ?? [];
   const crossRefs = projected.crossRefs ?? [];
@@ -137,9 +155,8 @@ export async function initCommand(positional, flags) {
   // today's default into every fresh manifest would freeze it for every release after
   //. With a declared array, `projected.surfaces` is that same array
   // resolved, so the assignment records rather than rewrites.
-  if (flags.surfaces !== undefined || Array.isArray(existing?.surfaces)) {
-    manifest.surfaces = projected.surfaces;
-  }
+  if (flags.harness !== undefined) manifest.surfaces = harnessScope.ids;
+  else if (flags.surfaces !== undefined || Array.isArray(existing?.surfaces)) manifest.surfaces = projected.surfaces;
 
   // The lock's input digest includes the manifest this run writes. On a fresh adoption
   // there is no manifest on disk yet, so the lock `plan` computed is the one for a repo
@@ -175,19 +192,20 @@ export async function initCommand(positional, flags) {
   // and end up with an agent the repository's own gate does not enforce. The parser's
   // `no-` convention delivers it as the positive `agents` set to false.
   const noAgents = flags.agents === false;
+  const noHarness = harnessScope.ids.length === 0;
   // ADR-111. The one agent this tool ships, planned with the rest so the operator sees
   // it in the same preview that lists everything else. Written in the apply path with
   // everything else, journaled the same way. `--harness` narrows it to one reader, the
   // same axis as the agent-hooks below, so the files and the hooks speak to the same set
   // of harnesses (the rule surfaces are a separate axis: `--surfaces`).
-  const agentPlan = noAgents ? [] : await planAgents(root, { harness: flags.harness });
+  const agentPlan = noAgents || noHarness ? [] : await planAgents(root, { harnesses: harnessScope.ids });
   // The agent-hooks entry, absorbed into this run so the adoption enforces its own
   // projection while the agent works. Planned with the rest for the same reason, and
   // written into this run's journal (committed with the rest, not a second journal).
   // `--harness` narrows it to the same reader the agent files are narrowed to.
   let agentHooks = null;
-  if (!noAgents) {
-    agentHooks = await planAgentHooks(root, { harness: flags.harness });
+  if (!noAgents && !noHarness) {
+    agentHooks = await planAgentHooks(root, { harnesses: harnessScope.ids });
     if (agentHooks.error) {
       return fail(agentHooks.error, EXIT.USAGE, agentHooks.remedy);
     }
@@ -272,6 +290,7 @@ export async function initCommand(positional, flags) {
     // an agents directory. `text` is stripped from the emitted payload the way the other
     // plans strip their rendered bytes; the apply path writes from `agentPlan`, which
     // keeps it.
+    agentScope: noAgents ? 'opted-out' : noHarness ? 'none' : harnessScope.source,
     agents: agentPlan.map(({ text, ...rest }) => rest),
     // The agent-hooks entry the apply path will write, absorbed into this run so the
     // adoption enforces its own projection while the agent works. `text` is stripped the
@@ -833,7 +852,12 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
   // uses: one line per config the tool writes, the shim, and the readers it narrows past.
   // `--no-agents` suppresses the section and says so, because a line that appears after
   // the run without being in the plan is the same silent write as any other.
-  if (payload.agentHooks === null) {
+  if (payload.agentHooks === null && payload.agentScope === 'none') {
+    // The remedy is the flag the reader did not pass, and the ids it accepts: "no harness
+    // was given" without either sends them to the help page for a flag this line can name.
+    lines.push(`  ${'skip'.padEnd(9)} agent files and agent-hooks  no --harness given, so no harness is selected`);
+    lines.push(`            remedy: ${CLI} init --harness <id>, one of: ${harnessIds().join(', ')}`);
+  } else if (payload.agentHooks === null) {
     lines.push(`  ${'skip'.padEnd(9)} agent-hooks  opted out with --no-agents; the agent files are skipped with it`);
   } else {
     for (const p of payload.agentHooks.plan) {

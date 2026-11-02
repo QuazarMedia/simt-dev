@@ -80,7 +80,10 @@ async function consumer({ stack = 'python', noAgents = false } = {}) {
   // `--no-agents` adopts without the agent files and hooks, for the writers that test
   // installing them: a repo init has already adopted carries them, and the install
   // has nothing left to write or diff.
-  const adopted = await run(['init', '--root', root, '--yes', ...(noAgents ? ['--no-agents'] : [])]);
+  // The fixture selects its harness (ADR-141): an adoption that names none now writes no
+  // agent files, and the rows below are about what an install does to a repository that
+  // has one selected.
+  const adopted = await run(['init', '--root', root, '--yes', '--harness', 'opencode', ...(noAgents ? ['--no-agents'] : [])]);
   assert.equal(adopted.code, 0, adopted.stderr);
   // `init` writes files it does not stage: `simt-dev.json`, and `.editorconfig` and
   // `.gitattributes` when the repo has none. `skills brief` treats an untracked path

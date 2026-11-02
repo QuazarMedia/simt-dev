@@ -222,9 +222,13 @@ export function rendered(adapterRow, agent, existing) {
  * renders what install would write, so a dry run and a run describe the same set
  * of files. `harness` narrows the agent files to one; the skill is always included.
  */
-export async function planAgents(root, { harness } = {}) {
+export async function planAgents(root, { harness, harnesses = null } = {}) {
   const agent = await loadAgent();
-  const rows = harness === undefined ? adapters() : adapters().filter((a) => a.id === harness);
+  // `harnesses` is the resolved set (ADR-141): `--harness` or the manifest's surfaces.
+  // `harness` stays for a caller that has exactly one id, and null means every adapter,
+  // which only a test or an explicit discovery path asks for.
+  const wanted = harnesses ?? (harness === undefined ? null : [harness]);
+  const rows = wanted === null ? adapters() : adapters().filter((a) => wanted.includes(a.id));
   const plan = [];
   for (const row of rows) {
     const path = agentPath(row.id);

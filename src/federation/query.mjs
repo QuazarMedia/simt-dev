@@ -8,10 +8,10 @@
 // to keep in sync. And it is not a gate, so a server that is down produces a sentence and
 // never a failure.
 //
-// The servers are asked in the order the manifest declares them, one at a time. Parallel
-// would be faster and would make the packet's item order a race, and a packet whose order
-// depends on which server answered first is the one property this whole module exists
-// beside.
+// The servers are asked together and assembled in the order the manifest declares them.
+// `Promise.all` answers in the order it was given, so the packet's items cannot reorder
+// themselves by whoever replied first - which was the reason this loop used to be serial -
+// while a slow server no longer delays every one behind it.
 
 import { callTool } from './client.mjs';
 
@@ -26,18 +26,23 @@ import { callTool } from './client.mjs';
  *   answered, one sentence per server that did not
  */
 export async function consult({ root, query, servers }) {
+  const settled = await Promise.all(
+    servers.map(async (server) => ({
+      server,
+      result: await callTool({
+        command: server.command,
+        args: server.args,
+        cwd: root,
+        tool: server.tool,
+        argument: server.argument,
+        query,
+        timeoutMs: server.timeoutMs,
+      }),
+    })),
+  );
   const answers = [];
   const findings = [];
-  for (const server of servers) {
-    const result = await callTool({
-      command: server.command,
-      args: server.args,
-      cwd: root,
-      tool: server.tool,
-      argument: server.argument,
-      query,
-      timeoutMs: server.timeoutMs,
-    });
+  for (const { server, result } of settled) {
     if (result.error !== undefined) {
       findings.push(`the \`${server.name}\` server did not answer (${result.error})`);
       continue;

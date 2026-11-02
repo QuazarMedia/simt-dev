@@ -41,7 +41,7 @@ async function scratch(prefix = 'simt-mono-') {
 /** Both paths: `execFile` never reports a code on success. */
 async function run(args) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
     return { code: 0, out: stdout + stderr };
   } catch (error) {
     return { code: error.code, out: (error.stdout ?? '') + (error.stderr ?? '') };

@@ -86,15 +86,15 @@ test('docs commands previews without --yes and writes with it', async () => {
   // write, and a run without the flag has to leave the tree exactly as it found it.
   const dir = await mkdtemp(join(tmpdir(), 'simt-docs-'));
   try {
-    const first = await exec('node', [BIN, 'docs', 'commands'], { cwd: dir });
+    const first = await exec(process.execPath, [BIN, 'docs', 'commands'], { cwd: dir });
     assert.match(first.stdout, /plan {2}docs\/commands/);
     await assert.rejects(stat(join(dir, 'docs', 'commands', 'README.md')));
 
-    await exec('node', [BIN, 'docs', 'commands', '--yes'], { cwd: dir });
+    await exec(process.execPath, [BIN, 'docs', 'commands', '--yes'], { cwd: dir });
     const written = await readFile(join(dir, 'docs', 'commands', 'README.md'), 'utf8');
     assert.equal(written, renderCommandPages().get('docs/commands/README.md'));
 
-    const again = await exec('node', [BIN, 'docs', 'commands'], { cwd: dir });
+    const again = await exec(process.execPath, [BIN, 'docs', 'commands'], { cwd: dir });
     assert.match(again.stdout, /current {2}docs\/commands/);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -105,7 +105,7 @@ test('a page that is not there yet is created, not refused', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'simt-docs-'));
   try {
     await writeFile(join(dir, 'README.md'), '# t\n');
-    const run = await exec('node', [BIN, 'docs', 'commands', '--yes'], { cwd: dir });
+    const run = await exec(process.execPath, [BIN, 'docs', 'commands', '--yes'], { cwd: dir });
     assert.match(run.stdout, /write {2}docs\/commands/);
   } finally {
     await rm(dir, { recursive: true, force: true });

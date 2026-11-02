@@ -46,7 +46,7 @@ async function scratch(prefix = 'simt-compile-') {
 
 async function runCli(args, env = {}) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
       maxBuffer: 16 << 20,
       env: { ...process.env, NO_COLOR: '1', SIMT_DEV_WORKSPACE: 'off', ...env },
     });

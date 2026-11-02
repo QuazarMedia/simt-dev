@@ -26,7 +26,7 @@ const exec = promisify(execFile);
 
 async function run(args) {
   try {
-    const { stdout, stderr } = await exec('node', [new URL('../bin/simt.mjs', import.meta.url).pathname, ...args], {
+    const { stdout, stderr } = await exec(process.execPath, [new URL('../bin/simt.mjs', import.meta.url).pathname, ...args], {
       maxBuffer: 8 << 20,
       env: { ...process.env, NO_COLOR: '1' },
     });

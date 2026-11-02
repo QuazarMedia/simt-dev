@@ -64,7 +64,7 @@ async function adopt(root, { sha = 'abc1234' } = {}) {
 
 /** The `--json` payload of one run, straight through the binary. */
 async function json(args) {
-  const { stdout } = await exec('node', [BIN, 'tokens', ...args, '--json'], { maxBuffer: 16 << 20 });
+  const { stdout } = await exec(process.execPath, [BIN, 'tokens', ...args, '--json'], { maxBuffer: 16 << 20 });
   return JSON.parse(stdout);
 }
 
@@ -73,7 +73,7 @@ async function json(args) {
  *  asserting that a promise resolved. */
 async function run(args) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, 'tokens', ...args], { maxBuffer: 16 << 20 });
+    const { stdout, stderr } = await exec(process.execPath, [BIN, 'tokens', ...args], { maxBuffer: 16 << 20 });
     return { code: 0, stdout, stderr };
   } catch (error) {
     return { code: error.code, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
@@ -86,7 +86,7 @@ test('the channels of a repository sum to its always-on total', async () => {
   const root = await repo(await scratch(), 'alpha');
   await adopt(root);
 
-  const { stdout } = await exec('node', [BIN, 'tokens', '--root', root, '--json']);
+  const { stdout } = await exec(process.execPath, [BIN, 'tokens', '--root', root, '--json']);
   const payload = JSON.parse(stdout);
   assert.equal(payload.roots.length, 1);
   const row = payload.roots[0];
@@ -104,7 +104,7 @@ test('the channels of a repository sum to its always-on total', async () => {
 
   // And the text report must carry the number the JSON carries. Two renderings of one
   // fact that disagree is the one-question-two-answers defect (ADR-050).
-  const text = await exec('node', [BIN, 'tokens', '--root', root]);
+  const text = await exec(process.execPath, [BIN, 'tokens', '--root', root]);
   assert.match(text.stdout, new RegExp(`always-on ${row.generatedBytes} B generated`));
   assert.match(text.stdout, new RegExp(`~${row.generatedTokens} tokens`));
 });
@@ -186,7 +186,7 @@ test('--repos gives a later repository the paragraphs an earlier one already loa
   assert.equal(t.generatedBytes, first.generatedBytes + second.generatedBytes);
   assert.equal(t.uniqueBytes + t.duplicateBytes, t.blockBytes);
 
-  const text = await exec('node', [BIN, 'tokens', '--root', parent, '--repos']);
+  const text = await exec(process.execPath, [BIN, 'tokens', '--root', parent, '--repos']);
   assert.match(text.stdout, new RegExp(`duplicate ${t.duplicateBytes} B \\(${Math.round((t.duplicateBytes / t.generatedBytes) * 100)}% of generated\\)`));
 });
 
@@ -272,7 +272,7 @@ test('the command is reachable by name, with the flag it documents', async () =>
 
   // `tokens` is an advanced command, so it is documented on the page that lists the
   // advanced tier rather than the core page (review 0003 Q61).
-  const help = await exec('node', [BIN, 'help', '--all']);
+  const help = await exec(process.execPath, [BIN, 'help', '--all']);
   assert.match(help.stdout, /tokens \[--repos\]/);
   assert.match(help.stdout, /--repos\s+tokens: measure every repository/);
 });
@@ -641,7 +641,7 @@ test('tokens --session splits a local transcript into rules, file reads and tool
 /** One `check` run, both streams and the code, because the code is the assertion. */
 async function gate(args) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
     return { code: 0, out: `${stdout}${stderr}` };
   } catch (error) {
     return { code: error.code, out: `${error.stdout ?? ''}${error.stderr ?? ''}` };

@@ -43,7 +43,7 @@ const scratch = () => mkdtemp(join(tmpdir(), 'simt-surf-'));
 
 async function capture(args) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args]);
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args]);
     return { code: 0, stdout, stderr };
   } catch (e) {
     return { code: e.code ?? 1, stdout: e.stdout ?? '', stderr: e.stderr ?? '' };
@@ -797,7 +797,7 @@ async function repoWithALeftoverRuleFile() {
   const root = await scratch();
   await mkdir(join(root, '.git'), { recursive: true });
   await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
-  await exec('node', [BIN, 'init', '--root', root, '--yes', '--surfaces', 'opencode,copilot']);
+  await exec(process.execPath, [BIN, 'init', '--root', root, '--yes', '--surfaces', 'opencode,copilot']);
   // copilot still gets files, so this one is planned and can be made stale.
   const copilotRule = join(root, '.github/instructions/test-gate.instructions.md');
   const text = await readFile(copilotRule, 'utf8');
@@ -851,7 +851,7 @@ test('the orphan scan reports nothing when nothing was ever left behind (S12)', 
   const root = await scratch();
   await mkdir(join(root, '.git'), { recursive: true });
   await writeFile(join(root, 'package.json'), '{"name":"x"}\n');
-  await exec('node', [BIN, 'init', '--root', root, '--yes', '--surfaces', 'opencode,cursor']);
+  await exec(process.execPath, [BIN, 'init', '--root', root, '--yes', '--surfaces', 'opencode,cursor']);
   const findings = await checkTargets(root, { surfaces: 'opencode,cursor' });
   assert.deepEqual(findings.filter((f) => f.status === 'orphaned'), []);
 });

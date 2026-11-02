@@ -38,7 +38,7 @@ async function repo(name = 'api') {
 }
 
 async function simt(args, root) {
-  const r = await run('node', [BIN, ...args, '--root', root], { cwd: root }).catch((e) => ({
+  const r = await run(process.execPath, [BIN, ...args, '--root', root], { cwd: root }).catch((e) => ({
     code: e.code ?? 1,
     stdout: e.stdout ?? '',
     stderr: e.stderr ?? '',

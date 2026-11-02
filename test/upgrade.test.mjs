@@ -35,7 +35,7 @@ const exec = promisify(execFile);
 // "the enclosing repository" is a fact about where the command was invoked.
 async function run(args, env = {}, bin = BIN, opts = {}) {
   try {
-    const { stdout, stderr } = await exec('node', [bin, ...args], { maxBuffer: 32 << 20, env: { ...process.env, ...env }, cwd: opts.cwd });
+    const { stdout, stderr } = await exec(process.execPath, [bin, ...args], { maxBuffer: 32 << 20, env: { ...process.env, ...env }, cwd: opts.cwd });
     return { code: 0, stdout, stderr };
   } catch (error) {
     return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };

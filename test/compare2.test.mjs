@@ -36,7 +36,7 @@ const made = [];
 
 /** Run a command for its --json payload. */
 async function json(args) {
-  const { stdout } = await exec('node', [BIN, ...args, '--json'], { maxBuffer: 16 << 20 });
+  const { stdout } = await exec(process.execPath, [BIN, ...args, '--json'], { maxBuffer: 16 << 20 });
   return JSON.parse(stdout);
 }
 
@@ -50,7 +50,7 @@ async function json(args) {
  */
 async function failingJson(args) {
   try {
-    const { stdout } = await exec('node', [BIN, ...args, '--json'], { maxBuffer: 16 << 20 });
+    const { stdout } = await exec(process.execPath, [BIN, ...args, '--json'], { maxBuffer: 16 << 20 });
     return { code: 0, payload: JSON.parse(stdout) };
   } catch (error) {
     return { code: error.code ?? 1, payload: JSON.parse(error.stdout) };
@@ -293,12 +293,12 @@ test('R36: compare aggregates ledgers, hook denials, and zero-value rules across
   await writeFile(join(repoA, '.simt', 'bench', 'runs', 'r-02.json'), `${JSON.stringify(benchRecords[1])}\n`);
 
   // Run `compare` twice (both JSON and text) and assert byte-identical output and expected rankings.
-  const firstJson = await exec('node', [BIN, 'compare', '--root', ws, '--json'], { maxBuffer: 16 << 20 });
-  const secondJson = await exec('node', [BIN, 'compare', '--root', ws, '--json'], { maxBuffer: 16 << 20 });
+  const firstJson = await exec(process.execPath, [BIN, 'compare', '--root', ws, '--json'], { maxBuffer: 16 << 20 });
+  const secondJson = await exec(process.execPath, [BIN, 'compare', '--root', ws, '--json'], { maxBuffer: 16 << 20 });
   assert.equal(firstJson.stdout, secondJson.stdout, 'compare --json must be byte-identical across runs on the same ledgers');
 
-  const firstText = await exec('node', [BIN, 'compare', '--root', ws], { maxBuffer: 16 << 20 });
-  const secondText = await exec('node', [BIN, 'compare', '--root', ws], { maxBuffer: 16 << 20 });
+  const firstText = await exec(process.execPath, [BIN, 'compare', '--root', ws], { maxBuffer: 16 << 20 });
+  const secondText = await exec(process.execPath, [BIN, 'compare', '--root', ws], { maxBuffer: 16 << 20 });
   assert.equal(firstText.stdout, secondText.stdout, 'compare text report must be byte-identical across runs on the same ledgers');
 
   const payload = JSON.parse(firstJson.stdout);
@@ -406,7 +406,7 @@ test('Q50: compare reads ablation from the local and legacy bench paths, and no-
     )}\n`,
   );
 
-  const out = await exec('node', [BIN, 'compare', '--root', ws, '--json'], { maxBuffer: 16 << 20 });
+  const out = await exec(process.execPath, [BIN, 'compare', '--root', ws, '--json'], { maxBuffer: 16 << 20 });
   const { learning } = JSON.parse(out.stdout);
 
   // One section per path: the legacy file must be read, not skipped for `.simt/ablation.json`.

@@ -227,7 +227,7 @@ test('simt lessons review promotes a candidate to docs/lessons/NNNN-<slug>.md wi
   });
 
   // Preview mode (without --yes) writes nothing
-  const preview = await exec('node', [BIN, 'lessons', 'review', '--root', root, '--json']);
+  const preview = await exec(process.execPath, [BIN, 'lessons', 'review', '--root', root, '--json']);
   const previewPayload = JSON.parse(preview.stdout);
   assert.equal(previewPayload.ok, true);
   assert.equal(previewPayload.written, false);
@@ -235,7 +235,7 @@ test('simt lessons review promotes a candidate to docs/lessons/NNNN-<slug>.md wi
   assert.equal(existsSync(join(root, previewPayload.path)), false);
 
   // Apply mode (--yes) writes docs/lessons/0001-<slug>.md
-  const applied = await exec('node', [BIN, 'lessons', 'review', '--root', root, '--yes', '--json']);
+  const applied = await exec(process.execPath, [BIN, 'lessons', 'review', '--root', root, '--yes', '--json']);
   const appliedPayload = JSON.parse(applied.stdout);
   assert.equal(appliedPayload.ok, true);
   assert.equal(appliedPayload.written, true);
@@ -262,7 +262,7 @@ test('simt lessons review promotes a candidate to docs/lessons/NNNN-<slug>.md wi
   assert.equal(promoted[0].id, '0001-restage-failed-on-deleted-file');
 
   // Verify `simt lessons` (default `lessons list`) reports both candidate and promoted lesson
-  const listed = await exec('node', [BIN, 'lessons', '--root', root, '--json']);
+  const listed = await exec(process.execPath, [BIN, 'lessons', '--root', root, '--json']);
   const listedPayload = JSON.parse(listed.stdout);
   assert.equal(listedPayload.ok, true);
   assert.equal(listedPayload.candidateCount, 1);
@@ -453,26 +453,26 @@ test('Q36: `list` reads, `capture` writes, and a second promotion is refused', a
   await writeFile(join(root, '.simt', 'local', 'ledger.jsonl'), `${ledger.map((x) => JSON.stringify(x)).join('\n')}\n`);
 
   // `list` must not capture: the ledger holds a fail-then-fix, but no candidate exists.
-  const listed = await exec('node', [BIN, 'lessons', 'list', '--root', root, '--json']);
+  const listed = await exec(process.execPath, [BIN, 'lessons', 'list', '--root', root, '--json']);
   assert.equal(JSON.parse(listed.stdout).candidateCount, 0);
   assert.equal(existsSync(join(root, LESSONS_FILE)), false, 'list must not write the store');
 
-  const captured = await exec('node', [BIN, 'lessons', 'capture', '--root', root, '--json']);
+  const captured = await exec(process.execPath, [BIN, 'lessons', 'capture', '--root', root, '--json']);
   const capturePayload = JSON.parse(captured.stdout);
   assert.equal(capturePayload.failThenFix, 1);
-  assert.equal(JSON.parse((await exec('node', [BIN, 'lessons', 'list', '--root', root, '--json'])).stdout).candidateCount, 1);
+  assert.equal(JSON.parse((await exec(process.execPath, [BIN, 'lessons', 'list', '--root', root, '--json'])).stdout).candidateCount, 1);
 
   // The candidate needs paths to promote (no `**` default) — pass them explicitly.
-  const preview = await exec('node', [BIN, 'lessons', 'review', '--root', root, '--paths', 'src/flaky.mjs', '--json']);
+  const preview = await exec(process.execPath, [BIN, 'lessons', 'review', '--root', root, '--paths', 'src/flaky.mjs', '--json']);
   assert.equal(JSON.parse(preview.stdout).ok, true);
-  const applied = await exec('node', [
+  const applied = await exec(process.execPath, [
     BIN, 'lessons', 'review', '--root', root, '--paths', 'src/flaky.mjs', '--yes', '--json',
   ]);
   assert.equal(JSON.parse(applied.stdout).written, true);
 
   // A refused promotion exits non-zero, so this uses spawnSync (which returns
   // the result) rather than exec (which throws on a non-zero exit).
-  const againRes = spawnSync('node', [BIN, 'lessons', 'review', '--root', root, '--paths', 'src/flaky.mjs', '--json'], { encoding: 'utf8' });
+  const againRes = spawnSync(process.execPath, [BIN, 'lessons', 'review', '--root', root, '--paths', 'src/flaky.mjs', '--json'], { encoding: 'utf8' });
   const againPayload = JSON.parse(againRes.stdout);
   assert.equal(againPayload.ok, false);
   assert.match(againPayload.error ?? againRes.stderr, /nothing to promote/);
@@ -512,7 +512,7 @@ test('Q36: expired lessons stop firing but stay listed as expired', async () => 
   assert.equal(all[0].expired, true);
   assert.equal(matchLessonByOutput(all.filter((l) => !l.expired), 'Error: stale lesson'), null);
 
-  const listed = await exec('node', [BIN, 'lessons', 'list', '--root', root, '--json']);
+  const listed = await exec(process.execPath, [BIN, 'lessons', 'list', '--root', root, '--json']);
   const payload = JSON.parse(listed.stdout);
   assert.equal(payload.promotedCount, 0);
   assert.equal(payload.expiredCount, 1);
@@ -580,7 +580,7 @@ test('R33: the brief includes lessons whose triggers match the task paths', asyn
   await git(['commit', '-qm', 'add lesson'], root);
 
   // 1. Task naming the file ranks src/hooks/dispatcher.mjs and includes the lesson in LESSONS
-  const byTaskRes = await exec('node', [
+  const byTaskRes = await exec(process.execPath, [
     BIN,
     'brief',
     'fix restage in src/hooks/dispatcher.mjs',
@@ -600,7 +600,7 @@ test('R33: the brief includes lessons whose triggers match the task paths', asyn
   );
 
   // 2. Explicit --paths scope matches the lesson trigger even when task text is generic
-  const byPathsRes = await exec('node', [
+  const byPathsRes = await exec(process.execPath, [
     BIN,
     'brief',
     'update module',
@@ -685,7 +685,7 @@ test('R33: bench shows fewer turns on recurring failure modes when the lesson is
     ...process.env,
     SIMT_DEV_VAULT_DIR: vaultRoot,
   };
-  const minedRes = await exec('node', [BIN, 'bench', 'mine', '--root', root, '--yes', '--json'], {
+  const minedRes = await exec(process.execPath, [BIN, 'bench', 'mine', '--root', root, '--yes', '--json'], {
     env: testEnv,
   });
   const minedPayload = JSON.parse(minedRes.stdout);

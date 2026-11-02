@@ -28,7 +28,7 @@ async function templateDirectories() {
 
 async function run(args) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
     return { code: 0, stdout, stderr };
   } catch (error) {
     return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };

@@ -41,7 +41,7 @@ const DECLARING_MANIFEST = { 'simt.json': JSON.stringify({ id: 'member', workspa
 
 async function run(args, env = {}, cwd = undefined) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
       maxBuffer: 16 << 20,
       env: { ...process.env, ...env },
       cwd,

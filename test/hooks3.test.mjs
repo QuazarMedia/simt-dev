@@ -28,7 +28,7 @@ import { MANIFEST_FILE } from '../src/name.mjs';
  */
 async function run(args) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
     return { code: 0, out: stdout + stderr };
   } catch (error) {
     return { code: error.code, out: (error.stdout ?? '') + (error.stderr ?? '') };
@@ -90,7 +90,7 @@ async function stagedContent(root, file) {
 }
 
 async function simt(args, cwd) {
-  return exec('node', [BIN, ...args], { cwd, env: { ...process.env, NO_COLOR: '1' } });
+  return exec(process.execPath, [BIN, ...args], { cwd, env: { ...process.env, NO_COLOR: '1' } });
 }
 
 /**

@@ -335,14 +335,14 @@ test('resolve: every skill in the registry can be scored without throwing', () =
 test('resolve: `skills find "durable object"` reports the keyword (S03)', async () => {
   // Review 0001 §S03, verbatim: this command reported four matches and not one
   // `keyword:` reason, on a phrase four skills declare.
-  const { stdout } = await exec('node', [BIN, 'skills', 'find', 'durable object']);
+  const { stdout } = await exec(process.execPath, [BIN, 'skills', 'find', 'durable object']);
   assert.match(stdout, /keyword:durable object/);
 });
 
 test('resolve: `skills brief --task "simt dry-run"` reports the keyword (S03)', async () => {
   // The same finding's second claim: the specific words in the task must select
   // through the keyword signal and name themselves in the reason the agent acts on.
-  const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'simt dry-run', '--root', ROOT]);
+  const { stdout } = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'simt dry-run', '--root', ROOT]);
   assert.match(stdout, /keyword:simt/);
 });
 // --- S04: stack is compatibility, not evidence ---------------------------------
@@ -523,7 +523,7 @@ test('resolve: `skills find` returns the repo\'s own skills alongside the regist
     'd1-safe-change': skillMd('d1-safe-change', 'Create, review, test, or deploy a D1 schema change.'),
   });
   try {
-    const { stdout } = await exec('node', [BIN, 'skills', 'find', 'd1', 'schema', '--root', root], { env: offEnv() });
+    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'find', 'd1', 'schema', '--root', root], { env: offEnv() });
     // Both surfaces of one answer: the registry skill that always scored, and the local
     // one that did not exist for `find` before this slice.
     assert.match(stdout, /cloudflare/);
@@ -539,7 +539,7 @@ test('resolve: `skills brief` inlines the body of a skill the repo owns (S3)', a
     'd1-safe-change': skillMd('d1-safe-change', 'Create, review, test, or deploy a D1 schema change.'),
   });
   try {
-    const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'd1 schema migration', '--root', root], {
+    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'd1 schema migration', '--root', root], {
       env: offEnv(),
     });
     assert.match(stdout, /RESOLVED 1 skill/);
@@ -560,7 +560,7 @@ test('resolve: a weak local match is NOT SELECTED, with the score named (S3)', a
     'maplibre-ui': skillMd('maplibre-ui', 'Build, debug, or validate MapLibre GL JS behavior.'),
   });
   try {
-    const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'please validate', '--root', root], {
+    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'please validate', '--root', root], {
       env: offEnv(),
     });
     assert.match(stdout, /NOT SELECTED/);
@@ -578,7 +578,7 @@ test('resolve: an agent tasked with a release gets the repo\'s release skill (S3
     'release-process': skillMd('release-process', 'Use when releasing: cutting a version, tagging, or publishing.'),
   });
   try {
-    const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'release 1.2.3', '--root', root], {
+    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'release 1.2.3', '--root', root], {
       env: offEnv(),
     });
     assert.match(stdout, /RESOLVED 1 skill/);
@@ -595,7 +595,7 @@ test('resolve: a local copy of a registry skill ranks once (S3)', async () => {
     wrangler: skillMd('wrangler', 'Local copy of the vendored wrangler skill.'),
   });
   try {
-    const { stdout } = await exec('node', [BIN, 'skills', 'find', 'wrangler', '--root', root], { env: offEnv() });
+    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'find', 'wrangler', '--root', root], { env: offEnv() });
     const lines = stdout.split('\n').filter((line) => /^\s*wrangler\b/.test(line));
     assert.equal(lines.length, 1, `expected one wrangler line, got:\n${stdout}`);
   } finally {
@@ -611,7 +611,7 @@ test('resolve: `skills show` resolves a skill the repo owns (S3)', async () => {
   });
   try {
     // A non-zero exit rejects the promise and fails the test; resolving is exit 0.
-    const { stdout } = await exec('node', [BIN, 'skills', 'show', 'd1-safe-change', '--root', root], { env: offEnv() });
+    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'show', 'd1-safe-change', '--root', root], { env: offEnv() });
     assert.match(stdout, /body\s+repo\s+.*SKILL\.md/);
     assert.match(stdout, /d1-safe-change-BODY-42/);
   } finally {
@@ -647,7 +647,7 @@ test('resolve: MCP `skills_find` and the CLI answer the local repo identically (
   });
   try {
     const mcp = await TOOLS.find((t) => t.name === 'skills_find').run({ query: 'd1 schema', root });
-    const { stdout } = await exec('node', [BIN, 'skills', 'find', 'd1', 'schema', '--root', root, '--json'], {
+    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'find', 'd1', 'schema', '--root', root, '--json'], {
       env: offEnv(),
     });
     const doc = JSON.parse(stdout);

@@ -39,7 +39,7 @@ async function scratch(files = {}) {
 
 function run(args) {
   return new Promise((resolveRun, reject) => {
-    const child = spawn('node', [BIN, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [BIN, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (chunk) => {

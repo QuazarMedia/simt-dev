@@ -28,6 +28,6 @@ test('a read returns its facts as data and prints nothing', async () => {
     }
     // Nothing else: a library read that prints has already chosen a renderer.
   }).catch((error) => { console.error(error.message); process.exit(1); });`;
-  const { stdout } = await promisify(execFile)('node', ['--input-type=module', '-e', script], { cwd: repo });
+  const { stdout } = await promisify(execFile)(process.execPath, ['--input-type=module', '-e', script], { cwd: repo });
   assert.equal(stdout, '', 'checkRepo wrote to stdout');
 });

@@ -109,7 +109,7 @@ test('eval: the brief a reader gets says why, through the shipped binary (S04)',
   try {
     await mkdir(join(root, '.git'), { recursive: true });
     await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'w', private: true }) + '\n');
-    const { stdout } = await exec('node', [BIN, 'skills', 'brief', '--task', 'fix a typo in the README', '--root', root]);
+    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'fix a typo in the README', '--root', root]);
     assert.match(stdout, /RESOLVED 0 skills/);
     assert.match(stdout, /NOT SELECTED/);
   } finally {
@@ -127,7 +127,7 @@ test('eval: `skills find` applies the same selection rule (S04)', async () => {
   // The word is chosen because it lands strictly between 0 and MIN_SCORE for exactly one
   // skill: `wrangler` scores 8 through its summary, and `cloudflare` scores 40 through
   // the keyword `d1` it declares.
-  const { stdout } = await exec('node', [BIN, 'skills', 'find', 'd1']);
+  const { stdout } = await exec(process.execPath, [BIN, 'skills', 'find', 'd1']);
   assert.match(stdout, /^1 match for "d1"/m);
   assert.doesNotMatch(stdout, /^wrangler\s/m);
 });

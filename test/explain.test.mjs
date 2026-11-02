@@ -25,7 +25,7 @@ const exec = promisify(execFile);
 
 async function run(args) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
       maxBuffer: 32 << 20,
       env: { ...process.env, NO_COLOR: '1' },
     });

@@ -48,7 +48,7 @@ async function scratch(prefix = 'simt-packs-') {
  */
 async function run(args) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
     return { code: 0, out: stdout + stderr };
   } catch (error) {
     return { code: error.code, out: (error.stdout ?? '') + (error.stderr ?? '') };

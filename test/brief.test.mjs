@@ -25,7 +25,7 @@ const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 
 async function run(root, args) {
   try {
-    const { stdout, stderr } = await promisify(execFile)('node', [BIN, ...args, '--root', root], {
+    const { stdout, stderr } = await promisify(execFile)(process.execPath, [BIN, ...args, '--root', root], {
       maxBuffer: 8 << 20,
     });
     return { code: 0, stdout, stderr };

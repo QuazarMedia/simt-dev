@@ -494,7 +494,7 @@ async function repoWith(files) {
 
 /** Run the shipped binary, because the claim under test is about what a reader runs. */
 async function simt(args) {
-  const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+  const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
   return { stdout, stderr };
 }
 

@@ -52,7 +52,7 @@ let CONTRACT_ROOT = null;
  */
 async function run(args) {
   return new Promise((resolve, reject) => {
-    const child = spawn('node', [BIN, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(process.execPath, [BIN, ...args], { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     child.stdout.on('data', (chunk) => {
       out += chunk;

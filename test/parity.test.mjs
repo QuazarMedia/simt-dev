@@ -35,7 +35,7 @@ const tool = (name) => {
 async function cli(...args) {
   // A gate command leaves non-zero when the repo is red; the document on stdout
   // is still the answer, so a failing exit must not fail the comparison.
-  const { stdout } = await exec('node', [BIN, ...args, '--json'], { cwd: ROOT }).catch((error) => error);
+  const { stdout } = await exec(process.execPath, [BIN, ...args, '--json'], { cwd: ROOT }).catch((error) => error);
   return JSON.parse(stdout);
 }
 

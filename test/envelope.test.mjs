@@ -8,7 +8,7 @@ const repo = fileURLToPath(new URL('..', import.meta.url));
 const bin = fileURLToPath(new URL('../bin/simt.mjs', import.meta.url));
 
 const run = async (args) => {
-  const result = await promisify(execFile)('node', [bin, ...args], { cwd: repo }).catch((error) => error);
+  const result = await promisify(execFile)(process.execPath, [bin, ...args], { cwd: repo }).catch((error) => error);
   return { doc: JSON.parse(result.stdout), code: result.code ?? 0 };
 };
 

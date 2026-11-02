@@ -36,7 +36,7 @@ const made = [];
 
 /** Run a command for its --json payload. */
 async function json(args) {
-  const { stdout } = await exec('node', [BIN, ...args, '--json'], { maxBuffer: 16 << 20 });
+  const { stdout } = await exec(process.execPath, [BIN, ...args, '--json'], { maxBuffer: 16 << 20 });
   return JSON.parse(stdout);
 }
 
@@ -50,7 +50,7 @@ async function json(args) {
  */
 async function failingJson(args) {
   try {
-    const { stdout } = await exec('node', [BIN, ...args, '--json'], { maxBuffer: 16 << 20 });
+    const { stdout } = await exec(process.execPath, [BIN, ...args, '--json'], { maxBuffer: 16 << 20 });
     return { code: 0, payload: JSON.parse(stdout) };
   } catch (error) {
     return { code: error.code ?? 1, payload: JSON.parse(error.stdout) };
@@ -592,7 +592,7 @@ test('compare: notes never change the exit code', async () => {
   await writeFile(join(own, '.git', 'hooks', 'pre-commit'), '#!/bin/sh\nexit 0\n');
   await chmod(join(own, '.git', 'hooks', 'pre-commit'), 0o755);
   // exec rejects on a non-zero exit, so a successful call IS the assertion.
-  const { stdout } = await exec('node', [BIN, 'compare', '--root', ws], { maxBuffer: 16 << 20 });
+  const { stdout } = await exec(process.execPath, [BIN, 'compare', '--root', ws], { maxBuffer: 16 << 20 });
   assert.match(stdout, /run their own hooks; adopting replaces them \(a note, not a problem\)/);
 });
 
@@ -822,7 +822,7 @@ test('every finding check refuses on, this row reports', async () => {
 
   // And the repair both of them name actually clears it, so parity is not two
   // commands agreeing on a defect neither can fix.
-  await exec('node', [BIN, 'sync', '--root', root, '--yes'], { maxBuffer: 16 << 20 });
+  await exec(process.execPath, [BIN, 'sync', '--root', root, '--yes'], { maxBuffer: 16 << 20 });
   const after = await failingJson(['check', '--root', root]);
   assert.equal(
     after.payload.findings.filter((f) => f.status === 'stale-generated-field').length,
@@ -859,7 +859,7 @@ test('a repo is complete exactly when install has nothing left to write', async 
     JSON.stringify({ id: 'r', stack: [], surfaces: null, gates: { preCommit: [], prePush: ['test'] } }, null, 2),
   );
 
-  await exec('node', [BIN, 'hooks', 'install', '--root', root, '--yes'], { maxBuffer: 16 << 20 });
+  await exec(process.execPath, [BIN, 'hooks', 'install', '--root', root, '--yes'], { maxBuffer: 16 << 20 });
   const row = await buildRow(root, CONTEXT);
 
   assert.equal(row.hooksRouted, true, 'the repository is routed');

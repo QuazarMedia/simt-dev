@@ -14,12 +14,12 @@ const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
  * assertions moved with it rather than being dropped, because a command that is on
  * neither page is still a capability nobody can reach. */
 async function helpAll() {
-  const { stdout } = await exec('node', [BIN, 'help', '--all'], { maxBuffer: 16 << 20 });
+  const { stdout } = await exec(process.execPath, [BIN, 'help', '--all'], { maxBuffer: 16 << 20 });
   return stdout;
 }
 
 async function help() {
-  const { stdout } = await exec('node', [BIN, '--help'], { maxBuffer: 8 << 20 });
+  const { stdout } = await exec(process.execPath, [BIN, '--help'], { maxBuffer: 8 << 20 });
   return stdout;
 }
 
@@ -59,7 +59,7 @@ test('--help documents nothing the binary will not run', async () => {
     if (path === 'init [path]' || path.includes('[') || path.includes('<')) continue;
     // A claim that resolves must actually dispatch. Probed rather than compared
     // against the table, because the table is the thing under suspicion.
-    const { code } = await exec('node', [BIN, path, '--help'], { maxBuffer: 8 << 20 }).then(
+    const { code } = await exec(process.execPath, [BIN, path, '--help'], { maxBuffer: 8 << 20 }).then(
       () => ({ code: 0 }),
       (error) => ({ code: error.code ?? 1 }),
     );
@@ -72,7 +72,7 @@ test('a command path whose group is unknown is a usage error, not a silent defau
   // `commandPath` returns null for `skills nonsense`, so it cannot fall through to the
   // group's default and print an index the caller did not ask for.
   await assert.rejects(
-    () => exec('node', [BIN, 'skills', 'nonsense'], { maxBuffer: 8 << 20 }),
+    () => exec(process.execPath, [BIN, 'skills', 'nonsense'], { maxBuffer: 8 << 20 }),
     (error) => {
       assert.equal(error.code, 2, 'an unknown subcommand must be a usage exit');
       assert.match(`${error.stdout}${error.stderr}`, /unknown command/i);
@@ -123,7 +123,7 @@ test('help: the top-level page fits in 2 KB and says where the rest is', async (
 });
 
 test('help: --all still lists every command and every flag', async () => {
-  const { stdout } = await exec('node', [BIN, 'help', '--all'], { maxBuffer: 16 << 20 });
+  const { stdout } = await exec(process.execPath, [BIN, 'help', '--all'], { maxBuffer: 16 << 20 });
   for (const path of COMMANDS) assert.ok(stdout.includes(`simt ${path}`), `${path} is on neither page`);
   for (const flag of [...VALUE_FLAGS, ...BOOL_FLAGS, ...REPEATABLE_FLAGS]) {
     // A boolean flag parses under both spellings - `--X` and, through the parser's `no-`
@@ -164,14 +164,14 @@ test('help: every spec path has a page that fits and says what the command is', 
 
 test('help: -h is the same request as --help', async () => {
   // It used to answer `unknown command '-h'`, which is the spelling a reader types first.
-  const { stdout } = await exec('node', [BIN, '-h'], { maxBuffer: 8 << 20 });
+  const { stdout } = await exec(process.execPath, [BIN, '-h'], { maxBuffer: 8 << 20 });
   assert.match(stdout, /usage:/);
 });
 
 /** The binary, resolved with what it printed and its exit code - a failing spawn is a
  * result here, not a thrown test, because the assertion is about the failure. */
 function run(args) {
-  return exec('node', [BIN, ...args], { maxBuffer: 8 << 20 }).then(
+  return exec(process.execPath, [BIN, ...args], { maxBuffer: 8 << 20 }).then(
     ({ stdout }) => ({ code: 0, out: stdout }),
     (error) => ({ code: error.code ?? 1, out: `${error.stdout ?? ''}${error.stderr ?? ''}` }),
   );
@@ -233,13 +233,13 @@ test('help: a bare group lists its own subcommands, not the whole surface', asyn
 });
 
 test('help: one command is one page, not the whole surface', async () => {
-  const { stdout } = await exec('node', [BIN, 'help', 'gate'], { maxBuffer: 8 << 20 });
+  const { stdout } = await exec(process.execPath, [BIN, 'help', 'gate'], { maxBuffer: 8 << 20 });
   assert.match(stdout, /^simt gate /);
   assert.ok(Buffer.byteLength(stdout) <= 1536, `${Buffer.byteLength(stdout)} bytes`);
 });
 
 test('help: --json emits the spec a UI reads', async () => {
-  const { stdout } = await exec('node', [BIN, 'help', '--json'], { maxBuffer: 8 << 20 });
+  const { stdout } = await exec(process.execPath, [BIN, 'help', '--json'], { maxBuffer: 8 << 20 });
   const doc = JSON.parse(stdout);
   // Compared as a set: the document follows the spec's own order, which is grouped by
   // subject rather than alphabetical, and a UI parses the rows it needs. Order is not

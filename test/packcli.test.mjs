@@ -411,20 +411,20 @@ test('pack lint and publish answer --json with one document that agrees with the
 test('a positional pack wins over --root, a preview reads no registry, and a linked rule is pinned (Q58)', async () => {
   const rootA = await scratch('simt-q58-a-');
   const rootB = await scratch('simt-q58-b-');
-  await exec('node', [BIN, 'pack', 'new', 'packa', '--source', 'npm:@scope/a', '--root', rootA, '--yes']);
-  await exec('node', [BIN, 'pack', 'new', 'packb', '--source', 'npm:@scope/b', '--root', rootB, '--yes']);
+  await exec(process.execPath, [BIN, 'pack', 'new', 'packa', '--source', 'npm:@scope/a', '--root', rootA, '--yes']);
+  await exec(process.execPath, [BIN, 'pack', 'new', 'packb', '--source', 'npm:@scope/b', '--root', rootB, '--yes']);
   const packA = join(rootA, 'packa');
   const packB = join(rootB, 'packb');
 
   // The docblock and the usage line promise the positional; the code read --root first.
-  const { stdout: linted } = await exec('node', [BIN, 'pack', 'lint', packA, '--root', packB, '--json'], {
+  const { stdout: linted } = await exec(process.execPath, [BIN, 'pack', 'lint', packA, '--root', packB, '--json'], {
     maxBuffer: 4 << 20,
   });
   assert.equal(JSON.parse(linted).dir, resolve(packA));
 
   // A preview plans the registry check instead of performing it: with --yes absent the
   // command answered offline, and `skipped` can only be true after a registry read.
-  const { stdout: preview } = await exec('node', [BIN, 'pack', 'publish', packA, '--json'], {
+  const { stdout: preview } = await exec(process.execPath, [BIN, 'pack', 'publish', packA, '--json'], {
     maxBuffer: 4 << 20,
   });
   const planned = JSON.parse(preview);

@@ -29,7 +29,7 @@ after(async () => {
 /** Run the binary and report the outcome, exit code included (see ci.test.mjs). */
 async function run(args, opts = {}) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
       ...opts,
       env: { ...process.env, NO_COLOR: '1', ...opts.env },
     });

@@ -17,7 +17,7 @@ const exec = promisify(execFile);
 // the tool is wired inside its own checkout is not a guard.
 async function run(args) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], { maxBuffer: 16 << 20 });
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
     return { code: 0, text: stdout + stderr };
   } catch (error) {
     return { code: error.code ?? 1, text: `${error.stdout ?? ''}${error.stderr ?? ''}` };

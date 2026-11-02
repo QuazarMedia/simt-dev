@@ -52,7 +52,7 @@ const NO_WORKSPACE = { SIMT_DEV_WORKSPACE: 'off' };
 /** Run the shipped binary. Never throws: the exit code is the thing under test. */
 async function run(args, env = {}) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
       maxBuffer: 32 << 20,
       env: { ...process.env, NO_COLOR: '1', ...env },
     });

@@ -39,7 +39,7 @@ async function scratch(files = {}) {
 
 async function run(args, env = {}) {
   try {
-    const { stdout, stderr } = await exec('node', [BIN, ...args], {
+    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
       maxBuffer: 32 << 20,
       // Every case runs against the staged workspace, and a case that needs no
       // workspace says `SIMT_DEV_WORKSPACE: 'off'` itself. Inheriting the

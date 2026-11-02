@@ -57,7 +57,7 @@ const temps = [];
  */
 async function run(args, opts = {}) {
   try {
-    const { stdout, stderr } = await exec('node', [CI, ...args], {
+    const { stdout, stderr } = await exec(process.execPath, [CI, ...args], {
       ...opts,
       env: { ...process.env, NO_COLOR: '1', ...opts.env },
     });
@@ -308,7 +308,7 @@ test('init writes the workflow into a repo that runs Actions, and says so', asyn
   // it is the thing the reader approves. `wrote` goes to stderr: it is advice about
   // what just happened to their disk, and a caller piping stdout to a file should not
   // find it there.
-  const { stdout, stderr } = await exec('node', [BIN, 'init', '--yes', '--surfaces', 'cursor'], {
+  const { stdout, stderr } = await exec(process.execPath, [BIN, 'init', '--yes', '--surfaces', 'cursor'], {
     cwd: root,
     env: { ...process.env, NO_COLOR: '1' },
   });
@@ -333,7 +333,7 @@ test('init writes the release-binary install into a Gradle repo with no package.
   await writeFile(join(root, WORKFLOWS_DIR, 'build.yml'), 'name: build\n');
   await writeFile(join(root, 'build.gradle'), 'plugins {}\n');
 
-  const { stdout } = await exec('node', [BIN, 'init', '--yes', '--surfaces', 'cursor'], {
+  const { stdout } = await exec(process.execPath, [BIN, 'init', '--yes', '--surfaces', 'cursor'], {
     cwd: root,
     env: { ...process.env, NO_COLOR: '1' },
   });
@@ -347,14 +347,14 @@ test('init writes the release-binary install into a Gradle repo with no package.
 
 test('init is dry-run by default, and then it still writes nothing', async () => {
   const root = await actionsRepo();
-  const { stdout } = await exec('node', [BIN, 'init'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
+  const { stdout } = await exec(process.execPath, [BIN, 'init'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
   assert.match(stdout, /create\s+\.github\/workflows\/simt-dev-check\.yml/);
   await assert.rejects(readFile(join(root, WORKFLOW_FILE), 'utf8'));
 });
 
 test('init leaves a repo with no .github exactly as it found it', async () => {
   const root = await plainRepo();
-  const { stdout } = await exec('node', [BIN, 'init', '--yes'], {
+  const { stdout } = await exec(process.execPath, [BIN, 'init', '--yes'], {
     cwd: root,
     env: { ...process.env, NO_COLOR: '1' },
   });
@@ -368,7 +368,7 @@ test('init leaves a repo with no .github exactly as it found it', async () => {
 
 test('check gates the merge: an Actions repo with no workflow fails, a repo with one passes', async () => {
   const ungated = await actionsRepo();
-  const first = await exec('node', [BIN, 'check'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } }).catch(
+  const first = await exec(process.execPath, [BIN, 'check'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } }).catch(
     (e) => e,
   );
   assert.notEqual(first.code, 0, 'a repo that merges ungated passed the gate');
@@ -376,8 +376,8 @@ test('check gates the merge: an Actions repo with no workflow fails, a repo with
   // A finding whose fix the reader has to guess at is a finding that gets skipped.
   assert.match(first.stdout, cmd('remedy: {cli} init --yes'));
 
-  await exec('node', [BIN, 'init', '--yes', '--surfaces', 'cursor'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } });
-  const gated = await exec('node', [BIN, 'check'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } });
+  await exec(process.execPath, [BIN, 'init', '--yes', '--surfaces', 'cursor'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } });
+  const gated = await exec(process.execPath, [BIN, 'check'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } });
   assert.doesNotMatch(gated.stdout, /simt-dev-check\.yml/);
 });
 
@@ -386,7 +386,7 @@ test('the gate never inspects the contents of a workflow it did not write', asyn
   // Reporting that would make `check` permanently red with no fix except re-running
   // init, which is the failure mode a gate nobody trusts ends up in.
   const root = await actionsRepo({ [WORKFLOW_FILE]: 'name: ours\non: push\n' });
-  const found = await exec('node', [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } }).catch(
+  const found = await exec(process.execPath, [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } }).catch(
     (e) => e,
   );
   // The repo is red here for its missing AGENTS.md, which this file has nothing to do
@@ -397,7 +397,7 @@ test('the gate never inspects the contents of a workflow it did not write', asyn
 
 test('a repo with no .github is not told to have a workflow', async () => {
   const root = await plainRepo();
-  const { stdout } = await exec('node', [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } }).catch(
+  const { stdout } = await exec(process.execPath, [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } }).catch(
     (e) => e,
   );
   assert.doesNotMatch(stdout, /simt-dev-check\.yml/);
@@ -453,7 +453,7 @@ test('simt-dev\'s own copy is current on disk, and check says so', async () => {
 
   // And `check`, run from a scratch cwd with this repo as the target, must not report
   // it. A drift finding here would be the one finding nothing could fix.
-  const found = await exec('node', [BIN, 'check', '--root', PACKAGE_ROOT], {
+  const found = await exec(process.execPath, [BIN, 'check', '--root', PACKAGE_ROOT], {
     cwd: PACKAGE_ROOT,
     env: { ...process.env, NO_COLOR: '1' },
   }).catch((e) => e);
@@ -642,7 +642,7 @@ test('a stale copy in simt-dev\'s own repository is reported, with the fix named
     assert.equal(plan.action, 'refresh');
     assert.match(plan.reason, /gate template has changed/);
 
-    const red = await exec('node', [BIN, 'check', '--root', PACKAGE_ROOT], {
+    const red = await exec(process.execPath, [BIN, 'check', '--root', PACKAGE_ROOT], {
       cwd: PACKAGE_ROOT,
       env: { ...process.env, NO_COLOR: '1' },
     }).catch((e) => e);
@@ -651,7 +651,7 @@ test('a stale copy in simt-dev\'s own repository is reported, with the fix named
 
     // And the fix is the thing that clears it. `--yes` because `ci` writes like every
     // other writer in this tool: shown first, changed only when told.
-    await exec('node', [CI, '--yes'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } });
+    await exec(process.execPath, [CI, '--yes'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } });
     assert.equal(await readFile(path, 'utf8'), renderWorkflow({ own: true }));
     assert.equal((await planWorkflow(PACKAGE_ROOT)).action, 'unchanged');
   } finally {
@@ -784,7 +784,7 @@ test('`ci --json` emits exactly one document in every mode, including --dry-run'
 });
 
 test('ci writes the own copy, is dry-run by default, and says when it is current', async () => {
-  const { stdout } = await exec('node', [CI], {
+  const { stdout } = await exec(process.execPath, [CI], {
     cwd: PACKAGE_ROOT,
     env: { ...process.env, NO_COLOR: '1' },
   });
@@ -794,7 +794,7 @@ test('ci writes the own copy, is dry-run by default, and says when it is current
   // file it would write is the same file, so this asserts the shape of the promise
   // rather than re-doing a write that would dirty the tree.
   const json = JSON.parse(
-    (await exec('node', [CI, '--json'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } })).stdout,
+    (await exec(process.execPath, [CI, '--json'], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } })).stdout,
   );
   assert.equal(json.ok, true);
   assert.equal(json.action, 'unchanged');
@@ -961,16 +961,16 @@ test("a repo's own edits to the config survive init, exactly as the workflow's d
   // `ignore` rule or a weekly cadence has done the thing this file exists to let them
   // do, and a second writer would delete it.
   const root = await actionsRepo();
-  await exec('node', [BIN, 'init', '--surfaces', 'opencode', '--yes'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
+  await exec(process.execPath, [BIN, 'init', '--surfaces', 'opencode', '--yes'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
   await writeFile(
     join(root, DEPENDABOT_FILE),
     `${renderDependabot([], { stack: ['node'] })}\n# our own security policy lives here\n`,
   );
-  await exec('node', [BIN, 'init', '--surfaces', 'opencode', '--yes'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
+  await exec(process.execPath, [BIN, 'init', '--surfaces', 'opencode', '--yes'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
   assert.match(await readFile(join(root, DEPENDABOT_FILE), 'utf8'), /our own security policy/);
 
   // And check does not inspect a file it did not write.
-  const { stderr } = await exec('node', [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } }).catch((e) => e);
+  const { stderr } = await exec(process.execPath, [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } }).catch((e) => e);
   assert.doesNotMatch(stderr, /dependabot/);
 });
 
@@ -979,19 +979,19 @@ test('check reports a repo that runs Actions but watches nothing', async () => {
   // dependencies are never updated finds out about a CVE from an advisory rather
   // than from a pull request.
   const root = await actionsRepo();
-  await exec('node', [BIN, 'init', '--surfaces', 'opencode', '--yes'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
+  await exec(process.execPath, [BIN, 'init', '--surfaces', 'opencode', '--yes'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
   await rm(join(root, DEPENDABOT_FILE));
-  const { stdout, code } = await exec('node', [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } }).catch((e) => e);
+  const { stdout, code } = await exec(process.execPath, [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } }).catch((e) => e);
   assert.match(stdout, /ABSENT\s+\.github\/dependabot\.yml/);
   assert.match(stdout, /nothing watches its dependencies/);
   assert.equal(code, 1);
 
-  await exec('node', [BIN, 'init', '--surfaces', 'opencode', '--yes'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
-  assert.ok((await exec('node', [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })).stdout);
+  await exec(process.execPath, [BIN, 'init', '--surfaces', 'opencode', '--yes'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
+  assert.ok((await exec(process.execPath, [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })).stdout);
 });
 
 test('simt-dev refreshes both of its own copies, and writes only what changed', async () => {
-  const { stdout } = await exec('node', [CI], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } });
+  const { stdout } = await exec(process.execPath, [CI], { cwd: PACKAGE_ROOT, env: { ...process.env, NO_COLOR: '1' } });
   assert.match(stdout, /current\s+\.github\/workflows\/simt-dev-check\.yml/);
   assert.match(stdout, /current\s+\.github\/dependabot\.yml/);
 });

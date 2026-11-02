@@ -54,7 +54,7 @@ async function repo(files) {
 }
 
 function run(args) {
-  return exec('node', [BIN, ...args], { maxBuffer: 16 << 20 }).then(
+  return exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 }).then(
     ({ stdout, stderr }) => ({ code: 0, out: stdout + stderr }),
     (error) => ({ code: error.code, out: (error.stdout ?? '') + (error.stderr ?? '') }),
   );

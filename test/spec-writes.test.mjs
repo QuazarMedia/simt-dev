@@ -48,7 +48,7 @@ test('a row that declares no writes leaves a repository alone', async () => {
   ]);
   const dir = await mkdtemp(join(tmpdir(), 'simt-writes-'));
   await exec('git', ['init', '-q', dir]);
-  await exec('node', [BIN, 'init', '--yes', '--root', dir], { cwd: dir });
+  await exec(process.execPath, [BIN, 'init', '--yes', '--root', dir], { cwd: dir });
   // The commit goes through the fixture's git, which carries an identity: a runner
   // derives an empty name from its passwd entry, and a bare `git commit` dies with
   // "empty ident name" before the test under assertion has started.
@@ -60,7 +60,7 @@ test('a row that declares no writes leaves a repository alone', async () => {
   for (const row of SPEC) {
     if (row.writes !== undefined || SKIP.has(row.path)) continue;
     const before = await status();
-    await exec('node', [BIN, ...row.path.split(' '), '--json', '--root', dir], { cwd: dir, timeout: 20000 }).catch((error) => error);
+    await exec(process.execPath, [BIN, ...row.path.split(' '), '--json', '--root', dir], { cwd: dir, timeout: 20000 }).catch((error) => error);
     const after = await status();
     if (after !== before) offenders.push(`${row.path}: ${after.split('\n')[0]}`);
   }

@@ -380,7 +380,7 @@ test('mcp: skills_brief and `skills brief` answer the same question identically'
 
   for (const budget of [2000, 20000]) {
     const mcp = await brief.run({ budget, skill: 'parallel-feature-team', root: ROOT });
-    const { stdout } = await exec('node', [
+    const { stdout } = await exec(process.execPath, [
       resolve(ROOT, 'bin', 'simt.mjs'),
       'skills', 'brief', '--root', ROOT, '--skill', 'parallel-feature-team',
       '--budget', String(budget), '--json',
@@ -426,7 +426,7 @@ test('mcp: no mutating command is exposed as a tool', () => {
 });
 
 test('mcp: every command that writes is reachable only from the CLI', async () => {
-  const { stdout } = await exec('node', [BIN, 'mcp', '--list', '--json']);
+  const { stdout } = await exec(process.execPath, [BIN, 'mcp', '--list', '--json']);
   const { tools } = JSON.parse(stdout);
   const names = tools.map((t) => t.name);
   for (const mutating of ['init', 'sync', 'upgrade', 'skills install', 'hooks install']) {
@@ -709,7 +709,7 @@ test('mcp: an unknown prompt is a method error naming the way to discover one', 
  */
 function converse(raw) {
   return new Promise((res, rej) => {
-    const child = spawn('node', [BIN, 'mcp']);
+    const child = spawn(process.execPath, [BIN, 'mcp']);
     let stdout = '';
     let stderr = '';
     child.stdout.on('data', (d) => { stdout += d; });
@@ -898,7 +898,7 @@ test('mcp: the annotations say what the tools are', async () => {
 test('mcp: --list answers without reading stdin', async () => {
   // An editor that has misconfigured the command has to be able to ask what it exposes
   // without hanging on a pipe nobody is writing to.
-  const { stdout } = await exec('node', [BIN, 'mcp', '--list'], { input: '' });
+  const { stdout } = await exec(process.execPath, [BIN, 'mcp', '--list'], { input: '' });
   assert.match(stdout, /all read-only except federation_query/);
   assert.match(stdout, /Nothing here writes to your repositories/);
 });
@@ -946,7 +946,7 @@ test('mcp: brief reads the index and never builds one', async () => {
   );
 
   // Warm it the way a person would, then ask again.
-  await exec('node', [BIN, 'index', '--root', dir]);
+  await exec(process.execPath, [BIN, 'index', '--root', dir]);
 
   const warm = await call(3);
   assert.equal(warm.result.isError, false, JSON.stringify(warm.result));

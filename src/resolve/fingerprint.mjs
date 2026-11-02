@@ -325,6 +325,25 @@ export async function fingerprint(root) {
   // object whose only key is "error" pretending to be this repo manifest .
   const manifest = manifestName === null ? null : (await loadManifest(root)).manifest;
 
+  // The `work` namespace as facts, so a profile can select on a declaration without a
+  // second detector learning the shape (ADR-146). An absent or malformed declaration
+  // emits nothing: the profiles are opt-in, and a repository that never declared work
+  // keeps Plan 3's selection byte for byte.
+  const workScopes = Array.isArray(manifest?.work?.scopes) ? manifest.work.scopes : [];
+  const workTargets = Array.isArray(manifest?.work?.targets) ? manifest.work.targets : [];
+  if (workScopes.length > 0) {
+    facts.add('has-work-scopes');
+    factEvidence['has-work-scopes'] ??= manifestName;
+  }
+  if (workScopes.some((scope) => Array.isArray(scope?.validators) && scope.validators.length > 0)) {
+    facts.add('has-work-validators');
+    factEvidence['has-work-validators'] ??= manifestName;
+  }
+  if (workTargets.length > 0) {
+    facts.add('has-work-targets');
+    factEvidence['has-work-targets'] ??= manifestName;
+  }
+
   const stackList = [...stack].sort();
   const factList = [...facts].sort();
   return {
@@ -544,7 +563,17 @@ export const STACK_TAGS = new Set([
 ]);
 
 /** Every fact `fingerprint()` can emit, derived for the same reason as above. */
-export const FACT_TAGS = new Set([...FACTS.map((f) => f.name), ...PKG_FACTS.map((f) => f.name)]);
+/**
+ * Facts that only an explicit `work` declaration can emit (ADR-146).
+ *
+ * They are not probed from the tree because the declaration is the signal: a directory
+ * named after a country is not evidence that a repository operates remote objects, and a
+ * `docs/` tree is not evidence that it declares validators. Exported so the profile
+ * selection test can ask what a work profile is allowed to select on.
+ */
+export const WORK_FACTS = Object.freeze(['has-work-scopes', 'has-work-validators', 'has-work-targets']);
+
+export const FACT_TAGS = new Set([...FACTS.map((f) => f.name), ...PKG_FACTS.map((f) => f.name), ...WORK_FACTS]);
 
 /**
  * The full vocabulary a profile's `applies` may name: platform tags and facts.

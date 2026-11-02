@@ -489,10 +489,19 @@ export async function loadRules(root = null) {
         .filter((n) => n.endsWith('.md'))
         .map((n) => `stacks/${n}`)
     : [];
+  // Work profiles are profiles: same frontmatter, same matcher, selected by the facts the
+  // `work` declaration emits (ADR-146). A third directory rather than a prefix on the
+  // existing one, so `stacks/` keeps meaning "an ecosystem" and a reader can tell which
+  // question a file answers.
+  const workFiles = entries.some((e) => e.isDirectory() && e.name === 'work')
+    ? (await readdir(join(RULES_DIR, 'work')))
+        .filter((n) => n.endsWith('.md'))
+        .map((n) => `work/${n}`)
+    : [];
 
   const collected = [];
 
-  for (const file of [...files, ...stackFiles].sort()) {
+  for (const file of [...files, ...stackFiles, ...workFiles].sort()) {
     collected.push({ file, dir: RULES_DIR, origin: 'central', source: `rules/${file}` });
   }
 

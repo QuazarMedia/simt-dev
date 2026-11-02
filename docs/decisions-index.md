@@ -154,3 +154,4 @@ in [architecture/history.md](architecture/history.md).
 | [143](decisions/ADR-143-facets-are-additive-to-stack-detection-and-ambiguity-is-reported.md) | facets are additive to stack detection, and ambiguity is reported | accepted · 2026-11-02 |
 | [144](decisions/ADR-144-the-work-namespace-is-versioned-and-adoption-fabricates-no-runner.md) | the work namespace is versioned, and adoption fabricates no runner | accepted · 2026-11-02 |
 | [145](decisions/ADR-145-artifact-identity-is-explicit-and-most-specific-scope-wins.md) | artifact identity is explicit, and the most specific scope wins | accepted · 2026-11-02 |
+| [146](decisions/ADR-146-work-profiles-select-only-on-an-explicit-declaration.md) | work profiles select only on an explicit declaration | accepted · 2026-11-02 |

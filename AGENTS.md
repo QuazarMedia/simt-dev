@@ -106,6 +106,7 @@ Two corollaries that are easy to get wrong:
 | --- | --- |
 | `rules/core.md` | Stack-agnostic rules, projected into every repo |
 | `rules/stacks/*.md` | One profile per ecosystem, projected on detection |
+| `rules/work/*.md` | Optional work profiles (knowledge, procedures, remote operations), projected only on an explicit `work` declaration (ADR-146) |
 | `rules/mdc/*.mdc` | Canonical Cursor rule files, projected with per-repo substitutions |
 | `graph/skills.graph.json` | The skill registry: capabilities, variants, byte sizes |
 | `src/projection/` | Generated-region markers, rule selection, manifest, conflict scanning |
@@ -134,7 +135,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=5a31432af1d7d445eb0f781e32a559325fe95d7d -->
+<!-- simt:sha=cadbf6fb6c388f2f81fedab31b78d4e5e240ead2 -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->

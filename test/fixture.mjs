@@ -12,7 +12,7 @@
 
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { cp, mkdir, mkdtemp, writeFile, readdir } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -293,13 +293,4 @@ export async function trackedFiles(root) {
   };
   await walk('');
   return out.sort();
-}
-
-
-/** Copy a tree, leaving generated state and history behind. */
-export async function copyTree(from, to) {
-  await cp(from, to, {
-    recursive: true,
-    filter: (src) => !/(^|\/)(node_modules|dist|\.git|\.simt)(\/|$)/.test(src),
-  });
 }

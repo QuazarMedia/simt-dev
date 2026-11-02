@@ -88,6 +88,9 @@ ${CLI} plan next [<id>]        one ready slice's section, or the one named; ~1 K
 ${CLI} plan labels             which header each tracker column matched, and
                            the ones it could not place
 ${CLI} plan done <id> [<sha>]  mark one row; dry-run unless --yes
+${CLI} plan archive <id>       close a finished plan or review and move it to its
+                           archive/ directory (dry-run unless --yes; refuses an
+                           unfinished document without --force)
 ${CLI} slice start <id>     give a slice its own worktree and branch, preload the
                            brief, and mark the row started (dry-run unless
                            --yes; the worktree is ${STATE_DIR}/local/worktrees/<id>
@@ -339,6 +342,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --compare <a> <b>       bench report: compare two arms with deltas and p-values
 --test <cmd>            plan done / slice finish: the test command that closes the row
 --state <name>          plan done: target state (default: Complete)
+--force                 plan archive: close a document that still has rows open. The
+                        refusal is the default, because an archived unfinished
+                        document stops being counted as work
 --tier <name>           plan next: stay inside one tier, read from the slice's Tier
                         column (the first word, so "L (S)" is an L slice with an S
                         reviewer); a tier no slice carries answers with nothing ready

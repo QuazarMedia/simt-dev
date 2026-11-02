@@ -33,7 +33,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [map](map.md) | 1 |
 | [mcp](mcp.md) | 1 |
 | [pack](pack.md) | 3 |
-| [plan](plan.md) | 4 |
+| [plan](plan.md) | 5 |
 | [plugin](plugin.md) | 1 |
 | [pr-body](pr-body.md) | 1 |
 | [review](review.md) | 1 |
@@ -159,6 +159,7 @@ simt pack new <name> --source <spec>                                   # scaffol
 simt pack publish [dir] --yes                                          # publish a rule pack
 
 # plan
+simt plan archive <id>                                                 # close a finished plan or review and move it to its archive/ directory
 simt plan done <id> [<sha>] --yes                                      # mark one tracker row complete, with its SHA and its evidence
 simt plan labels                                                       # the header each tracker column matched, and the labels this repository configured
 simt plan next [<id>] [--tier <name>] [--wave <name>] [--lane <name>]  # one ready slice's section, or the one named, inside a tier, a wave or a lane

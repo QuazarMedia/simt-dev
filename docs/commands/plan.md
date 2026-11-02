@@ -8,5 +8,6 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 | `simt plan labels` | — | the header each tracker column matched, and the labels this repository configured |
 | `simt plan next [<id>] [--tier <name>] [--wave <name>] [--lane <name>]` | `--diff`, `--state`, `--test`, `--tier`, `--wave`, `--lane` | one ready slice's section, or the one named, inside a tier, a wave or a lane |
 | `simt plan status` | `--diff`, `--state`, `--test` | count the tracker rows, the share of the plan done, and its tiers, waves and lanes |
+| `simt plan archive <id>` | `--force`, `--yes` | close a finished plan or review and move it to its archive/ directory |
 
-None of these write to the repository.
+Writes to the repository: `simt plan archive`. Each prints its plan and writes nothing without `--yes`.

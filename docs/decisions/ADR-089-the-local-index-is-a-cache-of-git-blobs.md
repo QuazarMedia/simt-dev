@@ -19,9 +19,9 @@ happened to build it is not the store the plan describes.
 ## Rulings
 
 1. **The store is sqlite when this process can open it and create an FTS5 table.**
-   The file is `.simt-dev/index.sqlite`. The tables are the ones the plan names:
+   The file is `.simt/local/index.sqlite`. The tables are the ones the plan names:
    files, symbols, edges, an FTS5 table, and meta. When the module is absent or FTS5
-   cannot be created, the same file rows are written to `.simt-dev/index.jsonl`.
+   cannot be created, the same file rows are written to `.simt/local/index.jsonl`.
    Nothing is added to the dependency set.
 
 2. **A row is keyed by the git blob.** `git ls-files -s` supplies the path and the

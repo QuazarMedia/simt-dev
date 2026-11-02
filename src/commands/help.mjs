@@ -254,6 +254,8 @@ ${CLI} pack publish [dir] [--yes]
                            publish an npm-sourced pack to the registry
                            (dry-run unless --yes; skips a version already live;
                            a git-sourced pack names the tag-and-push instead)
+pack is experimental: frozen, no repository vendors one, and removal is a later
+                           plan's decision (ADR-130)
 ${CLI} docs readme --yes      render the README command list from the spec
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
@@ -548,7 +550,12 @@ function groupPage(group) {
 
 /** One spec row as the JSON a UI or a harness reads. */
 function specRow(row) {
-  return { path: row.path, summary: row.summary, ...(row.defaultFor === undefined ? {} : { defaultFor: row.defaultFor }) };
+  return {
+    path: row.path,
+    summary: row.summary,
+    ...(row.defaultFor === undefined ? {} : { defaultFor: row.defaultFor }),
+    ...(row.stability === undefined ? {} : { stability: row.stability }),
+  };
 }
 
 const PAGE_WIDTH = 78;

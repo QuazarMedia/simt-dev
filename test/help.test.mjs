@@ -280,6 +280,14 @@ test('every flag the parser accepts is described in --help', async () => {
  * directions are pinned: promoting it back to core, or dropping it from `--all`, fails here
  * rather than passing because the other page happens to carry it (ADR-129).
  */
+test('help: --all says packs are experimental, and why (Q84)', async () => {
+  // ADR-130 freezes the group; a reader who never learns that scaffolds a pack expecting
+  // support. The record's number is on the page so `simt rules why ADR-130` resolves.
+  const all = await helpAll();
+  assert.match(all, /pack is experimental/);
+  assert.match(all, /ADR-130/);
+});
+
 test('help: distill is on --all and off the core page', async () => {
   const core = await help();
   assert.ok(!core.includes('distill'), 'the core page spends its 2 KB on distill');

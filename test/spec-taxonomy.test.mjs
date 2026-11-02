@@ -34,6 +34,16 @@ test('a command whose work needs a corpus is advanced even when its group is cor
   assert.equal(tierOf('pack new'), 'advanced');
 });
 
+test('every pack row is marked experimental, and nothing else is (Q84)', () => {
+  // The marker is the surface half of ADR-130: it is what a reader sees before scaffolding
+  // a pack, and it is only true while it covers the whole group and nothing else.
+  const pack = SPEC.filter((row) => row.path.startsWith('pack '));
+  assert.ok(pack.length >= 3, 'the pack group lost its rows');
+  for (const row of pack) assert.equal(row.stability, 'experimental', `${row.path} is not marked experimental`);
+  const other = SPEC.filter((row) => !row.path.startsWith('pack ') && row.stability !== undefined);
+  assert.deepEqual(other.map((row) => row.path), [], 'a stability marker spread beyond packs');
+});
+
 test('the tests command declares the gate spelling it now answers', () => {
   const row = SPEC.find((entry) => entry.path === 'tests');
   assert.ok(row.flags.includes('run'), 'tests does not declare --run');

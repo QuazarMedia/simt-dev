@@ -138,3 +138,4 @@ in [architecture/history.md](architecture/history.md).
 | [127](decisions/ADR-127-the-mcp-tool-list-is-written-by-hand-and-roots-is-not-asked-for.md) | the MCP tool list is written by hand and held to the spec, and roots is not asked for | accepted · 2026-11-01 |
 | [128](decisions/ADR-128-a-research-plan-is-a-plan-and-the-tracker-reads-it.md) | A research plan is a plan, and the tracker reads it | accepted · 2026-11-01 · supersedes ADR-082 ruling 1 |
 | [129](decisions/ADR-129-distill-is-documented-on-the-advanced-help-page-not-the-core-one.md) | Distill is documented on the advanced help page, not the core one | accepted · 2026-11-02 |
+| [130](decisions/ADR-130-packs-are-experimental-and-frozen-until-a-repository-adopts-one.md) | Packs are experimental and frozen until a repository adopts one | accepted · 2026-11-02 |

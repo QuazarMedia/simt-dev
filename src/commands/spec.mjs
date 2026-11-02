@@ -79,9 +79,11 @@ export const SPEC = [
   { path: 'mcp', usage: '[--list]', summary: 'serve the read-only MCP surface over stdio', flags: ["list"], },
   // The default is the read: `pack` alone lints the working directory,
   // the way `skills` alone indexes and `graph` alone lints.
-  { path: 'pack lint', usage: '[dir] [--require-measured]', summary: 'lint a rule pack in the working directory', defaultFor: 'pack', flags: ["diff","require-measured","source"], },
-  { path: 'pack new', usage: '<name> --source <spec>', summary: 'scaffold a rule pack', flags: ["diff","require-measured","source"], },
-  { path: 'pack publish', usage: '[dir] --yes', summary: 'publish a rule pack', flags: ["diff","require-measured","source"], },
+  // No sibling repository vendors a pack, so the group is frozen: it works, it is
+  // documented, and it gains no feature until one is adopted somewhere real (ADR-130).
+  { path: 'pack lint', usage: '[dir] [--require-measured]', summary: 'lint a rule pack in the working directory', defaultFor: 'pack', stability: 'experimental', flags: ["diff","require-measured","source"], },
+  { path: 'pack new', usage: '<name> --source <spec>', summary: 'scaffold a rule pack', stability: 'experimental', flags: ["diff","require-measured","source"], },
+  { path: 'pack publish', usage: '[dir] --yes', summary: 'publish a rule pack', stability: 'experimental', flags: ["diff","require-measured","source"], },
   { path: 'plan done', usage: '<id> [<sha>] --yes', mcp: { name: 'plan_done', flags: ['state', 'test'] }, summary: 'mark one tracker row complete, with its SHA and its evidence', flags: ["diff","state","test"], },
   { path: 'plan labels', summary: 'the header each tracker column matched, and the labels this repository configured', flags: [] },
   { path: 'plan next', usage: '[<id>] [--tier <name>] [--wave <name>] [--lane <name>]', mcp: { name: 'plan_next', flags: [] }, summary: "one ready slice's section, or the one named, inside a tier, a wave or a lane", flags: ["diff","state","test","tier","wave","lane"], },

@@ -40,8 +40,13 @@ export async function dirtyPaths(root) {
     return (stdout ?? '')
       .split('\n')
       .filter(Boolean)
-      .map((line) => line.slice(3).trim())
-      .filter((p) => !p.includes(' -> '));
+      // The two status columns are not fixed-width once the head of the output has been
+      // trimmed: an unstaged modification starts with a space, so `slice(3)` on that line
+      // took the first character of the path with it (`src/keep.mjs` -> `rc/keep.mjs`), and
+      // the packet was then about a file that does not exist.
+      .map((line) => /^\s*[ MADRCU?!]{1,2}\s+(.*)$/.exec(line)?.[1] ?? '')
+      .map((path) => path.trim())
+      .filter((path) => path.length > 0 && !path.includes(' -> '));
   } catch {
     return [];
   }

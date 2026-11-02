@@ -149,7 +149,7 @@ export async function plan(root, flags = {}) {
   // them and reports them in the same plan it prints for AGENTS.md and the rule
   // files. A file the reader was not shown is a file they approve by reading the diff
   // afterwards, which is the one review step this tool exists to make unnecessary.
-  const baselines = await baselineTargets(root, meta.sha);
+  const baselines = await baselineTargets(root, meta.sha, { adopt: flags.baselines === true });
 
   // A monorepo projects once per package as well as once at the root. The nested
   // regions come after the root's and before the rule files, because the root is

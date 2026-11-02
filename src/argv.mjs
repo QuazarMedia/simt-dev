@@ -36,6 +36,7 @@ export const BOOL_FLAGS = new Set([
   'cross-group',
   'json',
   'all',
+  'baselines',
   'dry-run',
   'yes',
   'check',

@@ -146,7 +146,7 @@ export const BASELINES = [
  * be a second place computing the desired bytes, which is the defect that made the
  * gate report drift on a clean tree before this list existed.
  */
-export async function baselineTargets(root, sha) {
+export async function baselineTargets(root, sha, { adopt = false } = {}) {
   const targets = [];
   for (const b of BASELINES) {
     const path = join(root, b.file);
@@ -157,6 +157,15 @@ export async function baselineTargets(root, sha) {
     } catch {
       exists = false;
     }
+    // Opt-in by presence (ADR-134). A repository that carries the region keeps it
+    // maintained; one that does not is left alone, because a file the repository wrote
+    // without the region is a decision this tool has no business reversing. `adopt` is
+    // the explicit request that writes the region into a repository that has none.
+    //
+    // Without this, every repository received both files on adoption, which shipped
+    // Go/Make/Python sections into TypeScript repositories and made one baseline edit a
+    // stale region in sixteen of them.
+    if (!adopt && parse(existing, b.style).status !== 'ok') continue;
     const body = b.body();
     // No `sources` in the provenance header. It records where the bytes came from,
     // and for a baseline the file being written IS the source - the module in front

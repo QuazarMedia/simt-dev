@@ -142,3 +142,4 @@ in [architecture/history.md](architecture/history.md).
 | [131](decisions/ADR-131-the-vector-path-is-one-module-and-only-embed-loads-it.md) | The vector path is one module, and only `--embed` loads it | accepted · 2026-11-02 |
 | [132](decisions/ADR-132-the-variant-experiment-runner-is-retired-and-the-marker-fold-stays.md) | The variant experiment runner is retired, and the marker fold stays | accepted · 2026-11-02 |
 | [133](decisions/ADR-133-the-github-refresh-is-a-script-and-not-a-command.md) | the .github refresh is a script and not a command | accepted · 2026-11-02 |
+| [134](decisions/ADR-134-baselines-are-carried-by-a-repository-not-assigned-by-adoption.md) | baselines are carried by a repository, not assigned by adoption | accepted · 2026-11-02 |

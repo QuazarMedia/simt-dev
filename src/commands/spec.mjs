@@ -67,7 +67,7 @@ export const SPEC = [
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff"], },
   { path: 'impact', usage: '<file|symbol>', summary: 'who a change reaches: importers, their tests and the contract', flags: [], },
   { path: 'index', usage: '[--embed]', summary: 'rebuild the local file index from git blob hashes', flags: ["allow-remote","embed"], },
-  { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, hooks, agents and agent-hooks', writes: 'repo', flags: ["yes","accept-conflicts","backup","diff","harness","agents","surfaces"], },
+  { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, hooks, agents and agent-hooks', writes: 'repo', flags: ["yes","accept-conflicts","backup","baselines","diff","harness","agents","surfaces"], },
   { path: 'lease', usage: '[<paths>] --session', summary: 'claim files for one session, or list the claims', flags: ["harness","session","ttl"], },
   { path: 'lessons capture', summary: 'scan the ledger and history for new lesson candidates', flags: ["diff","expires","paths","task"], },
   { path: 'lessons list', summary: 'deterministic lesson candidates and the promoted lessons', defaultFor: 'lessons', flags: ["diff","expires","paths","task"], },
@@ -117,7 +117,7 @@ export const SPEC = [
   // `--check` is the spelling bare `sync` replaced: the command already reports before it
   // writes, so the flag asked a question the default answer answers. It keeps working and
   // says what replaced it, rather than disappearing from under a script.
-  { path: 'sync', usage: '--yes', summary: 're-render the generated regions from the rule content', writes: 'repo', deprecated: { check: 'sync' }, flags: ["yes","check","diff","dry-run"], },
+  { path: 'sync', usage: '--yes', summary: 're-render the generated regions from the rule content', writes: 'repo', deprecated: { check: 'sync' }, flags: ["yes","baselines","check","diff","dry-run"], },
   { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed]', summary: 'the tests that exercise a file, or - with --run - the ones a change reaches', flags: ["cochange","run","changed"], },
   { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', aliases: ['harness cost'], flags: ["repos","session"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff"], },

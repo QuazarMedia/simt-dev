@@ -219,11 +219,11 @@ test('a repository that is not a workspace projects exactly what it did before',
   assert.deepEqual((await discoverPackages(root)).packages, []);
   const { targets, packages } = await plan(root);
   assert.deepEqual(packages, []);
-  // One AGENTS.md, the two baseline files every repository gets, and the lock file
-  // plan() writes. A non-workspace must be byte-identical to what it got before the
-  // workspace feature, which is the only way to know the detector does not fire where
-  // it should not.
-  assert.deepEqual(targets.map((t) => t.file), ['AGENTS.md', '.editorconfig', '.gitattributes', 'simt.lock.json']);
+  // One AGENTS.md and the lock file plan() writes. The baselines are absent because a
+  // repository opts into them by carrying them (ADR-134); a non-workspace must still be
+  // byte-identical to what it got before the workspace feature, which is the only way to
+  // know the detector does not fire where it should not.
+  assert.deepEqual(targets.map((t) => t.file), ['AGENTS.md', 'simt.lock.json']);
 });
 
 test('compare reports each package region, and a drifted one as a problem', async () => {

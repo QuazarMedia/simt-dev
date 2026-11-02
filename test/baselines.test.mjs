@@ -150,11 +150,17 @@ test('the region is a comment in the file it lands in, not an HTML comment', () 
   assert.doesNotMatch(text, /<!--/);
 });
 
-test('a repo with no .editorconfig gets one', async () => {
+test('a repo with no .editorconfig is left alone, and adoption is opt-in', async () => {
+  // ADR-134: a baseline is a file the repository carries, not one adoption hands it.
+  // Handing it over shipped Go, Make and Python sections into TypeScript repositories,
+  // and made one edit here a stale region in every repository that ever adopted.
   const root = await repo();
   const { targets } = await baselineTargets(root, SHA);
-  assert.equal(targets.length, BASELINES.length);
-  const t = targets[0];
+  assert.deepEqual(targets, [], 'no region, no target: the file is the repository\'s decision');
+
+  const adopted = await baselineTargets(root, SHA, { adopt: true });
+  assert.equal(adopted.targets.length, BASELINES.length);
+  const t = adopted.targets[0];
   assert.equal(t.file, '.editorconfig');
   assert.equal(t.exists, false);
   assert.equal(t.action, 'added');
@@ -179,7 +185,7 @@ test('the repo\'s own settings land BELOW the region, so the repo wins', async (
 
 test('a second sync writes nothing, and the gate calls it current', async () => {
   const root = await repo();
-  const first = await baselineTargets(root, SHA);
+  const first = await baselineTargets(root, SHA, { adopt: true });
   await writeFile(join(root, '.editorconfig'), first.targets[0].text);
   const second = await baselineTargets(root, SHA);
   assert.equal(second.targets[0].action, 'unchanged');
@@ -193,7 +199,7 @@ test('a region that has been moved below the repo\'s settings is reported, with 
   // sync first, so the region records the SHA the gate will compare against. Building
   // the file from a hand-picked SHA instead would report DRIFT alongside MISPLACED,
   // and the test would pass while asserting the wrong thing.
-  await simt(['sync', '--yes'], root);
+  await simt(['sync', '--yes', '--baselines'], root);
   const synced = await readFile(join(root, '.editorconfig'), 'utf8');
   const region = synced.slice(synced.indexOf('# simt:begin'));
   const moved = `# their own settings\n\n[*]\nindent_size = 4\n\n${region}`;
@@ -220,16 +226,16 @@ test('a region that has been moved below the repo\'s settings is reported, with 
 
 test('a region at the top of the file is not reported as misplaced', async () => {
   const root = await repo();
-  const { targets } = await baselineTargets(root, SHA);
+  const { targets } = await baselineTargets(root, SHA, { adopt: true });
   await writeFile(join(root, '.editorconfig'), targets[0].text);
   assert.equal(misplaced(parse(targets[0].text, 'hash'), 'hash'), null);
 });
 
 // ------------------------------------------------------------------------- end to end
 
-test('sync writes the baseline, check reports it current, and both name it', async () => {
+test('sync --baselines writes it, check reports it current, and both name it', async () => {
   const root = await repo();
-  const wrote = await simt(['sync', '--yes'], root);
+  const wrote = await simt(['sync', '--yes', '--baselines'], root);
   assert.equal(wrote.code, 0, wrote.out);
 
   const onDisk = await readFile(join(root, '.editorconfig'), 'utf8');
@@ -241,41 +247,49 @@ test('sync writes the baseline, check reports it current, and both name it', asy
   assert.match(checked.out, /CURRENT\s+\.editorconfig/);
 });
 
-test('the plan shows the baseline before it exists, with what it is for', async () => {
+test('the plan shows the baseline only when adoption was asked for', async () => {
+  // A plan is a statement about what a run would write, so a baseline nobody asked for
+  // must not appear in it — the preview and the write stay the same list.
   const root = await repo();
-  const p = await plan(root, {});
-  const t = p.targets.find((x) => x.file === '.editorconfig');
+  const quiet = await plan(root, {});
+  assert.equal(quiet.targets.some((x) => x.file === '.editorconfig'), false);
+
+  const adopting = await plan(root, { baselines: true });
+  const t = adopting.targets.find((x) => x.file === '.editorconfig');
   assert.ok(t, 'the plan must contain every file sync will write');
   assert.equal(t.action, 'added');
 });
 
-test('a deleted baseline is a blocking finding with a command, not a note', async () => {
-  // Same treatment the rule files get: adopting a repo means running init, so a
-  // baseline that has been removed is drift. A finding nothing can act on is the
-  // failure this gate exists to stop.
+test('deleting an adopted baseline is opting out, and check stops reporting it', async () => {
+  // ADR-134 in one test: presence is the opt-in, so removal is the opt-out. Reporting
+  // the absence would make the gate demand a file the repository just decided against,
+  // and the only way to silence it would be to write the file back by hand.
   const root = await repo();
-  await simt(['sync', '--yes'], root);
+  await simt(['sync', '--yes', '--baselines'], root);
   await rename(join(root, '.editorconfig'), join(root, '.editorconfig.bak'));
 
   const checked = await simt(['check'], root);
-  assert.equal(checked.code, 1);
-  assert.match(checked.out, /\.editorconfig/);
-  assert.match(checked.out, cmd('{cli} sync'));
+  assert.equal(checked.code, 0, checked.out);
+  assert.doesNotMatch(checked.out, /\.editorconfig/);
 });
 
-test('a repo whose .editorconfig has no region is reported, not silently left alone', async () => {
+test('a repo whose .editorconfig has no region is left alone', async () => {
+  // The repository wrote this file and did not carry the region. That is a decision,
+  // and a gate that reported it would be asking the repository to adopt a baseline it
+  // never asked for.
   const root = await repo();
+  await simt(['sync', '--yes'], root);
   await writeFile(join(root, '.editorconfig'), 'root = true\n\n[*]\nindent_size = 4\n');
   const checked = await simt(['check'], root);
-  assert.equal(checked.code, 1);
-  assert.match(checked.out, /\.editorconfig/);
+  assert.equal(checked.code, 0, checked.out);
+  assert.doesNotMatch(checked.out, /\.editorconfig/);
 });
 
 test('adopting the baseline does not touch what the repo already had', async () => {
   const root = await repo();
   const mine = 'root = true\n\n[*]\nindent_size = 4\nmax_line_length = 120\n';
   await writeFile(join(root, '.editorconfig'), mine);
-  await simt(['sync', '--yes'], root);
+  await simt(['sync', '--yes', '--baselines'], root);
   const after = await readFile(join(root, '.editorconfig'), 'utf8');
   for (const line of mine.split('\n').filter((l) => l !== '')) {
     assert.ok(after.includes(line), `lost a line the repo wrote: ${line}`);
@@ -308,7 +322,7 @@ test('every baseline is loaded into the same target list as AGENTS.md', async ()
   // disagree once. `sync` writes `plan().targets` and nothing else, so a baseline in
   // a different list would need sync to know about it twice.
   const root = await repo();
-  const p = await plan(root, {});
+  const p = await plan(root, { baselines: true });
   const fromPlan = p.targets.filter((t) => !t.surface).map((t) => t.file);
   assert.deepEqual(fromPlan, ['AGENTS.md', ...BASELINES.map((b) => b.file), LOCK_FILE]);
 });
@@ -320,7 +334,7 @@ test('the shared gitattributes line normalises text without claiming anything is
   // the most common way a repository corrupts an asset. `eol=lf` is the claim ADR-025
   // refused to make from .editorconfig, made here because this is where git reads it.
   const root = await scratch();
-  const { targets } = await baselineTargets(root, SHA);
+  const { targets } = await baselineTargets(root, SHA, { adopt: true });
   const ga = targets.find((t) => t.file === '.gitattributes');
   assert.ok(ga, 'the region is missing from the target list');
   assert.match(ga.text, /^\* text=auto eol=lf$/m);
@@ -334,23 +348,22 @@ test('the shared line is not a claim about what any individual file IS', async (
   // that declared them would be wrong in thirteen of sixteen repositories, and a wrong
   // attribute is silently obeyed rather than refused.
   const root = await scratch();
-  const { targets } = await baselineTargets(root, SHA);
+  const { targets } = await baselineTargets(root, SHA, { adopt: true });
   const body = targets.find((t) => t.file === '.gitattributes').text;
   for (const claim of ['filter=lfs', 'binary', '-text', 'linguist', 'diff=', 'merge=']) {
     assert.ok(!body.includes(claim), `${claim} is a per-repo claim and must not be shared`);
   }
 });
 
-test('a repo with no gitattributes is offered one, and sync writes it', async () => {
-  // Thirteen repos are in this state, so it is the common case and not an edge one.
+test('a repo with no gitattributes is not handed one, and --baselines writes it', async () => {
   const root = await repo();
   const { targets } = await baselineTargets(root, SHA);
-  const ga = targets.find((t) => t.file === '.gitattributes');
-  assert.equal(ga.exists, false);
-  assert.equal(ga.action, 'added');
-  // Planning is not writing: asserting the file existed here would be asserting the
-  // wrong half of the contract, and `sync` is what has to actually put the bytes down.
+  assert.equal(targets.some((t) => t.file === '.gitattributes'), false);
   await simt(['sync', '--yes'], root);
+  await assert.rejects(readFile(join(root, '.gitattributes'), 'utf8'), 'sync must not create a baseline nobody asked for');
+
+  // Planning is not writing: `sync --baselines` is what has to put the bytes down.
+  await simt(['sync', '--yes', '--baselines'], root);
   assert.match(await readFile(join(root, '.gitattributes'), 'utf8'), /^\* text=auto eol=lf$/m);
 });
 
@@ -427,7 +440,7 @@ test('git itself accepts the shipped region, and honours the repo lines beneath 
   await exec(['init', '-q', '-b', 'main', '.'], root);
   await exec(['config', 'user.email', 't@example.com'], root);
   await exec(['config', 'user.name', 't'], root);
-  const { targets } = await baselineTargets(root, SHA);
+  const { targets } = await baselineTargets(root, SHA, { adopt: true });
   await writeFile(join(root, '.gitattributes'), targets.find((t) => t.file === '.gitattributes').text);
   await writeFile(join(root, '.iq'), 'binary\n');
   await writeFile(join(root, 'main.mc'), 'void main() {}\n');
@@ -448,28 +461,26 @@ test('git itself accepts the shipped region, and honours the repo lines beneath 
   assert.ok(!bytes.includes(Buffer.from('\r\n')), 'a CRLF in the working tree defeats the baseline');
 });
 
-test('a deleted gitattributes is a blocking finding with a command, not a note', async () => {
-  // Same treatment the editorconfig gets: adopting a repo means running sync, so a
-  // baseline that has been removed is drift. And a finding nothing can act on is the
-  // failure this gate exists to stop, so the remedy is a command.
+test('a deleted gitattributes is opting out, and check stops reporting it', async () => {
+  // The same rule as the editorconfig, on the file more repositories will remove: a
+  // baseline is carried, not assigned, so its absence is not drift (ADR-134).
   const root = await repo();
-  await simt(['sync', '--yes'], root);
+  await simt(['sync', '--yes', '--baselines'], root);
   await rm(join(root, '.gitattributes'));
   const checked = await simt(['check'], root);
-  assert.equal(checked.code, 1);
-  assert.match(checked.out, /\.gitattributes/);
-  assert.match(checked.out, cmd('{cli} sync'));
+  assert.equal(checked.code, 0, checked.out);
+  assert.doesNotMatch(checked.out, /\.gitattributes/);
 });
 
-test('a gitattributes with no region is reported, not silently left alone', async () => {
-  // Thirteen repos in the estate have no file at all; this one has a file that simply
-  // does not say what the estate says. Leaving it alone would be indistinguishable from
-  // a repo that has chosen otherwise, and the whole point is that nobody chose.
+test('a gitattributes with no region is left alone', async () => {
+  // A file the repository wrote without the region is the repository's answer. The
+  // finding that used to be here assumed everybody had been assigned the baseline.
   const root = await repo();
+  await simt(['sync', '--yes'], root);
   await writeFile(join(root, '.gitattributes'), '*.iq binary\n');
   const checked = await simt(['check'], root);
-  assert.equal(checked.code, 1);
-  assert.match(checked.out, /\.gitattributes/);
+  assert.equal(checked.code, 0, checked.out);
+  assert.doesNotMatch(checked.out, /\.gitattributes/);
 });
 
 test('this repository adopts its own baselines, region first', async () => {

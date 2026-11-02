@@ -193,22 +193,25 @@ test('markers: a content digest is a stamp the grammar accepts', async () => {
   assert.equal(await provenanceDigest(), digest);
 });
 
-test('markers: the digest covers every projected byte, baselines included (S53)', async () => {
+test('markers: the digest covers the rule bodies and not the baselines (S53, ADR-134)', async () => {
   // The set is the claim, and the set is what was wrong. `provenanceDigest` hashed
   // `rules/` and `graph/` only, so the shared `.editorconfig` block — a string every
   // adopting repository receives — changed without moving the stamp. `check` still saw
   // it, because `check` compares bytes; `upgrade` did not, and reported the pin as
   // unchanged while restamping a region whose content had moved.
   //
-  // Both halves are asserted, and the second is the one that would have caught it: every
-  // baseline's rendered body is IN the hashed set, keyed by the file it becomes in the
-  // adopting repository rather than the module it is written in.
+  // The set is asserted from both directions. The rule bodies are in it, because a rule
+  // edit must restamp every region it projects. The baselines are not: ADR-134 made them
+  // files a repository opts into by carrying them, and hashing their bodies meant one
+  // edit here restamped the AGENTS.md of every repository, adopted baseline or not.
   const inputs = await provenanceInputs();
   const paths = inputs.map((i) => i.path);
   for (const b of BASELINES) {
-    const entry = inputs.find((i) => i.path === `baselines/${b.file}`);
-    assert.ok(entry, `${b.file} leaves the package and is not in the digest`);
-    assert.equal(entry.bytes.toString('utf8'), b.body(), `${b.file} is hashed as something other than its body`);
+    assert.equal(
+      paths.includes(`baselines/${b.file}`),
+      false,
+      `${b.file} is a file a repository opts into, not rule content (ADR-134)`,
+    );
   }
   // ...and nothing else from `src/` sneaked in with them. `src/` as a directory stays
   // excluded: a refactor that projects identical bytes must not move anyone's stamp.
@@ -236,9 +239,11 @@ test('markers: the digest is a function of exactly its inputs, in order (S53)', 
   const inputs = await provenanceInputs();
   assert.equal(rehash(inputs), await provenanceDigest());
 
-  const editor = inputs.findIndex((i) => i.path === 'baselines/.editorconfig');
-  const changed = inputs.map((i, n) => (n === editor ? { ...i, bytes: Buffer.from(`${i.bytes} `) } : i));
-  assert.notEqual(rehash(changed), await provenanceDigest(), 'a baseline body is in the list but not in the hash');
+  const changed = inputs.map((i, n) => (n === 0 ? { ...i, bytes: Buffer.from(`${i.bytes} `) } : i));
+  assert.notEqual(rehash(changed), await provenanceDigest(), 'a rule body is in the list but not in the hash');
+  // And the negative the defect needed: nothing under `baselines/` is an input, so an
+  // edit to a baseline body cannot move a stamp at all (ADR-134).
+  assert.equal(inputs.some((i) => i.path.startsWith('baselines/')), false);
 });
 
 test('markers: compose emits begin before end and carries the header inside', () => {

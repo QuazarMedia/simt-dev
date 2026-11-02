@@ -39,7 +39,6 @@ import { packToBudget } from '../kernel/budget.mjs';
 import { filterInferable, inferableDefect, inferableProofs } from '../kernel/inferability.mjs';
 import { checkDefect, foldChecks } from '../kernel/checks.mjs';
 import { foldVariants, readLockedVariants, variantsDefect } from '../kernel/variants.mjs';
-import { BASELINES } from './baselines.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { installedSkills } from './disclosure.mjs';
 import { PACK_DIR, resolvePacks } from '../packs.mjs';
@@ -125,12 +124,11 @@ export async function provenanceInputs() {
       inputs.push({ path: `${dir}/${rel}`, bytes: await readFile(join(ROOT, dir, rel)) });
     }
   }
-  // Last, and keyed by the FILE it becomes in the adopting repository rather than the
-  // module it is written in: the stamp answers what content produced those bytes, and
-  // `.editorconfig` is the name a reader of a generated region recognises.
-  for (const b of BASELINES) {
-    inputs.push({ path: `baselines/${b.file}`, bytes: Buffer.from(b.body()) });
-  }
+  // The baselines are deliberately absent (ADR-134). The stamp answers "which rule text
+  // produced this region", and a baseline is not rule text: it is a file the repository
+  // opts into by carrying it, and its own region carries the same stamp so a rule change
+  // still reaches it. Hashing the bodies here made one edit to `.editorconfig` a stale
+  // AGENTS.md in every repository, adopted baseline or not.
   return inputs;
 }
 

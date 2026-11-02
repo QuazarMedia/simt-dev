@@ -305,6 +305,10 @@ const FLAGS = `--json                 structured output (compact; one document, 
                         simt-dev/adopt before writing (the undo path)
 --no-agents             init: skip the agent files and the agent-hooks in one flag;
                         the standalone agents / agent-hooks install commands remain
+--baselines             init, sync: write the .editorconfig and .gitattributes
+                        regions into a repository that does not carry them;
+                        without it a baseline is maintained only where the
+                        repository already has the region
 --spec <name>           graph lint: also check every skill against a named
                         specification (one exists: agentskills)
 --user                  harness detect: also report the directories in your home

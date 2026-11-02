@@ -300,6 +300,8 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // ADR-133 joined for the same reason once more: the ruling is ABOUT where the .github
   // refresh lives, and a decision that a writer leaves the shipped surface without naming
   // the script that replaces it would not be an argument a maintainer can act on.
+  // ADR-134 does not join: its prose names no package path, because the files it rules on
+  // (`.editorconfig`, `.gitattributes`) exist in every repository rather than in this one.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',

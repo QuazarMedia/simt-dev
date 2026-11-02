@@ -26,9 +26,9 @@ import {
   resolveWorkspace,
 } from '../src/workspace.mjs';
 import { skillWorkspace, workspaceEnv } from './fixture.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 /**
@@ -39,18 +39,7 @@ const exec = promisify(execFile);
  */
 const DECLARING_MANIFEST = { 'simt.json': JSON.stringify({ id: 'member', workspace: '/from/declared' }) };
 
-async function run(args, env = {}, cwd = undefined) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
-      maxBuffer: 16 << 20,
-      env: { ...process.env, ...env },
-      cwd,
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (args, env = {}, cwd) => simtCli(args, { maxBuffer: 16 << 20, env, cwd });
 
 async function runJson(args, env = {}) {
   const { code, stdout, stderr } = await run([...args, '--json'], env);

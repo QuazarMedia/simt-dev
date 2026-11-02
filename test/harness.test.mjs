@@ -14,9 +14,9 @@ import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import { promisify } from 'node:util';
 import { tempDir } from './fixture.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 const made = [];
 
@@ -30,14 +30,7 @@ async function scratch(prefix = 'simt-harness-') {
   return dir;
 }
 
-async function run(args) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
-    return { code: 0, out: stdout + stderr };
-  } catch (error) {
-    return { code: error.code, out: (error.stdout ?? '') + (error.stderr ?? '') };
-  }
-}
+const run = (args) => simtCli(args, { maxBuffer: 16 << 20 }).then(({ code, stdout, stderr }) => ({ code, out: stdout + stderr }));
 
 /** A repository with the given configuration directories present. */
 async function repoWith(...dirs) {

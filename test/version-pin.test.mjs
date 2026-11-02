@@ -17,9 +17,9 @@ import { promisify } from 'node:util';
 import test, { after } from 'node:test';
 import { packageVersion, hasNpm, assertVersionPin, describeVersion, checkoutSha } from '../src/package-version.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const exec = promisify(execFile);
-const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 const temps = [];
 
 after(async () => {
@@ -27,17 +27,7 @@ after(async () => {
 });
 
 /** Run the binary and report the outcome, exit code included (see ci.test.mjs). */
-async function run(args, opts = {}) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
-      ...opts,
-      env: { ...process.env, NO_COLOR: '1', ...opts.env },
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (args, opts = {}) => simtCli(args, { ...opts, env: { NO_COLOR: '1', ...opts.env } });
 
 test('packageVersion is the running package version, never a guess', () => {
   // The version baked into every rendered artifact must be the one that produced it. It is

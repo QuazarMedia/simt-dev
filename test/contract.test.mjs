@@ -31,9 +31,9 @@ import { fileURLToPath } from 'node:url';
 
 import { git, skillWorkspace, workspaceEnv } from './fixture.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 // One row installs a skill body, and a body lives in the estate. Without a staged
@@ -50,17 +50,7 @@ after(() => rm(WORKSPACE, { recursive: true, force: true }));
 const NO_WORKSPACE = { SIMT_DEV_WORKSPACE: 'off' };
 
 /** Run the shipped binary. Never throws: the exit code is the thing under test. */
-async function run(args, env = {}) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
-      maxBuffer: 32 << 20,
-      env: { ...process.env, NO_COLOR: '1', ...env },
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (args, env = {}) => simtCli(args, { maxBuffer: 32 << 20, env: { NO_COLOR: '1', ...env } });
 
 /**
  * A consumer repo: a git work tree, committed, with a python stack so `init`

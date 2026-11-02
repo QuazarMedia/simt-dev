@@ -26,9 +26,9 @@ import { packageVersion } from '../src/package-version.mjs';
 import { packDigest, resolvePacks, PACK_DIR } from '../src/packs.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { git, tempDir } from './fixture.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 const made = [];
 
@@ -46,14 +46,7 @@ async function scratch(prefix = 'simt-packs-') {
  * One run of the real binary. `execFile` rejects on a non-zero exit and never reports
  * a code on success, so a test asserting "it exits 0" has to read both paths.
  */
-async function run(args) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
-    return { code: 0, out: stdout + stderr };
-  } catch (error) {
-    return { code: error.code, out: (error.stdout ?? '') + (error.stderr ?? '') };
-  }
-}
+const run = (args) => simtCli(args, { maxBuffer: 16 << 20 }).then(({ code, stdout, stderr }) => ({ code, out: stdout + stderr }));
 
 const HOUSE_RULE = `---
 simt-id: house-node

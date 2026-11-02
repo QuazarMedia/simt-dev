@@ -18,23 +18,12 @@ import { fileURLToPath } from 'node:url';
 
 import { git } from './fixture.mjs';
 import { recordRun } from '../src/ledger/index.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
-async function run(args, { cwd } = {}) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
-      cwd,
-      maxBuffer: 32 << 20,
-      env: { ...process.env, NO_COLOR: '1', SIMT_DEV_WORKSPACE: 'off' },
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (args, { cwd } = {}) => simtCli(args, { maxBuffer: 32 << 20, cwd, env: { NO_COLOR: '1', SIMT_DEV_WORKSPACE: 'off' } });
 
 /**
  * A two-commit fixture PR: a base commit, then a commit touching a source

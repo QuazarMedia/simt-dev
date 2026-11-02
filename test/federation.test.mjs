@@ -11,20 +11,17 @@
 // that declared nothing pays nothing at all.
 
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
-import { promisify } from 'node:util';
 
 import { callTool, DEFAULT_TIMEOUT_MS } from '../src/federation/client.mjs';
 import { federationAccess, federationServers } from '../src/federation/config.mjs';
 import { CONFIG_DIR, CONFIG_FILE } from '../src/workspace.mjs';
 import { TOOLS } from '../src/mcp/tools.mjs';
-import { git } from './fixture.mjs';
+import { git, simt as simtCli } from './fixture.mjs';
 
-const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 
 /**
  * The timeout is on the child, not the test.
@@ -32,17 +29,7 @@ const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
  * If the client failed to bound its wait, this call would never return and the suite would
  * hang rather than fail — and a hang is the one failure mode that reports nothing.
  */
-async function run(root, args) {
-  try {
-    const { stdout, stderr } = await promisify(execFile)(process.execPath, [BIN, ...args, '--root', root], {
-      maxBuffer: 8 << 20,
-      timeout: 30000,
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (root, args) => simtCli([...args, '--root', root], { maxBuffer: 8 << 20, timeout: 30000 });
 
 /** A minimal MCP server: it initializes, and it answers any tool call with fixed text. */
 const ANSWERING_SERVER = `

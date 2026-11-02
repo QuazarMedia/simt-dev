@@ -14,9 +14,9 @@ import { initCommand } from '../src/commands/init.mjs';
 import { loadRules, select } from '../src/projection/project.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
 import { MANIFEST_FILE, STATE_DIR } from '../src/name.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 async function templateDirectories() {
@@ -26,14 +26,7 @@ async function templateDirectories() {
   return template.directories;
 }
 
-async function run(args) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (args) => simtCli(args, { maxBuffer: 16 << 20 });
 
 async function scratch(files = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'simt-rules-'));

@@ -29,10 +29,10 @@ import { fileURLToPath } from 'node:url';
 import { diffField, readBefore, renderDiffs, unifiedDiff } from '../src/diff.mjs';
 import { git, tempDir } from './fixture.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
-const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 const made = [];
 
@@ -47,17 +47,7 @@ after(async () => {
 });
 
 /** Run the shipped binary. Never throws: the exit code is the thing under test. */
-async function run(args, env = {}) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
-      maxBuffer: 64 << 20,
-      env: { ...process.env, NO_COLOR: '1', SIMT_DEV_WORKSPACE: 'off', ...env },
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (args, env = {}) => simtCli(args, { maxBuffer: 64 << 20, env: { NO_COLOR: '1', SIMT_DEV_WORKSPACE: 'off', ...env } });
 
 async function runJson(args, env = {}) {
   const result = await run([...args, '--json'], env);

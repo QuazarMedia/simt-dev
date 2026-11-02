@@ -22,9 +22,9 @@ import { provenanceDigest } from '../src/projection/rules.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { git, tempDir } from './fixture.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 const made = [];
 
@@ -39,14 +39,7 @@ async function scratch(prefix = 'simt-mono-') {
 }
 
 /** Both paths: `execFile` never reports a code on success. */
-async function run(args) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
-    return { code: 0, out: stdout + stderr };
-  } catch (error) {
-    return { code: error.code, out: (error.stdout ?? '') + (error.stderr ?? '') };
-  }
-}
+const run = (args) => simtCli(args, { maxBuffer: 16 << 20 }).then(({ code, stdout, stderr }) => ({ code, out: stdout + stderr }));
 
 const pkg = (name, extra = {}) => `${JSON.stringify({ name, version: '1.0.0', ...extra }, null, 2)}\n`;
 

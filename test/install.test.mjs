@@ -12,9 +12,9 @@ import { loadRegistry, measureSkill } from '../src/graph/load.mjs';
 import { skillsDir, wrapFlat } from '../src/commands/skillsinstall.mjs';
 import { readManifest, MANIFEST } from '../src/projection/manifest.mjs';
 import { skillWorkspace, workspaceEnv, cmd } from './fixture.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 // The bodies these tests install live here, staged from the registry by the suite
@@ -37,21 +37,7 @@ async function scratch(files = {}) {
   return dir;
 }
 
-async function run(args, env = {}) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
-      maxBuffer: 32 << 20,
-      // Every case runs against the staged workspace, and a case that needs no
-      // workspace says `SIMT_DEV_WORKSPACE: 'off'` itself. Inheriting the
-      // developer's own workspace would hide exactly the behaviour the
-      // single-repo cases exist to check.
-      env: { ...process.env, ...workspaceEnv(WORKSPACE), ...env },
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (args, env = {}) => simtCli(args, { maxBuffer: 32 << 20, env: { ...workspaceEnv(WORKSPACE), ...env } });
 
 /** A clone of exactly one repo: it holds that repo's own bodies and nothing else. */
 async function singleRepoClone(skillName) {

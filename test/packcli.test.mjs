@@ -25,6 +25,7 @@ import { BENCH_JSON, PACK_JSON, describeSourceProblem, describeVersionProblem, n
 import { buildManifest, manifestText } from '../src/projection/manifest.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { tempDir } from './fixture.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -42,21 +43,10 @@ async function scratch(prefix = 'simt-packcli-') {
 }
 
 /** One run of the real binary. Extra env (PATH stubs) via `env`. */
-async function run(args, { cwd = null, env = {} } = {}) {
-  try {
-    // `process.execPath`, not `'node'`: a test that strips PATH (the npm-missing
-    // refusal) would otherwise fail to spawn the binary itself, because command
-    // lookup reads the child's PATH.
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
-      maxBuffer: 16 << 20,
-      ...(cwd === null ? {} : { cwd }),
-      env: { ...process.env, ...env },
-    });
-    return { code: 0, out: stdout + stderr };
-  } catch (error) {
-    return { code: error.code, out: (error.stdout ?? '') + (error.stderr ?? '') };
-  }
-}
+const run = (args, { cwd = null, env = {} } = {}) =>
+  simtCli(args, { maxBuffer: 16 << 20, ...(cwd === null ? {} : { cwd }), env }).then(
+    ({ code, stdout, stderr }) => ({ code, out: stdout + stderr }),
+  );
 
 const RULE = (id) => `---\nsimt-id: ${id}\nsimt-applies: []\n---\n\n# Rule\n`;
 

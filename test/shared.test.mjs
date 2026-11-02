@@ -36,9 +36,9 @@ import {
 } from '../src/projection/shared.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { git, tempDir } from './fixture.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 const made = [];
 
@@ -106,17 +106,7 @@ async function estate(names, { profiles = {} } = {}) {
   return { ws, roots, env, home: env.HOME, copy: join(env.HOME, '.config/opencode/AGENTS.md') };
 }
 
-async function run(args, env = {}) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
-      maxBuffer: 16 << 20,
-      env: { ...process.env, ...env },
-    });
-    return { code: 0, out: `${stdout}${stderr}` };
-  } catch (error) {
-    return { code: error.code ?? 1, out: `${error.stdout ?? ''}${error.stderr ?? ''}` };
-  }
-}
+const run = (args, env = {}) => simtCli(args, { maxBuffer: 16 << 20, env }).then(({ code, stdout, stderr }) => ({ code, out: stdout + stderr }));
 
 /** The `--json` payload of one run. A failing command's payload is the interesting half of
  *  the preview, so this reads both paths rather than rejecting on a non-zero exit. */

@@ -20,20 +20,14 @@ import * as gateModule from '../src/projection/manifest.mjs';
 import { git, cmd } from './fixture.mjs';
 import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 /**
  * One run of the real binary, both paths. `check` is the only surface that can say a
  * `gates.cwd` is wrong before a commit, so the test that claims `check` does has to run
  * `check` - through the binary, as a reader would.
  */
-async function run(args) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
-    return { code: 0, out: stdout + stderr };
-  } catch (error) {
-    return { code: error.code, out: (error.stdout ?? '') + (error.stderr ?? '') };
-  }
-}
+const run = (args) => simtCli(args, { maxBuffer: 16 << 20 }).then(({ code, stdout, stderr }) => ({ code, out: stdout + stderr }));
 
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;

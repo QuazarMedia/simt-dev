@@ -342,6 +342,32 @@ export async function capture(run) {
  * the next copy is the one that forgets the prefix (Q92). Cleanup stays with the caller: a
  * file that keeps a registry of its directories must go on registering them.
  */
+/**
+ * The CLI under test, as a path. Files that run it used to name the file themselves, in
+ * twenty-nine declarations a move of `bin/` would each have had to find.
+ */
+export const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
+
+/**
+ * Run the CLI the way a user does: a child process, not an import.
+ *
+ * Twenty-nine test files carried the same try/exec/catch envelope around it, each with its own
+ * maxBuffer and env defaults. The envelope is the duplication; the shape each file returns
+ * (`stdout`/`stderr`, or one concatenated `out`) stays in that file, because that is its
+ * contract with its own assertions (Q92).
+ */
+export async function simt(args, { env = {}, cwd, maxBuffer = 16 << 20, timeout, bin = BIN } = {}) {
+  try {
+    const { stdout, stderr } = await promisify(execFile)(process.execPath, [bin, ...args], {
+      maxBuffer, cwd, timeout,
+      env: { ...process.env, ...env },
+    });
+    return { code: 0, stdout, stderr };
+  } catch (error) {
+    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
+  }
+}
+
 export async function tempDir(prefix = 'simt-') {
   return mkdtemp(join(tmpdir(), prefix));
 }

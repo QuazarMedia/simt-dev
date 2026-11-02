@@ -26,6 +26,7 @@ import { buildManifest, manifestText, readManifest } from '../src/projection/man
 import { compose } from '../src/projection/markers.mjs';
 import { ALWAYS_ON_BUDGET_BYTES } from '../src/measure/context.mjs';
 import { git, tempDir } from './fixture.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -71,14 +72,7 @@ async function json(args) {
 /** The exit code of one run. `execFile` rejects on non-zero and never reports a code
  *  on success, so a test that asserts "it exits 0" has to read both paths or it is
  *  asserting that a promise resolved. */
-async function run(args) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, 'tokens', ...args], { maxBuffer: 16 << 20 });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (args) => simtCli(['tokens', ...args], { maxBuffer: 16 << 20 });
 
 test('the channels of a repository sum to its always-on total', async () => {
   // The property the whole command rests on. If a channel is measured and not

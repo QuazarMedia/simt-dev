@@ -9,20 +9,13 @@ import { fileURLToPath } from 'node:url';
 
 import { fingerprint, STACK_TAGS, FACT_TAGS, KNOWN_TAGS, __internals } from '../src/resolve/fingerprint.mjs';
 import { plan, loadRules, select, checkTarget, LOCAL_PROFILE_DIR } from '../src/projection/project.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
-const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
 // The shipped binary, not this module graph: a guard that only fires because of how
 // the tool is wired inside its own checkout is not a guard.
-async function run(args) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], { maxBuffer: 16 << 20 });
-    return { code: 0, text: stdout + stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, text: `${error.stdout ?? ''}${error.stderr ?? ''}` };
-  }
-}
+const run = (args) => simtCli(args, { maxBuffer: 16 << 20 }).then(({ code, stdout, stderr }) => ({ code, text: stdout + stderr }));
 
 async function fixture(files = {}) {
   const root = await mkdtemp(join(tmpdir(), 'simt-generic-'));

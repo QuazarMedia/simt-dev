@@ -6,6 +6,7 @@ import { promisify } from 'node:util';
 import { COMMANDS } from '../src/commands/index.mjs';
 import { parse } from '../src/argv.mjs';
 import { BOOL_FLAGS, REPEATABLE_FLAGS, VALUE_FLAGS } from '../src/argv.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
@@ -170,12 +171,7 @@ test('help: -h is the same request as --help', async () => {
 
 /** The binary, resolved with what it printed and its exit code - a failing spawn is a
  * result here, not a thrown test, because the assertion is about the failure. */
-function run(args) {
-  return exec(process.execPath, [BIN, ...args], { maxBuffer: 8 << 20 }).then(
-    ({ stdout }) => ({ code: 0, out: stdout }),
-    (error) => ({ code: error.code ?? 1, out: `${error.stdout ?? ''}${error.stderr ?? ''}` }),
-  );
-}
+const run = (args) => simtCli(args, { maxBuffer: 8 << 20 }).then(({ code, stdout, stderr }) => ({ code, out: code === 0 ? stdout : `${stdout}${stderr}` }));
 
 /**
  * `-h` means help wherever it appears, and every command answers it with its own page.

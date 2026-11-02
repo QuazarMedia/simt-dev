@@ -41,6 +41,7 @@ import { PACKAGE_ROOT } from '../src/workspace.mjs';
 const CI = join(PACKAGE_ROOT, 'scripts', 'ci.mjs');
 import { EXIT } from '../src/output/index.mjs';
 import { assertClean } from './leaks.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const exec = promisify(execFile);
 const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
@@ -55,17 +56,7 @@ const temps = [];
  * stdout if it catches the rejection, and the code it was supposed to check is the
  * code in the error.
  */
-async function run(args, opts = {}) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [CI, ...args], {
-      ...opts,
-      env: { ...process.env, NO_COLOR: '1', ...opts.env },
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (args, opts = {}) => simtCli(args, { ...opts, bin: CI, env: { NO_COLOR: '1', ...opts.env } });
 
 after(async () => {
   for (const t of temps) await exec('rm', ['-rf', t]);

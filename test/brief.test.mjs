@@ -9,30 +9,19 @@
 // binary's stdout: the one compact JSON line, the exit code, the packet as printed.
 
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { promisify } from 'node:util';
 
 import { CLI } from '../src/name.mjs';
 import { assembleBrief } from '../src/brief/assemble.mjs';
 import { reindex } from '../src/index/store.mjs';
 import { git } from './fixture.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
-const BIN = new URL('../bin/simt.mjs', import.meta.url).pathname;
 
-async function run(root, args) {
-  try {
-    const { stdout, stderr } = await promisify(execFile)(process.execPath, [BIN, ...args, '--root', root], {
-      maxBuffer: 8 << 20,
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (root, args) => simtCli([...args, '--root', root], { maxBuffer: 8 << 20 });
 
 /** A repository with one source file, one test that imports it, and a test script. */
 async function fixture() {

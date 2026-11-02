@@ -18,22 +18,12 @@ import { fileURLToPath } from 'node:url';
 
 import { EXPLAIN_CODES } from '../src/explain.mjs';
 import { EXPLAIN_ALIASES, listExplainCodes } from '../src/commands/explain.mjs';
+import { simt as simtCli } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
-async function run(args) {
-  try {
-    const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
-      maxBuffer: 32 << 20,
-      env: { ...process.env, NO_COLOR: '1' },
-    });
-    return { code: 0, stdout, stderr };
-  } catch (error) {
-    return { code: error.code ?? 1, stdout: error.stdout ?? '', stderr: error.stderr ?? '' };
-  }
-}
+const run = (args) => simtCli(args, { maxBuffer: 32 << 20, env: { NO_COLOR: '1' } });
 
 // Every module `check` reads findings from. Not all of src/: the same words
 // appear in other commands wearing other meanings (`compare` reports drift, the

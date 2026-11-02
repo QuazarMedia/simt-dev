@@ -14,7 +14,7 @@ import { CLI } from '../name.mjs';
 import { applyPlan, change, pending } from '../write/plan.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { commandRoot } from '../repo-root.mjs';
-import { DOCS_DIR, renderCommandPages } from '../docs/commands.mjs';
+import { DOCS_DIR, renderCommandPages, renderReferencePages } from '../docs/commands.mjs';
 
 export async function docsCommand(sub, args, flags) {
   if (sub !== 'commands') {
@@ -25,7 +25,7 @@ export async function docsCommand(sub, args, flags) {
     );
   }
   const root = commandRoot(flags);
-  const pages = renderCommandPages();
+  const pages = new Map([...renderCommandPages(), ...renderReferencePages()]);
   const changes = [];
   for (const [path, after] of pages) {
     let before;

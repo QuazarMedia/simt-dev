@@ -14,7 +14,13 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { SPEC } from '../src/commands/spec.mjs';
-import { BEGIN, END, renderCommandBlock, renderCommandPages } from '../src/docs/commands.mjs';
+import {
+  BEGIN,
+  END,
+  renderCommandBlock,
+  renderCommandPages,
+  renderReferencePages,
+} from '../src/docs/commands.mjs';
 
 const exec = promisify(execFile);
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -25,6 +31,9 @@ test('docs/commands is exactly what the spec renders', async () => {
   const pages = renderCommandPages();
   const onDisk = new Set((await readdir(join(ROOT, 'docs/commands'))).map((name) => `docs/commands/${name}`));
   assert.deepEqual([...onDisk].sort(), [...pages.keys()].sort(), 'run: simt docs commands --yes');
+  for (const [path, text] of renderReferencePages()) {
+    assert.equal(await readFile(join(ROOT, path), 'utf8'), text, `${path} is stale: run simt docs commands --yes`);
+  }
   for (const [path, text] of pages) {
     assert.equal(await readFile(join(ROOT, path), 'utf8'), text, `${path} is stale: run simt docs commands --yes`);
   }

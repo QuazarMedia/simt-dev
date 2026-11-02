@@ -11,6 +11,7 @@
 // order is the order the spec lists groups in, so a new group lands where its author put
 // it rather than wherever it sorts.
 import { SPEC } from '../commands/spec.mjs';
+import { EXPLAIN_CODES } from '../explain.mjs';
 import { CLI } from '../name.mjs';
 
 export const README_FILE = 'README.md';
@@ -116,4 +117,28 @@ function rowNote(rows) {
   if (writes.length === 0) return 'None of these write to the repository.';
   const names = writes.map((row) => `\`simt ${row.path}\``).join(', ');
   return `Writes to the repository: ${names}. Each prints its plan and writes nothing without \`--yes\`.`;
+}
+
+/** `docs/reference/findings.md`, rendered from the one table that explains a code. */
+function renderFindingsPage() {
+  const rows = Object.entries(EXPLAIN_CODES)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([code, entry]) => `| \`${code.toUpperCase()}\` | ${cell(entry.what)} |`);
+  return [
+    '# Finding codes',
+    '',
+    'Rendered from `src/explain.mjs` by `simt docs commands --yes`; do not edit by hand.',
+    '`simt explain <CODE>` prints the full record for each: the defect, the ruling behind it,',
+    'the command that fixes it, and what a reader sees.',
+    '',
+    '| Code | What it means |',
+    '| --- | --- |',
+    ...rows,
+    '',
+  ].join('\n');
+}
+
+/** Reference pages rendered from a table rather than written by hand. */
+export function renderReferencePages() {
+  return new Map([['docs/reference/findings.md', renderFindingsPage()]]);
 }

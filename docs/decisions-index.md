@@ -150,3 +150,7 @@ in [architecture/history.md](architecture/history.md).
 | [139](decisions/ADR-139-a-benchmark-gain-is-reported-beside-its-cost-and-coverage.md) | a benchmark gain is reported beside its cost and its coverage | accepted · 2026-11-02 |
 | [140](decisions/ADR-140-archiving-is-a-command-and-it-refuses-what-it-cannot-close.md) | archiving is a command, and it refuses what it cannot close | accepted · 2026-11-02 |
 | [141](decisions/ADR-141-a-repository-selects-its-harness-once-and-the-agent-commands-follow-it.md) | a repository selects its harness once, and the agent commands follow it | accepted · 2026-11-02 |
+| [142](decisions/ADR-142-assurance-is-a-level-with-a-subject-and-a-claim-cannot-raise-it.md) | assurance is a level with a subject, and a claim cannot raise it | accepted · 2026-11-02 |
+| [143](decisions/ADR-143-facets-are-additive-to-stack-detection-and-ambiguity-is-reported.md) | facets are additive to stack detection, and ambiguity is reported | accepted · 2026-11-02 |
+| [144](decisions/ADR-144-the-work-namespace-is-versioned-and-adoption-fabricates-no-runner.md) | the work namespace is versioned, and adoption fabricates no runner | accepted · 2026-11-02 |
+| [145](decisions/ADR-145-artifact-identity-is-explicit-and-most-specific-scope-wins.md) | artifact identity is explicit, and the most specific scope wins | accepted · 2026-11-02 |

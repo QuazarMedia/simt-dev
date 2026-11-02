@@ -27,7 +27,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { diffField, readBefore, renderDiffs, unifiedDiff } from '../src/diff.mjs';
-import { git } from './fixture.mjs';
+import { git, tempDir } from './fixture.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -37,7 +37,7 @@ const exec = promisify(execFile);
 const made = [];
 
 async function scratch(prefix) {
-  const dir = await mkdtemp(join(tmpdir(), prefix));
+  const dir = await tempDir(prefix);
   made.push(dir);
   return dir;
 }

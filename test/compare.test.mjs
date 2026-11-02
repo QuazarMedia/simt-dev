@@ -25,7 +25,7 @@ import { GATES } from '../src/hooks/gates.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { git, cmd } from './fixture.mjs';
+import { git, cmd, tempDir } from './fixture.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -93,7 +93,7 @@ function rowsOf(payload) {
 }
 
 async function scratch() {
-  const root = await mkdtemp(join(tmpdir(), 'simt-compare-ws-'));
+  const root = await tempDir('simt-compare-ws-');
   made.push(root);
   return root;
 }

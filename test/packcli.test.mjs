@@ -24,6 +24,7 @@ import { packDigest } from '../src/packs.mjs';
 import { BENCH_JSON, PACK_JSON, describeSourceProblem, describeVersionProblem, npmPackageOf, packRuleFiles, readPack } from '../src/packs/manage.mjs';
 import { buildManifest, manifestText } from '../src/projection/manifest.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
+import { tempDir } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -35,7 +36,7 @@ after(async () => {
 });
 
 async function scratch(prefix = 'simt-packcli-') {
-  const dir = await mkdtemp(join(tmpdir(), prefix));
+  const dir = await tempDir(prefix);
   made.push(dir);
   return dir;
 }

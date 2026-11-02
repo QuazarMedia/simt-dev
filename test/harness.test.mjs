@@ -13,6 +13,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 import { promisify } from 'node:util';
+import { tempDir } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -24,7 +25,7 @@ after(async () => {
 });
 
 async function scratch(prefix = 'simt-harness-') {
-  const dir = await mkdtemp(join(tmpdir(), prefix));
+  const dir = await tempDir(prefix);
   made.push(dir);
   return dir;
 }

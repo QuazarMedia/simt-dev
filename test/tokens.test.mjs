@@ -25,7 +25,7 @@ import { plan } from '../src/projection/project.mjs';
 import { buildManifest, manifestText, readManifest } from '../src/projection/manifest.mjs';
 import { compose } from '../src/projection/markers.mjs';
 import { ALWAYS_ON_BUDGET_BYTES } from '../src/measure/context.mjs';
-import { git } from './fixture.mjs';
+import { git, tempDir } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -37,7 +37,7 @@ after(async () => {
 });
 
 async function scratch(prefix = 'simt-tokens-') {
-  const dir = await mkdtemp(join(tmpdir(), prefix));
+  const dir = await tempDir(prefix);
   made.push(dir);
   return dir;
 }

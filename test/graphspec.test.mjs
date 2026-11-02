@@ -13,6 +13,7 @@ import { after, test } from 'node:test';
 
 import { SPEC, checkSkill, nameProblems } from '../src/graph/spec.mjs';
 import { lintSpec } from '../src/graph/speccheck.mjs';
+import { tempDir } from './fixture.mjs';
 
 const made = [];
 
@@ -21,7 +22,7 @@ after(async () => {
 });
 
 async function scratch() {
-  const dir = await mkdtemp(join(tmpdir(), 'simt-spec-'));
+  const dir = await tempDir('simt-spec-');
   made.push(dir);
   return dir;
 }

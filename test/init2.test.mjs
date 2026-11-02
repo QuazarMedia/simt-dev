@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import * as gateModule from '../src/projection/manifest.mjs';
 import * as gateTable from '../src/hooks/gates.mjs';
 import { readCapability, declaredCommands } from '../src/hooks/capability.mjs';
-import { git, cmd } from './fixture.mjs';
+import { git, cmd, tempDir } from './fixture.mjs';
 import { CLI, MANIFEST_FILE, MANIFEST_LEGACY } from '../src/name.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 
@@ -33,15 +33,12 @@ async function capture(run) {
   return { code, text: `${out.join('')}${err.join('')}` };
 }
 
-async function scratch() {
-  return mkdtemp(join(tmpdir(), 'simt-manifest-'));
-}
 
 test('a repo-chosen projection sub-key is not a stale field, and the repair keeps it', async () => {
   const { syncCommand } = await import('../src/commands/sync.mjs');
   const { MANIFEST_COMMENT, manifestDrift } = await import('../src/projection/manifest.mjs');
   const { provenanceDigest } = await import('../src/projection/project.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   const stack = ['node'];
   const sha = await provenanceDigest();
   const version = packageVersion();
@@ -78,7 +75,7 @@ test('a repo-chosen projection sub-key is not a stale field, and the repair keep
 test('a top-placed region that has moved down is drift, and sync moves it back', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
   const { checkCommand, syncCommand } = await import('../src/commands/sync.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x' }));
   await capture(() => initCommand([], { root, yes: true }));
 
@@ -117,7 +114,7 @@ test('sync repairs a reformatted manifest only once the repo ignores it', async 
   const { syncCommand } = await import('../src/commands/sync.mjs');
   const { manifestDrift, MANIFEST_COMMENT } = await import('../src/projection/manifest.mjs');
   const { provenanceDigest } = await import('../src/projection/project.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   const stack = ['node'];
   // The stamp is this build's own digest, so the ONLY thing wrong with this manifest
   // is its bytes. A fixture sha of 'abc1234' would also be a stale generated field,
@@ -210,7 +207,7 @@ test('the remedy for a stale manifest field names the command that repairs it', 
   // remedy for one stale field is naming a command that does more than the reader
   // asked for, while naming the wrong one is naming a command that cannot help.
   const { manifestDrift } = await import('../src/projection/manifest.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, MANIFEST_FILE), `${JSON.stringify({ projection: { simtDevSha: 'a' } }, null, 2)}\n`);
   const stale = await manifestDrift(root, ['node'], 'b');
   assert.equal(stale?.status, 'stale-generated-field');
@@ -228,7 +225,7 @@ test('init --backup: the branch and the tag it creates are both reported (S15)',
   // The claim under test is about what a reader SEES, so it is asserted on the printed
   // output rather than on the returned payload, which already carried both.
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await git(['init', '-q'], { cwd: root });
   await writeFile(join(root, 'notes.txt'), 'x\n');
   await git(['add', '-A'], { cwd: root });
@@ -269,7 +266,7 @@ test('init without --backup writes in place: no tag, no branch (ADR-063)', async
   // restores the undo path. A reader who ran the documented flow without choosing an
   // escape hatch must not find a branch they did not ask for under them.
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await git(['init', '-q'], { cwd: root });
   await writeFile(join(root, 'notes.txt'), 'x\n');
   await git(['add', '-A'], { cwd: root });
@@ -303,7 +300,7 @@ test('init --yes builds the index and reports it; a dry run leaves none behind (
   // fresh repository answers from real files. A dry run plans the build without doing
   // it: a run that writes nothing must not leave a cache behind.
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await git(['init', '-q'], { cwd: root });
   await writeFile(join(root, 'notes.txt'), 'x\n');
   await git(['add', '-A'], { cwd: root });
@@ -329,7 +326,7 @@ test('init --backup: a directory that is not a git work tree reports no branch a
   // adoptable), so the notes carry the reason. What must not happen is the tool
   // claiming a tag or a branch it did not create.
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'monkey.jungle'), '');
   const { code, text } = await capture(() => initCommand([], { root, yes: true, backup: true }));
   assert.equal(code, 0);

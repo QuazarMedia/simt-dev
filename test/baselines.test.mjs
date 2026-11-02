@@ -7,7 +7,7 @@
 // until somebody's editor disagrees with their colleague's.
 
 import assert from 'node:assert/strict';
-import { cmd } from './fixture.mjs';
+import { cmd, tempDir } from './fixture.mjs';
 import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -26,12 +26,9 @@ const run = promisify(execFile);
 const BIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'bin', 'simt.mjs');
 const SHA = 'a831794';
 
-async function scratch() {
-  return mkdtemp(join(tmpdir(), 'simt-baseline-'));
-}
 
 async function repo(name = 'api') {
-  const root = await scratch();
+  const root = await tempDir('simt-baseline-');
   await mkdir(join(root, '.git'), { recursive: true });
   await writeFile(join(root, 'package.json'), JSON.stringify({ name, dependencies: { hono: '^4' } }) + '\n');
   return root;
@@ -333,7 +330,7 @@ test('the shared gitattributes line normalises text without claiming anything is
   // so a binary is left alone; `text` alone would force every path to be text, which is
   // the most common way a repository corrupts an asset. `eol=lf` is the claim ADR-025
   // refused to make from .editorconfig, made here because this is where git reads it.
-  const root = await scratch();
+  const root = await tempDir('simt-baseline-');
   const { targets } = await baselineTargets(root, SHA, { adopt: true });
   const ga = targets.find((t) => t.file === '.gitattributes');
   assert.ok(ga, 'the region is missing from the target list');
@@ -347,7 +344,7 @@ test('the shared line is not a claim about what any individual file IS', async (
   // Every one of these belongs to a repo, not to the estate. A shared `.gitattributes`
   // that declared them would be wrong in thirteen of sixteen repositories, and a wrong
   // attribute is silently obeyed rather than refused.
-  const root = await scratch();
+  const root = await tempDir('simt-baseline-');
   const { targets } = await baselineTargets(root, SHA, { adopt: true });
   const body = targets.find((t) => t.file === '.gitattributes').text;
   for (const claim of ['filter=lfs', 'binary', '-text', 'linguist', 'diff=', 'merge=']) {
@@ -371,7 +368,7 @@ test('a repo that already has LFS filters and binary declarations keeps all of t
   // simt-app's real file, which is what "the repo's own patterns must survive" means in
   // practice: it has no `text` line at all, and a region that replaced the file would
   // quietly un-LFS a 40 MB map.
-  const root = await scratch();
+  const root = await tempDir('simt-baseline-');
   const mine = [
     'res/data/map/*.tif filter=lfs diff=lfs merge=lfs -text',
     '*.zip filter=lfs diff=lfs merge=lfs -text',
@@ -388,7 +385,7 @@ test('the region goes ABOVE the repo patterns, because git takes the last match'
   // region at all rather than a file simt-dev owns. A region below the repo's patterns
   // would still be a correct set of bytes, and it would silently reverse their intent
   // for every path both lines match.
-  const root = await scratch();
+  const root = await tempDir('simt-baseline-');
   const existing = '* text eol=lf\n*.iq binary\n';
   const result = inject(existing, GITATTRIBUTES_BODY, { sha: SHA }, { style: 'hash' });
   const regionAt = result.text.indexOf(STYLES.hash.begin);
@@ -435,7 +432,7 @@ test('git itself accepts the shipped region, and honours the repo lines beneath 
   // The check that cannot be faked by reading the string back: `git check-attr` asks
   // git what it decided, in a real repository, for a real path. A region that parsed as
   // a comment and did nothing would pass every assertion above and fail here.
-  const root = await scratch();
+  const root = await tempDir('simt-baseline-');
   const exec = async (args, cwd) => (await run('git', args, { cwd })).stdout;
   await exec(['init', '-q', '-b', 'main', '.'], root);
   await exec(['config', 'user.email', 't@example.com'], root);

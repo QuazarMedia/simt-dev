@@ -26,6 +26,7 @@ import { promisify } from 'node:util';
 
 import { LOADERS, caps, loader } from '../src/projection/loaders.mjs';
 import { viewOf } from '../src/measure/loaderView.mjs';
+import { tempDir } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -37,7 +38,7 @@ after(async () => {
 });
 
 async function scratch(prefix = 'simt-loaders-') {
-  const dir = await mkdtemp(join(tmpdir(), prefix));
+  const dir = await tempDir(prefix);
   made.push(dir);
   return dir;
 }

@@ -332,3 +332,16 @@ export async function capture(run) {
     process.stderr.write = stderr;
   }
 }
+
+
+/**
+ * A temporary directory for one test, named for the area it belongs to.
+ *
+ * Twenty-odd files carried their own copy of this. The copies were the same three lines with
+ * a different prefix, which is precisely the case where a shared export costs nothing and
+ * the next copy is the one that forgets the prefix (Q92). Cleanup stays with the caller: a
+ * file that keeps a registry of its directories must go on registering them.
+ */
+export async function tempDir(prefix = 'simt-') {
+  return mkdtemp(join(tmpdir(), prefix));
+}

@@ -35,7 +35,7 @@ import {
   writeSharedFile,
 } from '../src/projection/shared.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
-import { git } from './fixture.mjs';
+import { git, tempDir } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -47,7 +47,7 @@ after(async () => {
 });
 
 async function scratch(prefix = 'simt-shared-') {
-  const dir = await mkdtemp(join(tmpdir(), prefix));
+  const dir = await tempDir(prefix);
   made.push(dir);
   return dir;
 }

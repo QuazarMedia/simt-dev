@@ -7,7 +7,7 @@ import { join } from 'node:path';
 import * as gateModule from '../src/projection/manifest.mjs';
 import * as gateTable from '../src/hooks/gates.mjs';
 import { readCapability, declaredCommands } from '../src/hooks/capability.mjs';
-import { git, cmd } from './fixture.mjs';
+import { git, cmd, tempDir } from './fixture.mjs';
 import { CLI, MANIFEST_FILE, MANIFEST_LEGACY } from '../src/name.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 
@@ -33,12 +33,9 @@ async function capture(run) {
   return { code, text: `${out.join('')}${err.join('')}` };
 }
 
-async function scratch() {
-  return mkdtemp(join(tmpdir(), 'simt-manifest-'));
-}
 
 test('manifest: id defaults to the directory name', async () => {
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   const { id } = buildManifest({ root, stack: ['python'] });
   assert.equal(id, root.split('/').pop());
 });
@@ -125,7 +122,7 @@ test('manifest: typescript repos get typecheck on pre-push', () => {
 
 test('init: dry-run is the default and writes nothing', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'monkey.jungle'), '');
   const code = await initCommand([], { root, yes: false });
   assert.equal(code, 0);
@@ -135,7 +132,7 @@ test('init: dry-run is the default and writes nothing', async () => {
 
 test('init: --yes --dry-run is a rehearsal and writes nothing (Q09)', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'monkey.jungle'), '');
   const code = await initCommand([], { root, yes: true, dryRun: true });
   assert.equal(code, 0);
@@ -145,7 +142,7 @@ test('init: --yes --dry-run is a rehearsal and writes nothing (Q09)', async () =
 
 test('init: a conflicting repo is blocked before any write', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'monkey.jungle'), '');
   await writeFile(join(root, 'AGENTS.md'), '# Rules\n\n8. Committed and pushed with a conventional message\n');
   const code = await initCommand([], { root, yes: true });
@@ -155,7 +152,7 @@ test('init: a conflicting repo is blocked before any write', async () => {
 
 test('init: --accept-conflicts proceeds and writes both files', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'monkey.jungle'), '');
   const agents = '# Rules\n\n1. Committed and pushed with a conventional message\n';
   await writeFile(join(root, 'AGENTS.md'), agents);
@@ -171,7 +168,7 @@ test('init: --accept-conflicts proceeds and writes both files', async () => {
 
 test('init: a malformed region blocks rather than duplicating the rules', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'monkey.jungle'), '');
   await writeFile(join(root, 'AGENTS.md'), '# R\n\n<!-- simt-dev:begin -->\nstuff\n');
   const code = await initCommand([], { root, yes: true });
@@ -182,7 +179,7 @@ test('init: a malformed region blocks rather than duplicating the rules', async 
 
 test('init: scaffolding a repo with no rules creates AGENTS.md', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'monkey.jungle'), '');
   const code = await initCommand([], { root, yes: true });
   assert.equal(code, 0);
@@ -198,7 +195,7 @@ test('init: never commits', async () => {
   const { promisify } = await import('node:util');
   const run = promisify(execFile);
 
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await run('git', ['init', '-q'], { cwd: root });
   await writeFile(join(root, 'monkey.jungle'), '');
   await run('git', ['add', '-A'], { cwd: root });
@@ -222,7 +219,7 @@ test('init: a repo with no commits is still adoptable', async () => {
   const { promisify } = await import('node:util');
   const run = promisify(execFile);
 
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await run('git', ['init', '-q'], { cwd: root });
   await writeFile(join(root, 'monkey.jungle'), '');
 
@@ -360,7 +357,7 @@ test('gates: unrunnableGates is empty for a manifest that declares nothing', () 
 
 test('capability: a repo with no package.json has no npm capability, and that is not an error', async () => {
   // A Python or Gradle repo has no package.json at all. That is a normal shape.
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   const capability = await readCapability(root);
   assert.equal(capability.error, null);
   assert.deepEqual(capability.scripts, {});
@@ -369,7 +366,7 @@ test('capability: a repo with no package.json has no npm capability, and that is
 });
 
 test('capability: an unparseable package.json IS reported', async () => {
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'package.json'), '{ not json');
   const capability = await readCapability(root);
   assert.match(capability.error, /package\.json/);
@@ -377,7 +374,7 @@ test('capability: an unparseable package.json IS reported', async () => {
 
 test('capability: binaries come from node_modules/.bin, not from dependencies', async () => {
   // A declared dependency with no install is not something the dispatcher can run.
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'package.json'), JSON.stringify({ devDependencies: { prettier: '^3' } }));
   assert.deepEqual((await readCapability(root)).binaries, []);
   await mkdir(join(root, 'node_modules', '.bin'), { recursive: true });
@@ -387,7 +384,7 @@ test('capability: binaries come from node_modules/.bin, not from dependencies', 
 });
 
 test('capability: the runner is npm when there is a package.json', async () => {
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'package.json'), JSON.stringify({ scripts: { test: 'vitest' } }));
   assert.equal((await readCapability(root)).runner, 'npm');
 });
@@ -396,15 +393,15 @@ test('capability: a non-npm runner is identified from a FILE, not a directory', 
   // The first cut of this used `readdir` to test existence, which answers "no" for
   // every file (ENOTDIR) and so classified every Gradle repo as having no runner. A
   // wrong answer from an evidence reader is worse than no answer.
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'gradlew'), '#!/bin/sh\n');
   assert.equal((await readCapability(root)).runner, 'gradle');
 
-  const py = await scratch();
+  const py = await tempDir('simt-manifest-');
   await writeFile(join(py, 'pyproject.toml'), '[project]\n');
   assert.equal((await readCapability(py)).runner, 'python');
 
-  const cargo = await scratch();
+  const cargo = await tempDir('simt-manifest-');
   await writeFile(join(cargo, 'Cargo.toml'), '[package]\n');
   assert.equal((await readCapability(cargo)).runner, 'cargo');
 });
@@ -412,7 +409,7 @@ test('capability: a non-npm runner is identified from a FILE, not a directory', 
 test('capability: npm wins over a stray non-npm marker', async () => {
   // simt-app carries .py tooling scripts and a Gradle wrapper; a repo with package.json
   // is an npm repo, whatever else is lying around in it.
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'package.json'), JSON.stringify({ scripts: {} }));
   await writeFile(join(root, 'gradlew'), '#!/bin/sh\n');
   assert.equal((await readCapability(root)).runner, 'npm');
@@ -532,9 +529,9 @@ test('gates: a command the repo already declared is not re-seeded', () => {
 test('capability: ecosystem tools are probed on PATH, not assumed', async () => {
   // The probe is deterministic: with a controlled PATH the answer cannot depend on
   // what happens to be installed on the machine running the suite.
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'Cargo.toml'), '[package]\nname="x"\n');
-  const bin = await scratch();
+  const bin = await tempDir('simt-manifest-');
   await writeFile(join(bin, 'cargo'), '#!/bin/sh\nexit 0\n');
   await chmod(join(bin, 'cargo'), 0o755);
 
@@ -542,7 +539,7 @@ test('capability: ecosystem tools are probed on PATH, not assumed', async () => 
   try {
     process.env.PATH = bin;
     assert.ok((await readCapability(root)).tools.includes('cargo'), 'a tool on PATH is found');
-    const empty = await scratch();
+    const empty = await tempDir('simt-manifest-');
     process.env.PATH = empty;
     assert.ok(!(await readCapability(root)).tools.includes('cargo'), 'a tool off PATH is not assumed');
   } finally {
@@ -553,12 +550,12 @@ test('capability: ecosystem tools are probed on PATH, not assumed', async () => 
 test('capability: a file tool (the Maven wrapper) is probed in the repo, executable or not', async () => {
   // A wrapper that exists but is not executable would be declared and then fail on
   // every commit; the probe must answer no for it.
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'pom.xml'), '<project/>\n');
   await writeFile(join(root, 'mvnw'), '#!/bin/sh\n');
   const saved = process.env.PATH;
   try {
-    process.env.PATH = await scratch();
+    process.env.PATH = await tempDir('simt-manifest-');
     assert.ok(!(await readCapability(root)).tools.includes('mvnw'), 'a non-executable wrapper is not a tool');
     await chmod(join(root, 'mvnw'), 0o755);
     assert.ok((await readCapability(root)).tools.includes('mvnw'), 'an executable wrapper is a tool');
@@ -572,11 +569,11 @@ test('init: a fresh Rust repo with cargo on PATH gets runnable seeded gates (S40
   // are the gates\' runnability — a manifest with the gate list and no commands
   // would be red on the first commit.
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await mkdir(join(root, 'src'), { recursive: true });
   await writeFile(join(root, 'Cargo.toml'), '[package]\nname="x"\n');
   await writeFile(join(root, 'src', 'main.rs'), 'fn main() {}\n');
-  const bin = await scratch();
+  const bin = await tempDir('simt-manifest-');
   await writeFile(join(bin, 'cargo'), '#!/bin/sh\nexit 0\n');
   await chmod(join(bin, 'cargo'), 0o755);
 
@@ -603,10 +600,10 @@ test('init: a fresh Rust repo with cargo on PATH gets runnable seeded gates (S40
 
 test('init: a fresh Rust repo without cargo declares the gates it cannot run as drops (S40)', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await mkdir(join(root, 'src'), { recursive: true });
   await writeFile(join(root, 'Cargo.toml'), '[package]\nname="x"\n');
-  const bin = await scratch();
+  const bin = await tempDir('simt-manifest-');
 
   const saved = process.env.PATH;
   try {
@@ -630,7 +627,7 @@ test('init: a fresh Rust repo without cargo declares the gates it cannot run as 
 test('check reports a landmine gate left by an older adoption (end to end)', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
   const { checkCommand } = await import('../src/commands/sync.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'wrangler.jsonc'), '');
   await writeFile(
     join(root, 'package.json'),
@@ -654,7 +651,7 @@ test('check reports a landmine gate left by an older adoption (end to end)', asy
 test('check stays green when a declared gate can run (no false alarm)', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
   const { checkCommand } = await import('../src/commands/sync.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x', scripts: { test: 'vitest run' } }));
   await mkdir(join(root, 'node_modules', '.bin'), { recursive: true });
   await writeFile(join(root, 'node_modules', '.bin', 'vitest'), '');
@@ -665,7 +662,7 @@ test('check stays green when a declared gate can run (no false alarm)', async ()
 
 test('check does not fire on a repo with no manifest at all', async () => {
   const { checkCommand } = await import('../src/commands/sync.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   // Not `current` for the absent AGENTS.md, but never an UNRUNNABLE gate.
   assert.equal(await checkCommand([], { root }), 1);
 });
@@ -674,7 +671,7 @@ test('init PRINTS each dropped gate with its remedy; a re-init reports none', as
   // A silently shorter gate list reads as "this repo needs no formatting check",
   // when the truth is "declaring one would block every commit".
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x', scripts: { test: 'vitest run' } }));
 
   // Applied, not a dry run: the point is that the manifest now exists, which is what
@@ -700,7 +697,7 @@ test('init PRINTS each dropped gate with its remedy; a re-init reports none', as
 // first adoption reached.
 test('init says out loud that declared gates are not yet enforced', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x', scripts: { test: 'vitest run' } }));
   await mkdir(join(root, 'node_modules', '.bin'), { recursive: true });
   await writeFile(join(root, 'node_modules', '.bin', 'vitest'), '');
@@ -716,7 +713,7 @@ test('init says there is nothing to install when the repo can run no gate', asyn
   // An empty gate list is a valid manifest - a repo with no formatter and no linter.
   // It must not be reported as an outstanding step.
   const { initCommand } = await import('../src/commands/init.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x' }));
   const run = await capture(() => initCommand([], { root, yes: true }));
   assert.equal(run.code, 0);
@@ -731,7 +728,7 @@ test('init says there is nothing to install when the repo can run no gate', asyn
 // current. Only the bytes were wrong, and nothing looked at them.
 test('a manifest a formatter rewrote is reported, and a hand-edited one is not', async () => {
   const { MANIFEST_COMMENT, manifestDrift } = await import('../src/projection/manifest.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   const stack = ['node'];
   const sha = 'abc1234';
   // The pin this build records: manifestDrift computes the expected projection with
@@ -792,7 +789,7 @@ test('a manifest a formatter rewrote is reported, and a hand-edited one is not',
 test('check is red when the manifest bytes are not what simt-dev writes', async () => {
   const { initCommand } = await import('../src/commands/init.mjs');
   const { checkCommand } = await import('../src/commands/sync.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'x' }));
   await capture(() => initCommand([], { root, yes: true }));
   assert.equal((await capture(() => checkCommand([], { root }))).code, 0);
@@ -816,7 +813,7 @@ test('sync repairs the manifest field check refuses, and previews it first', asy
   const { syncCommand } = await import('../src/commands/sync.mjs');
   const { MANIFEST_COMMENT, manifestDrift } = await import('../src/projection/manifest.mjs');
   const { provenanceDigest } = await import('../src/projection/project.mjs');
-  const root = await scratch();
+  const root = await tempDir('simt-manifest-');
   const stack = ['node'];
   // The real digest, because `sync` stamps the one this build computes. A fixture sha
   // of 'abc1234' makes the field genuinely stale, and then the test below is

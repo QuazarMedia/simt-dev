@@ -25,6 +25,7 @@ import {
 } from '../src/graph/compile.mjs';
 import { loadRegistry } from '../src/graph/load.mjs';
 import { checkSkill } from '../src/graph/spec.mjs';
+import { tempDir } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
@@ -39,7 +40,7 @@ after(async () => {
 });
 
 async function scratch(prefix = 'simt-compile-') {
-  const dir = await mkdtemp(join(tmpdir(), prefix));
+  const dir = await tempDir(prefix);
   tempDirs.push(dir);
   return dir;
 }

@@ -5,10 +5,13 @@
 // command is reported, not dropped.
 
 import assert from 'node:assert/strict';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { whyCommand } from '../src/commands/why.mjs';
-import { ensureGit } from './fixture.mjs';
+import { copyTree, ensureGit } from './fixture.mjs';
 import {
   affectsTokens,
   matchGlob,
@@ -21,7 +24,7 @@ const tick = String.fromCharCode(96);
 const bt = (value) => tick + value + tick;
 const commands = ['init', 'hooks run', 'check'];
 
-test('why resolves an Affects token and names the decisions on the dispatcher', async () => {
+test('why resolves an Affects token and names the decisions on the dispatcher', async (t) => {
   const text = [
     'Status: **accepted**',
     '',
@@ -56,7 +59,11 @@ test('why resolves an Affects token and names the decisions on the dispatcher', 
   assert.equal(matchGlob('src/**/*.' + open + 'js,mjs' + close, 'src/a.js'), true);
   assert.deepEqual(scopePaths('---\nsimt-id: node\nsimt-applies: [node]\nsimt-scope: ["package.json", "**/*.mjs"]\n---\n'), ['package.json', '**/*.mjs']);
 
-  const root = new URL('..', import.meta.url).pathname;
+  // A private copy: creating a repository in the shared checkout races every other test
+  // file that asks the same tree for its file list (Q92).
+  const root = await mkdtemp(join(tmpdir(), 'simt-why-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await copyTree(new URL('..', import.meta.url).pathname, root);
   await ensureGit(root);
   const listed = await capture(() => whyCommand(['src/hooks/dispatcher.mjs'], { root }, commands));
   assert.equal(listed.code, 0);

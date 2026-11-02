@@ -30,8 +30,9 @@ node scripts/ci.mjs --yes     # --check reports drift and exits 1
 One suite, on the repository's own runner:
 
 ```sh
-npm test                      # node --test over test/*.test.mjs
-node --test test/index.test.mjs   # the focused form, while working
+npm test                          # every file, both tiers
+npm run test:unit                 # the focused form: files that never spawn the CLI
+node --test test/index.test.mjs   # one file
 ```
 
 A focused run is the default gate. A full suite runs against a named trigger: phase exit,

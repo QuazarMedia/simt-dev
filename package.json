@@ -46,6 +46,8 @@
   ],
   "scripts": {
     "test": "node --test --test-concurrency=$(node -p 'os.cpus().length') test/*.test.mjs",
+    "test:unit": "node scripts/run-tests.mjs unit",
+    "test:integration": "node scripts/run-tests.mjs integration",
     "lint": "node bin/simt.mjs graph lint",
     "verify:shipped": "node --test test/shipped.test.mjs",
     "build:sea": "node scripts/build-sea.mjs",

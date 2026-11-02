@@ -298,6 +298,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // the script that replaces it would not be an argument a maintainer can act on.
   // ADR-134 does not join: its prose names no package path, because the files it rules on
   // (`.editorconfig`, `.gitattributes`) exist in every repository rather than in this one.
+  // ADR-137 joined for the same reason once more: the ruling is ABOUT which tier a test file
+  // is in, and a decision that the tier is a property of the file rather than a list, without
+  // naming the classifier, the runner and the assertion that holds the partition, would not
+  // be an argument a maintainer can act on.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -325,6 +329,7 @@ assert.deepEqual(leaking, [
     'ADR-133',
     'ADR-135',
     'ADR-136',
+    'ADR-137',
 ]);
 });
 

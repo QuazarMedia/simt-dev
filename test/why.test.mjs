@@ -5,13 +5,11 @@
 // command is reported, not dropped.
 
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { whyCommand } from '../src/commands/why.mjs';
-import { copyTree, ensureGit, capture } from './fixture.mjs';
+import { copyTree, ensureGit, capture, tempDir } from './fixture.mjs';
 import {
   affectsTokens,
   matchGlob,
@@ -61,8 +59,7 @@ test('why resolves an Affects token and names the decisions on the dispatcher', 
 
   // A private copy: creating a repository in the shared checkout races every other test
   // file that asks the same tree for its file list (Q92).
-  const root = await mkdtemp(join(tmpdir(), 'simt-why-'));
-  t.after(() => rm(root, { recursive: true, force: true }));
+  const root = await tempDir('simt-why-');
   await copyTree(new URL('..', import.meta.url).pathname, root);
   await ensureGit(root);
   const listed = await capture(() => whyCommand(['src/hooks/dispatcher.mjs'], { root }, commands));

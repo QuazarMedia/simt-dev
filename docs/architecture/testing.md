@@ -3,9 +3,15 @@
 One suite, on the repository's own runner:
 
 ```sh
-npm test                          # node --test over test/*.test.mjs
-node --test test/index.test.mjs   # the focused form
+npm test                          # every file: node --test over test/*.test.mjs
+npm run test:unit                 # the files that never spawn the CLI, ~9 s
+node --test test/index.test.mjs   # one file
 ```
+
+`test/tier.mjs` decides which tier a file is in, from the file's own source: a test that
+spawns the CLI is integration, a test that imports modules and calls them is unit. The split
+is asserted by `test/tiers.test.mjs`, so a new file joins its tier without anyone updating a
+list (ADR-137). `npm test` still runs both tiers, and it is what pre-push and CI run.
 
 ## What the suite is built on
 

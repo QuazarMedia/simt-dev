@@ -376,7 +376,11 @@ const TEMP_DIRS = [];
 // `keepTemp`. Before this, every file kept its own array and its own `after` hook, so a new
 // test that forgot the array leaked a directory and nothing said so.
 process.once('exit', () => {
-  for (const dir of TEMP_DIRS) rmSync(dir, { recursive: true, force: true });
+  // Retried: `rm -rf` of a tree a git command has just written to fails ENOTEMPTY while the
+  // last of it lands, and that is a flake in the cleanup, not in the test it reports against.
+  for (const dir of TEMP_DIRS) {
+    rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+  }
 });
 
 export function keepTemp(...paths) {

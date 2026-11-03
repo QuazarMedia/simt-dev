@@ -12,5 +12,7 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 | `simt bench probes --yes` | `--all`, `--arm`, `--compare`, `--cross-group`, `--harness`, `--labels`, `--model`, `--regrade`, `--replace`, `--reps`, `--task`, `--yes` | run the deterministic probes against a workspace |
 | `simt bench report [--compare a b]` | `--all`, `--arm`, `--compare`, `--cross-group`, `--harness`, `--labels`, `--model`, `--regrade`, `--replace`, `--reps`, `--task` | summarise the runs recorded in the vault |
 | `simt bench run --yes` | `--all`, `--arm`, `--compare`, `--cross-group`, `--harness`, `--labels`, `--model`, `--regrade`, `--replace`, `--reps`, `--task`, `--yes` | run agents against the mined tasks |
+| `simt bench replay --input <file>` | `--input` | counterfactual replay: did an irrelevant change move the outcome? |
+| `simt bench calibrate --input <file>` | `--input` | false-accept rate against expert labels, and the autonomy it does or does not justify |
 
 Writes to the repository: `simt bench export`, `simt bench mine`, `simt bench probes`, `simt bench run`. Each prints its plan and writes nothing without `--yes`.

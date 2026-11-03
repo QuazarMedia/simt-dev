@@ -157,6 +157,10 @@ export const VALUE_FLAGS = new Set([
   'claims',
   'input',
   // knowledge why: the two bounds a paginated door owes its reader.
+  // knowledge rank|debt|impact: the question, the scoring weights, the changed ids.
+  'query',
+  'refs',
+  'weights',
   // knowledge why: the two dates a bitemporal query needs, both required together.
   'as-of',
   'known-at',

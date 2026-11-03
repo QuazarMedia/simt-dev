@@ -9,10 +9,10 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [agent-hook](agent-hook.md) | 1 |
 | [agent-hooks](agent-hooks.md) | 3 |
 | [agents](agents.md) | 2 |
-| [bench](bench.md) | 8 |
+| [bench](bench.md) | 10 |
 | [brief](brief.md) | 1 |
 | [check](check.md) | 1 |
-| [work](work.md) | 1 |
+| [work](work.md) | 5 |
 | [workspace](workspace.md) | 4 |
 | [completions](completions.md) | 1 |
 | [decide](decide.md) | 2 |
@@ -29,7 +29,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [impact](impact.md) | 1 |
 | [index](index.md) | 1 |
 | [init](init.md) | 1 |
-| [knowledge](knowledge.md) | 3 |
+| [knowledge](knowledge.md) | 8 |
 | [lease](lease.md) | 1 |
 | [lessons](lessons.md) | 3 |
 | [local](local.md) | 1 |
@@ -74,11 +74,13 @@ simt agents status                                                        # what
 
 # bench
 simt bench ablate --yes                                                   # measure one arm of the brief against its ablation
+simt bench calibrate --input <file>                                       # false-accept rate against expert labels, and the autonomy it does or does not justify
 simt bench critic                                                         # score the review critic against the labelled bench set
 simt bench export --yes                                                   # write the sealed bench corpus as one signed document
 simt bench import                                                         # verify a sealed corpus and load it into the vault
 simt bench mine --yes                                                     # mine tasks out of a repository history
 simt bench probes --yes                                                   # run the deterministic probes against a workspace
+simt bench replay --input <file>                                          # counterfactual replay: did an irrelevant change move the outcome?
 simt bench report [--compare a b]                                         # summarise the runs recorded in the vault
 simt bench run --yes                                                      # run agents against the mined tasks
 
@@ -89,7 +91,11 @@ simt brief "<task>"                                                       # the 
 simt check                                                                # report stale or missing generated regions and every check finding
 
 # work
+simt work graduate --input <file>                                         # whether repeated traces can be proposed as a procedure, and what still blocks it
+simt work handoff --input <file>                                          # build a resume capsule from ids and provenance, never from a transcript
 simt work inspect                                                         # what this repository's work consists of, and which validations are actually available
+simt work resume --input <file>                                           # revalidate permission, target, dependencies, authorization and lease before reuse
+simt work schedule --input <file>                                         # which ready tasks can run together under capacity and resource constraints
 
 # workspace
 simt workspace compare                                                    # the adoption and drift matrix across every sibling repository
@@ -148,8 +154,13 @@ simt index [--embed]                                                      # rebu
 simt init [path]                                                          # adopt this repository: manifest, region, hooks, agents and agent-hooks
 
 # knowledge
+simt knowledge debt --input <file>                                        # rank stale and unsupported knowledge by consequence per effort
+simt knowledge derivations --input <file>                                 # which outputs a source, template or skill change puts in question
 simt knowledge export --input <file>                                      # a bounded, permission-filtered packet another repository can read offline
+simt knowledge impact --input <file> --refs <ids>                         # what a change reaches over typed edges, and where the graph is unknown
 simt knowledge import --input <file>                                      # validate an exported packet as data, and never execute it
+simt knowledge rank --input <file> --query "<question>"                   # rank evidence units by authority and quality, and report what was excluded
+simt knowledge sections <file.md>                                         # the retrieval units a long document yields, with anchors and byte ranges
 simt knowledge why <claim-id> --claims <file> [--limit <n>] [--page <n>]  # what a claim derives from, what depends on it, what applied at a date, and where it conflicts
 
 # lease

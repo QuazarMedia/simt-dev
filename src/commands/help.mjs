@@ -29,6 +29,22 @@ ${CLI} verify status --input  closure over recorded obligations, and what is
                            unresolved and why
 ${CLI} action status --journal  where an operation stands from its journal,
                            and what the state permits next
+${CLI} knowledge rank       ranked evidence units, and what was excluded or unplaced
+                           (reads --input <file> --query "<question>")
+${CLI} knowledge impact --input  what a change reaches over typed edges, and where
+                           the graph is unknown (--refs <id,...>)
+${CLI} knowledge derivations --input  which outputs a source or template change
+                           puts in question
+${CLI} knowledge debt --input  stale and unsupported knowledge, ranked by
+                           consequence per effort
+${CLI} knowledge sections <file.md>  the units a long document yields, with anchors
+${CLI} work schedule --input  which ready tasks may run together, which serialize
+${CLI} work handoff --input  a resume capsule built from ids and provenance
+${CLI} work resume --input  revalidate a capsule before a new session reuses it
+${CLI} work graduate --input  whether repeated traces can be proposed as a procedure
+${CLI} bench replay --input  counterfactual replay of a sanitized trace
+${CLI} bench calibrate --input  a judge against expert labels, and the autonomy it
+                           does or does not justify
 ${CLI} doctor [--fix]        classify a repo and check config health (with --fix:
                            apply the remedies flagged safe and list the rest;
                            dry-run unless --yes)
@@ -325,6 +341,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --list                  print the MCP tool surface without reading stdin (mcp)
 --as-of <YYYY-MM-DD>    knowledge why: the date the question is about
 --known-at <YYYY-MM-DD>  knowledge why: what was known when (both dates, or neither)
+--query <text>          knowledge rank: the question the units are ranked against
+--refs <ids>            knowledge impact: the changed claim or artifact ids, comma separated
+--weights <k=n,...>     knowledge debt: the scoring weights, e.g. obligations=3,effort=1
 --limit <n>             knowledge why: how many nodes one page carries (1..100)
 --page <n>              knowledge why: which page of those nodes to read
 --claims <file>         knowledge why: the document of {claims, edges, artifacts}

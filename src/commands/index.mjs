@@ -81,6 +81,32 @@ export const IMPLEMENTED = {
     return (args, flags) => knowledgeCommand('import', args, flags);
   },
   'work inspect': async () => (await import('./work.mjs')).workInspectCommand,
+  'work schedule': async () => (await import('./work.mjs')).workScheduleCommand,
+  'work handoff': async () => (await import('./work.mjs')).workHandoffCommand,
+  'work resume': async () => (await import('./work.mjs')).workResumeCommand,
+  'work graduate': async () => (await import('./work.mjs')).workGraduateCommand,
+  'knowledge rank': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('rank', args, flags);
+  },
+  'knowledge derivations': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('derivations', args, flags);
+  },
+  'knowledge debt': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('debt', args, flags);
+  },
+  'knowledge impact': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('impact', args, flags);
+  },
+  'knowledge sections': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('sections', args, flags);
+  },
+  'bench replay': async () => (await import('./bench.mjs')).benchReplayCommand,
+  'bench calibrate': async () => (await import('./bench.mjs')).benchCalibrateCommand,
   // One group, two questions about one document: `plan` names the next observation and
   // `status` reports closure over what was recorded. Neither writes.
   'verify plan': async () => {

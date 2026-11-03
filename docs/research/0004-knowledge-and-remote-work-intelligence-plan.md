@@ -589,7 +589,7 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W16 | Contradictions and uncertainty | 2 | W14 | M | E5 | structured conflict gold exact | Complete | d6cc073 |
 | W17 | Derivation/regeneration | 2 | W13, W16 | M | E5 | exact known closure; unknowns expanded | Complete | b4f40d1 |
 | W18 | Graph store and overlays | 3 | W13, W14 | M | E7 | backend parity; staged/working distinction | Complete | 1ba76be |
-| W19 | Evidence ranking | 3 | W18, W16, W04 | M | E7 | recall@10 ≥90%; zero scope leakage | Queued | |
+| W19 | Evidence ranking | 3 | W18, W16, W04 | M | E7 | recall@10 ≥90%; zero scope leakage | Complete | d09f7bc |
 | W20 | Proof-bearing packets | 3 | W19, W11, W24 | M | E7 | mandatory coverage or explicit incomplete | Queued | |
 | W21 | Next observation planner | 3 | W20, W10 | M | E8 | minimal admissible action; finite stop | Queued | |
 | W22 | Impact/counterexamples | 3 | W18, W17 | M | E7 | exact known impact; incomplete frontier | Queued | |

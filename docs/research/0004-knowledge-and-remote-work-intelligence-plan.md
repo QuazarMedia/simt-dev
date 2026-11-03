@@ -594,7 +594,7 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W21 | Next observation planner | 3 | W20, W10 | M | E8 | minimal admissible action; finite stop | Queued | |
 | W22 | Impact/counterexamples | 3 | W18, W17 | M | E7 | exact known impact; incomplete frontier | Complete | f2dd5ca |
 | W23 | Query interop/bundles | 3 | W20, W22 | M | E6 | CLI/MCP parity; offline/private-safe export | Queued | |
-| W24 | Outcome contracts | 4 | W08, W05 | M | E8 | unknown never passes mandatory closure | Queued | |
+| W24 | Outcome contracts | 4 | W08, W05 | M | E8 | unknown never passes mandatory closure | Complete | 96f0664 |
 | W25 | Document validation | 4 | W24, W17 | M | E8 | native rubric routing; source claims honest | Queued | |
 | W26 | Procedure validation | 4 | W24, W13 | M | E8 | effects/actor/fallback semantics preserved | Queued | |
 | W27 | Incremental verification | 4 | W24, W25, W26, W22 | M | E8 | source selection kept; no false green | Queued | |

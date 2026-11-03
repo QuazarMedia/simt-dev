@@ -612,9 +612,9 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W39 | Handoff capsules | 6 | W38, W23, W36 | M | E12 | resumable scope-safe evidence | Complete | 406eb9a |
 | W40 | Structured tool hooks | 6 | W32, W05 | M | E2 | cross-harness parity; source hooks kept | Complete | a108935 |
 | W41 | Trust/secret boundaries | 6 | W40, W23, W33 | M | E6 | malicious-source/secret probes pass | Complete | 75c830e |
-| W42 | Review/promotion bundles | 6 | W39, W41, W31 | M | E11 | pre/post review; rebind promotion | Queued | |
-| W43 | Scoped discovery memory | 7 | W28, W16, W35 | M | E13 | verified discoveries; no stale bleed | Queued | |
-| W44 | Procedure graduation | 7 | W43, W26, W36 | L | E13 | held-out semantic conformance | Queued | |
+| W42 | Review/promotion bundles | 6 | W39, W41, W31 | M | E11 | pre/post review; rebind promotion | Complete | 0b367a8 |
+| W43 | Scoped discovery memory | 7 | W28, W16, W35 | M | E13 | verified discoveries; no stale bleed | Complete | c750fea |
+| W44 | Procedure graduation | 7 | W43, W26, W36 | L | E13 | held-out semantic conformance | Complete | 91ca5cb |
 | W45 | Counterfactual replay | 7 | W44, W03 | M | E1 | declared metamorphic relations checked | Queued | |
 | W46 | Calibrated autonomy | 7 | W45, W04, W25 | M | E13 | preregistered false-accept bar | Queued | |
 | W47 | Knowledge debt/VOI | 7 | W43, W21, W04 | M | E13 | explainable ranking earns uplift | Queued | |

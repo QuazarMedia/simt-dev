@@ -16,9 +16,6 @@
 // Event ids deduplicate local recording only. They never imply the remote effect was deduplicated;
 // that requires the server-side support W34 classifies.
 
-import { digestOf } from '../knowledge/observations.mjs';
-import { canonicalJson } from '../util/canonical.mjs';
-
 export const MACHINE_SCHEMA = 'simt.machine/1';
 
 /** The happy path. */
@@ -159,6 +156,3 @@ export function executionGuarantee({ serverDeduplication = false, atomicPrecondi
   if (serverDeduplication || atomicPrecondition) return { promise: 'at-most-once-per-effect', reason: 'the target deduplicates or enforces the precondition' };
   return { promise: 'at-least-once', reason: 'no exactly-once claim without server-side deduplication or an atomic precondition' };
 }
-
-/** The digest a reviewer can compare across the journal, the request and the verifier. */
-export const recordDigest = (record) => digestOf(canonicalJson({ operationId: record?.operationId ?? null, intentDigest: record?.intentDigest ?? null, step: record?.step ?? null }));

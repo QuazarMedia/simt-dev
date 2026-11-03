@@ -17,7 +17,7 @@
 
 import { SCOPE_FIELDS } from './validity.mjs';
 
-export const CONFLICT_SCHEMA_VERSION = 1;
+const CONFLICT_SCHEMA_VERSION = 1;
 
 /** Every verdict a pair can receive. Only `contradiction` is a finding about the world. */
 export const CONFLICT_VERDICTS = Object.freeze([

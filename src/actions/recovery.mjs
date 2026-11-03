@@ -15,7 +15,7 @@
 import { digestOf } from '../knowledge/observations.mjs';
 import { canonicalJson } from '../util/canonical.mjs';
 
-export const RECOVERY_SCHEMA = 'simt.recovery/1';
+const RECOVERY_SCHEMA = 'simt.recovery/1';
 
 /** What may be done after a failure. `none` means the operation verified. */
 export const RECOVERY_CHOICES = Object.freeze(['none', 'retry-after-reconciliation', 'forward-repair', 'compensation', 'manual']);

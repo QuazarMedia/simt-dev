@@ -20,8 +20,8 @@
 import { digestOf } from './observations.mjs';
 
 export const BUNDLE_SCHEMA = 'simt.bundle/1';
-export const BUNDLE_SCHEMA_VERSION = 1;
-export const MAX_BUNDLE_BYTES = 64 * 1024;
+const BUNDLE_SCHEMA_VERSION = 1;
+const MAX_BUNDLE_BYTES = 64 * 1024;
 export const MAX_PAGE = 100;
 
 const isText = (value) => typeof value === 'string' && value.length > 0;

@@ -49,7 +49,7 @@ export const EDGE_KINDS = Object.freeze([
 const DEPENDENCY_EDGES = new Set(['supports', 'derived-from', 'imports-context', 'implements', 'generated-by', 'verifies', 'affects-object']);
 
 /** Review state. Only `reviewed` may answer a mandatory check or name an authority. */
-export const CLAIM_STATUSES = Object.freeze(['proposed', 'reviewed']);
+const CLAIM_STATUSES = Object.freeze(['proposed', 'reviewed']);
 
 /** The value types a claim can carry. A date is a string with a declared format, later. */
 const VALUE_TYPES = Object.freeze(['number', 'string', 'boolean']);

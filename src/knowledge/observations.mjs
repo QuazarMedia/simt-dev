@@ -22,7 +22,7 @@
 
 import { createHash } from 'node:crypto';
 
-export const OBSERVATION_SCHEMA_VERSION = 1;
+const OBSERVATION_SCHEMA_VERSION = 1;
 
 /** What a refresh may conclude about the source. Nothing here is a pass. */
 export const CHANGES = Object.freeze(['changed', 'unchanged', 'not-modified', 'unknown']);

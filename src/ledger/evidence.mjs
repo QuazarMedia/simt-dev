@@ -23,6 +23,7 @@
 // digests detects damage — while never claiming to be an execution attestation.
 
 import { digestOf } from '../knowledge/observations.mjs';
+import { canonicalJson } from '../util/canonical.mjs';
 
 /** The envelope's own schema, distinct from the run-record `v` in the ledger file. */
 export const EVIDENCE_SCHEMA = 'simt.evidence/2';
@@ -41,19 +42,6 @@ const SECRET_PATTERNS = [
 
 const isText = (value) => typeof value === 'string' && value.length > 0;
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
-
-/** JSON with sorted keys, so two equal records have one digest. */
-function canonicalJson(value) {
-  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
-  if (isObject(value)) {
-    return `{${Object.keys(value)
-      .sort()
-      .filter((key) => value[key] !== undefined)
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`)
-      .join(',')}}`;
-  }
-  return JSON.stringify(value);
-}
 
 /**
  * Reduce a command's output to what may be kept: a redacted summary and a digest.

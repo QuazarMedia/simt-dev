@@ -619,10 +619,10 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W46 | Calibrated autonomy | 7 | W45, W04, W25 | M | E13 | preregistered false-accept bar | Complete | 29f0edf |
 | W47 | Knowledge debt/VOI | 7 | W43, W21, W04 | M | E13 | explainable ranking earns uplift | Complete | e5db6cf |
 | W48 | Adapter conformance | 8 | W41, W26, W36 | M | E14 | generic adapters; no runtime deps | Complete | 8c501c6 |
-| W49 | Knowledge pilot | 8 | W48, W25, W29, W47 | M | — | source/claim/generation scenarios pass | Queued | |
+| W49 | Knowledge pilot | 8 | W48, W25, W29, W47 | M | — | source/claim/generation scenarios pass | Complete | ac75165 |
 | W50 | Remote-work pilot | 8 | W48, W42, W46 | L | — | crash/reset/fallback scenarios pass | Complete | 6d8fc9f |
 | W51 | Compatibility rollout | 8 | W49, W50, W40, W04 | M | E14 | exact old contracts; code NI evidence | Complete | 331481d |
-| W52 | Playbooks/release | 8 | W51 | S | E14 | isolated consumer can act; claims measured | Queued | |
+| W52 | Playbooks/release | 8 | W51 | S | E14 | isolated consumer can act; claims measured | Complete | ccce889 |
 
 **Execution discipline.** For Wxx, first implement the section's named test and behavior, then run that exact file using the repository's supported focused runner, inspect/stage only the slice, read the staged diff, commit locally and record SHA/evidence. Currently the existing manifest defines `npm test` as the full `test/*.test.mjs` suite; until a focused script is deliberately introduced, `node --test test/<named-file>.test.mjs` is the existing Node test-file form used in this repo's hooks. Do not claim a future test file exists before creating it. Full-suite triggers are phase exit, package/release gate, cross-system compatibility, or explicit instruction. Required test failures block closure.
 

@@ -580,14 +580,14 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W07 | Work manifest and adoption | 1 | W06 | M | E3 | no fabricated runner; stable old schema | Complete | d0f6bf6 |
 | W08 | Artifact scopes and identity | 1 | W07 | M | E3 | exact scope/representation resolution | Complete | 197201b |
 | W09 | Portable work profiles | 1 | W08, W05 | S | E4 | actionable rendered rules; hard gates kept | Complete | 0b15012 |
-| W10 | Capability cards | 1 | W07 | S | E2 | declared/available/authorized separated | Queued | |
-| W11 | Intent routing | 1 | W08, W10 | M | E3 | labelled intent evidence; no inferred effects | Queued | |
+| W10 | Capability cards | 1 | W07 | S | E2 | declared/available/authorized separated | Complete | ba408e5 |
+| W11 | Intent routing | 1 | W08, W10 | M | E3 | labelled intent evidence; no inferred effects | Complete | 3bc56d4 |
 | W12 | Section extraction | 2 | W08 | M | E5 | late/Unicode sections recovered | Complete | c227e48 · test: node --test test/knowledge-sections.test.mjs |
-| W13 | Claims and typed edges | 2 | W12 | L | E5 | exact declared lineage; proposals isolated | Queued | |
-| W14 | Temporal authority | 2 | W13 | M | E5 | historical/applicable/conflict cases exact | Queued | |
-| W15 | Source observations | 2 | W14, W10 | M | E6 | bounded opt-in refresh; no implicit sockets | Queued | |
-| W16 | Contradictions and uncertainty | 2 | W14 | M | E5 | structured conflict gold exact | Queued | |
-| W17 | Derivation/regeneration | 2 | W13, W16 | M | E5 | exact known closure; unknowns expanded | Queued | |
+| W13 | Claims and typed edges | 2 | W12 | L | E5 | exact declared lineage; proposals isolated | Complete | 8389989 |
+| W14 | Temporal authority | 2 | W13 | M | E5 | historical/applicable/conflict cases exact | Complete | 2e7bb5f |
+| W15 | Source observations | 2 | W14, W10 | M | E6 | bounded opt-in refresh; no implicit sockets | Complete | a7901bf |
+| W16 | Contradictions and uncertainty | 2 | W14 | M | E5 | structured conflict gold exact | Complete | d6cc073 |
+| W17 | Derivation/regeneration | 2 | W13, W16 | M | E5 | exact known closure; unknowns expanded | Complete | b4f40d1 |
 | W18 | Graph store and overlays | 3 | W13, W14 | M | E7 | backend parity; staged/working distinction | Queued | |
 | W19 | Evidence ranking | 3 | W18, W16, W04 | M | E7 | recall@10 ≥90%; zero scope leakage | Queued | |
 | W20 | Proof-bearing packets | 3 | W19, W11, W24 | M | E7 | mandatory coverage or explicit incomplete | Queued | |

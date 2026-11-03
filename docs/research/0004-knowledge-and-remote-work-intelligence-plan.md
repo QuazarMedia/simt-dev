@@ -603,9 +603,9 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W30 | Target snapshots | 5 | W10, W28, W05 | M | E10 | wrong/reset identity cannot mutate | Complete | 096c610 |
 | W31 | Semantic object deltas | 5 | W30, W08, W18 | M | E10 | typed diff and frame conditions exact | Complete | 9e5f031 |
 | W32 | Intent/authorization binding | 5 | W31, W24 | M | E11 | authorization scoped to real intent | Complete | 0936e23 |
-| W33 | Executor state machine | 5 | W32, W03 | L | E11 | crash-safe journal; no implicit execution | Queued | |
-| W34 | Preconditions/retries | 5 | W33 | L | E11 | one create after lost response | Queued | |
-| W35 | Independent verification | 5 | W34, W29 | M | E10 | postconditions/frame/convergence checked | Queued | |
+| W33 | Executor state machine | 5 | W32, W03 | L | E11 | crash-safe journal; no implicit execution | Complete | eb033b1 |
+| W34 | Preconditions/retries | 5 | W33 | L | E11 | one create after lost response | Complete | ac4eba0 |
+| W35 | Independent verification | 5 | W34, W29 | M | E10 | postconditions/frame/convergence checked | Complete | 0600014 |
 | W36 | Recovery/fallback | 5 | W35, W26 | L | E11 | no repeated effect; semantic parity required | Queued | |
 | W37 | Resource leases/fencing | 6 | W32, W34 | M | E12 | stale-worker rejection or advisory label | Queued | |
 | W38 | Work graph/budgets | 6 | W37, W29 | M | E12 | acyclic ready tasks; conflicts serialize | Queued | |

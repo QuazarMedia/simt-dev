@@ -615,9 +615,9 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W42 | Review/promotion bundles | 6 | W39, W41, W31 | M | E11 | pre/post review; rebind promotion | Complete | 0b367a8 |
 | W43 | Scoped discovery memory | 7 | W28, W16, W35 | M | E13 | verified discoveries; no stale bleed | Complete | c750fea |
 | W44 | Procedure graduation | 7 | W43, W26, W36 | L | E13 | held-out semantic conformance | Complete | 91ca5cb |
-| W45 | Counterfactual replay | 7 | W44, W03 | M | E1 | declared metamorphic relations checked | Queued | |
-| W46 | Calibrated autonomy | 7 | W45, W04, W25 | M | E13 | preregistered false-accept bar | Queued | |
-| W47 | Knowledge debt/VOI | 7 | W43, W21, W04 | M | E13 | explainable ranking earns uplift | Queued | |
+| W45 | Counterfactual replay | 7 | W44, W03 | M | E1 | declared metamorphic relations checked | Complete | 665a53a |
+| W46 | Calibrated autonomy | 7 | W45, W04, W25 | M | E13 | preregistered false-accept bar | Complete | 29f0edf |
+| W47 | Knowledge debt/VOI | 7 | W43, W21, W04 | M | E13 | explainable ranking earns uplift | Complete | e5db6cf |
 | W48 | Adapter conformance | 8 | W41, W26, W36 | M | E14 | generic adapters; no runtime deps | Queued | |
 | W49 | Knowledge pilot | 8 | W48, W25, W29, W47 | M | — | source/claim/generation scenarios pass | Queued | |
 | W50 | Remote-work pilot | 8 | W48, W42, W46 | L | — | crash/reset/fallback scenarios pass | Queued | |

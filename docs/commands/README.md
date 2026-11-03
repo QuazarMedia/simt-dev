@@ -155,7 +155,7 @@ simt ignore [--yes] [--diff]                                              # rend
 simt impact <file|symbol>                                                 # who a change reaches: importers, their tests and the contract
 
 # index
-simt index [--embed]                                                      # rebuild the local file index from git blob hashes
+simt index [--open] [--embed]                                             # rebuild the local file index from git blobs, or report what it holds
 simt index overlay --input <file>                                         # a working-tree or staged node labelled by its provenance, never both
 
 # init

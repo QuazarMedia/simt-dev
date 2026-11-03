@@ -2,7 +2,7 @@
 // module exists to produce, through the command a reader would run.
 
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -145,4 +145,20 @@ test('W45: a world model runs offline and the oracle answers about its effects',
   const { payload } = run('bench world', doc(dir, 'world.json', { events: [], probes: true }));
   assert.ok(Array.isArray(payload.world.oracle.effects));
   assert.ok(Array.isArray(payload.probes.rows));
+});
+
+test('W18: `index --open` answers what the cache holds without rebuilding it', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'simt-open-'));
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  writeFileSync(join(dir, 'a.mjs'), 'export const a = 1;\n');
+  execFileSync('git', ['add', 'a.mjs'], { cwd: dir });
+
+  const built = spawnSync(process.execPath, [BIN, 'index'], { cwd: dir, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+  assert.equal(built.status, 0, built.stderr);
+
+  const opened = spawnSync(process.execPath, [BIN, 'index', '--open', '--json'], { cwd: dir, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+  const payload = JSON.parse(opened.stdout);
+  assert.equal(payload.open, true);
+  assert.equal(payload.counts.files, 1);
+  assert.equal(typeof payload.stale, 'boolean');
 });

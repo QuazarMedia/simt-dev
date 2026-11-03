@@ -5,12 +5,40 @@
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { SQLITE_FILE, reindex } from '../index/store.mjs';
+import { openIndex } from '../index/open.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { git } from '../sys/git.mjs';
 
 export async function indexCommand(args, flags) {
   if (args.length > 0) return fail(`unknown index argument ${args[0]}`, EXIT.USAGE, `run: ${CLI} index`);
   const root = commandRoot(flags);
+  // `--open` asks what the index already holds instead of rebuilding it. The cache is a
+  // question-answering structure, and before this the only way to ask it was to pay for a
+  // rebuild: an empty answer and a stale answer looked the same from outside.
+  if (flags.open === true) {
+    const opened = await openIndex(root, { build: false });
+    if (opened.ok !== true) {
+      return fail(`could not open the index (${opened.error.message})`, EXIT.FAIL, `run: ${CLI} index`);
+    }
+    try {
+      const status = await opened.status();
+      if (status.ok !== true) return fail(status.error.message, EXIT.FAIL, `run: ${CLI} index`);
+      const payload = { ok: true, command: 'index', root, open: true, ...status.data };
+      if (isJson(flags)) {
+        emitJson(payload);
+        return EXIT.OK;
+      }
+      emit([
+        `files    ${status.data.counts.files}`,
+        `symbols  ${status.data.counts.symbols}`,
+        `edges    ${status.data.counts.edges}`,
+        `stale    ${status.data.stale ? 'yes - run: simt index' : 'no'}`,
+      ].join('\n'));
+      return EXIT.OK;
+    } finally {
+      if (typeof opened.close === 'function') await opened.close();
+    }
+  }
   let result;
   try {
     result = await reindex(root, {

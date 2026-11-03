@@ -353,6 +353,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --list                  print the MCP tool surface without reading stdin (mcp)
 --as-of <YYYY-MM-DD>    knowledge why: the date the question is about
 --known-at <YYYY-MM-DD>  knowledge why: what was known when (both dates, or neither)
+--open                  index: read what the cache holds instead of rebuilding it
 --query <text>          knowledge rank: the question the units are ranked against
 --refs <ids>            knowledge impact: the changed claim or artifact ids, comma separated
 --weights <k=n,...>     knowledge debt: the scoring weights, e.g. obligations=3,effort=1

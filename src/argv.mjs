@@ -43,6 +43,8 @@ export const BOOL_FLAGS = new Set([
   'baselines',
   'dry-run',
   'yes',
+  // index: read what the cache holds instead of rebuilding it.
+  'open',
   'check',
   'plan',
   'help',

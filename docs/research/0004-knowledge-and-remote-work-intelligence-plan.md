@@ -609,9 +609,9 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W36 | Recovery/fallback | 5 | W35, W26 | L | E11 | no repeated effect; semantic parity required | Complete | b8dd07f |
 | W37 | Resource leases/fencing | 6 | W32, W34 | M | E12 | stale-worker rejection or advisory label | Complete | 0a0dc10 |
 | W38 | Work graph/budgets | 6 | W37, W29 | M | E12 | acyclic ready tasks; conflicts serialize | Complete | be0c1c1 |
-| W39 | Handoff capsules | 6 | W38, W23, W36 | M | E12 | resumable scope-safe evidence | Queued | |
-| W40 | Structured tool hooks | 6 | W32, W05 | M | E2 | cross-harness parity; source hooks kept | Queued | |
-| W41 | Trust/secret boundaries | 6 | W40, W23, W33 | M | E6 | malicious-source/secret probes pass | Queued | |
+| W39 | Handoff capsules | 6 | W38, W23, W36 | M | E12 | resumable scope-safe evidence | Complete | 406eb9a |
+| W40 | Structured tool hooks | 6 | W32, W05 | M | E2 | cross-harness parity; source hooks kept | Complete | a108935 |
+| W41 | Trust/secret boundaries | 6 | W40, W23, W33 | M | E6 | malicious-source/secret probes pass | Complete | 75c830e |
 | W42 | Review/promotion bundles | 6 | W39, W41, W31 | M | E11 | pre/post review; rebind promotion | Queued | |
 | W43 | Scoped discovery memory | 7 | W28, W16, W35 | M | E13 | verified discoveries; no stale bleed | Queued | |
 | W44 | Procedure graduation | 7 | W43, W26, W36 | L | E13 | held-out semantic conformance | Queued | |

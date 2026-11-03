@@ -92,6 +92,9 @@ export function mediate({ facts = {}, env = {}, harness = null, mediated = false
     operation,
     blocked: decision.blocked,
     messages: decision.messages,
+    // Present on every branch: a reader should distinguish "no reason to give" from "the key this
+    // function is documented to return is missing", and only the refusals used to carry one.
+    reason: null,
   };
 }
 

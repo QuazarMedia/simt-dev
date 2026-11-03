@@ -105,3 +105,12 @@ test('an empty comparison is not agreement', () => {
   assert.deepEqual(result.effects, []);
   assert.deepEqual(result.harnesses, []);
 });
+
+// Every mediation answer carries `reason`: absent and null are different answers to a reader.
+import { mediate as mediateForShape } from '../src/agenthooks/normalize.mjs';
+
+test('a classified call carries the reason key as null, not an absent one', () => {
+  const allowed = mediateForShape({ facts: {}, mediated: false });
+  assert.equal(allowed.verdict, 'allow');
+  assert.equal(allowed.reason, null);
+});

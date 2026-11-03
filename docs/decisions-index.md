@@ -196,3 +196,5 @@ in [architecture/history.md](architecture/history.md).
 | [185](decisions/ADR-185-an-adapter-is-data-and-being-installed-is-not-being-enabled.md) | an adapter descriptor is data, and being installed is not being enabled | accepted · 2026-11-03 |
 | [186](decisions/ADR-186-a-pilot-is-a-synthetic-fixture-and-its-live-half-stays-unrun.md) | a pilot is a synthetic fixture, and its live half stays unrun until someone authorises it | accepted · 2026-11-03 |
 | [187](decisions/ADR-187-rollout-keeps-the-old-contracts-and-opens-no-socket.md) | the rollout keeps the old contracts intact and opens no socket | accepted · 2026-11-03 |
+| [188](decisions/ADR-188-the-knowledge-pilot-is-a-synthetic-fixture-over-the-real-modules.md) | the knowledge pilot is a synthetic fixture over the real modules, and its live half is unrun | accepted · 2026-11-03 |
+| [189](decisions/ADR-189-a-playbook-names-only-commands-that-exist.md) | a playbook names only commands that exist, and states what is not supported | accepted · 2026-11-03 |

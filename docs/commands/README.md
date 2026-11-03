@@ -191,7 +191,7 @@ simt skills show <name>                                                # one ski
 simt skills why <name>                                                 # which skill covers a task
 
 # slice
-simt slice abandon <id>                                                # remove a slice worktree, delete its branch, and return the row
+simt slice abandon <id> --yes                                          # remove a slice worktree, delete its branch, and return the row
 simt slice finish <id> --yes                                           # run the gates, commit the slice and record its evidence
 simt slice start <id> --yes  |  -- "<text>"                            # give a slice its worktree, branch and brief; -- starts one from a prompt, no row
 

@@ -156,3 +156,31 @@ in [architecture/history.md](architecture/history.md).
 | [145](decisions/ADR-145-artifact-identity-is-explicit-and-most-specific-scope-wins.md) | artifact identity is explicit, and the most specific scope wins | accepted · 2026-11-02 |
 | [146](decisions/ADR-146-work-profiles-select-only-on-an-explicit-declaration.md) | work profiles select only on an explicit declaration | accepted · 2026-11-02 |
 | [147](decisions/ADR-147-non-code-pushes-skip-the-test-gate-and-the-manifest-declares-the-set.md) | non-code pushes skip the test gate, and the manifest declares the set | accepted · 2026-11-03 |
+| [148](decisions/ADR-148-a-capability-card-separates-declared-installed-and-authorized.md) | a capability card separates declared, installed and authorized, and reading a card is not an action | accepted · 2026-11-03 |
+| [149](decisions/ADR-149-intent-is-a-vector-and-routing-grants-nothing.md) | intent is a vector with a version, a tie is a discovery, and routing grants nothing | accepted · 2026-11-03 |
+| [150](decisions/ADR-150-a-claim-is-typed-an-edge-has-a-direction-and-a-proposal-is-not-authority.md) | a claim is a typed record, an edge has a direction, and a proposal is not authority | accepted · 2026-11-03 |
+| [151](decisions/ADR-151-validity-is-bitemporal-and-authority-is-declared.md) | validity is bitemporal, authority is declared, and an unplaceable claim blocks the answer | accepted · 2026-11-03 |
+| [152](decisions/ADR-152-an-observation-is-a-read-a-refresh-is-a-plan.md) | an observation is a record of a read, a refresh is a plan, and only a reviewed canonicalizer may ignore bytes | accepted · 2026-11-03 |
+| [153](decisions/ADR-153-a-conflict-is-four-axes-and-no-finding-certifies-prose.md) | a conflict is a difference on four axes, uncertainty is a question, and no finding certifies prose | accepted · 2026-11-03 |
+| [154](decisions/ADR-154-a-receipt-binds-a-derivation-and-regeneration-is-a-proposal.md) | a receipt binds a derivation, completeness is claimed, and regeneration is a proposal | accepted · 2026-11-03 |
+| [155](decisions/ADR-155-a-working-tree-overlay-is-labelled-merged-and-never-cached.md) | a working-tree overlay is labelled, merged, and never written into the cache | accepted · 2026-11-03 |
+| [156](decisions/ADR-156-ranking-filters-first-scores-in-parts-and-a-hub-cannot-win-by-being-linked.md) | ranking filters first, scores in named parts, and a linked page cannot win by being linked | accepted · 2026-11-03 |
+| [157](decisions/ADR-157-impact-is-typed-and-proposed-edges-are-not-dependencies.md) | impact is typed, proposed edges are not dependencies, and a lesson carries its tenant | accepted · 2026-11-03 |
+| [158](decisions/ADR-158-a-runner-success-is-not-an-outcome-and-a-waiver-is-not-a-pass.md) | a runner's success is not an outcome, and a waiver is not a pass | accepted · 2026-11-03 |
+| [159](decisions/ADR-159-a-packet-spends-its-bytes-on-obligations-and-an-infeasible-ceiling-is-not-a-packet.md) | a packet's bytes are spent on obligations, and an infeasible ceiling is not a packet | accepted · 2026-11-03 |
+| [160](decisions/ADR-160-the-next-question-is-ranked-by-what-it-would-settle-and-a-planner-stops.md) | the next question is ranked by what it would settle, and a planner stops | accepted · 2026-11-03 |
+| [161](decisions/ADR-161-a-read-is-filtered-before-it-is-ranked-and-an-imported-bundle-is-data.md) | a read is filtered before it is ranked, and an imported bundle is data | accepted · 2026-11-03 |
+| [162](decisions/ADR-162-document-checks-are-three-bases-and-a-model-name-is-not-a-second-opinion.md) | document checks are three bases, and a model name is not a second opinion | accepted · 2026-11-03 |
+| [163](decisions/ADR-163-a-procedure-keeps-its-own-language-and-an-orchestration-is-not-a-function.md) | a procedure keeps its own language, and an orchestration is not a function | accepted · 2026-11-03 |
+| [164](decisions/ADR-164-gate-selection-keeps-the-import-closure-and-an-empty-selection-is-not-a-pass.md) | gate selection keeps the import closure, and an empty selection is not a pass | accepted · 2026-11-03 |
+| [165](decisions/ADR-165-evidence-is-current-only-for-the-subject-and-target-it-names.md) | evidence is current only for the subject and target it names, and a chain is not an attestation | accepted · 2026-11-03 |
+| [166](decisions/ADR-166-completion-is-unanimous-and-its-semantics-are-part-of-the-output.md) | completion is unanimous, and its semantics are part of the output | accepted · 2026-11-03 |
+| [167](decisions/ADR-167-a-target-is-identified-by-namespace-and-incarnation.md) | a target is identified by namespace and incarnation, and a session is a credential not an identity | accepted · 2026-11-03 |
+| [168](decisions/ADR-168-a-semantic-delta-never-guesses-a-masked-field.md) | a semantic delta never guesses a masked field, and an unknown never justifies replacement | accepted · 2026-11-03 |
+| [169](decisions/ADR-169-an-authorization-is-about-the-intent-not-its-rendering.md) | an authorization is about the intent, never about its rendering or its source text | accepted · 2026-11-03 |
+| [170](decisions/ADR-170-the-journal-precedes-dispatch-and-cancellation-is-unknown.md) | the journal is written before dispatch, and a cancellation during dispatch is unknown | accepted · 2026-11-03 |
+| [171](decisions/ADR-171-reconcile-before-retry-and-never-invent-idempotency.md) | reconcile before retry, and never invent an idempotency the target does not offer | accepted · 2026-11-03 |
+| [172](decisions/ADR-172-a-pass-is-a-stable-read-back-that-names-its-target.md) | a pass is a stable read-back naming target, incarnation and revision | accepted · 2026-11-03 |
+| [173](decisions/ADR-173-recovery-is-not-rollback-and-a-fallback-is-a-new-intent.md) | recovery is not rollback, and a fallback that changes the effect is a new intent | accepted · 2026-11-03 |
+| [174](decisions/ADR-174-a-lease-is-worth-what-can-enforce-it.md) | a lease is worth exactly what can enforce it, and fencing is checked before every effect | accepted · 2026-11-03 |
+| [175](decisions/ADR-175-readiness-needs-current-evidence-and-a-cycle-is-not-waiting.md) | readiness needs current evidence, a cycle is not waiting, and the graph proposes rather than spawns | accepted · 2026-11-03 |

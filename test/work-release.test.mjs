@@ -43,6 +43,9 @@ test('the unsupported paths are stated, not left to be discovered', () => {
 
 test('the playbooks read as instructions a consumer can follow', () => {
   assert.doesNotMatch(playbooks, /simt-dev\//, 'a playbook points at this repository by path');
+  // A path argument is the sharpest version of this: `simt why src/knowledge/debt.mjs` resolves in
+  // this checkout and nowhere the playbook is read. The example names the reader's own file.
+  assert.doesNotMatch(playbooks, /\b(?:src|rules|docs\/decisions)\//, 'a playbook passes a path that exists only in this repository');
   assert.doesNotMatch(playbooks, /npx |yarn |pnpm /, 'a playbook names a package runner');
   assert.match(playbooks, /simt gate --changed/);
 });

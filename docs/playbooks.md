@@ -24,7 +24,7 @@ A change that touches retrieved knowledge and the code that reads it.
 
 ```sh
 simt brief "add the effective-date rule"
-simt why src/knowledge/debt.mjs
+simt why <path/to/a/file/you/changed>
 simt gate --changed
 simt evidence
 ```

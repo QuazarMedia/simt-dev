@@ -108,12 +108,12 @@ export const SPEC = [
   { path: 'skills install', usage: '<name> --yes', summary: 'install skills into the workspace', writes: 'repo', flags: ["yes","diff","from","variant","dry-run"], },
   { path: 'skills show', usage: '<name>', mcp: { name: 'skills_show', flags: [] }, summary: 'one skill packet', flags: ["all","plan"], },
   { path: 'skills why', usage: '<name>', mcp: { name: 'skills_why', flags: [] }, summary: 'which skill covers a task', flags: ["all","plan","task"], },
-  { path: 'slice abandon', usage: '<id>', summary: 'remove a slice worktree, delete its branch, and return the row', aliases: ['plan abandon'], flags: ["session","test","type"], },
+  { path: 'slice abandon', usage: '<id> --yes', summary: 'remove a slice worktree, delete its branch, and return the row', aliases: ['plan abandon'], flags: ["yes","session","test","type"], },
   { path: 'slice finish', usage: '<id> --yes', summary: 'run the gates, commit the slice and record its evidence', writes: 'repo', aliases: ['plan finish'], flags: ["yes","session","test","type"], },
   // Both halves write, so a bare `slice` has no read to default to.
   // `start` is the default because with the id it is missing it fails with a usage error
   // before anything is created - the one default here that cannot mutate.
-  { path: 'slice start', usage: '<id> --yes  |  -- "<text>"', summary: 'give a slice its worktree, branch and brief; -- starts one from a prompt, no row', defaultFor: 'slice', aliases: ['plan start'], flags: ["id","session","test","type"], },
+  { path: 'slice start', usage: '<id> --yes  |  -- "<text>"', summary: 'give a slice its worktree, branch and brief; -- starts one from a prompt, no row', defaultFor: 'slice', aliases: ['plan start'], flags: ["yes","id","session","test","type"], },
   { path: 'status', usage: '[--line]', summary: 'the repository snapshot, or one line of the last check', flags: ["line"], },
   // `--check` is the spelling bare `sync` replaced: the command already reports before it
   // writes, so the flag asked a question the default answer answers. It keeps working and

@@ -6,6 +6,23 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-03
+
+Plan 0004's work layer ships as library modules. None of them is wired to a command yet: this
+release adds in-process surface that the suite exercises, and it claims no new CLI behaviour for
+it. Every module is reachable from `src/`, states its ruling in a comment, and opens no socket.
+
+### Added
+
+- Remote-action contracts under `src/actions/`: a target identified by namespace and incarnation (ADR-167), a semantic delta that never guesses a masked field (ADR-168), authorization held against the intent rather than its rendering (ADR-169), a journal written before dispatch with cancellation left unknown (ADR-170), reconcile-before-retry with no invented idempotency (ADR-171), a pass as a stable read-back that names its target (ADR-172), and recovery that is not rollback with a fallback as a new intent (ADR-173).
+- Coordination primitives under `src/coordination/`: a lease worth what can enforce it (ADR-174), readiness that needs current evidence and does not count a cycle as waiting (ADR-175), and a capsule rebuilt from ids and revalidated before reuse (ADR-176).
+- The work-harness layer: a tool call named by effect rather than by harness (ADR-177), retrieved material treated as evidence with only policy changing policy (ADR-178), review bundles planned, applied or verified with promotion as a new intent (ADR-179), authority as a property of establishment rather than repetition (ADR-180), and graduation after three runs on semantic equivalence rather than transport parity (ADR-181).
+- The assurance layer: a metamorphic relation declared by the contract and never invented (ADR-182), a bar declared after the numbers not counting as a bar (ADR-183), knowledge debt as a sum of named components with no invented probability (ADR-184), and adapters as data where installed is distinct from enabled (ADR-185).
+- Synthetic pilots for the knowledge-repository and remote-operation cases, each over the real modules with its live half left unrun (ADR-186, ADR-188).
+- `docs/playbooks.md`: five consumer paths whose every documented command is checked against the dispatch table (ADR-189).
+- One canonical JSON encoder, shared by the evidence ledger and the action contracts, so two equal values have one digest (`src/util/canonical.mjs`).
+- Rollout boundaries for the above: the v1 closure envelope and legacy ledger lines keep their meaning byte for byte, and new behaviour is opt-in (ADR-187).
+
 ### Changed
 
 - The pre-push test skip is now "non-code" (ADR-147): a built-in image-and-document extension set applies when the manifest declares no `extensions` (a declared set replaces it, never unions with it), and this repo's ceiling rises to 5 commits over `docs/`, `res/`, `package.json` and `simt.json`.

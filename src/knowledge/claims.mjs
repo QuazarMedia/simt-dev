@@ -255,7 +255,14 @@ export function buildClaimGraph({ artifacts = [], claims = [], edges = [] } = {}
     if (!nodes.has(id)) nodes.set(id, { id, kind, ...extra });
   };
 
-  for (const artifact of Array.isArray(artifacts) ? artifacts : []) add(artifact?.id, artifact?.kind, artifact?.path === undefined ? {} : { path: artifact.path });
+  for (const artifact of Array.isArray(artifacts) ? artifacts : []) {
+    // Scope travels with the node: a report that has to place an artifact cannot ask the
+    // caller to re-declare the population the graph was built from.
+    const extra = {};
+    if (artifact?.path !== undefined) extra.path = artifact.path;
+    if (artifact?.scope !== undefined) extra.scope = artifact.scope;
+    add(artifact?.id, artifact?.kind, extra);
+  }
   for (const claim of Array.isArray(claims) ? claims : []) add(claim?.id, 'claim', { claim });
 
   const accepted = [];

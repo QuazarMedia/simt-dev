@@ -30,6 +30,31 @@ const isText = (value) => typeof value === 'string' && value.length > 0;
 const isDay = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 
 /**
+ * Whether a declared scope satisfies the scope a question requires.
+ *
+ * A dimension the question names and the declaration leaves open is `unknown`, not a match:
+ * the declaration might be about the same population, and guessing either way is the failure
+ * this predicate exists to prevent. One predicate serves ranking (W19) and impact (W22), so
+ * the two cannot disagree about what "applies" means.
+ *
+ * @param {object|null|undefined} declared
+ * @param {[string, string][]} required
+ * @returns {'match'|'conflict'|'unknown'}
+ */
+export function satisfiesScope(declared, required = []) {
+  const scope = isObject(declared) ? declared : {};
+  let unknown = false;
+  for (const [key, value] of required) {
+    if (!isText(scope[key])) {
+      unknown = true;
+      continue;
+    }
+    if (scope[key] !== value) return 'conflict';
+  }
+  return unknown ? 'unknown' : 'match';
+}
+
+/**
  * One claim's validity, validated.
  *
  * `validFrom` is required: an open start is not "always was true", it is a claim whose

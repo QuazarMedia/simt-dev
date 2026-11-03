@@ -19,6 +19,8 @@
 // discusses the question - but it carries the `obsolete` or `boilerplate-hub` label and a
 // penalty, so it cannot quietly outrank the source that applies.
 
+import { satisfiesScope } from './validity.mjs';
+
 export const RANK_SCHEMA_VERSION = 1;
 
 /** The weights a total is made of. Exported so a report can name them. */
@@ -73,19 +75,6 @@ export function scoreFrom(components) {
     components.evidence * RANK_WEIGHTS.evidence -
     components.penalty
   );
-}
-
-function scopeRelation(unitScope, required) {
-  const scope = unitScope !== null && typeof unitScope === 'object' ? unitScope : {};
-  let unknown = false;
-  for (const [key, value] of required) {
-    if (!isText(scope[key])) {
-      unknown = true;
-      continue;
-    }
-    if (scope[key] !== value) return 'conflict';
-  }
-  return unknown ? 'unknown' : 'match';
 }
 
 function labelsOf(unit, hubPenalty) {
@@ -163,7 +152,7 @@ export function rank(units = [], { query = '', scope = {}, permissions = null, l
       excluded.push({ id: unit.id ?? null, reason: 'permission' });
       continue;
     }
-    const relation = scopeRelation(unit.scope, required);
+    const relation = satisfiesScope(unit.scope, required);
     if (relation === 'conflict') {
       excluded.push({ id: unit.id ?? null, reason: 'scope-mismatch' });
       continue;

@@ -128,7 +128,8 @@ function evidenceValidateFacts(doc) {
   };
 }
 
-const DOORS = {
+export const DOCUMENT_DOORS = {
+
   'action review': actionReviewFacts,
   'adapter check': adapterCheckFacts,
   'verify contracts': verifyContractsFacts,
@@ -148,7 +149,7 @@ const DOORS = {
  * @param {object} flags
  */
 export async function wireCommand(path, args, flags) {
-  const facts = DOORS[path];
+  const facts = DOCUMENT_DOORS[path];
   if (facts === undefined) return fail(`unknown door ${path}`, EXIT.USAGE, `run: ${CLI} help --all`);
   const usage = `run: ${CLI} ${path} --input <file>`;
   if (args.length > 0) return fail(`unknown ${path} argument ${args[0]}`, EXIT.USAGE, usage);

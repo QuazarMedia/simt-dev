@@ -865,6 +865,15 @@ test('mcp: every tool answers, and every answer matches the schema it declared',
     action_status: { document: { journal: [] } },
     knowledge_export: { document: { facts: [] } },
     knowledge_import: { document: { schema: 'simt.bundle/1', version: 1, facts: [] } },
+    action_review: { document: { contract: { commit: 'abc123' }, target: { incarnation: 'inc-1', class: 'document' }, before: { 'doc:1': 'sha256-before' }, authorization: { digest: 'sha256-auth' }, postconditions: [{ id: 'p1' }] } },
+    adapter_check: { document: { text: '{"name":"a"}' } },
+    verify_contracts: { document: { contract: { obligations: [] }, observations: [] } },
+    verify_documents: { document: { output: {}, contract: {} } },
+    verify_procedures: { document: { records: [{ id: 'a', calls: ['b'] }] } },
+    lessons_discover: { document: { candidates: [{ id: '1', proposition: 'a repeated claim', kind: 'discovery', verified: false }] } },
+    work_packet: { document: { units: [{ id: 'u1', text: 'the rule', obligations: ['o1'] }] } },
+    index_overlay: { document: { node: { key: 'k', kind: 'claim', source: 'docs/a.md', provenance: 'staged', trust: 'observed', revision: 'staged:abc' } } },
+    evidence_validate: { document: { records: [] } },
   };
 
   for (const tool of TOOLS) {

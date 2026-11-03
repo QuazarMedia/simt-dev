@@ -74,7 +74,7 @@ export const SPEC = [
   { path: 'hooks status', summary: 'what each git event routes to; --agent reports each harness instead', defaultFor: 'hooks', flags: ["agent","diff","dry-run"], },
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff","yes"], writes: 'repo' },
   { path: 'impact', usage: '<file|symbol>', summary: 'who a change reaches: importers, their tests and the contract', flags: [], },
-  { path: 'index', usage: '[--open] [--embed]', summary: 'rebuild the local file index from git blobs, or report what it holds', flags: ["allow-remote","embed","open"], },
+  { path: 'index', usage: '[--open] [--search <task>] [--embed]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","search"], },
   { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, hooks, agents and agent-hooks', writes: 'repo', flags: ["yes","accept-conflicts","backup","baselines","diff","harness","agents","surfaces"], },
   { path: 'knowledge why', usage: '<claim-id> --claims <file> [--limit <n>] [--page <n>]', mcp: { name: 'knowledge_why', flags: [] }, summary: 'what a claim derives from, what depends on it, what applied at a date, and where it conflicts', defaultFor: 'knowledge', flags: ["as-of","claims","known-at","limit","page"], },
   { path: 'knowledge export', usage: '--input <file>', mcp: { name: 'knowledge_export', flags: [] }, summary: 'a bounded, permission-filtered packet another repository can read offline', flags: ["input"], },

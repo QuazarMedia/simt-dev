@@ -162,3 +162,23 @@ test('W18: `index --open` answers what the cache holds without rebuilding it', (
   assert.equal(payload.counts.files, 1);
   assert.equal(typeof payload.stale, 'boolean');
 });
+
+test('W18: `index --search` and `--rank` answer from the open cache', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'simt-query-'));
+  execFileSync('git', ['init', '-q'], { cwd: dir });
+  writeFileSync(join(dir, 'alpha.mjs'), 'export const alphaBeta = 1;\n');
+  execFileSync('git', ['add', 'alpha.mjs'], { cwd: dir });
+
+  const built = spawnSync(process.execPath, [BIN, 'index'], { cwd: dir, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+  assert.equal(built.status, 0, built.stderr);
+
+  const searched = spawnSync(process.execPath, [BIN, 'index', '--search', 'alphaBeta', '--json'], { cwd: dir, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+  const found = JSON.parse(searched.stdout);
+  assert.equal(found.asked, 'search');
+  assert.ok(found.rows.some((row) => row.path === 'alpha.mjs'));
+
+  const ranked = spawnSync(process.execPath, [BIN, 'index', '--rank', 'alphaBeta', '--json'], { cwd: dir, encoding: 'utf8', env: { ...process.env, NO_COLOR: '1' } });
+  const order = JSON.parse(ranked.stdout);
+  assert.equal(order.asked, 'rank');
+  assert.ok(order.rows.some((row) => row.path === 'alpha.mjs' && typeof row.rank === 'number'));
+});

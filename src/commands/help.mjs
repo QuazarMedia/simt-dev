@@ -354,6 +354,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --as-of <YYYY-MM-DD>    knowledge why: the date the question is about
 --known-at <YYYY-MM-DD>  knowledge why: what was known when (both dates, or neither)
 --open                  index: read what the cache holds instead of rebuilding it
+--search <task>         index: BM25 rows for a task, from the open cache
+--rank <task>           index: files ranked for a task, from the open cache
 --query <text>          knowledge rank: the question the units are ranked against
 --refs <ids>            knowledge impact: the changed claim or artifact ids, comma separated
 --weights <k=n,...>     knowledge debt: the scoring weights, e.g. obligations=3,effort=1

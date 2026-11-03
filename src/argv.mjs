@@ -160,6 +160,9 @@ export const VALUE_FLAGS = new Set([
   'input',
   // knowledge why: the two bounds a paginated door owes its reader.
   // knowledge rank|debt|impact: the question, the scoring weights, the changed ids.
+  // index: the task string the open cache answers for.
+  'search',
+  'rank',
   'query',
   'refs',
   'weights',

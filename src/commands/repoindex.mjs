@@ -12,6 +12,36 @@ import { git } from '../sys/git.mjs';
 export async function indexCommand(args, flags) {
   if (args.length > 0) return fail(`unknown index argument ${args[0]}`, EXIT.USAGE, `run: ${CLI} index`);
   const root = commandRoot(flags);
+  // The cache's own query surface. `search` and `rank` were reachable only by importing the
+  // handle, so the only way to ask the index a question was to rebuild it and read the files.
+  const wantsSearch = typeof flags.search === 'string' && flags.search !== '';
+  const wantsRank = typeof flags.rank === 'string' && flags.rank !== '';
+  if (wantsSearch || wantsRank) {
+    if (wantsSearch && wantsRank) {
+      return fail('index takes one of --search or --rank', EXIT.USAGE, `run: ${CLI} index --search "<task>"`);
+    }
+    const task = wantsSearch ? flags.search : flags.rank;
+    const limit = flags.limit === undefined ? undefined : Number(flags.limit);
+    const opened = await openIndex(root, { build: false });
+    if (opened.ok !== true) {
+      return fail(`could not open the index (${opened.error.message})`, EXIT.FAIL, `run: ${CLI} index`);
+    }
+    try {
+      const answer = wantsSearch ? await opened.search(task, { limit }) : await opened.rank(task, { limit });
+      if (answer.ok !== true) return fail(answer.error.message, EXIT.FAIL, `run: ${CLI} index`);
+      const rows = Array.isArray(answer.data) ? answer.data : [];
+      const payload = { ok: true, command: 'index', root, asked: wantsSearch ? 'search' : 'rank', task, rows };
+      if (isJson(flags)) {
+        emitJson(payload);
+        return EXIT.OK;
+      }
+      const lines = rows.map((row) => `${String(row.score ?? 0).padStart(8)}  ${row.path}${row.kind === undefined ? '' : `  ${row.kind}`}`);
+      emit(lines.length === 0 ? '(no rows)' : lines.join('\n'));
+      return EXIT.OK;
+    } finally {
+      if (typeof opened.close === 'function') opened.close();
+    }
+  }
   // `--open` asks what the index already holds instead of rebuilding it. The cache is a
   // question-answering structure, and before this the only way to ask it was to pay for a
   // rebuild: an empty answer and a stale answer looked the same from outside.

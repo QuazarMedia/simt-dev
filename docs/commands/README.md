@@ -150,7 +150,7 @@ simt init [path]                                                          # adop
 # knowledge
 simt knowledge export --input <file>                                      # a bounded, permission-filtered packet another repository can read offline
 simt knowledge import --input <file>                                      # validate an exported packet as data, and never execute it
-simt knowledge why <claim-id> --claims <file> [--limit <n>] [--page <n>]  # what a claim derives from, what depends on it, and where it conflicts
+simt knowledge why <claim-id> --claims <file> [--limit <n>] [--page <n>]  # what a claim derives from, what depends on it, what applied at a date, and where it conflicts
 
 # lease
 simt lease [<paths>] --session                                            # claim files for one session, or list the claims

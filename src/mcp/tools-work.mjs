@@ -9,7 +9,7 @@
 // client has the bytes and a path in an editor's process is the editor's, not the repository's.
 
 import { workInspectFacts } from '../commands/work.mjs';
-import { knowledgeWhyFacts } from '../commands/knowledge.mjs';
+import { knowledgeExportFacts, knowledgeImportFacts, knowledgeWhyFacts } from '../commands/knowledge.mjs';
 import { verifyPlanFacts, verifyStatusFacts } from '../commands/verify.mjs';
 import { actionStatusFacts } from '../commands/action.mjs';
 import { output, rootArg, rootOf } from './schemas.mjs';
@@ -80,6 +80,26 @@ export const TOOLS_WORK = [
       const facts = actionStatusFacts(args.document);
       if (facts.error !== undefined) refuse(facts.error, 'pass {"journal": [...]} or a bare journal array');
       return { ok: true, doc: facts };
+    },
+  },
+  {
+    outputSchema: output.work_doc,
+    name: 'knowledge_export',
+    description: 'A bounded, permission-filtered packet another repository can read offline; restricted facts are dropped before the page is cut.',
+    inputSchema: { type: 'object', properties: { document: DOCUMENT }, required: ['document'] },
+    async run(args) {
+      const facts = knowledgeExportFacts(args.document);
+      if (facts.error !== undefined) refuse(facts.error, 'the document limit and page must be within the bounds the export names');
+      return { ok: true, doc: facts };
+    },
+  },
+  {
+    outputSchema: output.work_doc,
+    name: 'knowledge_import',
+    description: 'Validate an exported packet as data: schema, version, expiry and revision digests. It executes nothing and treats every fact as text.',
+    inputSchema: { type: 'object', properties: { document: DOCUMENT }, required: ['document'] },
+    async run(args) {
+      return { ok: true, doc: knowledgeImportFacts(args.document) };
     },
   },
 ];

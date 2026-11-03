@@ -862,6 +862,8 @@ test('mcp: every tool answers, and every answer matches the schema it declared',
     verify_plan: { document: { obligations: [], capabilities: [] } },
     verify_status: { document: { obligations: [{ id: 'o1', state: 'pass' }], evidence: [] } },
     action_status: { document: { journal: [] } },
+    knowledge_export: { document: { facts: [] } },
+    knowledge_import: { document: { schema: 'simt.bundle/1', version: 1, facts: [] } },
   };
 
   for (const tool of TOOLS) {

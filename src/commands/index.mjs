@@ -68,7 +68,18 @@ export const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version'
  */
 export const IMPLEMENTED = {
   'action status': async () => (await import('./action.mjs')).actionStatusCommand,
-  'knowledge why': async () => (await import('./knowledge.mjs')).knowledgeWhyCommand,
+  'knowledge why': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('why', args, flags);
+  },
+  'knowledge export': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('export', args, flags);
+  },
+  'knowledge import': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('import', args, flags);
+  },
   'work inspect': async () => (await import('./work.mjs')).workInspectCommand,
   // One group, two questions about one document: `plan` names the next observation and
   // `status` reports closure over what was recorded. Neither writes.

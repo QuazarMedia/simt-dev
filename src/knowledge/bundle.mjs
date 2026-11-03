@@ -69,7 +69,7 @@ export function checkDoors({ cli = [], mcp = [], doors = READ_ONLY_DOORS } = {})
 }
 
 const allows = (fact, held) => {
-  if (!isText(fact.permission)) return true;
+  if (!isText(fact.permission) || fact.permission === 'public') return true;
   return Array.isArray(held) && held.includes(fact.permission);
 };
 

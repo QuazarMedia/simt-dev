@@ -18,6 +18,9 @@ ${CLI} work inspect           what this repo's work is: artifacts, activities,
 ${CLI} knowledge why <id>     what a claim derives from, what depends on it,
                            and where another claim contradicts it
                            (reads --claims <file>)
+${CLI} knowledge export --input  a bounded, permission-filtered packet for
+                           another repository to read offline
+${CLI} knowledge import --input  validate such a packet as data; it executes nothing
 ${CLI} verify plan --input    the next observation worth making, from the
                            obligations still unmet
 ${CLI} verify status --input  closure over recorded obligations, and what is
@@ -318,6 +321,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --variant <id>          which body of a multi-variant skill to use
 --from <repo/path>      install from a declared source by name
 --list                  print the MCP tool surface without reading stdin (mcp)
+--limit <n>             knowledge why: how many nodes one page carries (1..100)
+--page <n>              knowledge why: which page of those nodes to read
 --claims <file>         knowledge why: the document of {claims, edges, artifacts}
 --input <file>          verify plan/status: the document of obligations and
                         evidence ("-" reads stdin)

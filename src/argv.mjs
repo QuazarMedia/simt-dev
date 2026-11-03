@@ -156,6 +156,9 @@ export const VALUE_FLAGS = new Set([
   // The plan-4 doors: the document each one interrogates, named rather than guessed.
   'claims',
   'input',
+  // knowledge why: the two bounds a paginated door owes its reader.
+  'limit',
+  'page',
   'journal',
   'skill',
   'task',

@@ -187,3 +187,69 @@ test('each door answers over MCP with the same facts the command reports', async
   assert.equal(explained.doc.command, 'knowledge why');
   assert.deepEqual(explained.doc.lineage.reachable.filter((id) => id !== 'c3'), ['c1']);
 });
+
+test('a paged door says how much it cut, and the next page continues from there', () => {
+  const dir = repo();
+  const claims = write(dir, 'claims.json', CLAIMS);
+  const first = json(dir, ['knowledge', 'why', 'c1', '--claims', claims, '--limit', '1']);
+  // c1 is depended on by c3, so the impact walk has two nodes and a page of one cuts it.
+  assert.equal(first.page.size, 1);
+  assert.equal(first.impact.total, 2);
+  assert.deepEqual(first.impact.reachable, ['c1']);
+  assert.equal(first.impact.truncated, true);
+
+  const second = json(dir, ['knowledge', 'why', 'c1', '--claims', claims, '--limit', '1', '--page', '1']);
+  assert.deepEqual(second.impact.reachable, ['c3']);
+  assert.equal(second.impact.truncated, false);
+});
+
+test('export filters by permission before the page, and import accepts it as data only', () => {
+  const dir = repo();
+  const doc = write(dir, 'facts.json', {
+    repository: 'producer',
+    permissionsHeld: ['public'],
+    limit: 5,
+    facts: [
+      { id: 'a', text: 'public one', revision: { ref: 'r1', digest: 'sha256-a' } },
+      { id: 'b', text: 'internal one', permission: 'internal', revision: { ref: 'r1', digest: 'sha256-b' } },
+      { id: 'c', text: 'public two', revision: { ref: 'r1', digest: 'sha256-c' } },
+    ],
+  });
+  const exported = json(dir, ['knowledge', 'export', '--input', doc]);
+  assert.deepEqual(exported.bundle.facts.map((fact) => fact.id), ['a', 'c']);
+  assert.equal(exported.bundle.omitted.restricted, 1);
+
+  const bundle = write(dir, 'bundle.json', exported.bundle);
+  const imported = json(dir, ['knowledge', 'import', '--input', bundle]);
+  assert.equal(imported.ok, true);
+  assert.deepEqual(imported.facts.map((fact) => fact.id), ['a', 'c']);
+  assert.equal(imported.executed, false);
+  assert.deepEqual(imported.effects, []);
+});
+
+test('an expired packet is refused, and the refusal names the expiry', () => {
+  const dir = repo();
+  const packet = {
+    schema: 'simt.bundle/1',
+    version: 1,
+    producer: { repository: 'r', digest: 'sha256-p' },
+    expiresAt: '2026-01-01',
+    facts: [{ id: 'a', text: 'one', revision: { ref: 'r1', digest: 'sha256-a' } }],
+  };
+  const wrapped = write(dir, 'wrapped.json', { bundle: packet, at: '2026-06-01' });
+  assert.throws(() => run(dir, ['knowledge', 'import', '--input', wrapped]), (error) => {
+    assert.match(String(error.stdout), /expired|2026-01-01/);
+    return true;
+  });
+});
+
+test('the doors the knowledge module declares exist on both surfaces, and neither writes', async () => {
+  const { SPEC } = await import('../src/commands/spec.mjs');
+  const { TOOLS } = await import('../src/mcp/tools.mjs');
+  const { checkDoors, READ_ONLY_DOORS } = await import('../src/knowledge/bundle.mjs');
+  // The structural check W23's acceptance names, run against the real registry rather than a
+  // fixture: the fixture version passed while none of the four doors existed.
+  const cli = SPEC.map((row) => ({ name: row.path, writes: row.writes !== undefined }));
+  const mcp = TOOLS.map((tool) => ({ name: tool.name, writes: false }));
+  assert.deepEqual(checkDoors({ cli, mcp }), { ok: true, errors: [], doors: READ_ONLY_DOORS.map((door) => door.name) });
+});

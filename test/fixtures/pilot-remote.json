@@ -1,0 +1,34 @@
+{
+  "intentDigest": "sha256-pilot-intent",
+  "target": {
+    "name": "pilot",
+    "hostname": "pilot.example.test",
+    "namespace": "pilot/rates",
+    "incarnation": "inc-1",
+    "platform": { "name": "mock-vendor", "revision": "2026.1" },
+    "actor": { "id": "pilot", "role": "editor" },
+    "capabilities": ["read-object"],
+    "session": { "state": "valid", "expiresAt": "2026-11-04T00:00:00Z" }
+  },
+  "targets": [
+    { "name": "rates-staging", "alias": "pilot", "namespace": "pilot/rates", "incarnation": "inc-1" },
+    { "name": "rates-legacy", "alias": "pilot", "namespace": "pilot/legacy", "incarnation": "inc-7" }
+  ],
+  "protocols": [
+    { "name": "ui", "capabilities": ["set-name"], "reliability": 0.99 },
+    { "name": "rest", "capabilities": ["set-name"], "reliability": 0.9 }
+  ],
+  "effects": [{ "scope": "remote", "operation": "write-object" }],
+  "fallbackEffects": [
+    { "scope": "remote", "operation": "write-object" },
+    { "scope": "remote", "operation": "delete-object" }
+  ],
+  "scenarios": [
+    "response-loss",
+    "target-reset",
+    "ambiguous-identity",
+    "feature-disabled",
+    "ui-only-operation",
+    "required-field-unavailable"
+  ]
+}

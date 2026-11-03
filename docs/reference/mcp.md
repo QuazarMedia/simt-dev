@@ -1,5 +1,7 @@
 # MCP surface
 
+Rendered from the command spec by `simt docs commands --yes`; do not edit by hand.
+
 `simt mcp` serves JSON-RPC over stdio. The surface is read-only: a tool answers from the same
 functions the commands call, and a flag absent from a tool's allowlist is not reachable
 through it. `simt mcp --list` prints the surface without reading stdin.
@@ -45,4 +47,4 @@ Neither writes.
 
 The tool list is declared on the command spec (`mcp: { name, flags }` on a row), so a tool and
 its command cannot disagree about which flags exist. `test/mcp*.test.mjs` holds the list
-against the spec, and `test/docs.test.mjs` holds this page against the list.
+against the spec, and the docs test holds this page against both.

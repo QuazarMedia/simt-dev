@@ -600,9 +600,9 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W27 | Incremental verification | 4 | W24, W25, W26, W22 | M | E8 | source selection kept; no false green | Complete | 747291f |
 | W28 | Ledger v2 | 4 | W24, W15 | L | E9 | target/dependency revisions bound | Complete | 2125802 |
 | W29 | Closure reports | 4 | W27, W28 | M | E9 | truthful partial/unavailable completion | Complete | 5d91560 |
-| W30 | Target snapshots | 5 | W10, W28, W05 | M | E10 | wrong/reset identity cannot mutate | Queued | |
-| W31 | Semantic object deltas | 5 | W30, W08, W18 | M | E10 | typed diff and frame conditions exact | Queued | |
-| W32 | Intent/authorization binding | 5 | W31, W24 | M | E11 | authorization scoped to real intent | Queued | |
+| W30 | Target snapshots | 5 | W10, W28, W05 | M | E10 | wrong/reset identity cannot mutate | Complete | 096c610 |
+| W31 | Semantic object deltas | 5 | W30, W08, W18 | M | E10 | typed diff and frame conditions exact | Complete | 9e5f031 |
+| W32 | Intent/authorization binding | 5 | W31, W24 | M | E11 | authorization scoped to real intent | Complete | 0936e23 |
 | W33 | Executor state machine | 5 | W32, W03 | L | E11 | crash-safe journal; no implicit execution | Queued | |
 | W34 | Preconditions/retries | 5 | W33 | L | E11 | one create after lost response | Queued | |
 | W35 | Independent verification | 5 | W34, W29 | M | E10 | postconditions/frame/convergence checked | Queued | |

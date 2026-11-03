@@ -157,6 +157,9 @@ export const VALUE_FLAGS = new Set([
   'claims',
   'input',
   // knowledge why: the two bounds a paginated door owes its reader.
+  // knowledge why: the two dates a bitemporal query needs, both required together.
+  'as-of',
+  'known-at',
   'limit',
   'page',
   'journal',

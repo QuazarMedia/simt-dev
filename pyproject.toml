@@ -121,6 +121,7 @@ pattern = '"version":\s*"(?P<version>[^"]+)"'
 "python/simt_dev" = "simt_dev"
 "bin" = "simt_dev/vendored/bin"
 "src" = "simt_dev/vendored/src"
+"packages/bench/src" = "simt_dev/vendored/packages/bench/src"
 "rules" = "simt_dev/vendored/rules"
 "templates" = "simt_dev/vendored/templates"
 "agents" = "simt_dev/vendored/agents"
@@ -141,6 +142,7 @@ include = [
     "/python",
     "/bin",
     "/src",
+    "/packages/bench/src",
     "/rules",
     "/templates",
     "/agents",

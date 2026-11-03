@@ -26,6 +26,7 @@ import {
   withLeaseLock,
   writeLeases,
 } from '../lease.mjs';
+import { enforcementFor } from '../coordination/leases.mjs';
 import { coreIgnoreCase } from '../repo-root.mjs';
 import { noteEvent } from '../state/events.mjs';
 import { SESSION_ENV } from '../agenthooks/policy.mjs';
@@ -338,12 +339,23 @@ async function listLeases(root, flags) {
     return fail(`${read.error}`, EXIT.FAIL, `fix or remove ${read.path}`);
   }
   const held = activeLeases(read);
+  // W37: a claim is only as strong as what enforces it. A file claim is checked by the pre-edit
+  // hook on this host and by nothing else, and a target-side fence is what would make it
+  // exclusion rather than etiquette. Reporting the level and the residual race is the difference
+  // between a lock and a note that looks like one.
+  const verdict = enforcementFor({});
+  const enforcement = typeof verdict === 'string' ? verdict : verdict.mode;
+  // The level and the race come from the lease model itself: a second copy of this sentence here
+  // would be the drift that put two lease implementations in this repository already.
+  const residualRace = typeof verdict === 'string' ? null : verdict.residualRace ?? null;
   if (isJson(flags)) {
-    emitJson({ ok: true, command: 'lease', root, leases: held });
+    emitJson({ ok: true, command: 'lease', root, leases: held, enforcement, residualRace });
     return EXIT.OK;
   }
   const lines = [
     `repo     ${root}`,
+    `enforced ${enforcement}`,
+    ...(residualRace === null ? [] : [`race     ${residualRace}`]),
     ...held.map((l) => `LEASED   ${l.path}  ${l.session}${l.harness ? `/${l.harness}` : ''}  until ${ISO(l.expiresAt)}`),
   ];
   if (held.length === 0) lines.push(`(no active leases)`);

@@ -323,6 +323,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --variant <id>          which body of a multi-variant skill to use
 --from <repo/path>      install from a declared source by name
 --list                  print the MCP tool surface without reading stdin (mcp)
+--as-of <YYYY-MM-DD>    knowledge why: the date the question is about
+--known-at <YYYY-MM-DD>  knowledge why: what was known when (both dates, or neither)
 --limit <n>             knowledge why: how many nodes one page carries (1..100)
 --page <n>              knowledge why: which page of those nodes to read
 --claims <file>         knowledge why: the document of {claims, edges, artifacts}

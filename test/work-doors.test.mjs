@@ -309,3 +309,30 @@ test('a Git hook may not run a remote validator, and the refusal cites no absent
   assert.equal(allowed.run.ok, true);
   assert.equal(allowed.run.executesRemote, true);
 });
+
+test('knowledge why answers what applied at a date, not what is newest', () => {
+  const dir = repo();
+  const doc = write(dir, 'history.json', {
+    claims: [
+      { id: 'old', subject: 'vat', predicate: 'rate', type: 'number', value: 19, validFrom: '2024-01-01', validTo: '2025-01-01', recordedFrom: '2024-01-01' },
+      { id: 'new', subject: 'vat', predicate: 'rate', type: 'number', value: 20, validFrom: '2025-01-01', recordedFrom: '2025-01-01' },
+    ],
+  });
+  const then = json(dir, ['knowledge', 'why', 'old', '--claims', doc, '--as-of', '2024-06-01', '--known-at', '2025-06-01']);
+  assert.equal(then.at.result, 'applicable');
+  assert.deepEqual(then.at.claims.map((claim) => claim.id), ['old']);
+
+  const now = json(dir, ['knowledge', 'why', 'old', '--claims', doc, '--as-of', '2025-06-01', '--known-at', '2025-06-01']);
+  assert.deepEqual(now.at.claims.map((claim) => claim.id), ['new']);
+});
+
+test('a bitemporal question with one date is refused rather than answered', () => {
+  const dir = repo();
+  const doc = write(dir, 'history.json', {
+    claims: [{ id: 'a', subject: 'vat', predicate: 'rate', type: 'number', value: 19, validFrom: '2024-01-01', recordedFrom: '2024-01-01' }],
+  });
+  assert.throws(() => run(dir, ['knowledge', 'why', 'a', '--claims', doc, '--as-of', '2024-06-01']), (error) => {
+    assert.match(String(error.stderr), /knownAt/);
+    return true;
+  });
+});

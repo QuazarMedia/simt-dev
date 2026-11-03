@@ -13,7 +13,7 @@ import { EXIT, fail, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { buildClaimGraph, impact, lineage, proposedEdges, readClaim } from '../knowledge/claims.mjs';
 import { findConflicts } from '../knowledge/conflicts.mjs';
-import { readApplicability } from '../knowledge/validity.mjs';
+import { applicableClaims, readApplicability } from '../knowledge/validity.mjs';
 import { MAX_PAGE, exportBundle, importBundle } from '../knowledge/bundle.mjs';
 import { readJsonDocument } from './doc-input.mjs';
 
@@ -27,7 +27,7 @@ const IMPORT_USAGE = `run: ${CLI} knowledge import --input <file>`;
  * @param {{limit?: number, page?: number}} [paging]
  * @returns {object}
  */
-export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0 } = {}) {
+export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0, asOf = null, knownAt = null } = {}) {
   const declared = Array.isArray(doc.claims) ? doc.claims : null;
   if (declared === null) return { error: 'the document needs a claims list' };
   const size = Number.isFinite(Number(limit)) ? Math.floor(Number(limit)) : MAX_PAGE;
@@ -58,6 +58,24 @@ export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0 } = {}) 
   const conflicts = findConflicts(claims);
   const validity = readApplicability(claim.applicability ?? claim);
 
+  // W14: "what applied at this date, knowing what was known then" is a different question from
+  // "what does the claim say", and it is the one latest-wins gets wrong. Asked only when both
+  // dates are given: an answer without a time is not a bitemporal one.
+  let at = null;
+  if ((typeof asOf === 'string' && asOf !== '') || (typeof knownAt === 'string' && knownAt !== '')) {
+    try {
+      at = applicableClaims(claims, {
+        subject: claim.subject,
+        predicate: claim.predicate,
+        asOf,
+        knownAt,
+        authority: Array.isArray(doc.authority) ? doc.authority : [],
+      });
+    } catch (error) {
+      return { error: error.message };
+    }
+  }
+
   const start = index * size;
   const pageOf = (list, walk) => {
     const slice = list.slice(start, start + size);
@@ -84,6 +102,7 @@ export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0 } = {}) 
     problems: [...(validity.problems ?? []), ...refused.map((entry) => `${entry.id ?? '(no id)'}: ${entry.reason}`)],
     proposedEdges: proposedEdges(graph).filter((edge) => edge.from === id || edge.to === id).length,
     certifies: conflicts.certifies,
+    at,
     page: { index, size, total: Math.max(upstream.reachable.length, downstream.reachable.length) },
   };
 }
@@ -135,7 +154,12 @@ export async function knowledgeCommand(sub, args, flags) {
     if (args.length > 1) return fail(`unknown knowledge why argument ${args[1]}`, EXIT.USAGE, WHY_USAGE);
     const read = await readJsonDocument(flags, 'claims');
     if (read.error !== undefined) return fail(read.error, EXIT.USAGE, WHY_USAGE);
-    const payload = knowledgeWhyFacts(read.doc, args[0], { limit: flags.limit, page: flags.page });
+    const payload = knowledgeWhyFacts(read.doc, args[0], {
+      limit: flags.limit,
+      page: flags.page,
+      asOf: flags.asOf,
+      knownAt: flags.knownAt,
+    });
     if (payload.error !== undefined) return fail(payload.error, EXIT.FAIL, 'a document of {claims, edges, artifacts}, with an id on every claim you name');
     present(payload, () => renderWhy(payload), flags);
     return EXIT.OK;
@@ -173,6 +197,11 @@ function renderWhy(payload) {
     lines.push(`valid      ${payload.applicability.validFrom} .. ${payload.applicability.validTo ?? 'open'}`);
   }
   for (const problem of payload.problems) lines.push(`problem    ${problem}`);
+  if (payload.at !== null) {
+    lines.push(`at         ${payload.at.result} at ${payload.at.asOf}, knowing what was known at ${payload.at.knownAt}`);
+    for (const winner of payload.at.claims) lines.push(`in force   ${winner.id} = ${JSON.stringify(winner.value)}`);
+    for (const reason of payload.at.reasons) lines.push(`because    ${reason}`);
+  }
   lines.push(`page       ${payload.page.index} of ${payload.page.size} (${payload.page.total} node(s))`);
   if (payload.lineage.truncated || payload.impact.truncated) lines.push('truncated  1');
   if (!payload.certifies) lines.push('certifies  no: this scan covers declared claims, not the documents behind them');

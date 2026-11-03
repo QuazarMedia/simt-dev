@@ -5,21 +5,21 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 
 | Group | Commands |
 | --- | --- |
-| [action](action.md) | 1 |
+| [action](action.md) | 2 |
 | [agent-hook](agent-hook.md) | 1 |
 | [agent-hooks](agent-hooks.md) | 3 |
 | [agents](agents.md) | 2 |
-| [bench](bench.md) | 10 |
+| [bench](bench.md) | 13 |
 | [brief](brief.md) | 1 |
 | [check](check.md) | 1 |
-| [work](work.md) | 5 |
+| [work](work.md) | 6 |
 | [workspace](workspace.md) | 4 |
 | [completions](completions.md) | 1 |
 | [decide](decide.md) | 2 |
 | [distill](distill.md) | 1 |
 | [docs](docs.md) | 1 |
 | [doctor](doctor.md) | 1 |
-| [evidence](evidence.md) | 2 |
+| [evidence](evidence.md) | 3 |
 | [explain](explain.md) | 1 |
 | [gate](gate.md) | 1 |
 | [graph](graph.md) | 1 |
@@ -27,11 +27,13 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [hooks](hooks.md) | 3 |
 | [ignore](ignore.md) | 1 |
 | [impact](impact.md) | 1 |
-| [index](index.md) | 1 |
+| [index](index.md) | 2 |
 | [init](init.md) | 1 |
 | [knowledge](knowledge.md) | 8 |
+| [adapter](adapter.md) | 1 |
+| [verify](verify.md) | 6 |
+| [lessons](lessons.md) | 4 |
 | [lease](lease.md) | 1 |
-| [lessons](lessons.md) | 3 |
 | [local](local.md) | 1 |
 | [map](map.md) | 1 |
 | [mcp](mcp.md) | 1 |
@@ -47,7 +49,6 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [sync](sync.md) | 1 |
 | [tests](tests.md) | 1 |
 | [tokens](tokens.md) | 1 |
-| [verify](verify.md) | 3 |
 | [undo](undo.md) | 1 |
 | [why](why.md) | 1 |
 
@@ -58,6 +59,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 
 ```sh
 # action
+simt action review --input <file>                                         # a reviewable bundle of contract, delta, target, authorization and postconditions
 simt action status --journal <file>                                       # where an operation stands from its journal, and what the state permits next
 
 # agent-hook
@@ -75,6 +77,8 @@ simt agents status                                                        # what
 # bench
 simt bench ablate --yes                                                   # measure one arm of the brief against its ablation
 simt bench calibrate --input <file>                                       # false-accept rate against expert labels, and the autonomy it does or does not justify
+simt bench compat --input <file>                                          # compare two baselines, or audit the predecessor document
+simt bench corpus --input <file>                                          # the stratified canary corpus, with gold, noop and wrong graded apart
 simt bench critic                                                         # score the review critic against the labelled bench set
 simt bench export --yes                                                   # write the sealed bench corpus as one signed document
 simt bench import                                                         # verify a sealed corpus and load it into the vault
@@ -83,6 +87,7 @@ simt bench probes --yes                                                   # run 
 simt bench replay --input <file>                                          # counterfactual replay: did an irrelevant change move the outcome?
 simt bench report [--compare a b]                                         # summarise the runs recorded in the vault
 simt bench run --yes                                                      # run agents against the mined tasks
+simt bench world --input <file>                                           # run the seeded world model and ask the oracle what the effects should be
 
 # brief
 simt brief "<task>"                                                       # the packet for a task: rules, skills and the files it names, within a budget
@@ -94,6 +99,7 @@ simt check                                                                # repo
 simt work graduate --input <file>                                         # whether repeated traces can be proposed as a procedure, and what still blocks it
 simt work handoff --input <file>                                          # build a resume capsule from ids and provenance, never from a transcript
 simt work inspect                                                         # what this repository's work consists of, and which validations are actually available
+simt work packet --input <file>                                           # the proof-bearing task packet, inside its byte budget or explicitly incomplete
 simt work resume --input <file>                                           # revalidate permission, target, dependencies, authorization and lease before reuse
 simt work schedule --input <file>                                         # which ready tasks can run together under capacity and resource constraints
 
@@ -122,6 +128,7 @@ simt doctor [--fix]                                                       # repo
 # evidence
 simt evidence                                                             # the runs recorded against the tree on disk
 simt evidence check <msg-file>                                            # a commit message claiming a run this tree does not have
+simt evidence validate --input <file>                                     # validate ledger evidence and the chain of custody behind it
 
 # explain
 simt explain <CODE>                                                       # what one check finding code means, and how to fix it
@@ -149,6 +156,7 @@ simt impact <file|symbol>                                                 # who 
 
 # index
 simt index [--embed]                                                      # rebuild the local file index from git blob hashes
+simt index overlay --input <file>                                         # a working-tree or staged node labelled by its provenance, never both
 
 # init
 simt init [path]                                                          # adopt this repository: manifest, region, hooks, agents and agent-hooks
@@ -163,13 +171,25 @@ simt knowledge rank --input <file> --query "<question>"                   # rank
 simt knowledge sections <file.md>                                         # the retrieval units a long document yields, with anchors and byte ranges
 simt knowledge why <claim-id> --claims <file> [--limit <n>] [--page <n>]  # what a claim derives from, what depends on it, what applied at a date, and where it conflicts
 
-# lease
-simt lease [<paths>] --session                                            # claim files for one session, or list the claims
+# adapter
+simt adapter check --input <file>                                         # validate adapter descriptors as data, and separate observe-only from execute
+
+# verify
+simt verify contracts --input <file>                                      # evaluate obligations against observations, with the result states kept apart
+simt verify documents --input <file>                                      # check a generated document against its template, sections and source scope
+simt verify plan --input <file>                                           # the next observation worth making, and the point at which there is not one
+simt verify procedures --input <file>                                     # check procedures for missing imports, calls and impossible prerequisites
+simt verify select --input <file>                                         # the narrowest checks that prove a change, and whether a Git hook may run them
+simt verify status --input <file>                                         # closure over recorded obligations, and what is unresolved
 
 # lessons
 simt lessons capture                                                      # scan the ledger and history for new lesson candidates
+simt lessons discover --input <file>                                      # deduplicate discovery candidates and report their authority
 simt lessons list                                                         # deterministic lesson candidates and the promoted lessons
 simt lessons review <id> --yes                                            # promote one lesson candidate into docs/lessons
+
+# lease
+simt lease [<paths>] --session                                            # claim files for one session, or list the claims
 
 # local
 simt local doctor [--allow-remote]                                        # the local model endpoints, and whether they answer
@@ -233,11 +253,6 @@ simt tests <path> [--cochange]  |  --run [--changed]                      # the 
 
 # tokens
 simt tokens [--repos] [--session]                                         # count tokens per instruction file and per skill
-
-# verify
-simt verify plan --input <file>                                           # the next observation worth making, and the point at which there is not one
-simt verify select --input <file>                                         # the narrowest checks that prove a change, and whether a Git hook may run them
-simt verify status --input <file>                                         # closure over recorded obligations, and what is unresolved
 
 # undo
 simt undo --yes                                                           # restore the last journaled set of writes, if untouched

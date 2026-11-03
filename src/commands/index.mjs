@@ -81,6 +81,45 @@ export const IMPLEMENTED = {
     return (args, flags) => knowledgeCommand('import', args, flags);
   },
   'work inspect': async () => (await import('./work.mjs')).workInspectCommand,
+  'action review': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('action review', args, flags);
+  },
+  'adapter check': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('adapter check', args, flags);
+  },
+  'verify contracts': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('verify contracts', args, flags);
+  },
+  'verify documents': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('verify documents', args, flags);
+  },
+  'verify procedures': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('verify procedures', args, flags);
+  },
+  'lessons discover': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('lessons discover', args, flags);
+  },
+  'work packet': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('work packet', args, flags);
+  },
+  'index overlay': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('index overlay', args, flags);
+  },
+  'evidence validate': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('evidence validate', args, flags);
+  },
+  'bench compat': async () => (await import('./bench.mjs')).benchCompatCommand,
+  'bench corpus': async () => (await import('./bench.mjs')).benchCorpusCommand,
+  'bench world': async () => (await import('./bench.mjs')).benchWorldCommand,
   'work schedule': async () => (await import('./work.mjs')).workScheduleCommand,
   'work handoff': async () => (await import('./work.mjs')).workHandoffCommand,
   'work resume': async () => (await import('./work.mjs')).workResumeCommand,

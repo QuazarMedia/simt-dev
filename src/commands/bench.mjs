@@ -43,6 +43,9 @@ export const benchAblateCommand = (args, flags) => run('benchAblateCommand', arg
 export const benchProbesCommand = (args, flags) => run('benchProbesCommand', args, flags);
 export const benchExportCommand = (args, flags) => run('benchExportCommand', args, flags);
 export const benchImportCommand = (args, flags) => run('benchImportCommand', args, flags);
+export const benchCompatCommand = (args, flags) => run('benchCompatCommand', args, flags);
+export const benchCorpusCommand = (args, flags) => run('benchCorpusCommand', args, flags);
+export const benchWorldCommand = (args, flags) => run('benchWorldCommand', args, flags);
 // W45 and W46 are evaluation logic rather than measurement of an agent, so they live in the
 // shipped sources and answer from a document: replaying a trace and calibrating a judge are
 // offline computations, and neither is a live acceptance run.

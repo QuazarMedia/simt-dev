@@ -45,6 +45,18 @@ ${CLI} work graduate --input  whether repeated traces can be proposed as a proce
 ${CLI} bench replay --input  counterfactual replay of a sanitized trace
 ${CLI} bench calibrate --input  a judge against expert labels, and the autonomy it
                            does or does not justify
+${CLI} action review --input  a reviewable bundle of contract, delta, target, authorization and postconditions
+${CLI} adapter check --input  validate adapter descriptors as data, and separate observe-only from execute
+${CLI} verify contracts --input  evaluate obligations against observations, with the result states kept apart
+${CLI} verify documents --input  check a generated document against its template, sections and source scope
+${CLI} verify procedures --input  check procedures for missing imports, calls and impossible prerequisites
+${CLI} lessons discover --input  deduplicate discovery candidates and report their authority
+${CLI} work packet --input  the proof-bearing task packet, inside its byte budget or explicitly incomplete
+${CLI} index overlay --input  a working-tree or staged node labelled by its provenance, never both
+${CLI} evidence validate --input  validate ledger evidence and the chain of custody behind it
+${CLI} bench compat --input  compare two baselines, or audit the predecessor document
+${CLI} bench corpus --input  the stratified canary corpus, with gold, noop and wrong graded apart
+${CLI} bench world --input  run the seeded world model and ask the oracle what the effects should be
 ${CLI} doctor [--fix]        classify a repo and check config health (with --fix:
                            apply the remedies flagged safe and list the rest;
                            dry-run unless --yes)

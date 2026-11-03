@@ -14,5 +14,8 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 | `simt bench run --yes` | `--all`, `--arm`, `--compare`, `--cross-group`, `--harness`, `--labels`, `--model`, `--regrade`, `--replace`, `--reps`, `--task`, `--yes` | run agents against the mined tasks |
 | `simt bench replay --input <file>` | `--input` | counterfactual replay: did an irrelevant change move the outcome? |
 | `simt bench calibrate --input <file>` | `--input` | false-accept rate against expert labels, and the autonomy it does or does not justify |
+| `simt bench compat --input <file>` | `--input` | compare two baselines, or audit the predecessor document |
+| `simt bench corpus --input <file>` | `--input` | the stratified canary corpus, with gold, noop and wrong graded apart |
+| `simt bench world --input <file>` | `--input` | run the seeded world model and ask the oracle what the effects should be |
 
 Writes to the repository: `simt bench export`, `simt bench mine`, `simt bench probes`, `simt bench run`. Each prints its plan and writes nothing without `--yes`.

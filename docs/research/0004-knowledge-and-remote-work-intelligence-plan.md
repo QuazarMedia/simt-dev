@@ -620,7 +620,7 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W47 | Knowledge debt/VOI | 7 | W43, W21, W04 | M | E13 | explainable ranking earns uplift | Complete | e5db6cf |
 | W48 | Adapter conformance | 8 | W41, W26, W36 | M | E14 | generic adapters; no runtime deps | Complete | 8c501c6 |
 | W49 | Knowledge pilot | 8 | W48, W25, W29, W47 | M | — | source/claim/generation scenarios pass | Queued | |
-| W50 | Remote-work pilot | 8 | W48, W42, W46 | L | — | crash/reset/fallback scenarios pass | Queued | |
+| W50 | Remote-work pilot | 8 | W48, W42, W46 | L | — | crash/reset/fallback scenarios pass | Complete | 6d8fc9f |
 | W51 | Compatibility rollout | 8 | W49, W50, W40, W04 | M | E14 | exact old contracts; code NI evidence | Queued | |
 | W52 | Playbooks/release | 8 | W51 | S | E14 | isolated consumer can act; claims measured | Queued | |
 

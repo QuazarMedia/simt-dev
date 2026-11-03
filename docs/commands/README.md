@@ -5,12 +5,14 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 
 | Group | Commands |
 | --- | --- |
+| [action](action.md) | 1 |
 | [agent-hook](agent-hook.md) | 1 |
 | [agent-hooks](agent-hooks.md) | 3 |
 | [agents](agents.md) | 2 |
 | [bench](bench.md) | 8 |
 | [brief](brief.md) | 1 |
 | [check](check.md) | 1 |
+| [work](work.md) | 1 |
 | [workspace](workspace.md) | 4 |
 | [completions](completions.md) | 1 |
 | [decide](decide.md) | 2 |
@@ -27,6 +29,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [impact](impact.md) | 1 |
 | [index](index.md) | 1 |
 | [init](init.md) | 1 |
+| [knowledge](knowledge.md) | 1 |
 | [lease](lease.md) | 1 |
 | [lessons](lessons.md) | 3 |
 | [local](local.md) | 1 |
@@ -44,6 +47,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [sync](sync.md) | 1 |
 | [tests](tests.md) | 1 |
 | [tokens](tokens.md) | 1 |
+| [verify](verify.md) | 2 |
 | [undo](undo.md) | 1 |
 | [why](why.md) | 1 |
 
@@ -53,6 +57,9 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 <!-- Rendered from the spec by `simt docs commands --yes`; do not edit by hand. -->
 
 ```sh
+# action
+simt action status --journal <file>                                      # where an operation stands from its journal, and what the state permits next
+
 # agent-hook
 simt agent-hook <event> --harness                                        # the harness entry point: decide one tool call, or deliver the prompt packet
 
@@ -80,6 +87,9 @@ simt brief "<task>"                                                      # the p
 
 # check
 simt check                                                               # report stale or missing generated regions and every check finding
+
+# work
+simt work inspect                                                        # what this repository's work consists of, and which validations are actually available
 
 # workspace
 simt workspace compare                                                   # the adoption and drift matrix across every sibling repository
@@ -136,6 +146,9 @@ simt index [--embed]                                                     # rebui
 
 # init
 simt init [path]                                                         # adopt this repository: manifest, region, hooks, agents and agent-hooks
+
+# knowledge
+simt knowledge why <claim-id> --claims <file>                            # what a claim derives from, what depends on it, and where it conflicts
 
 # lease
 simt lease [<paths>] --session                                           # claim files for one session, or list the claims
@@ -207,6 +220,10 @@ simt tests <path> [--cochange]  |  --run [--changed]                     # the t
 
 # tokens
 simt tokens [--repos] [--session]                                        # count tokens per instruction file and per skill
+
+# verify
+simt verify plan --input <file>                                          # the next observation worth making, and the point at which there is not one
+simt verify status --input <file>                                        # closure over recorded obligations, and what is unresolved
 
 # undo
 simt undo --yes                                                          # restore the last journaled set of writes, if untouched

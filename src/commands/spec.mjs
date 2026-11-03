@@ -27,6 +27,10 @@
 
 /** @type {SpecRow[]} */
 export const SPEC = [
+  // Plan 4's read-only doors (W20): the first two, plus `verify plan`/`verify status` and
+  // `work inspect` below, answer questions about a document the caller holds or about the
+  // tree, and each is exposed over MCP from the same fact function the command renders.
+  { path: 'action status', usage: '--journal <file>', mcp: { name: 'action_status', flags: [] }, summary: 'where an operation stands from its journal, and what the state permits next', flags: ["journal"], },
   { path: 'agent-hook', usage: '<event> --harness', summary: 'the harness entry point: decide one tool call, or deliver the prompt packet', aliases: ['harness hook'], flags: ["diff","harness"], },
   // The read of the same surface `install` writes: what a payload is judged to be, rather
   // than what was installed (ADR-190). It writes nothing, so it needs no --yes.
@@ -47,6 +51,7 @@ export const SPEC = [
   { path: 'bench run', usage: '--yes', summary: 'run agents against the mined tasks', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task","yes"], writes: 'repo' },
   { path: 'brief', usage: '"<task>"', mcp: { name: 'brief', flags: ['budget', 'paths', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","paths","task"], },
   { path: 'check', mcp: { name: 'check', flags: [] }, summary: 'report stale or missing generated regions and every check finding', flags: ["check","diff","dry-run","frozen","surfaces"], },
+  { path: 'work inspect', mcp: { name: 'work_inspect', flags: [] }, summary: "what this repository's work consists of, and which validations are actually available", flags: [], },
   { path: 'workspace compare', mcp: { name: 'compare', flags: [] }, summary: 'the adoption and drift matrix across every sibling repository', aliases: ['compare'], flags: ["learn","concurrency"], },
   { path: 'completions', usage: '<bash|zsh|fish>', summary: 'print a bash, zsh or fish completion script generated from this spec', flags: [], },
   { path: 'decide lint', summary: 'check every decision record for the structure a supersession needs', flags: ["check","diff"], },
@@ -71,6 +76,7 @@ export const SPEC = [
   { path: 'impact', usage: '<file|symbol>', summary: 'who a change reaches: importers, their tests and the contract', flags: [], },
   { path: 'index', usage: '[--embed]', summary: 'rebuild the local file index from git blob hashes', flags: ["allow-remote","embed"], },
   { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, hooks, agents and agent-hooks', writes: 'repo', flags: ["yes","accept-conflicts","backup","baselines","diff","harness","agents","surfaces"], },
+  { path: 'knowledge why', usage: '<claim-id> --claims <file>', mcp: { name: 'knowledge_why', flags: [] }, summary: 'what a claim derives from, what depends on it, and where it conflicts', flags: ["claims"], },
   { path: 'lease', usage: '[<paths>] --session', summary: 'claim files for one session, or list the claims', flags: ["harness","session","ttl","yes"], writes: 'repo' },
   { path: 'lessons capture', summary: 'scan the ledger and history for new lesson candidates', flags: ["diff","expires","paths","task"], },
   { path: 'lessons list', summary: 'deterministic lesson candidates and the promoted lessons', defaultFor: 'lessons', flags: ["diff","expires","paths","task"], },
@@ -124,6 +130,8 @@ export const SPEC = [
   { path: 'sync', usage: '--yes', summary: 're-render the generated regions from the rule content', writes: 'repo', deprecated: { check: 'sync' }, flags: ["yes","baselines","check","diff","dry-run","surfaces","explain"], },
   { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed]', summary: 'the tests that exercise a file, or - with --run - the ones a change reaches', flags: ["cochange","run","changed"], },
   { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', aliases: ['harness cost'], flags: ["repos","session"], },
+  { path: 'verify plan', usage: '--input <file>', mcp: { name: 'verify_plan', flags: [] }, summary: 'the next observation worth making, and the point at which there is not one', flags: ["input"], },
+  { path: 'verify status', usage: '--input <file>', mcp: { name: 'verify_status', flags: [] }, summary: 'closure over recorded obligations, and what is unresolved', defaultFor: 'verify', flags: ["input"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff","dry-run"], },
   { path: 'workspace upgrade', usage: '--yes', summary: 'replace this installation with the pinned release', writes: 'repo', aliases: ['upgrade'], flags: ["yes","all","diff","workspace","dry-run"], },
   { path: 'why', usage: '[<subject>]', summary: 'what governs a path, rule, decision, skill or finding code', flags: [], },

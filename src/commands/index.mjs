@@ -67,6 +67,19 @@ export const GLOBAL_FLAGS = new Set(['root', 'json', 'pretty', 'help', 'version'
  * still holds the key set against the spec.
  */
 export const IMPLEMENTED = {
+  'action status': async () => (await import('./action.mjs')).actionStatusCommand,
+  'knowledge why': async () => (await import('./knowledge.mjs')).knowledgeWhyCommand,
+  'work inspect': async () => (await import('./work.mjs')).workInspectCommand,
+  // One group, two questions about one document: `plan` names the next observation and
+  // `status` reports closure over what was recorded. Neither writes.
+  'verify plan': async () => {
+    const { verifyCommand } = await import('./verify.mjs');
+    return (args, flags) => verifyCommand('plan', args, flags);
+  },
+  'verify status': async () => {
+    const { verifyCommand } = await import('./verify.mjs');
+    return (args, flags) => verifyCommand('status', args, flags);
+  },
   brief: async () => {
     const { briefCommand } = await import('./brief.mjs');
     return (args, flags) => briefCommand(args, flags, COMMANDS);
@@ -506,12 +519,18 @@ const GROUP_DEFAULT_TAKES_ARGUMENTS = new Set(['decide']);
 function resolveCommandPath(first, second) {
   if (first === undefined) return null;
   if (!GROUPS.has(first)) {
-    // A two-word alias whose first word is no longer a group: `shared plan` survives the
+    // A two-word path whose first word is no longer a group: `shared plan` survives the
     // move to `workspace share` because the pair is looked up before the single word. A
     // spelling from before the merge costs a reader nothing, and the table that keeps it
     // alive is the spec's own alias list rather than a branch here.
-    const pair = second === undefined ? undefined : ALIASES.get(`${first} ${second}`);
-    if (pair !== undefined) return { path: pair, consumed: 2 };
+    const pairKey = second === undefined ? null : `${first} ${second}`;
+    // An implemented pair must dispatch whether or not its group declares a default. This
+    // branch used to look only in ALIASES, so `work inspect` and `action status` - declared,
+    // implemented and listed by help - answered "unknown command `work`". Looking the pair up
+    // in the registry makes "declared" and "dispatchable" the same statement.
+    if (pairKey !== null && (pairKey in IMPLEMENTED || ALIASES.has(pairKey))) {
+      return { path: ALIASES.get(pairKey) ?? pairKey, consumed: 2 };
+    }
     return { path: ALIASES.get(first) ?? first, consumed: 1 };
   }
 

@@ -201,3 +201,4 @@ in [architecture/history.md](architecture/history.md).
 | [190](decisions/ADR-190-an-explanation-reads-a-payload-through-the-hooks-own-adapter.md) | an explanation reads a payload through the hook's own adapter and policy table | accepted · 2026-11-03 |
 | [191](decisions/ADR-191-a-release-states-what-its-surface-reaches.md) | a release states what its surface reaches, and a command is added for a consumer | accepted · 2026-11-03 |
 | [192](decisions/ADR-192-an-audit-tightened-four-classifications-in-the-work-layer.md) | an audit tightened four classifications in the work layer | accepted · 2026-11-03 |
+| [193](decisions/ADR-193-the-mcp-description-budget-is-per-tool-not-per-surface.md) | the MCP description budget is per tool, not per surface | accepted · 2026-11-03 |

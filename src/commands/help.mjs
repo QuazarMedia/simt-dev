@@ -12,6 +12,18 @@ const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into th
                            (dry-run unless --yes; conflicts block without
                            --accept-conflicts; in place unless --backup;
                            never commits or pushes)
+
+${CLI} work inspect           what this repo's work is: artifacts, activities,
+                           and which validations are declared vs available
+${CLI} knowledge why <id>     what a claim derives from, what depends on it,
+                           and where another claim contradicts it
+                           (reads --claims <file>)
+${CLI} verify plan --input    the next observation worth making, from the
+                           obligations still unmet
+${CLI} verify status --input  closure over recorded obligations, and what is
+                           unresolved and why
+${CLI} action status --journal  where an operation stands from its journal,
+                           and what the state permits next
 ${CLI} doctor [--fix]        classify a repo and check config health (with --fix:
                            apply the remedies flagged safe and list the rest;
                            dry-run unless --yes)
@@ -306,6 +318,10 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --variant <id>          which body of a multi-variant skill to use
 --from <repo/path>      install from a declared source by name
 --list                  print the MCP tool surface without reading stdin (mcp)
+--claims <file>         knowledge why: the document of {claims, edges, artifacts}
+--input <file>          verify plan/status: the document of obligations and
+                        evidence ("-" reads stdin)
+--journal <file>        action status: the journal to replay ("-" reads stdin)
 --payload <file>        agent-hooks explain: the harness JSON to read (default:
                         stdin)
 --mediated              agent-hooks explain: claim the boundary mediates the call

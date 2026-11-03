@@ -487,6 +487,13 @@ export const output = {
     required: ['root', 'query', 'servers', 'answers', 'findings'],
   },
   /** The shape of every tool failure, which is a result and not a protocol error. */
+  // The plan-4 doors answer with one document and no fixed field set: each door owns the
+  // shape it returns, and a schema here that restated it would be a second copy to keep.
+  work_doc: {
+    type: 'object',
+    properties: { ok: { type: 'boolean' }, doc: { type: 'object' } },
+    required: ['ok', 'doc'],
+  },
   error: ERROR_SHAPE,
 };
 

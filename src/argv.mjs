@@ -153,6 +153,10 @@ export const VALUE_FLAGS = new Set([
   // agent-hooks explain: the harness JSON to read when a harness pipes nothing. A value
   // rather than a switch, because a payload with no file named would have to be guessed.
   'payload',
+  // The plan-4 doors: the document each one interrogates, named rather than guessed.
+  'claims',
+  'input',
+  'journal',
   'skill',
   'task',
   // plan next: stay inside one tier, or one wave, or both. A value, not a switch,

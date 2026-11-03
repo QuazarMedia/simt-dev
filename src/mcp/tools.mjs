@@ -21,8 +21,9 @@
 
 import { TOOLS_READ } from './tools-read.mjs';
 import { TOOLS_FACTS } from './tools-facts.mjs';
+import { TOOLS_WORK } from './tools-work.mjs';
 
-export const TOOLS = [...TOOLS_READ, ...TOOLS_FACTS];
+export const TOOLS = [...TOOLS_READ, ...TOOLS_FACTS, ...TOOLS_WORK];
 
 export { ERROR_SHAPE } from './schemas.mjs';
 

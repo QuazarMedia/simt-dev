@@ -358,14 +358,18 @@ test('mcp: every tool declares a usable schema', () => {
   }
 });
 
-test('mcp: the tool descriptions fit the 2 KB budget the plan set', () => {
-  // plan 0003 R41: a cacheable tools/list kept to at most 2 KB through terse
-  // descriptions. The budget is measured on the description prose - the mechanism the
-  // plan names - and not on the whole payload, which stays full: ADR-068 requires both
-  // the structured and the text shape declared, and schemas cut to fit a byte count
-  // would need a superseding ADR the tracker does not carry.
-  const total = TOOLS.reduce((n, t) => n + Buffer.byteLength(t.description, 'utf8'), 0);
-  assert.ok(total <= 2048, `${total} bytes of description against the 2 KB budget`);
+test('mcp: every description is short, and the total grows only with the surface', () => {
+  // Plan 3's R41 capped the whole description prose at 2 KB when twelve tools shipped, and
+  // those twelve spent 2,035 bytes of it. Plan 4's five doors cannot fit inside that ceiling
+  // at any length, so the property is kept and the absolute is replaced: one description stays
+  // short, and the total is allowed to grow only when a tool does (ADR-193).
+  const CEILING = 240;
+  const long = TOOLS.filter((tool) => Buffer.byteLength(tool.description, 'utf8') > CEILING).map(
+    (tool) => `${tool.name}: ${Buffer.byteLength(tool.description, 'utf8')}`,
+  );
+  assert.deepEqual(long, [], `descriptions over the ${CEILING} byte ceiling`);
+  const total = TOOLS.reduce((n, tool) => n + Buffer.byteLength(tool.description, 'utf8'), 0);
+  assert.ok(total <= CEILING * TOOLS.length, `${total} bytes of description across ${TOOLS.length} tools`);
 });
 
 test('mcp: skills_brief and `skills brief` answer the same question identically', async () => {
@@ -850,6 +854,14 @@ test('mcp: every tool answers, and every answer matches the schema it declared',
     rules_why: { what: 'ADR-001' },
     plan_done: { id: 'no-such-slice' },
     federation_query: { query: 'what calls the keep helper' },
+    work_inspect: {},
+    knowledge_why: {
+      id: 'c1',
+      document: { claims: [{ id: 'c1', subject: 's', predicate: 'p', type: 'number', value: 1 }] },
+    },
+    verify_plan: { document: { obligations: [], capabilities: [] } },
+    verify_status: { document: { obligations: [{ id: 'o1', state: 'pass' }], evidence: [] } },
+    action_status: { document: { journal: [] } },
   };
 
   for (const tool of TOOLS) {

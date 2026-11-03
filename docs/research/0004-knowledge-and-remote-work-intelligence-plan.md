@@ -598,7 +598,7 @@ Same columns as Plan 3, plus `SHA / evidence` so `plan done` can retain closure 
 | W25 | Document validation | 4 | W24, W17 | M | E8 | native rubric routing; source claims honest | Complete | f678060 |
 | W26 | Procedure validation | 4 | W24, W13 | M | E8 | effects/actor/fallback semantics preserved | Complete | 71cee18 |
 | W27 | Incremental verification | 4 | W24, W25, W26, W22 | M | E8 | source selection kept; no false green | Complete | 747291f |
-| W28 | Ledger v2 | 4 | W24, W15 | L | E9 | target/dependency revisions bound | Queued | |
+| W28 | Ledger v2 | 4 | W24, W15 | L | E9 | target/dependency revisions bound | Complete | 2125802 |
 | W29 | Closure reports | 4 | W27, W28 | M | E9 | truthful partial/unavailable completion | Queued | |
 | W30 | Target snapshots | 5 | W10, W28, W05 | M | E10 | wrong/reset identity cannot mutate | Queued | |
 | W31 | Semantic object deltas | 5 | W30, W08, W18 | M | E10 | typed diff and frame conditions exact | Queued | |

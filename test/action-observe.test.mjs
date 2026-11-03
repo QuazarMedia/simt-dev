@@ -109,3 +109,23 @@ test('the module is deterministic and reads nothing', async () => {
   const source = await readFile(new URL('../src/actions/observe.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });
+
+// A postcondition over a field the object never carried compared `undefined` with `undefined` and
+// passed; and a channel that declared no backing was treated as its own store.
+import { channelIndependence as channelIndependenceForBacking, verifyOutcome as verifyOutcomeForAbsentField } from '../src/actions/observe.mjs';
+
+test('a postcondition naming an absent field fails rather than passing on undefined', () => {
+  const result = verifyOutcomeForAbsentField({
+    object: { target: 'shop', incarnation: 'inc-1', revision: 'r1', fields: { name: 'discount' } },
+    postconditions: [{ field: 'retiredAt', expect: undefined }],
+    channels: [{ name: 'api', backing: 'primary' }, { name: 'db', backing: 'replica' }],
+  });
+  assert.equal(result.verdict, 'fail');
+});
+
+test('channels that declare no backing store are not independent', () => {
+  const named = channelIndependenceForBacking([{ name: 'api' }, { name: 'db' }]);
+  assert.equal(named.assurance, 'correlated');
+  assert.match(named.reason, /no backing/);
+  assert.equal(channelIndependenceForBacking([{ name: 'api', backing: 'primary' }, { name: 'db', backing: 'replica' }]).assurance, 'independent');
+});

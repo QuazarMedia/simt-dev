@@ -40,7 +40,6 @@ function classify(command, parsed, writes) {
   if (parsed.some((fact) => fact.kind === 'git' && fact.sub === 'push')) return 'push';
   if (parsed.some((fact) => fact.kind === 'git' && ['commit', 'reset', 'rebase', 'revert'].includes(fact.sub))) return 'history';
   if (isText(command) && parsed.length === 0) return 'unknown';
-  if (isText(command)) return 'read';
   return 'read';
 }
 

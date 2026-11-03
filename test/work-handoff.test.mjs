@@ -113,3 +113,19 @@ test('the capsule is deterministic and the module reads nothing', async () => {
   const source = await readFile(new URL('../src/coordination/handoff.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });
+
+// A capsule that recorded no approval is not a capsule whose approval disagrees. The check read
+// `approval !== null`, which is true for `undefined`, so every hand-built capsule failed resume.
+import { buildCapsule as buildCapsuleForApproval, checkResume as checkResumeForApproval } from '../src/coordination/handoff.mjs';
+
+test('a capsule with no recorded approval does not fail the authorization check', () => {
+  const capsule = buildCapsuleForApproval({
+    goal: 'apply the discount',
+    intent: { digest: 'sha256-intent' },
+    target: { incarnation: 'inc-1' },
+  });
+  assert.equal(capsule.approval, null);
+  const result = checkResumeForApproval(capsule, { target: { incarnation: 'inc-1' } });
+  assert.deepEqual(result.failures, []);
+  assert.equal(result.resumable, true);
+});

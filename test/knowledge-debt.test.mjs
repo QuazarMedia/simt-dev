@@ -97,3 +97,16 @@ test('the module is deterministic and reads nothing', async () => {
   const source = await readFile(new URL('../src/knowledge/debt.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });
+
+// A raw row reached `rank` with no fields filled, and its reasons read "undefined obligation(s)
+// affected" — a rank nobody can explain, from the module whose stated purpose is explainability.
+import { rank as rankForRawRow } from '../src/knowledge/debt.mjs';
+
+test('a raw row is normalised so its reasons are explainable', () => {
+  const ranked = rankForRawRow([{ id: 'raw-row' }]);
+  assert.equal(ranked[0].affectedObligations, 0);
+  assert.equal(ranked[0].criticality, 'normal');
+  assert.equal(ranked[0].effort, 1);
+  assert.equal(ranked[0].coldStart, true);
+  assert.doesNotMatch(ranked[0].reasons.join(' '), /undefined/);
+});

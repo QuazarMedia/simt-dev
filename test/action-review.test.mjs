@@ -124,3 +124,31 @@ test('the module is deterministic and reads nothing', async () => {
   const source = await readFile(new URL('../src/actions/review.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });
+
+// An environment-local id is a property of a reference, not of any value that looks numeric. The
+// promotion guard read every change's `after`, so a bundle carrying `quantity: 42` was refused.
+import { buildReviewBundle as buildForNumeric, promote as promoteForNumeric } from '../src/actions/review.mjs';
+
+test('a numeric functional field is not an environment-local id', () => {
+  const bundle = buildForNumeric({
+    contract: { commit: 'abc123' },
+    target: { incarnation: 'inc-1' },
+    before: { revision: 'r1' },
+    authorization: { digest: 'sha256-approval' },
+    postconditions: [{ field: 'quantity', expect: 42 }],
+    delta: { changes: [{ field: 'quantity', kind: 'changed', class: 'functional', before: 7, after: 42 }] },
+  });
+  const result = promoteForNumeric(bundle, { target: { incarnation: 'inc-2' }, authorization: { digest: 'sha256-new' } });
+  assert.equal(result.promoted, true, JSON.stringify(result.rejected));
+
+  const raw = buildForNumeric({
+    contract: { commit: 'abc123' },
+    target: { incarnation: 'inc-1' },
+    before: { revision: 'r1' },
+    authorization: { digest: 'sha256-approval' },
+    postconditions: [{ field: 'approver', expect: '42' }],
+    delta: { changes: [{ field: 'approver', kind: 'renamed', class: 'reference', after: '42' }] },
+  });
+  const refused = promoteForNumeric(raw, { target: { incarnation: 'inc-2' }, authorization: { digest: 'sha256-new' } });
+  assert.equal(refused.promoted, false, 'a raw id in a reference must still be refused');
+});

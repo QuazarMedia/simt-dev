@@ -74,16 +74,19 @@ export function rank(items = [], { weights = DEFAULT_WEIGHTS } = {}) {
   return (Array.isArray(items) ? items : [])
     .filter((item) => isText(item?.id))
     .map((item) => {
-      const computed = score(item, weights);
+      // Normalised before scoring: a raw row reached this function with no fields filled and the
+      // reasons read "undefined obligation(s) affected", which is a rank nobody can explain.
+      const normalised = { ...item, ...debtItem(item) };
+      const computed = score(normalised, weights);
       return {
-        ...item,
+        ...normalised,
         score: computed.total,
         components: computed.components,
         reasons: [
-          `${item.affectedObligations} obligation(s) affected`,
-          `criticality ${item.criticality}`,
-          `${item.queries} recorded query/queries${item.coldStart ? ' (cold start: none recorded)' : ''}`,
-          `refresh effort ${item.effort}`,
+          `${normalised.affectedObligations} obligation(s) affected`,
+          `criticality ${normalised.criticality}`,
+          `${normalised.queries} recorded query/queries${normalised.coldStart ? ' (cold start: none recorded)' : ''}`,
+          `refresh effort ${normalised.effort}`,
         ],
       };
     })

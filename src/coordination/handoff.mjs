@@ -104,7 +104,9 @@ export function checkResume(capsule, { permission = null, target = null, depende
   const stale = (Array.isArray(dependencies) ? dependencies : []).filter((dependency) => dependency?.current !== true);
   if (stale.length > 0) failures.push({ check: 'dependencies', reason: `${stale.map((dependency) => dependency.id ?? 'a dependency').join(', ')} no longer hold current evidence` });
 
-  if (capsule?.approval !== null && capsule?.approval?.digest !== (authorization?.digest ?? null)) {
+  // A capsule that recorded no approval is not a capsule whose approval disagrees. `undefined`
+  // is not `null`, so `!== null` made every hand-built or older capsule fail this check.
+  if (isObject(capsule?.approval) && capsule.approval.digest !== (authorization?.digest ?? null)) {
     failures.push({ check: 'authorization', reason: 'the recorded approval is referenced and revalidated, never recreated from the capsule' });
   }
 

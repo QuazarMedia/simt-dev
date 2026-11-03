@@ -128,7 +128,8 @@ export function bindAuthorization(intent, authorization = {}) {
   const digest = intentDigest(intent);
   const declared = isText(authorization.digest) ? authorization.digest : digest;
   const reasons = declared === digest ? [] : ['the intent changed after this authorization was recorded'];
-  return { bound: reasons.length === 0, digest, scope: authorization.scope ?? null, effects: [...(authorization.effects ?? [])], reasons };
+  const effects = Array.isArray(authorization.effects) ? [...authorization.effects] : [];
+  return { bound: reasons.length === 0, digest, scope: authorization.scope ?? null, effects, reasons };
 }
 
 /**

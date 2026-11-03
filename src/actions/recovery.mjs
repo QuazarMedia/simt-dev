@@ -164,8 +164,8 @@ export function checkUiStructure(bound, { signature = null, attempts = 0, limit 
  */
 export function fallbackIntent({ effects = [], fallbackEffects = [] } = {}) {
   const key = (effect) => `${effect?.scope ?? 'local'}:${effect?.operation ?? null}`;
-  const before = new Set((effects ?? []).map(key));
-  const after = new Set((fallbackEffects ?? []).map(key));
+  const before = new Set((Array.isArray(effects) ? effects : []).map(key));
+  const after = new Set((Array.isArray(fallbackEffects) ? fallbackEffects : []).map(key));
   const added = [...after].filter((entry) => !before.has(entry)).sort();
   const removed = [...before].filter((entry) => !after.has(entry)).sort();
   if (added.length === 0 && removed.length === 0) return { sameIntent: true, added, removed, reason: 'the fallback performs the same effects' };

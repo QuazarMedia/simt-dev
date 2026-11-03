@@ -219,7 +219,7 @@ export function canReplaceWholeObject(snapshot) {
  * @param {{name: string, map?: object, rawIds?: string[]}[]} targets
  */
 export function promotionPlan(delta, targets = []) {
-  const references = (delta?.changes ?? []).filter((change) => change.class === 'reference');
+  const references = (Array.isArray(delta?.changes) ? delta.changes : []).filter((change) => change.class === 'reference');
   const rawIds = new Set((Array.isArray(targets) ? targets : []).flatMap((target) => target.rawIds ?? []));
   const rejected = [];
   const plans = [];

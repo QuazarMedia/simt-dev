@@ -109,3 +109,13 @@ test('the module is deterministic and reads nothing', async () => {
   const source = await readFile(new URL('../src/actions/retry.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });
+
+// The budget was consulted before the rejection, so a 400 on the last allowed attempt was reported
+// as an exhausted budget rather than as the target refusing.
+import { planRetry as planRetryForRejection } from '../src/actions/retry.mjs';
+
+test('a rejection on the last allowed attempt is a rejection, not an exhausted budget', () => {
+  const decision = planRetryForRejection({ operation: 'conditional-mutation', attempt: 3, status: 400, budget: { attempts: 3 } });
+  assert.equal(decision.decision, 'halt');
+  assert.match(decision.reason, /rejected the request \(400\)/);
+});

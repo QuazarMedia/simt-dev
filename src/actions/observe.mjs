@@ -31,7 +31,14 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 export function channelIndependence(channels = []) {
   const list = (Array.isArray(channels) ? channels : []).filter((channel) => isObject(channel));
   if (list.length < 2) return { assurance: 'correlated', reason: 'fewer than two channels were declared' };
-  const backings = new Set(list.map((channel) => channel.backing ?? channel.name ?? null));
+  // A channel that declares no backing cannot prove it is a second reading. Falling back to the
+  // name made two differently named clients over one cache look independent, which is the exact
+  // failure this function exists to catch.
+  const undeclared = list.filter((channel) => !isText(channel.backing));
+  if (undeclared.length > 0) {
+    return { assurance: 'correlated', reason: 'a channel declares no backing store, so independence cannot be claimed' };
+  }
+  const backings = new Set(list.map((channel) => channel.backing));
   if (backings.size < list.length) return { assurance: 'correlated', reason: 'two declared channels share a backing store, so they are one reading' };
   return { assurance: 'independent', reason: 'the channels do not share a backing store' };
 }
@@ -52,6 +59,9 @@ const holds = (entry, snapshot) => {
   const field = isObject(entry) ? entry.field : null;
   const expect = isObject(entry) ? entry.expect : entry;
   if (!isText(field) || !isObject(snapshot) || !isObject(snapshot.fields)) return false;
+  // An absent field is not a satisfied one: `undefined` on both sides compared equal, so a
+  // postcondition could pass on a field the object never carried.
+  if (!Object.prototype.hasOwnProperty.call(snapshot.fields, field)) return false;
   return canonicalJson(snapshot.fields[field]) === canonicalJson(expect);
 };
 
@@ -89,10 +99,13 @@ export function verifyOutcome({
     return result('unknown', ['the observation does not name an incarnation and revision, so it cannot be current evidence about anything']);
   }
 
-  const failedPostconditions = postconditions.filter((entry) => !holds(entry, object)).map((entry) => (isObject(entry) ? entry.field : String(entry)));
+  const required = Array.isArray(postconditions) ? postconditions : [];
+  const framesRequired = Array.isArray(frames) ? frames : [];
+
+  const failedPostconditions = required.filter((entry) => !holds(entry, object)).map((entry) => (isObject(entry) ? entry.field : String(entry)));
   if (failedPostconditions.length > 0) return result('fail', [`the target does not hold the intended result: ${failedPostconditions.join(', ')}`], { failed: failedPostconditions });
 
-  const brokenFrames = frames.filter((entry) => !holds(entry, object)).map((entry) => (isObject(entry) ? entry.field : String(entry)));
+  const brokenFrames = framesRequired.filter((entry) => !holds(entry, object)).map((entry) => (isObject(entry) ? entry.field : String(entry)));
   if (brokenFrames.length > 0) {
     return result('fail', [`frame condition violated: ${brokenFrames.join(', ')} was expected to stay unchanged`], { failed: brokenFrames });
   }

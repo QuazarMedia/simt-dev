@@ -150,7 +150,7 @@ export function redactedTarget(snapshot) {
     identity: snapshot.identity ?? null,
     platform: snapshot.platform ?? null,
     actor: snapshot.actor ? { id: snapshot.actor.id ?? null, role: snapshot.actor.role ?? null } : null,
-    capabilities: [...(snapshot.capabilities ?? [])],
+    capabilities: Array.isArray(snapshot.capabilities) ? [...snapshot.capabilities] : [],
     session: snapshot.session ? { state: snapshot.session.state ?? 'valid', expiresAt: snapshot.session.expiresAt ?? null } : null,
     observedAt: snapshot.observedAt ?? null,
     digest: snapshot.digest ?? null,

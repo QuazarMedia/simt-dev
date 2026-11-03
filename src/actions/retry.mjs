@@ -86,8 +86,10 @@ export function planRetry({ operation = 'read', attempt = 1, status = null, erro
   if (className === 'reconcilable-create' && (error === 'lost-response' || error === 'timeout' || (status !== null && status >= 500))) {
     return { decision: 'reconcile', delayMs: 0, halted: false, reason: 'the response was lost: query the outcome by idempotency key before any retry', className };
   }
-  if (attempt >= attempts) return stop(`the attempt budget (${attempts}) is exhausted; the operation state is preserved, not reclassified as success`);
+  // The rejection is classified before the budget is consulted: a 400 on the last allowed attempt
+  // is the target refusing, not an exhausted budget, and the two call for different actions.
   if (status !== null && status >= 400 && status < 500 && status !== 408 && status !== 429) return halt(`the target rejected the request (${status}); retrying repeats a decision, not a transient failure`);
+  if (attempt >= attempts) return stop(`the attempt budget (${attempts}) is exhausted; the operation state is preserved, not reclassified as success`);
   if (status === 429 && retryAfterMs !== null) {
     const wait = Math.min(deadlineMs, Math.max(0, retryAfterMs));
     return elapsedMs + wait > deadlineMs ? stop('the deadline would pass while waiting for the rate limit to clear') : { decision: 'retry', delayMs: wait, halted: false, reason: 'rate limited; the target declared when to try again', className };

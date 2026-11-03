@@ -47,7 +47,7 @@ export function buildReviewBundle({
     state: 'planned',
     contract: { commit: contract.commit, digest: contract.digest ?? null },
     delta: {
-      changes: (delta?.changes ?? []).map((change) => ({
+      changes: (Array.isArray(delta?.changes) ? delta.changes : []).map((change) => ({
         field: change.field,
         kind: change.kind,
         class: change.class,
@@ -120,7 +120,10 @@ export function promote(bundle, { target = null, mappings = {}, authorization = 
   if (!isObject(authorization) || !isText(authorization.digest)) rejected.push({ reason: 'promotion needs its own authorization; the bundle of another target is not one' });
   if ((bundle?.delta?.lossy ?? false) === true) rejected.push({ reason: 'a lossy bundle cannot justify replacing an object in another environment' });
 
-  const rawIds = (bundle?.delta?.changes ?? [])
+  const rawIds = (Array.isArray(bundle?.delta?.changes) ? bundle.delta.changes : [])
+    // Only a reference carries an environment-local id. Filtering on the value alone rejected
+    // every bundle with a numeric functional field (`quantity: 42`) as an id from another tenant.
+    .filter((change) => change?.class === 'reference')
     .map((change) => change.after)
     .filter((value) => typeof value === 'string' && (/^[0-9]+$/.test(value) || /^[0-9a-f]{8}-[0-9a-f]{4}-/i.test(value)));
   if (rawIds.length > 0) rejected.push({ reason: `${rawIds.join(', ')} are environment-local ids, not logical references` });

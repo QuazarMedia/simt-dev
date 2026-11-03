@@ -1,0 +1,36 @@
+{
+  "question": { "query": "standard rate", "scope": { "jurisdiction": "DE" } },
+  "units": [
+    {
+      "id": "rates-de",
+      "path": "docs/rates/de.md",
+      "headings": ["Standard rate"],
+      "text": "The standard rate applies to most goods.",
+      "scope": { "jurisdiction": "DE" },
+      "authority": 3
+    },
+    {
+      "id": "rates-fr",
+      "path": "docs/rates/fr.md",
+      "headings": ["Standard rate"],
+      "text": "The standard rate applies to most goods in France.",
+      "scope": { "jurisdiction": "FR" },
+      "authority": 3
+    },
+    {
+      "id": "rates-unscoped",
+      "path": "docs/rates/notes.md",
+      "headings": ["Standard rate notes"],
+      "text": "A note about the standard rate with no declared jurisdiction.",
+      "authority": 1
+    }
+  ],
+  "claims": [
+    { "id": "de-19", "subject": "de.vat", "predicate": "standard-rate", "type": "rate", "value": 19 },
+    { "id": "de-21", "subject": "de.vat", "predicate": "standard-rate", "type": "rate", "value": 21 }
+  ],
+  "matrix": [
+    { "id": "published-rates", "match": { "pattern": "docs/rates/*.md" }, "rubrics": ["rates", "legacy"], "excludeRubrics": ["legacy"] }
+  ],
+  "rubrics": ["rates", "legacy"]
+}

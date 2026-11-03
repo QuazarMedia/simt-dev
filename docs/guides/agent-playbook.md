@@ -84,6 +84,13 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
 3. If you need to understand a specific file's impact, `simt impact <file>` — blast radius
 4. If you need to understand governance, `simt why <file>` — ADRs and rules
 
+6. **Review an operation before it runs.** Ask for the bundle instead of the transcript:
+   `simt action review --input <bundle.json>` (MCP `action_review`) names the contract, the
+   semantic delta, the target incarnation, the authorization and the postconditions, and says
+   which check is still missing. An adapter descriptor is validated as data with
+   `simt adapter check --input <descriptor.json>` (MCP `adapter_check`), which keeps
+   observe-only apart from execute. Neither runs the operation, and an untrusted descriptor is
+   refused before anything could.
 ## 3. During implementation — validate incrementally under dual gates
 
 1. **Keep the local index current.** After adding, renaming, or changing exports/imports,
@@ -113,7 +120,10 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
 2. **Verify execution evidence matches the current tree.** Run `simt evidence` to confirm
    that the tests and gates you plan to cite were recorded against the current
    `git write-tree` digest in `.simt/ledger.jsonl`. Any file edit invalidates earlier
-   evidence.
+   evidence.    `simt evidence validate --input <evidence.json>` (MCP `evidence_validate`) checks a claim's
+   state and its chain of custody, and `simt verify status --input <closure.json>` (MCP
+   `verify_status`) closes recorded obligations without turning an unreachable verifier into a
+   pass.
 3. **Record decisions, lessons, and tracker state:**
    - If the change alters what the repository or tool believes, scaffold an ADR with
      `simt decide "<title>" [--supersedes ADR-NNN[:<ruling>]] --yes`.
@@ -129,3 +139,23 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
 3. `simt lessons list` — check for any unreviewed lesson candidates
 4. `git commit` — commit locally (never push without explicit approval)
 5. `simt plan done <id> <sha> --yes` — close the tracker slice if working from a plan
+
+## 5. When the task is about knowledge, work or proof itself
+
+These doors answer from a JSON document passed with `--input`, and the matching MCP tool takes
+the same document as an object. They report; they do not mutate.
+
+- **Knowledge.** `simt knowledge rank`, `impact`, `derivations`, `debt` and `sections` rank
+  evidence units, trace typed edges, name what a source change puts in question, order stale
+  knowledge by consequence per effort, and split a long document into retrievable units.
+- **Work.** `simt work inspect` describes what the repository's work consists of;
+  `simt work schedule`, `handoff`, `resume` and `graduate` sequence ready tasks, build a resume
+  capsule, revalidate it, and decide whether repeated traces can become a procedure.
+- **Proof.** `simt work packet --input <packet.json>` (MCP `work_packet`) returns the packet
+  with uncited units rejected rather than trimmed. `simt verify contracts`, `documents` and
+  `procedures` check obligation results, a generated document, and a procedure's imports and
+  prerequisites.
+- **Discovery.** `simt lessons discover --input <candidates.json>` deduplicates candidates and
+  reports the authority each has earned.
+- **Retrieval.** `simt index --search "<task>"` and `--rank "<task>"` answer from the open
+  cache; `simt index --open` reports its counts and staleness without rebuilding it.

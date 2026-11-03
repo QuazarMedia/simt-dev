@@ -187,3 +187,6 @@ in [architecture/history.md](architecture/history.md).
 | [176](decisions/ADR-176-a-capsule-is-rebuilt-from-ids-and-revalidated-before-reuse.md) | a capsule is rebuilt from ids, and every dimension is revalidated before it is reused | accepted · 2026-11-03 |
 | [177](decisions/ADR-177-a-tool-call-is-named-by-effect-not-by-harness.md) | a tool call is named by its effect, and a boundary cannot mediate what it cannot name | accepted · 2026-11-03 |
 | [178](decisions/ADR-178-retrieved-material-is-evidence-and-only-policy-changes-policy.md) | retrieved material is evidence, and only the repository's own policy changes policy | accepted · 2026-11-03 |
+| [179](decisions/ADR-179-a-review-bundle-is-planned-applied-or-verified-and-promotion-is-a-new-intent.md) | a review bundle says which of three states it is in, and promotion is a new intent | accepted · 2026-11-03 |
+| [180](decisions/ADR-180-authority-is-a-property-of-establishment-not-repetition.md) | authority is a property of how a candidate was established, never of how often it was repeated | accepted · 2026-11-03 |
+| [181](decisions/ADR-181-graduation-needs-three-runs-and-semantic-equivalence-not-transport-parity.md) | graduation needs three validated independent runs, and equivalence is semantic rather than transport | accepted · 2026-11-03 |

@@ -47,7 +47,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [sync](sync.md) | 1 |
 | [tests](tests.md) | 1 |
 | [tokens](tokens.md) | 1 |
-| [verify](verify.md) | 2 |
+| [verify](verify.md) | 3 |
 | [undo](undo.md) | 1 |
 | [why](why.md) | 1 |
 
@@ -225,6 +225,7 @@ simt tokens [--repos] [--session]                                         # coun
 
 # verify
 simt verify plan --input <file>                                           # the next observation worth making, and the point at which there is not one
+simt verify select --input <file>                                         # the narrowest checks that prove a change, and whether a Git hook may run them
 simt verify status --input <file>                                         # closure over recorded obligations, and what is unresolved
 
 # undo

@@ -144,11 +144,11 @@ test('source tests, document checks and remote checks are reported separately', 
   assert.equal(report.costs.total, 4);
 });
 
-test('a Git hook cannot run a remote validator; `simt verify run` can', () => {
+test('a Git hook cannot run a remote validator; and the refusal cites no missing command', () => {
   const hook = checkVerifyRun({ invocation: 'git-hook', selected: { remote: ['remote-check'] } });
   assert.equal(hook.ok, false);
   assert.equal(hook.code, 'remote-from-hook');
-  assert.match(hook.remedy, /simt verify run/);
+  assert.doesNotMatch(hook.remedy, /simt verify run/);
   assert.equal(hook.usesRepoRunner, true);
 
   const cli = checkVerifyRun({ invocation: 'cli', selected: { remote: ['remote-check'] } });

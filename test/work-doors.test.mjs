@@ -253,3 +253,59 @@ test('the doors the knowledge module declares exist on both surfaces, and neithe
   const mcp = TOOLS.map((tool) => ({ name: tool.name, writes: false }));
   assert.deepEqual(checkDoors({ cli, mcp }), { ok: true, errors: [], doors: READ_ONLY_DOORS.map((door) => door.name) });
 });
+
+test('a change with no admissible validator is unverified, never a green claim', () => {
+  const dir = repo();
+  const doc = write(dir, 'select.json', {
+    changed: ['docs/rates.md'],
+    typed: [{ id: 'o1', paths: ['docs/rates.md'] }],
+    validators: [],
+  });
+  const payload = json(dir, ['verify', 'select', '--input', doc]);
+  assert.equal(payload.selection.status, 'unverified');
+  assert.equal(payload.selection.claimsGreen, false);
+  assert.deepEqual(payload.selection.unverified, [{ obligation: 'o1', reason: 'no-admissible-validator' }]);
+  assert.equal(payload.selection.plan.length, 0);
+});
+
+test('a mandatory validator is taken before any cheaper alternative', () => {
+  const dir = repo();
+  const doc = write(dir, 'select.json', {
+    changed: ['docs/rates.md'],
+    typed: [{ id: 'o1', paths: ['docs/rates.md'] }],
+    validators: [
+      { id: 'cheap', covers: ['o1'], cost: 1 },
+      { id: 'mandatory', covers: ['o1'], cost: 9, mandatory: true },
+    ],
+  });
+  const payload = json(dir, ['verify', 'select', '--input', doc]);
+  const byId = new Map(payload.selection.plan.map((entry) => [entry.id, entry]));
+  assert.equal(byId.get('mandatory').basis, 'mandatory');
+  // A floor is not a candidate: once the mandatory validator covers o1, nothing is left to
+  // cover, so the cheaper alternative is not taken as well.
+  assert.equal(byId.has('cheap'), false);
+  assert.equal(payload.selection.status, 'ok');
+});
+
+test('a Git hook may not run a remote validator, and the refusal cites no absent command', () => {
+  const dir = repo();
+  const doc = write(dir, 'select.json', {
+    changed: ['src/a.mjs'],
+    typed: [{ id: 'o1', paths: ['src/a.mjs'] }],
+    validators: [{ id: 'live-read', class: 'remote', covers: ['o1'], environment: 'production' }],
+    invocation: 'git-hook',
+  });
+  const payload = json(dir, ['verify', 'select', '--input', doc]);
+  assert.equal(payload.run.ok, false);
+  assert.equal(payload.run.code, 'remote-from-hook');
+  assert.ok(!/simt verify run/.test(payload.run.remedy), 'the remedy cites a command this binary cannot dispatch');
+  assert.deepEqual(payload.selection.environment, ['production']);
+
+  const allowed = json(dir, ['verify', 'select', '--input', write(dir, 'ok.json', {
+    changed: ['src/a.mjs'],
+    typed: [{ id: 'o1', paths: ['src/a.mjs'] }],
+    validators: [{ id: 'live-read', class: 'remote', covers: ['o1'], environment: 'production' }],
+  })]);
+  assert.equal(allowed.run.ok, true);
+  assert.equal(allowed.run.executesRemote, true);
+});

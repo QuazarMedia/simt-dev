@@ -193,7 +193,9 @@ export function checkVerifyRun({ invocation = 'cli', selected = {} } = {}) {
       code: 'remote-from-hook',
       usesRepoRunner: true,
       detail: `a Git hook may not run remote validators: ${remote.join(', ')}`,
-      remedy: 'run them from `simt verify run`, where a person invoked the check',
+      // The remedy names where the read went, not a command: the executor is not this
+      // package's, and a remedy citing a verb this binary cannot dispatch is a second problem.
+      remedy: 'select and run them where a person invoked the check, not from a Git hook',
     };
   }
   return { ok: true, code: null, usesRepoRunner: true, executesRemote: invocation !== 'git-hook' && remote.length > 0, detail: null, remedy: null };

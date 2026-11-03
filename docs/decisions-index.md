@@ -202,3 +202,4 @@ in [architecture/history.md](architecture/history.md).
 | [191](decisions/ADR-191-a-release-states-what-its-surface-reaches.md) | a release states what its surface reaches, and a command is added for a consumer | accepted · 2026-11-03 |
 | [192](decisions/ADR-192-an-audit-tightened-four-classifications-in-the-work-layer.md) | an audit tightened four classifications in the work layer | accepted · 2026-11-03 |
 | [193](decisions/ADR-193-the-mcp-description-budget-is-per-tool-not-per-surface.md) | the MCP description budget is per tool, not per surface | accepted · 2026-11-03 |
+| [194](decisions/ADR-194-a-slice-is-complete-when-its-acceptance-is-exercised.md) | a slice is complete when its acceptance sentence is exercised | accepted · 2026-11-03 |

@@ -10,7 +10,7 @@
 
 import { workInspectFacts } from '../commands/work.mjs';
 import { knowledgeExportFacts, knowledgeImportFacts, knowledgeWhyFacts } from '../commands/knowledge.mjs';
-import { verifyPlanFacts, verifyStatusFacts } from '../commands/verify.mjs';
+import { verifyPlanFacts, verifySelectFacts, verifyStatusFacts } from '../commands/verify.mjs';
 import { actionStatusFacts } from '../commands/action.mjs';
 import { output, rootArg, rootOf } from './schemas.mjs';
 
@@ -56,6 +56,15 @@ export const TOOLS_WORK = [
     inputSchema: { type: 'object', properties: { document: DOCUMENT }, required: ['document'] },
     async run(args) {
       return { ok: true, doc: verifyPlanFacts(args.document) };
+    },
+  },
+  {
+    outputSchema: output.work_doc,
+    name: 'verify_select',
+    description: 'The narrowest checks that prove a change: mandatory first, then cover by cost, with independence kept and unverified said out loud.',
+    inputSchema: { type: 'object', properties: { document: DOCUMENT }, required: ['document'] },
+    async run(args) {
+      return { ok: true, doc: verifySelectFacts(args.document) };
     },
   },
   {

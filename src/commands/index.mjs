@@ -87,6 +87,10 @@ export const IMPLEMENTED = {
     const { verifyCommand } = await import('./verify.mjs');
     return (args, flags) => verifyCommand('plan', args, flags);
   },
+  'verify select': async () => {
+    const { verifyCommand } = await import('./verify.mjs');
+    return (args, flags) => verifyCommand('select', args, flags);
+  },
   'verify status': async () => {
     const { verifyCommand } = await import('./verify.mjs');
     return (args, flags) => verifyCommand('status', args, flags);

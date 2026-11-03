@@ -133,6 +133,7 @@ export const SPEC = [
   { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed]', summary: 'the tests that exercise a file, or - with --run - the ones a change reaches', flags: ["cochange","run","changed"], },
   { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', aliases: ['harness cost'], flags: ["repos","session"], },
   { path: 'verify plan', usage: '--input <file>', mcp: { name: 'verify_plan', flags: [] }, summary: 'the next observation worth making, and the point at which there is not one', flags: ["input"], },
+  { path: 'verify select', usage: '--input <file>', mcp: { name: 'verify_select', flags: [] }, summary: 'the narrowest checks that prove a change, and whether a Git hook may run them', flags: ["input"], },
   { path: 'verify status', usage: '--input <file>', mcp: { name: 'verify_status', flags: [] }, summary: 'closure over recorded obligations, and what is unresolved', defaultFor: 'verify', flags: ["input"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff","dry-run"], },
   { path: 'workspace upgrade', usage: '--yes', summary: 'replace this installation with the pinned release', writes: 'repo', aliases: ['upgrade'], flags: ["yes","all","diff","workspace","dry-run"], },

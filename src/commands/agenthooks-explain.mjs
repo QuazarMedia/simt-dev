@@ -22,6 +22,9 @@ import { repoRoot } from '../repo-root.mjs';
 
 const USAGE = `run: ${CLI} agent-hooks explain --harness <id> [--payload <file>] [--mediated]`;
 
+/** A payload is one harness call, not a stream: the bound keeps a pipe from becoming the input. */
+const MAX_PAYLOAD_BYTES = 1024 * 1024;
+
 /**
  * The payload to read: the file named, or what a harness would have piped in.
  *
@@ -40,7 +43,12 @@ async function readPayload(flags) {
   }
   if (process.stdin.isTTY) return { empty: true };
   const chunks = [];
-  for await (const chunk of process.stdin) chunks.push(chunk);
+  let size = 0;
+  for await (const chunk of process.stdin) {
+    size += chunk.length;
+    if (size > MAX_PAYLOAD_BYTES) return { error: `the payload on stdin is over the ${MAX_PAYLOAD_BYTES} byte bound` };
+    chunks.push(chunk);
+  }
   return { text: Buffer.concat(chunks).toString('utf8') };
 }
 

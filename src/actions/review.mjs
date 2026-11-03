@@ -80,12 +80,16 @@ export function buildReviewBundle({
  */
 export function appendResults(bundle, { receipts = [], observed = null, verified = false } = {}) {
   if (bundle?.state !== 'planned' && bundle?.state !== 'applied') throw new Error(`results cannot be appended to a ${bundle?.state ?? 'missing'} bundle`);
-  return {
+  const next = {
     ...bundle,
     state: verified ? 'verified' : 'applied',
     receipts: [...(bundle.receipts ?? []), ...(Array.isArray(receipts) ? receipts : []).filter(isText)],
     observed: isObject(observed) ? observed : bundle.observed,
   };
+  // The digest labels the artefact it sits on. Keeping the planned digest meant a reviewer who
+  // recomputed it over an applied bundle got a mismatch and no way to tell damage from progress.
+  next.digest = digestOf(canonicalJson({ ...next, digest: undefined }));
+  return next;
 }
 
 /**

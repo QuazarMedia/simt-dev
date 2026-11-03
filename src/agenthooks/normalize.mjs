@@ -105,7 +105,8 @@ export function parity(operations = []) {
   const effects = new Set(list.map((entry) => entry.effect));
   const operationsSet = new Set(list.map((entry) => entry.operation));
   return {
-    same: effects.size <= 1 && operationsSet.size <= 1,
+    // An empty list is not agreement: nothing was compared, so nothing is the same.
+    same: list.length > 0 && effects.size <= 1 && operationsSet.size <= 1,
     effects: [...effects].sort(),
     harnesses: list.map((entry) => entry.harness).filter(Boolean).sort(),
   };

@@ -111,3 +111,20 @@ test('explaining a payload writes nothing', async () => {
   assert.equal(status.status, 0, status.stderr);
   assert.equal(status.stdout.trim(), '', 'the command wrote to the repository it explained');
 });
+
+// A write with no path is refused rather than dropped, and a flag with no value says so.
+import { absoluteWrites } from '../src/agenthooks/facts.mjs';
+
+test('a payload write with no path is refused rather than dropped', () => {
+  assert.throws(() => absoluteWrites('/tmp/root', [{ kind: 'edit' }]), /needs a path/);
+  assert.throws(() => absoluteWrites('/tmp/root', ['']), /needs a path/);
+});
+
+test('a payload flag with no value is a usage error', async () => {
+  const root = await repo();
+  const run = explain(root, ['--harness', 'claude', '--payload']);
+  assert.equal(run.status, 2);
+  // The argv parser refuses the value-less flag before dispatch, which is the one place that can
+  // name the flag and its remedy for every command rather than for this one only.
+  assert.match(run.stderr, /--payload requires a value/);
+});

@@ -22,7 +22,10 @@ import { isAbsolute, join } from 'node:path';
 export function absoluteWrites(payloadRoot, writes = []) {
   return (Array.isArray(writes) ? writes : []).map((entry) => {
     const path = typeof entry === 'string' ? entry : entry?.path;
-    const absolute = typeof path === 'string' && isAbsolute(path) ? path : join(payloadRoot, path);
+    // A write with no path is refused rather than dropped: a silently discarded write is a
+    // mutation that escapes the lease check this resolution exists to feed.
+    if (typeof path !== 'string' || path === '') throw new Error('a payload write needs a path');
+    const absolute = isAbsolute(path) ? path : join(payloadRoot, path);
     return typeof entry === 'string' ? absolute : { ...entry, path: absolute };
   });
 }

@@ -152,3 +152,20 @@ test('a numeric functional field is not an environment-local id', () => {
   const refused = promoteForNumeric(raw, { target: { incarnation: 'inc-2' }, authorization: { digest: 'sha256-new' } });
   assert.equal(refused.promoted, false, 'a raw id in a reference must still be refused');
 });
+
+// The digest labels the artefact it sits on, so appending results must re-digest it; a planned
+// digest left on an applied bundle is a mismatch with no way to tell damage from progress.
+import { appendResults as appendResultsForDigest } from '../src/actions/review.mjs';
+
+test('appending results re-digests the bundle it changes', () => {
+  const planned = buildForNumeric({
+    contract: { commit: 'abc123' },
+    target: { incarnation: 'inc-1' },
+    before: { revision: 'r1' },
+    authorization: { digest: 'sha256-approval' },
+    postconditions: [{ field: 'quantity', expect: 42 }],
+  });
+  const applied = appendResultsForDigest(planned, { receipts: ['receipt-1'] });
+  assert.match(applied.digest, /^sha256-/);
+  assert.notEqual(applied.digest, planned.digest, 'the applied bundle still carries the planned digest');
+});

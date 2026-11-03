@@ -95,3 +95,13 @@ test('the normaliser is deterministic and reads nothing', async () => {
   const source = await readFile(new URL('../src/agenthooks/normalize.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });
+
+// Nothing was compared, so nothing is the same: an empty list used to report agreement.
+import { parity as parityOfNothing } from '../src/agenthooks/normalize.mjs';
+
+test('an empty comparison is not agreement', () => {
+  const result = parityOfNothing([]);
+  assert.equal(result.same, false);
+  assert.deepEqual(result.effects, []);
+  assert.deepEqual(result.harnesses, []);
+});

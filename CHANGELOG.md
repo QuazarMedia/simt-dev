@@ -6,6 +6,31 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+Plan 0004's modules are now reachable from both surfaces. Where 0.10.0 shipped the work layer as
+library code with one wired command, every module in the layer answers through a command, and the
+read-only doors a client needs are also MCP tools calling the same fact functions.
+
+### Added
+
+- Doors for every Plan 0004 module: `work inspect`, `schedule`, `handoff`, `resume`, `graduate`, `packet`; `knowledge why`, `rank`, `impact`, `derivations`, `debt`, `sections`, `export`, `import`; `verify plan`, `select`, `status`, `contracts`, `documents`, `procedures`; `action status`, `review`; `adapter check`; `lessons discover`; `index overlay`; and `evidence validate`. Each takes a JSON document with `--input` and returns the module's own facts (ADR-194).
+- The bench doors `bench replay`, `calibrate`, `compat`, `corpus` and `world`, reached through the optional bench package rather than imported by `src/`.
+- Nine MCP tools — `action_review`, `adapter_check`, `verify_contracts`, `verify_documents`, `verify_procedures`, `lessons_discover`, `work_packet`, `index_overlay` and `evidence_validate` — calling the same fact function as their command, so the transport and the terminal cannot answer differently (ADR-035).
+- `simt index --open` reports the cache's counts and staleness without rebuilding it, and `--search <task>` / `--rank <task>` answer from it with `--limit`.
+- `simt lease` names the enforcement it can actually claim (advisory across hosts) beside the race it leaves.
+- `simt knowledge why --as-of <date> --known-at <date>` answers from the claims applicable at that time rather than the current ones.
+- `packages/bench/src` ships in the package `files`, so an installed bench has its sources; a test fails when a runtime import is missing from `files`.
+
+### Changed
+
+- `docs/reference/mcp.md` lists all 32 tools and a test holds it to the registry; the module reference and the agent playbook name the new doors.
+
+### Fixed
+
+- Three defects the audit found in the work layer: an applied bundle is re-digested, a write with no path is refused, and the payload is bounded.
+- A mediation returns its `reason` key on every branch, so a refusal without a reason no longer reads as an empty one.
+- A missing numeric bound in an impact query was read as zero rather than unbounded.
+
+
 ## [0.10.0] — 2026-11-03
 
 Plan 0004's work layer ships mostly as library modules. Every module is reachable from `src/`,

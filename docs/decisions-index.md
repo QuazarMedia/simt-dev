@@ -190,3 +190,6 @@ in [architecture/history.md](architecture/history.md).
 | [179](decisions/ADR-179-a-review-bundle-is-planned-applied-or-verified-and-promotion-is-a-new-intent.md) | a review bundle says which of three states it is in, and promotion is a new intent | accepted · 2026-11-03 |
 | [180](decisions/ADR-180-authority-is-a-property-of-establishment-not-repetition.md) | authority is a property of how a candidate was established, never of how often it was repeated | accepted · 2026-11-03 |
 | [181](decisions/ADR-181-graduation-needs-three-runs-and-semantic-equivalence-not-transport-parity.md) | graduation needs three validated independent runs, and equivalence is semantic rather than transport | accepted · 2026-11-03 |
+| [182](decisions/ADR-182-a-metamorphic-relation-is-declared-by-the-contract-and-never-invented.md) | a metamorphic relation is declared by the contract, and an offline replay is not an acceptance run | accepted · 2026-11-03 |
+| [183](decisions/ADR-183-a-bar-declared-after-the-numbers-is-not-a-bar.md) | a bar declared after the numbers is not a bar, and a hard constraint outranks an average | accepted · 2026-11-03 |
+| [184](decisions/ADR-184-knowledge-debt-is-a-sum-of-named-components-and-no-invented-probability.md) | knowledge debt is a sum of named components, and a frequency nobody measured is not a probability | accepted · 2026-11-03 |

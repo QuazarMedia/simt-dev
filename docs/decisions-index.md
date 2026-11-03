@@ -184,3 +184,6 @@ in [architecture/history.md](architecture/history.md).
 | [173](decisions/ADR-173-recovery-is-not-rollback-and-a-fallback-is-a-new-intent.md) | recovery is not rollback, and a fallback that changes the effect is a new intent | accepted · 2026-11-03 |
 | [174](decisions/ADR-174-a-lease-is-worth-what-can-enforce-it.md) | a lease is worth exactly what can enforce it, and fencing is checked before every effect | accepted · 2026-11-03 |
 | [175](decisions/ADR-175-readiness-needs-current-evidence-and-a-cycle-is-not-waiting.md) | readiness needs current evidence, a cycle is not waiting, and the graph proposes rather than spawns | accepted · 2026-11-03 |
+| [176](decisions/ADR-176-a-capsule-is-rebuilt-from-ids-and-revalidated-before-reuse.md) | a capsule is rebuilt from ids, and every dimension is revalidated before it is reused | accepted · 2026-11-03 |
+| [177](decisions/ADR-177-a-tool-call-is-named-by-effect-not-by-harness.md) | a tool call is named by its effect, and a boundary cannot mediate what it cannot name | accepted · 2026-11-03 |
+| [178](decisions/ADR-178-retrieved-material-is-evidence-and-only-policy-changes-policy.md) | retrieved material is evidence, and only the repository's own policy changes policy | accepted · 2026-11-03 |

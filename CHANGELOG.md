@@ -10,65 +10,45 @@ All notable changes to this package are recorded here. The format follows
 
 ### Added
 
-- A tracker slice may carry a **tier** — an optional `columns.tier` in the plan template
-  (`Tier`, `Model tier`, `Class`, `Effort`) — and `simt plan next --tier <name>` returns
-  the next ready slice inside that class instead of the next one anywhere. The tag is the
-  cell's first word without notes, so `L (S)` is an L slice with an S reviewer.
-- `simt plan next --wave <name>` filters by the wave tables the template already names,
-  and the two combine: `--wave 0 --tier L` is a slice that is in both. A filter that
-  matches nothing says which one it applied rather than falling back to every slice.
-- A tracker slice may carry a **lane** — an optional `columns.lane` (`Lane`, `Stream`,
-  `Workstream`, `Track`), read by the same first-word rule — and `simt plan next --lane
-  <name>` keeps the answer inside one subsystem, so two agents can take two lanes whose
-  file sets do not overlap. `simt plan labels` reports which header each column matched.
-- A **`Reviewer` column** and the **`To review`** state: a slice whose implementation is
-  finished but not accepted is named beside the next answer instead of being handed out
-  as ready work, and nothing depending on it is ready yet.
-- `simt plan status` reports the share of each tracker that is done and what remains, as
-  a percent beside the per-state counts.
-- `simt hooks install --agent` and `simt hooks status --agent` write and report each
-  harness's own hooks file; `agent-hooks install|status` answer as the same run under
-  their own spelling, and the remedy names the spelling the caller typed.
-- `simt help <group>` prints that group's subcommands rather than the whole surface, and
-  `-h` is answered wherever it appears on a command line.
-- The shipped agent keeps the harness's own task list current every turn, and says so
-  once when the surface has no such tool instead of claiming an update.
-- `simt init --harness <id>` now selects one reader: the rules project to that surface,
-  only its agent file and hooks entry are written, and the manifest records the id in
-  `surfaces`. `agents install|status` and `agent-hooks install|status` follow that
-  declaration or the flag, and a repository with nothing selected gets a no-op naming both
-  remedies instead of six files nobody opened (ADR-141).
-- The bench ships an eleven-entry adversarial probe catalogue — source-instruction
-  widening, forged verifier receipts, wrong tenant, expired approval, mixed-scope
-  retrieval, stale revision, private-field-losing fallback, crash-after-commit, expired
-  lease, unavailable live verification — each with its own verdict and effect oracle, plus
-  assurance reported as `declared`, `observed`, `mediated` or `externally-enforced` with
-  the evidence that supports it (ADR-142).
-- Work facets describe a repository's artifact kinds, activities, execution loci and
-  declared verification capabilities beside its stack, additively: an incidental source
-  file adds a kind and removes no obligation (ADR-143).
-- The `work` manifest namespace is versioned and validated, and adoption writes no
-  `package.json`, `pyproject.toml` or gate a repository cannot run (ADR-144). Artifacts get
-  explicit identity that survives a rename, and scopes resolve by the most specific literal
-  path, refusing equal specificity rather than ordering it by listing (ADR-145).
-- Three opt-in work profiles — `work/knowledge`, `work/procedures` and
-  `work/remote-operations` — are selected only by an explicit `work` declaration, so a
-  knowledge repository is never told to run a software test it does not have, and a remote
-  operation keeps its target identity, compare-and-set, approval, idempotency and privacy
-  rules (ADR-146).
+- `simt plan next --tier <name>` and `--wave <name>`: a slice carries a tier (`L (S)` is the first word, notes dropped) and/or a wave, and the two filters combine; a filter that matches nothing says which one it applied.
+- `simt plan next --lane <name>`: a slice carries a lane (`Lane`, `Stream`, `Workstream`, `Track`) so two agents can take two subsystems at once; `simt plan labels` reports which header each column matched.
+- A `Reviewer` column and a `To review` state: finished-but-unaccepted work is named beside the next answer instead of being handed out as ready.
+- `simt plan status` reports the share of each tracker that is done and what remains; `simt plan archive <id>` retires a finished plan or review and closes its status with it.
+- `simt init --harness <id>` selects one reader at adoption: rules project to that surface, only its agent file and hooks entry are written, and the agent commands follow the declaration (ADR-141).
+- `simt hooks install|status --agent` delegate to the `agent-hooks` run under the name typed, and the remedy names the spelling the caller used.
+- `simt help <group>` prints that group's subcommands and the flags the spec declares; `-h` is answered wherever it appears on a command line.
+- `simt why <subject>` answers one entry point for every subject a reader can name — files, commands, decisions, skills.
+- `simt tests --run` asks the gate's question: run the tests for the files named, through the repository's own runner.
+- The `decide` command is a group with `lint` as the check it names; superseded flags say they are superseded; a bare group stays a read.
+- `simt pack` is marked experimental and frozen by a ruling (ADR-130).
+- Work facets describe a repository's artifact kinds, activities, execution loci and declared verification capabilities beside its stack, additively (ADR-143).
+- The `work` manifest namespace is versioned and validated; adoption writes no `package.json`, `pyproject.toml` or gate a repository cannot run (ADR-144).
+- Work artifacts get explicit identity that survives a rename; scopes resolve by the most specific literal path, refusing equal specificity (ADR-145).
+- Three opt-in work profiles — `work/knowledge`, `work/procedures`, `work/remote-operations` — are selected only by an explicit `work` declaration, so a knowledge repository is never told to run a software test it does not have (ADR-146).
+- Knowledge documents are parsed into sections and chunks with byte ranges.
+- The bench becomes an optional package behind a loader, with a compatibility baseline against the predecessor, an outcome corpus with a hidden oracle, and a deterministic world that reproduces remote failure modes offline.
+- The bench ships an eleven-entry adversarial probe catalogue — forged verifier receipts, wrong tenant, expired approval, crash-after-commit, expired lease and more — each with its own verdict and effect oracle, and reports verified resolution, coverage and cost by component with assurance levels (ADR-142).
+- Federation queries the declared servers together and answers in declaration order; a server's whole group dies on failure, its greeting is read, and its answer is capped.
+- The shipped agent keeps the harness's own task list current every turn, and says so once when the surface has no such tool.
+- The command reference is generated under `docs/`, the README is bounded to it, and the contributor how-tos and reference live on their own pages.
+- The `.github` refresh moves to `scripts/` and off the shipped command surface.
+
+### Changed
+
+- The index retires its JSON-lines backend now that the floor carries FTS5, and the vector path is isolated in one module.
+- Baselines opt in by carrying the region, and leave the projection digest.
+- The variants experiment runner and its arm are retired; the marker fold stays.
+- The workspace commands are one group.
 
 ### Fixed
 
-- The deprecation window that ended at this release closed on a spec that had not
-  declared 26 flags the commands already implemented, so `plan done --yes`,
-  `sync --explain`, `skills compile --yes`, `upgrade --diff --dry-run`,
-  `pack new --dry-run`, `plugin --yes` and others became usage errors. Every one is now
-  declared on the path that reads it, and the reference in `docs/commands` is regenerated
-  from that spec. An undeclared flag is a usage error and says so in the JSON document,
-  not only on stderr.
-- `simt review --local`, `simt check --frozen` and `simt compare --learn` were documented
-  and implemented but undeclared in the command spec, so naming one warned that the
-  command does not take it; `simt sync` advertised `--explain`, which nothing read.
+- Every flag the commands implement is now declared in the command spec before the deprecation window closes, and `docs/commands` is regenerated from that spec, so `plan done --yes`, `sync --explain`, `slice start --yes` and friends stop flipping between usage error and tolerated; an undeclared flag is a usage error that says so in the JSON document.
+- `simt review --local`, `simt check --frozen` and `simt compare --learn` were implemented but undeclared, so naming one warned the command does not take it; `simt sync` advertised an `--explain` nothing read.
+- `simt brief`'s first dirty path lost its first character.
+- `undo` reads the local git config, not the merged one, so a repository-local identity no longer shadows the shared one.
+- The agent-hooks shim carries a locator a GUI harness cannot take away.
+- `simt plan next` treats a bare dash as no tier, and `S (L)` is the S tier, not the L.
+- The evidence-invalidation test no longer depends on filesystem timestamp resolution.
 
 ## [0.8.0] — 2026-11-01
 

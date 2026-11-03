@@ -28,6 +28,7 @@ import { dirname, isAbsolute, join } from 'node:path';
 import { commitJournal } from '../journal.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
 import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../agenthooks/shim.mjs';
+import { absoluteWrites } from '../agenthooks/facts.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
@@ -109,17 +110,7 @@ export async function agentHookCommand(args, flags) {
   // `.gitmodules`) must resolve against the root git itself uses, not the cwd.
   const { root: payloadRoot, command, writes, session: payloadSession } = factsFrom(row, payload, { root: flags.root });
   const root = repoRoot(payloadRoot);
-  // A relative write path is relative to the directory the harness is in, not to the
-  // repository root the facts resolve against: an agent editing `keep.mjs` from `src/`
-  // means `src/keep.mjs`, and a path joined to the wrong base is a path the lease file
-  // will never meet.
-  // Writes are `{path, ...edit}` rows : the path resolves against the harness
-  // cwd, the edit detail travels untouched so the region check sees the old_string.
-  const writesAbsolute = writes.map((w) => {
-    const path = typeof w === 'string' ? w : w?.path;
-    const abs = typeof path === 'string' && isAbsolute(path) ? path : join(payloadRoot, path);
-    return typeof w === 'string' ? abs : { ...w, path: abs };
-  });
+  const writesAbsolute = absoluteWrites(payloadRoot, writes);
   const facts = await factsFor(root, { command, writes: writesAbsolute });
   // Harness hook processes rarely carry SIMT_SESSION, so the payload's own
   // session id is the fallback: without it an agent is blocked by its own

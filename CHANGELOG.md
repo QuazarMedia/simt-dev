@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `simt agent-hooks explain`: one harness payload in, the effect class, resource set, operation identity and the mediation the boundary may claim out, read through the same adapter and policy table the hook uses (ADR-190).
+
 ## [0.10.0] — 2026-11-03
 
 Plan 0004's work layer ships as library modules. None of them is wired to a command yet: this

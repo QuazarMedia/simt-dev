@@ -67,6 +67,9 @@ ${CLI} agent-hooks install     write this repo's policies into the harnesses tha
                            (dry-run unless --yes; merges into the file, keeps every
                             key it does not own; Codex needs the hook trusted)
 ${CLI} agent-hooks status      what each harness will run, and what is not trusted yet
+${CLI} agent-hooks explain     what one harness payload is judged to be, and how the
+                            boundary would judge it (--payload <file> or stdin; the
+                            same adapter and policy table the hook calls)
 ${CLI} agents install          write the Simt-Agent into the harnesses that read an
                             agents file (--harness <id> writes one, not all; dry-run
                             unless --yes; markdown with a frontmatter the harness
@@ -303,6 +306,10 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --variant <id>          which body of a multi-variant skill to use
 --from <repo/path>      install from a declared source by name
 --list                  print the MCP tool surface without reading stdin (mcp)
+--payload <file>        agent-hooks explain: the harness JSON to read (default:
+                        stdin)
+--mediated              agent-hooks explain: claim the boundary mediates the call
+                        instead of reporting that it only observes
 --accept-conflicts      init: adopt rules that collide with hand-written ones
 --backup                init: tag the pre-adoption commit and branch onto
                         simt-dev/adopt before writing (the undo path)

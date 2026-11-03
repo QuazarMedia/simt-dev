@@ -34,6 +34,10 @@ export const BOOL_FLAGS = new Set([
   // read `flags.crossGroup` while the parser accepted no such flag, so the override
   // existed only in the error message that told the reader to pass it
   'cross-group',
+  // agent-hooks explain: the boundary claims it mediated the call rather than only
+  // observed it. Off by default, because a report that assumes mediation would claim an
+  // assurance the boundary does not have.
+  'mediated',
   'json',
   'all',
   'baselines',
@@ -146,6 +150,9 @@ export const VALUE_FLAGS = new Set([
   'labels',
   'max-bytes',
   'paths',
+  // agent-hooks explain: the harness JSON to read when a harness pipes nothing. A value
+  // rather than a switch, because a payload with no file named would have to be guessed.
+  'payload',
   'skill',
   'task',
   // plan next: stay inside one tier, or one wave, or both. A value, not a switch,

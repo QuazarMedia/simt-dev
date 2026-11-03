@@ -28,6 +28,9 @@
 /** @type {SpecRow[]} */
 export const SPEC = [
   { path: 'agent-hook', usage: '<event> --harness', summary: 'the harness entry point: decide one tool call, or deliver the prompt packet', aliases: ['harness hook'], flags: ["diff","harness"], },
+  // The read of the same surface `install` writes: what a payload is judged to be, rather
+  // than what was installed (ADR-190). It writes nothing, so it needs no --yes.
+  { path: 'agent-hooks explain', usage: '--harness <id> [--payload <file>] [--mediated]', summary: 'what one harness payload is in the policy table terms, and how the boundary would judge it', flags: ["harness","mediated","payload"], },
   { path: 'agent-hooks install', usage: '--yes', summary: "write this repository's policies into each harness hooks file", writes: 'repo', aliases: ['harness install'], flags: ["yes","diff","harness","dry-run"], },
   { path: 'agent-hooks status', summary: 'what each harness will run, and what is not trusted yet', defaultFor: 'agent-hooks', flags: ["diff","harness"], },
   { path: 'agents install', usage: '--yes', summary: 'write the Simt-Agent into each harness agents file', writes: 'repo', flags: ["yes","diff","harness"], },

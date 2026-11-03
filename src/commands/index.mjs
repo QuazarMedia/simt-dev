@@ -205,6 +205,7 @@ export const IMPLEMENTED = {
   // The alias spelling of `hooks install --agent` / `hooks status --agent`. It routes
   // through the same command so the two spellings cannot drift, and it says which one was
   // typed in the report and the remedy.
+  'agent-hooks explain': async () => (await import('./agenthooks-explain.mjs')).agentHooksExplainCommand,
   'agent-hooks install': async () => {
     const { hooksCommand } = await import('./hooks.mjs');
     return (args, flags) =>

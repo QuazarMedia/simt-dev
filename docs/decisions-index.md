@@ -194,3 +194,4 @@ in [architecture/history.md](architecture/history.md).
 | [183](decisions/ADR-183-a-bar-declared-after-the-numbers-is-not-a-bar.md) | a bar declared after the numbers is not a bar, and a hard constraint outranks an average | accepted · 2026-11-03 |
 | [184](decisions/ADR-184-knowledge-debt-is-a-sum-of-named-components-and-no-invented-probability.md) | knowledge debt is a sum of named components, and a frequency nobody measured is not a probability | accepted · 2026-11-03 |
 | [185](decisions/ADR-185-an-adapter-is-data-and-being-installed-is-not-being-enabled.md) | an adapter descriptor is data, and being installed is not being enabled | accepted · 2026-11-03 |
+| [186](decisions/ADR-186-a-pilot-is-a-synthetic-fixture-and-its-live-half-stays-unrun.md) | a pilot is a synthetic fixture, and its live half stays unrun until someone authorises it | accepted · 2026-11-03 |

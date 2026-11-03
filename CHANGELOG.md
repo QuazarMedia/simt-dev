@@ -16,13 +16,6 @@ behaviour.
 ### Added
 
 - `simt agent-hooks explain`: one harness payload in, the effect class, resource set, operation identity and the mediation the boundary may claim out, read through the same adapter and policy table the hook uses (ADR-190).
-
-Plan 0004's work layer ships as library modules. None of them is wired to a command yet: this
-release adds in-process surface that the suite exercises, and it claims no new CLI behaviour for
-it. Every module is reachable from `src/`, states its ruling in a comment, and opens no socket.
-
-### Added
-
 - Remote-action contracts under `src/actions/`: a target identified by namespace and incarnation (ADR-167), a semantic delta that never guesses a masked field (ADR-168), authorization held against the intent rather than its rendering (ADR-169), a journal written before dispatch with cancellation left unknown (ADR-170), reconcile-before-retry with no invented idempotency (ADR-171), a pass as a stable read-back that names its target (ADR-172), and recovery that is not rollback with a fallback as a new intent (ADR-173).
 - Coordination primitives under `src/coordination/`: a lease worth what can enforce it (ADR-174), readiness that needs current evidence and does not count a cycle as waiting (ADR-175), and a capsule rebuilt from ids and revalidated before reuse (ADR-176).
 - The work-harness layer: a tool call named by effect rather than by harness (ADR-177), retrieved material treated as evidence with only policy changing policy (ADR-178), review bundles planned, applied or verified with promotion as a new intent (ADR-179), authority as a property of establishment rather than repetition (ADR-180), and graduation after three runs on semantic equivalence rather than transport parity (ADR-181).

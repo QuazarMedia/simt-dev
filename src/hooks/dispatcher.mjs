@@ -21,7 +21,7 @@
 import { spawn } from 'node:child_process';
 import { mkdtemp, readFile, rm, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join, matchesGlob, resolve, sep } from 'node:path';
+import { basename, extname, join, matchesGlob, resolve, sep } from 'node:path';
 
 import { GATES, getGate } from './gates.mjs';
 import { resolveGate } from './resolve.mjs';
@@ -41,6 +41,23 @@ import { git, gitPaths, gitText } from '../sys/git.mjs';
  */
 const DEFAULT_GATE_TIMEOUT_SECONDS = 600;
 const KILL_GRACE_MS = 5000;
+
+/**
+ * The extension set a push may carry and still skip the `test` gate when the manifest
+ * declares none of its own: images and documents, the file kinds a push can add that no
+ * test reads (ADR-147). A manifest `extensions` array REPLACES this set - one declared
+ * set is the only set that applies - it never unions with it.
+ */
+export const DEFAULT_SKIP_EXTENSIONS = [
+  'avif', 'bmp', 'gif', 'heic', 'heif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'tif', 'tiff', 'webp',
+  'doc', 'docx', 'epub', 'md', 'odt', 'pdf', 'rtf', 'txt',
+];
+
+/**
+ * The extension a path carries, lowercased without its dot: `res/a.PNG` is `png`. A name
+ * with no dot is `''`, which no extension set contains.
+ */
+const fileExtension = (name) => extname(name).replace(/^\./, '').toLowerCase();
 
 /**
  * How much of a gate's output a report can carry. This is a bound on what is KEPT, not
@@ -177,7 +194,7 @@ export function parsePushedRefs(text) {
 
 /**
  * Confirm a tag's commit is already accounted for, so the tag may ride along in a
- * docs-only push (ADR-113). A tag carries no commits of its own in the release flow:
+ * non-code push (ADR-147). A tag carries no commits of its own in the release flow:
  * it points at commits delivered (and tested) by a branch push. It is acceptable only
  * when the commit it names is reachable from a remote-tracking ref (already pushed) or
  * from a branch tip this same push is delivering. Any uncertainty - the tag does not
@@ -222,11 +239,11 @@ async function tagCommitAccountedFor(root, tagSha, pushingTips) {
 }
 
 /**
- * Decide whether a push carries only documentation, so the `test` gate may be
- * skipped for it (ADR-113). Every uncertainty fails closed to `{ docsOnly: false }`
- * with the reason the full suite runs: an empty ref list, a new branch (no remote
- * sha to diff against), a tag whose commit is not confirmed already delivered, a
- * commit count above the ceiling, a file outside the declared paths, or a git error.
+ * Decide whether a push is non-code, so the `test` gate may be skipped for it (ADR-147).
+ * Every uncertainty fails closed to `{ nonCode: false }` with the reason the full suite
+ * runs: an empty ref list, a new branch (no remote sha to diff against), a tag whose
+ * commit is not confirmed already delivered, a commit count above the ceiling, a file
+ * outside the declared paths and extensions, or a git error.
  *
  * Branch refs are judged on a TREE diff (`remote..local`), so a force push that
  * drops commits is judged on the trees it replaces, not on the commit count alone.
@@ -235,12 +252,15 @@ async function tagCommitAccountedFor(root, tagSha, pushingTips) {
  *
  * @param {string} root the repository to ask git
  * @param {{ref: string, localSha: string, remoteSha: string}[]} refs
- * @param {{maxCommits: number, paths: string[]}} config the manifest's `gates.prePushSkipTest`
- * @returns {Promise<{docsOnly: boolean, reason: string}>}
+ * @param {{maxCommits: number, paths: string[], extensions?: string[] | Set<string>}} config
+ *   the manifest's `gates.prePushSkipTest`; `extensions` defaults to the built-in
+ *   image-and-document set
+ * @returns {Promise<{nonCode: boolean, reason: string}>}
  */
-export async function classifyPush(root, refs, { maxCommits, paths }) {
+export async function classifyPush(root, refs, { maxCommits, paths, extensions = DEFAULT_SKIP_EXTENSIONS }) {
+  const exts = new Set(extensions);
   if (refs.length === 0) {
-    return { docsOnly: false, reason: 'the push carries no readable ref list; running the full suite' };
+    return { nonCode: false, reason: 'the push carries no readable ref list; running the full suite' };
   }
   const deletions = refs.filter((r) => r.localSha === ZERO_SHA).length;
   const branches = refs.filter((r) => r.localSha !== ZERO_SHA && !r.ref.startsWith('refs/tags/'));
@@ -250,14 +270,14 @@ export async function classifyPush(root, refs, { maxCommits, paths }) {
   const files = new Set();
   for (const { ref, localSha, remoteSha } of branches) {
     if (remoteSha === ZERO_SHA) {
-      return { docsOnly: false, reason: `a new branch is being pushed (${ref}); its history cannot be diffed against the remote` };
+      return { nonCode: false, reason: `a new branch is being pushed (${ref}); its history cannot be diffed against the remote` };
     }
     let count, names;
     try {
       count = await gitText(root, ['rev-list', '--count', `${remoteSha}..${localSha}`]);
       names = await gitPaths(root, ['diff', '--name-only', `${remoteSha}..${localSha}`]);
     } catch (error) {
-      return { docsOnly: false, reason: `the push could not be diffed: ${String(error.stderr ?? error.message).trim()}` };
+      return { nonCode: false, reason: `the push could not be diffed: ${String(error.stderr ?? error.message).trim()}` };
     }
     commits += Number(count);
     // NUL-separated paths because a path can contain a newline, and git quotes such a
@@ -271,26 +291,29 @@ export async function classifyPush(root, refs, { maxCommits, paths }) {
   const pushingTips = branches.map((b) => b.localSha);
   for (const { localSha } of tags) {
     const verdict = await tagCommitAccountedFor(root, localSha, pushingTips);
-    if (!verdict.ok) return { docsOnly: false, reason: verdict.reason };
+    if (!verdict.ok) return { nonCode: false, reason: verdict.reason };
   }
 
   if (commits > maxCommits) {
-    return { docsOnly: false, reason: `${commits} commits exceed the ${maxCommits}-commit ceiling for a docs-only push` };
+    return { nonCode: false, reason: `${commits} commits exceed the ${maxCommits}-commit ceiling for a non-code push` };
   }
-  const outside = [...files].filter((f) => !paths.some((p) => matchesGlob(f, p)));
+  // A file is inside when a declared path matches it OR its extension is declared:
+  // the two are orthogonal, and a file that satisfies neither is the suite's to judge.
+  const inside = (f) => paths.some((p) => matchesGlob(f, p)) || exts.has(fileExtension(f));
+  const outside = [...files].filter((f) => !inside(f));
   if (outside.length > 0) {
-    return { docsOnly: false, reason: `${outside.length} file(s) are outside the docs-only paths: ${outside.slice(0, 5).join(', ')}` };
+    return { nonCode: false, reason: `${outside.length} file(s) are outside the declared paths and extensions: ${outside.slice(0, 5).join(', ')}` };
   }
 
   const parts = [];
-  if (commits > 0) parts.push(`${commits} commit(s) touching ${files.size} file(s), all inside the docs-only paths`);
+  if (commits > 0) parts.push(`${commits} commit(s) touching ${files.size} file(s), all inside the declared paths and extensions`);
   if (tags.length > 0) parts.push(`${tags.length} tag(s) already delivered`);
   if (deletions > 0) parts.push(`${deletions} ref deletion(s)`);
-  if (parts.length === 0) return { docsOnly: true, reason: 'no commits carried' };
-  // The report prints this as-is (ADR-113). The label names what is being pushed:
-  // a push that carries only tags is a tag push, not a docs-only push.
-  const kind = commits > 0 ? 'docs-only push' : tags.length > 0 ? 'tag push' : 'deletion push';
-  return { docsOnly: true, reason: `${kind}: ${parts.join('; ')}` };
+  if (parts.length === 0) return { nonCode: true, reason: 'no commits carried' };
+  // The report prints this as-is (ADR-147). The label names what is being pushed:
+  // a push that carries only tags is a tag push, not a non-code push.
+  const kind = commits > 0 ? 'non-code push' : tags.length > 0 ? 'tag push' : 'deletion push';
+  return { nonCode: true, reason: `${kind}: ${parts.join('; ')}` };
 }
 
 /**
@@ -303,16 +326,31 @@ export async function classifyPush(root, refs, { maxCommits, paths }) {
  *
  * @returns {Promise<{reason: string, adr: string} | null>} null runs the suite; a reason skips the `test` gate
  */
-async function resolveDocsOnlySkip(root, manifest, pushed) {
+async function resolveNonCodeSkip(root, manifest, pushed) {
   if (pushed === undefined) return null;
   const config = manifest?.gates?.prePushSkipTest;
-  if (typeof config?.maxCommits !== 'number' || !Array.isArray(config?.paths)) return null;
+  if (typeof config?.maxCommits !== 'number' || !Array.isArray(config.paths)) return null;
+  // `extensions` is optional: absent, the built-in image-and-document set applies.
+  // Present, it must be an array of non-empty strings - a misshape runs the suite,
+  // the same fail-closed as any other field - and it REPLACES the built-in set:
+  // the declared set is the only set that applies (ADR-147).
+  let extensions = DEFAULT_SKIP_EXTENSIONS;
+  if (config.extensions !== undefined) {
+    if (!Array.isArray(config.extensions) || !config.extensions.every((e) => typeof e === 'string' && e.trim() !== '')) {
+      return null;
+    }
+    extensions = config.extensions.map((e) => e.trim().replace(/^\./, '').toLowerCase());
+  }
   const { refs, error } = parsePushedRefs(pushed);
   if (error !== null) {
     return null; // the caller cannot be sure what is being pushed; the suite runs
   }
-  const verdict = await classifyPush(root, refs, { maxCommits: config.maxCommits, paths: config.paths });
-  return verdict.docsOnly ? { reason: verdict.reason, adr: 'ADR-113' } : null;
+  const verdict = await classifyPush(root, refs, {
+    maxCommits: config.maxCommits,
+    paths: config.paths,
+    extensions: new Set(extensions),
+  });
+  return verdict.nonCode ? { reason: verdict.reason, adr: 'ADR-147' } : null;
 }
 
 /**
@@ -321,7 +359,7 @@ async function resolveDocsOnlySkip(root, manifest, pushed) {
  * The dispatcher records every gate run against the tree it ran on (ADR-087). If a passing
  * `test` run is recorded for the committed tree about to be pushed, and nothing has changed
  * since, re-running the full suite at push time buys nothing: it is the same tree, already
- * proven. This reads that evidence and earns the same reported skip the docs-only path does.
+ * proven. This reads that evidence and earns the same reported skip the non-code path does.
  *
  * It matches the COMMITTED tree (`HEAD^{tree}`), not the working tree: the pre-push gate runs
  * at HEAD, so the evidence that matters is a pass on exactly that tree. A file edited after
@@ -411,11 +449,11 @@ export async function runGates(event, { root, manifest, pushed }) {
   let headWorktree = null;
   let skipTest = null;
   if (event === 'pre-push') {
-    // Decided before the worktree exists: a push that carries only documentation skips the
-    // `test` gate (ADR-113), and a push whose tree the author already proved green skips it
-    // on that evidence (ADR-120). A push that earns either skip needs no tree for a gate
-    // that will not run.
-    skipTest = (await resolveDocsOnlySkip(root, manifest, pushed)) ??
+    // Decided before the worktree exists: a non-code push (documentation, images, release
+    // files) skips the `test` gate (ADR-147), and a push whose tree the author already proved
+    // green skips it on that evidence (ADR-120). A push that earns either skip needs no tree
+    // for a gate that will not run.
+    skipTest = (await resolveNonCodeSkip(root, manifest, pushed)) ??
       (await resolveAlreadyPassedSkip(root));
     if (skipTest === null) {
       const materialized = await materializeHeadWorktree(root);
@@ -463,7 +501,7 @@ export async function runGates(event, { root, manifest, pushed }) {
  * @param {string[]} ctx.declared the gate names for this event
  * @param {string} ctx.key the manifest key for this event
  * @param {{reason: string, adr: string} | null} [ctx.skipTest] set when a push skips the
- *   `test` gate (ADR-113 for docs-only, ADR-120 for an already-green tree); the reason is
+ *   `test` gate (ADR-147 for a non-code push, ADR-120 for an already-green tree); the reason is
  *   what the report prints in its place, and the adr is the record that earned it
  * @returns {Promise<{event: string, gates: object[], failed: boolean}>}
  */
@@ -516,7 +554,7 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
       continue;
     }
 
-    // The one gate a push may not run (ADR-113 for a docs-only push, ADR-120 for a tree
+    // The one gate a push may not run (ADR-147 for a non-code push, ADR-120 for a tree
     // already proven green). It is reported, not dropped: a skip without a printed reason
     // would let "passed" mean "the suite never ran", which is the exact confusion the report
     // exists to prevent.

@@ -393,6 +393,8 @@ test('a partial supersession never becomes a whole one', async () => {
   // of the status rather than dropped.
   assert.equal(index.get('ADR-011').supersededBy, 'ADR-012');
   assert.deepEqual(index.get('ADR-012').supersedes, ['ADR-011']);
+  assert.equal(index.get('ADR-113').supersededBy, 'ADR-147');
+  assert.deepEqual(index.get('ADR-147').supersedes, ['ADR-113']);
 });
 
 test('accepted is read from the status, not from one record\'s spelling of it', async () => {
@@ -402,7 +404,7 @@ test('accepted is read from the status, not from one record\'s spelling of it', 
   // author's habits rather than the document.
   const { decisions } = await loadDecisions();
   const notAccepted = decisions.filter((d) => !d.accepted).map((d) => d.id);
-  assert.deepEqual(notAccepted, ['ADR-011'], 'only a record whose status starts with "superseded" may read as not accepted');
+  assert.deepEqual(notAccepted, ['ADR-011', 'ADR-113'], 'only a record whose status starts with "superseded" may read as not accepted');
 });
 
 test('a ruling that was overturned says so where it is printed', async () => {

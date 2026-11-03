@@ -6,6 +6,10 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- The pre-push test skip is now "non-code" (ADR-147): a built-in image-and-document extension set applies when the manifest declares no `extensions` (a declared set replaces it, never unions with it), and this repo's ceiling rises to 5 commits over `docs/`, `res/`, `package.json` and `simt.json`.
+
 ## [0.9.0] — 2026-11-02
 
 ### Added

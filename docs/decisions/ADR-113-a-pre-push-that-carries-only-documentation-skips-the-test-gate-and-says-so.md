@@ -5,7 +5,7 @@ simt-supersedes: []
 
 # ADR-113 — a pre-push that carries only documentation skips the test gate, and says so
 
-Status: **accepted** · 2026-10-31
+Status: **superseded by [ADR-147](ADR-147-non-code-pushes-skip-the-test-gate-and-the-manifest-declares-the-set.md)** · 2026-10-31
 
 ## Context
 

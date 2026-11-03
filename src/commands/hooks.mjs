@@ -75,7 +75,7 @@ async function runHook(args, flags) {
     return fail(`${root} has no ${MANIFEST_FILE}; the hook cannot know its gate list`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
   }
 
-  // git feeds pre-push its ref list on stdin, and the docs-only skip (ADR-113)
+  // git feeds pre-push its ref list on stdin, and the non-code skip (ADR-147)
   // needs it. A manual run from a terminal has a TTY and reads empty, which the
   // dispatcher treats as "no push to classify" and answers with the full suite.
   const pushed = event === 'pre-push' ? await readStdin() : undefined;

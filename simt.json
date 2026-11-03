@@ -24,10 +24,10 @@
       "test"
     ],
     "prePushSkipTest": {
-      "maxCommits": 2,
+      "maxCommits": 5,
       "paths": [
-        "**/*.md",
         "docs/**",
+        "res/**",
         "package.json",
         "simt.json"
       ]

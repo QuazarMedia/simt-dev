@@ -12,7 +12,7 @@ import { after, test } from 'node:test';
 import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_DIR_LEGACY, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
 import { hasScript, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
-import { classifyPush, parsePushedRefs, renderGateReport, runGates, stagedFiles } from '../src/hooks/dispatcher.mjs';
+import { classifyPush, DEFAULT_SKIP_EXTENSIONS, parsePushedRefs, renderGateReport, runGates, stagedFiles } from '../src/hooks/dispatcher.mjs';
 import { recordRun } from '../src/ledger/index.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 import { readCapability } from '../src/hooks/capability.mjs';
@@ -157,7 +157,17 @@ test('dispatcher: a tag whose commit no pushed ref contains runs the test gate',
   assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
 });
 
-test('dispatcher: a tag riding a docs-only branch push skips the test gate', async () => {
+test('the built-in extension set is the image and document kinds, and a change needs a test edit', () => {
+  // A manifest without `extensions` applies this set (ADR-147). Pinning it here means a
+  // kind added or dropped from the default is visible in the diff, not only in a push
+  // that suddenly stops skipping.
+  assert.deepEqual(DEFAULT_SKIP_EXTENSIONS, [
+    'avif', 'bmp', 'gif', 'heic', 'heif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'tif', 'tiff', 'webp',
+    'doc', 'docx', 'epub', 'md', 'odt', 'pdf', 'rtf', 'txt',
+  ]);
+});
+
+test('dispatcher: a tag riding a non-code branch push skips the test gate', async () => {
   const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
   const { root, base, head } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
   // The tag names the commit the branch is delivering in this same push.
@@ -168,9 +178,78 @@ test('dispatcher: a tag riding a docs-only branch push skips the test gate', asy
   assert.equal(result.failed, false);
   const gate = result.gates.find((g) => g.name === 'test');
   assert.equal(gate.status, 'skipped');
-  // Commits are being delivered, so the push kind stays docs-only even with a tag aboard.
-  assert.match(gate.detail, /^docs-only push: 1 commit\(s\) touching 1 file\(s\)/);
+  // Commits are being delivered, so the push kind stays non-code even with a tag aboard.
+  assert.match(gate.detail, /^non-code push: 1 commit\(s\) touching 1 file\(s\)/);
   assert.match(gate.detail, /1 tag\(s\) already delivered/);
+});
+
+test('dispatcher: image and document files skip the test gate without a declared extension list', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: { maxCommits: 2, paths: ['docs/**'] } } };
+  const { root, pushed } = await twoCommitPush({
+    files: { 'base.md': 'a\n' },
+    topFiles: { 'res/shot.png': 'img\n', 'notes.txt': 'b\n' },
+    manifest,
+  });
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'skipped');
+  // Neither file matches the declared path; both sit in the built-in image-and-document set.
+  assert.match(gate.detail, /non-code push: 1 commit\(s\) touching 2 file\(s\)/);
+});
+
+test('dispatcher: a declared extension list replaces the built-in set, never unions with it', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: { maxCommits: 2, paths: ['docs/**'], extensions: ['txt'] } } };
+  const { root, pushed } = await twoCommitPush({
+    files: { 'base.md': 'a\n' },
+    topFiles: { 'notes.txt': 'b\n', 'res/shot.png': 'img\n' },
+    manifest,
+  });
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  // `txt` is declared; `png` sits in the built-in set only, so a union would skip and a
+  // replacement runs the suite.
+  assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
+});
+
+test('dispatcher: a misshaped extension list fails closed to the test gate', async () => {
+  for (const bad of [5, '', ['ok', '']]) {
+    const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: { maxCommits: 2, paths: ['docs/**'], extensions: bad } } };
+    const { root, pushed } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.txt': 'b\n' }, manifest });
+    const result = await runGates('pre-push', { root, manifest, pushed });
+    assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed', `extensions: ${JSON.stringify(bad)}`);
+  }
+});
+
+test('dispatcher: a declared res path covers a file no extension set contains', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: { maxCommits: 2, paths: ['res/**', 'docs/**'] } } };
+  const { root, pushed } = await twoCommitPush({
+    files: { 'base.md': 'a\n' },
+    topFiles: { 'res/data.csv': '1,2\n' },
+    manifest,
+  });
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'skipped');
+  // `csv` is in no extension set; the declared path is what earns the skip.
+  assert.match(gate.detail, /non-code push: 1 commit\(s\) touching 1 file\(s\)/);
+});
+
+test('dispatcher: a five-commit push within a declared five-commit ceiling skips the test gate', async () => {
+  const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: { maxCommits: 5, paths: ['docs/**'] } } };
+  const root = await fixture({ scripts: { test: 'exit 0' }, files: { 'a.md': '1\n' }, manifest });
+  await git(['add', '-A'], { cwd: root });
+  await git(['commit', '-m', 'base'], { cwd: root });
+  const { stdout: base } = await exec('git', ['rev-parse', 'HEAD'], { cwd: root });
+  for (let i = 1; i <= 5; i += 1) {
+    await writeFile(join(root, `note-${i}.txt`), `${i}\n`);
+    await git(['add', '-A'], { cwd: root });
+    await git(['commit', '-m', `note-${i}`], { cwd: root });
+  }
+  const { stdout: head } = await exec('git', ['rev-parse', 'HEAD'], { cwd: root });
+  const pushed = `refs/heads/main ${head.trim()} refs/heads/main ${base.trim()}\n`;
+  const result = await runGates('pre-push', { root, manifest, pushed });
+  const gate = result.gates.find((g) => g.name === 'test');
+  assert.equal(gate.status, 'skipped');
+  assert.match(gate.detail, /5 commit\(s\) touching 5 file\(s\)/);
 });
 
 test('dispatcher: an annotated tag is dereferenced to its commit before classification', async () => {
@@ -230,8 +309,8 @@ test('dispatcher: a later failure cancels the pass, so the suite runs', async ()
   assert.equal(result.gates.find((g) => g.name === 'test').status, 'passed');
 });
 
-test('dispatcher: a code push that is not docs-only skips on evidence when present', async () => {
-  // With prePushSkipTest declared, a code push is not docs-only, so the docs-only path yields
+test('dispatcher: a code push skips on evidence when present', async () => {
+  // With prePushSkipTest declared, a code push is not non-code, so the non-code path yields
   // and the evidence path decides: green evidence skips, none runs the suite.
   const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
   const root = await fixture({ scripts: { test: 'exit 0' }, files: { 'src/x.js': '1\n' }, manifest });

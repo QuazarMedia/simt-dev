@@ -726,17 +726,17 @@ test('dispatcher: pre-push fails closed when HEAD cannot be materialized (no com
   assert.match(gate.detail, /git worktree add failed/);
 });
 
-// ------------------------------------------------ pre-push docs-only skip (ADR-113)
+// ------------------------------------------------ pre-push non-code skip (ADR-147)
 
 /** The classifier's ceiling and paths, as a manifest would declare them. */
-test('dispatcher: a docs-only push skips the test gate and reports why', async () => {
+test('dispatcher: a non-code push skips the test gate and reports why', async () => {
   const manifest = { gates: { preCommit: [], prePush: ['test'], prePushSkipTest: SKIP_TEST } };
   const { root, pushed } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest });
   const result = await runGates('pre-push', { root, manifest, pushed });
   assert.equal(result.failed, false);
   const gate = result.gates.find((g) => g.name === 'test');
   assert.equal(gate.status, 'skipped');
-  assert.match(gate.detail, /docs-only push: 1 commit\(s\) touching 1 file\(s\), all inside the docs-only paths/);
+  assert.match(gate.detail, /non-code push: 1 commit\(s\) touching 1 file\(s\), all inside the declared paths and extensions/);
   // The report names the skip: a gate that did not run must be visible as such.
   assert.match(renderGateReport('pre-push', ['test'], result).join('\n'), /SKIPPED\s+test/);
 });
@@ -823,25 +823,25 @@ test('parsePushedRefs: reads git pre-push lines and refuses what it cannot read'
   assert.match(parsePushedRefs(`refs/heads/main notash refs/heads/main ${remote}\n`).error, /unrecognized sha/);
 });
 
-test('classifyPush: a file outside the declared paths fails closed', async () => {
+test('classifyPush: a file outside the declared paths and extensions fails closed', async () => {
   const { root, base, head } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'src/x.js': '1\n' }, manifest: {} });
   const verdict = await classifyPush(root, [{ ref: 'refs/heads/main', localSha: head, remoteSha: base }], SKIP_TEST);
-  assert.equal(verdict.docsOnly, false);
-  assert.match(verdict.reason, /outside the docs-only paths: src\/x\.js/);
+  assert.equal(verdict.nonCode, false);
+  assert.match(verdict.reason, /outside the declared paths and extensions: src\/x\.js/);
 });
 
 test('classifyPush: a diff git cannot answer fails closed', async () => {
   const { root } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest: {} });
   const missing = 'c'.repeat(40);
   const verdict = await classifyPush(root, [{ ref: 'refs/heads/main', localSha: missing, remoteSha: missing }], SKIP_TEST);
-  assert.equal(verdict.docsOnly, false);
+  assert.equal(verdict.nonCode, false);
   assert.match(verdict.reason, /could not be diffed/);
 });
 
 test('classifyPush: an empty ref list fails closed', async () => {
   const { root } = await twoCommitPush({ files: { 'base.md': 'a\n' }, topFiles: { 'notes.md': 'b\n' }, manifest: {} });
   const verdict = await classifyPush(root, [], SKIP_TEST);
-  assert.equal(verdict.docsOnly, false);
+  assert.equal(verdict.nonCode, false);
   assert.match(verdict.reason, /no readable ref list/);
 });
 
@@ -857,7 +857,7 @@ test('dispatcher: a tag on an already-pushed commit skips the test gate', async 
   assert.equal(result.failed, false);
   const gate = result.gates.find((g) => g.name === 'test');
   assert.equal(gate.status, 'skipped');
-  // A push that carries only a tag is a tag push; the report must not call it docs-only.
+  // A push that carries only a tag is a tag push; the report must not call it non-code.
   assert.match(gate.detail, /tag push: 1 tag\(s\) already delivered/);
-  assert.doesNotMatch(gate.detail, /docs-only/);
+  assert.doesNotMatch(gate.detail, /non-code/);
 });

@@ -56,7 +56,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A07 | A refused sibling claim still enters the why-graph | P1 | F | knowledge | S | A06 | Complete | f0d295117e10c6845f6ed04b76f75f1c6a206d7d · test: node --test test/work-doors.test.mjs |
 | A08 | A new lease grant reuses fencing token 1 | P1 | F | fencing | S | — | Complete | 9567ca986f3b3dace55097b368e61f97aa8aed79 · test: node --test test/work-leases.test.mjs |
 | A09 | A parsed command with no git fact skips the push regex | P0 | S | agenthooks | M | — | Complete | c40e9bbd20e48eb059352e6c123857a5554e5359 · test: node --test test/agenthooks-audit.test.mjs |
-| A10 | `git pull -r` is not treated as a rewrite | P1 | S | agenthooks | S | A09 | Queued | — |
+| A10 | `git pull -r` is not treated as a rewrite | P1 | S | agenthooks | S | A09 | Complete | fe874f1094e3161a5fc243ab18945df7826f488a · test: node --test test/agenthooks-audit.test.mjs |
 | A11 | Split `dispatcher.mjs` so the pre-push fix has room under 1000 | P2 | C | dispatcher | M | — | Queued | — |
 | A12 | Pre-push runs the other gates on the dirty tree when test is skipped | P1 | F | dispatcher | M | A11 | Queued | — |
 | A13 | `run()` JSON omits `exitCode` and superseded-flag `deprecated` | P1 | F | envelope | M | — | Queued | — |

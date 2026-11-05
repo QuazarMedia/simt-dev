@@ -75,7 +75,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A26 | `slice start` can leave a lease or a worktree behind | P2 | F | slice | M | — | Complete | 93dc627de6e27b49dbdc1b89618e31820b0932f9 · test: node --test test/slice.test.mjs |
 | A27 | `slice finish` reports a SHA when the tracker write failed | P3 | F | slice | S | A26 | Complete | a8d42ee16a3de570dadcc578e1725b366b4f0019 · test: node --test test/slice.test.mjs |
 | A28 | `read-channel-equivalence` ignores `before` and `after` | P2 | F | replay | S | — | Complete | ad7cd23bd74eb54cb6404816371678f15ebb84e0 · test: node --test test/work-replay.test.mjs test/work-acceptance.test.mjs |
-| A29 | `mine.mjs` keeps a second process timeout beside `spawnBounded` | P2 | C | mine | S | — | Queued | — |
+| A29 | `mine.mjs` keeps a second process timeout beside `spawnBounded` | P2 | C | mine | S | — | Complete | fb18a63cd29bee15e5a8d98ce437e5be5cff768f · test: node --test test/bench.test.mjs test/sys-utils.test.mjs |
 | A30 | `lintRegistry` does not require registry `version` 1 | P2 | F | graph | S | — | Queued | — |
 | A31 | The wheel assertion's failure text says the opposite of the match | P3 | D | shipped | S | — | Queued | — |
 | A32 | `brew style` runs before the formula is rendered | P3 | D | publish | S | — | Queued | — |

@@ -55,6 +55,12 @@ export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0, asOf = 
     const validity = readApplicability(read.claim.applicability ?? record);
     return { ...read.claim, applicability: read.claim.applicability ?? validity.applicability ?? null };
   });
+  // The map keeps the raw record for a refused claim so its problems can be reported; that
+  // also made the requested id findable, and the command then rendered `asserts undefined`
+  // and exited 0. A refusal is the answer for that id.
+  const refusedHere = refused.find((entry) => entry.id === id);
+  if (refusedHere) return { error: `claim ${id} was refused: ${refusedHere.reason}` };
+
   const claim = claims.find((record) => record?.id === id) ?? null;
   if (claim === null) return { error: `no claim ${id} in the document, which holds ${claims.length} claim(s)` };
 

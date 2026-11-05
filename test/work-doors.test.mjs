@@ -84,6 +84,18 @@ test('knowledge why refuses an id the document does not hold, and says how many 
   });
 });
 
+test('knowledge why exits non-zero on a claim the reader refused (A06)', () => {
+  // The refused record stayed in the map, so the requested id was found, `renderWhy`
+  // printed `asserts undefined undefined = undefined`, and the command exited 0.
+  const dir = repo();
+  const claims = write(dir, 'bad-claims.json', { claims: [{ id: 'bad' }] });
+  assert.throws(() => run(dir, ['knowledge', 'why', 'bad', '--claims', claims]), (error) => {
+    assert.match(String(error.stderr), /claim bad was refused/);
+    assert.doesNotMatch(String(error.stdout ?? ''), /asserts undefined/);
+    return true;
+  });
+});
+
 test('verify plan offers only what the constraints admit, and reports what it excluded', () => {
   const dir = repo();
   const doc = write(dir, 'plan.json', {

@@ -26,6 +26,7 @@
 // slice's code: editing the same row in both places would make every merge of a
 // finished slice a conflict on the one line that records it.
 
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 
@@ -233,17 +234,31 @@ async function claimSlice(main, id, leaseRel, session) {
  * that will clean itself up, never a second failure stacked on a success.
  */
 /**
- * Take back a worktree and its branch that a failed `start` created.
+ * Take back the worktree and branch a failed `start` created.
  *
  * `--force` becomes `rm -rf` becomes a prune, the same order the abandon path uses: a
  * half-created tree must not be what decides whether the next start can run (A26).
+ * Only the parts this attempt created are removed; a path or branch that existed before
+ * the attempt made `worktree add` fail, and deleting either would destroy another
+ * caller's work.
  */
-async function discardWorktree(main, worktree, branch) {
-  await git(main, ['worktree', 'remove', '--force', worktree]).catch(async () => {
-    await rm(worktree, { recursive: true, force: true }).catch(() => {});
-    await git(main, ['worktree', 'prune']).catch(() => {});
-  });
-  await git(main, ['branch', '-D', branch]).catch(() => {});
+async function discardWorktree(main, worktree, branch, { removeTree = true, deleteBranch = true } = {}) {
+  if (removeTree) {
+    await git(main, ['worktree', 'remove', '--force', worktree]).catch(async () => {
+      await rm(worktree, { recursive: true, force: true }).catch(() => {});
+      await git(main, ['worktree', 'prune']).catch(() => {});
+    });
+  }
+  if (deleteBranch) await git(main, ['branch', '-D', branch]).catch(() => {});
+}
+
+async function branchExists(main, branch) {
+  try {
+    await git(main, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function releaseSlice(main, id, session) {
@@ -413,6 +428,10 @@ async function startSlice(root, id, flags, prompt) {
     lease = claimed.mine;
   }
 
+  // `worktree add` fails on a path or branch that already exists. Neither belongs to this
+  // start, so cleanup must remove only what this attempt created (A26).
+  const worktreeExisted = existsSync(worktree);
+  const branchExisted = await branchExists(main, branch);
   try {
     await git(main, ['worktree', 'add', '-b', branch, worktree]);
   } catch (error) {
@@ -420,7 +439,7 @@ async function startSlice(root, id, flags, prompt) {
     // The lease was claimed before the tree existed, and `git worktree add` may already
     // have created the branch before it failed. A start that has no tree has no claim and
     // no branch either, or the slice is blocked until the TTL (A26).
-    await discardWorktree(main, worktree, branch);
+    await discardWorktree(main, worktree, branch, { removeTree: !worktreeExisted, deleteBranch: !branchExisted });
     if (lease !== null) await releaseSlice(main, id, session);
     return fail(`the worktree could not be created: ${detail}`, EXIT.FAIL, `run: git -C ${main} worktree list`);
   }

@@ -76,12 +76,24 @@ test('a failed worktree add releases the lease it claimed (A26)', async () => {
   const first = await capture(() => sliceCommand('start', ['A26'], { root, yes: true, session: 'tester' }));
   assert.notEqual(first.code, 0);
   assert.match(first.stderr, /worktree could not be created/);
+  assert.equal(existsSync(join(blocked, 'occupied')), true, 'a pre-existing blocked path was deleted');
 
   // The lease is the claim that has to go with the tree: with the obstruction removed,
   // the same session can start the slice again only if the first attempt released it.
   await rm(blocked, { recursive: true, force: true });
   const second = await capture(() => sliceCommand('start', ['A26'], { root, yes: true, session: 'tester' }));
   assert.equal(second.code, 0, second.stderr);
+});
+
+test('a failed start preserves a slice branch it did not create (A26)', async () => {
+  const { root } = await startableRepo();
+  await git(['-C', root, 'branch', 'slice/a26']);
+
+  const result = await capture(() => sliceCommand('start', ['A26'], { root, yes: true, session: 'tester' }));
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /worktree could not be created/);
+  const branches = await git(['-C', root, 'branch', '--list', 'slice/a26']);
+  assert.match(String(branches.stdout), /slice\/a26/, 'a pre-existing branch was deleted');
 });
 
 test('a tracker failure after a commit names the sha and the plan done command (A27)', async () => {

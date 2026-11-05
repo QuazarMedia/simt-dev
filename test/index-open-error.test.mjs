@@ -33,6 +33,7 @@ test('a corrupt index surfaces the underlying message, not [object Object] (A20)
     // file that is broken; the test needs a term that survives tokenisation.
     const result = await ix.search('anything');
     assert.equal(result.ok, false);
+    assert.equal(result.error.code, 'INDEX_CORRUPT', 'the underlying code was replaced by E_READ');
     assert.equal(typeof result.error.message, 'string');
     assert.notEqual(result.error.message, '[object Object]', 'the error object was stringified');
     assert.ok(result.error.message.length > 0, 'the message is empty');

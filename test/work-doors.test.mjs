@@ -108,6 +108,9 @@ test('a refused sibling stays reported but leaves the why-graph (A07)', () => {
   const payload = json(dir, ['knowledge', 'why', 'c1', '--claims', claims]);
   assert.equal(payload.impact.reachable.includes('refused-sibling'), false, 'a refused claim is not a dependent');
   assert.equal(payload.lineage.reachable.includes('refused-sibling'), false, 'a refused claim is not a source');
+  assert.equal(payload.graph.edges, 0, 'the edge to the refused claim is still in the graph');
+  assert.equal(payload.impact.total, 1, 'the refused claim was counted as a dependent node');
+  assert.equal(payload.lineage.total, 1, 'the refused claim was counted as a source node');
   assert.ok(
     payload.problems.some((problem) => problem.includes('refused-sibling')),
     'the refusal is still reported in the problems list',

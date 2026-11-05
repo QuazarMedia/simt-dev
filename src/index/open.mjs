@@ -105,7 +105,10 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
       answered(async () => {
         if (closed) throw new Error(INDEX_CODES.CLOSED);
         const rows = await searchFtsBm25(root, task);
-        if (rows.error) return fail(INDEX_CODES.READ, rows.error?.message ?? String(rows.error));
+        if (rows.error) {
+          const code = typeof rows.error.code === 'string' ? rows.error.code : INDEX_CODES.READ;
+          return fail(code, rows.error.message ?? String(rows.error));
+        }
         return ok(limit === undefined ? rows : rows.slice(0, limit));
       }),
 
@@ -121,7 +124,10 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
         const g = await graph();
         if (g.files.length === 0) return fail(INDEX_CODES.NO_INDEX, 'the index is empty');
         const bm25 = String(task ?? '').trim().length > 0 ? await searchFtsBm25(root, task) : [];
-        if (bm25.error) return fail(INDEX_CODES.READ, bm25.error?.message ?? String(bm25.error));
+        if (bm25.error) {
+          const code = typeof bm25.error.code === 'string' ? bm25.error.code : INDEX_CODES.READ;
+          return fail(code, bm25.error.message ?? String(bm25.error));
+        }
         const ranked = rankFiles({ ...g, bm25, task });
         return ok(limit === undefined ? ranked : ranked.slice(0, limit));
       }),

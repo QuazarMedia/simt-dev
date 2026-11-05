@@ -55,7 +55,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A06 | `knowledge why` exits 0 on a claim `readClaim` refused | P1 | F | knowledge | S | — | Complete | 047349f35082843faeac2c5b64bc342db945c520 · test: node --test test/work-doors.test.mjs |
 | A07 | A refused sibling claim still enters the why-graph | P1 | F | knowledge | S | A06 | Complete | f0d295117e10c6845f6ed04b76f75f1c6a206d7d · test: node --test test/work-doors.test.mjs |
 | A08 | A new lease grant reuses fencing token 1 | P1 | F | fencing | S | — | Complete | 9567ca986f3b3dace55097b368e61f97aa8aed79 · test: node --test test/work-leases.test.mjs |
-| A09 | A parsed command with no git fact skips the push regex | P0 | S | agenthooks | M | — | Queued | — |
+| A09 | A parsed command with no git fact skips the push regex | P0 | S | agenthooks | M | — | Complete | c40e9bbd20e48eb059352e6c123857a5554e5359 · test: node --test test/agenthooks-audit.test.mjs |
 | A10 | `git pull -r` is not treated as a rewrite | P1 | S | agenthooks | S | A09 | Queued | — |
 | A11 | Split `dispatcher.mjs` so the pre-push fix has room under 1000 | P2 | C | dispatcher | M | — | Queued | — |
 | A12 | Pre-push runs the other gates on the dirty tree when test is skipped | P1 | F | dispatcher | M | A11 | Queued | — |

@@ -93,7 +93,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A44 | `doc-input.mjs` has no direct test | P3 | D | docinput | S | — | Complete | 68080cc4297f5f99943f8a2e9644406be28effbf · test: node --test test/doc-input.test.mjs |
 | A45 | Door parity covers five MCP tools, not every spec door | P2 | D | doors | S | — | Complete | 343bd60ecf7aafb835034ca6f7457e8ea1a1a7fa · test: node --test test/work-door-parity.test.mjs test/work-query-contract.test.mjs |
 | A46 | Rank stratum `queries` is never incremented | P3 | F | rank | S | — | Complete | 98af5d906282a5bd7a7029b4661f8c87206e6133 · test: node --test test/knowledge-rank.test.mjs |
-| A47 | Split `test/agenthooks.test.mjs` (982 lines) | P2 | C | t-hooks | M | — | Queued | — |
+| A47 | Split `test/agenthooks.test.mjs` (982 lines) | P2 | C | t-hooks | M | — | Complete | 447a46d414e367ca6af18ce37f5685cf02842d89 · test: node --test test/agenthooks.test.mjs test/agenthooks-delivery.test.mjs test/agenthooks-audit.test.mjs |
 | A48 | Split `test/mcp.test.mjs` (985 lines) | P2 | C | t-mcp | M | — | Queued | — |
 | A49 | Split `test/ci.test.mjs` (983 lines) | P2 | C | t-ci | M | — | Queued | — |
 | A50 | Split `test/hooks2.test.mjs` (933 lines) | P2 | C | t-hooks2 | M | — | Queued | — |

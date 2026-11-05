@@ -415,7 +415,7 @@ export async function commitJournal(root, command, acc, { at = Date.now() } = {}
     kind: 'write.committed',
     subject: command,
     tree: null,
-    data: { entries: entries.length, paths: entries.map((entry) => entry.path) },
+    data: { entries: entries.length, paths: entries.map(entryLabel) },
   });
   return id;
 }

@@ -83,7 +83,9 @@ export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, req
       mandatory: unit.mandatory === true,
       dynamic: unit.dynamic === true,
       authority: Math.max(0, Number(unit.authority) || 0),
-      cost: byteLength(renderUnit(unit, citation)) + 1,
+      // The unit's own encoded bytes. The newline that separates it from its neighbour is
+      // charged when it is placed, so the running total is the packet's length (A40).
+      cost: byteLength(renderUnit(unit, citation)),
     });
   }
 
@@ -95,6 +97,7 @@ export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, req
   const reasons = [];
 
   for (const unit of candidates.filter((candidate) => candidate.mandatory && !candidate.dynamic)) {
+    if (selected.length > 0) stableBytes += 1;
     selected.push(unit);
     order.push(unit.id);
     stableBytes += unit.cost;
@@ -114,11 +117,12 @@ export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, req
       if (selected.includes(unit) || unit.dynamic) continue;
       const gain = unit.obligations.filter((obligation) => !covered.has(obligation)).length;
       if (gain === 0) continue;
-      if (stableBytes + unit.cost > budget) continue;
+      if (stableBytes + (selected.length > 0 ? 1 : 0) + unit.cost > budget) continue;
       const score = (gain / unit.cost) * (1 + Math.min(0.5, unit.authority / 10));
       if (best === null || score > best.score || (score === best.score && unit.id < best.unit.id)) best = { unit, score };
     }
     if (best === null) break;
+    if (selected.length > 0) stableBytes += 1;
     selected.push(best.unit);
     order.push(best.unit.id);
     stableBytes += best.unit.cost;
@@ -132,7 +136,7 @@ export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, req
     const gain = unit.obligations.filter((obligation) => !covered.has(obligation)).length;
     cut.push({
       id: unit.id,
-      reason: gain === 0 ? 'redundant' : stableBytes + unit.cost > budget ? 'over-budget' : 'not-selected',
+      reason: gain === 0 ? 'redundant' : stableBytes + (selected.length > 0 ? 1 : 0) + unit.cost > budget ? 'over-budget' : 'not-selected',
       detail: gain === 0 ? 'every obligation it covers is already covered' : `${gain} obligation(s) still uncovered`,
     });
   }

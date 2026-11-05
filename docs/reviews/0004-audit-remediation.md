@@ -66,7 +66,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A17 | MCP `knowledge_import` reports `ok: true` when the import failed | P2 | F | mcpwork | S | A16 | Queued | — |
 | A18 | `knowledge why` prints the page limit as a page count | P3 | F | knowledge | S | A07 | Queued | — |
 | A19 | `--limit` and `--page` accept a non-integer and silently default | P2 | F | knowledge | S | A18 | Queued | — |
-| A20 | `openIndex().search` stringifies an error object | P2 | F | open | S | — | In progress | — |
+| A20 | `openIndex().search` stringifies an error object | P2 | F | open | S | — | Complete | ab0a2c17864f6d05a835f34c4864784dd4e93dca · test: node --test test/index-open-error.test.mjs |
 | A21 | A corrupt SQLite overlay reads as an empty overlay | P2 | F | overlay | S | — | Complete | 9a8a72016fc0a0c4e9ef7ea3236ee8d492c97033 · test: node --test test/overlay-corrupt.test.mjs |
 | A22 | An FTS term containing `"` breaks the MATCH expression | P2 | F | fts | S | — | Complete | 6fe7b05bd07dd4fd014d3fa12c326f443ac8d7e2 · test: node --test test/index-fts-quote.test.mjs |
 | A23 | `hooks-disable` has no regex when the tokenizer fails | P2 | S | agenthooks | M | A10 | Queued | — |

@@ -77,7 +77,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A28 | `read-channel-equivalence` ignores `before` and `after` | P2 | F | replay | S | — | Complete | ad7cd23bd74eb54cb6404816371678f15ebb84e0 · test: node --test test/work-replay.test.mjs test/work-acceptance.test.mjs |
 | A29 | `mine.mjs` keeps a second process timeout beside `spawnBounded` | P2 | C | mine | S | — | Complete | fb18a63cd29bee15e5a8d98ce437e5be5cff768f · test: node --test test/bench.test.mjs test/sys-utils.test.mjs |
 | A30 | `lintRegistry` does not require registry `version` 1 | P2 | F | graph | S | — | Complete | a82389e720a1da4de0220373c07f3fff06bbe0be · test: node --test test/graph-version.test.mjs test/graph.test.mjs |
-| A31 | The wheel assertion's failure text says the opposite of the match | P3 | D | shipped | S | — | Queued | — |
+| A31 | The wheel assertion's failure text says the opposite of the match | P3 | D | shipped | S | — | Complete | 8fb90151371a3a34b42de727fe2babad9f7c014e · test: node --test test/shipped.test.mjs |
 | A32 | `brew style` runs before the formula is rendered | P3 | D | publish | S | — | Queued | — |
 | A33 | `test/pack.test.mjs` names a `simt-dev` bin the package does not install | P3 | D | pack | S | — | Queued | — |
 | A34 | Shell completions omit alias tokens the dispatcher accepts | P3 | F | complete | S | — | Queued | — |

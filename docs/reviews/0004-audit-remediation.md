@@ -47,7 +47,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 
 | ID | Slice | Sev | Grp | Lane | Effort | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| A01 | Bench run treats a missing skill registry as an empty one | P1 | F | bench | S | — | Queued | — |
+| A01 | Bench run treats a missing skill registry as an empty one | P1 | F | bench | S | — | Complete | b61bbca8d805efcc2c1e9bb1c7236ed5c324aaf2 · test: node --test test/bench.test.mjs test/bench2.test.mjs test/bench3.test.mjs |
 | A02 | Reindexing a changed file leaves stale `fts_tri` rows | P1 | F | index | S | — | Queued | — |
 | A03 | `classifyTask` reads "failure" as a bugfix | P1 | F | brief | S | — | Queued | — |
 | A04 | `evaluateIntent` throws when a corpus label is not an intent | P1 | F | brief | S | A03 | Queued | — |

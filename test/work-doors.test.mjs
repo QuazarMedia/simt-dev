@@ -96,6 +96,24 @@ test('knowledge why exits non-zero on a claim the reader refused (A06)', () => {
   });
 });
 
+test('a refused sibling stays reported but leaves the why-graph (A07)', () => {
+  const dir = repo();
+  const claims = write(dir, 'mixed-claims.json', {
+    claims: [
+      { id: 'c1', subject: 'de.vat', predicate: 'standard-rate', type: 'number', value: 19, unit: '%' },
+      { id: 'refused-sibling' },
+    ],
+    edges: [{ from: 'c1', to: 'refused-sibling', kind: 'derived-from', status: 'reviewed' }],
+  });
+  const payload = json(dir, ['knowledge', 'why', 'c1', '--claims', claims]);
+  assert.equal(payload.impact.reachable.includes('refused-sibling'), false, 'a refused claim is not a dependent');
+  assert.equal(payload.lineage.reachable.includes('refused-sibling'), false, 'a refused claim is not a source');
+  assert.ok(
+    payload.problems.some((problem) => problem.includes('refused-sibling')),
+    'the refusal is still reported in the problems list',
+  );
+});
+
 test('verify plan offers only what the constraints admit, and reports what it excluded', () => {
   const dir = repo();
   const doc = write(dir, 'plan.json', {

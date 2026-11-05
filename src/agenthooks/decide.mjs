@@ -65,7 +65,12 @@ function applies(row, facts, env) {
   if (row.inspects === 'command') {
     if (typeof facts.command !== 'string') return false;
     if (facts.shell !== null && facts.shell !== undefined && facts.shell.parsed === true) {
-      return row.match(facts);
+      // A command can tokenise and still produce no git fact: `busybox git push` parses as
+      // a wrapper plus arguments, so the push row had nothing to match and the push ran.
+      // With no normalised fact to judge, the text is the only evidence there is.
+      const hasGit = Array.isArray(facts.shell.facts) && facts.shell.facts.some((f) => f?.kind === 'git');
+      if (hasGit) return row.match(facts);
+      return row.regex !== null && row.regex.test(facts.command);
     }
     return row.regex !== null && row.regex.test(facts.command);
   }

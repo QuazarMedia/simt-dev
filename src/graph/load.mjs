@@ -291,6 +291,13 @@ export function lintRegistry(registry) {
   const err = (message) => errors.push(message);
   const warn = (message) => warnings.push(message);
 
+  // A future shape with these same arrays would otherwise pass every check below by
+  // coincidence. Version 1 is the only shape this lint knows how to read (A30).
+  if (registry?.version !== 1) {
+    err(`version: ${registry?.version ?? '<missing>'} is not the supported version 1`);
+    return { sync: errors, warnings, index: new Map() };
+  }
+
   const capabilities = new Map((registry.capabilities ?? []).map((c) => [c.id, c]));
   const skills = registry.skills ?? [];
   const index = new Map();

@@ -7,7 +7,7 @@
 // than the artefact.
 //
 // So this file packs the working tree, installs the tarball into a consumer with
-// nothing else in it, and drives `node_modules/.bin/simt-dev`. Everything it
+// nothing else in it, and drives `node_modules/.bin/simt`. Everything it
 // asserts is something the reader of this repository would only learn from the
 // published package: the registry it ships - none, and the honest absence it
 // reports instead (ADR-061) - the decisions being present to read, and a full

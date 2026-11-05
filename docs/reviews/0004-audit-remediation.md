@@ -80,7 +80,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A31 | The wheel assertion's failure text says the opposite of the match | P3 | D | shipped | S | — | Complete | 8fb90151371a3a34b42de727fe2babad9f7c014e · test: node --test test/shipped.test.mjs |
 | A32 | `brew style` runs before the formula is rendered | P3 | D | publish | S | — | Complete | 7c1f65a1d32a2a916e08a0eba64889765305842a · test: node --test test/packaging.test.mjs |
 | A33 | `test/pack.test.mjs` names a `simt-dev` bin the package does not install | P3 | D | pack | S | — | Complete | bf65e4b54d592dbf1006413d6ea3c957c461e317 · test: node --test test/pack.test.mjs |
-| A34 | Shell completions omit alias tokens the dispatcher accepts | P3 | F | complete | S | — | Queued | — |
+| A34 | Shell completions omit alias tokens the dispatcher accepts | P3 | F | complete | S | — | Complete | 9cace7c93dabde3e6bd6b0b229b601dd8c36becf · test: node --test test/completions.test.mjs |
 | A35 | A schema with `required` and no `type` accepts a non-object | P3 | F | schema | S | — | Queued | — |
 | A36 | MCP cancel uses `===` on request ids | P3 | F | cancel | S | — | Queued | — |
 | A37 | Check remedies tell a consumer to expect the name `simt-dev` | P2 | F | wording | S | — | Queued | — |

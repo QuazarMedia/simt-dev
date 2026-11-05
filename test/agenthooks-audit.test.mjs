@@ -51,3 +51,26 @@ test('git pull -r is treated as the rewrite it is (A10)', () => {
   const allowed = decide({ facts: parsedGit('git pull origin main', [gitFact({ opts: new Set() })]), env: {} });
   assert.equal(allowed.decision, 'allow', 'a plain pull is not a rewrite');
 });
+
+/** Facts as an unbalanced quote leaves them: no parse, so only the text is evidence. */
+const unparsed = (command) => ({ command, shell: { parsed: false, facts: [] }, writes: [] });
+
+test('an unparseable command that names the hooks path is denied (A23)', () => {
+  for (const command of ['git config core.hooksPath /dev/null "unclosed', 'rm -rf .simt/hooks "unclosed']) {
+    const decision = decide({ facts: unparsed(command), env: {} });
+    assert.equal(decision.decision, 'deny', `${command} was allowed`);
+    assert.ok(decision.blocked.includes('hooks-disable'), `${command} did not match the hooks row`);
+  }
+
+  // The fallback is this row's text, not a general pattern match.
+  assert.equal(decide({ facts: unparsed('echo "unclosed'), env: {} }).decision, 'allow');
+});
+
+test('a parseable git config core.hooksPath stays denied (A23)', () => {
+  const facts = parsedGit('git config core.hooksPath /dev/null', [
+    gitFact({ sub: 'config', opts: new Set(), refspecs: ['core.hooksPath', '/dev/null'] }),
+  ]);
+  const decision = decide({ facts, env: {} });
+  assert.equal(decision.decision, 'deny');
+  assert.ok(decision.blocked.includes('hooks-disable'));
+});

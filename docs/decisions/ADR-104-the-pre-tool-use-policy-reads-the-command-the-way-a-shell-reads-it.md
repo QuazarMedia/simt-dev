@@ -50,7 +50,8 @@ cannot tell them apart. The decision is made on the act.
    `git -c core.hooksPath=…`, `git config … core.hooksPath`, and `rm` of the
    hooks directory. It carries no regex fallback because it did not exist
    before this ruling: a command that cannot be tokenised is judged exactly as
-   it was judged before the row was written.
+   it was judged before the row was written. ADR-195 narrows this for the row's
+   own text: the key `core.hooksPath` and the hooks directory it writes.
 4. **The author's aliases are resolved with one `git config --get-regexp
    '^alias\.'` per command, and only when a fact's subcommand is not one git
    ships.** A value that starts with `!` is a shell command and is read the

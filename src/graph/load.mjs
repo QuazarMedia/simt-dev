@@ -584,20 +584,32 @@ for (const duplicate of duplicates(sources.map((s) => `${s.repo}/${s.path}`))) {
   }
 }
 
+/** The repo name this package declares for a source that ships with it (package.json "name"). */
+const PACKAGE_NAME = 'simt-dev';
+
 /** Compare declared sizes against the filesystem. */
 async function lintSourcesOnDisk(registry, workspaceRoot) {
   const errors = [];
   const warnings = [];
 
   for (const skill of registry.skills ?? []) {
-    // A vendored skill ships with the package; its source is the package root,
-    // not a workspace member. Verifying it against the workspace filesystem is
-    // the wrong check (the path will not exist there by design).
-    if (skill.vendored) continue;
     for (const source of skill.sources ?? []) {
       const at = `${skill.name}: ${source.repo}/${source.path}`;
       if (!source.repo || !source.path) continue;
-      const full = join(workspaceRoot, source.repo, source.path);
+      // A vendored skill's source lives in a workspace member - a path that will not
+      // exist in a lone clone of this package, so verifying it against the workspace
+      // filesystem is the wrong check there. The exception is a source whose repo is
+      // this package itself: that body ships with the package root, which is on disk
+      // on every machine, so its declared bytes are verifiable everywhere. Skipping
+      // every vendored node was how a 4161-byte declaration outlived a 6689-byte body
+      // (simt-commands, 2026-11) and `skills install` refused every consumer.
+      let full;
+      if (skill.vendored) {
+        if (source.repo !== PACKAGE_NAME) continue;
+        full = join(PACKAGE_ROOT, source.path);
+      } else {
+        full = join(workspaceRoot, source.repo, source.path);
+      }
 
       let measured;
       try {

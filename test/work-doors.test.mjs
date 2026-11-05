@@ -231,6 +231,12 @@ test('a paged door says how much it cut, and the next page continues from there'
   const second = json(dir, ['knowledge', 'why', 'c1', '--claims', claims, '--limit', '1', '--page', '1']);
   assert.deepEqual(second.impact.reachable, ['c3']);
   assert.equal(second.impact.truncated, false);
+
+  // `size` is the limit; printing it after "of" made `page 0 of 1` read as one page when
+  // the document held two nodes (A18).
+  const text = run(dir, ['knowledge', 'why', 'c1', '--claims', claims, '--limit', '1']);
+  assert.match(text, /page\s+0 \(limit 1, 2 node\(s\)\)/);
+  assert.doesNotMatch(text, /page\s+0 of 1/);
 });
 
 test('export filters by permission before the page, and import accepts it as data only', () => {

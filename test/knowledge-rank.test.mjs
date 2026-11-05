@@ -76,6 +76,23 @@ test('the answer is filtered by permission and by scope before anything is score
   assert.ok(allowed.ranked.some((hit) => hit.id === 'internal-rate'), 'a held permission was still filtered');
 });
 
+test('a stratum counts one query per corpus entry, not per gold id (A46)', () => {
+  const entries = TOPICS.map((topic, index) => ({
+    query: topic.en,
+    gold: [`gold-${index}-en`, `copy-${index}-en`],
+    scope: DE,
+  }));
+  const report = evaluateRank(corpusUnits(), entries);
+
+  const english = report.byLanguage.find((row) => row.key === 'en');
+  assert.equal(english.queries, entries.length, 'the language stratum counted gold ids');
+
+  // The first topic's two gold units are both documents, so that kind saw one entry.
+  const documents = report.byKind.find((row) => row.key === 'document');
+  assert.equal(documents.queries, 1, 'a two-gold entry counted twice');
+  assert.equal(documents.gold, 2, 'the gold count must still count each expected id');
+});
+
 test('a hub cannot win by being linked, and it says which label cost it the place', () => {
   const report = rank(corpusUnits(), { query: 'standard rate', scope: DE });
   const order = report.ranked.map((hit) => hit.id);

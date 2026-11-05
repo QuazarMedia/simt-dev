@@ -120,7 +120,10 @@ export const TOOLS_WORK = [
     description: 'Validate an exported packet as data: schema, version, expiry and revision digests. It executes nothing and treats every fact as text.',
     inputSchema: { type: 'object', properties: { document: DOCUMENT }, required: ['document'] },
     async run(args) {
-      return { ok: true, doc: knowledgeImportFacts(args.document) };
+      const facts = knowledgeImportFacts(args.document);
+      // The envelope says whether the call succeeded. An expired or malformed bundle is a
+      // failed import, not a successful call that happens to carry a false in `doc`.
+      return { ok: facts.ok !== false, doc: facts };
     },
   },
 ];

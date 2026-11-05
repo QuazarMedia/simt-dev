@@ -36,10 +36,12 @@ const IMPORT_USAGE = `run: ${CLI} knowledge import --input <file>`;
 export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0, asOf = null, knownAt = null } = {}) {
   const declared = Array.isArray(doc.claims) ? doc.claims : null;
   if (declared === null) return { error: 'the document needs a claims list' };
-  const size = Number.isFinite(Number(limit)) ? Math.floor(Number(limit)) : MAX_PAGE;
-  const index = Number.isFinite(Number(page)) ? Math.floor(Number(page)) : 0;
-  if (size < 1 || size > MAX_PAGE) return { error: `--limit takes 1 to ${MAX_PAGE}` };
-  if (index < 0) return { error: '--page takes a non-negative number' };
+  // A caller through `run()` passes the strings `parse` never saw: the same rejection has
+  // to happen here, or `limit: 'foo'` silently becomes MAX_PAGE.
+  const size = Number(limit);
+  const index = Number(page);
+  if (!Number.isInteger(size) || size < 1 || size > MAX_PAGE) return { error: `--limit takes an integer from 1 to ${MAX_PAGE}` };
+  if (!Number.isInteger(index) || index < 0) return { error: '--page takes a non-negative integer' };
 
   // Through the reader, not straight from the document. `readClaim` validates a record and moves
   // its validity window under `applicability`, which is where the conflict detector compares it:

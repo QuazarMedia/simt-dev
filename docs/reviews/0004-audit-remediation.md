@@ -81,7 +81,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A32 | `brew style` runs before the formula is rendered | P3 | D | publish | S | — | Complete | 7c1f65a1d32a2a916e08a0eba64889765305842a · test: node --test test/packaging.test.mjs |
 | A33 | `test/pack.test.mjs` names a `simt-dev` bin the package does not install | P3 | D | pack | S | — | Complete | bf65e4b54d592dbf1006413d6ea3c957c461e317 · test: node --test test/pack.test.mjs |
 | A34 | Shell completions omit alias tokens the dispatcher accepts | P3 | F | complete | S | — | Complete | 9cace7c93dabde3e6bd6b0b229b601dd8c36becf · test: node --test test/completions.test.mjs |
-| A35 | A schema with `required` and no `type` accepts a non-object | P3 | F | schema | S | — | Queued | — |
+| A35 | A schema with `required` and no `type` accepts a non-object | P3 | F | schema | S | — | Complete | a1bc34b0364f8569a719fd3c6f13327ba1a74fd3 · test: node --test test/mcp-schema.test.mjs |
 | A36 | MCP cancel uses `===` on request ids | P3 | F | cancel | S | — | Queued | — |
 | A37 | Check remedies tell a consumer to expect the name `simt-dev` | P2 | F | wording | S | — | Queued | — |
 | A38 | Help does not say that gate, tests, and impact walk different graphs | P2 | D | spec | S | A16 | Queued | — |

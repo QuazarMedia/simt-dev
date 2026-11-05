@@ -89,7 +89,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A40 | Proof-packet budget counts a unit cost, not the encoded bytes | P3 | F | spec | S | A39 | Complete | a82882bab2b3f4f1b4b15559274f92858852c919 · test: node --test test/work-brief.test.mjs |
 | A41 | Journal undo restore writes the destination in place | P3 | F | journal | S | — | Complete | bbd28aa5fcb7daa43eaa3d141bb30bdd74308391 · test: node --test test/undo.test.mjs |
 | A42 | `commitJournal` records `undefined` paths for git-config entries | P3 | F | journal | S | A41 | Complete | 4e9d1eec6349de7cad942cfd19693539d6896589 · test: node --test test/undo.test.mjs |
-| A43 | `GLOBAL_FLAGS` can drift from the spec flag rows | P3 | D | help | S | — | Queued | — |
+| A43 | `GLOBAL_FLAGS` can drift from the spec flag rows | P3 | D | help | S | — | Complete | 94a64239bcb284c1fa86671f5cf3cc3e966d5c68 · test: node --test test/spec.test.mjs test/help.test.mjs |
 | A44 | `doc-input.mjs` has no direct test | P3 | D | docinput | S | — | Queued | — |
 | A45 | Door parity covers five MCP tools, not every spec door | P2 | D | doors | S | — | Queued | — |
 | A46 | Rank stratum `queries` is never incremented | P3 | F | rank | S | — | Queued | — |

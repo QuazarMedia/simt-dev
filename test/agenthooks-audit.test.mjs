@@ -13,12 +13,13 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { decide, factsFor } from '../src/agenthooks/decide.mjs';
+import { commandFacts } from '../src/agenthooks/shell.mjs';
 import { keepTemp } from './fixture.mjs';
 
 /** Facts as the normaliser leaves a command that parsed but carried no git fact. */
 const parsedWithoutGit = (command) => ({
   command,
-  shell: { parsed: true, facts: [] },
+  shell: commandFacts(command),
   writes: [],
 });
 

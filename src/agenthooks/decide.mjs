@@ -65,13 +65,18 @@ function applies(row, facts, env) {
   if (row.inspects === 'command') {
     if (typeof facts.command !== 'string') return false;
     if (facts.shell !== null && facts.shell !== undefined && facts.shell.parsed === true) {
-      // A command can tokenise and still produce no git fact: `busybox git push` parses as
-      // a wrapper plus arguments, so the push row had nothing to match and the push ran.
-      // With no normalised fact to judge, the text is the only evidence there is.
-      const hasGit = Array.isArray(facts.shell.facts) && facts.shell.facts.some((f) => f?.kind === 'git');
+      const normalised = Array.isArray(facts.shell.facts) ? facts.shell.facts : [];
       // A failed alias lookup leaves an unexpanded subcommand looking like a builtin; the
-      // text is the only evidence for what it might have been (ADR-196).
-      if (hasGit && facts.shell.aliasLookupFailed !== true) return row.match(facts);
+      // facts are partial, so the text is the only complete evidence (ADR-196).
+      if (normalised.length > 0 && facts.shell.aliasLookupFailed !== true) return row.match(facts);
+      // A command can tokenise and still produce no fact: `busybox git push` parses as a
+      // wrapper plus arguments, so the push row has nothing to match. The token stream,
+      // not the raw text, says whether a wrapper could be hiding one: a quoted
+      // `"git rebase"` is a single argument to grep, and `echo --no-verify` is text, not
+      // a git option (ADR-017). A caller that hands over a shell fact with no names keeps
+      // the regex fallback, because it carried no token stream to read.
+      const names = facts.shell.names;
+      if (Array.isArray(names) && !names.includes('git') && !names.includes('rm')) return false;
       return row.regex !== null && row.regex.test(facts.command);
     }
     return row.regex !== null && row.regex.test(facts.command);

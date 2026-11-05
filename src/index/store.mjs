@@ -517,7 +517,9 @@ export async function searchFtsBm25(root, task, opts = {}) {
 
 async function ftsBranch(root, table, terms) {
   if (terms.length === 0) return { rows: [], error: null };
-  const matchExpr = terms.map((t) => `"${t}"`).join(' OR ');
+  // FTS5 escapes a phrase by doubling its quote. A token carrying one used to break the
+  // MATCH expression and come back as a read failure rather than as rows or no rows.
+  const matchExpr = terms.map((t) => `"${String(t).replaceAll('"', '""')}"`).join(' OR ');
   // `fts` is the v5 node-keyed table: the path comes back through the node key.
   // `fts_tri` keeps its v4 (kind, ref, body) shape for the CJK trigram path ,
   // so it is queried the old way.

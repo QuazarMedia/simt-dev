@@ -49,7 +49,7 @@ export const SPEC = [
   { path: 'bench probes', usage: '--yes', summary: 'run the deterministic probes against a workspace', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task","yes"], writes: 'repo' },
   { path: 'bench report', usage: '[--compare a b]', summary: 'summarise the runs recorded in the vault', defaultFor: 'bench', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench run', usage: '--yes', summary: 'run agents against the mined tasks', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task","yes"], writes: 'repo' },
-  { path: 'brief', usage: '"<task>"', mcp: { name: 'brief', flags: ['budget', 'paths', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","paths","task"], },
+  { path: 'brief', usage: '"<task>"', mcp: { name: 'brief', flags: ['budget', 'paths', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","paths","proof","task"], },
   { path: 'check', mcp: { name: 'check', flags: [] }, summary: 'report stale or missing generated regions and every check finding', flags: ["check","diff","dry-run","frozen","surfaces"], },
   { path: 'work inspect', mcp: { name: 'work_inspect', flags: [] }, summary: "what this repository's work consists of, and which validations are actually available", flags: [], },
   { path: 'workspace compare', mcp: { name: 'compare', flags: [] }, summary: 'the adoption and drift matrix across every sibling repository', aliases: ['compare'], flags: ["learn","concurrency"], },

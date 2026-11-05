@@ -39,6 +39,9 @@ export const BOOL_FLAGS = new Set([
   // assurance the boundary does not have.
   'mediated',
   'json',
+  // brief: attach the proof packet's completeness to the JSON document, never to the
+  // default packet's bytes (A39).
+  'proof',
   'all',
   'baselines',
   'dry-run',

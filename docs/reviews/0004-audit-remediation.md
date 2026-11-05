@@ -98,7 +98,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A49 | Split `test/ci.test.mjs` (983 lines) | P2 | C | t-ci | M | — | Complete | 4722148e700f82aee9b111695d825a933aba19f6 · test: node --test test/ci.test.mjs test/ci-dependabot.test.mjs |
 | A50 | Split `test/hooks2.test.mjs` (933 lines) | P2 | C | t-hooks2 | M | — | Complete | 653853a8d9f319911bda2070a7fb84a405f75ec4 · test: node --test test/hooks2.test.mjs test/hooks-install.test.mjs |
 | A51 | Split `test/shipped.test.mjs` (997 lines) | P2 | C | shipped | M | A31 | Complete | c41177138a0e259a999546ad4d128017f5298e0b · test: node --test test/shipped.test.mjs test/shipped-decisions.test.mjs |
-| A52 | Split `src/commands/init.mjs` (957 lines) | P2 | C | t-init | M | — | Queued | — |
+| A52 | Split `src/commands/init.mjs` (957 lines) | P2 | C | t-init | M | — | Complete | bd70663f4ff2a24e013bcdbc5042977c8aaa814f · test: node --test test/init.test.mjs test/init2.test.mjs test/init-harness.test.mjs |
 | A53 | Split `src/commands/hooks.mjs` (905 lines) | P2 | C | t-hookscmd | M | — | Queued | — |
 | A54 | Split `src/memory/lessons.mjs` (952 lines) | P2 | C | t-lessons | M | — | Queued | — |
 | A55 | Split `src/commands/slice.mjs` (858 lines) | P2 | C | slice | M | A27 | Queued | — |

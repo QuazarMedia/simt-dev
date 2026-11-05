@@ -23,5 +23,9 @@ export function finaliseJson(documents, { code, deprecated } = {}) {
 
   const doc = { ...only, ok: only.ok ?? code === EXIT.OK, exitCode: code };
   if (deprecated !== undefined && Object.keys(deprecated).length > 0) doc.deprecated = deprecated;
-  return { documents: [doc], code, single: true };
+
+  // A document that could not fit its own ceiling says so and the handler still returns
+  // EXIT.OK: emitting it changed the answer, so the process must not claim success.
+  const exit = doc.ok === false && doc.error?.code === 'MAX_BYTES' ? EXIT.FAIL : code;
+  return { documents: [{ ...doc, exitCode: exit }], code: exit, single: true };
 }

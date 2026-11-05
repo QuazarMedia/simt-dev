@@ -28,6 +28,7 @@ import { ALIASES, GROUP_DEFAULTS, SPEC, SPEC_PATHS } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI } from '../name.mjs';
 import { finaliseJson } from '../output/envelope.mjs';
+import { maxBytesExceeded } from '../output/index.mjs';
 import { packageVersion } from '../package-version.mjs';
 
 
@@ -574,7 +575,8 @@ async function dispatchInState(argv) {
   // A stream of documents (NDJSON) has no single place for one exit code; each is written
   // as the command produced it, and the process exit status still carries the code.
   for (const doc of finalised.documents) emitJson(doc);
-  return finalised.code;
+  // The envelope written in place of the document says failure; the process must too.
+  return maxBytesExceeded() ? EXIT.FAIL : finalised.code;
 }
 
 /**

@@ -30,6 +30,17 @@ test('every JSON document names the command path that produced it', async () => 
   }
 });
 
+test('a document that could not fit its ceiling exits non-zero (A14)', async () => {
+  // The handler returns EXIT.OK because writing the document is what it did; the document
+  // says the answer was replaced by a MAX_BYTES envelope. A process that exits 0 here
+  // tells a script the command succeeded while its own output says it did not.
+  const { doc, code } = await run(['why', 'src/name.mjs', '--json', '--max-bytes', '120']);
+  assert.equal(doc.ok, false);
+  assert.equal(doc.error.code, 'MAX_BYTES');
+  assert.notEqual(code, 0, 'the process said success for a document that says failure');
+  assert.equal(doc.exitCode, code);
+});
+
 test('a document names the exit code it shipped with, and ok agrees with it', async () => {
   // `upgrade` used to answer `ok: false` and exit 0. A caller that trusted either half
   // was wrong about the other, and nothing in the document said which was the truth.

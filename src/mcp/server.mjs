@@ -496,6 +496,12 @@ export async function serve(tools, { input = process.stdin, output = process.std
   // iterator below yields the same line afterwards and `handle` answers it
   // with null, as every notification is answered - the peek consumes nothing.
   let inflight = null;
+  // JSON has no integer type: a client may echo `1` as `"1"`, and `===` treated that as a
+  // different request. Only a string or a finite number can name a request (A36).
+  const sameRequestId = (left, right) => {
+    const comparable = (value) => typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value));
+    return comparable(left) && comparable(right) && String(left) === String(right);
+  };
   const peekCancel = (line) => {
     if (!inflight || line.trim() === '') return;
     let message;
@@ -504,7 +510,7 @@ export async function serve(tools, { input = process.stdin, output = process.std
     } catch {
       return;
     }
-    if (message?.method === 'notifications/cancelled' && message?.params?.requestId === inflight.id) {
+    if (message?.method === 'notifications/cancelled' && sameRequestId(message?.params?.requestId, inflight.id)) {
       inflight.controller.abort();
     }
   };

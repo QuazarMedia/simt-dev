@@ -538,7 +538,7 @@ The agenthooks, MCP, envelope, and pre-push rows already add their cases in new 
 
 ### A57 — Split `src/memory/decide.mjs` (513 lines)
 
-- **Acceptance:** `node --test test/work-memory.test.mjs test/decide.test.mjs`. Lane `t-decide`.
+- **Acceptance:** `node --test test/decide.test.mjs test/decisions.test.mjs`. Lane `t-decide`.
 
 ## 11. Taking a row
 

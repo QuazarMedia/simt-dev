@@ -345,8 +345,16 @@ export function jsonlBackend(file) {
       let text;
       try {
         text = await readFile(file, 'utf8');
-      } catch {
-        return { nodes: [], edges: [] };
+      } catch (error) {
+        // A missing overlay is empty. An existing file that cannot be read is not: the
+        // SQLite backend reports that as corruption, and the two backends are one
+        // semantics (A21).
+        if (error.code === 'ENOENT') return { nodes: [], edges: [] };
+        return {
+          nodes: [],
+          edges: [],
+          error: { code: 'INDEX_CORRUPT', message: `overlay ${file}: ${error?.message ?? error}` },
+        };
       }
       const nodes = [];
       const edges = [];

@@ -10,6 +10,7 @@ import { test } from 'node:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 
 import { git } from './fixture.mjs';
 import { reindex } from '../src/index/store.mjs';
@@ -37,6 +38,34 @@ test('a corrupt index surfaces the underlying message, not [object Object] (A20)
     assert.equal(typeof result.error.message, 'string');
     assert.notEqual(result.error.message, '[object Object]', 'the error object was stringified');
     assert.ok(result.error.message.length > 0, 'the message is empty');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a busy index keeps INDEX_BUSY rather than collapsing it to E_READ (A20)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-open-busy-'));
+  try {
+    await git(['init', '-q', root]);
+    await writeFile(join(root, 'a.md'), '# a\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    await reindex(root);
+
+    const lock = new DatabaseSync(join(root, SQLITE_FILE));
+    try {
+      // WAL lets readers proceed beside a writer; DELETE mode makes the exclusive
+      // transaction block the read, which is the SQLITE_BUSY path this test needs.
+      lock.exec('pragma journal_mode=delete');
+      lock.exec('begin exclusive');
+      const ix = await openIndex(root, { build: false });
+      assert.equal(ix.ok, true, 'the handle opens; the database is locked');
+      const result = await ix.search('anything');
+      assert.equal(result.ok, false);
+      assert.equal(result.error.code, 'INDEX_BUSY', 'the busy code was replaced by E_READ');
+    } finally {
+      lock.close();
+    }
   } finally {
     await rm(root, { recursive: true, force: true });
   }

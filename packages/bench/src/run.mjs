@@ -99,6 +99,7 @@ export async function runBench(
     concurrency = DEFAULT_CONCURRENCY,
     cwd = process.cwd(),
     adapters: adapterTable,
+    registryLoader = loadRegistry,
   } = {},
 ) {
   const adapters = adapterTable ?? (await loadAdapters());
@@ -169,6 +170,47 @@ export async function runBench(
     };
   }
 
+  const regRes = await registryLoader().catch((error) => ({
+    ok: false,
+    registry: null,
+    errors: [String(error?.message ?? error)],
+  }));
+  if (!regRes.ok) {
+    // `loadRegistry` reports a missing or invalid registry in `ok`/`errors`; it does not
+    // throw, so a `.catch` fallback silently turned that into `skills: []` and scored the
+    // batch against an empty catalogue. A batch that cannot say what it measured is an
+    // exclusion, not a zero-skill measurement.
+    const detail = (regRes.errors ?? []).join('; ') || 'the skill registry could not be read';
+    return {
+      applied: true,
+      root,
+      harness,
+      model: resolvedModel,
+      arms: armSpecs.map((arm) => arm.name),
+      armDescriptions: armSpecs.map((arm) => `${arm.name}: ${describeArm(arm)}`),
+      reps,
+      taskCount: tasks.length,
+      experiment,
+      runs: plannedRuns.map((item) => ({
+        ...runRecord({
+          task: item.task,
+          arm: item.armSpec.name,
+          harness,
+          model: resolvedModel,
+          rep: item.rep,
+          measured,
+          isolation,
+          experiment: { ...experiment, model: resolvedModel },
+          status: 'error',
+          error: `skill registry: ${detail}`,
+        }),
+        runId: item.runId,
+      })),
+    };
+  }
+  const registrySkills = regRes.registry?.skills ?? [];
+  const knownSkillNames = new Set(registrySkills.map((skill) => skill.name));
+
   const baseRunsDir = runsBaseDir(root);
   for (const armSpec of armSpecs) {
     for (let rep = 1; rep <= reps; rep += 1) {
@@ -177,10 +219,6 @@ export async function runBench(
       await writeFile(join(runDir, '.arm.json'), `${JSON.stringify(armSpec, null, 2)}\n`, 'utf8');
     }
   }
-
-  const regRes = await loadRegistry().catch(() => ({ registry: { skills: [] } }));
-  const registrySkills = regRes?.registry?.skills ?? [];
-  const knownSkillNames = new Set(registrySkills.map((skill) => skill.name));
   const parentDir = await mkdtemp(join(tmpdir(), 'bench-batch-'));
   try {
     // One export per task, copied per run: the harness is what the batch measures, not

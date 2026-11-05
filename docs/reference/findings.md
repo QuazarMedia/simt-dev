@@ -33,6 +33,7 @@ the command that fixes it, and what a reader sees.
 | `LOCK-UNREADABLE` | The lock file cannot be read or parsed: --frozen has a lock it cannot verify. |
 | `MALFORMED` | The generated region’s markers do not parse: the begin/end lines are damaged, duplicated, or in the wrong order. |
 | `MISPLACED` | The region is intact but not at the top of the file, so it overrides the settings below it — and in this format the last matching definition wins, so the repository’s own settings silently stop applying. |
+| `OPTIONAL` | The repo runs GitHub Actions but lacks one of the two .github files `init` writes at adoption (“simt-dev-check.yml”, “dependabot.yml”): the file is offered, not present. |
 | `ORPHANED` | A managed rule file this run would not write: narrowing a surface’s output left a file the tool once generated and now ignores. |
 | `PACK-DECLARED-TWICE` | The manifest declares the same pack twice: the second declaration is read as the first, so one of them is dead text. |
 | `PACK-DIGEST-MISMATCH` | The pack’s bytes no longer match the digest the manifest pins: someone edited the vendored copy, or vendored different bytes than the pin records. |

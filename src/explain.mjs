@@ -184,6 +184,12 @@ export const EXPLAIN_CODES = {
     fix: 'Delete it by hand if it is truly stale, or leave it: the gate reports and passes.',
     example: 'A .mcc rule dropped from the surface set, still on disk.',
   },
+  optional: {
+    what: 'The repo runs GitHub Actions but lacks one of the two .github files `init` writes at adoption (\u201csimt-dev-check.yml\u201d, \u201cdependabot.yml\u201d): the file is offered, not present.',
+    why: 'ADR-023: the file is written once at adoption and is the repository\u2019s file after that \u2014 a repo without it declined the offer. A decision is not a defect, so both commands report the absence with its remedy and leave the verdict green.',
+    fix: 'Run: simt init --yes to accept the offer, or leave it: the gate reports and passes.',
+    example: 'An Actions repo with no simt-dev-check.yml: OPTIONAL names the file and the remedy.',
+  },
   'pack-declared-twice': {
     what: 'The manifest declares the same pack twice: the second declaration is read as the first, so one of them is dead text.',
     why: 'ADR-065: a pack declaration is a pin, and two pins for one name cannot both be true. The resolver reads the first and reports the second rather than merging them and guessing.',

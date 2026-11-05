@@ -64,7 +64,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A15 | A numeric MCP cursor past the list is an empty page | P1 | F | paginate | S | — | Complete | 9b5515ae1426b42f6a7e006f490760ca1793d6e0 · test: node --test test/mcp-paginate.test.mjs |
 | A16 | MCP `knowledge_why` cannot page or ask a bitemporal question | P2 | F | mcpwork | S | — | Complete | 9c015c684328c824f11d07ea51434dc9b991aefd · test: node --test test/mcp-work.test.mjs test/mcp-spec.test.mjs |
 | A17 | MCP `knowledge_import` reports `ok: true` when the import failed | P2 | F | mcpwork | S | A16 | Complete | 844c343bb08cbc6d2eea5ee75aa6bb3ec251cb4d · test: node --test test/mcp-work.test.mjs |
-| A18 | `knowledge why` prints the page limit as a page count | P3 | F | knowledge | S | A07 | Queued | — |
+| A18 | `knowledge why` prints the page limit as a page count | P3 | F | knowledge | S | A07 | Complete | c432899e7e0a303e8ec7949075b460728e78ac3e · test: node --test test/work-doors.test.mjs |
 | A19 | `--limit` and `--page` accept a non-integer and silently default | P2 | F | knowledge | S | A18 | Queued | — |
 | A20 | `openIndex().search` stringifies an error object | P2 | F | open | S | — | Complete | ab0a2c17864f6d05a835f34c4864784dd4e93dca · test: node --test test/index-open-error.test.mjs |
 | A21 | A corrupt SQLite overlay reads as an empty overlay | P2 | F | overlay | S | — | Complete | 9a8a72016fc0a0c4e9ef7ea3236ee8d492c97033 · test: node --test test/overlay-corrupt.test.mjs |

@@ -90,7 +90,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A41 | Journal undo restore writes the destination in place | P3 | F | journal | S | — | Complete | bbd28aa5fcb7daa43eaa3d141bb30bdd74308391 · test: node --test test/undo.test.mjs |
 | A42 | `commitJournal` records `undefined` paths for git-config entries | P3 | F | journal | S | A41 | Complete | 4e9d1eec6349de7cad942cfd19693539d6896589 · test: node --test test/undo.test.mjs |
 | A43 | `GLOBAL_FLAGS` can drift from the spec flag rows | P3 | D | help | S | — | Complete | 94a64239bcb284c1fa86671f5cf3cc3e966d5c68 · test: node --test test/spec.test.mjs test/help.test.mjs |
-| A44 | `doc-input.mjs` has no direct test | P3 | D | docinput | S | — | Queued | — |
+| A44 | `doc-input.mjs` has no direct test | P3 | D | docinput | S | — | Complete | 68080cc4297f5f99943f8a2e9644406be28effbf · test: node --test test/doc-input.test.mjs |
 | A45 | Door parity covers five MCP tools, not every spec door | P2 | D | doors | S | — | Queued | — |
 | A46 | Rank stratum `queries` is never incremented | P3 | F | rank | S | — | Queued | — |
 | A47 | Split `test/agenthooks.test.mjs` (982 lines) | P2 | C | t-hooks | M | — | Queued | — |

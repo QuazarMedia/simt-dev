@@ -47,7 +47,11 @@ export function check(value, schema, path = '$') {
   }
 
   if (schema.type === 'object' || schema.properties !== undefined || schema.required !== undefined) {
-    if (value === null || typeof value !== 'object' || Array.isArray(value)) return null;
+    // `required` or `properties` without `type` still describes an object; returning null
+    // here accepted a string against a schema that demanded properties (A35).
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return `${path}: expected an object, got ${describeValue(value)}`;
+    }
     for (const key of schema.required ?? []) {
       if (!(key in value)) return `${path}: missing required property "${key}"`;
     }

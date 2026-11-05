@@ -72,6 +72,10 @@ export const SYNC_NON_BLOCKING = new Set([
   // them would fail every fresh TypeScript adoption over a file the tool does not write.
   'inert',
   'inconsistent',
+  // The two `.github` files: written once by `init` at adoption, and a repo that
+  // declines them is making a decision, not carrying a defect. `sync` offers,
+  // `check` reports with the remedy, and neither fails the gate over the refusal.
+  'optional',
 ]);
 
 /**
@@ -114,6 +118,10 @@ export const SYNC_NON_BLOCKING = new Set([
 // A fresh TypeScript adoption has neither file in a state the tool can repair, and a
 // gate that reddens on a policy decision is one the repo satisfies by choosing, not by
 // running a command.
+// `optional` is here for: the two `.github` files (`simt-dev-check.yml`,
+// `dependabot.yml`) are written once by `init` at adoption and are the repository's
+// to decline. A repo without them gets the finding with its remedy, and the decision
+// does not fail the gate.
 export const CHECK_NON_BLOCKING = new Set([
   'orphaned',
   'pack-unpinned',
@@ -123,6 +131,7 @@ export const CHECK_NON_BLOCKING = new Set([
   'check-unbuilt',
   'inert',
   'inconsistent',
+  'optional',
 ]);
 
 export async function syncCommand(positional, flags) {

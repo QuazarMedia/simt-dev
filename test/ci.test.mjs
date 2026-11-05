@@ -298,19 +298,28 @@ test('init leaves a repo with no .github exactly as it found it', async () => {
   assert.match(stdout, /create \.github\/workflows\/ first/);
 });
 
-test('check gates the merge: an Actions repo with no workflow fails, a repo with one passes', async () => {
+test('check offers the gate file to an Actions repo without failing it', async () => {
+  // The file is written once by `init` at adoption, and a repo that does not have it
+  // has declined the offer: the absence is reported with its remedy, and the
+  // decision does not red the gate.
   const ungated = await actionsRepo();
   const first = await exec(process.execPath, [BIN, 'check'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } }).catch(
     (e) => e,
   );
-  assert.notEqual(first.code, 0, 'a repo that merges ungated passed the gate');
-  assert.match(first.stdout, /ABSENT\s+\.github\/workflows\/simt-dev-check\.yml/);
+  assert.match(first.stdout, /OPTIONAL\s+\.github\/workflows\/simt-dev-check\.yml/);
   // A finding whose fix the reader has to guess at is a finding that gets skipped.
   assert.match(first.stdout, cmd('remedy: {cli} init --yes'));
 
   await exec(process.execPath, [BIN, 'init', '--yes', '--surfaces', 'cursor'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } });
   const gated = await exec(process.execPath, [BIN, 'check'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } });
   assert.doesNotMatch(gated.stdout, /simt-dev-check\.yml/);
+
+  // And the absence alone cannot red a repo: with everything else current, deleting
+  // the gate file leaves the check green. A resolved exec is the green: execFile
+  // rejects on a non-zero exit.
+  await rm(join(ungated, WORKFLOW_FILE));
+  const optional = await exec(process.execPath, [BIN, 'check'], { cwd: ungated, env: { ...process.env, NO_COLOR: '1' } });
+  assert.match(optional.stdout, /OPTIONAL\s+\.github\/workflows\/simt-dev-check\.yml/);
 });
 
 test('the gate never inspects the contents of a workflow it did not write', async () => {

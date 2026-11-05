@@ -183,20 +183,23 @@ test("a repo's own edits to the config survive init, exactly as the workflow's d
   assert.doesNotMatch(stderr, /dependabot/);
 });
 
-test('check reports a repo that runs Actions but watches nothing', async () => {
+test('check offers the dependabot config to a repo that runs Actions, without failing it', async () => {
   // The gate file alone does not make a repo safe to merge into: a repo whose
   // dependencies are never updated finds out about a CVE from an advisory rather
-  // than from a pull request.
+  // than from a pull request. The config is offered with its remedy, and a repo
+  // that declines it is making a decision, not carrying a defect.
   const root = await actionsRepo();
   await exec(process.execPath, [BIN, 'init', '--surfaces', 'opencode', '--yes'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
   await rm(join(root, DEPENDABOT_FILE));
-  const { stdout, code } = await exec(process.execPath, [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } }).catch((e) => e);
-  assert.match(stdout, /ABSENT\s+\.github\/dependabot\.yml/);
+  // A resolved exec is the green: declining the config must not red the gate, and
+  // execFile rejects on a non-zero exit.
+  const { stdout } = await exec(process.execPath, [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
+  assert.match(stdout, /OPTIONAL\s+\.github\/dependabot\.yml/);
   assert.match(stdout, /nothing watches its dependencies/);
-  assert.equal(code, 1);
 
   await exec(process.execPath, [BIN, 'init', '--surfaces', 'opencode', '--yes'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
-  assert.ok((await exec(process.execPath, [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } })).stdout);
+  const restored = await exec(process.execPath, [BIN, 'check'], { cwd: root, env: { ...process.env, NO_COLOR: '1' } });
+  assert.doesNotMatch(restored.stdout, /dependabot/);
 });
 
 test('simt-dev refreshes both of its own copies, and writes only what changed', async () => {

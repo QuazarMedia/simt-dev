@@ -17,6 +17,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { PACKAGE_NAME } from '../name.mjs';
 import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 import { matchesGlob, syntheticPathFor } from '../resolve/resolve.mjs';
 import { tokenize } from '../text/tokens.mjs';
@@ -583,9 +584,6 @@ for (const duplicate of duplicates(sources.map((s) => `${s.repo}/${s.path}`))) {
     warn(`${at}: declares the same source path twice (${duplicate})`);
   }
 }
-
-/** The repo name this package declares for a source that ships with it (package.json "name"). */
-const PACKAGE_NAME = 'simt-dev';
 
 /** Compare declared sizes against the filesystem. */
 async function lintSourcesOnDisk(registry, workspaceRoot) {

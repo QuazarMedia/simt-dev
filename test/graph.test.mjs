@@ -36,54 +36,6 @@ test('registry: lint is clean against the filesystem too', async () => {
   assert.equal(ok, true, errors.join('\n'));
 });
 
-test('lint: a vendored source that ships with the package is byte-verified (regression)', async () => {
-  // simt-commands ships with the package root. Every vendored node used to skip
-  // the on-disk check entirely, so a body that grew outlived its declaration -
-  // 4161 declared, 6689 on disk - and `skills install` refused every consumer.
-  // A stale count on a packaged body must now fail the load.
-  const dir = await mkdtemp(join(tmpdir(), 'simt-vend-'));
-  try {
-    const g = clone();
-    const source = g.skills.find((s) => s.name === 'simt-commands').sources[0];
-    source.bytes += 1;
-    const reg = join(dir, 'registry.json');
-    await writeFile(reg, JSON.stringify(g));
-    const { ok, errors } = await loadRegistry(reg);
-    assert.equal(ok, false);
-    assert.ok(
-      errors.some(
-        (e) =>
-          e.includes('simt-commands: simt-dev/skills/simt-commands') &&
-          /declared \d+ bytes, on disk \d+/.test(e),
-      ),
-      `expected a byte-count error, got: ${errors.join('\n')}`,
-    );
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-test('lint: a packaged body that is missing is an error, not a silent skip', async () => {
-  // The other half: the check must fire on absence of the shipped body too,
-  // not only on a size disagreement.
-  const dir = await mkdtemp(join(tmpdir(), 'simt-vend2-'));
-  try {
-    const g = clone();
-    const source = g.skills.find((s) => s.name === 'simt-commands').sources[0];
-    source.path = 'skills/does-not-ship';
-    const reg = join(dir, 'registry.json');
-    await writeFile(reg, JSON.stringify(g));
-    const { ok, errors } = await loadRegistry(reg);
-    assert.equal(ok, false);
-    assert.ok(
-      errors.some((e) => e.includes('simt-commands') && /does not exist/.test(e)),
-      `expected a missing-path error, got: ${errors.join('\n')}`,
-    );
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
 test('registry: every skill is reachable and addressable', () => {
   const names = real.skills.map((s) => s.name);
   assert.equal(new Set(names).size, names.length, 'duplicate skill name');

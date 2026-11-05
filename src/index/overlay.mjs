@@ -21,6 +21,7 @@
 // Two backends store the merged rows - JSON lines and SQLite - and they are one semantics:
 // the same rows written through either read back identical, in a deterministic order.
 
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
@@ -413,6 +414,9 @@ export function sqliteBackend(file) {
       }
     },
     async read() {
+      // Before the open, because `new DatabaseSync(file)` creates the file: a missing
+      // overlay would then be "corrupt" (no tables) rather than simply absent.
+      if (!existsSync(file)) return { nodes: [], edges: [] };
       const { DatabaseSync } = await import('node:sqlite');
       let db;
       try {
@@ -426,8 +430,14 @@ export function sqliteBackend(file) {
           .all()
           .map(normaliseEdge);
         return { nodes, edges };
-      } catch {
-        return { nodes: [], edges: [] };
+      } catch (error) {
+        // A file that exists and cannot be read is not an empty overlay: reporting both
+        // as empty let a truncated database read as "no edits".
+        return {
+          nodes: [],
+          edges: [],
+          error: { code: 'INDEX_CORRUPT', message: `overlay ${file}: ${error?.message ?? error}` },
+        };
       } finally {
         db?.close();
       }

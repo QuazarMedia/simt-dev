@@ -314,12 +314,12 @@
         "agent",
         "install"
       ],
-      "bytes": 6689,
+      "bytes": 9713,
       "sources": [
         {
           "repo": "simt-dev",
           "path": "skills/simt-commands",
-          "bytes": 6689,
+          "bytes": 9713,
           "role": "canonical"
         }
       ],

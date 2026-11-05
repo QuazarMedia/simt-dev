@@ -17,17 +17,20 @@ add `--yes` and hope.
 `agents install`, `agent-hooks install`, `hooks install`, `doctor --fix`,
 `ignore`, `ci`, `shared install`, `lessons review`, `decide`, `undo`,
 `skills install`, `bench mine|run|ablate|probes|variants`, `pack new|publish`,
-`lease`
+`lease`, `plugin <harness>`, `workspace upgrade`
 
 ### Read-only commands (no flag needed)
 
 `brief`, `why`, `tests`, `gate`, `impact`, `map`, `check`, `status`,
 `plan status|next`, `rules *`, `agents status`, `agent-hooks status`,
-`hooks status`, `evidence`, `evidence check`, `pr-body`, `explain`,
-`graph lint`, `skills index|brief|show|why|find|compile|eval`, `index`,
-`review`, `tokens`, `harness *`, `compare`, `distill`, `docs readme`,
-`local doctor`, `shared plan`, `bench report|critic`, `pack lint`,
-`mcp`, `completions`, `lessons list|capture`
+`hooks status`, `evidence`, `evidence check`, `evidence validate`,
+`pr-body`, `explain`, `graph lint`,
+`skills index|brief|show|why|find|compile|eval`, `index`, `index overlay`,
+`review`, `tokens`, `harness *`, `compare`, `workspace compare|share`,
+`distill`, `docs readme`, `local doctor`, `shared plan`,
+`bench report|critic`, `pack lint`, `mcp`, `completions`,
+`lessons list|capture|discover`, `knowledge *`, `work *`, `verify *`,
+`action status|review`, `adapter check`
 
 ## Command reference
 
@@ -80,6 +83,34 @@ Pick the command by what you need, not by what you remember:
 | Compile a skill | `simt skills compile [<name>]` | Agent Skills standard |
 | Score the registry | `simt skills eval [corpus]` | Against recorded transcripts |
 | Refresh the workflows | `simt ci` | This package's own `.github` |
+
+## Doors (JSON in, facts out)
+
+The Plan 0004 modules answer through read-only doors: each takes a JSON document
+(`--input <file>`, or `--claims`/`--refs`/`--journal` where the table says) and
+returns the module's own facts. None of them write to the repository. A door with
+an MCP name is also a read-only MCP tool calling the same fact function, so the
+CLI and a client cannot disagree about a fact.
+
+| You need to… | Command | MCP tool |
+|---|---|---|
+| What a claim derives from, what depends on it, what applied at a date, conflicts | `simt knowledge why <id> --claims <file>` | `knowledge_why` |
+| The retrieval units a long document yields, with anchors and byte ranges | `simt knowledge sections <file.md>` | — |
+| Ranked evidence units for a question, and what was excluded | `simt knowledge rank --input <f> --query "…"` | — |
+| Stale, unsupported knowledge ranked by consequence per effort | `simt knowledge debt --input <f>` | — |
+| Which outputs a source, template or skill change puts in question | `simt knowledge derivations --input <f>` | — |
+| What a change reaches over typed edges, and where the graph is unknown | `simt knowledge impact --input <f> --refs <ids>` | — |
+| A bounded packet another repo can read; validate such a packet | `simt knowledge export` / `import --input <f>` | `knowledge_export` / `knowledge_import` |
+| The next observation worth making; the narrowest checks that prove a change; closure over obligations | `simt verify plan\|select\|status --input <f>` | `verify_plan` / `verify_select` / `verify_status` |
+| Obligations against observations; a generated doc vs its template; procedures' imports and prerequisites | `simt verify contracts\|documents\|procedures --input <f>` | `verify_contracts` / `verify_documents` / `verify_procedures` |
+| What this repo's work is: artifacts, activities | `simt work inspect` | `work_inspect` |
+| Ready tasks that may run together; a resume capsule; revalidate a capsule; traces proposed as a procedure; the proof-bearing task packet | `simt work schedule\|handoff\|resume\|graduate\|packet --input <f>` | `work_packet` |
+| Where an operation stands from its journal | `simt action status --journal <f>` | `action_status` |
+| A reviewable bundle of contract, delta, target, authorization, postconditions | `simt action review --input <f>` | `action_review` |
+| Validate adapter descriptors; observe-only vs execute | `simt adapter check --input <f>` | `adapter_check` |
+| Deduplicate discovery candidates and report their authority | `simt lessons discover --input <f>` | `lessons_discover` |
+| A working-tree or staged node labelled by its provenance | `simt index overlay --input <f>` | `index_overlay` |
+| Validate ledger evidence and the chain of custody behind it | `simt evidence validate --input <f>` | `evidence_validate` |
 
 ## Tiers, waves, lanes and reviewers
 

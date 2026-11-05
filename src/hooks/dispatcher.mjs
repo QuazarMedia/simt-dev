@@ -451,16 +451,16 @@ export async function runGates(event, { root, manifest, pushed }) {
   if (event === 'pre-push') {
     // Decided before the worktree exists: a non-code push (documentation, images, release
     // files) skips the `test` gate (ADR-147), and a push whose tree the author already proved
-    // green skips it on that evidence (ADR-120). A push that earns either skip needs no tree
-    // for a gate that will not run.
+    // green skips it on that evidence (ADR-120).
     skipTest = (await resolveNonCodeSkip(root, manifest, pushed)) ??
       (await resolveAlreadyPassedSkip(root));
-    if (skipTest === null) {
-      const prepared = await preparePushTree(root);
-      if (prepared.path === null) return { event, gates: [prepared.gate], failed: true };
-      runRoot = prepared.path;
-      cleanupHeadWorktree = prepared.done;
-    }
+    // The tree is materialised for every pre-push, including one that skips `test`: lint and
+    // format must see the commit being pushed, not the author's uncommitted edits. The skip
+    // reason is passed through so `runGatesAt` still leaves the test gate alone.
+    const prepared = await preparePushTree(root);
+    if (prepared.path === null) return { event, gates: [prepared.gate], failed: true };
+    runRoot = prepared.path;
+    cleanupHeadWorktree = prepared.done;
   }
 
   try {

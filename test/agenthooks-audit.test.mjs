@@ -30,3 +30,24 @@ test('the fallback does not deny a command the regex does not name (A09)', () =>
   const decision = decide({ facts: parsedWithoutGit('busybox ls -la'), env: {} });
   assert.equal(decision.decision, 'allow');
 });
+
+/** A normalised git fact, as `parseGit` leaves one. */
+const gitFact = (over = {}) => ({
+  kind: 'git',
+  sub: 'pull',
+  opts: new Set(['r']),
+  refspecs: [],
+  globals: { c: [] },
+  ...over,
+});
+
+const parsedGit = (command, facts) => ({ command, shell: { parsed: true, facts }, writes: [] });
+
+test('git pull -r is treated as the rewrite it is (A10)', () => {
+  const denied = decide({ facts: parsedGit('git pull -r origin main', [gitFact()]), env: {} });
+  assert.equal(denied.decision, 'deny');
+  assert.ok(denied.blocked.includes('rewrite'), 'the short rebase flag was not read');
+
+  const allowed = decide({ facts: parsedGit('git pull origin main', [gitFact({ opts: new Set() })]), env: {} });
+  assert.equal(allowed.decision, 'allow', 'a plain pull is not a rewrite');
+});

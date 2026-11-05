@@ -88,7 +88,13 @@ export function dateDivergence({ before = null, after = null, allowedFields = []
 export function metamorphic({ before = null, after = null, relations = [], options = {} } = {}) {
   const results = (Array.isArray(relations) ? relations : []).map((relation) => {
     if (!RELATIONS.includes(relation)) return { relation, holds: false, reason: `${relation} is not a declared relation` };
-    const args = { before, after, ...(options?.[relation] ?? {}) };
+    const supplied = options?.[relation];
+    const args = { before, after, ...(supplied ?? {}) };
+    // The two observations are the two channels when the caller named no answers (A28); an
+    // explicit list still wins, and one observation alone stays a failure.
+    if (relation === 'read-channel-equivalence' && supplied?.answers === undefined) {
+      args.answers = [before, after];
+    }
     const check =
       relation === 'rename-invariance'
         ? renameInvariant(args)

@@ -69,7 +69,9 @@ function applies(row, facts, env) {
       // a wrapper plus arguments, so the push row had nothing to match and the push ran.
       // With no normalised fact to judge, the text is the only evidence there is.
       const hasGit = Array.isArray(facts.shell.facts) && facts.shell.facts.some((f) => f?.kind === 'git');
-      if (hasGit) return row.match(facts);
+      // A failed alias lookup leaves an unexpanded subcommand looking like a builtin; the
+      // text is the only evidence for what it might have been (ADR-196).
+      if (hasGit && facts.shell.aliasLookupFailed !== true) return row.match(facts);
       return row.regex !== null && row.regex.test(facts.command);
     }
     return row.regex !== null && row.regex.test(facts.command);
@@ -276,12 +278,14 @@ function gitAliases(root) {
     timeout: 1000,
   });
   const aliases = new Map();
-  if (result.status !== 0) return aliases;
   for (const line of String(result.stdout ?? '').split('\n')) {
     const m = /^alias\.(\S+)\s+(.*)$/.exec(line);
     if (m !== null) aliases.set(m[1], m[2]);
   }
-  return aliases;
+  // A status of 1 means "no aliases configured"; a timeout or a missing git is a lookup
+  // that could not finish. Both leave a map, and only the second means the map is partial.
+  const failed = result.error !== undefined || result.status === null;
+  return { aliases, failed };
 }
 
 /**
@@ -297,7 +301,14 @@ async function normalizeCommand(root, command) {
   const parsed = commandFacts(command); // non-null: `command` is a string here
   if (parsed === null || !parsed.parsed) return { parsed: false };
   if (parsed.facts.some((f) => f.kind === 'git' && !GIT_BUILTINS.has(f.sub))) {
-    parsed.facts = applyAliases(parsed.facts, gitAliases(root));
+    const lookup = gitAliases(root);
+    parsed.facts = applyAliases(parsed.facts, lookup.aliases);
+    // Partial aliases are still applied above. The marker is set only when the failure
+    // left an unknown subcommand unexpanded: an alias the lookup did read is now the
+    // builtin it names, and that fact is better evidence than the command's text.
+    if (lookup.failed && parsed.facts.some((f) => f.kind === 'git' && !GIT_BUILTINS.has(f.sub))) {
+      parsed.aliasLookupFailed = true;
+    }
   }
   return parsed;
 }

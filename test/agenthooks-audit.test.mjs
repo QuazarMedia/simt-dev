@@ -7,9 +7,13 @@
 // A09 appends here rather than pushing that file over the hard ceiling.
 
 import assert from 'node:assert/strict';
+import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { decide } from '../src/agenthooks/decide.mjs';
+import { decide, factsFor } from '../src/agenthooks/decide.mjs';
+import { keepTemp } from './fixture.mjs';
 
 /** Facts as the normaliser leaves a command that parsed but carried no git fact. */
 const parsedWithoutGit = (command) => ({
@@ -64,6 +68,32 @@ test('an unparseable command that names the hooks path is denied (A23)', () => {
 
   // The fallback is this row's text, not a general pattern match.
   assert.equal(decide({ facts: unparsed('echo "unclosed'), env: {} }).decision, 'allow');
+});
+
+test('a timed-out alias lookup still denies the push it read (A24)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'simt-alias-'));
+  keepTemp(dir);
+  const bin = join(dir, 'bin');
+  await mkdir(bin, { recursive: true });
+  const stub = join(bin, 'git');
+  // Print the alias, then exceed the one-second lookup ceiling: the partial answer is what
+  // a killed `git config` leaves behind, and it is enough to read `git p` as a push.
+  await writeFile(stub, '#!/bin/sh\nprintf "alias.p push\\n"\nsleep 5\n');
+  await chmod(stub, 0o755);
+
+  const previous = process.env.PATH;
+  process.env.PATH = `${bin}:${previous}`;
+  try {
+    const facts = await factsFor(dir, { command: 'git p' });
+    const decision = decide({ facts, env: {} });
+    assert.equal(decision.decision, 'deny', 'a timed-out lookup allowed the push');
+    assert.ok(decision.blocked.includes('push'));
+
+    const status = decide({ facts: await factsFor(dir, { command: 'git status' }), env: {} });
+    assert.equal(status.decision, 'allow', 'the fallback denied an ordinary command');
+  } finally {
+    process.env.PATH = previous;
+  }
 });
 
 test('a parseable git config core.hooksPath stays denied (A23)', () => {

@@ -59,7 +59,8 @@ cannot tell them apart. The decision is made on the act.
    table can read is left as-is, which is the same position the pre-lookup
    policy found it in. A git that is missing or cannot answer yields no
    aliases, and the facts stand where the pre-lookup policy would have left
-   them.
+   them. ADR-196 keeps what a timed-out lookup printed and marks the failure so
+   the push and rewrite rows can fall back to their text.
 
 ## Consequences
 

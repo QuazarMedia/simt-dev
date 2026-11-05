@@ -315,6 +315,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --skill <name>          force a skill into the brief (repeatable)
 --task "<text>"         the task text used for capability resolution
 --paths <globs>         comma-separated path globs used for path resolution
+--proof                 brief --json: report whether the packet proves what it kept
 --root <path>           repository root (default: cwd)
 --base <ref>           pr-body: the ref the body diffs against
                         (default: origin/main, then main; falls back to the
@@ -654,7 +655,7 @@ function wrapped(text) {
  * showed `--tier` or `--wave` even after the spec declared them: the page was complete
  * about what a command is and silent about what it takes.
  */
-const GLOBAL_FLAGS = new Set(['json', 'pretty', 'root', 'max-bytes']);
+export const GLOBAL_FLAGS = new Set(['json', 'pretty', 'root', 'max-bytes']);
 
 export function commandPage(path) {
   const row = SPEC.find((r) => r.path === path);

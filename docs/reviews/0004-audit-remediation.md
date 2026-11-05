@@ -69,7 +69,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A20 | `openIndex().search` stringifies an error object | P2 | F | open | S | — | Complete | ab0a2c17864f6d05a835f34c4864784dd4e93dca · test: node --test test/index-open-error.test.mjs |
 | A21 | A corrupt SQLite overlay reads as an empty overlay | P2 | F | overlay | S | — | Complete | 9a8a72016fc0a0c4e9ef7ea3236ee8d492c97033 · test: node --test test/overlay-corrupt.test.mjs |
 | A22 | An FTS term containing `"` breaks the MATCH expression | P2 | F | fts | S | — | Complete | 6fe7b05bd07dd4fd014d3fa12c326f443ac8d7e2 · test: node --test test/index-fts-quote.test.mjs |
-| A23 | `hooks-disable` has no regex when the tokenizer fails | P2 | S | agenthooks | M | A10 | Queued | — |
+| A23 | `hooks-disable` has no regex when the tokenizer fails | P2 | S | agenthooks | M | A10 | Complete | 07d70a2a3dc80af82c3fb143320e18021647d29a · test: node --test test/agenthooks-audit.test.mjs |
 | A24 | Git alias lookup fails open on timeout | P2 | S | agenthooks | S | A23 | Queued | — |
 | A25 | The secret scan judges each added line alone | P2 | S | secrets | S | — | Queued | — |
 | A26 | `slice start` can leave a lease or a worktree behind | P2 | F | slice | M | — | Queued | — |

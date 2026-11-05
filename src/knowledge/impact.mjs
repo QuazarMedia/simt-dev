@@ -54,7 +54,20 @@ const isText = (value) => typeof value === 'string' && value.length > 0;
 const requiredScope = (scopes) => Object.entries(scopes ?? {}).filter(([, value]) => value !== undefined && value !== null);
 
 /** A node's scope is its own, or the one its claim record declares. */
-const scopeOfNode = (node) => (isObject(node) && node.scope !== undefined ? node.scope : isObject(node?.claim) ? node.claim.scope : undefined);
+/**
+ * The scope a node carries, wherever its producer put it.
+ *
+ * `readClaim` stores scope at `claim.applicability.scope`; `buildClaimGraph` keeps the
+ * claim whole, so a scoped claim reached impact with no `node.scope` and no
+ * `claim.scope` and was filed as `scope-missing`.
+ */
+const scopeOfNode = (node) => {
+  if (!isObject(node)) return undefined;
+  if (node.scope !== undefined) return node.scope;
+  if (!isObject(node.claim)) return undefined;
+  if (node.claim.scope !== undefined) return node.claim.scope;
+  return node.claim.applicability?.scope;
+};
 
 const byId = (a, b) => String(a.id ?? '').localeCompare(String(b.id ?? ''));
 

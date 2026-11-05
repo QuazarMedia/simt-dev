@@ -26,7 +26,7 @@
 // slice's code: editing the same row in both places would make every merge of a
 // finished slice a conflict on the one line that records it.
 
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
@@ -231,6 +231,20 @@ async function claimSlice(main, id, leaseRel, session) {
  * calls it after the commit exists, so a lease failure is a note about a TTL
  * that will clean itself up, never a second failure stacked on a success.
  */
+/**
+ * Take back a worktree and its branch that a failed `start` created.
+ *
+ * `--force` becomes `rm -rf` becomes a prune, the same order the abandon path uses: a
+ * half-created tree must not be what decides whether the next start can run (A26).
+ */
+async function discardWorktree(main, worktree, branch) {
+  await git(main, ['worktree', 'remove', '--force', worktree]).catch(async () => {
+    await rm(worktree, { recursive: true, force: true }).catch(() => {});
+    await git(main, ['worktree', 'prune']).catch(() => {});
+  });
+  await git(main, ['branch', '-D', branch]).catch(() => {});
+}
+
 async function releaseSlice(main, id, session) {
   if (session === null) return { released: false };
   try {
@@ -402,6 +416,11 @@ async function startSlice(root, id, flags, prompt) {
     await git(main, ['worktree', 'add', '-b', branch, worktree]);
   } catch (error) {
     const detail = String(error.stderr ?? error.message ?? error).trim().split('\n')[0];
+    // The lease was claimed before the tree existed, and `git worktree add` may already
+    // have created the branch before it failed. A start that has no tree has no claim and
+    // no branch either, or the slice is blocked until the TTL (A26).
+    await discardWorktree(main, worktree, branch);
+    if (lease !== null) await releaseSlice(main, id, session);
     return fail(`the worktree could not be created: ${detail}`, EXIT.FAIL, `run: git -C ${main} worktree list`);
   }
 
@@ -415,8 +434,18 @@ async function startSlice(root, id, flags, prompt) {
   if (promptMode) {
     await writeSliceRecord(main, id, { id, title, kind: 'prompt', createdAt: new Date().toISOString() });
   } else {
-    row = await planDone(main, id, { state: started.state, dryRun: false });
+    // `planDone` can throw when the tracker cannot be written; a start that has a tree
+    // must take that tree down on either shape of failure (A26).
+    try {
+      row = await planDone(main, id, { state: started.state, dryRun: false });
+    } catch (error) {
+      row = { error: String(error?.message ?? error), remedy: `run: ${CLI} plan status` };
+    }
     if (row.error) {
+      // The brief and the tree are both this start's; without the row nothing has
+      // started, so take them back down rather than leaving a slice to clean up (A26).
+      await discardWorktree(main, worktree, branch);
+      if (lease !== null) await releaseSlice(main, id, session);
       return fail(`${branch} exists with its brief, but the tracker row was not updated: ${row.error}`, EXIT.FAIL, row.remedy ?? `run: ${CLI} plan status`);
     }
   }

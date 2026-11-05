@@ -27,6 +27,10 @@ export function paginate(items, cursor, size = PAGE_SIZE) {
   // and accepting a cursor nobody issued is how pagination silently repeats or skips.
   if (!/^\d+$/.test(text)) return null;
   const start = Number(text);
+  // A cursor past the end is stale, not a request for the last page: `server.mjs` maps
+  // `null` to the invalid-cursor error instead of silently repeating the tail. Cursor 0
+  // on an empty list is still a valid empty page.
+  if (start !== 0 && start >= items.length) return null;
   const page = items.slice(start, start + size);
   const next = start + size < items.length ? String(start + size) : null;
   return { items: page, nextCursor: next };

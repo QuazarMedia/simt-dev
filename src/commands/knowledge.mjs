@@ -363,7 +363,9 @@ function renderWhy(payload) {
     for (const winner of payload.at.claims) lines.push(`in force   ${winner.id} = ${JSON.stringify(winner.value)}`);
     for (const reason of payload.at.reasons) lines.push(`because    ${reason}`);
   }
-  lines.push(`page       ${payload.page.index} of ${payload.page.size} (${payload.page.total} node(s))`);
+  // `size` is the limit, not a page count: `page 0 of 50` read as fifty pages when the
+  // document held three nodes. The machine fields `index`, `size` and `total` stay stable.
+  lines.push(`page       ${payload.page.index} (limit ${payload.page.size}, ${payload.page.total} node(s))`);
   if (payload.lineage.truncated || payload.impact.truncated) lines.push('truncated  1');
   if (!payload.certifies) lines.push('certifies  no: this scan covers declared claims, not the documents behind them');
   return lines.join('\n');

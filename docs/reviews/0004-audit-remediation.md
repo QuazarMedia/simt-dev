@@ -101,7 +101,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A52 | Split `src/commands/init.mjs` (957 lines) | P2 | C | t-init | M | — | Complete | bd70663f4ff2a24e013bcdbc5042977c8aaa814f · test: node --test test/init.test.mjs test/init2.test.mjs test/init-harness.test.mjs |
 | A53 | Split `src/commands/hooks.mjs` (905 lines) | P2 | C | t-hookscmd | M | — | Complete | 5cc0d457026732a64c2f4f9c618b26a0c32e1123 · test: node --test test/hooks.test.mjs test/hooks3.test.mjs test/hooks-context.test.mjs test/hooks-push.test.mjs test/hooks-install.test.mjs |
 | A54 | Split `src/memory/lessons.mjs` (952 lines) | P2 | C | t-lessons | M | — | Complete | d858bd33b20bb79411c0d8d8e6e04db118f7df93 · test: node --test test/lessons.test.mjs test/ledger.test.mjs |
-| A55 | Split `src/commands/slice.mjs` (858 lines) | P2 | C | slice | M | A27 | Queued | — |
+| A55 | Split `src/commands/slice.mjs` (858 lines) | P2 | C | slice | M | A27 | Complete | b951781abb331b1750985a5c9d0bb4d6190de6b0 · test: node --test test/slice.test.mjs |
 | A56 | Split `src/knowledge/sections.mjs` (473 lines) | P3 | C | t-sections | S | — | Queued | — |
 | A57 | Split `src/memory/decide.mjs` (513 lines) | P3 | C | t-decide | S | — | Queued | — |
 

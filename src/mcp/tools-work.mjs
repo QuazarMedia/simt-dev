@@ -39,11 +39,23 @@ export const TOOLS_WORK = [
       'Why a claim is held: what it derives from, what depends on it, the conflicts that mention it, and its validity window. Reads declared claims only, so a clean scan certifies nothing.',
     inputSchema: {
       type: 'object',
-      properties: { id: { type: 'string', description: 'the claim id to explain' }, document: DOCUMENT },
+      properties: {
+        id: { type: 'string', description: 'the claim id to explain' },
+        limit: { type: 'integer', description: 'how many lineage and impact entries one page carries' },
+        page: { type: 'integer', description: 'the zero-based page of lineage and impact entries' },
+        asOf: { type: 'string', description: 'the date to answer as of, with knownAt' },
+        knownAt: { type: 'string', description: 'the date whose knowledge bounds the answer, with asOf' },
+        document: DOCUMENT,
+      },
       required: ['id', 'document'],
     },
     async run(args) {
-      const facts = knowledgeWhyFacts(args.document, args.id);
+      const facts = knowledgeWhyFacts(args.document, args.id, {
+        limit: args.limit,
+        page: args.page,
+        asOf: args.asOf,
+        knownAt: args.knownAt,
+      });
       if (facts.error !== undefined) refuse(facts.error, 'pass a document of {claims, edges, artifacts} and an id that is on one of its claims');
       return { ok: true, doc: facts };
     },

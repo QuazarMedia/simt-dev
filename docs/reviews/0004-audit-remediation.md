@@ -48,7 +48,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | ID | Slice | Sev | Grp | Lane | Effort | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | A01 | Bench run treats a missing skill registry as an empty one | P1 | F | bench | S | — | Complete | b61bbca8d805efcc2c1e9bb1c7236ed5c324aaf2 · test: node --test test/bench.test.mjs test/bench2.test.mjs test/bench3.test.mjs |
-| A02 | Reindexing a changed file leaves stale `fts_tri` rows | P1 | F | index | S | — | Queued | — |
+| A02 | Reindexing a changed file leaves stale `fts_tri` rows | P1 | F | index | S | — | Complete | ce8a7b411c56514d32580d5afe4da8ed65b3f887 · test: node --test test/index.test.mjs test/index-tri.test.mjs |
 | A03 | `classifyTask` reads "failure" as a bugfix | P1 | F | brief | S | — | Queued | — |
 | A04 | `evaluateIntent` throws when a corpus label is not an intent | P1 | F | brief | S | A03 | Queued | — |
 | A05 | Impact scope ignores `claim.applicability.scope` | P1 | F | impact | S | — | Queued | — |

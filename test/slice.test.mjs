@@ -56,7 +56,7 @@ async function startableRepo() {
   await writeFile(join(root, MANIFEST_FILE), JSON.stringify({ id: 'r', stack: [], surfaces: ['cursor'], gates: { preCommit: [], prePush: [] } }));
   await mkdir(join(root, 'docs', 'reviews'), { recursive: true });
   const tracker = join(root, 'docs', 'reviews', '0004-audit-remediation.md');
-  await copyFile(new URL('../docs/reviews/0004-audit-remediation.md', import.meta.url), tracker);
+  await copyFile(new URL('../docs/reviews/archive/0004-audit-remediation.md', import.meta.url), tracker);
   await writeFile(join(root, 'a.mjs'), 'export const a = 1;\n');
   await git(['init', '-q', root]);
   await git(['-C', root, 'config', 'user.email', 'tests@simt.invalid']);

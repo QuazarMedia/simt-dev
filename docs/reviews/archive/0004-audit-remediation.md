@@ -1,6 +1,6 @@
 # Review 0004 — remediation of the five audits at `29f58e9`
 
-Status: **queued** · 2026-11-05
+Status: **closed** — 57 row(s): 57 Complete · 2026-11-05
 Reviewed at: `29f58e9` on `main` (clean, level with `origin/main`). Package version `0.10.0`.
 Sources: five read-only audits (packaging, CLI/MCP, plan 0004 work, index/brief/init, hooks/secrets/ledger). This review did not re-run those reproductions and did not run `npm test`. It re-read the cited lines and kept a finding only where the tree at `29f58e9` still matches it.
 

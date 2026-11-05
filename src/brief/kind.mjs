@@ -46,7 +46,7 @@ const HINTS = [
       /\bflaky\b/i,
       /\bcrash(?:es|ed|ing)?\b/i,
       /\bbroken\b/i,
-      /\bfail(?:s|ed|ing|ure)?\b/i,
+      /\bfail(?:s|ed|ing)?\b/i,
       /\bwrong\b/i,
     ],
   ],

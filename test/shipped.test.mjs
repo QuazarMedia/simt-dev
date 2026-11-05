@@ -942,7 +942,7 @@ test('the guard above covers what is actually published', async () => {
 
   // And the wheel, which is the channel that carries the records.
   const pyproject = await readFile(join(ROOT, 'pyproject.toml'), 'utf8');
-  assert.match(pyproject, /"docs\/decisions" = "simt_dev\/vendored\/docs\/decisions"/, 'the wheel no longer ships docs/decisions');
+  assert.match(pyproject, /"docs\/decisions" = "simt_dev\/vendored\/docs\/decisions"/, 'the wheel must ship docs/decisions through force-include');
 });
 
 

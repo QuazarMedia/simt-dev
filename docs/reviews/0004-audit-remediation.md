@@ -92,7 +92,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A43 | `GLOBAL_FLAGS` can drift from the spec flag rows | P3 | D | help | S | — | Complete | 94a64239bcb284c1fa86671f5cf3cc3e966d5c68 · test: node --test test/spec.test.mjs test/help.test.mjs |
 | A44 | `doc-input.mjs` has no direct test | P3 | D | docinput | S | — | Complete | 68080cc4297f5f99943f8a2e9644406be28effbf · test: node --test test/doc-input.test.mjs |
 | A45 | Door parity covers five MCP tools, not every spec door | P2 | D | doors | S | — | Complete | 343bd60ecf7aafb835034ca6f7457e8ea1a1a7fa · test: node --test test/work-door-parity.test.mjs test/work-query-contract.test.mjs |
-| A46 | Rank stratum `queries` is never incremented | P3 | F | rank | S | — | Queued | — |
+| A46 | Rank stratum `queries` is never incremented | P3 | F | rank | S | — | Complete | 98af5d906282a5bd7a7029b4661f8c87206e6133 · test: node --test test/knowledge-rank.test.mjs |
 | A47 | Split `test/agenthooks.test.mjs` (982 lines) | P2 | C | t-hooks | M | — | Queued | — |
 | A48 | Split `test/mcp.test.mjs` (985 lines) | P2 | C | t-mcp | M | — | Queued | — |
 | A49 | Split `test/ci.test.mjs` (983 lines) | P2 | C | t-ci | M | — | Queued | — |

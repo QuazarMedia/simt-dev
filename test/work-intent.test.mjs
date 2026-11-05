@@ -50,6 +50,13 @@ test('the single label is unchanged beside the vector', () => {
   assert.ok(routed.reasons.some((reason) => /^generate: the task matches/.test(reason)));
 });
 
+test('a failure test is a feature, and a failing checkout is still a bugfix (A03)', () => {
+  // `fail(?:s|ed|ing|ure)?` read the noun as a cue, so "add failure test for checkout"
+  // routed to bugfix and the brief asked for a reproduction recipe instead of a build.
+  assert.equal(classifyTask('add failure test for checkout').kind, 'feature');
+  assert.equal(classifyTask('fix the failing checkout').kind, 'bugfix');
+});
+
 test('documenting a mutation requires observation and never authorization', () => {
   const routed = classifyIntent('Document the API mutation');
   assert.deepEqual(routed.leaders, ['generate', 'operate']);

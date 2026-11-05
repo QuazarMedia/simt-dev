@@ -102,9 +102,10 @@ const POLICIES = [
     adr: 'ADR-104',
     event: 'pre-tool-use',
     inspects: 'command',
-    // No regex fallback: before ADR-104 this policy did not exist, so a command that
-    // cannot be tokenised is judged exactly as it was judged before this row was written.
-    regex: null,
+    // A conservative fallback for the one act a parse failure could hide: the config key
+    // and the hooks directory this tool writes, and nothing else (ADR-195). A command that
+    // names neither stays allowed, which is the position ADR-104 left it in.
+    regex: /core\.hooksPath|\.simt\/hooks/i,
     match: (facts) => {
       const dir = (a) => a.replace(/^\.\/+/, '').replace(/\/+$/, '');
       const key = HOOKS_PATH_KEY.toLowerCase(); // config keys are case-insensitive in git

@@ -678,7 +678,7 @@ test('check reports a foreign pointer as blocking, with what is in the way', asy
     (f) => f.status === 'pointer-blocked',
   );
   assert.ok(blocked, 'a regular file at CLAUDE.md must be reported');
-  assert.match(blocked.detail, /simt-dev will not replace it/);
+  assert.match(blocked.detail, /this tool will not replace it/);
   assert.ok(blocked.remedy, 'a blocking finding must carry a remedy');
   assert.match(blocked.remedy, /delete the file/, 'the remedy names the kind of thing it is');
 });

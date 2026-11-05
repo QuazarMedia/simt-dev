@@ -237,6 +237,15 @@ test('a paged door says how much it cut, and the next page continues from there'
   const text = run(dir, ['knowledge', 'why', 'c1', '--claims', claims, '--limit', '1']);
   assert.match(text, /page\s+0 \(limit 1, 2 node\(s\)\)/);
   assert.doesNotMatch(text, /page\s+0 of 1/);
+
+  // A present flag with a bad value is a usage error, not the default (A19).
+  for (const bad of [['--limit', 'foo'], ['--page', '-1']]) {
+    assert.throws(() => run(dir, ['knowledge', 'why', 'c1', '--claims', claims, ...bad]), (error) => {
+      assert.equal(error.status, 2, `${bad.join(' ')} did not exit 2`);
+      assert.match(String(error.stderr), /--(limit|page) must be/);
+      return true;
+    });
+  }
 });
 
 test('export filters by permission before the page, and import accepts it as data only', () => {

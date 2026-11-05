@@ -52,6 +52,16 @@ test('argv: non-negative integer flags are validated', () => {
   assert.equal(parse(['--max-bytes', '0']).ok, true);
 });
 
+test('argv: paging flags are integers in their documented range (A19)', () => {
+  assert.equal(parse(['--limit', 'foo']).ok, false);
+  assert.equal(parse(['--limit', '0']).ok, false);
+  assert.equal(parse(['--page', '-1']).ok, false);
+  assert.equal(parse(['--page', '1.5']).ok, false);
+  const { value } = parse(['--limit', '10', '--page', '2']);
+  assert.equal(value.flags.limit, 10);
+  assert.equal(value.flags.page, 2);
+});
+
 test('argv: value flags require a value', () => {
   assert.equal(parse(['--task']).ok, false);
   assert.equal(parse(['--task', '--json']).ok, false);

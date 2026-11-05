@@ -355,6 +355,15 @@ export function parse(argv) {
           return { ok: false, error: usage(`--reps must be a positive integer, received ${value}`) };
         }
         flags.reps = n;
+      } else if (raw === 'limit' || raw === 'page') {
+        // `Number('notanumber')` falls through to the default and `page: -1` became 0, so a
+        // caller who asked for page -1 got the first page and no notice.
+        const n = Number(value);
+        const floor = raw === 'limit' ? 1 : 0;
+        if (!Number.isInteger(n) || n < floor) {
+          return { ok: false, error: usage(`--${raw} must be a ${floor === 1 ? 'positive' : 'non-negative'} integer, received ${value}`) };
+        }
+        flags[raw] = n;
       } else {
         const key = camel(raw);
         if (REPEATABLE_FLAGS.has(raw)) {

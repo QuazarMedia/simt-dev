@@ -42,6 +42,11 @@ test('knowledge_why answers a bitemporal question when both dates are given (A16
   await assert.rejects(why.run({ id: 'c1', document, asOf: '2024-06-01' }), /asOf|knownAt|both|date/i);
 });
 
+test('knowledge_why refuses a non-integer page rather than defaulting (A19)', async () => {
+  await assert.rejects(why.run({ id: 'c2', document, limit: 'foo' }), /--limit/);
+  await assert.rejects(why.run({ id: 'c2', document, page: '-1' }), /--page/);
+});
+
 test('knowledge_import reports a failed import as a failed call (A17)', async () => {
   const exported = knowledgeExportFacts({ facts: [], repository: 'r', revisions: [], expiresAt: '2000-01-01' });
   const expired = await importTool.run({ document: { bundle: exported.bundle, at: '2024-01-01' } });

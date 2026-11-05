@@ -64,10 +64,14 @@ export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0, asOf = 
   const claim = claims.find((record) => record?.id === id) ?? null;
   if (claim === null) return { error: `no claim ${id} in the document, which holds ${claims.length} claim(s)` };
 
-  const graph = buildClaimGraph({ artifacts: Array.isArray(doc.artifacts) ? doc.artifacts : [], claims, edges: Array.isArray(doc.edges) ? doc.edges : [] });
+  // A refused sibling is not evidence about anything: it stays in `refused` and in the
+  // problems list, but the graph and the conflict detector only see claims that read.
+  const readable = claims.filter((record) => !refused.some((entry) => entry.id === record?.id));
+
+  const graph = buildClaimGraph({ artifacts: Array.isArray(doc.artifacts) ? doc.artifacts : [], claims: readable, edges: Array.isArray(doc.edges) ? doc.edges : [] });
   const upstream = lineage(graph, id);
   const downstream = impact(graph, id);
-  const conflicts = findConflicts(claims);
+  const conflicts = findConflicts(readable);
   const validity = readApplicability(claim.applicability ?? claim);
 
   // W14: "what applied at this date, knowing what was known then" is a different question from

@@ -51,7 +51,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A02 | Reindexing a changed file leaves stale `fts_tri` rows | P1 | F | index | S | — | Complete | ce8a7b411c56514d32580d5afe4da8ed65b3f887 · test: node --test test/index.test.mjs test/index-tri.test.mjs |
 | A03 | `classifyTask` reads "failure" as a bugfix | P1 | F | brief | S | — | Complete | 1f5f987b5caeaba7e402b623fad0f6ac078c9834 · test: node --test test/work-intent.test.mjs |
 | A04 | `evaluateIntent` throws when a corpus label is not an intent | P1 | F | brief | S | A03 | Complete | bca8628634f56d436b91608cfee778e4237164bc · test: node --test test/work-intent.test.mjs |
-| A05 | Impact scope ignores `claim.applicability.scope` | P1 | F | impact | S | — | Queued | — |
+| A05 | Impact scope ignores `claim.applicability.scope` | P1 | F | impact | S | — | Complete | fb5b342d501ce135b5c4600e58a2459a076eb349 · test: node --test test/work-impact.test.mjs |
 | A06 | `knowledge why` exits 0 on a claim `readClaim` refused | P1 | F | knowledge | S | — | Queued | — |
 | A07 | A refused sibling claim still enters the why-graph | P1 | F | knowledge | S | A06 | Queued | — |
 | A08 | A new lease grant reuses fencing token 1 | P1 | F | fencing | S | — | Queued | — |

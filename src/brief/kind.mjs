@@ -363,6 +363,35 @@ export function evaluateIntent(corpus = []) {
   const unknown = [];
   const entries = Array.isArray(corpus) ? corpus : [];
 
+  // A label outside INTENTS is a broken corpus, not a zero. `rows.get(label)` is
+  // undefined, so the old read threw halfway through the counts and the report was
+  // lost. Name the task and the label instead, so the corpus can be fixed.
+  const badLabels = [];
+  for (const entry of entries) {
+    const labels = Array.isArray(entry.expect) ? entry.expect : [entry.expect];
+    for (const label of labels) {
+      if (!rows.has(label)) badLabels.push({ task: String(entry.task ?? ''), expect: label });
+    }
+  }
+  if (badLabels.length > 0) {
+    return {
+      version: INTENT_VERSION,
+      examples: entries.length,
+      perIntent: [],
+      precision: null,
+      recall: null,
+      ambiguous: [],
+      unknown: [],
+      error: {
+        code: 'UNKNOWN_INTENT',
+        message: `corpus labels that are not intents: ${badLabels
+          .map((row) => `${JSON.stringify(row.expect)} in ${JSON.stringify(row.task)}`)
+          .join(', ')}`,
+        labels: badLabels,
+      },
+    };
+  }
+
   for (const entry of entries) {
     const expected = new Set(Array.isArray(entry.expect) ? entry.expect : [entry.expect]);
     const result = classifyIntent(entry.task, entry.options ?? {});

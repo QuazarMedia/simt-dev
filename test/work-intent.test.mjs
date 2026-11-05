@@ -158,6 +158,17 @@ test('the labelled corpus reports precision and recall per intent, and cannot hi
   assert.equal(validateRow.precision, null, 'nothing predicted validate, so its precision is undefined');
 });
 
+test('an unknown corpus label is reported with its task, not thrown (A04)', () => {
+  // `rows.get(label)` is undefined outside INTENTS; the old read threw on it and the
+  // report was lost before it could name the corpus entry that was wrong.
+  const report = evaluateIntent([{ task: 'Refactor the parser', expect: 'not-an-intent' }]);
+  assert.equal(report.error?.code, 'UNKNOWN_INTENT');
+  assert.match(report.error.message, /not-an-intent/);
+  assert.match(report.error.message, /Refactor the parser/);
+  assert.deepEqual(report.perIntent, []);
+  assert.equal(report.precision, null);
+});
+
 test('routing is deterministic and reads no clock, environment or socket', async () => {
   const options = { paths: ['Germany/rates.md', 'eval/render.mjs'], artifactIds: ['de-rates'] };
   assert.deepEqual(classifyIntent('Update de-rates and validate it', options), classifyIntent('Update de-rates and validate it', options));

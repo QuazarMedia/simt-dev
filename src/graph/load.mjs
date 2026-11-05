@@ -214,42 +214,53 @@ export async function loadRegistry(path = null, flags = {}) {
 
   const ws = await workspace(flags);
 
+  // A body that ships with the package is measured from the package root on every
+  // machine, so its declared bytes are verifiable whether or not a workspace
+  // resolves. Workspace-member bodies are verifiable only where a workspace that
+  // holds them resolves. Coupling the two is how the packaged-body check went
+  // silent in exactly the environment that needs it most: the pre-push gate runs
+  // in a disposable worktree under tmpdir, whose "workspace: .." points at a
+  // tmpdir that holds none of the repositories the registry names.
+  const members =
+    ws.error === null && ws.root !== null && existsSync(ws.root) && holdsAnyRepo(registry, ws.root);
+
   if (ws.error) {
     // A config file that exists and does not parse is a real mistake, and it is the
     // author's to fix - so this one IS an error. An absent config is not.
     errors.push(`${ws.detail}: ${ws.error}`);
-  } else if (ws.root === null) {
-    warnings.push(
-      `skill sources are not available: no workspace configured, so byte counts were not verified`,
-    );
-    warnings.push(WORKSPACE_REMEDY);
-  } else if (!existsSync(ws.root)) {
-    // A workspace that was CONFIGURED but is not there is a different fact from one
-    // that was never configured: the reader named a directory that has moved. Naming
-    // it is useful; turning it into 38 ENOENT lines is not, and it is the same
-    // mistake as above with an extra cause (ADR-014).
-    warnings.push(
-      `skill sources were not verified: the configured workspace ${ws.root} (from ${ws.detail}) does not exist`,
-    );
-  } else if (!holdsAnyRepo(registry, ws.root)) {
-    // Exists, but holds none of the directories the registry names. Either the
-    // reader pointed at the wrong directory or the repos are not cloned there. Both
-    // are one fact with one remedy, and neither is 38 ENOENT lines.
-    const named = [...new Set((registry.skills ?? []).flatMap((s) => (s.sources ?? []).map((x) => x.repo)))].sort();
-    warnings.push(
-      `skill sources were not verified: ${ws.root} (from ${ws.detail}) contains none of the ` +
-        `repositories the registry names (${named.slice(0, 4).join(', ')}${named.length > 4 ? ', …' : ''})`,
-    );
   } else {
+    if (ws.root === null) {
+      warnings.push(
+        `skill sources are not available: no workspace configured, so workspace-member byte counts were not verified`,
+      );
+      warnings.push(WORKSPACE_REMEDY);
+    } else if (!existsSync(ws.root)) {
+      // A workspace that was CONFIGURED but is not there is a different fact from one
+      // that was never configured: the reader named a directory that has moved. Naming
+      // it is useful; turning it into 38 ENOENT lines is not, and it is the same
+      // mistake as above with an extra cause (ADR-014).
+      warnings.push(
+        `workspace-member sources were not verified: the configured workspace ${ws.root} (from ${ws.detail}) does not exist`,
+      );
+    } else if (!holdsAnyRepo(registry, ws.root)) {
+      // Exists, but holds none of the directories the registry names. Either the
+      // reader pointed at the wrong directory or the repos are not cloned there. Both
+      // are one fact with one remedy, and neither is 38 ENOENT lines.
+      const named = [...new Set((registry.skills ?? []).flatMap((s) => (s.sources ?? []).map((x) => x.repo)))].sort();
+      warnings.push(
+        `workspace-member sources were not verified: ${ws.root} (from ${ws.detail}) contains none of the ` +
+          `repositories the registry names (${named.slice(0, 4).join(', ')}${named.length > 4 ? ', …' : ''})`,
+      );
+    }
     // Disk verification is async: a registry that no longer matches the repos is
-    // worse than one that is merely malformed, because it still resolves.
-    const disk = await lintSourcesOnDisk(registry, ws.root);
+    // worse than one that is merely malformed, because it still resolves. Packaged
+    // bodies are checked in every branch; member bodies only where `members` holds.
+    const disk = await lintSourcesOnDisk(registry, ws.root, { members });
     errors.push(...disk.errors);
     warnings.push(...disk.warnings);
   }
 
-  const verified =
-    ws.error === null && ws.root !== null && existsSync(ws.root) && holdsAnyRepo(registry, ws.root);
+  const verified = members;
 
   return {
     ok: errors.length === 0,
@@ -592,10 +603,18 @@ for (const duplicate of duplicates(sources.map((s) => `${s.repo}/${s.path}`))) {
   }
 }
 
-/** Compare declared sizes against the filesystem. */
-async function lintSourcesOnDisk(registry, workspaceRoot) {
+/**
+ * Compare declared sizes against the filesystem.
+ *
+ * `members` says whether workspace-member sources may be measured: a member body
+ * exists only where the workspace holds it, so measuring one from a directory
+ * that does not is an ENOENT that reads as a broken registry. Packaged bodies
+ * are measured from the package root in every case.
+ */
+async function lintSourcesOnDisk(registry, workspaceRoot, { members }) {
   const errors = [];
   const warnings = [];
+  const skippedRepos = new Set();
 
   for (const skill of registry.skills ?? []) {
     for (const source of skill.sources ?? []) {
@@ -609,10 +628,17 @@ async function lintSourcesOnDisk(registry, workspaceRoot) {
       // every vendored node was how a 4161-byte declaration outlived a 6689-byte body
       // (simt-commands, 2026-11) and `skills install` refused every consumer.
       let full;
-      if (skill.vendored) {
-        if (source.repo !== PACKAGE_NAME) continue;
+      if (skill.vendored && source.repo === PACKAGE_NAME) {
         full = join(PACKAGE_ROOT, source.path);
       } else {
+        if (!members) continue;
+        // A repository the workspace does not hold cannot be measured: its
+        // absence is absence, not drift - the lone-clone rule, per repository.
+        // Naming it once keeps the skip visible without one ENOENT per source.
+        if (!existsSync(join(workspaceRoot, source.repo))) {
+          skippedRepos.add(source.repo);
+          continue;
+        }
         full = join(workspaceRoot, source.repo, source.path);
       }
 
@@ -633,6 +659,9 @@ async function lintSourcesOnDisk(registry, workspaceRoot) {
       }
       if (!source.bytes) warnings.push(`${at}: no declared bytes to compare against`);
     }
+  }
+  for (const repo of [...skippedRepos].sort()) {
+    warnings.push(`${repo} is not in the workspace; its sources were not verified`);
   }
   return { errors, warnings };
 }

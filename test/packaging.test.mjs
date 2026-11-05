@@ -249,3 +249,12 @@ test('packaging: nothing in python/ is shipped to npm', async () => {
   assert.ok(files.includes('cli.py'), 'the launcher has moved; the packaging test needs updating');
   assert.ok(!pkg.files.includes('python'), 'python/ must not be in the npm tarball');
 });
+
+test('packaging: brew style lints the formula this release rendered (A32)', async () => {
+  const channels = await readFile(new URL('../.github/workflows/publish-channels.yml', import.meta.url), 'utf8');
+  const rendered = channels.indexOf('scripts/release-formula.mjs');
+  const styled = channels.indexOf('brew style Formula/simt-dev.rb');
+  assert.ok(rendered !== -1, 'the formula render step is missing');
+  assert.ok(styled !== -1, 'the brew style step is missing');
+  assert.ok(styled > rendered, 'brew style must run after the formula is rendered for this release');
+});

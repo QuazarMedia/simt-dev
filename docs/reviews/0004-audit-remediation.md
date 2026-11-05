@@ -61,14 +61,14 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A12 | Pre-push runs the other gates on the dirty tree when test is skipped | P1 | F | dispatcher | M | A11 | Queued | — |
 | A13 | `run()` JSON omits `exitCode` and superseded-flag `deprecated` | P1 | F | envelope | M | — | Queued | — |
 | A14 | A `MAX_BYTES` document can still exit 0 | P1 | F | envelope | S | A13 | Queued | — |
-| A15 | A numeric MCP cursor past the list is an empty page | P1 | F | paginate | S | — | Queued | — |
+| A15 | A numeric MCP cursor past the list is an empty page | P1 | F | paginate | S | — | Complete | 9b5515ae1426b42f6a7e006f490760ca1793d6e0 · test: node --test test/mcp-paginate.test.mjs |
 | A16 | MCP `knowledge_why` cannot page or ask a bitemporal question | P2 | F | mcpwork | S | — | Queued | — |
 | A17 | MCP `knowledge_import` reports `ok: true` when the import failed | P2 | F | mcpwork | S | A16 | Queued | — |
 | A18 | `knowledge why` prints the page limit as a page count | P3 | F | knowledge | S | A07 | Queued | — |
 | A19 | `--limit` and `--page` accept a non-integer and silently default | P2 | F | knowledge | S | A18 | Queued | — |
-| A20 | `openIndex().search` stringifies an error object | P2 | F | open | S | — | Queued | — |
-| A21 | A corrupt SQLite overlay reads as an empty overlay | P2 | F | overlay | S | — | Queued | — |
-| A22 | An FTS term containing `"` breaks the MATCH expression | P2 | F | fts | S | — | Queued | — |
+| A20 | `openIndex().search` stringifies an error object | P2 | F | open | S | — | In progress | — |
+| A21 | A corrupt SQLite overlay reads as an empty overlay | P2 | F | overlay | S | — | In progress | — |
+| A22 | An FTS term containing `"` breaks the MATCH expression | P2 | F | fts | S | — | In progress | — |
 | A23 | `hooks-disable` has no regex when the tokenizer fails | P2 | S | agenthooks | M | A10 | Queued | — |
 | A24 | Git alias lookup fails open on timeout | P2 | S | agenthooks | S | A23 | Queued | — |
 | A25 | The secret scan judges each added line alone | P2 | S | secrets | S | — | Queued | — |

@@ -85,7 +85,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A36 | MCP cancel uses `===` on request ids | P3 | F | cancel | S | — | Complete | c3e80b0b75b3c6a4b934c9c1ad40d41a6c1ccbe1 · test: node --test test/mcp-cancel.test.mjs |
 | A37 | Check remedies tell a consumer to expect the name `simt-dev` | P2 | F | wording | S | — | Complete | 97be93e30e808a83381749c9595c3e39ebc9c258 · test: node --test test/surfaces.test.mjs test/compare.test.mjs test/naming.test.mjs test/doctor.test.mjs |
 | A38 | Help does not say that gate, tests, and impact walk different graphs | P2 | D | spec | S | A16 | Complete | 9c1f06e0bcc361957dc700ff6493c4b6593d58b4 · test: node --test test/help-walks.test.mjs test/help.test.mjs test/spec.test.mjs |
-| A39 | `brief` never builds the W20 proof packet | P2 | F | spec | M | A38 | Queued | — |
+| A39 | `brief` never builds the W20 proof packet | P2 | F | spec | M | A38 | Complete | dc79597bf422152def7eff36b549329ad47e0b7a · test: node --test test/work-brief.test.mjs test/spec.test.mjs test/brief.test.mjs |
 | A40 | Proof-packet budget counts a unit cost, not the encoded bytes | P3 | F | spec | S | A39 | Queued | — |
 | A41 | Journal undo restore writes the destination in place | P3 | F | journal | S | — | Queued | — |
 | A42 | `commitJournal` records `undefined` paths for git-config entries | P3 | F | journal | S | A41 | Queued | — |

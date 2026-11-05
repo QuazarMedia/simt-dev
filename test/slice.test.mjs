@@ -51,12 +51,16 @@ test('an unknown subcommand names the three that exist instead of guessing one',
  */
 async function startableRepo() {
   const root = await tempDir('slice-start-');
-  await copyFile(new URL('../simt.json', import.meta.url), join(root, MANIFEST_FILE));
+  // No gates: the finish below must reach the tracker write, not stop at a lint runner a
+  // fixture repository does not have.
+  await writeFile(join(root, MANIFEST_FILE), JSON.stringify({ id: 'r', stack: [], surfaces: ['cursor'], gates: { preCommit: [], prePush: [] } }));
   await mkdir(join(root, 'docs', 'reviews'), { recursive: true });
   const tracker = join(root, 'docs', 'reviews', '0004-audit-remediation.md');
   await copyFile(new URL('../docs/reviews/0004-audit-remediation.md', import.meta.url), tracker);
   await writeFile(join(root, 'a.mjs'), 'export const a = 1;\n');
   await git(['init', '-q', root]);
+  await git(['-C', root, 'config', 'user.email', 'tests@simt.invalid']);
+  await git(['-C', root, 'config', 'user.name', 'simt slice tests']);
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'initial'], { cwd: root });
   await reindex(root);
@@ -78,6 +82,31 @@ test('a failed worktree add releases the lease it claimed (A26)', async () => {
   await rm(blocked, { recursive: true, force: true });
   const second = await capture(() => sliceCommand('start', ['A26'], { root, yes: true, session: 'tester' }));
   assert.equal(second.code, 0, second.stderr);
+});
+
+test('a tracker failure after a commit names the sha and the plan done command (A27)', async () => {
+  const { root, tracker } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+
+  const reviews = join(root, 'docs', 'reviews');
+  await chmod(tracker, 0o444);
+  await chmod(reviews, 0o555);
+  try {
+    const result = await capture(() => sliceCommand('finish', ['A27'], { root: worktree, yes: true, test: 'true' }));
+    assert.notEqual(result.code, 0, 'the tracker failure was reported as success');
+    const output = result.stdout + result.stderr;
+    const sha = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+    assert.match(output, new RegExp(sha), 'the committed sha was not reported');
+    assert.match(output, new RegExp(`plan done A27 ${sha}`), 'no command records the row');
+  } finally {
+    await chmod(reviews, 0o755);
+    await chmod(tracker, 0o644);
+  }
 });
 
 test('a tracker write failure takes the worktree and branch back down (A26)', async () => {

@@ -691,9 +691,20 @@ async function finishSlice(root, id, flags) {
 
   let row = null;
   if (!promptMode) {
-    row = await planDone(main, id, { sha, test, dryRun: false });
+    // The commit is the thing that happened; a tracker write that fails after it does not
+    // undo it. Name the sha and the one command that records it, rather than leaving a
+    // row queued with no way to finish it (A27).
+    try {
+      row = await planDone(main, id, { sha, test, dryRun: false });
+    } catch (error) {
+      row = { error: String(error?.message ?? error) };
+    }
     if (row.error) {
-      return fail(`${sha} is committed, but the tracker row could not record it: ${row.error}`, EXIT.FAIL, row.remedy ?? `run: ${CLI} plan status`);
+      return fail(
+        `${sha} is committed, but the tracker row could not record it: ${row.error}`,
+        EXIT.FAIL,
+        `run: ${CLI} plan done ${id} ${sha}`,
+      );
     }
   }
 

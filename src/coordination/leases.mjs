@@ -53,9 +53,15 @@ export const orderResources = (keys = []) => [...new Set((Array.isArray(keys) ? 
 export function acquire({ held = [], key = null, owner = null, ttl = 60000, fencing = 1, now = 0 } = {}) {
   if (!isText(key)) return { granted: false, reason: 'a lease needs a resource key' };
   if (!isText(owner)) return { granted: false, reason: 'a lease needs an owner' };
-  const current = (Array.isArray(held) ? held : []).find((lease) => lease?.key === key && (lease.expiresAt ?? 0) > now);
+  const history = (Array.isArray(held) ? held : []).filter((lease) => lease?.key === key);
+  const current = history.find((lease) => (lease.expiresAt ?? 0) > now);
   if (current && current.owner !== owner) return { granted: false, reason: `held by ${current.owner} until ${current.expiresAt}`, holder: current.owner };
-  const lease = { schema: LEASE_SCHEMA, key, owner, fencing, acquiredAt: now, expiresAt: now + ttl, grants: [] };
+  // A token identifies a grant, so it only moves forward. Stamping the caller's value on
+  // every grant made an expired takeover and a renewal both replay token 1, which
+  // `checkFencing` then accepted from the worker that had already lost the resource.
+  const highest = history.reduce((max, lease) => (Number.isInteger(lease?.fencing) ? Math.max(max, lease.fencing) : max), 0);
+  const issued = Math.max(highest + 1, Number.isInteger(fencing) ? fencing : 1);
+  const lease = { schema: LEASE_SCHEMA, key, owner, fencing: issued, acquiredAt: now, expiresAt: now + ttl, grants: [] };
   return { granted: true, lease, held: [...(Array.isArray(held) ? held : []).filter((entry) => entry?.key !== key), lease].sort((a, b) => a.key.localeCompare(b.key)) };
 }
 

@@ -71,7 +71,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A22 | An FTS term containing `"` breaks the MATCH expression | P2 | F | fts | S | — | Complete | 6fe7b05bd07dd4fd014d3fa12c326f443ac8d7e2 · test: node --test test/index-fts-quote.test.mjs |
 | A23 | `hooks-disable` has no regex when the tokenizer fails | P2 | S | agenthooks | M | A10 | Complete | 07d70a2a3dc80af82c3fb143320e18021647d29a · test: node --test test/agenthooks-audit.test.mjs |
 | A24 | Git alias lookup fails open on timeout | P2 | S | agenthooks | S | A23 | Complete | 391391d553cdd8fe1e903207d2b65dd7e55ebde6 · test: node --test test/agenthooks-audit.test.mjs |
-| A25 | The secret scan judges each added line alone | P2 | S | secrets | S | — | Queued | — |
+| A25 | The secret scan judges each added line alone | P2 | S | secrets | S | — | Complete | b5eb0d8ec61aab144c3880175f9681083918de1e · test: node --test test/secrets.test.mjs |
 | A26 | `slice start` can leave a lease or a worktree behind | P2 | F | slice | M | — | Queued | — |
 | A27 | `slice finish` reports a SHA when the tracker write failed | P3 | F | slice | S | A26 | Queued | — |
 | A28 | `read-channel-equivalence` ignores `before` and `after` | P2 | F | replay | S | — | Queued | — |

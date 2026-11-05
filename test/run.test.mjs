@@ -44,6 +44,17 @@ test('a command that answers in JSON hands back the document', async () => {
   assert.equal(renderJson(result).command, 'status');
 });
 
+test('a run result carries the same exit code the dispatcher would name (A13)', async () => {
+  const result = await run('status', { flags: { line: true, json: true }, root: process.cwd() });
+  assert.equal(renderJson(result).exitCode, result.code);
+  assert.equal(renderJson(result).ok, result.code === 0);
+});
+
+test('a superseded flag is named in the run result, as it is on stderr (A13)', async () => {
+  const result = await run('sync', { flags: { check: true, json: true }, root: process.cwd() });
+  assert.equal(renderJson(result).deprecated.check, 'sync');
+});
+
 test('a writer previews into the result and writes nothing without --yes', async () => {
   const root = await mkdtemp(join(tmpdir(), 'simt-run-'));
   try {

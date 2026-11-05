@@ -17,8 +17,9 @@
 // (`src/api.mjs`).
 
 import { EXIT, clearWarnings, jsonCommand, jsonFailMode, jsonIndentDefault, maxBytesLimit, warnings, withOutputState, withSink } from './output/index.mjs';
+import { finaliseJson } from './output/envelope.mjs';
 import { CLI } from './name.mjs';
-import { GLOBAL_FLAGS, resolveCommand } from './commands/index.mjs';
+import { GLOBAL_FLAGS, deprecatedFlags, resolveCommand } from './commands/index.mjs';
 
 /** `--some-flag` for a flag key the parser handed back as `someFlag`. */
 function spelled(key) {
@@ -69,12 +70,18 @@ export async function run(command, { args = [], flags = {}, root } = {}) {
 
   const effective = root === undefined ? flags : { root, ...flags };
   const produced = await withOutputState(() => withSink(() => resolved.run(args, effective)));
+  // The same finaliser the dispatcher uses: a library caller and a terminal caller must
+  // not disagree about the exit code a document carries, or whether a flag was superseded.
+  const finalised = finaliseJson(produced.documents, {
+    code: produced.code,
+    deprecated: Object.fromEntries(deprecatedFlags(command, flags)),
+  });
   return {
     command,
-    ok: produced.code === EXIT.OK,
-    code: produced.code,
+    ok: finalised.code === EXIT.OK,
+    code: finalised.code,
     text: produced.text,
-    documents: produced.documents,
+    documents: finalised.documents,
     notes: produced.notes,
     warnings: warnings(),
     error: produced.error,

@@ -54,7 +54,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A05 | Impact scope ignores `claim.applicability.scope` | P1 | F | impact | S | — | Complete | fb5b342d501ce135b5c4600e58a2459a076eb349 · test: node --test test/work-impact.test.mjs |
 | A06 | `knowledge why` exits 0 on a claim `readClaim` refused | P1 | F | knowledge | S | — | Complete | 047349f35082843faeac2c5b64bc342db945c520 · test: node --test test/work-doors.test.mjs |
 | A07 | A refused sibling claim still enters the why-graph | P1 | F | knowledge | S | A06 | Complete | f0d295117e10c6845f6ed04b76f75f1c6a206d7d · test: node --test test/work-doors.test.mjs |
-| A08 | A new lease grant reuses fencing token 1 | P1 | F | fencing | S | — | In progress | — |
+| A08 | A new lease grant reuses fencing token 1 | P1 | F | fencing | S | — | Complete | 9567ca986f3b3dace55097b368e61f97aa8aed79 · test: node --test test/work-leases.test.mjs |
 | A09 | A parsed command with no git fact skips the push regex | P0 | S | agenthooks | M | — | Queued | — |
 | A10 | `git pull -r` is not treated as a rewrite | P1 | S | agenthooks | S | A09 | Queued | — |
 | A11 | Split `dispatcher.mjs` so the pre-push fix has room under 1000 | P2 | C | dispatcher | M | — | Queued | — |

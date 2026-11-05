@@ -46,6 +46,22 @@ async function repo(files = {}) {
 
 // --- patterns ----------------------------------------------------------------
 
+test('a secret split across two added lines is still a finding (A25)', async () => {
+  const root = await repo();
+  await writeFile(join(root, 'split.txt'), `${'AKIA'}\n${'SIMTSENTINEL0123'}\n`);
+  await git(['-C', root, 'add', 'split.txt']);
+
+  const { findings } = await scanStaged(root);
+  const hit = findings.find((finding) => finding.file === 'split.txt');
+  assert.ok(hit, 'the two-line token was invisible');
+  assert.equal(hit.kind, 'aws-access-key-id');
+  assert.equal(hit.line, 1, 'the finding is attributed to the line the token starts on');
+  // The report names the finding, never the bytes it found.
+  assert.doesNotMatch(hit.preview, /SIMTSENTINEL0123/);
+  assert.doesNotMatch(renderFindings(findings), /SIMTSENTINEL0123/);
+});
+
+
 test('every vendor shape the library names is caught', () => {
   const cases = [
     ['aws-access-key-id', `const k = "${AWS_SENTINEL}";`],

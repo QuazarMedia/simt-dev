@@ -316,10 +316,14 @@ export async function scanStaged(root, options = {}) {
   let lineNo = 0;
   let inHunk = false;
   let fileSkipped = false;
+  // The previous added line in this hunk. A token split across two `+` lines has no whole
+  // shape on either one, so the pair is scanned as well as each line on its own (A25).
+  let previousAdded = null;
 
   for (const raw of stdout.split('\n')) {
     if (raw.startsWith('diff --git ')) {
       inHunk = false;
+      previousAdded = null;
       continue;
     }
     if (raw.startsWith('@@ ')) {
@@ -327,6 +331,7 @@ export async function scanStaged(root, options = {}) {
       if (hunk) {
         lineNo = Number(hunk[1]);
         inHunk = true;
+        previousAdded = null;
       }
       continue;
     }
@@ -338,15 +343,35 @@ export async function scanStaged(root, options = {}) {
         file = path === '/dev/null' ? null : path.replace(/^b\//, '');
         const name = file === null ? '' : file.slice(file.lastIndexOf('/') + 1);
         fileSkipped = file !== null && (LOCKFILES.has(name) || ignore.some((re) => re.test(file)));
+        previousAdded = null;
       }
       continue;
     }
-    if (!raw.startsWith('+')) continue; // -U0 has no context; this is `\ No newline…`
+    if (!raw.startsWith('+')) {
+      // -U0 has no context; a removed line still breaks the run of additions, and so does
+      // the `\ No newline…` marker.
+      previousAdded = null;
+      continue;
+    }
     lines += 1;
     if (file !== null && !fileSkipped && !raw.includes(PRAGMA)) {
-      for (const hit of scanText(raw.slice(1))) {
+      const text = raw.slice(1);
+      const own = scanText(text);
+      for (const hit of own) {
         findings.push({ file, line: lineNo, ...hit });
       }
+      // Scan the pair only when neither line stands on its own. A token that is whole on
+      // one line is already reported by that line, and re-reading it in the pair would
+      // report the same bytes twice (and could see entropy across a boundary that is not
+      // a token at all).
+      if (previousAdded !== null && own.length === 0 && previousAdded.clean) {
+        for (const hit of scanText(previousAdded.text + text)) {
+          findings.push({ file, line: previousAdded.line, ...hit });
+        }
+      }
+      previousAdded = { text, line: lineNo, clean: own.length === 0 };
+    } else {
+      previousAdded = null;
     }
     lineNo += 1;
   }

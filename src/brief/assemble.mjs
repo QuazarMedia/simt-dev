@@ -33,11 +33,13 @@
 // command and the tool leave it on. It is inert either way in a repository that declared no
 // servers.
 
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
 import { CLI, STATE_DIR } from '../name.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
-import { DEFAULT_BRIEF_BYTES, buildPacket, collect } from './packet.mjs';
+import { DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES, buildPacket, collect } from './packet.mjs';
+import { buildProofPacket } from './proof.mjs';
 import { classifyTask, cardVerbs } from './kind.mjs';
 import { briefAdvice } from '../advice/advice.mjs';
 import { commandCard } from '../kernel/card.mjs';
@@ -131,6 +133,8 @@ async function generatedRegions(root) {
  * @param {string[]} [options.commands] the dispatchable command paths (`COMMANDS`). A
  *   decision's `Affects:` token is a command only when the tool has that command, so a
  *   packet that does not know them reports every one of them as unresolved
+ * @param {boolean} [options.proof] also report whether the kept packet proves every
+ *   section it kept; the default packet's bytes never change
  * @returns a packet, or `{ error }` carrying the exit code a failure already reported, or
  *   `{ cold: true }` when the index is empty and this caller may not build one
  */
@@ -143,6 +147,7 @@ export async function assembleBrief({
   build = true,
   federate = true,
   commands = [],
+  proof = false,
 } = {}) {
   const named = paths !== null;
   const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(`${STATE_DIR}/`));
@@ -393,6 +398,31 @@ export async function assembleBrief({
 
   const packed = buildPacket(packet.items, { budget });
   const cut = new Set(packed.cut);
+
+  // A proof summary answers only what the kept packet itself proves: each kept section is
+  // an obligation, and each kept line cites the tree it was read from (A39).
+  let proofSummary;
+  if (proof) {
+    const head = (await gitText(root, ['rev-parse', 'HEAD']))?.trim() ?? '';
+    const kept = packet.items.filter((item) => !cut.has(item.id));
+    const units = kept.map((item) => ({
+      id: item.id,
+      text: item.text,
+      obligations: [item.section],
+      mandatory: item.priority === 'hard',
+      revision: {
+        ref: head.length > 0 ? head : 'worktree',
+        digest: `sha256-${createHash('sha256').update(item.text).digest('hex')}`,
+      },
+      anchor: null,
+    }));
+    const report = buildProofPacket(units, {
+      budget: Math.min(budget > 0 ? budget : DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES),
+      required: [...new Set(kept.map((item) => item.section))],
+    });
+    proofSummary = { complete: report.complete, omittedObligations: report.omittedObligations };
+  }
+
   const sections = {};
   for (const item of packet.items) {
     if (cut.has(item.id)) continue;
@@ -400,5 +430,5 @@ export async function assembleBrief({
     sections[item.section].push(item.text);
   }
 
-  return { root, kind, basis, task, scope, budget, items: packet.items, packed, sections };
+  return { root, kind, basis, task, scope, budget, items: packet.items, packed, sections, proof: proofSummary };
 }

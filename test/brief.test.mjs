@@ -56,6 +56,21 @@ test('a task that names a file produces its kind, its file and its test', async 
   assert.ok(stdout.includes('npm run test'), stdout);
 });
 
+test('--proof attaches the proof summary and the default packet is unchanged (A39)', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const plain = await run(root, ['brief', 'fix the keep helper', '--json']);
+  assert.equal(plain.code, 0, plain.stderr);
+  assert.equal('proof' in JSON.parse(plain.stdout), false, 'the default packet gained a field');
+
+  const proofed = await run(root, ['brief', 'fix the keep helper', '--json', '--proof']);
+  assert.equal(proofed.code, 0, proofed.stderr);
+  const doc = JSON.parse(proofed.stdout);
+  assert.equal(typeof doc.proof.complete, 'boolean');
+  assert.ok(Array.isArray(doc.proof.omittedObligations));
+});
+
 test('a stale index warns the packet instead of quoting yesterday (Q42)', async (t) => {
   // The delivered packet may not rebuild the index, so it says it is old.
   // Removing README after the build makes the stored tree older than the

@@ -102,7 +102,7 @@ Not done: the audits' reproduction scripts, `npm test`, `node scripts/verify-whe
 | A53 | Split `src/commands/hooks.mjs` (905 lines) | P2 | C | t-hookscmd | M | — | Complete | 5cc0d457026732a64c2f4f9c618b26a0c32e1123 · test: node --test test/hooks.test.mjs test/hooks3.test.mjs test/hooks-context.test.mjs test/hooks-push.test.mjs test/hooks-install.test.mjs |
 | A54 | Split `src/memory/lessons.mjs` (952 lines) | P2 | C | t-lessons | M | — | Complete | d858bd33b20bb79411c0d8d8e6e04db118f7df93 · test: node --test test/lessons.test.mjs test/ledger.test.mjs |
 | A55 | Split `src/commands/slice.mjs` (858 lines) | P2 | C | slice | M | A27 | Complete | b951781abb331b1750985a5c9d0bb4d6190de6b0 · test: node --test test/slice.test.mjs |
-| A56 | Split `src/knowledge/sections.mjs` (473 lines) | P3 | C | t-sections | S | — | Queued | — |
+| A56 | Split `src/knowledge/sections.mjs` (473 lines) | P3 | C | t-sections | S | — | Complete | 2f20b78ffac338b9f890ee11360465497077de76 · test: node --test test/knowledge-sections.test.mjs |
 | A57 | Split `src/memory/decide.mjs` (513 lines) | P3 | C | t-decide | S | — | Complete | 38b751933a3cb0e4e7e7dc942d039f075196c857 · test: node --test test/decide.test.mjs test/decisions.test.mjs |
 
 Count: 57 slices — 1 P0, 13 P1, 27 P2, 16 P3.

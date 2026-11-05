@@ -339,6 +339,21 @@ test('Q22: git config keys round-trip through the journal', async (t) => {
   assert.equal(await readGitValue(root, 'simt.test.key'), 'two');
 });
 
+test('A42: a journal commit labels a config entry instead of recording undefined', async (t) => {
+  const root = await freshRoot(t);
+  const acc = [];
+  await journaledGitConfig(root, acc, 'simt.test.key', 'one');
+  assert.ok(await commitJournal(root, 'test', acc));
+
+  const lines = (await readFile(join(root, LOCAL_DIR, 'events.jsonl'), 'utf8')).trim().split('\n');
+  const committed = lines
+    .map((line) => JSON.parse(line))
+    .filter((event) => event.kind === 'write.committed')
+    .at(-1);
+  assert.deepEqual(committed.data.paths, ['git config simt.test.key']);
+  assert.equal(committed.data.paths.includes(undefined), false, 'a config entry recorded no path');
+});
+
 test('H3: legacy sets under `.simt/journal` move into the current directory on the next write', async (t) => {
   const root = await freshRoot(t);
   const digestOf = (s) => `sha256-${createHash('sha256').update(s).digest('hex')}`;

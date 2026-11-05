@@ -535,6 +535,16 @@ function entryBytes(entry) {
   return Buffer.from(entry.beforeBytes, 'base64');
 }
 
+/**
+ * Write restored bytes the way every other journal write is written: temp, then rename.
+ * A crash before the rename leaves the destination as it was, never torn (A41).
+ */
+async function restoreBytes(abs, bytes) {
+  const tmp = `${abs}.tmp-${process.pid}`;
+  await writeFile(tmp, bytes);
+  await rename(tmp, abs);
+}
+
 /** Restore one entry: bytes and permission bits for files, the value for config. */
 async function restoreEntry(root, entry) {
   if (entry.kind === 'git-config') {
@@ -545,12 +555,12 @@ async function restoreEntry(root, entry) {
   if (entry.afterDigest === null) {
     // The run removed this path: re-create it with its pre-run bytes.
     await mkdir(dirname(abs), { recursive: true });
-    await writeFile(abs, entryBytes(entry));
+    await restoreBytes(abs, entryBytes(entry));
   } else if (entry.beforeDigest === null) {
     // The run created this path: remove it.
     await unlink(abs);
   } else {
-    await writeFile(abs, entryBytes(entry));
+    await restoreBytes(abs, entryBytes(entry));
   }
   if (entry.modeBefore !== null && entry.modeBefore !== undefined) {
     await chmod(abs, entry.modeBefore);

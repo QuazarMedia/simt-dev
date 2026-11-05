@@ -200,7 +200,7 @@ export async function buildRow(path, context) {
   // for hooks, where an unadopted repo's own hooks are a note rather than a problem.
   if (row.ruleFiles.orphaned.length > 0) {
     notes.push(
-      `${row.ruleFiles.orphaned.length} generated rule file(s) repeat text already folded into AGENTS.md (${row.ruleFiles.orphaned.join(', ')}); delete them, or the reader loads the rule twice. simt-dev will not remove a file it wrote.`,
+      `${row.ruleFiles.orphaned.length} generated rule file(s) repeat text already folded into AGENTS.md (${row.ruleFiles.orphaned.join(', ')}); delete them, or the reader loads the rule twice. This tool will not remove a file it wrote.`,
     );
   }
 

@@ -408,7 +408,7 @@ export async function manifestDrift(root, stack, sha) {
     return {
       file: MANIFEST,
       status: 'stale-generated-field',
-      detail: `generated field(s) ${stale.join(', ')} do not match what this simt-dev writes`,
+      detail: `generated field(s) ${stale.join(', ')} do not match what this tool writes`,
       // `sync`, and not `init`. `sync` repairs exactly this field set and nothing
       // else; `init` re-runs adoption - it tags, it branches, it asks every question
       // again - and two commands must not answer one question with different

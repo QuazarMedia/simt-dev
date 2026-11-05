@@ -555,8 +555,8 @@ export async function checkTargets(root, flags = {}) {
         // does not delete what a person wrote — so both name the same remedy.
         detail:
           st.entries === undefined
-            ? `${st.detail} (${st.bytes} bytes); simt-dev will not replace it`
-            : `${st.detail} (${st.entries} ${st.entries === 1 ? 'entry' : 'entries'}); simt-dev will not replace it`,
+            ? `${st.detail} (${st.bytes} bytes); this tool will not replace it`
+            : `${st.detail} (${st.entries} ${st.entries === 1 ? 'entry' : 'entries'}); this tool will not replace it`,
         remedy: `move it aside, or delete the ${st.entries === undefined ? 'file' : 'directory'} and re-run: ${CLI} sync --yes`,
       });
     } else if (st.state === 'mispointed') {
@@ -624,7 +624,7 @@ async function orphanedRuleFiles(root, resolved) {
         surface: s.id,
         status: 'orphaned',
         detail: `${s.label} reads AGENTS.md, where this rule is already folded; this file repeats it`,
-        remedy: `delete ${rel}; simt-dev will not remove a file it wrote`,
+        remedy: `delete ${rel}; this tool will not remove a file it wrote`,
       });
     }
   }

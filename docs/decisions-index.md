@@ -203,3 +203,5 @@ in [architecture/history.md](architecture/history.md).
 | [192](decisions/ADR-192-an-audit-tightened-four-classifications-in-the-work-layer.md) | an audit tightened four classifications in the work layer | accepted · 2026-11-03 |
 | [193](decisions/ADR-193-the-mcp-description-budget-is-per-tool-not-per-surface.md) | the MCP description budget is per tool, not per surface | accepted · 2026-11-03 |
 | [194](decisions/ADR-194-a-slice-is-complete-when-its-acceptance-is-exercised.md) | a slice is complete when its acceptance sentence is exercised | accepted · 2026-11-03 |
+| [195](decisions/ADR-195-the-hooks-disable-policy-reads-its-own-text-when-the-shell-cannot.md) | the hooks-disable policy reads its own text when the shell cannot | accepted · 2026-11-05 |
+| [196](decisions/ADR-196-a-failed-alias-lookup-leaves-the-push-and-rewrite-rows-their-text.md) | a failed alias lookup leaves the push and rewrite rows their text | accepted · 2026-11-05 |

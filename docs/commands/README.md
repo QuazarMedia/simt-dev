@@ -134,7 +134,7 @@ simt evidence validate --input <file>                                     # vali
 simt explain <CODE>                                                       # what one check finding code means, and how to fix it
 
 # gate
-simt gate --changed                                                       # the tests a change reaches, and only those
+simt gate --changed                                                       # the tests a change reaches over the import closure, and only those
 
 # graph
 simt graph lint [--spec agentskills]                                      # check the skill registry against the skills on disk
@@ -152,7 +152,7 @@ simt hooks status                                                         # what
 simt ignore [--yes] [--diff]                                              # render the one ignore list into every harness ignore file
 
 # impact
-simt impact <file|symbol>                                                 # who a change reaches: importers, their tests and the contract
+simt impact <file|symbol>                                                 # who a change reaches over the import closure: importers, their tests and the contract
 
 # index
 simt index [--open] [--search <task>] [--embed]                           # rebuild the index, or ask the open cache for rows and ranks
@@ -249,7 +249,7 @@ simt status [--line]                                                      # the 
 simt sync --yes                                                           # re-render the generated regions from the rule content
 
 # tests
-simt tests <path> [--cochange]  |  --run [--changed]                      # the tests that exercise a file, or - with --run - the ones a change reaches
+simt tests <path> [--cochange]  |  --run [--changed]                      # the stored test edges that exercise a file; --run asks the gate instead
 
 # tokens
 simt tokens [--repos] [--session]                                         # count tokens per instruction file and per skill

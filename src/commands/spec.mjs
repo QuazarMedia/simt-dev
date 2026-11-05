@@ -65,7 +65,7 @@ export const SPEC = [
   { path: 'evidence', summary: 'the runs recorded against the tree on disk', aliases: ['evidence show'], flags: [], },
   { path: 'evidence check', usage: '<msg-file>', summary: 'a commit message claiming a run this tree does not have', flags: [], },
   { path: 'explain', usage: '<CODE>', summary: 'what one check finding code means, and how to fix it', flags: [], },
-  { path: 'gate', usage: '--changed', summary: 'the tests a change reaches, and only those', flags: ["changed"], },
+  { path: 'gate', usage: '--changed', summary: 'the tests a change reaches over the import closure, and only those', flags: ["changed"], },
   { path: 'graph lint', usage: '[--spec agentskills]', summary: 'check the skill registry against the skills on disk', defaultFor: 'graph', aliases: ['skills lint'], flags: ["spec","workspace"], },
   { path: 'harness detect', usage: '[--user]', summary: 'which harness is installed, and what it carries', defaultFor: 'harness', flags: ["at","reader","table","user"], },
   { path: 'harness loaders', usage: '[--table]', summary: 'the instruction files each harness loads, and what they cost', flags: ["at","reader","table","user"], },
@@ -73,7 +73,7 @@ export const SPEC = [
   { path: 'hooks run', usage: '<event>', summary: "run one git event's gates now, as git would", writes: 'repo', flags: ["yes","diff","dry-run","agent"], },
   { path: 'hooks status', summary: 'what each git event routes to; --agent reports each harness instead', defaultFor: 'hooks', flags: ["agent","diff","dry-run"], },
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff","yes"], writes: 'repo' },
-  { path: 'impact', usage: '<file|symbol>', summary: 'who a change reaches: importers, their tests and the contract', flags: [], },
+  { path: 'impact', usage: '<file|symbol>', summary: 'who a change reaches over the import closure: importers, their tests and the contract', flags: [], },
   { path: 'index', usage: '[--open] [--search <task>] [--embed]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","search"], },
   { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, hooks, agents and agent-hooks', writes: 'repo', flags: ["yes","accept-conflicts","backup","baselines","diff","harness","agents","surfaces"], },
   { path: 'knowledge why', usage: '<claim-id> --claims <file> [--limit <n>] [--page <n>]', mcp: { name: 'knowledge_why', flags: ['as-of','known-at','limit','page'] }, summary: 'what a claim derives from, what depends on it, what applied at a date, and where it conflicts', defaultFor: 'knowledge', flags: ["as-of","claims","known-at","limit","page"], },
@@ -153,7 +153,7 @@ export const SPEC = [
   // writes, so the flag asked a question the default answer answers. It keeps working and
   // says what replaced it, rather than disappearing from under a script.
   { path: 'sync', usage: '--yes', summary: 're-render the generated regions from the rule content', writes: 'repo', deprecated: { check: 'sync' }, flags: ["yes","baselines","check","diff","dry-run","surfaces","explain"], },
-  { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed]', summary: 'the tests that exercise a file, or - with --run - the ones a change reaches', flags: ["cochange","run","changed"], },
+  { path: 'tests', usage: '<path> [--cochange]  |  --run [--changed]', summary: 'the stored test edges that exercise a file; --run asks the gate instead', flags: ["cochange","run","changed"], },
   { path: 'tokens', usage: '[--repos] [--session]', summary: 'count tokens per instruction file and per skill', aliases: ['harness cost'], flags: ["repos","session"], },
   { path: 'verify plan', usage: '--input <file>', mcp: { name: 'verify_plan', flags: [] }, summary: 'the next observation worth making, and the point at which there is not one', flags: ["input"], },
   { path: 'verify select', usage: '--input <file>', mcp: { name: 'verify_select', flags: [] }, summary: 'the narrowest checks that prove a change, and whether a Git hook may run them', flags: ["input"], },

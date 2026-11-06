@@ -401,7 +401,7 @@ function renderImport(payload) {
   return lines.join('\n');
 }
 
-function renderKnowledge(payload) {
+export function renderKnowledge(payload) {
   if (payload.command === 'knowledge rank') return renderRank(payload);
   if (payload.command === 'knowledge derivations') return renderDerivations(payload);
   if (payload.command === 'knowledge debt') return renderDebt(payload);
@@ -445,15 +445,15 @@ function renderDebt(payload) {
 }
 
 function renderImpact(payload) {
-  const lines = [`refs       ${(payload.change?.refs ?? payload.refs ?? []).join(', ')}`];
-  const buckets = payload.buckets ?? null;
-  if (buckets === null) {
-    for (const entry of payload.affected ?? payload.reached ?? []) lines.push(`affected   ${typeof entry === 'string' ? entry : entry.id}`);
-  } else {
-    for (const [bucket, list] of Object.entries(buckets)) {
-      for (const entry of Array.isArray(list) ? list : []) lines.push(`${bucket.padEnd(10)} ${typeof entry === 'string' ? entry : entry.id ?? JSON.stringify(entry)}`);
-    }
-  }
+  const lines = [`refs       ${(payload.changed ?? payload.change?.refs ?? payload.refs ?? []).join(', ')}`];
+  // `impactReport` hands back `affected` as a bucket object; the flat-list shape is the
+  // legacy one. Both render; the object is iterated per bucket so a claims-only change is
+  // not printed as `affected undefined`.
+  const affected = payload.buckets ?? payload.affected ?? payload.reached ?? [];
+  const rows = Array.isArray(affected)
+    ? affected.map((entry) => ['affected', entry])
+    : Object.entries(affected).flatMap(([bucket, list]) => (Array.isArray(list) ? list : []).map((entry) => [bucket, entry]));
+  for (const [bucket, entry] of rows) lines.push(`${bucket.padEnd(10)} ${typeof entry === 'string' ? entry : entry.id ?? JSON.stringify(entry)}`);
   for (const entry of payload.unknown ?? []) lines.push(`unknown    ${entry.ref ?? entry.id}  ${entry.reason ?? 'unknown'}`);
   for (const entry of payload.excluded ?? []) lines.push(`excluded   ${entry.id ?? entry.ref}  ${entry.reason ?? 'excluded'}`);
   for (const reason of payload.reasons ?? []) lines.push(`because    ${reason}`);

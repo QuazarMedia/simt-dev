@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { sliceCommand } from '../src/commands/slice.mjs';
+import { parse } from '../src/argv.mjs';
 import { reindex } from '../src/index/store.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { capture, git, tempDir } from './fixture.mjs';
@@ -140,3 +141,47 @@ test('a tracker write failure takes the worktree and branch back down (A26)', as
     await chmod(tracker, 0o644);
   }
 });
+
+// Regression: the dry-run apply hint used to print `slice start -- "<prompt>" --yes`.
+// After `--`, `--yes` is a positional, so the hinted command dry-ran again - the remedy
+// for the refusal was the refusal. The hint must be a command that would apply: `--yes`
+// in flag position, the prompt after the marker.
+test('the dry-run apply hint is a command that would apply (--yes before --)', async () => {
+  const root = await tempDir('slice-hint-');
+  const prompt = 'fix the thing with "quotes" inside';
+  const result = await capture(() => sliceCommand('start', [prompt], { root, dashdash: true }));
+  assert.equal(result.code, 0, `prompt-mode dry run refused: ${result.stderr}`);
+  const match = result.stdout.match(/^apply\s+run: (.*)$/m);
+  assert.ok(match, 'the dry run printed an apply hint');
+  const tokens = tokenizeHint(match[1]);
+  const parsed = parse(tokens.slice(tokens.indexOf('start') + 1));
+  assert.ok(parsed.ok, `the hinted command does not parse: ${JSON.stringify(parsed.error)}`);
+  assert.equal(parsed.value.flags.yes, true, '--yes must reach the flag position');
+  assert.equal(parsed.value.flags.dashdash, true, 'the prompt must stay after the -- marker');
+  assert.deepEqual(parsed.value.positional, [prompt], 'the prompt is the sole positional');
+});
+
+function tokenizeHint(line) {
+  const tokens = [];
+  let current = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '\\') current += line[++i];
+      else if (ch === '"') quoted = false;
+      else current += ch;
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (/\s/.test(ch)) {
+      if (current !== '') {
+        tokens.push(current);
+        current = '';
+      }
+    } else {
+      current += ch;
+    }
+  }
+  if (current !== '') tokens.push(current);
+  return tokens;
+}

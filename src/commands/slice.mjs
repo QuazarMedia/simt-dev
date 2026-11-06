@@ -341,7 +341,7 @@ async function startSlice(root, id, flags, prompt) {
   const session = sliceSession(flags);
   const task = `${id}: ${String(title ?? '').trim()}`;
   const apply = promptMode
-    ? `run: ${CLI} slice start -- ${JSON.stringify(prompt)} --yes`
+    ? `run: ${CLI} slice start --yes -- ${JSON.stringify(prompt)}`
     : `run: ${CLI} slice start ${id} --yes`;
   const record = recordPath(main, id);
 

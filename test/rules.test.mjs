@@ -720,7 +720,7 @@ test('select: the rules a repo receives are exactly those its own signals name',
 });
 
 test('select: a repo that carries .simt/knowledge receives the knowledge rule, and no other does', async () => {
-  // Plan 0005 K1: directory presence is the declaration, so the rule selects
+  // Directory presence is the declaration, so the rule selects
   // exactly the repositories that authored inputs — and a repository without
   // them keeps the selection it always had (ADR-146's no-declaration-no-change).
   const dir = await scratch({ 'pyproject.toml': '[project]\nname="x"\n' });

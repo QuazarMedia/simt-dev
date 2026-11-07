@@ -646,7 +646,7 @@ export async function checkRepo(root, opts = {}) {
   // crashes on the repository's own input is a red state nobody sees until an agent
   // reads it. Validated here, at the gate, so `check` is the first place a malformed
   // input is heard of. Absent directory raises nothing: a repo that never authored
-  // inputs keeps its check exactly as it was (Plan 0005 K2).
+  // inputs keeps its check exactly as it was.
   findings.push(...(await knowledgeInputFindings(root)));
 
   // `CHECK_NON_BLOCKING`, not the union. This is the gate whose exit code a repository

@@ -80,7 +80,7 @@ const LIKELY_FILES = 3;
 const MAP_FACTOR = 8;
 
 /**
- * The directory the knowledge doors read their inputs from (Plan 0005).
+ * The directory the knowledge doors read their inputs from.
  *
  * Its presence is what gates the pointer below and, in the projection, the
  * knowledge rule: a repository that authored no inputs has nothing to point at,
@@ -90,7 +90,7 @@ const MAP_FACTOR = 8;
 const KNOWLEDGE_DIR = '.simt/knowledge';
 
 /**
- * The six conventional inputs, each named for the door it feeds (Plan 0005 K3).
+ * The six conventional inputs, each named for the door it feeds.
  *
  * `src/knowledge/inputs.mjs` validates these files against the doors' reader
  * contracts; this table only names them, so the pointer never carries a claim's
@@ -144,7 +144,7 @@ async function generatedRegions(root) {
 }
 
 /**
- * The knowledge pointer lines this repository's packet carries (Plan 0005 K3).
+ * The knowledge pointer lines this repository's packet carries.
  *
  * Pointer only: the directory, the README when it is there, and one usage line for
  * each conventional input the repository authored. It reads no claim file, scores
@@ -265,7 +265,7 @@ export async function assembleBrief({
     });
   }
 
-  // The knowledge pointer (Plan 0005 K3). Soft, because it names a directory the
+  // The knowledge pointer. Soft, because it names a directory the
   // reader can list in one command; a packet under pressure loses the pointer
   // before it loses a command or a path.
   for (const line of await knowledgePointers(root)) {

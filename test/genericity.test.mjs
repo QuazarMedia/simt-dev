@@ -74,7 +74,7 @@ test('a directory fact fires on a path with a slash in it', async () => {
 });
 
 test('the knowledge directory fact fires on .simt/knowledge and names it as evidence', async () => {
-  // Plan 0005 K1: the directory's presence is the declaration that gates the
+  // The directory's presence is the declaration that gates the
   // knowledge rule, so a repository without it must emit nothing.
   const root = await fixture({ '.simt/knowledge': null });
   const result = await fingerprint(root);

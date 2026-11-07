@@ -240,7 +240,7 @@ test(`the brief refuses two tasks and a budget that is not a number`, async (t) 
   assert.equal(bad.code, 2);
 });
 
-// --- the knowledge pointer (Plan 0005 K3) ------------------------------------
+// --- the knowledge pointer ----------------------------------------------------
 //
 // The section is a pointer, not an index: the directory, the cheat sheet, and one
 // usage line per door the repository authored. It reads no claim, so a claim id in

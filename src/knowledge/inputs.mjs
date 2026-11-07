@@ -1,4 +1,4 @@
-// `simt check` validates the knowledge inputs a repository has authored (Plan 0005 K2).
+// `simt check` validates the knowledge inputs a repository has authored.
 //
 // Six doors read six conventional files under `.simt/knowledge/`, and each door
 // asserts a shape as its first gate before it can answer. A file that is absent
@@ -21,7 +21,7 @@ import { BUNDLE_SCHEMA, importBundle } from './bundle.mjs';
 
 /**
  * The directory the knowledge doors read their inputs from. Its presence is the
- * declaration that gates the knowledge rule (Plan 0005 K1); its contents are
+ * declaration that gates the knowledge rule; its contents are
  * what this validator checks.
  */
 export const KNOWLEDGE_DIR = '.simt/knowledge';

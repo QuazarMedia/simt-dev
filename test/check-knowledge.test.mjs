@@ -1,4 +1,4 @@
-// `simt check` validates the knowledge inputs a repository has authored (Plan 0005 K2).
+// `simt check` validates the knowledge inputs a repository has authored.
 //
 // Six doors read six files under `.simt/knowledge/`, and each asserts a shape before
 // it can answer. A file that is absent is legal; a file that is present but does not

@@ -718,6 +718,22 @@ test('select: the rules a repo receives are exactly those its own signals name',
   // container keys on has-dockerfile, python on python: a fact and a tag both select.
   assert.deepEqual(ids, ['container', 'core', 'python']);
 });
+
+test('select: a repo that carries .simt/knowledge receives the knowledge rule, and no other does', async () => {
+  // Plan 0005 K1: directory presence is the declaration, so the rule selects
+  // exactly the repositories that authored inputs — and a repository without
+  // them keeps the selection it always had (ADR-146's no-declaration-no-change).
+  const dir = await scratch({ 'pyproject.toml': '[project]\nname="x"\n' });
+  await mkdir(join(dir, '.simt', 'knowledge'), { recursive: true });
+  const rules = await loadRules(dir);
+  const { stack, facts } = await fingerprint(dir);
+  const { selected } = select(rules, stack, facts);
+  assert.ok(selected.some((r) => r.id === 'knowledge'), 'the knowledge rule was not selected for a repo that carries inputs');
+  const bare = await scratch({ 'pyproject.toml': '[project]\nname="x"\n' });
+  const bareSignals = await fingerprint(bare);
+  const { selected: bareSelected } = select(await loadRules(bare), bareSignals.stack, bareSignals.facts);
+  assert.ok(!bareSelected.some((r) => r.id === 'knowledge'), 'the knowledge rule selected a repo without inputs');
+});
 test('the catalogue sees the per-surface rules, and says where each came from', async () => {
   // The defect: `loadRules` reads `rules/*.md` and `rules/stacks/*.md`, which is every
   // rule that is a *stack profile*. The four per-surface rules are projected by a

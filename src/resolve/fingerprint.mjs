@@ -150,6 +150,10 @@ const FACTS = [
   { name: 'has-tests-dir', kind: 'dir', paths: ['test', 'tests', '__tests__', 'spec', 'e2e'] },
   { name: 'has-decisions-dir', kind: 'dir', paths: ['docs/decisions', 'docs/adr', 'docs/adrs', 'adr'] },
   { name: 'has-ci-workflows', kind: 'dir', paths: ['.github/workflows', '.gitlab-ci.d'] },
+  // The knowledge doors read their inputs from this directory; its presence is the
+  // declaration that gates the knowledge rule, so a repository without it projects
+  // the region it always did (Plan 0005 K1).
+  { name: 'has-knowledge', kind: 'dir', paths: ['.simt/knowledge'] },
   {
     name: 'has-lockfile',
     kind: 'file',

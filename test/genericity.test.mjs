@@ -73,6 +73,17 @@ test('a directory fact fires on a path with a slash in it', async () => {
   assert.equal(result.factEvidence['has-schema-dir'], 'db/schema');
 });
 
+test('the knowledge directory fact fires on .simt/knowledge and names it as evidence', async () => {
+  // Plan 0005 K1: the directory's presence is the declaration that gates the
+  // knowledge rule, so a repository without it must emit nothing.
+  const root = await fixture({ '.simt/knowledge': null });
+  const result = await fingerprint(root);
+  assert.ok(result.facts.includes('has-knowledge'), 'the fact did not fire on .simt/knowledge/');
+  assert.equal(result.factEvidence['has-knowledge'], '.simt/knowledge');
+  const bare = await fixture({ '.simt': null });
+  assert.ok(!(await fingerprint(bare)).facts.includes('has-knowledge'), 'a .simt without knowledge fired the fact');
+});
+
 test('a directory fact does not fire on a file that happens to be named after it', async () => {
   // The control for the test above, because probing by presence rather than by kind
   // passes both of them: `names.has` is true for the file below and false for every

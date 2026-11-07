@@ -168,5 +168,3 @@ export async function knowledgeInputFindings(root) {
   }
   return findings;
 }
-
-export { isObject, isText };

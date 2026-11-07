@@ -34,6 +34,7 @@
 // servers.
 
 import { createHash } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { CLI, STATE_DIR } from '../name.mjs';
@@ -79,6 +80,32 @@ const LIKELY_FILES = 3;
 const MAP_FACTOR = 8;
 
 /**
+ * The directory the knowledge doors read their inputs from (Plan 0005).
+ *
+ * Its presence is what gates the pointer below and, in the projection, the
+ * knowledge rule: a repository that authored no inputs has nothing to point at,
+ * and a packet that pointed at a directory that is not there would be a caution
+ * about the tool rather than a fact about the tree.
+ */
+const KNOWLEDGE_DIR = '.simt/knowledge';
+
+/**
+ * The six conventional inputs, each named for the door it feeds (Plan 0005 K3).
+ *
+ * `src/knowledge/inputs.mjs` validates these files against the doors' reader
+ * contracts; this table only names them, so the pointer never carries a claim's
+ * content and cannot disagree with a reader about what a door reads.
+ */
+const KNOWLEDGE_DOORS = [
+  { name: 'why', file: 'claims.json', usage: `${CLI} knowledge why <claim-id> --claims ${KNOWLEDGE_DIR}/claims.json` },
+  { name: 'rank', file: 'units.json', usage: `${CLI} knowledge rank --input ${KNOWLEDGE_DIR}/units.json` },
+  { name: 'debt', file: 'debt.json', usage: `${CLI} knowledge debt --input ${KNOWLEDGE_DIR}/debt.json` },
+  { name: 'impact', file: 'impact.json', usage: `${CLI} knowledge impact --input ${KNOWLEDGE_DIR}/impact.json` },
+  { name: 'derivations', file: 'derivations.json', usage: `${CLI} knowledge derivations --input ${KNOWLEDGE_DIR}/derivations.json` },
+  { name: 'import', file: 'export.json', usage: `${CLI} knowledge import --input ${KNOWLEDGE_DIR}/export.json` },
+];
+
+/**
  * The tool's own state directory, read from the path the index is written to.
  *
  * A brief asks git what a task touches, and the index it just read the answer from is a
@@ -114,6 +141,42 @@ async function generatedRegions(root) {
     if (parseRegion(text, 'html').status === 'ok') carrying.push(path);
   }
   return carrying;
+}
+
+/**
+ * The knowledge pointer lines this repository's packet carries (Plan 0005 K3).
+ *
+ * Pointer only: the directory, the README when it is there, and one usage line for
+ * each conventional input the repository authored. It reads no claim file, scores
+ * no path and performs no matching, so the same tree yields the same lines and a
+ * repository without the directory yields none at all — which is what keeps its
+ * packet byte-identical to the one it had before this section existed.
+ *
+ * @param {string} root
+ * @returns {Promise<string[]>} the section's lines, empty when there is no directory
+ */
+async function knowledgePointers(root) {
+  const dir = join(root, KNOWLEDGE_DIR);
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    // No directory is the ordinary case: the repository authored no knowledge
+    // inputs, so the packet has nothing to point at.
+    return [];
+  }
+  const present = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name));
+
+  const lines = [`${KNOWLEDGE_DIR}/ — the knowledge doors read their inputs here`];
+  if (present.has('README.md')) {
+    lines.push(`${KNOWLEDGE_DIR}/README.md — the cheat sheet that names each input and its door`);
+  }
+  // A door whose input is absent is not offered: the pointer sends a reader to a
+  // file that is there, never to one the repository has not authored.
+  for (const door of KNOWLEDGE_DOORS) {
+    if (present.has(door.file)) lines.push(`${door.name}: ${door.usage}`);
+  }
+  return lines;
 }
 
 /**
@@ -199,6 +262,15 @@ export async function assembleBrief({
   for (const verb of card.dropped) {
     packet.add('COMMANDS', `dropped by the card's own 600-byte ceiling: ${verb}`, {
       why: ['the card keeps its own budget before this packet spends any of it'],
+    });
+  }
+
+  // The knowledge pointer (Plan 0005 K3). Soft, because it names a directory the
+  // reader can list in one command; a packet under pressure loses the pointer
+  // before it loses a command or a path.
+  for (const line of await knowledgePointers(root)) {
+    packet.add('KNOWLEDGE', line, {
+      why: ['the repository authored knowledge inputs, and a door is how they are read'],
     });
   }
 

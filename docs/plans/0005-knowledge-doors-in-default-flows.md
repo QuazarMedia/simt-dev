@@ -33,9 +33,9 @@ claims in the brief; knowledge facts in `simt gate`, `simt evidence` or `simt re
 
 | id | state | evidence |
 | -- | ----- | -------- |
-| K1 | queued | — |
-| K2 | queued | — |
-| K3 | queued | — |
+| K1 | Complete | 026614319a4fd9f7b01fc1056420cf9acfe57acc |
+| K2 | Complete | b953e19d880f6d49d7bbd4ae6bf85839984cd63c |
+| K3 | Complete | 2437f92027edf9da4c9893aa0a992ab59543f044 |
 
 ## K1 — `has-knowledge` fact + `rules/knowledge.md` (agent awareness)
 

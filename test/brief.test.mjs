@@ -239,3 +239,152 @@ test(`the brief refuses two tasks and a budget that is not a number`, async (t) 
   const bad = await run(root, ['brief', 'one', '--budget', 'not-a-number']);
   assert.equal(bad.code, 2);
 });
+
+// --- the knowledge pointer (Plan 0005 K3) ------------------------------------
+//
+// The section is a pointer, not an index: the directory, the cheat sheet, and one
+// usage line per door the repository authored. It reads no claim, so a claim id in
+// the files never crosses into the packet, and a repository without the directory
+// keeps the packet it had before the section existed.
+
+/** The six conventional inputs, each shaped for the door that reads it. */
+const KNOWLEDGE_INPUTS = {
+  'claims.json': { claims: [{ id: 'claim:only-in-the-file', subject: 's', predicate: 'p', value: 'v' }] },
+  'units.json': { units: [] },
+  'debt.json': { items: [] },
+  'impact.json': { graph: { nodes: [{ id: 'n1' }], edges: [] }, change: { refs: ['n1'] } },
+  'derivations.json': { receipts: [] },
+  'export.json': { schema: 'simt.bundle/1', version: 1, facts: [] },
+};
+
+/** Author knowledge inputs under `.simt/knowledge/`, committed so the tree is clean. */
+async function knowledgeFixture(root, { readme = true, files = Object.keys(KNOWLEDGE_INPUTS) } = {}) {
+  const dir = join(root, '.simt', 'knowledge');
+  await mkdir(dir, { recursive: true });
+  if (readme) await writeFile(join(dir, 'README.md'), '# knowledge\n');
+  for (const name of files) {
+    await writeFile(join(dir, name), JSON.stringify(KNOWLEDGE_INPUTS[name], null, 2));
+  }
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'knowledge inputs']);
+}
+
+const knowledgeLines = (packet) =>
+  (packet.items ?? []).filter((item) => item.section === 'KNOWLEDGE').map((item) => item.text);
+
+test('a repository with knowledge inputs gets a pointer section and no claim ids (K3)', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await knowledgeFixture(root);
+
+  const packet = await assembleBrief({ root, task: 'fix the keep helper', budget: 0, federate: false });
+  const lines = knowledgeLines(packet);
+
+  // The directory line, the README line, and one usage line per door.
+  assert.ok(
+    lines.some((line) => line.includes('.simt/knowledge/') && !line.includes('README')),
+    JSON.stringify(lines),
+  );
+  assert.ok(lines.some((line) => line.includes('.simt/knowledge/README.md')), JSON.stringify(lines));
+  for (const door of ['why', 'rank', 'debt', 'impact', 'derivations', 'import']) {
+    assert.ok(
+      lines.some((line) => line.startsWith(`${door}: `)),
+      `no ${door} usage line in ${JSON.stringify(lines)}`,
+    );
+  }
+  // Pointer only: the claim id in claims.json is not enumerated.
+  assert.ok(!lines.join('\n').includes('claim:only-in-the-file'), 'the pointer enumerated a claim');
+});
+
+test('a repository without the knowledge directory has no KNOWLEDGE section (K3)', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const packet = await assembleBrief({ root, task: 'fix the keep helper', budget: 0, federate: false });
+  assert.deepEqual(knowledgeLines(packet), []);
+  assert.equal(packet.sections.KNOWLEDGE, undefined);
+});
+
+test('the pointer offers only the doors and README the repository authored (K3)', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await knowledgeFixture(root, { readme: false, files: ['claims.json'] });
+
+  const lines = knowledgeLines(
+    await assembleBrief({ root, task: 'fix the keep helper', budget: 0, federate: false }),
+  );
+  assert.ok(lines.some((line) => line.startsWith('why: ')), JSON.stringify(lines));
+  assert.ok(!lines.some((line) => line.startsWith('rank: ')), JSON.stringify(lines));
+  assert.ok(!lines.some((line) => line.includes('README.md')), JSON.stringify(lines));
+});
+
+test('the printed brief carries the KNOWLEDGE heading only when the directory exists (K3)', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const bare = await run(root, ['brief', 'fix the keep helper', '--budget', '0']);
+  assert.equal(bare.code, 0);
+  assert.doesNotMatch(bare.stdout, /\nKNOWLEDGE\n/);
+
+  await knowledgeFixture(root);
+  const pointed = await run(root, ['brief', 'fix the keep helper', '--budget', '0']);
+  assert.equal(pointed.code, 0);
+  assert.match(pointed.stdout, /\nKNOWLEDGE\n/);
+  assert.match(pointed.stdout, /\.simt\/knowledge\/README\.md/);
+  assert.match(pointed.stdout, /simt knowledge rank --input \.simt\/knowledge\/units\.json/);
+});
+
+/** A fixture whose tree also authored knowledge inputs under `.simt/knowledge/`. */
+async function withKnowledge(files) {
+  const root = await fixture();
+  const dir = join(root, '.simt', 'knowledge');
+  await mkdir(dir, { recursive: true });
+  for (const [name, body] of Object.entries(files)) {
+    await writeFile(join(dir, name), typeof body === 'string' ? body : `${JSON.stringify(body, null, 2)}\n`);
+  }
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'knowledge inputs']);
+  return root;
+}
+
+test('a tree with knowledge inputs gains a pointer to the directory, the README and the doors (K3)', async (t) => {
+  const root = await withKnowledge({
+    'README.md': '# knowledge\n\nThe cheat sheet.\n',
+    'claims.json': { claims: [{ id: 'claim:secret-123', subject: 's', predicate: 'p', value: 'v' }] },
+    'units.json': { units: [{ id: 'u1', path: 'src/keep.mjs', text: 't' }] },
+  });
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  // `--budget 0` keeps the whole packet, so the pointer is never the thing the
+  // ceiling happened to cut.
+  const { code, stdout } = await run(root, ['brief', 'fix the keep helper in src/keep.mjs', '--json', '--budget', '0']);
+  assert.equal(code, 0, stdout);
+  const payload = JSON.parse(stdout);
+  const lines = payload.sections.KNOWLEDGE ?? [];
+
+  assert.ok(lines.some((line) => line.includes('.simt/knowledge/')), stdout);
+  assert.ok(lines.some((line) => line.includes('.simt/knowledge/README.md')), stdout);
+  assert.ok(lines.some((line) => line.startsWith('why:') && line.includes('claims.json')), stdout);
+  assert.ok(lines.some((line) => line.startsWith('rank:') && line.includes('units.json')), stdout);
+  // A door whose input is absent is not offered: the pointer never names a file
+  // the repository has not authored.
+  assert.ok(!lines.some((line) => line.startsWith('debt:')), stdout);
+  // Pointer only: a claim id in the file never reaches the packet.
+  assert.ok(!stdout.includes('claim:secret-123'), 'the packet enumerated a claim');
+});
+
+test('a tree without knowledge inputs gains no KNOWLEDGE section (K3)', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const { code, stdout } = await run(root, ['brief', 'fix the keep helper in src/keep.mjs', '--json']);
+  assert.equal(code, 0, stdout);
+  const payload = JSON.parse(stdout);
+  assert.equal('KNOWLEDGE' in payload.sections, false, 'the section appeared without inputs');
+  assert.doesNotMatch(stdout, /KNOWLEDGE/);
+
+  // The printed packet carries no empty heading either: a section with nothing is
+  // absent, not a blank line.
+  const printed = await run(root, ['brief', 'fix the keep helper in src/keep.mjs']);
+  assert.doesNotMatch(printed.stdout, /\nKNOWLEDGE\n/);
+});

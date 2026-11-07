@@ -36,6 +36,7 @@ import { computeLock, readLock } from '../projection/lock.mjs';
 import { runDeclaredChecks } from '../kernel/checks.mjs';
 import { decisionsCutoff, decisionsDir } from '../decisions/dir.mjs';
 import { lintDecisions } from '../memory/decide.mjs';
+import { knowledgeInputFindings } from '../knowledge/inputs.mjs';
 import { commandRoot } from '../repo-root.mjs';
 
 /** Findings `sync` reports and does not fail on.
@@ -640,6 +641,13 @@ export async function checkRepo(root, opts = {}) {
       remedy: f.remedy,
     })),
   );
+
+  // The knowledge doors read their inputs from `.simt/knowledge/`, and a door that
+  // crashes on the repository's own input is a red state nobody sees until an agent
+  // reads it. Validated here, at the gate, so `check` is the first place a malformed
+  // input is heard of. Absent directory raises nothing: a repo that never authored
+  // inputs keeps its check exactly as it was (Plan 0005 K2).
+  findings.push(...(await knowledgeInputFindings(root)));
 
   // `CHECK_NON_BLOCKING`, not the union. This is the gate whose exit code a repository
   // acts on, so a finding it reports and does not fail on is a decision recorded in a

@@ -33,11 +33,14 @@
 // command and the tool leave it on. It is inert either way in a repository that declared no
 // servers.
 
+import { createHash } from 'node:crypto';
+import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { CLI, STATE_DIR } from '../name.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
-import { DEFAULT_BRIEF_BYTES, buildPacket, collect } from './packet.mjs';
+import { DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES, buildPacket, collect } from './packet.mjs';
+import { buildProofPacket } from './proof.mjs';
 import { classifyTask, cardVerbs } from './kind.mjs';
 import { briefAdvice } from '../advice/advice.mjs';
 import { commandCard } from '../kernel/card.mjs';
@@ -75,6 +78,32 @@ const LIKELY_FILES = 3;
  * enormous repository never renders the whole map.
  */
 const MAP_FACTOR = 8;
+
+/**
+ * The directory the knowledge doors read their inputs from.
+ *
+ * Its presence is what gates the pointer below and, in the projection, the
+ * knowledge rule: a repository that authored no inputs has nothing to point at,
+ * and a packet that pointed at a directory that is not there would be a caution
+ * about the tool rather than a fact about the tree.
+ */
+const KNOWLEDGE_DIR = '.simt/knowledge';
+
+/**
+ * The six conventional inputs, each named for the door it feeds.
+ *
+ * `src/knowledge/inputs.mjs` validates these files against the doors' reader
+ * contracts; this table only names them, so the pointer never carries a claim's
+ * content and cannot disagree with a reader about what a door reads.
+ */
+const KNOWLEDGE_DOORS = [
+  { name: 'why', file: 'claims.json', usage: `${CLI} knowledge why <claim-id> --claims ${KNOWLEDGE_DIR}/claims.json` },
+  { name: 'rank', file: 'units.json', usage: `${CLI} knowledge rank --input ${KNOWLEDGE_DIR}/units.json` },
+  { name: 'debt', file: 'debt.json', usage: `${CLI} knowledge debt --input ${KNOWLEDGE_DIR}/debt.json` },
+  { name: 'impact', file: 'impact.json', usage: `${CLI} knowledge impact --input ${KNOWLEDGE_DIR}/impact.json` },
+  { name: 'derivations', file: 'derivations.json', usage: `${CLI} knowledge derivations --input ${KNOWLEDGE_DIR}/derivations.json` },
+  { name: 'import', file: 'export.json', usage: `${CLI} knowledge import --input ${KNOWLEDGE_DIR}/export.json` },
+];
 
 /**
  * The tool's own state directory, read from the path the index is written to.
@@ -115,6 +144,42 @@ async function generatedRegions(root) {
 }
 
 /**
+ * The knowledge pointer lines this repository's packet carries.
+ *
+ * Pointer only: the directory, the README when it is there, and one usage line for
+ * each conventional input the repository authored. It reads no claim file, scores
+ * no path and performs no matching, so the same tree yields the same lines and a
+ * repository without the directory yields none at all — which is what keeps its
+ * packet byte-identical to the one it had before this section existed.
+ *
+ * @param {string} root
+ * @returns {Promise<string[]>} the section's lines, empty when there is no directory
+ */
+async function knowledgePointers(root) {
+  const dir = join(root, KNOWLEDGE_DIR);
+  let entries;
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    // No directory is the ordinary case: the repository authored no knowledge
+    // inputs, so the packet has nothing to point at.
+    return [];
+  }
+  const present = new Set(entries.filter((entry) => entry.isFile()).map((entry) => entry.name));
+
+  const lines = [`${KNOWLEDGE_DIR}/ — the knowledge doors read their inputs here`];
+  if (present.has('README.md')) {
+    lines.push(`${KNOWLEDGE_DIR}/README.md — the cheat sheet that names each input and its door`);
+  }
+  // A door whose input is absent is not offered: the pointer sends a reader to a
+  // file that is there, never to one the repository has not authored.
+  for (const door of KNOWLEDGE_DOORS) {
+    if (present.has(door.file)) lines.push(`${door.name}: ${door.usage}`);
+  }
+  return lines;
+}
+
+/**
  * Assemble one packet for a task.
  *
  * @param {object} [options]
@@ -131,6 +196,8 @@ async function generatedRegions(root) {
  * @param {string[]} [options.commands] the dispatchable command paths (`COMMANDS`). A
  *   decision's `Affects:` token is a command only when the tool has that command, so a
  *   packet that does not know them reports every one of them as unresolved
+ * @param {boolean} [options.proof] also report whether the kept packet proves every
+ *   section it kept; the default packet's bytes never change
  * @returns a packet, or `{ error }` carrying the exit code a failure already reported, or
  *   `{ cold: true }` when the index is empty and this caller may not build one
  */
@@ -143,6 +210,7 @@ export async function assembleBrief({
   build = true,
   federate = true,
   commands = [],
+  proof = false,
 } = {}) {
   const named = paths !== null;
   const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(`${STATE_DIR}/`));
@@ -194,6 +262,15 @@ export async function assembleBrief({
   for (const verb of card.dropped) {
     packet.add('COMMANDS', `dropped by the card's own 600-byte ceiling: ${verb}`, {
       why: ['the card keeps its own budget before this packet spends any of it'],
+    });
+  }
+
+  // The knowledge pointer. Soft, because it names a directory the
+  // reader can list in one command; a packet under pressure loses the pointer
+  // before it loses a command or a path.
+  for (const line of await knowledgePointers(root)) {
+    packet.add('KNOWLEDGE', line, {
+      why: ['the repository authored knowledge inputs, and a door is how they are read'],
     });
   }
 
@@ -393,6 +470,31 @@ export async function assembleBrief({
 
   const packed = buildPacket(packet.items, { budget });
   const cut = new Set(packed.cut);
+
+  // A proof summary answers only what the kept packet itself proves: each kept section is
+  // an obligation, and each kept line cites the tree it was read from (A39).
+  let proofSummary;
+  if (proof) {
+    const head = (await gitText(root, ['rev-parse', 'HEAD']))?.trim() ?? '';
+    const kept = packet.items.filter((item) => !cut.has(item.id));
+    const units = kept.map((item) => ({
+      id: item.id,
+      text: item.text,
+      obligations: [item.section],
+      mandatory: item.priority === 'hard',
+      revision: {
+        ref: head.length > 0 ? head : 'worktree',
+        digest: `sha256-${createHash('sha256').update(item.text).digest('hex')}`,
+      },
+      anchor: null,
+    }));
+    const report = buildProofPacket(units, {
+      budget: Math.min(budget > 0 ? budget : DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES),
+      required: [...new Set(kept.map((item) => item.section))],
+    });
+    proofSummary = { complete: report.complete, omittedObligations: report.omittedObligations };
+  }
+
   const sections = {};
   for (const item of packet.items) {
     if (cut.has(item.id)) continue;
@@ -400,5 +502,5 @@ export async function assembleBrief({
     sections[item.section].push(item.text);
   }
 
-  return { root, kind, basis, task, scope, budget, items: packet.items, packed, sections };
+  return { root, kind, basis, task, scope, budget, items: packet.items, packed, sections, proof: proofSummary };
 }

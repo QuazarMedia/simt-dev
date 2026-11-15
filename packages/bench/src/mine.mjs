@@ -10,7 +10,7 @@
 // outside every worktree (RepoTrials / PatchGym), while deterministic task
 // descriptors live in `.simt/bench/tasks/<id>.json`.
 
-import { execFile, spawn } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { chmod, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
@@ -26,6 +26,7 @@ import { isTestPath } from '../../../src/testing/paths.mjs';
 import { cleanupReports, dedupeSorted, readReports } from '../../../src/testing/parsers.mjs';
 import { detectTestRunner } from '../../../src/testing/runners.mjs';
 import { resolveVaultDir } from '../../../src/testing/vault.mjs';
+import { spawnBounded } from '../../../src/sys/proc.mjs';
 
 const exec = promisify(execFile);
 export const DEFAULT_MINE_TARGET = 20;
@@ -112,53 +113,6 @@ export async function listCandidates(root) {
   return { ok: true, candidates };
 }
 
-/**
- * Run a child process in its own process group with a hard timeout so a hanging
- * test or grandchildren cannot outlive the check.
- */
-function runProcess(cmd, args, { cwd, input, env, timeoutMs = 15000 } = {}) {
-  return new Promise((resolvePromise) => {
-    const child = spawn(cmd, args, {
-      cwd,
-      env,
-      stdio: ['pipe', 'pipe', 'pipe'],
-      detached: true,
-    });
-    let stdout = '';
-    let stderr = '';
-    let timedOut = false;
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      try {
-        process.kill(-child.pid, 'SIGKILL');
-      } catch {
-        child.kill('SIGKILL');
-      }
-      child.stdout.destroy();
-      child.stderr.destroy();
-    }, timeoutMs);
-
-    child.stdout.on('data', (chunk) => {
-      stdout += chunk;
-    });
-    child.stderr.on('data', (chunk) => {
-      stderr += chunk;
-    });
-    child.on('error', (err) => {
-      clearTimeout(timer);
-      resolvePromise({ code: 1, timedOut: false, stdout, stderr: `${stderr}\n${err.message}` });
-    });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      resolvePromise({ code: code ?? 1, timedOut, stdout, stderr });
-    });
-
-    if (input !== undefined) child.stdin.end(input);
-    else child.stdin.end();
-  });
-}
-
 async function executeRunner(runner, worktree, env, timeoutMs) {
   const spec = runner.buildExec(worktree);
   // Remove what a previous run left behind before running: a stale report
@@ -167,9 +121,9 @@ async function executeRunner(runner, worktree, env, timeoutMs) {
   for (const p of spec.reportPaths ?? []) {
     if (existsSync(p)) await rm(p, { recursive: true, force: true });
   }
-  const res = await runProcess(spec.cmd, spec.args, { cwd: worktree, env, timeoutMs });
+  const res = await spawnBounded(spec.cmd, spec.args, { cwd: worktree, env, timeoutMs });
   const reportText = await readReports(spec.reportPaths);
-  const parsed = runner.parse(res.stdout, reportText);
+  const parsed = runner.parse(res.stdout.toString('utf8'), reportText);
   await cleanupReports(spec.reportPaths);
   return {
     code: res.code,
@@ -223,11 +177,11 @@ async function validateCandidate(
 
   await exec('git', ['reset', '--hard', 'HEAD'], { cwd: worktree }).catch(() => null);
   await exec('git', ['clean', '-fdx'], { cwd: worktree }).catch(() => null);
-  const co = await runProcess('git', ['checkout', '-f', candidate.base], { cwd: worktree });
+  const co = await spawnBounded('git', ['checkout', '-f', candidate.base], { cwd: worktree, timeoutMs: 15000 });
   if (co.code !== 0) return null;
   await exec('git', ['clean', '-fdx'], { cwd: worktree }).catch(() => null);
 
-  const appliedRed = await runProcess('git', ['apply', '-'], { cwd: worktree, input: testPatch });
+  const appliedRed = await spawnBounded('git', ['apply', '-'], { cwd: worktree, input: testPatch, timeoutMs: 15000 });
   if (appliedRed.code !== 0) return null;
 
   const runnableFiles = candidate.testFiles.filter((f) => existsSync(join(worktree, f)));
@@ -252,7 +206,7 @@ async function validateCandidate(
   }
 
   // Apply gold.patch on top of BASE + test.patch.
-  const appliedGold = await runProcess('git', ['apply', '-'], { cwd: worktree, input: goldPatch });
+  const appliedGold = await spawnBounded('git', ['apply', '-'], { cwd: worktree, input: goldPatch, timeoutMs: 15000 });
   if (appliedGold.code !== 0) return null;
 
   // Pass 1 & 2 of GOLD: BASE + test.patch + gold.patch must pass reproducibly.

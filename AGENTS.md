@@ -135,7 +135,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=cadbf6fb6c388f2f81fedab31b78d4e5e240ead2 -->
+<!-- simt:sha=1c8436ac0ee4ea8fa7f6387b32683fc98adbbd03 -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->

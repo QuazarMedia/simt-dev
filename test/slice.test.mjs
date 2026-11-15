@@ -10,10 +10,16 @@
 // the success path the command suite already covers.
 
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { chmod, copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { sliceCommand } from '../src/commands/slice.mjs';
-import { capture, tempDir } from './fixture.mjs';
+import { parse } from '../src/argv.mjs';
+import { reindex } from '../src/index/store.mjs';
+import { MANIFEST_FILE } from '../src/name.mjs';
+import { capture, git, tempDir } from './fixture.mjs';
 
 test('every subcommand that needs an id refuses without one, and says what to run', async () => {
   const root = await tempDir('slice-');
@@ -39,3 +45,143 @@ test('an unknown subcommand names the three that exist instead of guessing one',
   assert.match(result.stderr, /unknown slice subcommand squash/);
   assert.match(result.stderr, /slice start <id> {2}\| {2}simt slice finish <id>/);
 });
+
+/**
+ * A repository `slice start` can reach the two failure points in: a tracker carrying A26,
+ * a manifest, one commit and an index the brief can read.
+ */
+async function startableRepo() {
+  const root = await tempDir('slice-start-');
+  // No gates: the finish below must reach the tracker write, not stop at a lint runner a
+  // fixture repository does not have.
+  await writeFile(join(root, MANIFEST_FILE), JSON.stringify({ id: 'r', stack: [], surfaces: ['cursor'], gates: { preCommit: [], prePush: [] } }));
+  await mkdir(join(root, 'docs', 'reviews'), { recursive: true });
+  const tracker = join(root, 'docs', 'reviews', '0004-audit-remediation.md');
+  await copyFile(new URL('../docs/reviews/archive/0004-audit-remediation.md', import.meta.url), tracker);
+  await writeFile(join(root, 'a.mjs'), 'export const a = 1;\n');
+  await git(['init', '-q', root]);
+  await git(['-C', root, 'config', 'user.email', 'tests@simt.invalid']);
+  await git(['-C', root, 'config', 'user.name', 'simt slice tests']);
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'initial'], { cwd: root });
+  await reindex(root);
+  return { root, tracker };
+}
+
+test('a failed worktree add releases the lease it claimed (A26)', async () => {
+  const { root } = await startableRepo();
+  const blocked = join(root, '.simt', 'local', 'worktrees', 'a26');
+  await mkdir(blocked, { recursive: true });
+  await writeFile(join(blocked, 'occupied'), 'x\n');
+
+  const first = await capture(() => sliceCommand('start', ['A26'], { root, yes: true, session: 'tester' }));
+  assert.notEqual(first.code, 0);
+  assert.match(first.stderr, /worktree could not be created/);
+  assert.equal(existsSync(join(blocked, 'occupied')), true, 'a pre-existing blocked path was deleted');
+
+  // The lease is the claim that has to go with the tree: with the obstruction removed,
+  // the same session can start the slice again only if the first attempt released it.
+  await rm(blocked, { recursive: true, force: true });
+  const second = await capture(() => sliceCommand('start', ['A26'], { root, yes: true, session: 'tester' }));
+  assert.equal(second.code, 0, second.stderr);
+});
+
+test('a failed start preserves a slice branch it did not create (A26)', async () => {
+  const { root } = await startableRepo();
+  await git(['-C', root, 'branch', 'slice/a26']);
+
+  const result = await capture(() => sliceCommand('start', ['A26'], { root, yes: true, session: 'tester' }));
+  assert.notEqual(result.code, 0);
+  assert.match(result.stderr, /worktree could not be created/);
+  const branches = await git(['-C', root, 'branch', '--list', 'slice/a26']);
+  assert.match(String(branches.stdout), /slice\/a26/, 'a pre-existing branch was deleted');
+});
+
+test('a tracker failure after a commit names the sha and the plan done command (A27)', async () => {
+  const { root, tracker } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+
+  const reviews = join(root, 'docs', 'reviews');
+  await chmod(tracker, 0o444);
+  await chmod(reviews, 0o555);
+  try {
+    const result = await capture(() => sliceCommand('finish', ['A27'], { root: worktree, yes: true, test: 'true' }));
+    assert.notEqual(result.code, 0, 'the tracker failure was reported as success');
+    const output = result.stdout + result.stderr;
+    const sha = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+    assert.match(output, new RegExp(sha), 'the committed sha was not reported');
+    assert.match(output, new RegExp(`plan done A27 ${sha}`), 'no command records the row');
+  } finally {
+    await chmod(reviews, 0o755);
+    await chmod(tracker, 0o644);
+  }
+});
+
+test('a tracker write failure takes the worktree and branch back down (A26)', async () => {
+  const { root, tracker } = await startableRepo();
+  const reviews = join(root, 'docs', 'reviews');
+  // Both halves of the write are blocked: an in-place write needs the file bit, a
+  // write-temp-and-rename needs the directory bit.
+  await chmod(tracker, 0o444);
+  await chmod(reviews, 0o555);
+  try {
+    const result = await capture(() => sliceCommand('start', ['A26'], { root, yes: true, session: 'tester' }));
+    assert.notEqual(result.code, 0);
+    assert.match(result.stderr, /tracker row was not updated/);
+    assert.equal(existsSync(join(root, '.simt', 'local', 'worktrees', 'a26')), false, 'the worktree survived');
+    const branches = await git(['-C', root, 'branch', '--list', 'slice/a26']);
+    assert.equal(String(branches.stdout).trim(), '', 'the branch survived');
+  } finally {
+    await chmod(reviews, 0o755);
+    await chmod(tracker, 0o644);
+  }
+});
+
+// Regression: the dry-run apply hint used to print `slice start -- "<prompt>" --yes`.
+// After `--`, `--yes` is a positional, so the hinted command dry-ran again - the remedy
+// for the refusal was the refusal. The hint must be a command that would apply: `--yes`
+// in flag position, the prompt after the marker.
+test('the dry-run apply hint is a command that would apply (--yes before --)', async () => {
+  const root = await tempDir('slice-hint-');
+  const prompt = 'fix the thing with "quotes" inside';
+  const result = await capture(() => sliceCommand('start', [prompt], { root, dashdash: true }));
+  assert.equal(result.code, 0, `prompt-mode dry run refused: ${result.stderr}`);
+  const match = result.stdout.match(/^apply\s+run: (.*)$/m);
+  assert.ok(match, 'the dry run printed an apply hint');
+  const tokens = tokenizeHint(match[1]);
+  const parsed = parse(tokens.slice(tokens.indexOf('start') + 1));
+  assert.ok(parsed.ok, `the hinted command does not parse: ${JSON.stringify(parsed.error)}`);
+  assert.equal(parsed.value.flags.yes, true, '--yes must reach the flag position');
+  assert.equal(parsed.value.flags.dashdash, true, 'the prompt must stay after the -- marker');
+  assert.deepEqual(parsed.value.positional, [prompt], 'the prompt is the sole positional');
+});
+
+function tokenizeHint(line) {
+  const tokens = [];
+  let current = '';
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (quoted) {
+      if (ch === '\\') current += line[++i];
+      else if (ch === '"') quoted = false;
+      else current += ch;
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (/\s/.test(ch)) {
+      if (current !== '') {
+        tokens.push(current);
+        current = '';
+      }
+    } else {
+      current += ch;
+    }
+  }
+  if (current !== '') tokens.push(current);
+  return tokens;
+}

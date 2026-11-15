@@ -20,6 +20,10 @@ import { runBenchProbes } from './probes.mjs';
 import { criticBench } from '../../../src/review/critic.mjs';
 import { listFlag } from '../../../src/commands/skills.mjs';
 import { commandRoot } from '../../../src/repo-root.mjs';
+import { auditPredecessor, compareBaselines } from './compat.mjs';
+import { buildCanary, gradeOutcome, goldSubmission, noopSubmission, wrongSubmission } from './work-corpus.mjs';
+import { runWorld, oracleVerdict } from './work-world.mjs';
+import { PROBES, runProbes } from './work-probes.mjs';
 
 /**
  * Refuse an authorised bench run that names no harness.
@@ -558,4 +562,80 @@ export async function benchImportCommand(positional, flags) {
   if (!apply) lines.push(`remedy   run: ${CLI} bench import ${file} --yes`);
   emit(lines.join('\n'));
   return EXIT.OK;
+}
+
+// The three doors that read a document rather than a bench directory: comparability (W01), the
+// stratified canary corpus (W45) and the seeded world model (W45). They live here, not in
+// `src/`, because the core package ships without the bench and must not import it.
+async function readBenchDocument(flags, command) {
+  const named = flags.input;
+  if (typeof named !== 'string' || named === '') return { error: `${command} needs --input <file>` };
+  try {
+    const text = named === '-' ? await readFile(0, 'utf8') : await readFile(named, 'utf8');
+    const doc = JSON.parse(text);
+    if (doc === null || typeof doc !== 'object') return { error: '--input must hold a JSON object' };
+    return { doc };
+  } catch (error) {
+    return { error: `--input could not be read as JSON: ${error.message}` };
+  }
+}
+
+export async function benchCompatCommand(positional, flags) {
+  if (positional.length > 0) return fail(`unknown bench compat argument ${positional[0]}`, EXIT.USAGE, `run: ${CLI} bench compat --input <file>`);
+  const read = await readBenchDocument(flags, 'bench compat');
+  if (read.error !== undefined) return fail(read.error, EXIT.USAGE, `run: ${CLI} bench compat --input <file>`);
+  const doc = read.doc;
+  if (doc.mode === 'audit') {
+    try {
+      const audit = await auditPredecessor(commandRoot(flags), doc.options ?? {});
+      if (isJson(flags)) emitJson({ schemaVersion: 1, ok: true, command: 'bench compat', ...audit });
+      else emit(`audited    ${audit.checked ?? 0} row(s); ${audit.problems?.length ?? 0} problem(s)`);
+      return EXIT.OK;
+    } catch (error) {
+      return fail(error.message, EXIT.FAIL, null);
+    }
+  }
+  const result = compareBaselines(doc.before ?? {}, doc.after ?? {}, doc.options ?? {});
+  if (isJson(flags)) { emitJson({ schemaVersion: 1, ok: true, command: 'bench compat', ...result }); return EXIT.OK; }
+  emit([`equal      ${result.equal === true ? 'yes' : 'no'}`, ...(result.differences ?? []).map((entry) => `difference ${JSON.stringify(entry)}`)].join('\n'));
+  return EXIT.OK;
+}
+
+export async function benchCorpusCommand(positional, flags) {
+  if (positional.length > 0) return fail(`unknown bench corpus argument ${positional[0]}`, EXIT.USAGE, `run: ${CLI} bench corpus --input <file>`);
+  const read = await readBenchDocument(flags, 'bench corpus');
+  if (read.error !== undefined) return fail(read.error, EXIT.USAGE, `run: ${CLI} bench corpus --input <file>`);
+  const tasks = (Array.isArray(buildCanary(read.doc.options ?? {})) ? buildCanary(read.doc.options ?? {}) : []).slice(0, 3);
+  const graded = tasks.map((task) => ({
+    id: task.id ?? null,
+    gold: gradeOutcome(task, goldSubmission(task)),
+    noop: gradeOutcome(task, noopSubmission()),
+    wrong: gradeOutcome(task, wrongSubmission(task)),
+  }));
+  const payload = { schemaVersion: 1, ok: true, command: 'bench corpus', tasks: tasks.map((task) => ({ id: task.id ?? null, stratum: task.stratum ?? null, intent: task.intent ?? null })), graded };
+  if (isJson(flags)) { emitJson(payload); return EXIT.OK; }
+  emit([`tasks      ${tasks.length}`, ...graded.map((entry) => `graded     ${entry.id}`)].join('\n'));
+  return EXIT.OK;
+}
+
+export async function benchWorldCommand(positional, flags) {
+  if (positional.length > 0) return fail(`unknown bench world argument ${positional[0]}`, EXIT.USAGE, `run: ${CLI} bench world --input <file>`);
+  const read = await readBenchDocument(flags, 'bench world');
+  if (read.error !== undefined) return fail(read.error, EXIT.USAGE, `run: ${CLI} bench world --input <file>`);
+  try {
+    const simulated = runWorld(Array.isArray(read.doc.events) ? read.doc.events : [], read.doc.options ?? {});
+    const payload = {
+      schemaVersion: 1,
+      ok: true,
+      command: 'bench world',
+      world: simulated,
+      verdict: read.doc.expectEffects !== undefined ? oracleVerdict(simulated, { expectEffects: read.doc.expectEffects }) : null,
+      probes: read.doc.probes === true ? runProbes(PROBES) : null,
+    };
+    if (isJson(flags)) { emitJson(payload); return EXIT.OK; }
+    emit([`effects    ${simulated.oracle?.effects?.length ?? 0}`, `duplicates ${simulated.oracle?.duplicates?.length ?? 0}`].join('\n'));
+    return EXIT.OK;
+  } catch (error) {
+    return fail(error.message, EXIT.FAIL, null);
+  }
 }

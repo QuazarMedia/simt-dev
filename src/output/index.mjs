@@ -348,6 +348,12 @@ export function jsonCommand(path) {
 /** Collect documents instead of writing them, so the dispatcher can add the exit code. */
 export function jsonCaptureStart() {
   state().captured = [];
+  state().maxBytesError = false;
+}
+
+/** Whether the document just emitted was replaced by the `MAX_BYTES` envelope. */
+export function maxBytesExceeded() {
+  return state().maxBytesError === true;
 }
 
 /** The captured documents and a reset, or an empty list when nothing was captured. */
@@ -414,6 +420,7 @@ export function emitJson(value, { stream = process.stdout, pretty = state().pret
         ? { command: payload.command }
         : {}),
       ok: false,
+      exitCode: EXIT.FAIL,
       error: {
         code: 'MAX_BYTES',
         message: `output exceeded the --max-bytes ceiling of ${maxBytes} bytes`,
@@ -421,6 +428,9 @@ export function emitJson(value, { stream = process.stdout, pretty = state().pret
       },
       truncated: { omitted: Buffer.byteLength(text) - maxBytes, limit: maxBytes },
     });
+    // The dispatcher captured the document before this replacement; it reads this to make
+    // the process exit agree with the envelope it actually wrote (A14).
+    state().maxBytesError = true;
     stream.write(`${stringifyJson(envelope, pretty)}\n`);
     return false;
   }

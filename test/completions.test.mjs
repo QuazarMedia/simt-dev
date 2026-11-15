@@ -20,6 +20,7 @@ import { join } from 'node:path';
 
 import { SHELLS, renderCompletions, shape } from '../src/completions.mjs';
 import { COMMANDS } from '../src/commands/index.mjs';
+import { ALIASES } from '../src/commands/spec.mjs';
 import { BOOL_FLAGS, VALUE_FLAGS } from '../src/argv.mjs';
 import { simt as simtCli } from './fixture.mjs';
 
@@ -67,6 +68,17 @@ test('every dispatchable command completes in every shell', () => {
       }
     }
   }
+});
+
+test('an alias the dispatcher accepts completes at the top level (A34)', () => {
+  const { top } = shape(COMMANDS);
+  for (const alias of ALIASES.keys()) {
+    const first = alias.split(' ')[0];
+    assert.ok(top.includes(first), `${first} dispatches but does not complete`);
+  }
+  const bash = renderCompletions('bash', COMMANDS);
+  assert.match(bash, word('upgrade'));
+  assert.match(bash, word('compare'));
 });
 
 test('every flag the parser accepts is offered in every shell', () => {

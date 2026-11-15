@@ -204,7 +204,6 @@ export function evaluateRank(units = [], corpus = [], { limit = 10 } = {}) {
     if (!map.has(key)) map.set(key, { key, queries: 0, gold: 0, hits: 0 });
     const row = map.get(key);
     row.gold += 1;
-    row.queries += found ? 0 : 0;
     if (found) row.hits += 1;
   };
 
@@ -216,11 +215,21 @@ export function evaluateRank(units = [], corpus = [], { limit = 10 } = {}) {
     const found = expected.filter((id) => ranked.has(id));
     gold += expected.length;
     hits += found.length;
+    const languages = new Set();
+    const kinds = new Set();
     for (const id of expected) {
       const unit = byId.get(id);
-      bump(strata.byLanguage, unit?.language ?? 'unknown', ranked.has(id));
-      bump(strata.byKind, unit?.kind ?? 'unknown', ranked.has(id));
+      const language = unit?.language ?? 'unknown';
+      const kind = unit?.kind ?? 'unknown';
+      languages.add(language);
+      kinds.add(kind);
+      bump(strata.byLanguage, language, ranked.has(id));
+      bump(strata.byKind, kind, ranked.has(id));
     }
+    // One corpus entry is one query in each stratum it reaches, however many gold ids it
+    // names; counting gold ids inflated the denominator a recall is read against (A46).
+    for (const key of languages) strata.byLanguage.get(key).queries += 1;
+    for (const key of kinds) strata.byKind.get(key).queries += 1;
     if (found.length < expected.length) {
       failures.push({
         query: entry.query,

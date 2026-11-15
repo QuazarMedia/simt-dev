@@ -339,6 +339,10 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       values (?, ?, ?, ?, ?, ?, 'observed')`);
     const addFts = db.prepare('insert into fts(body, node_id, kind) values (?, ?, ?)');
     const addTri = db.prepare('insert into fts_tri(kind, ref, body) values (?, ?, ?)');
+    // A changed file rebuilds its rows, but the trigram table is keyed by path rather
+    // than node id, so nothing else deletes the old bodies. Left in place, a file that
+    // dropped its CJK text stayed findable by it.
+    const dropTri = db.prepare('delete from fts_tri where ref = ?');
     const upsertVector = db.prepare(`insert into vectors(node_id, model, dims, vec) values (?, ?, ?, ?)
       on conflict(node_id) do update set model = excluded.model, dims = excluded.dims, vec = excluded.vec`);
     const dropSource = [
@@ -352,6 +356,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     for (const row of next) {
       const sourceId = sourceIdOf.get(row.path)?.id;
       if (sourceId !== undefined) for (const st of dropDependents) st.run(sourceId);
+      dropTri.run(row.path);
       upsertSource.run(row.path, row.blob, row.lang, row.bytes, JSON.stringify({ pkg: row.pkg ?? '' }));
     }
     for (const path of removed) {

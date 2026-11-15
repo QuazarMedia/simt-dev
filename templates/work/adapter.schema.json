@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "simt.adapter/1",
+  "title": "SIMT adapter descriptor",
+  "description": "A portable description of an observer, validator, executor or recipe mapper. Data only: loading a descriptor never executes code, and a descriptor that claims execute capability is a separate, pinned installation decision.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "name", "version", "interfaces", "capability"],
+  "properties": {
+    "schema": {
+      "const": "simt.adapter/1"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]{0,63}$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "digest": {
+      "type": "string",
+      "description": "Content digest of the adapter package the descriptor pins, so two installations of the same version cannot quietly differ."
+    },
+    "interfaces": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "enum": ["observer", "validator", "executor", "recipe-mapper"]
+      }
+    },
+    "capability": {
+      "enum": ["observe-only", "execute"]
+    },
+    "bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maxInputBytes": { "type": "integer", "minimum": 0 },
+        "maxOutputBytes": { "type": "integer", "minimum": 0 },
+        "maxEffects": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "permissions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "What the adapter needs from the caller. A lease, an approval or a file mode is never granted by the descriptor."
+    },
+    "sideEffects": {
+      "enum": ["none", "read", "write", "remote"],
+      "description": "The widest effect any interface may produce. observe-only adapters may not declare write or remote."
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": { "type": "string" },
+        "revision": { "type": "string" }
+      }
+    },
+    "retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "attempts": { "type": "integer", "minimum": 1, "maximum": 5 },
+        "backoffMs": { "type": "integer", "minimum": 0 },
+        "idempotent": { "type": "boolean" }
+      }
+    }
+  }
+}

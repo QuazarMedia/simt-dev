@@ -85,7 +85,7 @@ const POLICIES = [
         if (f.sub === 'commit' && (f.opts.has('--amend') || f.opts.has('n'))) return true; // -n is --no-verify
         if (f.sub === 'reset' && f.opts.has('--hard')) return true;
         if (f.sub === 'rebase') return true;
-        if (f.sub === 'pull' && f.opts.has('--rebase')) return true; // pull --rebase rebases
+        if (f.sub === 'pull' && (f.opts.has('--rebase') || f.opts.has('r'))) return true; // --rebase and its short form both rebase
         return (
           (f.sub === 'push' || f.sub === 'send-pack') &&
           (f.opts.has('--force') || f.opts.has('f') || f.refspecs.some((r) => r.startsWith('+')))
@@ -102,9 +102,10 @@ const POLICIES = [
     adr: 'ADR-104',
     event: 'pre-tool-use',
     inspects: 'command',
-    // No regex fallback: before ADR-104 this policy did not exist, so a command that
-    // cannot be tokenised is judged exactly as it was judged before this row was written.
-    regex: null,
+    // A conservative fallback for the one act a parse failure could hide: the config key
+    // and the hooks directory this tool writes, and nothing else (ADR-195). A command that
+    // names neither stays allowed, which is the position ADR-104 left it in.
+    regex: /core\.hooksPath|\.simt\/hooks/i,
     match: (facts) => {
       const dir = (a) => a.replace(/^\.\/+/, '').replace(/\/+$/, '');
       const key = HOOKS_PATH_KEY.toLowerCase(); // config keys are case-insensitive in git

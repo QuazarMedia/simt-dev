@@ -95,7 +95,7 @@ async function collectFindings(root, { result, ws, shared, withDiffs = false, ct
         findings.push({
           id: 'manifest-stale',
           severity: 'warning',
-          detail: `generated field(s) ${repair.stale.join(', ')} do not match what this simt-dev writes`,
+          detail: `generated field(s) ${repair.stale.join(', ')} do not match what this tool writes`,
           remedy: `run: ${CLI} sync --root ${root} --yes`,
           why: null,
           safe: true,

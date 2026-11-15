@@ -74,6 +74,24 @@ test('two channels that disagree are not an answer', () => {
   assert.equal(channelEquivalent({ answers: [{ rate: 0.19 }] }).holds, false);
 });
 
+test('the before and after observations are the two channel answers (A28)', () => {
+  assert.equal(metamorphic({ before: observation(), after: observation(), relations: ['read-channel-equivalence'] }).holds, true);
+
+  const different = metamorphic({ before: observation(), after: observation({ rate: 0.2 }), relations: ['read-channel-equivalence'] });
+  assert.equal(different.holds, false);
+
+  const one = metamorphic({ before: observation(), relations: ['read-channel-equivalence'] });
+  assert.equal(one.holds, false);
+
+  const explicit = metamorphic({
+    before: observation(),
+    after: observation({ rate: 0.3 }),
+    relations: ['read-channel-equivalence'],
+    options: { 'read-channel-equivalence': { answers: [{ rate: 0.19 }, { rate: 0.19 }] } },
+  });
+  assert.equal(explicit.holds, true);
+});
+
 test('repetition is only a relation where the contract promises it', () => {
   assert.equal(idempotent({ once: ['a'], repeated: ['a'] }).holds, true);
   const changed = idempotent({ once: ['a'], repeated: ['a', 'a'] });

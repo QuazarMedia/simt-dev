@@ -26,7 +26,8 @@
 // slice's code: editing the same row in both places would make every merge of a
 // finished slice a conflict on the one line that records it.
 
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
@@ -52,6 +53,7 @@ import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { LOCAL_DIR } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { git, gitText } from '../sys/git.mjs';
+import { abandonSlice } from './slice-abandon.mjs';
 
 /**
  * The state a started slice moves to: the template's `started`-role state, not
@@ -83,7 +85,7 @@ const TYPE = /^[a-z]+(?:\([a-z0-9][a-z0-9._-]*\))?!?$/;
  * back to `root`: the plan machinery reads it from wherever it was pointed, and the
  * git commands below will have their own say about whether this is a repository.
  */
-async function mainCheckout(root) {
+export async function mainCheckout(root) {
   try {
     const common = await gitText(root, ['rev-parse', '--git-common-dir']);
     return dirname(resolve(root, common));
@@ -97,7 +99,7 @@ async function mainCheckout(root) {
  * The worktree lives under machine-local state: a worktree inside
  * the checkout would be recorded as an embedded gitlink and would change the tree id.
  */
-function places(main, id) {
+export function places(main, id) {
   const slug = id.toLowerCase();
   return {
     branch: `slice/${slug}`,
@@ -128,7 +130,7 @@ function subjectFor(type, id, title) {
 const CO_AUTHOR = 'Co-Authored-By: Simt Dev <noreply@simt.space>';
 
 /** Resolve one named slice through `plan next`, which already knows missing and ambiguous. */
-async function resolveSlice(main, id) {
+export async function resolveSlice(main, id) {
   const found = await planNext(main, id);
   if (found.error) return { error: found.error, remedy: found.remedy ?? `run: ${CLI} plan status` };
   if (!found.next) return { error: found.reason ?? `${id} has no section`, remedy: `run: ${CLI} plan status` };
@@ -157,7 +159,7 @@ function slugify(text) {
  * `abandon` fall back to when the tracker has no row for the id. It lives beside the
  * briefs, under the local state directory, not in the tree the slice commits.
  */
-function recordPath(main, id) {
+export function recordPath(main, id) {
   return join(main, LOCAL_DIR, 'slices', `${id.toLowerCase()}.json`);
 }
 
@@ -168,7 +170,7 @@ async function writeSliceRecord(main, id, record) {
   return path;
 }
 
-async function readSliceRecord(main, id) {
+export async function readSliceRecord(main, id) {
   try {
     return JSON.parse(await readFile(recordPath(main, id), 'utf8'));
   } catch {
@@ -179,7 +181,7 @@ async function readSliceRecord(main, id) {
 /** The session holding the slice, or null when the caller named none: a person
  *  at a terminal has no session, and starting without one proceeds unleased
  *  rather than refusing the work. */
-function sliceSession(flags) {
+export function sliceSession(flags) {
   const session = flags.session ?? process.env[SESSION_ENV] ?? null;
   return typeof session === 'string' && session !== '' ? session : null;
 }
@@ -231,6 +233,34 @@ async function claimSlice(main, id, leaseRel, session) {
  * calls it after the commit exists, so a lease failure is a note about a TTL
  * that will clean itself up, never a second failure stacked on a success.
  */
+/**
+ * Take back the worktree and branch a failed `start` created.
+ *
+ * `--force` becomes `rm -rf` becomes a prune, the same order the abandon path uses: a
+ * half-created tree must not be what decides whether the next start can run (A26).
+ * Only the parts this attempt created are removed; a path or branch that existed before
+ * the attempt made `worktree add` fail, and deleting either would destroy another
+ * caller's work.
+ */
+async function discardWorktree(main, worktree, branch, { removeTree = true, deleteBranch = true } = {}) {
+  if (removeTree) {
+    await git(main, ['worktree', 'remove', '--force', worktree]).catch(async () => {
+      await rm(worktree, { recursive: true, force: true }).catch(() => {});
+      await git(main, ['worktree', 'prune']).catch(() => {});
+    });
+  }
+  if (deleteBranch) await git(main, ['branch', '-D', branch]).catch(() => {});
+}
+
+async function branchExists(main, branch) {
+  try {
+    await git(main, ['show-ref', '--verify', '--quiet', `refs/heads/${branch}`]);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function releaseSlice(main, id, session) {
   if (session === null) return { released: false };
   try {
@@ -311,7 +341,7 @@ async function startSlice(root, id, flags, prompt) {
   const session = sliceSession(flags);
   const task = `${id}: ${String(title ?? '').trim()}`;
   const apply = promptMode
-    ? `run: ${CLI} slice start -- ${JSON.stringify(prompt)} --yes`
+    ? `run: ${CLI} slice start --yes -- ${JSON.stringify(prompt)}`
     : `run: ${CLI} slice start ${id} --yes`;
   const record = recordPath(main, id);
 
@@ -398,10 +428,19 @@ async function startSlice(root, id, flags, prompt) {
     lease = claimed.mine;
   }
 
+  // `worktree add` fails on a path or branch that already exists. Neither belongs to this
+  // start, so cleanup must remove only what this attempt created (A26).
+  const worktreeExisted = existsSync(worktree);
+  const branchExisted = await branchExists(main, branch);
   try {
     await git(main, ['worktree', 'add', '-b', branch, worktree]);
   } catch (error) {
     const detail = String(error.stderr ?? error.message ?? error).trim().split('\n')[0];
+    // The lease was claimed before the tree existed, and `git worktree add` may already
+    // have created the branch before it failed. A start that has no tree has no claim and
+    // no branch either, or the slice is blocked until the TTL (A26).
+    await discardWorktree(main, worktree, branch, { removeTree: !worktreeExisted, deleteBranch: !branchExisted });
+    if (lease !== null) await releaseSlice(main, id, session);
     return fail(`the worktree could not be created: ${detail}`, EXIT.FAIL, `run: git -C ${main} worktree list`);
   }
 
@@ -415,8 +454,18 @@ async function startSlice(root, id, flags, prompt) {
   if (promptMode) {
     await writeSliceRecord(main, id, { id, title, kind: 'prompt', createdAt: new Date().toISOString() });
   } else {
-    row = await planDone(main, id, { state: started.state, dryRun: false });
+    // `planDone` can throw when the tracker cannot be written; a start that has a tree
+    // must take that tree down on either shape of failure (A26).
+    try {
+      row = await planDone(main, id, { state: started.state, dryRun: false });
+    } catch (error) {
+      row = { error: String(error?.message ?? error), remedy: `run: ${CLI} plan status` };
+    }
     if (row.error) {
+      // The brief and the tree are both this start's; without the row nothing has
+      // started, so take them back down rather than leaving a slice to clean up (A26).
+      await discardWorktree(main, worktree, branch);
+      if (lease !== null) await releaseSlice(main, id, session);
       return fail(`${branch} exists with its brief, but the tracker row was not updated: ${row.error}`, EXIT.FAIL, row.remedy ?? `run: ${CLI} plan status`);
     }
   }
@@ -662,9 +711,20 @@ async function finishSlice(root, id, flags) {
 
   let row = null;
   if (!promptMode) {
-    row = await planDone(main, id, { sha, test, dryRun: false });
+    // The commit is the thing that happened; a tracker write that fails after it does not
+    // undo it. Name the sha and the one command that records it, rather than leaving a
+    // row queued with no way to finish it (A27).
+    try {
+      row = await planDone(main, id, { sha, test, dryRun: false });
+    } catch (error) {
+      row = { error: String(error?.message ?? error) };
+    }
     if (row.error) {
-      return fail(`${sha} is committed, but the tracker row could not record it: ${row.error}`, EXIT.FAIL, row.remedy ?? `run: ${CLI} plan status`);
+      return fail(
+        `${sha} is committed, but the tracker row could not record it: ${row.error}`,
+        EXIT.FAIL,
+        `run: ${CLI} plan done ${id} ${sha}`,
+      );
     }
   }
 
@@ -713,146 +773,3 @@ async function finishSlice(root, id, flags) {
   return EXIT.OK;
 }
 
-/**
- * `simt slice abandon <id>`: take the slice back down. The worktree is
- * removed, the branch deleted, and the tracker row returns to the ready
- * state — abandonment is a state the tracker can see, not a worktree that
- * silently rots. Preview names everything that would be destroyed; `--yes`
- * is the consent to destroy it.
- */
-async function abandonSlice(root, id, flags) {
-  const mode = writeMode(flags);
-  const main = await mainCheckout(root);
-  const resolved = await resolveSlice(main, id);
-  // A prompt slice has no tracker row: the record file stands in for it, and the
-  // abandon removes the record file where a tracked abandon would reset the row.
-  const record = resolved.error ? await readSliceRecord(main, id) : null;
-  if (resolved.error && record === null) {
-    return fail(resolved.error, EXIT.USAGE, resolved.remedy);
-  }
-  const promptMode = record !== null;
-  const doc = promptMode ? record.title : resolved.slice.doc;
-  const recRel = relative(main, recordPath(main, id));
-  const { branch, worktree } = places(main, id);
-  const session = sliceSession(flags);
-  const apply = `run: ${CLI} slice abandon ${id} --yes`;
-
-  let preview = null;
-  if (!promptMode) {
-    const loaded = await loadFormat(main);
-    if (loaded.error) return fail(loaded.error, EXIT.USAGE, loaded.remedy);
-    const readyDisplay = loaded.format.canonical(loaded.format.ready) ?? 'Queued';
-    preview = await planDone(main, id, { state: readyDisplay, dryRun: true });
-    if (preview.error) return fail(preview.error, EXIT.USAGE, preview.remedy ?? `run: ${CLI} plan status`);
-  }
-  const stateLine = promptMode ? `state    (no tracker row; removing ${recRel})` : `state    ${preview.from} -> ${preview.to}`;
-  const stateJson = promptMode ? { row: false, record: recRel } : { from: preview.from, to: preview.to, changed: preview.wouldChange };
-
-  if (!mode.apply) {
-    if (isJson(flags)) {
-      emitJson({
-        ok: true,
-        command: 'slice abandon',
-        root,
-        id,
-        dryRun: true,
-        branch,
-        worktree: relative(main, worktree),
-        state: stateJson,
-        remedy: apply,
-      });
-      return EXIT.OK;
-    }
-    const lines = [
-      `repo     ${root}`,
-      `slice    ${id}  ${doc}`,
-      `remove   ${relative(main, worktree)} and branch ${branch} (on apply)`,
-      stateLine,
-      `apply    ${apply}`,
-    ];
-    emit(lines.join('\n'));
-    return EXIT.OK;
-  }
-
-  // Abandoning from inside the worktree would pull the floor out: the shell's
-  // own directory is the thing being removed. Compared through git, not through
-  // strings, because the caller's spelling of the path may differ in symlinks.
-  const top = await gitText(root, ['rev-parse', '--show-toplevel']).catch(() => null);
-  if (top !== null && (top === worktree || top.startsWith(`${worktree}/`))) {
-    return fail(
-      `cannot abandon ${id} from inside its worktree`,
-      EXIT.USAGE,
-      `move to the main checkout (${main}) and rerun: ${apply}`,
-    );
-  }
-
-  const removed = [];
-  try {
-    await git(main, ['worktree', 'remove', '--force', worktree]);
-    removed.push(`removed  ${relative(main, worktree)}`);
-  } catch (error) {
-    const detail = String(error.stderr ?? error.message ?? error).trim().split('\n')[0];
-    removed.push(`kept     ${relative(main, worktree)} (${detail})`);
-  }
-  try {
-    await git(main, ['branch', '-D', branch]);
-    removed.push(`deleted  ${branch}`);
-  } catch (error) {
-    const detail = String(error.stderr ?? error.message ?? error).trim().split('\n')[0];
-    removed.push(`kept     ${branch} (${detail})`);
-  }
-
-  let row = null;
-  if (promptMode) {
-    // No row to reset; the record file is the only mark of the slice, and it goes.
-    try {
-      await unlink(recordPath(main, id));
-    } catch {
-      // A record that is already gone is not a second failure: the worktree and
-      // branch are what abandonment exists to take down.
-    }
-  } else {
-    const loaded = await loadFormat(main);
-    if (loaded.error) return fail(loaded.error, EXIT.USAGE, loaded.remedy);
-    const readyDisplay = loaded.format.canonical(loaded.format.ready) ?? 'Queued';
-    row = await planDone(main, id, { state: readyDisplay, dryRun: false });
-    if (row.error) {
-      return fail(
-        `the worktree is down, but the tracker row was not updated: ${row.error}`,
-        EXIT.FAIL,
-        row.remedy ?? `run: ${CLI} plan status`,
-      );
-    }
-  }
-
-  const released = await releaseSlice(main, id, session);
-  const leaseLine =
-    released.released === true
-      ? `released the slice lease`
-      : released.error
-        ? `the slice lease could not be released (${released.error}); the TTL reaps it`
-        : 'no slice lease was held';
-  const abandonStateJson = promptMode ? { row: false, record: recRel, removed: true } : { from: row.from, to: row.to, changed: row.changed };
-  if (isJson(flags)) {
-    emitJson({
-      ok: true,
-      command: 'slice abandon',
-      root,
-      id,
-      branch,
-      worktree: relative(main, worktree),
-      lease: released.released === true ? { slice: id, session } : null,
-      state: abandonStateJson,
-    });
-    return EXIT.OK;
-  }
-  const lines = [
-    `repo     ${root}`,
-    `slice    ${id}  ${doc}`,
-    ...removed,
-    promptMode ? `state    (no tracker row; removed ${recRel})` : `state    ${row.from} -> ${row.to}`,
-    `lease    ${leaseLine}`,
-  ];
-  emit(lines.join('\n'));
-  return EXIT.OK;
-}

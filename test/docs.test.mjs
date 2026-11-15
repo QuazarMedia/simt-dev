@@ -111,3 +111,10 @@ test('a page that is not there yet is created, not refused', async () => {
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test('the MCP reference lists every tool, so a reader sees the whole surface', async () => {
+  const { TOOLS } = await import('../src/mcp/tools.mjs');
+  const text = await readFile(join(ROOT, 'docs/reference/mcp.md'), 'utf8');
+  const missing = TOOLS.map((tool) => tool.name).filter((name) => !text.includes('`' + name + '`'));
+  assert.deepEqual(missing, [], 'docs/reference/mcp.md is stale: regenerate its table from TOOLS');
+});

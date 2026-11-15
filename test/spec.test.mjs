@@ -15,7 +15,8 @@ import { promisify } from 'node:util';
 import { test } from 'node:test';
 
 import { ALIASES, GROUP_DEFAULTS, SPEC, SPEC_PATHS } from '../src/commands/spec.mjs';
-import { COMMANDS, GROUPS, IMPLEMENTED } from '../src/commands/index.mjs';
+import { COMMANDS, GLOBAL_FLAGS as PARSER_GLOBALS, GROUPS, IMPLEMENTED } from '../src/commands/index.mjs';
+import { GLOBAL_FLAGS as HELP_GLOBALS } from '../src/commands/help.mjs';
 import { BOOL_FLAGS, REPEATABLE_FLAGS, VALUE_FLAGS } from '../src/argv.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -47,6 +48,25 @@ test('spec: the registry imports no command module at load time', () => {
     [],
     'a command module is imported statically again',
   );
+});
+
+test('spec: the globals help hides are globals the parser and the rows agree on (A43)', () => {
+  const kebab = (name) => name.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`);
+  const parserGlobals = new Set([...PARSER_GLOBALS].map(kebab));
+
+  for (const flag of HELP_GLOBALS) {
+    assert.ok(parserGlobals.has(flag), `help hides ${flag}, which is not a global the parser accepts`);
+    assert.ok(BOOL_FLAGS.has(flag) || VALUE_FLAGS.has(flag), `help hides ${flag}, which argv does not parse`);
+  }
+
+  // A row that declares a global is the case the filter exists for: if help stops
+  // hiding it, the page prints one flag twice.
+  for (const row of SPEC) {
+    for (const flag of row.flags ?? []) {
+      if (!parserGlobals.has(flag)) continue;
+      assert.ok(HELP_GLOBALS.has(flag), `${row.path} declares global ${flag}, which help does not hide`);
+    }
+  }
 });
 
 test('spec: every group default is a real subcommand of the group it names', () => {

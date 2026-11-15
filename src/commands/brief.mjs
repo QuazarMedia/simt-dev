@@ -40,6 +40,7 @@ export async function briefCommand(args, flags, commands = []) {
     budget,
     flags,
     commands,
+    proof: flags.proof === true,
   });
   if (result.error) return result.error;
   // Unreachable from here — only a delivered brief asks for a cold index to be reported
@@ -67,6 +68,7 @@ export async function briefCommand(args, flags, commands = []) {
         cut: packed.cut,
         sections,
         explain: flags.explain === true ? explainPacket(items, { cut }) : undefined,
+        proof: result.proof,
         text: packed.text,
       },
     );

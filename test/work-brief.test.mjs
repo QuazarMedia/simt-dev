@@ -122,6 +122,20 @@ test('an obligation the budget cannot reach is reported, not silently dropped', 
   assert.ok(report.reasons.length > 0);
 });
 
+test('a budget equal to the encoded packet is complete, one byte under is not (A40)', () => {
+  const full = buildProofPacket(corpus(), { budget: 2048, required });
+  const exact = full.stable.bytes;
+  assert.equal(full.complete, true, JSON.stringify(full.reasons));
+
+  const at = buildProofPacket(corpus(), { budget: exact, required });
+  assert.equal(at.overBudget, false, 'the packet was charged for bytes it does not contain');
+  assert.equal(at.complete, true, JSON.stringify(at.reasons));
+  assert.equal(at.stable.bytes, exact);
+
+  const under = buildProofPacket(corpus(), { budget: exact - 1, required });
+  assert.equal(under.complete, false, 'a budget one byte short claimed completeness');
+});
+
 test('the budget is bounded by the measured cap, and the builder is deterministic', async () => {
   assert.throws(() => buildProofPacket(corpus(), { budget: PROMPT_CAP_BYTES + 1 }), /measured cap/);
   assert.throws(() => buildProofPacket(corpus(), { budget: -1 }), /non-negative/);

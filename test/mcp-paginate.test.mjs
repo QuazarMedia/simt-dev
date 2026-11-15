@@ -43,6 +43,13 @@ test('an empty list is a page with no cursor', () => {
   assert.deepEqual(paginate([], undefined), { items: [], nextCursor: null });
 });
 
+test('a numeric cursor past the list is refused, not answered with an empty page (A15)', () => {
+  // `items.slice(999)` is `[]` with `nextCursor: null`, which reads as "the list ended"
+  // rather than "your cursor is stale". Cursor 0 on an empty list stays a valid page.
+  assert.equal(paginate(items(10), '999'), null);
+  assert.deepEqual(paginate([], '0'), { items: [], nextCursor: null });
+});
+
 test('the protocol refuses a cursor it did not issue, and answers the first page without one', async () => {
   // The unit test proves the page arithmetic; this proves the four list methods actually
   // pass the cursor through, which is the half a client depends on.

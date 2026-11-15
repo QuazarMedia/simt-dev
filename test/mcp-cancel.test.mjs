@@ -103,3 +103,52 @@ test('mcp: a cancelled compare stops between rows and answers as an error', asyn
     await rm(ws, { recursive: true, force: true });
   }
 });
+
+/** A waiting tool that records whether its signal ever fired. */
+function trackedTool() {
+  let entered;
+  const started = new Promise((resolve) => { entered = resolve; });
+  let aborted = false;
+  return {
+    tool: {
+      name: 'waiting',
+      description: 'starts and waits until the client cancels it',
+      inputSchema: { type: 'object', properties: {}, required: [] },
+      async run(_args, ctx) {
+        entered();
+        await new Promise((resolve) => {
+          if (ctx.signal.aborted) { aborted = true; return resolve(); }
+          ctx.signal.addEventListener('abort', () => { aborted = true; resolve(); }, { once: true });
+        });
+        throw Object.assign(new Error('cancelled before it finished'), { remedy: null });
+      },
+    },
+    started,
+    wasAborted: () => aborted,
+  };
+}
+
+test('mcp: a cancel matches the string form of a numeric request id (A36)', async () => {
+  const input = new PassThrough();
+  const written = [];
+  const { tool, started, wasAborted } = trackedTool();
+  const served = serve([tool], {
+    input,
+    output: { write: (chunk) => { written.push(String(chunk)); return true; } },
+  });
+
+  input.write(line({ jsonrpc: '2.0', id: 8, method: 'tools/call', params: { name: 'waiting', arguments: {} } }));
+  await started;
+  input.write(line({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: '9' } }));
+  await new Promise((resolve) => setTimeout(resolve, 25));
+  assert.equal(wasAborted(), false, 'a different id must not abort the call');
+
+  input.write(line({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: '8' } }));
+  input.end();
+  await served;
+
+  assert.equal(wasAborted(), true, 'the string form of the in-flight numeric id must abort');
+  const answer = written.map((entry) => JSON.parse(entry)).find((reply) => reply.id === 8);
+  assert.ok(answer, 'the cancelled call must still be answered');
+  assert.equal(answer.result.isError, true);
+});

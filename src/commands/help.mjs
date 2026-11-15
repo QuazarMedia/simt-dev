@@ -29,6 +29,34 @@ ${CLI} verify status --input  closure over recorded obligations, and what is
                            unresolved and why
 ${CLI} action status --journal  where an operation stands from its journal,
                            and what the state permits next
+${CLI} knowledge rank       ranked evidence units, and what was excluded or unplaced
+                           (reads --input <file> --query "<question>")
+${CLI} knowledge impact --input  what a change reaches over typed edges, and where
+                           the graph is unknown (--refs <id,...>)
+${CLI} knowledge derivations --input  which outputs a source or template change
+                           puts in question
+${CLI} knowledge debt --input  stale and unsupported knowledge, ranked by
+                           consequence per effort
+${CLI} knowledge sections <file.md>  the units a long document yields, with anchors
+${CLI} work schedule --input  which ready tasks may run together, which serialize
+${CLI} work handoff --input  a resume capsule built from ids and provenance
+${CLI} work resume --input  revalidate a capsule before a new session reuses it
+${CLI} work graduate --input  whether repeated traces can be proposed as a procedure
+${CLI} bench replay --input  counterfactual replay of a sanitized trace
+${CLI} bench calibrate --input  a judge against expert labels, and the autonomy it
+                           does or does not justify
+${CLI} action review --input  a reviewable bundle of contract, delta, target, authorization and postconditions
+${CLI} adapter check --input  validate adapter descriptors as data, and separate observe-only from execute
+${CLI} verify contracts --input  evaluate obligations against observations, with the result states kept apart
+${CLI} verify documents --input  check a generated document against its template, sections and source scope
+${CLI} verify procedures --input  check procedures for missing imports, calls and impossible prerequisites
+${CLI} lessons discover --input  deduplicate discovery candidates and report their authority
+${CLI} work packet --input  the proof-bearing task packet, inside its byte budget or explicitly incomplete
+${CLI} index overlay --input  a working-tree or staged node labelled by its provenance, never both
+${CLI} evidence validate --input  validate ledger evidence and the chain of custody behind it
+${CLI} bench compat --input  compare two baselines, or audit the predecessor document
+${CLI} bench corpus --input  the stratified canary corpus, with gold, noop and wrong graded apart
+${CLI} bench world --input  run the seeded world model and ask the oracle what the effects should be
 ${CLI} doctor [--fix]        classify a repo and check config health (with --fix:
                            apply the remedies flagged safe and list the rest;
                            dry-run unless --yes)
@@ -287,6 +315,7 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --skill <name>          force a skill into the brief (repeatable)
 --task "<text>"         the task text used for capability resolution
 --paths <globs>         comma-separated path globs used for path resolution
+--proof                 brief --json: report whether the packet proves what it kept
 --root <path>           repository root (default: cwd)
 --base <ref>           pr-body: the ref the body diffs against
                         (default: origin/main, then main; falls back to the
@@ -325,6 +354,12 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --list                  print the MCP tool surface without reading stdin (mcp)
 --as-of <YYYY-MM-DD>    knowledge why: the date the question is about
 --known-at <YYYY-MM-DD>  knowledge why: what was known when (both dates, or neither)
+--open                  index: read what the cache holds instead of rebuilding it
+--search <task>         index: BM25 rows for a task, from the open cache
+--rank <task>           index: files ranked for a task, from the open cache
+--query <text>          knowledge rank: the question the units are ranked against
+--refs <ids>            knowledge impact: the changed claim or artifact ids, comma separated
+--weights <k=n,...>     knowledge debt: the scoring weights, e.g. obligations=3,effort=1
 --limit <n>             knowledge why: how many nodes one page carries (1..100)
 --page <n>              knowledge why: which page of those nodes to read
 --claims <file>         knowledge why: the document of {claims, edges, artifacts}
@@ -620,7 +655,7 @@ function wrapped(text) {
  * showed `--tier` or `--wave` even after the spec declared them: the page was complete
  * about what a command is and silent about what it takes.
  */
-const GLOBAL_FLAGS = new Set(['json', 'pretty', 'root', 'max-bytes']);
+export const GLOBAL_FLAGS = new Set(['json', 'pretty', 'root', 'max-bytes']);
 
 export function commandPage(path) {
   const row = SPEC.find((r) => r.path === path);

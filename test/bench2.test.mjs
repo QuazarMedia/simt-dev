@@ -386,6 +386,26 @@ test('bench run: gold adapter resolves 100%, noop resolves 0%, and re-grading re
   assert.equal(broken.runs[0].status, 'error');
   assert.match(broken.runs[0].error, /agent-for-q47|ENOENT/);
 
+  // A registry that failed to load is a batch that cannot say what it measured. The
+  // loader reports that in `ok`/`errors` and never throws, so the old fallback scored
+  // every run against an empty catalogue (review 0004 A01).
+  const noRegistry = await runBench(repo, {
+    apply: true,
+    arms: ['current'],
+    harness: 'gold',
+    reps: 1,
+    vaultRoot,
+    registryLoader: async () => ({
+      ok: false,
+      registry: null,
+      errors: ['no skill registry at /nowhere'],
+    }),
+  });
+  assert.equal(noRegistry.runs.length, 1);
+  assert.equal(noRegistry.runs[0].status, 'error');
+  assert.match(noRegistry.runs[0].error, /no skill registry/);
+  assert.equal(noRegistry.runs[0].skills, null, 'an error record makes no skill claim');
+
   // 4. Direct gradeWorkspace check: an agent that edits an unrelated file and tampers with
   //    the test file has its test file reset to initialHead and outsideBlastRadius = 1.
   const ws = await prepareIsolatedWorkspace(repo, task.base, await parseArmSpec('bare'), task);

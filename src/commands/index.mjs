@@ -27,6 +27,8 @@ import { help } from './help.mjs';
 import { ALIASES, GROUP_DEFAULTS, SPEC, SPEC_PATHS } from './spec.mjs';
 import { parse, rawJsonFlag } from '../argv.mjs';
 import { CLI } from '../name.mjs';
+import { finaliseJson } from '../output/envelope.mjs';
+import { maxBytesExceeded } from '../output/index.mjs';
 import { packageVersion } from '../package-version.mjs';
 
 
@@ -81,6 +83,71 @@ export const IMPLEMENTED = {
     return (args, flags) => knowledgeCommand('import', args, flags);
   },
   'work inspect': async () => (await import('./work.mjs')).workInspectCommand,
+  'action review': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('action review', args, flags);
+  },
+  'adapter check': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('adapter check', args, flags);
+  },
+  'verify contracts': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('verify contracts', args, flags);
+  },
+  'verify documents': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('verify documents', args, flags);
+  },
+  'verify procedures': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('verify procedures', args, flags);
+  },
+  'lessons discover': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('lessons discover', args, flags);
+  },
+  'work packet': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('work packet', args, flags);
+  },
+  'index overlay': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('index overlay', args, flags);
+  },
+  'evidence validate': async () => {
+    const { wireCommand } = await import('./wires.mjs');
+    return (args, flags) => wireCommand('evidence validate', args, flags);
+  },
+  'bench compat': async () => (await import('./bench.mjs')).benchCompatCommand,
+  'bench corpus': async () => (await import('./bench.mjs')).benchCorpusCommand,
+  'bench world': async () => (await import('./bench.mjs')).benchWorldCommand,
+  'work schedule': async () => (await import('./work.mjs')).workScheduleCommand,
+  'work handoff': async () => (await import('./work.mjs')).workHandoffCommand,
+  'work resume': async () => (await import('./work.mjs')).workResumeCommand,
+  'work graduate': async () => (await import('./work.mjs')).workGraduateCommand,
+  'knowledge rank': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('rank', args, flags);
+  },
+  'knowledge derivations': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('derivations', args, flags);
+  },
+  'knowledge debt': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('debt', args, flags);
+  },
+  'knowledge impact': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('impact', args, flags);
+  },
+  'knowledge sections': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('sections', args, flags);
+  },
+  'bench replay': async () => (await import('./bench.mjs')).benchReplayCommand,
+  'bench calibrate': async () => (await import('./bench.mjs')).benchCalibrateCommand,
   // One group, two questions about one document: `plan` names the next observation and
   // `status` reports closure over what was recorded. Neither writes.
   'verify plan': async () => {
@@ -343,6 +410,25 @@ export const DEPRECATION_RELEASE = '0.9.0';
 const DEPRECATED = new Map(SPEC.filter((row) => row.deprecated !== undefined).map((row) => [row.path, row.deprecated]));
 
 /**
+ * The superseded flags set for `path`, mapped to what answers them now.
+ *
+ * One reader of `DEPRECATED`, because `dispatch` and `run` must agree about which flags
+ * were tolerated: the CLI's notice and the library's `deprecated` field are the same fact.
+ *
+ * @param {string} path the resolved command path
+ * @param {object} flags the parsed flags
+ * @returns {Map<string, string>} flag name -> the spelling that answers it
+ */
+export function deprecatedFlags(path, flags) {
+  const renamed = new Map();
+  for (const [flag, use] of Object.entries(DEPRECATED.get(path) ?? {})) {
+    const key = flag.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+    if (flags[key] === true) renamed.set(flag, use);
+  }
+  return renamed;
+}
+
+/**
  * Whether a tolerance that ends at `removedIn` has ended, comparing the way versions
  * are numbered rather than the way strings are ordered: 0.10.0 is later than 0.9.0, and
  * a string comparison says the opposite. An unreadable version refuses nothing - a build
@@ -438,8 +524,7 @@ async function dispatchInState(argv) {
   // command, so `status --frozen` ran, ignored the flag and reported success - the
   // caller's intent discarded with nothing to notice. A flag the spec does not declare
   // for this path is named on stderr and still runs for one release; the next release
-  // makes it EXIT.USAGE. `--json` has no warnings array yet, so the JSON half of the
-  // window waits on the envelope .
+  // makes it EXIT.USAGE.
   const declared = DECLARED.get(path);
   const refusing = refusesAt(DEPRECATION_RELEASE, packageVersion());
   for (const key of Object.keys(flags)) {
@@ -455,12 +540,7 @@ async function dispatchInState(argv) {
   }
   // A superseded flag is declared, so the loop above is silent about it; the note belongs
   // here, where the path it belongs to is known.
-  const superseded = DEPRECATED.get(path) ?? {};
-  const renamed = new Map();
-  for (const [flag, use] of Object.entries(superseded)) {
-    const key = flag.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
-    if (flags[key] === true) renamed.set(flag, use);
-  }
+  const renamed = deprecatedFlags(path, flags);
   for (const [flag, use] of renamed) {
     const message = `--${flag} is deprecated for \`${path}\`; \`${use}\` already answers it`;
     warn(message);
@@ -488,20 +568,15 @@ async function dispatchInState(argv) {
   jsonCaptureStart();
   const code = await run(args, flags);
   const docs = jsonCaptureTake() ?? [];
-  const [only] = docs;
-  if (docs.length === 1 && only.value !== null && typeof only.value === 'object' && !Array.isArray(only.value)) {
-    emitJson({
-      ...only.value,
-      ok: only.value.ok ?? code === 0,
-      exitCode: code,
-      ...(renamed.size === 0 ? {} : { deprecated: Object.fromEntries(renamed) }),
-    });
-    return code;
-  }
+  const finalised = finaliseJson(docs.map((doc) => doc.value), {
+    code,
+    deprecated: renamed.size === 0 ? undefined : Object.fromEntries(renamed),
+  });
   // A stream of documents (NDJSON) has no single place for one exit code; each is written
   // as the command produced it, and the process exit status still carries the code.
-  for (const doc of docs) emitJson(doc.value);
-  return code;
+  for (const doc of finalised.documents) emitJson(doc);
+  // The envelope written in place of the document says failure; the process must too.
+  return maxBytesExceeded() ? EXIT.FAIL : finalised.code;
 }
 
 /**

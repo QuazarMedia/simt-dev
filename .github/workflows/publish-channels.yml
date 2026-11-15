@@ -282,11 +282,24 @@ jobs:
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
+      - name: render the formula for this release
+        run: |
+          set -eu
+          node scripts/release-formula.mjs \
+            --version="${{ env.RELEASE_VERSION }}" \
+            --sha256-darwin-arm64="${{ env.SHA256_DARWIN_ARM64 }}" \
+            --sha256-darwin-x64="${{ env.SHA256_DARWIN_X64 }}" \
+            --sha256-linux-x64="${{ env.SHA256_LINUX_X64 }}"
+          git --no-pager diff -- Formula/simt-dev.rb
+
       - name: the formula lints
         # `brew style` runs the same RuboCop engine that homebrew-core's
         # `brew audit --strict` uses for its style pass, so a formula that would
         # trip those checks fails here - as a red job - instead of arriving later
         # as a rejected tap pull request.
+        #
+        # This runs after the render above so the style gate sees the version and
+        # checksums this release just wrote, not the previous release's.
         #
         # Why `brew style <path>` and not `brew audit --strict`:
         #   * Homebrew 7 disabled the path form of audit ("calling brew audit
@@ -303,16 +316,6 @@ jobs:
         run: |
           set -eu
           brew style Formula/simt-dev.rb
-
-      - name: render the formula for this release
-        run: |
-          set -eu
-          node scripts/release-formula.mjs \
-            --version="${{ env.RELEASE_VERSION }}" \
-            --sha256-darwin-arm64="${{ env.SHA256_DARWIN_ARM64 }}" \
-            --sha256-darwin-x64="${{ env.SHA256_DARWIN_X64 }}" \
-            --sha256-linux-x64="${{ env.SHA256_LINUX_X64 }}"
-          git --no-pager diff -- Formula/simt-dev.rb
 
       - name: push it to the tap
         # The tap is `QuazarMedia/homebrew-tap` and this job lands on its `main`:

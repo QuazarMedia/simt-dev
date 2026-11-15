@@ -95,6 +95,24 @@ test('a scope the question did not ask about is excluded, and a missing one is u
   assert.equal(report.conservative, true);
 });
 
+test('a claim scoped where readClaim stores it is not filed as scope-missing (A05)', () => {
+  // `readClaim` moves the window and the scope under `applicability`; impact read only
+  // `node.scope` and `node.claim.scope`, so every scoped claim arrived as `scope-missing`.
+  const graph = buildClaimGraph({
+    artifacts: [{ id: 'src:a', kind: 'source' }],
+    claims: [
+      { id: 'claim:de', subject: 'de.vat', predicate: 'standard-rate', type: 'number', value: 19, unit: '%', applicability: { scope: { jurisdiction: 'DE' } } },
+      { id: 'claim:fr', subject: 'fr.vat', predicate: 'standard-rate', type: 'number', value: 20, unit: '%', applicability: { scope: { jurisdiction: 'FR' } } },
+    ],
+    edges: [reviewed('claim:de', 'src:a', 'derived-from'), reviewed('claim:fr', 'src:a', 'derived-from')],
+  });
+
+  const report = impactReport({ graph, change: { refs: ['src:a'], scopes: DE } });
+  assert.deepEqual(report.affected.claims, ['claim:de']);
+  assert.deepEqual(report.excluded, [{ id: 'claim:fr', reason: 'scope-mismatch' }]);
+  assert.deepEqual(report.unknown, [], 'a scoped claim was filed as scope-missing');
+});
+
 test('bound exhaustion is an incomplete answer that asks for conservative verification', () => {
   const report = impactReport({ graph: chainGraph(), change: { refs: ['src:de-2024'], scopes: DE }, limits: { nodes: 2 } });
   assert.equal(report.truncated, true);

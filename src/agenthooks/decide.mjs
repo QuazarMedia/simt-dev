@@ -65,7 +65,19 @@ function applies(row, facts, env) {
   if (row.inspects === 'command') {
     if (typeof facts.command !== 'string') return false;
     if (facts.shell !== null && facts.shell !== undefined && facts.shell.parsed === true) {
-      return row.match(facts);
+      const normalised = Array.isArray(facts.shell.facts) ? facts.shell.facts : [];
+      // A failed alias lookup leaves an unexpanded subcommand looking like a builtin; the
+      // facts are partial, so the text is the only complete evidence (ADR-196).
+      if (normalised.length > 0 && facts.shell.aliasLookupFailed !== true) return row.match(facts);
+      // A command can tokenise and still produce no fact: `busybox git push` parses as a
+      // wrapper plus arguments, so the push row has nothing to match. The token stream,
+      // not the raw text, says whether a wrapper could be hiding one: a quoted
+      // `"git rebase"` is a single argument to grep, and `echo --no-verify` is text, not
+      // a git option (ADR-017). A caller that hands over a shell fact with no names keeps
+      // the regex fallback, because it carried no token stream to read.
+      const names = facts.shell.names;
+      if (Array.isArray(names) && !names.includes('git') && !names.includes('rm')) return false;
+      return row.regex !== null && row.regex.test(facts.command);
     }
     return row.regex !== null && row.regex.test(facts.command);
   }
@@ -271,12 +283,14 @@ function gitAliases(root) {
     timeout: 1000,
   });
   const aliases = new Map();
-  if (result.status !== 0) return aliases;
   for (const line of String(result.stdout ?? '').split('\n')) {
     const m = /^alias\.(\S+)\s+(.*)$/.exec(line);
     if (m !== null) aliases.set(m[1], m[2]);
   }
-  return aliases;
+  // A status of 1 means "no aliases configured"; a timeout or a missing git is a lookup
+  // that could not finish. Both leave a map, and only the second means the map is partial.
+  const failed = result.error !== undefined || result.status === null;
+  return { aliases, failed };
 }
 
 /**
@@ -292,7 +306,14 @@ async function normalizeCommand(root, command) {
   const parsed = commandFacts(command); // non-null: `command` is a string here
   if (parsed === null || !parsed.parsed) return { parsed: false };
   if (parsed.facts.some((f) => f.kind === 'git' && !GIT_BUILTINS.has(f.sub))) {
-    parsed.facts = applyAliases(parsed.facts, gitAliases(root));
+    const lookup = gitAliases(root);
+    parsed.facts = applyAliases(parsed.facts, lookup.aliases);
+    // Partial aliases are still applied above. The marker is set only when the failure
+    // left an unknown subcommand unexpanded: an alias the lookup did read is now the
+    // builtin it names, and that fact is better evidence than the command's text.
+    if (lookup.failed && parsed.facts.some((f) => f.kind === 'git' && !GIT_BUILTINS.has(f.sub))) {
+      parsed.aliasLookupFailed = true;
+    }
   }
   return parsed;
 }

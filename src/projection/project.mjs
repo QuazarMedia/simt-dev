@@ -377,9 +377,10 @@ export async function checkTargets(root, flags = {}) {
   }
 
   // The gate has to run where the merge happens, not only on the machine of whoever
-  // remembers to run it. A repo that already runs GitHub Actions and has no simt-dev
-  // job is ungated at its front door, and that is the one finding here that no amount
-  // of reading the local rules would surface.
+  // remembers to run it, and a repo that already runs GitHub Actions is where the
+  // offer lands. But the offer is an offer: `init` writes both files once at adoption
+  // and a repo that declines them is making a decision, not carrying a defect, so
+  // their absence is reported with its remedy and left out of the verdict.
   // Two `.github` files, one ownership rule, so one loop over both. The gate and the
   // dependency-updates config fail for the same reason and are fixed the same way,
   // and listing them separately is how the second copy of this rule gets written.
@@ -406,7 +407,7 @@ export async function checkTargets(root, flags = {}) {
     if (plan.action === 'create') {
       findings.push({
         file: plan.file,
-        status: 'absent',
+        status: 'optional',
         detail: `this repo runs GitHub Actions but ${what}`,
         remedy: `${CLI} init --yes`,
       });
@@ -555,8 +556,8 @@ export async function checkTargets(root, flags = {}) {
         // does not delete what a person wrote — so both name the same remedy.
         detail:
           st.entries === undefined
-            ? `${st.detail} (${st.bytes} bytes); simt-dev will not replace it`
-            : `${st.detail} (${st.entries} ${st.entries === 1 ? 'entry' : 'entries'}); simt-dev will not replace it`,
+            ? `${st.detail} (${st.bytes} bytes); this tool will not replace it`
+            : `${st.detail} (${st.entries} ${st.entries === 1 ? 'entry' : 'entries'}); this tool will not replace it`,
         remedy: `move it aside, or delete the ${st.entries === undefined ? 'file' : 'directory'} and re-run: ${CLI} sync --yes`,
       });
     } else if (st.state === 'mispointed') {
@@ -624,7 +625,7 @@ async function orphanedRuleFiles(root, resolved) {
         surface: s.id,
         status: 'orphaned',
         detail: `${s.label} reads AGENTS.md, where this rule is already folded; this file repeats it`,
-        remedy: `delete ${rel}; simt-dev will not remove a file it wrote`,
+        remedy: `delete ${rel}; this tool will not remove a file it wrote`,
       });
     }
   }

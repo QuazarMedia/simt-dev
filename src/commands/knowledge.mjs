@@ -16,6 +16,12 @@ import { findConflicts } from '../knowledge/conflicts.mjs';
 import { applicableClaims, readApplicability } from '../knowledge/validity.mjs';
 import { MAX_PAGE, exportBundle, importBundle } from '../knowledge/bundle.mjs';
 import { readJsonDocument } from './doc-input.mjs';
+import { readFile } from 'node:fs/promises';
+import { rank as rankUnits } from '../knowledge/rank.mjs';
+import { regenerationCandidates } from '../knowledge/derivations.mjs';
+import { aggregate as aggregateDebt, coldStart as coldStartDebt, rank as rankDebt, weightSensitivity } from '../knowledge/debt.mjs';
+import { impactReport } from '../knowledge/impact.mjs';
+import { extractDocument } from '../knowledge/sections.mjs';
 
 const WHY_USAGE = `run: ${CLI} knowledge why <claim-id> --claims <file> [--limit <n>] [--page <n>]`;
 const EXPORT_USAGE = `run: ${CLI} knowledge export --input <file>`;
@@ -30,10 +36,12 @@ const IMPORT_USAGE = `run: ${CLI} knowledge import --input <file>`;
 export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0, asOf = null, knownAt = null } = {}) {
   const declared = Array.isArray(doc.claims) ? doc.claims : null;
   if (declared === null) return { error: 'the document needs a claims list' };
-  const size = Number.isFinite(Number(limit)) ? Math.floor(Number(limit)) : MAX_PAGE;
-  const index = Number.isFinite(Number(page)) ? Math.floor(Number(page)) : 0;
-  if (size < 1 || size > MAX_PAGE) return { error: `--limit takes 1 to ${MAX_PAGE}` };
-  if (index < 0) return { error: '--page takes a non-negative number' };
+  // A caller through `run()` passes the strings `parse` never saw: the same rejection has
+  // to happen here, or `limit: 'foo'` silently becomes MAX_PAGE.
+  const size = Number(limit);
+  const index = Number(page);
+  if (!Number.isInteger(size) || size < 1 || size > MAX_PAGE) return { error: `--limit takes an integer from 1 to ${MAX_PAGE}` };
+  if (!Number.isInteger(index) || index < 0) return { error: '--page takes a non-negative integer' };
 
   // Through the reader, not straight from the document. `readClaim` validates a record and moves
   // its validity window under `applicability`, which is where the conflict detector compares it:
@@ -49,13 +57,23 @@ export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0, asOf = 
     const validity = readApplicability(read.claim.applicability ?? record);
     return { ...read.claim, applicability: read.claim.applicability ?? validity.applicability ?? null };
   });
+  // The map keeps the raw record for a refused claim so its problems can be reported; that
+  // also made the requested id findable, and the command then rendered `asserts undefined`
+  // and exited 0. A refusal is the answer for that id.
+  const refusedHere = refused.find((entry) => entry.id === id);
+  if (refusedHere) return { error: `claim ${id} was refused: ${refusedHere.reason}` };
+
   const claim = claims.find((record) => record?.id === id) ?? null;
   if (claim === null) return { error: `no claim ${id} in the document, which holds ${claims.length} claim(s)` };
 
-  const graph = buildClaimGraph({ artifacts: Array.isArray(doc.artifacts) ? doc.artifacts : [], claims, edges: Array.isArray(doc.edges) ? doc.edges : [] });
+  // A refused sibling is not evidence about anything: it stays in `refused` and in the
+  // problems list, but the graph and the conflict detector only see claims that read.
+  const readable = claims.filter((record) => !refused.some((entry) => entry.id === record?.id));
+
+  const graph = buildClaimGraph({ artifacts: Array.isArray(doc.artifacts) ? doc.artifacts : [], claims: readable, edges: Array.isArray(doc.edges) ? doc.edges : [] });
   const upstream = lineage(graph, id);
   const downstream = impact(graph, id);
-  const conflicts = findConflicts(claims);
+  const conflicts = findConflicts(readable);
   const validity = readApplicability(claim.applicability ?? claim);
 
   // W14: "what applied at this date, knowing what was known then" is a different question from
@@ -148,6 +166,119 @@ export function knowledgeImportFacts(doc) {
   };
 }
 
+/**
+ * The units a question may use, ranked (W19).
+ *
+ * @param {object} doc
+ * @param {{query?: string, limit?: number}} [options]
+ * @returns {object}
+ */
+function knowledgeRankFacts(doc, { query = '', limit = 10 } = {}) {
+  const units = Array.isArray(doc?.units) ? doc.units : null;
+  if (units === null) return { error: 'the document needs a units list: [{id, path, text, headings, scope, authority}]' };
+  if (typeof query !== 'string' || query.trim() === '') return { error: 'rank needs --query' };
+  return {
+    ok: true,
+    command: 'knowledge rank',
+    ...rankUnits(units, {
+      query,
+      scope: doc.scope ?? {},
+      permissions: Array.isArray(doc.permissionsHeld) ? doc.permissionsHeld : null,
+      limit: Number.isFinite(Number(limit)) ? Math.floor(Number(limit)) : 10,
+    }),
+  };
+}
+
+/**
+ * Which outputs a change puts in question (W17).
+ *
+ * @param {object} doc
+ * @returns {object}
+ */
+function knowledgeDerivationsFacts(doc) {
+  try {
+    return { ok: true, command: 'knowledge derivations', ...regenerationCandidates(doc) };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+/**
+ * Rank the knowledge debt by consequence per effort (W47).
+ *
+ * @param {object} doc
+ * @param {{weights?: object|null}} [options]
+ * @returns {object}
+ */
+function knowledgeDebtFacts(doc, { weights = null } = {}) {
+  const items = Array.isArray(doc?.items) ? doc.items : null;
+  if (items === null) return { error: 'the document needs an items list' };
+  const chosen = weights ?? (doc.weights !== null && typeof doc.weights === 'object' ? doc.weights : null);
+  const options = chosen === null ? {} : { weights: chosen };
+  let sensitivity = null;
+  if (doc.sensitivity !== null && typeof doc.sensitivity === 'object') {
+    try {
+      sensitivity = weightSensitivity(items, { weights: chosen ?? undefined, field: doc.sensitivity.field, to: Number(doc.sensitivity.to) });
+    } catch (error) {
+      sensitivity = { error: error.message };
+    }
+  }
+  const ranked = rankDebt(items, options);
+  return {
+    ok: true,
+    command: 'knowledge debt',
+    ranked,
+    aggregate: aggregateDebt(items, options),
+    coldStart: coldStartDebt(ranked),
+    sensitivity,
+    weights: chosen,
+  };
+}
+
+/**
+ * What a change reaches over typed edges, and where the graph cannot say (W22).
+ *
+ * @param {object} doc
+ * @param {{refs?: string[], limit?: number|null}} [options]
+ * @returns {object}
+ */
+function knowledgeImpactFacts(doc, { refs = [], limit = null } = {}) {
+  const graph = doc?.graph ?? (Array.isArray(doc?.nodes) ? { nodes: doc.nodes, edges: Array.isArray(doc.edges) ? doc.edges : [] } : null);
+  const changed = Array.isArray(refs) && refs.length > 0 ? refs : doc?.change?.refs;
+  if (!Array.isArray(changed) || changed.length === 0) return { error: 'impact needs --refs <id,...> or change.refs' };
+  try {
+    return {
+      ok: true,
+      command: 'knowledge impact',
+      ...impactReport({
+        graph,
+        change: { refs: changed, scopes: doc.change?.scopes ?? doc.scopes ?? {}, tenant: doc.change?.tenant ?? doc.tenant ?? null },
+        derivations: doc.derivations ?? null,
+        lessons: Array.isArray(doc.lessons) ? doc.lessons : [],
+        limits: limit === null || limit === undefined || !Number.isFinite(Number(limit)) ? {} : { nodes: Number(limit) },
+      }),
+    };
+  } catch (error) {
+    return { error: error.message };
+  }
+}
+
+function parseWeights(value) {
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const weights = {};
+  for (const pair of value.split(',')) {
+    const [key, raw] = pair.split('=');
+    const number = Number(raw);
+    if (key === undefined || key.trim() === '' || !Number.isFinite(number)) return null;
+    weights[key.trim()] = number;
+  }
+  return Object.keys(weights).length === 0 ? null : weights;
+}
+
+function parseList(value) {
+  return typeof value === 'string' && value.trim() !== '' ? value.split(',').map((entry) => entry.trim()).filter((entry) => entry !== '') : [];
+}
+
 export async function knowledgeCommand(sub, args, flags) {
   if (sub === 'why') {
     if (args.length === 0) return fail('a claim id is required', EXIT.USAGE, WHY_USAGE);
@@ -162,6 +293,38 @@ export async function knowledgeCommand(sub, args, flags) {
     });
     if (payload.error !== undefined) return fail(payload.error, EXIT.FAIL, 'a document of {claims, edges, artifacts}, with an id on every claim you name');
     present(payload, () => renderWhy(payload), flags);
+    return EXIT.OK;
+  }
+
+  // The four document doors answer a question over one file, and none of them writes.
+  if (sub === 'rank' || sub === 'derivations' || sub === 'debt' || sub === 'impact') {
+    const usage = `run: ${CLI} knowledge ${sub} --input <file>`;
+    if (args.length > 0) return fail(`unknown knowledge ${sub} argument ${args[0]}`, EXIT.USAGE, usage);
+    const document = await readJsonDocument(flags, 'input');
+    if (document.error !== undefined) return fail(document.error, EXIT.USAGE, usage);
+    const payload =
+      sub === 'rank'
+        ? knowledgeRankFacts(document.doc, { query: flags.query, limit: flags.limit })
+        : sub === 'derivations'
+          ? knowledgeDerivationsFacts(document.doc)
+          : sub === 'debt'
+            ? knowledgeDebtFacts(document.doc, { weights: parseWeights(flags.weights) })
+            : knowledgeImpactFacts(document.doc, { refs: parseList(flags.refs), limit: flags.limit });
+    if (payload.error !== undefined) return fail(payload.error, EXIT.FAIL, usage);
+    present(payload, () => renderKnowledge(payload), flags);
+    return EXIT.OK;
+  }
+
+  if (sub === 'sections') {
+    if (args.length !== 1) return fail('knowledge sections needs one markdown file', EXIT.USAGE, `run: ${CLI} knowledge sections <file.md>`);
+    let source;
+    try {
+      source = await readFile(args[0], 'utf8');
+    } catch (error) {
+      return fail(`cannot read ${args[0]}: ${error.code ?? error.message}`, EXIT.FAIL, null);
+    }
+    const payload = { ...extractDocument(source), ok: true, command: 'knowledge sections', path: args[0] };
+    present(payload, () => renderKnowledge(payload), flags);
     return EXIT.OK;
   }
 
@@ -202,7 +365,9 @@ function renderWhy(payload) {
     for (const winner of payload.at.claims) lines.push(`in force   ${winner.id} = ${JSON.stringify(winner.value)}`);
     for (const reason of payload.at.reasons) lines.push(`because    ${reason}`);
   }
-  lines.push(`page       ${payload.page.index} of ${payload.page.size} (${payload.page.total} node(s))`);
+  // `size` is the limit, not a page count: `page 0 of 50` read as fifty pages when the
+  // document held three nodes. The machine fields `index`, `size` and `total` stay stable.
+  lines.push(`page       ${payload.page.index} (limit ${payload.page.size}, ${payload.page.total} node(s))`);
   if (payload.lineage.truncated || payload.impact.truncated) lines.push('truncated  1');
   if (!payload.certifies) lines.push('certifies  no: this scan covers declared claims, not the documents behind them');
   return lines.join('\n');
@@ -233,5 +398,74 @@ function renderImport(payload) {
   ];
   for (const problem of payload.problems) lines.push(`problem    ${problem.code}  ${problem.detail}`);
   if (payload.bundle !== undefined) lines.push(`producer   ${payload.bundle.producer?.digest ?? '(none)'}`);
+  return lines.join('\n');
+}
+
+export function renderKnowledge(payload) {
+  if (payload.command === 'knowledge rank') return renderRank(payload);
+  if (payload.command === 'knowledge derivations') return renderDerivations(payload);
+  if (payload.command === 'knowledge debt') return renderDebt(payload);
+  if (payload.command === 'knowledge impact') return renderImpact(payload);
+  return renderSections(payload);
+}
+
+function renderRank(payload) {
+  const lines = [`query      ${payload.query}`];
+  for (const hit of payload.ranked) lines.push(`${String(hit.score).padStart(6)}  ${hit.id}  ${hit.path ?? ''}`);
+  if (payload.ranked.length === 0) lines.push('ranked     none for this question');
+  for (const unit of payload.unknownScope) lines.push(`unknown    ${unit.path ?? unit.id}  scope not stated, so it cannot be ranked as if it applied`);
+  for (const unit of payload.excluded) lines.push(`excluded   ${unit.id ?? '(no id)'}  ${unit.reason}`);
+  lines.push(`embeddings ${payload.embeddings}`);
+  return lines.join('\n');
+}
+
+function renderDerivations(payload) {
+  const lines = [`candidates ${payload.candidates.length}`];
+  for (const entry of payload.candidates) lines.push(`stale      ${entry.output}  ${(entry.reasons ?? []).join('; ')}`);
+  for (const entry of payload.conflicts ?? []) lines.push(`conflict   ${entry.output}  ${(entry.reasons ?? []).join('; ')}`);
+  for (const entry of payload.unknown ?? []) lines.push(`unknown    ${typeof entry === 'string' ? entry : entry.output ?? entry.id}  receipt absence cannot justify a minimal safe set`);
+  for (const entry of payload.reusable ?? []) lines.push(`reuse      ${typeof entry === 'string' ? entry : entry.output ?? entry.id}`);
+  return lines.join('\n');
+}
+
+function renderDebt(payload) {
+  const lines = [`items      ${payload.ranked.length}`];
+  for (const item of payload.ranked) {
+    lines.push(`${item.score.toFixed(2).padStart(6)}  ${item.id}  ${item.kind}`);
+    for (const reason of item.reasons ?? []) lines.push(`           ${reason}`);
+  }
+  lines.push(`total      ${payload.aggregate.totalDebt}`);
+  if (payload.aggregate.confidentialExcluded > 0) lines.push(`withheld   ${payload.aggregate.confidentialExcluded} confidential item(s), counted for their owner and never in this total`);
+  if (payload.coldStart.cold) lines.push('cold-start yes: no query frequency is recorded for these items');
+  if (payload.sensitivity?.moved !== undefined) {
+    for (const moved of payload.sensitivity.moved) lines.push(`moved      ${moved.id} ${moved.before} -> ${moved.after}`);
+    lines.push(`because    ${payload.sensitivity.explanation}`);
+  }
+  return lines.join('\n');
+}
+
+function renderImpact(payload) {
+  const lines = [`refs       ${(payload.changed ?? payload.change?.refs ?? payload.refs ?? []).join(', ')}`];
+  // `impactReport` hands back `affected` as a bucket object; the flat-list shape is the
+  // legacy one. Both render; the object is iterated per bucket so a claims-only change is
+  // not printed as `affected undefined`.
+  const affected = payload.buckets ?? payload.affected ?? payload.reached ?? [];
+  const rows = Array.isArray(affected)
+    ? affected.map((entry) => ['affected', entry])
+    : Object.entries(affected).flatMap(([bucket, list]) => (Array.isArray(list) ? list : []).map((entry) => [bucket, entry]));
+  for (const [bucket, entry] of rows) lines.push(`${bucket.padEnd(10)} ${typeof entry === 'string' ? entry : entry.id ?? JSON.stringify(entry)}`);
+  for (const entry of payload.unknown ?? []) lines.push(`unknown    ${entry.ref ?? entry.id}  ${entry.reason ?? 'unknown'}`);
+  for (const entry of payload.excluded ?? []) lines.push(`excluded   ${entry.id ?? entry.ref}  ${entry.reason ?? 'excluded'}`);
+  for (const reason of payload.reasons ?? []) lines.push(`because    ${reason}`);
+  if (payload.truncated) lines.push('truncated  1: the bound was reached, so verify conservatively');
+  return lines.join('\n');
+}
+
+function renderSections(payload) {
+  const lines = [`path       ${payload.path}`];
+  const units = payload.sections ?? payload.units ?? [];
+  for (const unit of units) lines.push(`${String(unit.anchor ?? '#').padEnd(30)} ${unit.title ?? unit.heading ?? ''}`);
+  lines.push(`units      ${units.length}`);
+  if (payload.truncated) lines.push('truncated  1');
   return lines.join('\n');
 }

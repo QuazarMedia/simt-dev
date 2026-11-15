@@ -20,6 +20,7 @@
 //     completion script that fails to parse there is a silent no-op.
 
 import { BOOL_FLAGS, VALUE_FLAGS } from './argv.mjs';
+import { ALIASES } from './commands/spec.mjs';
 
 /** The shells this command can render, sorted. */
 export const SHELLS = ['bash', 'fish', 'zsh'];
@@ -49,6 +50,9 @@ export function shape(commands) {
       subs.get(first).add(second);
     }
   }
+  // An alias is absent from COMMANDS because help must stay free of second spellings, but
+  // the dispatcher still answers it; a completion that omits it hides a working command (A34).
+  for (const alias of ALIASES.keys()) top.add(alias.split(' ')[0]);
   return {
     top: [...top].sort(),
     groups: [...subs.entries()]

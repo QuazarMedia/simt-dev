@@ -491,7 +491,11 @@ export function commandFacts(text) {
       if (fact !== null) facts.push(fact);
     }
   }
-  return { parsed: true, facts };
+  // Every token, by base name, so a decision can tell a wrapped command
+  // (`busybox git push`) from a word that is only an argument: a quoted `"git rebase"`
+  // is one word, not two, and names no command.
+  const names = tokens.commands.flat().map((word) => basename(word));
+  return { parsed: true, facts, names };
 }
 
 /**

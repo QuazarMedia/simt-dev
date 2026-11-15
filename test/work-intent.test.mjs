@@ -50,6 +50,13 @@ test('the single label is unchanged beside the vector', () => {
   assert.ok(routed.reasons.some((reason) => /^generate: the task matches/.test(reason)));
 });
 
+test('a failure test is a feature, and a failing checkout is still a bugfix (A03)', () => {
+  // `fail(?:s|ed|ing|ure)?` read the noun as a cue, so "add failure test for checkout"
+  // routed to bugfix and the brief asked for a reproduction recipe instead of a build.
+  assert.equal(classifyTask('add failure test for checkout').kind, 'feature');
+  assert.equal(classifyTask('fix the failing checkout').kind, 'bugfix');
+});
+
 test('documenting a mutation requires observation and never authorization', () => {
   const routed = classifyIntent('Document the API mutation');
   assert.deepEqual(routed.leaders, ['generate', 'operate']);
@@ -149,6 +156,17 @@ test('the labelled corpus reports precision and recall per intent, and cannot hi
   assert.equal(researchRow.recall, null, 'no example expected research, so its recall is undefined');
   assert.equal(validateRow.recall, 0, 'the label the prediction did not cover');
   assert.equal(validateRow.precision, null, 'nothing predicted validate, so its precision is undefined');
+});
+
+test('an unknown corpus label is reported with its task, not thrown (A04)', () => {
+  // `rows.get(label)` is undefined outside INTENTS; the old read threw on it and the
+  // report was lost before it could name the corpus entry that was wrong.
+  const report = evaluateIntent([{ task: 'Refactor the parser', expect: 'not-an-intent' }]);
+  assert.equal(report.error?.code, 'UNKNOWN_INTENT');
+  assert.match(report.error.message, /not-an-intent/);
+  assert.match(report.error.message, /Refactor the parser/);
+  assert.deepEqual(report.perIntent, []);
+  assert.equal(report.precision, null);
 });
 
 test('routing is deterministic and reads no clock, environment or socket', async () => {

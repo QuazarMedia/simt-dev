@@ -51,15 +51,19 @@ test('two owners cannot hold one exclusive lease', () => {
   assert.equal(second.granted, false);
   assert.equal(second.holder, 'session-a');
 
+  assert.equal(first.lease.fencing, 1, 'a first grant is token 1');
+
   const again = acquire({ held: first.held, key: remoteKey(), owner: 'session-a', ttl: 1000, now: 10 });
   assert.equal(again.granted, true);
+  assert.equal(again.lease.fencing, 2, 'a renewal is a new grant and advances the token');
 });
 
 test('an expired lease can be taken, and an unkeyed one is refused', () => {
   const first = acquire({ held: [], key: remoteKey(), owner: 'session-a', ttl: 100, now: 0 });
   const taken = acquire({ held: first.held, key: remoteKey(), owner: 'session-b', ttl: 100, now: 500 });
   assert.equal(taken.granted, true);
-  assert.equal(taken.lease.fencing, 1);
+  assert.equal(taken.lease.fencing, 2, 'an expired takeover is a new grant, not a replay of token 1');
+  assert.equal(checkFencing({ lease: taken.lease, token: 1 }).valid, false, 'the expired worker\'s token is dead');
   assert.equal(acquire({ held: [], key: null, owner: 'x' }).granted, false);
   assert.equal(acquire({ held: [], key: remoteKey(), owner: null }).granted, false);
 });

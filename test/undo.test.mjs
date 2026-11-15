@@ -264,6 +264,36 @@ test('Q22: a crashed undo resumes from its marker instead of refusing its own pr
   );
 });
 
+test('A41: a restore interrupted between its temp file and its rename resumes cleanly', async (t) => {
+  const root = await freshRoot(t);
+  const a = join(root, 'a.md');
+  const b = join(root, 'b.md');
+  await writeFile(a, 'a1\n', 'utf8');
+  await writeFile(b, 'b1\n', 'utf8');
+
+  const journal = [];
+  await journaledWriteFile(root, journal, a, 'a2\n');
+  await journaledWriteFile(root, journal, b, 'b2\n');
+  const id = await commitJournal(root, 'test', journal);
+
+  // The crash state: `a` was renamed into place before the crash, `b` was not — its
+  // destination still holds the after-bytes and its temp file exists. The marker is what
+  // makes the retry legal, and the destination must be one whole version or the other.
+  await writeFile(a, 'a1\n', 'utf8');
+  await writeFile(`${b}.tmp-99999`, 'half-written', 'utf8');
+  await writeFile(
+    join(root, LOCAL_DIR, 'journal', `${id}.undoing.json`),
+    `${JSON.stringify({ version: 1, set: id, at: Date.now() }, null, 2)}\n`,
+  );
+
+  const result = await undoLastJournalSet(root);
+  assert.ok(!('refused' in result && result.refused), JSON.stringify(result.refused));
+  assert.equal(result.resumed, true);
+  assert.equal(await readFile(a, 'utf8'), 'a1\n');
+  assert.equal(await readFile(b, 'utf8'), 'b1\n');
+  assert.notEqual(await readFile(b, 'utf8'), 'half-written');
+});
+
 test('Q22: a version-1 set with utf8 beforeBytes still restores', async (t) => {
   const root = await freshRoot(t);
   const digestOf = (s) => `sha256-${createHash('sha256').update(s).digest('hex')}`;
@@ -307,6 +337,21 @@ test('Q22: git config keys round-trip through the journal', async (t) => {
   const back = await undoLastJournalSet(root);
   assert.ok(!('refused' in back && back.refused), JSON.stringify(back.refused));
   assert.equal(await readGitValue(root, 'simt.test.key'), 'two');
+});
+
+test('A42: a journal commit labels a config entry instead of recording undefined', async (t) => {
+  const root = await freshRoot(t);
+  const acc = [];
+  await journaledGitConfig(root, acc, 'simt.test.key', 'one');
+  assert.ok(await commitJournal(root, 'test', acc));
+
+  const lines = (await readFile(join(root, LOCAL_DIR, 'events.jsonl'), 'utf8')).trim().split('\n');
+  const committed = lines
+    .map((line) => JSON.parse(line))
+    .filter((event) => event.kind === 'write.committed')
+    .at(-1);
+  assert.deepEqual(committed.data.paths, ['git config simt.test.key']);
+  assert.equal(committed.data.paths.includes(undefined), false, 'a config entry recorded no path');
 });
 
 test('H3: legacy sets under `.simt/journal` move into the current directory on the next write', async (t) => {

@@ -39,10 +39,15 @@ export const BOOL_FLAGS = new Set([
   // assurance the boundary does not have.
   'mediated',
   'json',
+  // brief: attach the proof packet's completeness to the JSON document, never to the
+  // default packet's bytes (A39).
+  'proof',
   'all',
   'baselines',
   'dry-run',
   'yes',
+  // index: read what the cache holds instead of rebuilding it.
+  'open',
   'check',
   'plan',
   'help',
@@ -157,6 +162,13 @@ export const VALUE_FLAGS = new Set([
   'claims',
   'input',
   // knowledge why: the two bounds a paginated door owes its reader.
+  // knowledge rank|debt|impact: the question, the scoring weights, the changed ids.
+  // index: the task string the open cache answers for.
+  'search',
+  'rank',
+  'query',
+  'refs',
+  'weights',
   // knowledge why: the two dates a bitemporal query needs, both required together.
   'as-of',
   'known-at',
@@ -346,6 +358,15 @@ export function parse(argv) {
           return { ok: false, error: usage(`--reps must be a positive integer, received ${value}`) };
         }
         flags.reps = n;
+      } else if (raw === 'limit' || raw === 'page') {
+        // `Number('notanumber')` falls through to the default and `page: -1` became 0, so a
+        // caller who asked for page -1 got the first page and no notice.
+        const n = Number(value);
+        const floor = raw === 'limit' ? 1 : 0;
+        if (!Number.isInteger(n) || n < floor) {
+          return { ok: false, error: usage(`--${raw} must be a ${floor === 1 ? 'positive' : 'non-negative'} integer, received ${value}`) };
+        }
+        flags[raw] = n;
       } else {
         const key = camel(raw);
         if (REPEATABLE_FLAGS.has(raw)) {

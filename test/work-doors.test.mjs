@@ -84,6 +84,39 @@ test('knowledge why refuses an id the document does not hold, and says how many 
   });
 });
 
+test('knowledge why exits non-zero on a claim the reader refused (A06)', () => {
+  // The refused record stayed in the map, so the requested id was found, `renderWhy`
+  // printed `asserts undefined undefined = undefined`, and the command exited 0.
+  const dir = repo();
+  const claims = write(dir, 'bad-claims.json', { claims: [{ id: 'bad' }] });
+  assert.throws(() => run(dir, ['knowledge', 'why', 'bad', '--claims', claims]), (error) => {
+    assert.match(String(error.stderr), /claim bad was refused/);
+    assert.doesNotMatch(String(error.stdout ?? ''), /asserts undefined/);
+    return true;
+  });
+});
+
+test('a refused sibling stays reported but leaves the why-graph (A07)', () => {
+  const dir = repo();
+  const claims = write(dir, 'mixed-claims.json', {
+    claims: [
+      { id: 'c1', subject: 'de.vat', predicate: 'standard-rate', type: 'number', value: 19, unit: '%' },
+      { id: 'refused-sibling' },
+    ],
+    edges: [{ from: 'c1', to: 'refused-sibling', kind: 'derived-from', status: 'reviewed' }],
+  });
+  const payload = json(dir, ['knowledge', 'why', 'c1', '--claims', claims]);
+  assert.equal(payload.impact.reachable.includes('refused-sibling'), false, 'a refused claim is not a dependent');
+  assert.equal(payload.lineage.reachable.includes('refused-sibling'), false, 'a refused claim is not a source');
+  assert.equal(payload.graph.edges, 0, 'the edge to the refused claim is still in the graph');
+  assert.equal(payload.impact.total, 1, 'the refused claim was counted as a dependent node');
+  assert.equal(payload.lineage.total, 1, 'the refused claim was counted as a source node');
+  assert.ok(
+    payload.problems.some((problem) => problem.includes('refused-sibling')),
+    'the refusal is still reported in the problems list',
+  );
+});
+
 test('verify plan offers only what the constraints admit, and reports what it excluded', () => {
   const dir = repo();
   const doc = write(dir, 'plan.json', {
@@ -201,6 +234,21 @@ test('a paged door says how much it cut, and the next page continues from there'
   const second = json(dir, ['knowledge', 'why', 'c1', '--claims', claims, '--limit', '1', '--page', '1']);
   assert.deepEqual(second.impact.reachable, ['c3']);
   assert.equal(second.impact.truncated, false);
+
+  // `size` is the limit; printing it after "of" made `page 0 of 1` read as one page when
+  // the document held two nodes (A18).
+  const text = run(dir, ['knowledge', 'why', 'c1', '--claims', claims, '--limit', '1']);
+  assert.match(text, /page\s+0 \(limit 1, 2 node\(s\)\)/);
+  assert.doesNotMatch(text, /page\s+0 of 1/);
+
+  // A present flag with a bad value is a usage error, not the default (A19).
+  for (const bad of [['--limit', 'foo'], ['--page', '-1']]) {
+    assert.throws(() => run(dir, ['knowledge', 'why', 'c1', '--claims', claims, ...bad]), (error) => {
+      assert.equal(error.status, 2, `${bad.join(' ')} did not exit 2`);
+      assert.match(String(error.stderr), /--(limit|page) must be/);
+      return true;
+    });
+  }
 });
 
 test('export filters by permission before the page, and import accepts it as data only', () => {

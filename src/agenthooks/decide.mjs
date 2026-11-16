@@ -101,6 +101,30 @@ function applies(row, facts, env) {
 }
 
 /**
+ * The environment the override is read from: the hook's own, with a `SIMT_ALLOW`
+ * the command itself carries taking its place.
+ *
+ * A denial names the override, and the spelling a shell gives it is a leading
+ * assignment — `SIMT_ALLOW=push git push`. The hook decides before the command runs,
+ * so it cannot read the environment the command will have; it reads the spelling
+ * instead, which is the same value and is visible in the command a reviewer sees.
+ * The assignment shadows the process value the way a shell prefix shadows the
+ * inherited environment, and a later assignment in the command list wins the way a
+ * later one does. Only `SIMT_ALLOW` is read from the command: the session a lease
+ * compares is the session the hook runs in, and a spelling inside a command is not
+ * a session.
+ */
+function overrideEnv(facts, env) {
+  const shell = facts.shell;
+  if (shell === null || shell === undefined || shell.parsed !== true) return env;
+  const assigns = Array.isArray(shell.assigns) ? shell.assigns : [];
+  for (let i = assigns.length - 1; i >= 0; i -= 1) {
+    if (assigns[i][0] === ALLOW_ENV) return { ...env, [ALLOW_ENV]: assigns[i][1] };
+  }
+  return env;
+}
+
+/**
  * The decision for one event.
  *
  * `blocked` and `lifted` are ids, not rows, because the caller prints them and an id is
@@ -108,7 +132,7 @@ function applies(row, facts, env) {
  * a denial is actionable without the reader knowing the variable exists.
  */
 export function decide({ event = EVENTS[0], facts = {}, env = {} } = {}) {
-  const { ids: lifted, unknown } = overrides(env);
+  const { ids: lifted, unknown } = overrides(overrideEnv(facts, env));
   const matched = policiesFor(event).filter((p) => applies(p, facts, env));
   const blocked = matched.filter((p) => !lifted.has(p.id));
   return {

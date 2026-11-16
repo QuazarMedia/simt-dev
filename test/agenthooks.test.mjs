@@ -91,6 +91,56 @@ test('the override lifts exactly the policy it names, and says so', async () => 
   assert.deepEqual(overrides({ SIMT_ALLOW: 'push, rewrite ,,nope' }).unknown, ['nope']);
 });
 
+test('a SIMT_ALLOW the command itself carries lifts exactly the policy it names', async () => {
+  // The denial names the override, and the spelling a shell gives it is a leading
+  // assignment. The hook decides before the command runs, so it reads the spelling
+  // from the command: the same value, visible where a reviewer sees the approval.
+  const root = await repo();
+  const lifted = HOOK('claude', shell.claude('SIMT_ALLOW=push git push origin main', root));
+  assert.equal(lifted.code, 0, `the command's own override did not lift the push: ${lifted.text}`);
+  assert.match(lifted.text, /allowed by SIMT_ALLOW: push/);
+
+  // The same value behind the wrappers a shell runs for you.
+  for (const command of [
+    'env SIMT_ALLOW=push git push origin main',
+    'sh -c \'SIMT_ALLOW=push git push\'',
+    'SIMT_ALLOW=push sudo git push',
+  ]) {
+    const result = HOOK('claude', shell.claude(command, root));
+    assert.equal(result.code, 0, `${command} was not lifted: ${result.text}`);
+  }
+
+  // Lifting one policy does not lift the next: a force-push is a rewrite too, and the
+  // command names only the push.
+  const force = HOOK('claude', shell.claude('SIMT_ALLOW=push git push --force', root));
+  assert.equal(force.code, 2, `a force-push went through on a push-only override: ${force.text}`);
+  assert.match(force.text, /ADR-017/);
+
+  // A typo in the value is reported, and the push stays blocked.
+  const typo = HOOK('claude', shell.claude('SIMT_ALLOW=pusch git push origin main', root));
+  assert.equal(typo.code, 2);
+  assert.match(typo.text, /SIMT_ALLOW names no policy: pusch/);
+  assert.match(typo.text, /ADR-001/);
+
+  // The assignment shadows the process value, the way a shell prefix shadows the
+  // inherited environment: the command names only the rewrite, so the push stands.
+  const shadowed = HOOK('claude', shell.claude('SIMT_ALLOW=rewrite git push --force', root), { env: { SIMT_ALLOW: 'push' } });
+  assert.equal(shadowed.code, 2, `the command's assignment did not shadow the process value: ${shadowed.text}`);
+  assert.match(shadowed.text, /ADR-001/);
+
+  // A later assignment in the command list wins, the way a later one does in a shell.
+  const lastWins = HOOK('claude', shell.claude('SIMT_ALLOW=push; SIMT_ALLOW=rewrite git push', root));
+  assert.equal(lastWins.code, 2);
+  assert.match(lastWins.text, /ADR-001/);
+
+  // An assignment the policies do not name changes nothing, and neither does a value
+  // that only contains `=` somewhere an argument sits.
+  for (const command of ['FOO=bar ls', 'git -c x=y push', 'grep -r "SIMT_ALLOW=push" docs']) {
+    const result = HOOK('claude', shell.claude(command, root));
+    assert.equal(result.code, command === 'git -c x=y push' ? 2 : 0, `${command}: ${result.text}`);
+  }
+});
+
 test('the normalised command is what a policy matches, in every spelling the review counted', async () => {
   // Each of these was allowed by the regex the normaliser replaced (review 0003 Q01):
   // the same act, spelled the way an agent finds easiest. The list is the evidence,

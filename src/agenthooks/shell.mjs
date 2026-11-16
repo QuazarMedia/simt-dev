@@ -468,34 +468,66 @@ function parseRm(words) {
 }
 
 /**
+ * The leading `NAME=value` words of one tokenised command, in the order a shell
+ * applies them to the command's environment. The loop stops at the first word that
+ * is not an assignment, so an argument that only contains `=` — a `-c` string, a
+ * path, an option value — is never read as one. An `env` in front is stepped off
+ * first, the way `unwrap` does, because `env NAME=value cmd` carries the
+ * assignments after the wrapper.
+ *
+ * @param {string[]} words one tokenised command
+ * @returns {Array<[string, string]>} the assignments, as name and value pairs
+ */
+function leadingAssigns(words) {
+  const out = [];
+  let i = words.length > 0 && basename(words[0]) === 'env' ? 1 : 0;
+  while (i < words.length) {
+    const m = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/.exec(words[i]);
+    if (m === null) break;
+    out.push([m[1], m[2]]);
+    i += 1;
+  }
+  return out;
+}
+
+/**
  * Every fact a policy can name that a command string carries, or null when it is not a
  * string.
  *
  * @param {string} text the command a payload carried
- * @returns {{parsed: true, facts: Array<ReturnType<typeof parseGit>|ReturnType<typeof parseRm>>}|{parsed: false}}
+ * @returns {{parsed: true, facts: Array<ReturnType<typeof parseGit>|ReturnType<typeof parseRm>>, names: string[], assigns: Array<[string, string]>}|{parsed: false, assigns: Array<[string, string]>}}
  *   one fact per git or rm invocation, including the ones a wrapper or a substitution
  *   hides; an invocation whose subcommand is not a builtin (an alias, or nothing) is
  *   left as-is - the caller resolves aliases against the author's own configuration,
- *   which this module does not read. `parsed` is false when the text cannot be
- *   tokenised at all, and a caller that gets it must fall back to something weaker,
- *   never to "nothing to see here".
+ *   which this module does not read. `assigns` is every leading environment
+ *   assignment the command carries, in command-list order, so a decision can read the
+ *   value a prefix like `SIMT_ALLOW=push` gives the command. `parsed` is false when the
+ *   text cannot be tokenised at all, and a caller that gets it must fall back to
+ *   something weaker, never to "nothing to see here".
  */
 export function commandFacts(text) {
   if (typeof text !== 'string') return null;
   const tokens = tokenize(text);
-  if (!tokens.ok) return { parsed: false };
+  if (!tokens.ok) return { parsed: false, assigns: [] };
   const facts = [];
+  const assigns = [];
   for (const words of tokens.commands) {
     for (const unwrapped of unwrap(words)) {
       const fact = parseGit(unwrapped) ?? parseRm(unwrapped);
       if (fact !== null) facts.push(fact);
+      // A wrapper's inner command carries its own prefix: `sh -c 'SIMT_ALLOW=push git
+      // push'` runs the assignment, so the decision must read it. `unwrap` returns the
+      // input array itself when nothing was unwrapped, so the identity check keeps a
+      // plain command's prefix out of the list twice.
+      if (unwrapped !== words) assigns.push(...leadingAssigns(unwrapped));
     }
+    assigns.push(...leadingAssigns(words));
   }
   // Every token, by base name, so a decision can tell a wrapped command
   // (`busybox git push`) from a word that is only an argument: a quoted `"git rebase"`
   // is one word, not two, and names no command.
   const names = tokens.commands.flat().map((word) => basename(word));
-  return { parsed: true, facts, names };
+  return { parsed: true, facts, names, assigns };
 }
 
 /**

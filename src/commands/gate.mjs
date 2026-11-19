@@ -5,16 +5,16 @@
 // runner is the one the package already uses. Nothing else runs. A report
 // this tool knows how to read is compacted; the raw log is kept.
 
-import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { commandAvailable, reportPathProblem, runnerSpecProblem } from '../testing/contract.mjs';
 import { detectTestRunner } from '../testing/runners.mjs';
+import { cleanupReports, readReports } from '../testing/parsers.mjs';
+import { spawnBounded } from '../sys/proc.mjs';
 import { loadManifest } from '../manifest/schema.mjs';
 import { compactOutput } from '../index/compact.mjs';
 import { coverage } from '../index/coverage.mjs';
@@ -25,7 +25,20 @@ import { commandRoot } from '../repo-root.mjs';
 import { gitPaths } from '../sys/git.mjs';
 import { cmp } from '../util/sort.mjs';
 
-const exec = promisify(execFile);
+/**
+ * How long one focused run may take, overridable for a test that must not wait for it.
+ *
+ * The gate used its own `execFile` with no deadline, so a hung runner held the commit
+ * forever and the author's only exit was `--no-verify` (review 0005 PR14). The hook
+ * dispatcher and the bench already run through `spawnBounded`; the focused gate now
+ * shares it rather than carrying a second, unbounded implementation.
+ */
+const DEFAULT_GATE_TIMEOUT_MS = 15 * 60 * 1000;
+
+/** The deadline for one run, resolved at run time so a test can shorten it. */
+function gateTimeoutMs() {
+  return Number(process.env.SIMT_GATE_TIMEOUT_MS ?? 0) || DEFAULT_GATE_TIMEOUT_MS;
+}
 
 /** How many raw gate logs the state directory keeps. */
 const RAW_LOG_KEEP = 5;
@@ -204,6 +217,7 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
       );
     }
     const built = runner.buildExec(cwd);
+    const preexistingReports = new Set((built.reportPaths ?? []).filter((path) => existsSync(path)));
     text.push(`selected  ${files.length}`, ...files, '', runner.displayCmd);
     // A parent `node --test` puts NODE_TEST_CONTEXT in the environment. Left
     // there, the child reports to that parent and exits 0 whether or not it failed.
@@ -211,17 +225,30 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     for (const key of Object.keys(env)) {
       if (key.startsWith('NODE_TEST')) delete env[key];
     }
-    const result = await exec(built.cmd, built.args, { cwd: built.cwd ?? cwd, env, maxBuffer: 32 << 20 }).then(
-      (out) => ({ code: 0, stdout: out.stdout, stderr: out.stderr }),
-      (error) => ({
-        code: typeof error.code === 'number' ? error.code : 1,
-        stdout: error.stdout ?? '',
-        stderr: error.stderr ?? '',
-      }),
-    );
+    const result = await spawnBounded(built.cmd, built.args, {
+      cwd: built.cwd ?? cwd,
+      env,
+      timeoutMs: gateTimeoutMs(),
+      maxOutputBytes: 32 << 20,
+    });
     if (result.code !== 0) code = result.code;
-    const stdout = String(result.stdout ?? '');
-    const stderr = String(result.stderr ?? '');
+    const stdout = result.stdout.toString('utf8');
+    const stderr = result.stderr.toString('utf8');
+    // A report the runner was told to write is read and then removed by the run that owns
+    // it. Before this the path was built and never read, so a report-shaped runner was
+    // parsed from stdout or not at all, and the file it wrote stayed in the tree.
+    let reportText = '';
+    if (Array.isArray(built.reportPaths) && built.reportPaths.length > 0) {
+      reportText = await readReports(built.reportPaths).catch(() => '');
+      // Only the files this run caused: a report the repository already had is its own
+      // file, and deleting it would be this command removing something it did not write.
+      const created = built.reportPaths.filter((path) => !preexistingReports.has(path));
+      // Ownership was settled by looking before the run, which is stronger than matching a
+      // filename: a path this run created is one it may remove, whatever it is called.
+      for (const path of created) await unlink(path).catch(() => {});
+    }
+    const parsed = reportText ? runner.parse(stdout, reportText) : undefined;
+    if (result.timedOut) text.push(`timeout  ${runner.displayCmd} exceeded ${gateTimeoutMs() / 1000}s`);
     const body = stderr ? `${stdout}\n${stderr}` : stdout;
     rawParts.push(body);
     const compact = compactOutput(body);
@@ -230,7 +257,17 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     // check is only a claim about the output mentioning each file, which is what a
     // selector-aware reporter prints; it is deliberately not a parse of pass counts.
     const unproven = files.filter((file) => !body.includes(file) && !body.includes(basename(file)));
-    runs.push({ package: pkg, command: runner.displayCmd, code: result.code, stdout, stderr, unproven });
+    runs.push({
+      package: pkg,
+      command: runner.displayCmd,
+      code: result.code,
+      stdout,
+      stderr,
+      unproven,
+      timedOut: result.timedOut,
+      truncated: result.truncated,
+      ...(parsed ? { passed: parsed.passed, failed: parsed.failed } : {}),
+    });
     text.push(compact ?? body);
   }
   const unproven = runs.flatMap((run) => run.unproven ?? []);

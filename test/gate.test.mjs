@@ -9,6 +9,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { test } from 'node:test';
+import { existsSync } from 'node:fs';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -337,3 +338,43 @@ function git(args) {
   return exec('git', ['-c', 'user.name=simt-dev tests', '-c', 'user.email=tests@example.com', '-c', 'commit.gpgsign=false', ...args], { maxBuffer: 16 << 20 });
 }
 
+
+test('a hung runner is bounded by a deadline (PR14)', async () => {
+  const root = await fixtureRepo();
+  process.env.SIMT_GATE_TIMEOUT_MS = '300';
+  try {
+    await writeFile(
+      join(root, 'simt.json'),
+      JSON.stringify({ test: { runner: { command: [process.execPath, '-e', 'setInterval(() => {}, 1000)'] } } }),
+    );
+    await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 2;\n');
+    const payload = JSON.parse((await capture(() => gateCommand(['src/keep.mjs'], { root, json: true }))).stdout);
+    assert.equal(payload.runs[0].timedOut, true);
+    assert.equal(payload.code, 124, 'a deadline is a failure, not a pass');
+  } finally {
+    delete process.env.SIMT_GATE_TIMEOUT_MS;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a report the runner writes is read and then removed (PR14)', async () => {
+  const root = await fixtureRepo();
+  try {
+    await writeFile(
+      join(root, 'run.mjs'),
+      "import { writeFileSync } from 'node:fs';\n" +
+        "writeFileSync(process.argv[2], '<testsuites><testsuite name=\"t\"><testcase classname=\"t\" name=\"k\"/></testsuite></testsuites>');\n",
+    );
+    await writeFile(
+      join(root, 'simt.json'),
+      JSON.stringify({ test: { runner: { command: [process.execPath, 'run.mjs', '{report}'], report: 'junit', reportPath: 'report.xml' } } }),
+    );
+    await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 3;\n');
+    const payload = JSON.parse((await capture(() => gateCommand(['src/keep.mjs'], { root, json: true }))).stdout);
+    assert.equal(payload.code, 0, payload.runs?.[0]?.stderr);
+    assert.deepEqual(payload.runs[0].passed, ['t > k']);
+    assert.equal(existsSync(join(root, 'report.xml')), false, 'the report belongs to the run and is cleaned up');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

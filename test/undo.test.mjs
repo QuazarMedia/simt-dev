@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
@@ -21,12 +21,14 @@ import {
   journaledCopyDir,
   journaledGitConfig,
   journaledRemoveFile,
+  journaledSymlink,
   journaledWriteFile,
   listJournalSets,
   readGitValue,
   undoLastJournalSet,
 } from '../src/journal.mjs';
 import { LOCAL_DIR } from '../src/state.mjs';
+import { readEvents } from '../src/state/events.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -489,4 +491,63 @@ test('H3: a repo with only `.simt/journal` heals through the binary on the next 
   const second = await runCli(['undo', '--root', root, '--yes']);
   assert.equal(second.code, 0, second.stderr.slice(0, 400));
   assert.equal(await readFile(join(root, 'a.md'), 'utf8'), 'before\n');
+});
+
+test('PR08: a created pointer is undone and a repaired one goes back to its old target', async (t) => {
+  const root = await freshRoot(t);
+  await writeFile(join(root, 'AGENTS.md'), 'rules\n', 'utf8');
+  await symlink('elsewhere.md', join(root, 'CLAUDE.md'));
+
+  const journal = [];
+  await journaledSymlink(root, journal, join(root, 'CLAUDE.md'), 'AGENTS.md');
+  await journaledSymlink(root, journal, join(root, '.cursorrules'), 'AGENTS.md');
+  await commitJournal(root, 'init', journal);
+  assert.equal(await readlink(join(root, 'CLAUDE.md')), 'AGENTS.md');
+
+  const result = await undoLastJournalSet(root);
+  assert.ok(!result.refused, JSON.stringify(result));
+  assert.equal(await readlink(join(root, 'CLAUDE.md')), 'elsewhere.md', 'the link the run repaired is back');
+  await assert.rejects(readlink(join(root, '.cursorrules')), 'the link the run created is removed');
+  assert.equal(await readFile(join(root, 'AGENTS.md'), 'utf8'), 'rules\n', 'the target is never touched');
+});
+
+test('PR08: a pointer entry is the link, not the bytes behind it', async (t) => {
+  const root = await freshRoot(t);
+  await writeFile(join(root, 'AGENTS.md'), 'rules\n', 'utf8');
+  await symlink('elsewhere.md', join(root, 'CLAUDE.md'));
+  const journal = [];
+  await journaledSymlink(root, journal, join(root, 'CLAUDE.md'), 'AGENTS.md');
+  await commitJournal(root, 'init', journal);
+
+  // An edit to the file the link points at is not an edit to the link.
+  await writeFile(join(root, 'AGENTS.md'), 'rules, edited by hand\n', 'utf8');
+  const result = await undoLastJournalSet(root);
+  assert.ok(!result.refused, JSON.stringify(result));
+  assert.equal(await readlink(join(root, 'CLAUDE.md')), 'elsewhere.md');
+  assert.equal(await readFile(join(root, 'AGENTS.md'), 'utf8'), 'rules, edited by hand\n');
+});
+
+test('PR08: a hand-moved link refuses the undo, and the log records the refusal', async (t) => {
+  const root = await freshRoot(t);
+  await writeFile(join(root, 'AGENTS.md'), 'rules\n', 'utf8');
+  const journal = [];
+  await journaledSymlink(root, journal, join(root, 'CLAUDE.md'), 'AGENTS.md');
+  const id = await commitJournal(root, 'init', journal);
+
+  await unlink(join(root, 'CLAUDE.md'));
+  await symlink('mine.md', join(root, 'CLAUDE.md'));
+  const result = await undoLastJournalSet(root);
+  assert.equal(result.refused?.path, 'CLAUDE.md');
+  assert.match(result.refused.detail, /the link was changed after the journaled write/);
+  assert.equal(await readlink(join(root, 'CLAUDE.md')), 'mine.md', 'a refusal changes nothing');
+
+  const { events } = await readEvents(root);
+  assert.ok(
+    events.some((e) => e.kind === 'write.undo-refused' && e.subject === id),
+    'the refusal is recorded against the set it was for',
+  );
+  assert.ok(
+    !events.some((e) => e.kind === 'write.undone' && e.subject === id),
+    'an undo that restored nothing is not recorded as one that did',
+  );
 });

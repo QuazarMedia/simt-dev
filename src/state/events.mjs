@@ -38,6 +38,7 @@ export const EVENT_KINDS = Object.freeze([
   'slice.transitioned',
   'write.committed',
   'write.undone',
+  'write.undo-refused',
   'lesson.captured',
 ]);
 

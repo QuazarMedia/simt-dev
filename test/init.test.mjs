@@ -877,3 +877,23 @@ test('sync repairs the manifest field check refuses, and previews it first', asy
 // setting on the very run `check` was telling the reader to apply - and the drift
 // check reported the setting as a stale generated field while doing it (review 0003
 // Q26). The remedy for BEYOND-READ-LIMIT was undoing itself.
+
+test('PR08: init journals the pointers it writes, so undo removes them', async () => {
+  const { initCommand } = await import('../src/commands/init.mjs');
+  const { undoCommand } = await import('../src/commands/undo.mjs');
+  const { readdir, lstat, readlink } = await import('node:fs/promises');
+  const root = await tempDir('simt-pointer-');
+  await writeFile(join(root, 'package.json'), '{ "name": "x" }\n');
+
+  assert.equal(await initCommand([], { root, yes: true, harness: 'claude' }), 0);
+  const links = [];
+  for (const name of await readdir(root)) {
+    if ((await lstat(join(root, name))).isSymbolicLink()) links.push([name, await readlink(join(root, name))]);
+  }
+  assert.ok(links.length > 0, 'the adoption wrote no pointers');
+
+  assert.equal(await undoCommand([], { root, yes: true }), 0);
+  for (const [name] of links) {
+    await assert.rejects(lstat(join(root, name)), `${name} survived the undo`);
+  }
+});

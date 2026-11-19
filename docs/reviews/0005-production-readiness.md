@@ -32,23 +32,23 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR10 | Validate and apply repository-local ecosystem records | P1 | ecosystem | M | PR09 | Complete | b3aaec60c74fc6bef363199703e7b69f946f395b |
 | PR11 | Make focused runners configurable across nested and mixed stacks | P1 | runners | M | PR06, PR10 | Complete | c6a28c4c3f393e60aac3b8170ca27753b257f7b2 |
 | PR12 | Resolve polyglot gates without command collisions | P1 | ecosystem | M | PR10, PR05 | Complete | 7521ce3c16752517d198d573efb0ac76b371c719 |
-| PR13 | Report test-selection gaps, deletions, and actual test outcomes | P1 | runners | M | PR11 | Queued | — |
+| PR13 | Report test-selection gaps, deletions, and actual test outcomes | P1 | runners | M | PR11 | Complete | c7a6be00cc761963c427ca4b9d22533c3552be65 |
 | PR14 | Share bounded gate execution and report cleanup | P1 | runners | M | PR13, PR04 | Queued | — |
 | PR15 | Make projected rules and adoption reports actionable in consumers | P1 | projection | M | PR08, PR12 | Queued | — |
 | PR16 | Make frozen projection and upgrades agree on the applied state | P1 | projection | M | PR15 | Queued | — |
 | PR17 | Generate reproducible CI with an explicit provider contract | P1 | ci | M | PR12, PR16 | Queued | — |
-| PR18 | Repair tracker concurrency and slice completion recovery | P1 | tracker | M | PR07, PR04 | Queued | — |
-| PR19 | Validate knowledge with the same readers used by its commands | P1 | knowledge | M | PR02 | Queued | — |
+| PR18 | Repair tracker concurrency and slice completion recovery | P1 | tracker | M | PR07, PR04 | In progress | — |
+| PR19 | Validate knowledge with the same readers used by its commands | P1 | knowledge | M | PR02 | In progress | — |
 | PR20 | Make document-driven verification reject malformed input | P1 | work | M | PR19 | Queued | — |
-| PR21 | Separate MCP reads from cache writes and process execution | P1 | transport | M | PR09, PR02 | Queued | — |
+| PR21 | Separate MCP reads from cache writes and process execution | P1 | transport | M | PR09, PR02 | In progress | — |
 | PR22 | Bound MCP framing and make response contracts consistent | P1 | transport | M | PR21 | Queued | — |
-| PR23 | Make index provenance and rebuild semantics coherent | P1 | retrieval | M | PR10, PR09 | Queued | — |
+| PR23 | Make index provenance and rebuild semantics coherent | P1 | retrieval | M | PR10, PR09 | In progress | — |
 | PR24 | Fix registry portability, skill identity, and workspace caching | P1 | retrieval | M | PR23 | Queued | — |
 | PR25 | Enforce local model data and transport boundaries | P1 | retrieval | M | PR24, PR21 | Queued | — |
 | PR26 | Audit filesystem scope and executable configuration ownership | P1 | trust | M | PR08, PR05, PR21, PR24 | Queued | — |
 | PR27 | Resolve each release once and verify cross-channel promotion | P1 | release | M | PR17 | Queued | — |
 | PR28 | Qualify installed packages and state platform prerequisites | P1 | release | M | PR27, PR11 | Queued | — |
-| PR29 | Publish one supported surface and deprecation map | P2 | surface | M | — | Queued | — |
+| PR29 | Publish one supported surface and deprecation map | P2 | surface | M | — | In progress | — |
 | PR30 | Retire or explicitly retain experimental packs | P2 | surface | M | PR29, PR16 | Queued | — |
 | PR31 | Move bench and synthetic research outside the stable core | P2 | surface | L | PR30, PR20, PR14 | Queued | — |
 | PR32 | Verify reachability, remove dead bindings, and narrow exports safely | P2 | surface | M | PR31, PR22 | Queued | — |

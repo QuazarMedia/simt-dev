@@ -777,3 +777,25 @@ test('a repo that never adopted is a skip, and the document agrees with the exit
   assert.equal(payload.exitCode, code);
   assert.equal(payload.ok, code === 0);
 });
+
+test('upgrade moves the version pin with the rules it just wrote (PR16)', async () => {
+  const { packageVersion } = await import('../src/package-version.mjs');
+  const dir = await mkdtemp(join(tmpdir(), 'simt-upgrade-pin-'));
+  try {
+    const root = join(dir, 'repo');
+    await repo(root, { 'package.json': JSON.stringify({ name: 'r', scripts: { test: 'node --test' } }) });
+    await run(['init', '--root', root, '--yes']);
+    const manifestFile = join(root, MANIFEST_FILE);
+    const before = JSON.parse(await readFile(manifestFile, 'utf8'));
+    // The state a consumer is in after a release: rules on disk are old, the pin says so.
+    before.projection = { ...(before.projection ?? {}), version: '0.0.1' };
+    await writeFile(manifestFile, `${JSON.stringify(before, null, 2)}\n`);
+
+    const { code } = await run(['upgrade', '--root', root, '--yes']);
+    assert.equal(code, 0);
+    const after = JSON.parse(await readFile(manifestFile, 'utf8'));
+    assert.equal(after.projection.version, packageVersion());
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

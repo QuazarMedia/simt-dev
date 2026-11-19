@@ -34,6 +34,7 @@ import { basename, dirname, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { namedRoot } from '../repo-root.mjs';
+import { packageVersion } from '../package-version.mjs';
 import { provenanceDigest, plan } from '../projection/project.mjs';
 import { MANIFEST, MANIFEST_COMMENT, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
@@ -148,7 +149,11 @@ export async function upgradeCommand(positional, flags) {
                   after: manifestText({
                     ...MANIFEST_COMMENT,
                     ...chosen,
-                    projection: { ...(input.manifest?.projection ?? {}), simtDevSha: sha },
+                    // The pin has to move with the rules. `upgrade` used to write the
+                    // digest and leave `projection.version` at the old release, so a
+                    // successful upgrade still failed the pin check afterwards and the
+                    // reported verdict denied the work the run had just done.
+                    projection: { ...(input.manifest?.projection ?? {}), version: packageVersion(), simtDevSha: sha },
                   }),
                 });
                 return pairs;
@@ -201,7 +206,7 @@ export async function upgradeCommand(positional, flags) {
           {
             ...MANIFEST_COMMENT,
             ...chosen,
-            projection: { ...(manifest?.projection ?? {}), simtDevSha: sha },
+            projection: { ...(manifest?.projection ?? {}), version: packageVersion(), simtDevSha: sha },
           },
           journal,
         );

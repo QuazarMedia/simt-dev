@@ -21,13 +21,12 @@
 // harnesses. An agent is a file the tool owns whole, not a config entry to
 // merge, so `rendered` compares bytes and reports created, unchanged or updated.
 
-import { mkdir, readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { PACKAGE_ROOT } from '../workspace.mjs';
 import { parseFrontmatter } from '../text/frontmatter.mjs';
 import { LOADERS } from '../projection/loaders.mjs';
-import { journaledWriteFile } from '../journal.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
 import { readBefore } from '../diff.mjs';
 import { readIfExists } from '../util/fs.mjs';
@@ -260,19 +259,4 @@ export async function writeAgentPlan(root, journal, plan) {
   );
   await applyPlan(root, changes, { mode: { apply: true }, journal, commit: false });
   return plan.filter((x) => x.action !== 'unchanged').map((p) => p.path);
-}
-
-/**
- * Write just the skill file so `installedSkills` can find it before `plan()`
- * computes the region. Called by `init` before the region is rendered.
- */
-export async function writeSkillFile(root, journal) {
-  const text = await loadSkill();
-  const path = await skillDestPath(root);
-  const full = join(root, path);
-  const existing = await readIfExists(full);
-  if (existing === text) return null;
-  await mkdir(dirname(full), { recursive: true });
-  await journaledWriteFile(root, journal, full, text);
-  return path;
 }

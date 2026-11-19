@@ -243,7 +243,7 @@ export async function desiredRegion(root, flags) {
   // Names and triggers only. Read once, outside the packer, because a skill does not
   // change as rules are cut and reading its body here would put the cost back into the
   // region the index exists to keep it out of (ADR-085).
-  const skills = await installedSkills(root);
+  const skills = await installedSkills(root, { planned: flags?.plannedSkills ?? [] });
 
   // The digest is needed before the region can be weighed rather than after, because the
   // provenance header is part of what lands in the file. `provenanceDigest` is a pure

@@ -45,7 +45,8 @@ import {
 import { pointerState, pointerTargets } from '../projection/project.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
-import { adapters, planAgents, writeAgentPlan, writeSkillFile } from '../agents/render.mjs';
+import { adapters, planAgents, writeAgentPlan } from '../agents/render.mjs';
+import { projectedSkill } from '../projection/disclosure.mjs';
 import { resolveHarnessScope } from '../agents/scope.mjs';
 import { applyAgentHooks, planAgentHooks } from './agenthook.mjs';
 import { computeLock } from '../projection/lock.mjs';
@@ -117,16 +118,31 @@ export async function initCommand(positional, flags) {
   const findings = await scanRepo(root);
   const summary = summarise(findings);
   // Every repo-file write is journaled, so `undo` can restore this run .
-  // Created before `plan()` because the skill file must be on disk when
-  // `installedSkills` reads the directory for the region's disclosure section.
   const journal = [];
-  await writeSkillFile(root, journal);
+  // `--no-agents` opts out of the agent files, the companion skill and the agent-hooks
+  // in one flag: they are the two halves of the same decision — which harnesses this
+  // adoption speaks to — and splitting them into two flags would let a reader ask for
+  // the files without the hooks and end up with an agent the repository's own gate does
+  // not enforce. The parser's `no-` convention delivers it as the positive `agents` set
+  // to false.
+  const noAgents = flags.agents === false;
+  const noHarness = harnessScope.ids.length === 0;
+  // ADR-111. The one agent this tool ships, planned before the region so the skill it
+  // carries reaches the region's disclosure section as a *projected* file. Writing the
+  // skill to disk first made a preview a write: an `init --json` that returned nothing
+  // written had already created `.agents/skills/simt-commands/SKILL.md`, and every
+  // refusal below (conflict, malformed region, unreadable harness config) left it there.
+  // `--harness` narrows it to one reader, the same axis as the agent-hooks below.
+  const agentPlan = noAgents || noHarness ? [] : await planAgents(root, { harnesses: harnessScope.ids });
+  const plannedSkills = agentPlan
+    .filter((x) => x.id === 'skill')
+    .map((x) => projectedSkill(x.text, x.path));
   // The harness is also the rule surface: `--harness cursor` and `--surfaces cursor` are
   // the same statement about this adoption, and the manifest records one list.
-  const projected = await plan(
-    root,
-    flags.harness !== undefined && flags.surfaces === undefined ? { ...flags, surfaces: flags.harness } : flags,
-  );
+  const projected = await plan(root, {
+    ...(flags.harness !== undefined && flags.surfaces === undefined ? { ...flags, surfaces: flags.harness } : flags),
+    plannedSkills,
+  });
   const region = projected.targets[0];
   const mdcProblems = projected.mdcProblems ?? [];
   const crossRefs = projected.crossRefs ?? [];
@@ -182,19 +198,6 @@ export async function initCommand(positional, flags) {
   const ci = await planWorkflow(root);
   const dependabot = await planDependabot(root);
   const tsconfigBase = await planTsconfigBase(root);
-  // `--no-agents` opts out of the agent files and the agent-hooks in one flag: they are
-  // the two halves of the same decision — which harnesses this adoption speaks to — and
-  // splitting them into two flags would let a reader ask for the files without the hooks
-  // and end up with an agent the repository's own gate does not enforce. The parser's
-  // `no-` convention delivers it as the positive `agents` set to false.
-  const noAgents = flags.agents === false;
-  const noHarness = harnessScope.ids.length === 0;
-  // ADR-111. The one agent this tool ships, planned with the rest so the operator sees
-  // it in the same preview that lists everything else. Written in the apply path with
-  // everything else, journaled the same way. `--harness` narrows it to one reader, the
-  // same axis as the agent-hooks below, so the files and the hooks speak to the same set
-  // of harnesses (the rule surfaces are a separate axis: `--surfaces`).
-  const agentPlan = noAgents || noHarness ? [] : await planAgents(root, { harnesses: harnessScope.ids });
   // The agent-hooks entry, absorbed into this run so the adoption enforces its own
   // projection while the agent works. Planned with the rest for the same reason, and
   // written into this run's journal (committed with the rest, not a second journal).
@@ -667,7 +670,13 @@ export async function initCommand(positional, flags) {
   // so `undo` restores them with the rest of the adoption. Written from `agentPlan`,
   // which keeps the rendered bytes the display payload strips.
   const agentWritten = await writeAgentPlan(root, journal, agentPlan);
-  for (const f of agentWritten) note(`wrote    ${f} (agent)`);
+  const skillPath = agentPlan.find((x) => x.id === 'skill')?.path ?? null;
+  for (const f of agentWritten) note(`wrote    ${f} (${f === skillPath ? 'skill' : 'agent'})`);
+  if (noAgents) {
+    note(`skipped  agent files, the companion skill and agent-hooks (--no-agents)`);
+  } else if (noHarness) {
+    note(`skipped  agent files and the companion skill (no --harness selected this adoption's reader)`);
+  }
   // The agent-hooks entry, written into this run's journal and committed with the rest of
   // the adoption. It is part of the adoption, not a second run: a second journal would
   // make `undo` restore the hooks separately from the files they enforce, and the reader

@@ -135,11 +135,25 @@ function header(own) {
  * checkout steps of the v7 Dependabot run all succeeded — only the template-drift
  * tests failed, which is the pin doing its job). `setup-node` stays on v4: no run has
  * yet proven a newer major here, and moving it is the same one reviewed line.
+ * `setup-bun` is in the consumer template and nowhere else, so its line moves when a
+ * consumer hits the reason to move it; the commit pin is the whole point, because a
+ * floating `@v2` on a third-party action runs whatever its author pushed that morning.
  */
 export const ACTIONS = {
   checkout: { repo: 'actions/checkout', commit: '3d3c42e5aac5ba805825da76410c181273ba90b1', release: 'v7.0.1' },
   setupNode: { repo: 'actions/setup-node', commit: '49933ea5288caeca8642d1e84afbd3f7d6820020', release: 'v4.4.0' },
+  setupBun: { repo: 'oven-sh/setup-bun', commit: '0c5077e51419868618aeaa5fe8019c62421857d6', release: 'v2.2.0' },
 };
+
+/**
+ * The bun version a repo that declares none gets.
+ *
+ * `latest` is not a version: a generated workflow that names it changes what CI runs
+ * without a commit, and the failure it produces is a mystery on a Tuesday. This is the
+ * release this tool rendered and tested against, the same way the node floor is the
+ * floor this package declares; a repository's own `packageManager` pin overrides it.
+ */
+export const BUN_FALLBACK_VERSION = '1.4.4';
 
 /**
  * One `- uses:` line, pinned.
@@ -358,9 +372,9 @@ corepack enable${declared === null ? '' : `\ncorepack prepare ${nodeManager}@${d
       ? [
           '      - name: install bun',
           '        # bun is its own runtime and is not on the runner image.',
-          '        uses: oven-sh/setup-bun@v2',
+          uses('setupBun'),
           '        with:',
-          `          bun-version: ${declared ?? 'latest'}`,
+          `          bun-version: ${declared ?? BUN_FALLBACK_VERSION}`,
         ]
       : [];
   const install = nodeInstall

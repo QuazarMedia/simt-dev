@@ -458,6 +458,9 @@ test('the pin and its release name the same commit Dependabot would', () => {
   assert.deepEqual(ACTIONS, {
     checkout: { repo: 'actions/checkout', commit: '3d3c42e5aac5ba805825da76410c181273ba90b1', release: 'v7.0.1' },
     setupNode: { repo: 'actions/setup-node', commit: '49933ea5288caeca8642d1e84afbd3f7d6820020', release: 'v4.4.0' },
+    // Consumer-only, and pinned all the same: a floating third-party tag in a workflow
+    // this repository wrote is a change nobody reviewed.
+    setupBun: { repo: 'oven-sh/setup-bun', commit: '0c5077e51419868618aeaa5fe8019c62421857d6', release: 'v2.2.0' },
   });
   // 40 hex characters is what makes it a commit id at all; the tag form this replaced
   // was a mutable name of the same length, which is the whole difference.
@@ -788,8 +791,13 @@ test('CI provisions the manager its install step uses (PR17)', () => {
   assert.match(pnpm, /corepack enable/, 'pnpm must be activated on the runner');
   const pinned = renderWorkflow({ manager: 'pnpm', packageManager: 'pnpm@9.1.0+sha512.deadbeef' });
   assert.match(pinned, /corepack prepare pnpm@9\.1\.0 --activate/, 'the declared pin wins over the default');
+  // Third-party actions are commit-pinned like checkout and setup-node: a floating tag
+  // runs whatever its author pushed that morning, in a workflow this repository wrote.
   const bun = renderWorkflow({ manager: 'bun' });
-  assert.match(bun, /oven-sh\/setup-bun@v2/, 'bun is not on the runner image');
+  assert.match(bun, /uses: oven-sh\/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2\.2\.0/);
+  assert.doesNotMatch(bun, /oven-sh\/setup-bun@v2\b/, 'the bootstrap still uses a floating tag');
+  assert.doesNotMatch(bun, /bun-version: latest/, 'the fallback is a version, not a moving label');
+  assert.match(bun, /bun-version: 1\.4\.4/, 'the fallback names the release this tool tested');
   const npm = renderWorkflow();
   assert.doesNotMatch(npm, /corepack|setup-bun/, 'npm ships with node; nothing to bootstrap');
 });

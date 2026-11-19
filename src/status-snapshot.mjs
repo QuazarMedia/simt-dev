@@ -19,6 +19,7 @@ import { join } from 'node:path';
 import { adapters, hookPath, installedIn } from './agenthooks/render.mjs';
 import { readHooksState, wantsShim } from './compare/hooksstate.mjs';
 import { repoContext } from './context.mjs';
+import { gateList } from './manifest/schema.mjs';
 import { listJournalSets } from './journal.mjs';
 import { activeLeases, readLeases } from './lease.mjs';
 import { hasTestEvidence, readLedger } from './ledger/index.mjs';
@@ -56,15 +57,20 @@ async function checkSlot(root) {
 }
 
 async function gitHooksSlot(root) {
-  const { manifest, exists, error } = await repoContext(root).manifest();
-  if (error) return { error };
+  const { manifest, exists, problems } = await repoContext(root).manifestState();
+  // A file that is there and does not read: absent is not an error, and the slot says
+  // which of the two it got, the same distinction the loader makes.
+  if (exists && manifest === null) return { error: problems[0] ?? 'unparseable' };
   const state = await readHooksState(root, { declaresGate: (event) => wantsShim(manifest, exists, event) });
   return {
     hooksPath: state.current,
     liveDir: state.liveDir,
     events: state.installed.map((i) => ({ event: i.event, present: i.present, stale: i.stale })),
     foreign: state.foreign.length,
-    gates: exists ? { preCommit: manifest?.gates?.preCommit ?? [], prePush: manifest?.gates?.prePush ?? [] } : null,
+    gates: exists ? { preCommit: gateList(manifest, 'preCommit'), prePush: gateList(manifest, 'prePush') } : null,
+    // A declared value this build cannot read: reported here so the snapshot names it
+    // instead of showing an empty gate list as though the repository declared none.
+    gatesError: problems[0] ?? null,
   };
 }
 
@@ -169,7 +175,7 @@ export async function statusSnapshot(root) {
     slot(() => journalSlot(root)),
   ]);
   return {
-    ok: (check?.blocking ?? 0) === 0,
+    ok: (check?.blocking ?? 0) === 0 && (gitHooks?.gatesError ?? null) === null,
     command: 'status',
     root,
     at: Date.now(),
@@ -203,6 +209,7 @@ export function renderSnapshot(snapshot) {
     const wired = hooks.events.filter((e) => e.present && !e.stale).length;
     const foreign = hooks.foreign > 0 ? `, ${hooks.foreign} foreign hook(s)` : '';
     lines.push(`githooks ${wired}/${hooks.events.length} events wired${foreign}${hooks.hooksPath === null ? ` (git default: ${hooks.liveDir})` : ''}`);
+    if (hooks.gatesError) lines.push(`manifest ${hooks.gatesError}`);
   }
 
   const agent = snapshot.agentHooks;

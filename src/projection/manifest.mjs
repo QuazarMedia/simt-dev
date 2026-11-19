@@ -37,6 +37,9 @@ import { ecosystemGateRows } from '../ecosystem/records.mjs';
 // file by name.
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { GENERATED_KEYS_OF, KEYS, loadManifest, manifestPath } from '../manifest/schema.mjs';
+// The manifest's validity vocabulary is owned by the schema; re-exported here because this
+// module is where every reader of the manifest already imports from.
+export { gateList, unknownKeys } from '../manifest/schema.mjs';
 import { CLI } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { defaultGates, planGates } from '../gates/index.mjs';

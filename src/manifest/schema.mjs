@@ -52,7 +52,25 @@ export async function manifestPath(root) {
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isStringList = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string');
+const isNameList = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string' && item !== '');
+const isStringMap = (value) => isObject(value) && Object.values(value).every((item) => typeof item === 'string' && item !== '');
 const isPositiveInt = (value) => Number.isInteger(value) && value > 0;
+
+/**
+ * `gates.prePushSkipTest`: the one object whose keys the dispatcher reads together, so
+ * a misshape is named as a shape rather than one key at a time. `extensions` is optional
+ * because absent means the built-in image-and-document set (ADR-147); present, it must
+ * be a list of non-empty strings and replaces that set.
+ */
+function skipTestProblem(value) {
+  if (!isObject(value) || !isPositiveInt(value.maxCommits) || !isStringList(value.paths)) {
+    return 'gates.prePushSkipTest must be {maxCommits: a positive integer, paths: a list of globs}';
+  }
+  if (value.extensions !== undefined && !isNameList(value.extensions)) {
+    return 'gates.prePushSkipTest.extensions must be a list of file extensions';
+  }
+  return null;
+}
 
 /**
  * The keys a manifest may carry.
@@ -72,6 +90,17 @@ export const KEYS = [
   { key: 'limits.fileLines', owner: 'repo', since: '0.7.0', check: (v) => (isObject(v) && isPositiveInt(v.warn) && isPositiveInt(v.error) && v.error >= v.warn ? null : 'limits.fileLines must be {warn, error} with error >= warn') },
   { key: 'limits.coverage', owner: 'repo', since: '0.7.0', check: (v) => (v === null || (typeof v === 'number' && v >= 0 && v <= 100) ? null : 'limits.coverage must be null or a percentage') },
   { key: 'gates', owner: 'repo', since: '0.7.0', check: (v) => (isObject(v) ? null : 'gates must be an object of gate name to command') },
+  // The gate lists and their options were read without a shape until review 0005: a
+  // `gates.preCommit` written as a string reported `ok: true` with zero hooks, and a
+  // numeric one made `check` throw "is not iterable". The consumer contract is an array
+  // of gate names; everything that reads it iterates, so anything else is a config error
+  // named at the boundary rather than a crash inside a commit.
+  { key: 'gates.preCommit', owner: 'repo', since: '0.7.0', check: (v) => (isNameList(v) ? null : 'gates.preCommit must be a list of gate names') },
+  { key: 'gates.prePush', owner: 'repo', since: '0.7.0', check: (v) => (isNameList(v) ? null : 'gates.prePush must be a list of gate names') },
+  { key: 'gates.commands', owner: 'repo', since: '0.7.0', check: (v) => (isStringMap(v) ? null : 'gates.commands must be an object of gate name to a command string') },
+  { key: 'gates.cwd', owner: 'repo', since: '0.10.0', check: (v) => (isStringMap(v) ? null : 'gates.cwd must be an object of gate name to a directory') },
+  { key: 'gates.evidence', owner: 'repo', since: '0.10.0', check: (v) => (v === 'warn' || v === 'block' ? null : 'gates.evidence must be "warn" or "block"') },
+  { key: 'gates.prePushSkipTest', owner: 'repo', since: '0.10.0', check: (v) => skipTestProblem(v) },
   { key: 'localSkills', owner: 'repo', since: '0.7.0', check: (v) => (isStringList(v) ? null : 'localSkills must be a list of skill ids') },
   { key: 'profiles', owner: 'repo', since: '0.8.0', check: (v) => (isStringList(v) ? null : 'profiles must be a list of profile ids') },
   { key: 'substitutions', owner: 'repo', since: '0.8.0', check: (v) => (isObject(v) ? null : 'substitutions must be an object keyed by rule id') },
@@ -80,6 +109,12 @@ export const KEYS = [
   // refuses to walk one that resolves outside, so the type is the whole check.
   { key: 'workspace', owner: 'repo', since: '0.7.0', check: (v) => (typeof v === 'string' ? null : 'workspace must be a path string') },
   { key: 'decisions', owner: 'repo', since: '0.8.0', check: (v) => (isObject(v) ? null : 'decisions must be an object') },
+  // Both have a module that validates them further and reports findings in their own
+  // words. The schema's job is the boundary: a repository that wrote a string where
+  // these modules read an object should hear that here, not learn it when a command
+  // that happens to read the block throws.
+  { key: 'federation', owner: 'repo', since: '0.9.0', check: (v) => (isObject(v) ? null : 'federation must be an object') },
+  { key: 'local', owner: 'repo', since: '0.9.0', check: (v) => (isObject(v) ? null : 'local must be an object') },
   { key: 'budget', owner: 'repo', since: '0.8.0', check: (v) => (isObject(v) ? null : 'budget must be an object') },
   { key: 'budget.bytes', owner: 'repo', since: '0.8.0', check: (v) => (isPositiveInt(v) ? null : 'budget.bytes must be a positive integer') },
   { key: 'mode', owner: 'repo', since: '0.8.0', check: (v) => (v === 'full' || v === 'kernel' ? null : 'mode must be "full" or "kernel", not ' + JSON.stringify(v)) },
@@ -95,6 +130,44 @@ export const KEYS = [
 ];
 
 const KNOWABLE = new Set(KEYS.map((entry) => entry.key));
+
+/**
+ * The keys a reader of this build actually consumes, in a shape the tool can iterate.
+ *
+ * `unknownKeys` is where the reference document's promise — "a key this tool does not
+ * know is reported, not silently carried" — lands. The validator deliberately does not
+ * treat an unknown key as an invalid value: the file's own comment invites a repository
+ * to keep its own keys, and refusing them would make the schema the owner of a file it
+ * calls the repository's. So an unknown key is reported by `check` as a non-blocking
+ * finding, and a key under the `x-` namespace is the documented way to say "this one is
+ * mine on purpose".
+ *
+ * @param {object} manifest
+ * @returns {string[]} the unknown top-level keys, sorted
+ */
+export function unknownKeys(manifest) {
+  if (!isObject(manifest)) return [];
+  return Object.keys(manifest)
+    .filter((key) => !KNOWABLE.has(key) && !NAMESPACES.has(key) && !key.startsWith('x-'))
+    .sort();
+}
+
+/**
+ * The gates one event declares, in the shape every consumer assumes: a list of names.
+ *
+ * `manifestProblems` names an invalid list and `check` fails on it, but a reader still
+ * has to answer for the moment before that failure is read. Returning the empty list
+ * here keeps a crash out of `status`, `check`, `init` and the projection; the failure
+ * itself is the finding, not the shape of the accessor.
+ *
+ * @param {object} manifest
+ * @param {'preCommit'|'prePush'} event
+ * @returns {string[]}
+ */
+export function gateList(manifest, event) {
+  const value = manifest?.gates?.[event];
+  return Array.isArray(value) ? value.filter((name) => typeof name === 'string' && name !== '') : [];
+}
 
 /** The keys this tool writes, derived from the table: the `generated` marks above. */
 export const GENERATED_KEYS_OF = new Set(KEYS.filter((entry) => entry.generated === true).map((entry) => entry.key));
@@ -191,8 +264,17 @@ export async function loadManifest(root) {
   let text;
   try {
     text = await readFile(path, 'utf8');
-  } catch {
-    return { manifest: null, exists: false, version: MANIFEST_VERSION, problems: [], path };
+  } catch (error) {
+    // Absent is absent; anything else is a file that is there and cannot be read. The
+    // first version of this returned the absence shape for every error, so a manifest
+    // with the wrong permissions read as "this repository was never adopted" and every
+    // command offered to adopt a repository that already was one. ENOENT and ENOTDIR
+    // are the two codes that mean there is no file; a directory in the file's place is
+    // not a manifest either.
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') {
+      return { manifest: null, exists: false, version: MANIFEST_VERSION, problems: [], path };
+    }
+    return { manifest: null, exists: true, version: MANIFEST_VERSION, problems: [`unreadable: ${error.message}`], path };
   }
   let parsed;
   try {
@@ -203,13 +285,15 @@ export async function loadManifest(root) {
   if (!isObject(parsed)) {
     return { manifest: null, exists: true, version: MANIFEST_VERSION, problems: ['not a JSON object'], path };
   }
-  return {
-    manifest: parsed,
-    exists: true,
-    version: Number.isInteger(parsed.version) ? parsed.version : MANIFEST_VERSION,
-    problems: manifestProblems(parsed),
-    path,
-  };
+  const problems = manifestProblems(parsed);
+  const version = Number.isInteger(parsed.version) ? parsed.version : MANIFEST_VERSION;
+  // A file from a newer tool is not a file this build can promise to read. It is still
+  // returned, so a repair (`sync`, `upgrade`) can see the keys and preserve them; the
+  // finding is what refuses to treat it as understood.
+  if (version > MANIFEST_VERSION) {
+    problems.unshift(`unsupported manifest version ${version}; this build reads version ${MANIFEST_VERSION}`);
+  }
+  return { manifest: parsed, exists: true, version, problems, path };
 }
 
 /** One key of the `work` namespace, reported through the same problem surface as the rest. */

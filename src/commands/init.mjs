@@ -24,7 +24,7 @@ import { dirname, join } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs';
-import { MANIFEST, buildManifest, manifestPath, manifestText, readManifest, writeManifest, planGates } from '../projection/manifest.mjs';
+import { MANIFEST, buildManifest, manifestPath, manifestText, readManifest, writeManifest, planGates, gateList } from '../projection/manifest.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { readHooksState } from '../compare/hooksstate.mjs';
@@ -722,7 +722,7 @@ export async function initCommand(positional, flags) {
   // the dispatcher is installed, and `init` used to finish without saying so — so a
   // fully adopted, `check`-green repo could enforce nothing at all, which is the state
   // the first adoption reached.
-  const gates = [...(manifest.gates.preCommit ?? []), ...(manifest.gates.prePush ?? [])];
+  const gates = [...gateList(manifest, 'preCommit'), ...gateList(manifest, 'prePush')];
   if (gates.length === 0) {
     note('hooks    this repo declares no gate it can run, so there is nothing to install. Run it in CI instead.');
   } else {

@@ -29,6 +29,7 @@ import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { readHooksState, wantsShim } from './compare/hooksstate.mjs';
+import { gateList } from './manifest/schema.mjs';
 import { LOCAL_DIR } from './state.mjs';
 import { gitText } from './sys/git.mjs';
 
@@ -129,7 +130,7 @@ export async function invalidateCheckCache(root) {
  * verdicts, not here: routing and runnability are different slots.
  */
 export async function hooksSummary(root, manifest, exists) {
-  const declared = [...(manifest?.gates?.preCommit ?? []), ...(manifest?.gates?.prePush ?? [])];
+  const declared = [...gateList(manifest, 'preCommit'), ...gateList(manifest, 'prePush')];
   const evidence = manifest?.gates?.evidence === 'warn' || manifest?.gates?.evidence === 'block';
   if (declared.length === 0 && !evidence) return { ok: true };
   const state = await readHooksState(root, { declaresGate: (event) => wantsShim(manifest, exists, event) });

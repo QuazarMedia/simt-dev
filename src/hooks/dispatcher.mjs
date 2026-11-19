@@ -162,6 +162,19 @@ function gateTimeoutMs(declared, name) {
 /** Gates that are known but not required for the event to pass. */
 const DEFAULT_EVENTS = { 'pre-commit': 'preCommit', 'pre-push': 'prePush' };
 
+/** A declared gate list as the manifest must carry it: names, and nothing else. */
+function isNonEmptyStringList(value) {
+  return Array.isArray(value) && value.every((name) => typeof name === 'string' && name !== '');
+}
+
+/** What a wrong value is, in words a reader can act on without inspecting the JSON. */
+function describeShape(value) {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'a list with an entry that is not a gate name';
+  if (typeof value === 'object') return 'an object';
+  return `a ${typeof value} (${JSON.stringify(value)})`;
+}
+
 /** The sha git writes for a ref that does not exist on the remote yet. */
 const ZERO_SHA = '0'.repeat(40);
 
@@ -405,6 +418,25 @@ export async function runGates(event, { root, manifest, pushed }) {
   }
 
   const declared = manifest?.gates?.[key];
+  // A declaration this build cannot read is a failed gate, not an empty one. The first
+  // version treated a string or a number exactly like an absent list, so a push with a
+  // malformed `gates.prePush` printed "nothing runs" and exited 0 - a configuration
+  // error reported as a successful gate, which is the worst answer a gate can give.
+  if (declared !== undefined && !isNonEmptyStringList(declared)) {
+    return {
+      event,
+      gates: [
+        {
+          name: 'config',
+          status: 'failed',
+          detail: `${MANIFEST_FILE} gates.${key} must be a list of gate names; it is ${describeShape(declared)}`,
+          remedy: `fix gates.${key} in ${MANIFEST_FILE} by hand; an empty list is a valid declaration`,
+          adr: null,
+        },
+      ],
+      failed: true,
+    };
+  }
   if (!Array.isArray(declared) || declared.length === 0) {
     // An array, not a string. This field sat next to `gates` as a bare string while
     // the caller iterated it, so an empty gate list printed one note line per

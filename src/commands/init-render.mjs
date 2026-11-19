@@ -4,6 +4,7 @@
 import { adapters } from '../agents/render.mjs';
 import { renderDependabot } from '../ci/dependabot.mjs';
 import { renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
+import { gateList } from '../manifest/schema.mjs';
 import { IDENTITY_FILE, INCLUDE_KEY } from '../identity.mjs';
 import { CLI, MANIFEST_FILE, PACKAGE_NAME } from '../name.mjs';
 import { LOCAL_PROFILE_DIR, PRIMARY_TARGET } from '../projection/project.mjs';
@@ -35,8 +36,8 @@ function render(payload, manifest, { npm = true, manager = null, version } = {})
   lines.push(`  ${payload.manifest.action.padEnd(9)} ${MANIFEST_FILE}`);
   lines.push(
     `            id=${manifest.id} stack=${manifest.stack.join(',') || '(none)'} ` +
-      `preCommit=${manifest.gates.preCommit.join(',') || '(none)'} ` +
-      `prePush=${manifest.gates.prePush.join(',') || '(none)'} ` +
+      `preCommit=${gateList(manifest, 'preCommit').join(',') || '(none)'} ` +
+      `prePush=${gateList(manifest, 'prePush').join(',') || '(none)'} ` +
       `coverage=${manifest.limits.coverage ?? 'undeclared (ADR-006)'} ` +
       `fileLines=${manifest.limits.fileLines.warn}/${manifest.limits.fileLines.error} (ADR-005)`,
   );

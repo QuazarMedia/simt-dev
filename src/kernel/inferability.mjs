@@ -16,6 +16,7 @@
 // the region either way: `simt-` vocabulary is for the rule's author, not its reader.
 
 import { gateNames } from '../hooks/gates.mjs';
+import { gateList } from '../manifest/schema.mjs';
 import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 
 import { CARD_VERBS } from './card.mjs';
@@ -130,8 +131,7 @@ export function inferableProofs({ facts = [], stack = [], card = null, manifest 
   for (const line of card?.lines ?? []) {
     if (line.verb) proofs.add(`card:${line.verb}`);
   }
-  const gates = manifest?.gates ?? {};
-  for (const name of [...(gates.preCommit ?? []), ...(gates.prePush ?? [])]) {
+  for (const name of [...gateList(manifest, 'preCommit'), ...gateList(manifest, 'prePush')]) {
     proofs.add(`gate:${name}`);
   }
   return proofs;

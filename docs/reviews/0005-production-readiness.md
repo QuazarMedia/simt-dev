@@ -30,7 +30,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR08 | Restore every journaled effect and report accurate undo outcomes | P1 | adoption | M | PR07 | Complete | d8e02dd727d542283b350f4ae25508004e5e3695 |
 | PR09 | Establish canonical repository context and config precedence | P1 | config | M | PR02 | Complete | 78dff168814df62a278ff69a71285c5f8b7b3c0a |
 | PR10 | Validate and apply repository-local ecosystem records | P1 | ecosystem | M | PR09 | Complete | b3aaec60c74fc6bef363199703e7b69f946f395b |
-| PR11 | Make focused runners configurable across nested and mixed stacks | P1 | runners | M | PR06, PR10 | Queued | — |
+| PR11 | Make focused runners configurable across nested and mixed stacks | P1 | runners | M | PR06, PR10 | Complete | c6a28c4c3f393e60aac3b8170ca27753b257f7b2 |
 | PR12 | Resolve polyglot gates without command collisions | P1 | ecosystem | M | PR10, PR05 | Queued | — |
 | PR13 | Report test-selection gaps, deletions, and actual test outcomes | P1 | runners | M | PR11 | Queued | — |
 | PR14 | Share bounded gate execution and report cleanup | P1 | runners | M | PR13, PR04 | Queued | — |

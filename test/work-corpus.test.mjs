@@ -219,6 +219,19 @@ test('committed, staged and working-tree content are three labelled states', asy
   assert.match(corpus.units[0].revision, /^worktree:/);
 });
 
+test('a heading-less source cites the file, not a fragment that does not exist', async () => {
+  const text = 'export const app = () => 1;\n';
+  const corpus = await buildCorpus({
+    scope: { id: 'code', paths: ['src'], kind: 'source' },
+    candidates: [{ path: 'src/app.mjs', ...md(text) }],
+    policy: { deny: ALWAYS_DENIED },
+    read: reader({ 'src/app.mjs': text }),
+  });
+  assert.equal(corpus.units.length, 1);
+  assert.equal(corpus.units[0].anchor, '');
+  assert.equal(corpus.units[0].artifact, 'src/app.mjs');
+});
+
 test('the policy digest ignores ordering and changes with every decision it covers', () => {
   const one = policyDigest({ deny: ['b', '.simt'], maxBytes: 10 });
   assert.equal(one, policyDigest({ deny: ['.simt', 'b', 'b'], maxBytes: 10 }));

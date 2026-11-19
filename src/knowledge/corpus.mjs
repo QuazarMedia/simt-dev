@@ -105,7 +105,9 @@ function generatedReason(text) {
 function unitRow({ scope, path, unit, sourceDigest, provenance, revision }) {
   return {
     id: unit.id,
-    artifact: artifactId({ path, anchor: unit.anchor }),
+    // A document with no heading has an empty anchor, and `path#` cites a fragment that does
+    // not exist: the artifact is the file, exactly as an explicit path id would be.
+    artifact: artifactId({ path, anchor: unit.anchor === '' ? null : unit.anchor }),
     scope: scope.id,
     path,
     anchor: unit.anchor,

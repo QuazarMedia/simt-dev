@@ -67,10 +67,47 @@ export function verifyStatusFacts(doc) {
   }
 }
 
+const LIST_FIELDS = {
+  plan: ['obligations', 'capabilities', 'history'],
+  select: ['changed', 'imports', 'typed', 'validators', 'scope'],
+  status: [],
+};
+
+/**
+ * The fields a command reads, and the shape a present value must have.
+ *
+ * The adapters default an absent field to an empty list, which is right; defaulting a
+ * present field to one is not, and `{"changed": "a\nb"}` became "nothing changed" and
+ * an OK no-op (review 0005 PR20). A request that is empty is legitimate; a request whose
+ * field is the wrong type is not evidence of anything.
+ */
+function inputProblems(sub, doc) {
+  const problems = [];
+  for (const field of LIST_FIELDS[sub] ?? []) {
+    if (doc[field] !== undefined && !Array.isArray(doc[field])) {
+      problems.push(`${field} must be a list`);
+    }
+  }
+  if (sub === 'select' && doc.closure !== undefined && doc.closure !== null && !Array.isArray(doc.closure)) {
+    problems.push('closure must be a list or null');
+  }
+  if (sub === 'select' && doc.invocation !== undefined && typeof doc.invocation !== 'string') {
+    problems.push('invocation must be a string');
+  }
+  if (sub === 'plan' && doc.constraints !== undefined && (doc.constraints === null || typeof doc.constraints !== 'object' || Array.isArray(doc.constraints))) {
+    problems.push('constraints must be an object');
+  }
+  return problems;
+}
+
 export async function verifyCommand(sub, args, flags) {
   if (args.length > 0) return fail(`unknown verify ${sub} argument ${args[0]}`, EXIT.USAGE, USAGE);
   const read = await readJsonDocument(flags, 'input');
   if (read.error !== undefined) return fail(read.error, EXIT.USAGE, USAGE);
+  const problems = inputProblems(sub, read.doc);
+  if (problems.length > 0) {
+    return fail(`malformed ${sub} input (${problems.join('; ')})`, EXIT.USAGE, 'fix the field, or omit it to mean an empty list');
+  }
   const payload = sub === 'plan' ? verifyPlanFacts(read.doc) : sub === 'select' ? verifySelectFacts(read.doc) : verifyStatusFacts(read.doc);
   if (payload.error !== undefined) return fail(payload.error, EXIT.FAIL, 'a document of obligations, capabilities and constraints');
   present(payload, () => (sub === 'plan' ? renderPlan(payload.plan) : sub === 'select' ? renderSelect(payload) : renderStatus(payload.report)), flags);

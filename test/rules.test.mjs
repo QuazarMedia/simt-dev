@@ -172,6 +172,9 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-097',
     'ADR-098',
     'ADR-099',
+    // ADR-120 joined when ADR-197 landed: its status line states that ruling 1's evidence
+    // matching is superseded, which is the claim the parser reads on the changed record.
+    'ADR-120',
   ]);
   for (const d of decisions) {
     for (const p of d.partial) {

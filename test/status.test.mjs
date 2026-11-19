@@ -181,3 +181,15 @@ test('R48: writers invalidate, so the line never reports a moved tree', async (t
   const line = await runCli(['status', '--line', '--root', root], env);
   assert.equal(line.stdout.trim(), 'simt no cache - run check');
 });
+
+test('checkRepo writes nothing unless the CLI asks for the cache (PR21)', async () => {
+  const { checkRepo } = await import('../src/commands/sync.mjs');
+  const { existsSync } = await import('node:fs');
+  const root = await mkdtemp(join(tmpdir(), 'simt-pure-check-'));
+  await git(['init', '-q', root]);
+  const first = await checkRepo(root, {});
+  assert.equal(typeof first.ok, 'boolean');
+  assert.equal(existsSync(join(root, '.simt')), false, 'a read must not create local state');
+  await checkRepo(root, { writeCache: true });
+  assert.equal(existsSync(join(root, '.simt')), true, 'the CLI path still refreshes its cache');
+});

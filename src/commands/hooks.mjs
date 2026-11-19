@@ -72,14 +72,20 @@ async function runHook(args, flags) {
   }
   const { manifest, exists, error } = await ctx.manifest();
   if (error) return fail(`${MANIFEST_FILE}: ${error}`, EXIT.CONFIG);
-  if (!exists) {
-    return fail(`${root} has no ${MANIFEST_FILE}; the hook cannot know its gate list`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
-  }
 
   // git feeds pre-push its ref list on stdin, and the non-code skip (ADR-147)
   // needs it. A manual run from a terminal has a TTY and reads empty, which the
   // dispatcher treats as "no push to classify" and answers with the full suite.
   const pushed = event === 'pre-push' ? await readStdin() : undefined;
+
+  // A pre-push with a ref list reads the gate list from each pushed revision, so the
+  // caller's checkout not being adopted is not a reason to refuse the push: the branch
+  // about to be delivered may carry its own manifest. Every other case still needs one
+  // here, because the caller's checkout is the only basis it has.
+  const pushedRevision = event === 'pre-push' && pushed.trim() !== '';
+  if (!exists && !pushedRevision) {
+    return fail(`${root} has no ${MANIFEST_FILE}; the hook cannot know its gate list`, EXIT.CONFIG, `run: ${CLI} init --root ${root}`);
+  }
 
   const result = await runGates(event, { root, manifest, pushed });
   if (result.error) return fail(result.error, EXIT.USAGE);
@@ -90,7 +96,7 @@ async function runHook(args, flags) {
   }
 
   for (const n of result.notes ?? []) note(`note     ${n}`);
-  emit(renderGateReport(event, manifest.gates[GATE_KEY[event]] ?? [], result).join('\n'));
+  emit(renderGateReport(event, manifest?.gates?.[GATE_KEY[event]] ?? [], result).join('\n'));
   return result.failed ? EXIT.FAIL : EXIT.OK;
 }
 

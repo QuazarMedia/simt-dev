@@ -16,25 +16,31 @@ import { join } from 'node:path';
 import { git } from '../sys/git.mjs';
 
 /**
- * Materialize a detached worktree at HEAD so the pre-push gates run against the
- * committed tree, not the working one. `node_modules` is symlinked in when the real root
- * has one, because a script gate resolves its runner and binaries from there and a fresh
- * worktree does not carry it.
+ * Materialize a detached worktree at one revision so a gate runs against the tree being
+ * pushed, not the working one. `node_modules` is symlinked in when the real root has one,
+ * because a script gate resolves its runner and binaries from there and a fresh worktree
+ * does not carry it.
  *
- * Fails closed: an unborn HEAD (no commits) or a git error returns `{ path: null }`
- * with the reason, and the caller turns that into a gate failure rather than running
- * against a tree it cannot name.
+ * The revision is a parameter rather than `HEAD` because a push can deliver several refs,
+ * and only one of them — often none of them — is the caller's HEAD. Running the gates at
+ * HEAD reported a result about a tree the push did not carry.
+ *
+ * Fails closed: a revision this repository cannot check out (an unborn HEAD, an object
+ * only the remote has, an unsupported object format) returns `{ path: null }` with the
+ * reason, and the caller turns that into a gate failure rather than running against a
+ * tree it cannot name.
  *
  * @param {string} root the real repository root
+ * @param {string} revision a rev-parse expression: a commit sha, a ref, or HEAD
  * @returns {Promise<{path: string, error?: never}|{path: null, error: string}>}
  */
-async function materializeHeadWorktree(root) {
+async function materializeHeadWorktree(root, revision) {
   const path = await mkdtemp(join(tmpdir(), 'head-gate-'));
   try {
-    await git(root, ['worktree', 'add', '--detach', path, 'HEAD']);
+    await git(root, ['worktree', 'add', '--detach', path, revision]);
   } catch (error) {
     await rm(path, { recursive: true, force: true }).catch(() => {});
-    return { path: null, error: `git worktree add failed: ${String(error.stderr ?? error.message).trim()}` };
+    return { path: null, error: `git worktree add failed for ${revision}: ${String(error.stderr ?? error.message).trim()}` };
   }
   const nodeModules = join(root, 'node_modules');
   try {
@@ -69,13 +75,14 @@ async function removeHeadWorktree(root, path) {
  * returns, because a pre-push gate that cannot name its tree has nothing to run against.
  *
  * @param {string} root the real repository root
+ * @param {string} [revision] the revision being pushed; HEAD for a manual run
  * @returns {Promise<
  *   {path: string, done: () => Promise<void>, gate?: never, error?: never} |
  *   {path: null, error: string, gate: object, done?: never}
  * >}
  */
-export async function preparePushTree(root) {
-  const materialized = await materializeHeadWorktree(root);
+export async function preparePushTree(root, revision = 'HEAD') {
+  const materialized = await materializeHeadWorktree(root, revision);
   if (materialized.path === null) {
     return {
       path: null,
@@ -84,7 +91,7 @@ export async function preparePushTree(root) {
         name: 'head',
         status: 'failed',
         detail: materialized.error,
-        remedy: 'commit the work, or resolve the git state so HEAD is a valid reference, then push again',
+        remedy: `make sure ${revision} is a commit this repository can check out, then push again`,
         adr: null,
       },
     };

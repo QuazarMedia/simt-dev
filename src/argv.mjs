@@ -106,7 +106,7 @@ export const BOOL_FLAGS = new Set([
   'changed',
   // gate: treat an unproven selection as a failure. Off by default because the answer
   // `nothing-selected` with exit 0 predates the flag and every existing consumer reads
-  // it; a repository that wants the stricter verdict opts in (ADR-164).
+  // it; a repository that wants the stricter verdict opts in (ADR-198).
   'strict',
   // tests: `--run` asks the gate's question — the tests a change reaches — under the
   // name that already means tests, so a reader does not have to learn a second verb.

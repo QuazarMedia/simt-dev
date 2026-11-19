@@ -103,7 +103,7 @@ export async function gateCommand(args, flags) {
   const unmatched = changed.filter((p) => !listed.files.includes(p));
   const graph = graphState(edges, files, root);
   if (selected.length === 0) {
-    // `--strict` is the opt-in versioned verdict (ADR-164): a code change with no reachable
+    // `--strict` is the opt-in versioned verdict (ADR-198): a code change with no reachable
     // test is unproven, not safe. The default stays compatible because every consumer of
     // the old answer reads exit 0 as "nothing to run".
     const strict = flags.strict === true;
@@ -234,7 +234,7 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     text.push(compact ?? body);
   }
   const unproven = runs.flatMap((run) => run.unproven ?? []);
-  // `--strict` is the opt-in versioned verdict (ADR-164). The default stays compatible:
+  // `--strict` is the opt-in versioned verdict (ADR-198). The default stays compatible:
   // an empty selection is still exit 0, because every consumer of the old answer expects
   // it. Strict refuses to call a run proven when the graph could not resolve, when a
   // changed path has no reachable test, or when the runner never mentioned a file it was

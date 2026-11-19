@@ -173,7 +173,6 @@ in [architecture/history.md](architecture/history.md).
 | [162](decisions/ADR-162-document-checks-are-three-bases-and-a-model-name-is-not-a-second-opinion.md) | document checks are three bases, and a model name is not a second opinion | accepted · 2026-11-03 |
 | [163](decisions/ADR-163-a-procedure-keeps-its-own-language-and-an-orchestration-is-not-a-function.md) | a procedure keeps its own language, and an orchestration is not a function | accepted · 2026-11-03 |
 | [164](decisions/ADR-164-gate-selection-keeps-the-import-closure-and-an-empty-selection-is-not-a-pass.md) | gate selection keeps the import closure, and an empty selection is not a pass | accepted · 2026-11-03 |
-| [164](decisions/ADR-164-the-strict-gate-verdict-is-opted-into.md) | the strict gate verdict is opted into, and the default keeps its old answer | accepted · 2026-11-19 |
 | [165](decisions/ADR-165-evidence-is-current-only-for-the-subject-and-target-it-names.md) | evidence is current only for the subject and target it names, and a chain is not an attestation | accepted · 2026-11-03 |
 | [166](decisions/ADR-166-completion-is-unanimous-and-its-semantics-are-part-of-the-output.md) | completion is unanimous, and its semantics are part of the output | accepted · 2026-11-03 |
 | [167](decisions/ADR-167-a-target-is-identified-by-namespace-and-incarnation.md) | a target is identified by namespace and incarnation, and a session is a credential not an identity | accepted · 2026-11-03 |
@@ -207,3 +206,4 @@ in [architecture/history.md](architecture/history.md).
 | [195](decisions/ADR-195-the-hooks-disable-policy-reads-its-own-text-when-the-shell-cannot.md) | the hooks-disable policy reads its own text when the shell cannot | accepted · 2026-11-05 |
 | [196](decisions/ADR-196-a-failed-alias-lookup-leaves-the-push-and-rewrite-rows-their-text.md) | a failed alias lookup leaves the push and rewrite rows their text | accepted · 2026-11-05 |
 | [197](decisions/ADR-197-gate-evidence-names-the-tree-it-ran-on.md) | gate evidence names the tree it ran on, and nothing else stands in for it | accepted · 2026-11-19 |
+| [198](decisions/ADR-198-the-strict-gate-verdict-is-opted-into.md) | the strict gate verdict is opted into, and the default keeps its answer | accepted · 2026-11-19 |

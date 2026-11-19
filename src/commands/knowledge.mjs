@@ -473,7 +473,12 @@ async function knowledgeBuildCommand(flags) {
       return fail(`${IDENTITY_FILE} is not JSON: ${error.message}`, EXIT.CONFIG, 'fix the file, or remove it; a map nobody can read maps nothing');
     }
     const map = readIdentityMap(doc);
-    if (map.problems.length > 0) return fail(`${IDENTITY_FILE}: ${map.problems[0].message}`, EXIT.CONFIG, map.problems[0].remedy);
+    // A map this reader cannot read is fatal: dropping an entry loses an id the repository
+    // declared. A duplicate is not that - every entry is readable, and two paths claiming one
+    // id is the same ambiguity a duplicate frontmatter id is, which the corpus reports per
+    // path rather than refusing the whole build.
+    const fatal = map.problems.find((entry) => entry.code !== 'duplicate-id');
+    if (fatal !== undefined) return fail(`${IDENTITY_FILE}: ${fatal.message}`, EXIT.CONFIG, fatal.remedy);
     identities = identityMap(map.paths);
   }
 
@@ -554,7 +559,7 @@ async function readTextFile(path) {
 
 function renderBuild(payload) {
   const counts = payload.counts;
-  const refused = ['ignored', 'denied', 'symlink', 'untracked', 'too-large', 'generated', 'unsupported', 'missing', 'outside']
+  const refused = ['ignored', 'denied', 'symlink', 'untracked', 'too-large', 'generated', 'sidecar', 'unsupported', 'missing', 'outside']
     .filter((state) => counts[state] > 0)
     .map((state) => `${counts[state]} ${state}`)
     .join(', ');

@@ -26,11 +26,11 @@ export const APPLICABILITY_RESULTS = Object.freeze(['applicable', 'conflict', 'u
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isText = (value) => typeof value === 'string' && value.length > 0;
 
-/** Days only: a timestamp would make the answer depend on a timezone nobody declared. */
 /**
  * An ISO day, as this module and the metadata reader both mean it.
  *
- * Exported when the second real caller arrived: a metadata date and a claim window that
+ * Days only: a timestamp would make the answer depend on a timezone nobody declared. Exported
+ * when the second real caller arrived, because a metadata date and a claim window that
  * disagreed about what `2026-02-30` is would be two answers to one question.
  */
 export const isIsoDay = (value) => {

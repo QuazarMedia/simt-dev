@@ -1,8 +1,8 @@
 // Native metadata: what a document already says about itself, and what it points at.
 //
-// A repository that has a handbook already writes frontmatter, and a
-// repository that generates its documents already keeps sidecars. The slice reads what is
-// there rather than asking for a second catalogue, and the rules that keep it honest are:
+// A repository that has a handbook already writes frontmatter, and a repository that generates
+// its documents already keeps sidecars. This reader reads what is there rather than asking for
+// a second catalogue, and the rules that keep it honest are:
 //
 //   * Only the keys this reader knows are interpreted. Unrelated frontmatter (`draft`,
 //     `tags`) belongs to the document's own tooling and is left alone; a *known* key whose
@@ -31,21 +31,21 @@ import { extractClaims } from './claims.mjs';
 
 // The finding codes a reader of this module may see: `unsupported-schema`, `invalid-date`,
 // `duplicate-id`, `ambiguous-scope`, `proposed-link`, `invalid-sidecar`, `invalid-claim`,
-// `unresolved-source` and `uncertain-anchor`. They are separate answers on purpose - the
-// acceptance for this slice is that a reader can tell them apart.
+// `unresolved-source` and `uncertain-anchor`. They are separate answers on purpose: a reader
+// told only "this reference is a problem" fixes the wrong one.
 
 /** The conventional identity file: authored, tracked, and read by the same reader as `check`. */
 export const IDENTITY_FILE = '.simt/knowledge/identities.json';
 
 /** Every frontmatter or sidecar key this reader interprets. Everything else is the document's. */
-export const METADATA_KEYS = Object.freeze(['id', 'type', 'scope', 'language', 'authority', 'validFrom', 'validTo', 'knownAt', 'sources']);
+const METADATA_KEYS = Object.freeze(['id', 'type', 'scope', 'language', 'authority', 'validFrom', 'validTo', 'knownAt', 'sources']);
 
-export const AUTHORITIES = Object.freeze(['declared', 'reviewed']);
+const AUTHORITIES = Object.freeze(['declared', 'reviewed']);
 
-export const ARTIFACT_TYPES = Object.freeze(['document', 'requirement', 'procedure', 'template', 'source', 'dataset', 'remote-object']);
+const ARTIFACT_TYPES = Object.freeze(['document', 'requirement', 'procedure', 'template', 'source', 'dataset', 'remote-object']);
 
 /** The type a work scope's kind implies, so a document needs no `type` when its scope says it. */
-export const KIND_TYPES = Object.freeze({ document: 'document', recipe: 'procedure', source: 'source', dataset: 'dataset', 'remote-object': 'remote-object' });
+const KIND_TYPES = Object.freeze({ document: 'document', recipe: 'procedure', source: 'source', dataset: 'dataset', 'remote-object': 'remote-object' });
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isText = (value) => typeof value === 'string' && value.length > 0;
@@ -313,8 +313,11 @@ function claimApplicability(metadata = {}) {
 /**
  * One document's artifact: identity, declared shape and dates, its claims and its references.
  *
+ * `body` and `offset` are for the section extractor: it indexes the document without the
+ * frontmatter block, and the offset is how a unit of the body still names bytes of the file.
+ *
  * @param {{path: string, text?: string, scopes?: object[], identities?: object, sidecar?: string|null}} input
- * @returns {{artifact: object, refs: object[], problems: object[]}}
+ * @returns {{artifact: object, refs: object[], problems: object[], body: string, offset: {bytes: number, lines: number}}}
  */
 export function describeArtifact({ path, text = '', scopes = [], identities = {}, sidecar = null } = {}) {
   const { front, body } = parseFrontmatter(text);

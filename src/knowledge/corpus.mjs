@@ -1,7 +1,7 @@
 // A scoped corpus: the sections of the files a repository declared, as data.
 //
 // The corpus is derived - it lives under `.simt/local/`, it is built from
-// the tracked files inside one declared scope, and nothing in it is authored. Four rules keep
+// the tracked files inside one declared scope, and nothing in it is authored. Five rules keep
 // it honest, and each one is a failure that has already shipped somewhere:
 //
 //   * Policy decides before the bytes are read. A denied path is a row in the inventory and is
@@ -15,6 +15,8 @@
 //   * Reuse is keyed by (path, content digest, policy digest), and only for a file this build
 //     still indexes. A stale cache therefore cannot resurrect content the declaration stopped
 //     including, and an incremental build produces the same corpus as a cold one.
+//   * A `.meta.json` beside a document is that document's metadata read with it, not a source
+//     of its own. Indexing the sidecar made the corpus cite metadata as if it were content.
 //
 // Ranges stay bytes, because the section extractor stores bytes and a corpus that mixes
 // characters with bytes cites a different span on every non-ASCII document.
@@ -49,6 +51,7 @@ const SOURCE_STATES = Object.freeze([
   'untracked',
   'too-large',
   'generated',
+  'sidecar',
   'unsupported',
   'missing',
 ]);
@@ -207,6 +210,13 @@ export async function buildCorpus({ scope = {}, scopes = null, candidates = [], 
     }
     if (candidate.tracked === false) {
       inventory.push({ path, state: 'untracked', reason: 'ingestion defaults to tracked files; commit it, or scope the path it belongs to' });
+      continue;
+    }
+    // A sidecar is metadata for the document beside it, and the reader above already folds it
+    // in. Indexing it as a document of its own would put the metadata in the corpus as content,
+    // with an anchor and a digest that answer a question the file never made a claim about.
+    if (path.endsWith('.meta.json')) {
+      inventory.push({ path, state: 'sidecar', reason: `${path} is the metadata sidecar of ${path.slice(0, -'.meta.json'.length)}, and is read with it rather than indexed` });
       continue;
     }
     if (Number.isFinite(candidate.bytes) && candidate.bytes > maxBytes) {

@@ -204,6 +204,25 @@ test('a sidecar overrides frontmatter, and an unknown sidecar key is a mistake',
   assert.equal(problems[0].field, 'colonne');
 });
 
+test('a metadata sidecar is read with its document, and never indexed as a document itself', async () => {
+  const files = { 'docs/rates.md': '# Rates\n\n30 days.\n' };
+  const sidecars = { 'docs/rates.md': JSON.stringify({ id: 'handbook.rates', validFrom: '2025-01-01', knownAt: '2025-01-01' }) };
+  const corpus = await buildCorpus({
+    scope,
+    candidates: [...Object.keys(files), 'docs/rates.md.meta.json'].map((path) => ({ path, tracked: true, bytes: 32 })),
+    policy: { deny: ALWAYS_DENIED, identities: {} },
+    read: async (path) => (Object.hasOwn(files, path) ? Buffer.from(files[path], 'utf8') : null),
+    sidecar: async (path) => (Object.hasOwn(sidecars, path) ? sidecars[path] : null),
+  });
+  assert.deepEqual(corpus.artifacts.map((artifact) => artifact.id), ['handbook.rates']);
+  assert.equal(corpus.artifacts[0].applicability.recordedFrom, '2025-01-01', 'the sidecar was not read with its document');
+  const row = corpus.inventory.find((entry) => entry.path === 'docs/rates.md.meta.json');
+  assert.equal(row.state, 'sidecar');
+  assert.match(row.reason, /metadata sidecar of docs\/rates\.md/);
+  assert.equal(corpus.counts.sidecar, 1);
+  assert.equal(corpus.counts.indexed, 1);
+});
+
 test('check validates the identity map with the same reader the build uses', async () => {
   const root = await tempDir('simt-identities-');
   mkdirSync(join(root, '.simt/knowledge'), { recursive: true });
@@ -263,6 +282,13 @@ test('a moved document keeps the id its identity map declares, across a rebuild'
   assert.equal(second.units.filter((unit) => unit.path === 'docs/handbook-notes.md').every((unit) => unit.artifact.startsWith('handbook.notes')), true);
 
   // A malformed map stops the build instead of quietly losing every id in it.
+  // A duplicate in the map is the same ambiguity a duplicate frontmatter id is: reported per
+  // path, so the build still produces a corpus. A map that cannot be read is the fatal case.
+  writeFileSync(join(root, '.simt/knowledge/identities.json'), `${JSON.stringify({ paths: { 'docs/rates.md': 'shared.id', 'docs/handbook-notes.md': 'shared.id' } }, null, 2)}\n`);
+  const ambiguous = await build(root);
+  assert.deepEqual(ambiguous.artifacts.map((artifact) => artifact.id), ['shared.id', 'shared.id']);
+  assert.deepEqual(ambiguous.problems.filter((problem) => problem.code === 'duplicate-id').map((problem) => problem.path).sort(), ['docs/handbook-notes.md', 'docs/rates.md']);
+
   writeFileSync(join(root, '.simt/knowledge/identities.json'), '{ "paths": [] }\n');
   const refused = await simt(['knowledge', 'build', '--scope', 'docs', '--root', root]);
   assert.notEqual(refused.code, 0);

@@ -29,7 +29,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [impact](impact.md) | 1 |
 | [index](index.md) | 2 |
 | [init](init.md) | 1 |
-| [knowledge](knowledge.md) | 8 |
+| [knowledge](knowledge.md) | 9 |
 | [adapter](adapter.md) | 1 |
 | [verify](verify.md) | 6 |
 | [lessons](lessons.md) | 4 |
@@ -163,6 +163,7 @@ simt index overlay --input <file>                                               
 simt init [path]                                                                     # adopt this repository: manifest, region, agents and agent-hooks; git hooks are a separate install
 
 # knowledge
+simt knowledge build --scope <id> [--yes]                                            # build the scoped corpus of declared sections under the ignored local area
 simt knowledge debt --input <file>                                                   # rank stale and unsupported knowledge by consequence per effort
 simt knowledge derivations --input <file>                                            # which outputs a source, template or skill change puts in question
 simt knowledge export --input <file>                                                 # a bounded, permission-filtered packet another repository can read offline

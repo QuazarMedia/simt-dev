@@ -147,6 +147,10 @@ export const IMPLEMENTED = {
     const { knowledgeCommand } = await import('./knowledge.mjs');
     return (args, flags) => knowledgeCommand('sections', args, flags);
   },
+  'knowledge build': async () => {
+    const { knowledgeCommand } = await import('./knowledge.mjs');
+    return (args, flags) => knowledgeCommand('build', args, flags);
+  },
   'bench replay': async () => (await import('./bench.mjs')).benchReplayCommand,
   'bench calibrate': async () => (await import('./bench.mjs')).benchCalibrateCommand,
   // One group, two questions about one document: `plan` names the next observation and

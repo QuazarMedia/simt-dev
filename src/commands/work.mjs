@@ -7,13 +7,20 @@
 // repository must therefore report that no software test is runnable rather than inventing
 // one, which is the failure this door exists to prevent.
 
-import { EXIT, fail, present } from '../output/index.mjs';
+import { relative } from 'node:path';
+
+import { EXIT, fail, note, present, writeMode } from '../output/index.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { detectFacets } from '../work/facets.mjs';
 import { capabilityCards, probeLocal } from '../work/capabilities.mjs';
 import { WORK_VERSION } from '../work/config.mjs';
 import { readWork } from '../work/effective.mjs';
+import { proposeScope } from '../work/setup.mjs';
+import { loadManifest, manifestPath } from '../manifest/schema.mjs';
+import { writeManifest } from '../projection/manifest.mjs';
+import { commitJournal } from '../journal.mjs';
+import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { buildCapsule, checkResume, duplicateEffects, reopenFor } from '../coordination/handoff.mjs';
 import { schedule } from '../coordination/workgraph.mjs';
 import { proposeGraduation, promotionReady } from '../memory/graduation.mjs';
@@ -35,6 +42,29 @@ const USAGE = `run: ${CLI} work inspect`;
  * remedy names the file the maintainer owns and the command that reads it again - both
  * exist in this build, which is the only kind of instruction a door may give.
  */
+/** The top directory the sample's first document sits in, or `.` when it sits at the root. */
+function suggestedDir(facets) {
+  const evidence = facets.artifactKinds.find((row) => row.kind === 'document')?.evidence ?? [];
+  const first = evidence.find((path) => !path.includes('#'));
+  if (first === undefined) return '.';
+  const [head, ...rest] = first.split('/');
+  return rest.length === 0 ? '.' : head;
+}
+
+/** A scope id a reader can act on: the directory it would own, as one word. */
+function suggestedId(facets) {
+  return suggestedDir(facets).replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || '<name>';
+}
+
+/** The kind a scope defaults to, read from the same sample the inspection reports. */
+function defaultKind(facets, path) {
+  const documents = facets.artifactKinds.find((row) => row.kind === 'document');
+  if (documents === undefined) return 'source';
+  if (typeof path !== 'string' || path === '' || path === '.' || path === './') return 'document';
+  const prefix = `${path.replace(/\/+$/, '')}/`;
+  return documents.evidence.some((entry) => entry === path || entry.startsWith(prefix)) ? 'document' : 'source';
+}
+
 function nextStep({ work, facets, validators }) {
   // A file that does not parse is the first problem: everything below it is a guess about
   // a declaration nobody can read, and naming the scope first would send the reader to a
@@ -43,7 +73,9 @@ function nextStep({ work, facets, validators }) {
   const expected = facets.artifactKinds.some((row) => row.kind === 'document') ? 'document' : 'source';
   const declareOne = {
     step: 'declare one scope, so what this repository produces is a declaration rather than a guess',
-    remedy: `add "work": {"version": ${WORK_VERSION}, "scopes": [{"id": "<name>", "paths": ["<directory>"], "kind": "${expected}"}]} to ${MANIFEST_FILE}, then run: ${CLI} work inspect`,
+    // The remedy is a command, not a snippet: an instruction a reader cannot run is a second
+    // problem stacked on the first.
+    remedy: `run: ${CLI} work setup --scope ${suggestedId(facets)} --path ${suggestedDir(facets)} --kind ${expected}`,
   };
   if (!work.declared) return declareOne;
   if (!work.ok) {
@@ -102,6 +134,74 @@ export async function workInspectCommand(args, flags) {
   const payload = await workInspectFacts(commandRoot(flags));
   present(payload, () => render(payload), flags);
   return EXIT.OK;
+}
+
+const SETUP_USAGE = `run: ${CLI} work setup --scope <id> --path <dir> [--kind <kind>] [--validator "<command>"]`;
+
+/**
+ * One scope, previewed and then written by the manifest's own writer.
+ *
+ * A preview writes nothing at all - no manifest, no journal, no git config - so the diff it
+ * shows is exactly the byte change the apply makes. The second apply finds the scope it
+ * would add and changes nothing, which is what makes the command safe to re-run.
+ */
+export async function workSetupCommand(args, flags) {
+  if (args.length > 0) return fail(`unknown work setup argument ${args[0]}`, EXIT.USAGE, SETUP_USAGE);
+  const root = commandRoot(flags);
+  const mode = writeMode(flags);
+  const loaded = await loadManifest(root);
+  if (loaded.exists && loaded.manifest === null) {
+    return fail(`${MANIFEST_FILE}: ${loaded.problems[0] ?? 'unparseable'}`, EXIT.CONFIG, `fix ${MANIFEST_FILE}, then rerun: ${SETUP_USAGE.replace('run: ', '')}`);
+  }
+  const manifest = loaded.manifest ?? {};
+  const facets = await detectFacets(root);
+  const kind = typeof flags.kind === 'string' && flags.kind !== '' ? flags.kind : defaultKind(facets, flags.path);
+  const proposal = proposeScope({ manifest, scope: flags.scope, path: flags.path, kind, validator: flags.validator });
+  if (proposal.error !== undefined) return fail(proposal.error, EXIT.USAGE, proposal.remedy);
+
+  const path = await manifestPath(root);
+  const before = await readBefore(path);
+  const diffs = flags.diff === true ? [{ path: MANIFEST_FILE, before, after: proposal.changed ? proposal.text : before }] : [];
+  const apply = `run: ${CLI} work setup --scope ${proposal.scope.id} --path ${proposal.scope.paths[0]} --kind ${proposal.scope.kind}${proposal.scope.validators ? ` --validator ${JSON.stringify(proposal.scope.validators[0])}` : ''} --yes`;
+  const payload = {
+    ok: true,
+    command: 'work setup',
+    root,
+    manifest: relative(root, path),
+    dryRun: !mode.apply,
+    changed: proposal.changed,
+    written: false,
+    scope: proposal.scope,
+    // The exact bytes the apply writes. A preview is only a preview if a reader can compare
+    // this against the file afterwards - and that comparison is what the test asserts.
+    next: proposal.changed ? proposal.text : before,
+    ...diffField(diffs, flags),
+    remedy: proposal.changed && !mode.apply ? apply : null,
+  };
+
+  if (mode.apply && proposal.changed) {
+    const journal = [];
+    await writeManifest(root, proposal.next, journal);
+    const set = await commitJournal(root, 'work setup', journal);
+    payload.written = true;
+    note(`wrote    ${relative(root, path)}`);
+    if (set !== null) note(`journal  ${set}  (${CLI} undo restores it)`);
+  }
+  present(payload, () => renderSetup(payload), flags);
+  emitDiffs(diffs, flags);
+  return EXIT.OK;
+}
+
+function renderSetup(payload) {
+  const lines = [
+    `manifest   ${payload.manifest}`,
+    `scope      ${payload.scope.id}  ${payload.scope.kind}  ${payload.scope.paths.join(', ')}`,
+  ];
+  for (const command of payload.scope.validators ?? []) lines.push(`validator  ${command}`);
+  if (!payload.changed) lines.push('unchanged  this scope is already declared; nothing to write');
+  else lines.push(payload.written ? 'wrote      one scope' : 'would add  one scope (preview: no bytes written)');
+  if (payload.remedy !== null) lines.push(`apply      ${payload.remedy}`);
+  return lines.join('\n');
 }
 
 /**

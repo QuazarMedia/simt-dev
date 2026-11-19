@@ -165,6 +165,13 @@ export const VALUE_FLAGS = new Set([
   // The plan-4 doors: the document each one interrogates, named rather than guessed.
   'claims',
   'input',
+  // work setup: the one scope it adds, the directory that scope owns, the kind that decides
+  // its obligations, and the validator it declares. Values rather than switches, because a
+  // setup that guessed any of the four would write a declaration the repository never made.
+  'scope',
+  'path',
+  'kind',
+  'validator',
   // knowledge why: the two bounds a paginated door owes its reader.
   // knowledge rank|debt|impact: the question, the scoring weights, the changed ids.
   // index: the task string the open cache answers for.

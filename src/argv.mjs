@@ -209,6 +209,9 @@ export const VALUE_FLAGS = new Set([
   'variant',
   'from',
   'surfaces',
+  // init: where CI comes from. A value, not a switch, because "no CI" and "CI elsewhere"
+  // are different answers a switch could not tell apart.
+  'ci',
   // graph lint: which specification to check the skills against. A value rather than a
   // boolean because "lint against the spec" would not say WHICH spec, and a lint that
   // silently applied an unnamed set of rules is the decoration this repository exists

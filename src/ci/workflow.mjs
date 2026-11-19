@@ -270,7 +270,7 @@ function indent(text, spaces) {
  * @param {{own?: boolean}} [options]
  * @returns {string} YAML, LF-terminated
  */
-export function renderWorkflow({ own = false, npm = true, manager = null, version } = {}) {
+export function renderWorkflow({ own = false, npm = true, manager = null, version, packageManager = null } = {}) {
   if (own) {
     const floor = nodeFloor();
     return `${header(true)}${skeleton(
@@ -331,11 +331,50 @@ export function renderWorkflow({ own = false, npm = true, manager = null, versio
   // `${{ runner.* }}` expression: an expression substituted into `$( … )` is a
   // command substitution trying to execute "Linux", which set -eu refuses - the
   // install would fail on every run in the one repository kind this channel is for.
+  // The declared pin, when the repo has one. `packageManager: "pnpm@9.1.0+sha512…"` names
+  // the exact manager this repo used; carrying it into the bootstrap keeps the runner on
+  // that version instead of whichever one corepack or the setup action defaults to.
+  const declared = (() => {
+    if (packageManager === null || nodeManager === null) return null;
+    const prefix = `${nodeManager}@`;
+    if (!String(packageManager).startsWith(prefix)) return null;
+    return String(packageManager).slice(prefix.length).split('+')[0];
+  })();
+  // CI must provision the manager it installs with. `npm` ships with Node; pnpm and yarn
+  // come from corepack; bun is a runtime of its own. Without this the install step fails
+  // on the runner with "command not found" and the failure looks like the repository's.
+  const bootstrap = nodeInstall?.bootstrap === 'corepack'
+    ? [
+        '      - name: enable the declared package manager',
+        '        run: |',
+        indent(
+          `set -eu
+command -v corepack >/dev/null 2>&1 || { echo "REMEDY use a Node image that ships corepack, or install ${nodeManager ?? 'the manager'} before this step" >&2; exit 1; }
+corepack enable${declared === null ? '' : `\ncorepack prepare ${nodeManager}@${declared} --activate`}`,
+          10,
+        ),
+      ]
+    : nodeInstall?.bootstrap === 'setup-bun'
+      ? [
+          '      - name: install bun',
+          '        # bun is its own runtime and is not on the runner image.',
+          '        uses: oven-sh/setup-bun@v2',
+          '        with:',
+          `          bun-version: ${declared ?? 'latest'}`,
+        ]
+      : [];
   const install = nodeInstall
     ? [
         '      - name: install dependencies',
-        `        # \`${nodeInstall.install}\` needs a lockfile; a repo without one is still gated, not skipped.`,
-        `        run: ${nodeInstall.install} || ${nodeInstall.fallback}`,
+        '        # A lockfile present means the frozen install, and a stale lock fails the job.',
+        '        # `|| install` used to run an unlocked install instead, so a green run could',
+        '        # prove nothing about the committed lockfile (review 0005 PR17). Without a',
+        '        # lockfile there is nothing to freeze, and such a repo is gated, not skipped.',
+        '        run: |',
+        indent(
+          `if ${nodeInstall.lockfiles.map((f) => `[ -f ${f} ]`).join(' || ')}; then\n${nodeInstall.install}\nelse\n${nodeInstall.fallback}\nfi`,
+          10,
+        ),
       ]
     : [
         '      - name: install the pinned gate binary',
@@ -371,12 +410,49 @@ chmod +x ${LOCAL_BIN}`, 10),
       // The binary branch has no setup-node: see the install step above.
       // bun ships its own runtime, so only managers that need Node get it.
       ...(nodeInstall && nodeInstall.setupNode ? [setupNode(nodeFloor())] : []),
+      ...bootstrap,
       ...install,
       `      - name: ${CLI} check`,
       '        run: |',
       indent(`set -eu\nROOT="\${GITHUB_WORKSPACE}"\n${locator}`, 10),
     ].join('\n'),
   )}\n`;
+}
+
+/**
+ * The same gating sequence, for a provider that is not GitHub Actions.
+ *
+ * A workflow file is one provider's syntax around three facts: the toolchain, the
+ * install and the gate. A repository on GitLab, Buildkite or a self-hosted runner needs
+ * the facts and not the YAML, so `--ci external` prints these and writes nothing. The
+ * values come from the same records the workflow is rendered from, so the two channels
+ * cannot drift into installing with different commands.
+ */
+export function ciContract({ npm = true, manager = null, version } = {}) {
+  const nodeManager = manager ?? (npm ? 'npm' : null);
+  if (nodeManager === null) {
+    const v = version ?? packageVersion();
+    return {
+      channel: 'binary',
+      node: null,
+      manager: null,
+      bootstrap: null,
+      lockfiles: [],
+      install: `fetch ${releaseBase(v)}/${assetNameExpr(v)} and its .sha256, verify the checksum, then run ${LOCAL_BIN}`,
+      gate: `${CLI} check`,
+    };
+  }
+  const inst = nodeInstallCommands(nodeManager);
+  return {
+    channel: 'node',
+    node: nodeFloor(),
+    manager: nodeManager,
+    bootstrap: inst.bootstrap,
+    install: inst.install,
+    withoutLockfile: inst.fallback,
+    lockfiles: inst.lockfiles,
+    gate: `${CLI} check`,
+  };
 }
 
 /**

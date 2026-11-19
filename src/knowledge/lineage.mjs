@@ -1,6 +1,6 @@
 // Native metadata: what a document already says about itself, and what it points at.
 //
-// WK04 of plan 0006. A repository that has a handbook already writes frontmatter, and a
+// A repository that has a handbook already writes frontmatter, and a
 // repository that generates its documents already keeps sidecars. The slice reads what is
 // there rather than asking for a second catalogue, and the rules that keep it honest are:
 //

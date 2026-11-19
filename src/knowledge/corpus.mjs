@@ -1,6 +1,6 @@
 // A scoped corpus: the sections of the files a repository declared, as data.
 //
-// WK03 of plan 0006. The corpus is derived - it lives under `.simt/local/`, it is built from
+// The corpus is derived - it lives under `.simt/local/`, it is built from
 // the tracked files inside one declared scope, and nothing in it is authored. Four rules keep
 // it honest, and each one is a failure that has already shipped somewhere:
 //
@@ -32,7 +32,7 @@ import { describeArtifact, resolveRefs } from './lineage.mjs';
 import { digestOf } from './observations.mjs';
 import { extractDocument } from './sections.mjs';
 
-// Version 2 added artifacts, claims and lineage (WK04). A corpus is derived, so an old one is
+// Version 2 added artifacts, claims and lineage. A corpus is derived, so an old one is
 // rebuilt rather than migrated: the version says what the file holds, not when it was written.
 export const CORPUS_SCHEMA_VERSION = 2;
 
@@ -284,7 +284,7 @@ export async function buildCorpus({ scope = {}, scopes = null, candidates = [], 
 
   // A rename is a digest this build indexes under a path the last build did not have, and a
   // path the last build indexed that is now gone. It is recorded, not resolved: the artifact id
-  // is still the path, and only an explicit rename map (WK04) makes a moved document one id.
+  // is still the path, and only an explicit rename map makes a moved document one id.
   const present = new Set(inventory.map((row) => row.path));
   const vanished = new Map();
   for (const row of priorSources.values()) {

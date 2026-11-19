@@ -30,7 +30,7 @@ const isText = (value) => typeof value === 'string' && value.length > 0;
 /**
  * An ISO day, as this module and the metadata reader both mean it.
  *
- * Exported when the second real caller arrived (WK04): a metadata date and a claim window that
+ * Exported when the second real caller arrived: a metadata date and a claim window that
  * disagreed about what `2026-02-30` is would be two answers to one question.
  */
 export const isIsoDay = (value) => {

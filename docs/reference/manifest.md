@@ -28,6 +28,7 @@ check that decides whether a value is valid.
 | `federation` | repo | external code-graph MCP servers, each with its `command`, `args`, `tool`, `argument` |
 | `local` | repo | loopback `chat`/`embed` endpoints, off until named |
 | `test.runner` | repo | how this repository runs a selected set of test files |
+| `work` | repo | what this repository produces, which directories own it, and how each part is validated |
 | `$comment` | tool | a free note, string or list |
 
 A key that this tool does not know is reported, not silently carried: `simt check` and
@@ -77,6 +78,70 @@ stack, or the detector would run the wrong thing, `test.runner` names the comman
 An invalid declaration is `manifest-invalid`: `check`, `doctor` and `gate` name the field and
 the shape it needs, and the gate exits without running. A repository that omits `test.runner`
 keeps the built-in chain (Vitest, Jest, `node --test`, Cargo, Go, pytest, Gradle, Maven).
+
+## The `work` declaration
+
+`work` says what this repository produces and which directory owns each part of it. It is the
+declaration `simt work inspect` reads and `simt work setup` writes; nothing in it is inferred
+from a directory name at read time, so a scope that is missing is reported as missing rather
+than guessed.
+
+```json
+{
+  "work": {
+    "version": 2,
+    "scopes": [
+      {
+        "id": "handbook",
+        "paths": ["handbook"],
+        "kind": "document",
+        "validators": ["node scripts/check-handbook.mjs"],
+        "ignore": ["drafts"]
+      }
+    ],
+    "targets": [{ "namespace": "publish", "type": "page" }],
+    "adapters": ["publish-pages"]
+  }
+}
+```
+
+| Field | What it decides |
+| --- | --- |
+| `work.version` | the shape of the declaration: `1`, or `2` once it uses a field version 1 does not have |
+| `work.scopes[].id` | the name artifacts are referenced by; unique within the repository |
+| `work.scopes[].paths` | the directories this scope owns, relative to the repository root; `.` is the root |
+| `work.scopes[].kind` | `source`, `document`, `dataset`, `recipe` or `remote-object`; omit it to let the artifact contract decide |
+| `work.scopes[].validators` | commands that validate this scope; a validator counts as installed only when the file it names is present, and this tool never runs it |
+| `work.scopes[].targets` | the ids of the targets this scope produces |
+| `work.scopes[].ignore` | the paths or segments this scope never ingests (version 2) |
+| `work.targets[]` | `{namespace, type, name?}`: an output that lives outside the repository, identified by `namespace:type` plus the optional `name` |
+| `work.adapters[]` | the ids of adapters installed separately; list only the ones this repository intends to use |
+
+A path is repository-relative and stored in one spelling: `./docs/`, `docs/` and `docs` are one
+claim, and the spelling `work setup` writes is the normalised one. An absolute path, a `..`
+segment or a padded path is refused by name rather than trimmed into a declaration the
+repository did not make. Two scopes may not claim one path: `check` reports both.
+
+A validator is a command, and this tool reads it as one without running it: a declaration is
+`installed` when a file it names exists, `false` when a named file is missing or outside the
+repository, and unproven
+when it names no file at all - so `npm test` is never reported as available just because npm
+is. A scope with no validator, or one whose file is missing, is the next thing `simt work
+inspect` asks for.
+
+An `ignore` pattern is a path prefix relative to the repository root, or a single segment
+matched anywhere (`draft.md` refuses every draft, `*.tmp.md` the ones a generator leaves).
+It applies inside the owning scope's paths and nowhere else.
+
+The version is the repository's, not the tool's. A declaration that uses no version-2 field
+stays at `1` and is read as written; a version-2 field under `1` is refused by name, with the
+version that would accept it. An unknown version is refused rather than guessed.
+
+`simt work setup --scope <id> --path <dir> --kind <kind>` adds one scope and previews it
+first: the manifest it would produce is printed, `--yes` writes it through the journal so
+`simt undo` restores what it replaced, and a second run over a scope it already declared
+changes nothing. It never rewrites a scope the repository wrote, never invents a runner or a
+gate, and leaves every other key - including `work.version` - as it found it.
 
 ## When a value is wrong
 

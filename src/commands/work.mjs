@@ -7,19 +7,21 @@
 // repository must therefore report that no software test is runnable rather than inventing
 // one, which is the failure this door exists to prevent.
 
-import { relative } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { EXIT, fail, note, present, writeMode } from '../output/index.mjs';
-import { CLI, MANIFEST_FILE } from '../name.mjs';
+import { CLI, MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { detectFacets } from '../work/facets.mjs';
 import { capabilityCards, probeLocal } from '../work/capabilities.mjs';
 import { WORK_VERSION } from '../work/config.mjs';
 import { readWork } from '../work/effective.mjs';
+import { normalizePath } from '../work/artifacts.mjs';
 import { proposeScope } from '../work/setup.mjs';
 import { loadManifest, manifestPath } from '../manifest/schema.mjs';
 import { writeManifest } from '../projection/manifest.mjs';
-import { commitJournal } from '../journal.mjs';
+import { commitJournal, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { buildCapsule, checkResume, duplicateEffects, reopenFor } from '../coordination/handoff.mjs';
 import { schedule } from '../coordination/workgraph.mjs';
@@ -60,9 +62,9 @@ function suggestedId(facets) {
 function defaultKind(facets, path) {
   const documents = facets.artifactKinds.find((row) => row.kind === 'document');
   if (documents === undefined) return 'source';
-  if (typeof path !== 'string' || path === '' || path === '.' || path === './') return 'document';
-  const prefix = `${path.replace(/\/+$/, '')}/`;
-  return documents.evidence.some((entry) => entry === path || entry.startsWith(prefix)) ? 'document' : 'source';
+  const dir = typeof path === 'string' ? normalizePath(path) : null;
+  if (dir === null || dir === '') return 'document';
+  return documents.evidence.some((entry) => entry === dir || entry.startsWith(`${dir}/`)) ? 'document' : 'source';
 }
 
 function nextStep({ work, facets, validators }) {
@@ -136,7 +138,22 @@ export async function workInspectCommand(args, flags) {
   return EXIT.OK;
 }
 
-const SETUP_USAGE = `run: ${CLI} work setup --scope <id> --path <dir> [--kind <kind>] [--validator "<command>"]`;
+const SETUP_USAGE = `run: ${CLI} work setup --scope <id> --path <dir> --kind <kind> [--validator "<command>"]`;
+
+/** The line a reader can paste: the scope, spelled with the flags this command takes. */
+function applyCommand(scope) {
+  const validator = scope.validators?.[0];
+  const declared = validator === undefined ? '' : ` --validator ${JSON.stringify(validator)}`;
+  return `run: ${CLI} work setup --scope ${scope.id} --path ${scope.paths[0]} --kind ${scope.kind}${declared} --yes`;
+}
+
+/** The legacy name this apply retires, or `null` when there is nothing to retire. */
+function legacyManifest(root) {
+  const fresh = join(root, MANIFEST_FILE);
+  return existsSync(join(root, MANIFEST_LEGACY)) && !existsSync(fresh) ? MANIFEST_LEGACY : null;
+}
+
+const reason = (error) => String(error?.message ?? error).split('\n')[0];
 
 /**
  * One scope, previewed and then written by the manifest's own writer.
@@ -159,32 +176,53 @@ export async function workSetupCommand(args, flags) {
   const proposal = proposeScope({ manifest, scope: flags.scope, path: flags.path, kind, validator: flags.validator });
   if (proposal.error !== undefined) return fail(proposal.error, EXIT.USAGE, proposal.remedy);
 
-  const path = await manifestPath(root);
-  const before = await readBefore(path);
-  const diffs = flags.diff === true ? [{ path: MANIFEST_FILE, before, after: proposal.changed ? proposal.text : before }] : [];
-  const apply = `run: ${CLI} work setup --scope ${proposal.scope.id} --path ${proposal.scope.paths[0]} --kind ${proposal.scope.kind}${proposal.scope.validators ? ` --validator ${JSON.stringify(proposal.scope.validators[0])}` : ''} --yes`;
+  const before = await readBefore(await manifestPath(root));
+  const after = proposal.changed ? proposal.text : before;
+  const diffs = flags.diff === true ? [{ path: MANIFEST_FILE, before, after }] : [];
+  const retired = proposal.changed ? legacyManifest(root) : null;
+  const apply = proposal.changed ? applyCommand(proposal.scope) : null;
   const payload = {
     ok: true,
     command: 'work setup',
     root,
-    manifest: relative(root, path),
+    manifest: MANIFEST_FILE,
+    retired,
     dryRun: !mode.apply,
     changed: proposal.changed,
     written: false,
     scope: proposal.scope,
-    // The exact bytes the apply writes. A preview is only a preview if a reader can compare
-    // this against the file afterwards - and that comparison is what the test asserts.
-    next: proposal.changed ? proposal.text : before,
+    // The exact bytes the apply writes: a preview is only a preview if a reader can compare
+    // this against the file afterwards.
+    next: after,
     ...diffField(diffs, flags),
-    remedy: proposal.changed && !mode.apply ? apply : null,
+    remedy: apply !== null && !mode.apply ? apply : null,
   };
 
   if (mode.apply && proposal.changed) {
     const journal = [];
-    await writeManifest(root, proposal.next, journal);
-    const set = await commitJournal(root, 'work setup', journal);
+    // `writeManifest` retires a legacy `simt-dev.json` by renaming it, and a rename outside
+    // the journal is one `undo` cannot put back: it would delete `simt.json` and leave the
+    // repository with no manifest at all. So the retirement is journaled first, as a create
+    // of the new name and a removal of the old, before the writer finds anything to move.
+    if (retired !== null) {
+      const bytes = readFileSync(join(root, MANIFEST_LEGACY), 'utf8');
+      await journaledWriteFile(root, journal, join(root, MANIFEST_FILE), bytes);
+      await journaledRemoveFile(root, journal, join(root, MANIFEST_LEGACY));
+    }
+    try {
+      await writeManifest(root, proposal.next, journal);
+    } catch (error) {
+      return fail(`${MANIFEST_FILE} could not be written: ${reason(error)}`, EXIT.FAIL, `nothing was recorded: fix the reason, then rerun ${applyCommand(proposal.scope).replace('run: ', '')}`);
+    }
+    let set = null;
+    try {
+      set = await commitJournal(root, 'work setup', journal);
+    } catch (error) {
+      return fail(`${MANIFEST_FILE} is written, but its journal set is not: ${reason(error)}`, EXIT.FAIL, `the scope stands; ${CLI} undo cannot reverse this write, so edit the file by hand if it has to go`);
+    }
     payload.written = true;
-    note(`wrote    ${relative(root, path)}`);
+    note(`wrote    ${MANIFEST_FILE}`);
+    if (retired !== null) note(`retired  ${retired}  (${MANIFEST_FILE} replaces it; ${CLI} undo restores both)`);
     if (set !== null) note(`journal  ${set}  (${CLI} undo restores it)`);
   }
   present(payload, () => renderSetup(payload), flags);
@@ -195,9 +233,10 @@ export async function workSetupCommand(args, flags) {
 function renderSetup(payload) {
   const lines = [
     `manifest   ${payload.manifest}`,
-    `scope      ${payload.scope.id}  ${payload.scope.kind}  ${payload.scope.paths.join(', ')}`,
+    `scope      ${payload.scope.id}  ${payload.scope.kind ?? 'any'}  ${payload.scope.paths.join(', ')}`,
   ];
   for (const command of payload.scope.validators ?? []) lines.push(`validator  ${command}`);
+  if (payload.retired !== null) lines.push(`retires    ${payload.retired}`);
   if (!payload.changed) lines.push('unchanged  this scope is already declared; nothing to write');
   else lines.push(payload.written ? 'wrote      one scope' : 'would add  one scope (preview: no bytes written)');
   if (payload.remedy !== null) lines.push(`apply      ${payload.remedy}`);

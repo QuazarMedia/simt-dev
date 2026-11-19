@@ -120,6 +120,42 @@ test('undo restores the manifest the setup replaced, and removes the one it crea
   assert.equal(readFileSync(join(created, 'simt.json'), 'utf8'), before, 'undo did not restore the pre-run bytes');
 });
 
+test('a scope that also carries ignore and targets is already declared, not a different declaration', async () => {
+  const root = await shape('mixed');
+  const declared = `${JSON.stringify({ work: { version: 2, scopes: [{ id: 'docs', paths: ['./docs/'], kind: 'document', ignore: ['drafts'], targets: [] }] } }, null, 2)}\n`;
+  writeFileSync(join(root, 'simt.json'), declared);
+
+  const preview = await json(root, ['work', 'setup', '--scope', 'docs', '--path', 'docs', '--kind', 'document']);
+  assert.equal(preview.changed, false, 'a declared scope looked like a scope to add');
+  assert.equal(preview.written, false);
+  assert.equal(preview.remedy, null, 'a no-op offers an apply line');
+  assert.equal(readFileSync(join(root, 'simt.json'), 'utf8'), declared, 'the preview rewrote a manifest it had nothing to add to');
+});
+
+test('undo restores a legacy-named manifest the setup retired', async () => {
+  const root = await shape('handbook');
+  const legacy = `${JSON.stringify({ $comment: 'kept under the old name', id: 'fixture' }, null, 2)}\n`;
+  writeFileSync(join(root, 'simt-dev.json'), legacy);
+  const flags = ['work', 'setup', '--scope', 'handbook', '--path', 'handbook', '--kind', 'document'];
+
+  const preview = await json(root, flags);
+  assert.equal(preview.retired, 'simt-dev.json', 'the preview did not say it retires the old name');
+  assert.equal(existsSync(join(root, 'simt.json')), false, 'the preview moved the manifest');
+  assert.equal(readFileSync(join(root, 'simt-dev.json'), 'utf8'), legacy);
+
+  const applied = await json(root, [...flags, '--yes']);
+  assert.equal(applied.retired, 'simt-dev.json');
+  assert.equal(existsSync(join(root, 'simt-dev.json')), false, 'the legacy name survived the apply');
+  const next = JSON.parse(readFileSync(join(root, 'simt.json'), 'utf8'));
+  assert.equal(next.$comment, 'kept under the old name');
+  assert.deepEqual(next.work.scopes.map((scope) => scope.id), ['handbook']);
+
+  const undone = await simt(['undo', '--root', root, '--yes']);
+  assert.equal(undone.code, 0, undone.stderr);
+  assert.equal(readFileSync(join(root, 'simt-dev.json'), 'utf8'), legacy, 'undo lost the manifest it renamed');
+  assert.equal(existsSync(join(root, 'simt.json')), false, 'undo left the renamed manifest behind');
+});
+
 test('a setup adds its scope and leaves every key the repository wrote exactly where it was', async () => {
   const root = await shape('mixed');
   const handwritten = {
@@ -159,6 +195,11 @@ test('a setup refuses what it cannot do, and changes nothing when it refuses', a
   const outside = await simt(['work', 'setup', '--scope', 'x', '--path', '../elsewhere', '--root', root]);
   assert.notEqual(outside.code, 0);
   assert.match(outside.stderr, /not a repository-relative path/);
+
+  const badKind = await simt(['work', 'setup', '--scope', 'x', '--path', 'docs', '--kind', 'nonsense', '--root', root]);
+  assert.notEqual(badKind.code, 0);
+  assert.match(badKind.stderr, /kind must be one of/);
+  assert.match(badKind.stderr, /document/);
 
   writeFileSync(
     join(root, 'simt.json'),

@@ -41,7 +41,7 @@ const INPUTS = [
   { file: 'derivations.json', door: 'derivations' },
   // `export.json` feeds the export door, not the import door: an export request names
   // what to emit, while an imported bundle is what the import door reads. Labeling it
-  // `import` made the finding name the wrong command (review 0005 PR19).
+  // `import` made the finding name the wrong command.
   { file: 'export.json', door: 'export' },
   // The identity map is authored, tracked, and read by `knowledge build`; the check asks the
   // same reader, so a map that fails here is a map the build would refuse.

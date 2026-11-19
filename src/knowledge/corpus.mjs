@@ -40,7 +40,7 @@ export const CORPUS_SCHEMA_VERSION = 2;
 export const CORPUS_DIR = '.simt/local/corpus';
 
 /** Every state a candidate can end in. Each one is a row, never a silent skip. */
-export const SOURCE_STATES = Object.freeze([
+const SOURCE_STATES = Object.freeze([
   'indexed',
   'outside',
   'denied',

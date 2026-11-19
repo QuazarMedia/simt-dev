@@ -33,11 +33,11 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR11 | Make focused runners configurable across nested and mixed stacks | P1 | runners | M | PR06, PR10 | Complete | c6a28c4c3f393e60aac3b8170ca27753b257f7b2 |
 | PR12 | Resolve polyglot gates without command collisions | P1 | ecosystem | M | PR10, PR05 | Complete | 7521ce3c16752517d198d573efb0ac76b371c719 |
 | PR13 | Report test-selection gaps, deletions, and actual test outcomes | P1 | runners | M | PR11 | Complete | c7a6be00cc761963c427ca4b9d22533c3552be65 |
-| PR14 | Share bounded gate execution and report cleanup | P1 | runners | M | PR13, PR04 | Queued | — |
+| PR14 | Share bounded gate execution and report cleanup | P1 | runners | M | PR13, PR04 | Complete | 547b7c3f86488400a18ba568760a5ec50e25c546 |
 | PR15 | Make projected rules and adoption reports actionable in consumers | P1 | projection | M | PR08, PR12 | Queued | — |
 | PR16 | Make frozen projection and upgrades agree on the applied state | P1 | projection | M | PR15 | Queued | — |
 | PR17 | Generate reproducible CI with an explicit provider contract | P1 | ci | M | PR12, PR16 | Queued | — |
-| PR18 | Repair tracker concurrency and slice completion recovery | P1 | tracker | M | PR07, PR04 | In progress | — |
+| PR18 | Repair tracker concurrency and slice completion recovery | P1 | tracker | M | PR07, PR04 | Complete | 75237c386f1292b04885a45df601f1302b50987a |
 | PR19 | Validate knowledge with the same readers used by its commands | P1 | knowledge | M | PR02 | Complete | 7ebf20fdb69948ea6f87dab15f9e8e00e7854b00 |
 | PR20 | Make document-driven verification reject malformed input | P1 | work | M | PR19 | Complete | 4afc0e34a194b79e5ea6a100b808d1e4cdc86638 |
 | PR21 | Separate MCP reads from cache writes and process execution | P1 | transport | M | PR09, PR02 | Complete | 20722ee329feb60bd4cd6d4ec4d6622b30727a3e |

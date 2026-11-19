@@ -20,7 +20,7 @@ import { importsOf } from './tests.mjs';
  * @param {{src: string, dst: string, kind?: string}[]} imports importer, then imported
  * @returns {string[]}
  */
-export function selectTests(changed, imports) {
+export function selectTests(changed, imports, { root = null } = {}) {
   const reverse = new Map();
   for (const edge of imports) {
     if (edge.kind && edge.kind !== 'import') continue;
@@ -38,7 +38,7 @@ export function selectTests(changed, imports) {
   }
   while (queue.length > 0) {
     const file = queue.pop();
-    if (isTestPath(file)) tests.push(file);
+    if (isTestPath(file, root)) tests.push(file);
     const importers = reverse.get(file);
     if (!importers) continue;
     for (const importer of importers) {

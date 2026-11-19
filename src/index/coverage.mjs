@@ -26,18 +26,18 @@ import { testEdges, testsFor } from './tests.mjs';
  *   the same commits, and is only ever on when a caller asked for it.
  * @returns {string[]}
  */
-export function coverage(graph, paths, { transitive = true, cochange = false } = {}) {
+export function coverage(graph, paths, { transitive = true, cochange = false, root = null } = {}) {
   const changed = [...new Set([...paths].filter(Boolean))];
   const imports = graph.imports ?? [];
   if (transitive) {
-    const selected = selectTests(changed, imports);
+    const selected = selectTests(changed, imports, { root });
     if (!cochange || graph.files === undefined) return selected;
     const edges = testEdges({
       files: graph.files,
       imports,
       coverage: graph.coverage ?? [],
       commits: graph.commits ?? [],
-    });
+    }, { root });
     const found = new Set(selected);
     for (const path of changed) {
       for (const test of testsFor(path, edges, { cochange: true })) found.add(test);

@@ -24,22 +24,22 @@ export { HISTORY };
  * @param {{files: {path: string}[]|string[], imports?: {src: string, dst: string, kind?: string}[], coverage?: string[], commits?: string[][]}} input
  * @returns {{src: string, dst: string, kind: string, weight: number}[]}
  */
-export function testEdges({ files, imports = [], coverage = [], commits = [] }) {
+export function testEdges({ files, imports = [], coverage = [], commits = [] }, { root = null } = {}) {
   const paths = [...new Set(files.map((file) => (typeof file === 'string' ? file : file.path)))].sort();
   const have = new Set(paths);
   const edges = [];
   for (const edge of imports) {
     if (edge.kind && edge.kind !== 'import') continue;
-    if (!isTestPath(edge.src) || isTestPath(edge.dst) || !have.has(edge.dst)) continue;
+    if (!isTestPath(edge.src, root) || isTestPath(edge.dst, root) || !have.has(edge.dst)) continue;
     edges.push({ src: edge.src, dst: edge.dst, kind: 'test', weight: 1 });
   }
   for (const test of paths) {
-    if (!isTestPath(test)) continue;
+    if (!isTestPath(test, root)) continue;
     const source = namedSource(test, have);
     if (source) edges.push({ src: test, dst: source, kind: 'test', weight: 1 });
   }
-  for (const text of coverage) edges.push(...coverageEdges(text, have));
-  edges.push(...cochangeEdges(commits));
+  for (const text of coverage) edges.push(...coverageEdges(text, have, root));
+  edges.push(...cochangeEdges(commits, root));
   return dedupe(edges);
 }
 
@@ -131,13 +131,13 @@ export function parseGoCover(text) {
  * mapping, and a pair seen once is a coincidence. Each test keeps its strongest
  * pairs, so one wide test cannot point at every file it ever met.
  */
-export function cochangeEdges(commits) {
+export function cochangeEdges(commits, root = null) {
   const counts = new Map();
   for (const commit of commits) {
     const tests = [];
     const sources = [];
     for (const path of commit) {
-      if (isTestPath(path)) tests.push(path);
+      if (isTestPath(path, root)) tests.push(path);
       else sources.push(path);
     }
     if (tests.length === 0 || sources.length === 0) continue;
@@ -167,14 +167,14 @@ export function cochangeEdges(commits) {
   return edges;
 }
 
-function coverageEdges(text, files) {
+function coverageEdges(text, files, root = null) {
   const edges = [];
   for (const pair of parseCoverage(text)) {
     const source = resolveToken(pair.source, files);
-    if (!source || isTestPath(source)) continue;
+    if (!source || isTestPath(source, root)) continue;
     let test = pair.test ? resolveToken(pair.test, files) : '';
     if (!test && pair.test === '') test = goTestFor(source, files);
-    if (!test || !isTestPath(test)) continue;
+    if (!test || !isTestPath(test, root)) continue;
     edges.push({ src: test, dst: source, kind: 'test', weight: 1 });
   }
   return edges;

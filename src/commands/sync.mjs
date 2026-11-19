@@ -26,6 +26,7 @@ import { manifestDrift, readManifest, unrunnableGates, buildManifest, writeManif
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { resolveGateCwd } from '../hooks/cwd.mjs';
+import { ecosystemFindings } from '../ecosystem/records.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { CLI, LOCK_FILE, MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { assertVersionPin, packageVersion } from '../package-version.mjs';
@@ -618,6 +619,11 @@ export async function checkRepo(root, opts = {}) {
     findings.push(...unrunnable);
     const cwdFindings = await gateCwdFindings(root, manifest);
     findings.push(...cwdFindings);
+    // A record under `.simt/ecosystems/` that did not validate is quarantined at load,
+    // and this is where the reader is told so. Silence was the old behaviour: the record
+    // was half-applied, or dropped, and every command that read it disagreed with the
+    // reader about what the repository had configured.
+    findings.push(...ecosystemFindings(root));
     gatesTotal = gateList(manifest, 'preCommit').length + gateList(manifest, 'prePush').length;
     const notRun =
       unrunnable.filter((f) => f.status === 'unrunnable').length + cwdFindings.length;

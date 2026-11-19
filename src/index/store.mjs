@@ -44,7 +44,15 @@ const MARKERS = ['package.json', 'pyproject.toml', 'go.mod', 'Cargo.toml', 'pom.
 // so the 65 MiB test exercises the skip, not the tokenize path.
 const BLOB_CAP = 16 * 1024 * 1024;
 
-const LANG = languageResolver();
+// Per root, because a repository may declare its own language in `.simt/ecosystems/`.
+// The module-level table was the shipped set for every repository in the process.
+const langByRoot = new Map();
+
+function langTable(root) {
+  const key = root ?? '';
+  if (!langByRoot.has(key)) langByRoot.set(key, languageResolver(root));
+  return langByRoot.get(key);
+}
 
 const INDEX_NODE_FLOOR = '22.20.0';
 
@@ -173,9 +181,9 @@ function hasCjk(text) {
  * matching is the resolver signal in scoreFiles, not a body term that matches
  * every row of that kind.
  */
-export function buildFtsBodies(filePath, symbolsForPath = [], text = null) {
+export function buildFtsBodies(filePath, symbolsForPath = [], text = null, root = null) {
   if (typeof text !== 'string' || text.length === 0) return [];
-  const kind = ftsKindOf(filePath, langOf(filePath));
+  const kind = ftsKindOf(filePath, langOf(filePath, root));
   const symTokens = [];
   for (const s of symbolsForPath) {
     if (s?.name) symTokens.push(s.name, s.name);
@@ -196,8 +204,8 @@ export function buildFtsBodies(filePath, symbolsForPath = [], text = null) {
   return rows;
 }
 
-export function buildFtsBody(filePath, symbolsForPath = [], text = null) {
-  const rows = buildFtsBodies(filePath, symbolsForPath, text);
+export function buildFtsBody(filePath, symbolsForPath = [], text = null, root = null) {
+  const rows = buildFtsBodies(filePath, symbolsForPath, text, root);
   return rows.length > 0 ? rows[0].body : '';
 }
 
@@ -256,7 +264,7 @@ export async function reindex(root, opts = {}) {
   const fts = [];
   let skipped = 0;
   for (const entry of changed) {
-    const lang = langOf(entry.path);
+    const lang = langOf(entry.path, root);
     next.push({
       path: entry.path,
       blob: entry.blob,
@@ -275,7 +283,7 @@ export async function reindex(root, opts = {}) {
       skipped += 1;
       continue;
     }
-    fts.push(...buildFtsBodies(entry.path, pulled.symbols, text));
+    fts.push(...buildFtsBodies(entry.path, pulled.symbols, text, root));
   }
   const removed = previous.filter((row) => !paths.has(row.path)).map((row) => row.path);
   // The tree this build vouches for, stored beside the rows so a later read
@@ -576,11 +584,11 @@ export function scoreFtsBm25(ftsRows, task) {
   return dedupePaths(out);
 }
 
-export function langOf(filePath) {
+export function langOf(filePath, root = null) {
   const base = filePath.slice(filePath.lastIndexOf('/') + 1);
   const dot = base.lastIndexOf('.');
   if (dot <= 0) return '';
-  return LANG[base.slice(dot + 1)] ?? '';
+  return langTable(root)[base.slice(dot + 1)] ?? '';
 }
 
 export async function packageOf(root, filePath, cache) {

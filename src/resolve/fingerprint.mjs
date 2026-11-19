@@ -21,6 +21,7 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 
+import { loadEcosystems } from '../ecosystem/records.mjs';
 import { matchesGlob } from './resolve.mjs';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { loadManifest } from '../manifest/schema.mjs';
@@ -241,6 +242,20 @@ export async function fingerprint(root) {
     if (hit) {
       stack.add(tag);
       evidence.push(hit);
+    }
+  }
+
+  // A repository may declare its own facts: `markers` are paths that prove the facts a
+  // local record names, so an ecosystem nobody ships arrives as configuration rather than
+  // as a new entry in FACTS (ADR-013). Read through the validated loader, and only after
+  // the record survived it.
+  for (const record of loadEcosystems(root)) {
+    if (!Array.isArray(record.markers) || !Array.isArray(record.facts)) continue;
+    const hit = record.markers.find((marker) => names.has(marker) || entries.some((entry) => matchesGlob(entry, marker)));
+    if (!hit) continue;
+    for (const fact of record.facts) {
+      facts.add(fact);
+      factEvidence[fact] ??= hit;
     }
   }
 

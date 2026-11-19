@@ -18,6 +18,7 @@ import { commandRoot } from '../repo-root.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
 import { readWork } from '../work/effective.mjs';
 import { ALWAYS_DENIED, CORPUS_DIR, CORPUS_DEFAULTS, buildCorpus } from '../knowledge/corpus.mjs';
+import { IDENTITY_FILE, identityMap, readIdentityMap } from '../knowledge/lineage.mjs';
 import { inventorySources } from '../knowledge/sources.mjs';
 import { buildClaimGraph, impact, lineage, proposedEdges, readClaim } from '../knowledge/claims.mjs';
 import { findConflicts } from '../knowledge/conflicts.mjs';
@@ -460,16 +461,34 @@ async function knowledgeBuildCommand(flags) {
     return fail(`cannot list the tracked files of this repository: ${String(error?.message ?? error).split('\n')[0]}`, EXIT.CONFIG, 'knowledge build reads tracked files; run it in a Git repository with one commit');
   }
 
+  // The identity map decides what a moved document is still cited as, so a map this reader
+  // cannot read stops the build instead of silently losing every id in it.
+  const declaredIdentities = await readTextFile(join(root, IDENTITY_FILE));
+  let identities = {};
+  if (declaredIdentities !== null) {
+    let doc;
+    try {
+      doc = JSON.parse(declaredIdentities);
+    } catch (error) {
+      return fail(`${IDENTITY_FILE} is not JSON: ${error.message}`, EXIT.CONFIG, 'fix the file, or remove it; a map nobody can read maps nothing');
+    }
+    const map = readIdentityMap(doc);
+    if (map.problems.length > 0) return fail(`${IDENTITY_FILE}: ${map.problems[0].message}`, EXIT.CONFIG, map.problems[0].remedy);
+    identities = identityMap(map.paths);
+  }
+
   const corpus = await buildCorpus({
     scope,
+    scopes: work.scopes,
     candidates: inventory.candidates,
-    policy: { deny: ALWAYS_DENIED, maxBytes: CORPUS_DEFAULTS.maxBytes, unitBytes: CORPUS_DEFAULTS.unitBytes },
+    policy: { deny: ALWAYS_DENIED, identities, maxBytes: CORPUS_DEFAULTS.maxBytes, unitBytes: CORPUS_DEFAULTS.unitBytes },
     previous,
     read: (path) => readBytes(join(root, path)),
+    sidecar: (path) => readTextFile(join(root, `${path}.meta.json`)),
   });
   // The stored document is the corpus, and only the corpus: a build statistic kept inside it
   // would make the second build differ from the first byte for byte.
-  const stored = { schema: corpus.schema, scope: corpus.scope, policy: corpus.policy, counts: corpus.counts, inventory: corpus.inventory, units: corpus.units };
+  const stored = { schema: corpus.schema, scope: corpus.scope, policy: corpus.policy, counts: corpus.counts, inventory: corpus.inventory, artifacts: corpus.artifacts, units: corpus.units, problems: corpus.problems };
   const text = `${JSON.stringify(stored, null, 2)}\n`;
   const changed = before !== text;
   const apply = `run: ${CLI} knowledge build --scope ${scope.id} --yes`;
@@ -488,7 +507,9 @@ async function knowledgeBuildCommand(flags) {
     counts: corpus.counts,
     reused: corpus.reused,
     inventory: corpus.inventory,
+    artifacts: corpus.artifacts,
     units: corpus.units,
+    problems: corpus.problems,
     ...diffField(diffs, flags),
     remedy: changed && !mode.apply ? apply : null,
   };
@@ -540,10 +561,16 @@ function renderBuild(payload) {
   const lines = [
     `scope      ${payload.scope}  ${counts.candidates} candidates, ${counts.indexed} indexed`,
     `units      ${counts.units} sections (${payload.reused} reused)`,
+    `artifacts  ${counts.artifacts} (${counts.claims} claims)`,
     `policy     ${payload.policy}`,
     `corpus     ${payload.corpus}`,
   ];
   if (refused !== '') lines.push(`refused    ${refused}`);
+  // Metadata findings are counted by code, so a missing source, a proposed link and an invalid
+  // date are three answers rather than one number.
+  const codes = new Map();
+  for (const entry of payload.problems) codes.set(entry.code, (codes.get(entry.code) ?? 0) + 1);
+  if (codes.size > 0) lines.push(`findings   ${[...codes].sort(([a], [b]) => a.localeCompare(b)).map(([code, count]) => `${count} ${code}`).join(', ')}`);
   if (payload.truncated) lines.push(`truncated  the build stopped at its candidate bound; scope a smaller path or build the rest under a second scope`);
   if (!payload.changed) lines.push('unchanged  the corpus on disk is the one this build would write');
   else lines.push(payload.written ? 'wrote      one corpus' : 'would write  one corpus (preview: no bytes written)');

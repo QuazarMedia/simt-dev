@@ -1,6 +1,6 @@
 // A scoped corpus: the sections of the files a repository declared, as data.
 //
-// WK03 of plan 0006. The corpus is derived - it lives under `.simt/local/`, it is built from
+// The corpus is derived - it lives under `.simt/local/`, it is built from
 // the tracked files inside one declared scope, and nothing in it is authored. Four rules keep
 // it honest, and each one is a failure that has already shipped somewhere:
 //
@@ -26,18 +26,21 @@
 
 import { createHash } from 'node:crypto';
 
-import { artifactId, normalizePath, resolveScope } from '../work/artifacts.mjs';
+import { normalizePath, resolveScope } from '../work/artifacts.mjs';
 import { mayIndex } from '../work/trust.mjs';
+import { describeArtifact, resolveRefs } from './lineage.mjs';
 import { digestOf } from './observations.mjs';
 import { extractDocument } from './sections.mjs';
 
-export const CORPUS_SCHEMA_VERSION = 1;
+// Version 2 added artifacts, claims and lineage. A corpus is derived, so an old one is
+// rebuilt rather than migrated: the version says what the file holds, not when it was written.
+export const CORPUS_SCHEMA_VERSION = 2;
 
 /** Where a corpus is derived to. Git-ignored with the rest of `.simt/`. */
 export const CORPUS_DIR = '.simt/local/corpus';
 
 /** Every state a candidate can end in. Each one is a row, never a silent skip. */
-export const SOURCE_STATES = Object.freeze([
+const SOURCE_STATES = Object.freeze([
   'indexed',
   'outside',
   'denied',
@@ -91,7 +94,10 @@ export function revisionOfSource({ head = null, index = null, worktree = null } 
  */
 export function policyDigest(policy = {}) {
   const deny = [...new Set(Array.isArray(policy.deny) ? policy.deny : [])].sort();
-  return digestOf(JSON.stringify({ deny, maxBytes: policy.maxBytes ?? CORPUS_DEFAULTS.maxBytes, unitBytes: policy.unitBytes ?? CORPUS_DEFAULTS.unitBytes }));
+  // The identity map is part of the policy: it decides what a unit is cited as, so a map that
+  // changed under an unchanged file must rebuild rather than reuse the old ids.
+  const identities = Object.entries(policy.identities ?? {}).sort(([a], [b]) => a.localeCompare(b));
+  return digestOf(JSON.stringify({ deny, identities, maxBytes: policy.maxBytes ?? CORPUS_DEFAULTS.maxBytes, unitBytes: policy.unitBytes ?? CORPUS_DEFAULTS.unitBytes }));
 }
 
 /** A file that says it is generated is indexed from its source, never from the output. */
@@ -102,21 +108,23 @@ function generatedReason(text) {
     : null;
 }
 
-function unitRow({ scope, path, unit, sourceDigest, provenance, revision }) {
+function unitRow({ artifact, scope, path, unit, sourceDigest, provenance, revision, offset = { bytes: 0, lines: 0 } }) {
   return {
     id: unit.id,
-    // A document with no heading has an empty anchor, and `path#` cites a fragment that does
-    // not exist: the artifact is the file, exactly as an explicit path id would be.
-    artifact: artifactId({ path, anchor: unit.anchor === '' ? null : unit.anchor }),
+    // The id comes from the artifact, not from the path: a declared id is what survives a move.
+    // A document with no heading has an empty anchor, and `id#` cites a fragment that does not
+    // exist, so the unit cites the artifact itself.
+    artifact: unit.anchor === '' ? artifact : `${artifact}#${unit.anchor}`,
     scope: scope.id,
     path,
     anchor: unit.anchor,
     title: unit.title,
     headings: unit.headings,
-    lineStart: unit.lineStart,
-    lineEnd: unit.lineEnd,
-    byteStart: unit.byteStart,
-    byteEnd: unit.byteEnd,
+    // The extractor ran on the body, so its ranges are shifted back onto the file.
+    lineStart: unit.lineStart + offset.lines,
+    lineEnd: unit.lineEnd + offset.lines,
+    byteStart: unit.byteStart + offset.bytes,
+    byteEnd: unit.byteEnd + offset.bytes,
     bytes: unit.bytes,
     digest: unit.digest,
     text: unit.text,
@@ -124,6 +132,8 @@ function unitRow({ scope, path, unit, sourceDigest, provenance, revision }) {
     provenance,
     revision,
     basis: 'section',
+    // A section is evidence: it supports an answer, and it is not a reviewed fact.
+    authority: 'evidence',
   };
 }
 
@@ -138,11 +148,13 @@ function unitRow({ scope, path, unit, sourceDigest, provenance, revision }) {
  * @param {{scope: object, candidates?: object[], policy?: object, previous?: object|null, read?: Function}} input
  * @returns {Promise<object>}
  */
-export async function buildCorpus({ scope = {}, candidates = [], policy = {}, previous = null, read = async () => null } = {}) {
+export async function buildCorpus({ scope = {}, scopes = null, candidates = [], policy = {}, previous = null, read = async () => null, sidecar = async () => null, identities = {} } = {}) {
   const deny = Array.isArray(policy.deny) ? policy.deny : [];
   const maxBytes = Number.isFinite(policy.maxBytes) ? policy.maxBytes : CORPUS_DEFAULTS.maxBytes;
   const unitBytes = Number.isFinite(policy.unitBytes) ? policy.unitBytes : CORPUS_DEFAULTS.unitBytes;
-  const policyId = policyDigest({ deny, maxBytes, unitBytes });
+  const declared = Array.isArray(scopes) && scopes.length > 0 ? scopes : [scope];
+  const identityMap = policy.identities ?? identities;
+  const policyId = policyDigest({ deny, identities: identityMap, maxBytes, unitBytes });
 
   const priorSources = new Map((Array.isArray(previous?.inventory) ? previous.inventory : []).map((row) => [row.path, row]));
   // A previous unit is only a candidate for reuse under the policy that produced it. Any
@@ -159,6 +171,8 @@ export async function buildCorpus({ scope = {}, candidates = [], policy = {}, pr
 
   const inventory = [];
   const units = [];
+  const artifacts = [];
+  const problems = [];
   let reused = 0;
 
   for (const candidate of [...candidates].sort((a, b) => String(a.path).localeCompare(String(b.path)))) {
@@ -218,25 +232,59 @@ export async function buildCorpus({ scope = {}, candidates = [], policy = {}, pr
       continue;
     }
 
-    const doc = extractDocument(text, { path, unitBytes });
+    const described = describeArtifact({ path, text, scopes: declared, identities: identityMap, sidecar: await sidecar(path) });
+    const doc = extractDocument(described.body, { path, unitBytes });
     if (doc.unindexed !== null) {
       inventory.push({ path, state: 'unsupported', reason: doc.unindexed.reason, ...row });
       continue;
     }
+    problems.push(...described.problems);
+    const base = described.artifact.id;
 
     const reusable = priorUnits.get(path);
-    const own = reusable !== undefined && reusable.length > 0 && reusable[0].sourceDigest === sourceDigest
+    const sameBlob = reusable !== undefined && reusable.length > 0 && reusable[0].sourceDigest === sourceDigest;
+    const own = sameBlob
       ? reusable.map((unit) => ({ ...unit, scope: scope.id, provenance, revision }))
-      : doc.units.map((unit) => unitRow({ scope, path, unit, sourceDigest, provenance, revision }));
-    if (reusable !== undefined && reusable.length > 0 && reusable[0].sourceDigest === sourceDigest) reused += 1;
+      : doc.units.map((unit) => unitRow({ artifact: base, scope, path, unit, sourceDigest, provenance, revision, offset: described.offset }));
+    if (sameBlob) reused += 1;
 
+    artifacts.push({ ...described.artifact, sources: described.refs, digest: sourceDigest, bytes: bytes.length, provenance, revision, sections: doc.sections.length, units: own.length });
     units.push(...own);
-    inventory.push({ path, state: 'indexed', sections: doc.sections.length, units: own.length, ...row });
+    inventory.push({ path, state: 'indexed', sections: doc.sections.length, units: own.length, artifact: base, ...row });
+  }
+
+  // Two documents that resolve to one id are reported, not merged: a shared id without an
+  // explicit multi-representation declaration makes every citation of it ambiguous.
+  const byId = new Map();
+  for (const artifact of artifacts) {
+    const list = byId.get(artifact.id) ?? [];
+    list.push(artifact.path);
+    byId.set(artifact.id, list);
+  }
+  for (const [id, list] of byId) {
+    if (list.length < 2) continue;
+    for (const path of list) {
+      problems.push({ code: 'duplicate-id', path, field: 'id', message: `id \`${id}\` is produced by ${list.join(', ')}`, remedy: 'give each document its own id, or map the shared id to one path in .simt/knowledge/identities.json' });
+    }
+  }
+
+  // References resolve against what this build indexes, after the loop: a document may point at
+  // a section of a file that comes later in the same build.
+  const anchors = new Map(artifacts.map((artifact) => [artifact.path, new Set()]));
+  for (const unit of units) {
+    const set = anchors.get(unit.path);
+    if (set !== undefined && unit.anchor !== '') set.add(unit.anchor);
+  }
+  const paths = new Set(artifacts.map((artifact) => artifact.path));
+  for (const artifact of artifacts) {
+    const resolved = resolveRefs(artifact.sources, { paths, anchorsOf: (path) => anchors.get(path) ?? new Set() });
+    artifact.sources = resolved.sources;
+    problems.push(...resolved.problems);
   }
 
   // A rename is a digest this build indexes under a path the last build did not have, and a
   // path the last build indexed that is now gone. It is recorded, not resolved: the artifact id
-  // is still the path, and only an explicit rename map (WK04) makes a moved document one id.
+  // is still the path, and only an explicit rename map makes a moved document one id.
   const present = new Set(inventory.map((row) => row.path));
   const vanished = new Map();
   for (const row of priorSources.values()) {
@@ -254,7 +302,13 @@ export async function buildCorpus({ scope = {}, candidates = [], policy = {}, pr
     row.renamedFrom = from;
   }
 
-  const counts = { candidates: candidates.length, ...Object.fromEntries(SOURCE_STATES.map((state) => [state, 0])), units: units.length };
+  const counts = {
+    candidates: candidates.length,
+    ...Object.fromEntries(SOURCE_STATES.map((state) => [state, 0])),
+    units: units.length,
+    artifacts: artifacts.length,
+    claims: artifacts.reduce((total, artifact) => total + artifact.claims.length, 0),
+  };
   for (const row of inventory) counts[row.state] += 1;
 
   // `reused` is reported beside the corpus, not inside it: it is a property of this build, and
@@ -265,7 +319,9 @@ export async function buildCorpus({ scope = {}, candidates = [], policy = {}, pr
     policy: policyId,
     counts,
     inventory,
+    artifacts,
     units,
+    problems,
     reused,
   };
 }

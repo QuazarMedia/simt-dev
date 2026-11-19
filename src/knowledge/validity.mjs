@@ -27,7 +27,24 @@ const isObject = (value) => value !== null && typeof value === 'object' && !Arra
 const isText = (value) => typeof value === 'string' && value.length > 0;
 
 /** Days only: a timestamp would make the answer depend on a timezone nobody declared. */
-const isDay = (value) => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+/**
+ * An ISO day, as this module and the metadata reader both mean it.
+ *
+ * Exported when the second real caller arrived: a metadata date and a claim window that
+ * disagreed about what `2026-02-30` is would be two answers to one question.
+ */
+export const isIsoDay = (value) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  // The shape is half the answer: `2025-02-30` has the shape of a day and is not one, and a
+  // date that does not exist is the failure a reader must hear about where it is written.
+  // The month lengths are arithmetic rather than a `Date`, because this module is not allowed a
+  // clock and a calendar that consults one is a clock by another name.
+  const [year, month, day] = value.split('-').map(Number);
+  if (month < 1 || month > 12 || day < 1) return false;
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const length = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return day <= length;
+};
 
 /**
  * Whether a declared scope satisfies the scope a question requires.
@@ -71,7 +88,7 @@ export function readApplicability(input = {}) {
       if (required) problems.push(`${key} must be an ISO date (YYYY-MM-DD)`);
       return null;
     }
-    if (!isDay(value)) {
+    if (!isIsoDay(value)) {
       problems.push(`${key} must be an ISO date (YYYY-MM-DD), not ${JSON.stringify(value)}`);
       return null;
     }
@@ -174,8 +191,8 @@ export function applicableClaims(claims = [], options = {}) {
   // A query without a question is a request for "the" claim, which is how latest-wins gets
   // in; a query without both times cannot be answered bitemporally at all.
   if (!isText(subject) || !isText(predicate)) throw new Error('a validity query needs a subject and a predicate');
-  if (!isDay(asOf)) throw new Error('asOf must be an ISO date (YYYY-MM-DD): a claim set is not an answer without a time');
-  if (!isDay(knownAt)) throw new Error('knownAt must be an ISO date (YYYY-MM-DD): what was true is not what was known');
+  if (!isIsoDay(asOf)) throw new Error('asOf must be an ISO date (YYYY-MM-DD): a claim set is not an answer without a time');
+  if (!isIsoDay(knownAt)) throw new Error('knownAt must be an ISO date (YYYY-MM-DD): what was true is not what was known');
 
   const required = Object.fromEntries(
     Object.entries(scope)

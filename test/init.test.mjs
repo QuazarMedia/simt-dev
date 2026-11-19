@@ -303,6 +303,36 @@ test('gates: planGates drops what the repo cannot run and names each one', () =>
   assert.match(dropped.find((d) => d.gate === 'i18n-completeness').remedy, /gates\.commands/);
 });
 
+test('gates: a mixed Node and Go repo runs both tests, each named with its scope (PR12)', () => {
+  // The old answer collapsed the two by name: the ecosystem seed replaced the Node
+  // script (or was suppressed entirely), so the manifest looked complete while one half
+  // of the repository never ran.
+  const { gates, commands } = gateModule.planGates(
+    ['node'],
+    { runner: 'npm', scripts: { test: 'node --test', lint: 'eslint .' }, binaries: [], commands: {}, tools: ['go'] },
+    ['has-go-mod'],
+  );
+  assert.ok(gates.prePush.includes('test'), 'the Node test gate stays');
+  assert.ok(gates.prePush.includes('test@go'), 'the Go test gate is scoped, not merged away');
+  assert.equal(commands['test@go'], 'go test ./...');
+  assert.equal(commands.test, undefined, 'the Node gate keeps running its own script');
+});
+
+test('gates: two foreign ecosystems keep distinct scoped commands (PR12)', () => {
+  const { gates, commands } = gateModule.planGates(
+    [],
+    { runner: 'go', scripts: {}, binaries: [], commands: {}, tools: ['go', 'cargo'] },
+    ['has-go-mod', 'has-cargo-toml'],
+  );
+  const scoped = [...gates.preCommit, ...gates.prePush].filter((name) => name.includes('@'));
+  assert.ok(scoped.length > 0, 'a second ecosystem must not replace the first gate');
+  // The row read first claims the unscoped name; the other is scoped by its own id, so
+  // both commands exist and neither can be mistaken for the other.
+  assert.equal(commands.test, 'cargo test');
+  assert.equal(commands['test@go'], 'go test ./...');
+  assert.ok(gates.prePush.includes('test@go'));
+});
+
 test('gates: without a capability the stack table is taken at face value', () => {
   // Only sound for callers that verify the result afterwards, which init does.
   const { gates, dropped } = gateModule.planGates(['node'], null);
@@ -495,11 +525,11 @@ test('gates: a marker without the toolchain drops every proposed gate and declar
   }
 });
 
-test('gates: an npm runner keeps its own scripts; no seed lands on top of them', () => {
-  // package.json is the repo's own answer to "how do I test and format". A seed
-  // outranks a script only where the repo has not declared a command of its own —
-  // exactly the mixed repos (package.json AND Cargo.toml) where the script is the
-  // deliberate answer. Replacing a choice with a default is what this guard stops.
+test('gates: an npm runner keeps its own scripts, and a second ecosystem is scoped beside them', () => {
+  // package.json is the repo's own answer to "how do I test and format", so no seed takes
+  // an unscoped name from it. A mixed repo (package.json AND Cargo.toml) still runs both:
+  // the ecosystem's seeds are scoped, which is how the Cargo half stops being silently
+  // absent without replacing a declaration with a default (PR12).
   const { commands, dropped } = gateModule.planGates(
     ['node'],
     {
@@ -511,7 +541,11 @@ test('gates: an npm runner keeps its own scripts; no seed lands on top of them',
     },
     ['has-cargo-toml'],
   );
-  assert.deepEqual(commands, {}, 'a seed must not override an npm repo\'s scripts');
+  assert.deepEqual(commands, {
+    'format@cargo': 'cargo fmt --check',
+    'lint@cargo': 'cargo clippy -- -D warnings',
+    'test@cargo': 'cargo test',
+  }, 'a scoped seed answers the second ecosystem; no unscoped name is taken');
   assert.deepEqual(dropped, [], 'the scripts answer every proposed gate: ' + JSON.stringify(dropped));
 });
 

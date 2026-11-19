@@ -9,7 +9,7 @@ import { promisify } from 'node:util';
 import { PACKAGE_NAME } from '../src/name.mjs';
 import { after, test } from 'node:test';
 
-import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
+import { GATE_KINDS, GATES, FORMATTABLE, gateNames, getGate } from '../src/hooks/gates.mjs';
 import { EVENTS, HOOKS_DIR, HOOKS_DIR_LEGACY, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
 import { hasScript, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
 import { classifyPush, parsePushedRefs, renderGateReport, runGates, stagedFiles } from '../src/hooks/dispatcher.mjs';
@@ -21,6 +21,21 @@ import { git, cmd, keepTemp } from './fixture.mjs';
 import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { simt as simtCli } from './fixture.mjs';
+
+test('a scoped gate id runs its own command, never the unscoped one (PR12)', async () => {
+  const commands = { test: 'node --test', 'test@go': 'go test ./...' };
+  const gate = getGate('test@go', commands);
+  assert.equal(gate.kind, 'command');
+  assert.equal(gate.scope, 'go');
+  const resolution = await resolveGate(gate, { root: '/tmp', commands });
+  assert.equal(resolution.ok, true);
+  assert.equal(resolution.command, 'go test ./...');
+  // A scope without its own command is not a gate: falling back to `test` would run the
+  // Node script under the Go label and report a pass for a suite that never ran.
+  assert.equal(getGate('test@go', { test: 'node --test' }), null);
+  // The unscoped name keeps meaning what it always meant.
+  assert.equal(getGate('test', commands).kind, 'script');
+});
 
 /**
  * One run of the real binary, both paths. `check` is the only surface that can say a

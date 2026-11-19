@@ -37,7 +37,7 @@ test('a multilingual document keeps anchors, byte ranges and its own digest', as
     read: reader({ 'docs/preise.md': text }),
   });
 
-  assert.equal(corpus.schema, 1);
+  assert.equal(corpus.schema, 2);
   assert.equal(corpus.scope, 'docs');
   assert.equal(corpus.counts.indexed, 1);
   assert.ok(corpus.units.length >= 2, 'the document yielded no sections');
@@ -281,7 +281,7 @@ test('knowledge build previews, writes under the ignored area, and rebuilds to t
   assert.equal(applied.written, true);
   const stored = JSON.parse(readFileSync(corpusPath, 'utf8'));
   assert.equal(stored.scope, 'docs');
-  assert.equal(stored.schema, 1);
+  assert.equal(stored.schema, 2);
   assert.equal(stored.units[0].provenance, 'committed', 'an unchanged committed file was not labelled committed');
   assert.equal(stored.units[0].path, 'docs/rates.md');
 

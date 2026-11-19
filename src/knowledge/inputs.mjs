@@ -1,6 +1,6 @@
 // `simt check` validates the knowledge inputs a repository has authored.
 //
-// Six doors read six conventional files under `.simt/knowledge/`, and each door
+// The doors read conventional files under `.simt/knowledge/`, and each door
 // asserts a shape as its first gate before it can answer. A file that is absent
 // is legal - the door simply has nothing to read. A file that is present but
 // does not parse, or that misses the shape its door requires, is a red state no
@@ -18,6 +18,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { BUNDLE_SCHEMA, importBundle } from './bundle.mjs';
+import { readIdentityMap } from './lineage.mjs';
 
 /** The bound the bundle reader already applies, reused for every input the doors read. */
 const MAX_INPUT_BYTES = 64 * 1024;
@@ -42,6 +43,9 @@ const INPUTS = [
   // what to emit, while an imported bundle is what the import door reads. Labeling it
   // `import` made the finding name the wrong command (review 0005 PR19).
   { file: 'export.json', door: 'export' },
+  // The identity map is authored, tracked, and read by `knowledge build`; the check asks the
+  // same reader, so a map that fails here is a map the build would refuse.
+  { file: 'identities.json', door: 'build' },
 ];
 
 const isText = (value) => typeof value === 'string' && value.length > 0;
@@ -157,6 +161,10 @@ function shapeProblems(door, doc) {
         return importBundle(doc, { at: null }).problems.map((problem) => ({ detail: problem.detail, remedy: problem.remedy }));
       }
       return [{ detail: 'the export door reads a "requests" list, not this shape', remedy: 'give the file a "requests" array, or a bundle the import door can read' }];
+    case 'build':
+      // The reader itself, not a restatement of its shape: a map that passes this is a map the
+      // build accepts, and its problems already carry a message and a remedy.
+      return readIdentityMap(doc).problems.map((problem) => ({ detail: problem.message, remedy: problem.remedy }));
     default:
       return [];
   }

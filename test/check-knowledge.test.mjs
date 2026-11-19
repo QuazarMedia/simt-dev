@@ -118,8 +118,10 @@ test('each door is checked against the shape it reads', async () => {
 
 test('an absent file is legal: a repo with a subset of inputs validates only what is present', async () => {
   const root = await repo();
-  // Only the claims door is authored; the other five files are absent.
-  await inputs(root, { 'claims.json': { claims: [{ id: 'c1' }] } });
+  // Only the claims door is authored; the other five files are absent. The claim itself
+  // must be one the door can read: `{id: 'c1'}` alone is refused by `knowledge why`, and
+  // the gate now says so (PR19) instead of blessing the subset by not reading the claim.
+  await inputs(root, { 'claims.json': { claims: [{ id: 'c1', subject: 's', predicate: 'p', value: 'v' }] } });
   assert.deepEqual(await knowledgeInputFindings(root), []);
 });
 

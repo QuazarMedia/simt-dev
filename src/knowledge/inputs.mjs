@@ -18,7 +18,6 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { BUNDLE_SCHEMA, importBundle } from './bundle.mjs';
-import { readClaim } from './claims.mjs';
 
 /** The bound the bundle reader already applies, reused for every input the doors read. */
 const MAX_INPUT_BYTES = 64 * 1024;
@@ -69,9 +68,27 @@ function shapeProblems(door, doc) {
       }
       const problems = [];
       doc.claims.forEach((claim, index) => {
-        const read = readClaim(claim);
-        for (const message of read.problems ?? []) {
-          problems.push({ detail: `claims[${index}]: ${message}`, remedy: 'give every claim the fields its reader needs' });
+        // The file contract, not the marker contract: a claim file may leave `type` to be
+        // inferred from the value, which is why `readClaim` (the marker reader) is stricter
+        // than the file the door reads. These are the fields the door needs to name a claim
+        // at all; `{"id":"a"}` fails here and is refused there.
+        if (!isObject(claim)) {
+          problems.push({ detail: `claims[${index}] must be an object`, remedy: 'give every claim the fields its reader needs' });
+          return;
+        }
+        for (const field of ['id', 'subject', 'predicate']) {
+          if (!isText(claim[field])) {
+            problems.push({ detail: `claims[${index}].${field} must be a non-empty string`, remedy: 'give every claim the fields its reader needs' });
+          }
+        }
+        if (claim.value === undefined) {
+          problems.push({ detail: `claims[${index}].value is missing`, remedy: 'give every claim the value it asserts' });
+        }
+        if (claim.type !== undefined && !['number', 'string', 'boolean'].includes(claim.type)) {
+          problems.push({ detail: `claims[${index}].type must be number, string or boolean`, remedy: 'fix the claim type, or omit it to let the value name it' });
+        }
+        if (claim.evidence !== undefined && !(Array.isArray(claim.evidence) && claim.evidence.every(isText))) {
+          problems.push({ detail: `claims[${index}].evidence must be a list of references`, remedy: 'make evidence an array of claim or path references' });
         }
       });
       if (doc.edges !== undefined && !Array.isArray(doc.edges)) {
@@ -134,7 +151,9 @@ function shapeProblems(door, doc) {
       // export door may also carry. Both are legal; a document that is neither is a
       // typo waiting to be discovered by the door that reads it.
       if (Array.isArray(doc.requests)) return [];
-      if (doc.schema !== undefined || doc.bundle !== undefined) {
+      // A bundle-shaped document is judged by the bundle reader, which is what names the
+      // missing schema; `version` and `facts` are enough to recognise the attempt.
+      if (doc.schema !== undefined || doc.bundle !== undefined || doc.version !== undefined || doc.facts !== undefined) {
         return importBundle(doc, { at: null }).problems.map((problem) => ({ detail: problem.detail, remedy: problem.remedy }));
       }
       return [{ detail: 'the export door reads a "requests" list, not this shape', remedy: 'give the file a "requests" array, or a bundle the import door can read' }];

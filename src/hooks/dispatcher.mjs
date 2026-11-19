@@ -24,6 +24,7 @@ import { basename, join, resolve, sep } from 'node:path';
 
 import { GATES, getGate } from './gates.mjs';
 import { preparePushTree } from './head-worktree.mjs';
+import { resolveGateCwd } from './cwd.mjs';
 import { resolveGate } from './resolve.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 import { readManifest } from '../projection/manifest.mjs';
@@ -556,7 +557,22 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
       continue;
     }
 
-    const resolution = await resolveGate(gate, { root, pkg, staged, commands, runner });
+    // Where the gate runs is part of resolving it: a `gates.cwd` entry selects a nested
+    // package's own script and its own binaries, so resolution happens in that scope
+    // rather than at the root and is moved afterwards. `check` answers the same question
+    // through the same resolver, so a finding and a run cannot disagree (review 0005 PR05).
+    const placement = await resolveGateCwd(root, cwds[name], name);
+    if (!placement.ok) {
+      results.push({ name, status: 'failed', detail: placement.detail, remedy: placement.remedy, adr: gate.adr });
+      continue;
+    }
+    // A staged gate is handed repository-relative paths, so it runs at the root whatever
+    // `gates.cwd` says: resolving its binary from the package directory while passing
+    // root-relative paths is the pairing that made a nested formatter fail on files it
+    // was never given. The declaration is still validated above, so a broken one is loud.
+    const cwd = gate.kind === 'staged' ? root : placement.path;
+    const scopedPkg = cwd === root ? pkg : await readPkg(cwd);
+    const resolution = await resolveGate(gate, { root: cwd, pkg: scopedPkg, staged, commands, runner, fallbackRoot: root });
     if (!resolution.ok) {
       results.push({
         name,
@@ -638,32 +654,6 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
         continue;
       }
       formatted = targets;
-    }
-
-    // The gate's directory, if it declares one. Resolved against the repo root and
-    // checked for containment: a `cwd` that escaped the repository would run a command
-    // against files this commit cannot see, and the gate would be green about them.
-    // Containment is checked on the RESOLVED path, not the string, because `..` and a
-    // symlink both get past a prefix test on the text.
-    let cwd = root;
-    const declaredCwd = cwds[name];
-    if (declaredCwd !== undefined) {
-      const resolved = resolve(root, declaredCwd);
-      const inside = resolved === root || resolved.startsWith(`${root}${sep}`);
-      const exists = inside && (await stat(resolved).catch(() => null))?.isDirectory();
-      if (!exists) {
-        results.push({
-          name,
-          status: 'failed',
-          detail: inside
-            ? `gates.cwd["${name}"] is ${declaredCwd}, which is not a directory in this repository`
-            : `gates.cwd["${name}"] is ${declaredCwd}, which is outside the repository`,
-          remedy: `point gates.cwd["${name}"] at a directory in this repository, or remove it to run the gate at the root`,
-          adr: gate.adr,
-        });
-        continue;
-      }
-      cwd = resolved;
     }
 
     const timeoutMs = gateTimeoutMs(timeouts, name);

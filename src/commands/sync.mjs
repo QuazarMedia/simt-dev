@@ -25,6 +25,7 @@ import { fingerprint } from '../resolve/fingerprint.mjs';
 import { manifestDrift, readManifest, unrunnableGates, buildManifest, writeManifest, withGenerated, manifestText, manifestPath, gateList, unknownKeys } from '../projection/manifest.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { readCapability } from '../hooks/capability.mjs';
+import { resolveGateCwd } from '../hooks/cwd.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
 import { CLI, LOCK_FILE, MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { assertVersionPin, packageVersion } from '../package-version.mjs';
@@ -534,20 +535,11 @@ async function gateCwdFindings(root, manifest) {
   const findings = [];
   for (const name of Object.keys(cwds).sort()) {
     if (!declared.includes(name)) continue;
-    const dir = String(cwds[name]);
-    const resolved = resolve(root, dir);
-    const inside = resolved === root || resolved.startsWith(`${root}${sep}`);
-    const isDir = inside && ((await stat(resolved).catch(() => null))?.isDirectory() ?? false);
-    if (isDir) continue;
-    findings.push({
-      file: MANIFEST_FILE,
-      status: inside ? 'gate-cwd-missing' : 'gate-cwd-outside',
-      gate: name,
-      detail: inside
-        ? `gates.cwd["${name}"] is ${dir}, which is not a directory in this repository`
-        : `gates.cwd["${name}"] is ${dir}, which resolves outside the repository`,
-      remedy: `point gates.cwd["${name}"] at a directory in this repository, or remove it to run the gate at the root`,
-    });
+    // The same resolver the dispatcher runs, so "check is green, the commit is red" is
+    // not a state this repository can reach (review 0005 PR05).
+    const placement = await resolveGateCwd(root, cwds[name], name);
+    if (placement.ok) continue;
+    findings.push({ file: MANIFEST_FILE, status: placement.status, gate: name, detail: placement.detail, remedy: placement.remedy });
   }
   return findings;
 }

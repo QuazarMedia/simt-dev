@@ -34,13 +34,16 @@ async function isExecutable(path) {
  * and the estate's single agreed formatter is prettier. A repo without it gets a
  * failure with a remedy, never a silent pass.
  */
-export async function resolveStagedTool(root, gate) {
+export async function resolveStagedTool(root, gate, fallbackRoot = null) {
   const tools = gate.tools ?? [];
+  const roots = fallbackRoot === null || fallbackRoot === root ? [root] : [root, fallbackRoot];
   const tried = [];
   for (const tool of tools) {
-    const path = join(root, 'node_modules', '.bin', tool);
-    if (await isExecutable(path)) return { tool, path, tried };
-    tried.push(path);
+    for (const base of roots) {
+      const path = join(base, 'node_modules', '.bin', tool);
+      if (await isExecutable(path)) return { tool, path, tried };
+      tried.push(path);
+    }
   }
   return { tool: null, path: null, tried };
 }
@@ -63,7 +66,7 @@ export function hasScript(pkg, script) {
  * @returns {Promise<{ok: true, argv: string[], kind: string, detail: string}
  *                  | {ok: false, gate: string, kind: string, reason: string, remedy: string}>}
  */
-export async function resolveGate(gate, { root, pkg, staged, commands, runner = null }) {
+export async function resolveGate(gate, { root, pkg, staged, commands, runner = null, fallbackRoot = null }) {
   const name = gate.name;
   const declared = commands?.[name];
 
@@ -129,7 +132,7 @@ export async function resolveGate(gate, { root, pkg, staged, commands, runner = 
   }
 
   if (gate.kind === 'staged') {
-    const tool = await resolveStagedTool(root, gate);
+    const tool = await resolveStagedTool(root, gate, fallbackRoot);
     if (tool.path === null) {
       return {
         ok: false,

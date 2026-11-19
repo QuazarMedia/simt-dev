@@ -25,7 +25,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR03 | Run pre-push gates on the revisions being pushed | P0 | hooks | M | PR02 | Complete | da06e94d6c0b1aeabfe56d05383f81659d4dab3f |
 | PR04 | Bind gate evidence to the executed inputs and outcome | P0 | hooks | M | PR03 | Complete | 35c29afd1e5b7da78ff86326c6142356f38f0427 |
 | PR05 | Resolve gate cwd and runnable status through one contract | P1 | hooks | M | PR04 | Complete | 918e1795997806ab2dd70503a5038dd5cce34bb1 |
-| PR06 | Restore Python focused test execution | P1 | runners | S | — | Queued | — |
+| PR06 | Restore Python focused test execution | P1 | runners | S | — | Complete | 3bd310f4d704662535e0d9066d8534f163e50215 |
 | PR07 | Make multi-file writes recoverable and race-aware | P0 | adoption | L | PR01, PR02 | Queued | — |
 | PR08 | Restore every journaled effect and report accurate undo outcomes | P1 | adoption | M | PR07 | Queued | — |
 | PR09 | Establish canonical repository context and config precedence | P1 | config | M | PR02 | Queued | — |

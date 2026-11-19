@@ -29,7 +29,7 @@ import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { sharedWarning } from './shared.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
-import { manifestPath, writeManifest } from '../projection/manifest.mjs';
+import { manifestPath, unknownKeys, writeManifest } from '../projection/manifest.mjs';
 import { planManifestRepair } from './sync.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
 import { applyHooksInstall, plannedDiffs, planHooksInstall } from './hooks.mjs';
@@ -65,7 +65,12 @@ async function collectFindings(root, { result, ws, shared, withDiffs = false, ct
     return findings;
   }
 
-  const { manifest, exists, error: manifestError } = await ctx.manifest();
+  // One read answers both "is there a manifest" and "what is wrong with it": the loader
+  // keeps absent, unreadable, malformed and invalid distinct, and doctor reports each.
+  const manifestState = await ctx.manifestState();
+  const { manifest, exists } = manifestState;
+  const manifestError =
+    manifestState.exists && manifestState.manifest === null ? (manifestState.problems[0] ?? 'unparseable') : null;
   if (manifestError !== null) {
     // An unreadable manifest is a hand-edit, not a repair: re-rendering it
     // would destroy whatever the other tool was saying.
@@ -89,6 +94,30 @@ async function collectFindings(root, { result, ws, shared, withDiffs = false, ct
       safe: false,
     });
   } else {
+    // A file that parses but declares something this build cannot read is a config
+    // error, not a repair: no command can guess the value the repository meant. Named
+    // here so `doctor` and `check` cannot disagree about whether the repository is
+    // valid, and `doctor` exits nonzero on it like the gate does.
+    for (const problem of manifestState.problems) {
+      findings.push({
+        id: 'manifest-invalid',
+        severity: 'error',
+        detail: `${MANIFEST_FILE}: ${problem}`,
+        remedy: `fix ${MANIFEST_FILE} by hand`,
+        why: 'only a human knows which value was intended',
+        safe: false,
+      });
+    }
+    for (const key of unknownKeys(manifestState.manifest)) {
+      findings.push({
+        id: 'manifest-unknown-key',
+        severity: 'warning',
+        detail: `${MANIFEST_FILE}: unknown key \`${key}\` is not read by this version`,
+        remedy: `rename it to \`x-${key}\` to keep it as an extension key, or remove it`,
+        why: null,
+        safe: false,
+      });
+    }
     const sha = await provenanceDigest();
     const repair = await planManifestRepair(root, result.stack, sha);    if (repair !== null) {
         const staleBefore = withDiffs ? await readBefore(await manifestPath(root)) : null;
@@ -262,7 +291,10 @@ export async function diagnose(root, args = {}) {
           remedy: 'fix the JSON, or remove the file',
         }
       : null;
-  const code = failure ? EXIT.CONFIG : EXIT.OK;
+  // An invalid manifest is a config failure even though the run completed: the finding
+  // names it, and the exit code says the repository is not in a state a reader can act on.
+  const invalidConfig = findings.some((f) => f.id === 'manifest-invalid');
+  const code = failure || invalidConfig ? EXIT.CONFIG : EXIT.OK;
   return { result, ws, shared, findings, failure, code };
 }
 
@@ -367,5 +399,7 @@ export async function runDoctor(positional, flags) {
   if (ws.error) {
     return fail(`workspace config ${ws.detail}: ${ws.error}`, EXIT.CONFIG, 'fix the JSON, or remove the file');
   }
-  return EXIT.OK;
+  // Both diagnostics above return their own failure; an invalid manifest has no separate
+  // stream, so its code is the one the report earned.
+  return diagnosisCode;
 }

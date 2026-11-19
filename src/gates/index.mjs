@@ -6,7 +6,7 @@ import { getGate } from '../hooks/gates.mjs';
 import { runScript } from '../ecosystem/node-runner.mjs';
 import { ecosystemGateRows } from '../ecosystem/records.mjs';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
-import { GENERATED_KEYS_OF, KEYS, loadManifest, manifestPath } from '../manifest/schema.mjs';
+import { GENERATED_KEYS_OF, KEYS, gateList, loadManifest, manifestPath } from '../manifest/schema.mjs';
 import { CLI } from '../name.mjs';
 import { packageVersion } from '../package-version.mjs';
 
@@ -302,10 +302,7 @@ function ecosystemCommands(facts = [], capability = null, root = null) {
  * than a visible one.
  */
 export function unrunnableGates(manifest, capability) {
-  const declared = [
-    ...(manifest?.gates?.preCommit ?? []),
-    ...(manifest?.gates?.prePush ?? []),
-  ];
+  const declared = [...gateList(manifest, 'preCommit'), ...gateList(manifest, 'prePush')];
   const findings = [];
   const seen = new Set();
   // `gates.cwd` names a directory a gate runs in, and a name that is not a declared

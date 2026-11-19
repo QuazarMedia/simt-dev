@@ -29,6 +29,26 @@ check that decides whether a value is valid.
 | `local` | repo | loopback `chat`/`embed` endpoints, off until named |
 | `$comment` | tool | a free note, string or list |
 
-A key that this tool does not know is reported, not silently carried: `simt check` names it.
-`simt doctor` prints the manifest keys this version reads, which is the answer to "why was my
-setting ignored".
+A key that this tool does not know is reported, not silently carried: `simt check` and
+`simt doctor` name it as `manifest-unknown-key`, which is a warning rather than a failure. A key
+that starts with `x-` is yours on purpose: it is the extension namespace, it is never reported,
+and it survives every write `init`, `sync` and `upgrade` make. `simt doctor` prints the manifest
+keys this version reads, which is the answer to "why was my setting ignored".
+
+## When a value is wrong
+
+The schema names a known key with an impossible value as `manifest-invalid`, and that finding
+fails `check`, `doctor` and the `check`/`doctor` MCP tools. `hooks run` fails the same way with
+a `config` gate rather than reporting "nothing runs", and `status` reports the repository as
+not ok. The distinction the loader keeps is the one a reader needs:
+
+| State | `exists` | `manifest` | `problems` |
+| --- | --- | --- | --- |
+| absent | `false` | `null` | `[]` |
+| unreadable (permissions, a directory in its place) | `true` | `null` | names the error |
+| malformed (does not parse, is not an object) | `true` | `null` | names the error |
+| invalid (parses, a known key has an impossible value) | `true` | the object | names each value |
+| a newer schema version | `true` | the object | names the version |
+
+An explicit empty gate list is a valid declaration: `"preCommit": []` says this repository
+declares no pre-commit gate, and every command treats it as that rather than as a missing key.

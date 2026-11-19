@@ -22,7 +22,7 @@ import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/i
 import { repoContext } from '../context.mjs';
 import { plan, checkTargets, checkTarget, select, pointerTargets, pointerState } from '../projection/project.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { manifestDrift, readManifest, unrunnableGates, buildManifest, writeManifest, withGenerated, manifestText, manifestPath } from '../projection/manifest.mjs';
+import { manifestDrift, readManifest, unrunnableGates, buildManifest, writeManifest, withGenerated, manifestText, manifestPath, gateList, unknownKeys } from '../projection/manifest.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { surfacesLine } from '../projection/surfaces.mjs';
@@ -124,6 +124,9 @@ export const SYNC_NON_BLOCKING = new Set([
 // to decline. A repo without them gets the finding with its remedy, and the decision
 // does not fail the gate.
 export const CHECK_NON_BLOCKING = new Set([
+  // An unknown manifest key is named, not failed: the repository owns the file, and a
+  // key this build does not read is a fact about the version, not a broken gate.
+  'manifest-unknown-key',
   'orphaned',
   'pack-unpinned',
   'budget',
@@ -527,7 +530,7 @@ async function formatterIgnoresManifest(root) {
 async function gateCwdFindings(root, manifest) {
   const cwds = manifest?.gates?.cwd;
   if (!cwds || typeof cwds !== 'object' || Array.isArray(cwds)) return [];
-  const declared = [...(manifest?.gates?.preCommit ?? []), ...(manifest?.gates?.prePush ?? [])];
+  const declared = [...gateList(manifest, 'preCommit'), ...gateList(manifest, 'prePush')];
   const findings = [];
   for (const name of Object.keys(cwds).sort()) {
     if (!declared.includes(name)) continue;
@@ -581,7 +584,29 @@ export async function checkRepo(root, opts = {}) {
   // A declared gate this repo cannot run fails closed on every commit once hooks are
   // installed. Reported here rather than left to `hooks status`, so the repo is red
   // before anyone installs anything rather than after.
-  const { manifest, exists } = await ctx.manifest();
+  // The manifest with its problems, read once for both questions. Before this, a
+  // `gates.preCommit` written as a string reported `ok: true` with zero hooks, and a
+  // numeric one threw "is not iterable" out of a reader that iterated it. Both are config
+  // errors a reader can fix, and both arrive here as findings rather than as a crash or a
+  // green gate.
+  const manifestState = await ctx.manifestState();
+  const { manifest, exists } = manifestState;
+  for (const problem of manifestState.problems) {
+    findings.push({
+      file: MANIFEST_FILE,
+      status: 'manifest-invalid',
+      detail: problem,
+      remedy: `fix ${MANIFEST_FILE} by hand; \`${CLI} init --yes\` keeps every key it does not write and will not replace this one silently`,
+    });
+  }
+  for (const key of unknownKeys(manifestState.manifest)) {
+    findings.push({
+      file: MANIFEST_FILE,
+      status: 'manifest-unknown-key',
+      detail: `unknown key \`${key}\` is not read by this version`,
+      remedy: `rename it to \`x-${key}\` to keep it as an extension key, or remove it`,
+    });
+  }
   // The gates slot, counted — not just reported — so the line can print run/total.
   // A cwd finding names a declared gate that will not run, so it counts with the
   // unrunnable; an unknown-gate-cwd names no declared gate, so it does not.
@@ -601,7 +626,7 @@ export async function checkRepo(root, opts = {}) {
     findings.push(...unrunnable);
     const cwdFindings = await gateCwdFindings(root, manifest);
     findings.push(...cwdFindings);
-    gatesTotal = (manifest.gates?.preCommit ?? []).length + (manifest.gates?.prePush ?? []).length;
+    gatesTotal = gateList(manifest, 'preCommit').length + gateList(manifest, 'prePush').length;
     const notRun =
       unrunnable.filter((f) => f.status === 'unrunnable').length + cwdFindings.length;
     gatesRun = Math.max(0, gatesTotal - notRun);

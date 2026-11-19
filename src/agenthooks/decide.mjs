@@ -117,11 +117,27 @@ function applies(row, facts, env) {
 function overrideEnv(facts, env) {
   const shell = facts.shell;
   if (shell === null || shell === undefined || shell.parsed !== true) return env;
-  const assigns = Array.isArray(shell.assigns) ? shell.assigns : [];
-  for (let i = assigns.length - 1; i >= 0; i -= 1) {
-    if (assigns[i][0] === ALLOW_ENV) return { ...env, [ALLOW_ENV]: assigns[i][1] };
-  }
-  return env;
+  // One override has one scope. Reading only the last assignment flattened the command
+  // list, so `SIMT_ALLOW=push git push && git push` lifted both invocations: the second
+  // never carried the override and the reviewer saw a single grant. The scope is now the
+  // invocations' own assignments, and an override is applied only when every invocation
+  // carries the same one. Anything else is indeterminate, which leaves the denial in
+  // place rather than widening authority to a command that was never covered.
+  const invocations = Array.isArray(shell.facts) && shell.facts.length > 0
+    ? shell.facts
+    : [{ assigns: Array.isArray(shell.assigns) ? shell.assigns : [] }];
+  const values = invocations.map((fact) => {
+    const assigns = Array.isArray(fact.assigns) ? fact.assigns : [];
+    for (let i = assigns.length - 1; i >= 0; i -= 1) {
+      if (assigns[i][0] === ALLOW_ENV) return assigns[i][1];
+    }
+    return null;
+  });
+  const present = values.filter((value) => value !== null);
+  if (present.length === 0) return env;
+  if (present.length !== values.length) return env;
+  if (new Set(present).size !== 1) return env;
+  return { ...env, [ALLOW_ENV]: present[0] };
 }
 
 /**

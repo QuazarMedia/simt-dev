@@ -9,7 +9,7 @@
 // ceiling and the pre-push fix has to add to it; this module owns exactly the materialise,
 // clean up and fail-closed contract.
 
-import { mkdtemp, rm, symlink } from 'node:fs/promises';
+import { mkdtemp, rm, stat, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -43,11 +43,15 @@ async function materializeHeadWorktree(root, revision) {
     return { path: null, error: `git worktree add failed for ${revision}: ${String(error.stderr ?? error.message).trim()}` };
   }
   const nodeModules = join(root, 'node_modules');
-  try {
-    await symlink(nodeModules, join(path, 'node_modules'));
-  } catch {
-    // Absent node_modules is the normal case for a repo with no install step; a
-    // dangling link is harmless, and `npm run` does not need it to exist.
+  const installed = await stat(nodeModules).then(
+    () => true,
+    () => false,
+  );
+  if (installed) {
+    // Only a link that resolves: a dangling `node_modules` is an untracked path in a
+    // repository that does not ignore it, which changes the tree id of an otherwise
+    // clean checkout and left a passing pre-push run unable to match the tree it pushed.
+    await symlink(nodeModules, join(path, 'node_modules')).catch(() => {});
   }
   return { path };
 }

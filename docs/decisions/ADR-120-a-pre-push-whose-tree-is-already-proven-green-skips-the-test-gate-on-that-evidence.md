@@ -5,7 +5,7 @@ simt-supersedes: []
 
 # ADR-120 — a pre-push whose tree is already proven green skips the test gate on that evidence
 
-Status: **accepted** · 2026-10-31
+Status: **accepted** · 2026-10-31 · ruling 1 superseded by ADR-197
 
 ## Context
 

@@ -137,6 +137,15 @@ async function runBounded(argv, { cwd, env, timeoutMs }) {
 }
 
 /**
+ * What ran the gate, recorded beside the result. Two runs of one command on one tree
+ * are only the same evidence when the toolchain that produced them is the same; the
+ * node runtime and the package manager are the two facts this tool selects.
+ */
+function toolchainIdentity(runner) {
+  return { node: process.version, platform: process.platform, arch: process.arch, ...(runner === null ? {} : { runner }) };
+}
+
+/**
  * The bound for one gate, in milliseconds. A number applies to every gate; a map applies
  * per name, the shape `gates.cwd` already has. A value that is neither a positive whole
  * number of seconds nor 0 falls back to the default rather than removing the bound: an
@@ -459,6 +468,8 @@ async function runPushTarget(root, callerManifest, target, pushed, notes) {
       declared: declaration.declared,
       key: 'prePush',
       skipTest,
+      // Named on every ledger line: the revision whose tree this line is about.
+      subjectRevision: revision,
     });
     return { ref: label, revision, basis, gates: run.gates, failed: run.failed };
   } finally {
@@ -487,7 +498,7 @@ async function runPushTarget(root, callerManifest, target, pushed, notes) {
  *   what the report prints in its place, and the adr is the record that earned it
  * @returns {Promise<{event: string, gates: object[], failed: boolean}>}
  */
-async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, skipTest = null }) {
+async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, skipTest = null, subjectRevision = null }) {
   const pkg = await readPkg(root);
   // the runner is committed evidence (lockfile, then `packageManager`),
   // resolved once per hook run so every script gate spawns the same manager.
@@ -575,6 +586,10 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
           output: outcome.output,
           gate: name,
           kind: 'builtin',
+          subject: root,
+          revision: subjectRevision,
+          toolchain: toolchainIdentity(null),
+          outcome: outcome.ok ? 'passed' : 'failed',
         });
       } catch {
         // Recorded by absence: the next evidence read for this tree has no line.
@@ -654,6 +669,11 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
     const timeoutMs = gateTimeoutMs(timeouts, name);
     const started = Date.now();
     const outcome = await runGate(resolution, cwd, timeoutMs);
+    // A gate that ran out of time is not a pass, whatever code its process managed to
+    // exit with: a child that traps SIGTERM and exits 0 used to reach the pass path and
+    // leave a green ledger line for a run the bound had already failed.
+    const passed = outcome.code === 0 && !outcome.timedOut;
+    const recordedExit = outcome.timedOut && outcome.code === 0 ? 1 : outcome.code;
     // The ledger is not the gate. A tree that cannot be named leaves no line, and the
     // claim check then finds nothing, which is the direction that cannot invent a run.
     try {
@@ -665,11 +685,18 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
         name === 'test' || name === 'coverage' ? 'test' : name === 'lint' ? 'lint' : name === 'format' ? 'format' : (gate.kind ?? name);
       await recordRun(ledgerRoot, {
         cmd,
-        exit: outcome.code,
+        exit: recordedExit,
         ms: Date.now() - started,
         output: `${outcome.stdout ?? ''}\n${outcome.stderr ?? ''}`,
         gate: name,
         kind,
+        // The tree the gate actually ran in, not the tree the ledger lives in: for a
+        // pre-push run those differ, and the skip query reads this line.
+        subject: root,
+        revision: subjectRevision,
+        toolchain: toolchainIdentity(runner),
+        ...(cwd !== root ? { cwd } : {}),
+        outcome: outcome.timedOut ? 'timeout' : passed ? 'passed' : 'failed',
       });
     } catch {
       // Recorded by absence: the next evidence read for this tree has no line.
@@ -678,11 +705,11 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
     // stated rather than left to `exit 1`, and the remedy says how to change the bound.
     results.push({
       name,
-      status: outcome.code === 0 ? 'passed' : 'failed',
+      status: passed ? 'passed' : 'failed',
       detail: outcome.timedOut
         ? `${resolution.detail}: timed out after ${Math.round(timeoutMs / 1000)} s`
         : `${resolution.detail}${outcome.code === 0 ? '' : `: exit ${outcome.code}`}`,
-      output: outcome.code === 0 ? '' : tail(outcome.stderr || outcome.stdout),
+      output: passed ? '' : tail(outcome.stderr || outcome.stdout),
       ...(outcome.timedOut
         ? { remedy: `fix the hang, raise gates.timeout to give it longer, or set gates.timeout to 0 to remove the bound` }
         : {}),

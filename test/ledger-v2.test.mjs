@@ -64,7 +64,11 @@ test('a tail read answers with the last entries and drops a half line', async ()
     }
     const { entries } = await readLedgerTail(root, { entries: 2 });
     assert.deepEqual(entries.map((e) => e.command), ['run 3', 'run 4']);
-    const sliced = await readLedgerTail(root, { entries: 10, bytes: 400 });
+    // A budget of one and a half lines: the read starts mid-line and must drop that half
+    // rather than parse it. Derived from the line, so a field added to the record does not
+    // silently turn this into a zero-line read that proves nothing.
+    const one = (await readFile(join(root, LEDGER_FILE), 'utf8')).split('\n')[0];
+    const sliced = await readLedgerTail(root, { entries: 10, bytes: Math.floor(one.length * 1.5) });
     assert.equal(sliced.partial, true);
     assert.ok(sliced.entries.length >= 1);
     assert.ok(sliced.entries.every((e) => typeof e.tree === 'string'), 'a half line was parsed as evidence');

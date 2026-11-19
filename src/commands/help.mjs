@@ -40,6 +40,8 @@ ${CLI} knowledge derivations --input  which outputs a source or template change
 ${CLI} knowledge debt --input  stale and unsupported knowledge, ranked by
                            consequence per effort
 ${CLI} knowledge sections <file.md>  the units a long document yields, with anchors
+${CLI} knowledge build --scope <id>  the sections of one declared scope, built
+                           incrementally; previewed, --yes writes under .simt/local
 ${CLI} work schedule --input  which ready tasks may run together, which serialize
 ${CLI} work handoff --input  a resume capsule built from ids and provenance
 ${CLI} work resume --input  revalidate a capsule before a new session reuses it

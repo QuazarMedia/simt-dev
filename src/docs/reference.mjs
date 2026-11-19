@@ -35,6 +35,7 @@ const MODULES = [
       'knowledge derivations',
       'knowledge debt',
       'knowledge sections',
+      'knowledge build',
       'knowledge export',
       'knowledge import',
     ],

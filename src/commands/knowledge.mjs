@@ -9,14 +9,21 @@
 // paginated: a door that can only answer "all of it" is a door whose answer grows without a
 // bound, and the cut has to be visible rather than implied.
 
-import { EXIT, fail, present } from '../output/index.mjs';
-import { CLI } from '../name.mjs';
+import { readFile, mkdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
+import { EXIT, fail, note, present, writeMode } from '../output/index.mjs';
+import { CLI, MANIFEST_FILE } from '../name.mjs';
+import { commandRoot } from '../repo-root.mjs';
+import { diffField, emitDiffs } from '../diff.mjs';
+import { readWork } from '../work/effective.mjs';
+import { ALWAYS_DENIED, CORPUS_DIR, CORPUS_DEFAULTS, buildCorpus } from '../knowledge/corpus.mjs';
+import { inventorySources } from '../knowledge/sources.mjs';
 import { buildClaimGraph, impact, lineage, proposedEdges, readClaim } from '../knowledge/claims.mjs';
 import { findConflicts } from '../knowledge/conflicts.mjs';
 import { applicableClaims, readApplicability } from '../knowledge/validity.mjs';
 import { MAX_PAGE, exportBundle, importBundle } from '../knowledge/bundle.mjs';
 import { readJsonDocument } from './doc-input.mjs';
-import { readFile } from 'node:fs/promises';
 import { rank as rankUnits } from '../knowledge/rank.mjs';
 import { regenerationCandidates } from '../knowledge/derivations.mjs';
 import { aggregate as aggregateDebt, coldStart as coldStartDebt, rank as rankDebt, weightSensitivity } from '../knowledge/debt.mjs';
@@ -26,6 +33,7 @@ import { extractDocument } from '../knowledge/sections.mjs';
 const WHY_USAGE = `run: ${CLI} knowledge why <claim-id> --claims <file> [--limit <n>] [--page <n>]`;
 const EXPORT_USAGE = `run: ${CLI} knowledge export --input <file>`;
 const IMPORT_USAGE = `run: ${CLI} knowledge import --input <file>`;
+const BUILD_USAGE = `run: ${CLI} knowledge build --scope <id> [--yes]`;
 
 /**
  * @param {object} doc
@@ -328,6 +336,12 @@ export async function knowledgeCommand(sub, args, flags) {
     return EXIT.OK;
   }
 
+  if (sub === 'build') {
+    if (args.length > 0) return fail(`unknown knowledge build argument ${args[0]}`, EXIT.USAGE, BUILD_USAGE);
+    if (typeof flags.scope !== 'string' || flags.scope === '') return fail('knowledge build needs a scope', EXIT.USAGE, BUILD_USAGE);
+    return knowledgeBuildCommand(flags);
+  }
+
   if (args.length > 0) return fail(`unknown knowledge ${sub} argument ${args[0]}`, EXIT.USAGE, sub === 'export' ? EXPORT_USAGE : IMPORT_USAGE);
   const read = await readJsonDocument(flags, 'input');
   if (read.error !== undefined) return fail(read.error, EXIT.USAGE, sub === 'export' ? EXPORT_USAGE : IMPORT_USAGE);
@@ -401,7 +415,144 @@ function renderImport(payload) {
   return lines.join('\n');
 }
 
+/**
+ * Build one scope's corpus, previewed and then written under the ignored local area.
+ *
+ * The build reads tracked files, so it answers from the manifest and from Git and never from
+ * a guess about the directory. A scope that is not declared is refused by name instead of
+ * being sampled: an undeclared scope has no authority to include anything.
+ *
+ * @param {object} flags
+ * @returns {Promise<number>}
+ */
+async function knowledgeBuildCommand(flags) {
+  const root = commandRoot(flags);
+  const mode = writeMode(flags);
+  const work = await readWork(root);
+  if (!work.ok) return fail(`${MANIFEST_FILE}'s work declaration is invalid: ${work.problems[0].message}`, EXIT.CONFIG, work.problems[0].remedy);
+  if (!work.declared) {
+    return fail('this repository declares no work, so it has no scope to build', EXIT.USAGE, `run: ${CLI} work setup --scope <id> --path <dir> --kind document`);
+  }
+  const scope = work.scopes.find((row) => row.id === flags.scope);
+  if (scope === undefined) {
+    const known = work.scopes.map((row) => `\`${row.id}\``).join(', ');
+    return fail(`\`${flags.scope}\` is not a declared scope`, EXIT.USAGE, known === '' ? `declare one first: ${BUILD_USAGE.replace('run: ', '')}` : `declared scopes are ${known}; pass one of them as --scope`);
+  }
+
+  const relativePath = join(CORPUS_DIR, `${scope.id}.json`);
+  const path = join(root, relativePath);
+  const before = await readTextFile(path);
+  let previous = null;
+  if (before !== null) {
+    try {
+      previous = JSON.parse(before);
+    } catch {
+      // A corpus this build cannot read is not a policy: it is a cache, and a cache that does
+      // not parse is rebuilt rather than trusted.
+      previous = null;
+    }
+  }
+
+  let inventory;
+  try {
+    inventory = await inventorySources(root, { paths: scope.paths, maxFiles: CORPUS_DEFAULTS.maxFiles });
+  } catch (error) {
+    return fail(`cannot list the tracked files of this repository: ${String(error?.message ?? error).split('\n')[0]}`, EXIT.CONFIG, 'knowledge build reads tracked files; run it in a Git repository with one commit');
+  }
+
+  const corpus = await buildCorpus({
+    scope,
+    candidates: inventory.candidates,
+    policy: { deny: ALWAYS_DENIED, maxBytes: CORPUS_DEFAULTS.maxBytes, unitBytes: CORPUS_DEFAULTS.unitBytes },
+    previous,
+    read: (path) => readBytes(join(root, path)),
+  });
+  // The stored document is the corpus, and only the corpus: a build statistic kept inside it
+  // would make the second build differ from the first byte for byte.
+  const stored = { schema: corpus.schema, scope: corpus.scope, policy: corpus.policy, counts: corpus.counts, inventory: corpus.inventory, units: corpus.units };
+  const text = `${JSON.stringify(stored, null, 2)}\n`;
+  const changed = before !== text;
+  const apply = `run: ${CLI} knowledge build --scope ${scope.id} --yes`;
+  const diffs = flags.diff === true ? [{ path: relativePath, before, after: text }] : [];
+  const payload = {
+    ok: true,
+    command: 'knowledge build',
+    root,
+    scope: scope.id,
+    corpus: relativePath,
+    dryRun: !mode.apply,
+    changed,
+    written: false,
+    truncated: inventory.truncated,
+    policy: corpus.policy,
+    counts: corpus.counts,
+    reused: corpus.reused,
+    inventory: corpus.inventory,
+    units: corpus.units,
+    ...diffField(diffs, flags),
+    remedy: changed && !mode.apply ? apply : null,
+  };
+
+  if (mode.apply && changed) {
+    // A corpus is derived state under the ignored area, so it is not journaled: nothing under
+    // `.simt/` is. It is written through a temporary file and a rename instead, so a reader
+    // never sees half a JSON document, and a rebuild is the way back from a bad one.
+    const temp = `${path}.tmp-${process.pid}`;
+    try {
+      await mkdir(dirname(path), { recursive: true });
+      await writeFile(temp, text);
+      await rename(temp, path);
+    } catch (error) {
+      await unlink(temp).catch(() => {});
+      return fail(`the corpus could not be written: ${String(error?.message ?? error).split('\n')[0]}`, EXIT.FAIL, `the previous corpus, if any, is untouched; fix the reason, then rerun ${apply.replace('run: ', '')}`);
+    }
+    payload.written = true;
+    note(`wrote    ${relativePath}`);
+  }
+
+  present(payload, () => renderBuild(payload), flags);
+  emitDiffs(diffs, flags);
+  return EXIT.OK;
+}
+
+async function readBytes(path) {
+  try {
+    return await readFile(path);
+  } catch {
+    return null;
+  }
+}
+
+async function readTextFile(path) {
+  try {
+    return await readFile(path, 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+function renderBuild(payload) {
+  const counts = payload.counts;
+  const refused = ['ignored', 'denied', 'symlink', 'untracked', 'too-large', 'generated', 'unsupported', 'missing', 'outside']
+    .filter((state) => counts[state] > 0)
+    .map((state) => `${counts[state]} ${state}`)
+    .join(', ');
+  const lines = [
+    `scope      ${payload.scope}  ${counts.candidates} candidates, ${counts.indexed} indexed`,
+    `units      ${counts.units} sections (${payload.reused} reused)`,
+    `policy     ${payload.policy}`,
+    `corpus     ${payload.corpus}`,
+  ];
+  if (refused !== '') lines.push(`refused    ${refused}`);
+  if (payload.truncated) lines.push(`truncated  the build stopped at its candidate bound; scope a smaller path or build the rest under a second scope`);
+  if (!payload.changed) lines.push('unchanged  the corpus on disk is the one this build would write');
+  else lines.push(payload.written ? 'wrote      one corpus' : 'would write  one corpus (preview: no bytes written)');
+  if (payload.remedy !== null) lines.push(`apply      ${payload.remedy}`);
+  return lines.join('\n');
+}
+
 export function renderKnowledge(payload) {
+  if (payload.command === 'knowledge build') return renderBuild(payload);
   if (payload.command === 'knowledge rank') return renderRank(payload);
   if (payload.command === 'knowledge derivations') return renderDerivations(payload);
   if (payload.command === 'knowledge debt') return renderDebt(payload);

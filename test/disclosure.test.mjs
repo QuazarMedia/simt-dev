@@ -6,11 +6,12 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, mkdir, writeFile, symlink, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, writeFile, symlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { desiredRegion } from '../src/projection/rules.mjs';
+import { installedSkills, projectedSkill } from '../src/projection/disclosure.mjs';
 
 const BODY = 'The body sentence that must stay out of the region.';
 
@@ -33,6 +34,30 @@ test('a skill contributes its name and its trigger, and the body stays in its fi
   assert.equal(desired.body.includes(BODY), false);
   const headings = [...desired.body.matchAll(/^## .+$/gm)].map((m) => m[0]);
   assert.equal(headings.at(-1), '## Disclosure');
+  await rm(root, { recursive: true, force: true });
+});
+
+test('a planned skill is disclosed before its bytes are written', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'simt-disclosure-'));
+  await writeFile(join(root, 'package.json'), '{ "name": "x" }\n');
+  const text = '---\nname: planned\ndescription: Open this before the file exists.\n---\n\n# Planned\n\nPlanned body.\n';
+  const planned = [projectedSkill(text, '.agents/skills/planned/SKILL.md')];
+  const skills = await installedSkills(root, { planned });
+  assert.deepEqual(skills.map((s) => [s.name, s.trigger, s.dir]), [['planned', 'Open this before the file exists.', '.agents/skills']]);
+  const desired = await desiredRegion(root, { surfaces: 'cursor', plannedSkills: planned });
+  assert.match(desired.body, /- planned — Open this before the file exists\./);
+  assert.equal(desired.body.includes('Planned body.'), false);
+  await assert.rejects(readFile(join(root, '.agents', 'skills', 'planned', 'SKILL.md')), 'the projection wrote the file it projected');
+  await rm(root, { recursive: true, force: true });
+});
+
+test('a planned replacement is disclosed with the trigger it will carry', async () => {
+  const root = await repo();
+  const text = '---\nname: widget\ndescription: The new trigger.\n---\n\n# Widget\n';
+  const planned = [projectedSkill(text, '.agents/skills/widget/SKILL.md')];
+  const desired = await desiredRegion(root, { surfaces: 'cursor', plannedSkills: planned });
+  assert.match(desired.body, /- widget — The new trigger\./);
+  assert.equal(desired.body.includes('Open this when editing a widget'), false);
   await rm(root, { recursive: true, force: true });
 });
 

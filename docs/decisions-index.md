@@ -206,3 +206,4 @@ in [architecture/history.md](architecture/history.md).
 | [195](decisions/ADR-195-the-hooks-disable-policy-reads-its-own-text-when-the-shell-cannot.md) | the hooks-disable policy reads its own text when the shell cannot | accepted · 2026-11-05 |
 | [196](decisions/ADR-196-a-failed-alias-lookup-leaves-the-push-and-rewrite-rows-their-text.md) | a failed alias lookup leaves the push and rewrite rows their text | accepted · 2026-11-05 |
 | [197](decisions/ADR-197-gate-evidence-names-the-tree-it-ran-on.md) | gate evidence names the tree it ran on, and nothing else stands in for it | accepted · 2026-11-19 |
+| [198](decisions/ADR-198-the-strict-gate-verdict-is-opted-into.md) | the strict gate verdict is opted into, and the default keeps its answer | accepted · 2026-11-19 |

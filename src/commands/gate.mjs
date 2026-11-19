@@ -8,7 +8,7 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
@@ -35,10 +35,14 @@ export async function gateCommand(args, flags) {
   const listed = await tracked(root);
   if (listed.error) return listed.error;
   let changed = args.filter(Boolean);
+  let renames = [];
+  let deleted = [];
   if (flags.changed === true) {
     const diff = await changedFiles(root);
     if (diff.error) return diff.error;
     changed = [...new Set([...changed, ...diff.files])].sort();
+    renames = diff.renames;
+    deleted = diff.deleted;
   }
   if (changed.length === 0) {
     if (flags.changed === true) {
@@ -59,7 +63,11 @@ export async function gateCommand(args, flags) {
   // gate could select from. That is a usage error, not an empty selection: the
   // old answer (`ok: true`, no tests, exit 0) was indistinguishable from "this
   // change is safe" and trained the reader to trust it.
-  const unknown = changed.filter((p) => !listed.files.includes(p) && !existsSync(join(root, p)));
+  // A deleted or renamed-away path is named by git and no longer exists, which is the
+  // point of it: it still selects the tests that imported it. Existence is only
+  // required of a path the caller typed.
+  const gone = new Set([...deleted, ...renames.map((rename) => rename.from)]);
+  const unknown = changed.filter((p) => !listed.files.includes(p) && !gone.has(p) && !existsSync(join(root, p)));
   if (unknown.length > 0) {
     return fail(
       `no such file: ${unknown.join(', ')}`,
@@ -95,18 +103,36 @@ export async function gateCommand(args, flags) {
   const unmatched = changed.filter((p) => !listed.files.includes(p));
   const graph = graphState(edges, files, root);
   if (selected.length === 0) {
-    const payload = { ok: true, command: 'gate', root, selected, unmatched, graph, verdict: 'nothing-selected', code: 0 };
+    // `--strict` is the opt-in versioned verdict (ADR-198): a code change with no reachable
+    // test is unproven, not safe. The default stays compatible because every consumer of
+    // the old answer reads exit 0 as "nothing to run".
+    const strict = flags.strict === true;
+    const docOnly = changed.length > 0 && changed.every(isDocPath);
+    const unproven = strict && !docOnly;
+    const payload = {
+      ok: !unproven,
+      command: 'gate',
+      root,
+      selected,
+      unmatched,
+      graph,
+      verdict: unproven ? 'unproven-selection' : 'nothing-selected',
+      code: unproven ? EXIT.FAIL : 0,
+      renames,
+      deleted,
+    };
     if (isJson(flags)) {
       emitJson(payload);
-      return EXIT.OK;
+      return payload.code === 0 ? EXIT.OK : EXIT.FAIL;
     }
-    const lines = ['selected  0', 'verdict  nothing-selected'];
+    const lines = ['selected  0', `verdict  ${payload.verdict}`];
     if (unmatched.length > 0) lines.push(`unmatched  ${unmatched.join(', ')}`);
     if (graph === 'unresolved') lines.push('graph  unresolved');
+    if (unproven) lines.push('strict  no test is reachable from this change; name one, or drop --strict');
     emit(lines.join('\n'));
-    return EXIT.OK;
+    return payload.code === 0 ? EXIT.OK : EXIT.FAIL;
   }
-  return runSelected(root, flags, selected, { unmatched, graph, spec });
+  return runSelected(root, flags, selected, { unmatched, graph, spec, renames, deleted, changed });
 }
 
 /**
@@ -114,6 +140,18 @@ export async function gateCommand(args, flags) {
  * zero reaching a tracked file. A language with no edges at all is not
  * evidence of anything - an unimported file needs no resolution.
  */
+/**
+ * Whether a changed path is prose rather than code.
+ *
+ * A docs-only change legitimately selects no test, and strict mode must not fail the one
+ * case where an empty selection is the whole truth. The list is deliberately about
+ * documentation, not about "not a language this tool parses": a config or data file a test
+ * reads is still a change strict mode should demand proof for.
+ */
+function isDocPath(file) {
+  return /(^|\/)(docs?|decisions)\/|\.(md|mdx|txt|rst|adoc)$/i.test(file);
+}
+
 function graphState(edges, files, root = null) {
   const byLang = new Map();
   for (const edge of edges) {
@@ -130,7 +168,7 @@ function graphState(edges, files, root = null) {
   return 'resolved';
 }
 
-async function runSelected(root, flags, selected, { unmatched = [], graph = 'resolved', spec = null } = {}) {
+async function runSelected(root, flags, selected, { unmatched = [], graph = 'resolved', spec = null, renames = [], deleted = [], changed = [] } = {}) {
   const cache = new Map();
   const groups = new Map();
   for (const file of selected) {
@@ -187,8 +225,34 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     const body = stderr ? `${stdout}\n${stderr}` : stdout;
     rawParts.push(body);
     const compact = compactOutput(body);
-    runs.push({ package: pkg, command: runner.displayCmd, code: result.code, stdout, stderr });
+    // Whether the runner was actually asked to run the files: a runner that ignores its
+    // selector exits 0 having run nothing, and the old report called that a pass. The
+    // check is only a claim about the output mentioning each file, which is what a
+    // selector-aware reporter prints; it is deliberately not a parse of pass counts.
+    const unproven = files.filter((file) => !body.includes(file) && !body.includes(basename(file)));
+    runs.push({ package: pkg, command: runner.displayCmd, code: result.code, stdout, stderr, unproven });
     text.push(compact ?? body);
+  }
+  const unproven = runs.flatMap((run) => run.unproven ?? []);
+  // `--strict` is the opt-in versioned verdict (ADR-198). The default stays compatible:
+  // an empty selection is still exit 0, because every consumer of the old answer expects
+  // it. Strict refuses to call a run proven when the graph could not resolve, when a
+  // changed path has no reachable test, or when the runner never mentioned a file it was
+  // given - the three ways a green exit used to mean nothing.
+  const strict = flags.strict === true;
+  const docOnly = changed.length > 0 && changed.every(isDocPath);
+  if (strict) {
+    if (graph === 'unresolved') {
+      text.push('', 'strict  the import graph did not resolve this change');
+      code = code === 0 ? EXIT.FAIL : code;
+    }
+    if (unproven.length > 0) {
+      text.push('', `strict  the runner never ran: ${unproven.join(', ')}`);
+      code = code === 0 ? EXIT.FAIL : code;
+    }
+    if (selected.length === 0 || unproven.length > 0) {
+      if (!docOnly) text.push('', 'strict  this change has no proven test selection');
+    }
   }
   const raw = await writeRaw(root, rawParts.join('\n'));
   if (raw) text.push('', `raw  ${raw}`);
@@ -203,6 +267,11 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     code,
     raw,
     runs,
+    renames,
+    deleted,
+    // The versioned strict verdict adds what the default answer never had to say: whether
+    // every selected file was actually mentioned by the runner.
+    ...(flags.strict === true ? { strict: { unproven } } : {}),
   };
   present(payload, () => text.filter((line) => line !== undefined).join('\n'), flags);
   return code === 0 ? EXIT.OK : EXIT.FAIL;
@@ -244,9 +313,34 @@ async function tracked(root) {
 
 async function changedFiles(root) {
   try {
-    const files = await gitPaths(root, ['diff', '--name-only', 'HEAD'], { maxBuffer: 8 << 20 });
+    // `--name-status` names what happened as well as what changed. A rename used to
+    // arrive as two unrelated paths and a deletion as a path that no longer exists, so a
+    // renamed module and a deleted one both selected nothing while exiting 0.
+    const status = await gitPaths(root, ['diff', '--name-status', '-z', 'HEAD'], { maxBuffer: 8 << 20 });
+    const files = [];
+    const renames = [];
+    const deleted = [];
+    for (let index = 0; index < status.length; index += 1) {
+      const code = status[index];
+      if (!/^[A-Z]/.test(code)) continue;
+      if (code.startsWith('R') || code.startsWith('C')) {
+        const from = status[index + 1];
+        const to = status[index + 2];
+        index += 2;
+        if (from && to) {
+          renames.push({ from, to });
+          files.push(from, to);
+        }
+        continue;
+      }
+      const path = status[index + 1];
+      index += 1;
+      if (!path) continue;
+      files.push(path);
+      if (code.startsWith('D')) deleted.push(path);
+    }
     const untracked = await gitPaths(root, ['ls-files', '--others', '--exclude-standard'], { maxBuffer: 8 << 20 });
-    return { files: [...new Set([...files, ...untracked])].sort() };
+    return { files: [...new Set([...files, ...untracked])].sort(), renames, deleted };
   } catch (error) {
     return {
       error: fail(

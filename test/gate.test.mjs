@@ -255,6 +255,84 @@ test('a uv project runs pytest through uv (PR11)', async () => {
   }
 });
 
+async function fixtureRepo() {
+  const root = await mkdtemp(join(tmpdir(), 'idx-gate-'));
+  await git(['init', '-q', root]);
+  await mkdir(join(root, 'src'), { recursive: true });
+  await mkdir(join(root, 'test'), { recursive: true });
+  await writeFile(join(root, 'package.json'), '{ "scripts": { "test": "node --test" } }\n');
+  await writeFile(join(root, 'README.md'), 'read me\n');
+  await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 1;\n');
+  await writeFile(
+    join(root, 'test', 'keep.test.mjs'),
+    "import { test } from 'node:test';\nimport { keep } from '../src/keep.mjs';\ntest('k', () => { if (keep !== 1) throw new Error('k'); });\n",
+  );
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'initial']);
+  return root;
+}
+
+test('gate --changed reports a rename as one change, with both names (PR13)', async () => {
+  const root = await fixtureRepo();
+  try {
+    await git(['-C', root, 'mv', 'src/keep.mjs', 'src/renamed.mjs']);
+    await writeFile(
+      join(root, 'test', 'keep.test.mjs'),
+      "import { test } from 'node:test';\nimport { keep } from '../src/renamed.mjs';\ntest('k', () => { if (keep !== 1) throw new Error('k'); });\n",
+    );
+    const payload = JSON.parse(
+      (await capture(() => gateCommand([], { root, changed: true, json: true }))).stdout,
+    );
+    assert.deepEqual(payload.renames, [{ from: 'src/keep.mjs', to: 'src/renamed.mjs' }]);
+    assert.ok(payload.selected.includes('test/keep.test.mjs'), 'the renamed module still selects its test');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('gate --strict refuses an unproven selection and names what it could not prove (PR13)', async () => {
+  const root = await fixtureRepo();
+  try {
+    // A code change with no reachable test: the default answer stays compatible
+    // (nothing-selected, exit 0), and strict says the truth instead.
+    await writeFile(join(root, 'src', 'lonely.mjs'), 'export const lonely = 1;\n');
+    const quiet = await capture(() => gateCommand(['src/lonely.mjs'], { root }));
+    assert.equal(quiet.code, 0);
+    const strict = await capture(() => gateCommand(['src/lonely.mjs'], { root, strict: true, json: true }));
+    assert.equal(strict.code, 1);
+    assert.equal(JSON.parse(strict.stdout).verdict, 'unproven-selection');
+
+    // A docs-only change is the one empty selection that is the whole truth.
+    await rm(join(root, 'src', 'lonely.mjs'));
+    await writeFile(join(root, 'README.md'), 'read me again\n');
+    const docs = await capture(() => gateCommand([], { root, changed: true, strict: true }));
+    assert.equal(docs.code, 0, docs.stdout);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('gate --strict fails when the runner never mentions the files it was given (PR13)', async () => {
+  // A runner that ignores its selector exits 0 having run nothing. The old report
+  // called that a pass; strict checks what the runner said it ran.
+  const root = await fixtureRepo();
+  try {
+    await writeFile(
+      join(root, 'simt.json'),
+      JSON.stringify({ test: { runner: { command: [process.execPath, '-e', 'console.log("ok")', '{files}'] } } }),
+    );
+    await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 2;\n');
+    const lenient = await capture(() => gateCommand(['src/keep.mjs'], { root }));
+    assert.equal(lenient.code, 0, 'the compatibility answer is the runner exit code');
+    const strict = await capture(() => gateCommand(['src/keep.mjs'], { root, strict: true, json: true }));
+    assert.equal(strict.code, 1);
+    const payload = JSON.parse(strict.stdout);
+    assert.deepEqual(payload.runs[0].unproven, ['test/keep.test.mjs']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 function git(args) {
   return exec('git', ['-c', 'user.name=simt-dev tests', '-c', 'user.email=tests@example.com', '-c', 'commit.gpgsign=false', ...args], { maxBuffer: 16 << 20 });
 }

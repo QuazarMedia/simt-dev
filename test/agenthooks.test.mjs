@@ -635,3 +635,21 @@ test('a grant nobody can point at is not a policy', async () => {
   assert.deepEqual(decision.unknown, ['whatever']);
 });
 
+
+test('an inline override covers only the invocation that carries it (PR38)', async () => {
+  const { commandFacts } = await import('../src/agenthooks/shell.mjs');
+  const run = (command) => decide({ event: 'pre-tool-use', facts: { command, shell: commandFacts(command) }, env: {} });
+
+  const single = run('SIMT_ALLOW=push git push');
+  assert.deepEqual(single.blocked, []);
+  assert.deepEqual(single.lifted, ['push']);
+
+  // The second invocation never carried the override, so the grant does not reach it.
+  const second = run('SIMT_ALLOW=push git push && git push');
+  assert.deepEqual(second.blocked, ['push']);
+  assert.deepEqual(second.lifted, []);
+
+  // Two different values have no single scope: nothing is lifted.
+  const differing = run('SIMT_ALLOW=push git push && SIMT_ALLOW=rm git push');
+  assert.deepEqual(differing.blocked, ['push']);
+});

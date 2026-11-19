@@ -514,7 +514,15 @@ export function commandFacts(text) {
   for (const words of tokens.commands) {
     for (const unwrapped of unwrap(words)) {
       const fact = parseGit(unwrapped) ?? parseRm(unwrapped);
-      if (fact !== null) facts.push(fact);
+      // The assignments that govern THIS invocation, in the order a shell applies them:
+      // the wrapper's own prefix first, then the inner command's. Flattening them across
+      // the whole command list let one invocation's `SIMT_ALLOW` lift another that never
+      // carried it (review 0005 PR38).
+      const scope = [
+        ...leadingAssigns(words),
+        ...(unwrapped === words ? [] : leadingAssigns(unwrapped)),
+      ];
+      if (fact !== null) facts.push({ ...fact, assigns: scope });
       // A wrapper's inner command carries its own prefix: `sh -c 'SIMT_ALLOW=push git
       // push'` runs the assignment, so the decision must read it. `unwrap` returns the
       // input array itself when nothing was unwrapped, so the identity check keeps a

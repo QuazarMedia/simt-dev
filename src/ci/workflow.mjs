@@ -494,7 +494,10 @@ export function ciContract({ npm = true, manager = null, version, gates = null }
       manager: null,
       bootstrap: null,
       lockfiles: [],
-      install: `fetch ${releaseBase(v)}/${assetNameExpr(v)} and its .sha256, verify the checksum, then run ${LOCAL_BIN}`,
+      // No asset name here: it is built from shell variables the workflow's own
+      // `platformLines` defines, and printing `-$os-$arch` as advice told a provider to
+      // run a filename no shell would produce.
+      install: `fetch this platform's release asset and its .sha256 from ${releaseBase(v)}, verify the checksum, then run ${LOCAL_BIN}`,
       gate: `${CLI} check`,
       ...(gates?.prePush?.length ? { declaredGates: `${CLI} hooks run pre-push --root "$ROOT"` } : {}),
     };

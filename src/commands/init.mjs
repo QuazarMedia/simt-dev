@@ -758,7 +758,10 @@ export async function initCommand(positional, flags) {
   // is what lets the reader see which one is missing. The old line said "then `check` in
   // CI" to an adoption that had no CI workflow at all.
   const ciState = await ciWorkflow(root);
-  payload.ci = ciState;
+  // A fact added to the plan, not a replacement for it. `payload.ci` already carries the
+  // write this run planned (file, action, mode, contract); assigning the detection over
+  // it dropped every one of those from the JSON payload.
+  payload.ci.detected = ciState;
   if (isJson(flags)) emitJson(payload);
   note('');
   note(`next     ${CLI} sync --yes, then ${CLI} check${ciState.present ? ' (the committed workflow runs it on push)' : ' locally - no workflow runs it yet'}. Commit when you are happy with the diff.`);
@@ -797,10 +800,10 @@ export async function initCommand(positional, flags) {
 /**
  * Whether this repository already carries a CI workflow that names this tool.
  *
- * A capability read from committed bytes. `init` writes no workflow - generating one is an
- * explicit opt-in in a later slice - so the honest report says which enforcement path
- * exists instead of telling every reader to check in CI. Deterministic: the same tree
- * gives the same answer on every machine.
+ * A capability read from committed bytes, and read narrowly: a workflow that mentions
+ * the name in a comment, or a job called `simstack`, is not a workflow that gates
+ * anything. The test is a command line that runs this tool, so the report cannot promise
+ * enforcement that does not exist. Deterministic: the same tree gives the same answer.
  *
  * @param {string} root
  * @returns {Promise<{present: boolean, file: string|null}>}
@@ -813,9 +816,18 @@ async function ciWorkflow(root) {
   } catch {
     return { present: false, file: null };
   }
+  // `simt.mjs` too: a workflow that has not installed the package may run the checkout's
+  // entry point by path, and that is still this tool doing the gating. The closing quote
+  // is allowed because the locator both this tool and a careful consumer use ends in
+  // `…/simt" check`, and a regex that missed that form reported the tool's own generated
+  // workflow as not running it.
+  const invoked = new RegExp(`\\b${CLI}(?:\\.mjs)?"?\\s+(?:check|gate|hooks|sync|update|verify)\\b`);
   for (const entry of entries.filter((name) => /\.ya?ml$/.test(name)).sort()) {
     const text = await readFile(join(dir, entry), 'utf8').catch(() => '');
-    if (text.includes(CLI)) return { present: true, file: `.github/workflows/${entry}` };
+    // A commented-out command is not a command; YAML comments are the common way a
+    // workflow carries an example the repository does not run.
+    const runs = text.split('\n').some((line) => !line.trimStart().startsWith('#') && invoked.test(line));
+    if (runs) return { present: true, file: `.github/workflows/${entry}` };
   }
   return { present: false, file: null };
 }

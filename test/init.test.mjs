@@ -939,15 +939,56 @@ test('init names the enforcement path that exists, not one it assumes (PR15)', a
   const payloadOf = (text) => JSON.parse(text.split('\n').find((line) => line.startsWith('{')) ?? '{}');
   const plain = await capture(() => initCommand([], { root, yes: true, json: true }));
   const first = payloadOf(plain.text);
-  assert.equal(first.ci.present, false);
+  assert.equal(first.ci.detected.present, false);
   assert.match(plain.text, /no workflow runs it yet/);
+  // The detection is an extra fact, not the whole `ci` object: the plan this run prints
+  // (file, action, mode) has to survive beside it.
+  assert.equal(first.ci.mode, 'auto');
+  assert.equal(typeof first.ci.action, 'string');
 
   // A committed workflow that names this tool is evidence, and the report says so.
   await mkdir(join(root, '.github', 'workflows'), { recursive: true });
   await writeFile(join(root, '.github', 'workflows', 'gate.yml'), 'run: simt check --frozen\n');
   const gated = await capture(() => initCommand([], { root, yes: true, json: true }));
   const second = payloadOf(gated.text);
-  assert.equal(second.ci.present, true);
-  assert.equal(second.ci.file, '.github/workflows/gate.yml');
+  assert.equal(second.ci.detected.present, true);
+  assert.equal(second.ci.detected.file, '.github/workflows/gate.yml');
   assert.match(gated.text, /runs it on push/);
+  assert.equal(second.ci.mode, 'auto', 'detection replaced the plan object');
+});
+
+test('a workflow that only mentions the tool in a comment is not evidence of gating', async () => {
+  // `includes('simt')` counted a comment, a job name or an unrelated word: the report
+  // then promised enforcement the repository did not have.
+  const root = await tempDir('simt-init-ci-comment-');
+  await git(['init', '-q', '.'], { cwd: root });
+  await mkdir(join(root, '.github', 'workflows'), { recursive: true });
+  await writeFile(
+    join(root, '.github', 'workflows', 'misc.yml'),
+    'name: misc\non: push\n# we do not run simt check here\njobs:\n  build:\n    runs-on: ubuntu-latest\n    steps:\n      - run: echo hi\n',
+  );
+  // `--ci none`, so this run writes no workflow of its own: the detection then answers
+  // about the committed file only, which is what the line in the report claims.
+  const result = await capture(() => initCommand([], { root, yes: true, json: true, ci: 'none' }));
+  const payload = JSON.parse(result.text.split('\n').find((line) => line.startsWith('{')) ?? '{}');
+  assert.equal(payload.ci.detected.present, false);
+  assert.match(result.text, /no workflow runs it yet/);
+});
+
+test('detection recognises the locator form a generated workflow uses', async () => {
+  // The locator ends in `…/simt" check --root "$ROOT"`: a quote between the program and
+  // its argument. The first version of the detection required whitespace there, so the
+  // tool's own generated workflow read as "no workflow runs it yet".
+  const root = await tempDir('simt-init-ci-locator-');
+  await git(['init', '-q', '.'], { cwd: root });
+  await mkdir(join(root, '.github', 'workflows'), { recursive: true });
+  await writeFile(
+    join(root, '.github', 'workflows', 'ci.yml'),
+    'name: ci\non: push\njobs:\n  g:\n    runs-on: ubuntu-latest\n    steps:\n      - run: |\n          exec "$ROOT/.simt/bin/simt" check --root "$ROOT"\n',
+  );
+  const result = await capture(() => initCommand([], { root, yes: true, json: true, ci: 'none' }));
+  const payload = JSON.parse(result.text.split('\n').find((line) => line.startsWith('{')) ?? '{}');
+  assert.equal(payload.ci.detected.present, true);
+  assert.equal(payload.ci.detected.file, '.github/workflows/ci.yml');
+  assert.match(result.text, /runs it on push/);
 });

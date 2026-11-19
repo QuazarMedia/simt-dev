@@ -38,9 +38,9 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR16 | Make frozen projection and upgrades agree on the applied state | P1 | projection | M | PR15 | Queued | — |
 | PR17 | Generate reproducible CI with an explicit provider contract | P1 | ci | M | PR12, PR16 | Queued | — |
 | PR18 | Repair tracker concurrency and slice completion recovery | P1 | tracker | M | PR07, PR04 | In progress | — |
-| PR19 | Validate knowledge with the same readers used by its commands | P1 | knowledge | M | PR02 | In progress | — |
+| PR19 | Validate knowledge with the same readers used by its commands | P1 | knowledge | M | PR02 | Complete | 7ebf20fdb69948ea6f87dab15f9e8e00e7854b00 |
 | PR20 | Make document-driven verification reject malformed input | P1 | work | M | PR19 | Queued | — |
-| PR21 | Separate MCP reads from cache writes and process execution | P1 | transport | M | PR09, PR02 | In progress | — |
+| PR21 | Separate MCP reads from cache writes and process execution | P1 | transport | M | PR09, PR02 | Complete | 20722ee329feb60bd4cd6d4ec4d6622b30727a3e |
 | PR22 | Bound MCP framing and make response contracts consistent | P1 | transport | M | PR21 | Queued | — |
 | PR23 | Make index provenance and rebuild semantics coherent | P1 | retrieval | M | PR10, PR09 | In progress | — |
 | PR24 | Fix registry portability, skill identity, and workspace caching | P1 | retrieval | M | PR23 | Queued | — |

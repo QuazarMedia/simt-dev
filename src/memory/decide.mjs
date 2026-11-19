@@ -292,7 +292,7 @@ function prosePartialSupersessions(body) {
  * rewrite without rewriting history. The number lives in the repository's
  * config (`decisions.historicalCutoff`, resolved by the caller), never in code.
  */
-export function lintDecision(text, { file = 'ADR-000.md', historicalCutoff = 0 } = {}) {
+export function lintDecision(text, { file = 'ADR-000.md', historicalCutoff = 0, declaredElsewhere = null } = {}) {
   const fileMatch = file !== 'ADR-000.md' ? /^(ADR-\d{3,})/i.exec(file) : null;
   const headMatch = /^#\s+(ADR-\d{3,})\b/m.exec(String(text ?? ''));
   const id = (fileMatch?.[1] ?? headMatch?.[1] ?? /^(ADR-\d{3,})/i.exec(file)?.[1] ?? '').toUpperCase() || null;
@@ -313,9 +313,22 @@ export function lintDecision(text, { file = 'ADR-000.md', historicalCutoff = 0 }
   }
 
   for (const claim of prosePartialSupersessions(body)) {
-    const covered = fm.supersedes.some(
-      (e) => e.ruling === claim.ruling && (claim.adr === null || e.adr === claim.adr || (id !== null && e.adr === id)),
-    );
+    // A partial supersession is stated once, on the record that rules. The superseded
+    // record may say so in prose — "ruling 1 superseded by ADR-197" — and that sentence
+    // named the ruling the newer record replaces, not a claim the older record makes
+    // about itself. Reading only this file's frontmatter demanded the older record
+    // declare `simt-supersedes: [newer]`, which says the opposite of what happened.
+    // The linter is given the directory's declarations by its caller; a lone document
+    // keeps the old, local answer.
+    const covered =
+      fm.supersedes.some(
+        (e) => e.ruling === claim.ruling && (claim.adr === null || e.adr === claim.adr || (id !== null && e.adr === id)),
+      ) ||
+      // Passive prose ("ruling 1 superseded by ADR-197") is a statement about this
+      // record's ruling, and the declaration it refers to lives on ADR-197. Active
+      // prose ("supersedes ADR-023 ruling 2") is this record's own claim, and only its
+      // own frontmatter can carry it.
+      (claim.adr !== null && id !== null && declaredElsewhere !== null && declaredElsewhere(claim.adr, id, claim.ruling));
     if (!covered) {
       const targetAdr = claim.adr ?? id ?? 'ADR-NNN';
       const rulingLabel = claim.ruling !== null ? `ruling ${claim.ruling}` : 'unnumbered ruling';
@@ -344,6 +357,21 @@ export async function lintDecisions(decisionsDir, { historicalCutoff = 0 } = {})
   const names = (await readdir(decisionsDir).catch(() => [])).filter((n) => /^ADR-\d{3,}-.*\.md$/i.test(n)).sort();
   const findings = [];
   const seen = new Map();
+  // The directory's declarations, read once and keyed by the record that makes them:
+  // a prose reference is satisfied by the named record actually declaring that it
+  // replaces this record's ruling.
+  const texts = new Map();
+  const declared = new Map();
+  for (const file of names) {
+    const text = await readFile(join(decisionsDir, file), 'utf8').catch(() => '');
+    texts.set(file, text);
+    const id = /^(ADR-\d{3,})/i.exec(file)?.[1]?.toUpperCase();
+    if (id === undefined) continue;
+    const entries = parseDecisionFrontmatter(text).supersedes.filter((e) => e.adr !== null);
+    if (entries.length > 0) declared.set(id, entries);
+  }
+  const declaredElsewhere = (superseder, superseded, ruling) =>
+    (declared.get(superseder) ?? []).some((e) => e.adr === superseded && e.ruling === ruling);
   for (const file of names) {
     const id = /^(ADR-\d{3,})/i.exec(file)?.[1]?.toUpperCase() ?? null;
     if (id !== null) {
@@ -359,8 +387,8 @@ export async function lintDecisions(decisionsDir, { historicalCutoff = 0 } = {})
       }
       seen.set(id, file);
     }
-    const text = await readFile(join(decisionsDir, file), 'utf8');
-    findings.push(...lintDecision(text, { file, historicalCutoff }).findings);
+    const text = texts.get(file) ?? '';
+    findings.push(...lintDecision(text, { file, historicalCutoff, declaredElsewhere }).findings);
   }
   return { ok: findings.length === 0, findings };
 }

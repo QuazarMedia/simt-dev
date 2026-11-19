@@ -315,3 +315,27 @@ test('R34: parseDecisionFrontmatter and parseSupersedesSpec support multi-line Y
   const badSpec = parseSupersedesSpec(['not-an-adr']);
   assert.equal(badSpec.errors.length, 1);
 });
+
+test('a passive prose supersession is satisfied by the record it names declaring it', async (t) => {
+  // The superseded record says "ruling 1 superseded by ADR-197"; the structured
+  // declaration belongs to ADR-197, because that is the record that rules. Reading only
+  // the older file's frontmatter demanded `simt-supersedes: [ADR-197]` there, which says
+  // the older record supersedes the newer one — the opposite of what happened.
+  const root = await mkdtemp(join(tmpdir(), 'simt-decide-declared-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dir = join(root, 'docs', 'decisions');
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, 'ADR-120-old.md'),
+    '---\nsimt-affects: []\nsimt-supersedes: []\n---\n# ADR-120 — old\n\nStatus: accepted · ruling 1 superseded by ADR-197\n',
+  );
+  const newer = (declared) =>
+    `---\nsimt-affects: []\nsimt-supersedes: ${declared}\n---\n# ADR-197 — new\n\nStatus: accepted\n`;
+  await writeFile(join(dir, 'ADR-197-new.md'), newer('[{ adr: "ADR-120", ruling: 1 }]'));
+  assert.equal((await lintDecisions(dir)).ok, true);
+
+  await writeFile(join(dir, 'ADR-197-new.md'), newer('[]'));
+  const bare = await lintDecisions(dir);
+  assert.equal(bare.ok, false);
+  assert.equal(bare.findings[0].status, 'prose-partial-supersession');
+});

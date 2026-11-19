@@ -1,6 +1,6 @@
 ---
 simt-affects: ["src/ledger/index.mjs", "src/hooks/dispatcher.mjs", "test/ledger-evidence.test.mjs"]
-simt-supersedes: ["ADR-120 ruling 1"]
+simt-supersedes: [{ adr: "ADR-120", ruling: 1 }]
 ---
 
 # ADR-197 — gate evidence names the tree it ran on, and nothing else stands in for it

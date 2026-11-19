@@ -20,6 +20,7 @@
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { loadManifest } from '../manifest/schema.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 
 /** Every kind of artifact this detector can name. */
@@ -113,17 +114,11 @@ export async function detectFacets(root, options = {}) {
   }
 
   // `remote-object` is a declaration, not something a path can prove: only an explicit
-  // work manifest says this repository operates objects it does not contain.
-  const manifest = await readFile(join(root, MANIFEST_FILE), 'utf8').then(
-    (text) => {
-      try {
-        return JSON.parse(text);
-      } catch {
-        return null;
-      }
-    },
-    () => null,
-  );
+  // work manifest says this repository operates objects it does not contain. Read through
+  // the shared loader, not a raw read of today's filename: the raw read lost a legacy
+  // manifest and every finding an invalid one carries, so the same repository answered
+  // differently here than in `check` (review 0005 PR09).
+  const { manifest } = await loadManifest(root);
   const targets = Array.isArray(manifest?.work?.targets) ? manifest.work.targets : [];
   if (targets.length > 0) {
     counts.set('remote-object', targets.length);

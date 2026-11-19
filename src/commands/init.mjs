@@ -15,7 +15,7 @@
 //   6. write               only with --yes
 // Never commits, never pushes (ADR-001).
 
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, readdir } from 'node:fs/promises';
 import { commitJournal, ignoreJournal, journaledSymlink, journaledWriteFile } from '../journal.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
 import { invalidateCheckCache } from '../status.mjs';
@@ -719,17 +719,24 @@ export async function initCommand(positional, flags) {
     note(`index    not built (${error.message}); ${CLI} index rebuilds it`);
   }
 
+  // Which capabilities this adoption actually leaves behind. They are three separate
+  // facts - a declared gate, an installed hook, a CI workflow - and naming them together
+  // is what lets the reader see which one is missing. The old line said "then `check` in
+  // CI" to an adoption that had no CI workflow at all (review 0005 PR15).
+  const ciState = await ciWorkflow(root);
+  payload.ci = ciState;
   if (isJson(flags)) emitJson(payload);
-
   note('');
-  note(`next     ${CLI} sync --yes, then ${CLI} check in CI. Commit when you are happy with the diff.`);
+  note(`next     ${CLI} sync --yes, then ${CLI} check${ciState.present ? ' (the committed workflow runs it on push)' : ' locally - no workflow runs it yet'}. Commit when you are happy with the diff.`);
   // The manifest declares what the repo promises to enforce. Nothing enforces it until
   // the dispatcher is installed, and `init` used to finish without saying so — so a
   // fully adopted, `check`-green repo could enforce nothing at all, which is the state
   // the first adoption reached.
   const gates = [...gateList(manifest, 'preCommit'), ...gateList(manifest, 'prePush')];
   if (gates.length === 0) {
-    note('hooks    this repo declares no gate it can run, so there is nothing to install. Run it in CI instead.');
+    note(
+      `hooks    this repo declares no gate it can run, so there is nothing to install. Declare one under "gates" in simt.json, or keep validating with: ${CLI} check`,
+    );
   } else {
     const state = await readHooksState(root);
     // Singular and plural, because "test are declared" is the kind of small wrongness
@@ -742,5 +749,31 @@ export async function initCommand(positional, flags) {
     );
   }
   return EXIT.OK;
+}
+
+/**
+ * Whether this repository already carries a CI workflow that names this tool.
+ *
+ * A capability read from committed bytes. `init` writes no workflow - generating one is an
+ * explicit opt-in in a later slice - so the honest report says which enforcement path
+ * exists instead of telling every reader to check in CI. Deterministic: the same tree
+ * gives the same answer on every machine.
+ *
+ * @param {string} root
+ * @returns {Promise<{present: boolean, file: string|null}>}
+ */
+async function ciWorkflow(root) {
+  const dir = join(root, '.github', 'workflows');
+  let entries;
+  try {
+    entries = await readdir(dir);
+  } catch {
+    return { present: false, file: null };
+  }
+  for (const entry of entries.filter((name) => /\.ya?ml$/.test(name)).sort()) {
+    const text = await readFile(join(dir, entry), 'utf8').catch(() => '');
+    if (text.includes(CLI)) return { present: true, file: `.github/workflows/${entry}` };
+  }
+  return { present: false, file: null };
 }
 

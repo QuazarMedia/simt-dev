@@ -4,6 +4,7 @@ import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/pr
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { initCommand } from '../src/commands/init.mjs';
 import * as gateModule from '../src/projection/manifest.mjs';
 import * as gateTable from '../src/hooks/gates.mjs';
 import { readCapability, declaredCommands } from '../src/hooks/capability.mjs';
@@ -930,4 +931,23 @@ test('PR08: init journals the pointers it writes, so undo removes them', async (
   for (const [name] of links) {
     await assert.rejects(lstat(join(root, name)), `${name} survived the undo`);
   }
+});
+
+test('init names the enforcement path that exists, not one it assumes (PR15)', async () => {
+  const root = await tempDir('simt-init-ci-');
+  await git(['init', '-q', '.'], { cwd: root });
+  const payloadOf = (text) => JSON.parse(text.split('\n').find((line) => line.startsWith('{')) ?? '{}');
+  const plain = await capture(() => initCommand([], { root, yes: true, json: true }));
+  const first = payloadOf(plain.text);
+  assert.equal(first.ci.present, false);
+  assert.match(plain.text, /no workflow runs it yet/);
+
+  // A committed workflow that names this tool is evidence, and the report says so.
+  await mkdir(join(root, '.github', 'workflows'), { recursive: true });
+  await writeFile(join(root, '.github', 'workflows', 'gate.yml'), 'run: simt check --frozen\n');
+  const gated = await capture(() => initCommand([], { root, yes: true, json: true }));
+  const second = payloadOf(gated.text);
+  assert.equal(second.ci.present, true);
+  assert.equal(second.ci.file, '.github/workflows/gate.yml');
+  assert.match(gated.text, /runs it on push/);
 });

@@ -90,7 +90,7 @@ export const KEYS = [
   { key: 'limits.fileLines', owner: 'repo', since: '0.7.0', check: (v) => (isObject(v) && isPositiveInt(v.warn) && isPositiveInt(v.error) && v.error >= v.warn ? null : 'limits.fileLines must be {warn, error} with error >= warn') },
   { key: 'limits.coverage', owner: 'repo', since: '0.7.0', check: (v) => (v === null || (typeof v === 'number' && v >= 0 && v <= 100) ? null : 'limits.coverage must be null or a percentage') },
   { key: 'gates', owner: 'repo', since: '0.7.0', check: (v) => (isObject(v) ? null : 'gates must be an object of gate name to command') },
-  // The gate lists and their options were read without a shape until review 0005: a
+  // The gate lists and their options were read without a shape before this boundary: a
   // `gates.preCommit` written as a string reported `ok: true` with zero hooks, and a
   // numeric one made `check` throw "is not iterable". The consumer contract is an array
   // of gate names; everything that reads it iterates, so anything else is a config error

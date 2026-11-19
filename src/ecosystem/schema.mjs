@@ -4,8 +4,7 @@
 // see this source. The loader used to merge whatever parsed, so an ecosystem with
 // `manifestOrder` and no `facts` crashed `init` on `facts[0]`, and a language named only
 // in a local record resolved through the loader while the index had never heard of it.
-// Validation here is the difference between a config error and a bug report (review 0005
-// PR10).
+// Validation here is the difference between a config error and a bug report.
 //
 // The schema is versioned and bounded. Versioned because a future field must be able to
 // say so rather than being guessed at; bounded because a record is read on every

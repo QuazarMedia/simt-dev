@@ -23,7 +23,7 @@ const patternsByRoot = new Map();
  *
  * Computed per root and cached: a repository may declare its own language and its own
  * test naming in `.simt/ecosystems/`, and reading the shipped set once at module load
- * meant those conventions never ran (review 0005 PR10). A caller with no root gets the
+ * meant those conventions never ran. A caller with no root gets the
  * shipped set, which is what a path-only question has always meant.
  */
 function langTestPatterns(root) {

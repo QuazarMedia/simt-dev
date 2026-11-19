@@ -117,7 +117,7 @@ export async function detectFacets(root, options = {}) {
   // work manifest says this repository operates objects it does not contain. Read through
   // the shared loader, not a raw read of today's filename: the raw read lost a legacy
   // manifest and every finding an invalid one carries, so the same repository answered
-  // differently here than in `check` (review 0005 PR09).
+  // differently here than in `check`.
   const { manifest } = await loadManifest(root);
   const targets = Array.isArray(manifest?.work?.targets) ? manifest.work.targets : [];
   if (targets.length > 0) {

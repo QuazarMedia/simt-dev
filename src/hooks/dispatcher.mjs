@@ -560,7 +560,7 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
     // Where the gate runs is part of resolving it: a `gates.cwd` entry selects a nested
     // package's own script and its own binaries, so resolution happens in that scope
     // rather than at the root and is moved afterwards. `check` answers the same question
-    // through the same resolver, so a finding and a run cannot disagree (review 0005 PR05).
+    // through the same resolver, so a finding and a run cannot disagree.
     const placement = await resolveGateCwd(root, cwds[name], name);
     if (!placement.ok) {
       results.push({ name, status: 'failed', detail: placement.detail, remedy: placement.remedy, adr: gate.adr });

@@ -4,7 +4,7 @@
 // then interleave their writes: each verified its own plan, and the second overwrites what
 // the first just wrote. A lock cannot make planning atomic, but it makes the window
 // between "these are the bytes I read" and "these are the bytes I wrote" hold one writer,
-// which is what the before-image check needs to mean anything (review 0005 PR07).
+// which is what the before-image check needs to mean anything.
 //
 // The lock is a file under the local state directory, so it is visible to `git status`
 // never and to `simt undo` never. A holder that died leaves it behind; a lock whose pid no

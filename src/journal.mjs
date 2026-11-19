@@ -220,7 +220,7 @@ export async function journaledRemoveFile(root, acc, path) {
  *
  * A pointer is its target, so that is all the entry needs. Reading through the link to
  * journal the file it points at would record an effect the run did not have, and would
- * follow a link out of the repository (review 0005 PR08).
+ * follow a link out of the repository.
  */
 function linkEntry(path, before, after) {
   return { kind: 'link', path, beforeTarget: before, afterTarget: after };

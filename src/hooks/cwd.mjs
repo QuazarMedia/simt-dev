@@ -4,7 +4,7 @@
 // their own copy of a prefix test on the resolved string. Two copies disagree the day one
 // of them learns about symlinks, and the reader learns about it in the wrong order: the
 // check passes, the commit fails. One function, called by both, is the only way the
-// finding and the run cannot contradict each other (review 0005 PR05).
+// finding and the run cannot contradict each other.
 
 import { realpath, stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';

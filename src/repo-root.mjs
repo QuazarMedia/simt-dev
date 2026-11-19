@@ -87,7 +87,7 @@ export function commandRoot(flags = {}, positional = []) {
  * A command that names no root must mean the repository it runs in, not the directory
  * it happens to start from: run from `src/`, `status` reported `src/` as the root while
  * `status --root .` reported the repository, and the two answered different questions
- * about the same checkout (review 0005 PR09). Only the IMPLICIT answer is resolved: an
+ * about the same checkout. Only the IMPLICIT answer is resolved: an
  * explicit root stays the path the caller wrote, because that is what the report echoes.
  *
  * The memo is keyed by the directory, not the process: one invocation asks many times,

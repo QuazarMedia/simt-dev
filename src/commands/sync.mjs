@@ -62,7 +62,7 @@ import { commandRoot } from '../repo-root.mjs';
  *  pointer belongs — is reported loudly with what is in the way, because that one is a
  *  decision somebody has to make. */
 export const SYNC_NON_BLOCKING = new Set([
-  // An unknown manifest key is named, not failed, in both commands (review 0005 PR02).
+  // An unknown manifest key is named, not failed, in both commands.
   // The manifest is the repository's file; a key this build does not read says the
   // repository is newer or older than the tool, and neither is something `sync` can
   // repair. It belongs in this set as well as `CHECK_NON_BLOCKING`, because the gate
@@ -543,7 +543,7 @@ async function gateCwdFindings(root, manifest) {
   for (const name of Object.keys(cwds).sort()) {
     if (!declared.includes(name)) continue;
     // The same resolver the dispatcher runs, so "check is green, the commit is red" is
-    // not a state this repository can reach (review 0005 PR05).
+    // not a state this repository can reach.
     const placement = await resolveGateCwd(root, cwds[name], name);
     if (placement.ok) continue;
     findings.push({ file: MANIFEST_FILE, status: placement.status, gate: name, detail: placement.detail, remedy: placement.remedy });

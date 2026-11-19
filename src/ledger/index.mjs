@@ -132,7 +132,7 @@ export async function recordRun(
   // The tree the gate RAN ON, which is not always the tree the ledger lives in. A
   // pre-push gate executes in a scratch worktree at the pushed revision; computing the
   // subject from `root` recorded the caller's checkout instead, so the skip query matched
-  // a tree no gate had run against - the defect review 0005 PR04 observed. `tree` keeps
+  // a tree no gate had run against - the defect this binding prevents. `tree` keeps
   // its old meaning for readers that predate `subjectTree`.
   const subjectRoot = subject ?? root;
   const worktreeTree = await treeId(subjectRoot);
@@ -327,8 +327,8 @@ export function passEntryForGate(entries, gate, tree) {
  *  go red (ADR-197). */
 export function hasTestEvidence(entries, tree, { basis = 'subject' } = {}) {
   // Which tree a question is about depends on who is asking. A pre-push skip is about the
-  // tree the gate EXECUTED in, and matching `indexTree` there was the defect review 0005
-  // PR04 observed: a pass recorded on a working tree with a different index matched the
+  // tree the gate EXECUTED in, and matching `indexTree` there was the defect this binding
+  // prevents: a pass recorded on a working tree with a different index matched the
   // staged tree, so a tree no gate had run against earned the skip. A commit message's
   // claim is about the index the commit records, and the run's own `indexTree` is that
   // index at the moment it ran - so that path asks for `basis: 'index'` and gets it.

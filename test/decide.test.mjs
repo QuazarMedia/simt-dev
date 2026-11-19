@@ -360,3 +360,39 @@ test('an active prose claim is not covered by the record it names declaring the 
   assert.equal(res.findings[0].status, 'prose-partial-supersession');
   assert.match(res.findings[0].detail, /ADR-023 ruling 2/);
 });
+
+test('a passive supersession counts only the record the prose names, not a third one', async (t) => {
+  // "ruling 1 superseded by ADR-197" is a statement about ADR-197. A different record
+  // declaring the same pair is a different supersession that happens to name this one,
+  // and accepting it would let any file in the directory vouch for any sentence.
+  const root = await mkdtemp(join(tmpdir(), 'simt-decide-third-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dir = join(root, 'docs', 'decisions');
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, 'ADR-120-old.md'),
+    '---\nsimt-affects: []\nsimt-supersedes: []\n---\n# ADR-120 — old\n\nStatus: accepted · ruling 1 superseded by ADR-197\n',
+  );
+  await writeFile(
+    join(dir, 'ADR-197-new.md'),
+    '---\nsimt-affects: []\nsimt-supersedes: []\n---\n# ADR-197 — new\n\nStatus: accepted\n',
+  );
+  await writeFile(
+    join(dir, 'ADR-200-third.md'),
+    '---\nsimt-affects: []\nsimt-supersedes: [{ adr: "ADR-120", ruling: 1 }]\n---\n# ADR-200 — third\n\nStatus: accepted\n',
+  );
+  const res = await lintDecisions(dir);
+  assert.equal(res.ok, false, 'a third record covered a sentence it does not name');
+  assert.equal(res.findings.length, 1);
+  assert.equal(res.findings[0].file, 'ADR-120-old.md');
+  assert.equal(res.findings[0].status, 'prose-partial-supersession');
+
+  // The named record declaring it is the one piece of evidence that counts. The third
+  // record is removed first, so a pass here cannot come from the file just rejected.
+  await rm(join(dir, 'ADR-200-third.md'));
+  await writeFile(
+    join(dir, 'ADR-197-new.md'),
+    '---\nsimt-affects: []\nsimt-supersedes: [{ adr: "ADR-120", ruling: 1 }]\n---\n# ADR-197 — new\n\nStatus: accepted\n',
+  );
+  assert.equal((await lintDecisions(dir)).ok, true);
+});

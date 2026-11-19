@@ -25,6 +25,7 @@ import { join } from 'node:path';
 
 import { CLI } from '../name.mjs';
 import { commitJournal, journaledWriteFile } from '../journal.mjs';
+import { withWriteLock } from '../write/lock.mjs';
 import { loadFormat } from './template.mjs';
 
 function clean(cell) {
@@ -846,6 +847,12 @@ export async function planDone(root, id, { sha = null, test = null, state = null
   if (shaError) return { root, id, error: shaError, remedy: `run: ${CLI} plan done ${id} --yes` };
   const testError = badCell(test, 'test');
   if (testError) return { root, id, error: testError, remedy: `run: ${CLI} plan done ${id} --yes` };
+  // The evidence column is read as a commit id by `plan next` and by the review that
+  // follows. A free-form sentence there is not evidence, it is a claim about evidence;
+  // the format check is the boundary that keeps the two apart (review 0005 PR18).
+  if (sha && !/^[0-9a-f]{3,40}$/i.test(sha)) {
+    return { root, id, error: `${sha} is not a commit sha`, remedy: `pass the commit's own id, e.g. run: ${CLI} plan done ${id} $(git rev-parse HEAD) --yes` };
+  }
 
   const loaded = await loadPlanState(root);
   if (loaded.error) return { root, id, error: loaded.error, remedy: loaded.remedy };
@@ -900,10 +907,43 @@ export async function planDone(root, id, { sha = null, test = null, state = null
   const newLine = changedCells ? rebuilt : original;
   const wouldChange = newLine !== original;
   if (wouldChange && !dryRun) {
-    found.lines[found.index] = newLine;
-    const journal = [];
-    await journaledWriteFile(root, journal, slice.docPath, found.lines.join('\n'));
-    await commitJournal(root, 'plan', journal);
+    // Read, rebase and write under the repository's write lock. Without it two `plan done`
+    // calls read the same snapshot and each wrote back its own copy, so the second
+    // completion reverted the first (review 0005 PR18). The re-read stays inside the lock
+    // for the same reason: the bytes checked are the bytes rebuilt.
+    const failure = await withWriteLock(root, async () => {
+      let current;
+      try {
+        current = await readFile(slice.docPath, 'utf8');
+      } catch (error) {
+        return { error: `cannot re-read ${slice.docName}: ${error.code ?? error.message}`, remedy: `run: ${CLI} plan status` };
+      }
+      const snapshot = found.lines.join('\n');
+      let lines = found.lines;
+      if (current !== snapshot) {
+        const again = locate(current, slice);
+        if (!again) {
+          return { error: `${id} disappeared from ${slice.docName} while this ran`, remedy: `run: ${CLI} plan status` };
+        }
+        // A row that changed under us is refused rather than overwritten: two answers to
+        // one question cannot be merged by guessing which is newer.
+        if (again.lines[again.index] !== original) {
+          return {
+            error: `${id} changed in ${slice.docName} while this ran; refusing to overwrite it`,
+            remedy: `re-read the row, then run: ${CLI} plan done ${id} --yes`,
+          };
+        }
+        lines = again.lines;
+        lines[again.index] = newLine;
+      } else {
+        found.lines[found.index] = newLine;
+      }
+      const journal = [];
+      await journaledWriteFile(root, journal, slice.docPath, lines.join('\n'));
+      await commitJournal(root, 'plan', journal);
+      return null;
+    });
+    if (failure) return { root, id, ...failure };
   }
 
   const apply = `run: ${CLI} plan done ${id}${sha ? ` ${sha}` : ''}${display === format.doneWrite ? '' : ` --state ${JSON.stringify(display)}`}${test ? ` --test ${JSON.stringify(test)}` : ''} --yes`;

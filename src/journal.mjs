@@ -139,7 +139,10 @@ export async function journaledWriteFile(root, acc, path, text, { mode } = {}) {
   // tmp + rename, the way this module writes its own set files: a crash
   // mid-write leaves the old bytes in place, never a half-written file
   //. The mode lands on the tmp, so the rename carries it.
-  const tmp = `${path}.tmp-${process.pid}`;
+  // The pid alone collided when two writes of one file overlapped in one process: the
+  // second rename found the first check's temp already moved and failed with ENOENT.
+  let serial = 0;
+  const tmp = `${path}.tmp-${process.pid}-${(serial += 1)}-${Math.random().toString(36).slice(2, 8)}`;
   await writeFile(tmp, text, 'utf8');
   if (mode !== undefined) await chmod(tmp, mode);
   await rename(tmp, path);

@@ -40,7 +40,7 @@
 // refuses when the two sets overlap on a file the first undo already restored.
 
 import { createHash } from 'node:crypto';
-import { chmod, cp, mkdir, readFile, readdir, rename, rmdir, stat, unlink, writeFile } from 'node:fs/promises';
+import { chmod, cp, lstat, mkdir, readFile, readdir, readlink, rename, rmdir, stat, symlink, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, sep } from 'node:path';
 
 import { noteEvent } from './state/events.mjs';
@@ -216,6 +216,58 @@ export async function journaledRemoveFile(root, acc, path) {
 }
 
 /**
+ * A `link` entry: the target strings on both sides, never the target's bytes.
+ *
+ * A pointer is its target, so that is all the entry needs. Reading through the link to
+ * journal the file it points at would record an effect the run did not have, and would
+ * follow a link out of the repository (review 0005 PR08).
+ */
+function linkEntry(path, before, after) {
+  return { kind: 'link', path, beforeTarget: before, afterTarget: after };
+}
+
+/** The target a path holds, null when absent, or `undefined` when it is not a link. */
+async function linkState(path) {
+  const info = await lstat(path).catch((error) => {
+    if (error.code === 'ENOENT') return null;
+    throw error;
+  });
+  if (info === null) return null;
+  if (!info.isSymbolicLink()) return undefined;
+  return await readlink(path);
+}
+
+/**
+ * Create, repair or leave a pointer, recording the link itself.
+ *
+ * The file a pointer points at is written by the plan that owns it; this records only the
+ * pointer, so `undo` restores the link the run found - including a link that pointed
+ * somewhere else, which the old raw `symlink` could not even repair (EEXIST).
+ *
+ * @param {string} root
+ * @param {Array} acc the run's set
+ * @param {string} path absolute path of the pointer
+ * @param {string} target the target string to write, as the link spells it
+ */
+export async function journaledSymlink(root, acc, path, target) {
+  if (relative(root, path).startsWith('..')) {
+    throw new Error(`journal refuses a link outside the repository: ${path}`);
+  }
+  const before = await linkState(path);
+  if (before === target) return null;
+  if (before === undefined) {
+    // A regular file or a directory is somebody's content; replacing it is not a repair.
+    throw new Error(`journal refuses to replace a path that is not a link: ${path}`);
+  }
+  if (before !== null) await unlink(path);
+  await mkdir(dirname(path), { recursive: true });
+  await symlink(target, path);
+  const entry = linkEntry(rel(root, path), before, target);
+  acc.push(entry);
+  return entry;
+}
+
+/**
  * Read one git config value from the repository's own local scope, or null when
  * unset there. The journal writes to local (`git config key value`) and `undo`
  * restores to local, so the before/after bookkeeping must read local too: a
@@ -325,12 +377,15 @@ function coalesceEntries(acc) {
     }
     if (entry.kind === 'git-config') {
       folded.set(slot, { ...entry, before: prev.before });
+    } else if (entry.kind === 'link') {
+      folded.set(slot, { ...entry, beforeTarget: prev.kind === 'link' ? prev.beforeTarget : prev.before ?? null });
     } else {
       folded.set(slot, { ...entry, beforeDigest: prev.beforeDigest, beforeBytes: prev.beforeBytes, modeBefore: prev.modeBefore });
     }
   }
   return order.map((slot) => folded.get(slot)).filter((entry) => {
     if (entry.kind === 'git-config') return entry.before !== entry.after;
+    if (entry.kind === 'link') return entry.beforeTarget !== entry.afterTarget;
     // Created then removed (or set back byte-for-byte, mode aside): nothing to restore.
     return entry.beforeDigest !== null || entry.afterDigest !== null;
   });
@@ -491,6 +546,7 @@ export async function readJournalSet(root, id) {
 
 /** The pre-run bytes of an entry as a string, for previews and diffs. */
 export function beforeText(entry) {
+  if (entry.kind === 'link') return entry.beforeTarget ?? null;
   if (entry.kind === 'git-config' || entry.beforeBytes === null || entry.beforeBytes === undefined) return entry.before ?? null;
   if (entry.kind === 'file-legacy') return entry.beforeBytes;
   return Buffer.from(entry.beforeBytes, 'base64').toString('utf8');
@@ -515,6 +571,9 @@ async function alreadyRestored(root, entry) {
   if (entry.kind === 'git-config') {
     return (await readGitValue(root, entry.key)) === entry.before;
   }
+  if (entry.kind === 'link') {
+    return (await linkState(join(root, entry.path))) === entry.beforeTarget;
+  }
   const state = await readOrNull(join(root, entry.path));
   return currentDigest(state) === entry.beforeDigest;
 }
@@ -524,6 +583,9 @@ async function alreadyRestored(root, entry) {
 async function untouchedSince(root, entry) {
   if (entry.kind === 'git-config') {
     return (await readGitValue(root, entry.key)) === entry.after;
+  }
+  if (entry.kind === 'link') {
+    return (await linkState(join(root, entry.path))) === entry.afterTarget;
   }
   const state = await readOrNull(join(root, entry.path));
   return currentDigest(state) === entry.afterDigest;
@@ -552,6 +614,15 @@ async function restoreEntry(root, entry) {
     return;
   }
   const abs = join(root, entry.path);
+  if (entry.kind === 'link') {
+    // `unlink` removes the link, never the file it points at.
+    if ((await linkState(abs)) !== null) await unlink(abs);
+    if (entry.beforeTarget !== null) {
+      await mkdir(dirname(abs), { recursive: true });
+      await symlink(entry.beforeTarget, abs);
+    }
+    return;
+  }
   if (entry.afterDigest === null) {
     // The run removed this path: re-create it with its pre-run bytes.
     await mkdir(dirname(abs), { recursive: true });
@@ -596,9 +667,13 @@ async function undoJournalSet(root, id) {
           detail:
             entry.kind === 'git-config'
               ? `git config ${entry.key} changed after the journaled write`
-              : (await readOrNull(join(root, entry.path))) === null
-                ? 'the file was deleted after the journaled write'
-                : 'the file changed after the journaled write',
+              : entry.kind === 'link'
+                ? (await linkState(join(root, entry.path))) === null
+                  ? 'the link was removed after the journaled write'
+                  : 'the link was changed after the journaled write'
+                : (await readOrNull(join(root, entry.path))) === null
+                  ? 'the file was deleted after the journaled write'
+                  : 'the file changed after the journaled write',
         },
       };
     }
@@ -628,7 +703,21 @@ export async function undoLastJournalSet(root) {
   const [id] = await listJournalSets(root);
   if (!id) return { empty: true };
   const result = await undoJournalSet(root, id);
-  // The set is gone from disk, so the log is now the only record it existed .
-  await noteEvent(root, { kind: 'write.undone', subject: id, data: { restored: result?.restored?.length ?? 0 } });
+  // The set is gone from disk, so the log is now the only record it existed. A refused
+  // undo restores nothing, and recording it as `write.undone` with zero restored made the
+  // history claim an undo that never happened; the two outcomes are separate kinds.
+  if (result.refused) {
+    await noteEvent(root, {
+      kind: 'write.undo-refused',
+      subject: id,
+      data: { path: result.refused.path, detail: result.refused.detail },
+    });
+    return { set: id, ...result };
+  }
+  await noteEvent(root, {
+    kind: 'write.undone',
+    subject: id,
+    data: { restored: result.restored.length, resumed: result.resumed === true },
+  });
   return { set: id, ...result };
 }

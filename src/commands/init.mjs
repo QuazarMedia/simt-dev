@@ -15,8 +15,8 @@
 //   6. write               only with --yes
 // Never commits, never pushes (ADR-001).
 
-import { mkdir, readFile, symlink } from 'node:fs/promises';
-import { commitJournal, ignoreJournal, journaledWriteFile } from '../journal.mjs';
+import { mkdir, readFile } from 'node:fs/promises';
+import { commitJournal, ignoreJournal, journaledSymlink, journaledWriteFile } from '../journal.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
 import { invalidateCheckCache } from '../status.mjs';
 import { dirname, join } from 'node:path';
@@ -522,7 +522,9 @@ export async function initCommand(positional, flags) {
   for (const message of git.notes) note(`note     ${message}`);
   if (!flags.backup) {
     note(
-      'in place   no backup tag or adopt branch created; the adoption is written on your current branch - git diff shows it and git checkout -- . discards it; re-run with --backup for the tag and the branch',
+      // Scoped recovery, not `git checkout -- .`: that discards every uncommitted edit in
+      // the repository, including the ones the reader made and the adoption never touched.
+      `in place   no backup tag or adopt branch created; the adoption is written on your current branch - review it with: git diff -- ${PRIMARY_TARGET}, or restore exactly what this run changed with: ${CLI} undo --yes; re-run with --backup for the tag and the branch`,
     );
   }
   // The operations that succeeded, not just the ones that failed.
@@ -545,8 +547,8 @@ export async function initCommand(positional, flags) {
     note(`branch   switched to ${git.branch}; ${git.from} is untouched and \`git checkout ${git.from}\` returns to it`);
   }
 
-  // Every repo-file write below is journaled, so `undo` can restore this run
-  // . Pointer symlinks carry no bytes and are not journaled.
+      // Every repo-file write below is journaled, so `undo` can restore this run
+    // . A pointer is journaled too, as a link: its target, never the bytes behind it.
   await writeManifest(root, manifest, journal);
   note(`wrote    ${MANIFEST_FILE} (${manifestAction})`);
 
@@ -660,8 +662,11 @@ export async function initCommand(positional, flags) {
       note(`pointer  ${p.file} -> ${p.to}  already correct`);
       continue;
     }
-    await symlink(p.to, p.path);
-    note(`linked   ${p.file} -> ${p.to}`);
+    // The link is journaled like every other effect: `undo` removes a pointer the run
+    // created and puts back the one it repaired. A link carries no bytes, so the entry
+    // records its target - never the file behind it, which the run did not change.
+    await journaledSymlink(root, journal, p.path, p.to);
+    note(`${p.state === 'mispointed' ? 'relinked' : 'linked'}   ${p.file} -> ${p.to}`);
   }
   for (const p of pointerBlocked) {
     note(`BLOCKED ${p.file}: ${p.detail} (${p.bytes} bytes); left as it is`);

@@ -160,7 +160,7 @@ simt index [--open] [--search <task>] [--embed]                                 
 simt index overlay --input <file>                                                    # a working-tree or staged node labelled by its provenance, never both
 
 # init
-simt init [path]                                                                     # adopt this repository: manifest, region, hooks, agents and agent-hooks
+simt init [path]                                                                     # adopt this repository: manifest, region, agents and agent-hooks; git hooks are a separate install
 
 # knowledge
 simt knowledge debt --input <file>                                                   # rank stale and unsupported knowledge by consequence per effort

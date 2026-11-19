@@ -79,7 +79,10 @@ export const SPEC = [
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff","yes"], writes: 'repo' },
   { path: 'impact', usage: '<file|symbol>', summary: 'who a change reaches over the import closure: importers, their tests and the contract', flags: [], },
   { path: 'index', usage: '[--open] [--search <task>] [--embed]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","search"], },
-  { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, hooks, agents and agent-hooks', writes: 'repo', flags: ["yes","accept-conflicts","backup","baselines","diff","harness","agents","surfaces"], },
+  // "hooks" used to be in this sentence and `init` never installed one: the promise and the
+  // effect disagreed, and a reader who trusted the help believed their commits were gated
+  // (review 0005 PR15). Git hooks are a separate, explicit install.
+  { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, agents and agent-hooks; git hooks are a separate install', writes: 'repo', flags: ["yes","accept-conflicts","backup","baselines","diff","harness","agents","surfaces"], },
   { path: 'knowledge why', usage: '<claim-id> --claims <file> [--limit <n>] [--page <n>]', mcp: { name: 'knowledge_why', flags: ['as-of','known-at','limit','page'] }, summary: 'what a claim derives from, what depends on it, what applied at a date, and where it conflicts', defaultFor: 'knowledge', flags: ["as-of","claims","known-at","limit","page"], },
   { path: 'knowledge export', usage: '--input <file>', mcp: { name: 'knowledge_export', flags: [] }, summary: 'a bounded, permission-filtered packet another repository can read offline', flags: ["input"], },
   { path: 'knowledge import', usage: '--input <file>', mcp: { name: 'knowledge_import', flags: [] }, summary: 'validate an exported packet as data, and never execute it', flags: ["input"], },

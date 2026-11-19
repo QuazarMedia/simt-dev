@@ -318,6 +318,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --task "<text>"         the task text used for capability resolution
 --paths <globs>         comma-separated path globs used for path resolution
 --proof                 brief --json: report whether the packet proves what it kept
+--strict                gate: refuse a change whose tests could not be proven
+                        to run (the default answer stays compatible)
 --root <path>           repository root (default: cwd)
 --base <ref>           pr-body: the ref the body diffs against
                         (default: origin/main, then main; falls back to the

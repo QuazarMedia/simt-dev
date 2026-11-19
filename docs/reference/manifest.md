@@ -27,6 +27,7 @@ check that decides whether a value is valid.
 | `decisions` | repo | the decision-corpus settings |
 | `federation` | repo | external code-graph MCP servers, each with its `command`, `args`, `tool`, `argument` |
 | `local` | repo | loopback `chat`/`embed` endpoints, off until named |
+| `test.runner` | repo | how this repository runs a selected set of test files |
 | `$comment` | tool | a free note, string or list |
 
 A key that this tool does not know is reported, not silently carried: `simt check` and
@@ -34,6 +35,38 @@ A key that this tool does not know is reported, not silently carried: `simt chec
 that starts with `x-` is yours on purpose: it is the extension namespace, it is never reported,
 and it survives every write `init`, `sync` and `upgrade` make. `simt doctor` prints the manifest
 keys this version reads, which is the answer to "why was my setting ignored".
+
+## The focused test runner
+
+`simt gate` asks a package's own manifest which runner it uses. When no detector knows the
+stack, or the detector would run the wrong thing, `test.runner` names the command instead:
+
+```json
+{
+  "test": {
+    "runner": {
+      "command": ["uv", "run", "pytest", "--junitxml={report}"],
+      "report": "junit",
+      "reportPath": ".simt/junit.xml",
+      "requires": ["uv"]
+    }
+  }
+}
+```
+
+- `command` is an argv list, never a shell string. `{files}` expands to the selected files as
+  separate arguments; without it they are appended. `{package}` is the package directory
+  relative to the repository and `{root}` the worktree, so one declaration serves a monorepo.
+- `report` is `none` (the default: stdout is the report), `tap`, `json` or `junit`. A `junit`
+  declaration also names `reportPath`, which must stay inside the package; pass it to the
+  runner with `{report}` in the flag that runner uses. This tool never invents a flag.
+- `requires` lists executables that must be on `PATH`. A missing one is reported as
+  `unsupported` before anything spawns, instead of arriving as exit 1 like a failing test.
+- `cwd` is an optional directory relative to the package.
+
+An invalid declaration is `manifest-invalid`: `check`, `doctor` and `gate` name the field and
+the shape it needs, and the gate exits without running. A repository that omits `test.runner`
+keeps the built-in chain (Vitest, Jest, `node --test`, Cargo, Go, pytest, Gradle, Maven).
 
 ## When a value is wrong
 

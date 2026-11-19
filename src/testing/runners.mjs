@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
 import { CLI } from '../name.mjs';
+import { compileRunner, runnerSpecProblem } from './contract.mjs';
 import {
   dedupeSorted,
   parseCargoTestOutput,
@@ -21,6 +22,24 @@ import {
 } from './parsers.mjs';
 
 let junitCounter = 0;
+
+/**
+ * The Node runtime a test child may use.
+ *
+ * A package's default runner is `node --test`, and the obvious spelling of that is
+ * `process.execPath`. Under a single-executable build `process.execPath` is this tool,
+ * not Node: the child re-ran `simt --test`, printed help and exited 0, so a failing suite
+ * looked like a pass (review 0005 PR11). `node` from PATH is the consumer's runtime; the
+ * executable is only used when it is one.
+ *
+ * @param {{execPath?: string, sea?: boolean}} [input]
+ * @returns {string}
+ */
+export function nodeCommand({ execPath = process.execPath, sea = Boolean(process.versions?.sea) } = {}) {
+  if (sea) return 'node';
+  const name = basename(execPath).replace(/\.exe$/i, '');
+  return /^node(js)?$/i.test(name) ? execPath : 'node';
+}
 
 /**
  * A JUnit report path this process owns.
@@ -39,14 +58,43 @@ function junitReportPath() {
  * Detect the test runner for a repository and build the command for a set of changed test
  * files.
  *
+ * When the repository declares `test.runner`, that declaration answers instead of this
+ * chain. It is validated here as well as at the manifest boundary, because the bench
+ * calls this function directly and a caller that skips the manifest must not run an
+ * unchecked argv.
+ *
  * @param {string} root
  * @param {string[]} testFiles
- * @returns {Promise<{runner: string, displayCmd: string,
- *   buildExec: (worktree: string) => {cmd: string, args: string[], reportPaths?: string[]},
+ * @param {{spec?: object|null, pkg?: string}} [options]
+ * @returns {Promise<{runner: string, displayCmd: string, requires?: string[],
+ *   buildExec: (worktree: string) => {cmd: string, args: string[], reportPaths?: string[], cwd?: string},
  *   parse: (stdout: string, reportText?: string) => {passed: string[], failed: string[]}}|null>}
  */
-export async function detectTestRunner(root, testFiles) {
+export async function detectTestRunner(root, testFiles, { spec = null, pkg = '' } = {}) {
   const files = [...testFiles].sort();
+
+  if (spec !== null && spec !== undefined) {
+    const problem = runnerSpecProblem(spec);
+    if (problem !== null) throw new Error(problem);
+    const parse =
+      spec.report === 'junit'
+        ? (_stdout, reportText) => parseJunitXml(reportText ?? '')
+        : spec.report === 'json'
+          ? (stdout) => parseVitestJson(stdout)
+          : spec.report === 'tap'
+            ? (stdout) => parseTapOutput(stdout)
+            : () => ({ passed: [], failed: [] });
+    // The display is the argv one run executes, expanded for this package, so a reader
+    // can paste it and a template placeholder never reaches the report.
+    const preview = compileRunner(spec, { worktree: root, pkg, files });
+    return {
+      runner: 'configured',
+      displayCmd: [preview.cmd, ...preview.args].join(' '),
+      requires: Array.isArray(spec.requires) ? spec.requires : [],
+      buildExec: (worktree) => compileRunner(spec, { worktree, pkg, files }),
+      parse,
+    };
+  }
 
   if (existsSync(join(root, 'package.json'))) {
     let pkg = {};
@@ -87,7 +135,7 @@ export async function detectTestRunner(root, testFiles) {
       runner: 'node-test',
       displayCmd: `node --test ${files.join(' ')}`,
       buildExec: () => ({
-        cmd: process.execPath,
+        cmd: nodeCommand(),
         args: ['--test', '--test-reporter=tap', ...files],
       }),
       parse: (stdout) => parseTapOutput(stdout),
@@ -109,6 +157,7 @@ export async function detectTestRunner(root, testFiles) {
     }
     return {
       runner: 'cargo-test',
+      requires: ['cargo'],
       displayCmd: ['cargo', ...args].join(' '),
       buildExec: () => ({ cmd: 'cargo', args }),
       parse: (stdout) => parseCargoTestOutput(stdout),
@@ -124,6 +173,7 @@ export async function detectTestRunner(root, testFiles) {
     );
     return {
       runner: 'go-test',
+      requires: ['go'],
       displayCmd: `go test -json ${packages.join(' ')}`,
       buildExec: () => ({ cmd: 'go', args: ['test', '-json', ...packages] }),
       parse: (stdout) => parseGoTestJson(stdout),
@@ -135,14 +185,24 @@ export async function detectTestRunner(root, testFiles) {
     existsSync(join(root, 'requirements.txt')) ||
     existsSync(join(root, 'setup.py'))
   ) {
+    // The environment rules are in the `uv` profile: a committed `uv.lock` owns the
+    // interpreter, then `poetry.lock`. A bare `pytest` in a uv project is whatever the
+    // shell happens to have, which is the different copy of the package the rule warns
+    // about. Without either lockfile, `pytest` is the declared command.
+    const launcher = existsSync(join(root, 'uv.lock'))
+      ? { cmd: 'uv', prefix: ['run', 'pytest'], requires: ['uv'] }
+      : existsSync(join(root, 'poetry.lock'))
+        ? { cmd: 'poetry', prefix: ['run', 'pytest'], requires: ['poetry'] }
+        : { cmd: 'pytest', prefix: [], requires: ['pytest'] };
     return {
       runner: 'pytest',
-      displayCmd: `pytest ${files.join(' ')}`,
+      requires: launcher.requires,
+      displayCmd: [launcher.cmd, ...launcher.prefix, ...files].join(' '),
       buildExec: () => {
         const reportPath = junitReportPath();
         return {
-          cmd: 'pytest',
-          args: [`--junitxml=${reportPath}`, ...files],
+          cmd: launcher.cmd,
+          args: [...launcher.prefix, `--junitxml=${reportPath}`, ...files],
           reportPaths: [reportPath],
         };
       },
@@ -155,6 +215,7 @@ export async function detectTestRunner(root, testFiles) {
     const filterArgs = classes.flatMap((name) => ['--tests', `*${name}*`]);
     return {
       runner: 'gradle',
+      requires: existsSync(join(root, 'gradlew')) ? [] : ['gradle'],
       displayCmd: `./gradlew test ${filterArgs.join(' ')}`.trim(),
       buildExec: (worktree) => ({
         cmd: existsSync(join(worktree, 'gradlew')) ? join(worktree, 'gradlew') : 'gradle',
@@ -171,6 +232,7 @@ export async function detectTestRunner(root, testFiles) {
     const arg = classes.length > 0 ? [`-Dtest=${classes.join(',')}`] : [];
     return {
       runner: 'maven',
+      requires: ['mvn'],
       displayCmd: `mvn test ${arg.join(' ')}`.trim(),
       buildExec: (worktree) => ({
         cmd: 'mvn',

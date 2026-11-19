@@ -24,6 +24,27 @@ const KIND_OBLIGATIONS = {
 
 const EXECUTABLE = /\.(mjs|cjs|js|ts|py|sh|kt|kts|java)$/i;
 
+/**
+ * A repository-relative path as the declarations mean it, or null when it leaves the repository.
+ *
+ * Two spellings of one path must not become two scopes: `docs/`, `./docs` and `docs//` are the
+ * same tree. The leading dot segment and the repeated and trailing slashes are folded away here,
+ * once, rather than in each reader. `.` and `''` both mean the repository root, which is what a
+ * scope over the whole tree is. An absolute path or a `..` segment names something the repository
+ * does not own, and null is the only honest answer for that.
+ *
+ * @param {unknown} path
+ * @returns {string|null}
+ */
+export function normalizePath(path) {
+  if (typeof path !== 'string') return null;
+  const forward = path.replace(/\\/g, '/');
+  if (forward.startsWith('/') || /^[A-Za-z]:/.test(forward)) return null;
+  const parts = forward.split('/').filter((part) => part !== '' && part !== '.');
+  if (parts.includes('..')) return null;
+  return parts.join('/');
+}
+
 function segmentsOf(path) {
   return path.split('/').filter((part) => part !== '' && part !== '.');
 }
@@ -68,10 +89,12 @@ function globSegment(pattern, value) {
  * @returns {{scope: string|null, error?: {kind: 'conflict'|'none', candidates: string[]}}}
  */
 export function resolveScope(scopes, path) {
-  const matches = scopes.filter((scope) => (scope.paths ?? []).some((prefix) => prefixMatches(prefix, path)));
+  const normalised = normalizePath(path);
+  if (normalised === null) return { scope: null, error: { kind: 'none', candidates: [] } };
+  const matches = scopes.filter((scope) => (scope.paths ?? []).some((prefix) => prefixMatches(normalizePath(prefix) ?? prefix, normalised)));
   if (matches.length === 0) return { scope: null, error: { kind: 'none', candidates: [] } };
   const scored = matches.map((scope) => {
-    const prefixes = scope.paths.filter((prefix) => prefixMatches(prefix, path));
+    const prefixes = scope.paths.map((prefix) => normalizePath(prefix) ?? prefix).filter((prefix) => prefixMatches(prefix, normalised));
     // A scope is as specific as the most specific of its own prefixes.
     const best = prefixes
       .map(specificity)
@@ -89,7 +112,34 @@ export function resolveScope(scopes, path) {
       .map((row) => row.id);
     return { scope: null, error: { kind: 'conflict', candidates } };
   }
+  // The winner's own declaration decides what it refuses to ingest. The answer names the
+  // pattern, because "ignored" with no reason is a path that vanished for no stated cause.
+  const owner = scopes.find((scope) => scope.id === winner.id);
+  const pattern = ignoredBy(owner?.ignore, normalised);
+  if (pattern !== null) return { scope: winner.id, ignored: true, pattern };
   return { scope: winner.id };
+}
+
+/**
+ * The ignore pattern that refuses a path, or null.
+ *
+ * A pattern with a slash is a path prefix relative to the repository root, the same spelling a
+ * scope path uses. A bare name matches one segment anywhere in the path, so `draft.md` refuses
+ * every draft and `*.tmp.md` refuses the ones a generator leaves behind.
+ *
+ * @param {string[]|undefined} patterns
+ * @param {string} path an already normalised path
+ * @returns {string|null}
+ */
+function ignoredBy(patterns, path) {
+  for (const raw of Array.isArray(patterns) ? patterns : []) {
+    const pattern = normalizePath(raw);
+    if (pattern === null || pattern === '') continue;
+    if (pattern.includes('/')) {
+      if (prefixMatches(pattern, path)) return raw;
+    } else if (segmentsOf(path).some((part) => globSegment(pattern, part))) return raw;
+  }
+  return null;
 }
 
 /**

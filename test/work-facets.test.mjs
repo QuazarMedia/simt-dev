@@ -103,6 +103,33 @@ test('the walk is bounded and says so instead of pretending it saw everything', 
   assert.ok(kind(facets, 'document').count <= 10);
 });
 
+test('a configured scope decides the kind, and the answer says so', async () => {
+  const root = await repo({
+    'handbook/intro.rst': 'Introduction\n',
+    'simt.json': JSON.stringify({ work: { version: 2, scopes: [{ id: 'handbook', paths: ['handbook'], kind: 'document' }] } }),
+  });
+  const facets = await detectFacets(root);
+  const documents = facets.artifactKinds.find((row) => row.kind === 'document');
+  assert.equal(documents.basis, 'declared', 'a corpus the sampler does not recognise was not counted as documents');
+  assert.equal(documents.count, 1);
+  assert.ok(documents.evidence.includes('simt.json#work.scopes'));
+  assert.deepEqual(facets.scopes, [{ id: 'handbook', kind: 'document', paths: ['handbook'] }]);
+  assert.equal(facets.configured, true);
+});
+
+test('an inferred kind says it is inferred, and an invalid declaration decides nothing', async () => {
+  const inferred = await repo({ 'Germany/rates.md': '# rates\n' });
+  assert.equal(kind(await detectFacets(inferred), 'document').basis, 'inferred');
+
+  const invalid = await repo({
+    'handbook/intro.rst': 'x\n',
+    'simt.json': JSON.stringify({ work: { version: 2, scopes: [{ id: 'handbook', paths: ['../outside'], kind: 'document' }] } }),
+  });
+  const facets = await detectFacets(invalid);
+  assert.deepEqual(facets.scopes, []);
+  assert.equal(facets.artifactKinds.find((row) => row.kind === 'document'), undefined);
+});
+
 test('PR09: a legacy manifest still declares its remote targets', async () => {
   // The raw read of `simt.json` lost every repository that had not been renamed yet, so
   // the same manifest `check` read correctly made facets report no remote object.

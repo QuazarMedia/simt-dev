@@ -152,7 +152,7 @@ in [architecture/history.md](architecture/history.md).
 | [141](decisions/ADR-141-a-repository-selects-its-harness-once-and-the-agent-commands-follow-it.md) | a repository selects its harness once, and the agent commands follow it | accepted · 2026-11-02 |
 | [142](decisions/ADR-142-assurance-is-a-level-with-a-subject-and-a-claim-cannot-raise-it.md) | assurance is a level with a subject, and a claim cannot raise it | accepted · 2026-11-02 |
 | [143](decisions/ADR-143-facets-are-additive-to-stack-detection-and-ambiguity-is-reported.md) | facets are additive to stack detection, and ambiguity is reported | accepted · 2026-11-02 |
-| [144](decisions/ADR-144-the-work-namespace-is-versioned-and-adoption-fabricates-no-runner.md) | the work namespace is versioned, and adoption fabricates no runner | accepted · 2026-11-02 |
+| [144](decisions/ADR-144-the-work-namespace-is-versioned-and-adoption-fabricates-no-runner.md) | the work namespace is versioned, and adoption fabricates no runner | accepted · 2026-11-02 · ruling 1 is superseded by ADR-198 |
 | [145](decisions/ADR-145-artifact-identity-is-explicit-and-most-specific-scope-wins.md) | artifact identity is explicit, and the most specific scope wins | accepted · 2026-11-02 |
 | [146](decisions/ADR-146-work-profiles-select-only-on-an-explicit-declaration.md) | work profiles select only on an explicit declaration | accepted · 2026-11-02 |
 | [147](decisions/ADR-147-non-code-pushes-skip-the-test-gate-and-the-manifest-declares-the-set.md) | non-code pushes skip the test gate, and the manifest declares the set | accepted · 2026-11-03 |
@@ -206,3 +206,4 @@ in [architecture/history.md](architecture/history.md).
 | [195](decisions/ADR-195-the-hooks-disable-policy-reads-its-own-text-when-the-shell-cannot.md) | the hooks-disable policy reads its own text when the shell cannot | accepted · 2026-11-05 |
 | [196](decisions/ADR-196-a-failed-alias-lookup-leaves-the-push-and-rewrite-rows-their-text.md) | a failed alias lookup leaves the push and rewrite rows their text | accepted · 2026-11-05 |
 | [197](decisions/ADR-197-gate-evidence-names-the-tree-it-ran-on.md) | gate evidence names the tree it ran on, and nothing else stands in for it | accepted · 2026-11-19 |
+| [198](decisions/ADR-198-the-work-schema-carries-versions-and-a-validator-is-installed-only-when-its-file-is.md) | the work schema carries versions, and a validator is installed only when its file is | accepted · 2026-11-19 · supersedes ADR-144 ruling 1 |

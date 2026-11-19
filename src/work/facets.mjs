@@ -14,14 +14,22 @@
 // under `recipes/` is both a recipe and source, and collapsing it to either would drop an
 // obligation the repository really has.
 //
-// This reads a bounded sample of the tree and nothing else: no manifest is written, no
-// command runs, no network is opened.
+// A bounded sample is a probe, and a probe is not an authority. Where the repository has
+// declared a scope and a kind, the declaration decides what the artifacts are - a corpus of
+// `.rst` pages under `handbook` is documents because the repository said so, not because the
+// extension was recognised - and the sample only supplies the counts and the paths. Every
+// kind therefore says which basis it rests on: `declared` or `inferred`.
+//
+// This reads a bounded sample of the tree and the manifest, and nothing else: no manifest is
+// written, no command runs, no network is opened.
 
 import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { loadManifest } from '../manifest/schema.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
+import { normalizePath, resolveScope } from './artifacts.mjs';
+import { validateWork } from './config.mjs';
 
 /** Every kind of artifact this detector can name. */
 export const ARTIFACT_KINDS = Object.freeze(['source', 'document', 'dataset', 'recipe', 'remote-object']);
@@ -119,7 +127,11 @@ export async function detectFacets(root, options = {}) {
   // manifest and every finding an invalid one carries, so the same repository answered
   // differently here than in `check`.
   const { manifest } = await loadManifest(root);
-  const targets = Array.isArray(manifest?.work?.targets) ? manifest.work.targets : [];
+  const work = manifest?.work !== null && typeof manifest?.work === 'object' && !Array.isArray(manifest.work) ? manifest.work : null;
+  const targets = Array.isArray(work?.targets) ? work.targets : [];
+  // An invalid declaration is not a declaration (ADR-144): its scopes decide nothing here,
+  // and the problems are `work inspect`'s to report.
+  const scopes = work !== null && validateWork(work).ok && Array.isArray(work.scopes) ? work.scopes.filter((scope) => scope !== null && typeof scope === 'object' && typeof scope.id === 'string') : [];
   if (targets.length > 0) {
     counts.set('remote-object', targets.length);
     add(kinds, 'remote-object', `${MANIFEST_FILE}#work.targets`);
@@ -152,19 +164,46 @@ export async function detectFacets(root, options = {}) {
       .filter(([key]) => ARTIFACT_KINDS.includes(key) || !['operate'].includes(key) || true)
       .map(([key, evidence]) => ({ key, evidence }));
 
+  // Which kinds the declarations assert, and the sampled paths each one covers. A declared
+  // kind survives a corpus the sampler does not recognise, which is the whole point of
+  // declaring it.
+  const declared = new Map();
+  for (const scope of scopes) {
+    if (!ARTIFACT_KINDS.includes(scope.kind)) continue;
+    const entry = declared.get(scope.kind) ?? { ids: [], files: new Set() };
+    entry.ids.push(scope.id);
+    for (const path of paths) if (resolveScope(scopes, path).scope === scope.id) entry.files.add(path);
+    declared.set(scope.kind, entry);
+  }
+
   return {
-    artifactKinds: [...counts.entries()]
-      .filter(([kind]) => ARTIFACT_KINDS.includes(kind))
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([kind, count]) => ({ kind, count, evidence: kinds.get(kind) ?? [] })),
+    artifactKinds: [...new Set([...counts.keys(), ...declared.keys()])]
+      .filter((kind) => ARTIFACT_KINDS.includes(kind))
+      .sort((a, b) => a.localeCompare(b))
+      .map((kind) => {
+        const assertion = declared.get(kind);
+        const inferred = kinds.get(kind) ?? [];
+        if (assertion === undefined) return { kind, count: counts.get(kind) ?? 0, basis: 'inferred', evidence: inferred };
+        return {
+          kind,
+          count: Math.max(counts.get(kind) ?? 0, assertion.files.size),
+          basis: 'declared',
+          evidence: [...new Set([`${MANIFEST_FILE}#work.scopes`, ...inferred])].slice(0, 5),
+        };
+      }),
     activities: rows(activities).map(({ key, evidence }) => ({ activity: key, evidence })),
     executionLoci: [
       { locus: 'local', evidence: ['.'] },
       ...(targets.length > 0 ? [{ locus: 'remote', evidence: [`${MANIFEST_FILE}#work.targets`] }] : []),
     ],
     capabilities: rows(capabilities).map(({ key, evidence }) => ({ capability: key, evidence })),
+    scopes: scopes.map((scope) => ({
+      id: scope.id,
+      kind: typeof scope.kind === 'string' ? scope.kind : null,
+      paths: (Array.isArray(scope.paths) ? scope.paths : []).map((path) => normalizePath(path) ?? path),
+    })),
     ambiguous,
     truncated: paths.length >= limit,
-    configured: Array.isArray(manifest?.work?.targets),
+    configured: work !== null && (targets.length > 0 || Array.isArray(work.scopes)),
   };
 }

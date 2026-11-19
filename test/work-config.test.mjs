@@ -12,7 +12,8 @@ import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { WORK_VERSION, validateWork } from '../src/work/config.mjs';
+import { SUPPORTED_WORK_VERSIONS, WORK_VERSION, normalizedWork, validateWork } from '../src/work/config.mjs';
+import { readWork } from '../src/work/effective.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { loadManifest } from '../src/manifest/schema.mjs';
 import { git, simt, tempDir } from './fixture.mjs';
@@ -36,14 +37,70 @@ async function docsRepo(files = {}) {
   return root;
 }
 
-test('the namespace is versioned exactly, and an unknown version is refused with a remedy', () => {
-  assert.equal(WORK_VERSION, 1);
-  assert.deepEqual(validateWork({ version: 1 }), { ok: true, problems: [] });
-  const future = validateWork({ version: 2 });
+test('a version is one this parser reads, and an unknown version is refused with a remedy', () => {
+  assert.equal(WORK_VERSION, 2);
+  assert.deepEqual([...SUPPORTED_WORK_VERSIONS], [1, 2]);
+  assert.deepEqual(validateWork({ version: 2 }), { ok: true, problems: [] });
+  assert.deepEqual(validateWork({ version: 1 }), { ok: true, problems: [] }, 'a version-1 declaration stopped being readable');
+  const future = validateWork({ version: 3 });
   assert.equal(future.ok, false);
-  assert.match(future.problems[0].message, /work\.version must be 1/);
-  assert.match(future.problems[0].remedy, /"work": \{"version": 1\}/);
+  assert.match(future.problems[0].message, /work\.version must be one of 1, 2/);
+  assert.match(future.problems[0].remedy, /"work": \{"version": 2\}/);
   assert.equal(validateWork(null).ok, false);
+});
+
+test('a field a version does not carry is refused by name, not read as unknown', () => {
+  const scopes = [{ id: 'handbook', paths: ['handbook'], ignore: ['drafts'] }];
+  const older = validateWork({ version: 1, scopes });
+  assert.equal(older.ok, false);
+  assert.equal(older.problems[0].path, 'work.scopes[0].ignore');
+  assert.equal(older.problems[0].code, 'field-needs-version');
+  assert.match(older.problems[0].message, /is a version 2 field, and this declaration is version 1/);
+  assert.match(older.problems[0].remedy, /"version": 2/);
+  assert.deepEqual(validateWork({ version: 2, scopes }), { ok: true, problems: [] }, 'version 2 refused its own field');
+});
+
+test('a path is repository-relative, and each impossible path names its field and a remedy', () => {
+  const parent = validateWork({ version: 2, scopes: [{ id: 'de', paths: ['../elsewhere'] }] });
+  assert.equal(parent.problems[0].path, 'work.scopes[0].paths[0]');
+  assert.equal(parent.problems[0].code, 'path-outside');
+  assert.match(parent.problems[0].remedy, /relative to the repository root/);
+
+  const absolute = validateWork({ version: 2, scopes: [{ id: 'de', paths: ['/srv/docs'] }] });
+  assert.equal(absolute.problems[0].code, 'path-outside', 'an absolute path resolves outside the repository it is declared in');
+
+  const ignored = validateWork({ version: 2, scopes: [{ id: 'de', paths: ['de'], ignore: ['../secrets'] }] });
+  assert.equal(ignored.problems[0].path, 'work.scopes[0].ignore[0]');
+});
+
+test('dot paths, trailing slashes and spaces are one claim each, and a root scope is a claim too', () => {
+  const spellings = validateWork({ version: 2, scopes: [{ id: 'a', paths: ['./docs'] }, { id: 'b', paths: ['docs/'] }] });
+  assert.ok(spellings.problems.some((problem) => problem.code === 'path-conflict'), 'two spellings of one tree were read as two trees');
+
+  assert.deepEqual(validateWork({ version: 2, scopes: [{ id: 'hand book', paths: ['hand book/docs'] }] }), { ok: true, problems: [] });
+  assert.deepEqual(validateWork({ version: 2, scopes: [{ id: 'all', paths: ['.'] }, { id: 'de', paths: ['./Germany/'] }] }), { ok: true, problems: [] });
+});
+
+test('the normalized declaration is the one spelling every reader compares', () => {
+  const effective = normalizedWork({
+    version: 2,
+    scopes: [{ id: 'de', paths: ['./Germany/', 'Germany/'], kind: 'document', validators: ['node eval/validate.mjs'], ignore: ['./drafts'] }],
+    targets: [],
+  });
+  assert.deepEqual(effective.scopes, [
+    { id: 'de', paths: ['Germany', 'Germany'], kind: 'document', validators: ['node eval/validate.mjs'], ignore: ['./drafts'] },
+  ]);
+});
+
+test('an invalid declaration exposes no scope to any reader', async () => {
+  const root = await docsRepo({
+    'simt.json': JSON.stringify({ work: { version: 1, scopes: [{ id: 'de', paths: ['Germany'], ignore: ['drafts'] }] } }),
+  });
+  const work = await readWork(root);
+  assert.equal(work.declared, true);
+  assert.equal(work.ok, false, 'a version-1 declaration carrying a version-2 field was accepted');
+  assert.deepEqual(work.scopes, [], 'half of an invalid declaration reached a reader');
+  assert.equal(work.problems[0].path, 'work.scopes[0].ignore');
 });
 
 test('unknown keys, duplicate ids and duplicate paths are refused, because each is a check that does not exist', () => {
@@ -86,6 +143,6 @@ test('doctor reports an invalid work declaration as a problem with a remedy, bef
   const root = await docsRepo({ 'simt.json': `${JSON.stringify({ id: 'fixture', work: { version: 7 } })}\n` });
   const loaded = await loadManifest(root);
   assert.ok(loaded.problems.length > 0, 'an unknown version reached a caller unchallenged');
-  assert.match(loaded.problems.join('\n'), /work\.version.*must be 1/);
+  assert.match(loaded.problems.join('\n'), /work\.version.*must be one of 1, 2/);
   assert.match(loaded.problems.join('\n'), /remove the key/);
 });

@@ -51,6 +51,34 @@ test('two scopes of equal specificity are refused instead of ordered by accident
   });
 });
 
+test('one path has one spelling: dot segments, trailing slashes and spaces resolve as written', () => {
+  const scopes = [
+    { id: 'handbook', paths: ['./handbook/'] },
+    { id: 'hand book', paths: ['hand book/docs'] },
+  ];
+  assert.deepEqual(resolveScope(scopes, './handbook/intro.md'), { scope: 'handbook' });
+  assert.deepEqual(resolveScope(scopes, 'hand book/docs/rates.md'), { scope: 'hand book' });
+  assert.deepEqual(resolveScope(scopes, 'handbook/../elsewhere/x.md'), { scope: null, error: { kind: 'none', candidates: [] } }, 'a parent segment names a tree the declaration never owned');
+});
+
+test('a scope over the repository root owns what no deeper scope claims', () => {
+  const scopes = [
+    { id: 'all', paths: ['.'] },
+    { id: 'de', paths: ['Germany'] },
+  ];
+  assert.deepEqual(resolveScope(scopes, 'Germany/rates.md'), { scope: 'de' });
+  assert.deepEqual(resolveScope(scopes, 'notes/todo.md'), { scope: 'all' });
+});
+
+test('an ignore pattern refuses a path and names itself', () => {
+  const scopes = [{ id: 'handbook', paths: ['handbook'], ignore: ['./drafts', '*.tmp.md', 'private'] }];
+  assert.deepEqual(resolveScope(scopes, 'handbook/intro.md'), { scope: 'handbook' });
+  assert.deepEqual(resolveScope(scopes, 'handbook/drafts/notes.md'), { scope: 'handbook', ignored: true, pattern: './drafts' });
+  assert.deepEqual(resolveScope(scopes, 'handbook/rates.tmp.md'), { scope: 'handbook', ignored: true, pattern: '*.tmp.md' });
+  assert.deepEqual(resolveScope(scopes, 'handbook/private/rates.md'), { scope: 'handbook', ignored: true, pattern: 'private' });
+  assert.deepEqual(resolveScope(scopes, 'handbook/public/private-notes.md'), { scope: 'handbook' }, 'a bare name matches a whole segment, not a prefix of one');
+});
+
 test('an explicit id survives a rename; a path id is honest about being a path', () => {
   assert.equal(artifactId({ path: 'Germany/rates.md', explicitId: 'de-rates' }), 'de-rates');
   assert.equal(artifactId({ path: 'Germany/rates.md', anchor: 'vat' }), 'Germany/rates.md#vat');

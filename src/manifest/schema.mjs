@@ -24,7 +24,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
-import { WORK_VERSION, validateWork } from '../work/config.mjs';
+import { SUPPORTED_WORK_VERSIONS, WORK_VERSION, validateWork } from '../work/config.mjs';
 import { runnerSpecProblem } from '../testing/contract.mjs';
 
 /** Absent means 1: the field arrived after the file did, and every file predates it. */
@@ -247,7 +247,9 @@ export function manifestProblems(manifest) {
     if (!isObject(value)) continue;
     for (const entry of keys) {
       if (!(entry.key in value) || value[entry.key] === undefined) continue;
-      const problem = entry.check(value[entry.key]);
+      // The whole namespace goes with the value: a field's rules can depend on a sibling -
+      // `work.scopes[].ignore` is only legal under a version that carries it.
+      const problem = entry.check(value[entry.key], value);
       if (problem !== null) problems.push(name + '.' + entry.key + ': ' + problem);
     }
   }
@@ -303,8 +305,8 @@ export async function loadManifest(root) {
 }
 
 /** One key of the `work` namespace, reported through the same problem surface as the rest. */
-function workKeyProblem(key, value) {
-  const scoped = validateWork({ version: WORK_VERSION, [key]: value });
+function workKeyProblem(key, value, whole = {}) {
+  const scoped = validateWork({ ...(isObject(whole) ? whole : {}), [key]: value });
   const found = scoped.problems.find((entry) => entry.path.startsWith(`work.${key}`));
   return found === undefined ? null : `${found.message}; ${found.remedy}`;
 }
@@ -317,9 +319,12 @@ registerNamespace('work', [
   {
     key: 'version',
     since: '0.8.0',
-    check: (v) => (v === WORK_VERSION ? null : `must be ${WORK_VERSION}, not ${JSON.stringify(v)}; set "work": {"version": ${WORK_VERSION}} or remove the key`),
+    check: (v) =>
+      SUPPORTED_WORK_VERSIONS.includes(v)
+        ? null
+        : `must be one of ${SUPPORTED_WORK_VERSIONS.join(', ')}, not ${JSON.stringify(v)}; set "work": {"version": ${WORK_VERSION}} or remove the key`,
   },
-  { key: 'scopes', since: '0.8.0', check: (v) => workKeyProblem('scopes', v) },
-  { key: 'targets', since: '0.8.0', check: (v) => workKeyProblem('targets', v) },
-  { key: 'adapters', since: '0.8.0', check: (v) => workKeyProblem('adapters', v) },
+  { key: 'scopes', since: '0.8.0', check: (v, whole) => workKeyProblem('scopes', v, whole) },
+  { key: 'targets', since: '0.8.0', check: (v, whole) => workKeyProblem('targets', v, whole) },
+  { key: 'adapters', since: '0.8.0', check: (v, whole) => workKeyProblem('adapters', v, whole) },
 ]);

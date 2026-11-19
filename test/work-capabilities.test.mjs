@@ -13,7 +13,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
-import { CAPABILITY_SOURCES, VALIDATION_KINDS, capabilityCards, probeLocal } from '../src/work/capabilities.mjs';
+import { CAPABILITY_SOURCES, VALIDATION_KINDS, capabilityCards, probeLocal, resolveValidator } from '../src/work/capabilities.mjs';
 import { keepTemp } from './fixture.mjs';
 
 async function repo(files = {}) {
@@ -153,6 +153,51 @@ test('authorization without an adapter is permission without capability, and an 
   assert.equal(allowed.mode, 'adapter');
   assert.equal(allowed.assurance, 'declared', 'permission plus an adapter is still a claim until an effect is read back');
   assert.match(allowed.reason, /writes tenant-a:calculation as agent/);
+});
+
+test('a declared validator, a missing one and a scope with none are three different answers', async () => {
+  const fixture = (validators) =>
+    repo({
+      'handbook/rates.md': '# rates\n',
+      'checks/structure.mjs': 'export const check = () => true;\n',
+      'simt.json': JSON.stringify({ work: { version: 2, scopes: [{ id: 'handbook', paths: ['handbook'], kind: 'document', validators }] } }),
+    });
+  const work = (validators) => ({ version: 2, scopes: [{ id: 'handbook', paths: ['handbook'], kind: 'document', validators }] });
+
+  const installedRoot = await fixture(['node checks/structure.mjs']);
+  const installedProbe = await probeLocal(installedRoot);
+  assert.deepEqual(installedProbe.validators.map((entry) => [entry.command, entry.installed]), [['node checks/structure.mjs', true]]);
+  const installedCard = cardFor(capabilityCards({ work: work(['node checks/structure.mjs']), local: installedProbe }), 'structural');
+  assert.equal(installedCard.available, true);
+  assert.equal(installedCard.mode, 'runner');
+
+  const missingRoot = await fixture(['node checks/absent.mjs']);
+  const missingProbe = await probeLocal(missingRoot);
+  assert.deepEqual(missingProbe.validators.map((entry) => [entry.command, entry.installed]), [['node checks/absent.mjs', false]]);
+  assert.match(missingProbe.validators[0].reason, /checks\/absent\.mjs, which is not in this repository/);
+  const missingCard = cardFor(capabilityCards({ work: work(['node checks/absent.mjs']), local: missingProbe }), 'structural');
+  assert.equal(missingCard.available, false, 'a validator with no executable was reported as available');
+  assert.equal(missingCard.mode, 'unavailable');
+  assert.match(missingCard.reason, /none can run/);
+
+  const noneRoot = await fixture([]);
+  const noneCard = cardFor(capabilityCards({ work: work([]), local: await probeLocal(noneRoot) }), 'structural');
+  assert.equal(noneCard.available, false);
+  assert.match(noneCard.reason, /configured with no validator/);
+
+  assert.notEqual(installedCard.reason, missingCard.reason);
+  assert.notEqual(missingCard.reason, noneCard.reason);
+});
+
+test('a validator may only name files the repository owns, and an unproven command is not a missing one', async () => {
+  const root = await repo({ 'checks/structure.mjs': 'export const check = () => true;\n' });
+  const outside = resolveValidator(root, { scope: 'handbook', command: 'node ../elsewhere/check.mjs' });
+  assert.equal(outside.installed, false);
+  assert.match(outside.reason, /outside this repository/);
+
+  const unproven = resolveValidator(root, { scope: 'handbook', command: 'make docs' });
+  assert.equal(unproven.installed, null, 'a command naming no file is unknown here, not missing');
+  assert.match(unproven.reason, /names no file in this repository/);
 });
 
 test('the cards are a pure function of their input and open nothing', async () => {

@@ -27,12 +27,73 @@ import { join } from 'node:path';
 
 import { loadManifest } from '../manifest/schema.mjs';
 import { assuranceLevel } from './assurance.mjs';
+import { normalizePath } from './artifacts.mjs';
 
 /** The validations a card lists separately, because they fail independently. */
 export const VALIDATION_KINDS = Object.freeze(['structural', 'rubric', 'replay', 'remote-read', 'remote-write']);
 
 /** The five sources a card keeps apart. */
 export const CAPABILITY_SOURCES = Object.freeze(['declared', 'local', 'adapter', 'target', 'authorized']);
+
+/** A token that looks like a file: a path, or a name with a program extension. */
+const FILE_TOKEN = /\.(mjs|cjs|js|ts|py|sh|rb|pl|java|kt)$/i;
+
+/**
+ * The file arguments a validator command names, in the order they appear.
+ *
+ * The program itself is not one: `node` is not in the repository, and asking whether it is
+ * would answer a question about the shell's PATH rather than about this repository. What a
+ * validator can prove locally is exactly the file it runs.
+ *
+ * @param {string} command
+ * @returns {string[]}
+ */
+function validatorInputs(command) {
+  return String(command ?? '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .filter((token) => !token.startsWith('-') && (token.includes('/') || FILE_TOKEN.test(token)));
+}
+
+/**
+ * Whether a declared validator can run here, read from the tree and nothing else.
+ *
+ * Three answers, because two would collapse a distinction the card exists to make:
+ *
+ *   `true`   every file the command names is in this repository
+ *   `false`  a file it names is missing, or it names something outside the repository
+ *   `null`   it names no file at all, so nothing in the tree can tell
+ *
+ * Nothing is executed. A declared command is a claim; this function only reports whether the
+ * claim has a subject on disk.
+ *
+ * @param {string} root
+ * @param {{scope?: string|null, command?: string}} reference
+ * @returns {{scope: string|null, command: string, files: {path: string, exists: boolean}[], installed: boolean|null, reason: string}}
+ */
+export function resolveValidator(root, { scope = null, command = '' } = {}) {
+  const inputs = validatorInputs(command);
+  const outside = inputs.find((token) => normalizePath(token) === null);
+  if (outside !== undefined) {
+    return { scope, command, files: [], installed: false, reason: `${command} names ${outside}, which is outside this repository; a validator may only run what the repository owns` };
+  }
+  if (inputs.length === 0) {
+    return { scope, command, files: [], installed: null, reason: `${command} names no file in this repository, so whether it can run cannot be read from the tree` };
+  }
+  const files = inputs.map((token) => ({ path: normalizePath(token) ?? token, exists: existsSync(join(root, normalizePath(token) ?? token)) }));
+  const missing = files.filter((file) => !file.exists).map((file) => file.path);
+  return {
+    scope,
+    command,
+    files,
+    installed: missing.length === 0,
+    reason:
+      missing.length === 0
+        ? `${command} names ${files.map((file) => file.path).join(', ')}, which is in this repository`
+        : `${command} names ${missing.join(', ')}, which is not in this repository; the check cannot run`,
+  };
+}
 
 /** Runner manifests whose presence is probed. Presence is not a check; see the card below. */
 const RUNNER_FILES = Object.freeze(['package.json', 'pyproject.toml', 'build.gradle', 'build.gradle.kts', 'Makefile', 'Cargo.toml']);
@@ -56,7 +117,40 @@ export async function probeLocal(root) {
     .map(([id, command]) => ({ id, command }))
     .sort((a, b) => a.id.localeCompare(b.id));
   const runnerFiles = RUNNER_FILES.filter((file) => existsSync(join(root, file)));
-  return { gates, runnerFiles };
+  // A configured scope's validator is the check a document repository actually declares, so
+  // the probe resolves each one to the file it names. A declared validator whose file is
+  // missing is the case that used to report `available`: the card said the check existed
+  // because the manifest mentioned it.
+  const scopes = Array.isArray(manifest?.work?.scopes) ? manifest.work.scopes.filter(isObject) : [];
+  const validators = scopes.flatMap((scope) =>
+    (Array.isArray(scope.validators) ? scope.validators : [])
+      .filter(isText)
+      .map((command) => resolveValidator(root, { scope: typeof scope.id === 'string' ? scope.id : null, command })),
+  );
+  return { gates, runnerFiles, validators };
+}
+
+/**
+ * What the structural card says, in one place, so the three outcomes stay distinguishable.
+ *
+ * `runnable` counts the checks whose executable is not known to be absent; `missing` counts the
+ * ones the probe found absent. A card that reported both as "declared" is the failure this
+ * wording exists to prevent.
+ */
+function structuralReason({ gates, validators, missing, runnable, named, scopes, runnerFiles }) {
+  if (runnable > 0) {
+    const declared = [...gates.map((gate) => gate.id), ...validators.map((entry) => `${entry.scope ?? 'scope'} validator`)].join(', ');
+    return missing.length === 0
+      ? `${named} local check(s) are declared: ${declared}`
+      : `${named} local check(s) are declared: ${declared}; ${missing.map((entry) => entry.reason).join('; ')}`;
+  }
+  if (named > 0) return `${named} local check(s) are declared, but none can run: ${missing.map((entry) => entry.reason).join('; ')}`;
+  if (scopes.length > 0) {
+    const ids = scopes.map((scope) => `\`${scope.id ?? 'scope'}\``).join(', ');
+    return `scope ${ids} ${scopes.length === 1 ? 'is' : 'are'} configured with no validator, and no gate is declared; nothing names what a structural check would run`;
+  }
+  if (runnerFiles.length > 0) return `${runnerFiles.join(', ')} present but no gate or validator is declared; nothing names what a structural check would run`;
+  return 'no gate or scope validator is declared; a structural check would have to be invented';
 }
 
 function card(kind, { declared = false, available = false, authorized = null, mode = 'unavailable', evidence = [], reason }) {
@@ -99,26 +193,27 @@ export function capabilityCards(input = {}) {
   const names = [...new Set([...adapters.map((adapter) => adapter.id), ...declaredAdapterIds])];
 
   // --- local structural ---------------------------------------------------------------
+  // An unprobed validator is unknown, not missing: a caller that passed no probe has said
+  // nothing about whether the file exists, and only the CLI reads the tree.
+  const probed = Array.isArray(local.validators) ? local.validators.filter(isObject) : null;
+  const resolvedValidators = probed ?? validators.map((entry) => ({ ...entry, files: [], installed: null }));
+  const missing = resolvedValidators.filter((entry) => entry.installed === false);
+  const runnable = gates.length + resolvedValidators.filter((entry) => entry.installed !== false).length;
   const structuralEvidence = [
     ...gates.map((gate) => ({ kind: 'declared', subject: `gate ${gate.id}: ${gate.command}` })),
-    ...validators.map((entry) => ({ kind: 'declared', subject: `validator ${entry.scope}: ${entry.command}` })),
+    ...resolvedValidators.map((entry) => ({ kind: 'declared', subject: `validator ${entry.scope}: ${entry.command}` })),
     // A probed file is a declaration that a runner exists, not an observation that a check
     // ran, so it sits at the floor with everything else (ADR-142).
     ...runnerFiles.map((file) => ({ kind: 'declared', subject: `runner ${file}` })),
   ];
-  const named = gates.length + validators.length;
+  const named = gates.length + resolvedValidators.length;
   const structural = card('structural', {
     declared: named > 0,
-    available: named > 0,
+    available: runnable > 0,
     authorized: null,
-    mode: named > 0 ? 'runner' : 'unavailable',
+    mode: runnable > 0 ? 'runner' : 'unavailable',
     evidence: structuralEvidence,
-    reason:
-      named > 0
-        ? `${named} local check(s) are declared: ${[...gates.map((gate) => gate.id), ...validators.map((entry) => `${entry.scope} validator`)].join(', ')}`
-        : runnerFiles.length > 0
-          ? `${runnerFiles.join(', ')} present but no gate or validator is declared; nothing names what a structural check would run`
-          : 'no gate or scope validator is declared; a structural check would have to be invented',
+    reason: structuralReason({ gates, validators: resolvedValidators, missing, runnable, named, scopes, runnerFiles }),
   });
 
   // --- semantic rubric ----------------------------------------------------------------

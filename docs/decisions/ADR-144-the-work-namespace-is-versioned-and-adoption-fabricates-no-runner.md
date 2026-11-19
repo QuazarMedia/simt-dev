@@ -4,7 +4,7 @@ simt-supersedes: []
 ---
 # ADR-144 — the work namespace is versioned, and adoption fabricates no runner
 
-Status: accepted · 2026-11-02
+Status: accepted · 2026-11-02 · ruling 1 is superseded by [ADR-198](ADR-198-the-work-schema-carries-versions-and-a-validator-is-installed-only-when-its-file-is.md)
 
 ## Context
 

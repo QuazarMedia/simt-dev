@@ -8,12 +8,12 @@
 // one, which is the failure this door exists to prevent.
 
 import { EXIT, fail, present } from '../output/index.mjs';
-import { CLI } from '../name.mjs';
+import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
-import { loadManifest } from '../manifest/schema.mjs';
 import { detectFacets } from '../work/facets.mjs';
 import { capabilityCards, probeLocal } from '../work/capabilities.mjs';
-import { validateWork } from '../work/config.mjs';
+import { WORK_VERSION } from '../work/config.mjs';
+import { readWork } from '../work/effective.mjs';
 import { buildCapsule, checkResume, duplicateEffects, reopenFor } from '../coordination/handoff.mjs';
 import { schedule } from '../coordination/workgraph.mjs';
 import { proposeGraduation, promotionReady } from '../memory/graduation.mjs';
@@ -27,20 +27,54 @@ const USAGE = `run: ${CLI} work inspect`;
  * @param {string} root
  * @returns {Promise<object>}
  */
+/**
+ * The next thing a maintainer can do, in one step.
+ *
+ * An inspection that ends at "no work declaration" is a wall; the plan's first requirement
+ * is that an unconfigured repository reports a small actionable next step instead. The
+ * remedy names the file the maintainer owns and the command that reads it again - both
+ * exist in this build, which is the only kind of instruction a door may give.
+ */
+function nextStep({ work, facets }) {
+  if (!work.declared) {
+    const expected = facets.artifactKinds.some((row) => row.kind === 'document') ? 'document' : 'source';
+    return {
+      step: 'declare one scope, so what this repository produces is a declaration rather than a guess',
+      remedy: `add "work": {"version": ${WORK_VERSION}, "scopes": [{"id": "<name>", "paths": ["<directory>"], "kind": "${expected}"}]} to ${MANIFEST_FILE}, then run: ${CLI} work inspect`,
+    };
+  }
+  if (!work.ok) {
+    const first = work.problems[0];
+    return { step: `fix ${first.path}`, remedy: `${first.message}; ${first.remedy}` };
+  }
+  const unscoped = work.scopes.filter((scope) => scope.validators.length === 0);
+  if (unscoped.length > 0) {
+    const ids = unscoped.map((scope) => `\`${scope.id}\``).join(', ');
+    return {
+      step: `scope ${ids} declares no validator`,
+      remedy: `add "validators": ["<command>"] to the scope in ${MANIFEST_FILE}, or run a repository command and record its result as evidence`,
+    };
+  }
+  return null;
+}
+
 export async function workInspectFacts(root) {
-  const { manifest } = await loadManifest(root).catch(() => ({ manifest: null }));
-  const declared = manifest?.work ?? null;
-  const [facets, local] = await Promise.all([detectFacets(root), probeLocal(root)]);
+  const [work, facets, local] = await Promise.all([readWork(root), detectFacets(root), probeLocal(root)]);
   return {
     ok: true,
     command: 'work inspect',
     root,
     facets,
-    capabilities: capabilityCards({ work: declared, local }),
-    work:
-      declared === null
-        ? { declared: false, ok: true, problems: [] }
-        : { declared: true, ...validateWork(declared) },
+    scopes: work.scopes,
+    validators: local.validators,
+    // An invalid declaration is not a declaration, so the cards are told there is none: a
+    // capability the repository claimed in a shape the parser refused was never a claim.
+    capabilities: capabilityCards({
+      work: work.ok && work.declared ? { version: work.version, scopes: work.scopes, targets: work.targets, adapters: work.adapters } : null,
+      local,
+    }),
+    work: { declared: work.declared, ok: work.ok, version: work.version, problems: work.problems },
+    next: nextStep({ work, facets }),
   };
 }
 
@@ -204,11 +238,20 @@ function render(payload) {
     lines.push(`validation ${card.kind.padEnd(13)}${card.mode.padEnd(15)}${card.reason}`);
   }
   if (payload.work.declared) {
-    lines.push(`work       declared, ${payload.work.ok ? 'valid' : `${payload.work.problems.length} problem(s)`}`);
+    lines.push(`work       declared, version ${payload.work.version}, ${payload.work.ok ? 'valid' : `${payload.work.problems.length} problem(s)`}`);
   } else {
     lines.push('work       no work declaration; the facts above come from paths and the manifest alone');
   }
+  for (const scope of payload.facets.scopes) lines.push(`scope      ${scope.id.padEnd(14)}${(scope.kind ?? 'any').padEnd(14)}${scope.paths.join(', ')}`);
+  for (const validator of payload.validators ?? []) {
+    const state = validator.installed === true ? 'installed' : validator.installed === false ? 'MISSING' : 'unproven';
+    lines.push(`validator  ${String(validator.scope ?? '-').padEnd(14)}${state.padEnd(12)}${validator.command}`);
+  }
   for (const problem of payload.work.problems) lines.push(`problem    ${problem.path}  ${problem.message}`);
   if (payload.facets.truncated) lines.push('truncated  1');
+  if (payload.next !== null) {
+    lines.push(`next       ${payload.next.step}`);
+    lines.push(`           ${payload.next.remedy}`);
+  }
   return lines.join('\n');
 }

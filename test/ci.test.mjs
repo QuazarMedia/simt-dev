@@ -881,3 +881,28 @@ test('the install block is indented past its key, so YAML keeps it a block scala
   assert.ok(runKey > at, 'the install step must use a block scalar');
   assert.match(lines[runKey + 1], /^ {10}[^ ]/, 'the install script body is not indented');
 });
+
+test('every uses: line in the generated workflow is a commit pin', () => {
+  // A floating tag runs whatever its author pushed that morning, in a file this
+  // repository wrote and a reviewer approved. Rendering every shape the consumer
+  // template has is what catches a new bootstrap step, which is how the bun action
+  // shipped on `@v2` while checkout and setup-node were pinned.
+  const shapes = [
+    renderWorkflow(),
+    renderWorkflow({ manager: 'pnpm' }),
+    renderWorkflow({ manager: 'yarn' }),
+    renderWorkflow({ manager: 'bun' }),
+    renderWorkflow({ manager: 'bun', packageManager: 'bun@1.2.0' }),
+    renderWorkflow({ npm: false }),
+    renderWorkflow({ manager: 'pnpm', gates: { preCommit: ['lint'], prePush: ['test'] } }),
+    renderWorkflow({ own: true }),
+  ];
+  for (const yaml of shapes) {
+    const uses = yaml.split('\n').filter((line) => /^\s*- uses:/.test(line));
+    assert.ok(uses.length > 0, 'a workflow with no action rows would pass this test for the wrong reason');
+    for (const line of uses) {
+      assert.match(line, /^\s*- uses: [\w.-]+\/[\w.-]+@[0-9a-f]{40}(?:\s+#\s+\S+)?$/, `not a commit pin: ${line}`);
+      assert.match(line, /\s#\s+\S+/, `the pin names no release: ${line}`);
+    }
+  }
+});

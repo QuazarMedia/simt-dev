@@ -166,6 +166,24 @@ export const EXPLAIN_CODES = {
     fix: 'Read the error: repair the file, or delete it and run: simt sync --yes to rewrite it.',
     example: 'A lock file truncated by a crashed write: LOCK-UNREADABLE names the parse error.',
   },
+  'manifest-invalid': {
+    what: 'The manifest itself is not usable: it does not parse, or a value in it has a shape the gate cannot run (a `gates.preCommit` written as a string, a `limits` that is not an object).',
+    why: 'A manifest that parses but cannot be read still looks configured, and every consumer used to interpret the bad value differently — check reported nothing, the hooks reported zero gates. Reporting the value and its expected shape is what makes the repository fixable.',
+    fix: 'Fix the named key in simt.json by hand, then run: simt sync --yes. `simt init --yes` keeps every key it does not write and will not replace the file silently.',
+    example: 'gates.preCommit: "lint" instead of ["lint"]: MANIFEST-INVALID names the key and the shape it needs.',
+  },
+  'manifest-unknown-key': {
+    what: 'The manifest carries a key this build does not read.',
+    why: 'The manifest is the repository\u2019s file, so a key the tool does not know says the repository and the tool are at different versions — a fact to report, not a gate to fail. It is named with its remedy in both `check` and `sync`.',
+    fix: 'Rename it to `x-<key>` to keep it as an extension key, or remove it.',
+    example: 'A key written by a newer release, read by an older one: MANIFEST-UNKNOWN-KEY names the key.',
+  },
+  'ecosystem-record-invalid': {
+    what: 'A record under .simt/ecosystems/ did not validate, so it was quarantined and the shipped record with its id (if any) is in force.',
+    why: 'A local record is configuration written by the reader, and applying the fields that happened to parse is how one typo silently changes what a repository\u2019s gates do. The whole record is dropped, and the finding names the file and the field.',
+    fix: 'Fix the named field, or delete the file to keep the shipped record.',
+    example: 'A record with `manifestOrder` and no `facts`: ECOSYSTEM-RECORD-INVALID names the field and why it is required.',
+  },
   malformed: {
     what: 'The generated region\u2019s markers do not parse: the begin/end lines are damaged, duplicated, or in the wrong order.',
     why: 'The markers are the machine-readable boundary between owned prose and generated text. A region the parser cannot bound cannot be diffed, so the gate reports the damage (with the line) instead of guessing which half is yours.',

@@ -14,6 +14,7 @@ the command that fixes it, and what a reader sees.
 | `CURRENT` | Not a defect: the file on disk is byte-for-byte what the tool would write. This is the gate’s passing state for that file. |
 | `DRIFT` | The file on disk differs from what the tool would write: someone edited the generated region, or the rules changed underneath it. |
 | `DUPLICATE-DECISION-ID` | Two decision records claim one number: the index only sees the first, so the second is a record no provenance answer can reach. |
+| `ECOSYSTEM-RECORD-INVALID` | A record under .simt/ecosystems/ did not validate, so it was quarantined and the shipped record with its id (if any) is in force. |
 | `FILE-LINES` | A file exceeds the 1000-line hard ceiling: it fails the gate. |
 | `FILE-LINES-WARN` | A file passed the 400-line review trigger but is under the ceiling: reported, and the gate stays green. |
 | `FORBID-REGEX` | A rule forbids a pattern and the pattern occurs: the file contains text the repository’s own rules refuse. |
@@ -32,6 +33,8 @@ the command that fixes it, and what a reader sees.
 | `LOCK-UNEXPLAINED` | The projection changed and the inputs did not: the outputs moved with no input change to explain them. |
 | `LOCK-UNREADABLE` | The lock file cannot be read or parsed: --frozen has a lock it cannot verify. |
 | `MALFORMED` | The generated region’s markers do not parse: the begin/end lines are damaged, duplicated, or in the wrong order. |
+| `MANIFEST-INVALID` | The manifest itself is not usable: it does not parse, or a value in it has a shape the gate cannot run (a `gates.preCommit` written as a string, a `limits` that is not an object). |
+| `MANIFEST-UNKNOWN-KEY` | The manifest carries a key this build does not read. |
 | `MISPLACED` | The region is intact but not at the top of the file, so it overrides the settings below it — and in this format the last matching definition wins, so the repository’s own settings silently stop applying. |
 | `OPTIONAL` | The repo runs GitHub Actions but lacks one of the two .github files `init` writes at adoption (“simt-dev-check.yml”, “dependabot.yml”): the file is offered, not present. |
 | `ORPHANED` | A managed rule file this run would not write: narrowing a surface’s output left a file the tool once generated and now ignores. |

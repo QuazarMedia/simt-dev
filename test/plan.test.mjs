@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, test } from 'node:test';
 
-import { loadPlanState, planNext } from '../src/plan/index.mjs';
+import { loadPlanState, planDone, planNext } from '../src/plan/index.mjs';
 import { CLI } from '../src/name.mjs';
 import { keepTemp } from './fixture.mjs';
 
@@ -803,4 +803,32 @@ test('plan next names the reviewer of the slice it returns, and --state hands on
   // reached by any of its words, which is how a finished slice is handed over.
   const dry = cli(['plan', 'done', 'A1', '--state', 'to review', '--root', owned]);
   assert.match(dry.stdout, /Queued -> To review/);
+});
+
+test('plan done refuses a sha that is not a commit id (PR18)', async () => {
+  const body = ['| ID | Slice | State | SHA |', '| --- | --- | --- | --- |', '| A1 | one | Queued | — |', ''].join('\n');
+  const root = await repo({ 'simt.json': JSON.stringify({ id: 'x' }), 'docs/reviews/0001-t.md': body });
+  const result = await planDone(root, 'A1', { sha: 'not a commit id' });
+  assert.match(result.error ?? '', /not a commit sha/);
+});
+
+test('concurrent plan done calls do not overwrite one another (PR18)', async () => {
+  const body = [
+    '| ID | Slice | State | SHA |',
+    '| --- | --- | --- | --- |',
+    '| A1 | one | Queued | — |',
+    '| A2 | two | Queued | — |',
+    '',
+  ].join('\n');
+  const root = await repo({ 'simt.json': JSON.stringify({ id: 'x' }), 'docs/reviews/0001-t.md': body });
+  const sha = 'a'.repeat(40);
+  const [first, second] = await Promise.all([
+    planDone(root, 'A1', { sha }),
+    planDone(root, 'A2', { sha }),
+  ]);
+  assert.equal(first.error, undefined, first.error);
+  assert.equal(second.error, undefined, second.error);
+  const text = await readFile(join(root, 'docs/reviews/0001-t.md'), 'utf8');
+  assert.match(text, /\| A1 \| one \| Complete \|/);
+  assert.match(text, /\| A2 \| two \| Complete \|/);
 });

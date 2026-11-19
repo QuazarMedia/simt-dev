@@ -91,10 +91,15 @@ function globSegment(pattern, value) {
 export function resolveScope(scopes, path) {
   const normalised = normalizePath(path);
   if (normalised === null) return { scope: null, error: { kind: 'none', candidates: [] } };
-  const matches = scopes.filter((scope) => (scope.paths ?? []).some((prefix) => prefixMatches(normalizePath(prefix) ?? prefix, normalised)));
+  // A hand-edited manifest reaches this before `check` reports it, so a scope whose
+  // `paths` is not a list claims nothing instead of throwing. Refusing to resolve is the
+  // same answer the validator will give it a moment later.
+  const list = Array.isArray(scopes) ? scopes.filter((scope) => scope !== null && typeof scope === 'object') : [];
+  const prefixesOf = (scope) => (Array.isArray(scope.paths) ? scope.paths : []).map((prefix) => normalizePath(prefix) ?? prefix);
+  const matches = list.filter((scope) => prefixesOf(scope).some((prefix) => prefixMatches(prefix, normalised)));
   if (matches.length === 0) return { scope: null, error: { kind: 'none', candidates: [] } };
   const scored = matches.map((scope) => {
-    const prefixes = scope.paths.map((prefix) => normalizePath(prefix) ?? prefix).filter((prefix) => prefixMatches(prefix, normalised));
+    const prefixes = prefixesOf(scope).filter((prefix) => prefixMatches(prefix, normalised));
     // A scope is as specific as the most specific of its own prefixes.
     const best = prefixes
       .map(specificity)
@@ -114,7 +119,7 @@ export function resolveScope(scopes, path) {
   }
   // The winner's own declaration decides what it refuses to ingest. The answer names the
   // pattern, because "ignored" with no reason is a path that vanished for no stated cause.
-  const owner = scopes.find((scope) => scope.id === winner.id);
+  const owner = list.find((scope) => scope.id === winner.id);
   const pattern = ignoredBy(owner?.ignore, normalised);
   if (pattern !== null) return { scope: winner.id, ignored: true, pattern };
   return { scope: winner.id };

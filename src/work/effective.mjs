@@ -22,20 +22,19 @@ import { normalizedWork, validateWork } from './config.mjs';
  * rather than two that disagree.
  *
  * @param {string} root
- * @returns {Promise<{declared: boolean, exists: boolean, ok: boolean, version: number|null, scopes: object[], targets: object[], adapters: string[], problems: object[], manifestProblems: string[]}>}
+ * @returns {Promise<{declared: boolean, ok: boolean, version: number|null, scopes: object[], targets: object[], adapters: string[], problems: object[], manifestProblems: string[]}>}
  */
 export async function readWork(root) {
-  const loaded = await loadManifest(root).catch(() => ({ manifest: null, exists: false, problems: [] }));
+  const loaded = await loadManifest(root).catch(() => ({ manifest: null, problems: [] }));
   const manifestProblems = Array.isArray(loaded.problems) ? loaded.problems : [];
   const declared = loaded.manifest?.work ?? null;
   if (declared === null || declared === undefined) {
-    return { declared: false, exists: loaded.exists, ok: true, version: null, scopes: [], targets: [], adapters: [], problems: [], manifestProblems };
+    return { declared: false, ok: true, version: null, scopes: [], targets: [], adapters: [], problems: [], manifestProblems };
   }
   const checked = validateWork(declared);
   const effective = checked.ok ? normalizedWork(declared) : normalizedWork({});
   return {
     declared: true,
-    exists: true,
     ok: checked.ok,
     version: effective.version ?? (Number.isInteger(declared?.version) ? declared.version : null),
     scopes: effective.scopes,

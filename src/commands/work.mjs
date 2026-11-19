@@ -35,17 +35,35 @@ const USAGE = `run: ${CLI} work inspect`;
  * remedy names the file the maintainer owns and the command that reads it again - both
  * exist in this build, which is the only kind of instruction a door may give.
  */
-function nextStep({ work, facets }) {
-  if (!work.declared) {
-    const expected = facets.artifactKinds.some((row) => row.kind === 'document') ? 'document' : 'source';
-    return {
-      step: 'declare one scope, so what this repository produces is a declaration rather than a guess',
-      remedy: `add "work": {"version": ${WORK_VERSION}, "scopes": [{"id": "<name>", "paths": ["<directory>"], "kind": "${expected}"}]} to ${MANIFEST_FILE}, then run: ${CLI} work inspect`,
-    };
-  }
+function nextStep({ work, facets, validators }) {
+  // A file that does not parse is the first problem: everything below it is a guess about
+  // a declaration nobody can read, and naming the scope first would send the reader to a
+  // key they cannot save.
+  if (work.manifestProblems.length > 0) return { step: `fix ${MANIFEST_FILE}`, remedy: work.manifestProblems[0] };
+  const expected = facets.artifactKinds.some((row) => row.kind === 'document') ? 'document' : 'source';
+  const declareOne = {
+    step: 'declare one scope, so what this repository produces is a declaration rather than a guess',
+    remedy: `add "work": {"version": ${WORK_VERSION}, "scopes": [{"id": "<name>", "paths": ["<directory>"], "kind": "${expected}"}]} to ${MANIFEST_FILE}, then run: ${CLI} work inspect`,
+  };
+  if (!work.declared) return declareOne;
   if (!work.ok) {
     const first = work.problems[0];
     return { step: `fix ${first.path}`, remedy: `${first.message}; ${first.remedy}` };
+  }
+  // A declaration that names no scope is the same wall as none at all: version 2 alone
+  // says nothing about which paths this repository owns.
+  if (work.scopes.length === 0) return declareOne;
+  // A validator whose file is missing outranks a scope that declares none: the repository
+  // asked for this check, and the one action that makes the card honest is to land the file
+  // or drop the claim.
+  const missing = (Array.isArray(validators) ? validators : []).filter((entry) => entry.installed === false);
+  if (missing.length > 0) {
+    const first = missing[0];
+    const files = (first.files ?? []).filter((file) => file.exists === false).map((file) => `\`${file.path}\``).join(', ') || 'the file it names';
+    return {
+      step: `${first.command} names ${files}, which this repository does not have`,
+      remedy: `add ${files} or remove the validator from the scope in ${MANIFEST_FILE}, then run: ${CLI} work inspect`,
+    };
   }
   const unscoped = work.scopes.filter((scope) => scope.validators.length === 0);
   if (unscoped.length > 0) {
@@ -74,7 +92,8 @@ export async function workInspectFacts(root) {
       local,
     }),
     work: { declared: work.declared, ok: work.ok, version: work.version, problems: work.problems },
-    next: nextStep({ work, facets }),
+    manifestProblems: work.manifestProblems,
+    next: nextStep({ work, facets, validators: local.validators }),
   };
 }
 
@@ -247,6 +266,7 @@ function render(payload) {
     const state = validator.installed === true ? 'installed' : validator.installed === false ? 'MISSING' : 'unproven';
     lines.push(`validator  ${String(validator.scope ?? '-').padEnd(14)}${state.padEnd(12)}${validator.command}`);
   }
+  for (const problem of payload.manifestProblems ?? []) lines.push(`manifest   ${problem}`);
   for (const problem of payload.work.problems) lines.push(`problem    ${problem.path}  ${problem.message}`);
   if (payload.facets.truncated) lines.push('truncated  1');
   if (payload.next !== null) {

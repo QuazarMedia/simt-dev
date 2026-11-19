@@ -47,6 +47,17 @@ function problem(path, message, remedy, code) {
 
 /** A path a declaration may own, or the problem that says why it may not. */
 function pathProblem(at, raw) {
+  // A padded path is the one typo normalization cannot see: it stays distinct, claims
+  // nothing, and the scope silently holds no artifacts - so it is refused where it is
+  // written rather than repaired into a path nobody typed.
+  if (raw !== raw.trim()) {
+    return problem(
+      at,
+      `${JSON.stringify(raw)} has leading or trailing whitespace`,
+      'write the path without padding; a padded path claims a directory that does not exist',
+      'path-padded',
+    );
+  }
   const normalised = normalizePath(raw);
   if (normalised === null) {
     return problem(

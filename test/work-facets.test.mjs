@@ -94,6 +94,16 @@ test('declared targets add a remote locus; absent config changes nothing', async
   assert.deepEqual(ARTIFACT_KINDS, ['source', 'document', 'dataset', 'recipe', 'remote-object']);
 });
 
+test('a remote object is a declaration, and its basis says so', async () => {
+  const root = await repo({
+    'pkg.py': 'print(1)\n',
+    'simt.json': JSON.stringify({ work: { version: 2, targets: [{ namespace: 't', type: 'calculation' }] } }),
+  });
+  const facets = await detectFacets(root);
+  assert.equal(kind(facets, 'remote-object').basis, 'declared', 'a kind only a declaration can produce was reported as inferred');
+  assert.equal(kind(facets, 'source').basis, 'inferred');
+});
+
 test('the walk is bounded and says so instead of pretending it saw everything', async () => {
   const files = {};
   for (let index = 0; index < 30; index += 1) files[`docs/page-${index}.md`] = '# page\n';

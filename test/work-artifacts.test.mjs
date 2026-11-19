@@ -79,6 +79,11 @@ test('an ignore pattern refuses a path and names itself', () => {
   assert.deepEqual(resolveScope(scopes, 'handbook/public/private-notes.md'), { scope: 'handbook' }, 'a bare name matches a whole segment, not a prefix of one');
 });
 
+test('a hand-edited scope whose paths are not a list claims nothing instead of throwing', () => {
+  assert.deepEqual(resolveScope([{ id: 'broken', paths: 'docs' }], 'docs/a.md'), { scope: null, error: { kind: 'none', candidates: [] } });
+  assert.deepEqual(resolveScope(null, 'docs/a.md'), { scope: null, error: { kind: 'none', candidates: [] } });
+});
+
 test('an explicit id survives a rename; a path id is honest about being a path', () => {
   assert.equal(artifactId({ path: 'Germany/rates.md', explicitId: 'de-rates' }), 'de-rates');
   assert.equal(artifactId({ path: 'Germany/rates.md', anchor: 'vat' }), 'Germany/rates.md#vat');

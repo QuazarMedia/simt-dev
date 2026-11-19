@@ -168,10 +168,12 @@ export async function detectFacets(root, options = {}) {
   // kind survives a corpus the sampler does not recognise, which is the whole point of
   // declaring it.
   const declared = new Map();
+  // A remote object is only ever a declaration: no path can be one, so `work.targets` is
+  // the whole of the evidence and the kind is not a guess about a directory name.
+  if (targets.length > 0) declared.set('remote-object', { files: new Set(), evidence: `${MANIFEST_FILE}#work.targets` });
   for (const scope of scopes) {
     if (!ARTIFACT_KINDS.includes(scope.kind)) continue;
-    const entry = declared.get(scope.kind) ?? { ids: [], files: new Set() };
-    entry.ids.push(scope.id);
+    const entry = declared.get(scope.kind) ?? { files: new Set(), evidence: `${MANIFEST_FILE}#work.scopes` };
     for (const path of paths) if (resolveScope(scopes, path).scope === scope.id) entry.files.add(path);
     declared.set(scope.kind, entry);
   }
@@ -188,7 +190,7 @@ export async function detectFacets(root, options = {}) {
           kind,
           count: Math.max(counts.get(kind) ?? 0, assertion.files.size),
           basis: 'declared',
-          evidence: [...new Set([`${MANIFEST_FILE}#work.scopes`, ...inferred])].slice(0, 5),
+          evidence: [...new Set([assertion.evidence, ...inferred])].slice(0, 5),
         };
       }),
     activities: rows(activities).map(({ key, evidence }) => ({ activity: key, evidence })),

@@ -81,6 +81,13 @@ test('dot paths, trailing slashes and spaces are one claim each, and a root scop
   assert.deepEqual(validateWork({ version: 2, scopes: [{ id: 'all', paths: ['.'] }, { id: 'de', paths: ['./Germany/'] }] }), { ok: true, problems: [] });
 });
 
+test('a padded path is refused rather than silently claiming nothing', () => {
+  const padded = validateWork({ version: 2, scopes: [{ id: 'de', paths: [' Germany'] }] });
+  assert.equal(padded.problems[0].path, 'work.scopes[0].paths[0]');
+  assert.equal(padded.problems[0].code, 'path-padded');
+  assert.match(padded.problems[0].remedy, /without padding/);
+});
+
 test('the normalized declaration is the one spelling every reader compares', () => {
   const effective = normalizedWork({
     version: 2,

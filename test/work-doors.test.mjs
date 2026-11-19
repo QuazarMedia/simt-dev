@@ -6,7 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -61,6 +61,46 @@ test('work inspect reports the five validations and says no work declaration exi
   // A repository with no declared gate must not be told a structural check is available.
   const structural = payload.capabilities.find((card) => card.kind === 'structural');
   assert.equal(structural.available, false);
+});
+
+test('work inspect ends in one next step, and reports the validator it could not probe', () => {
+  const dir = repo();
+  mkdirSync(join(dir, 'handbook'), { recursive: true });
+  writeFileSync(join(dir, 'handbook', 'intro.md'), '# intro\n');
+
+  const unconfigured = json(dir, ['work', 'inspect']);
+  assert.equal(unconfigured.work.declared, false);
+  assert.match(unconfigured.next.step, /declare one scope/);
+  assert.match(unconfigured.next.remedy, /"work"/);
+  assert.match(unconfigured.next.remedy, /simt work inspect/, 'the next step must name a command this build runs');
+
+  // A declaration with no scope is the same wall as none at all, and gets the same step.
+  writeFileSync(join(dir, 'simt.json'), JSON.stringify({ work: { version: 2 } }));
+  assert.match(json(dir, ['work', 'inspect']).next.step, /declare one scope/);
+
+  writeFileSync(
+    join(dir, 'simt.json'),
+    JSON.stringify({ work: { version: 2, scopes: [{ id: 'handbook', paths: ['handbook'], kind: 'document', validators: ['node checks/absent.mjs'] }] } }),
+  );
+  const declared = json(dir, ['work', 'inspect']);
+  assert.equal(declared.work.ok, true);
+  assert.deepEqual(declared.validators.map((entry) => [entry.command, entry.installed]), [['node checks/absent.mjs', false]]);
+  assert.deepEqual(declared.scopes.map((scope) => scope.paths), [['handbook']], 'the effective path is the one the reader wrote, normalized');
+  const structural = declared.capabilities.find((card) => card.kind === 'structural');
+  assert.equal(structural.available, false, 'a validator with no executable was reported as available');
+  // The one action that makes this repository honest: land the file, or drop the claim.
+  assert.match(declared.next.step, /checks\/absent\.mjs/);
+  assert.match(declared.next.remedy, /remove the validator/);
+});
+
+test('work inspect names an unparseable manifest instead of reporting no declaration', () => {
+  const dir = repo();
+  writeFileSync(join(dir, 'simt.json'), '{ not json\n');
+  const payload = json(dir, ['work', 'inspect']);
+  assert.equal(payload.work.declared, false);
+  assert.ok(payload.manifestProblems.length > 0);
+  assert.match(payload.next.step, /fix simt\.json/);
+  assert.match(payload.next.remedy, /unparseable/);
 });
 
 test('knowledge why separates what a claim derives from what depends on it', () => {

@@ -25,6 +25,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { WORK_VERSION, validateWork } from '../work/config.mjs';
+import { runnerSpecProblem } from '../testing/contract.mjs';
 
 /** Absent means 1: the field arrived after the file did, and every file predates it. */
 const MANIFEST_VERSION = 1;
@@ -127,9 +128,14 @@ export const KEYS = [
   // ever produced, so accepting it would be the validator blessing a typo.
   { key: 'surfaces', owner: 'repo', since: '0.8.0', check: (v) => (v === null || isStringList(v) ? null : 'surfaces must be null or a list of surface ids') },
   { key: 'projection', owner: 'tool', generated: true, since: '0.7.0', check: (v) => (isObject(v) ? null : 'projection must be an object') },
+  // The focused runner a repository declares when no detector recognises its stack. It
+  // is *repo* data: the tool runs it and never writes it (review 0005 PR11).
+  { key: 'test.runner', owner: 'repo', since: '0.11.0', check: (v) => runnerSpecProblem(v) },
 ];
 
 const KNOWABLE = new Set(KEYS.map((entry) => entry.key));
+/** A dotted key like `test.runner` makes its head (`test`) a known top-level key too. */
+const KNOWN_HEADS = new Set([...KNOWABLE].map((key) => key.split('.')[0]));
 
 /**
  * The keys a reader of this build actually consumes, in a shape the tool can iterate.
@@ -148,7 +154,7 @@ const KNOWABLE = new Set(KEYS.map((entry) => entry.key));
 export function unknownKeys(manifest) {
   if (!isObject(manifest)) return [];
   return Object.keys(manifest)
-    .filter((key) => !KNOWABLE.has(key) && !NAMESPACES.has(key) && !key.startsWith('x-'))
+    .filter((key) => !KNOWN_HEADS.has(key) && !NAMESPACES.has(key) && !key.startsWith('x-'))
     .sort();
 }
 

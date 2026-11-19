@@ -13,7 +13,9 @@ import { promisify } from 'node:util';
 
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
+import { commandAvailable, reportPathProblem, runnerSpecProblem } from '../testing/contract.mjs';
 import { detectTestRunner } from '../testing/runners.mjs';
+import { loadManifest } from '../manifest/schema.mjs';
 import { compactOutput } from '../index/compact.mjs';
 import { coverage } from '../index/coverage.mjs';
 import { readImportEdges } from '../index/gate.mjs';
@@ -67,6 +69,21 @@ export async function gateCommand(args, flags) {
   }
   const files = new Set(listed.files);
   for (const file of changed) files.add(file);
+  // The repository's own declaration answers before the detection chain does, and an
+  // invalid one is refused here rather than in the child: a runner that cannot be built
+  // is a configuration finding, not a failing test.
+  const loaded = await loadManifest(root);
+  const spec = loaded.manifest?.test?.runner ?? null;
+  if (spec !== null) {
+    const problem = runnerSpecProblem(spec) ?? reportPathProblem(spec, root);
+    if (problem !== null) {
+      return fail(
+        `invalid test.runner (${problem})`,
+        EXIT.USAGE,
+        `fix "test": {"runner": ...} in ${loaded.path}`,
+      );
+    }
+  }
   const edges = await readImportEdges(root, files);
   const selected = coverage({ imports: edges }, changed, { root });
   // the selection explains itself. `unmatched` names explicit paths the
@@ -89,7 +106,7 @@ export async function gateCommand(args, flags) {
     emit(lines.join('\n'));
     return EXIT.OK;
   }
-  return runSelected(root, flags, selected, { unmatched, graph });
+  return runSelected(root, flags, selected, { unmatched, graph, spec });
 }
 
 /**
@@ -113,7 +130,7 @@ function graphState(edges, files, root = null) {
   return 'resolved';
 }
 
-async function runSelected(root, flags, selected, { unmatched = [], graph = 'resolved' } = {}) {
+async function runSelected(root, flags, selected, { unmatched = [], graph = 'resolved', spec = null } = {}) {
   const cache = new Map();
   const groups = new Map();
   for (const file of selected) {
@@ -129,12 +146,23 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
   for (const [pkg, files] of [...groups.entries()].sort((a, b) => cmp(a[0], b[0]))) {
     const relative = files.map((file) => (pkg && file.startsWith(`${pkg}/`) ? file.slice(pkg.length + 1) : file));
     const cwd = join(root, pkg);
-    const runner = await detectTestRunner(cwd, relative);
+    const runner = await detectTestRunner(cwd, relative, { spec, pkg });
     if (!runner) {
       return fail(
         `no runner for ${files.length} test${files.length === 1 ? '' : 's'} in ${pkg || 'this repository'}`,
         EXIT.UNSUPPORTED,
-        'declare a package manifest the test runner can see',
+        'declare "test": {"runner": {"command": [argv]}} in simt.json, or a package manifest a built-in detector reads',
+      );
+    }
+    // A declared tool that is not installed is unsupported, not a failing test: the child
+    // would otherwise exit 1 with ENOENT and the reader would go looking for a bug in the
+    // code the test covers.
+    const missing = (runner.requires ?? []).filter((command) => !commandAvailable(command, { cwd }));
+    if (missing.length > 0) {
+      return fail(
+        `the ${runner.runner} runner needs ${missing.join(', ')}, which is not installed`,
+        EXIT.UNSUPPORTED,
+        `install ${missing.join(', ')} or declare a different "test": {"runner": ...} in simt.json`,
       );
     }
     const built = runner.buildExec(cwd);
@@ -145,7 +173,7 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     for (const key of Object.keys(env)) {
       if (key.startsWith('NODE_TEST')) delete env[key];
     }
-    const result = await exec(built.cmd, built.args, { cwd, env, maxBuffer: 32 << 20 }).then(
+    const result = await exec(built.cmd, built.args, { cwd: built.cwd ?? cwd, env, maxBuffer: 32 << 20 }).then(
       (out) => ({ code: 0, stdout: out.stdout, stderr: out.stderr }),
       (error) => ({
         code: typeof error.code === 'number' ? error.code : 1,

@@ -9,12 +9,13 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { test } from 'node:test';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { gateCommand } from '../src/commands/gate.mjs';
+import { detectTestRunner, nodeCommand } from '../src/testing/runners.mjs';
 import { selectTests } from '../src/index/gate.mjs';
 import { capture } from './fixture.mjs';
 
@@ -147,6 +148,108 @@ test('gate reports an unresolvable language graph (Q40)', async () => {
     assert.deepEqual(payload.selected, []);
     assert.equal(payload.graph, 'unresolved');
     assert.equal(payload.verdict, 'nothing-selected');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a declared test.runner answers before the detection chain (PR11)', async () => {
+  // A package whose runner no detector knows: the repository says how to run its tests,
+  // and the gate must run exactly that argv with the selected files, from the package.
+  const root = await mkdtemp(join(tmpdir(), 'idx-gate-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await mkdir(join(root, 'test'), { recursive: true });
+    await writeFile(join(root, 'package.json'), '{ "name": "custom" }\n');
+    await writeFile(
+      join(root, 'runner.mjs'),
+      "import { writeFileSync } from 'node:fs';\n" +
+        "writeFileSync('argv.json', JSON.stringify(process.argv.slice(2)));\n",
+    );
+    await writeFile(
+      join(root, 'simt.json'),
+      JSON.stringify({ test: { runner: { command: [process.execPath, 'runner.mjs', '--pick', '{files}'] } } }),
+    );
+    await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 1;\n');
+    await writeFile(
+      join(root, 'test', 'keep.test.mjs'),
+      "import { test } from 'node:test';\nimport { keep } from '../src/keep.mjs';\ntest('k', () => { if (keep !== 1) throw new Error('k'); });\n",
+    );
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+
+    const ran = await capture(() => gateCommand(['src/keep.mjs'], { root }));
+    assert.equal(ran.code, 0, `${ran.stdout}${ran.stderr}`);
+    assert.deepEqual(JSON.parse(await readFile(join(root, 'argv.json'), 'utf8')), ['--pick', 'test/keep.test.mjs']);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an invalid test.runner is a named configuration error (PR11)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-gate-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await mkdir(join(root, 'test'), { recursive: true });
+    await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 1;\n');
+    await writeFile(
+      join(root, 'test', 'keep.test.mjs'),
+      "import { test } from 'node:test';\nimport { keep } from '../src/keep.mjs';\ntest('k', () => { if (keep !== 1) throw new Error('k'); });\n",
+    );
+    await writeFile(join(root, 'simt.json'), JSON.stringify({ test: { runner: { command: 'npm test' } } }));
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    const refused = await capture(() => gateCommand(['src/keep.mjs'], { root }));
+    assert.equal(refused.code, 2);
+    assert.match(`${refused.stdout}${refused.stderr}`, /invalid test\.runner/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a runner whose declared tool is missing is unsupported, not failed (PR11)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-gate-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await mkdir(join(root, 'test'), { recursive: true });
+    await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 1;\n');
+    await writeFile(
+      join(root, 'test', 'keep.test.mjs'),
+      "import { test } from 'node:test';\nimport { keep } from '../src/keep.mjs';\ntest('k', () => { if (keep !== 1) throw new Error('k'); });\n",
+    );
+    await writeFile(
+      join(root, 'simt.json'),
+      JSON.stringify({ test: { runner: { command: [process.execPath, '-e', '0'], requires: ['simt-not-installed-xyz'] } } }),
+    );
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    const refused = await capture(() => gateCommand(['src/keep.mjs'], { root }));
+    assert.equal(refused.code, 5);
+    assert.match(`${refused.stdout}${refused.stderr}`, /simt-not-installed-xyz/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a SEA executable is never the Node a test child runs (PR11)', () => {
+  assert.equal(nodeCommand({ execPath: '/opt/simt/bin/simt', sea: true }), 'node');
+  assert.equal(nodeCommand({ execPath: '/opt/simt/bin/simt', sea: false }), 'node');
+  assert.equal(nodeCommand({ execPath: '/usr/local/bin/node', sea: false }), '/usr/local/bin/node');
+});
+
+test('a uv project runs pytest through uv (PR11)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-gate-'));
+  try {
+    await writeFile(join(root, 'pyproject.toml'), '[project]\nname = "p"\n');
+    await writeFile(join(root, 'uv.lock'), 'version = 1\n');
+    const runner = await detectTestRunner(root, ['tests/test_app.py']);
+    const built = runner.buildExec(root);
+    assert.equal(built.cmd, 'uv');
+    assert.deepEqual(built.args.slice(0, 2), ['run', 'pytest']);
+    assert.deepEqual(runner.requires, ['uv']);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

@@ -36,7 +36,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR14 | Share bounded gate execution and report cleanup | P1 | runners | M | PR13, PR04 | Complete | 547b7c3f86488400a18ba568760a5ec50e25c546 |
 | PR15 | Make projected rules and adoption reports actionable in consumers | P1 | projection | M | PR08, PR12 | Complete | 324f5757eca06954ad63aaa7c9158cf03d043568 |
 | PR16 | Make frozen projection and upgrades agree on the applied state | P1 | projection | M | PR15 | Complete | d57ee4a7769376f9f217b2536614a74fd5fdffe1 |
-| PR17 | Generate reproducible CI with an explicit provider contract | P1 | ci | M | PR12, PR16 | Complete | a944acc7fc7efa06afaf50857ecdb4a36fc4cbe3 |
+| PR17 | Generate reproducible CI with an explicit provider contract | P1 | ci | M | PR12, PR16 | Complete | a944acc7fc7efa06afaf50857ecdb4a36fc4cbe3 — dc2d07d |
 | PR18 | Repair tracker concurrency and slice completion recovery | P1 | tracker | M | PR07, PR04 | Complete | 75237c386f1292b04885a45df601f1302b50987a |
 | PR19 | Validate knowledge with the same readers used by its commands | P1 | knowledge | M | PR02 | Complete | 7ebf20fdb69948ea6f87dab15f9e8e00e7854b00 |
 | PR20 | Make document-driven verification reject malformed input | P1 | work | M | PR19 | Complete | 4afc0e34a194b79e5ea6a100b808d1e4cdc86638 |

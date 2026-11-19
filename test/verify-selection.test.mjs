@@ -171,3 +171,19 @@ test('selection is deterministic and the module reads nothing', async () => {
   const source = await readFile(new URL('../src/verify/select.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });
+
+test('a field of the wrong type is refused, not read as an empty list (PR20)', async () => {
+  const { verifyCommand } = await import('../src/commands/verify.mjs');
+  const { mkdtemp, writeFile } = await import('node:fs/promises');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const dir = await mkdtemp(join(tmpdir(), 'simt-verify-input-'));
+  const doc = (value) => {
+    const path = join(dir, `${Math.random().toString(36).slice(2)}.json`);
+    return writeFile(path, JSON.stringify(value)).then(() => path);
+  };
+  // A string `changed` used to select nothing and return an OK no-op.
+  assert.equal(await verifyCommand('select', [], { input: await doc({ changed: 'src/a.mjs' }) }), 2);
+  assert.equal(await verifyCommand('select', [], { input: await doc({ changed: ['src/a.mjs'] }) }), 0);
+  assert.equal(await verifyCommand('plan', [], { input: await doc({ obligations: 'all' }) }), 2);
+});

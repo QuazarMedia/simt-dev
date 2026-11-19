@@ -65,7 +65,7 @@ simt verify status --changed --scope handbook
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | WK01 | Define local configuration, scopes and inspection | First use | config | M | — | Complete | e11b9b735c9772b1df050ffb12002ec5aae01a30 · test: node --test test/work-config.test.mjs test/work-artifacts.test.mjs test/work-facets.test.mjs test/work-capabilities.test.mjs |
 | WK02 | Add previewable one-scope setup | First use | setup | M | WK01 | Complete | 172ec660c181300cbd98c037fefd8cb794ea89e9 · test: node --test test/work-setup.test.mjs test/work-config.test.mjs test/work-doors.test.mjs test/work-capabilities.test.mjs test/work-facets.test.mjs test/work-artifacts.test.mjs |
-| WK03 | Build a scoped corpus from existing files | First use | corpus | L | WK01 | Queued | — |
+| WK03 | Build a scoped corpus from existing files | First use | corpus | L | WK01 | Complete | 14d6c59e733c53e11cfe0376a5d07e4d5cc2a7f2 · test: node --test test/work-corpus.test.mjs test/knowledge-sections.test.mjs test/work-index.test.mjs test/work-artifacts.test.mjs test/work-trust.test.mjs test/index.test.mjs |
 | WK04 | Reuse native metadata for claims and source lineage | First use | corpus | M | WK03 | Queued | — |
 | WK05 | Query the repository directly with citations and dates | First use | query | M | WK04 | Queued | — |
 | WK06 | Prove the first-session flow in two installed fixtures | First use | qualify | M | WK02, WK05 | Queued | — |

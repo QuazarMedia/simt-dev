@@ -39,9 +39,9 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR17 | Generate reproducible CI with an explicit provider contract | P1 | ci | M | PR12, PR16 | Queued | — |
 | PR18 | Repair tracker concurrency and slice completion recovery | P1 | tracker | M | PR07, PR04 | In progress | — |
 | PR19 | Validate knowledge with the same readers used by its commands | P1 | knowledge | M | PR02 | Complete | 7ebf20fdb69948ea6f87dab15f9e8e00e7854b00 |
-| PR20 | Make document-driven verification reject malformed input | P1 | work | M | PR19 | Queued | — |
+| PR20 | Make document-driven verification reject malformed input | P1 | work | M | PR19 | Complete | 4afc0e34a194b79e5ea6a100b808d1e4cdc86638 |
 | PR21 | Separate MCP reads from cache writes and process execution | P1 | transport | M | PR09, PR02 | Complete | 20722ee329feb60bd4cd6d4ec4d6622b30727a3e |
-| PR22 | Bound MCP framing and make response contracts consistent | P1 | transport | M | PR21 | Queued | — |
+| PR22 | Bound MCP framing and make response contracts consistent | P1 | transport | M | PR21 | Complete | d092ff35c5db4d1419b873617663a98a853acc7a |
 | PR23 | Make index provenance and rebuild semantics coherent | P1 | retrieval | M | PR10, PR09 | In progress | — |
 | PR24 | Fix registry portability, skill identity, and workspace caching | P1 | retrieval | M | PR23 | Queued | — |
 | PR25 | Enforce local model data and transport boundaries | P1 | retrieval | M | PR24, PR21 | Queued | — |
@@ -57,7 +57,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR35 | Make CLI, API, MCP, and generated references agree | P1 | surface | M | PR32, PR22, PR19 | Queued | — |
 | PR36 | Make the isolated test and release qualification gate reproducible | P1 | ci | M | PR17, PR28, PR32, PR33 | Queued | — |
 | PR37 | Qualify production readiness from installed consumer fixtures | P1 | release | M | PR18, PR25, PR26, PR28, PR34, PR35, PR36, PR38 | Queued | — |
-| PR38 | Bind an inline agent-hook override to its invocation | P0 | agenthooks | M | — | Queued | — |
+| PR38 | Bind an inline agent-hook override to its invocation | P0 | agenthooks | M | — | Complete | b65d36fc54897c0b576c85dc02bf6a90f857befb |
 
 Worktree boundaries follow the files, including shared tests and generated outputs. Use the tracker dependencies for sequencing and check planned paths before parallel work. Serialize overlapping edits to the command spec, projection, dispatcher, or shared fixtures. Keep a focused regression and rendered consumer acceptance with the slice that changes behavior. Use the full document name `0005-production-readiness.md` when archiving because the separate knowledge plan also uses 0005.
 

@@ -27,7 +27,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR05 | Resolve gate cwd and runnable status through one contract | P1 | hooks | M | PR04 | Complete | 918e1795997806ab2dd70503a5038dd5cce34bb1 |
 | PR06 | Restore Python focused test execution | P1 | runners | S | — | Complete | 3bd310f4d704662535e0d9066d8534f163e50215 |
 | PR07 | Make multi-file writes recoverable and race-aware | P0 | adoption | L | PR01, PR02 | Complete | 0fb73c354fa83d4dba1fcf0cb084174ab2511163 |
-| PR08 | Restore every journaled effect and report accurate undo outcomes | P1 | adoption | M | PR07 | Queued | — |
+| PR08 | Restore every journaled effect and report accurate undo outcomes | P1 | adoption | M | PR07 | Complete | d8e02dd727d542283b350f4ae25508004e5e3695 |
 | PR09 | Establish canonical repository context and config precedence | P1 | config | M | PR02 | Queued | — |
 | PR10 | Validate and apply repository-local ecosystem records | P1 | ecosystem | M | PR09 | Queued | — |
 | PR11 | Make focused runners configurable across nested and mixed stacks | P1 | runners | M | PR06, PR10 | Queued | — |

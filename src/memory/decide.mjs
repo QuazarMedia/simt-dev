@@ -267,18 +267,22 @@ function prosePartialSupersessions(body) {
     const adr = /^ADR-/i.test(ref) ? ref.toUpperCase() : lastNamed;
     if (/^ADR-/i.test(ref)) lastNamed = ref.toUpperCase();
     const rulings = list ? list.split(/\D+/).filter(Boolean).map(Number) : [null];
-    for (const ruling of rulings) claims.push({ adr, ruling, kind: normaliseKind(kind), raw });
+    // `passive` is the direction, and the only thing a reader of another file can
+    // satisfy: this record's ruling is the one replaced, and the declaration lives on
+    // the record named. The active forms below are this record's own claim, so only
+    // its own frontmatter can carry them.
+    for (const ruling of rulings) claims.push({ adr, ruling, kind: normaliseKind(kind), passive: true, raw });
   }
   for (const m of clean.matchAll(ACTIVE_PARTIAL_AFTER_RE)) {
     const [raw, verb, adrRaw, list] = m;
     for (const ruling of list.split(/\D+/).filter(Boolean).map(Number)) {
-      claims.push({ adr: adrRaw.toUpperCase(), ruling, kind: normaliseKind(verb), raw });
+      claims.push({ adr: adrRaw.toUpperCase(), ruling, kind: normaliseKind(verb), passive: false, raw });
     }
   }
   for (const m of clean.matchAll(ACTIVE_PARTIAL_BEFORE_RE)) {
     const [raw, verb, list, adrRaw] = m;
     for (const ruling of list.split(/\D+/).filter(Boolean).map(Number)) {
-      claims.push({ adr: adrRaw.toUpperCase(), ruling, kind: normaliseKind(verb), raw });
+      claims.push({ adr: adrRaw.toUpperCase(), ruling, kind: normaliseKind(verb), passive: false, raw });
     }
   }
   return claims;
@@ -292,7 +296,7 @@ function prosePartialSupersessions(body) {
  * rewrite without rewriting history. The number lives in the repository's
  * config (`decisions.historicalCutoff`, resolved by the caller), never in code.
  */
-export function lintDecision(text, { file = 'ADR-000.md', historicalCutoff = 0, declaredElsewhere = null } = {}) {
+export function lintDecision(text, { file = 'ADR-000.md', historicalCutoff = 0, declarationsByAdr = null } = {}) {
   const fileMatch = file !== 'ADR-000.md' ? /^(ADR-\d{3,})/i.exec(file) : null;
   const headMatch = /^#\s+(ADR-\d{3,})\b/m.exec(String(text ?? ''));
   const id = (fileMatch?.[1] ?? headMatch?.[1] ?? /^(ADR-\d{3,})/i.exec(file)?.[1] ?? '').toUpperCase() || null;
@@ -313,22 +317,19 @@ export function lintDecision(text, { file = 'ADR-000.md', historicalCutoff = 0, 
   }
 
   for (const claim of prosePartialSupersessions(body)) {
-    // A partial supersession is stated once, on the record that rules. The superseded
-    // record may say so in prose — "ruling 1 superseded by ADR-197" — and that sentence
-    // named the ruling the newer record replaces, not a claim the older record makes
-    // about itself. Reading only this file's frontmatter demanded the older record
-    // declare `simt-supersedes: [newer]`, which says the opposite of what happened.
-    // The linter is given the directory's declarations by its caller; a lone document
-    // keeps the old, local answer.
+    // A partial supersession is stated once, on the record that rules. Passive prose
+    // ("ruling 1 superseded by ADR-197") names the record that replaces this one's
+    // ruling, so that record's frontmatter is the evidence; reading only this file's
+    // demanded the opposite declaration here. Active prose ("supersedes ADR-023 ruling
+    // 2") is this record's own claim, and no other record's declaration can stand in
+    // for it — accepting one would pass a pair that contradicts the sentence.
+    const declaredByNamed = claim.passive
+      ? (declarationsByAdr?.get(claim.adr) ?? []).some((e) => e.adr === id && e.ruling === claim.ruling)
+      : false;
     const covered =
       fm.supersedes.some(
         (e) => e.ruling === claim.ruling && (claim.adr === null || e.adr === claim.adr || (id !== null && e.adr === id)),
-      ) ||
-      // Passive prose ("ruling 1 superseded by ADR-197") is a statement about this
-      // record's ruling, and the declaration it refers to lives on ADR-197. Active
-      // prose ("supersedes ADR-023 ruling 2") is this record's own claim, and only its
-      // own frontmatter can carry it.
-      (claim.adr !== null && id !== null && declaredElsewhere !== null && declaredElsewhere(claim.adr, id, claim.ruling));
+      ) || declaredByNamed;
     if (!covered) {
       const targetAdr = claim.adr ?? id ?? 'ADR-NNN';
       const rulingLabel = claim.ruling !== null ? `ruling ${claim.ruling}` : 'unnumbered ruling';
@@ -337,7 +338,10 @@ export function lintDecision(text, { file = 'ADR-000.md', historicalCutoff = 0, 
         id,
         status: 'prose-partial-supersession',
         detail: `partial supersession (${targetAdr} ${rulingLabel}) is stated only in prose ("${claim.raw}")`,
-        remedy: `declare simt-supersedes: [{ adr: "${targetAdr}", ruling: ${claim.ruling ?? 1} }] in the ADR frontmatter`,
+        // Where the declaration goes is half the answer, and it differs by direction:
+        // a passive sentence is satisfied by the named record, an active one only by
+        // this record's own frontmatter.
+        remedy: `declare simt-supersedes: [{ adr: "${claim.passive ? (id ?? 'ADR-NNN') : targetAdr}", ruling: ${claim.ruling ?? 1} }] in ${claim.passive ? `${targetAdr}'s` : 'this ADR\'s'} frontmatter`,
       });
     }
   }
@@ -361,17 +365,17 @@ export async function lintDecisions(decisionsDir, { historicalCutoff = 0 } = {})
   // a prose reference is satisfied by the named record actually declaring that it
   // replaces this record's ruling.
   const texts = new Map();
-  const declared = new Map();
+  // Keyed by the record that declares, which is the record a passive sentence names:
+  // a third record declaring the same pair is not evidence for that sentence.
+  const declarationsByAdr = new Map();
   for (const file of names) {
     const text = await readFile(join(decisionsDir, file), 'utf8').catch(() => '');
     texts.set(file, text);
     const id = /^(ADR-\d{3,})/i.exec(file)?.[1]?.toUpperCase();
     if (id === undefined) continue;
     const entries = parseDecisionFrontmatter(text).supersedes.filter((e) => e.adr !== null);
-    if (entries.length > 0) declared.set(id, entries);
+    if (entries.length > 0) declarationsByAdr.set(id, entries);
   }
-  const declaredElsewhere = (superseder, superseded, ruling) =>
-    (declared.get(superseder) ?? []).some((e) => e.adr === superseded && e.ruling === ruling);
   for (const file of names) {
     const id = /^(ADR-\d{3,})/i.exec(file)?.[1]?.toUpperCase() ?? null;
     if (id !== null) {
@@ -388,7 +392,7 @@ export async function lintDecisions(decisionsDir, { historicalCutoff = 0 } = {})
       seen.set(id, file);
     }
     const text = texts.get(file) ?? '';
-    findings.push(...lintDecision(text, { file, historicalCutoff, declaredElsewhere }).findings);
+    findings.push(...lintDecision(text, { file, historicalCutoff, declarationsByAdr }).findings);
   }
   return { ok: findings.length === 0, findings };
 }

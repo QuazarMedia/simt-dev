@@ -339,3 +339,24 @@ test('a passive prose supersession is satisfied by the record it names declaring
   assert.equal(bare.ok, false);
   assert.equal(bare.findings[0].status, 'prose-partial-supersession');
 });
+
+test('an active prose claim is not covered by the record it names declaring the reverse', async (t) => {
+  // "supersedes ADR-023 ruling 2" is this record's claim; ADR-023 saying it supersedes
+  // this record is the opposite relation, and accepting it would pass a cycle as proof.
+  const root = await mkdtemp(join(tmpdir(), 'simt-decide-active-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const dir = join(root, 'docs', 'decisions');
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, 'ADR-100-active.md'),
+    '---\nsimt-affects: []\nsimt-supersedes: []\n---\n# ADR-100 — active\n\nStatus: accepted · supersedes ADR-023 ruling 2\n',
+  );
+  await writeFile(
+    join(dir, 'ADR-023-other.md'),
+    '---\nsimt-affects: []\nsimt-supersedes: [{ adr: "ADR-100", ruling: 2 }]\n---\n# ADR-023 — other\n\nStatus: accepted\n',
+  );
+  const res = await lintDecisions(dir);
+  assert.equal(res.ok, false);
+  assert.equal(res.findings[0].status, 'prose-partial-supersession');
+  assert.match(res.findings[0].detail, /ADR-023 ruling 2/);
+});

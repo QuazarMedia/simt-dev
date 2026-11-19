@@ -28,6 +28,7 @@ import {
   isOwnRepo,
   nodeFloor,
   ACTIONS,
+  BUN_FALLBACK_VERSION,
   WORKFLOW_FILE,
   WORKFLOWS_DIR,
 } from '../src/ci/workflow.mjs';
@@ -826,13 +827,19 @@ test('CI provisions the manager its install step uses (PR17)', () => {
   assert.match(pnpm, /corepack enable/, 'pnpm must be activated on the runner');
   const pinned = renderWorkflow({ manager: 'pnpm', packageManager: 'pnpm@9.1.0+sha512.deadbeef' });
   assert.match(pinned, /corepack prepare pnpm@9\.1\.0 --activate/, 'the declared pin wins over the default');
-  // Third-party actions are commit-pinned like checkout and setup-node: a floating tag
-  // runs whatever its author pushed that morning, in a workflow this repository wrote.
+  // The bootstrap step itself uses the pinned form; the workflow-wide pin test below
+  // enforces that shape everywhere, so this asserts the step is wired to the table.
   const bun = renderWorkflow({ manager: 'bun' });
-  assert.match(bun, /uses: oven-sh\/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2\.2\.0/);
-  assert.doesNotMatch(bun, /oven-sh\/setup-bun@v2\b/, 'the bootstrap still uses a floating tag');
-  assert.doesNotMatch(bun, /bun-version: latest/, 'the fallback is a version, not a moving label');
-  assert.match(bun, /bun-version: 1\.4\.4/, 'the fallback names the release this tool tested');
+  assert.ok(
+    bun.includes(`uses: ${ACTIONS.setupBun.repo}@${ACTIONS.setupBun.commit} # ${ACTIONS.setupBun.release}`),
+    'the bun step does not use the pinned action',
+  );
+  // From the constant, not a second copy of the number: bumping the fallback is then a
+  // one-line change, and this test still names what a reader will see.
+  assert.ok(bun.includes(`bun-version: ${BUN_FALLBACK_VERSION}`), 'the fallback is not the stated version');
+  assert.match(BUN_FALLBACK_VERSION, /^\d+\.\d+\.\d+$/, 'the fallback must be a version, not a moving label');
+  const pinnedBun = renderWorkflow({ manager: 'bun', packageManager: 'bun@1.2.0' });
+  assert.ok(pinnedBun.includes('bun-version: 1.2.0'), 'a declared pin must win over the fallback');
   const npm = renderWorkflow();
   assert.doesNotMatch(npm, /corepack|setup-bun/, 'npm ships with node; nothing to bootstrap');
 });
@@ -882,7 +889,7 @@ test('the install block is indented past its key, so YAML keeps it a block scala
   assert.match(lines[runKey + 1], /^ {10}[^ ]/, 'the install script body is not indented');
 });
 
-test('every uses: line in the generated workflow is a commit pin', () => {
+test('every uses: line in a generated workflow is a commit pin', () => {
   // A floating tag runs whatever its author pushed that morning, in a file this
   // repository wrote and a reviewer approved. Rendering every shape the consumer
   // template has is what catches a new bootstrap step, which is how the bun action

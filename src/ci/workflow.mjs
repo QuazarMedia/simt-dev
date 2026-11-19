@@ -126,8 +126,9 @@ function header(own) {
  * published under the name today, so the bytes executing a gate are not the bytes the
  * adopting repository reviewed, and a change to them arrives as a force-push or a
  * compromised token rather than as a diff. The pin is the commit; the comment beside it
- * is the release a reader recognises, and Dependabot's `github-actions` ecosystem
- * rewrites the pair together - which is why the pin needs no maintenance here.
+ * is the release a reader recognises. The two actions this repository's own workflows
+ * run are updated by Dependabot's `github-actions` ecosystem, which rewrites the pair
+ * together, so those pins need no maintenance here.
  *
  * The major version moves by review, not by updater. `checkout` stayed on v4 while v7
  * carried breaking changes a gate should not absorb by re-running Dependabot; it moved
@@ -146,14 +147,56 @@ export const ACTIONS = {
 };
 
 /**
- * The bun version a repo that declares none gets.
+ * The bun version a repository that declares none gets.
  *
  * `latest` is not a version: a generated workflow that names it changes what CI runs
  * without a commit, and the failure it produces is a mystery on a Tuesday. This is the
- * release this tool rendered and tested against, the same way the node floor is the
- * floor this package declares; a repository's own `packageManager` pin overrides it.
+ * release this template was rendered and tested against — the line under `bun-version:`
+ * in a generated workflow, not a claim about bun's best version. It is bumped by
+ * changing this one constant (and the release it names) when a consumer has a reason to
+ * move, exactly like a pin in `ACTIONS`; `BUN_FALLBACK_VERSION` is exported so the test
+ * asserts against this value instead of restating a second copy of the number. A
+ * repository's own `packageManager` pin always wins over it.
  */
 export const BUN_FALLBACK_VERSION = '1.4.4';
+
+/**
+ * The steps that provision the package manager the install step will use.
+ *
+ * `npm` ships with Node and needs none. pnpm and yarn come from corepack, which ships
+ * with Node; bun is a runtime of its own and needs its setup action. Without these the
+ * install step fails on the runner with "command not found", and the failure looks like
+ * the repository's own.
+ *
+ * @param {object|null} nodeInstall the manager record from `installCommands`
+ * @param {string|null} nodeManager
+ * @param {string|null} declared the version from `packageManager`, when it names this manager
+ * @returns {string[]} step lines, or an empty list
+ */
+function bootstrapSteps(nodeInstall, nodeManager, declared) {
+  if (nodeInstall?.bootstrap === 'corepack') {
+    return [
+      '      - name: enable the declared package manager',
+      '        run: |',
+      indent(
+        `set -eu
+command -v corepack >/dev/null 2>&1 || { echo "REMEDY use a Node image that ships corepack, or install ${nodeManager ?? 'the manager'} before this step" >&2; exit 1; }
+corepack enable${declared === null ? '' : `\ncorepack prepare ${nodeManager}@${declared} --activate`}`,
+        10,
+      ),
+    ];
+  }
+  if (nodeInstall?.bootstrap === 'setup-bun') {
+    return [
+      '      - name: install bun',
+      '        # bun is its own runtime and is not on the runner image.',
+      uses('setupBun'),
+      '        with:',
+      `          bun-version: ${declared ?? BUN_FALLBACK_VERSION}`,
+    ];
+  }
+  return [];
+}
 
 /**
  * One `- uses:` line, pinned.
@@ -354,29 +397,7 @@ export function renderWorkflow({ own = false, npm = true, manager = null, versio
     if (!String(packageManager).startsWith(prefix)) return null;
     return String(packageManager).slice(prefix.length).split('+')[0];
   })();
-  // CI must provision the manager it installs with. `npm` ships with Node; pnpm and yarn
-  // come from corepack; bun is a runtime of its own. Without this the install step fails
-  // on the runner with "command not found" and the failure looks like the repository's.
-  const bootstrap = nodeInstall?.bootstrap === 'corepack'
-    ? [
-        '      - name: enable the declared package manager',
-        '        run: |',
-        indent(
-          `set -eu
-command -v corepack >/dev/null 2>&1 || { echo "REMEDY use a Node image that ships corepack, or install ${nodeManager ?? 'the manager'} before this step" >&2; exit 1; }
-corepack enable${declared === null ? '' : `\ncorepack prepare ${nodeManager}@${declared} --activate`}`,
-          10,
-        ),
-      ]
-    : nodeInstall?.bootstrap === 'setup-bun'
-      ? [
-          '      - name: install bun',
-          '        # bun is its own runtime and is not on the runner image.',
-          uses('setupBun'),
-          '        with:',
-          `          bun-version: ${declared ?? BUN_FALLBACK_VERSION}`,
-        ]
-      : [];
+  const bootstrap = bootstrapSteps(nodeInstall, nodeManager, declared);
   const install = nodeInstall
     ? [
         '      - name: install dependencies',

@@ -42,13 +42,13 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR20 | Make document-driven verification reject malformed input | P1 | work | M | PR19 | Complete | 4afc0e34a194b79e5ea6a100b808d1e4cdc86638 |
 | PR21 | Separate MCP reads from cache writes and process execution | P1 | transport | M | PR09, PR02 | Complete | 20722ee329feb60bd4cd6d4ec4d6622b30727a3e |
 | PR22 | Bound MCP framing and make response contracts consistent | P1 | transport | M | PR21 | Complete | d092ff35c5db4d1419b873617663a98a853acc7a |
-| PR23 | Make index provenance and rebuild semantics coherent | P1 | retrieval | M | PR10, PR09 | In progress | — |
+| PR23 | Make index provenance and rebuild semantics coherent | P1 | retrieval | M | PR10, PR09 | Queued | — |
 | PR24 | Fix registry portability, skill identity, and workspace caching | P1 | retrieval | M | PR23 | Queued | — |
 | PR25 | Enforce local model data and transport boundaries | P1 | retrieval | M | PR24, PR21 | Queued | — |
 | PR26 | Audit filesystem scope and executable configuration ownership | P1 | trust | M | PR08, PR05, PR21, PR24 | Queued | — |
 | PR27 | Resolve each release once and verify cross-channel promotion | P1 | release | M | PR17 | Queued | — |
 | PR28 | Qualify installed packages and state platform prerequisites | P1 | release | M | PR27, PR11 | Queued | — |
-| PR29 | Publish one supported surface and deprecation map | P2 | surface | M | — | In progress | — |
+| PR29 | Publish one supported surface and deprecation map | P2 | surface | M | — | Queued | — |
 | PR30 | Retire or explicitly retain experimental packs | P2 | surface | M | PR29, PR16 | Queued | — |
 | PR31 | Move bench and synthetic research outside the stable core | P2 | surface | L | PR30, PR20, PR14 | Queued | — |
 | PR32 | Verify reachability, remove dead bindings, and narrow exports safely | P2 | surface | M | PR31, PR22 | Queued | — |

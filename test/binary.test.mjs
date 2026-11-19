@@ -26,6 +26,7 @@ import test from 'node:test';
 
 import { renderWorkflow } from '../src/ci/workflow.mjs';
 import { renderShim } from '../src/hooks/shim.mjs';
+import { BIN_ENV } from '../src/name.mjs';
 import {
   TARGETS,
   LOCAL_BIN,
@@ -342,10 +343,17 @@ function hostTarget() {
   return arch ? `${os}-${arch}` : null;
 }
 
-/** A PATH that contains no node: the current one, minus any directory that has one. */
+/**
+ * A PATH that contains no node and no simt: the current one, minus any directory
+ * that has either. Both matter to the locator tests: node is what a script-style
+ * dispatcher runs through, and a `simt` on PATH is the locator's last resolution
+ * step, so a global install would satisfy a refusal the test is asserting.
+ */
 function pathWithoutNode() {
   const dirs = (process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
-  return dirs.filter((dir) => !existsSync(path.join(dir, 'node'))).join(path.delimiter);
+  return dirs
+    .filter((dir) => !existsSync(path.join(dir, 'node')) && !existsSync(path.join(dir, 'simt')))
+    .join(path.delimiter);
 }
 
 async function networkAvailable() {
@@ -428,6 +436,10 @@ test('binary: the hook shim hands over to the binary the repository downloaded, 
     await chmod(shim, 0o755);
 
     const env = { ...process.env, PATH: pathWithoutNode() };
+    // The locator ranks the explicit override above .simt/bin; a SIMT_DEV_BIN
+    // inherited from the author's shell would steal the resolution this test
+    // asserts, so the test owns its environment end to end.
+    delete env[BIN_ENV];
     const run = spawnSync('/bin/sh', [shim], { cwd: fixture, env, encoding: 'utf8' });
     assert.equal(run.status, 0, `the shim did not hand over:\n${run.stderr}`);
     const prefix = 'stub hooks run pre-commit --root ';

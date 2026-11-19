@@ -34,7 +34,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR12 | Resolve polyglot gates without command collisions | P1 | ecosystem | M | PR10, PR05 | Complete | 7521ce3c16752517d198d573efb0ac76b371c719 |
 | PR13 | Report test-selection gaps, deletions, and actual test outcomes | P1 | runners | M | PR11 | Complete | c7a6be00cc761963c427ca4b9d22533c3552be65 |
 | PR14 | Share bounded gate execution and report cleanup | P1 | runners | M | PR13, PR04 | Complete | 547b7c3f86488400a18ba568760a5ec50e25c546 |
-| PR15 | Make projected rules and adoption reports actionable in consumers | P1 | projection | M | PR08, PR12 | Queued | — |
+| PR15 | Make projected rules and adoption reports actionable in consumers | P1 | projection | M | PR08, PR12 | Complete | 324f5757eca06954ad63aaa7c9158cf03d043568 |
 | PR16 | Make frozen projection and upgrades agree on the applied state | P1 | projection | M | PR15 | Queued | — |
 | PR17 | Generate reproducible CI with an explicit provider contract | P1 | ci | M | PR12, PR16 | Queued | — |
 | PR18 | Repair tracker concurrency and slice completion recovery | P1 | tracker | M | PR07, PR04 | Complete | 75237c386f1292b04885a45df601f1302b50987a |

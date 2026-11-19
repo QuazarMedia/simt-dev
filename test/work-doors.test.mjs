@@ -71,8 +71,8 @@ test('work inspect ends in one next step, and reports the validator it could not
   const unconfigured = json(dir, ['work', 'inspect']);
   assert.equal(unconfigured.work.declared, false);
   assert.match(unconfigured.next.step, /declare one scope/);
-  assert.match(unconfigured.next.remedy, /"work"/);
-  assert.match(unconfigured.next.remedy, /simt work inspect/, 'the next step must name a command this build runs');
+  assert.match(unconfigured.next.remedy, /simt work setup/);
+  assert.match(unconfigured.next.remedy, /--scope handbook --path handbook/, 'the step names the directory the sample found, not a placeholder');
 
   // A declaration with no scope is the same wall as none at all, and gets the same step.
   writeFileSync(join(dir, 'simt.json'), JSON.stringify({ work: { version: 2 } }));

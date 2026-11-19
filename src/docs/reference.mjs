@@ -64,6 +64,7 @@ const MODULES = [
     name: 'Work & Plans',
     paths: [
       'work inspect',
+      'work setup',
       'work schedule',
       'work handoff',
       'work resume',

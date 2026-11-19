@@ -52,6 +52,10 @@ export const SPEC = [
   { path: 'brief', usage: '"<task>"', mcp: { name: 'brief', flags: ['budget', 'paths', 'task'] }, summary: 'the packet for a task: rules, skills and the files it names, within a budget', flags: ["budget","explain","paths","proof","task"], },
   { path: 'check', mcp: { name: 'check', flags: [] }, summary: 'report stale or missing generated regions and every check finding', flags: ["check","diff","dry-run","frozen","surfaces"], },
   { path: 'work inspect', mcp: { name: 'work_inspect', flags: [] }, summary: "what this repository's work consists of, and which validations are actually available", flags: [], },
+  // The write the read above proposes: one scope, named explicitly, previewed before it
+  // lands. It refuses an id or path it did not write, so a re-run is a no-op rather than a
+  // second opinion about the same declaration.
+  { path: 'work setup', usage: '--scope <id> --path <dir> [--kind <kind>] [--validator "<command>"]', summary: 'declare one work scope in the manifest, previewed before it writes', writes: 'repo', flags: ["yes","diff","scope","path","kind","validator"], },
   { path: 'workspace compare', mcp: { name: 'compare', flags: [] }, summary: 'the adoption and drift matrix across every sibling repository', aliases: ['compare'], flags: ["learn","concurrency"], },
   { path: 'completions', usage: '<bash|zsh|fish>', summary: 'print a bash, zsh or fish completion script generated from this spec', flags: [], },
   { path: 'decide lint', summary: 'check every decision record for the structure a supersession needs', flags: ["check","diff"], },

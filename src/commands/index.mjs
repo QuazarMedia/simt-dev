@@ -83,6 +83,7 @@ export const IMPLEMENTED = {
     return (args, flags) => knowledgeCommand('import', args, flags);
   },
   'work inspect': async () => (await import('./work.mjs')).workInspectCommand,
+  'work setup': async () => (await import('./work.mjs')).workSetupCommand,
   'action review': async () => {
     const { wireCommand } = await import('./wires.mjs');
     return (args, flags) => wireCommand('action review', args, flags);

@@ -15,6 +15,8 @@ const COMMANDS = `${CLI} init [path]            adopt or scaffold a repo into th
 
 ${CLI} work inspect           what this repo's work is: artifacts, activities,
                            and which validations are declared vs available
+${CLI} work setup --scope <id> --path <dir>  declare one work scope in the manifest
+                           (--kind <kind>, --validator "<command>"); previewed, --yes writes
 ${CLI} knowledge why <id>     what a claim derives from, what depends on it,
                            and where another claim contradicts it
                            (reads --claims <file>)

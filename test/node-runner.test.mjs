@@ -159,7 +159,13 @@ test('the workflow installs with the repo manager', async () => {
   assert.match(pnpm, /pnpm add -D/, 'the remedy names pnpm');
   assert.ok(!/npm ci/.test(pnpm), 'no npm install step leaks into a pnpm workflow');
   const npm = renderWorkflow({ version: '0.6.2' });
-  assert.match(npm, /npm ci \|\| npm install/, 'the npm default keeps its bytes');
+  // The frozen install runs when the lockfile is there, and a stale lock fails the job:
+  // `npm ci || npm install` reported green after repairing a lock the repo never
+  // committed to (review 0005 PR17).
+  assert.match(npm, /if \[ -f package-lock\.json \]; then/, 'the lockfile decides the install');
+  assert.match(npm, /^\s*npm ci$/m, 'a present lockfile installs frozen');
+  assert.doesNotMatch(npm, /npm ci \|\|/, 'no unlocked fallback hides a stale lock');
+  assert.match(npm, /^\s*npm install$/m, 'a repo with no lockfile still installs');
   const binary = renderWorkflow({ npm: false, version: '0.6.2' });
   assert.match(binary, /install the pinned gate binary/, 'the non-Node branch keeps its bytes');
 });

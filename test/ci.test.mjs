@@ -174,7 +174,10 @@ test('the workflow is shell a POSIX sh will accept, running the gate it says it 
   // scalar's content is indented past its key, which is what YAML actually requires.
   const yaml = renderWorkflow();
   const lines = yaml.split('\n');
-  const runKey = lines.findIndex((l) => /^ {8}run: \|$/.test(l));
+  // The last block scalar is the gate step. The install step became one too (the frozen
+  // install is guarded by a lockfile test), and taking the first one started linting the
+  // installer instead of the command the file exists to run.
+  const runKey = lines.findLastIndex((l) => /^ {8}run: \|$/.test(l));
   assert.ok(runKey > 0, 'the check step must use a block scalar');
   const body = [];
   for (const line of lines.slice(runKey + 1)) {
@@ -779,3 +782,59 @@ test('ci refuses a repository that adopted simt-dev, and names the command that 
 // mine and those are yours". ADR-025's region mechanism has nothing to merge here.
 // Everything below is about that file being correct on its own terms.
 
+
+test('CI provisions the manager its install step uses (PR17)', () => {
+  const pnpm = renderWorkflow({ manager: 'pnpm' });
+  assert.match(pnpm, /corepack enable/, 'pnpm must be activated on the runner');
+  const pinned = renderWorkflow({ manager: 'pnpm', packageManager: 'pnpm@9.1.0+sha512.deadbeef' });
+  assert.match(pinned, /corepack prepare pnpm@9\.1\.0 --activate/, 'the declared pin wins over the default');
+  const bun = renderWorkflow({ manager: 'bun' });
+  assert.match(bun, /oven-sh\/setup-bun@v2/, 'bun is not on the runner image');
+  const npm = renderWorkflow();
+  assert.doesNotMatch(npm, /corepack|setup-bun/, 'npm ships with node; nothing to bootstrap');
+});
+
+test('init --ci none leaves CI alone and names the mode', async () => {
+  const root = await actionsRepo();
+  const { stdout, stderr } = await exec(process.execPath, [BIN, 'init', '--yes', '--ci', 'none', '--surfaces', 'cursor'], {
+    cwd: root,
+    env: { ...process.env, NO_COLOR: '1' },
+  });
+  await assert.rejects(readFile(join(root, WORKFLOW_FILE), 'utf8'), 'a workflow was written under --ci none');
+  assert.match(`${stdout}${stderr}`, /--ci none/);
+  assert.equal(await readFile(join(root, WORKFLOWS_DIR, 'build.yml'), 'utf8'), 'name: build\n', 'the repo\'s own workflow moved');
+});
+
+test('init --ci github writes the workflow where Actions is not configured', async () => {
+  const root = await plainRepo();
+  await exec(process.execPath, [BIN, 'init', '--yes', '--ci', 'github', '--surfaces', 'cursor'], {
+    cwd: root,
+    env: { ...process.env, NO_COLOR: '1' },
+  });
+  const written = await readFile(join(root, WORKFLOW_FILE), 'utf8');
+  assert.match(written, /check --root "\$ROOT"/, 'the opt-in wrote something other than the gate');
+});
+
+test('init --ci external writes nothing and prints the contract the provider runs', async () => {
+  const root = await actionsRepo();
+  const { stdout, stderr } = await exec(process.execPath, [BIN, 'init', '--yes', '--ci', 'external', '--surfaces', 'cursor'], {
+    cwd: root,
+    env: { ...process.env, NO_COLOR: '1' },
+  });
+  await assert.rejects(readFile(join(root, WORKFLOW_FILE), 'utf8'), 'a workflow was written under --ci external');
+  const text = `${stdout}${stderr}`;
+  assert.match(text, /install: npm ci/, 'the contract names the install');
+  assert.match(text, /gate:\s+simt check/, 'the contract names the gate');
+});
+
+test('the install block is indented past its key, so YAML keeps it a block scalar', () => {
+  // A body flush with `run:` is not a block scalar to YAML: it is a syntax error found
+  // on the adopting repo's first pull request, in public.
+  const yaml = renderWorkflow();
+  const lines = yaml.split('\n');
+  const at = lines.indexOf('      - name: install dependencies');
+  assert.ok(at > 0);
+  const runKey = lines.indexOf('        run: |', at);
+  assert.ok(runKey > at, 'the install step must use a block scalar');
+  assert.match(lines[runKey + 1], /^ {10}[^ ]/, 'the install script body is not indented');
+});

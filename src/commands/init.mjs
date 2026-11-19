@@ -28,7 +28,7 @@ import { MANIFEST, buildManifest, manifestPath, manifestText, readManifest, writ
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { readHooksState } from '../compare/hooksstate.mjs';
-import { planWorkflow, renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
+import { ciContract, planWorkflow, renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
 import { planDependabot, renderDependabot } from '../ci/dependabot.mjs';
 import { planTsconfigBase } from '../tsconfig.mjs';
 import {
@@ -82,15 +82,24 @@ export async function initCommand(positional, flags) {
   // resolver as the card and the gates — lockfile first, `packageManager` next.
   // `manager` is the Node manager id or null (no package.json: binary channel).
   let manager = null;
+  // The repo's own pin (`pnpm@9.1.0`), kept for the runner that decides which manager
+  // and for CI, which can only install a manager it has provisioned.
+  let packageManagerDecl = null;
   if (npm) {
-    let packageManager = null;
     try {
       const pkg = JSON.parse(await readFile(join(root, 'package.json'), 'utf8'));
-      if (typeof pkg.packageManager === 'string') packageManager = pkg.packageManager;
+      if (typeof pkg.packageManager === 'string') packageManagerDecl = pkg.packageManager;
     } catch {
       // Unreadable here is reported by the manifest path; the default stays npm.
     }
-    manager = resolveNodeRunner({ facts: detected.facts, packageManager }).id;
+    manager = resolveNodeRunner({ facts: detected.facts, packageManager: packageManagerDecl }).id;
+  }
+  // Where CI comes from is a choice, not a guess: `auto` (the default) only attaches to a
+  // repository that already runs Actions, `github` writes the workflow there on explicit
+  // request, and `none`/`external` leave the file alone and say who owns the gate.
+  const ciMode = String(flags.ci ?? 'auto');
+  if (!['auto', 'github', 'none', 'external'].includes(ciMode)) {
+    return fail(`unknown --ci mode: ${ciMode}`, EXIT.USAGE, 'use --ci auto, --ci github, --ci none or --ci external');
   }
   const existing = await readManifest(root);
   const { manifest: current, exists, error } = existing;
@@ -196,6 +205,17 @@ export async function initCommand(positional, flags) {
   // in the plan is a file they approve by reading the diff afterwards, which is the
   // one review step this tool exists to make unnecessary.
   const ci = await planWorkflow(root);
+  if (ciMode === 'none' || ciMode === 'external') {
+    ci.action = 'skip';
+    ci.reason = ciMode === 'none'
+      ? 'CI generation is off for this run (--ci none)'
+      : 'this repository gates outside GitHub Actions (--ci external)';
+  } else if (ciMode === 'github' && ci.action === 'skip') {
+    // The explicit opt-in: the reader asked for the workflow, so the missing `.github`
+    // directory is not a reason to withhold it.
+    ci.action = 'create';
+    ci.reason = null;
+  }
   const dependabot = await planDependabot(root);
   const tsconfigBase = await planTsconfigBase(root);
   // The agent-hooks entry, absorbed into this run so the adoption enforces its own
@@ -267,7 +287,17 @@ export async function initCommand(positional, flags) {
     surfaceSource: projected.surfaceSource,
     pointers: pointerPlan.map((p) => ({ file: p.file, to: p.to, readers: p.readers, state: p.state })),
     pointersBlocked: pointerBlocked,
-    ci: { file: ci.file, action: ci.action, bytes: ci.bytes, own: ci.own, reason: ci.reason },
+    ci: {
+      file: ci.file,
+      action: ci.action,
+      bytes: ci.bytes,
+      own: ci.own,
+      reason: ci.reason,
+      mode: ciMode,
+      // Only the external channel needs the facts spelled out; the other modes own a
+      // file or write nothing, and a contract nobody asked for is noise in every payload.
+      ...(ciMode === 'external' ? { contract: ciContract({ npm, manager, version }) } : {}),
+    },
     identity: identityPlan,
     dependabot: {
       file: dependabot.file,
@@ -384,7 +414,7 @@ export async function initCommand(positional, flags) {
     if (isJson(flags)) {
       emitJson(payload);
     } else {
-      emit(render(payload, manifest, { npm, manager, version }));
+      emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl }));
       note('');
       note(
         `blocked  ${summary.conflicts} conflict${summary.conflicts === 1 ? '' : 's'}; nothing written`,
@@ -408,7 +438,7 @@ export async function initCommand(positional, flags) {
     if (isJson(flags)) {
       emitJson(payload);
     } else {
-      emit(render(payload, manifest, { npm, manager, version }));
+      emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl }));
       note('');
       note(`refused  ${agentHooks.refused.length} hooks config(s) could not be read; nothing written`);
     }
@@ -427,7 +457,7 @@ export async function initCommand(positional, flags) {
     payload.ok = false;
     payload.blockedBy = 'malformed-region';
     if (isJson(flags)) emitJson(payload);
-    else emit(render(payload, manifest, { npm, manager, version }));
+    else emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl }));
     return fail(
       `${malformed.length} target(s) have a malformed generated region (${malformed[0].file}: ${malformed[0].reason})`,
       EXIT.FAIL,
@@ -467,7 +497,7 @@ export async function initCommand(positional, flags) {
       diffs.push({
         path: payload.ci.file,
         before: await readBefore(join(root, payload.ci.file)),
-        after: renderWorkflow({ own: payload.ci.own, npm, manager, version }),
+        after: renderWorkflow({ own: payload.ci.own, npm, manager, version, packageManager: packageManagerDecl }),
       });
     }
     if (payload.dependabot.action === 'create') {
@@ -496,7 +526,7 @@ export async function initCommand(positional, flags) {
   if (isJson(flags)) {
     if (!apply) emitJson(payload);
   } else {
-    emit(render(payload, manifest, { npm, manager, version }));
+    emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl }));
     // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
   }
@@ -594,7 +624,7 @@ export async function initCommand(positional, flags) {
   // guaranteed to be misled.
   if (payload.ci.action === 'create') {
     await mkdir(dirname(join(root, payload.ci.file)), { recursive: true });
-    await journaledWriteFile(root, journal, join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own, npm, manager, version }));
+    await journaledWriteFile(root, journal, join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own, npm, manager, version, packageManager: packageManagerDecl }));
     note(`wrote    ${payload.ci.file} (create; yours to edit from here, simt-dev will not rewrite it)`);
   }
   if (payload.dependabot.action === 'create') {
@@ -747,6 +777,14 @@ export async function initCommand(positional, flags) {
         ? `hooks    installed and current: ${gates.join(', ')}`
         : `hooks    NOT ENFORCED yet - ${gates.join(', ')} ${verb} but no hook runs them. Install with: ${CLI} hooks install --root ${root} --yes`,
     );
+  }
+  if (ciMode === 'external') {
+    const contract = ciContract({ npm, manager, version });
+    note('');
+    note(`ci       this repository gates outside GitHub Actions; no workflow is written. A provider runs:`);
+    note(`         ${contract.channel === 'node' ? `node ${contract.node}, with ${contract.manager} bootstrapped via ${contract.bootstrap ?? 'the image'}` : 'the release binary, checksum-verified'}`);
+    note(`         install: ${contract.install}${contract.lockfiles?.length ? `  (only when ${contract.lockfiles.join(' or ')} exists; otherwise ${contract.withoutLockfile})` : ''}`);
+    note(`         gate:    ${contract.gate}`);
   }
   return EXIT.OK;
 }

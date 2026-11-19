@@ -327,6 +327,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
                         (default: origin/main, then main; falls back to the
                         worktree diff against HEAD when neither exists)
 --out <path>            plugin: where the generated package lands (required)
+--ci <mode>             init: auto attaches to a repo that already runs Actions,
+                        github writes the workflow there on request, none and
+                        external write nothing (external prints the gate contract)
 --surfaces <ids>        comma-separated editors to write rule files for;
                          "" means AGENTS.md only (default: every surface,
                          or the "surfaces" list in simt-dev.json)

@@ -27,6 +27,7 @@ export const NODE_MANAGERS = [
     run: 'pnpm',
     install: 'pnpm install --frozen-lockfile',
     installFallback: 'pnpm install',
+    bootstrap: 'corepack',
     addDev: 'pnpm add -D',
     silent: true,
     setupNode: true,
@@ -38,6 +39,7 @@ export const NODE_MANAGERS = [
     run: 'yarn',
     install: 'yarn install --frozen-lockfile',
     installFallback: 'yarn install',
+    bootstrap: 'corepack',
     addDev: 'yarn add -D',
     silent: true,
     setupNode: true,
@@ -49,6 +51,7 @@ export const NODE_MANAGERS = [
     run: 'bun',
     install: 'bun install --frozen-lockfile',
     installFallback: 'bun install',
+    bootstrap: 'setup-bun',
     addDev: 'bun add -d',
     silent: false,
     setupNode: false,
@@ -132,7 +135,16 @@ export function runScriptArgv(manager, script) {
 /** Install step for CI: the frozen command plus its fallback. */
 export function installCommands(manager) {
   const row = typeof manager === 'string' ? (BY_ID.get(manager) ?? npmManager()) : (manager ?? npmManager());
-  return { install: row.install, fallback: row.installFallback, setupNode: row.setupNode };
+  // `bootstrap` names how CI gets this manager at all: npm ships with Node, corepack
+  // activates pnpm and yarn, and bun needs its own setup action. A workflow that installs
+  // with a manager it never provisioned fails on the runner and not on the laptop.
+  return {
+    install: row.install,
+    fallback: row.installFallback,
+    lockfiles: row.lockfiles,
+    bootstrap: row.bootstrap ?? null,
+    setupNode: row.setupNode,
+  };
 }
 
 /** Look up a manager record by lockfile name, fact, or id. */

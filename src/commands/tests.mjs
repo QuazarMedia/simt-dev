@@ -48,18 +48,19 @@ export async function testsCommand(args, flags) {
   const paths = new Set(files.map((file) => file.path));
   const imports = stored.filter((edge) => edge.kind === 'import');
   for (const file of files) {
-    if (!isTestPath(file.path)) continue;
+    if (!isTestPath(file.path, root)) continue;
     const text = texts.get(file.blob);
     if (!text) continue;
-    imports.push(...importsOf(file.path, text, langOf(file.path), paths));
+    imports.push(...importsOf(file.path, text, langOf(file.path, root), paths));
   }
-  const edges = testEdges({ files, imports, coverage: reports, commits });
+  const edges = testEdges({ files, imports, coverage: reports, commits }, { root });
   const target = args[0];
   if (!target) return summarise(root, flags, edges);
   if (!paths.has(target)) {
     return fail(`not in the index: ${target}`, EXIT.USAGE, `pass a path ${CLI} index knows`);
   }
   const tests = coverage({ files, imports, coverage: reports, commits }, [target], {
+    root,
     transitive: false,
     cochange: flags.cochange === true,
   });
@@ -110,7 +111,7 @@ async function loadFiles(root) {
 async function testBlobs(root, files) {
   const blobs = [];
   for (const file of files) {
-    if (isTestPath(file.path) && file.blob) blobs.push(file.blob);
+    if (isTestPath(file.path, root) && file.blob) blobs.push(file.blob);
   }
   return blobTexts(root, blobs).catch(() => new Map());
 }

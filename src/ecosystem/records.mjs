@@ -19,9 +19,11 @@
 // its table at evaluation time. This file is two levels below the root (src/ecosystem/),
 // so two levels up is the root — a fixed path, not a heuristic.
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { MAX_LOCAL_RECORDS, MAX_RECORD_BYTES, validateRecord } from './schema.mjs';
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const SHIPPED_DIR = join(PACKAGE_ROOT, 'ecosystems');
@@ -32,21 +34,88 @@ const SHIPPED_DIR = join(PACKAGE_ROOT, 'ecosystems');
  * const-iterating tests and every call without a root read.
  */
 export function loadEcosystems(root = null) {
+  return localRecords(root).records;
+}
+
+/**
+ * The local records in force for `root`, and everything wrong with the ones that are not.
+ *
+ * Every local record is validated before it is applied, and an invalid one is quarantined
+ * whole with a problem naming the file and the field. Applying the fields that happened
+ * to parse is how one typo silently changes what a repository's gates do; the shipped
+ * record with the same id stays in force instead.
+ *
+ * @param {string|null} root
+ * @returns {{records: object[], problems: {file: string, status: string, detail: string}[]}}
+ */
+export function localRecords(root = null) {
+  const key = root === null ? null : resolve(String(root));
+  if (key !== null && localCache.has(key)) return localCache.get(key);
   const base = shipped();
-  if (!root) return base;
+  const result = key === null ? { records: base, problems: [] } : mergeLocal(base, key);
+  if (key !== null) localCache.set(key, result);
+  return result;
+}
+
+const localCache = new Map();
+
+function mergeLocal(base, root) {
   const localDir = join(root, '.simt', 'ecosystems');
-  if (!existsSync(localDir)) return base;
+  if (!existsSync(localDir)) return { records: base, problems: [] };
   const byId = new Map(base.map((r) => [r.id, r]));
-  for (const file of readdirSync(localDir)) {
-    if (!file.endsWith('.json')) continue;
+  const problems = [];
+  const files = readdirSync(localDir).filter((f) => f.endsWith('.json')).sort();
+  if (files.length > MAX_LOCAL_RECORDS) {
+    problems.push({
+      file: `.simt/ecosystems`,
+      status: 'ecosystem-record-invalid',
+      detail: `${files.length} local records; the limit is ${MAX_LOCAL_RECORDS}`,
+    });
+  }
+  for (const file of files.slice(0, MAX_LOCAL_RECORDS)) {
     const id = file.slice(0, -5);
-    const rec = parse(join(localDir, file));
-    if (!rec) continue;
+    const path = join(localDir, file);
+    const bytes = statSync(path).size;
+    const parsed = parse(path, bytes);
+    if (parsed === null) {
+      problems.push({
+        file: `.simt/ecosystems/${file}`,
+        status: 'ecosystem-record-invalid',
+        detail: bytes > MAX_RECORD_BYTES ? 'the record is larger than the schema allows' : 'the record does not parse as JSON',
+      });
+      continue;
+    }
+    const checked = validateRecord(id, parsed, { bytes });
+    if (!checked.ok) {
+      for (const detail of checked.problems) {
+        problems.push({ file: `.simt/ecosystems/${file}`, status: 'ecosystem-record-invalid', detail });
+      }
+      continue;
+    }
     // Same id: a shallow merge over the shipped record, so a local override that omits
     // a field keeps the shipped one. New id: the record as-is.
-    byId.set(id, byId.has(id) ? { ...byId.get(id), ...rec } : rec);
+    byId.set(id, byId.has(id) ? { ...byId.get(id), ...checked.record } : checked.record);
   }
-  return [...byId.values()];
+  return { records: [...byId.values()], problems };
+}
+
+/** The problems a repository's local records carry, in file order. */
+export function ecosystemProblems(root = null) {
+  return localRecords(root).problems;
+}
+
+/**
+ * The problems as `check` findings. A record that did not validate is configuration the
+ * reader wrote and this build could not use, so it is blocking, naming the file and the
+ * field, with the remedy that always works: remove it and the shipped record applies.
+ */
+export function ecosystemFindings(root = null) {
+  return ecosystemProblems(root).map((problem) => ({
+    file: problem.file,
+    status: problem.status,
+    detail: problem.detail,
+    remedy: 'fix the record under .simt/ecosystems, or remove it to keep the shipped one',
+  }));
 }
 
 /** The shipped records, read once per process and cached. */
@@ -73,7 +142,8 @@ function readRecords(dir, into) {
 }
 
 /** One record, or null when the file is absent, unreadable or does not parse. */
-function parse(path) {
+function parse(path, bytes = 0) {
+  if (bytes > MAX_RECORD_BYTES) return null;
   try {
     const rec = JSON.parse(readFileSync(path, 'utf8'));
     return rec && typeof rec === 'object' ? rec : null;
@@ -90,7 +160,11 @@ function parse(path) {
  */
 export function ecosystemGateRows(root = null) {
   return loadEcosystems(root)
-    .filter((r) => r.manifestOrder != null)
+    // A row is keyed by the fact that proves the ecosystem. Validation refuses a
+    // `manifestOrder` without facts, and this guard is what a record that reached here
+    // through a merge still cannot crash: `facts[0]` on an absent list threw out of
+    // `init` before the schema existed.
+    .filter((r) => r.manifestOrder != null && Array.isArray(r.facts) && r.facts.length > 0)
     .sort((a, b) => a.manifestOrder - b.manifestOrder)
     .map((r) => {
       const row = { fact: r.facts[0], tool: r.tool };

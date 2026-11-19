@@ -68,7 +68,7 @@ export async function gateCommand(args, flags) {
   const files = new Set(listed.files);
   for (const file of changed) files.add(file);
   const edges = await readImportEdges(root, files);
-  const selected = coverage({ imports: edges }, changed);
+  const selected = coverage({ imports: edges }, changed, { root });
   // the selection explains itself. `unmatched` names explicit paths the
   // tracked tree does not carry (untracked but present, so the run proceeds);
   // `graph` is `unresolved` when a language has edges but none of them reaches
@@ -76,7 +76,7 @@ export async function gateCommand(args, flags) {
   // `verdict` says the empty set out loud instead of leaving `selected: []` to
   // be read as either safe or blind. `ok` stays as is until a versioned opt-in.
   const unmatched = changed.filter((p) => !listed.files.includes(p));
-  const graph = graphState(edges, files);
+  const graph = graphState(edges, files, root);
   if (selected.length === 0) {
     const payload = { ok: true, command: 'gate', root, selected, unmatched, graph, verdict: 'nothing-selected', code: 0 };
     if (isJson(flags)) {
@@ -97,10 +97,10 @@ export async function gateCommand(args, flags) {
  * zero reaching a tracked file. A language with no edges at all is not
  * evidence of anything - an unimported file needs no resolution.
  */
-function graphState(edges, files) {
+function graphState(edges, files, root = null) {
   const byLang = new Map();
   for (const edge of edges) {
-    const lang = langOf(edge.src);
+    const lang = langOf(edge.src, root);
     if (!lang) continue;
     const stat = byLang.get(lang) ?? { total: 0, resolved: 0 };
     stat.total += 1;

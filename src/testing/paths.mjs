@@ -16,9 +16,26 @@ import { testConventions } from '../ecosystem/records.mjs';
  * De-duplicated because a language may share a pattern with a sibling (the JVM pattern
  * matches both `.java` and `.kt`); a duplicate RegExp is the same check run twice.
  */
-const LANG_TEST_PATTERNS = [...new Set(testConventions().flatMap((record) => record.base ?? []))].map(
-  (src) => new RegExp(src),
-);
+const patternsByRoot = new Map();
+
+/**
+ * The record-declared patterns for one repository.
+ *
+ * Computed per root and cached: a repository may declare its own language and its own
+ * test naming in `.simt/ecosystems/`, and reading the shipped set once at module load
+ * meant those conventions never ran (review 0005 PR10). A caller with no root gets the
+ * shipped set, which is what a path-only question has always meant.
+ */
+function langTestPatterns(root) {
+  const key = root ?? '';
+  if (!patternsByRoot.has(key)) {
+    patternsByRoot.set(
+      key,
+      [...new Set(testConventions(root).flatMap((record) => record.base ?? []))].map((src) => new RegExp(src)),
+    );
+  }
+  return patternsByRoot.get(key);
+}
 
 const TEST_DIRECTORIES = ['test', 'tests', 'spec', '__tests__', 'src/test'];
 
@@ -28,7 +45,7 @@ const TEST_DIRECTORIES = ['test', 'tests', 'spec', '__tests__', 'src/test'];
  * @param {string} relPath forward-slash repository-relative path
  * @returns {boolean}
  */
-export function isTestPath(relPath) {
+export function isTestPath(relPath, root = null) {
   const norm = String(relPath).replaceAll('\\', '/').replace(/^\.\//, '');
   if (!norm) return false;
   const segments = norm.split('/');
@@ -43,7 +60,7 @@ export function isTestPath(relPath) {
 
   if (/\.(?:test|spec)\.[A-Za-z0-9]+$/.test(base)) return true;
   if (/_(?:test|spec)\.[A-Za-z0-9]+$/.test(base)) return true;
-  if (LANG_TEST_PATTERNS.some((re) => re.test(base))) return true;
+  if (langTestPatterns(root).some((re) => re.test(base))) return true;
 
   return false;
 }

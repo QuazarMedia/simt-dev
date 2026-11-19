@@ -261,7 +261,7 @@ async function branchExists(main, branch) {
   }
 }
 
-async function releaseSlice(main, id, session) {
+export async function releaseSlice(main, id, session) {
   if (session === null) return { released: false };
   try {
     return await withLeaseLock(main, async () => {

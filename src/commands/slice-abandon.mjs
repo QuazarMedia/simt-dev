@@ -10,7 +10,7 @@ import { planDone } from '../plan/index.mjs';
 import { loadFormat } from '../plan/template.mjs';
 import { CLI } from '../name.mjs';
 import { git, gitText } from '../sys/git.mjs';
-import { mainCheckout, places, readSliceRecord, recordPath, resolveSlice, sliceSession } from './slice.mjs';
+import { mainCheckout, places, readSliceRecord, recordPath, releaseSlice, resolveSlice, sliceSession } from './slice.mjs';
 
 /**
  * `simt slice abandon <id>`: take the slice back down. The worktree is

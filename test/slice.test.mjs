@@ -11,7 +11,7 @@
 
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { chmod, copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
@@ -185,3 +185,19 @@ function tokenizeHint(line) {
   if (current !== '') tokens.push(current);
   return tokens;
 }
+
+test('abandon runs to the end: the worktree goes, the row returns to Queued', async () => {
+  // The abandon path called `releaseSlice` without importing it, so it crashed after the
+  // state work and before releasing the lease. Nothing in the suite drove that branch,
+  // which is why the tool reported an error while its effect had already happened.
+  const { root, tracker } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A26'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+  const abandoned = await capture(() => sliceCommand('abandon', ['A26'], { root, yes: true, session: 'tester' }));
+  assert.equal(abandoned.code, 0, abandoned.stderr);
+  const row = (await readFile(tracker, 'utf8'))
+    .split('\n')
+    .find((line) => line.startsWith('| A26 '));
+  assert.match(row ?? '', /\| Queued \|/, 'the abandoned row did not return to Queued');
+  assert.equal(existsSync(join(root, '.simt', 'local', 'worktrees', 'a26')), false);
+});

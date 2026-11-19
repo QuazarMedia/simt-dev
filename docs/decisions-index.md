@@ -129,7 +129,7 @@ in [architecture/history.md](architecture/history.md).
 | [117](decisions/ADR-117-the-darwin-release-builds-on-supported-macos-15-runners-and-a-re-run-is-idempotent.md) | the darwin release builds on supported macOS 15 runners, and a re-run is idempotent | accepted · 2026-10-31 · supersedes ADR-099 ruling 1 |
 | [118](decisions/ADR-118-the-bench-corpus-is-keyed-on-history-is-append-only-and-is-portable-as-a-sealed-document.md) | the bench corpus is keyed on history, is append-only, and is portable as a sealed document | accepted · 2026-10-31 · filed as review 0003 Q48 |
 | [119](decisions/ADR-119-the-environment-variable-points-into-a-workspace-the-repo-declared.md) | the environment variable points into a workspace the repo declared | accepted · 2026-10-31 · supersedes ADR-014 ruling 1 |
-| [120](decisions/ADR-120-a-pre-push-whose-tree-is-already-proven-green-skips-the-test-gate-on-that-evidence.md) | a pre-push whose tree is already proven green skips the test gate on that evidence | accepted · 2026-10-31 |
+| [120](decisions/ADR-120-a-pre-push-whose-tree-is-already-proven-green-skips-the-test-gate-on-that-evidence.md) | a pre-push whose tree is already proven green skips the test gate on that evidence | accepted · 2026-10-31 · ruling 1 superseded by ADR-197 |
 | [122](decisions/ADR-122-the-shims-move-into-the-state-directory-and-the-legacy-directory-removes-itself.md) | the shims move into the state directory, and the legacy directory removes itself | accepted · 2026-10-31 |
 | [123](decisions/ADR-123-a-surplus-positional-is-not-refused-because-arity-is-not-in-the-source.md) | a surplus positional is not refused, because a command's arity is not in its source | accepted · 2026-10-31 |
 | [124](decisions/ADR-124-the-manifest-has-a-schema-in-the-tool-and-its-unknown-keys-stay-the-repositorys.md) | the manifest has a schema in the tool, and its unknown keys stay the repository's | accepted · 2026-10-31 |
@@ -205,3 +205,4 @@ in [architecture/history.md](architecture/history.md).
 | [194](decisions/ADR-194-a-slice-is-complete-when-its-acceptance-is-exercised.md) | a slice is complete when its acceptance sentence is exercised | accepted · 2026-11-03 |
 | [195](decisions/ADR-195-the-hooks-disable-policy-reads-its-own-text-when-the-shell-cannot.md) | the hooks-disable policy reads its own text when the shell cannot | accepted · 2026-11-05 |
 | [196](decisions/ADR-196-a-failed-alias-lookup-leaves-the-push-and-rewrite-rows-their-text.md) | a failed alias lookup leaves the push and rewrite rows their text | accepted · 2026-11-05 |
+| [197](decisions/ADR-197-gate-evidence-names-the-tree-it-ran-on.md) | gate evidence names the tree it ran on, and nothing else stands in for it | accepted · 2026-11-19 |

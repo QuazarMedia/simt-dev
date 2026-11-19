@@ -80,9 +80,9 @@ async function checkClaim(root, file, flags) {
     if (isJson(flags)) emitJson(payload, { pretty: flags.pretty === true });
     return EXIT.OK;
   }
-  // A commit records the index, not the worktree: `git add -p` can commit bytes
-  // the worktree tree never had. Match on the staged tree, with
-  // the worktree tree as the fallback when git cannot name the index.
+  // A commit records the index, not the worktree: `git add -p` can commit bytes the
+  // worktree tree never had. Match on the staged tree against the index each run recorded
+  // (ADR-197), with the worktree tree as the fallback when git cannot name the index.
   let tree;
   try {
     tree = (await indexTreeId(root)) ?? (await treeId(root));
@@ -90,7 +90,7 @@ async function checkClaim(root, file, flags) {
     return fail(`could not name this tree (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository');
   }
   const { entries } = await readLedger(root);
-  const supported = hasTestEvidence(entries, tree);
+  const supported = hasTestEvidence(entries, tree, { basis: 'index' });
   const payload = { ok: supported || mode === 'warn', command: 'evidence check', claim: true, supported, mode, tree };
   if (supported) {
     if (isJson(flags)) emitJson(payload, { pretty: flags.pretty === true });

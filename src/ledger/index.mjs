@@ -124,18 +124,35 @@ export async function indexTreeId(root) {
   }
 }
 
-export async function recordRun(root, { cmd, exit, ms, output, gate = null, kind = null }) {
+export async function recordRun(
+  root,
+  { cmd, exit, ms, output, gate = null, kind = null, subject = null, revision = null, toolchain = null, cwd = null, outcome = null },
+) {
   const { entries: prior } = await readLedger(root).catch(() => ({ entries: [] }));
-  const worktreeTree = await treeId(root);
-  const indexTree = await indexTreeId(root);
+  // The tree the gate RAN ON, which is not always the tree the ledger lives in. A
+  // pre-push gate executes in a scratch worktree at the pushed revision; computing the
+  // subject from `root` recorded the caller's checkout instead, so the skip query matched
+  // a tree no gate had run against - the defect review 0005 PR04 observed. `tree` keeps
+  // its old meaning for readers that predate `subjectTree`.
+  const subjectRoot = subject ?? root;
+  const worktreeTree = await treeId(subjectRoot);
+  const indexTree = await indexTreeId(subjectRoot);
   const line = {
     v: 2,
     ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
     tree: worktreeTree,
+    subjectTree: worktreeTree,
     worktreeTree,
     ...(indexTree !== null ? { indexTree } : {}),
     ...(typeof gate === 'string' ? { gate } : {}),
     ...(typeof kind === 'string' ? { kind } : {}),
+    // Where an execution is named, it is named here rather than inferred from where the
+    // line was written: the revision is the pushed commit, the toolchain is what ran it,
+    // and the outcome distinguishes a clean exit from a timeout that happened to exit 0.
+    ...(typeof revision === 'string' ? { revision } : {}),
+    ...(toolchain !== null && typeof toolchain === 'object' ? { toolchain } : {}),
+    ...(typeof cwd === 'string' ? { cwd } : {}),
+    outcome: outcome ?? (exit === 0 ? 'passed' : 'failed'),
     cmd,
     command: cmd,
     exit,
@@ -304,20 +321,35 @@ export function passEntryForGate(entries, gate, tree) {
   return null;
 }
 
-/** A passing test-kind entry for `tree` with no later failure of the same
- *  command on the same tree. v1 lines (no `kind`) keep today's reading: any
- *  passing entry for the tree counts, so old ledgers do not go red. */
-export function hasTestEvidence(entries, tree) {
-  const scoped = entries.filter((e) => e.tree === tree || e.worktreeTree === tree || e.indexTree === tree);
-  for (let i = 0; i < scoped.length; i += 1) {
-    const candidate = scoped[i];
-    if (candidate.exit !== 0) continue;
-    const legacy = candidate.v !== 2 || candidate.kind === undefined || candidate.kind === null;
-    if (!legacy && !isTestKind(candidate)) continue;
-    const laterFailure = scoped
-      .slice(i + 1)
-      .some((later) => later.cmd === candidate.cmd && later.exit !== 0);
-    if (!laterFailure) return true;
+/** A passing test-kind entry whose last run of the gate on `tree` succeeded. `basis` names
+ *  which tree the question is about: `subject` is where the gate executed, `index` is the
+ *  index the run recorded. v1 lines (no `kind`) keep their reading, so old ledgers do not
+ *  go red (ADR-197). */
+export function hasTestEvidence(entries, tree, { basis = 'subject' } = {}) {
+  // Which tree a question is about depends on who is asking. A pre-push skip is about the
+  // tree the gate EXECUTED in, and matching `indexTree` there was the defect review 0005
+  // PR04 observed: a pass recorded on a working tree with a different index matched the
+  // staged tree, so a tree no gate had run against earned the skip. A commit message's
+  // claim is about the index the commit records, and the run's own `indexTree` is that
+  // index at the moment it ran - so that path asks for `basis: 'index'` and gets it.
+  const subjectOf = (entry) => (typeof entry?.subjectTree === 'string' ? entry.subjectTree : entry?.tree);
+  const indexOf = (entry) => (typeof entry?.indexTree === 'string' ? entry.indexTree : subjectOf(entry));
+  const basisOf = basis === 'index' ? indexOf : subjectOf;
+  const scoped = entries.filter((e) => basisOf(e) === tree);
+  // The identity of a run: its gate when it named one, its command otherwise. The LAST
+  // run of an identity decides: a later failure, a timeout, or a re-run with a different
+  // command supersedes the pass. Reading the earliest pass and asking whether anything
+  // later failed let a stale green line outlive the command the repository runs now.
+  const identityOf = (entry) => (typeof entry?.gate === 'string' ? `gate:${entry.gate}` : `cmd:${entry?.cmd}`);
+  const latest = new Map();
+  for (const entry of scoped) latest.set(identityOf(entry), entry);
+  for (const entry of latest.values()) {
+    if (entry.exit !== 0) continue;
+    if (entry.outcome === 'timeout' || entry.outcome === 'cancelled') continue;
+    const legacy = !(entry.v >= 2) || entry.kind === undefined || entry.kind === null;
+    if (!legacy && !isTestKind(entry)) continue;
+    if (legacy && !/\btest/.test(String(entry.cmd))) continue;
+    return true;
   }
   return false;
 }

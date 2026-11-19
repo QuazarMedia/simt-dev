@@ -36,6 +36,16 @@ that starts with `x-` is yours on purpose: it is the extension namespace, it is 
 and it survives every write `init`, `sync` and `upgrade` make. `simt doctor` prints the manifest
 keys this version reads, which is the answer to "why was my setting ignored".
 
+## Scoped gate ids
+
+Two ecosystems in one repository both need a `test`. A gate id carrying `@` names a scope:
+`test@go` runs `gates.commands["test@go"]`, while `test` keeps running the Node script. `init`
+writes the scoped form when a second ecosystem proposes a name that is already taken, so a
+polyglot repository carries `test` and `test@go` and both run. A scoped id with no command of
+its own is unrunnable — `check` says so instead of falling back to the unscoped command, which
+would report a pass for a suite that never ran. Write the name in `gates.preCommit` or
+`gates.prePush` like any other, and `gates.cwd["test@go"]` scopes its directory.
+
 ## The focused test runner
 
 `simt gate` asks a package's own manifest which runner it uses. When no detector knows the

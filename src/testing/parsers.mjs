@@ -4,8 +4,10 @@
 // JUnit XML, `go test -json`, and libtest's text. They are parsers, not graders, so the
 // gate, the index and the bench read a run the same way.
 import { readFile, readdir, rm, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
+
+import { CLI } from '../name.mjs';
 
 /**
  * Sort and de-duplicate a list of ids.
@@ -252,12 +254,18 @@ export async function readReports(paths) {
  * this package directed to the temporary directory has no other owner, and leaving it
  * there is how a repository ended up with `.bench-junit.xml` beside its sources.
  *
+ * Only a report this package created is removed: the name carries the prefix and the
+ * process id that `junitReportPath` writes. A temp directory is shared with every other
+ * program on the machine, and a path handed in by a caller is not evidence of ownership.
+ *
  * @param {string[]} paths
  */
 export async function cleanupReports(paths = []) {
   const temp = tmpdir();
   for (const path of paths ?? []) {
-    if (!String(path).startsWith(temp)) continue;
-    await rm(path, { recursive: true, force: true }).catch(() => {});
+    const text = String(path);
+    if (dirname(text) !== temp) continue;
+    if (!basename(text).startsWith(`${CLI}-junit-${process.pid}-`)) continue;
+    await rm(text, { recursive: true, force: true }).catch(() => {});
   }
 }

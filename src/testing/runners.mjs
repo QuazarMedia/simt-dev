@@ -10,6 +10,7 @@ import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 
+import { CLI } from '../name.mjs';
 import {
   dedupeSorted,
   parseCargoTestOutput,

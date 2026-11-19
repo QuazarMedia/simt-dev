@@ -160,7 +160,7 @@ simt index [--open] [--search <task>] [--embed]                                 
 simt index overlay --input <file>                                                    # a working-tree or staged node labelled by its provenance, never both
 
 # init
-simt init [path]                                                                     # adopt this repository: manifest, region, agents and agent-hooks; git hooks are a separate install
+simt init [path]                                                                     # adopt this repository: manifest, region, agents, agent-hooks; git hooks install separately
 
 # knowledge
 simt knowledge build --scope <id> [--yes]                                            # build the scoped corpus of declared sections under the ignored local area

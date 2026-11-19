@@ -492,7 +492,7 @@ function error(id, code, message) {
  *
  * `readline` buffers a whole line before a listener sees it, so the cap bounded what was
  * parsed and not what was read: a client could hand this process a line large enough to
- * take the memory it needed to refuse it (review 0005 PR22). This reader keeps at most
+ * take the memory it needed to refuse it. This reader keeps at most
  * `limit` bytes, emits `null` once for an overlong line, and discards the rest of that
  * line. UTF-8 splits across chunks are harmless because bytes are joined before decoding.
  */

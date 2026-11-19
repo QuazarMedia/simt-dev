@@ -10,7 +10,7 @@ import { realpath, stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 
 /** The one remedy this condition has, shared so the finding and the gate say the same words. */
-export function gateCwdRemedy(name) {
+function gateCwdRemedy(name) {
   return `point gates.cwd["${name}"] at a directory in this repository, or remove it to run the gate at the root`;
 }
 

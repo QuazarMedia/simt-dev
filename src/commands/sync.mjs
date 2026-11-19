@@ -686,8 +686,8 @@ export async function checkRepo(root, opts = {}) {
   // `.simt/`, never repo content, the same standing as the ledger and the
   // index. It is written only by the CLI path that owns it (`opts.writeCache`):
   // `checkRepo` is also the MCP tool's implementation, and a read tool that created a
-  // cache on a fresh fixture was writing a file it never said it would (review 0005
-  // PR21). A pure check is the default; the command below opts in.
+  // cache on a fresh fixture was writing a file it never said it would. A pure check is
+  // the default; the command below opts in.
   if (opts.writeCache === true) await writeCheckCache(
     root,
     await buildCacheRecord(root, {

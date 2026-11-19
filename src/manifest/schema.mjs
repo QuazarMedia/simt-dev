@@ -129,7 +129,7 @@ export const KEYS = [
   { key: 'surfaces', owner: 'repo', since: '0.8.0', check: (v) => (v === null || isStringList(v) ? null : 'surfaces must be null or a list of surface ids') },
   { key: 'projection', owner: 'tool', generated: true, since: '0.7.0', check: (v) => (isObject(v) ? null : 'projection must be an object') },
   // The focused runner a repository declares when no detector recognises its stack. It
-  // is *repo* data: the tool runs it and never writes it (review 0005 PR11).
+  // is *repo* data: the tool runs it and never writes it.
   { key: 'test.runner', owner: 'repo', since: '0.11.0', check: (v) => runnerSpecProblem(v) },
 ];
 

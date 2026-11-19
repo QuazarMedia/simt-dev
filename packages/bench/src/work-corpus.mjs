@@ -22,7 +22,7 @@ import { OUTCOME_PREDICATE_KINDS, normaliseTask } from '../../../src/measure/tas
 import { registerOracle } from './graders.mjs';
 
 /** The strata an outcome corpus reports separately. A pooled gain cannot hide a loss. */
-export const WORK_STRATA = Object.freeze(['source', 'knowledge', 'recipe', 'remote', 'ui']);
+const WORK_STRATA = Object.freeze(['source', 'knowledge', 'recipe', 'remote', 'ui']);
 
 /** One predicate per stratum, so a stratum is a shape rather than a label. */
 const SHAPE = Object.freeze({

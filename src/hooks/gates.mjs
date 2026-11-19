@@ -106,14 +106,14 @@ export const GATES = {
  *
  * A polyglot repository has more than one `test`: Node's script and Go's package run.
  * Merging them by name kept whichever table was read last, so the manifest looked
- * complete while one half of the repository never ran (review 0005 PR12). A scope is a
+ * complete while one half of the repository never ran. A scope is a
  * suffix on the id, which keeps `gates.prePush` an ordered list of names and leaves every
  * unscoped name meaning exactly what it meant before.
  *
  * @param {string} name
  * @returns {{base: string, scope: string}|null}
  */
-export function gateScope(name) {
+function gateScope(name) {
   if (typeof name !== 'string') return null;
   const at = name.indexOf('@');
   if (at <= 0 || at === name.length - 1) return null;

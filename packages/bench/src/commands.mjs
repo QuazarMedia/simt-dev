@@ -21,7 +21,7 @@ import { criticBench } from '../../../src/review/critic.mjs';
 import { listFlag } from '../../../src/commands/skills.mjs';
 import { commandRoot } from '../../../src/repo-root.mjs';
 import { auditPredecessor, compareBaselines } from './compat.mjs';
-import { buildCanary, gradeOutcome, goldSubmission, noopSubmission, wrongSubmission } from './work-corpus.mjs';
+import { buildCanary, gradeOutcome, goldSubmission, noopSubmission, publicTask, wrongSubmission } from './work-corpus.mjs';
 import { runWorld, oracleVerdict } from './work-world.mjs';
 import { PROBES, runProbes } from './work-probes.mjs';
 
@@ -612,7 +612,7 @@ export async function benchCorpusCommand(positional, flags) {
     noop: gradeOutcome(task, noopSubmission()),
     wrong: gradeOutcome(task, wrongSubmission(task)),
   }));
-  const payload = { schemaVersion: 1, ok: true, command: 'bench corpus', tasks: tasks.map((task) => ({ id: task.id ?? null, stratum: task.stratum ?? null, intent: task.intent ?? null })), graded };
+  const payload = { schemaVersion: 1, ok: true, command: 'bench corpus', tasks: tasks.map(publicTask), graded };
   if (isJson(flags)) { emitJson(payload); return EXIT.OK; }
   emit([`tasks      ${tasks.length}`, ...graded.map((entry) => `graded     ${entry.id}`)].join('\n'));
   return EXIT.OK;

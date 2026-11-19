@@ -81,7 +81,7 @@ export const SPEC = [
   { path: 'index', usage: '[--open] [--search <task>] [--embed]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","search"], },
   // "hooks" used to be in this sentence and `init` never installed one: the promise and the
   // effect disagreed, and a reader who trusted the help believed their commits were gated
-  // (review 0005 PR15). Git hooks are a separate, explicit install.
+  // Git hooks are a separate, explicit install.
   { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, agents, agent-hooks; git hooks install separately', writes: 'repo', flags: ["yes","accept-conflicts","backup","baselines","ci","diff","harness","agents","surfaces"], },
   { path: 'knowledge why', usage: '<claim-id> --claims <file> [--limit <n>] [--page <n>]', mcp: { name: 'knowledge_why', flags: ['as-of','known-at','limit','page'] }, summary: 'what a claim derives from, what depends on it, what applied at a date, and where it conflicts', defaultFor: 'knowledge', flags: ["as-of","claims","known-at","limit","page"], },
   { path: 'knowledge export', usage: '--input <file>', mcp: { name: 'knowledge_export', flags: [] }, summary: 'a bounded, permission-filtered packet another repository can read offline', flags: ["input"], },

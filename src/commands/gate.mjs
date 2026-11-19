@@ -29,7 +29,7 @@ import { cmp } from '../util/sort.mjs';
  * How long one focused run may take, overridable for a test that must not wait for it.
  *
  * The gate used its own `execFile` with no deadline, so a hung runner held the commit
- * forever and the author's only exit was `--no-verify` (review 0005 PR14). The hook
+ * forever and the author's only exit was `--no-verify`. The hook
  * dispatcher and the bench already run through `spawnBounded`; the focused gate now
  * shares it rather than carrying a second, unbounded implementation.
  */

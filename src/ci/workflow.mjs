@@ -440,8 +440,8 @@ chmod +x ${LOCAL_BIN}`, 10),
   const locator = renderLocator('check --root "$ROOT"', { remedy });
   // The declared gates, run by the dispatcher a push runs. Without this the workflow
   // proved the projection was current and nothing about the tests the repository
-  // declared, so a green pull request said less than its checks implied (review 0005
-  // PR17). Only `pre-push` is run here: the pre-commit gate reads the staged set, and a
+  // declared, so a green pull request said less than its checks implied. Only `pre-push`
+  // is run here: the pre-commit gate reads the staged set, and a
   // CI checkout has nothing staged — its lint runs through the same command in the
   // pre-push list when the repository declares it there.
   const declaredGates = gates?.prePush ?? [];

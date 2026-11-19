@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 import { CLI } from '../name.mjs';
 import { LOCAL_DIR } from '../state.mjs';
 
-export const LOCK_REL = join(LOCAL_DIR, 'write.lock');
+const LOCK_REL = join(LOCAL_DIR, 'write.lock');
 const STALE_MS = 120_000;
 const POLL_MS = 25;
 

@@ -849,7 +849,7 @@ export async function planDone(root, id, { sha = null, test = null, state = null
   if (testError) return { root, id, error: testError, remedy: `run: ${CLI} plan done ${id} --yes` };
   // The evidence column is read as a commit id by `plan next` and by the review that
   // follows. A free-form sentence there is not evidence, it is a claim about evidence;
-  // the format check is the boundary that keeps the two apart (review 0005 PR18).
+  // the format check is the boundary that keeps the two apart.
   if (sha && !/^[0-9a-f]{3,40}$/i.test(sha)) {
     return { root, id, error: `${sha} is not a commit sha`, remedy: `pass the commit's own id, e.g. run: ${CLI} plan done ${id} $(git rev-parse HEAD) --yes` };
   }
@@ -909,7 +909,7 @@ export async function planDone(root, id, { sha = null, test = null, state = null
   if (wouldChange && !dryRun) {
     // Read, rebase and write under the repository's write lock. Without it two `plan done`
     // calls read the same snapshot and each wrote back its own copy, so the second
-    // completion reverted the first (review 0005 PR18). The re-read stays inside the lock
+    // completion reverted the first. The re-read stays inside the lock
     // for the same reason: the bytes checked are the bytes rebuilt.
     const failure = await withWriteLock(root, async () => {
       let current;

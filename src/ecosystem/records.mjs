@@ -48,7 +48,7 @@ export function loadEcosystems(root = null) {
  * @param {string|null} root
  * @returns {{records: object[], problems: {file: string, status: string, detail: string}[]}}
  */
-export function localRecords(root = null) {
+function localRecords(root = null) {
   const key = root === null ? null : resolve(String(root));
   if (key !== null && localCache.has(key)) return localCache.get(key);
   const base = shipped();
@@ -168,7 +168,7 @@ export function ecosystemGateRows(root = null) {
     .sort((a, b) => a.manifestOrder - b.manifestOrder)
     .map((r) => {
       // `id` travels with the row because a gate this ecosystem proposes is scoped by
-      // it when two ecosystems propose the same gate name (review 0005 PR12).
+      // it when two ecosystems propose the same gate name.
       const row = { id: r.id, fact: r.facts[0], tool: r.tool };
       if (r.file === true) row.file = true;
       if (Array.isArray(r.gates?.preCommit)) row.preCommit = r.gates.preCommit;

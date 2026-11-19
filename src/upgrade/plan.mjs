@@ -142,7 +142,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   const pinBehind = base.pinnedSha !== sha;
   // The release pin is half of the stamp. Comparing only the SHA called a repository
   // current whose manifest still named an older release, so `upgrade` skipped it and the
-  // pin check failed immediately afterwards (review 0005 PR16). Absent is not behind:
+  // pin check failed immediately afterwards. Absent is not behind:
   // a repository that never recorded a version is repaired the first time it is
   // restamped, and the pin check does not judge absence either.
   const versionBehind =

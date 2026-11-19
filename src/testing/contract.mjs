@@ -15,7 +15,7 @@ import { existsSync, accessSync, constants } from 'node:fs';
 import { delimiter, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /** The report formats a configured runner may declare. `none` means stdout is the report. */
-export const RUNNER_REPORTS = ['none', 'tap', 'json', 'junit'];
+const RUNNER_REPORTS = ['none', 'tap', 'json', 'junit'];
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isCommandList = (value) => Array.isArray(value) && value.length > 0 && value.every((item) => typeof item === 'string' && item.length > 0);
@@ -136,7 +136,7 @@ export function compileRunner(spec, { worktree, pkg = '', files }) {
  * `{report}` lets the declaration pass the path to its own runner through whatever flag
  * that runner takes (`--junitxml={report}`, `--output={report}`); this tool never invents
  * a flag the command does not have. A report outside the package would be a write this
- * run does not own, so it is refused rather than resolved (review 0005 PR26's boundary).
+ * run does not own, so it is refused rather than resolved.
  */
 export function reportPathProblem(spec, worktree) {
   if (typeof spec?.reportPath !== 'string') return null;

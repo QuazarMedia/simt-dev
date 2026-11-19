@@ -29,7 +29,7 @@ let junitCounter = 0;
  * A package's default runner is `node --test`, and the obvious spelling of that is
  * `process.execPath`. Under a single-executable build `process.execPath` is this tool,
  * not Node: the child re-ran `simt --test`, printed help and exited 0, so a failing suite
- * looked like a pass (review 0005 PR11). `node` from PATH is the consumer's runtime; the
+ * looked like a pass. `node` from PATH is the consumer's runtime; the
  * executable is only used when it is one.
  *
  * @param {{execPath?: string, sea?: boolean}} [input]

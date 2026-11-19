@@ -517,7 +517,7 @@ export function commandFacts(text) {
       // The assignments that govern THIS invocation, in the order a shell applies them:
       // the wrapper's own prefix first, then the inner command's. Flattening them across
       // the whole command list let one invocation's `SIMT_ALLOW` lift another that never
-      // carried it (review 0005 PR38).
+      // carried it.
       const scope = [
         ...leadingAssigns(words),
         ...(unwrapped === words ? [] : leadingAssigns(unwrapped)),

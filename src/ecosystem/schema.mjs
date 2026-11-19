@@ -14,7 +14,7 @@
 // shipped record with its id (if any) stays in force. Half-applying a record is how one
 // invalid field silently changes what a repository's gates do.
 
-export const RECORD_VERSION = 1;
+const RECORD_VERSION = 1;
 /** A record larger than this is not a record; it is a paste. */
 export const MAX_RECORD_BYTES = 64 * 1024;
 /** More local files than this under `.simt/ecosystems/` is a directory to look at. */

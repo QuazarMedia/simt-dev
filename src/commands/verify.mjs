@@ -78,7 +78,7 @@ const LIST_FIELDS = {
  *
  * The adapters default an absent field to an empty list, which is right; defaulting a
  * present field to one is not, and `{"changed": "a\nb"}` became "nothing changed" and
- * an OK no-op (review 0005 PR20). A request that is empty is legitimate; a request whose
+ * an OK no-op. A request that is empty is legitimate; a request whose
  * field is the wrong type is not evidence of anything.
  */
 function inputProblems(sub, doc) {

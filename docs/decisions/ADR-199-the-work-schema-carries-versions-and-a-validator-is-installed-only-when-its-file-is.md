@@ -2,7 +2,7 @@
 simt-affects: ["src/work/config.mjs", "src/work/effective.mjs", "src/work/capabilities.mjs", "src/work/facets.mjs", "src/work/artifacts.mjs", "src/manifest/schema.mjs", "src/commands/work.mjs", "test/work-config.test.mjs", "test/work-artifacts.test.mjs", "test/work-capabilities.test.mjs", "test/work-facets.test.mjs"]
 simt-supersedes: [{ adr: "ADR-144", ruling: 1 }]
 ---
-# ADR-198 — the work schema carries versions, and a validator is installed only when its file is
+# ADR-199 — the work schema carries versions, and a validator is installed only when its file is
 
 Status: accepted · 2026-11-19 · supersedes ADR-144 ruling 1
 

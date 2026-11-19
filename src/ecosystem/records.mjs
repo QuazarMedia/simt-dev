@@ -167,7 +167,9 @@ export function ecosystemGateRows(root = null) {
     .filter((r) => r.manifestOrder != null && Array.isArray(r.facts) && r.facts.length > 0)
     .sort((a, b) => a.manifestOrder - b.manifestOrder)
     .map((r) => {
-      const row = { fact: r.facts[0], tool: r.tool };
+      // `id` travels with the row because a gate this ecosystem proposes is scoped by
+      // it when two ecosystems propose the same gate name (review 0005 PR12).
+      const row = { id: r.id, fact: r.facts[0], tool: r.tool };
       if (r.file === true) row.file = true;
       if (Array.isArray(r.gates?.preCommit)) row.preCommit = r.gates.preCommit;
       if (Array.isArray(r.gates?.prePush)) row.prePush = r.gates.prePush;

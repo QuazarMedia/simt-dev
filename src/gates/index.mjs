@@ -272,21 +272,27 @@ export function planGates(stack = [], capability = null, facts = [], root = null
 function ecosystemCommands(facts = [], capability = null, root = null) {
   if (!capability?.tools?.length) return {};
   // A Node runner (npm/pnpm/yarn/bun) already answers "how do I test and format"
-  // with its own package.json scripts, and a seed only wins over those scripts when
-  // the repo has not declared a command of its own — which is exactly the mixed
-  // repos (package.json AND Cargo.toml) where the script is the deliberate answer.
-  // Seeding there would replace a choice with a default; the reader's escape hatch
-  // is declaring gates.commands by hand, which a seed would lose to anyway. Pure
-  // ecosystem repos have runner 'cargo'/'go'/... and seed normally.
-  // every Node manager skips seeding — pnpm is not "foreign", it is Node.
-  if (['npm', 'pnpm', 'yarn', 'bun'].includes(capability.runner)) return {};
+  // with its own package.json scripts, and those scripts stay the declaration they are.
+  // The mixed repository (package.json AND go.mod) used to get no seed at all, so the
+  // Go half never ran; its seeds are scoped instead (`test@go`), which keeps both gates
+  // and keeps them distinguishable in the report.
+  const node = ['npm', 'pnpm', 'yarn', 'bun'].includes(capability.runner);
   const present = new Set(facts);
   const commands = {};
+  // Which ecosystem claimed an unscoped name, so a second one is scoped rather than
+  // silently replacing the first (the defect this slice exists to remove).
+  const owner = new Map();
   for (const eco of ecosystemGateRows(root)) {
     if (!present.has(eco.fact)) continue;
     if (!capability.tools.includes(eco.tool)) continue;
     for (const [gate, command] of Object.entries(eco.commands)) {
-      if (!capability.commands?.[gate]) commands[gate] = command;
+      if (capability.commands?.[gate]) continue;
+      const claimed = owner.get(gate);
+      const scoped = node || (claimed !== undefined && claimed !== eco.id);
+      const id = scoped ? `${gate}@${eco.id}` : gate;
+      if (capability.commands?.[id]) continue;
+      commands[id] = command;
+      if (!owner.has(gate)) owner.set(gate, eco.id);
     }
   }
   return commands;
@@ -359,8 +365,14 @@ function defaultGates(stack, facts = [], root = null) {
     if (signals.has(row.fact)) {
       // A row proposes what it has: the Maven row has no preCommit gates, so a
       // missing key is "none", not a defect. Spreading undefined throws.
-      gates.preCommit.push(...(row.preCommit ?? []));
-      gates.prePush.push(...(row.prePush ?? []));
+      //
+      // A name another row (or the stack table) already proposed is scoped by this
+      // ecosystem's id, so `dedupe` cannot collapse two different programs into one
+      // gate. The manifest then carries `test` and `test@go`, each with its own
+      // command, and neither pretends to be the other.
+      const scope = (name) => (gates.preCommit.includes(name) || gates.prePush.includes(name) ? `${name}@${row.id}` : name);
+      gates.preCommit.push(...(row.preCommit ?? []).map(scope));
+      gates.prePush.push(...(row.prePush ?? []).map(scope));
     }
   }
   for (const row of TAG_GATES) {

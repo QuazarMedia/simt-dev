@@ -684,9 +684,11 @@ export async function checkRepo(root, opts = {}) {
   const bad = findings.filter((f) => f.status !== 'current' && !CHECK_NON_BLOCKING.has(f.status));
   // The `--line` cache is local state, not a write: counts and booleans under
   // `.simt/`, never repo content, the same standing as the ledger and the
-  // index. Written on every run — red state is state — so a prompt never
-  // reports the tree as it was two checks ago.
-  await writeCheckCache(
+  // index. It is written only by the CLI path that owns it (`opts.writeCache`):
+  // `checkRepo` is also the MCP tool's implementation, and a read tool that created a
+  // cache on a fresh fixture was writing a file it never said it would (review 0005
+  // PR21). A pure check is the default; the command below opts in.
+  if (opts.writeCache === true) await writeCheckCache(
     root,
     await buildCacheRecord(root, {
       rulesOk,
@@ -702,7 +704,7 @@ export async function checkRepo(root, opts = {}) {
 
 export async function checkCommand(positional, flags) {
   const root = commandRoot(flags, positional);
-  const { ok, findings } = await checkRepo(root, flags);
+  const { ok, findings } = await checkRepo(root, { ...flags, writeCache: true });
   const payload = {
     ok,
     command: 'check',

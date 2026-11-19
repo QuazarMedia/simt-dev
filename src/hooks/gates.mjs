@@ -101,9 +101,40 @@ export const GATES = {
   },
 };
 
+/**
+ * Split a scoped gate id, `test@go`, into the gate it runs and the scope it names.
+ *
+ * A polyglot repository has more than one `test`: Node's script and Go's package run.
+ * Merging them by name kept whichever table was read last, so the manifest looked
+ * complete while one half of the repository never ran (review 0005 PR12). A scope is a
+ * suffix on the id, which keeps `gates.prePush` an ordered list of names and leaves every
+ * unscoped name meaning exactly what it meant before.
+ *
+ * @param {string} name
+ * @returns {{base: string, scope: string}|null}
+ */
+export function gateScope(name) {
+  if (typeof name !== 'string') return null;
+  const at = name.indexOf('@');
+  if (at <= 0 || at === name.length - 1) return null;
+  return { base: name.slice(0, at), scope: name.slice(at + 1) };
+}
+
 export function getGate(name, commands = {}) {
   const declared = GATES[name];
   if (declared) return declared;
+  const scoped = gateScope(name);
+  if (scoped) {
+    const base = GATES[scoped.base];
+    const cmd = commands?.[name];
+    // A scoped id is only a gate when its own command is declared: falling back to the
+    // unscoped command would run the Node script under the Go scope and report a pass for
+    // a suite that never ran.
+    if (base && typeof cmd === 'string' && cmd.trim() !== '') {
+      return { ...base, name, scope: scoped.scope, kind: 'command', why: `${base.why} (scope: ${scoped.scope})` };
+    }
+    return null;
+  }
   // a command the repository declared under gates.commands is a valid gate even when
   // no central row knows it. The manifest is the source of truth for a repo's gates, and
   // a name that resolves to a declared command must not read as unknown. Synthesized, not

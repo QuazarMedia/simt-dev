@@ -167,3 +167,25 @@ test('checkCommand exits non-zero and prints the file and remedy', async () => {
     process.stdout.write = write;
   }
 });
+
+test('a claim the door refuses is a finding at the gate (PR19)', async () => {
+  // `{"claims":[{"id":"a"}]}` passed the gate and was refused by `knowledge why`:
+  // the validator checked the outer array and the door checked the claim.
+  const root = await repo();
+  await inputs(root, { 'claims.json': JSON.stringify({ claims: [{ id: 'a' }] }) });
+  const findings = await knowledgeInputFindings(root);
+  assert.ok(findings.length > 0, 'a claim with only an id is not a claim the door can read');
+  assert.match(findings[0].file, /claims\.json$/);
+  assert.match(findings[0].detail, /claims\[0\]/);
+});
+
+test('export.json is read by the export door, and a shape neither door reads is named (PR19)', async () => {
+  const root = await repo();
+  await inputs(root, { 'export.json': JSON.stringify({ nope: true }) });
+  const findings = await knowledgeInputFindings(root);
+  assert.equal(findings.length, 1);
+  assert.match(findings[0].detail, /export door/);
+  // An export request is legal.
+  await inputs(root, { 'export.json': JSON.stringify({ requests: [] }) });
+  assert.deepEqual(await knowledgeInputFindings(root), []);
+});

@@ -299,3 +299,36 @@ test('mcp: subscribing is refused with the reason, and never advertised', async 
   const init = await handle(at('2026-07-28', 'initialize'), TOOLS);
   assert.equal(init.result.capabilities.resources.subscribe, undefined, 'no subscription capability may be promised');
 });
+
+test('a frame is refused before it is buffered, and the stream stays in step (PR22)', async () => {
+  const out = [];
+  const sink = { write: (text) => { out.push(text); return true; } };
+  const valid = `${JSON.stringify({ jsonrpc: '2.0', id: 7, method: 'tools/list' })}\n`;
+  // 2 MiB with no newline: the cap fires during the read, not after readline has held it.
+  const huge = `${'a'.repeat(2 * 1024 * 1024)}\n`;
+  const code = await serve([], {
+    input: Readable.from([Buffer.from(huge), Buffer.from(valid)]),
+    output: sink,
+    packageVersion: '0.0.0',
+  });
+  assert.equal(code, 0);
+  const lines = out.join('').trim().split('\n').map((line) => JSON.parse(line));
+  assert.equal(lines[0].error.code, RPC.REQUEST);
+  assert.match(lines[0].error.message, /larger than/);
+  assert.equal(lines[1].id, 7, 'the request after the oversized frame is still answered');
+  assert.ok(lines[1].result);
+});
+
+test('a UTF-8 sequence split across chunks decodes as one line (PR22)', async () => {
+  const out = [];
+  const sink = { write: (text) => { out.push(text); return true; } };
+  const body = Buffer.from(`${JSON.stringify({ jsonrpc: '2.0', id: 9, method: 'tools/list', params: { note: '→ ok' } })}\n`);
+  const cut = body.indexOf(Buffer.from('→')) + 1;
+  await serve([], {
+    input: Readable.from([body.subarray(0, cut), body.subarray(cut)]),
+    output: sink,
+    packageVersion: '0.0.0',
+  });
+  const answer = JSON.parse(out.join('').trim());
+  assert.equal(answer.id, 9);
+});

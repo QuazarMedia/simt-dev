@@ -20,7 +20,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 
 | ID | Slice | Priority | Lane | Tier | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| PR01 | Make init previews and refusals side-effect free | P0 | adoption | S | — | Queued | — |
+| PR01 | Make init previews and refusals side-effect free | P0 | adoption | S | — | Complete | 7ecc7c9f8566b5a032ca7ca30be76e1123cadfbf |
 | PR02 | Reject invalid manifest and gate configuration at the boundary | P0 | config | M | — | Queued | — |
 | PR03 | Run pre-push gates on the revisions being pushed | P0 | hooks | M | PR02 | Queued | — |
 | PR04 | Bind gate evidence to the executed inputs and outcome | P0 | hooks | M | PR03 | Queued | — |

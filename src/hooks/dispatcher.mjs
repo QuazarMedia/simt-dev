@@ -20,18 +20,24 @@
 
 import { spawn } from 'node:child_process';
 import { readFile, stat } from 'node:fs/promises';
-import { basename, extname, join, matchesGlob, resolve, sep } from 'node:path';
+import { basename, join, resolve, sep } from 'node:path';
 
 import { GATES, getGate } from './gates.mjs';
 import { preparePushTree } from './head-worktree.mjs';
 import { resolveGate } from './resolve.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
+import { readManifest } from '../projection/manifest.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { assertVersionPin } from '../package-version.mjs';
-import { hasTestEvidence, readLedger, recordRun } from '../ledger/index.mjs';
+import { recordRun } from '../ledger/index.mjs';
 import { renderFindings, scanStaged } from '../secrets.mjs';
 import { git, gitPaths, gitText } from '../sys/git.mjs';
+import { ZERO_SHA, parsePushedRefs, resolveAlreadyPassedSkip, resolveNonCodeSkip } from './push-skip.mjs';
+
+// The classification API stays importable from this module: `hooks` is what a consumer
+// already imports, and the extraction is a file split, not a change of surface.
+export { DEFAULT_SKIP_EXTENSIONS, classifyPush, parsePushedRefs } from './push-skip.mjs';
 
 /**
  * The default bound on one gate, in seconds, and the grace a killed gate gets before
@@ -42,22 +48,6 @@ import { git, gitPaths, gitText } from '../sys/git.mjs';
 const DEFAULT_GATE_TIMEOUT_SECONDS = 600;
 const KILL_GRACE_MS = 5000;
 
-/**
- * The extension set a push may carry and still skip the `test` gate when the manifest
- * declares none of its own: images and documents, the file kinds a push can add that no
- * test reads (ADR-147). A manifest `extensions` array REPLACES this set - one declared
- * set is the only set that applies - it never unions with it.
- */
-export const DEFAULT_SKIP_EXTENSIONS = [
-  'avif', 'bmp', 'gif', 'heic', 'heif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'tif', 'tiff', 'webp',
-  'doc', 'docx', 'epub', 'md', 'odt', 'pdf', 'rtf', 'txt',
-];
-
-/**
- * The extension a path carries, lowercased without its dot: `res/a.PNG` is `png`. A name
- * with no dot is `''`, which no extension set contains.
- */
-const fileExtension = (name) => extname(name).replace(/^\./, '').toLowerCase();
 
 /**
  * How much of a gate's output a report can carry. This is a bound on what is KEPT, not
@@ -175,233 +165,6 @@ function describeShape(value) {
   return `a ${typeof value} (${JSON.stringify(value)})`;
 }
 
-/** The sha git writes for a ref that does not exist on the remote yet. */
-const ZERO_SHA = '0'.repeat(40);
-
-/**
- * The lines git feeds a pre-push hook on stdin, one per ref being pushed:
- * `<local ref> <local sha> <remote ref> <remote sha>`.
- *
- * Returns `{ refs, error }`. A line this parser cannot read is an ERROR, not a
- * dropped line: a push that cannot be read is a push that cannot be classified,
- * and the classifier's contract is to fail closed to the full suite.
- *
- * @param {string} text the raw stdin
- * @returns {{refs: {ref: string, localSha: string, remoteSha: string}[] | null, error: string | null}}
- */
-export function parsePushedRefs(text) {
-  const refs = [];
-  for (const line of String(text ?? '').split('\n')) {
-    const trimmed = line.trim();
-    if (trimmed === '') continue;
-    const parts = trimmed.split(' ');
-    if (parts.length !== 4) return { refs: null, error: `unrecognized pre-push line: ${trimmed}` };
-    const [ref, localSha, , remoteSha] = parts;
-    if (!/^[0-9a-f]{40}$/.test(localSha) || !/^[0-9a-f]{40}$/.test(remoteSha)) {
-      return { refs: null, error: `unrecognized sha in pre-push line: ${trimmed}` };
-    }
-    refs.push({ ref, localSha, remoteSha });
-  }
-  return { refs, error: null };
-}
-
-/**
- * Confirm a tag's commit is already accounted for, so the tag may ride along in a
- * non-code push (ADR-147). A tag carries no commits of its own in the release flow:
- * it points at commits delivered (and tested) by a branch push. It is acceptable only
- * when the commit it names is reachable from a remote-tracking ref (already pushed) or
- * from a branch tip this same push is delivering. Any uncertainty - the tag does not
- * resolve to a commit, the remote refs cannot be listed, no candidate is known, or the
- * commit is unreachable from all of them - fails closed to the full suite.
- *
- * @param {string} root the repository to ask git
- * @param {string} tagSha the tag's local sha from the pre-push line
- * @param {string[]} pushingTips branch tips this same push is delivering
- * @returns {Promise<{ok: boolean, reason: string | null}>}
- */
-async function tagCommitAccountedFor(root, tagSha, pushingTips) {
-  let commit;
-  try {
-    commit = await gitText(root, ['rev-parse', `${tagSha}^{commit}`]);
-  } catch (error) {
-    return { ok: false, reason: `the tag could not be resolved to a commit: ${String(error.stderr ?? error.message).trim()}` };
-  }
-
-  let remoteRefs;
-  try {
-    remoteRefs = await gitText(root, ['for-each-ref', 'refs/remotes/', '--format=%(refname)']);
-  } catch (error) {
-    return { ok: false, reason: `the remote refs could not be listed: ${String(error.stderr ?? error.message).trim()}` };
-  }
-  const candidates = [
-    ...remoteRefs.split('\n').map((s) => s.trim()).filter((s) => s !== ''),
-    ...pushingTips,
-  ];
-  if (candidates.length === 0) {
-    return { ok: false, reason: 'no remote refs are known and no branch is being pushed, so the tag’s commit cannot be confirmed as already delivered' };
-  }
-  for (const candidate of candidates) {
-    try {
-      await git(root, ['merge-base', '--is-ancestor', commit, candidate]);
-      return { ok: true, reason: null };
-    } catch {
-      // not reachable from this ref; try the next candidate
-    }
-  }
-  return { ok: false, reason: `the tag’s commit (${commit.slice(0, 7)}) is not reachable from any pushed ref; it may not have been tested` };
-}
-
-/**
- * Decide whether a push is non-code, so the `test` gate may be skipped for it (ADR-147).
- * Every uncertainty fails closed to `{ nonCode: false }` with the reason the full suite
- * runs: an empty ref list, a new branch (no remote sha to diff against), a tag whose
- * commit is not confirmed already delivered, a commit count above the ceiling, a file
- * outside the declared paths and extensions, or a git error.
- *
- * Branch refs are judged on a TREE diff (`remote..local`), so a force push that
- * drops commits is judged on the trees it replaces, not on the commit count alone.
- * Tag refs carry no commits of their own; each is accepted only when its commit is
- * already accounted for (see `tagCommitAccountedFor`). Deletions push nothing.
- *
- * @param {string} root the repository to ask git
- * @param {{ref: string, localSha: string, remoteSha: string}[]} refs
- * @param {{maxCommits: number, paths: string[], extensions?: string[] | Set<string>}} config
- *   the manifest's `gates.prePushSkipTest`; `extensions` defaults to the built-in
- *   image-and-document set
- * @returns {Promise<{nonCode: boolean, reason: string}>}
- */
-export async function classifyPush(root, refs, { maxCommits, paths, extensions = DEFAULT_SKIP_EXTENSIONS }) {
-  const exts = new Set(extensions);
-  if (refs.length === 0) {
-    return { nonCode: false, reason: 'the push carries no readable ref list; running the full suite' };
-  }
-  const deletions = refs.filter((r) => r.localSha === ZERO_SHA).length;
-  const branches = refs.filter((r) => r.localSha !== ZERO_SHA && !r.ref.startsWith('refs/tags/'));
-  const tags = refs.filter((r) => r.localSha !== ZERO_SHA && r.ref.startsWith('refs/tags/'));
-
-  let commits = 0;
-  const files = new Set();
-  for (const { ref, localSha, remoteSha } of branches) {
-    if (remoteSha === ZERO_SHA) {
-      return { nonCode: false, reason: `a new branch is being pushed (${ref}); its history cannot be diffed against the remote` };
-    }
-    let count, names;
-    try {
-      count = await gitText(root, ['rev-list', '--count', `${remoteSha}..${localSha}`]);
-      names = await gitPaths(root, ['diff', '--name-only', `${remoteSha}..${localSha}`]);
-    } catch (error) {
-      return { nonCode: false, reason: `the push could not be diffed: ${String(error.stderr ?? error.message).trim()}` };
-    }
-    commits += Number(count);
-    // NUL-separated paths because a path can contain a newline, and git quotes such a
-    // name in the line-terminated form, so splitting on newlines compares a quoted path
-    // against an unquoted glob and never matches.
-    for (const name of names) {
-      files.add(name);
-    }
-  }
-
-  const pushingTips = branches.map((b) => b.localSha);
-  for (const { localSha } of tags) {
-    const verdict = await tagCommitAccountedFor(root, localSha, pushingTips);
-    if (!verdict.ok) return { nonCode: false, reason: verdict.reason };
-  }
-
-  if (commits > maxCommits) {
-    return { nonCode: false, reason: `${commits} commits exceed the ${maxCommits}-commit ceiling for a non-code push` };
-  }
-  // A file is inside when a declared path matches it OR its extension is declared:
-  // the two are orthogonal, and a file that satisfies neither is the suite's to judge.
-  const inside = (f) => paths.some((p) => matchesGlob(f, p)) || exts.has(fileExtension(f));
-  const outside = [...files].filter((f) => !inside(f));
-  if (outside.length > 0) {
-    return { nonCode: false, reason: `${outside.length} file(s) are outside the declared paths and extensions: ${outside.slice(0, 5).join(', ')}` };
-  }
-
-  const parts = [];
-  if (commits > 0) parts.push(`${commits} commit(s) touching ${files.size} file(s), all inside the declared paths and extensions`);
-  if (tags.length > 0) parts.push(`${tags.length} tag(s) already delivered`);
-  if (deletions > 0) parts.push(`${deletions} ref deletion(s)`);
-  if (parts.length === 0) return { nonCode: true, reason: 'no commits carried' };
-  // The report prints this as-is (ADR-147). The label names what is being pushed:
-  // a push that carries only tags is a tag push, not a non-code push.
-  const kind = commits > 0 ? 'non-code push' : tags.length > 0 ? 'tag push' : 'deletion push';
-  return { nonCode: true, reason: `${kind}: ${parts.join('; ')}` };
-}
-
-/**
- * The pre-push skip decision, from the manifest and the ref list git fed on stdin.
- *
- * The skip is OPT-IN: a repository without `gates.prePushSkipTest` runs the full
- * suite on every push, because a control a repo did not declare is one it did not
- * review. A misdeclaration (missing fields) also runs the suite - a skip the
- * manifest cannot state precisely is a skip a reviewer cannot see.
- *
- * @returns {Promise<{reason: string, adr: string} | null>} null runs the suite; a reason skips the `test` gate
- */
-async function resolveNonCodeSkip(root, manifest, pushed) {
-  if (pushed === undefined) return null;
-  const config = manifest?.gates?.prePushSkipTest;
-  if (typeof config?.maxCommits !== 'number' || !Array.isArray(config.paths)) return null;
-  // `extensions` is optional: absent, the built-in image-and-document set applies.
-  // Present, it must be an array of non-empty strings - a misshape runs the suite,
-  // the same fail-closed as any other field - and it REPLACES the built-in set:
-  // the declared set is the only set that applies (ADR-147).
-  let extensions = DEFAULT_SKIP_EXTENSIONS;
-  if (config.extensions !== undefined) {
-    if (!Array.isArray(config.extensions) || !config.extensions.every((e) => typeof e === 'string' && e.trim() !== '')) {
-      return null;
-    }
-    extensions = config.extensions.map((e) => e.trim().replace(/^\./, '').toLowerCase());
-  }
-  const { refs, error } = parsePushedRefs(pushed);
-  if (error !== null) {
-    return null; // the caller cannot be sure what is being pushed; the suite runs
-  }
-  const verdict = await classifyPush(root, refs, {
-    maxCommits: config.maxCommits,
-    paths: config.paths,
-    extensions: new Set(extensions),
-  });
-  return verdict.nonCode ? { reason: verdict.reason, adr: 'ADR-147' } : null;
-}
-
-/**
- * The pre-push skip for a suite the author already ran on this exact tree (ADR-120).
- *
- * The dispatcher records every gate run against the tree it ran on (ADR-087). If a passing
- * `test` run is recorded for the committed tree about to be pushed, and nothing has changed
- * since, re-running the full suite at push time buys nothing: it is the same tree, already
- * proven. This reads that evidence and earns the same reported skip the non-code path does.
- *
- * It matches the COMMITTED tree (`HEAD^{tree}`), not the working tree: the pre-push gate runs
- * at HEAD, so the evidence that matters is a pass on exactly that tree. A file edited after
- * the green pass changes the tree id, so the match fails and the suite runs - the "no changes
- * since" condition is enforced by the digest, not by trusting the author. Every uncertainty -
- * an unborn HEAD, an unreadable ledger, no entry for this tree, a later failure - fails closed
- * to the suite.
- *
- * @param {string} root the real repository root
- * @returns {Promise<{reason: string} | null>} null runs the suite; a reason skips the `test` gate
- */
-async function resolveAlreadyPassedSkip(root) {
-  let headTree;
-  try {
-    headTree = await gitText(root, ['rev-parse', 'HEAD^{tree}']);
-  } catch {
-    return null;
-  }
-  if (!/^[0-9a-f]{40}$/.test(headTree)) return null;
-  const { entries, errors } = await readLedger(root);
-  if (errors.length > 0) return null;
-  if (!hasTestEvidence(entries, headTree)) return null;
-  return {
-    reason:
-      'already passing on current state: the test gate ran green on this tree and nothing has changed since',
-    adr: 'ADR-120',
-  };
-}
-
 /**
  * @param {string} event 'pre-commit' | 'pre-push'
  * @param {object} ctx
@@ -417,25 +180,29 @@ export async function runGates(event, { root, manifest, pushed }) {
     return { event, gates: [], failed: true, error: `unknown hook event ${event}` };
   }
 
+  // A push is gated per revision, not per checkout: the ref list names revisions the
+  // caller's HEAD may not be, and a branch carries its own manifest. This is the one
+  // event where the tree a gate runs in and the tree the caller stands in differ.
+  if (event === 'pre-push') return runPushGates({ root, manifest, pushed });
+
+  const prepared = prepareDeclaration(manifest, key, event);
+  if (prepared.result) return prepared.result;
+  return runGatesAt(event, { root, ledgerRoot: root, manifest, declared: prepared.declared, key });
+}
+
+/**
+ * The declaration checks every event shares: a list this build cannot read, an empty
+ * one, and a version pin that does not match the binary about to run the gates.
+ * Returns either the report to return early or the list to run.
+ */
+function prepareDeclaration(manifest, key, event) {
   const declared = manifest?.gates?.[key];
   // A declaration this build cannot read is a failed gate, not an empty one. The first
   // version treated a string or a number exactly like an absent list, so a push with a
   // malformed `gates.prePush` printed "nothing runs" and exited 0 - a configuration
   // error reported as a successful gate, which is the worst answer a gate can give.
   if (declared !== undefined && !isNonEmptyStringList(declared)) {
-    return {
-      event,
-      gates: [
-        {
-          name: 'config',
-          status: 'failed',
-          detail: `${MANIFEST_FILE} gates.${key} must be a list of gate names; it is ${describeShape(declared)}`,
-          remedy: `fix gates.${key} in ${MANIFEST_FILE} by hand; an empty list is a valid declaration`,
-          adr: null,
-        },
-      ],
-      failed: true,
-    };
+    return { result: { event, gates: [configGate(key, declared)], failed: true } };
   }
   if (!Array.isArray(declared) || declared.length === 0) {
     // An array, not a string. This field sat next to `gates` as a bare string while
@@ -444,14 +211,16 @@ export async function runGates(event, { root, manifest, pushed }) {
     // Only reachable on a repo that has no formatter and no linter, so the one path
     // where an author's patience is already spent.
     return {
-      event,
-      gates: [],
-      failed: false,
-      notes: [
-        `nothing runs on ${event}: ${MANIFEST_FILE} declares no gates.${key}. That is a valid ` +
-          `answer when the repo has no tool for any of them - \`${CLI} check\` reports each ` +
-          `gate it could not run and why - but it is also what an unfiltered default looks like.`,
-      ],
+      result: {
+        event,
+        gates: [],
+        failed: false,
+        notes: [
+          `nothing runs on ${event}: ${MANIFEST_FILE} declares no gates.${key}. That is a valid ` +
+            `answer when the repo has no tool for any of them - \`${CLI} check\` reports each ` +
+            `gate it could not run and why - but it is also what an unfiltered default looks like.`,
+        ],
+      },
     };
   }
 
@@ -465,40 +234,235 @@ export async function runGates(event, { root, manifest, pushed }) {
   const mismatch = assertVersionPin(manifest);
   if (mismatch) {
     return {
-      event,
-      gates: [{ name: 'version', status: 'failed', detail: mismatch, remedy: `run: ${CLI} upgrade --yes`, adr: null }],
+      result: {
+        event,
+        gates: [{ name: 'version', status: 'failed', detail: mismatch, remedy: `run: ${CLI} upgrade --yes`, adr: null }],
+        failed: true,
+      },
+    };
+  }
+  return { declared };
+}
+
+/** The one gate a malformed declaration reports, in the words a reader can act on. */
+function configGate(key, declared) {
+  return {
+    name: 'config',
+    status: 'failed',
+    detail: `${MANIFEST_FILE} gates.${key} must be a list of gate names; it is ${describeShape(declared)}`,
+    remedy: `fix gates.${key} in ${MANIFEST_FILE} by hand; an empty list is a valid declaration`,
+    adr: null,
+  };
+}
+
+/**
+ * The distinct commits a push delivers, each with every ref that carries it.
+ *
+ * An annotated tag's pre-push sha is the tag OBJECT, so every ref is dereferenced to its
+ * commit before it is used as a worktree revision; a branch and a tag that deliver the
+ * same commit are one target, because running the gates twice on one tree proves nothing
+ * the first run did not. A ref that does not resolve to a commit is carried with
+ * `revision: null` and reported as its own failure.
+ */
+async function pushedRevisions(root, refs) {
+  const byRevision = new Map();
+  for (const ref of refs) {
+    if (ref.localSha === ZERO_SHA) continue;
+    let revision = null;
+    try {
+      revision = await gitText(root, ['rev-parse', `${ref.localSha}^{commit}`]);
+    } catch {
+      // Reported by the target, not swallowed: a pushed object this repository cannot
+      // read is exactly the case that must fail closed.
+    }
+    const key = revision ?? ref.localSha;
+    const at = byRevision.get(key) ?? { revision, object: ref.localSha, refs: [] };
+    if (!at.refs.includes(ref.ref)) at.refs.push(ref.ref);
+    byRevision.set(key, at);
+  }
+  return [...byRevision.values()];
+}
+
+/**
+ * Gate every revision a push delivers, once per distinct commit.
+ *
+ * A manual run (no ref list on stdin) is a push of HEAD, and says so: the gates run
+ * against the committed HEAD tree exactly as they would for a push, which is the only
+ * basis a hook can name when git told it nothing.
+ */
+async function runPushGates({ root, manifest, pushed }) {
+  const notes = [];
+  const parsed = pushed === undefined || String(pushed).trim() === '' ? null : parsePushedRefs(pushed);
+  let targets;
+  if (parsed === null || parsed.error !== null) {
+    let head = null;
+    try {
+      head = await gitText(root, ['rev-parse', 'HEAD^{commit}']);
+    } catch {
+      // Unborn HEAD: reported as the target's failure below.
+    }
+    // A manual run's basis is the caller's manifest, so its declaration is answered
+    // before any worktree exists - the order every other event uses, and the one that
+    // lets "this repository declares no pre-push gate" be the whole answer.
+    const early = manifest === null || manifest === undefined ? { declared: [] } : prepareDeclaration(manifest, 'prePush', 'pre-push');
+    if (early.result) return { ...early.result, targets: [], notes: [...(early.result.notes ?? []), ...notes] };
+    // `HEAD` rather than the literal sha when the branch is unborn, so the failure names
+    // the reference the reader typed rather than a null.
+    targets = [{ revision: head ?? 'HEAD', object: head ?? 'HEAD', refs: ['HEAD'], manual: true }];
+    notes.push(
+      head === null
+        ? 'manual run: there is no ref list on stdin and no commit at HEAD, so there is no tree to run a gate against'
+        : `manual run: no ref list on stdin, so the gates run against HEAD (${head.slice(0, 12)})`,
+    );
+    if (parsed?.error !== null && parsed?.error !== undefined) {
+      notes.push(`the push ref list could not be read (${parsed.error}); the gates run against HEAD instead`);
+    }
+  } else {
+    const refs = parsed.refs ?? [];
+    const deletions = refs.filter((r) => r.localSha === ZERO_SHA);
+    if (deletions.length > 0) {
+      notes.push(`deletion(s) push no tree, so nothing runs for: ${deletions.map((d) => d.ref).join(', ')}`);
+    }
+    targets = await pushedRevisions(root, refs);
+    if (targets.length === 0) {
+      // A deletion-only push delivers no tree, but it is still a push: the classifier
+      // earns the non-code skip on the deletions themselves, and the other gates run
+      // against HEAD, which is the only tree the caller can name.
+      let head = null;
+      try {
+        head = await gitText(root, ['rev-parse', 'HEAD^{commit}']);
+      } catch {
+        // Unborn HEAD: reported by the target's own gate below.
+      }
+      targets = [{ revision: head ?? 'HEAD', object: head ?? 'HEAD', refs: deletions.map((d) => d.ref), manual: true }];
+      notes.push(
+        'the push carries deletions only, so there is no pushed tree; the gates run against HEAD and the non-code classification reports the deletions',
+      );
+    }
+  }
+
+  const results = [];
+  for (const target of targets) {
+    results.push({ manual: target.manual === true, ...(await runPushTarget(root, manifest, target, pushed, notes)) });
+  }
+  // A target's own notes ("nothing runs", "this revision's manifest cannot be read")
+  // are part of the run's answer, and `hooks run` prints the top-level list. A multi-
+  // target run prefixes each with its revision so the note says which tree it is about.
+  const targetNotes = results.flatMap((r) =>
+    (r.notes ?? []).map((n) => (results.length > 1 ? `${r.revision === null ? r.ref : r.revision.slice(0, 12)}: ${n}` : n)),
+  );
+  return {
+    event: 'pre-push',
+    // Flat as well as grouped: a caller that only wants the verdict keeps the shape it
+    // had, and each gate names the ref and revision it belongs to.
+    gates: results.flatMap((r) => r.gates.map((g) => ({ ...g, ref: r.ref, revision: r.revision }))),
+    targets: results,
+    failed: results.some((r) => r.failed),
+    notes: [...targetNotes, ...notes],
+  };
+}
+
+/** One revision a push delivers: its tree, its declaration, its gates and its cleanup. */
+async function runPushTarget(root, callerManifest, target, pushed, notes) {
+  const label = target.refs.join(', ');
+  const revision = target.revision;
+  if (revision === null) {
+    return {
+      ref: label,
+      revision: null,
+      basis: null,
+      gates: [
+        {
+          name: 'head',
+          status: 'failed',
+          detail: `the pushed object ${String(target.object).slice(0, 12)} is not a commit this repository can check out`,
+          remedy: 'push a revision this repository has, or fetch the missing objects and push again',
+          adr: null,
+        },
+      ],
       failed: true,
     };
   }
-
-  // A pre-push gate runs against the COMMITTED tree, not the working one. Uncommitted
-  // work must not block the push of previous commits: a gate that fails on WIP the
-  // author has not committed is blocking a push it does not own. The worktree is
-  // disposable and shares the repository's object store, so `git worktree add` is cheap
-  // and needs no clone. The ledger and the version pin stay at the real root - the
-  // evidence is about this repository, not the throwaway checkout.
-  let runRoot = root;
-  let cleanupHeadWorktree = async () => {};
-  let skipTest = null;
-  if (event === 'pre-push') {
-    // Decided before the worktree exists: a non-code push (documentation, images, release
-    // files) skips the `test` gate (ADR-147), and a push whose tree the author already proved
-    // green skips it on that evidence (ADR-120).
-    skipTest = (await resolveNonCodeSkip(root, manifest, pushed)) ??
-      (await resolveAlreadyPassedSkip(root));
-    // The tree is materialised for every pre-push, including one that skips `test`: lint and
-    // format must see the commit being pushed, not the author's uncommitted edits. The skip
-    // reason is passed through so `runGatesAt` still leaves the test gate alone.
-    const prepared = await preparePushTree(root);
-    if (prepared.path === null) return { event, gates: [prepared.gate], failed: true };
-    runRoot = prepared.path;
-    cleanupHeadWorktree = prepared.done;
-  }
-
+  const prepared = await preparePushTree(root, revision);
+  if (prepared.path === null) return { ref: label, revision, basis: null, gates: [prepared.gate], failed: true };
   try {
-    return await runGatesAt(event, { root: runRoot, ledgerRoot: root, manifest, declared, key, skipTest });
+    // The declaration and the toolchain come from the tree the gates run in: a branch
+    // that changes simt.json changes what its own push is gated by, and the caller's
+    // checkout is not the authority on either.
+    const loaded = await readManifest(prepared.path);
+    if (loaded.exists && loaded.manifest === null) {
+      return {
+        ref: label,
+        revision,
+        basis: 'revision',
+        gates: [
+          {
+            name: 'config',
+            status: 'failed',
+            detail: `${MANIFEST_FILE} in ${revision.slice(0, 12)} cannot be read: ${loaded.error}`,
+            remedy: 'fix the manifest in that revision and push it again',
+            adr: null,
+          },
+        ],
+        failed: true,
+      };
+    }
+    let basis = 'revision';
+    let basisManifest = loaded.manifest;
+    if (!loaded.exists) {
+      // A revision adopted before its manifest landed still has to be gated by
+      // something. The caller's declaration is the only one on offer, and the target
+      // row says so rather than claiming the revision declared it.
+      basis = 'caller';
+      basisManifest = callerManifest ?? null;
+      if (basisManifest === null) {
+        return {
+          ref: label,
+          revision,
+          basis: null,
+          gates: [
+            {
+              name: 'config',
+              status: 'failed',
+              detail: `neither ${revision.slice(0, 12)} nor the caller checkout carries ${MANIFEST_FILE}, so the gate list is unknown`,
+              remedy: `commit ${MANIFEST_FILE} into the pushed revision, then push again`,
+              adr: null,
+            },
+          ],
+          failed: true,
+        };
+      }
+      notes.push(`${revision.slice(0, 12)} carries no ${MANIFEST_FILE}; its gates are the caller checkout's declaration`);
+    }
+    const declaration = prepareDeclaration(basisManifest, 'prePush', 'pre-push');
+    if (declaration.result) {
+      return {
+        ref: label,
+        revision,
+        basis,
+        gates: declaration.result.gates,
+        failed: declaration.result.failed,
+        notes: declaration.result.notes ?? [],
+      };
+    }
+    // A non-code push skips `test` for every revision it carries (ADR-147); a tree the
+    // author already proved green skips it on that evidence (ADR-120), matched against
+    // the revision's own tree rather than HEAD's.
+    const skipTest =
+      (await resolveNonCodeSkip(root, basisManifest, pushed)) ?? (await resolveAlreadyPassedSkip(root, revision));
+    // The tree is materialised for every pre-push, including one that skips `test`: lint and
+    // format must see the commit being pushed, not the author's uncommitted edits.
+    const run = await runGatesAt('pre-push', {
+      root: prepared.path,
+      ledgerRoot: root,
+      manifest: basisManifest,
+      declared: declaration.declared,
+      key: 'prePush',
+      skipTest,
+    });
+    return { ref: label, revision, basis, gates: run.gates, failed: run.failed };
   } finally {
-    await cleanupHeadWorktree();
+    await prepared.done();
   }
 }
 
@@ -777,11 +741,31 @@ async function runGatesAt(event, { root, ledgerRoot, manifest, declared, key, sk
  * @returns {string[]} the report lines, newline-free, in print order
  */
 export function renderGateReport(event, declared, result) {
-  const lines = [`hooks    ${event}`, `gates    ${(declared ?? []).join(', ') || '(none declared)'}`];
-  for (const g of result.gates) {
-    lines.push(`${g.status.toUpperCase().padEnd(8)} ${g.name.padEnd(20)} ${g.detail}${g.adr ? `  [${g.adr}]` : ''}`);
-    if (g.remedy) lines.push(`        remedy: ${g.remedy}`);
-    if (g.output) lines.push(...g.output.split('\n').map((l) => `        ${l}`));
+  const lines = [`hooks    ${event}`];
+  const gateLines = (gates) => {
+    const out = [];
+    for (const g of gates) {
+      out.push(`${g.status.toUpperCase().padEnd(8)} ${g.name.padEnd(20)} ${g.detail}${g.adr ? `  [${g.adr}]` : ''}`);
+      if (g.remedy) out.push(`        remedy: ${g.remedy}`);
+      if (g.output) out.push(...g.output.split('\n').map((l) => `        ${l}`));
+    }
+    return out;
+  };
+  const targets = result.targets ?? [];
+  // A push that delivers a revision other than the caller's HEAD is reported per
+  // target: the ref, the revision and the verdict, because "the gates passed" about a
+  // tree the push did not carry is the answer this report exists not to give.
+  const grouped = targets.length > 1 || targets.some((t) => t.manual !== true);
+  if (grouped) {
+    for (const target of targets) {
+      lines.push(
+        `target   ${target.ref}  ${target.revision === null ? '(no commit)' : target.revision.slice(0, 12)}  basis: ${target.basis ?? 'unknown'}`,
+      );
+      lines.push(...gateLines(target.gates));
+    }
+  } else {
+    lines.push(`gates    ${(declared ?? []).join(', ') || '(none declared)'}`);
+    lines.push(...gateLines(result.gates));
   }
   lines.push(result.failed ? 'BLOCKED  at least one gate failed' : 'PASSED');
   return lines;

@@ -63,7 +63,7 @@ simt verify status --changed --scope handbook
 
 | ID | Slice | Phase | Lane | Tier | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| WK01 | Define local configuration, scopes and inspection | First use | config | M | — | Queued | — |
+| WK01 | Define local configuration, scopes and inspection | First use | config | M | — | Complete | e11b9b735c9772b1df050ffb12002ec5aae01a30 · test: node --test test/work-config.test.mjs test/work-artifacts.test.mjs test/work-facets.test.mjs test/work-capabilities.test.mjs |
 | WK02 | Add previewable one-scope setup | First use | setup | M | WK01 | Queued | — |
 | WK03 | Build a scoped corpus from existing files | First use | corpus | L | WK01 | Queued | — |
 | WK04 | Reuse native metadata for claims and source lineage | First use | corpus | M | WK03 | Queued | — |

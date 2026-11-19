@@ -1,6 +1,7 @@
 import { MANIFEST_COMMENT } from '../projection/manifest.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
+import { packageVersion } from '../package-version.mjs';
 // Classify one repository's upgrade state. Pure: no filesystem, no git.
 //
 // The line this module draws is narrow on purpose. `upgrade` moves a PIN. It does not
@@ -139,6 +140,13 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
         ? 'a baseline changed'
         : null;
   const pinBehind = base.pinnedSha !== sha;
+  // The release pin is half of the stamp. Comparing only the SHA called a repository
+  // current whose manifest still named an older release, so `upgrade` skipped it and the
+  // pin check failed immediately afterwards (review 0005 PR16). Absent is not behind:
+  // a repository that never recorded a version is repaired the first time it is
+  // restamped, and the pin check does not judge absence either.
+  const versionBehind =
+    typeof manifest?.projection?.version === 'string' && manifest.projection.version !== packageVersion();
   // A generated field of the manifest can alone be stale. `$comment` is written by
   // simt-dev and describes this file's provenance, so an adopted repo whose regions
   // and pin are all current can still be carrying an older version's wording -
@@ -147,7 +155,7 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
   // field nobody checks is a field nobody fixes.
   const manifestBehind =
     manifest?.$comment !== undefined && manifest.$comment !== MANIFEST_COMMENT.$comment;
-  if (!regionBehind && !pinBehind && !manifestBehind) {
+  if (!regionBehind && !pinBehind && !versionBehind && !manifestBehind) {
     return { ...base, state: 'current', action: 'unchanged', detail: 'already at this simt-dev' };
   }
 
@@ -174,7 +182,9 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
         ? cause === null
           ? 'region repaired; the pin and the rules were already current'
           : `region restamped; the pin was already current (${cause})`
-        : 'manifest metadata refreshed; the rules and the pin were already current',
+        : pinBehind || versionBehind
+          ? 'pin moved; the region was already current'
+          : 'manifest metadata refreshed; the rules and the pin were already current',
   };
 }
 

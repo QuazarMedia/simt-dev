@@ -20,7 +20,7 @@
 //      without a human reading a diff first, and ADR-001 makes pushing approval-sensitive
 //      for a reason that does not weaken because the caller is a model.
 
-import { createInterface } from 'node:readline';
+import { once } from 'node:events';
 import { CLI } from '../name.mjs';
 import { getPrompt, PROMPTS } from './prompts.mjs';
 import { RESOURCE_TEMPLATES, listResources, readResource } from './resources.mjs';
@@ -486,8 +486,69 @@ function error(id, code, message) {
  * only because a client on an older revision sends bare requests afterwards and expects
  * the answers it agreed to.
  */
+/**
+ * Split a byte stream into lines, refusing a line longer than `limit` before it is
+ * buffered.
+ *
+ * `readline` buffers a whole line before a listener sees it, so the cap bounded what was
+ * parsed and not what was read: a client could hand this process a line large enough to
+ * take the memory it needed to refuse it (review 0005 PR22). This reader keeps at most
+ * `limit` bytes, emits `null` once for an overlong line, and discards the rest of that
+ * line. UTF-8 splits across chunks are harmless because bytes are joined before decoding.
+ */
+async function* boundedLines(input, limit) {
+  let parts = [];
+  let size = 0;
+  let dropping = false;
+  for await (const raw of input) {
+    // A test or an adapter may hand over strings; the reader works in bytes so the cap
+    // means the same thing for both.
+    const chunk = typeof raw === 'string' ? Buffer.from(raw) : raw;
+    let start = 0;
+    while (start <= chunk.length) {
+      const newline = chunk.indexOf(10, start);
+      const end = newline === -1 ? chunk.length : newline;
+      if (!dropping) {
+        const slice = chunk.subarray(start, end);
+        size += slice.length;
+        if (size > limit) {
+          dropping = true;
+          parts = [];
+          size = 0;
+          yield null;
+        } else {
+          parts.push(slice);
+        }
+      }
+      if (newline === -1) break;
+      if (!dropping) {
+        const line = Buffer.concat(parts).toString('utf8');
+        yield line.endsWith('\r') ? line.slice(0, -1) : line;
+      }
+      parts = [];
+      size = 0;
+      dropping = false;
+      start = newline + 1;
+    }
+  }
+  if (!dropping && size > 0) {
+    const line = Buffer.concat(parts).toString('utf8');
+    yield line.endsWith('\r') ? line.slice(0, -1) : line;
+  }
+}
+
 export async function serve(tools, { input = process.stdin, output = process.stdout, packageVersion, onError } = {}) {
-  const rl = createInterface({ input, crlfDelay: Infinity });
+  const lines = boundedLines(input, MAX_LINE_BYTES);
+  // Every write goes through one ordered queue: a response queued behind a drain must
+  // not overtake the notification that preceded it, and a client that stops reading must
+  // apply backpressure instead of growing this process.
+  let chain = Promise.resolve();
+  const send = (text) => {
+    chain = chain.then(async () => {
+      if (output.write(text) === false) await once(output, 'drain');
+    });
+    return chain;
+  };
   const state = { version: null };
   // The in-flight call a `notifications/cancelled` can abort. Read this way
   // because the loop below is blocked awaiting the tool while the client
@@ -514,20 +575,45 @@ export async function serve(tools, { input = process.stdin, output = process.std
       inflight.controller.abort();
     }
   };
-  rl.on('line', peekCancel);
+  // The reader runs one step ahead of the decisions: a cancellation must be observed
+  // while a tool is in flight, and the loop below is blocked awaiting that tool.
+  const queue = [];
+  let wake = null;
+  let closed = false;
+  const reader = (async () => {
+    for await (const line of lines) {
+      if (line !== null) peekCancel(line);
+      queue.push(line);
+      if (wake) {
+        const resume = wake;
+        wake = null;
+        resume();
+      }
+    }
+    closed = true;
+    if (wake) {
+      const resume = wake;
+      wake = null;
+      resume();
+    }
+  })();
   try {
-    for await (const line of rl) {
-      if (line.trim() === '') continue;
-      // readline has already buffered this line, so the cap bounds what is parsed and
-      // answered rather than what is read. That is still the difference between a request
-      // the server refuses by name and one it takes apart for minutes: a 40 MB line used
-      // to reach `JSON.parse` and take the process with it .
-      if (Buffer.byteLength(line) > MAX_LINE_BYTES) {
-        output.write(
-          `${JSON.stringify(error(null, RPC.REQUEST, `request is larger than ${MAX_LINE_BYTES} bytes`))}\n`,
-        );
+    for (;;) {
+      if (queue.length === 0) {
+        if (closed) break;
+        await new Promise((resolve) => { wake = resolve; });
         continue;
       }
+      const line = queue.shift();
+      // `null` is the byte cap having fired before this line was buffered: the request is
+      // refused by name and the rest of the line is discarded, so one oversized frame does
+      // not desynchronise the stream.
+      if (line === null) {
+        await send(`${JSON.stringify(error(null, RPC.REQUEST, `request is larger than ${MAX_LINE_BYTES} bytes`))}\n`);
+        continue;
+      }
+      if (line.trim() === '') continue;
+      peekCancel(line);
 
       // Parse and handling fail differently and must answer differently. A line that is
       // not JSON has no id to answer to, so it is a parse error with `id: null`; a
@@ -554,7 +640,7 @@ export async function serve(tools, { input = process.stdin, output = process.std
             packageVersion,
             state,
             signal: controller?.signal ?? null,
-            notify: (notification) => output.write(`${JSON.stringify(notification)}\n`),
+            notify: (notification) => send(`${JSON.stringify(notification)}\n`),
           });
         } catch (handlerFailure) {
           const id = message !== null && typeof message === 'object' && 'id' in message ? message.id : null;
@@ -564,11 +650,15 @@ export async function serve(tools, { input = process.stdin, output = process.std
         }
       }
       if (response === null) continue;
-      output.write(`${JSON.stringify(response)}\n`);
+      await send(`${JSON.stringify(response)}\n`);
     }
+    await reader;
+    // Every response queued behind a drain is written before the process reports done.
+    await chain;
     return EXIT_OK;
   } finally {
-    rl.off('line', peekCancel);
+    // Nothing to detach: the reader ends when the input does, and `peekCancel` is called
+    // from this loop rather than from a second listener that could fire after it.
   }
 }
 

@@ -284,7 +284,7 @@ function indent(text, spaces) {
  * @param {{own?: boolean}} [options]
  * @returns {string} YAML, LF-terminated
  */
-export function renderWorkflow({ own = false, npm = true, manager = null, version, packageManager = null } = {}) {
+export function renderWorkflow({ own = false, npm = true, manager = null, version, packageManager = null, gates = null } = {}) {
   if (own) {
     const floor = nodeFloor();
     return `${header(true)}${skeleton(
@@ -417,6 +417,26 @@ chmod +x ${LOCAL_BIN}`, 10),
     ? `REMEDY run: ${addDev}   (the gate runs from the pinned dependency)`
     : `REMEDY run: ${localInstall(v)}   (the gate runs from the release binary in .simt/bin)`;
   const locator = renderLocator('check --root "$ROOT"', { remedy });
+  // The declared gates, run by the dispatcher a push runs. Without this the workflow
+  // proved the projection was current and nothing about the tests the repository
+  // declared, so a green pull request said less than its checks implied (review 0005
+  // PR17). Only `pre-push` is run here: the pre-commit gate reads the staged set, and a
+  // CI checkout has nothing staged — its lint runs through the same command in the
+  // pre-push list when the repository declares it there.
+  const declaredGates = gates?.prePush ?? [];
+  const gateStep = declaredGates.length === 0
+    ? []
+    : [
+        '      - name: the declared pre-push gates',
+        `        # ${declaredGates.join(', ')}: run by the same dispatcher a push runs, so a green`,
+        '        # run here and a green push cannot disagree about what was checked. stdin is',
+        '        # closed so the dispatcher cannot wait for a ref list CI never gave it.',
+        '        run: |',
+        indent(
+          `set -eu\nROOT="\${GITHUB_WORKSPACE}"\n${renderLocator('hooks run pre-push --root "$ROOT" </dev/null', { remedy })}`,
+          10,
+        ),
+      ];
   return `${header(false)}${skeleton(
     `${CLI} check`,
     [
@@ -429,6 +449,7 @@ chmod +x ${LOCAL_BIN}`, 10),
       `      - name: ${CLI} check`,
       '        run: |',
       indent(`set -eu\nROOT="\${GITHUB_WORKSPACE}"\n${locator}`, 10),
+      ...gateStep,
     ].join('\n'),
   )}\n`;
 }
@@ -442,7 +463,7 @@ chmod +x ${LOCAL_BIN}`, 10),
  * values come from the same records the workflow is rendered from, so the two channels
  * cannot drift into installing with different commands.
  */
-export function ciContract({ npm = true, manager = null, version } = {}) {
+export function ciContract({ npm = true, manager = null, version, gates = null } = {}) {
   const nodeManager = manager ?? (npm ? 'npm' : null);
   if (nodeManager === null) {
     const v = version ?? packageVersion();
@@ -454,6 +475,7 @@ export function ciContract({ npm = true, manager = null, version } = {}) {
       lockfiles: [],
       install: `fetch ${releaseBase(v)}/${assetNameExpr(v)} and its .sha256, verify the checksum, then run ${LOCAL_BIN}`,
       gate: `${CLI} check`,
+      ...(gates?.prePush?.length ? { declaredGates: `${CLI} hooks run pre-push --root "$ROOT"` } : {}),
     };
   }
   const inst = nodeInstallCommands(nodeManager);
@@ -466,6 +488,7 @@ export function ciContract({ npm = true, manager = null, version } = {}) {
     withoutLockfile: inst.fallback,
     lockfiles: inst.lockfiles,
     gate: `${CLI} check`,
+    ...(gates?.prePush?.length ? { declaredGates: `${CLI} hooks run pre-push --root "$ROOT"` } : {}),
   };
 }
 

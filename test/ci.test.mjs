@@ -174,11 +174,13 @@ test('the workflow is shell a POSIX sh will accept, running the gate it says it 
   // scalar's content is indented past its key, which is what YAML actually requires.
   const yaml = renderWorkflow();
   const lines = yaml.split('\n');
-  // The last block scalar is the gate step. The install step became one too (the frozen
-  // install is guarded by a lockfile test), and taking the first one started linting the
-  // installer instead of the command the file exists to run.
-  const runKey = lines.findLastIndex((l) => /^ {8}run: \|$/.test(l));
-  assert.ok(runKey > 0, 'the check step must use a block scalar');
+  // The check step by name. The install step is a block scalar too, and the declared-gate
+  // step follows the check, so neither "first" nor "last" finds the command this test is
+  // about.
+  const checkStep = lines.indexOf(`      - name: ${CLI} check`);
+  assert.ok(checkStep > 0, 'the check step is missing');
+  const runKey = lines.findIndex((l, i) => i > checkStep && /^ {8}run: \|$/.test(l));
+  assert.ok(runKey > checkStep, 'the check step must use a block scalar');
   const body = [];
   for (const line of lines.slice(runKey + 1)) {
     if (line.trim() === '') { body.push(''); continue; }
@@ -192,6 +194,39 @@ test('the workflow is shell a POSIX sh will accept, running the gate it says it 
   keepTemp(join(script, '..'));
   await writeFile(script, body.join('\n'));
   await exec('sh', ['-n', script]);
+});
+
+test('the workflow runs the gates the repository declared (PR17)', () => {
+  // `check` proves the projection; it says nothing about the tests this repository
+  // declared. The dispatcher a push runs is the one that does, so CI runs the same one.
+  const yaml = renderWorkflow({ gates: { preCommit: ['lint'], prePush: ['test'] } });
+  assert.match(yaml, /- name: the declared pre-push gates/);
+  assert.match(yaml, /# test: run by the same dispatcher a push runs/);
+  assert.match(yaml, /hooks run pre-push --root "\$ROOT" <\/dev\/null/, 'the gate step must close stdin');
+
+  // A repository that declares no gate gets no step: an empty run would pass and prove
+  // nothing, which is worse than its absence.
+  assert.doesNotMatch(renderWorkflow(), /declared pre-push gates/);
+  assert.doesNotMatch(renderWorkflow({ gates: { preCommit: ['lint'], prePush: [] } }), /hooks run pre-push/);
+});
+
+test('init writes the gate step into the workflow when the repo declares a gate', async () => {
+  const root = await actionsRepo({
+    'package.json': JSON.stringify({
+      name: 'fx',
+      private: true,
+      scripts: { test: 'node --test', lint: 'node --check a.mjs' },
+      devDependencies: { [PACKAGE_NAME]: '0.0.0' },
+    }),
+    'a.mjs': 'export const a = 1;\n',
+  });
+  await exec(process.execPath, [BIN, 'init', '--yes', '--surfaces', 'cursor'], {
+    cwd: root,
+    env: { ...process.env, NO_COLOR: '1' },
+  });
+  const written = await readFile(join(root, WORKFLOW_FILE), 'utf8');
+  assert.match(written, /hooks run pre-push --root "\$ROOT" <\/dev\/null/);
+  assert.match(written, /# test: run by the same dispatcher/);
 });
 
 test('the workflow ships nothing only its author can act on', () => {

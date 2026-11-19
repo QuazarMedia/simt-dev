@@ -205,6 +205,10 @@ export async function initCommand(positional, flags) {
   // in the plan is a file they approve by reading the diff afterwards, which is the
   // one review step this tool exists to make unnecessary.
   const ci = await planWorkflow(root);
+  // The gates this adoption declares, so the generated workflow can run them instead of
+  // only proving the projection is current. Read from the planned manifest, which is the
+  // one this run writes.
+  const declaredGates = { preCommit: gateList(manifest, 'preCommit'), prePush: gateList(manifest, 'prePush') };
   if (ciMode === 'none' || ciMode === 'external') {
     ci.action = 'skip';
     ci.reason = ciMode === 'none'
@@ -296,7 +300,7 @@ export async function initCommand(positional, flags) {
       mode: ciMode,
       // Only the external channel needs the facts spelled out; the other modes own a
       // file or write nothing, and a contract nobody asked for is noise in every payload.
-      ...(ciMode === 'external' ? { contract: ciContract({ npm, manager, version }) } : {}),
+      ...(ciMode === 'external' ? { contract: ciContract({ npm, manager, version, gates: declaredGates }) } : {}),
     },
     identity: identityPlan,
     dependabot: {
@@ -414,7 +418,7 @@ export async function initCommand(positional, flags) {
     if (isJson(flags)) {
       emitJson(payload);
     } else {
-      emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl }));
+      emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl, gates: declaredGates }));
       note('');
       note(
         `blocked  ${summary.conflicts} conflict${summary.conflicts === 1 ? '' : 's'}; nothing written`,
@@ -438,7 +442,7 @@ export async function initCommand(positional, flags) {
     if (isJson(flags)) {
       emitJson(payload);
     } else {
-      emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl }));
+      emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl, gates: declaredGates }));
       note('');
       note(`refused  ${agentHooks.refused.length} hooks config(s) could not be read; nothing written`);
     }
@@ -457,7 +461,7 @@ export async function initCommand(positional, flags) {
     payload.ok = false;
     payload.blockedBy = 'malformed-region';
     if (isJson(flags)) emitJson(payload);
-    else emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl }));
+    else emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl, gates: declaredGates }));
     return fail(
       `${malformed.length} target(s) have a malformed generated region (${malformed[0].file}: ${malformed[0].reason})`,
       EXIT.FAIL,
@@ -497,7 +501,7 @@ export async function initCommand(positional, flags) {
       diffs.push({
         path: payload.ci.file,
         before: await readBefore(join(root, payload.ci.file)),
-        after: renderWorkflow({ own: payload.ci.own, npm, manager, version, packageManager: packageManagerDecl }),
+        after: renderWorkflow({ own: payload.ci.own, npm, manager, version, packageManager: packageManagerDecl, gates: declaredGates }),
       });
     }
     if (payload.dependabot.action === 'create') {
@@ -526,7 +530,7 @@ export async function initCommand(positional, flags) {
   if (isJson(flags)) {
     if (!apply) emitJson(payload);
   } else {
-    emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl }));
+    emit(render(payload, manifest, { npm, manager, version, packageManager: packageManagerDecl, gates: declaredGates }));
     // After the report: the report says what, the diff shows it .
     emitDiffs(diffs, flags);
   }
@@ -624,7 +628,7 @@ export async function initCommand(positional, flags) {
   // guaranteed to be misled.
   if (payload.ci.action === 'create') {
     await mkdir(dirname(join(root, payload.ci.file)), { recursive: true });
-    await journaledWriteFile(root, journal, join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own, npm, manager, version, packageManager: packageManagerDecl }));
+    await journaledWriteFile(root, journal, join(root, payload.ci.file), renderWorkflow({ own: payload.ci.own, npm, manager, version, packageManager: packageManagerDecl, gates: declaredGates }));
     note(`wrote    ${payload.ci.file} (create; yours to edit from here, simt-dev will not rewrite it)`);
   }
   if (payload.dependabot.action === 'create') {
@@ -752,7 +756,7 @@ export async function initCommand(positional, flags) {
   // Which capabilities this adoption actually leaves behind. They are three separate
   // facts - a declared gate, an installed hook, a CI workflow - and naming them together
   // is what lets the reader see which one is missing. The old line said "then `check` in
-  // CI" to an adoption that had no CI workflow at all (review 0005 PR15).
+  // CI" to an adoption that had no CI workflow at all.
   const ciState = await ciWorkflow(root);
   payload.ci = ciState;
   if (isJson(flags)) emitJson(payload);
@@ -779,12 +783,13 @@ export async function initCommand(positional, flags) {
     );
   }
   if (ciMode === 'external') {
-    const contract = ciContract({ npm, manager, version });
+    const contract = ciContract({ npm, manager, version, gates: declaredGates });
     note('');
     note(`ci       this repository gates outside GitHub Actions; no workflow is written. A provider runs:`);
     note(`         ${contract.channel === 'node' ? `node ${contract.node}, with ${contract.manager} bootstrapped via ${contract.bootstrap ?? 'the image'}` : 'the release binary, checksum-verified'}`);
     note(`         install: ${contract.install}${contract.lockfiles?.length ? `  (only when ${contract.lockfiles.join(' or ')} exists; otherwise ${contract.withoutLockfile})` : ''}`);
     note(`         gate:    ${contract.gate}`);
+    if (contract.declaredGates) note(`         then:    ${contract.declaredGates}  (the gates this repository declares)`);
   }
   return EXIT.OK;
 }

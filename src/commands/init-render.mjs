@@ -20,7 +20,7 @@ function harnessIds() {
  *  finding. Generated regions are skipped: quoting a ruling is not a conflict with
  *  it, and the region is rewritten by `sync` anyway. */
 /** Every line is a decision with a reason. Nothing is silent. */
-function render(payload, manifest, { npm = true, manager = null, version, packageManager = null } = {}) {
+function render(payload, manifest, { npm = true, manager = null, version, packageManager = null, gates = null } = {}) {
   const lines = [
     `repo        ${payload.root}`,
     `stack       ${payload.stack.length > 0 ? payload.stack.join(', ') : '(undetected)'}`,
@@ -159,7 +159,7 @@ function render(payload, manifest, { npm = true, manager = null, version, packag
   // a reader can tell "this repo does not use GitHub Actions" from "this repo was
   // not offered the gate".
   if (payload.ci.action === 'create') {
-    lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow({ own: payload.ci.own, npm, manager, version, packageManager }).length} bytes`);
+    lines.push(`  ${'create'.padEnd(9)} ${payload.ci.file}  ${renderWorkflow({ own: payload.ci.own, npm, manager, version, packageManager, gates }).length} bytes`);
     lines.push(
       payload.ci.own
         ? `            this repository is simt-dev's own; node scripts/ci.mjs --yes refreshes this copy when the gate changes`

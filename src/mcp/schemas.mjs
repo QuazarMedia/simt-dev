@@ -5,6 +5,7 @@
 // handlers are the tools. A tool module imports both and defines neither.
 
 import { loadRegistry } from '../graph/load.mjs';
+import { implicitRoot } from '../repo-root.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
 import { discover } from '../compare/discover.mjs';
 import { buildRows, resolveConcurrency, summarise } from '../compare/row.mjs';
@@ -505,7 +506,10 @@ export const rootArg = {
 
 
 export function rootOf(args) {
-  return typeof args?.root === 'string' && args.root.length > 0 ? args.root : process.cwd();
+  // The same implicit root the CLI uses: an editor starts a tool from whatever directory
+  // it is pointed at, which is often nested, and `args.root ?? process.cwd()` made the
+  // tool answer about that directory while `simt status` answered about the repository.
+  return typeof args?.root === 'string' && args.root.length > 0 ? args.root : implicitRoot();
 }
 
 export async function registry(args) {

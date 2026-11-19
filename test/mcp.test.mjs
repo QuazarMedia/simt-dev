@@ -15,7 +15,7 @@ process.env.SIMT_DEV_WORKSPACE = 'off';
 
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -694,3 +694,29 @@ test('mcp: an unknown prompt is a method error naming the way to discover one', 
   assert.match(r.error.message, /prompts\/list/);
 });
 
+
+test('PR09: a tool called with no root answers about the repository, not the editor directory', async () => {
+  // An editor hands the server a cwd it happens to be in, and that is often nested. The
+  // tool's default was `process.cwd()`, so it described `src/` while `simt status` in the
+  // same directory described the repository.
+  const root = await mkdtemp(join(tmpdir(), 'simt-mcp-root-'));
+  try {
+    await exec('git', ['init', '-q', '-b', 'main'], { cwd: root });
+    await mkdir(join(root, 'src', 'deep'), { recursive: true });
+    await exec('git', ['add', '-A'], { cwd: root });
+    await exec('git', ['-c', 'user.name=t', '-c', 'user.email=t@example.com', 'commit', '-q', '--allow-empty', '-m', 'base'], {
+      cwd: root,
+    });
+    const before = process.cwd();
+    process.chdir(join(root, 'src', 'deep'));
+    try {
+      const r = await handle(req('tools/call', { name: 'check', arguments: {} }), TOOLS);
+      const top = await realpath(root);
+      assert.equal(r.result.structuredContent.root, top);
+    } finally {
+      process.chdir(before);
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});

@@ -102,3 +102,29 @@ test('the walk is bounded and says so instead of pretending it saw everything', 
   assert.equal(facets.truncated, true);
   assert.ok(kind(facets, 'document').count <= 10);
 });
+
+test('PR09: a legacy manifest still declares its remote targets', async () => {
+  // The raw read of `simt.json` lost every repository that had not been renamed yet, so
+  // the same manifest `check` read correctly made facets report no remote object.
+  const root = await repo({
+    'README.md': '# notes\n',
+    'Germany/rates.md': '# rates\n',
+    'simt-dev.json': JSON.stringify({ work: { targets: [{ id: 'vault', kind: 'bucket' }] } }),
+  });
+  const facets = await detectFacets(root);
+  assert.equal(facets.configured, true, 'the legacy manifest was not read');
+  assert.equal(kind(facets, 'remote-object').count, 1);
+  assert.deepEqual(facets.executionLoci.at(-1), { locus: 'remote', evidence: ['simt.json#work.targets'] });
+});
+
+test('PR09: an invalid work declaration is not a declaration', async () => {
+  // `work.targets` as a string is what the loader rejects; reading it raw reported it as
+  // configured and then counted its characters as targets.
+  const root = await repo({
+    'README.md': '# notes\n',
+    'simt.json': JSON.stringify({ work: { targets: 'vault' } }),
+  });
+  const facets = await detectFacets(root);
+  assert.equal(facets.configured, false);
+  assert.equal(kind(facets, 'remote-object'), undefined);
+});

@@ -78,7 +78,27 @@ export function namedRoot(flags = {}, positional = []) {
 }
 
 export function commandRoot(flags = {}, positional = []) {
-  return namedRoot(flags, positional) ?? process.cwd();
+  return namedRoot(flags, positional) ?? implicitRoot();
+}
+
+/**
+ * The repository the working directory belongs to, answered once per directory.
+ *
+ * A command that names no root must mean the repository it runs in, not the directory
+ * it happens to start from: run from `src/`, `status` reported `src/` as the root while
+ * `status --root .` reported the repository, and the two answered different questions
+ * about the same checkout (review 0005 PR09). Only the IMPLICIT answer is resolved: an
+ * explicit root stays the path the caller wrote, because that is what the report echoes.
+ *
+ * The memo is keyed by the directory, not the process: one invocation asks many times,
+ * and `repoRoot` spawns git. A test that chdirs gets its own answer.
+ */
+const implicit = new Map();
+
+export function implicitRoot(cwd = process.cwd()) {
+  const key = resolve(String(cwd));
+  if (!implicit.has(key)) implicit.set(key, repoRoot(key));
+  return implicit.get(key);
 }
 
 /**

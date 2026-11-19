@@ -636,7 +636,7 @@ test('the two non-blocking sets are different, and the difference is the fix', a
   // bytes disagree with its pin is NOT in either - that one blocks.
   assert.deepEqual(
     [...SYNC_NON_BLOCKING].sort(),
-    ['budget', 'budget-cut', 'check-unbuilt', 'file-lines-warn', 'inconsistent', 'inert', 'optional', 'orphaned', 'pack-unpinned', 'pointer-unread'],
+    ['budget', 'budget-cut', 'check-unbuilt', 'file-lines-warn', 'inconsistent', 'inert', 'manifest-unknown-key', 'optional', 'orphaned', 'pack-unpinned', 'pointer-unread'],
   );
   // `budget` joined for ADR-072: an over-budget finding says the projection is bigger
   // than this repository agreed to, and nothing is cut, so a gate that failed there
@@ -652,9 +652,13 @@ test('the two non-blocking sets are different, and the difference is the fix', a
   // `optional` joined both: the two `.github` files are written once by `init` and
   // are the repository's to decline. Both commands report the absence with its
   // remedy; neither fails the gate over a decision the repo made.
+  // `manifest-unknown-key` joined both sets with review 0005 PR02: the manifest is the
+  // repository's file, and a key this build does not read is a fact about the version,
+  // not a gate that is broken. It is named with its remedy and does not fail either
+  // command, so the two sets stay in the relation asserted below.
   assert.deepEqual(
     [...CHECK_NON_BLOCKING].sort(),
-    ['budget', 'budget-cut', 'check-unbuilt', 'file-lines-warn', 'inconsistent', 'inert', 'optional', 'orphaned', 'pack-unpinned'],
+    ['budget', 'budget-cut', 'check-unbuilt', 'file-lines-warn', 'inconsistent', 'inert', 'manifest-unknown-key', 'optional', 'orphaned', 'pack-unpinned'],
   );
   for (const status of ['pack-digest-mismatch', 'pack-missing']) {
     assert.ok(!CHECK_NON_BLOCKING.has(status), `${status} must fail the gate`);

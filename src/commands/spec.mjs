@@ -65,7 +65,7 @@ export const SPEC = [
   { path: 'evidence', summary: 'the runs recorded against the tree on disk', aliases: ['evidence show'], flags: [], },
   { path: 'evidence check', usage: '<msg-file>', summary: 'a commit message claiming a run this tree does not have', flags: [], },
   { path: 'explain', usage: '<CODE>', summary: 'what one check finding code means, and how to fix it', flags: [], },
-  { path: 'gate', usage: '--changed', summary: 'the tests a change reaches over the import closure, and only those', flags: ["changed"], },
+  { path: 'gate', usage: '--changed', summary: 'the tests a change reaches over the import closure, and only those', flags: ["changed","strict"], },
   { path: 'graph lint', usage: '[--spec agentskills]', summary: 'check the skill registry against the skills on disk', defaultFor: 'graph', aliases: ['skills lint'], flags: ["spec","workspace"], },
   { path: 'harness detect', usage: '[--user]', summary: 'which harness is installed, and what it carries', defaultFor: 'harness', flags: ["at","reader","table","user"], },
   { path: 'harness loaders', usage: '[--table]', summary: 'the instruction files each harness loads, and what they cost', flags: ["at","reader","table","user"], },

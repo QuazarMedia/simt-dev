@@ -254,8 +254,11 @@ test('the prose locations left in place are counted, so the decision cannot go u
     // ran `hooks install` and not in the fresh clone the pre-push gate tests in.
     // Counting it makes the number developer-dependent - ADR-122's `.simt/hooks`
     // turned the gate red on the very push that introduced the record.
+    // `node_modules/` is the same class of state, one level up the tree: it exists
+    // in a checkout that ran `npm install` (the devDependency guard) and not in the
+    // fresh clone, so a record that names `node_modules/.bin` must not leak.
     const prose = [...d.summary.ruled, ...d.summary.rejected].join('\n');
-    if ([...new Set(prose.match(/[\w.@/-]*[\w-]+\/[\w./-]+/g) ?? [])].some((t) => !t.startsWith(`${STATE_DIR}/`) && existsSync(join(root, t)))) {
+    if ([...new Set(prose.match(/[\w.@/-]*[\w-]+\/[\w./-]+/g) ?? [])].some((t) => !t.startsWith(`${STATE_DIR}/`) && !t.startsWith('node_modules/') && existsSync(join(root, t)))) {
       leaking.push(d.id);
     }
   }

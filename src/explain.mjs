@@ -281,8 +281,8 @@ export const EXPLAIN_CODES = {
     example: 'git commit --amend, git reset --hard, git push --force: each reports this code and the flag that matched.',
   },
   'stale-generated-field': {
-    what: 'Generated manifest fields do not match what simt-dev writes: the projection SHA, the stack, or the version pin drifted without a re-run.',
-    why: 'ADR-050: sync repairs exactly this field set and nothing else, so init\u2019s re-adoption is never the repair for a stale field. check names the fields; sync rewrites them.',
+    what: 'Generated manifest fields do not match what simt-dev writes: the projection SHA, the stack, or the version pin drifted without a re-run. A repository that declared `projection.follows: "source"` carries no pin, so only a leftover pin can be stale there.',
+    why: 'ADR-050: sync repairs exactly this field set and nothing else, so init\u2019s re-adoption is never the repair for a stale field. check names the fields; sync rewrites them. ADR-200: a follows-source repository writes the declaration in place of the pin pair, and a pin left beside it is exactly the stale field this names.',
     fix: 'Run: simt sync --yes.',
     example: 'A hand-bumped version pin with the old projection SHA still recorded.',
   },
@@ -317,8 +317,8 @@ export const EXPLAIN_CODES = {
     example: 'A lint gate naming eslint with no eslint on PATH: UNRUNNABLE names the probe.',
   },
   'version-mismatch': {
-    what: 'The binary running the gate is not the version the manifest pins: the gate that runs is not the gate CI runs.',
-    why: 'ADR-059: the version a repository runs is the one it pinned, and a stale binary would run a different gate than the one the pin promises. The mismatch fails the gate rather than warning, because a warning is a gate that passes while disagreeing with CI.',
+    what: 'The binary running the gate is not the version the manifest pins: the gate that runs is not the gate CI runs. A repository that declared `projection.follows: "source"` has no release pin, so this finding never applies to it.',
+    why: 'ADR-059: the version a repository runs is the one it pinned, and a stale binary would run a different gate than the one the pin promises. The mismatch fails the gate rather than warning, because a warning is a gate that passes while disagreeing with CI. ADR-200: a repository that runs from a source checkout declares `projection.follows: "source"` and pins no release, so there is no version to mismatch.',
     fix: 'Run: simt upgrade --yes to move the pin (and the binary) forward.',
     example: 'Pin simt-dev 0.5.0 with 0.6.2 installed: VERSION-MISMATCH names both.',
   },

@@ -11,7 +11,7 @@ check that decides whether a value is valid.
 | `version` | tool | the manifest schema version |
 | `stack` | tool | the profiles selected by detection |
 | `surfaces` | repo | which harnesses get per-rule files (`[]` folds everything into the region) |
-| `projection` | repo | where the region goes (`place: "top"`), and the read cap it must fit |
+| `projection` | repo | where the region goes (`place: "top"`), and whether the install follows a source checkout (`follows: "source"`) |
 | `limits.fileLines` | repo | the `{warn, error}` pair a rule line enforces |
 | `limits.coverage` | repo | the coverage percentage a rule line enforces, or `null` |
 | `gates` | repo | the commands the dispatcher runs at each git and agent event |
@@ -78,6 +78,24 @@ stack, or the detector would run the wrong thing, `test.runner` names the comman
 An invalid declaration is `manifest-invalid`: `check`, `doctor` and `gate` name the field and
 the shape it needs, and the gate exits without running. A repository that omits `test.runner`
 keeps the built-in chain (Vitest, Jest, `node --test`, Cargo, Go, pytest, Gradle, Maven).
+
+## Following a source checkout
+
+A repository that runs simt-dev from a live source checkout — a sibling clone, or
+`SIMT_DEV_BIN` pointing at one — has no released copy to pin: the bytes that run are the
+bytes a pin would name. `simt init --follow-source` records that fact once:
+
+```json
+{ "projection": { "follows": "source" } }
+```
+
+With the declaration, `projection.version` and `projection.simtDevSha` are neither written
+nor compared: `check`, the hook dispatcher, `sync` and `upgrade` all read it, so a commit
+to the checkout that leaves the rule text alone no longer makes every adopting repository
+stale. The generated region is still checked and re-rendered by `simt sync --yes` when the
+rule text changes, because that is a real change to the projected bytes, not a pin to
+rewrite. `simt init --no-follow-source` returns the repository to a release pin, and
+`init --yes` keeps the declaration it finds.
 
 ## The `work` declaration
 

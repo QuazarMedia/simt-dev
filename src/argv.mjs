@@ -65,6 +65,10 @@ export const BOOL_FLAGS = new Set([
   // agent-hooks install commands remain for a repo that wants them later. Off by
   // default because the adoption writes them by default.
   'agents',
+  // init: record that this repository runs simt-dev from a live source checkout rather
+  // than a release, so there is no version/SHA pair to rewrite on every change (ADR-200).
+  // The negative spelling returns the repository to a release pin.
+  'follow-source',
   'list',
   // tokens: measure every repository under the root, not just the one.
   // names this flag `--workspace`, and that name has been a VALUE flag since plan

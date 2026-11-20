@@ -33,9 +33,9 @@ import { basename, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { namedRoot } from '../repo-root.mjs';
-import { packageVersion } from '../package-version.mjs';
+import { followsSource, packageVersion } from '../package-version.mjs';
 import { provenanceDigest, plan } from '../projection/project.mjs';
-import { MANIFEST_COMMENT, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
+import { MANIFEST_COMMENT, manifestPath, manifestText, projectionFor, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { FAULT_STATES, planUpgrade, summariseUpgrade } from '../upgrade/plan.mjs';
 import { discover } from '../compare/discover.mjs';
@@ -151,8 +151,14 @@ export async function upgradeCommand(positional, flags) {
                     // The pin has to move with the rules. `upgrade` used to write the
                     // digest and leave `projection.version` at the old release, so a
                     // successful upgrade still failed the pin check afterwards and the
-                    // reported verdict denied the work the run had just done.
-                    projection: { ...(input.manifest?.projection ?? {}), version: packageVersion(), simtDevSha: sha },
+                    // reported verdict denied the work the run had just done. A
+                    // follows-source repository has no pin to move: its decision is
+                    // kept and no release is written beside it (ADR-200).
+                    projection: projectionFor(input.manifest, {
+                      followSource: followsSource(input.manifest),
+                      sha,
+                      version: packageVersion(),
+                    }),
                   }),
                 });
                 return pairs;
@@ -205,7 +211,13 @@ export async function upgradeCommand(positional, flags) {
           {
             ...MANIFEST_COMMENT,
             ...chosen,
-            projection: { ...(manifest?.projection ?? {}), version: packageVersion(), simtDevSha: sha },
+            // A follows-source repository keeps its declaration and gets no release
+            // pin; the checkout that is running is the thing it installs (ADR-200).
+            projection: projectionFor(manifest, {
+              followSource: followsSource(manifest),
+              sha,
+              version: packageVersion(),
+            }),
           },
           journal,
         );
@@ -299,7 +311,9 @@ function render(plans, summary, ctx) {
   for (const p of plans) {
     lines.push(`repo      ${p.name}`);
     lines.push(`          state   ${p.state}`);
-    lines.push(`          pin     ${p.pinnedSha ?? '(none)'}${p.pinnedSha === p.sha ? ' (unchanged)' : ` -> ${p.sha}`}`);
+    lines.push(
+      `          pin     ${p.followsSource ? '(follows a source checkout; no release pin)' : `${p.pinnedSha ?? '(none)'}${p.pinnedSha === p.sha ? ' (unchanged)' : ` -> ${p.sha}`}`}`,
+    );
     lines.push(`          ${p.detail}`);
     if (p.remedy) lines.push(`          remedy  ${p.remedy}`);
     lines.push('');

@@ -333,6 +333,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --surfaces <ids>        comma-separated editors to write rule files for;
                          "" means AGENTS.md only (default: every surface,
                          or the "surfaces" list in simt-dev.json)
+--follow-source         init: the repo runs simt-dev from a live source checkout,
+                         so no release pin is recorded (ADR-200);
+                         --no-follow-source returns it to a release pin
 --workspace <path>      where the skill sources live; "off" declines it
                         (default: SIMT_DEV_WORKSPACE, then the user config
                         file, then the sibling heuristic if it verifies)

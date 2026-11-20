@@ -28,7 +28,7 @@ function render(payload, manifest, { npm = true, manager = null, version, packag
     `profiles    ${payload.profiles.join(', ')}${payload.fallback ? ' (fallback)' : ''}`,
     `mode        ${payload.adoption ? 'adopt existing repo' : 'scaffold new repo'}`,
     surfacesLine({ ids: payload.surfaces, source: payload.surfaceSource }),
-    `sha         ${manifest.projection.simtDevSha}`,
+    `sha         ${manifest.projection?.follows === 'source' ? '(follows a source checkout; no release pin)' : manifest.projection.simtDevSha}`,
   ];
   for (const n of payload.notes) lines.push(`note        ${n}`);
 

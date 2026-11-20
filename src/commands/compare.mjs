@@ -191,7 +191,9 @@ function render(rows, summary, found, learning = null, flags = {}) {
     lines.push(
       `          rules   ${r.ruleFiles.total === 0 ? '(none)' : `${r.ruleFiles.current}/${r.ruleFiles.total} current`}${r.ruleFiles.stale.length > 0 ? ` - ${r.ruleFiles.stale.join(', ')}` : ''}`,
     );
-    lines.push(`          sha     pinned ${r.pinnedSha ?? '(none)'} region ${r.recordedSha ?? '(none)'}`);
+    lines.push(
+      `          sha     ${r.followsSource ? 'follows a source checkout (no release pin)' : `pinned ${r.pinnedSha ?? '(none)'}`} region ${r.recordedSha ?? '(none)'}`,
+    );
     lines.push(
       `          hooks   ${r.hooksRouted ? 'shared dispatcher' : r.adoption === 'adopted' ? 'NOT ROUTED' : '(n/a)'}${r.hooksRouted && !r.hooksComplete ? ' (incomplete)' : ''}`,
     );

@@ -128,6 +128,11 @@ export const KEYS = [
   // ever produced, so accepting it would be the validator blessing a typo.
   { key: 'surfaces', owner: 'repo', since: '0.8.0', check: (v) => (v === null || isStringList(v) ? null : 'surfaces must be null or a list of surface ids') },
   { key: 'projection', owner: 'tool', generated: true, since: '0.7.0', check: (v) => (isObject(v) ? null : 'projection must be an object') },
+  // ADR-200: a repository that runs simt-dev from a live source checkout has no release
+  // to pin. The declaration is the repository's; the release pin is the tool's. `source`
+  // is the only value that exists today, because a checkout is the only install whose
+  // bytes the running binary already is.
+  { key: 'projection.follows', owner: 'repo', since: '0.12.0', check: (v) => (v === 'source' ? null : 'projection.follows must be "source" (or absent)') },
   // The focused runner a repository declares when no detector recognises its stack. It
   // is *repo* data: the tool runs it and never writes it.
   { key: 'test.runner', owner: 'repo', since: '0.11.0', check: (v) => runnerSpecProblem(v) },

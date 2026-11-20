@@ -50,10 +50,10 @@ the command that fixes it, and what a reader sees.
 | `REFORMATTED` | The manifest’s content is what simt-dev would write, but the bytes differ: another formatter owns this file’s shape. |
 | `REQUIRED-FILE` | A rule requires a file the repository does not have: the project is missing something its own rules demand. |
 | `REWRITE` | The command amends, rebases, resets --hard, force-pushes or passes --no-verify: each one rewrites history or skips a declared gate. |
-| `STALE-GENERATED-FIELD` | Generated manifest fields do not match what simt-dev writes: the projection SHA, the stack, or the version pin drifted without a re-run. |
+| `STALE-GENERATED-FIELD` | Generated manifest fields do not match what simt-dev writes: the projection SHA, the stack, or the version pin drifted without a re-run. A repository that declared `projection.follows: "source"` carries no pin, so only a leftover pin can be stale there. |
 | `UNKNOWN-GATE-CWD` | gates.cwd names a gate the manifest never declares: the working-directory override points at nothing. |
 | `UNMANAGED` | The file exists but carries no generated region: the repository was never adopted, or the region was deleted by hand. |
 | `UNREADABLE` | The gate could not read a file it must verify: permissions, a broken symlink, or an I/O error — anything but a clean absence. |
 | `UNRESOLVABLE` | The checked-in gate workflow cannot resolve simt-dev by any path its locator tries: no pinned devDependency, no release binary, no simt on PATH. |
 | `UNRUNNABLE` | A declared gate cannot run here: the command it needs is not on PATH, or its runner is missing. |
-| `VERSION-MISMATCH` | The binary running the gate is not the version the manifest pins: the gate that runs is not the gate CI runs. |
+| `VERSION-MISMATCH` | The binary running the gate is not the version the manifest pins: the gate that runs is not the gate CI runs. A repository that declared `projection.follows: "source"` has no release pin, so this finding never applies to it. |

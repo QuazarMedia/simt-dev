@@ -1,7 +1,7 @@
 import { MANIFEST_COMMENT } from '../projection/manifest.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
-import { packageVersion } from '../package-version.mjs';
+import { followsSource, packageVersion } from '../package-version.mjs';
 // Classify one repository's upgrade state. Pure: no filesystem, no git.
 //
 // The line this module draws is narrow on purpose. `upgrade` moves a PIN. It does not
@@ -28,7 +28,12 @@ import { packageVersion } from '../package-version.mjs';
 export function planUpgrade({ name, path, manifest, manifestExists, manifestError, targets, sha }) {
   const list = Array.isArray(targets) ? targets : [];
   const primary = list[0] ?? null;
-  const base = { name, path, sha, pinnedSha: manifest?.projection?.simtDevSha ?? null };
+  // ADR-200: a repository that follows a source checkout has no release pin to move.
+  // Its "pin" is the checkout that is running, so the state is current by construction;
+  // reporting it behind would make `upgrade` write back a number the repository
+  // deliberately stopped carrying.
+  const follows = followsSource(manifest);
+  const base = { name, path, sha, followsSource: follows, pinnedSha: follows ? null : manifest?.projection?.simtDevSha ?? null };
 
   // A repo that never adopted is not behind; it is absent. `simt init` is the command
   // for it, and calling this a failure would make the exit code describe the estate's
@@ -139,14 +144,15 @@ export function planUpgrade({ name, path, manifest, manifestExists, manifestErro
       : baselineChanged
         ? 'a baseline changed'
         : null;
-  const pinBehind = base.pinnedSha !== sha;
+  const pinBehind = !follows && base.pinnedSha !== sha;
   // The release pin is half of the stamp. Comparing only the SHA called a repository
   // current whose manifest still named an older release, so `upgrade` skipped it and the
   // pin check failed immediately afterwards. Absent is not behind:
   // a repository that never recorded a version is repaired the first time it is
-  // restamped, and the pin check does not judge absence either.
+  // restamped, and the pin check does not judge absence either. A follows-source
+  // repository has no release to be behind (ADR-200).
   const versionBehind =
-    typeof manifest?.projection?.version === 'string' && manifest.projection.version !== packageVersion();
+    !follows && typeof manifest?.projection?.version === 'string' && manifest.projection.version !== packageVersion();
   // A generated field of the manifest can alone be stale. `$comment` is written by
   // simt-dev and describes this file's provenance, so an adopted repo whose regions
   // and pin are all current can still be carrying an older version's wording -

@@ -4,6 +4,16 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `simt init --follow-source` records `projection.follows: "source"`: a repository that runs simt-dev from a live source checkout (a sibling clone selected by `SIMT_DEV_BIN`, or `npm link`) no longer carries a release pin, so a version bump or an unrelated commit in the checkout does not make it stale. `check`, the hook dispatcher, `sync`, `upgrade` and `compare` read the declaration, and `--no-follow-source` returns the repository to a release pin (ADR-200).
+
+### Changed
+
+- A follows-source manifest carries `{ follows: "source" }` instead of `projection.simtDevSha` and `projection.version`; converting one drops the stale pair on the next `init` or `sync`. The generated region is still checked and re-rendered by `sync --yes` when the rule text changes.
+
 ## [0.11.0] — 2026-11-20
 
 Plan 0004's modules are now reachable from both surfaces. Where 0.10.0 shipped the work layer as

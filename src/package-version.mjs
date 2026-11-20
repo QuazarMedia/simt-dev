@@ -102,6 +102,21 @@ export async function hasNpm(root) {
 }
 
 /**
+ * Whether this repository declared that it runs simt-dev from a live source checkout
+ * rather than a released copy (ADR-200).
+ *
+ * `projection.follows: "source"` is the declaration. A checkout is not a copy of a
+ * release: the bytes that run are the bytes that would be pinned, so there is nothing
+ * to compare the pin against, and a pin recorded at adoption goes stale by construction
+ * — every commit to the source tree, every version bump. The declaration is what lets
+ * the gate say that plainly instead of asking the repository to keep rewriting a number
+ * that describes a release it never installed.
+ */
+export function followsSource(manifest) {
+  return manifest?.projection?.follows === 'source';
+}
+
+/**
  * Whether the running binary matches the version a repository pinned when it adopted
  * simt-dev. Returns null when there is nothing to refuse, otherwise a message that
  * names both versions and the one command that fixes it.
@@ -111,11 +126,14 @@ export async function hasNpm(root) {
  * thing that knows which version it should be is the pin. A node_modules copy is pinned by npm itself, so its mismatch
  * is a stale manifest, which `upgrade` refreshes — the remedy is the same either way.
  *
- * A manifest with no recorded pin (adopted before the field existed) is skipped, not
- * failed: there is nothing to compare against, and failing it would turn every pre-0.2
- * repository into a red gate the moment this check ships.
+ * A manifest that follows a source checkout is skipped: the checkout is the pin, so a
+ * recorded release would contradict the declaration rather than describe the install
+ * (ADR-200). A manifest with no recorded pin (adopted before the field existed) is
+ * skipped too: there is nothing to compare against, and failing it would turn every
+ * pre-0.2 repository into a red gate the moment this check ships.
  */
 export function assertVersionPin(manifest) {
+  if (followsSource(manifest)) return null;
   const pin = manifest?.projection?.version;
   if (!pin || pin === 'unknown') return null;
   const running = packageVersion();

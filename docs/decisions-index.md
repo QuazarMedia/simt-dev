@@ -208,3 +208,4 @@ in [architecture/history.md](architecture/history.md).
 | [197](decisions/ADR-197-gate-evidence-names-the-tree-it-ran-on.md) | gate evidence names the tree it ran on, and nothing else stands in for it | accepted · 2026-11-19 |
 | [198](decisions/ADR-198-the-strict-gate-verdict-is-opted-into.md) | the strict gate verdict is opted into, and the default keeps its answer | accepted · 2026-11-19 |
 | [199](decisions/ADR-199-the-work-schema-carries-versions-and-a-validator-is-installed-only-when-its-file-is.md) | the work schema carries versions, and a validator is installed only when its file is | accepted · 2026-11-19 · supersedes ADR-144 ruling 1 |
+| [200](decisions/ADR-200-a-repository-that-runs-a-source-checkout-has-no-release-to-pin.md) | a repository that runs a source checkout has no release to pin | accepted · 2026-11-20 · affects every repository that adopts simt-dev from a checkout |

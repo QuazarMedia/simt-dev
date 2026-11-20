@@ -23,6 +23,7 @@ import { loadRules, select } from '../projection/rules.mjs';
 import { resolvePacks } from '../packs.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { readHooksState, wantsShim } from './hooksstate.mjs';
+import { followsSource } from '../package-version.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 
@@ -40,6 +41,7 @@ import { MANIFEST_FILE } from '../name.mjs';
  * @property {{path: string, profiles: string[], status: string, detail: string|null}[]} packageProblems
  *   the nested regions that are not `current`; empty for an unadopted repository
  * @property {string|null} pinnedSha
+ * @property {boolean} followsSource  the repository runs a live checkout (ADR-200)
  * @property {string|null} recordedSha
  * @property {'current'|'drift'|'unmanaged'|'absent'|'malformed'} region
  * @property {string|null} regionDetail
@@ -147,6 +149,10 @@ export async function buildRow(path, context) {
     facts: fp.facts ?? [],
     profiles: chosen.map((r) => r.id),
     pinnedSha: manifest.manifest?.projection?.simtDevSha ?? null,
+    // ADR-200: the repository declared it runs a live checkout. There is no release
+    // pin to compare, so the row reports the declaration rather than an absent pin
+    // that reads like drift.
+    followsSource: followsSource(manifest.manifest),
     recordedSha: region.recordedSha ?? null,
     region: region.status,
     regionDetail: region.detail ?? null,
@@ -394,7 +400,7 @@ export function summarise(rows, extra = {}) {
   const count = (pred) => rows.filter(pred).length;
   const shas = new Map();
   for (const r of rows) {
-    const sha = r.pinnedSha ?? '(none)';
+    const sha = r.followsSource ? '(source)' : r.pinnedSha ?? '(none)';
     shas.set(sha, (shas.get(sha) ?? 0) + 1);
   }
   return {

@@ -119,7 +119,7 @@ export async function initCommand(positional, flags) {
   // gets and the gates its commits run. Without it the ecosystem rows never fire here
   // and a fresh Rust repo is adopted with gates it cannot run.
   const { dropped, commands } = planGates(detected.stack, capability, detected.facts);
-  const manifest = buildManifest({ root, stack: detected.stack, sha, version, existing: current, capability, facts: detected.facts });
+  const manifest = buildManifest({ root, stack: detected.stack, sha, version, existing: current, capability, facts: detected.facts, followSource: flags.followSource });
   const findings = await scanRepo(root);
   const summary = summarise(findings);
   // Every repo-file write is journaled, so `undo` can restore this run .

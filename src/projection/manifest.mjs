@@ -38,7 +38,7 @@ import { GENERATED_KEYS_OF, loadManifest, manifestPath } from '../manifest/schem
 // module is where every reader of the manifest already imports from.
 export { gateList, unknownKeys } from '../manifest/schema.mjs';
 import { CLI } from '../name.mjs';
-import { packageVersion } from '../package-version.mjs';
+import { followsSource, packageVersion } from '../package-version.mjs';
 import { defaultGates, planGates } from '../gates/index.mjs';
 export { ECOSYSTEMS, defaultGates, gateRunnable, planGates, unrunnableGates } from '../gates/index.mjs';
 export const MANIFEST = MANIFEST_FILE;
@@ -63,7 +63,7 @@ export { MANIFEST_LEGACY };
 export const MANIFEST_COMMENT = {
   $comment: [
     `Written and maintained by simt-dev. \`${CLI} sync --yes\` regenerates the projected rules.`,
-    `\`${CLI} init\` refreshes the SHA and keeps every key it does not write, so a value you add here survives a re-init.`,
+    `\`${CLI} init\` refreshes the generated fields and keeps every key it does not write, so a value you add here survives a re-init.`,
     `\`plans\` is such a key: it selects the tracker template and the directories \`${CLI} plan\` reads.`,
     'Omit it and the tracker template applies, which reads docs/plans, docs/research and docs/reviews.',
   ].join(' '),
@@ -73,9 +73,15 @@ export const MANIFEST_COMMENT = {
  * Gate names the shared dispatcher knows how to run (step 8). Choosing these from
  * the detected stack rather than asking a human keeps `init` non-interactive.
  */
-export function buildManifest({ root, stack = [], sha, version, existing = null, capability = null, surfaces = undefined, facts = [] }) {
+export function buildManifest({ root, stack = [], sha, version, existing = null, capability = null, surfaces = undefined, facts = [], followSource = undefined }) {
   const gates = defaultGates(stack, facts, root);
   const limits = defaultLimits();
+  // ADR-200: a repository that runs simt-dev from a live source checkout has no release
+  // to pin, so `--follow-source` records that fact and later writes keep it. An explicit
+  // `false` (the parser's `--no-follow-source`) returns the repository to a release pin.
+  // Absent preserves what the manifest already declared, because that choice is the
+  // repository's and a re-init must not silently flip it.
+  const follows = followSource === true || (followSource === undefined && followsSource(existing));
 
   // A re-init must never silently weaken a repo's own declaration: existing
   // limits and gates win over defaults, and only the projection stamp is refreshed.
@@ -152,7 +158,11 @@ export function buildManifest({ root, stack = [], sha, version, existing = null,
     // binary to version and refuses on a mismatch, which is how a repository without
     // npm (the release binary in `.simt/bin`, pinned only by this field) is held to
     // the release it adopted. See src/package-version.mjs.
-    projection: { simtDevSha: sha ?? null, version: version ?? null },
+    //
+    // `follows: "source"` replaces both fields when the repository runs a live checkout
+    // (ADR-200): the checkout is the pin, and recording a release beside it would name
+    // bytes the repository does not install.
+    projection: projectionFor(existing, { followSource: follows, sha, version }),
   };
   return withRepoKeys(existing, owned);
 }
@@ -329,6 +339,34 @@ function generatedProjection(value) {
 }
 
 /**
+ * The `projection` object this build writes, keeping the sub-keys the repository owns.
+ *
+ * One writer for the two shapes the projection can take — a release pin, or the
+ * declaration that this repository follows a checkout (ADR-200). `init`, `sync` and
+ * `upgrade` all write this object, and a second construction is how the repository's
+ * `place` sub-key was deleted by a repair.
+ *
+ * A generated sub-key the chosen shape does not carry is dropped rather than merged:
+ * a repository that starts following a checkout must not keep a release pin beside the
+ * declaration, because that pin names bytes the repository does not install.
+ *
+ * @param {object|null} manifest the repository's manifest, as parsed
+ * @param {{followSource?: boolean, sha?: string|null, version?: string|null}} fields
+ * @returns {object} the projection object to write
+ */
+export function projectionFor(manifest, { followSource = false, sha = null, version = null } = {}) {
+  const kept = {};
+  for (const [key, value] of Object.entries(projectionOf(manifest?.projection))) {
+    // `follows` is the shape key the other side of this switch wrote: keeping it
+    // beside a fresh pin is the same defect as keeping a pin beside the declaration,
+    // and the `--no-follow-source` that returns a repo to a pin must remove it.
+    if (key === 'follows' || PROJECTION_KEYS.has(key)) continue;
+    kept[key] = value;
+  }
+  return followSource ? { ...kept, follows: 'source' } : { ...kept, simtDevSha: sha, version };
+}
+
+/**
  * A manifest with this tool's own fields replaced by what this build writes, and
  * nothing else touched.
  *
@@ -351,7 +389,11 @@ export function withGenerated(manifest, expected) {
     if (!(key in expected)) continue;
     patched[key] =
       key === 'projection'
-        ? { ...projectionOf(manifest?.projection), ...expected.projection }
+        ? projectionFor(manifest, {
+            followSource: expected.projection?.follows === 'source',
+            sha: expected.projection?.simtDevSha ?? null,
+            version: expected.projection?.version ?? null,
+          })
         : expected[key];
   }
   return patched;
@@ -400,9 +442,13 @@ export async function manifestDrift(root, stack, sha) {
     if (!(key in expected)) return false;
     // `projection` compares on the sub-keys this tool writes: a sub-key the repo
     // chose (`place`) is not a stale field, and reporting it is what made `sync`
-    // delete the one setting that was not stale.
+    // delete the one setting that was not stale. Both sides are reduced, because the
+    // shape this build writes can be `{follows}` with no pin at all (ADR-200), and
+    // comparing an empty generated set against the declaration would report every
+    // follows-source repository stale forever.
     const actual = key === 'projection' ? generatedProjection(manifest[key]) : manifest[key];
-    return JSON.stringify(actual) !== JSON.stringify(expected[key]);
+    const wanted = key === 'projection' ? generatedProjection(expected[key]) : expected[key];
+    return JSON.stringify(actual) !== JSON.stringify(wanted);
   });
   if (stale.length > 0) {
     return {

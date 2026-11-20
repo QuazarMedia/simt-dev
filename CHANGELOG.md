@@ -4,11 +4,14 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.11.0] — 2026-11-20
 
 Plan 0004's modules are now reachable from both surfaces. Where 0.10.0 shipped the work layer as
 library code with one wired command, every module in the layer answers through a command, and the
-read-only doors a client needs are also MCP tools calling the same fact functions.
+read-only doors a client needs are also MCP tools calling the same fact functions. On top of that,
+the production-readiness review (PR01–PR22) repairs the gates, the tracker and the CI generation,
+and the work and knowledge adoption waves (WK01–WK04) add the setup preview, the scoped corpus and
+the native source lineage.
 
 ### Added
 
@@ -19,16 +22,37 @@ read-only doors a client needs are also MCP tools calling the same fact function
 - `simt lease` names the enforcement it can actually claim (advisory across hosts) beside the race it leaves.
 - `simt knowledge why --as-of <date> --known-at <date>` answers from the claims applicable at that time rather than the current ones.
 - `packages/bench/src` ships in the package `files`, so an installed bench has its sources; a test fails when a runtime import is missing from `files`.
+- `simt work setup --scope <id> --path <dir>`: declare one work scope in the manifest, previewed before it writes — local configuration, scopes and inspection, with the work schema versioned and validated (WK01–WK02, ADR-199).
+- A scoped corpus built from the repository's existing files is what the knowledge doors read; a heading-less unit is cited by its file (WK03).
+- Claims and source lineage reuse the document's native metadata, and a metadata sidecar reads with its document rather than as one (WK04).
+- Configurable focused runners: nested and mixed-stack repositories resolve their own runners, with SEA, uv and Poetry launchers (PR11), and polyglot repositories get scoped gate ids that cannot collide across stacks (PR12).
+- Reproducible CI generation with an explicit provider contract: the workflow provisions its own manager with pinned actions, and the repository's declared pre-push gates run in the workflow (PR17).
+- `simt brief` carries the knowledge pointer, and `simt check` validates the inputs the knowledge doors read.
+- A zero-install unused-imports detector names an unread import, a guard test holds the tree clean, and `npm run lint:imports` repairs it; the 678 it found are gone.
 
 ### Changed
 
 - `docs/reference/mcp.md` lists all 32 tools and a test holds it to the registry; the module reference and the agent playbook name the new doors.
+- `simt init` previews and refusals are side-effect free: a preview writes nothing, and the CI plan stays in the payload (PR01).
+- Manifest and gate configuration are validated at the boundary, and an unknown manifest key is non-blocking in both check commands (PR02).
+- The pre-push gate runs on the revisions being pushed, not the dirty tree (PR03, ADR-197).
+- Gate evidence is bound to the inputs it ran on and its outcome, so a recorded pass names the tree it ran on (PR04, ADR-197).
+- Multi-file writes are recoverable and race-aware, and `undo` restores every journaled effect and reports the outcome (PR07–PR08).
+- A canonical repository context sets config precedence, and repository-local ecosystem records are validated and applied (PR09–PR10).
+- The strict gate verdict is opted into; test-selection gaps, renames and deletions are reported with actual test outcomes (PR13, ADR-198).
+- The tracker writes under a lock, a failed write names the SHA it could not record, and evidence is validated (PR18, ADR-197).
+- Frozen projection and upgrades agree on the applied state: an upgrade moves the version pin with the rules (PR16).
+- Projected rules and adoption reports are actionable in the consuming repository (PR15).
+- Knowledge is validated with the same readers its commands use, and document-driven verification rejects malformed input (PR19–PR20).
+- MCP reads are separated from cache writes and process execution, framing is bounded, and response contracts are consistent (PR21–PR22).
 
 ### Fixed
 
 - Three defects the audit found in the work layer: an applied bundle is re-digested, a write with no path is refused, and the payload is bounded.
 - A mediation returns its `reason` key on every branch, so a refusal without a reason no longer reads as an empty one.
 - A missing numeric bound in an impact query was read as zero rather than unbounded.
+- The audit sweep repaired the index (stale trigram rows on reindex, a quote in an FTS term, a corrupt overlay told from an empty one), the MCP surface (request-id comparison, a schema with `required` and no `type`, a cursor past the list, a failed import reporting success), the hooks (secret scanning judged consecutive lines together, a failed alias lookup failed open, a wrapped push with no git fact), and recovery (undo restored through a temp file and rename, a failed slice start left a lease behind).
+- Six modules and seven test suites are split at their boundaries to stay under the line ceiling, and the knowledge impact text renders without crashing.
 
 
 ## [0.10.0] — 2026-11-03

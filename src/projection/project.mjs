@@ -25,7 +25,7 @@ import { planWorkflow } from '../ci/workflow.mjs';
 import { planDependabot } from '../ci/dependabot.mjs';
 import { checkTsconfig } from '../tsconfig.mjs';
 import { checkToolchain } from '../toolchain.mjs';
-import { diff, parse, inject, BEGIN, END } from './markers.mjs';
+import { parse, inject, BEGIN, END } from './markers.mjs';
 import { budgetFinding, readManifest } from './manifest.mjs';
 import { budgetCutFinding } from '../kernel/budget.mjs';
 import { measureRoot } from '../measure/context.mjs';

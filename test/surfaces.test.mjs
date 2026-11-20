@@ -24,7 +24,6 @@ import {
   DEFAULT_SURFACES,
   POINTERS,
   SURFACES,
-  SURFACE_IDS,
   foldsRules,
   resolveSurfaces,
   rulePath,

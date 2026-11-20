@@ -23,12 +23,12 @@ import { dirname, join } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs';
+import { summarise } from '../projection/conflicts.mjs';
 import { MANIFEST, buildManifest, manifestPath, manifestText, readManifest, writeManifest, planGates, gateList } from '../projection/manifest.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { readCapability } from '../hooks/capability.mjs';
 import { readHooksState } from '../compare/hooksstate.mjs';
-import { ciContract, planWorkflow, renderWorkflow, WORKFLOWS_DIR } from '../ci/workflow.mjs';
+import { ciContract, planWorkflow, renderWorkflow } from '../ci/workflow.mjs';
 import { planDependabot, renderDependabot } from '../ci/dependabot.mjs';
 import { planTsconfigBase } from '../tsconfig.mjs';
 import {
@@ -43,23 +43,19 @@ import {
   resolveIdentity,
 } from '../identity.mjs';
 import { pointerState, pointerTargets } from '../projection/project.mjs';
-import { surfacesLine } from '../projection/surfaces.mjs';
-import { plan, provenanceDigest, PRIMARY_TARGET, LOCAL_PROFILE_DIR } from '../projection/project.mjs';
-import { adapters, planAgents, writeAgentPlan } from '../agents/render.mjs';
+import { plan, provenanceDigest, PRIMARY_TARGET } from '../projection/project.mjs';
+import { planAgents, writeAgentPlan } from '../agents/render.mjs';
 import { projectedSkill } from '../projection/disclosure.mjs';
 import { resolveHarnessScope } from '../agents/scope.mjs';
 import { applyAgentHooks, planAgentHooks } from './agenthook.mjs';
 import { computeLock } from '../projection/lock.mjs';
-import { parse as parseRegion } from '../projection/markers.mjs';
 import { reindex, SQLITE_FILE } from '../index/store.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { packageVersion, hasNpm } from '../package-version.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
-import { PACKAGE_NAME } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
-import { git as sysGit } from '../sys/git.mjs';
-import { ADOPT_BRANCH, BACKUP_TAG, establishEscapeHatch, git, scanRepo } from './init-scan.mjs';
+import { establishEscapeHatch, scanRepo } from './init-scan.mjs';
 import { render } from './init-render.mjs';
 
 

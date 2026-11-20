@@ -11,7 +11,6 @@
 
 import { EXIT, fail, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { commandRoot } from '../repo-root.mjs';
 import { readJsonDocument } from './doc-input.mjs';
 import { inspectTarget } from '../actions/targets.mjs';
 import { semanticDelta } from '../actions/delta.mjs';

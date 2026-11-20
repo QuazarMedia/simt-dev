@@ -10,8 +10,7 @@
 //
 // Usage: node scripts/ci.mjs [--check] [--diff] [--json] [--yes] [--dry-run] [--root <path>]
 
-import { readFile } from 'node:fs/promises';
-import { isAbsolute, join, resolve } from 'node:path';
+import { isAbsolute, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { readBefore, renderDiffs, unifiedDiff } from '../src/diff.mjs';

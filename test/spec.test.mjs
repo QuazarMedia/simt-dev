@@ -15,7 +15,7 @@ import { promisify } from 'node:util';
 import { test } from 'node:test';
 
 import { ALIASES, GROUP_DEFAULTS, SPEC, SPEC_PATHS } from '../src/commands/spec.mjs';
-import { COMMANDS, GLOBAL_FLAGS as PARSER_GLOBALS, GROUPS, IMPLEMENTED } from '../src/commands/index.mjs';
+import { GLOBAL_FLAGS as PARSER_GLOBALS, GROUPS, IMPLEMENTED } from '../src/commands/index.mjs';
 import { GLOBAL_FLAGS as HELP_GLOBALS } from '../src/commands/help.mjs';
 import { BOOL_FLAGS, REPEATABLE_FLAGS, VALUE_FLAGS } from '../src/argv.mjs';
 

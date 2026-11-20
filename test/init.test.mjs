@@ -1,7 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { chmod, mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { initCommand } from '../src/commands/init.mjs';
@@ -9,7 +8,7 @@ import * as gateModule from '../src/projection/manifest.mjs';
 import * as gateTable from '../src/hooks/gates.mjs';
 import { readCapability, declaredCommands } from '../src/hooks/capability.mjs';
 import { git, cmd, tempDir } from './fixture.mjs';
-import { CLI, MANIFEST_FILE, MANIFEST_LEGACY } from '../src/name.mjs';
+import { CLI, MANIFEST_FILE } from '../src/name.mjs';
 import { packageVersion } from '../src/package-version.mjs';
 
 const buildManifest = gateModule.buildManifest;

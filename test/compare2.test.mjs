@@ -16,17 +16,11 @@ import { promisify } from 'node:util';
 
 import { plan } from '../src/projection/project.mjs';
 
-import { classify, discover, ownerFromGitdir, parseGitdirPointer, slugMatchesDir } from '../src/compare/discover.mjs';
-import { buildRow, buildRows, resolveConcurrency, summarise } from '../src/compare/row.mjs';
-import { mapCapped } from '../src/compare/parallel.mjs';
-import { readHooksState } from '../src/compare/hooksstate.mjs';
-import { classifyGateCommand, classifyRuleViolations, clearLearningCache, learnAcrossEstate, renderAdrDraft, renderLearningLines } from '../src/compare/learn.mjs';
+import { classifyGateCommand, classifyRuleViolations, learnAcrossEstate, renderAdrDraft, renderLearningLines } from '../src/compare/learn.mjs';
 import { GATES } from '../src/hooks/gates.mjs';
-import { dispatch } from '../src/commands/index.mjs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { git, cmd, tempDir, keepTemp } from './fixture.mjs';
-import { MANIFEST_FILE } from '../src/name.mjs';
+import { git, tempDir, keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');

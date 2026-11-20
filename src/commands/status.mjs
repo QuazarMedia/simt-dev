@@ -13,7 +13,6 @@
 // prompt nobody reads.
 
 import { EXIT, emit, emitJson, isJson, present } from '../output/index.mjs';
-import { CLI } from '../name.mjs';
 import { currentHead, readCheckCache, renderStatusLine } from '../status.mjs';
 import { renderSnapshot, statusSnapshot } from '../status-snapshot.mjs';
 import { commandRoot } from '../repo-root.mjs';

@@ -16,7 +16,7 @@
 // fact per line in a stable field order so two runs diff cleanly; a row that
 // reordered its columns would make every comparison between two runs unreadable.
 
-import { mapCapped, DEFAULT_CONCURRENCY, resolveConcurrency } from './parallel.mjs';
+import { mapCapped, DEFAULT_CONCURRENCY } from './parallel.mjs';
 import { checkTargets, PRIMARY_TARGET } from '../projection/project.mjs';
 import { manifestDrift, readManifest } from '../projection/manifest.mjs';
 import { loadRules, select } from '../projection/rules.mjs';

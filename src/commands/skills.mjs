@@ -14,13 +14,12 @@ import { repoContext } from '../context.mjs';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
-import { EXIT, emit, emitJson, fail, isJson, note as emitNote } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { bodyFile, sourcePath } from '../resolve/body.mjs';
 import { unknownSkills, scoreCorpus } from '../resolve/eval.mjs';
 import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
-import { fingerprint } from '../resolve/fingerprint.mjs';
-import { rankSkills, closure, selectWithinBudget, resolveAlias, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
+import { rankSkills, closure, selectWithinBudget, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
 import { tokenize } from '../text/tokens.mjs';
 import { localSkillNodes } from '../resolve/local.mjs';
 import { nearMatches } from '../resolve/near.mjs';

@@ -24,7 +24,6 @@ import { stat } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
 import { LOADERS, caps } from '../projection/loaders.mjs';
-import { extractFrontmatter } from '../projection/targets.mjs';
 import { BYTES_PER_TOKEN } from './context.mjs';
 import { bytes, filesUnder, frontmatter, readText } from './fs.mjs';
 

@@ -12,7 +12,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 
 import { GATE_KINDS, GATES } from '../src/hooks/gates.mjs';
 import { runGates } from '../src/hooks/dispatcher.mjs';

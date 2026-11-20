@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 
 import { BIN_ENV, BIN_REL, CLI, CONFIG_DIR, MANIFEST_FILE, MANIFEST_LEGACY, MARKER_PREFIX, MARKER_PREFIX_LEGACY, PACKAGE_NAME, PROJECT, WORKFLOW_FILE_NAME } from '../src/name.mjs';
 import { manifestPath, writeManifest } from '../src/projection/manifest.mjs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 

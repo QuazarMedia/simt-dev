@@ -5,7 +5,7 @@
 // tested against that shape, and against the real plan 0003 tracker, because an audit
 // that only passes on a fixture proves the fixture.
 
-import test, { after } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

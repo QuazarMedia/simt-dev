@@ -11,7 +11,7 @@ import { execFile } from 'node:child_process';
 import { chmod, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import { promisify } from 'node:util';
 
 import { plan } from '../src/projection/project.mjs';
@@ -20,7 +20,7 @@ import { classify, discover, ownerFromGitdir, parseGitdirPointer, slugMatchesDir
 import { buildRow, buildRows, resolveConcurrency, summarise } from '../src/compare/row.mjs';
 import { mapCapped } from '../src/compare/parallel.mjs';
 import { readHooksState } from '../src/compare/hooksstate.mjs';
-import { classifyGateCommand, classifyRuleViolations, clearLearningCache, learnAcrossEstate, renderAdrDraft, renderLearningLines } from '../src/compare/learn.mjs';
+import { clearLearningCache, learnAcrossEstate } from '../src/compare/learn.mjs';
 import { GATES } from '../src/hooks/gates.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { resolve, dirname } from 'node:path';

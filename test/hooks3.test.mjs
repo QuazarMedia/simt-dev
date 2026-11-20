@@ -6,19 +6,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { PACKAGE_NAME } from '../src/name.mjs';
 import { test } from 'node:test';
 
-import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
-import { EVENTS, HOOKS_DIR, HOOKS_DIR_LEGACY, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
-import { hasScript, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
-import { classifyPush, parsePushedRefs, renderGateReport, runGates, stagedFiles } from '../src/hooks/dispatcher.mjs';
+import { HOOKS_DIR, HOOKS_DIR_LEGACY, HOOKS_PATH_KEY, SHIM_MARKER, fileFor } from '../src/hooks/shim.mjs';
 import { recordRun } from '../src/ledger/index.mjs';
-import { packageVersion } from '../src/package-version.mjs';
-import { readCapability } from '../src/hooks/capability.mjs';
-import * as gateModule from '../src/projection/manifest.mjs';
-import { git, cmd, keepTemp } from './fixture.mjs';
-import { CLI } from '../src/name.mjs';
+import { git, keepTemp } from './fixture.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { simt as simtCli } from './fixture.mjs';
 

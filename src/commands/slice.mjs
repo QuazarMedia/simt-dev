@@ -27,7 +27,7 @@
 // finished slice a conflict on the one line that records it.
 
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, rm, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';

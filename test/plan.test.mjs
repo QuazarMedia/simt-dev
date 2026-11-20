@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 
 import { loadPlanState, planDone, planNext } from '../src/plan/index.mjs';
 import { CLI } from '../src/name.mjs';

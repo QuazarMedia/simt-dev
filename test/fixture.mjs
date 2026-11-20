@@ -13,7 +13,7 @@
 import { execFile } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { promisify } from 'node:util';
-import { cp, mkdir, mkdtemp, writeFile, readdir, rm } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 

@@ -11,7 +11,7 @@
 // `simt lessons review` promotes a candidate to `docs/lessons/NNNN-<slug>.md` with the
 // Appendix A frontmatter (`simt-trigger`, `simt-evidence`, `simt-expires`).
 
-import { FIX_DIFF_BUDGET, capFixDiff, sameEvidence, slugify } from './lesson-text.mjs';
+import { capFixDiff, sameEvidence, slugify } from './lesson-text.mjs';
 import { noteEvent } from '../state/events.mjs';
 import { createHash } from 'node:crypto';
 import { mkdir, open, readdir, readFile, writeFile } from 'node:fs/promises';

@@ -7,7 +7,6 @@
 // projected or committed text does — that is the direction this command cannot
 // take (principle P2).
 
-import { CLI } from '../name.mjs';
 import { EXIT, emit, emitJson, isJson } from '../output/index.mjs';
 import { distillTarget } from '../distill/distill.mjs';
 

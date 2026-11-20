@@ -1,24 +1,13 @@
-import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
+import { chmod, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
-import { PACKAGE_NAME } from '../src/name.mjs';
-import { after, test } from 'node:test';
 
-import { GATE_KINDS, GATES, FORMATTABLE, gateNames } from '../src/hooks/gates.mjs';
-import { EVENTS, HOOKS_DIR, HOOKS_DIR_LEGACY, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderShim } from '../src/hooks/shim.mjs';
-import { hasScript, resolveGate, resolveStagedTool } from '../src/hooks/resolve.mjs';
-import { classifyPush, DEFAULT_SKIP_EXTENSIONS, parsePushedRefs, renderGateReport, runGates, stagedFiles } from '../src/hooks/dispatcher.mjs';
+import { HOOKS_PATH_KEY } from '../src/hooks/shim.mjs';
 import { recordRun } from '../src/ledger/index.mjs';
-import { packageVersion } from '../src/package-version.mjs';
-import { readCapability } from '../src/hooks/capability.mjs';
-import * as gateModule from '../src/projection/manifest.mjs';
-import { git, cmd, keepTemp } from './fixture.mjs';
-import { CLI } from '../src/name.mjs';
+import { git, keepTemp } from './fixture.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { simt as simtCli } from './fixture.mjs';
 

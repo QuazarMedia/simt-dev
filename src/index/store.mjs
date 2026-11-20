@@ -5,7 +5,7 @@
 // `git ls-files -s` can rebuild it, so a missing file is not a lost database. A blob
 // that has not changed is not read again.
 
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 

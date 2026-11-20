@@ -15,7 +15,7 @@ import { renderMcpPage, renderModulesPage } from './reference.mjs';
 import { EXPLAIN_CODES } from '../explain.mjs';
 import { CLI } from '../name.mjs';
 
-export const README_FILE = 'README.md';
+const README_FILE = 'README.md';
 export const DOCS_DIR = 'docs/commands';
 export const BEGIN = '<!-- simt:commands:begin -->';
 export const END = '<!-- simt:commands:end -->';

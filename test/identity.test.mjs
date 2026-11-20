@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import test, { after } from 'node:test';
+import test from 'node:test';
 
 import { initCommand } from '../src/commands/init.mjs';
 import {

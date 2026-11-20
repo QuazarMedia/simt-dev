@@ -14,32 +14,19 @@
 // edit something in a repository they do not have.
 
 import assert from 'node:assert/strict';
-import { cmd, keepTemp } from './fixture.mjs';
-import test, { after } from 'node:test';
-import { execFile } from 'node:child_process';
-import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { keepTemp } from './fixture.mjs';
+import test from 'node:test';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
-import {
-  renderWorkflow,
-  planWorkflow,
-  isOwnRepo,
-  nodeFloor,
-  ACTIONS,
-  WORKFLOW_FILE,
-  WORKFLOWS_DIR,
-} from '../src/ci/workflow.mjs';
+
+
 import { renderDependabot, planDependabot, DEPENDABOT_FILE } from '../src/ci/dependabot.mjs';
 import { fingerprint } from '../src/resolve/fingerprint.mjs';
-import { renderShim, EVENTS } from '../src/hooks/shim.mjs';
-import { BIN_ENV, CLI, PACKAGE_NAME } from '../src/name.mjs';
-import { renderLocator } from '../src/locate.mjs';
 import { PACKAGE_ROOT } from '../src/workspace.mjs';
 
-import { CI, BIN, exec, run, actionsRepo, plainRepo } from './ci-fixture.mjs';
-import { EXIT } from '../src/output/index.mjs';
+import { CI, BIN, exec, actionsRepo, plainRepo } from './ci-fixture.mjs';
 import { assertClean } from './leaks.mjs';
 // Dependabot is a second `.github` file and not a third baseline, and the difference
 // is structural rather than editorial: `updates:` is a YAML list, two lists cannot be

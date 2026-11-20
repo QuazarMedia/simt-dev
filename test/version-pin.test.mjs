@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
-import test, { after } from 'node:test';
+import test from 'node:test';
 import { packageVersion, hasNpm, assertVersionPin, describeVersion, checkoutSha } from '../src/package-version.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 import { simt as simtCli, keepTemp } from './fixture.mjs';

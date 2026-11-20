@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
@@ -28,63 +28,15 @@ import {
   verifyCorpusDocument,
   writeCorpusDocument,
 } from '../src/measure/corpus.mjs';
-import { gradeWorkspace } from '../packages/bench/src/grade.mjs';
-import { extractPatchFiles } from '../src/testing/patches.mjs';
-import { spawnBounded } from '../src/sys/proc.mjs';
-import { BUILTIN_ARMS, materialiseArm, parseArmSpec } from '../packages/bench/src/arms.mjs';
-import { adapterIsolation, agentEnv, loadAdapters, parseAdapterUsage } from '../packages/bench/src/adapters.mjs';
-import { regradeRun, runBench } from '../packages/bench/src/run.mjs';
-import { prepareIsolatedWorkspace } from '../packages/bench/src/workspace.mjs';
-import { buildBenchReport } from '../packages/bench/src/report.mjs';
-import { formatReportMarkdown } from '../packages/bench/src/render.mjs';
-import { loadRunRecords } from '../src/measure/records.mjs';
-import {
-  computeRunCost,
-  computeRunQuality,
-  evaluateRunRecord,
-  isRunResolved,
-  loadPrices,
-} from '../src/measure/metrics.mjs';
-import {
-  DEFAULT_BOOTSTRAP_SAMPLES,
-  DEFAULT_BOOTSTRAP_SEED,
-  MIN_PAIRD_TASKS,
-  NON_INFERIORITY_MARGIN,
-  bootstrapArmCi,
-  compareArms,
-  holmAdjust,
-  mcnemarTest,
-  signTest,
-  wilcoxonSignedRank,
-} from '../src/measure/stats.mjs';
-import {
-  CANARY_ALPHA,
-  DEFAULT_CANARY_SIZE,
-  DEL_R_TOLERANCE,
-  ablateBench,
-  ablateSectionInWorkspace,
-  formatAblationMarkdown,
-  isDeletionCandidate,
-  listAblationSections,
-  parseAblationArmName,
-  parseCoreSections,
-  removeCoreSectionFromBody,
-  removeTopSectionFromBody,
-  shouldEscalateCanary,
-  slugifyHeading,
-} from '../packages/bench/src/ablate.mjs';
-import {
-  CALIBRATION_HARNESSES,
-  PROBES,
-  appendLedgerEntry,
-  extractTranscriptCommands,
-  formatProbesMarkdown,
-  gradeProbe,
-  loadProbeRecords,
-  prepareProbeWorkspace,
-  readLedgerEntries,
-  runBenchProbes,
-} from '../packages/bench/src/probes.mjs';
+import { loadAdapters, parseAdapterUsage } from '../packages/bench/src/adapters.mjs';
+
+
+
+
+
+
+
+
 import { git } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

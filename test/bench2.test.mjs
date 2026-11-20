@@ -2,36 +2,19 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { DEFAULT_MINE_TARGET, listCandidates, mineTasks, patchStats } from '../packages/bench/src/mine.mjs';
-import { isTestPath } from '../src/testing/paths.mjs';
-import { detectTestRunner } from '../src/testing/runners.mjs';
-import { resolveVaultDir } from '../src/testing/vault.mjs';
-import {
-  parseCargoTestOutput,
-  parseGoTestJson,
-  parseJunitXml,
-  parseTapOutput,
-  parseVitestJson,
-  readReports,
-} from '../src/testing/parsers.mjs';
-import {
-  CORPUS_KIND,
-  CORPUS_SCHEMA_VERSION,
-  buildCorpusDocument,
-  verifyCorpusDocument,
-  writeCorpusDocument,
-} from '../src/measure/corpus.mjs';
+import { mineTasks } from '../packages/bench/src/mine.mjs';
+
+
+
+
 import { gradeWorkspace } from '../packages/bench/src/grade.mjs';
 import { extractPatchFiles } from '../src/testing/patches.mjs';
-import { spawnBounded } from '../src/sys/proc.mjs';
 import { BUILTIN_ARMS, materialiseArm, parseArmSpec } from '../packages/bench/src/arms.mjs';
-import { adapterIsolation, agentEnv, loadAdapters, parseAdapterUsage } from '../packages/bench/src/adapters.mjs';
 import { regradeRun, runBench } from '../packages/bench/src/run.mjs';
 import { prepareIsolatedWorkspace } from '../packages/bench/src/workspace.mjs';
 import { buildBenchReport } from '../packages/bench/src/report.mjs';
@@ -56,34 +39,10 @@ import {
   signTest,
   wilcoxonSignedRank,
 } from '../src/measure/stats.mjs';
-import {
-  CANARY_ALPHA,
-  DEFAULT_CANARY_SIZE,
-  DEL_R_TOLERANCE,
-  ablateBench,
-  ablateSectionInWorkspace,
-  formatAblationMarkdown,
-  isDeletionCandidate,
-  listAblationSections,
-  parseAblationArmName,
-  parseCoreSections,
-  removeCoreSectionFromBody,
-  removeTopSectionFromBody,
-  shouldEscalateCanary,
-  slugifyHeading,
-} from '../packages/bench/src/ablate.mjs';
-import {
-  CALIBRATION_HARNESSES,
-  PROBES,
-  appendLedgerEntry,
-  extractTranscriptCommands,
-  formatProbesMarkdown,
-  gradeProbe,
-  loadProbeRecords,
-  prepareProbeWorkspace,
-  readLedgerEntries,
-  runBenchProbes,
-} from '../packages/bench/src/probes.mjs';
+
+
+
+
 import { git, tempDir, keepTemp } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));

@@ -5,12 +5,10 @@
 // Co-change is a separate kind and stays out of the default answer.
 
 import assert from 'node:assert/strict';
-import { execFile } from 'node:child_process';
 import { test } from 'node:test';
 import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
 import { isTestPath } from '../src/testing/paths.mjs';
 import { git, trackedFiles, capture } from './fixture.mjs';

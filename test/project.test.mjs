@@ -6,7 +6,7 @@ import { join } from 'node:path';
 
 import { plan, loadRules, select, render, checkTarget, checkTargets } from '../src/projection/project.mjs';
 import { desiredRegion } from '../src/projection/rules.mjs';
-import { BEGIN, END, compose, inject, parse } from '../src/projection/markers.mjs';
+import { BEGIN, END, compose, parse } from '../src/projection/markers.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
 async function fixture(files = {}) {

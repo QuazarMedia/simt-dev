@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 
 import { checkCommand, frozenFindings } from '../src/commands/sync.mjs';
 import {

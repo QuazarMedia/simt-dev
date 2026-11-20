@@ -18,7 +18,7 @@ import { join, resolve } from 'node:path';
 import { LOCAL_DIR } from '../state.mjs';
 import { packageVersion } from '../package-version.mjs';
 
-export const RECORD_SCHEMA_VERSION = 2;
+const RECORD_SCHEMA_VERSION = 2;
 
 /** Directory a run's records are stored under, with the pre-move path as a fallback. */
 export function runsDir(root) {

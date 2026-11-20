@@ -10,7 +10,7 @@
 // Research documents are not archived. They are notes, they have no satisfying state and
 // no rows to be finished, and a command that moved them would be a command that guessed
 // what "done" means for a document nobody tracks.
-import { mkdir, readFile, rename } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
 
 import { CLI } from '../name.mjs';

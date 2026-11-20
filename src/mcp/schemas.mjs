@@ -6,28 +6,13 @@
 
 import { loadRegistry } from '../graph/load.mjs';
 import { implicitRoot } from '../repo-root.mjs';
-import { provenanceDigest } from '../projection/project.mjs';
-import { discover } from '../compare/discover.mjs';
-import { buildRows, resolveConcurrency, summarise } from '../compare/row.mjs';
 import { GATES } from '../hooks/gates.mjs';
-import { checkRepo } from '../commands/sync.mjs';
-import { diagnose, serialisedFindings } from '../commands/doctor.mjs';
-import { rulesCatalogue, rulesWhyFacts } from '../commands/rules.mjs';
-import { skillsBriefFacts, skillsFindFacts, skillsShowFacts, skillsWhyFacts } from '../commands/skills.mjs';
-import { assembleBrief } from '../brief/assemble.mjs';
-import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
-import { federationAccess, readFederation } from '../federation/config.mjs';
-import { consult } from '../federation/query.mjs';
-import { planNext, planDone } from '../plan/index.mjs';
-import { buildPrBody } from '../prbody.mjs';
-import { configPaths, readUserConfig, resolveWorkspace } from '../workspace.mjs';
-import { measureSkill } from '../graph/load.mjs';
 import { CLI } from '../name.mjs';
 
 export const GATE_KINDS = new Map(Object.entries(GATES).map(([name, g]) => [name, g.kind]));
 
 /** A schema with no required fields still needs the object declared. */
-export const noArgs = { type: 'object', properties: {}, required: [] };
+const noArgs = { type: 'object', properties: {}, required: [] };
 
 /**
  * Output schemas, one per tool, describing what a SUCCESSFUL call returns.

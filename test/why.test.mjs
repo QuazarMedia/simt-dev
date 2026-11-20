@@ -5,7 +5,6 @@
 // command is reported, not dropped.
 
 import assert from 'node:assert/strict';
-import { join } from 'node:path';
 import { test } from 'node:test';
 
 import { whyCommand } from '../src/commands/why.mjs';

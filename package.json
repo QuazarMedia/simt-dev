@@ -51,6 +51,7 @@
     "test:integration": "node scripts/run-tests.mjs integration",
     "test:coverage": "node scripts/run-tests.mjs unit --coverage",
     "lint": "node bin/simt.mjs graph lint",
+    "lint:imports": "eslint --fix src packages bin test scripts",
     "verify:shipped": "node --test test/shipped.test.mjs",
     "build:sea": "node scripts/build-sea.mjs",
     "verify:wheel": "node scripts/verify-wheel.mjs"
@@ -59,5 +60,9 @@
     ".": "./src/api.mjs",
     "./package.json": "./package.json",
     "./src/*": "./src/*"
+  },
+  "devDependencies": {
+    "eslint": "^10.15.0",
+    "eslint-plugin-unused-imports": "^4.4.1"
   }
 }

@@ -15,7 +15,7 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 
 import { denyEntries, parseIgnoreList, renderClaudeSettings, renderTextIgnore } from '../src/ignore.mjs';
 import { keepTemp } from './fixture.mjs';

@@ -4,29 +4,20 @@
 // computes is one answer with one caller contract: `sync` writes it, `check` compares
 // it, and a second copy of it would report drift on a tree `sync` had just written.
 
-import { readFile, readdir } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve } from 'node:path';
 
-import { fingerprint, KNOWN_TAGS } from '../resolve/fingerprint.mjs';
-import { loadMdcRules, renderMdc } from './mdc.mjs';
-import { foldsRules, resolveSurfaces, rulePath, canScope } from './surfaces.mjs';
+import { fingerprint } from '../resolve/fingerprint.mjs';
+import { foldsRules, rulePath, canScope } from './surfaces.mjs';
 import { ruleTargets } from './targets.mjs';
 import { compose } from './markers.mjs';
-import { declaredBudget, declaredShared, readManifest } from './manifest.mjs';
-import { loadManifest } from '../manifest/schema.mjs';
-import { commandCard, CARD_LIMIT_BYTES } from '../kernel/card.mjs';
+import { declaredBudget, declaredShared } from './manifest.mjs';
+import { CARD_LIMIT_BYTES } from '../kernel/card.mjs';
 import { packToBudget } from '../kernel/budget.mjs';
-import { filterInferable, inferableDefect, inferableProofs } from '../kernel/inferability.mjs';
-import { checkDefect, foldChecks } from '../kernel/checks.mjs';
-import { foldVariants, readLockedVariants, variantsDefect } from '../kernel/variants.mjs';
-import { BASELINES } from './baselines.mjs';
-import { CLI, MANIFEST_FILE } from '../name.mjs';
+import { filterInferable } from '../kernel/inferability.mjs';
+import { foldChecks } from '../kernel/checks.mjs';
+import { foldVariants, readLockedVariants } from '../kernel/variants.mjs';
+import { CLI } from '../name.mjs';
 import { installedSkills } from './disclosure.mjs';
-import { PACK_DIR, resolvePacks } from '../packs.mjs';
-import { discoverPackages } from '../monorepo.mjs';
-import { KERNEL_CLASSES, ORIENTATION_POINTER, byPriorityThenId, crossRefProblems, frameSource, inferableEvidence, loadRules, mdcTargets, projectionMode, provenanceDigest, render, ruleBodies, select, sourceTitle, stableOrder, stripFrontmatter, toolRule } from './rules.mjs';
+import { KERNEL_CLASSES, ORIENTATION_POINTER, byPriorityThenId, crossRefProblems, frameSource, inferableEvidence, loadRules, projectionMode, provenanceDigest, render, ruleBodies, select, sourceTitle, stableOrder, stripFrontmatter, toolRule } from './rules.mjs';
 
 export async function desiredRegion(root, flags) {
   const { stack, facts, manifest } = await fingerprint(root);

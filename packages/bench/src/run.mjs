@@ -29,7 +29,6 @@ import { gradeWithOracle } from './graders.mjs';
 import './grade.mjs';
 import { resolveVaultDir } from '../../../src/testing/vault.mjs';
 import {
-  RECORD_SCHEMA_VERSION,
   corpusDigestOf,
   experimentOf,
   runIdFor,

@@ -18,11 +18,10 @@
 // a promise the bytes matter; they do not.
 
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 

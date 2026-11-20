@@ -13,20 +13,15 @@ import { test } from 'node:test';
 // These tests are about the protocol, not workspace discovery, so decline it.
 process.env.SIMT_DEV_WORKSPACE = 'off';
 
-import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
-import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import { Readable } from 'node:stream';
-import { handle, serve, PROTOCOL_VERSION, RPC, SUPPORTED_VERSIONS, META } from '../src/mcp/server.mjs';
-import { TOOLS, toolNames, ERROR_SHAPE } from '../src/mcp/tools.mjs';
+import { handle, serve, PROTOCOL_VERSION, RPC, SUPPORTED_VERSIONS } from '../src/mcp/server.mjs';
+import { TOOLS, ERROR_SHAPE } from '../src/mcp/tools.mjs';
 import { assertValid } from '../src/mcp/schema.mjs';
 import { CLI } from '../src/name.mjs';
-import { desiredRegion } from '../src/projection/rules.mjs';
-import { planNext } from '../src/plan/index.mjs';
 
 import { BIN, exec, req, at, converse } from './mcp-fixture.mjs';
 // --- end to end over a real pipe ------------------------------------------------

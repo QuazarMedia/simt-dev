@@ -27,7 +27,6 @@ import { readFile, readdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { parse } from './markers.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 import { parseFrontmatter as splitBlock, stripFrontmatter as stripBlock } from '../text/frontmatter.mjs';
 

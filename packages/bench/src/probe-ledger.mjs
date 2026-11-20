@@ -3,15 +3,14 @@
 // A probe measures whether an agent follows a rule by running a workspace and reading
 // the commands it issued. The catalogue references these helpers, and the runner writes
 // the same ledger, so they live beside neither: one module both import (review 0003 Q80).
-import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import { sanitizedEnv, spawnBounded } from '../../../src/sys/proc.mjs';
 import { LOCAL_DIR } from '../../../src/state.mjs';
 
 export const PROBE_AGENT_TIMEOUT_MS = 120_000;
-export const PROBE_COMMAND_TIMEOUT_MS = 120_000;
+const PROBE_COMMAND_TIMEOUT_MS = 120_000;
 
 
 export async function runGit(args, { cwd, env = {} } = {}) {

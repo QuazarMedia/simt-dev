@@ -11,20 +11,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { constants } from 'node:fs';
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { access, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
-import { decide, overrides } from '../src/agenthooks/decide.mjs';
-import { adapter, adapters, hookCommand, hookPath, hookRows } from '../src/agenthooks/render.mjs';
-import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../src/agenthooks/shim.mjs';
-import { EVENTS, POLICY_IDS } from '../src/agenthooks/policy.mjs';
+import { adapter, adapters, hookCommand, hookPath } from '../src/agenthooks/render.mjs';
+import { AGENT_HOOK_SHIM } from '../src/agenthooks/shim.mjs';
+import { EVENTS } from '../src/agenthooks/policy.mjs';
 import { SQLITE_FILE } from '../src/index/persist.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
-import { HARNESSES, BIN, HOOK, REGION_HASH, REGION_HTML, ROOT, cli, git, installedShim, repo, shell, write } from './agenthooks-fixture.mjs';
+import { HARNESSES, HOOK, REGION_HTML, ROOT, cli, git, installedShim, repo } from './agenthooks-fixture.mjs';
 // Delivery (plan 0003 R29). The second event is not a decision and none of these tests is
 // about blocking: a prompt hook that could stop a person's prompt is a hook whose own bug
 // is a person who cannot type. What is asserted is that the packet reaches stdout - the

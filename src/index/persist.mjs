@@ -5,7 +5,7 @@
 // and the format together crossed the review trigger.
 
 import { createHash } from 'node:crypto';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, rename, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { LOCAL_DIR } from '../state.mjs';

@@ -14,15 +14,13 @@
 // copied in and pinned by digest, never fetched at render time.
 
 import { execFile } from 'node:child_process';
-import { mkdir, readdir, readFile, stat } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { applyPlan, change } from '../write/plan.mjs';
 import { readBefore } from '../diff.mjs';
-import { createHash } from 'node:crypto';
 import { basename, dirname, join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { PACK_DIR, packDigest, packNameProblem } from '../packs.mjs';
-import { readManifest } from '../projection/manifest.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { parseFrontmatter } from '../text/frontmatter.mjs';
 

@@ -30,7 +30,7 @@ import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/i
 import { loadRegistry, measureSkill } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { readCapability } from '../hooks/capability.mjs';
-import { MANIFEST, buildManifest, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
+import { buildManifest, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
 import { locateSource, sourceHeldLocally } from '../resolve/source.mjs';
 import { nearMatches } from '../resolve/near.mjs';

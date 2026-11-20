@@ -56,4 +56,4 @@ export function sameEvidence(a = [], b = []) {
  */
 
 /** The cap on a stored fix diff, so one large commit cannot bloat a lesson. */
-export const FIX_DIFF_BUDGET = 20000;
+const FIX_DIFF_BUDGET = 20000;

@@ -13,7 +13,6 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CLI } from '../../../src/name.mjs';
 import { sanitizedEnv, spawnBounded } from '../../../src/sys/proc.mjs';
 
 const BENCH_DIR = dirname(fileURLToPath(import.meta.url));

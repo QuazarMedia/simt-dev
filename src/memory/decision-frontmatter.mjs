@@ -156,4 +156,4 @@ export function parseDecisionFrontmatter(text) {
 
 const VALID_KINDS = new Set(['superseded', 'narrowed', 'withdrawn']);
 
-export { VALID_KINDS, normaliseKind, normaliseSupersedesEntry };
+export { normaliseKind, normaliseSupersedesEntry };

@@ -9,22 +9,17 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { constants } from 'node:fs';
-import { access, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { access, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 
 import { decide, overrides } from '../src/agenthooks/decide.mjs';
 import { adapter, adapters, hookCommand, hookPath, hookRows } from '../src/agenthooks/render.mjs';
-import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../src/agenthooks/shim.mjs';
+import { AGENT_HOOK_SHIM } from '../src/agenthooks/shim.mjs';
 import { EVENTS, POLICY_IDS } from '../src/agenthooks/policy.mjs';
-import { SQLITE_FILE } from '../src/index/persist.mjs';
-import { MANIFEST_FILE } from '../src/name.mjs';
 
-import { HARNESSES, BIN, HOOK, REGION_HASH, REGION_HTML, ROOT, cli, git, installedShim, repo, shell, write } from './agenthooks-fixture.mjs';
+import { HOOK, REGION_HASH, REGION_HTML, ROOT, cli, git, installedShim, repo, shell, write } from './agenthooks-fixture.mjs';
 test('every harness blocks a push, in its own dialect and with its own exit code', async () => {
   const root = await repo();
   const expected = {

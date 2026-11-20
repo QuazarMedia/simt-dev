@@ -23,8 +23,8 @@
 // and that is the right blast radius for a hook that is broken rather than refusing.
 
 import { existsSync } from 'node:fs';
-import { mkdir, readFile } from 'node:fs/promises';
-import { dirname, isAbsolute, join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { isAbsolute, join } from 'node:path';
 import { commitJournal } from '../journal.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
 import { AGENT_HOOK_SHIM, renderAgentHookShim } from '../agenthooks/shim.mjs';

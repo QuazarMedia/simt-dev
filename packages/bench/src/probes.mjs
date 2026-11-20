@@ -22,23 +22,19 @@
 import { PROBES } from './probes.catalog.mjs';
 import {
   PROBE_AGENT_TIMEOUT_MS,
-  PROBE_COMMAND_TIMEOUT_MS,
   appendLedgerEntry,
   extractTranscriptCommands,
   readLedgerEntries,
   runGit,
-  runNode,
 } from './probe-ledger.mjs';
 export { PROBES, appendLedgerEntry, extractTranscriptCommands, readLedgerEntries };
 
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import { LOCAL_DIR } from '../../../src/state.mjs';
-import { parse as parseRegion } from '../../../src/projection/markers.mjs';
-import { sanitizedEnv, spawnBounded } from '../../../src/sys/proc.mjs';
 import { adapterIsolation, executeAdapter, loadAdapters } from './adapters.mjs';
 import { materialiseArm, parseArmSpec } from './arms.mjs';
 

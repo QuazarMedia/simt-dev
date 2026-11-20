@@ -24,7 +24,6 @@ import { classifyTask } from '../brief/kind.mjs';
 import { computeRunCost, isRunResolved, loadPrices } from '../measure/metrics.mjs';
 import { loadRunRecords } from '../measure/records.mjs';
 import { loadTasks } from '../measure/tasks.mjs';
-import { CONFIG_DIR } from '../name.mjs';
 
 /**
  * Every advice report carries its row's accept bar (ADR-076: a metric is a measurement or

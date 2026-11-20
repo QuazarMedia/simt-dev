@@ -25,7 +25,7 @@ const ORACLE_TYPES = new Set(['tests', 'outcome']);
  * artifacts and effects the task may produce — and the predicates are part of the
  * oracle, not something a grader infers.
  */
-export const OUTCOME_PREDICATE_KINDS = Object.freeze([
+const OUTCOME_PREDICATE_KINDS = Object.freeze([
   'artifact-contains',
   'artifact-equals',
   'artifact-matches',

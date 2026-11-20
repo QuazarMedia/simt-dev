@@ -1,14 +1,11 @@
 // Half of the MCP tool list. The tools are read-only and answer through the commands.
 
-import { loadRegistry } from '../graph/load.mjs';
 import { provenanceDigest } from '../projection/project.mjs';
 import { discover } from '../compare/discover.mjs';
 import { buildRows, resolveConcurrency, summarise } from '../compare/row.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { checkRepo } from '../commands/sync.mjs';
-import { diagnose, serialisedFindings } from '../commands/doctor.mjs';
-import { rulesCatalogue, rulesWhyFacts } from '../commands/rules.mjs';
-import { skillsBriefFacts, skillsFindFacts, skillsShowFacts, skillsWhyFacts } from '../commands/skills.mjs';
+import { skillsBriefFacts } from '../commands/skills.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
 import { federationAccess, readFederation } from '../federation/config.mjs';
@@ -16,10 +13,9 @@ import { consult } from '../federation/query.mjs';
 import { planNext, planDone } from '../plan/index.mjs';
 import { buildPrBody } from '../prbody.mjs';
 import { configPaths, readUserConfig, resolveWorkspace } from '../workspace.mjs';
-import { measureSkill } from '../graph/load.mjs';
 import { CLI } from '../name.mjs';
-import { ERROR_SHAPE, GATE_KINDS, noArgs, output, rootArg } from './schemas.mjs';
-import { registry, rootOf } from './schemas.mjs';
+import { GATE_KINDS, output, rootArg } from './schemas.mjs';
+import { rootOf } from './schemas.mjs';
 
 export const TOOLS_FACTS = [
   {

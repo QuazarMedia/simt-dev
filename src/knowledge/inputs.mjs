@@ -17,7 +17,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { BUNDLE_SCHEMA, importBundle } from './bundle.mjs';
+import { importBundle } from './bundle.mjs';
 import { readIdentityMap } from './lineage.mjs';
 
 /** The bound the bundle reader already applies, reused for every input the doors read. */

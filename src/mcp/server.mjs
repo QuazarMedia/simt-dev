@@ -21,7 +21,6 @@
 //      for a reason that does not weaken because the caller is a model.
 
 import { once } from 'node:events';
-import { CLI } from '../name.mjs';
 import { getPrompt, PROMPTS } from './prompts.mjs';
 import { RESOURCE_TEMPLATES, listResources, readResource } from './resources.mjs';
 import { paginate } from './paginate.mjs';

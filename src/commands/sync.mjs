@@ -16,12 +16,11 @@
 //     three `.mdc` rules would let a reader believe a repo is fully current when
 //     only the file they happened to open is.
 
-import { mkdir, readFile, stat, symlink, unlink } from 'node:fs/promises';
-import { dirname, join, resolve, sep } from 'node:path';
+import { mkdir, readFile, symlink, unlink } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { repoContext } from '../context.mjs';
 import { plan, checkTargets, checkTarget, select, pointerTargets, pointerState } from '../projection/project.mjs';
-import { fingerprint } from '../resolve/fingerprint.mjs';
 import { manifestDrift, readManifest, unrunnableGates, buildManifest, writeManifest, withGenerated, manifestText, manifestPath, gateList, unknownKeys } from '../projection/manifest.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { readCapability } from '../hooks/capability.mjs';

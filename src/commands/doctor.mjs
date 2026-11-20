@@ -23,9 +23,8 @@
 
 import { join } from 'node:path';
 import { repoContext } from '../context.mjs';
-import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
+import { EXIT, emit, emitJson, fail, isJson, writeMode } from '../output/index.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
-import { fingerprint } from '../resolve/fingerprint.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
 import { sharedWarning } from './shared.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';

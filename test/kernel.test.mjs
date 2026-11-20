@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 
 import { desiredRegion, loadRules } from '../src/projection/rules.mjs';
 import { budgetFinding, buildManifest, declaredBudget, readManifest } from '../src/projection/manifest.mjs';

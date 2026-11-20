@@ -1,6 +1,9 @@
 # Editors and operating systems
 .DS_Store
 .idea/
+# Dev dependencies (ESLint for the import guard); the package ships zero runtime
+# dependencies, so this is the only installed tree and it is never committed.
+node_modules/
 # Per-developer git identity, written by `simt init`. Not a file to share:
 # it carries whoever is committing into the tree, and a repository has more than
 # one of those. See ADR-057.

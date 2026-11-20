@@ -3,9 +3,9 @@
 // Split out of init.mjs when it reached the repository ceiling. Neither function writes
 // the manifest; both answer a question the command asks before it does.
 
-import { mkdir, readFile, symlink } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { git as sysGit } from '../sys/git.mjs';
-import { rulePaths, scanDocument, summarise } from '../projection/conflicts.mjs';
+import { rulePaths, scanDocument } from '../projection/conflicts.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
 
 const BACKUP_TAG = 'backup-before-simt-dev';
@@ -87,4 +87,4 @@ async function git(cwd, args) {
 }
 
 
-export { ADOPT_BRANCH, BACKUP_TAG, establishEscapeHatch, git, scanRepo };
+export { establishEscapeHatch, git, scanRepo };

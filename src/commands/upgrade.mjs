@@ -25,18 +25,17 @@
 // about scope, so it needs `--all` or an explicit root: the old
 //      default resolved the workspace and a dry run inside one repo planned all sixteen.
 
-import { mkdir } from 'node:fs/promises';
 import { commitJournal } from '../journal.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
 import { invalidateCheckCache } from '../status.mjs';
 
-import { basename, dirname, resolve } from 'node:path';
+import { basename, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { namedRoot } from '../repo-root.mjs';
 import { packageVersion } from '../package-version.mjs';
 import { provenanceDigest, plan } from '../projection/project.mjs';
-import { MANIFEST, MANIFEST_COMMENT, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
+import { MANIFEST_COMMENT, manifestPath, manifestText, readManifest, writeManifest } from '../projection/manifest.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { FAULT_STATES, planUpgrade, summariseUpgrade } from '../upgrade/plan.mjs';
 import { discover } from '../compare/discover.mjs';

@@ -12,33 +12,19 @@
 // a correct default that a naive grep would flag.
 
 import assert from 'node:assert/strict';
-import { cmd } from './fixture.mjs';
-import { CLI, PROJECT } from '../src/name.mjs';
+import { CLI } from '../src/name.mjs';
 import { loadDecisions } from '../src/decisions/index.mjs';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 
 import { mkdir, mkdtemp, readdir, writeFile } from 'node:fs/promises';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { tmpdir } from 'node:os';
-import { loadRules, select, LOCAL_PROFILE_DIR } from '../src/projection/project.mjs';
-import { desiredRegion, mdcTargets } from '../src/projection/rules.mjs';
-import { DECISIONS_DIR, ESTATE_NAME } from '../src/decisions/index.mjs';
-import { loadMdcRules, renderMdc, ruleName } from '../src/projection/mdc.mjs';
-import { SURFACES, rulePath, surface, undocumentedKeys } from '../src/projection/surfaces.mjs';
-import { compose } from '../src/projection/markers.mjs';
-import { renderShim } from '../src/hooks/shim.mjs';
-import { buildManifest } from '../src/projection/manifest.mjs';
-import { PACKAGE_ROOT } from '../src/workspace.mjs';
-import { dispatch } from '../src/commands/index.mjs';
-import { EXIT } from '../src/output/index.mjs';
-import { assertClean } from './leaks.mjs';
+import { loadRules, LOCAL_PROFILE_DIR } from '../src/projection/project.mjs';
+import { DECISIONS_DIR } from '../src/decisions/index.mjs';
 import { PREFIX_ARGUING, TOOL_WORDS } from '../src/toolwords.mjs';
 
-import { ROOT, TEXT_EXTENSIONS, collect } from './shipped-fixture.mjs';
+import { ROOT, collect } from './shipped-fixture.mjs';
 test('no shipped decision record names a command this package does not install', async () => {
   // Found by reading a `rules why` answer: ADR-005 told the reader to run `simt check`,
   // which is not a command. Twenty-one occurrences across eight records, all invisible

@@ -1,14 +1,9 @@
-import { readFile, rename, writeFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
-import { journaledWriteFile } from '../journal.mjs';
 import { getGate } from '../hooks/gates.mjs';
 import { runScript } from '../ecosystem/node-runner.mjs';
 import { ecosystemGateRows } from '../ecosystem/records.mjs';
-import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
-import { GENERATED_KEYS_OF, KEYS, gateList, loadManifest, manifestPath } from '../manifest/schema.mjs';
+import { MANIFEST_FILE } from '../name.mjs';
+import { gateList } from '../manifest/schema.mjs';
 import { CLI } from '../name.mjs';
-import { packageVersion } from '../package-version.mjs';
 
 // The gates a repository declares: what each one runs, and whether it can run at all.
 //

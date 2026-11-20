@@ -4,7 +4,7 @@
 // scripts. The catalogue is data and the runner is code (ADR-013): a new probe is an
 // entry, not an edit to the runner (review 0003 Q80).
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { parse as parseRegion } from '../../../src/projection/markers.mjs';

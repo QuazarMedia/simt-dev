@@ -15,9 +15,9 @@
 import { readdir, readFile, readlink, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { diff, parse, inject } from './markers.mjs';
+import { parse, inject } from './markers.mjs';
 import { ruleName } from './mdc.mjs';
-import { foldsRules, frontmatterBlock, POINTERS, rulePath, SURFACES } from './surfaces.mjs';
+import { foldsRules, frontmatterBlock, POINTERS, rulePath } from './surfaces.mjs';
 import { foldChecks } from '../kernel/checks.mjs';
 import { frontmatterBlock as extractBlock, stripFrontmatter } from '../text/frontmatter.mjs';
 

@@ -21,10 +21,9 @@ import { invalidateCheckCache } from '../status.mjs';
 import { isAbsolute, join, relative } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
-import { MANIFEST, readManifest } from '../projection/manifest.mjs';
 import { CHAIN_MARKER, EVENTS, HOOKS_DIR, HOOKS_DIR_LEGACY, HOOKS_PATH_KEY, SHIM_MARKER, fileFor, renderChainedShim, renderEvidenceShim, renderShim } from '../hooks/shim.mjs';
-import { GATE_KEY, gateCount, readHooksPath, readHooksState, wantsShim } from '../compare/hooksstate.mjs';
-import { gateNames, getGate } from '../hooks/gates.mjs';
+import { GATE_KEY, gateCount, readHooksState, wantsShim } from '../compare/hooksstate.mjs';
+import { getGate } from '../hooks/gates.mjs';
 import { renderGateReport, runGates } from '../hooks/dispatcher.mjs';
 import { CLI } from '../name.mjs';
 import { MANIFEST_FILE } from '../name.mjs';

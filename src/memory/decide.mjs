@@ -10,7 +10,7 @@ import { decisionsDir } from '../decisions/dir.mjs';
 import { parseFrontmatter } from '../text/frontmatter.mjs';
 import { gitText } from '../sys/git.mjs';
 import { parseDecisionFrontmatter } from './decision-frontmatter.mjs';
-import { VALID_KINDS, normaliseKind, normaliseSupersedesEntry } from './decision-frontmatter.mjs';
+import { normaliseKind, normaliseSupersedesEntry } from './decision-frontmatter.mjs';
 export { parseDecisionFrontmatter };
 
 export const DECISION_KEYS = ['simt-affects', 'simt-supersedes'];

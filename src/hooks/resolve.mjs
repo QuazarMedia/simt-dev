@@ -14,7 +14,7 @@ import { access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { extname, join } from 'node:path';
 
-import { FORMATTABLE, GATES, gateNames } from './gates.mjs';
+import { FORMATTABLE } from './gates.mjs';
 import { MANIFEST_FILE } from '../name.mjs';
 
 /** Is this path an executable file? */

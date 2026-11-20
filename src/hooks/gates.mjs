@@ -1,4 +1,3 @@
-import { MANIFEST_FILE } from '../name.mjs';
 // Gate definitions for the shared hook dispatcher.
 //
 // A gate has one of four kinds, and the choice is not cosmetic:

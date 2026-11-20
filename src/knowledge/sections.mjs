@@ -13,7 +13,6 @@
 // unit list is not the same answer: a parser that says nothing looks exactly like a
 // document with nothing in it, and only one of the two is safe to verify against.
 
-import { createHash } from 'node:crypto';
 import { TOKEN, anchorOf, attribute, normalise, scanLines, sectionsOf, splitLines, unitsOf, withAnchors } from './markdown.mjs';
 export { anchorOf };
 

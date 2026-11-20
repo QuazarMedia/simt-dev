@@ -15,7 +15,7 @@
 // are derived from `before` and `after`, because a writer that passes an action it
 // computed by hand is the bug this replaces.
 import { readFile, stat, unlink, writeFile, mkdir } from 'node:fs/promises';
-import { dirname, isAbsolute, join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 
 import { commitJournal, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
 import { LOCAL_DIR } from '../state.mjs';

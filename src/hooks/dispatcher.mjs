@@ -20,7 +20,7 @@
 
 import { spawn } from 'node:child_process';
 import { readFile, stat } from 'node:fs/promises';
-import { basename, join, resolve, sep } from 'node:path';
+import { join } from 'node:path';
 
 import { GATES, getGate } from './gates.mjs';
 import { preparePushTree } from './head-worktree.mjs';

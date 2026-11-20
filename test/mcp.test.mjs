@@ -13,16 +13,14 @@ import { test } from 'node:test';
 // These tests are about the protocol, not workspace discovery, so decline it.
 process.env.SIMT_DEV_WORKSPACE = 'off';
 
-import { execFile, spawn } from 'node:child_process';
-import { promisify } from 'node:util';
-import { access, mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { Readable } from 'node:stream';
 import { handle, serve, PROTOCOL_VERSION, RPC, SUPPORTED_VERSIONS, META } from '../src/mcp/server.mjs';
-import { TOOLS, toolNames, ERROR_SHAPE } from '../src/mcp/tools.mjs';
+import { TOOLS, toolNames } from '../src/mcp/tools.mjs';
 import { assertValid } from '../src/mcp/schema.mjs';
 import { CLI } from '../src/name.mjs';
 import { desiredRegion } from '../src/projection/rules.mjs';

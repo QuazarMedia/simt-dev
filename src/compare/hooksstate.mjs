@@ -115,7 +115,7 @@ export function wantsShim(manifest, exists, event) {
 }
 
 /** `core.hooksPath`, or null when unset or the repo is not a git repo. */
-export async function readHooksPath(root) {
+async function readHooksPath(root) {
   try {
     const value = await gitText(root, ['config', '--get', HOOKS_PATH_KEY]);
     return value === '' ? null : value;

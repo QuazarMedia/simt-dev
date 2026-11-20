@@ -13,7 +13,7 @@ import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs
 import { CLI } from '../name.mjs';
 import { commandAvailable, reportPathProblem, runnerSpecProblem } from '../testing/contract.mjs';
 import { detectTestRunner } from '../testing/runners.mjs';
-import { cleanupReports, readReports } from '../testing/parsers.mjs';
+import { readReports } from '../testing/parsers.mjs';
 import { spawnBounded } from '../sys/proc.mjs';
 import { loadManifest } from '../manifest/schema.mjs';
 import { compactOutput } from '../index/compact.mjs';

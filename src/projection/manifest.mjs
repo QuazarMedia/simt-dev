@@ -23,20 +23,17 @@ import { journaledWriteFile } from '../journal.mjs';
 // this file already selects from; duplicating the runnability rules here would be two
 // answers to "can this repo run that gate", which is precisely the kind of drift this
 // file exists to prevent elsewhere.
-import { getGate } from '../hooks/gates.mjs';
 // the one Node runner table. This module and the card, capability,
 // dispatcher and CI workflow all spell `<manager> run <script>` from it.
-import { runScript } from '../ecosystem/node-runner.mjs';
 // the ecosystem records. A new ecosystem is a new file under `ecosystems/`, not a
 // row added to this table. records.mjs imports nothing from this package, so this edge
 // cannot cycle.
-import { ecosystemGateRows } from '../ecosystem/records.mjs';
 
 // Imported as well as re-exported: a bare `export { X as Y } from` binds nothing here,
 // and the manifest name is used a dozen times below in remedy strings that name this
 // file by name.
 import { MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
-import { GENERATED_KEYS_OF, KEYS, loadManifest, manifestPath } from '../manifest/schema.mjs';
+import { GENERATED_KEYS_OF, loadManifest, manifestPath } from '../manifest/schema.mjs';
 // The manifest's validity vocabulary is owned by the schema; re-exported here because this
 // module is where every reader of the manifest already imports from.
 export { gateList, unknownKeys } from '../manifest/schema.mjs';

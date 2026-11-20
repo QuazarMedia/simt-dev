@@ -2,60 +2,22 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
-import { DEFAULT_MINE_TARGET, listCandidates, mineTasks, patchStats } from '../packages/bench/src/mine.mjs';
-import { isTestPath } from '../src/testing/paths.mjs';
-import { detectTestRunner } from '../src/testing/runners.mjs';
-import { resolveVaultDir } from '../src/testing/vault.mjs';
-import {
-  parseCargoTestOutput,
-  parseGoTestJson,
-  parseJunitXml,
-  parseTapOutput,
-  parseVitestJson,
-  readReports,
-} from '../src/testing/parsers.mjs';
-import {
-  CORPUS_KIND,
-  CORPUS_SCHEMA_VERSION,
-  buildCorpusDocument,
-  verifyCorpusDocument,
-  writeCorpusDocument,
-} from '../src/measure/corpus.mjs';
-import { gradeWorkspace } from '../packages/bench/src/grade.mjs';
-import { extractPatchFiles } from '../src/testing/patches.mjs';
+
+
+
+
 import { spawnBounded } from '../src/sys/proc.mjs';
-import { BUILTIN_ARMS, materialiseArm, parseArmSpec } from '../packages/bench/src/arms.mjs';
-import { adapterIsolation, agentEnv, loadAdapters, parseAdapterUsage } from '../packages/bench/src/adapters.mjs';
-import { regradeRun, runBench } from '../packages/bench/src/run.mjs';
-import { prepareIsolatedWorkspace } from '../packages/bench/src/workspace.mjs';
-import { buildBenchReport } from '../packages/bench/src/report.mjs';
-import { formatReportMarkdown } from '../packages/bench/src/render.mjs';
-import { loadRunRecords } from '../src/measure/records.mjs';
-import {
-  computeRunCost,
-  computeRunQuality,
-  evaluateRunRecord,
-  isRunResolved,
-  loadPrices,
-} from '../src/measure/metrics.mjs';
-import {
-  DEFAULT_BOOTSTRAP_SAMPLES,
-  DEFAULT_BOOTSTRAP_SEED,
-  MIN_PAIRD_TASKS,
-  NON_INFERIORITY_MARGIN,
-  bootstrapArmCi,
-  compareArms,
-  holmAdjust,
-  mcnemarTest,
-  signTest,
-  wilcoxonSignedRank,
-} from '../src/measure/stats.mjs';
+import { materialiseArm, parseArmSpec } from '../packages/bench/src/arms.mjs';
+import { adapterIsolation, agentEnv } from '../packages/bench/src/adapters.mjs';
+
+
+
+
 import {
   CANARY_ALPHA,
   DEFAULT_CANARY_SIZE,

@@ -18,7 +18,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { OUTCOME_PREDICATE_KINDS, normaliseTask } from '../../../src/measure/task-schema.mjs';
+import { normaliseTask } from '../../../src/measure/task-schema.mjs';
 import { registerOracle } from './graders.mjs';
 
 /** The strata an outcome corpus reports separately. A pooled gain cannot hide a loss. */

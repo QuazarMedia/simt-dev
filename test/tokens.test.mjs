@@ -12,14 +12,12 @@
 
 import assert from 'node:assert/strict';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { after, test } from 'node:test';
+import { test } from 'node:test';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 
-import { tokensCommand } from '../src/commands/tokens.mjs';
 import { dispatch } from '../src/commands/index.mjs';
 import { plan } from '../src/projection/project.mjs';
 import { buildManifest, manifestText, readManifest } from '../src/projection/manifest.mjs';

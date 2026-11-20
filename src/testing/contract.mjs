@@ -11,7 +11,7 @@
 // shell reads the selected file names as its own syntax; argv has neither problem, and a
 // path containing a space stays one argument.
 
-import { existsSync, accessSync, constants } from 'node:fs';
+import { accessSync, constants } from 'node:fs';
 import { delimiter, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /** The report formats a configured runner may declare. `none` means stdout is the report. */

@@ -15,12 +15,10 @@
 
 import assert from 'node:assert/strict';
 import { cmd, keepTemp } from './fixture.mjs';
-import test, { after } from 'node:test';
-import { execFile } from 'node:child_process';
+import test from 'node:test';
 import { mkdtemp, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
 import {
   renderWorkflow,
@@ -32,8 +30,6 @@ import {
   WORKFLOW_FILE,
   WORKFLOWS_DIR,
 } from '../src/ci/workflow.mjs';
-import { renderDependabot, planDependabot, DEPENDABOT_FILE } from '../src/ci/dependabot.mjs';
-import { fingerprint } from '../src/resolve/fingerprint.mjs';
 import { renderShim, EVENTS } from '../src/hooks/shim.mjs';
 import { BIN_ENV, CLI, PACKAGE_NAME } from '../src/name.mjs';
 import { renderLocator } from '../src/locate.mjs';

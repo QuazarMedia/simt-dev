@@ -15,7 +15,6 @@ import { CLI, MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { detectFacets } from '../work/facets.mjs';
 import { capabilityCards, probeLocal } from '../work/capabilities.mjs';
-import { WORK_VERSION } from '../work/config.mjs';
 import { readWork } from '../work/effective.mjs';
 import { normalizePath } from '../work/artifacts.mjs';
 import { proposeScope } from '../work/setup.mjs';

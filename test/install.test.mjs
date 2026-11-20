@@ -3,12 +3,12 @@ import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { cp, mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadRegistry, measureSkill } from '../src/graph/load.mjs';
+import { measureSkill } from '../src/graph/load.mjs';
 import { skillsDir, wrapFlat } from '../src/commands/skillsinstall.mjs';
 import { readManifest, MANIFEST } from '../src/projection/manifest.mjs';
 import { skillWorkspace, workspaceEnv, cmd, keepTemp } from './fixture.mjs';

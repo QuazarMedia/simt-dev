@@ -10,13 +10,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFile } from 'node:child_process';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { renderJson, renderText, run } from '../src/run.mjs';
-import { BEGIN, END, README_FILE } from '../src/docs/commands.mjs';
 
 const exec = promisify(execFile);
 const RUN_URL = new URL('../src/run.mjs', import.meta.url).href;

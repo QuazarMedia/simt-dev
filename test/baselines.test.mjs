@@ -7,10 +7,9 @@
 // until somebody's editor disagrees with their colleague's.
 
 import assert from 'node:assert/strict';
-import { cmd, tempDir } from './fixture.mjs';
+import { tempDir } from './fixture.mjs';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';

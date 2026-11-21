@@ -329,6 +329,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // ADR-208 joined because its ruling is ABOUT which command carries the migration and
   // which loader parses a rule id, so it names the command, the module and the projection
   // loader; a record that named none of them could not be followed to the exit it promises.
+  // ADR-211 joined because its ruling is ABOUT the package boundary, so it names the two
+  // core modules whose imports close it, the grammar module they move to, the bench
+  // package and the build script that ships it; a record that named none of them could
+  // not be followed to the edge it forbids.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -363,6 +367,7 @@ assert.deepEqual(leaking, [
     'ADR-206',
     'ADR-207',
     'ADR-208',
+    'ADR-211',
   ]);
 });
 

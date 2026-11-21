@@ -52,13 +52,70 @@ async function walk(dir, out = []) {
  * contents are reduced to an empty literal — leaving the delimiters so an import
  * statement's shape survives — so an `import … from '…'` that merely appears
  * *inside* a string (the test fixtures do this) is no longer mistaken for one.
+ *
+ * A template literal is scanned character by character, entering its `${…}`
+ * interpolations as code: a backtick, a quote or a `//` inside an interpolation
+ * is code-level syntax, not string content, and a `//` line inside a template
+ * that mentions a backtick used to close the template early and flip the
+ * comment/string state for the whole of the rest of the file, which read used
+ * imports as dead. `state` is `code` or `template` (template text), and `interp`
+ * stacks the brace count of every open interpolation, 1 being its own braces —
+ * a nested template inside an interpolation returns to that interpolation, not
+ * to top-level code.
  */
 function stripComments(text, blankStrings = false) {
   let out = '';
   let i = 0;
+  let state = 'code';
+  const interp = [];
   while (i < text.length) {
     const c = text[i];
     const next = text[i + 1];
+    // Braces only count in code state: inside a nested template they are
+    // content, and counting them would unbalance the interpolation that holds
+    // it.
+    if (interp.length > 0 && state === 'code' && c === '{') {
+      interp[interp.length - 1]++;
+      out += c;
+      i++;
+      continue;
+    }
+    if (interp.length > 0 && state === 'code' && c === '}') {
+      interp[interp.length - 1]--;
+      if (interp[interp.length - 1] === 0) {
+        interp.pop();
+        // An interpolation only opens from a template, so its close returns
+        // to the template's text, whatever code state it was scanned in.
+        state = 'template';
+      }
+      out += c;
+      i++;
+      continue;
+    }
+    if (state === 'template') {
+      // Template text: only escapes, the closing backtick and `${` are syntax;
+      // a `//` here is content, which is what the code state must not assume.
+      if (c === '\\') {
+        i += 2;
+        continue;
+      }
+      if (c === '`') {
+        state = 'code';
+        out += c;
+        i++;
+        continue;
+      }
+      if (c === '$' && next === '{') {
+        interp.push(1);
+        state = 'code';
+        out += c + next;
+        i += 2;
+        continue;
+      }
+      if (!blankStrings) out += c;
+      i++;
+      continue;
+    }
     if (c === '/' && next === '/') {
       while (i < text.length && text[i] !== '\n') i++;
       continue;
@@ -70,7 +127,7 @@ function stripComments(text, blankStrings = false) {
       out += ' ';
       continue;
     }
-    if (c === '"' || c === "'" || c === '`') {
+    if (c === '"' || c === "'") {
       const quote = c;
       const start = i;
       i++;
@@ -83,6 +140,12 @@ function stripComments(text, blankStrings = false) {
       }
       if (i < text.length) i++;
       out += blankStrings ? quote + quote : text.slice(start, i);
+      continue;
+    }
+    if (c === '`') {
+      state = 'template';
+      out += c;
+      i++;
       continue;
     }
     out += c;

@@ -217,3 +217,6 @@ in [architecture/history.md](architecture/history.md).
 | [206](decisions/ADR-206-support-is-one-inventory-and-the-binary-checks-its-platform.md) | support is one inventory, and the binary checks its platform | accepted · 2026-11-21 · filed as review 0005 PR28 |
 | [207](decisions/ADR-207-the-surface-has-one-inventory-and-one-stability-statement-per-name.md) | the surface has one inventory, and one stability statement per name | accepted · 2026-11-21 · filed as review 0005 PR29 |
 | [208](decisions/ADR-208-packs-stay-experimental-and-their-exit-is-a-migration.md) | packs stay experimental, and their exit is a migration, not a removal | accepted · 2026-11-21 · filed as review 0005 PR30 |
+| [209](decisions/ADR-209-a-slice-finish-lands-the-slice-it-commits.md) | a slice finish lands the slice it commits | accepted · 2026-11-21 · filed while folding worktree cleanup into the slice commands · ruling 3's commit step is extended by ADR-210 |
+| [210](decisions/ADR-210-a-slice-finish-lands-work-already-committed.md) | a slice finish lands work already committed | accepted · 2026-11-21 · filed with the clean-worktree finish |
+| [211](decisions/ADR-211-the-bench-ships-as-an-optional-package-and-core-imports-none-of-it.md) | the bench ships as an optional package, and core imports none of it | accepted · 2026-11-21 · filed as PR31 (review 0005) |

@@ -76,10 +76,16 @@ test('--paths is the scope, and an unnamed packet takes it from the dirty tree',
 
   await writeFile(join(root, 'src', 'keep.mjs'), 'export function keep(value) {\n  return value + 1;\n}\n');
   const dirty = await assembleBrief({ root, task: 'touch what is dirty' });
-  // The whole path, not `rc/keep.mjs`: an unstaged modification's status line begins with a
+  // A task that spells no path scopes the whole repository; the dirty tree is reported
+  // beside it as a caution, not taken as the scope — the task chooses the scope. The path
+  // must be whole, not `rc/keep.mjs`: an unstaged modification's status line begins with a
   // space, and the helper that reads it took the first character of the path with it (Q92).
-  assert.deepEqual(dirty.scope, ['src/keep.mjs']);
-  assert.deepEqual(whyOf(dirty, 'scope'), ['taken from the files git reports as modified']);
+  assert.deepEqual(dirty.scope, []);
+  assert.deepEqual(whyOf(dirty, 'scope'), ['the task names no path, so the whole repository']);
+  assert.ok(
+    dirty.sections.CAUTIONS.some((line) => line.includes('the working tree has 1 modified file(s) (src/keep.mjs)')),
+    JSON.stringify(dirty.sections.CAUTIONS),
+  );
 });
 
 /** The recorded reason for the TASK line that starts with `prefix`. */

@@ -120,7 +120,7 @@ with a table view that carries the same data.
   paths are filtered exactly as the corpus filters them, before anything is serialized.
 - **Live data is one file.** The SSE route tails `.simt/local/events.jsonl` from a byte
   offset, replays a bounded recent window on connect, and heartbeats. It never writes.
-- **Control is the writer.** A new ADR-211 settles the control path: an allowlist of
+- **Control is the writer.** A new decision record settles the control path: an allowlist of
   mutating commands, each invoked first in preview mode; the confirm request carries the
   digest of the previewed write plan and is refused if the plan changed underneath it;
   the apply runs the same command function with `--yes` semantics, journals, and appears
@@ -150,7 +150,7 @@ with a table view that carries the same data.
 
 | ID | Slice | Phase | Lane | Tier | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| ST01 | One loopback socket: the studio server, token and command | Foundation | server | M | — | Queued | — |
+| ST01 | One loopback socket: the studio server, token and command | Foundation | server | M | — | In progress | — |
 | ST02 | The API bridge serves the doors' own objects | Foundation | api | S | ST01 | Queued | — |
 | ST03 | The shell: design system, themes, navigation, zero external assets | Foundation | shell | M | ST01 | Queued | — |
 | ST04 | Overview: the snapshot with every defect named | Observe | views | S | ST02, ST03 | Queued | — |
@@ -356,7 +356,7 @@ string re-runs identically in the fixture. Run
 
 ### ST12 — Guarded control: preview, confirm by digest, journal, undo
 
-Write ADR-211: control is the writer's preview, confirmed by digest. Add the control
+Write the decision record: control is the writer's preview, confirmed by digest. Add the control
 route with a fixed allowlist — `work setup`, `knowledge build`, `slice start`,
 `slice finish`, `plan done`, `sync`, `undo` — each a two-step transaction: POST preview
 runs the command in preview mode and returns the write plan plus its digest; POST apply

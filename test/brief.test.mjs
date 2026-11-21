@@ -174,12 +174,24 @@ test('a body-only task says FILES is context, not the graph hub', async (t) => {
   assert.ok(keep < 0 || body < keep, 'the body hit did not outrank the graph hub');
 
   // The caution is the only thing that tells a reader the FILES lines are not matches,
-  // so it has to survive the ceiling even when the rest of the packet does not.
-  const assembled = await assembleBrief({ root, task: 'zebracorn', budget: 0, federate: false });
+  // so it has to survive the ceiling even when the rest of the packet does not. A dirty
+  // README adds the soft cautions the trim should lose, and 600 bytes is below the
+  // fixture's full packet but above its hard floor.
+  await writeFile(join(root, 'README.md'), '# fixture\n\nedited in the working tree\n');
+  const assembled = await assembleBrief({ root, task: 'zebracorn', budget: 600, federate: false });
   const caution = assembled.items.find(
     (item) => item.section === 'CAUTIONS' && item.text.startsWith('matched 0:'),
   );
-  assert.equal(caution?.priority, 'hard', 'the matched-0 caution can be cut by the budget');
+  assert.ok(caution, 'the matched-0 caution was not assembled');
+  const cut = new Set(assembled.packed.cut);
+  assert.equal(cut.has(caution.id), false, 'the matched-0 caution was cut by the budget');
+  assert.match(assembled.packed.text, /matched 0: .*FILES is context rather than a match/, assembled.packed.text);
+  const soft = assembled.items.filter(
+    (item) => item.section === 'CAUTIONS' && item.id !== caution.id,
+  );
+  assert.ok(soft.length > 0, 'the fixture produced no soft caution to trim');
+  assert.ok(soft.every((item) => cut.has(item.id)), 'the budget did not trim the soft cautions');
+  assert.ok(assembled.packed.after <= 600, `the hard floor escaped the ceiling: ${assembled.packed.after}`);
 });
 
 test('a modified file is context, not the task scope or its kind', async (t) => {

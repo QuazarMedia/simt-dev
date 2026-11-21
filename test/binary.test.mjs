@@ -96,7 +96,7 @@ test('binary: a re-run skips a version that is already staged', async () => {
   const start = workflow.indexOf('publish-npm:');
   const job = workflow.slice(start, workflow.indexOf('create-release:', start));
   const capability = job.indexOf('npm stage --help >/dev/null 2>&1');
-  const queue = job.indexOf('npm stage list "$name" --json');
+  const queue = job.indexOf('npm stage list "$pkg" --json');
   const stage = job.indexOf('npm stage publish --provenance');
   assert.ok(capability !== -1, 'the workflow never checks that npm supports stage');
   assert.ok(queue !== -1, 'the workflow never reads the staging queue');

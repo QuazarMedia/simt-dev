@@ -1340,8 +1340,10 @@ and `lessons` into the SQLite FTS5 `fts` table (with deterministic Okapi BM25 fa
 `bm25(fts)` (`searchFtsBm25`), PageRank graph proximity, and resolver signals via
 reciprocal-rank fusion (`RRF_K = 40`). On this repository's 20 mined benchmark tasks,
 deterministic hybrid retrieval raises gold-file recall@10 from 54.3% to 62.1% (SQLite FTS5),
-clearing ADR-091's 60% bar; re-derived at `3976c0eb` (ADR-225). Optional local embeddings via R37
-(`--embed`, `local.embed`) are stored as `Float32Array` SQLite blobs in the `embeddings`
+clearing ADR-091's 60% bar; re-derived at `3976c0eb` (ADR-225). That is the R28 code's
+figure: on the same 365-file tree, current code measures 58.0%, a regression ADR-225 records.
+Optional local embeddings via R37 (`--embed`, `local.embed`) are stored as `Float32Array`
+SQLite blobs in the `embeddings`
 table (`encodeVectorBlob`, `decodeVectorBlob`), ranked by brute-force cosine similarity
 (`cosineSimilarity`, `rankByCosine`), and gated by `measureRecall` against
 `EMBED_RECALL_GAIN_BAR = 0.1` (+10 percentage points recall@10) so embeddings stay off by

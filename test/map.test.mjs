@@ -276,7 +276,7 @@ test('map says when the ranking is the graph hub rather than a match (Q52)', asy
   const hub = await capture(() => mapCommand([], { root, task: 'zebracorn', budget: '0' }));
   assert.equal(hub.code, 0);
   assert.match(hub.stdout, /basis\s+unmatched/);
-  assert.match(hub.stdout, /no path or symbol mentions this task/);
+  assert.match(hub.stdout, /no path or symbol matches this task's words/);
   const hubJson = await capture(() => mapCommand([], { root, task: 'zebracorn', budget: '0', json: true }));
   assert.equal(JSON.parse(hubJson.stdout).matched, 0, 'the hub is not a path or symbol match');
 
@@ -305,6 +305,15 @@ test('a body-only hit is context, not a match', async () => {
   assert.equal(payload.matched, 0, 'a body hit is not a path or symbol match');
   assert.ok(payload.files.length > 0, 'the BM25 rows are still offered as context');
   assert.equal(payload.basis, 'unmatched', 'the basis names the absence of a resolver match, not a cause');
+
+  const human = await capture(() => mapCommand([], { root, task: 'zebracorn', budget: '0' }));
+  assert.equal(human.code, 0);
+  assert.match(human.stdout, /basis\s+unmatched/);
+  assert.match(
+    human.stdout,
+    /no path or symbol matches this task's words; the ranking is context, not a match/,
+    'the human output did not explain that the body hit is context',
+  );
   await rm(root, { recursive: true, force: true });
 });
 

@@ -74,7 +74,7 @@ export async function mapCommand(args, flags) {
   }
   const lines = [
     `level    ${level}`,
-    `basis    ${basis}${basis === 'unmatched' ? ' (no path or symbol mentions this task; the ranking is context, not a match)' : ''}`,
+    `basis    ${basis}${basis === 'unmatched' ? " (no path or symbol matches this task's words; the ranking is context, not a match)" : ''}`,
     `shown    ${rendered.shown}`,
     `total    ${rendered.total}`,
     `budget   ${budget}`,

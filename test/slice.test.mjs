@@ -110,7 +110,7 @@ test('a tracker failure after a commit names the sha and the plan done command (
   await chmod(tracker, 0o444);
   await chmod(reviews, 0o555);
   try {
-    const result = await capture(() => sliceCommand('finish', ['A27'], { root: worktree, yes: true, test: 'true' }));
+    const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
     assert.notEqual(result.code, 0, 'the tracker failure was reported as success');
     const output = result.stdout + result.stderr;
     const sha = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
@@ -120,6 +120,47 @@ test('a tracker failure after a commit names the sha and the plan done command (
     await chmod(reviews, 0o755);
     await chmod(tracker, 0o644);
   }
+});
+
+test('finish from the main checkout merges the slice, commits the row and removes the worktree', async () => {
+  const { root } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /merge\s+[0-9a-f]{40}\s+slice\/a27 -> a27-branch|merge\s+[0-9a-f]{40}\s+slice\/a27 -> /, result.stdout);
+  assert.match(result.stdout, /removed\s+\.simt\/local\/worktrees\/a27/, result.stdout);
+  assert.match(result.stdout, /deleted\s+slice\/a27/, result.stdout);
+
+  assert.equal(existsSync(worktree), false, 'the worktree survived a finish');
+  const branch = await git(['-C', root, 'branch', '--list', 'slice/a27']);
+  assert.equal(String(branch.stdout).trim(), '', 'the branch survived a finish');
+  assert.equal((await readFile(join(root, 'a.mjs'), 'utf8')).trim(), 'export const a = 2;', 'the slice was not merged');
+  const status = await git(['-C', root, 'status', '--porcelain', '--untracked-files=no']);
+  assert.equal(String(status.stdout).trim(), '', 'the tracker row was not committed with the merge');
+  const log = await git(['-C', root, 'log', '-1', '--format=%s']);
+  assert.match(String(log.stdout), /^Merge branch 'slice\/a27'/, 'the slice was not a merge commit');
+});
+
+test('finish from inside the worktree refuses before it commits anything', async () => {
+  const { root } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  const before = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root: worktree, yes: true }));
+  assert.notEqual(result.code, 0, 'finishing inside the worktree was accepted');
+  assert.match(result.stderr, /main checkout/);
+  assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), before, 'a commit happened anyway');
 });
 
 test('a tracker write failure takes the worktree and branch back down (A26)', async () => {

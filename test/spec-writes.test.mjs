@@ -38,7 +38,7 @@ test('a row that declares no writes leaves a repository alone', async () => {
   // waiting for input. They are named with the reason, not filtered silently.
   const SKIP = new Map([
     ['slice start', 'runs the declared gates'],
-    ['slice finish', 'runs the declared gates and commits'],
+    ['slice finish', 'runs the declared gates and merges'],
     ['review run', 'reaches a model'],
     ['bench run', 'reaches a model'],
     ['workspace upgrade', 'reaches the network'],

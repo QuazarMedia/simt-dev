@@ -16,17 +16,25 @@
 //   start: worktree, brief, then row. Everything the row would claim exists before it
 //   claims it, so a failed `worktree add` leaves the tracker untouched.
 //
-//   finish: gates, commit, row. The row records a SHA that only exists after the
-//   commit, and if the row write then fails the message says which half happened —
-//   the commit exists, the tracker does not know it — because a silent half-state is
-//   how a tracker starts lying.
+//   finish: gates, commit, row, merge, cleanup. The row records a SHA that only exists
+//   after the commit, and if the row write then fails the message says which half
+//   happened — the commit exists, the tracker does not know it — because a silent
+//   half-state is how a tracker starts lying. The merge comes last because only then is
+//   there a branch to merge, and the removal comes after it because a branch cannot be
+//   deleted while a worktree has it checked out.
+//
+// `finish` is a main-checkout command. The commit is made on the slice branch in its
+// worktree, but the merge and the removal happen in the checkout that owns the tracker:
+// a worktree cannot delete the directory the shell is standing in, and a branch that is
+// checked out cannot be merged into itself. Requiring the main checkout is what lets one
+// command close the slice instead of leaving a merged branch and a worktree to clean up.
 //
 // The tracker itself always lives in the MAIN checkout. `start` flips the row there
 // and `finish` records the evidence there, while the worktree carries only the
 // slice's code: editing the same row in both places would make every merge of a
 // finished slice a conflict on the one line that records it.
 
-import { existsSync } from 'node:fs';
+import { existsSync, realpathSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 
@@ -92,6 +100,89 @@ export async function mainCheckout(root) {
   } catch {
     return root;
   }
+}
+
+/** Resolve symlinks so `/var` and `/private/var` are the same checkout (macOS). */
+function canonicalPath(path) {
+  try {
+    return realpathSync(path);
+  } catch {
+    return resolve(path);
+  }
+}
+
+/** Whether `root` is the checkout that owns the tracker, not a linked worktree. */
+async function isMainCheckout(root, main) {
+  const top = await gitText(root, ['rev-parse', '--show-toplevel']).catch(() => null);
+  return top !== null && canonicalPath(top) === canonicalPath(main);
+}
+
+/** The first line of a git failure, which is the one naming the conflict. */
+function gitDetail(error) {
+  return String(error?.stderr ?? error?.message ?? error).trim().split('\n')[0];
+}
+
+/**
+ * Merge a committed slice into the main checkout, carry the tracker row in the merge
+ * commit, then remove the worktree and its branch. Runs only from the main checkout:
+ * `git worktree remove` cannot delete the directory its caller is standing in.
+ *
+ * A conflict aborts the merge before returning, so the main checkout is left as the
+ * caller had it; the slice commit and its row are already recorded and are named by the
+ * refusal. Cleanup is best-effort by contract: a worktree kept because it holds untracked
+ * files is reported, not forced away, and its branch is kept with it.
+ */
+async function landSlice(main, { branch, worktree, row }) {
+  const head = await gitText(main, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => null);
+  if (head === null || head === 'HEAD') {
+    return { error: 'the main checkout has no branch checked out' };
+  }
+  try {
+    await git(main, ['merge', '--no-ff', '--no-commit', branch]);
+  } catch (error) {
+    await git(main, ['merge', '--abort']).catch(() => {});
+    return { error: gitDetail(error) };
+  }
+  const merging = await gitText(main, ['rev-parse', '-q', '--verify', 'MERGE_HEAD']).catch(() => null);
+  if (merging === null) {
+    return { error: `${branch} has no commits that ${head} does not already have` };
+  }
+  if (row !== null) {
+    try {
+      await git(main, ['add', '--', relative(main, row)]);
+    } catch (error) {
+      await git(main, ['merge', '--abort']).catch(() => {});
+      return { error: `the tracker row could not be staged: ${gitDetail(error)}` };
+    }
+  }
+  let mergeSha;
+  try {
+    await git(main, ['commit', '--no-edit']);
+    mergeSha = await gitText(main, ['rev-parse', 'HEAD']);
+  } catch (error) {
+    await git(main, ['merge', '--abort']).catch(() => {});
+    return { error: `the merge could not be committed: ${gitDetail(error)}` };
+  }
+
+  let worktreeRemoved = false;
+  let worktreeReason = null;
+  try {
+    await git(main, ['worktree', 'remove', worktree]);
+    worktreeRemoved = true;
+  } catch (error) {
+    worktreeReason = gitDetail(error);
+  }
+  let branchDeleted = false;
+  let branchReason = worktreeRemoved ? null : 'the branch is still checked out in the worktree';
+  if (worktreeRemoved) {
+    try {
+      await git(main, ['branch', '-d', branch]);
+      branchDeleted = true;
+    } catch (error) {
+      branchReason = gitDetail(error);
+    }
+  }
+  return { mergeSha, head, worktreeRemoved, worktreeReason, branchDeleted, branchReason };
 }
 
 /**
@@ -390,6 +481,7 @@ async function startSlice(root, id, flags, prompt) {
       `brief    ${relative(main, briefPath)} (assembled on apply)`,
       leaseLine,
       stateLine,
+      `finish   from ${main}: ${CLI} slice finish ${id}`,
       `apply    ${apply}`,
     ];
     emit(lines.join('\n'));
@@ -499,6 +591,7 @@ async function startSlice(root, id, flags, prompt) {
     promptMode
       ? `state    (no tracker row; recorded at ${relative(main, record)})`
       : `state    ${row.from} -> ${row.to}`,
+    `finish   from ${main}: ${CLI} slice finish ${id}`,
   ];
   emit(lines.join('\n'));
   return EXIT.OK;
@@ -561,6 +654,9 @@ async function finishSlice(root, id, flags) {
   const doc = promptMode ? record.title : resolved.slice.doc;
   const recRel = relative(main, recordPath(main, id));
   const { branch, worktree } = places(main, id);
+  // The checkout whose staged tree is the slice: the worktree when it exists, so a caller
+  // can inspect the plan from either checkout. Applying is stricter - see below.
+  const work = existsSync(worktree) ? worktree : root;
 
   const type = String(flags.type ?? 'feat');
   if (!TYPE.test(type)) {
@@ -572,15 +668,15 @@ async function finishSlice(root, id, flags) {
   // A manifest that does not parse fails closed: the gates cannot be read, so nothing
   // may commit through them. No manifest at all is a valid answer — `runGates` turns
   // it into a note and an empty pass, the same way the hook does.
-  const manifest = await readManifest(root);
+  const manifest = await readManifest(work);
   if (manifest.error) {
     return fail(`${MANIFEST_FILE}: ${manifest.error}`, EXIT.CONFIG, `fix ${MANIFEST_FILE}, or run: ${CLI} init`);
   }
   const declared = manifest.manifest?.gates?.preCommit ?? [];
   const apply = `run: ${CLI} slice finish ${id}${test ? ` --test ${JSON.stringify(test)}` : ''} --yes`;
 
-  const staged = await stagedFiles(root);
-  const split = await splitGates(root, declared, manifest.manifest);
+  const staged = await stagedFiles(work);
+  const split = await splitGates(work, declared, manifest.manifest);
 
   if (!mode.apply) {
     let row = null;
@@ -605,6 +701,7 @@ async function finishSlice(root, id, flags) {
         staged,
         gates: { event: 'pre-commit', declared, skipped: split.skipped.map((s) => s.name) },
         state: stateJson,
+        land: existsSync(worktree) ? { from: main, branch, merge: true, remove: true } : null,
         remedy: apply,
       });
       return EXIT.OK;
@@ -612,30 +709,65 @@ async function finishSlice(root, id, flags) {
     const lines = [
       `repo     ${root}`,
       `slice    ${id}  ${doc}`,
+      `worktree ${relative(main, work)}${existsSync(worktree) ? '' : '  (missing: finish will refuse)'}`,
       `gates    pre-commit  ${gateLine} (run on apply)`,
       `staged   ${staged.length} file(s)${staged.length === 0 ? '  (finish refuses without one)' : ''}`,
       `subject  ${subject}`,
       stateLine,
+      `land     ${branch} -> ${main}, then remove the worktree (on apply from the main checkout)`,
       `apply    ${apply}`,
     ];
     emit(lines.join('\n'));
     return EXIT.OK;
   }
 
-  // The commit lands on the slice branch or not at all: finishing from `main`
-  // commits main's tree under the slice's subject, which is the defect this
-  // guard closes.
-  const head = await gitText(root, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => null);
+  // The commit lands on the slice branch or not at all, and the checkout has to be the
+  // main one: the merge and the worktree removal that follow cannot be done from inside
+  // the worktree they remove.
+  if (!(await isMainCheckout(root, main))) {
+    return fail(
+      `run ${CLI} slice finish from the main checkout, not the slice worktree`,
+      EXIT.USAGE,
+      `run: cd ${main} && ${CLI} slice finish ${id} --yes`,
+    );
+  }
+  if (!existsSync(worktree)) {
+    return fail(
+      `no worktree for ${id} at ${relative(main, worktree)}`,
+      EXIT.USAGE,
+      `run: ${CLI} slice start ${id}`,
+    );
+  }
+  // `start` already flipped the tracker row in the main checkout, and that edit is
+  // meant to travel with the merge; every other change would be merged under the
+  // slice's name, so only the row is allowed to be dirty.
+  const rowRel = promptMode ? null : relative(main, resolved.slice.path);
+  // `gitText` trims its output, so the first line's leading status column is gone; the
+  // path starts after the two status characters whether or not that space survived.
+  const porcelainPath = (line) => line.slice(2).trim();
+  const mainDirty = String(await gitText(main, ['status', '--porcelain', '--untracked-files=no']).catch(() => ''))
+    .split('\n')
+    .filter(Boolean)
+    .filter((line) => rowRel === null || porcelainPath(line) !== rowRel);
+  if (mainDirty.length > 0) {
+    return fail(
+      `the main checkout has uncommitted changes (${mainDirty.slice(0, 3).map(porcelainPath).join(', ')}), so the slice cannot be merged into it`,
+      EXIT.USAGE,
+      `commit or stash them, then rerun: ${apply}`,
+    );
+  }
+
+  const head = await gitText(work, ['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => null);
   if (head !== branch) {
     return fail(
-      `not on the slice branch: HEAD is ${head ?? 'unknown'}, expected ${branch}`,
+      `the slice worktree is not on ${branch}: HEAD is ${head ?? 'unknown'}`,
       EXIT.USAGE,
-      `move to the slice worktree (${relative(main, worktree)}) and rerun: ${apply}`,
+      `run: git -C ${work} switch ${branch}`,
     );
   }
 
   if (staged.length === 0) {
-    return fail(`${root} has nothing staged to commit`, EXIT.USAGE, `stage what the slice changed, then rerun: ${apply}`);
+    return fail(`${work} has nothing staged to commit`, EXIT.USAGE, `stage what the slice changed, then rerun: ${apply}`);
   }
 
   // The gates the hook would run, run here. This command is the one place a commit
@@ -649,7 +781,7 @@ async function finishSlice(root, id, flags) {
   const freshGates =
     split.fresh.length === 0 && declared.length > 0
       ? { event: 'pre-commit', gates: [], failed: false, notes: [] }
-      : await runGates('pre-commit', { root, manifest: manifestForGates });
+      : await runGates('pre-commit', { root: work, manifest: manifestForGates });
   if (freshGates.error) return fail(freshGates.error, EXIT.USAGE);
 
   // A gate that rewrites the tree (the formatter restaging) moves the commit
@@ -657,13 +789,13 @@ async function finishSlice(root, id, flags) {
   // run once on the new tree; those results stand, the way fresh results do.
   let skipped = split.skipped;
   if (skipped.length > 0 && split.tree !== null) {
-    const afterTree = await indexTreeId(root).catch(() => null);
+    const afterTree = await indexTreeId(work).catch(() => null);
     if (afterTree !== null && afterTree !== split.tree) {
-      const { entries } = await readLedger(root).catch(() => ({ entries: [] }));
+      const { entries } = await readLedger(work).catch(() => ({ entries: [] }));
       const stale = skipped.filter((s) => passEntryForGate(entries, s.name, afterTree) === null);
       if (stale.length > 0) {
         const rerun = await runGates('pre-commit', {
-          root,
+          root: work,
           manifest: { ...manifest.manifest, gates: { ...(manifest.manifest?.gates ?? {}), preCommit: stale.map((s) => s.name) } },
         });
         if (rerun.error) return fail(rerun.error, EXIT.USAGE);
@@ -689,7 +821,7 @@ async function finishSlice(root, id, flags) {
         id,
         exitCode: EXIT.FAIL,
         error: `pre-commit gates failed: ${failed}`,
-        remedy: `run: ${CLI} hooks run pre-commit --root ${root}`,
+        remedy: `run: ${CLI} hooks run pre-commit --root ${work}`,
         gates: gates.gates,
       });
       return EXIT.FAIL;
@@ -702,11 +834,11 @@ async function finishSlice(root, id, flags) {
   let sha = null;
   const message = `${subject}\n\n${CO_AUTHOR}`;
   try {
-    await git(root, ['commit', '-m', message]);
-    sha = await gitText(root, ['rev-parse', 'HEAD']);
+    await git(work, ['commit', '-m', message]);
+    sha = await gitText(work, ['rev-parse', 'HEAD']);
   } catch (error) {
     const detail = String(error.stderr ?? error.message ?? error).trim().split('\n')[0];
-    return fail(`the gates passed but the commit failed: ${detail}`, EXIT.FAIL, `run: git -C ${root} commit -m ${JSON.stringify(message)}`);
+    return fail(`the gates passed but the commit failed: ${detail}`, EXIT.FAIL, `run: git -C ${work} commit -m ${JSON.stringify(message)}`);
   }
 
   let row = null;
@@ -728,6 +860,18 @@ async function finishSlice(root, id, flags) {
     }
   }
 
+  // The commit and the row are the slice's record; the merge and the removal are what
+  // make the checkout usable again. A merge failure is reported with the commit it could
+  // not land, because both facts are true and only one of them is in the tracker.
+  const land = await landSlice(main, { branch, worktree, row: promptMode ? null : row.file });
+  if (land.error) {
+    return fail(
+      `${sha} is committed${promptMode ? '' : ' and the row recorded'}, but the merge into ${main} failed: ${land.error}`,
+      EXIT.FAIL,
+      `commit the tracker row if it is still uncommitted, then run: git -C ${main} merge --no-ff ${branch}`,
+    );
+  }
+
   // The slice is done: its lease goes with it. A failure here is a note — the
   // commit exists, and a lease the TTL will reap is not a second failure.
   const released = await releaseSlice(main, id, sliceSession(flags));
@@ -744,6 +888,13 @@ async function finishSlice(root, id, flags) {
       commit: { sha, subject },
       gates: gates.gates,
       staged,
+      land: {
+        merge: land.mergeSha,
+        head: land.head,
+        worktree: land.worktreeRemoved ? 'removed' : 'kept',
+        branch: land.branchDeleted ? 'deleted' : 'kept',
+        ...(land.worktreeReason === null ? {} : { note: land.worktreeReason }),
+      },
       ...(promptMode
         ? { state: { row: false, record: recRel } }
         : {
@@ -765,10 +916,17 @@ async function finishSlice(root, id, flags) {
     lines.push(`state    (no tracker row; recorded at ${recRel})`);
   } else {
     lines.push(`state    ${row.from} -> ${row.to}`);
-    lines.push(`record   ${relative(main, row.file)} line ${row.line}  (edited, not staged: commit it with the merge)`);
+    lines.push(`record   ${relative(main, row.file)} line ${row.line}  (committed with the merge)`);
     if (row.evidenceRecorded) lines.push(`evidence ${sha}${test ? `  test: ${test}` : ''}`);
     else if (row.evidenceNote) lines.push(`note     ${row.evidenceNote}`);
   }
+  lines.push(`merge    ${land.mergeSha}  ${branch} -> ${land.head}`);
+  lines.push(
+    land.worktreeRemoved
+      ? `removed  ${relative(main, worktree)}`
+      : `kept     ${relative(main, worktree)} (${land.worktreeReason})`,
+  );
+  lines.push(land.branchDeleted ? `deleted  ${branch}` : `kept     ${branch} (${land.branchReason})`);
   emit(lines.join('\n'));
   return EXIT.OK;
 }

@@ -135,7 +135,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=1c8436ac0ee4ea8fa7f6387b32683fc98adbbd03 -->
+<!-- simt:sha=21d26aa46d3e643dbf68c85a93a60fda31c1350b -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->
@@ -393,13 +393,16 @@ A worktree is the unit of isolation for concurrent work. The rules that keep it 
 - **Start from the record, not from memory.** `simt slice start <id>` creates the
   worktree for the tracker row and returns its path; work in that path, not the main
   checkout.
-- **Finish where you started.** `simt slice finish <id>` runs the declared gates and
-  commits from the worktree; `simt plan done <id> <sha>` records the SHA in the main
-  checkout's tracker. A slice is not done when its worktree is green — it is done
-  when the tracker row is complete and the SHA is recorded.
-- **Leave the worktree when the slice is done.** A finished worktree that still holds
-  a dirty tree is a claim about work that is not committed; remove it, and report what
-  you left behind if there was any.
+- **Finish from the main checkout.** `simt slice finish <id>` runs the declared gates
+  and commits on the slice branch, records the SHA in the main checkout's tracker,
+  merges the branch into the main checkout, and removes the worktree and its branch
+  (ADR-209). It refuses when run inside the worktree, because a worktree cannot delete
+  the directory that shell is standing in. A slice is not done when its worktree is
+  green — it is done when that one command has merged it.
+- **A kept worktree is a failure to report.** `finish` removes a worktree only when it
+  can do so without discarding untracked work. A kept worktree and branch are named in
+  its output; remove them once their contents are accounted for, and report what was
+  left behind.
 - **Never rewrite history across worktrees.** A rebase, reset or amend in one worktree
   changes the base every other worktree branched from; coordinate it, or do not do it.
 

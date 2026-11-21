@@ -122,6 +122,42 @@ test('a tracker failure after a commit names the sha and the plan done command (
   }
 });
 
+test('an unrelated change in the main checkout refuses before any commit, row write or merge', async () => {
+  const { root, tracker } = await startableRepo();
+  const notes = join(root, 'docs', 'notes.md');
+  await writeFile(notes, 'base\n');
+  await git(['-C', root, 'add', 'docs/notes.md']);
+  await git(['-C', root, 'commit', '-qm', 'notes']);
+
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+
+  // The tracker row is allowed to be dirty; this is the second, unrelated file.
+  await writeFile(notes, 'unrelated work in progress\n');
+  const mainHead = String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim();
+  const worktreeHead = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+  const trackerBefore = await readFile(tracker, 'utf8');
+
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
+  assert.notEqual(result.code, 0, 'an unrelated main-checkout change was accepted');
+  const output = result.stdout + result.stderr;
+  assert.match(output, /docs\/notes\.md/, 'the refusal did not name the unrelated file');
+  assert.doesNotMatch(output, /0004-audit-remediation\.md/, 'the tracker row was treated as unrelated');
+
+  // Refused before the commit, the tracker write, or the merge: all three have their own
+  // observable that would move if the guard ran one step late.
+  assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), worktreeHead, 'a slice commit was made');
+  assert.match(String((await git(['-C', worktree, 'status', '--porcelain'])).stdout), /M  a\.mjs/, 'the staged slice work was consumed');
+  assert.equal(await readFile(tracker, 'utf8'), trackerBefore, 'the tracker row was written');
+  assert.equal(String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim(), mainHead, 'main moved');
+  assert.equal(existsSync(join(root, '.git', 'MERGE_HEAD')), false, 'a merge was started');
+  assert.match(String((await git(['-C', root, 'branch', '--list', 'slice/a27'])).stdout), /slice\/a27/, 'the branch was removed');
+  assert.equal(existsSync(worktree), true, 'the worktree was removed');
+});
+
 test('finish from the main checkout merges the slice, commits the row and removes the worktree', async () => {
   const { root } = await startableRepo();
   const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));

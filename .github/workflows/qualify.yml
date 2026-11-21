@@ -1,0 +1,63 @@
+# Manual qualification, separate from the offline correctness gate.
+#
+# `simt-dev-check.yml` answers whether a change may merge. This workflow answers the
+# slower questions a merge does not need: does the suite pass on every supported Node
+# and OS without network or host Git configuration, and do the packaged artifacts build
+# and run on each release host. It is manual because it downloads a pinned Node base,
+# builds a wheel and spends minutes doing it.
+name: simt-dev qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: simt-dev-qualification-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  offline:
+    name: offline ${{ matrix.os }} node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['ubuntu-latest', 'macos-latest']
+        node: ['22.20.0', '24', '26']
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '${{ matrix.node }}'
+      - name: npm test
+        run: npm test
+      - name: registry lint
+        run: npm run lint
+      - name: generated copies are current
+        run: node scripts/ci.mjs --check
+      - name: incremental index budget
+        run: node scripts/bench-index.mjs
+
+  artifacts:
+    name: artifacts ${{ matrix.os }} node ${{ matrix.node }}
+    needs: offline
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ['ubuntu-latest', 'macos-latest']
+        node: ['22.20.0']
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '${{ matrix.node }}'
+      # The wheel needs python3, which both runners have; pip fetches `build` inside a
+      # disposable venv in scripts/verify-wheel.mjs. A missing prerequisite fails the
+      # stage by name instead of being reported as an unrelated test failure.
+      - name: qualification artifacts
+        run: npm run qualify:artifacts

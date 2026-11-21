@@ -15,7 +15,7 @@ import { rmSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { cp, mkdir, mkdtemp, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 import { loadRegistry } from '../src/graph/load.mjs';
 import { CLI, MANIFEST_FILE } from '../src/name.mjs';
@@ -47,6 +47,23 @@ export function cmd(text) {
 const exec = promisify(execFile);
 
 /**
+ * Remove the host's Git identity, signing and config injection from this process.
+ *
+ * `-c user.name=...` on the command line is not enough: `GIT_AUTHOR_NAME` and its
+ * siblings outrank it, and `GIT_CONFIG_COUNT` injects config at a scope a test cannot
+ * see. A full-suite run on a machine with any of those set failed for a reason that
+ * had nothing to do with the code, which is the inheritance ADR-031 records. The
+ * suite builds the identity it needs and reads no global or system config; a test
+ * that wants a global config sets `GIT_CONFIG_GLOBAL` itself, after this runs.
+ */
+const HOST_GIT_ENV = /^GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL|DATE)$|^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/;
+for (const name of Object.keys(process.env)) {
+  if (HOST_GIT_ENV.test(name)) delete process.env[name];
+}
+process.env.GIT_CONFIG_GLOBAL = '/dev/null';
+process.env.GIT_CONFIG_SYSTEM = '/dev/null';
+
+/**
  * git with an identity, always.
  *
  * A runner has no `user.email`, so a bare `git commit` dies with "Author identity
@@ -65,7 +82,13 @@ const IDENTITY = [
 
 /** Run git with the identity above. Accepts the same options as execFile. */
 export function git(args, options = {}) {
-  return exec('git', [...IDENTITY, ...args], { maxBuffer: 32 << 20, ...options });
+  return exec('git', [...IDENTITY, ...args], {
+    maxBuffer: 32 << 20,
+    ...options,
+    // A caller may pass an env for a scenario that wants one; it still starts from the
+    // scrubbed process environment rather than from whatever the developer exported.
+    env: { ...process.env, ...options.env },
+  });
 }
 
 /**
@@ -301,7 +324,14 @@ export async function trackedFiles(root) {
 export async function copyTree(from, to) {
   await cp(from, to, {
     recursive: true,
-    filter: (src) => !/(^|\/)(node_modules|dist|\.git|\.simt)(\/|$)/.test(src),
+    // The filter is on the path INSIDE the tree, not the absolute source path. A
+    // checkout under `.simt/local/worktrees` otherwise matched the `.simt` segment in
+    // its own parent and copied nothing, which is the relocated-checkout failure this
+    // slice exists to make impossible.
+    filter: (src) => {
+      const rel = relative(from, src).split(sep).join('/');
+      return rel === '' || !/(^|\/)(node_modules|dist|\.git|\.simt)(\/|$)/.test(rel);
+    },
   });
 }
 

@@ -21,7 +21,6 @@
 // the one that started it tests an interpreter nobody asked about.
 
 import { spawnSync } from 'node:child_process';
-import { cpus } from 'node:os';
 
 import { files, tiers } from '../test/tier.mjs';
 
@@ -37,7 +36,10 @@ if (unknown.length > 0 || !tiers().includes(which)) {
   process.exit(2);
 }
 
-const flags = ['--test', `--test-concurrency=${cpus().length}`];
+// A fixed concurrency, not the host CPU count: a result that changes with the machine
+// is not reproducible, and six-core and two-core runners used to run different suites.
+// Four is the declared budget in package.json's `test` script as well.
+const flags = ['--test', '--test-concurrency=4'];
 if (coverage) {
   // The exclusions are the files that are not the code under test: the tests themselves, this
   // runner, the CLI entry point (child processes) and the vendored Node builds for the SEA.

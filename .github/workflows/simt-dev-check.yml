@@ -48,10 +48,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          # `bench mine` counts commits, and the Affects snapshot reads
-          # 4c27514. A depth-1 checkout fails both, and both run in `npm test`.
-          fetch-depth: 0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           # The floor in this package's `engines.node`. A gate that cannot start on

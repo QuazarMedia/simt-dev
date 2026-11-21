@@ -1,7 +1,9 @@
 // The local index (R20, ADR-089).
 //
 // Two properties. The same blobs come back as the same rows. A
-// one-file change rewrites that row and leaves the others, in under 300 ms.
+// one-file change rewrites that row and leaves the others. The wall-clock budget is
+// not here: a correctness suite cannot tell a busy runner from a regression, so the
+// repeatable benchmark lives in `scripts/bench-index.mjs` and the qualification job.
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
@@ -66,7 +68,7 @@ test('sqlite rows are a function of the blobs', async () => {
   await rm(root, { recursive: true, force: true });
 });
 
-test('one changed file is the only row rewritten, in under 300 ms', async () => {
+test('one changed file is the only row rewritten', async () => {
   const root = await repo();
   await reindex(root);
   const before = await readFiles(root);
@@ -74,7 +76,6 @@ test('one changed file is the only row rewritten, in under 300 ms', async () => 
   await git(['-C', root, 'add', 'apps/web/src/f0.js']);
   const again = await reindex(root);
   assert.equal(again.updated, 1);
-  assert.ok(again.ms < 300, `reindex took ${again.ms} ms`);
   const after = await readFiles(root);
   const changed = after.filter((row, i) => row.blob !== before[i].blob);
   assert.deepEqual(changed.map((row) => row.path), ['apps/web/src/f0.js']);

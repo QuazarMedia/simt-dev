@@ -211,14 +211,15 @@ function uses(action) {
   return `      - uses: ${repo}@${commit} # ${release}`;
 }
 
-/** This repository's own gate runs `npm test`, and two of those tests read
- *  history. A consumer's gate does not, so its checkout stays shallow. */
-function checkoutFull() {
-  return `${uses('checkout')}
-        with:
-          # \`bench mine\` counts commits, and the Affects snapshot reads
-          # 4c27514. A depth-1 checkout fails both, and both run in \`npm test\`.
-          fetch-depth: 0`;
+/** The checkout step, shallow like a consumer's.
+ *
+ * The suite used to read this repository's own commit history: `bench mine` counted
+ * commits and an Affects snapshot named 4c27514. The mined corpus is committed test
+ * data now and the snapshots build their own history, so a depth-1 checkout is enough.
+ * A gate that needs a full clone is a gate a relocated shallow checkout cannot
+ * reproduce, which is exactly what this slice is about. */
+function checkout() {
+  return uses('checkout');
 }
 
 /** The YAML every copy shares, so the two cannot drift on triggers, permissions or
@@ -335,7 +336,7 @@ export function renderWorkflow({ own = false, npm = true, manager = null, versio
     return `${header(true)}${skeleton(
       'simt-dev own gate',
       [
-        checkoutFull(),
+        checkout(),
         setupNode('${{ matrix.node }}'),
         // The two checks `.githooks/pre-push` runs, named here rather than discovered,
         // because a reader of this file has to be able to answer "what stops a merge"

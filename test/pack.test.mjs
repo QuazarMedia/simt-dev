@@ -20,7 +20,7 @@
 // to catch is asserted structurally instead, in `markers.test.mjs`.
 
 import assert from 'node:assert/strict';
-import { realpathSync } from 'node:fs';
+import { mkdtempSync, realpathSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { after, before, test } from 'node:test';
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -60,11 +60,22 @@ const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  * install" a question about the developer's home directory — the same defect ADR-031
  * found three times, one level down and wearing a different hat.
  */
-const NO_ESTATE = Object.fromEntries(
-  Object.entries({ ...process.env, SIMT_DEV_WORKSPACE: 'off' }).filter(
-    ([name]) => !/^npm_config_/i.test(name),
+const NPM_HOME = mkdtempSync(join(tmpdir(), 'simt-dev-npm-home-'));
+const NO_ESTATE = {
+  ...Object.fromEntries(
+    Object.entries({ ...process.env, SIMT_DEV_WORKSPACE: 'off' }).filter(
+      ([name]) => !/^npm_config_/i.test(name),
+    ),
   ),
-);
+  // A writable cache and config inside this test's own directory. npm's default cache
+  // is under the developer's home, and seven package tests shared one setup failure
+  // when an install discarded the supplied cache settings: the cache is an input to
+  // reproducibility, not an implementation detail.
+  npm_config_cache: join(NPM_HOME, 'cache'),
+  npm_config_userconfig: join(NPM_HOME, 'npmrc'),
+  npm_config_globalconfig: join(NPM_HOME, 'global-npmrc'),
+  npm_config_update_notifier: 'false',
+};
 
 /**
  * execFile that reports rather than throws.
@@ -150,6 +161,7 @@ before(async () => {
 
 after(async () => {
   await rm(stage, { recursive: true, force: true });
+  await rm(NPM_HOME, { recursive: true, force: true });
 });
 
 /** A copy of the installed consumer, mutated and then adopted by the installed binary. */

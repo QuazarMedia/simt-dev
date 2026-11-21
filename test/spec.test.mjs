@@ -15,6 +15,17 @@ import { promisify } from 'node:util';
 import { test } from 'node:test';
 
 import { ALIASES, GROUP_DEFAULTS, SPEC, SPEC_PATHS } from '../src/commands/spec.mjs';
+import {
+  API_EXPORTS,
+  DEPRECATIONS,
+  DISPOSITIONS,
+  NAMED_SURFACES,
+  PACKAGE_EXPORTS,
+  STABILITY,
+  aliasInventory,
+  commandInventory,
+  dispositionOf,
+} from '../src/surface.mjs';
 import { GLOBAL_FLAGS as PARSER_GLOBALS, GROUPS, IMPLEMENTED } from '../src/commands/index.mjs';
 import { GLOBAL_FLAGS as HELP_GLOBALS } from '../src/commands/help.mjs';
 import { BOOL_FLAGS, REPEATABLE_FLAGS, VALUE_FLAGS } from '../src/argv.mjs';
@@ -196,6 +207,61 @@ test('spec: a bare group resolves to the read, not the writer', () => {
   // the weaker one; the ruling that changed a default is asserted directly (review 0003
   // Q81: bare `simt bench` mined tasks into the vault).
   assert.equal(GROUP_DEFAULTS.get('bench'), 'report', 'bare bench must summarise, not mine');
+});
+
+test('surface: every path has exactly one disposition, and no group is classified by omission (PR29)', () => {
+  // A group the table does not name throws rather than defaulting to stable: a stability
+  // promise made by omission is the defect this slice exists to end.
+  for (const path of SPEC_PATHS) assert.ok(dispositionOf(path), path);
+  const groups = new Set(SPEC.map((row) => row.path.split(' ')[0]));
+  const covered = new Set(DISPOSITIONS.flatMap((entry) => entry.groups ?? []));
+  assert.deepEqual([...groups].filter((group) => !covered.has(group)), [], 'these groups have no disposition');
+  for (const entry of DISPOSITIONS) assert.ok(STABILITY.includes(entry.stability), `${entry.id}: ${entry.stability}`);
+
+  // Every group is claimed once: two rows saying "stable" and "prototype" for one group
+  // would make the answer depend on table order.
+  const seen = new Map();
+  for (const entry of DISPOSITIONS) {
+    for (const group of entry.groups ?? []) {
+      assert.equal(seen.get(group), undefined, `${group} is claimed by ${seen.get(group)} and ${entry.id}`);
+      seen.set(group, entry.id);
+    }
+  }
+});
+
+test('surface: the review\'s named surfaces each have an explicit disposition (PR29)', () => {
+  const ids = new Set(DISPOSITIONS.map((entry) => entry.id));
+  for (const [name, id] of NAMED_SURFACES) assert.ok(ids.has(id), `${name} is settled by ${id}, which does not exist`);
+  const named = new Set(NAMED_SURFACES.map(([, id]) => id));
+  for (const id of ['bench', 'pack', 'distill', 'work', 'action', 'verify', 'federation', 'workspace-sharing', 'aliases']) {
+    assert.ok(named.has(id), `${id} is not in NAMED_SURFACES`);
+  }
+});
+
+test('surface: the inventory is derived from the spec, one row per command', () => {
+  const rows = commandInventory();
+  assert.deepEqual(rows.map((row) => row.path), SPEC.map((row) => row.path));
+  for (const row of rows) {
+    assert.ok(STABILITY.includes(row.stability), row.path);
+    assert.ok(row.owner.length > 0, `${row.path} has no owner`);
+  }
+  // The alias column is the spec's alias table, not a second copy of it.
+  assert.deepEqual(aliasInventory(), [...ALIASES].map(([alias, target]) => ({ alias, target })));
+  for (const [alias, target] of ALIASES) {
+    assert.ok(rows.find((row) => row.path === target)?.aliases.includes(alias), `${alias} is missing from ${target}`);
+  }
+});
+
+test('surface: the library and package exports carry a decision, and deprecations name a replacement', () => {
+  assert.equal(new Set(API_EXPORTS.map((entry) => entry.name)).size, API_EXPORTS.length, 'an export is listed twice');
+  for (const entry of API_EXPORTS) assert.ok(entry.module.length > 0, `${entry.name} has no module`);
+  assert.deepEqual(PACKAGE_EXPORTS.map((entry) => entry.key), ['.', './package.json', './src/*']);
+  assert.equal(PACKAGE_EXPORTS.find((entry) => entry.key === './src/*').stability, 'deprecate');
+  assert.ok(DEPRECATIONS.length > 0);
+  for (const entry of DEPRECATIONS) {
+    assert.ok(entry.replacedBy.length > 0, `${entry.what} names no replacement`);
+    assert.ok(entry.window.length > 0, `${entry.what} names no window`);
+  }
 });
 
 test('spec: every alias resolves to a path, and none shadows one', () => {

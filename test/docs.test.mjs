@@ -112,6 +112,18 @@ test('a page that is not there yet is created, not refused', async () => {
   }
 });
 
+test('the support page lists every command and every library export (PR29)', async () => {
+  // The dispositions are rendered; this holds the rendered bytes to the two lists a
+  // reader is promised them from. A path added to the spec without classification fails
+  // in src/surface.mjs first, and a page that stopped printing it fails here.
+  const { API_EXPORTS } = await import('../src/surface.mjs');
+  const text = await readFile(join(ROOT, 'docs/reference/surface.md'), 'utf8');
+  const missing = SPEC.map((row) => row.path).filter((path) => !text.includes('`simt ' + path + '`'));
+  assert.deepEqual(missing, [], 'commands absent from the surface page');
+  const exports = API_EXPORTS.map((entry) => entry.name).filter((name) => !text.includes('`' + name + '`'));
+  assert.deepEqual(exports, [], 'library exports absent from the surface page');
+});
+
 test('the MCP reference lists every tool, so a reader sees the whole surface', async () => {
   const { TOOLS } = await import('../src/mcp/tools.mjs');
   const text = await readFile(join(ROOT, 'docs/reference/mcp.md'), 'utf8');

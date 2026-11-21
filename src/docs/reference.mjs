@@ -8,6 +8,16 @@
 
 import { SPEC } from '../commands/spec.mjs';
 import { TOOLS } from '../mcp/tools.mjs';
+import {
+  API_EXPORTS,
+  DEPRECATIONS,
+  DISPOSITIONS,
+  NAMED_SURFACES,
+  PACKAGE_EXPORTS,
+  STABILITY,
+  aliasInventory,
+  commandInventory,
+} from '../surface.mjs';
 
 const MODULES = [
   {
@@ -157,6 +167,83 @@ export function renderMcpPage() {
     'The tool list is declared on the command spec (`mcp: { name, flags }` on a row), so a tool and',
     'its command cannot disagree about which flags exist. `test/mcp*.test.mjs` holds the list',
     'against the spec, and the docs test holds this page against both.',
+    '',
+  ].join('\n');
+}
+
+/** `docs/reference/surface.md`: what is promised, per command, export and tool. */
+export function renderSurfacePage() {
+  const commands = commandInventory();
+  const rows = DISPOSITIONS.map(
+    (entry) =>
+      `| \`${entry.id}\` | ${entry.stability} | ${entry.owner} | ${cell(entry.consumer)} | ${cell(entry.note)} |`,
+  );
+  const aliases = aliasInventory()
+    .sort((a, b) => (a.alias < b.alias ? -1 : a.alias > b.alias ? 1 : 0))
+    .map((entry) => `| \`${entry.alias}\` | \`${entry.target}\` |`);
+  return [
+    '# Supported surface and deprecations',
+    '',
+    'Rendered from `src/surface.mjs` by `simt docs commands --yes`; do not edit by hand.',
+    'Every dispatchable path resolves to exactly one disposition, and the test that holds this',
+    'page to the module fails when a new group, export or tool is left unclassified.',
+    '',
+    `The vocabulary is exactly ${STABILITY.map((word) => `\`${word}\``).join(', ')}: a stability`, 'promise, a shipping decision, a prototype without one, and a frozen experimental surface.',
+    '',
+    '## Dispositions',
+    '',
+    '| Surface | Stability | Owner | Consumer | What the word means here |',
+    '| --- | --- | --- | --- | --- |',
+    ...rows,
+    '',
+    '## The surfaces this review named',
+    '',
+    '| Surface | Settled by |',
+    '| --- | --- |',
+    ...NAMED_SURFACES.map(([name, id]) => `| ${name} | \`${id}\` |`),
+    '',
+    '## Command inventory',
+    '',
+    `${commands.length} dispatchable paths, one row each in \`src/commands/spec.mjs\`. The generated`,
+    'command pages carry the flags; this table carries the promise.',
+    '',
+    '| Command | Stability | Owner | Writes | MCP tool | Aliases |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...commands.map(
+      (row) =>
+        `| \`simt ${row.path}\` | ${row.stability} | ${row.owner} | ${row.writes} | ${row.mcp === null ? '—' : `\`${row.mcp}\``} | ${row.aliases.length === 0 ? '—' : row.aliases.map((alias) => `\`${alias}\``).join(', ')} |`,
+    ),
+    '',
+    '## Compatibility aliases',
+    '',
+    'An alias is a second spelling of a dispatch key: it resolves before the registry is',
+    'consulted, it never appears in help, and it adds no capability. One is kept until the',
+    'next major, and removing one is a deprecation with a window like any other name.',
+    '',
+    '| Alias | Path |',
+    '| --- | --- |',
+    ...aliases,
+    '',
+    '## Library exports',
+    '',
+    '| Export | Module | Stability |',
+    '| --- | --- | --- |',
+    ...API_EXPORTS.map((entry) => `| \`${entry.name}\` | \`src/${entry.module}\` | stable |`),
+    '',
+    '## Package exports',
+    '',
+    '| Entry | Stability | What it is for |',
+    '| --- | --- | --- |',
+    ...PACKAGE_EXPORTS.map((entry) => `| \`${entry.key}\` | ${entry.stability} | ${cell(entry.note)} |`),
+    '',
+    '## Deprecations',
+    '',
+    '| Working today | Use instead | Window |',
+    '| --- | --- | --- |',
+    ...DEPRECATIONS.map((entry) => `| ${cell(entry.what)} | ${cell(entry.replacedBy)} | ${cell(entry.window)} |`),
+    '',
+    'A removal is a separate, later decision: it needs the replacement to be the documented',
+    'route for a release, and the deprecation to have been printed by the surface it names.',
     '',
   ].join('\n');
 }

@@ -11,7 +11,7 @@
 // order is the order the spec lists groups in, so a new group lands where its author put
 // it rather than wherever it sorts.
 import { SPEC } from '../commands/spec.mjs';
-import { renderMcpPage, renderModulesPage } from './reference.mjs';
+import { renderMcpPage, renderModulesPage, renderSurfacePage } from './reference.mjs';
 import { EXPLAIN_CODES } from '../explain.mjs';
 import { CLI } from '../name.mjs';
 
@@ -145,5 +145,6 @@ export function renderReferencePages() {
     ['docs/reference/findings.md', renderFindingsPage()],
     ['docs/reference/mcp.md', renderMcpPage()],
     ['docs/reference/modules.md', renderModulesPage()],
+    ['docs/reference/surface.md', renderSurfacePage()],
   ]);
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { MCP_ONLY, SPEC } from '../src/commands/spec.mjs';
 import { TOOLS } from '../src/mcp/tools.mjs';
+import { STABILITY, toolDisposition } from '../src/surface.mjs';
 
 const rows = SPEC.filter((row) => row.mcp);
 const byTool = new Map(rows.map((row) => [row.mcp.name, row]));
@@ -40,6 +41,16 @@ test('every flag a row exposes is a property its tool actually accepts', () => {
     for (const flag of row.mcp.flags) if (!properties.has(camel(flag))) missing.push(`${tool.name}: --${flag}`);
   }
   assert.deepEqual(missing, [], 'exposed flags the tool schema does not accept');
+});
+
+test('every tool has a disposition, including the transport-only one (PR29)', () => {
+  // A tool is part of the surface a model can call, so it needs the same stability
+  // statement a command has; `federation_query` inherits none from a row and is listed
+  // by name instead of being left to look like an oversight.
+  for (const tool of TOOLS) {
+    const disposition = toolDisposition(tool.name);
+    assert.ok(STABILITY.includes(disposition.stability), `${tool.name}: ${disposition.stability}`);
+  }
 });
 
 test('a tool name is a lower-case identifier, so it survives every client', () => {

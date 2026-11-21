@@ -323,7 +323,9 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // ADR-206 joined because its ruling is ABOUT which module publishes the support
   // matrix and which command checks a platform before downloading, so it names both and
   // the pages that must agree with them; a record that named neither would not be
-  // actionable when the table drifts.
+  // actionable when the table drifts. ADR-207 joined because its ruling is ABOUT which
+  // module carries the surface inventory and which page publishes it, so it names both;
+  // a record that named neither could not be followed when a command loses its row.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -356,6 +358,7 @@ assert.deepEqual(leaking, [
     'ADR-204',
     'ADR-205',
     'ADR-206',
+    'ADR-207',
   ]);
 });
 

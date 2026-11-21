@@ -225,6 +225,27 @@ test('--proof attaches the proof summary and the default packet is unchanged (A3
   assert.ok(Array.isArray(doc.proof.omittedObligations));
 });
 
+test('the matched-0 caution is mandatory in --proof at the default ceiling', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'src', 'body.mjs'), '// zebracorn\nexport const leaf = 1;\n');
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'body token']);
+
+  const assembled = await assembleBrief({ root, task: 'zebracorn', proof: true, federate: false });
+  const caution = assembled.items.find(
+    (item) => item.section === 'CAUTIONS' && item.text.startsWith('matched 0:'),
+  );
+  assert.ok(caution, 'the matched-0 caution was not assembled');
+  // Hard packet items are the proof's mandatory units; if this becomes soft, the
+  // default ceiling can still hide that FILES is context rather than a match.
+  assert.equal(caution.priority, 'hard', 'the matched-0 caution is not mandatory proof');
+  assert.equal(assembled.packed.cut.includes(caution.id), false, 'the default packet cut the caution');
+  assert.ok(assembled.proof, '--proof did not attach a summary');
+  assert.equal(assembled.proof.complete, true, 'the proof summary dropped a kept section');
+  assert.deepEqual(assembled.proof.omittedObligations, []);
+});
+
 test('a stale index warns the packet instead of quoting yesterday (Q42)', async (t) => {
   // The delivered packet may not rebuild the index, so it says it is old.
   // Removing README after the build makes the stored tree older than the

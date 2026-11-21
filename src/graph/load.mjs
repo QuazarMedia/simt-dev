@@ -220,6 +220,18 @@ const VALID_ROLES = new Set(['canonical', 'variant', 'stub', 'duplicate', 'depre
  * @returns {Promise<{ok: boolean, registry: object|null, errors: string[], warnings: string[],
  *                    verified: boolean, workspace: {root: string|null, source: string, detail: string}>}
  */
+
+/**
+ * Which registry the tiers select for this root, without reading or verifying it.
+ *
+ * `loadRegistry` answers with the document and its disk checks; a caller that only needs
+ * the file the order lands on (why maps skill names to paths) would otherwise copy the
+ * order here and drift from it.
+ */
+export async function registryLocation(flags = {}) {
+  return defaultRegistry(flags);
+}
+
 export async function loadRegistry(path = null, flags = {}) {
   // An explicitly named path wins over the default (ADR-061). When none is given,
   // `defaultRegistry` looks in the package root and then in the workspace's members; its

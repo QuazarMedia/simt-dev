@@ -18,9 +18,11 @@ test('a fixture repository lists every governor and reports an unresolved token'
   await mkdir(join(root, 'src'), { recursive: true });
   await mkdir(join(root, 'docs', 'decisions'), { recursive: true });
   await mkdir(join(root, 'docs', 'lessons'), { recursive: true });
-  await mkdir(join(root, 'rules'), { recursive: true });
-  await mkdir(join(root, 'graph'), { recursive: true });
+  await mkdir(join(root, '.simt', 'profiles'), { recursive: true });
   await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 1;\n');
+  // An extension no gate owns, so the answer is genuinely empty rather than "the format
+  // gate covers .md".
+  await writeFile(join(root, 'docs', 'notes.zzz'), 'nothing governs this file\n');
   await writeFile(join(root, 'docs', 'decisions', 'ADR-001-keep.md'), [
     '# ADR-001 — Keep the file',
     '',
@@ -30,8 +32,12 @@ test('a fixture repository lists every governor and reports an unresolved token'
     '',
   ].join('\n'));
   await writeFile(join(root, 'docs', 'lessons', '0001-keep.md'), '---\nsimt-trigger: { paths: ["src/keep.mjs"] }\n---\n\n# Keep\n');
-  await writeFile(join(root, 'rules', 'toy.md'), '---\nsimt-id: toy\nsimt-title: Toy\nsimt-scope: ["src/keep.mjs"]\n---\n\n# Toy\n');
-  await writeFile(join(root, 'graph', 'skills.graph.json'), JSON.stringify({
+  // A local profile: the repository's own rule, which is also the id `repoContext` loads,
+  // so `why rule:toy` can be answered without the package's catalogue.
+  await writeFile(join(root, '.simt', 'profiles', 'toy.md'), '---\nsimt-id: toy\nsimt-title: Toy\nsimt-scope: ["src/keep.mjs"]\n---\n\n# Toy\n');
+  // The repository tier of ADR-202, which is where an adopted repository keeps it.
+  await writeFile(join(root, '.simt', 'skills.graph.json'), JSON.stringify({
+    version: 1,
     skills: [{ name: 'keep', summary: 'Keep a file', paths: ['src/keep.mjs'] }],
   }));
   await writeFile(join(root, 'simt.json'), JSON.stringify({ gates: { commands: { memory: 'node src/keep.mjs' } } }));
@@ -52,12 +58,60 @@ test('a fixture repository lists every governor and reports an unresolved token'
 
   const missing = await capture(() => whyCommand(['src/absent.mjs'], { root }, []));
   assert.equal(missing.code, 2);
+
+  // A prefix names its own kind and still needs the corpus: without it every rule was
+  // reported unknown, which is how both prefixes shipped.
+  const prefixedRule = await capture(() => whyCommand(['rule:toy'], { root }, []));
+  assert.match(prefixedRule.stdout, /toy - Toy/);
+
+  // The reader's spelling, not git's: absolute, `./`, and a bare name from the directory
+  // the file is in. All three are the same tracked file.
+  const absolute = await capture(() => whyCommand([join(root, 'src', 'keep.mjs')], { root }, []));
+  assert.equal(absolute.code, 0, absolute.stderr);
+  assert.match(absolute.stdout, /decision {2}ADR-001/);
+
+  const here = process.cwd();
+  process.chdir(join(root, 'src'));
+  try {
+    const fromBelow = await capture(() => whyCommand(['keep.mjs'], { root }, []));
+    assert.equal(fromBelow.code, 0, fromBelow.stderr);
+    assert.match(fromBelow.stdout, /decision {2}ADR-001/);
+  } finally {
+    process.chdir(here);
+  }
+
+  const directory = await capture(() => whyCommand([join(root, 'src')], { root }, []));
+  assert.equal(directory.code, 2, 'a directory is not silently treated as a file');
+  assert.match(directory.stderr, /src is a directory/);
+
+  // An ungoverned file says what was looked for, so `none` cannot read as a no-op.
+  const ungoverned = await capture(() => whyCommand([join(root, 'docs', 'notes.zzz')], { root }, []));
+  assert.equal(ungoverned.code, 0, ungoverned.stderr);
+  assert.match(ungoverned.stdout, /^none {5}nothing recorded names docs\/notes\.zzz/);
+  assert.match(ungoverned.stdout, /note {5}looked for a decision/);
+
   await rm(root, { recursive: true, force: true });
 
   const bare = await mkdtemp(join(tmpdir(), 'idx-why-'));
   const refused = await capture(() => whyCommand(['src/keep.mjs'], { root: bare }, []));
   assert.equal(refused.code, 5);
   await rm(bare, { recursive: true, force: true });
+});
+
+test('a decision answers with no git repository and no tracked files', async () => {
+  // `why ADR-NNN` used to list the tree first, so it failed with "run this inside a git
+  // repository" even though the decisions ship with the package. The subject's shape
+  // settles the question before the listing does.
+  const root = await mkdtemp(join(tmpdir(), 'idx-why-'));
+  try {
+    await mkdir(join(root, 'docs', 'decisions'), { recursive: true });
+    await writeFile(join(root, 'docs', 'decisions', 'ADR-009-a-note.md'), '# ADR-009 — A note\n\nStatus: accepted\n');
+    const decided = await capture(() => whyCommand(['ADR-009'], { root }, []));
+    assert.equal(decided.code, 0, decided.stderr);
+    assert.match(decided.stdout, /ADR-009/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test('why resolves a non-ASCII path instead of calling it missing (Q39)', async () => {

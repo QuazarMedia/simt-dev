@@ -27,12 +27,13 @@ import { checkTsconfig } from '../tsconfig.mjs';
 import { checkToolchain } from '../toolchain.mjs';
 import { parse, inject, BEGIN, END } from './markers.mjs';
 import { budgetFinding, readManifest } from './manifest.mjs';
+import { readLockText } from './lock-file.mjs';
 import { budgetCutFinding } from '../kernel/budget.mjs';
 import { measureRoot } from '../measure/context.mjs';
 import { loadMdcRules } from './mdc.mjs';
 import { foldsRules, resolveSurfaces, SURFACES, SURFACE_IDS } from './surfaces.mjs';
 import { pointerState, pointerTargets, scopedTargets } from './targets.mjs';
-import { CLI, LOCK_FILE, LOCK_LEGACY, PACKAGE_NAME } from '../name.mjs';
+import { CLI, LOCK_FILE, PACKAGE_NAME } from '../name.mjs';
 import { MANIFEST_FILE, WORKFLOW_FILE_NAME } from '../name.mjs';
 import { resolveNodeRunner } from '../ecosystem/node-runner.mjs';
 import { LOCAL_BIN } from '../distribute/release.mjs';
@@ -167,17 +168,9 @@ export async function plan(root, flags = {}) {
   // `sync` that printed "wrote simt-dev.lock.json" and then "nothing written" .
   const lock = await computeLock(root, flags);
   const lockText = `${JSON.stringify(lock, null, 2)}\n`;
-  let previousLockText = '';
-  let lockExists = false;
-  for (const name of [LOCK_FILE, LOCK_LEGACY]) {
-    try {
-      previousLockText = await readFile(join(root, name), 'utf8');
-      lockExists = true;
-      break;
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
-  }
+  const previous = await readLockText(root);
+  const previousLockText = previous.text ?? '';
+  const lockExists = previous.text !== null;
   const lockTarget = {
     file: LOCK_FILE,
     path: join(root, LOCK_FILE),

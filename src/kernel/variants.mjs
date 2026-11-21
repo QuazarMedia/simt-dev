@@ -6,10 +6,7 @@
 // When `simt.lock.json` records a locked winner for `<ruleId>.<slot>`,
 // projection deterministically renders that winning variant.
 
-import { readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-
-import { LOCK_FILE, LOCK_LEGACY } from '../name.mjs';
+import { readLockText } from '../projection/lock-file.mjs';
 
 export const VARIANTS_MARKER = 'simt-variants';
 
@@ -21,27 +18,21 @@ export const VARIANTS_MARKER = 'simt-variants';
  */
 export async function readLockedVariants(root) {
   if (!root) return {};
-  for (const name of [LOCK_FILE, LOCK_LEGACY]) {
-    let raw;
-    try {
-      raw = await readFile(join(root, name), 'utf8');
-    } catch {
-      continue; // no lock under this name; try the next one
+  const { text } = await readLockText(root);
+  if (text === null) return {};
+  try {
+    const parsed = JSON.parse(text);
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      parsed.variants &&
+      typeof parsed.variants === 'object' &&
+      !Array.isArray(parsed.variants)
+    ) {
+      return parsed.variants;
     }
-    try {
-      const parsed = JSON.parse(raw);
-      if (
-        parsed &&
-        typeof parsed === 'object' &&
-        parsed.variants &&
-        typeof parsed.variants === 'object' &&
-        !Array.isArray(parsed.variants)
-      ) {
-        return parsed.variants;
-      }
-    } catch {
-      return {};
-    }
+  } catch {
+    return {};
   }
   return {};
 }

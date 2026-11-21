@@ -15,6 +15,7 @@ All notable changes to this package are recorded here. The format follows
 - A follows-source manifest carries `{ follows: "source" }` instead of `projection.simtDevSha` and `projection.version`; converting one drops the stale pair on the next `init` or `sync`. The generated region is still checked and re-rendered by `sync --yes` when the rule text changes.
 - The `simt-dev/src/*` wildcard is gone. The optional bench's 39 exact deep imports remain as a migration list, while the retired variant writer, test-only retry schedule simulator and exported job-state helper are removed from the shipped surface (PR32).
 - Focused gate output renders from the same structured reader as the runner parsers, so TAP, Vitest/Jest, JUnit, Go and Cargo agree on pass/fail/skip counts; a report file is compacted too, and an unrecognised log carries `compact: "unavailable"` with its raw text. The index and workspace projection share one package-marker table, so nested Gradle, Maven and Mix ownership agrees between attribution, ranking and the gate (PR33).
+- Legacy formats have one owner and an explicit inventory (ADR-213): the manifest, lock, markers, state paths, lease schema, ledger records and journal sets each name the module that reads both spellings and the evidence for keeping them. The lock locator is shared by the frozen check, plan and variant fold, and the disposable `.simt/check.json` cache is retired in favour of `run check` (PR34).
 
 ## [0.11.0] — 2026-11-20
 
@@ -126,6 +127,7 @@ behaviour.
 
 ### Fixed
 
+- A legacy `.simt/leases.json` no longer vanishes from the hook's view when the current lease file exists. Active claims are merged from both files, and a successful write retires the old file after the new one is in place (PR34).
 - Every flag the commands implement is now declared in the command spec before the deprecation window closes, and `docs/commands` is regenerated from that spec, so `plan done --yes`, `sync --explain`, `slice start --yes` and friends stop flipping between usage error and tolerated; an undeclared flag is a usage error that says so in the JSON document.
 - `simt review --local`, `simt check --frozen` and `simt compare --learn` were implemented but undeclared, so naming one warned the command does not take it; `simt sync` advertised an `--explain` nothing read.
 - `simt brief`'s first dirty path lost its first character.

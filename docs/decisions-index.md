@@ -221,3 +221,4 @@ in [architecture/history.md](architecture/history.md).
 | [210](decisions/ADR-210-a-slice-finish-lands-work-already-committed.md) | a slice finish lands work already committed | accepted · 2026-11-21 · filed with the clean-worktree finish |
 | [211](decisions/ADR-211-the-bench-ships-as-an-optional-package-and-core-imports-none-of-it.md) | the bench ships as an optional package, and core imports none of it | accepted · 2026-11-21 · filed as PR31 (review 0005) |
 | [212](decisions/ADR-212-the-studio-opens-one-loopback-socket-only-when-invoked.md) | the studio opens one loopback socket, only when invoked | accepted · 2026-11-21 |
+| [213](decisions/ADR-213-legacy-readers-have-one-owner-and-only-recovery-value-keeps-them.md) | a legacy format has one owner, and only recovery value keeps it | accepted · 2026-11-21 |

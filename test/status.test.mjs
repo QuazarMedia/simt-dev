@@ -9,7 +9,7 @@
 
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { performance } from 'node:perf_hooks';
@@ -107,6 +107,19 @@ test('R48: no cache is a miss, not an error', async (t) => {
   assert.equal(payload.ok, true);
   assert.equal(payload.cached, false);
   assert.equal(payload.line, null);
+});
+
+test('R48/PR34: the pre-move check cache is retired, not read', async (t) => {
+  const root = await freshRoot(t);
+  await mkdir(join(root, '.simt'), { recursive: true });
+  await writeFile(
+    join(root, '.simt', 'check.json'),
+    `${JSON.stringify({ version: 1, at: Date.now(), head: 'abc', rulesOk: true, hooksOk: true, gatesRun: 1, gatesTotal: 1, blocking: 0, warnings: 0 })}\n`,
+  );
+  assert.equal(await readCheckCache(root), null, 'a disposable pre-move cache must not revive');
+  const text = await runCli(['status', '--line', '--root', root], SETUP_ENV());
+  assert.equal(text.code, 0);
+  assert.equal(text.stdout.trim(), 'simt no cache - run check');
 });
 
 test('R48: a real check round-trips into the line', async (t) => {

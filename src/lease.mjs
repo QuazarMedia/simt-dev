@@ -14,10 +14,10 @@
 // the hook refuses edits, the command refuses to write (ADR-101 rulings 4).
 
 import { existsSync, realpathSync } from 'node:fs';
-import { mkdir, open, rename, stat, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, open, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 
-import { localRel, readStateFile } from './state.mjs';
+import { localRel } from './state.mjs';
 
 /** Where the claims live, in every repository: beside the index and the ledger. */
 export const LEASE_FILE = localRel('leases.json');
@@ -172,26 +172,49 @@ export function canonicalLeasePath(root, input, { ignoreCase = false } = {}) {
  */
 export async function readLeases(root) {
   const path = join(root, LEASE_FILE);
-  // The pre-move path is a fallback for one release.
-  let text;
-  try {
-    ({ text } = await readStateFile(root, LEASE_FILE, [LEASE_FILE_LEGACY]));
-  } catch (error) {
-    return { path, leases: [], error: `${LEASE_FILE} could not be read (${error.message})` };
-  }
-  if (text === null) return { path, leases: [], error: null };
-  try {
-    const parsed = JSON.parse(text);
+  const candidates = [
+    { name: LEASE_FILE, path },
+    { name: LEASE_FILE_LEGACY, path: join(root, LEASE_FILE_LEGACY) },
+  ];
+  const documents = [];
+
+  for (const candidate of candidates) {
+    let text;
+    try {
+      text = await readFile(candidate.path, 'utf8');
+    } catch (error) {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') continue;
+      return { path, leases: [], error: `${candidate.name} could not be read (${error.message})` };
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(text);
+    } catch (error) {
+      return { path, leases: [], error: `${candidate.name} is not valid JSON (${error.message})` };
+    }
     if (parsed === null || typeof parsed !== 'object' || !Array.isArray(parsed.leases)) {
-      return { path, leases: [], error: `${LEASE_FILE} is not a lease document (no leases array)` };
+      return { path, leases: [], error: `${candidate.name} is not a lease document (no leases array)` };
     }
     // A malformed entry is dropped rather than trusted: an expiry that is not a number
     // would otherwise live forever, which is the opposite of what a TTL promises.
-    const leases = parsed.leases.map(normaliseLease).filter((l) => l !== null);
-    return { path, leases, error: null };
-  } catch (error) {
-    return { path, leases: [], error: `${LEASE_FILE} is not valid JSON (${error.message})` };
+    documents.push(parsed.leases.map(normaliseLease).filter((lease) => lease !== null));
   }
+
+  // A new claim file must not hide an old one. The two paths can both exist between the
+  // state-directory move and the next write, and a claim in the old file is still a claim
+  // the hook has to enforce. The current file wins a duplicate because it is the one a
+  // write has just replaced; a new session or resource is kept from either file.
+  const seen = new Set();
+  const leases = [];
+  for (const entries of documents) {
+    for (const lease of entries) {
+      const key = `${lease.resource.kind}\0${lease.resource.id}\0${lease.holder.session}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      leases.push(lease);
+    }
+  }
+  return { path, leases, error: null };
 }
 
 /**
@@ -238,6 +261,16 @@ export async function writeLeases(root, leases) {
   const tmp = `${path}.tmp-${process.pid}`;
   await writeFile(tmp, body, 'utf8');
   await rename(tmp, path);
+  // The write is the migration. Every caller of this function hands over the whole set
+  // it read, so once the new file is in place the old one is a shadow that would
+  // otherwise resurrect a released claim on the next read. Removing it after the rename
+  // is what makes a crash idempotent: a surviving legacy file is merged on the next read
+  // and retired by the next successful write.
+  try {
+    await unlink(join(root, LEASE_FILE_LEGACY));
+  } catch (error) {
+    if (error.code !== 'ENOENT' && error.code !== 'ENOTDIR') throw error;
+  }
   return path;
 }
 

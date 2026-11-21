@@ -305,19 +305,14 @@ export async function assembleBrief({
         })
       : null;
   const ranked = rankFiles({ files, symbols, edges, fts, bm25, embeddings, queryVector, task });
-  // An empty match is a different answer from a weak one: the ranking can then be the
-  // graph hub or BM25 body hits, neither of which is a path or symbol match, and a reader
-  // who asked about `zebracorn` must not read either as one
+  // A resolver hit is the task's own words against a path or symbol; a fused score is
+  // positive for graph neighbours and BM25 body hits too. When nothing resolves, those
+  // rows stay as context and the caution below says so. When something does resolve, keep
+  // only the resolver rows: the rest made a two-file task look like it touched src/name.mjs.
   const matched = ranked.filter((row) => row.resolver > 0).length;
-  // When the task did match files, the graph hub and the BM25 tail are not answers: they
-  // are the rows the fused ranking keeps for coverage, and listing them under FILES made
-  // a two-file task look like it touched `src/name.mjs`. `resolver` is the score from the
-  // task's own words against paths and symbols; a fused score is positive for neighbours
-  // too. The hub or body rows stay for a task that matched nothing, where they are all
-  // there is.
   const focused = matched > 0 ? ranked.filter((row) => row.resolver > 0) : ranked;
   if (task.trim().length > 0 && matched === 0) {
-    packet.add('CAUTIONS', 'matched 0: no path or symbol mentions this task, so FILES is context rather than a match', {
+    packet.add('CAUTIONS', 'matched 0: no path or symbol matches this task’s words, so FILES is context rather than a match', {
       hard: true,
       why: ['a body hit or a graph neighbour is not path or symbol evidence about this task'],
     });

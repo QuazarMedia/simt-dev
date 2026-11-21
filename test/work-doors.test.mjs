@@ -420,7 +420,7 @@ test('a bitemporal question with one date is refused rather than answered', () =
     claims: [{ id: 'a', subject: 'vat', predicate: 'rate', type: 'number', value: 19, validFrom: '2024-01-01', recordedFrom: '2024-01-01' }],
   });
   assert.throws(() => run(dir, ['knowledge', 'why', 'a', '--claims', doc, '--as-of', '2024-06-01']), (error) => {
-    assert.match(String(error.stderr), /knownAt/);
+    assert.match(String(error.stderr), /knownAt must be an ISO date \(YYYY-MM-DD\)/);
     return true;
   });
 });

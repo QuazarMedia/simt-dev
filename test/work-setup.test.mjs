@@ -214,7 +214,7 @@ test('a setup refuses what it cannot do, and changes nothing when it refuses', a
   writeFileSync(join(root, 'simt.json'), `${JSON.stringify({ work: { version: 7 } }, null, 2)}\n`);
   const invalid = await simt(['work', 'setup', '--scope', 'x', '--path', 'docs', '--root', root, '--yes']);
   assert.notEqual(invalid.code, 0);
-  assert.match(invalid.stderr, /work\.version/);
+  assert.match(invalid.stderr, /simt\.json's work declaration is invalid: work\.version must be one of 1, 2, not 7/);
 
   writeFileSync(join(root, 'simt.json'), '{ not json\n');
   const unreadable = await simt(['work', 'setup', '--scope', 'x', '--path', 'docs', '--root', root, '--yes']);

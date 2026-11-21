@@ -117,7 +117,8 @@ test('no flag binds a non-loopback address', async () => {
   const root = await fixtureRepo();
   const run = await simt(['studio', '--host', '0.0.0.0', '--no-open'], { cwd: root });
   assert.equal(run.code, 2);
-  assert.match(run.stderr + run.stdout, /--host/);
+  const output = run.stderr + run.stdout;
+  assert.ok(output.includes('unknown flag --host'), output);
 });
 
 test('a port outside 0..65535 is a usage error', async () => {
@@ -125,7 +126,8 @@ test('a port outside 0..65535 is a usage error', async () => {
   for (const value of ['abc', '70000', '-1']) {
     const run = await simt(['studio', '--port', value, '--no-open'], { cwd: root });
     assert.equal(run.code, 2, `--port ${value}`);
-    assert.match(run.stderr + run.stdout, /--port/);
+    const output = run.stderr + run.stdout;
+    assert.ok(output.includes(`--port must be an integer from 0 to 65535, received ${value}`), output);
   }
 });
 
@@ -135,7 +137,8 @@ test('a taken port refuses with a remedy naming --port', async (t) => {
   t.after(() => studio.stop());
   const run = await simt(['studio', '--port', String(studio.port), '--no-open'], { cwd: root });
   assert.equal(run.code, 1);
-  assert.match(run.stderr + run.stdout, /--port/);
+  const output = run.stderr + run.stdout;
+  assert.ok(output.includes(`port ${studio.port} is already serving`), output);
 });
 
 test('a named free port is the port served', async (t) => {

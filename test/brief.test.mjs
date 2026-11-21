@@ -14,7 +14,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { CLI } from '../src/name.mjs';
 import { assembleBrief } from '../src/brief/assemble.mjs';
 import { reindex } from '../src/index/store.mjs';
 import { git } from './fixture.mjs';
@@ -439,7 +438,7 @@ test(`the brief refuses two tasks and a budget that is not a number`, async (t) 
   t.after(() => rm(root, { recursive: true, force: true }));
   const two = await run(root, ['brief', 'one', 'two']);
   assert.equal(two.code, 2);
-  assert.match(two.stderr, new RegExp(`run: ${CLI} brief`, 'u'));
+  assert.match(two.stderr, /brief takes one task, not 2/);
   const bad = await run(root, ['brief', 'one', '--budget', 'not-a-number']);
   assert.equal(bad.code, 2);
 });

@@ -292,7 +292,7 @@ test('a moved document keeps the id its identity map declares, across a rebuild'
   writeFileSync(join(root, '.simt/knowledge/identities.json'), '{ "paths": [] }\n');
   const refused = await simt(['knowledge', 'build', '--scope', 'docs', '--root', root]);
   assert.notEqual(refused.code, 0);
-  assert.match(refused.stderr, /identities\.json/);
+  assert.match(refused.stderr, /\.simt\/knowledge\/identities\.json: the identity file needs a "paths" object/);
 
   rmSync(join(root, '.simt/knowledge/identities.json'));
 });

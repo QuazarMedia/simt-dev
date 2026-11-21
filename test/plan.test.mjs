@@ -576,7 +576,7 @@ test('a plans key that cannot be read is not silently the default', async () => 
   });
   const badPattern = cli(['plan', 'status', '--root', pattern]);
   assert.notEqual(badPattern.code, 0);
-  assert.match(badPattern.stderr, /id\.pattern/);
+  assert.match(badPattern.stderr, /id\.pattern is not a valid pattern/);
 });
 
 const TIERED = `# plan

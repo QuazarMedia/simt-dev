@@ -263,7 +263,8 @@ test('R38: a path that escapes the root is refused', async () => {
   const root = await scratchDocRoot();
   const { code, stderr } = await runCli(['distill', '../outside.md', '--root', root]);
   assert.equal(code, 1, stderr);
-  assert.match(stderr, /outside/);
+  assert.match(stderr, /^ERROR 1 \.\.\/outside\.md is outside /m);
+  assert.match(stderr, /^REMEDY distill reads docs under the repository root only$/m);
 });
 
 // --- the local proposer ----------------------------------------------------------

@@ -496,7 +496,7 @@ test('binary: the hook shim hands over to the binary the repository downloaded, 
     await rm(local, { force: true });
     const refused = spawnSync('/bin/sh', [shim], { cwd: fixture, env, encoding: 'utf8' });
     assert.notEqual(refused.status, 0, 'the shim passed with no dispatcher to run');
-    assert.match(refused.stderr, /cannot locate/);
+    assert.match(refused.stderr, /simt: cannot locate the dispatcher\./);
   } finally {
     await rm(fixture, { recursive: true, force: true });
   }

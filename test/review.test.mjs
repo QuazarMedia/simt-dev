@@ -420,6 +420,6 @@ test('bench critic refuses a label outside the vocabulary', async () => {
     ]);
     const { code, stdout, stderr } = await runCli(['bench', 'critic', '--root', dir]);
     assert.equal(code, 1);
-    assert.match(stdout + stderr, /verdict is not one of .*BLOCK|APPROVE/);
+    assert.match(stdout + stderr, /line 2 verdict is not one of BLOCK \/ APPROVE \/ APPROVE WITH RESIDUAL RISK/);
   });
 });

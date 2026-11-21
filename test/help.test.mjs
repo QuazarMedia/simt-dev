@@ -76,7 +76,7 @@ test('a command path whose group is unknown is a usage error, not a silent defau
     () => exec(process.execPath, [BIN, 'skills', 'nonsense'], { maxBuffer: 8 << 20 }),
     (error) => {
       assert.equal(error.code, 2, 'an unknown subcommand must be a usage exit');
-      assert.match(`${error.stdout}${error.stderr}`, /unknown command/i);
+      assert.match(`${error.stdout}${error.stderr}`, /unknown command `skills nonsense`/);
       return true;
     },
   );

@@ -114,7 +114,7 @@ test('claiming without a session, with a bad TTL, or outside the repository is a
 
   const outside = cli(['lease', '../elsewhere.txt', '--session', 'a', '--root', root, '--yes']);
   assert.equal(outside.code, 2);
-  assert.match(outside.stderr, /not a path inside the repository/);
+  assert.match(outside.stderr, /\.\.\/elsewhere\.txt is not a path inside the repository/);
 
   const listWithSession = cli(['lease', '--session', 'a', '--root', root]);
   assert.equal(listWithSession.code, 2);
@@ -346,7 +346,7 @@ test('the holder releases and renews its own claims, and nobody else\u2019s (Q20
 
   const foreign = cli(['lease', 'release', 'src/other.mjs', '--session', 'alpha', '--root', root, '--yes']);
   assert.equal(foreign.code, 1, foreign.text);
-  assert.match(foreign.stderr, /leased by beta/);
+  assert.match(foreign.stderr, /src\/other\.mjs is leased by beta until \d{4}-/);
 
   const released = cli(['lease', 'release', 'src/keep.mjs', '--session', 'alpha', '--root', root, '--yes']);
   assert.equal(released.code, 0, released.text);

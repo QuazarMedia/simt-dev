@@ -552,7 +552,7 @@ test('CLI: skills install without a workspace refuses rather than half-installin
     SIMT_DEV_WORKSPACE: 'off',
   });
   assert.notEqual(code, 0);
-  assert.match(stderr, /no workspace/);
+  assert.match(stderr, /no workspace is configured and this repo does not hold it/);
 });
 
 test('CLI: doctor reports which source answered', async () => {
@@ -574,7 +574,7 @@ test('CLI: an unparseable config makes doctor fail rather than fall through sile
   const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const { code, stderr } = await run(['doctor', '--root', app], { XDG_CONFIG_HOME: cfg, SIMT_DEV_WORKSPACE: 'off' });
   assert.notEqual(code, 0);
-  assert.match(stderr, /unparseable JSON/);
+  assert.match(stderr, /workspace config .*config\.json: unparseable JSON/);
 });
 
 test('CLI: a single repo with no workspace adopts and gates normally', async () => {

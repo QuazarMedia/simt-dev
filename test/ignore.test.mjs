@@ -167,7 +167,7 @@ test('no list is an error that names the file, not four empty renders', async ()
   const root = await scratch({});
   const { code, stderr } = await run(['ignore', '--root', root]);
   assert.notEqual(code, 0);
-  assert.match(stderr, /\.simtignore/);
+  assert.match(stderr, /^ERROR 1 no \.simtignore in /m);
   for (const path of ['.cursorignore', '.aiderignore', '.geminiignore']) {
     assert.ok(!existsSync(join(root, path)), `${path} must not be created from a missing list`);
   }
@@ -186,7 +186,7 @@ test('an unparseable Claude settings file is refused, and nothing is written at 
   const root = await scratch({ '.simtignore': LIST, '.claude/settings.json': broken });
   const { code, stderr } = await run(['ignore', '--root', root, '--yes']);
   assert.notEqual(code, 0);
-  assert.match(stderr, /settings\.json/);
+  assert.match(stderr, /\.claude\/settings\.json is not valid JSON:/);
   assert.equal(await readFile(join(root, '.claude', 'settings.json'), 'utf8'), broken, 'the file was touched');
   // The whole run refuses, not just the one target: three generated files
   // agreeing with a list whose fourth render failed would leave the set split.

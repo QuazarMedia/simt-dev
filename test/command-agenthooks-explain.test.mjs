@@ -88,7 +88,7 @@ test('an unreadable payload is a usage error, not a silent pass', async () => {
   const root = await repo();
   const empty = explain(root, ['--harness', 'claude']);
   assert.equal(empty.status, 2);
-  assert.match(empty.stderr, /not JSON/);
+  assert.match(empty.stderr, /the payload is not JSON/);
 
   const missing = explain(root, ['--harness', 'claude', '--payload', join(root, 'absent.json')]);
   assert.equal(missing.status, 2);

@@ -53,7 +53,7 @@ governing decisions in one bounded packet. Try it with a real task from your bac
 
 Prefer another install? Use `npm i -D simt-dev`, `pip install simt-dev`, or
 `brew install QuazarMedia/homebrew-tap/simt-dev`.
-[Installation guide →](docs/getting-started.md)
+[Installation guide →](docs/getting-started.md) · [Search a local document scope →](docs/guides/local-work.md)
 
 Pin the release you adopt: upgrading can change generated rules. Repository writers
 preview changes until you pass `--yes`; `index` rebuilds its ignored cache directly.

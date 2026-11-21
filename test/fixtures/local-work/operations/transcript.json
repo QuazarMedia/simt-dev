@@ -1,0 +1,6 @@
+{
+  "search": ["handbook/current.md", "device-checkout"],
+  "scoped": ["handbook/current.md", "device-checkout"],
+  "opened": ["handbook/current.md", "device-checkout"],
+  "historical": ["retention.archive"]
+}

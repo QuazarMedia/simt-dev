@@ -68,8 +68,8 @@ simt verify status --changed --scope handbook
 | WK03 | Build a scoped corpus from existing files | First use | corpus | L | WK01 | Complete | 14d6c59e733c53e11cfe0376a5d07e4d5cc2a7f2 · test: node --test test/work-corpus.test.mjs test/knowledge-sections.test.mjs test/work-index.test.mjs test/work-artifacts.test.mjs test/work-trust.test.mjs test/index.test.mjs |
 | WK04 | Reuse native metadata for claims and source lineage | First use | corpus | M | WK03 | Complete | 1c43d11f4bef1d15d8ae1bdc75d00736302de413 · test: node --test test/work-lineage.test.mjs test/knowledge-claims.test.mjs test/knowledge-validity.test.mjs test/knowledge-observations.test.mjs test/knowledge-conflicts.test.mjs test/check-knowledge.test.mjs |
 | WK05 | Query the repository directly with citations and dates | First use | query | M | WK04 | Complete | 8ea315a719b00ef2682aedd41c00232f36d82c1e · test: node --test test/work-query.test.mjs test/work-doors.test.mjs test/knowledge-rank.test.mjs test/knowledge-validity.test.mjs test/work-door-parity.test.mjs |
-| WK06 | Prove the first-session flow in two installed fixtures | First use | qualify | M | WK02, WK05 | Queued | — |
-| WK07 | Explain the impact of a local change and stale derived outputs | Daily work | impact | M | WK04 | Queued | — |
+| WK06 | Prove the first-session flow in two installed fixtures | First use | qualify | M | WK02, WK05 | Complete | 9eb80419a09731550a957e314b7340b599f311e2 · test: node --test test/pack.test.mjs test/shipped.test.mjs test/pilot-knowledge.test.mjs test/work-release.test.mjs |
+| WK07 | Explain the impact of a local change and stale derived outputs | Daily work | impact | M | WK04 | In progress | — |
 | WK08 | Select typed checks from the repository diff | Daily work | verify | M | WK07 | Queued | — |
 | WK09 | Run scoped local validators and bind evidence to inputs | Daily work | verify | L | WK08 | Queued | — |
 | WK10 | Bring scoped knowledge and verification into agent entry points | Daily work | agent | M | WK05, WK09 | Queued | — |

@@ -57,6 +57,14 @@ await writeFile(
       ...sourceManifest,
       private: false,
       version: core.version,
+      // A scoped package is restricted by default. Without this, the first
+      // `npm stage publish` publishes it to a private scope instead of the
+      // public registry the documented install route names.
+      publishConfig: { access: 'public' },
+      // Provenance cross-checks this field against the OIDC repository claim.
+      // The source lives in the core's repository under packages/bench; the
+      // directory is the source location, not the generated dist/bench path.
+      repository: { ...core.repository, directory: 'packages/bench' },
       main: 'src/commands.mjs',
       exports: { '.': './src/commands.mjs', './src/*': './src/*' },
       peerDependencies: { 'simt-dev': `^${core.version}` },

@@ -62,9 +62,15 @@ test('the optional bench package builds with its core imports rewritten', async 
   try {
     await exec(process.execPath, [join(ROOT, 'scripts', 'build-bench-package.mjs'), out]);
     const pkg = JSON.parse(await readFile(join(out, 'package.json'), 'utf8'));
+    const core = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
     assert.equal(pkg.name, '@simt-dev/bench');
     assert.equal(pkg.private, false);
-    assert.equal(pkg.peerDependencies['simt-dev'], `^${JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8')).version}`);
+    assert.equal(pkg.peerDependencies['simt-dev'], `^${core.version}`);
+    // A scoped package is restricted unless it says otherwise, and provenance
+    // refuses a release whose repository does not match the source repository.
+    assert.equal(pkg.publishConfig?.access, 'public');
+    assert.equal(pkg.repository?.url, core.repository.url);
+    assert.equal(pkg.repository?.directory, 'packages/bench');
 
     for (const file of await sources(join(out, 'src'))) {
       const source = await readFile(file, 'utf8');

@@ -27,6 +27,13 @@
 #     -> (human, 2FA)           npm stage approve <id>
 #     -> publish-channels.yml   run by hand with the version as its input
 #
+# The optional `@simt-dev/bench` package is built from this same tagged tree and
+# staged in the npm job, one stage beside the core's. It is a separate package
+# with a peer dependency on the same core version, so the documented
+# `npm install simt-dev @simt-dev/bench` pair has a released artifact behind it
+# rather than a source-build instruction (ADR-211). Its own idempotency check
+# means a re-run can stage the bench without staging the core again.
+#
 # Nothing here is red in a healthy release. A job designed to fail until a human
 # acts again would be a gate that is red on the day it lands, and a reader learns
 # to ignore red exactly once - ADR-097 holds the argument and the old layout.
@@ -137,43 +144,60 @@ jobs:
           npm --version
           npm stage --help >/dev/null
 
-      - name: this version is not already published or staged
+      - name: neither package version is already published or staged
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -eu
           version="${{ needs.version.outputs.version }}"
           name="$(node -p "require('./package.json').name")"
+          bench_name="$(node -p "require('./packages/bench/package.json').name")"
+          already_staged() {
+            local pkg="$1"
+            local staged
+            staged="$(npm stage list "$pkg" --json 2>/dev/null || true)"
+            printf '%s' "$staged" | node -e '
+              const fs = require("node:fs");
+              const [pkg, version] = process.argv.slice(1);
+              let rows = [];
+              try { rows = JSON.parse(fs.readFileSync(0, "utf8")); } catch {}
+              process.exit(Array.isArray(rows) && rows.some((row) =>
+                row && row.packageName === pkg && row.version === version) ? 0 : 1);
+            ' "$pkg" "$version"
+          }
           # Re-running a workflow is normal; publishing or staging the same
           # version twice is not. A published version is visible on the registry;
           # a staged one is not, so the registry check alone would send a re-run
-          # back into `npm stage publish` and fail on the duplicate. Both checks
-          # therefore run, and either one makes this job a quiet no-op.
+          # back into `npm stage publish` and fail on the duplicate. Each package
+          # is checked on its own: the bench can be missing while the core is
+          # already live, which is exactly the state a first bench release
+          # leaves behind.
+          skip=false
           if npm view "${name}@${version}" version >/dev/null 2>&1; then
             echo "::notice::${name}@${version} is already published; nothing to stage"
-            echo "SKIP=true" >> "$GITHUB_ENV"
-            exit 0
-          fi
-          staged="$(npm stage list "$name" --json 2>/dev/null || true)"
-          if printf '%s' "$staged" | node -e '
-            const fs = require("node:fs");
-            const [name, version] = process.argv.slice(1);
-            let rows = [];
-            try { rows = JSON.parse(fs.readFileSync(0, "utf8")); } catch {}
-            process.exit(Array.isArray(rows) && rows.some((row) =>
-              row && row.packageName === name && row.version === version) ? 0 : 1);
-          ' "$name" "$version"; then
+            skip=true
+          elif already_staged "$name"; then
             echo "::notice::${name}@${version} is already staged; nothing to stage"
-            echo "SKIP=true" >> "$GITHUB_ENV"
-          else
-            echo "SKIP=false" >> "$GITHUB_ENV"
+            skip=true
           fi
+          bench_skip=false
+          if npm view "${bench_name}@${version}" version >/dev/null 2>&1; then
+            echo "::notice::${bench_name}@${version} is already published; nothing to stage"
+            bench_skip=true
+          elif already_staged "$bench_name"; then
+            echo "::notice::${bench_name}@${version} is already staged; nothing to stage"
+            bench_skip=true
+          fi
+          echo "SKIP=${skip}" >> "$GITHUB_ENV"
+          echo "BENCH_SKIP=${bench_skip}" >> "$GITHUB_ENV"
 
       - name: tests
         # Staging is the reversible half of a release, but the bytes still left
         # the building. A green `main` is no guarantee about this tag: a tag can
-        # point at any commit, including one that never passed the gate.
-        if: env.SKIP == 'false'
+        # point at any commit, including one that never passed the gate. The
+        # bench is tested even when only it still needs staging, because a
+        # release can open with the core already live.
+        if: env.SKIP == 'false' || env.BENCH_SKIP == 'false'
         run: npm test
 
       - name: skill registry lint
@@ -194,7 +218,29 @@ jobs:
         if: env.SKIP == 'false'
         run: node scripts/verify-wheel.mjs
 
-      - name: stage for a maintainer to approve
+      - name: build the optional bench package at this version
+        # The build reads the version from the tagged package.json and writes it
+        # into the optional manifest with a peer dependency on the same core
+        # version. Checking the generated result here is what makes "built at the
+        # released version" a gate rather than a property of the script.
+        if: env.BENCH_SKIP == 'false'
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -eu
+          node scripts/build-bench-package.mjs dist/bench
+          node --input-type=module - <<'JS'
+          import { readFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('dist/bench/package.json', 'utf8'));
+          const version = process.env.VERSION;
+          const peer = `^${version}`;
+          if (pkg.name !== '@simt-dev/bench' || pkg.version !== version || pkg.private !== false || pkg.peerDependencies?.['simt-dev'] !== peer) {
+            console.error(`::error::dist/bench is not @simt-dev/bench@${version} with peer simt-dev@${peer}`);
+            process.exit(1);
+          }
+          JS
+
+      - name: stage the core for a maintainer to approve
         if: env.SKIP == 'false'
         run: |
           set -eu
@@ -208,10 +254,29 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      - name: stage the optional bench package for a maintainer to approve
+        # A separate stage: npm stages one package at a time, and the bench has
+        # its own approval. `publish-channels.yml` verifies the released pair, so
+        # approving only the core fails the release check rather than leaving a
+        # documented install route without an artifact.
+        if: env.BENCH_SKIP == 'false'
+        working-directory: dist/bench
+        run: |
+          set -eu
+          if [ "${{ github.event.repository.visibility }}" = "public" ]; then
+            echo "repository is public; publishing with provenance"
+            npm stage publish --access public --provenance --tag latest
+          else
+            echo "repository is private; npm provenance requires a public source, staging without it"
+            npm stage publish --access public --tag latest
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: what is now waiting
-        # The stage id is what a maintainer passes to `npm stage approve`, and
-        # the job log is not where anyone looks for it hours later.
-        if: env.SKIP == 'false'
+        # The stage ids are what a maintainer passes to `npm stage approve`, and
+        # the job log is not where anyone looks for them hours later.
+        if: env.SKIP == 'false' || env.BENCH_SKIP == 'false'
         run: npm stage list
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

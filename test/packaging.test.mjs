@@ -276,6 +276,32 @@ test('packaging: the brew channel lands on the tap main and one tap name', async
   assert.match(readme, /brew install QuazarMedia\/homebrew-tap\/simt-dev/, 'the README install line must name the same tap');
 });
 
+test('packaging: the release builds, stages and verifies the optional bench (ADR-211)', async () => {
+  // The core deliberately does not carry the bench, so the only thing that can
+  // make `npm install simt-dev @simt-dev/bench` work is the release staging the
+  // second package. These are the three points that have to stay connected:
+  // build it at the released version, stage it as its own package, and install
+  // the published pair to run a command through the core's dynamic import.
+  const publish = await readFile(new URL('../.github/workflows/publish.yml', import.meta.url), 'utf8');
+  const built = publish.indexOf('node scripts/build-bench-package.mjs dist/bench');
+  assert.ok(built !== -1, 'publish.yml does not build @simt-dev/bench');
+  assert.ok(publish.includes('BENCH_SKIP'), 'publish.yml has no independent bench idempotency check');
+  assert.match(publish, /npm view "\$\{bench_name\}@\$\{version\}"/, 'publish.yml does not check the bench registry version');
+  assert.match(publish, /pkg\.version !== version/, 'publish.yml does not check the built bench version');
+  const staged = publish.indexOf('working-directory: dist/bench');
+  assert.ok(staged > built, 'publish.yml stages the bench before building it');
+  assert.ok(publish.indexOf('npm stage publish', staged) > staged, 'publish.yml does not stage from dist/bench');
+
+  const channels = await readFile(new URL('../.github/workflows/publish-channels.yml', import.meta.url), 'utf8');
+  assert.match(channels, /^  verify-bench:/m, 'publish-channels.yml has no released-pair check');
+  assert.match(
+    channels,
+    /npm install --prefix "\$prefix"[\s\S]*?"simt-dev@\$\{VERSION\}" "@simt-dev\/bench@\$\{VERSION\}"/,
+    'the release check does not install both published packages',
+  );
+  assert.match(channels, /bench replay --input/, 'the release check does not run a bench command');
+});
+
 test('packaging: the version is not a burned placeholder (Q06)', () => {
   // 1.0.0 and 0.0.0-stage on npm are pre-publish placeholders with no bin.
   // Publishing (or versioning into) either reuses a burned number; see RELEASING.md.

@@ -35,13 +35,17 @@ git push origin v0.7.2
 ```
 
 The tag push starts `publish.yml` (trigger `push: tags: ['v*']`). A version that is
-already published *or staged* is skipped quietly, so a re-run is idempotent (ADR-117).
+already published *or staged* is skipped quietly for each package, so a re-run is
+idempotent (ADR-117) - including the case where the core is live and only
+`@simt-dev/bench` still needs staging.
 
 ## 3. What `publish.yml` does
 
 1. **Version guard** — the tag must equal `package.json` on the tagged tree.
 2. **Stage** — the full suite, the skill-registry lint, the wheel-parity check
-   (`npm run verify:wheel`), then `npm stage publish --tag latest`.
+   (`npm run verify:wheel`), then `npm stage publish --tag latest` for the core.
+   It also builds `@simt-dev/bench` at the same version and stages that package
+   as its own stage.
 3. **Create the release** — cuts this version's changelog block into the GitHub
    release notes.
 4. **Build the binaries** — the three release targets on native runners, each
@@ -56,8 +60,9 @@ maintainer approves.
 ## 4. Approve the stage — a human step
 
 ```sh
-npm stage list             # needs npm >= 11; prints the id the "what is now waiting" step showed
-npm stage approve <id>     # 2FA; a maintainer decision, never a CI step
+npm stage list                 # needs npm >= 11; prints the ids the "what is now waiting" step showed
+npm stage approve <core-id>    # 2FA; a maintainer decision, never a CI step
+npm stage approve <bench-id>   # the optional package has its own stage
 ```
 
 ## 5. The downstream channels
@@ -73,12 +78,18 @@ gh workflow run publish-channels.yml -f version=0.7.2 # a named release
 - **Homebrew** verifies the three release assets exist, lints the formula,
   re-renders it from the published checksums, and pushes it to the tap; `verify-brew`
   then proves the tap serves the release.
+- **The bench** is checked by `verify-bench`, which installs
+  `simt-dev@<version>` and `@simt-dev/bench@<version>` from npm into an empty
+  prefix and runs `simt bench replay`. A core approved without its bench stage
+  fails this check, which is the intended outcome: the documented pair is not
+  installable yet.
 
 ## 6. Verify
 
 ```sh
-npm view simt-dev version   # the channel serves the version
-npm stage list              # nothing left staged
+npm view simt-dev version             # the channel serves the version
+npm view @simt-dev/bench version      # the optional package serves the same version
+npm stage list                        # nothing left staged
 ```
 
 plus the GitHub release's assets and `.sha256` files, the committed

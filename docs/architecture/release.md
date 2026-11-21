@@ -9,12 +9,21 @@ Four channels, one tag, and the same bytes:
 | Homebrew | the formula downloads the single-file binary for the machine |
 | single-file binary | one executable per platform (macOS arm64/x64, Linux x64) beside its `.sha256` |
 
+The optional `@simt-dev/bench` package is released with the same version as the
+core. `publish.yml` builds it from the tagged tree and stages it beside
+`simt-dev`; `publish-channels.yml`'s `verify-bench` job installs the published
+pair by name and runs `simt bench replay`. The core does not carry or import the
+bench, and the bench declares `simt-dev` as a peer, so installing both by name is
+the supported route (ADR-211).
+
 The Node floor is 22.20.0 for the npm and PyPI channels, because the index needs
 `node:sqlite` with FTS5. The binary carries its own runtime, so it has no such floor.
 
 ## What a release must contain
 
 - the version in `package.json` and the wheel's metadata,
+- for a bench release, `@simt-dev/bench` at the same version, with its stage
+  approved and the published pair verified,
 - a CHANGELOG entry with one line per change and its decision-record link,
 - `docs/commands/` and `docs/decisions-index.md` regenerated and committed,
 - a green suite on the released tree, cited in the release notes,

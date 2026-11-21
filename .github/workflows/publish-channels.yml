@@ -39,6 +39,13 @@
 # DESTINATION on the resolved version - `publish-pypi-0.7.0`, not
 # `publish-channels-latest`.
 #
+# The optional `@simt-dev/bench` package is released beside the core. The
+# `verify-bench` job installs the pair by name, from the registry, and runs a
+# bench command, so the documented `npm install simt-dev @simt-dev/bench` route
+# is checked in the same release run as the downstream channels. It has no
+# publish step and no checkbox: it is the release check that the pair a
+# maintainer just approved is actually installable.
+#
 # The dispatch field never reaches a shell through `${{ }}` interpolation. It is
 # passed as an environment variable to a script whose first act is to refuse
 # everything that is not a concrete x.y.z after trimming; `latest` is a request
@@ -126,6 +133,56 @@ jobs:
         env:
           INPUT_VERSION: ${{ inputs.version }}
         run: node scripts/release-descriptor.mjs --print
+
+  # -------------------------------------------------------------------------
+  # Optional bench package
+  #
+  # The core does not carry the bench, and the bench declares the core as a
+  # peer. Installing only one of them therefore leaves `simt bench` unsupported
+  # (core) or has no core to run against (bench). This installs the exact
+  # released pair into an empty prefix - no checkout, no source build - and runs
+  # an offline replay, which is the cheapest command that loads the optional
+  # package through the core's dynamic import.
+  verify-bench:
+    name: the released bench pairs with this release
+    needs: [resolve]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22.20.0'
+
+      - name: install the pair by name and run a bench command
+        # `--prefix` puts node_modules and the bin shim under a directory that
+        # has no package.json and is outside any checkout, so the install is
+        # resolved from the registry exactly as a consumer would resolve it.
+        # `--ignore-scripts` keeps the check about package contents and dynamic
+        # loading rather than install-time hooks. The replay document is
+        # offline: it needs no agent, no git history and no API key.
+        run: |
+          set -eu
+          prefix="$RUNNER_TEMP/bench-pair"
+          mkdir -p "$prefix"
+          npm install --prefix "$prefix" --no-audit --no-fund --ignore-scripts --no-save \
+            "simt-dev@${VERSION}" "@simt-dev/bench@${VERSION}"
+          cat > "$RUNNER_TEMP/bench-replay.json" <<'JSON'
+          {
+            "trace": {
+              "intent": { "digest": "sha256:release-check" },
+              "observations": [{ "fields": { "rate": 0.19 } }],
+              "events": [{ "id": "release-check" }]
+            },
+            "before": { "fields": { "rate": 0.19 } },
+            "after": { "fields": { "rate": 0.19 } },
+            "relations": ["rename-invariance"]
+          }
+          JSON
+          "$prefix/node_modules/.bin/simt" bench replay --input "$RUNNER_TEMP/bench-replay.json"
 
   # -------------------------------------------------------------------------
   # PyPI

@@ -9,6 +9,12 @@ All notable changes to this package are recorded here. The format follows
 ### Added
 
 - `simt init --follow-source` records `projection.follows: "source"`: a repository that runs simt-dev from a live source checkout (a sibling clone selected by `SIMT_DEV_BIN`, or `npm link`) no longer carries a release pin, so a version bump or an unrelated commit in the checkout does not make it stale. `check`, the hook dispatcher, `sync`, `upgrade` and `compare` read the declaration, and `--no-follow-source` returns the repository to a release pin (ADR-200).
+- `simt studio [--port <n>] [--no-open]`: the local dashboard, served over one loopback socket guarded by a one-time token and opened only when invoked. The API bridge serves the doors' own objects, the Overview snapshot names every defect, and the shell is one design system with zero external assets. None of it writes to the repository (st01–st04, ADR-212).
+- `simt slice finish`: runs the declared gates and commits the staged work on the slice branch — or, when nothing is staged, lands the commit already on its branch — records the SHA in the main checkout's tracker, merges the branch into main, and removes the worktree and its branch; a kept worktree is named in its output (ADR-209, ADR-210).
+- The release acceptance matrix is one inventory (ADR-214): the reproducible commands, targets, bounds and failure behaviour of a release, with the measurable startup, index and hook limits declared before data, and every unsupported combination carrying its reason and a supported exit or remedy. `docs/reference/acceptance.md` renders from the same data module (PR37).
+- The knowledge doors query the repository directly: `why` and `rank` accept `--scope <id>` against the scoped corpus with `--where` narrowing, and citations carry dates (WK05).
+- `@simt-dev/bench` is staged with the core as its own stage and verified by installing the pair into an empty prefix; a tag predating the pair skips bench verification.
+- Two installed-consumer guards on the package surface: every exact deep export the bench uses is imported through an installed core rather than string-matched against the exports map, and the retired PR32 bindings are asserted absent from the shipped file set.
 
 ### Changed
 
@@ -18,6 +24,10 @@ All notable changes to this package are recorded here. The format follows
 - Legacy formats have one owner and an explicit inventory (ADR-213): the manifest, lock, markers, state paths, lease schema, ledger records and journal sets each name the module that reads both spellings and the evidence for keeping them. The lock locator is shared by the frozen check, plan and variant fold, and the disposable `.simt/check.json` cache is retired in favour of `run check` (PR34).
 - `run()` resolves the same aliases and group defaults as the CLI, returns a thrown handler's failure as data with its exit code, remedy and domain code, and the CLI preserves those values instead of flattening every throw to exit 1. The generated own-repository workflow now says the repository adopts itself and names the findings that keep `simt check` red, rather than claiming it never did (PR35).
 - The suite is reproducible from a relocated shallow checkout: host Git identity, signing and injected config are removed, npm packing uses its own cache and config, test concurrency is fixed at four, and CI no longer asks for full history. The incremental-index wall-clock budget moves out of the correctness test into `scripts/bench-index.mjs`, and the SEA build has an explicit `SIMT_SEA_CACHE`. `npm run qualify:offline` and `npm run qualify:artifacts` separate the offline gate from wheel, SEA and built-binary qualification, with a manual workflow across the supported matrix (PR36).
+- An inline agent-hook override binds to the invocation that carries it: the `SIMT_ALLOW` a command carries is its own override, not the ambient one (PR38).
+- `simt brief` reports the mandatory proof units it selected, and a matched-0 caution survives a trimmed packet; `simt map` decides `matched` from the resolver score, names the no-match basis `unmatched`, and a body hit is context rather than the graph hub.
+- Dry-run refusals are reported in JSON: a missing worktree and staged work after a committed slice both name their reason under `--json`.
+- One containment check judges published claims, and a tree-wide skill path is no longer evidence for one named file.
 
 ## [0.11.0] — 2026-11-20
 

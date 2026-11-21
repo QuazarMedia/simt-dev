@@ -1,6 +1,6 @@
 # Plan 0005 — wire the knowledge doors into the default flows
 
-Status: **queued** · created 2026-11-07
+Status: **closed** — 3 row(s): 3 Complete · 2026-11-21
 
 ## Scope
 

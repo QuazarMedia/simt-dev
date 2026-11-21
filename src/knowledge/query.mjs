@@ -20,8 +20,8 @@
 import { EDGE_KINDS } from './claims.mjs';
 import { rank } from './rank.mjs';
 
-/** The declared authority bases, in the order ranking prefers them. Exported so a report can name them. */
-export const AUTHORITY_LEVELS = Object.freeze({ reviewed: 3, declared: 2, evidence: 1 });
+/** The declared authority bases, in the order ranking prefers them. */
+const AUTHORITY_LEVELS = Object.freeze({ reviewed: 3, declared: 2, evidence: 1 });
 
 const isText = (value) => typeof value === 'string' && value.length > 0;
 
@@ -50,7 +50,7 @@ export function citationOf(unit, artifact) {
 }
 
 /** The corpus units in the shape `rank` scores, with the artifact's declared metadata joined. */
-export function rankableUnits(corpus) {
+function rankableUnits(corpus) {
   const byPath = new Map((corpus?.artifacts ?? []).map((artifact) => [artifact.path, artifact]));
   return (corpus?.units ?? []).map((unit) => {
     const artifact = byPath.get(unit.path);

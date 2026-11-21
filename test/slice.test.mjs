@@ -18,7 +18,7 @@ import { test } from 'node:test';
 import { sliceCommand } from '../src/commands/slice.mjs';
 import { parse } from '../src/argv.mjs';
 import { reindex } from '../src/index/store.mjs';
-import { MANIFEST_FILE } from '../src/name.mjs';
+import { CLI, MANIFEST_FILE } from '../src/name.mjs';
 import { EXIT } from '../src/output/index.mjs';
 import { capture, git, tempDir } from './fixture.mjs';
 
@@ -160,7 +160,14 @@ test('an unrelated change in the main checkout refuses before any commit, row wr
 
   const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
   assert.notEqual(result.code, 0, 'an unrelated main-checkout change was accepted');
-  assert.match(result.stdout + result.stderr, /docs\/notes\.md/, 'the refusal did not name the unrelated file');
+  assert.match(
+    result.stderr,
+    new RegExp(
+      `^ERROR ${EXIT.USAGE} the main checkout has uncommitted changes \\(docs/notes\\.md\\), so the slice cannot be merged into it$`,
+      'm',
+    ),
+    `the refusal did not name the unrelated file: ${result.stderr}`,
+  );
 
   // Each step before the merge has one state change, so each has one witness: a late
   // guard would move the worktree HEAD (commit), the tracker bytes (row) or main HEAD
@@ -386,7 +393,11 @@ test('finish from inside the worktree refuses before it commits anything', async
 
   const result = await capture(() => sliceCommand('finish', ['A27'], { root: worktree, yes: true }));
   assert.notEqual(result.code, 0, 'finishing inside the worktree was accepted');
-  assert.match(result.stderr, /main checkout/);
+  assert.match(
+    result.stderr,
+    new RegExp(`^ERROR ${EXIT.USAGE} run ${CLI} slice finish from the main checkout, not the slice worktree$`, 'm'),
+    `the refusal named the wrong checkout: ${result.stderr}`,
+  );
   assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), before, 'a commit happened anyway');
 });
 

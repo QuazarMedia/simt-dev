@@ -312,6 +312,9 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // is in, and a decision that the tier is a property of the file rather than a list, without
   // naming the classifier, the runner and the assertion that holds the partition, would not
   // be an argument a maintainer can act on.
+  // ADR-202 joined because the ruling is ABOUT where a repository keeps its registry and
+  // which module answers a source's identity, so it names the path those sources live at and
+  // the files that implement the rule; a record that named neither would not be actionable.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -340,6 +343,7 @@ assert.deepEqual(leaking, [
     'ADR-135',
     'ADR-136',
     'ADR-137',
+    'ADR-202',
 ]);
 });
 

@@ -54,18 +54,41 @@ export async function locateSource(source, options = {}) {
 
   for (const candidate of candidates) {
     if (!existsSync(candidate.path)) continue;
-    let size;
+    let volume;
     try {
-      size = (await measureSkill(candidate.path)).bytes;
+      volume = await measureSkill(candidate.path);
     } catch {
       // A directory with no SKILL.md, or an unreadable path: not this source.
       continue;
     }
-    measured.push({ ...candidate, bytes: size });
-    // Declared bytes are the identity check. No declared bytes means the registry
-    // has nothing to verify against, so a size match cannot be claimed.
-    if (typeof source.bytes === 'number' && size === source.bytes) {
-      return { path: candidate.path, how: candidate.how, bytes: size, reason: null, candidates: measured };
+    measured.push({ ...candidate, bytes: volume.bytes, sha256: volume.sha256 });
+    // A declared digest is the identity check: two bodies of the same size are exactly
+    // the case a byte count cannot separate. Byte-only is the migration path, and a
+    // size match is claimed only where the registry declares one.
+    if (typeof source.sha256 === 'string') {
+      if (volume.sha256 === source.sha256) {
+        return {
+          path: candidate.path,
+          how: candidate.how,
+          bytes: volume.bytes,
+          sha256: volume.sha256,
+          identity: 'sha256',
+          reason: null,
+          candidates: measured,
+        };
+      }
+      continue;
+    }
+    if (typeof source.bytes === 'number' && volume.bytes === source.bytes) {
+      return {
+        path: candidate.path,
+        how: candidate.how,
+        bytes: volume.bytes,
+        sha256: volume.sha256,
+        identity: 'bytes',
+        reason: null,
+        candidates: measured,
+      };
     }
   }
 
@@ -73,7 +96,14 @@ export async function locateSource(source, options = {}) {
     path: null,
     how: null,
     bytes: null,
-    reason: measured.length === 0 ? 'no candidate location exists' : 'no candidate has the declared size',
+    sha256: null,
+    identity: null,
+    reason:
+      measured.length === 0
+        ? 'no candidate location exists'
+        : typeof source.sha256 === 'string'
+          ? 'no candidate matches the declared sha256'
+          : 'no candidate has the declared size',
     candidates: measured,
   };
 }

@@ -9,6 +9,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { measureSkill } from '../src/graph/load.mjs';
+import { locateSource } from '../src/resolve/source.mjs';
 import { skillsDir, wrapFlat } from '../src/commands/skillsinstall.mjs';
 import { readManifest, MANIFEST } from '../src/projection/manifest.mjs';
 import { skillWorkspace, workspaceEnv, cmd, keepTemp } from './fixture.mjs';
@@ -57,6 +58,30 @@ test('measureSkill: a directory with reference .md files is not a flat skill', a
   const measured = await measureSkill(join(dir, 's'));
   assert.equal(measured.flat, false);
   assert.equal(measured.files, 2);
+});
+
+test('locateSource: a same-size body is rejected when the declaration names a digest (PR24)', async () => {
+  // The defect: a source's identity was its byte count, so a different body of the
+  // same length satisfied the declaration and was installed under the right name.
+  const dir = await scratch({ 's/SKILL.md': 'AAAA\n' });
+  const measured = await measureSkill(join(dir, 's'));
+  const source = { repo: 'simt-dev', path: 's', bytes: measured.bytes, sha256: measured.sha256, role: 'canonical' };
+
+  const found = await locateSource(source, { root: dir });
+  assert.equal(found.path, join(dir, 's'));
+  assert.equal(found.identity, 'sha256');
+
+  // Same length, different content: the count still matches, the identity does not.
+  await writeFile(join(dir, 's', 'SKILL.md'), 'BBBB\n');
+  const rejected = await locateSource(source, { root: dir });
+  assert.equal(rejected.path, null, 'a same-size substitution was accepted');
+  assert.match(rejected.reason, /sha256/);
+
+  // An older registry declares bytes only: it still resolves, and says which identity
+  // answered.
+  const legacy = await locateSource({ ...source, sha256: undefined }, { root: dir });
+  assert.equal(legacy.path, join(dir, 's'));
+  assert.equal(legacy.identity, 'bytes');
 });
 
 test('measureSkill: a flat .md file is still reported as flat', async () => {

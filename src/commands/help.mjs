@@ -340,8 +340,9 @@ const FLAGS = `--json                 structured output (compact; one document, 
                         (default: SIMT_DEV_WORKSPACE, then the user config
                         file, then the sibling heuristic if it verifies)
 --registry <path>       which skill registry to read (skills commands and
-                        graph lint; default: SIMT_REGISTRY, then the checkout's
-                        own graph/skills.graph.json, then the one member of the
+                        graph lint; default: SIMT_REGISTRY, then this repo's
+                        .simt/skills.graph.json, then the checkout's own
+                        graph/skills.graph.json, then the one member of the
                         workspace that holds one)
 --concurrency <n>       compare: rows built at once (default 4, or
                         SIMT_CONCURRENCY; order-preserving whatever it is)

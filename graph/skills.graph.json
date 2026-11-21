@@ -320,6 +320,7 @@
           "repo": "simt-dev",
           "path": "skills/simt-commands",
           "bytes": 9713,
+          "sha256": "4214d3cee42e1251ce6485418a365b2383b73007cc7fa4f2f3db68be9a464bb5",
           "role": "canonical"
         }
       ],

@@ -13,11 +13,12 @@
 // are frequently symlink pairs, so the same body is reachable by two paths; sources
 // are measured once per declared source and never double-counted.
 
+import { createHash } from 'node:crypto';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
-import { PACKAGE_NAME } from '../name.mjs';
+import { MANIFEST_FILE, PACKAGE_NAME } from '../name.mjs';
 import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 import { matchesGlob, syntheticPathFor } from '../resolve/resolve.mjs';
 import { tokenize } from '../text/tokens.mjs';
@@ -32,6 +33,20 @@ import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.m
  */
 function defaultRegistryPath() {
   return join(PACKAGE_ROOT, 'graph', 'skills.graph.json');
+}
+
+/**
+ * A registry the repository being operated on owns.
+ *
+ * ADR-061 makes the registry workspace data; a single repository with no workspace still
+ * needs a way to say which bodies it holds. `.simt/skills.graph.json` is that path -
+ * inside the repository, beside the other adopted state, and never in the package's
+ * published files. It outranks the source-checkout catalogue because the repository the
+ * reader named is more specific than the checkout the binary happens to live in.
+ */
+function repoRegistryPath(flags) {
+  const root = flags?.root ? resolve(process.cwd(), String(flags.root)) : process.cwd();
+  return join(root, '.simt', 'skills.graph.json');
 }
 
 /**
@@ -54,6 +69,8 @@ function defaultRegistryPath() {
  * @returns {Promise<{where: string|null, errors: string[], workspace: {root: string|null, source: string, detail: string}|null}>}
  */
 async function defaultRegistry(flags) {
+  const local = repoRegistryPath(flags);
+  if (existsSync(local)) return { where: local, errors: [], workspace: null };
   const own = defaultRegistryPath();
   if (existsSync(own)) return { where: own, errors: [], workspace: null };
 
@@ -128,14 +145,57 @@ async function defaultRegistry(flags) {
  * the one resolution, which is where the cost was.
  */
 const workspacePromises = new Map();
-export function workspace(flags = {}) {
+const MAX_WORKSPACE_CACHE = 16;
+
+/**
+ * The revision of a file that decides a workspace answer, or `absent`.
+ *
+ * Content, not mtime: a config edited twice within a filesystem timestamp tick is
+ * exactly the case a cache keyed on time would keep serving, and these files are a few
+ * hundred bytes. Reading one absent path costs a failed `open`, not a parse.
+ */
+async function revisionOf(path) {
+  try {
+    return createHash('sha1').update(await readFile(path)).digest('hex');
+  } catch {
+    return 'absent';
+  }
+}
+
+/** The first user config a reader would actually load, by the same precedence. */
+async function userConfigRevision() {
+  const { configPaths } = await import('../workspace.mjs');
+  for (const path of configPaths()) {
+    const revision = await revisionOf(path);
+    if (revision !== 'absent') return `${path}:${revision}`;
+  }
+  return 'absent';
+}
+
+/**
+ * The workspace for these inputs, cached by the inputs that decide it - including the
+ * current revision of the files it reads.
+ *
+ * The cache used to be keyed by the cwd and environment alone, so a `simt.json` or user
+ * config edited between two calls in one process kept answering the first value. The key
+ * now carries a digest of both files, and the map is bounded so a long-lived process that
+ * walks many directories does not retain every answer.
+ */
+export async function workspace(flags = {}) {
   const key = JSON.stringify([
     flags?.workspace ?? null,
     process.env.SIMT_DEV_WORKSPACE ?? null,
     process.env.XDG_CONFIG_HOME ?? null,
     process.cwd(),
+    await revisionOf(join(process.cwd(), MANIFEST_FILE)),
+    await userConfigRevision(),
   ]);
-  if (!workspacePromises.has(key)) workspacePromises.set(key, resolveWorkspace(flags));
+  if (!workspacePromises.has(key)) {
+    if (workspacePromises.size >= MAX_WORKSPACE_CACHE) {
+      workspacePromises.delete(workspacePromises.keys().next().value);
+    }
+    workspacePromises.set(key, resolveWorkspace(flags));
+  }
   return workspacePromises.get(key);
 }
 
@@ -211,6 +271,17 @@ export async function loadRegistry(path = null, flags = {}) {
 
   for (const error of lint.sync) errors.push(error);
   for (const warning of lint.warnings) warnings.push(warning);
+
+  // The migration path for a byte-only registry: the old check still runs, but the
+  // reader learns that a same-size body can satisfy a declaration whose whole identity
+  // is a count (ADR-202). One warning for the file, not one per source.
+  const declared = (registry.skills ?? []).flatMap((skill) => skill.sources ?? []);
+  const byteOnly = declared.filter((source) => source.sha256 === undefined).length;
+  if (byteOnly > 0) {
+    warnings.push(
+      `${byteOnly} of ${declared.length} declared sources carry no sha256; their identity is a byte count, so a same-size body can satisfy them`,
+    );
+  }
 
   const ws = await workspace(flags);
 
@@ -346,6 +417,12 @@ export function lintRegistry(registry) {
     const at = skill.name ?? '<unnamed>';
 
     if (!skill.summary) err(`${at}: missing summary`);
+    for (const source of skill.sources ?? []) {
+      if (source.sha256 === undefined) continue;
+      if (typeof source.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(source.sha256)) {
+        err(`${at}: source ${source.repo}/${source.path} sha256 must be 64 lowercase hex characters`);
+      }
+    }
     if (!Array.isArray(skill.capabilities) || skill.capabilities.length === 0) {
       err(`${at}: needs at least one capability`);
     }
@@ -657,6 +734,13 @@ async function lintSourcesOnDisk(registry, workspaceRoot, { members }) {
           `${at}: declared ${source.bytes} bytes, on disk ${measured.bytes} (${delta > 0 ? '+' : ''}${delta})`,
         );
       }
+      // A digest is the identity when one is declared: two bodies of the same size are
+      // the case a byte count cannot separate, and this is the check that does.
+      if (typeof source.sha256 === 'string' && source.sha256 !== measured.sha256) {
+        errors.push(
+          `${at}: declared sha256 ${source.sha256.slice(0, 12)}…, on disk ${measured.sha256.slice(0, 12)}…`,
+        );
+      }
       if (!source.bytes) warnings.push(`${at}: no declared bytes to compare against`);
     }
   }
@@ -676,28 +760,30 @@ export async function measureSkill(full) {
   const info = await stat(full);
 
   if (info.isFile()) {
-    const bytes = (await readFile(full)).byteLength;
-    return { bytes, files: 1, flat: true };
+    const data = await readFile(full);
+    return { bytes: data.byteLength, files: 1, flat: true, sha256: digestOfFiles([['', data]]) };
   }
   if (!info.isDirectory()) {
     throw Object.assign(new Error(`${full} is neither a file nor a directory`), { code: 'NOT_A_SKILL' });
   }
 
-  let bytes = 0;
-  let files = 0;
-  const walk = async (dir) => {
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
+  const contents = [];
+  const walk = async (dir, prefix) => {
+    const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    for (const entry of entries) {
       const child = join(dir, entry.name);
+      const rel = prefix === '' ? entry.name : `${prefix}/${entry.name}`;
       if (entry.isDirectory()) {
-        await walk(child);
+        await walk(child, rel);
         continue;
       }
-      const data = await readFile(child);
-      bytes += data.byteLength;
-      files += 1;
+      contents.push([rel, await readFile(child)]);
     }
   };
-  await walk(full);
+  await walk(full, '');
+  const bytes = contents.reduce((sum, [, data]) => sum + data.byteLength, 0);
+  const files = contents.length;
+  const sha256 = digestOfFiles(contents);
 
   // Confirm the entry point exists, because a directory of reference files
   // without SKILL.md is not a skill.
@@ -717,7 +803,21 @@ export async function measureSkill(full) {
     throw Object.assign(new Error(`${full} has no SKILL.md entry point`), { code: 'NO_SKILL_MD' });
   }
 
-  return { bytes, files, flat: false };
+  return { bytes, files, flat: false, sha256 };
+}
+
+/**
+ * One digest over a skill body: every file's relative path, length and bytes, in sorted
+ * order. Path and length are in the hash so moving a byte between two files or renaming
+ * one changes it; the content is in the hash so two same-size bodies do not collide.
+ */
+function digestOfFiles(files) {
+  const hash = createHash('sha256');
+  for (const [rel, data] of [...files].sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0))) {
+    hash.update(`${rel}\0${data.byteLength}\0`, 'utf8');
+    hash.update(data);
+  }
+  return hash.digest('hex');
 }
 
 function duplicates(list) {

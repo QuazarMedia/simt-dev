@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -260,6 +260,76 @@ test('lint: reports a missing file rather than throwing', async () => {
   const { ok, errors } = await loadRegistry('/definitely/not/a/registry.json');
   assert.equal(ok, false);
   assert.match(errors[0], /unreadable|invalid JSON/);
+});
+
+test('registry: a repository-local registry outranks the checkout catalogue (PR24)', async () => {
+  // ADR-061 makes the registry workspace data, and a single repository with no
+  // workspace still owns one. `.simt/skills.graph.json` is inside the repository the
+  // reader named, which is more specific than the checkout the binary lives in.
+  const dir = await mkdtemp(join(tmpdir(), 'simt-reg-local-'));
+  try {
+    await mkdir(join(dir, '.simt'), { recursive: true });
+    const local = join(dir, '.simt', 'skills.graph.json');
+    await writeFile(local, REGISTRY);
+    const found = await loadRegistry(null, { root: dir });
+    assert.equal(found.path, local, 'the repository-local registry was not the one read');
+    assert.equal(found.ok, true, found.errors.join('\n'));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('CLI: the source CLI reads the repository-local registry, and says which one (PR24)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'simt-reg-local-cli-'));
+  try {
+    await mkdir(join(dir, '.simt'), { recursive: true });
+    const local = join(dir, '.simt', 'skills.graph.json');
+    await writeFile(local, REGISTRY);
+    const { code, stdout } = await runCli(['graph', 'lint', '--root', dir, '--json']);
+    assert.equal(code, 0, stdout);
+    assert.equal(JSON.parse(stdout).registry, local);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('registry: a declared digest is checked, because a byte count cannot separate same-size bodies (PR24)', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'simt-reg-digest-'));
+  try {
+    const g = clone();
+    const source = g.skills.find((s) => s.name === 'simt-commands').sources[0];
+    source.sha256 = '0'.repeat(64);
+    const reg = join(dir, 'registry.json');
+    await writeFile(reg, JSON.stringify(g));
+    const { ok, errors } = await loadRegistry(reg);
+    assert.equal(ok, false, 'a wrong digest passed the load');
+    assert.ok(
+      errors.some((e) => e.includes('simt-commands') && /declared sha256/.test(e)),
+      `expected a digest error, got: ${errors.join('\n')}`,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test('registry: byte-only sources keep working and say they are byte-only (PR24)', async () => {
+  // The migration path: an older registry is still readable, and the one warning
+  // names the identity it actually has so the reader can add a digest.
+  const dir = await mkdtemp(join(tmpdir(), 'simt-reg-bytes-'));
+  try {
+    const g = clone();
+    for (const skill of g.skills) for (const source of skill.sources ?? []) delete source.sha256;
+    const reg = join(dir, 'registry.json');
+    await writeFile(reg, JSON.stringify(g));
+    const { ok, warnings } = await loadRegistry(reg);
+    assert.equal(ok, true, 'a byte-only registry stopped loading');
+    assert.ok(
+      warnings.some((warning) => /carry no sha256/.test(warning)),
+      `expected the byte-only warning, got: ${warnings.join('\n')}`,
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('registry: --registry flag and SIMT_REGISTRY name the file (Q37)', async () => {

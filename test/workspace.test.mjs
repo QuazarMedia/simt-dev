@@ -18,6 +18,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
+  CONFIG_DIR,
   CONFIG_FILE,
   PACKAGE_ROOT,
   WORKSPACE_REMEDY,
@@ -25,6 +26,7 @@ import {
   readUserConfig,
   resolveWorkspace,
 } from '../src/workspace.mjs';
+import { workspace } from '../src/graph/load.mjs';
 import { skillWorkspace, workspaceEnv } from './fixture.mjs';
 import { simt as simtCli } from './fixture.mjs';
 
@@ -415,6 +417,36 @@ test('CLI: without a workspace the catalogue still lists every skill, with one l
   // One line about the workspace, not one ENOENT per skill.
   const noise = stdout.split('\n').filter((l) => l.includes('ENOENT'));
   assert.deepEqual(noise, [], `degraded mode must not emit ENOENTs: ${noise.join('\n')}`);
+});
+
+test('workspace: an edit between two calls in one process is answered fresh (PR24)', async () => {
+  // The cache was keyed by cwd and environment alone, so a config edited between two
+  // requests in one process kept answering the first value. The key now carries the
+  // revision of the config and the manifest it reads.
+  const repo = await scratch();
+  const home = await scratch();
+  const wsA = join(await scratch(), 'a');
+  const wsB = join(await scratch(), 'b');
+  await mkdir(wsA, { recursive: true });
+  await mkdir(wsB, { recursive: true });
+  const config = join(home, CONFIG_DIR, CONFIG_FILE);
+  await mkdir(dirname(config), { recursive: true });
+  await writeFile(config, JSON.stringify({ workspace: wsA }), 'utf8');
+
+  const prevCwd = process.cwd();
+  const prevXdg = process.env.XDG_CONFIG_HOME;
+  try {
+    process.chdir(repo);
+    process.env.XDG_CONFIG_HOME = home;
+    assert.equal((await workspace({})).root, wsA);
+    // Same length, different content: the second answer must not be the cached first.
+    await writeFile(config, JSON.stringify({ workspace: wsB }), 'utf8');
+    assert.equal((await workspace({})).root, wsB, 'the cache kept serving the pre-edit config');
+  } finally {
+    process.chdir(prevCwd);
+    if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
+    else process.env.XDG_CONFIG_HOME = prevXdg;
+  }
 });
 
 test('CLI: graph lint without a workspace warns and still lints the registry', async () => {

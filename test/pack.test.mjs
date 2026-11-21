@@ -177,6 +177,26 @@ test('the installed tool ships no registry, and says so instead of serving one',
   assert.match(lint.out, /graph lint <path-to-registry>/);
 });
 
+test('an installed consumer reads its own repository-local registry (PR24)', async () => {
+  // The packed CLI holds no estate catalogue (ADR-061), and a single repository still
+  // needs to name the bodies it holds. `.simt/skills.graph.json` is that path, and it
+  // outranks the package's absence without reaching into the source checkout.
+  const root = join(stage, `local-registry-${run1++}`);
+  // No `.git`: a lint reads a registry and a body, and copying a live object store is
+  // both unnecessary and racy.
+  await cp(join(stage, 'seed'), root, {
+    recursive: true,
+    filter: (src) => !/(^|\/)\.git(\/|$)/.test(src),
+  });
+  const registryPath = join(root, '.simt', 'skills.graph.json');
+  await mkdir(dirname(registryPath), { recursive: true });
+  await cp(join(PACKAGE_ROOT, 'graph', 'skills.graph.json'), registryPath);
+
+  const lint = await simt(root, ['graph', 'lint', '--root', '.']);
+  assert.equal(lint.code, 0, lint.out);
+  assert.match(lint.out, /\.simt[/\\]skills\.graph\.json/);
+});
+
 test('an explicitly named registry wins over the absence', async () => {
   // The installed package ships no registry, so a reader outside this workspace has
   // none by default. The way out is to name one: an explicit path wins over

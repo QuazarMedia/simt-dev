@@ -2,8 +2,14 @@
 // The release step that rewrites the formula for a tagged version.
 //
 // Usage:
+//   node scripts/release-formula.mjs --descriptor=release/descriptor.json
 //   node scripts/release-formula.mjs --version=0.5.0 \
 //     --sha256-darwin-arm64=<hex> --sha256-darwin-x64=<hex> --sha256-linux-x64=<hex>
+//
+// `--descriptor` is the channel workflow's form: the release was resolved once, and
+// the checksums this script writes are that resolution's - the bytes its resolve job
+// downloaded from the release and hashed. The explicit flags stay for a maintainer
+// rendering from bytes they downloaded themselves.
 //
 // The formula downloads the release binary for the platform it runs on, so a
 // release has three url/sha256 pairs to patch - one per target. The sha256s
@@ -20,6 +26,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { TARGETS, releaseUrl } from '../src/distribute/release.mjs';
+import { checkDescriptor } from '../src/distribute/descriptor.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const FORMULA = join(ROOT, 'Formula', 'simt-dev.rb');
@@ -30,9 +37,10 @@ function die(msg) {
 }
 
 function parseArgs(argv) {
-  const args = { version: null, sha256s: {} };
+  const args = { version: null, sha256s: {}, descriptor: null };
   for (const arg of argv) {
-    if (arg.startsWith('--version=')) args.version = arg.slice('--version='.length);
+    if (arg.startsWith('--descriptor=')) args.descriptor = arg.slice('--descriptor='.length);
+    else if (arg.startsWith('--version=')) args.version = arg.slice('--version='.length);
     else if (arg.startsWith('--sha256-')) {
       const eq = arg.indexOf('=', '--sha256-'.length);
       if (eq === -1) die(`--${arg.slice(2, eq === -1 ? arg.length : eq)} needs a value`);
@@ -43,11 +51,34 @@ function parseArgs(argv) {
       args.sha256s[target] = value;
     } else die(`unknown argument "${arg}"`);
   }
+  if (args.descriptor) {
+    if (args.version || Object.keys(args.sha256s).length > 0) {
+      die('--descriptor cannot be combined with --version or --sha256-*; one release, one source of truth');
+    }
+    return args;
+  }
   if (!args.version || !/^\d+\.\d+\.\d+$/.test(args.version)) die('--version=<semver> is required');
   for (const target of TARGETS) {
     if (!args.sha256s[target]) die(`--sha256-${target}=<hex> is required`);
   }
   return args;
+}
+
+// The descriptor is validated as a whole before any of it is trusted, because the
+// formula is what a `brew install` follows and a half-read descriptor would write
+// checksums for a release nobody resolved.
+function fromDescriptor(path) {
+  let descriptor;
+  try {
+    descriptor = JSON.parse(readFileSync(path, 'utf8'));
+  } catch (error) {
+    die(`could not read the release descriptor at ${path}: ${error.message}`);
+  }
+  const problems = checkDescriptor(descriptor);
+  if (problems.length > 0) die(problems);
+  const sha256s = {};
+  for (const asset of descriptor.assets) sha256s[asset.target] = asset.sha256;
+  return { version: descriptor.version, sha256s };
 }
 
 function escapeRegExp(s) {
@@ -65,7 +96,8 @@ function patchPair(text, target, url, sha256) {
   return text.replace(shaRe, `$1sha256 "${sha256}"`);
 }
 
-const { version, sha256s } = parseArgs(process.argv.slice(2));
+const parsed = parseArgs(process.argv.slice(2));
+const { version, sha256s } = parsed.descriptor ? fromDescriptor(parsed.descriptor) : parsed;
 let text = readFileSync(FORMULA, 'utf8');
 for (const target of TARGETS) {
   text = patchPair(text, target, releaseUrl(version, target), sha256s[target]);

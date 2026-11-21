@@ -250,6 +250,39 @@ test('packaging: nothing in python/ is shipped to npm', async () => {
   assert.ok(!pkg.files.includes('python'), 'python/ must not be in the npm tarball');
 });
 
+test('packaging: the channels resolve one release and serialise per destination (PR27)', async () => {
+  // The defect: each channel expanded `latest` itself, so a release landing between
+  // them split one run across versions, and `0.7.0` and `latest` named the same
+  // artifact under two concurrency keys. One resolve job now answers once, each
+  // destination queues on the RESOLVED version, and no channel reads npm itself.
+  const channels = await readFile(new URL('../.github/workflows/publish-channels.yml', import.meta.url), 'utf8');
+  assert.match(channels, /^  resolve:/m, 'there must be one resolution job');
+  assert.ok(!/npm view simt-dev version/.test(channels), 'a channel still resolved `latest` on its own');
+  assert.match(channels, /group: publish-pypi-\$\{\{ needs\.resolve\.outputs\.version \}\}/);
+  assert.match(channels, /group: publish-brew-\$\{\{ needs\.resolve\.outputs\.version \}\}/);
+  assert.equal(
+    (channels.match(/--recheck=release\/descriptor\.json/g) ?? []).length,
+    2,
+    'each channel must verify the descriptor before promoting',
+  );
+  assert.match(channels, /release-formula\.mjs --descriptor=release\/descriptor\.json/);
+  assert.match(channels, /formulaChecksums/, 'the tap verification must compare hashes, not just the version');
+});
+
+test('packaging: the dispatch value never reaches a shell through interpolation (PR27)', async () => {
+  // `${{ inputs.version }}` inside a `run:` block is text from a form reaching shell
+  // before anything validated it. It is passed as an environment variable exactly
+  // once, to the script whose first act is to refuse anything but a concrete x.y.z.
+  const channels = await readFile(new URL('../.github/workflows/publish-channels.yml', import.meta.url), 'utf8');
+  // Comments may quote the expression - the explanation of why it is not interpolated
+  // names it - so only live lines count.
+  const uses = channels
+    .split('\n')
+    .filter((line) => !/^\s*#/.test(line) && line.includes('${{ inputs.version }}'))
+    .map((line) => line.trim());
+  assert.deepEqual(uses, ['INPUT_VERSION: ${{ inputs.version }}']);
+});
+
 test('packaging: brew style lints the formula this release rendered (A32)', async () => {
   const channels = await readFile(new URL('../.github/workflows/publish-channels.yml', import.meta.url), 'utf8');
   const rendered = channels.indexOf('scripts/release-formula.mjs');

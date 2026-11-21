@@ -21,15 +21,28 @@
 # The version is an INPUT, not the ref. That is the whole point of this file:
 # on a dispatch, `github.ref_name` is the branch the form defaulted to, and the
 # version guard would compare a branch name against package.json (ADR-058
-# ruling 7). Both jobs below check out tag v<version> itself and refuse to run
-# when the tag is absent or disagrees with the version the tag's package.json
-# claims - so the form field is the only thing describing the release, and a
-# wrong form field fails loudly instead of publishing a side channel of a
-# version this repository never claimed.
+# ruling 7). Every job checks out tag v<version> itself and refuses to run when
+# the tag is absent or disagrees with the version the tag's package.json claims
+# - so the form field is the only thing describing the release, and a wrong
+# form field fails loudly instead of publishing a side channel of a version
+# this repository never claimed.
 #
-# The field may be left as `latest` (its default) or emptied: each job's first
-# step resolves that to the concrete version the npm registry serves, and only
-# the resolved value reaches the guard - a channel named `latest` never does.
+# ONE resolution, then data (review 0005 PR27, ADR-203). The channels used to
+# expand `latest` themselves, in three jobs. A release landing between them split
+# one run across two versions, and `0.7.0` and `latest` named the same artifact
+# under two different concurrency keys - so two runs could promote one version
+# concurrently while neither was waiting for the other. The `resolve` job now
+# answers the question once: a concrete version, the commit the tag names, and
+# the sha256 of every release asset it downloaded and hashed. That JSON travels
+# to each channel as a job output, each channel re-checks it before promoting
+# (npm's newest version, the tag, the bytes), and serialisation is per
+# DESTINATION on the resolved version - `publish-pypi-0.7.0`, not
+# `publish-channels-latest`.
+#
+# The dispatch field never reaches a shell through `${{ }}` interpolation. It is
+# passed as an environment variable to a script whose first act is to refuse
+# everything that is not a concrete x.y.z after trimming; `latest` is a request
+# the script expands, not a value any command sees.
 #
 # Each channel has its own prerequisite, and each job checks it before
 # publishing, naming the remedy when it is unmet (ADR-058 ruling 7):
@@ -59,8 +72,7 @@ on:
       # The version of the release whose stage a maintainer just approved,
       # without the `v` the tag wears. `latest` - the default - and an empty
       # field both mean "whatever npm serves as newest"; the resolution lands
-      # in the job's environment before the guard runs, so the guard always
-      # compares a concrete version against the tag.
+      # in one job's outputs as a concrete version before any channel reads it.
       version:
         description: 'the simt-dev version live on npm, or latest for the newest published version'
         required: false
@@ -82,21 +94,51 @@ on:
         type: boolean
         default: true
 
-concurrency:
-  # Serial rather than cancel: two dispatches for the same or neighbouring
-  # versions would otherwise race to upload the artefacts, and PyPI has no way
-  # to describe a partial upload. A cancelled release is recoverable; a torn
-  # one is not.
-  group: publish-channels-${{ inputs.version }}
-  cancel-in-progress: false
-
 jobs:
+  # -------------------------------------------------------------------------
+  # One resolution
+  resolve:
+    name: resolve one release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.d.outputs.version }}
+      commit: ${{ steps.d.outputs.commit }}
+      id: ${{ steps.d.outputs.id }}
+      descriptor: ${{ steps.d.outputs.descriptor }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: resolve and validate the whole release
+        # The form value is an ENVIRONMENT VARIABLE, never interpolated into the
+        # script: `${{ inputs.version }}` inside a `run:` block is text from a
+        # dispatch form landing in shell before anything validated it. The
+        # script refuses anything but a concrete x.y.z, expands `latest` from the
+        # registry, peels the tag to its commit, checks the version is live on
+        # npm, downloads every target's asset to hash it, and compares the tap's
+        # formula when it already names this version.
+        #
+        # Its evidence lines are printed for the run log, and the JSON is the job
+        # output every channel reads. Nothing downstream resolves anything.
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: node scripts/release-descriptor.mjs --print
+
   # -------------------------------------------------------------------------
   # PyPI
   publish-pypi:
     name: publish to PyPI
+    needs: [resolve]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Serialised by DESTINATION on the RESOLVED version: a `latest` run and an
+    # `0.7.0` run that resolve to the same release queue behind each other
+    # instead of racing to upload the same wheel.
+    concurrency:
+      group: publish-pypi-${{ needs.resolve.outputs.version }}
+      cancel-in-progress: false
     # Runs only when the dispatch ticked this channel. An unchecked box skips
     # the job - it does not fail, so a brew-only run is green end to end.
     if: ${{ inputs['publish-pypi'] }}
@@ -110,65 +152,43 @@ jobs:
       # Trusted publishing exchanges this run's OIDC identity for an upload
       # session; PyPI rejects the exchange without it.
       id-token: write
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      DESCRIPTOR: ${{ needs.resolve.outputs.descriptor }}
     steps:
-      - name: resolve the version
-        # `latest` (the form's default) and an empty field both mean "whatever
-        # npm serves as newest". The resolution lands in the job's environment
-        # before anything else reads the version, so the checkout, the guard
-        # and the channels all name the concrete release.
-        run: |
-          set -eu
-          version="${{ inputs.version }}"
-          if [ -z "$version" ] || [ "$version" = "latest" ]; then
-            version="$(npm view simt-dev version)"
-          fi
-          echo "resolved version: ${version}"
-          echo "RELEASE_VERSION=${version}" >> "$GITHUB_ENV"
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # The tagged tree, not whatever the dispatch form pointed at: the
-          # wheel carries the bytes of the release the input names, and those
-          # bytes have an address - the tag publish.yml stamped.
-          ref: v${{ env.RELEASE_VERSION }}
+          # wheel carries the bytes of the release the resolution named, and
+          # those bytes have an address - the tag publish.yml stamped.
+          ref: v${{ needs.resolve.outputs.version }}
+
+      - name: the release this run resolved has not moved
+        # A descriptor is a claim about a moving world. This re-reads npm's
+        # newest version, the tag's commit and every asset's bytes, and refuses
+        # when any of them disagrees with what the resolve job recorded - the
+        # `latest` alias is the case that matters, because a release published
+        # between the two jobs would otherwise promote a version this run never
+        # resolved.
+        run: |
+          set -eu
+          mkdir -p release
+          printf '%s' "$DESCRIPTOR" > release/descriptor.json
+          node scripts/release-descriptor.mjs --recheck=release/descriptor.json --print
 
       - name: the tag is this package's version
         # The dispatch input replaces the tag-ref comparison publish.yml gets
         # for free from its push event. It is the same guard pointed the other
-        # way: FORM INPUT against package.json, on the tagged tree, so a
+        # way: RESOLVED version against package.json, on the tagged tree, so a
         # typo'd or stale version fails here and not at PyPI.
         run: |
           set -eu
           rendered="$(node -p "require('./package.json').version")"
-          if [ "${{ env.RELEASE_VERSION }}" != "$rendered" ]; then
-            echo "::error::version ${{ env.RELEASE_VERSION }} does not match package.json version ${rendered} on tag v${{ env.RELEASE_VERSION }}"
+          if [ "$VERSION" != "$rendered" ]; then
+            echo "::error::version $VERSION does not match package.json version ${rendered} on tag v$VERSION"
             exit 1
           fi
-          echo "v${{ env.RELEASE_VERSION }} matches package.json"
-
-      - name: the npm channel has this version
-        # The wheel and the tarball carry the same bytes, and a PyPI release
-        # whose npm counterpart is still sitting in a staging area is a version
-        # where `pip install` and `npm install` give different answers - or,
-        # more precisely, where one of them answers nothing at all.
-        #
-        # This step is what makes running this workflow the intended flow
-        # rather than a trick somebody discovers: with the input named and the
-        # stage still unapproved, the job says so and names the approval.
-        run: |
-          set -eu
-          version="${{ env.RELEASE_VERSION }}"
-          if npm view "simt-dev@${version}" version >/dev/null 2>&1; then
-            echo "simt-dev@${version} is live on npm"
-          else
-            echo "::error::simt-dev@${version} is not on the npm registry."
-            echo "  The npm channel publishes by STAGING, and a staged version is"
-            echo "  not installable until a maintainer approves it. Approve the"
-            echo "  stage, then run this workflow again:"
-            echo "    npm stage list"
-            echo "    npm stage approve <stage-id>"
-            exit 1
-          fi
+          echo "v$VERSION matches package.json"
 
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
@@ -201,75 +221,74 @@ jobs:
         # rather than a broken release.
         continue-on-error: false
 
+      - name: the registry serves the wheel this run built
+        # The other direction of the parity check: what PyPI now installs is
+        # byte-for-byte what this run built. A registry that re-packed, or an
+        # upload that uploaded something else, is invisible in a green publish
+        # step and visible here.
+        run: |
+          set -eu
+          python -m pip download --no-deps --dest /tmp/served "simt-dev==${VERSION}" >/dev/null
+          built="$(sha256sum dist/*.whl | cut -d' ' -f1)"
+          served="$(sha256sum /tmp/served/*.whl | cut -d' ' -f1)"
+          if [ "$built" != "$served" ]; then
+            echo "::error::PyPI serves simt-dev ${VERSION} as ${served}, but this run built ${built}"
+            exit 1
+          fi
+          echo "PyPI serves the wheel this run built (${built})"
+
   # -------------------------------------------------------------------------
   # Homebrew
   publish-brew:
     name: publish to Homebrew
+    needs: [resolve]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Per destination, on the resolved version - see the PyPI job.
+    concurrency:
+      group: publish-brew-${{ needs.resolve.outputs.version }}
+      cancel-in-progress: false
     # Runs only when the dispatch ticked this channel. An unchecked box skips
     # the job - it does not fail, so a PyPI-only run is green end to end.
     if: ${{ inputs['publish-brew'] }}
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      DESCRIPTOR: ${{ needs.resolve.outputs.descriptor }}
+      TAP: ${{ vars.HOMEBREW_TAP || 'QuazarMedia/homebrew-tap' }}
     steps:
-      - name: resolve the version
-        # The same resolution as the PyPI job: the form field may be `latest`
-        # or empty, and only the concrete version the npm registry serves
-        # reaches the guard and the tap.
-        run: |
-          set -eu
-          version="${{ inputs.version }}"
-          if [ -z "$version" ] || [ "$version" = "latest" ]; then
-            version="$(npm view simt-dev version)"
-          fi
-          echo "resolved version: ${version}"
-          echo "RELEASE_VERSION=${version}" >> "$GITHUB_ENV"
-
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # The tagged tree, for the same reason PyPI's checkout is: the
-          # formula is rendered from the release's own source of truth.
-          ref: v${{ env.RELEASE_VERSION }}
+          # The tagged tree, for the same reason PyPI's checkout is: the formula
+          # is rendered from the release's own source of truth.
+          ref: v${{ needs.resolve.outputs.version }}
+
+      - name: the release this run resolved has not moved
+        # The resolve job downloaded and hashed every asset, and compared the
+        # tap's formula against them when it already named this version. Doing
+        # it again here is the same guard as PyPI's, plus the tap: a formula
+        # written by a concurrent run between resolution and now would be a
+        # checksum this run did not resolve.
+        run: |
+          set -eu
+          mkdir -p release
+          printf '%s' "$DESCRIPTOR" > release/descriptor.json
+          node scripts/release-descriptor.mjs \
+            --recheck=release/descriptor.json \
+            --tap="https://raw.githubusercontent.com/${TAP}/main/Formula/simt-dev.rb" \
+            --print
 
       - name: the tag is this package's version
-        # Same guard as the PyPI job: the form field is compared against the
-        # version the tagged package.json claims, and a mismatch stops the
+        # Same guard as the PyPI job: the resolved version is compared against
+        # the version the tagged package.json claims, and a mismatch stops the
         # job before a formula can name a release this repository never made.
         run: |
           set -eu
           rendered="$(node -p "require('./package.json').version")"
-          if [ "${{ env.RELEASE_VERSION }}" != "$rendered" ]; then
-            echo "::error::version ${{ env.RELEASE_VERSION }} does not match package.json version ${rendered} on tag v${{ env.RELEASE_VERSION }}"
+          if [ "$VERSION" != "$rendered" ]; then
+            echo "::error::version $VERSION does not match package.json version ${rendered} on tag v$VERSION"
             exit 1
           fi
-          echo "v${{ env.RELEASE_VERSION }} matches package.json"
-
-      - name: the release binary the formula points at exists
-        # The formula downloads these three assets. If any of them is missing,
-        # `brew install` fails on somebody's machine from a tap this run already
-        # declared done. publish.yml builds them when the tag is pushed, so a
-        # missing asset means the tag never ran - and the remedy says so. The
-        # checksums of what GitHub actually serves land in the environment for
-        # the render step below, which is the one place the tap's values are set.
-        run: |
-          set -eu
-          version="${{ env.RELEASE_VERSION }}"
-          for target in darwin-arm64 darwin-x64 linux-x64; do
-            read -r asset url < <(node -e "
-              import('./src/distribute/release.mjs').then((m) => {
-                console.log(m.assetName('${version}', '${target}'), m.releaseUrl('${version}', '${target}'));
-              })")
-            if ! curl -fsSL -o "/tmp/${asset}" "$url"; then
-              echo "::error::${url} is not downloadable."
-              echo "  The release binary is built by publish.yml when the tag is"
-              echo "  pushed. Push the tag (or re-run publish.yml), then run this"
-              echo "  workflow again."
-              exit 1
-            fi
-            sha256="$(shasum -a 256 "/tmp/${asset}" | cut -d' ' -f1)"
-            name="SHA256_$(printf '%s' "$target" | tr 'a-z-' 'A-Z_')"
-            echo "${name}=${sha256}" >> "$GITHUB_ENV"
-            echo "${asset} is live at ${url} (sha256 ${sha256})"
-          done
+          echo "v$VERSION matches package.json"
 
       - name: install Homebrew
         # `ubuntu-latest` does not ship Homebrew, and `brew style`
@@ -282,14 +301,14 @@ jobs:
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
           echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
 
-      - name: render the formula for this release
+      - name: render the formula from the resolved release
+        # The checksums are the descriptor's - the bytes the resolve job
+        # downloaded from the release and hashed - rather than a fresh download
+        # in this job. A render step that downloaded its own checksums would be
+        # a second resolution, which is the defect this slice removes.
         run: |
           set -eu
-          node scripts/release-formula.mjs \
-            --version="${{ env.RELEASE_VERSION }}" \
-            --sha256-darwin-arm64="${{ env.SHA256_DARWIN_ARM64 }}" \
-            --sha256-darwin-x64="${{ env.SHA256_DARWIN_X64 }}" \
-            --sha256-linux-x64="${{ env.SHA256_LINUX_X64 }}"
+          node scripts/release-formula.mjs --descriptor=release/descriptor.json
           git --no-pager diff -- Formula/simt-dev.rb
 
       - name: the formula lints
@@ -318,20 +337,19 @@ jobs:
           brew style Formula/simt-dev.rb
 
       - name: push it to the tap
-        # The tap is `QuazarMedia/homebrew-tap` and this job lands on its `main`:
-        # a release branch that is never merged leaves `brew install` serving the
-        # previous version while this run reports success (review 0003 Q04). The
-        # variable stays as an escape hatch, but the default is the one name the
-        # README and the formula document.
+        # The tap lands on its `main`: a release branch that is never merged
+        # leaves `brew install` serving the previous version while this run
+        # reports success (review 0003 Q04). The variable stays as an escape
+        # hatch, but the default is the one name the README and the formula
+        # document. Idempotent: a tap that already has these bytes commits
+        # nothing and exits 0, so a retry after a later job failed is safe.
         env:
-          TAP: ${{ vars.HOMEBREW_TAP || 'QuazarMedia/homebrew-tap' }}
           TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -eu
-          tap="${TAP}"
           git config --global user.name  "${{ github.actor }}"
           git config --global user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
-          git clone --quiet --depth 1 --branch main "https://x-access-token:${TOKEN}@github.com/${tap}.git" /tmp/tap
+          git clone --quiet --depth 1 --branch main "https://x-access-token:${TOKEN}@github.com/${TAP}.git" /tmp/tap
           cp Formula/simt-dev.rb "/tmp/tap/Formula/simt-dev.rb"
           cd /tmp/tap
           git add Formula/simt-dev.rb
@@ -339,38 +357,50 @@ jobs:
             echo "the tap already has this version; nothing to push"
             exit 0
           fi
-          git commit --quiet -m "$(printf 'simt-dev %s\n' "${{ env.RELEASE_VERSION }}")"
+          git commit --quiet -m "$(printf 'simt-dev %s\n' "$VERSION")"
           git push --quiet origin main
-          echo "pushed simt-dev ${{ env.RELEASE_VERSION }} to ${tap}@main"
+          echo "pushed simt-dev $VERSION to ${TAP}@main"
+
   verify-brew:
     name: the tap serves this release
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: [publish-brew]
+    needs: [resolve, publish-brew]
     if: ${{ inputs['publish-brew'] }}
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      DESCRIPTOR: ${{ needs.resolve.outputs.descriptor }}
+      TAP: ${{ vars.HOMEBREW_TAP || 'QuazarMedia/homebrew-tap' }}
     steps:
-      - name: resolve the version
-        # The same resolution as the other jobs: this check greps the tap for
-        # the concrete version the release named.
-        run: |
-          set -eu
-          version="${{ inputs.version }}"
-          if [ -z "$version" ] || [ "$version" = "latest" ]; then
-            version="$(npm view simt-dev version)"
-          fi
-          echo "resolved version: ${version}"
-          echo "RELEASE_VERSION=${version}" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: the tap formula names this version
-        env:
-          TAP: ${{ vars.HOMEBREW_TAP || 'QuazarMedia/homebrew-tap' }}
+      - name: the tap formula names this release's bytes
+        # Not just the version: the formula that a `brew install` will follow
+        # must name the hashes this run resolved. A version-only check passes on
+        # a formula whose checksums belong to different bytes, which is exactly
+        # the state a clobbered upload leaves behind.
         run: |
           set -eu
+          mkdir -p release
+          printf '%s' "$DESCRIPTOR" > release/descriptor.json
           url="https://raw.githubusercontent.com/${TAP}/main/Formula/simt-dev.rb"
-          formula="$(curl -fsSL "$url")"
-          if printf '%s' "$formula" | grep -q "simt-dev-${{ env.RELEASE_VERSION }}-"; then
-            echo "the tap serves simt-dev ${{ env.RELEASE_VERSION }}"
-          else
-            echo "::error::${url} does not name simt-dev-${{ env.RELEASE_VERSION }}. The tap push did not land on main."
-            exit 1
-          fi
+          curl -fsSL "$url" -o /tmp/simt-dev.rb
+          node --input-type=module -e '
+            import fs from "node:fs";
+            import { formulaChecksums } from "./src/distribute/descriptor.mjs";
+            const descriptor = JSON.parse(fs.readFileSync("release/descriptor.json", "utf8"));
+            const declared = formulaChecksums(fs.readFileSync("/tmp/simt-dev.rb", "utf8"), descriptor.version);
+            let bad = 0;
+            for (const asset of descriptor.assets) {
+              const tap = declared.get(asset.target);
+              if (tap === undefined) {
+                console.error(`::error::the tap formula does not name simt-dev-${descriptor.version}-${asset.target}`);
+                bad += 1;
+              } else if (tap !== asset.sha256) {
+                console.error(`::error::the tap formula names ${tap} for ${asset.target}, but the release serves ${asset.sha256}`);
+                bad += 1;
+              }
+            }
+            if (bad > 0) process.exit(1);
+            console.log(`the tap serves ${descriptor.version} at the resolved bytes`);
+          '

@@ -68,9 +68,10 @@ const SECTION_VALUE = {
 /**
  * The floor. An item marked `hard` is never cut, whatever the ceiling.
  *
- * The list is short on purpose: the task itself and the commands that say whether the
- * change worked. Everything else is recoverable with one more command; these are the ones
- * whose absence turns the packet into a quiet lie about what the repository needs.
+ * The list is short on purpose: the task itself, the commands that say whether the
+ * change worked, and a caution that changes how FILES is read. Everything else is
+ * recoverable with one more command; these are the ones whose absence turns the packet
+ * into a quiet lie about what the repository needs or what the task matched.
  */
 const HARD = 'hard';
 const SOFT = 'soft';

@@ -169,6 +169,14 @@ test('a body-only task says FILES is context, not the graph hub', async (t) => {
   assert.match(stdout, /matched 0: no path or symbol mentions this task, so FILES is context rather than a match/, stdout);
   assert.ok(stdout.includes('src/keep.mjs'), 'the body hit is still offered as context');
   assert.ok(!stdout.includes('graph hub'), stdout);
+
+  // The caution is the only thing that tells a reader the FILES lines are not matches,
+  // so it has to survive the ceiling even when the rest of the packet does not.
+  const assembled = await assembleBrief({ root, task: 'zebracorn', budget: 0, federate: false });
+  const caution = assembled.items.find(
+    (item) => item.section === 'CAUTIONS' && item.text.startsWith('matched 0:'),
+  );
+  assert.equal(caution?.priority, 'hard', 'the matched-0 caution can be cut by the budget');
 });
 
 test('a modified file is context, not the task scope or its kind', async (t) => {

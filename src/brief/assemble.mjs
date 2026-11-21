@@ -318,6 +318,7 @@ export async function assembleBrief({
   const focused = matched > 0 ? ranked.filter((row) => row.resolver > 0) : ranked;
   if (task.trim().length > 0 && matched === 0) {
     packet.add('CAUTIONS', 'matched 0: no path or symbol mentions this task, so FILES is context rather than a match', {
+      hard: true,
       why: ['a body hit or a graph neighbour is not path or symbol evidence about this task'],
     });
   }

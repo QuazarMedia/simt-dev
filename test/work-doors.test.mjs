@@ -4,6 +4,7 @@
 // door that only works from its own source tree is the failure ADR-031 exists to catch. The
 // documents are written to a temporary directory and passed by path, or piped as `-`.
 
+import './isolate.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';

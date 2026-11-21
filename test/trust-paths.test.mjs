@@ -6,6 +6,7 @@
 // the repository's own code is opt-in, an unreadable policy is closed, and a retry is the
 // same answer - where a reviewer can read them.
 
+import './isolate.mjs';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';

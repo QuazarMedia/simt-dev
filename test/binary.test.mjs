@@ -411,13 +411,22 @@ async function networkAvailable() {
 }
 
 test('binary: the built bytes run a Gradle fixture with no Node on PATH', { timeout: 15 * 60_000 }, async (t) => {
+  // This is an artifact qualification, not an offline correctness test. It downloads a
+  // pinned Node base and builds a binary; running it inside `npm test` made a checkout
+  // with no network slow and a checkout with network spend minutes on every suite run.
+  // `npm run qualify:artifacts` sets the opt-in and declares the skip when it cannot.
+  if (process.env.SIMT_QUALIFY_SEA !== '1') {
+    return t.skip('qualification-only: run `npm run qualify:artifacts` (sets SIMT_QUALIFY_SEA=1)');
+  }
   const target = hostTarget();
   if (!target) return t.skip('this host is not a release target');
-  if (!(await networkAvailable())) return t.skip('nodejs.org is unreachable; the build cannot fetch its base');
 
   const dist = path.join(ROOT, 'dist');
   const bin = path.join(dist, assetName(pkg.version, target));
   if (!existsSync(bin)) {
+    if (!(await networkAvailable())) {
+      assert.fail('nodejs.org is unreachable and no built binary is cached; the pinned Node base cannot be fetched');
+    }
     t.diagnostic(`building ${assetName(pkg.version, target)} (first run downloads the node base)`);
     execFileSync(process.execPath, [path.join(ROOT, 'scripts', 'build-sea.mjs'), target], { stdio: 'inherit' });
   }

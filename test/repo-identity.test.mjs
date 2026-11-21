@@ -5,6 +5,7 @@
 // the machine's identity. 34 commits in this repository shipped as `t <t@t.t>` that
 // way, and every check stayed green, because nothing asked what the config said.
 
+import './isolate.mjs';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { mkdtemp } from 'node:fs/promises';

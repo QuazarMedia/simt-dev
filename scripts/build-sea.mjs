@@ -36,7 +36,9 @@ import { TARGETS, assetName } from '../src/distribute/release.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
 const DIST = path.join(ROOT, 'dist');
-const CACHE = path.join(ROOT, '.sea-cache');
+// An explicit cache location, because a build must not depend on a writable checkout.
+// The default keeps the old path; a qualification run points this at a fresh directory.
+const CACHE = path.resolve(process.env.SIMT_SEA_CACHE ?? path.join(ROOT, '.sea-cache'));
 
 const NODE_VERSION = 'v22.20.0'; // must equal the engines floor in package.json
 const POSTJECT_VERSION = '1.0.0-alpha.6';
@@ -159,9 +161,9 @@ async function ensureNodeBinary(target) {
   await mkdir(dir, { recursive: true });
   const tarball = path.join(CACHE, `node-${NODE_VERSION}-${target}.tar.xz`);
   const url = `https://nodejs.org/dist/${NODE_VERSION}/node-${NODE_VERSION}-${target}.tar.xz`;
-  console.log(`  downloading ${url}`);
+  console.log(`  downloading ${url} into ${CACHE}`);
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`node download failed: ${res.status} ${url}`);
+  if (!res.ok) throw new Error(`node download failed: ${res.status} ${url} (cache: ${CACHE})`);
   await writeFile(tarball, Buffer.from(await res.arrayBuffer()));
   // Extract the whole tree: member selection is unreliable across bsdtar/GNU tar.
   execFileSync('tar', ['-xJf', tarball, '--strip-components=1', '-C', dir]);
@@ -174,8 +176,19 @@ async function ensurePostject() {
   const postject = path.join(deps, 'node_modules', 'postject', 'dist', 'api.js');
   if (await exists(postject)) return postject;
   await mkdir(deps, { recursive: true });
-  console.log(`  installing build-only dependency postject@${POSTJECT_VERSION}`);
-  execFileSync('npm', ['install', '--prefix', deps, '--no-save', '--no-audit', '--no-fund', `postject@${POSTJECT_VERSION}`], { stdio: 'inherit' });
+  const npmCache = path.join(CACHE, 'npm');
+  await mkdir(npmCache, { recursive: true });
+  console.log(`  installing build-only dependency postject@${POSTJECT_VERSION} into ${CACHE}`);
+  try {
+    execFileSync(
+      'npm',
+      ['install', '--prefix', deps, '--cache', npmCache, '--no-save', '--no-audit', '--no-fund', `postject@${POSTJECT_VERSION}`],
+      { stdio: 'inherit', env: { ...process.env, npm_config_cache: npmCache, npm_config_update_notifier: 'false' } },
+    );
+  } catch (error) {
+    throw new Error(`could not install pinned postject@${POSTJECT_VERSION} in ${CACHE}: ${error.message}`);
+  }
+  if (!(await exists(postject))) throw new Error(`postject@${POSTJECT_VERSION} installed without ${postject}`);
   return postject;
 }
 

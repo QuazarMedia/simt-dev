@@ -11,6 +11,7 @@
 // deliberately paired with a test that runs the CLI, because a table that describes
 // the wrong reality passes its own unit tests perfectly.
 
+import './isolate.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, mkdir, readFile, rm, writeFile, symlink, lstat, stat } from 'node:fs/promises';

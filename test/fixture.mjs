@@ -15,10 +15,11 @@ import { rmSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { cp, mkdir, mkdtemp, writeFile, readdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 import { loadRegistry } from '../src/graph/load.mjs';
 import { CLI, MANIFEST_FILE } from '../src/name.mjs';
+import './isolate.mjs';
 
 /**
  * A RegExp matching literal text, with `{cli}` the command and `{manifest}` the manifest
@@ -65,7 +66,13 @@ const IDENTITY = [
 
 /** Run git with the identity above. Accepts the same options as execFile. */
 export function git(args, options = {}) {
-  return exec('git', [...IDENTITY, ...args], { maxBuffer: 32 << 20, ...options });
+  return exec('git', [...IDENTITY, ...args], {
+    maxBuffer: 32 << 20,
+    ...options,
+    // A caller may pass an env for a scenario that wants one; it still starts from the
+    // scrubbed process environment rather than from whatever the developer exported.
+    env: { ...process.env, ...options.env },
+  });
 }
 
 /**
@@ -301,7 +308,14 @@ export async function trackedFiles(root) {
 export async function copyTree(from, to) {
   await cp(from, to, {
     recursive: true,
-    filter: (src) => !/(^|\/)(node_modules|dist|\.git|\.simt)(\/|$)/.test(src),
+    // The filter is on the path INSIDE the tree, not the absolute source path. A
+    // checkout under `.simt/local/worktrees` otherwise matched the `.simt` segment in
+    // its own parent and copied nothing, which is the relocated-checkout failure this
+    // slice exists to make impossible.
+    filter: (src) => {
+      const rel = relative(from, src).split(sep).join('/');
+      return rel === '' || !/(^|\/)(node_modules|dist|\.git|\.simt)(\/|$)/.test(rel);
+    },
   });
 }
 

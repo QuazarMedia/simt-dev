@@ -19,6 +19,24 @@ the supported route (ADR-211).
 The Node floor is 22.20.0 for the npm and PyPI channels, because the index needs
 `node:sqlite` with FTS5. The binary carries its own runtime, so it has no such floor.
 
+## Qualification
+
+The offline correctness gate and the artifact gate are separate commands, because a
+network or a prior build cache must not decide whether `npm test` passes.
+
+```sh
+npm run qualify:offline    # suite, lint, generated CI, incremental-index budget
+npm run qualify:artifacts  # wheel parity, pinned SEA build, built-binary acceptance
+```
+
+`qualify:offline` uses a fixed four-worker test concurrency and writes npm and Git
+state under temporary directories; it needs no network and no host Git identity.
+`qualify:artifacts` sets `SIMT_QUALIFY_SEA=1`, builds into `SIMT_SEA_CACHE` (or a
+temporary cache), and reports a missing Node base or npm registry as a named stage
+failure. The `simt-dev qualification` workflow runs both across the supported Node and
+macOS/Linux matrix on manual dispatch; a skipped stage prints its prerequisite rather
+than counting as a pass.
+
 ## What a release must contain
 
 - the version in `package.json` and the wheel's metadata,

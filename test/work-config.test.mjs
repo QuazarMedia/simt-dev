@@ -39,12 +39,12 @@ async function docsRepo(files = {}) {
 
 test('a version is one this parser reads, and an unknown version is refused with a remedy', () => {
   assert.equal(WORK_VERSION, 2);
-  assert.deepEqual([...SUPPORTED_WORK_VERSIONS], [1, 2]);
+  assert.deepEqual([...SUPPORTED_WORK_VERSIONS], [1, 2, 3]);
   assert.deepEqual(validateWork({ version: 2 }), { ok: true, problems: [] });
   assert.deepEqual(validateWork({ version: 1 }), { ok: true, problems: [] }, 'a version-1 declaration stopped being readable');
-  const future = validateWork({ version: 3 });
+  const future = validateWork({ version: 4 });
   assert.equal(future.ok, false);
-  assert.match(future.problems[0].message, /work\.version must be one of 1, 2/);
+  assert.match(future.problems[0].message, /work\.version must be one of 1, 2, 3/);
   assert.match(future.problems[0].remedy, /"work": \{"version": 2\}/);
   assert.equal(validateWork(null).ok, false);
 });

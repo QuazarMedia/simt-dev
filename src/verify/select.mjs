@@ -42,7 +42,7 @@ const byId = (a, b) => a.id.localeCompare(b.id);
 const providerOf = (validator) => (isText(validator?.provider) ? validator.provider : 'unspecified');
 
 /** A declared scope entry is a path prefix; a glob would be a second matching language. */
-const inScope = (path, scope) => scope.some((prefix) => path === prefix || path.startsWith(prefix));
+const inScope = (path, scope) => scope.some((prefix) => prefix === '.' || path === prefix || path.startsWith(`${prefix.replace(/\/$/, '')}/`));
 
 /**
  * Select the checks that prove what this change touched.

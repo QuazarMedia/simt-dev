@@ -44,7 +44,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR22 | Bound MCP framing and make response contracts consistent | P1 | transport | M | PR21 | Complete | d092ff35c5db4d1419b873617663a98a853acc7a |
 | PR23 | Make index provenance and rebuild semantics coherent | P1 | retrieval | M | PR10, PR09 | Complete | 7869ead14b7f01af9c43b6efe33456e13f5d33ef |
 | PR24 | Fix registry portability, skill identity, and workspace caching | P1 | retrieval | M | PR23 | Complete | aa3ef1840ce79325f86d6676e7fac066023c5590 |
-| PR25 | Enforce local model data and transport boundaries | P1 | retrieval | M | PR24, PR21 | Queued | — |
+| PR25 | Enforce local model data and transport boundaries | P1 | retrieval | M | PR24, PR21 | Complete | c87eeb1f9f81ba3aaf24f40b5192c4db5ef00ef9 |
 | PR26 | Audit filesystem scope and executable configuration ownership | P1 | trust | M | PR08, PR05, PR21, PR24 | Queued | — |
 | PR27 | Resolve each release once and verify cross-channel promotion | P1 | release | M | PR17 | Complete | 6abb3071377c6f9a28eb63a01601441b98a06d6f |
 | PR28 | Qualify installed packages and state platform prerequisites | P1 | release | M | PR27, PR11 | Queued | — |

@@ -86,19 +86,32 @@ const CAPABILITY_ALIASES = {
  * @param {object} context    { repoStack: string[], taskTokens: string[], paths: string[] }
  * @returns {{score: number, reasons: string[]}} score 0 means "not applicable"
  */
+/**
+ * A glob that covers a large share of the tree names a tree, not the file a task named.
+ * `src/**` on a workers skill otherwise matched every source file a task could mention,
+ * spending one of the packet's few skill names on every task in the repository. The share
+ * is the resolver's existing "labels every file" ceiling, not a new number.
+ */
+function namesTree(tree, glob) {
+  if (tree.length === 0) return false;
+  let hits = 0;
+  for (const path of tree) if (matchesGlob(path, glob)) hits += 1;
+  return hits > Math.max(2, Math.floor(tree.length * 0.15));
+}
+
 export function scoreSkill(skill, context) {
-  const { repoStack = [], taskTokens = [], paths = [] } = context;
+  const { repoStack = [], taskTokens = [], paths = [], tree = [] } = context;
   const repo = new Set(repoStack);
   const reasons = [];
   let evidence = 0;
 
   // --- path signal: strongest, because the diff is ground truth ----------------
   for (const glob of skill.paths ?? []) {
-    if (paths.some((p) => matchesGlob(p, glob))) {
-      evidence += W.path;
-      reasons.push(`path:${glob}`);
-      break;
-    }
+    if (!paths.some((p) => matchesGlob(p, glob))) continue;
+    if (namesTree(tree, glob)) continue;
+    evidence += W.path;
+    reasons.push(`path:${glob}`);
+    break;
   }
 
   // --- capability signal ------------------------------------------------------

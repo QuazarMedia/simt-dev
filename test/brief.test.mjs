@@ -67,7 +67,10 @@ test('a task that names a file still surfaces its skill and lesson', async (t) =
     join(root, '.simt', 'skills.graph.json'),
     `${JSON.stringify({
       version: 1,
-      capabilities: [{ id: 'keep', summary: 'Keeping a value' }],
+      capabilities: [
+        { id: 'keep', summary: 'Keeping a value' },
+        { id: 'any', summary: 'Any file' },
+      ],
       skills: [
         {
           name: 'keeper',
@@ -79,11 +82,38 @@ test('a task that names a file still surfaces its skill and lesson', async (t) =
           bytes: 4096,
           sources: [{ repo: 'f', path: 'src/keep.mjs', role: 'canonical', bytes: 24 }],
         },
+        // A tree-wide declaration, the shape `src/**` has in a real registry.
+        {
+          name: 'broad',
+          summary: 'Any source file',
+          capabilities: ['any'],
+          stack: ['node'],
+          keywords: ['widespread'],
+          paths: ['src/**'],
+          bytes: 512,
+          sources: [{ repo: 'f', path: 'src/keep.mjs', role: 'canonical', bytes: 24 }],
+        },
+        // A specific config file: the case the tree-wide guard must not take with it.
+        {
+          name: 'manifest',
+          summary: 'The package manifest',
+          capabilities: ['any'],
+          stack: ['node'],
+          keywords: ['semver'],
+          paths: ['package.json'],
+          bytes: 512,
+          sources: [{ repo: 'f', path: 'package.json', role: 'canonical', bytes: 24 }],
+        },
       ],
     }, null, 2)}\n`,
   );
   await mkdir(join(root, 'docs', 'lessons'), { recursive: true });
   await writeFile(join(root, 'docs', 'lessons', '0001-keep.md'), '---\nsimt-trigger: { paths: ["src/keep.mjs"] }\n---\n\n# Keep the helper\n');
+  // Enough source files that `src/**` covers a large share of this tree rather than one
+  // file, which is the state a real repository is in.
+  for (const name of ['a', 'b', 'c', 'd']) {
+    await writeFile(join(root, 'src', `${name}.mjs`), `export const ${name} = 1;\n`);
+  }
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'records']);
 
@@ -92,7 +122,14 @@ test('a task that names a file still surfaces its skill and lesson', async (t) =
   // The keyword is deliberately not in the task: the skill can only be found by the path
   // it declares, which is the signal the empty scope had removed.
   assert.match(stdout, /SKILLS\n\s+keeper .*path:src\/keep\.mjs/, stdout);
+  assert.ok(!stdout.includes('broad'), 'a tree-wide glob is not evidence for one file');
   assert.match(stdout, /LESSONS\n\s+0001-keep /, stdout);
+
+  // The same guard must leave a skill that names one config file alone.
+  const config = await run(root, ['brief', 'bump the package metadata in package.json']);
+  assert.equal(config.code, 0, config.stderr);
+  assert.match(config.stdout, /SKILLS\n\s+manifest .*path:package\.json/, config.stdout);
+  assert.ok(!config.stdout.includes('broad'), config.stdout);
 });
 
 test('a caution about unresolved Affects names only the decisions that govern the task', async (t) => {

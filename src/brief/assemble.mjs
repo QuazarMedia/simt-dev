@@ -437,7 +437,7 @@ export async function assembleBrief({
   } else {
     const rankedSkills = rankSkills(
       loaded.registry.skills,
-      { repoStack: repo.signals, taskTokens: tokenize(task), paths: scope },
+      { repoStack: repo.signals, taskTokens: tokenize(task), paths: scope, tree: [...filePaths] },
       { forced: [] },
     );
     const expanded = closure(rankedSkills.selected, loaded.registry.skills);

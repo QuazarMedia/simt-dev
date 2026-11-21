@@ -5,7 +5,7 @@ simt-supersedes: []
 
 # ADR-187 — the rollout keeps the old contracts intact and opens no socket
 
-Status: accepted · 2026-11-03
+Status: accepted · 2026-11-03 · ruling 5 narrowed by ADR-211
 
 ## Context
 

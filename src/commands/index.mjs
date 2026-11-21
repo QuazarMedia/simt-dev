@@ -173,6 +173,7 @@ export const IMPLEMENTED = {
   // A bare command: the only mode is `--line`, so there is no
   // group and no default subcommand to resolve.
   status: async () => (await import('./status.mjs')).statusCommand,
+  studio: async () => (await import('./studio.mjs')).studioCommand,
   'graph lint': async () => (await import('./graph.mjs')).lintCommand,
   'skills index': async () => (await import('./skills.mjs')).indexCommand,
   'skills find': async () => (await import('./skills.mjs')).findCommand,

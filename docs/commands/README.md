@@ -46,6 +46,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [skills](skills.md) | 8 |
 | [slice](slice.md) | 3 |
 | [status](status.md) | 1 |
+| [studio](studio.md) | 1 |
 | [sync](sync.md) | 1 |
 | [tests](tests.md) | 1 |
 | [tokens](tokens.md) | 1 |
@@ -247,6 +248,9 @@ simt slice start <id> --yes  |  -- "<text>"                                     
 
 # status
 simt status [--line]                                                                       # the repository snapshot, or one line of the last check
+
+# studio
+simt studio [--port <n>] [--no-open]                                                       # serve the local dashboard over a loopback socket, guarded by a one-time token
 
 # sync
 simt sync --yes                                                                            # re-render the generated regions from the rule content

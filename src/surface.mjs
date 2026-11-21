@@ -91,6 +91,14 @@ export const DISPOSITIONS = [
     groups: ['plugin'],
   },
   {
+    id: 'studio',
+    stability: 'optional',
+    owner: 'studio',
+    consumer: 'a maintainer watching the doors of the tool in a browser',
+    note: 'one loopback socket, opened only by explicit invocation and read-only (ADR-211); nothing leaves the machine (ADR-075)',
+    groups: ['studio'],
+  },
+  {
     id: 'local-models',
     stability: 'optional',
     owner: 'local',
@@ -160,6 +168,7 @@ export const NAMED_SURFACES = [
   ['verify', 'verify'],
   ['federation', 'federation'],
   ['workspace sharing', 'workspace-sharing'],
+  ['studio', 'studio'],
   ['compatibility aliases', 'aliases'],
 ];
 

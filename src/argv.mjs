@@ -46,7 +46,8 @@ export const BOOL_FLAGS = new Set([
   'baselines',
   'dry-run',
   'yes',
-  // index: read what the cache holds instead of rebuilding it.
+  // index: read what the cache holds instead of rebuilding it. studio: `--no-open`
+  // prints the URL without launching a browser; the positive is the default there.
   'open',
   'check',
   'plan',
@@ -162,6 +163,9 @@ export const VALUE_FLAGS = new Set([
   // ADR-008 — the tool never annotates for them.
   'labels',
   'max-bytes',
+  // studio: the loopback port to bind. A value, not a switch, because 0 asks the OS
+  // for an ephemeral port and any other number names the one the caller wants.
+  'port',
   'paths',
   // agent-hooks explain: the harness JSON to read when a harness pipes nothing. A value
   // rather than a switch, because a payload with no file named would have to be guessed.
@@ -380,6 +384,12 @@ export function parse(argv) {
           return { ok: false, error: usage(`--reps must be a positive integer, received ${value}`) };
         }
         flags.reps = n;
+      } else if (raw === 'port') {
+        const n = Number(value);
+        if (!Number.isInteger(n) || n < 0 || n > 65535) {
+          return { ok: false, error: usage(`--port must be an integer from 0 to 65535, received ${value}`) };
+        }
+        flags.port = n;
       } else if (raw === 'limit' || raw === 'page') {
         // `Number('notanumber')` falls through to the default and `page: -1` became 0, so a
         // caller who asked for page -1 got the first page and no notice.

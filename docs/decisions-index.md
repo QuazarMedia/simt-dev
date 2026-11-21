@@ -195,7 +195,7 @@ in [architecture/history.md](architecture/history.md).
 | [184](decisions/ADR-184-knowledge-debt-is-a-sum-of-named-components-and-no-invented-probability.md) | knowledge debt is a sum of named components, and a frequency nobody measured is not a probability | accepted · 2026-11-03 |
 | [185](decisions/ADR-185-an-adapter-is-data-and-being-installed-is-not-being-enabled.md) | an adapter descriptor is data, and being installed is not being enabled | accepted · 2026-11-03 |
 | [186](decisions/ADR-186-a-pilot-is-a-synthetic-fixture-and-its-live-half-stays-unrun.md) | a pilot is a synthetic fixture, and its live half stays unrun until someone authorises it | accepted · 2026-11-03 |
-| [187](decisions/ADR-187-rollout-keeps-the-old-contracts-and-opens-no-socket.md) | the rollout keeps the old contracts intact and opens no socket | accepted · 2026-11-03 |
+| [187](decisions/ADR-187-rollout-keeps-the-old-contracts-and-opens-no-socket.md) | the rollout keeps the old contracts intact and opens no socket | accepted · 2026-11-03 · ruling 5 narrowed by ADR-211 |
 | [188](decisions/ADR-188-the-knowledge-pilot-is-a-synthetic-fixture-over-the-real-modules.md) | the knowledge pilot is a synthetic fixture over the real modules, and its live half is unrun | accepted · 2026-11-03 |
 | [189](decisions/ADR-189-a-playbook-names-only-commands-that-exist.md) | a playbook names only commands that exist, and states what is not supported | accepted · 2026-11-03 |
 | [190](decisions/ADR-190-an-explanation-reads-a-payload-through-the-hooks-own-adapter.md) | an explanation reads a payload through the hook's own adapter and policy table | accepted · 2026-11-03 |
@@ -217,3 +217,6 @@ in [architecture/history.md](architecture/history.md).
 | [206](decisions/ADR-206-support-is-one-inventory-and-the-binary-checks-its-platform.md) | support is one inventory, and the binary checks its platform | accepted · 2026-11-21 · filed as review 0005 PR28 |
 | [207](decisions/ADR-207-the-surface-has-one-inventory-and-one-stability-statement-per-name.md) | the surface has one inventory, and one stability statement per name | accepted · 2026-11-21 · filed as review 0005 PR29 |
 | [208](decisions/ADR-208-packs-stay-experimental-and-their-exit-is-a-migration.md) | packs stay experimental, and their exit is a migration, not a removal | accepted · 2026-11-21 · filed as review 0005 PR30 |
+| [209](decisions/ADR-209-a-slice-finish-lands-the-slice-it-commits.md) | a slice finish lands the slice it commits | accepted · 2026-11-21 · filed while folding worktree cleanup into the slice commands · ruling 3's commit step is extended by ADR-210 |
+| [210](decisions/ADR-210-a-slice-finish-lands-work-already-committed.md) | a slice finish lands work already committed | accepted · 2026-11-21 · filed with the clean-worktree finish |
+| [211](decisions/ADR-211-the-studio-opens-one-loopback-socket-only-when-invoked.md) | the studio opens one loopback socket, only when invoked | accepted · 2026-11-21 |

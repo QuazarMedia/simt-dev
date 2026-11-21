@@ -225,6 +225,11 @@ ${CLI} undo                  restore the last journaled set of writes, but only
 ${CLI} local doctor            probe configured local model endpoints (chat and embed)
                            (reads local in ${MANIFEST_FILE}; opens no socket when
                            unset; refuses non-loopback URLs without --allow-remote)
+${CLI} studio                  the local dashboard: one loopback socket serving this
+                           repository's own doors (--port <n> names the port, 0 an
+                           ephemeral one; --no-open prints the one-time URL without
+                           launching a browser; reads only, nothing is written;
+                           Ctrl-C closes the socket)
 ${CLI} distill <skill|doc>     a budgeted proposal summary of a skill body or doc,
                            every claim citing the source line range it rests on
                            (writes .simt/local/distilled/<digest>.md; a proposal a

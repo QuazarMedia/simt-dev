@@ -1,0 +1,41 @@
+:root {
+  color-scheme: dark;
+  --ink: #e8e6e3;
+  --dim: #9a97a3;
+  --bg: #101014;
+  --line: #2a2a33;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+main {
+  max-width: 34rem;
+  padding: 2rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+h1 {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+  letter-spacing: 0.04em;
+}
+
+p { color: var(--dim); }
+
+kbd {
+  padding: 0 0.35em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--ink);
+}

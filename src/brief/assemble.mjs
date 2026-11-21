@@ -39,6 +39,7 @@ import { join } from 'node:path';
 
 import { CLI, STATE_DIR } from '../name.mjs';
 import { parse as parseRegion } from '../projection/markers.mjs';
+import { assembleScopedBrief } from './local-work.mjs';
 import { DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES, buildPacket, collect } from './packet.mjs';
 import { buildProofPacket } from './proof.mjs';
 import { classifyTask, cardVerbs } from './kind.mjs';
@@ -213,7 +214,9 @@ export async function assembleBrief({
   federate = true,
   commands = [],
   proof = false,
+  workScope = null,
 } = {}) {
+  if (workScope !== null) return assembleScopedBrief({ root, task, budget, workScope });
   const named = paths !== null;
   const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(`${STATE_DIR}/`));
   // A dirty file is where the reader is standing, not what the task asked about. When a

@@ -440,6 +440,7 @@ for (const shape of ['handbook', 'operations']) {
       return [hit.citation.path, hit.citation.anchor];
     };
     assert.ok(ranked.ranked.some((entry) => entry.path === 'handbook/other.md'));
+    assert.ok(ranked.ranked.every((entry) => entry.citation.path === entry.path), 'equal headings must not exchange citations');
     assert.ok(scoped.excluded.some((entry) => entry.reason === 'scope-mismatch'));
     assert.ok(!scoped.ranked.some((entry) => entry.path === 'handbook/other.md'));
     assert.equal(historical.at.result, 'applicable');
@@ -451,6 +452,22 @@ for (const shape of ['handbook', 'operations']) {
     };
     assert.deepEqual(transcript, JSON.parse(await readFile(join(fixture, 'transcript.json'), 'utf8')));
     assert.match(await readFile(join(root, transcript.opened[0]), 'utf8'), /# Device checkout/);
+
+    await mkdir(join(root, 'handbook/private'));
+    await writeFile(join(root, 'handbook/private/private-task.md'), '# Private device checkout retention task');
+    const briefArgs = ['brief', 'device checkout retention', '--scope', 'handbook', '--json'];
+    const brief = await simt(root, briefArgs);
+    assert.equal(brief.code, 0, brief.out);
+    const packet = JSON.parse(brief.out);
+    assert.equal(packet.workScope, 'handbook');
+    assert.match(packet.text, /knowledge sections 'handbook\//);
+    assert.match(packet.text, /verify status --changed --scope 'handbook'/);
+    assert.ok(packet.proof.citations.every(({ digest }) => digest.startsWith('committed:')));
+    assert.ok(packet.proof.citations.length > 0);
+    assert.doesNotMatch(brief.out, /private-task|Private device/);
+    const tiny = JSON.parse((await simt(root, [...briefArgs, '--budget', '48'])).out);
+    assert.ok(Buffer.byteLength(tiny.text) <= 48);
+    assert.equal(tiny.proof.complete, false);
 
     const missing = await simt(root, ['knowledge', 'why', 'handbook/missing.md', '--scope', 'handbook']);
     assert.notEqual(missing.code, 0);
@@ -532,6 +549,10 @@ test('installed scoped verification captures current, stale and raced local rece
   let status = await check('status');
   assert.equal(status.structuralGreen, true);
   assert.equal(status.verified, false);
+  const scopedBrief = await simt(root, ['brief', 'policy', '--scope', 'handbook']);
+  assert.equal(scopedBrief.code, 0, scopedBrief.out);
+  assert.match(scopedBrief.out, /1\/2 obligations verified, 1 pending/);
+  assert.match(scopedBrief.out, /no committed source section matched/);
   const semantic = status.results.find(({ kind }) => kind === 'semantic-review');
   assert.equal(semantic.state, 'pending-review');
   const attestations = join(root, '.simt/local/review.json');

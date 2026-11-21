@@ -24,6 +24,7 @@ import { rank } from './rank.mjs';
 const AUTHORITY_LEVELS = Object.freeze({ reviewed: 3, declared: 2, evidence: 1 });
 
 const isText = (value) => typeof value === 'string' && value.length > 0;
+const unitKey = (unit) => JSON.stringify([unit.path, unit.id]);
 
 /** The authority basis a unit carries: its artifact's declared metadata, or bare evidence. */
 function basisOf(artifact) {
@@ -84,10 +85,10 @@ export function rankCorpus(corpus, { query = '', scope = {}, permissions = null,
   const units = rankableUnits(corpus);
   const report = rank(units, { query, scope, permissions, limit });
 
-  const byId = new Map((corpus?.units ?? []).map((unit) => [unit.id, unit]));
+  const byId = new Map((corpus?.units ?? []).map((unit) => [unitKey(unit), unit]));
   const byPath = new Map((corpus?.artifacts ?? []).map((artifact) => [artifact.path, artifact]));
   const ranked = report.ranked.map((hit) => {
-    const unit = byId.get(hit.id);
+    const unit = byId.get(unitKey(hit));
     const artifact = unit === undefined ? undefined : byPath.get(unit.path);
     return {
       ...hit,
@@ -106,7 +107,7 @@ export function rankCorpus(corpus, { query = '', scope = {}, permissions = null,
         unit.artifact === wanted ||
         unit.path === wanted ||
         artifact?.id === wanted;
-      if (named && !exact.some((entry) => entry.id === unit.id)) {
+      if (named && !exact.some((entry) => entry.id === unit.id && entry.citation.path === unit.path)) {
         exact.push({ id: unit.id, citation: citationOf(unit, artifact) });
       }
     }

@@ -262,6 +262,7 @@ export async function assembleBrief({
   }
   if (graphStale) {
     packet.add('CAUTIONS', 'the index predates the current tree, so files added or removed since the last build are missing or ghosted', {
+      hard: true,
       why: ['this caller may not rebuild the index; run a command that can before quoting the file list'],
     });
   }
@@ -323,6 +324,7 @@ export async function assembleBrief({
   }
   if (rendered.truncated) {
     packet.add('CAUTIONS', `the map held back ${rendered.total - rendered.shown} of ${rendered.total} files`, {
+      hard: true,
       why: [`\`${CLI} map --budget 0\` lists them all`],
     });
   }

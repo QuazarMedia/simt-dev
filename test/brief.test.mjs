@@ -232,13 +232,44 @@ test('a stale index warns the packet instead of quoting yesterday (Q42)', async 
   await reindex(root);
   await git(['-C', root, 'rm', '-q', 'README.md']);
   await git(['-C', root, 'commit', '-qm', 'drop readme']);
-  const packet = await assembleBrief({ root, task: 'fix the keep helper', build: false, federate: false });
+  const packet = await assembleBrief({ root, task: 'fix the keep helper', build: false, federate: false, budget: 450 });
   assert.equal(packet.cold, undefined);
-  const cautions = (packet.items ?? []).filter((item) => item.section === 'CAUTIONS').map((item) => item.text);
-  assert.ok(
-    cautions.some((text) => text.includes('the index predates the current tree')),
-    `no staleness caution in: ${JSON.stringify(cautions)}`,
+  const caution = (packet.items ?? []).find(
+    (item) => item.section === 'CAUTIONS' && item.text.includes('the index predates the current tree'),
   );
+  assert.ok(caution, 'no staleness caution was assembled');
+  const cut = new Set(packet.packed.cut);
+  assert.equal(cut.has(caution.id), false, 'the staleness caution was cut by the budget');
+  assert.match(packet.packed.text, /the index predates the current tree/, packet.packed.text);
+  assert.ok(packet.packed.cut.length > 0, 'the budget did not trim a soft item');
+  assert.ok(packet.packed.after <= 450, `the hard floor escaped the ceiling: ${packet.packed.after}`);
+});
+
+test('a truncated FILES list keeps its held-back caution under the ceiling', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  // Long paths and several symbols per file make the rendered map exceed its
+  // eight-times-the-packet allowance, which is the state the caution describes.
+  const dir = join(root, 'src', 'a-very-long-directory-name-that-makes-map-blocks-large');
+  await mkdir(dir, { recursive: true });
+  for (let i = 0; i < 80; i += 1) {
+    const name = `a-very-long-file-name-${String(i).padStart(3, '0')}`;
+    const symbols = Array.from({ length: 6 }, (_, j) => `export const ${name.replaceAll('-', '_')}_symbol_${j} = ${j};`).join('\n');
+    await writeFile(join(dir, `${name}.mjs`), `${symbols}\n`);
+  }
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'many files']);
+
+  const packet = await assembleBrief({ root, task: 'zebracorn', budget: 1200, federate: false });
+  const caution = (packet.items ?? []).find(
+    (item) => item.section === 'CAUTIONS' && item.text.startsWith('the map held back'),
+  );
+  assert.ok(caution, 'no map-truncation caution was assembled');
+  const cut = new Set(packet.packed.cut);
+  assert.equal(cut.has(caution.id), false, 'the map-truncation caution was cut by the budget');
+  assert.match(packet.packed.text, /the map held back \d+ of \d+ files/, packet.packed.text);
+  assert.ok(packet.packed.cut.length > 0, 'the budget did not trim a soft item');
+  assert.ok(packet.packed.after <= 1200, `the hard floor escaped the ceiling: ${packet.packed.after}`);
 });
 
 test("a decision's command token resolves against the registry, not the tool's shell card (Q52)", async (t) => {

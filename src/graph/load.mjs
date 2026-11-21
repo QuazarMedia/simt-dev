@@ -23,6 +23,7 @@ import { KNOWN_TAGS } from '../resolve/fingerprint.mjs';
 import { matchesGlob, syntheticPathFor } from '../resolve/resolve.mjs';
 import { tokenize } from '../text/tokens.mjs';
 import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
+import { implicitRoot } from '../repo-root.mjs';
 
 /**
  * The registry is workspace data (ADR-061): it describes which skill bodies a particular
@@ -45,7 +46,13 @@ function defaultRegistryPath() {
  * reader named is more specific than the checkout the binary happens to live in.
  */
 function repoRegistryPath(flags) {
-  const root = flags?.root ? resolve(process.cwd(), String(flags.root)) : process.cwd();
+  // The REPOSITORY the reader is in, not the directory they typed it from: run
+  // `simt graph lint` inside `src/` and the registry at the top level is still the
+  // repository's own. `implicitRoot` is the same answer `commandRoot` gives every
+  // command, memoised per directory - resolving cwd here made the repo-local tier
+  // exist only for callers that passed `--root`, which is not the tier ADR-202
+  // ruling 3 names.
+  const root = flags?.root ? resolve(process.cwd(), String(flags.root)) : implicitRoot();
   return join(root, '.simt', 'skills.graph.json');
 }
 

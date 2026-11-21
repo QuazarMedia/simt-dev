@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -279,6 +279,46 @@ test('registry: a repository-local registry outranks the checkout catalogue (PR2
   }
 });
 
+test('registry: the repository tier applies without --root, from any directory in it (ADR-202)', async () => {
+  // The tier resolved `process.cwd()`, so it existed only for callers that named a
+  // root: run `simt graph lint` from `src/` and the repository's own registry was
+  // skipped in favour of the checkout's catalogue. The implicit root is the same one
+  // `commandRoot` gives every command.
+  const dir = await mkdtemp(join(tmpdir(), 'simt-reg-implicit-'));
+  const deep = join(dir, 'a', 'b');
+  try {
+    await mkdir(join(dir, '.simt'), { recursive: true });
+    await mkdir(deep, { recursive: true });
+    // `/var` is a symlink to `/private/var` on macOS, and the answer is a real path.
+    const local = join(await realpath(dir), '.simt', 'skills.graph.json');
+    const g = clone();
+    g.skills[0].summary = 'repo-local marker';
+    await writeFile(local, JSON.stringify(g));
+
+    const previous = process.cwd();
+    try {
+      process.chdir(deep);
+      const found = await loadRegistry(null, {});
+      assert.equal(found.path, local, 'the loader skipped the repository named by the cwd');
+
+      const cli = await runCli(['graph', 'lint', '--json'], {}, deep);
+      assert.equal(cli.code, 0, cli.stdout);
+      assert.equal(JSON.parse(cli.stdout).registry, local, 'graph lint answered with another registry');
+
+      const skills = await runCli(['skills', 'index', '--json'], {}, deep);
+      assert.equal(skills.code, 0, skills.stderr);
+      assert.ok(
+        JSON.parse(skills.stdout).skills.some((s) => s.summary === 'repo-local marker'),
+        'the skills commands read a registry other than the repository’s own',
+      );
+    } finally {
+      process.chdir(previous);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('CLI: the source CLI reads the repository-local registry, and says which one (PR24)', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'simt-reg-local-cli-'));
   try {
@@ -410,10 +450,11 @@ test('CLI: --spec without a verified registry skips loudly instead of warning 37
 const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const exec = promisify(execFile);
 
-async function runCli(args, env = {}) {
+async function runCli(args, env = {}, cwd = undefined) {
   try {
     const { stdout, stderr } = await exec(process.execPath, [BIN, ...args], {
       maxBuffer: 16 << 20,
+      cwd,
       env: { ...process.env, NO_COLOR: '1', SIMT_DEV_WORKSPACE: 'off', ...env },
     });
     return { code: 0, stdout, stderr };

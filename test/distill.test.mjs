@@ -330,6 +330,9 @@ test('R38: --local proposes from the configured model, citing checked line range
     result = JSON.parse(stdout);
     assert.match(result.engine, /^local:stub-model \(prompt sha256-/, result.engine);
     assert.ok(result.verified, stdout);
+    // What answered and how much crossed the socket, without the document or the key.
+    assert.equal(result.basis.model, 'stub-model');
+    assert.ok(result.basis.requestBytes > 0 && result.basis.responseBytes > 0);
     const proposal = await readFile(join(root, result.proposal.path), 'utf8');
     assert.match(proposal, /^engine: local:stub-model \(prompt sha256-/m);
     assert.match(proposal, /\[L7-L7\]/m);

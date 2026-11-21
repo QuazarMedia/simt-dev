@@ -13,6 +13,7 @@ import {
   readLocalConfig,
   resolveEndpointUrl,
 } from './config.mjs';
+import { dataBasis, requestJson } from './transport.mjs';
 
 function guardEndpoint(endpoint, { allowRemote = false } = {}) {
   if (!endpoint || typeof endpoint !== 'object') {
@@ -46,73 +47,10 @@ function guardEndpoint(endpoint, { allowRemote = false } = {}) {
   };
 }
 
-async function requestJson(url, { method = 'GET', body = undefined, timeoutMs = DEFAULT_LOCAL_TIMEOUT_MS, apiKey = null, fetchImpl = globalThis.fetch } = {}) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const headers = {
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
-      accept: 'application/json',
-    };
-    if (typeof apiKey === 'string' && apiKey.length > 0) {
-      headers.authorization = `Bearer ${apiKey}`;
-    }
-    const response = await fetchImpl(url, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-      signal: controller.signal,
-    });
-    const text = await response.text();
-    let parsed = null;
-    if (text.trim().length > 0) {
-      try {
-        parsed = JSON.parse(text);
-      } catch {
-        parsed = null;
-      }
-    }
-    if (!response.ok) {
-      const serverMsg =
-        parsed?.error?.message ??
-        (typeof parsed?.error === 'string' ? parsed.error : null) ??
-        (text.trim().slice(0, 160) || `HTTP ${response.status}`);
-      return {
-        ok: false,
-        status: response.status,
-        error: `${method} ${url} failed (${response.status}): ${serverMsg}`,
-        socketOpened: true,
-      };
-    }
-    if (parsed === null || typeof parsed !== 'object') {
-      return {
-        ok: false,
-        status: response.status,
-        error: `${method} ${url} returned non-JSON response`,
-        socketOpened: true,
-      };
-    }
-    return { ok: true, status: response.status, data: parsed, socketOpened: true };
-  } catch (error) {
-    const reason =
-      error?.name === 'AbortError'
-        ? `timed out after ${timeoutMs} ms`
-        : error?.cause?.message ?? error?.message ?? String(error);
-    return {
-      ok: false,
-      status: null,
-      error: `${method} ${url} failed: ${reason}`,
-      socketOpened: true,
-    };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 /**
  * Query `GET <baseUrl>/v1/models` on an OpenAI-compatible local server.
  */
-export async function localModels(endpoint, { allowRemote = false, fetchImpl = globalThis.fetch } = {}) {
+export async function localModels(endpoint, { allowRemote = false, fetchImpl = globalThis.fetch, limits = undefined } = {}) {
   const guard = guardEndpoint(endpoint, { allowRemote });
   if (!guard.ok) {
     return {
@@ -130,6 +68,7 @@ export async function localModels(endpoint, { allowRemote = false, fetchImpl = g
     timeoutMs: guard.timeoutMs,
     apiKey: guard.apiKey,
     fetchImpl,
+    limits,
   });
   if (!res.ok) {
     return {
@@ -159,6 +98,13 @@ export async function localModels(endpoint, { allowRemote = false, fetchImpl = g
     error: null,
     refusedRemote: false,
     socketOpened: true,
+    basis: dataBasis({
+      model: guard.model,
+      url: targetUrl,
+      requestBytes: res.requestBytes,
+      responseBytes: res.responseBytes,
+      redirects: res.redirects,
+    }),
   };
 }
 
@@ -175,6 +121,7 @@ export async function localChat(
     maxTokens = 256,
     allowRemote = false,
     fetchImpl = globalThis.fetch,
+    limits = undefined,
   } = {},
 ) {
   const guard = guardEndpoint(endpoint, { allowRemote });
@@ -210,6 +157,7 @@ export async function localChat(
     timeoutMs: guard.timeoutMs,
     apiKey: guard.apiKey,
     fetchImpl,
+    limits,
   });
 
   if (!res.ok) {
@@ -254,6 +202,13 @@ export async function localChat(
     error: null,
     refusedRemote: false,
     socketOpened: true,
+    basis: dataBasis({
+      model: guard.model,
+      url: targetUrl,
+      requestBytes: res.requestBytes,
+      responseBytes: res.responseBytes,
+      redirects: res.redirects,
+    }),
   };
 }
 
@@ -262,7 +217,7 @@ export async function localChat(
  */
 export async function localEmbed(
   endpoint,
-  { input, allowRemote = false, fetchImpl = globalThis.fetch } = {},
+  { input, allowRemote = false, fetchImpl = globalThis.fetch, limits = undefined } = {},
 ) {
   const guard = guardEndpoint(endpoint, { allowRemote });
   if (!guard.ok) {
@@ -288,6 +243,7 @@ export async function localEmbed(
     timeoutMs: guard.timeoutMs,
     apiKey: guard.apiKey,
     fetchImpl,
+    limits,
   });
 
   if (!res.ok) {
@@ -337,6 +293,13 @@ export async function localEmbed(
     error: null,
     refusedRemote: false,
     socketOpened: true,
+    basis: dataBasis({
+      model: guard.model,
+      url: targetUrl,
+      requestBytes: res.requestBytes,
+      responseBytes: res.responseBytes,
+      redirects: res.redirects,
+    }),
   };
 }
 

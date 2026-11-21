@@ -426,6 +426,10 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     upsertMeta.run('inputs', meta.inputs ?? '');
     upsertMeta.run('resolution', meta.resolution ?? '');
     upsertMeta.run('build', meta.build ?? '');
+    // The embedding exchange's basis, as JSON, or empty when this build did not embed.
+    // Read back by `readBuildMeta`: the model, the endpoint and byte counts - never a
+    // credential and never the content that was embedded (ADR-204).
+    upsertMeta.run('embed_basis', meta.embedBasis ? JSON.stringify(meta.embedBasis) : '');
     db.exec('commit');
   } catch (error) {
     try { db.exec('rollback'); } catch { /* a failed begin has nothing to undo */ }
@@ -547,7 +551,7 @@ export async function readSchema(root) {
   return rows[0]?.value ?? '';
 }
 
-const BUILD_META_KEYS = ['schema', 'tree', 'inputs', 'resolution', 'build'];
+const BUILD_META_KEYS = ['schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis'];
 
 /**
  * The stamps a build leaves, with the read error attached.

@@ -212,3 +212,4 @@ in [architecture/history.md](architecture/history.md).
 | [201](decisions/ADR-201-the-index-records-its-inputs-and-unknown-freshness-is-a-state.md) | the index records the inputs it was built from, and unknown freshness is a state | accepted · 2026-11-21 · filed as review 0005 PR23 · narrows ADR-089 ruling 2 |
 | [202](decisions/ADR-202-a-skill-source-is-identified-by-a-digest-and-a-repository-names-its-own-registry.md) | a skill source is identified by a digest, and a repository names its own registry | accepted · 2026-11-21 · filed as review 0005 PR24 |
 | [203](decisions/ADR-203-a-release-is-resolved-once-and-promoted-from-its-descriptor.md) | a release is resolved once, and promotion verifies the source it resolved | accepted · 2026-11-21 · filed as review 0005 PR27 |
+| [204](decisions/ADR-204-a-local-model-endpoint-is-one-bounded-destination.md) | a local model endpoint is one bounded destination | accepted · 2026-11-21 · filed as review 0005 PR25 |

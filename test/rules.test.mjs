@@ -315,6 +315,9 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // ADR-202 joined because the ruling is ABOUT where a repository keeps its registry and
   // which module answers a source's identity, so it names the path those sources live at and
   // the files that implement the rule; a record that named neither would not be actionable.
+  // ADR-204 joined because its ruling is ABOUT which destination a request may reach and
+  // which modules enforce it, so it names the transport, the client and the two callers it
+  // holds to one policy; the paths are the argument, not decoration.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -344,7 +347,8 @@ assert.deepEqual(leaking, [
     'ADR-136',
     'ADR-137',
     'ADR-202',
-]);
+    'ADR-204',
+  ]);
 });
 
 test('a status line is scrubbed, and a command that travels is not (S54)', () => {

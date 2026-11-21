@@ -27,6 +27,7 @@ import {
   resolveEndpointUrl,
 } from '../src/local/config.mjs';
 import { localChat, localEmbed, localModels, probeLocal } from '../src/local/client.mjs';
+import { MAX_REQUEST_BYTES, MAX_RESPONSE_BYTES, redactSecrets } from '../src/local/transport.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, '..', 'bin', 'simt.mjs');
@@ -502,6 +503,111 @@ test('R37: doctor remedy distinguishes an unauthorised server from a down one', 
   const downPayload = JSON.parse(downCli.stdout);
   assert.equal(downPayload.status, 'unreachable');
   assert.match(downPayload.remedy, /start the local model server/);
+});
+
+test('PR25: a redirect off the configured endpoint is refused and never followed', async (t) => {
+  const elsewhere = await startStubServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ data: [{ id: 'stolen' }] }));
+  });
+  t.after(() => elsewhere.close());
+  const stub = await startStubServer((req, res) => {
+    res.writeHead(302, { location: `${elsewhere.baseUrl}/v1/models` });
+    res.end();
+  });
+  t.after(() => stub.close());
+
+  const res = await localModels({ url: stub.baseUrl, model: 'm' });
+  assert.equal(res.ok, false);
+  assert.match(res.error, /redirected to .*which is not the configured endpoint/);
+  assert.equal(elsewhere.requests.length, 0, 'the request reached a host it was never configured for');
+
+  // A redirect that stays on the endpoint is followed, bounded.
+  const sameOrigin = await startStubServer((req, res) => {
+    if (req.url === '/v1/models') {
+      res.writeHead(307, { location: '/v1/models/' });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ data: [{ id: 'm' }] }));
+  });
+  t.after(() => sameOrigin.close());
+  const followed = await localModels({ url: sameOrigin.baseUrl, model: 'm' });
+  assert.equal(followed.ok, true, followed.error);
+  assert.equal(followed.basis.redirects, 1);
+  assert.deepEqual(followed.models, ['m']);
+});
+
+test('PR25: both directions of the exchange are bounded', async (t) => {
+  const stub = await startStubServer((req, res) => {
+    const body = 'x'.repeat(4096);
+    if (req.url.includes('/chat/')) {
+      // No content-length: the bound has to hold without being declared.
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(body);
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json', 'content-length': String(body.length) });
+    res.end(body);
+  });
+  t.after(() => stub.close());
+
+  const declared = await localModels({ url: stub.baseUrl, model: 'm' }, { limits: { maxResponseBytes: 1024 } });
+  assert.equal(declared.ok, false);
+  assert.match(declared.error, /declared 4096 bytes, over the 1024-byte response limit/);
+
+  const streamed = await localChat(
+    { url: stub.baseUrl, model: 'm' },
+    { prompt: 'x', limits: { maxResponseBytes: 64 } },
+  );
+  assert.equal(streamed.ok, false);
+  assert.match(streamed.error, /more than the 64-byte response limit/);
+
+  // A request too large to be a question is refused before a socket opens.
+  let fetchCalls = 0;
+  const oversized = await localChat(
+    { url: stub.baseUrl, model: 'm' },
+    {
+      messages: [{ role: 'user', content: 'x'.repeat(MAX_REQUEST_BYTES + 1) }],
+      fetchImpl: () => {
+        fetchCalls += 1;
+        throw new Error('the socket must not open');
+      },
+    },
+  );
+  assert.equal(oversized.ok, false);
+  assert.equal(oversized.socketOpened, false);
+  assert.equal(fetchCalls, 0);
+  assert.match(oversized.error, new RegExp(`over the ${MAX_REQUEST_BYTES}-byte limit`));
+  assert.equal(MAX_RESPONSE_BYTES, 16 << 20, 'the default answer bound is part of the policy');
+});
+
+test('PR25: a credential never appears in an error or in the data basis', async (t) => {
+  const stub = await startStubServer((req, res) => {
+    res.writeHead(500, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ error: { message: `bad auth: Authorization: Bearer sk-secret` } }));
+  });
+  t.after(() => stub.close());
+
+  const failed = await localChat({ url: stub.baseUrl, model: 'm', apiKey: 'sk-secret' }, { prompt: 'hi' });
+  assert.equal(failed.ok, false);
+  assert.match(failed.error, /\[redacted\]/);
+  assert.ok(!JSON.stringify(failed).includes('sk-secret'), 'the credential survived in the failure');
+  assert.equal(redactSecrets('Bearer sk-secret and sk-secret', 'sk-secret'), 'Bearer [redacted] and [redacted]');
+
+  const okStub = await startStubServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ model: 'm', choices: [{ message: { content: 'pong' } }] }));
+  });
+  t.after(() => okStub.close());
+  const okRes = await localChat({ url: okStub.baseUrl, model: 'm', apiKey: 'sk-secret' }, { prompt: 'hi' });
+  assert.equal(okRes.ok, true, okRes.error);
+  assert.equal(okRes.basis.model, 'm');
+  assert.equal(okRes.basis.endpoint, new URL(okStub.baseUrl).origin);
+  assert.ok(okRes.basis.requestBytes > 0 && okRes.basis.responseBytes > 0);
+  assert.ok(!JSON.stringify(okRes.basis).includes('sk-secret'));
+  assert.ok(!JSON.stringify(okRes.basis).includes('hi'), 'the basis stored the content, not its size');
 });
 
 test('R37: reasoning models are handled — content falls back to reasoning_content', async (t) => {

@@ -329,6 +329,10 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   const embeddedIdx = await reindex(root, { embed: true, fetchImpl: stubFetch });
   assert.equal(embeddedIdx.embedState, 'embedded');
   assert.equal(embeddedIdx.embeddings, 13);
+  // The data basis is recorded with the rows: model, endpoint, sizes - and no content.
+  assert.equal(embeddedIdx.embedBasis.model, 'nomic-embed-code');
+  assert.ok(embeddedIdx.embedBasis.requestBytes > 0 && embeddedIdx.embedBasis.responseBytes > 0);
+  assert.ok(!JSON.stringify(embeddedIdx.embedBasis).includes('semantic target'));
   const storedVecs = await readEmbeddings(root);
   assert.equal(storedVecs.length, 13);
   const cachedIdx = await reindex(root, {
@@ -338,6 +342,7 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
     },
   });
   assert.equal(cachedIdx.embedState, 'cached');
+  assert.equal(cachedIdx.embedBasis, null, 'a cached build made no exchange to describe');
 
   // 3. Evaluate recall@10 gate: embeddings are accepted only when they raise recall@10 by >= 10 points.
   await mkdir(join(root, '.simt', 'bench', 'tasks'), { recursive: true });

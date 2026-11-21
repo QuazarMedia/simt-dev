@@ -143,7 +143,9 @@ async function runEngine(kind, text, budget, context) {
       ),
     };
   }
-  return { engine: ENGINE_LOCAL, model: chat.model, body: String(chat.content).trim(), prompt };
+  // The basis rides with the result so the record can name what answered and how much
+  // crossed the socket, without the prompt itself or the credential (ADR-204).
+  return { engine: ENGINE_LOCAL, model: chat.model, body: String(chat.content).trim(), prompt, basis: chat.basis ?? null };
 }
 
 function parseExistingFrontmatter(text) {
@@ -250,6 +252,7 @@ export async function distillTarget(args, flags) {
     target: { kind: source.how, source: source.name, bytes, lines: lineCount },
     digest: sourceDigest(text),
     engine: provenance,
+    ...(outcome.basis ? { basis: outcome.basis } : {}),
     budget,
     citations: check.ranges.length,
     verified: faults.length === 0,

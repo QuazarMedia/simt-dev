@@ -351,6 +351,7 @@ export async function reindex(root, opts = {}) {
     resolution,
     build,
     edgeOwners,
+    embedBasis: embedBuild.basis ?? null,
   });
   const counts = await countSqlite(root);
   return {
@@ -362,6 +363,7 @@ export async function reindex(root, opts = {}) {
     edges: counts.edges,
     embeddings: counts.embeddings ?? 0,
     embedState: embedBuild.state,
+    embedBasis: embedBuild.basis ?? null,
     parsers: adapter.state,
     inputs,
     resolution,
@@ -416,10 +418,10 @@ function resolutionDigest(root, listed) {
 }
 
 async function buildEmbeddings(root, listed, changedFts, { force, embed, allowRemote, fetchImpl }) {
-  if (!embed) return { state: 'off', rows: [] };
+  if (!embed) return { state: 'off', rows: [], basis: null };
   const localCfg = await readLocalConfig(root, { allowRemote });
-  if (!localCfg.embed) return { state: 'off', rows: [] };
-  if (localCfg.embed.blocked) return { state: 'refused-remote', rows: [] };
+  if (!localCfg.embed) return { state: 'off', rows: [], basis: null };
+  if (localCfg.embed.blocked) return { state: 'refused-remote', rows: [], basis: null };
 
   const existingEmbeds = force ? [] : await readEmbeddings(root);
   const embedByPath = new Map(existingEmbeds.map((row) => [row.path, row]));
@@ -436,7 +438,7 @@ async function buildEmbeddings(root, listed, changedFts, { force, embed, allowRe
     }
     missingEntries.push(entry);
   }
-  if (missingEntries.length === 0) return { state: 'cached', rows: [] };
+  if (missingEntries.length === 0) return { state: 'cached', rows: [], basis: null };
 
   // Ensure FTS summaries are available for any entry that did not change in this pass.
   const needFts = missingEntries.some((entry) => !ftsByPath.has(entry.path));
@@ -448,6 +450,9 @@ async function buildEmbeddings(root, listed, changedFts, { force, embed, allowRe
   }
 
   const rows = [];
+  // The exchange's basis, recorded once beside the rows: which model answered, where,
+  // and how much crossed the socket. No content and no credential (ADR-204).
+  let basis = null;
   const batchSize = 32;
   for (let i = 0; i < missingEntries.length; i += batchSize) {
     const slice = missingEntries.slice(i, i + batchSize);
@@ -457,8 +462,9 @@ async function buildEmbeddings(root, listed, changedFts, { force, embed, allowRe
     });
     const res = await localEmbed(localCfg.embed, { input: inputs, allowRemote, fetchImpl });
     if (!res.ok || res.embeddings.length !== slice.length) {
-      return { state: 'failed', rows };
+      return { state: 'failed', rows, basis };
     }
+    basis = res.basis ?? basis;
     for (let j = 0; j < slice.length; j += 1) {
       const vec = res.embeddings[j];
       rows.push({
@@ -470,7 +476,7 @@ async function buildEmbeddings(root, listed, changedFts, { force, embed, allowRe
       });
     }
   }
-  return { state: 'embedded', rows };
+  return { state: 'embedded', rows, basis };
 }
 
 /**

@@ -156,9 +156,9 @@ test('a caution about unresolved Affects names only the decisions that govern th
 });
 
 test('a body-only task says FILES is context, not the graph hub', async (t) => {
-  // The graph ranking contains every node, so the hub can appear without mentioning the
-  // task. A disconnected file whose path and symbols carry none of the task is lifted
-  // above that hub only by the BM25 body hit.
+  // With no path or symbol matching the task, the graph has no seeds and ranks every
+  // node, so the hub appears without mentioning the task. The disconnected body-only file
+  // reaches FILES above that hub through the BM25 list, not through a path or symbol match.
   const root = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));
   await writeFile(join(root, 'src', 'body.mjs'), '// zebracorn\nexport const leaf = 1;\n');
@@ -171,7 +171,6 @@ test('a body-only task says FILES is context, not the graph hub', async (t) => {
   const files = JSON.parse(stdout).sections.FILES;
   const body = files.findIndex((line) => line.includes('src/body.mjs'));
   const keep = files.findIndex((line) => line.includes('src/keep.mjs'));
-  assert.ok(keep >= 0, 'the graph hub is not present as context');
   assert.ok(body >= 0, 'the BM25 body hit is not offered as context');
   assert.ok(body < keep, 'the body hit did not outrank the graph hub');
 

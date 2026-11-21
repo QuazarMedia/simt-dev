@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -119,6 +119,64 @@ test('the bindings retired by PR32 are gone from their module namespaces', async
   assert.equal('writeLockVariants' in lock, false, 'the retired variant writer is still exported');
   assert.equal('simulateSchedule' in retry, false, 'the test-only scheduler is still exported');
   assert.equal('jobState' in observe, false, 'the observation helper is still exported instead of private');
+});
+
+/** Every named binding `text` exports, in declaration or list position. */
+function exportedNames(text) {
+  const body = withoutComments(text);
+  const names = new Set();
+  for (const m of body.matchAll(/export\s+(?:async\s+)?(?:function|class)\s+([A-Za-z_$][\w$]*)/g)) names.add(m[1]);
+  for (const m of body.matchAll(/export\s+(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) names.add(m[1]);
+  for (const m of body.matchAll(/export\s*\{([^}]*)\}/g)) {
+    for (const part of m[1].split(',')) {
+      const token = part.trim();
+      if (!token) continue;
+      // `local as exported` exports the right-hand name.
+      names.add(token.split(/\s+as\s+/).pop().trim());
+    }
+  }
+  return names;
+}
+
+test('the retired bindings are not exported by any file the package ships', async () => {
+  // The namespace test imports three modules from the checkout; this asks the same
+  // question of the set npm packs, because a channel can ship a file the checkout no
+  // longer reads: `files` names directories, so a resurrected variant writer under
+  // src/ ships with nothing in the checkout importing it. The set is expanded the way
+  // scripts/build-sea.mjs and scripts/verify-wheel.mjs expand it — directories
+  // recursively, plus package.json — so one assertion covers the tarball, the wheel
+  // (asserted byte-identical to it) and the SEA payload. The last dist/ binary was
+  // built from a pre-PR32 tree and carried all three as exports: nothing asserted
+  // their absence from the payload until this test.
+  const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+  const shipped = ['package.json'];
+  for (const entry of pkg.files) {
+    const abs = join(ROOT, entry);
+    if ((await stat(abs).catch(() => null))?.isDirectory()) {
+      const stack = [abs];
+      while (stack.length) {
+        const dir = stack.pop();
+        for (const entry of await readdir(dir, { withFileTypes: true })) {
+          const p = join(dir, entry.name);
+          if (entry.isDirectory()) stack.push(p);
+          else if (/\.(mjs|cjs|js)$/.test(entry.name)) shipped.push(p.slice(ROOT.length + 1));
+        }
+      }
+    } else if (/\.(mjs|cjs|js)$/.test(entry)) shipped.push(entry);
+  }
+  // The three modules that used to export the names must be in the set: if `files`
+  // stops naming src/, the assertion below passes vacuously, which is the drift this
+  // test exists to catch.
+  for (const mod of ['src/projection/lock.mjs', 'src/actions/retry.mjs', 'src/actions/observe.mjs']) {
+    assert.ok(shipped.includes(mod), `the shipped set no longer names ${mod}`);
+  }
+  const retired = ['writeLockVariants', 'simulateSchedule', 'jobState'];
+  const leaked = [];
+  for (const rel of shipped) {
+    const names = exportedNames(await readFile(join(ROOT, rel), 'utf8'));
+    for (const name of retired) if (names.has(name)) leaked.push(`${rel} exports ${name}`);
+  }
+  assert.deepEqual(leaked, [], `a retired binding is exported by a shipped file:\n  ${leaked.join('\n  ')}`);
 });
 
 test('every __internals seam is actually imported', async () => {

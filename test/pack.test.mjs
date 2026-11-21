@@ -103,6 +103,7 @@ function simt(root, args, env = NO_ESTATE) {
 }
 
 let stage = '';
+let tarball = '';
 let run1 = 0;
 
 /**
@@ -120,13 +121,13 @@ before(async () => {
   const pack = join(stage, 'pack');
   await mkdir(pack);
 
-  const packed = await run('npm', ['pack', '--pack-destination', pack], { cwd: PACKAGE_ROOT });
+  const packed = await run('npm', ['pack', '--pack-destination', pack], { cwd: PACKAGE_ROOT, env: NO_ESTATE });
   assert.equal(packed.code, 0, `npm pack failed:\n${packed.out}`);
   // Not from stdout: npm interleaves `npm notice` lines with the filename, and
   // picking a line out of that is a guess that survives one npm version.
   const tarballs = (await readdir(pack)).filter((name) => name.endsWith('.tgz'));
   assert.deepEqual(tarballs.length, 1, `npm pack wrote ${tarballs.length} tarballs: ${tarballs}`);
-  const tarball = join(pack, tarballs[0]);
+  tarball = join(pack, tarballs[0]);
 
   const seed = join(stage, 'seed');
   await mkdir(seed);
@@ -138,7 +139,7 @@ before(async () => {
   );
   assert.equal(installed.code, 0, `installing the tarball failed:\n${installed.out}`);
 
-  const npm = (await run('npm', ['--version'])).out.trim();
+  const npm = (await run('npm', ['--version'], { env: NO_ESTATE })).out.trim();
   const pkg = await run(
     'npm',
     [
@@ -400,3 +401,59 @@ test('a consumer with no estate is told every way to point at one', async () => 
   assert.match(result.out, /SIMT_DEV_WORKSPACE/);
   assert.match(result.out, /config\.json/);
 });
+for (const shape of ['handbook', 'operations']) {
+  test(`local scope first session in an installed ${shape} checkout`, async () => {
+    const fixture = join(PACKAGE_ROOT, 'test', 'fixtures', 'local-work', shape);
+    const origin = join(stage, `origin-${shape}`);
+    const root = join(stage, `consumer-${shape}`);
+    await cp(fixture, origin, { recursive: true, filter: (path) => !path.endsWith('transcript.json') });
+    await git(['init', '-q'], { cwd: origin });
+    await git(['add', '.'], { cwd: origin });
+    await git(['commit', '-qm', 'seed sources'], { cwd: origin });
+    await git(['clone', '-q', origin, root]);
+    const installed = await run('npm', ['install', '--no-audit', '--no-fund', '--offline', tarball], {
+      cwd: root, env: NO_ESTATE,
+    });
+    assert.equal(installed.code, 0, installed.out);
+
+    const status = async () => (await git(['status', '--porcelain'], { cwd: root })).stdout;
+    const denied = await simt(root, ['knowledge', 'rank', '--scope', 'handbook', '--query', 'retention']);
+    assert.notEqual(denied.code, 0);
+    assert.match(denied.out, /declares no work/);
+    const guide = await readFile(join(root, 'node_modules', 'simt-dev', 'docs/guides/local-work.md'), 'utf8');
+    const commands = guide.match(/```sh\n([\s\S]*?)```/)[1].trim().split('\n');
+    const results = [];
+    for (const [index, command] of commands.entries()) {
+      const preview = [0, 1, 3].includes(index);
+      const before = preview ? await status() : null;
+      const { stdout } = await exec('sh', ['-ec', `${command} --json`], {
+        cwd: root, env: { ...NO_ESTATE, PATH: `${join(root, 'node_modules', '.bin')}:${NO_ESTATE.PATH}` },
+      });
+      results.push(JSON.parse(stdout));
+      if (preview) assert.equal(await status(), before, command);
+    }
+
+    const [, , , , , ranked, scoped, opened, historical] = results;
+    const cite = (result) => {
+      const hit = result.ranked.find((entry) => entry.path === 'handbook/current.md');
+      assert.ok(hit);
+      return [hit.citation.path, hit.citation.anchor];
+    };
+    assert.ok(ranked.ranked.some((entry) => entry.path === 'handbook/other.md'));
+    assert.ok(scoped.excluded.some((entry) => entry.reason === 'scope-mismatch'));
+    assert.ok(!scoped.ranked.some((entry) => entry.path === 'handbook/other.md'));
+    assert.equal(historical.at.result, 'applicable');
+    const transcript = {
+      search: cite(ranked),
+      scoped: cite(scoped),
+      opened: [opened.source.path, opened.source.anchor],
+      historical: historical.at.claims.map((claim) => claim.id),
+    };
+    assert.deepEqual(transcript, JSON.parse(await readFile(join(fixture, 'transcript.json'), 'utf8')));
+    assert.match(await readFile(join(root, transcript.opened[0]), 'utf8'), /# Device checkout/);
+
+    const missing = await simt(root, ['knowledge', 'why', 'handbook/missing.md', '--scope', 'handbook']);
+    assert.notEqual(missing.code, 0);
+    assert.match(missing.out, /no claim or section/);
+  });
+}

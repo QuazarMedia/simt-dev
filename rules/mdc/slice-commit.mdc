@@ -88,11 +88,12 @@ A worktree is the unit of isolation for concurrent work. The rules that keep it 
   worktree for the tracker row and returns its path; work in that path, not the main
   checkout.
 - **Finish from the main checkout.** `simt slice finish <id>` runs the declared gates
-  and commits on the slice branch, records the SHA in the main checkout's tracker,
+  and commits the staged work on the slice branch — or, when nothing is staged, lands
+  the commit already on its branch — records the SHA in the main checkout's tracker,
   merges the branch into the main checkout, and removes the worktree and its branch
-  (ADR-209). It refuses when run inside the worktree, because a worktree cannot delete
-  the directory that shell is standing in. A slice is not done when its worktree is
-  green — it is done when that one command has merged it.
+  (ADR-209, ADR-210). It refuses when run inside the worktree, because a worktree cannot
+  delete the directory that shell is standing in. A slice is not done when its worktree
+  is green — it is done when that one command has merged it.
 - **A kept worktree is a failure to report.** `finish` removes a worktree only when it
   can do so without discarding untracked work. A kept worktree and branch are named in
   its output; remove them once their contents are accounted for, and report what was

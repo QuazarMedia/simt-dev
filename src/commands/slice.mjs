@@ -642,6 +642,34 @@ function cachedResult({ name, at }) {
   };
 }
 
+/**
+ * The worktree's own commit when there is nothing staged. A slice whose work is already
+ * committed has no commit for `finish` to make, but it still has to land; only tracked
+ * edits that are not in a commit block the merge. Untracked files do not: cleanup keeps
+ * them and their worktree, which is the same answer it gives after committing the
+ * staged path.
+ */
+async function committedSlice(work, main) {
+  const status = String(await gitText(work, ['status', '--porcelain']).catch(() => ''))
+    .split('\n')
+    .filter(Boolean);
+  const dirty = status.filter((line) => !line.startsWith('??')).map((line) => line.slice(2).trim());
+  if (dirty.length > 0) {
+    return { error: `${work} has uncommitted changes (${dirty.slice(0, 3).join(', ')})` };
+  }
+  const sha = await gitText(work, ['rev-parse', 'HEAD']).catch(() => null);
+  const mainHead = await gitText(main, ['rev-parse', 'HEAD']).catch(() => null);
+  if (sha === null || mainHead === null) {
+    return { error: `could not read ${sha === null ? 'the worktree HEAD' : 'the main checkout HEAD'}` };
+  }
+  const ahead = Number(await gitText(work, ['rev-list', '--count', `${mainHead}..HEAD`]).catch(() => '0'));
+  if (!(ahead > 0)) {
+    return { error: `${work} has nothing staged and no commits ahead of ${main}` };
+  }
+  const subject = await gitText(work, ['log', '-1', '--format=%s']).catch(() => '');
+  return { sha, subject };
+}
+
 async function finishSlice(root, id, flags) {
   const mode = writeMode(flags);
   const main = await mainCheckout(root);
@@ -665,7 +693,6 @@ async function finishSlice(root, id, flags) {
   if (!TYPE.test(type)) {
     return fail(`${type} is not a Conventional Commits type`, EXIT.USAGE, `example: run: ${CLI} slice finish ${id} --type fix`);
   }
-  const subject = subjectFor(type, id, title);
   const test = flags.test ?? null;
 
   // A manifest that does not parse fails closed: the gates cannot be read, so nothing
@@ -680,6 +707,11 @@ async function finishSlice(root, id, flags) {
 
   const staged = await stagedFiles(work);
   const split = await splitGates(work, declared, manifest.manifest);
+  // Nothing staged is not nothing to land: the slice may already be committed in its
+  // worktree. Read that commit now so the dry run can name it and the apply can skip
+  // creating a second, empty one.
+  const committed = staged.length === 0 ? await committedSlice(work, main) : null;
+  const subject = committed?.sha ? committed.subject : subjectFor(type, id, title);
 
   if (!mode.apply) {
     let row = null;
@@ -714,7 +746,11 @@ async function finishSlice(root, id, flags) {
       `slice    ${id}  ${doc}`,
       `worktree ${relative(main, work)}${existsSync(worktree) ? '' : '  (missing: finish will refuse)'}`,
       `gates    pre-commit  ${gateLine} (run on apply)`,
-      `staged   ${staged.length} file(s)${staged.length === 0 ? '  (finish refuses without one)' : ''}`,
+      committed?.sha
+        ? `staged   0 file(s)  (HEAD ${committed.sha} is already committed; finish lands it)`
+        : staged.length === 0
+          ? `staged   0 file(s)  (finish refuses: ${committed?.error ?? 'nothing staged'})`
+          : `staged   ${staged.length} file(s)`,
       `subject  ${subject}`,
       stateLine,
       `land     ${branch} -> ${main}, then remove the worktree (on apply from the main checkout)`,
@@ -769,8 +805,8 @@ async function finishSlice(root, id, flags) {
     );
   }
 
-  if (staged.length === 0) {
-    return fail(`${work} has nothing staged to commit`, EXIT.USAGE, `stage what the slice changed, then rerun: ${apply}`);
+  if (committed?.error) {
+    return fail(committed.error, EXIT.USAGE, `commit the slice in ${relative(main, work)}, then rerun: ${apply}`);
   }
 
   // The gates the hook would run, run here. This command is the one place a commit
@@ -834,14 +870,19 @@ async function finishSlice(root, id, flags) {
     return EXIT.FAIL;
   }
 
-  let sha = null;
-  const message = `${subject}\n\n${CO_AUTHOR}`;
-  try {
-    await git(work, ['commit', '-m', message]);
-    sha = await gitText(work, ['rev-parse', 'HEAD']);
-  } catch (error) {
-    const detail = String(error.stderr ?? error.message ?? error).trim().split('\n')[0];
-    return fail(`the gates passed but the commit failed: ${detail}`, EXIT.FAIL, `run: git -C ${work} commit -m ${JSON.stringify(message)}`);
+  // A commit already on the branch is the slice's commit; making an empty one would
+  // claim the work again and leave two records of it. Its own subject is what the
+  // output reports, not the subject this run would have generated.
+  let sha = committed?.sha ?? null;
+  if (committed === null) {
+    const message = `${subject}\n\n${CO_AUTHOR}`;
+    try {
+      await git(work, ['commit', '-m', message]);
+      sha = await gitText(work, ['rev-parse', 'HEAD']);
+    } catch (error) {
+      const detail = String(error.stderr ?? error.message ?? error).trim().split('\n')[0];
+      return fail(`the gates passed but the commit failed: ${detail}`, EXIT.FAIL, `run: git -C ${work} commit -m ${JSON.stringify(message)}`);
+    }
   }
 
   let row = null;

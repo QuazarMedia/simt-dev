@@ -156,7 +156,7 @@ export const SPEC = [
   { path: 'skills show', usage: '<name>', mcp: { name: 'skills_show', flags: [] }, summary: 'one skill packet', flags: ["all","plan"], },
   { path: 'skills why', usage: '<name>', mcp: { name: 'skills_why', flags: [] }, summary: 'which skill covers a task', flags: ["all","plan","task"], },
   { path: 'slice abandon', usage: '<id> --yes', summary: 'remove a slice worktree, delete its branch, and return the row', writes: 'repo', aliases: ['plan abandon'], flags: ["yes","session","test","type"], },
-  { path: 'slice finish', usage: '<id> --yes', summary: 'run the gates, commit the slice, record it, merge it and remove its worktree', writes: 'repo', aliases: ['plan finish'], flags: ["yes","session","test","type"], },
+  { path: 'slice finish', usage: '<id> --yes', summary: 'run the gates, commit or land the slice, record it, merge it and remove its worktree', writes: 'repo', aliases: ['plan finish'], flags: ["yes","session","test","type"], },
   // Both halves write, so a bare `slice` has no read to default to.
   // `start` is the default because with the id it is missing it fails with a usage error
   // before anything is created - the one default here that cannot mutate.

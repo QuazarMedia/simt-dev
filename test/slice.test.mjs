@@ -147,6 +147,29 @@ test('finish from the main checkout merges the slice, commits the row and remove
   assert.match(String(log.stdout), /^Merge branch 'slice\/a27'/, 'the slice was not a merge commit');
 });
 
+test('finish lands work already committed in the worktree without a second commit', async () => {
+  const { root } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+  const message = 'feat(a27): commit the slice in its worktree';
+  await git(['-C', worktree, 'commit', '-qm', message]);
+  const committed = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
+  assert.equal(result.code, 0, result.stderr);
+  assert.ok(result.stdout.includes(`commit   ${committed}  ${message}`), `the existing commit and its subject were not reported: ${result.stdout}`);
+  assert.match(result.stdout, /removed\s+\.simt\/local\/worktrees\/a27/, result.stdout);
+  assert.equal(existsSync(worktree), false, 'the worktree survived a finish');
+  assert.equal((await readFile(join(root, 'a.mjs'), 'utf8')).trim(), 'export const a = 2;', 'the committed slice was not merged');
+  const parents = String((await git(['-C', root, 'log', '-1', '--format=%P'])).stdout).trim().split(' ');
+  assert.ok(parents.includes(committed), 'the slice commit is not a parent of the merge');
+  assert.equal(String((await git(['-C', root, 'status', '--porcelain', '--untracked-files=no'])).stdout).trim(), '', 'the tracker row was not committed with the merge');
+});
+
 test('a conflicting merge aborts, reports the commit and row, and leaves main usable', async () => {
   const { root, tracker } = await startableRepo();
   const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));

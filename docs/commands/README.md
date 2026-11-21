@@ -242,7 +242,7 @@ simt skills why <name>                                                          
 
 # slice
 simt slice abandon <id> --yes                                                              # remove a slice worktree, delete its branch, and return the row
-simt slice finish <id> --yes                                                               # run the gates, commit the slice, record it, merge it and remove its worktree
+simt slice finish <id> --yes                                                               # run the gates, commit or land the slice, record it, merge it and remove its worktree
 simt slice start <id> --yes  |  -- "<text>"                                                # give a slice its worktree, branch and brief; -- starts one from a prompt, no row
 
 # status

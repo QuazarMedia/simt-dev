@@ -4,7 +4,7 @@ simt-supersedes: []
 ---
 # ADR-209 — a slice finish lands the slice it commits
 
-Status: accepted · 2026-11-21 · filed while folding worktree cleanup into the slice commands
+Status: accepted · 2026-11-21 · filed while folding worktree cleanup into the slice commands · ruling 3's commit step is extended by [ADR-210](ADR-210-a-slice-finish-lands-work-already-committed.md)
 
 ## Context
 

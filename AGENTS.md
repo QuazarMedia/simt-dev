@@ -135,7 +135,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=21d26aa46d3e643dbf68c85a93a60fda31c1350b -->
+<!-- simt:sha=20c13b517e1e4d7763014c112b2bbf31337aa132 -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->
@@ -394,11 +394,12 @@ A worktree is the unit of isolation for concurrent work. The rules that keep it 
   worktree for the tracker row and returns its path; work in that path, not the main
   checkout.
 - **Finish from the main checkout.** `simt slice finish <id>` runs the declared gates
-  and commits on the slice branch, records the SHA in the main checkout's tracker,
+  and commits the staged work on the slice branch — or, when nothing is staged, lands
+  the commit already on its branch — records the SHA in the main checkout's tracker,
   merges the branch into the main checkout, and removes the worktree and its branch
-  (ADR-209). It refuses when run inside the worktree, because a worktree cannot delete
-  the directory that shell is standing in. A slice is not done when its worktree is
-  green — it is done when that one command has merged it.
+  (ADR-209, ADR-210). It refuses when run inside the worktree, because a worktree cannot
+  delete the directory that shell is standing in. A slice is not done when its worktree
+  is green — it is done when that one command has merged it.
 - **A kept worktree is a failure to report.** `finish` removes a worktree only when it
   can do so without discarding untracked work. A kept worktree and branch are named in
   its output; remove them once their contents are accounted for, and report what was

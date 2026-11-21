@@ -32,10 +32,10 @@ export const WORK_VERSION = 2;
 export const SUPPORTED_WORK_VERSIONS = Object.freeze([1, 2, 3]);
 
 /** The version each field arrived in. A field absent here is version 1's. */
-const FIELD_VERSION = new Map([['scope.ignore', 2], ['scope.checks', 3], ['scope.independent', 3], ['scope.tracker', 3]]);
+const FIELD_VERSION = new Map([['scope.ignore', 2], ['scope.checks', 3], ['scope.independent', 3], ['scope.tracker', 3], ['scope.catalogue', 3], ['scope.share', 3]]);
 
 const TOP_KEYS = new Set(['version', 'scopes', 'targets', 'adapters']);
-const SCOPE_KEYS = new Set(['id', 'paths', 'kind', 'validators', 'targets', 'ignore', 'checks', 'independent', 'tracker']);
+const SCOPE_KEYS = new Set(['id', 'paths', 'kind', 'validators', 'targets', 'ignore', 'checks', 'independent', 'tracker', 'catalogue', 'share']);
 const TARGET_KEYS = new Set(['namespace', 'type', 'name']);
 const KINDS = new Set(['source', 'document', 'dataset', 'recipe', 'remote-object']);
 
@@ -183,6 +183,22 @@ export function validateWork(work) {
           if (bad !== null) problems.push(bad);
         }
       }
+      if (version >= 3 && scope.catalogue !== undefined) {
+        if (!isText(scope.catalogue) || !scope.catalogue.endsWith('.json')) {
+          problems.push(problem(`${at}.catalogue`, 'catalogue must name a local JSON file', 'use a repository-relative path to a catalogue', 'invalid-catalogue'));
+        } else {
+          const bad = pathProblem(`${at}.catalogue`, scope.catalogue);
+          if (bad !== null) problems.push(bad);
+        }
+      }
+      if (version >= 3 && scope.share !== undefined) {
+        if (!Array.isArray(scope.share) || !scope.share.every(isText)) {
+          problems.push(problem(`${at}.share`, 'share must list the paths permitted for scoped export', 'list only paths approved for sharing, or omit it to withhold the scope', 'invalid-share-policy'));
+        } else scope.share.forEach((path, index) => {
+          const bad = pathProblem(`${at}.share[${index}]`, path);
+          if (bad !== null) problems.push(bad);
+        });
+      }
       if (scope.targets !== undefined && (!Array.isArray(scope.targets) || !scope.targets.every(isText))) {
         problems.push(problem(`${at}.targets`, `${at}.targets must be a list of target ids`, 'reference a declared target by its id', 'invalid-targets'));
       }
@@ -246,6 +262,8 @@ export function normalizedWork(work) {
       ignore: (Array.isArray(scope.ignore) ? scope.ignore : []).filter(isText),
       ...(Array.isArray(scope.checks) ? { checks: scope.checks } : {}),
       ...(Array.isArray(scope.independent) ? { independent: scope.independent } : {}),
+      ...(typeof scope.catalogue === 'string' ? { catalogue: normalizePath(scope.catalogue) } : {}),
+      ...(Array.isArray(scope.share) ? { share: scope.share.map((path) => normalizePath(path) || '.') } : {}),
       ...(isObject(scope.tracker) ? { tracker: { ...scope.tracker, path: normalizePath(scope.tracker.path) || '.' } } : {}),
     })),
     targets: Array.isArray(work?.targets) ? work.targets.filter(isObject) : [],

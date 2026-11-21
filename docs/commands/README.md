@@ -167,9 +167,9 @@ simt init [path]                                                                
 simt knowledge build --scope <id> [--yes]                                                  # build the scoped corpus of declared sections under the ignored local area
 simt knowledge debt --input <file>                                                         # rank stale and unsupported knowledge by consequence per effort
 simt knowledge derivations --input <file>                                                  # which outputs a source, template or skill change puts in question
-simt knowledge export --input <file>                                                       # a bounded, permission-filtered packet another repository can read offline
+simt knowledge export (--input <file> | --scope <id>)                                      # a bounded, permission-filtered packet another repository can read offline
 simt knowledge impact (--input <file> --refs <ids> | --changed --scope <id>)               # what a change reaches over typed edges, and where the graph is unknown
-simt knowledge import --input <file>                                                       # validate an exported packet as data, and never execute it
+simt knowledge import --input <file> [--scope <id>]                                        # validate an exported packet as data, and never execute it
 simt knowledge rank (--input <file> | --scope <id>) --query "<question>"                   # rank evidence units by authority and quality, and report what was excluded
 simt knowledge sections <file.md>                                                          # the retrieval units a long document yields, with anchors and byte ranges
 simt knowledge why <claim-id> (--claims <file> | --scope <id>) [--limit <n>] [--page <n>]  # what a claim derives from, what depends on it, what applied at a date, and where it conflicts

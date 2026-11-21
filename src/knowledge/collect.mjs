@@ -55,12 +55,13 @@ export async function collectCorpus({ root, work, scope, previous = null }) {
     if (fatal !== undefined) return { error: `${IDENTITY_FILE}: ${fatal.message}`, remedy: fatal.remedy };
     identities = identityMap(map.paths);
   }
+  const deny = [...ALWAYS_DENIED, ...work.scopes.flatMap(({ tracker }) => tracker?.visibility === 'private' ? [tracker.path] : [])];
   const controlled = new Set(inventory.candidates.filter((row) => row.tracked && !row.symlink).map((row) => row.path));
   const corpus = await buildCorpus({
     scope,
     scopes: work.scopes,
     candidates: inventory.candidates,
-    policy: { deny: ALWAYS_DENIED, identities, maxBytes: CORPUS_DEFAULTS.maxBytes, unitBytes: CORPUS_DEFAULTS.unitBytes },
+    policy: { deny, identities, maxBytes: CORPUS_DEFAULTS.maxBytes, unitBytes: CORPUS_DEFAULTS.unitBytes },
     previous,
     read,
     sidecar(path) {

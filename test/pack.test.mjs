@@ -20,6 +20,7 @@
 // to catch is asserted structurally instead, in `markers.test.mjs`.
 
 import assert from 'node:assert/strict';
+import { realpathSync } from 'node:fs';
 import { execFile } from 'node:child_process';
 import { after, before, test } from 'node:test';
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
@@ -207,6 +208,23 @@ test('an installed consumer reads its own repository-local registry (PR24)', asy
   assert.equal(fromBelow.code, 0, fromBelow.out);
   assert.match(fromBelow.out, /\.simt[/\\]skills\.graph\.json/);
   assert.equal(fromBelow.out.includes(PACKAGE_ROOT), false, 'the installed tool reached into this checkout');
+
+  // The other branch of the same resolution: with a git repository present, the root
+  // git reports wins over the `.simt` walk-up. A decoy registry between the
+  // subdirectory and the root is what makes that a claim instead of a coincidence —
+  // the nearer one is what a walk-up would stop at, and it is deliberately unreadable.
+  const init = await run('git', ['init', '--quiet'], { cwd: root, env: NO_ESTATE });
+  assert.equal(init.code, 0, init.out);
+  await mkdir(join(root, 'app', '.simt'), { recursive: true });
+  await writeFile(join(root, 'app', '.simt', 'skills.graph.json'), '{ this is not a registry\n');
+
+  const withGit = await run(join(root, 'node_modules', '.bin', CLI), ['graph', 'lint'], { cwd: nested, env: NO_ESTATE });
+  assert.equal(withGit.code, 0, withGit.out);
+  // Git answers with the physical path; compare the same one the answer names.
+  const registry = join(realpathSync(root), '.simt', 'skills.graph.json');
+  assert.ok(withGit.out.includes(registry), `the run did not read ${registry}:\n${withGit.out}`);
+  assert.equal(withGit.out.includes(join('app', '.simt')), false, 'resolution stopped at the nearer .simt a walk-up would find');
+  assert.equal(withGit.out.includes(PACKAGE_ROOT), false, 'the installed tool reached into this checkout');
 });
 
 test('an explicitly named registry wins over the absence', async () => {

@@ -162,6 +162,7 @@ export const SPEC = [
   // before anything is created - the one default here that cannot mutate.
   { path: 'slice start', usage: '<id> --yes  |  -- "<text>"', summary: 'give a slice its worktree, branch and brief; -- starts one from a prompt, no row', writes: 'repo', defaultFor: 'slice', aliases: ['plan start'], flags: ["yes","id","session","test","type"], },
   { path: 'status', usage: '[--line]', summary: 'the repository snapshot, or one line of the last check', flags: ["line"], },
+  { path: 'studio', usage: '[--port <n>] [--no-open]', summary: 'serve the local dashboard over a loopback socket, guarded by a one-time token', flags: ["port","open"], },
   // `--check` is the spelling bare `sync` replaced: the command already reports before it
   // writes, so the flag asked a question the default answer answers. It keeps working and
   // says what replaced it, rather than disappearing from under a script.

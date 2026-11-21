@@ -179,6 +179,10 @@ test('every partial supersession in the corpus is found, with its kind and its r
     // exact version is superseded by a set of readable versions, which is the claim the
     // parser reads on the changed record.
     'ADR-144',
+    // ADR-187 joined when ADR-212 landed: its status line states that ruling 5's
+    // no-socket guarantee is narrowed for the explicitly invoked studio, which is the
+    // claim the parser reads on the changed record.
+    'ADR-187',
   ]);
   for (const d of decisions) {
     for (const p of d.partial) {

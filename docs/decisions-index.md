@@ -195,7 +195,7 @@ in [architecture/history.md](architecture/history.md).
 | [184](decisions/ADR-184-knowledge-debt-is-a-sum-of-named-components-and-no-invented-probability.md) | knowledge debt is a sum of named components, and a frequency nobody measured is not a probability | accepted · 2026-11-03 |
 | [185](decisions/ADR-185-an-adapter-is-data-and-being-installed-is-not-being-enabled.md) | an adapter descriptor is data, and being installed is not being enabled | accepted · 2026-11-03 |
 | [186](decisions/ADR-186-a-pilot-is-a-synthetic-fixture-and-its-live-half-stays-unrun.md) | a pilot is a synthetic fixture, and its live half stays unrun until someone authorises it | accepted · 2026-11-03 |
-| [187](decisions/ADR-187-rollout-keeps-the-old-contracts-and-opens-no-socket.md) | the rollout keeps the old contracts intact and opens no socket | accepted · 2026-11-03 |
+| [187](decisions/ADR-187-rollout-keeps-the-old-contracts-and-opens-no-socket.md) | the rollout keeps the old contracts intact and opens no socket | accepted · 2026-11-03 · ruling 5 narrowed by ADR-212 |
 | [188](decisions/ADR-188-the-knowledge-pilot-is-a-synthetic-fixture-over-the-real-modules.md) | the knowledge pilot is a synthetic fixture over the real modules, and its live half is unrun | accepted · 2026-11-03 |
 | [189](decisions/ADR-189-a-playbook-names-only-commands-that-exist.md) | a playbook names only commands that exist, and states what is not supported | accepted · 2026-11-03 |
 | [190](decisions/ADR-190-an-explanation-reads-a-payload-through-the-hooks-own-adapter.md) | an explanation reads a payload through the hook's own adapter and policy table | accepted · 2026-11-03 |
@@ -220,3 +220,4 @@ in [architecture/history.md](architecture/history.md).
 | [209](decisions/ADR-209-a-slice-finish-lands-the-slice-it-commits.md) | a slice finish lands the slice it commits | accepted · 2026-11-21 · filed while folding worktree cleanup into the slice commands · ruling 3's commit step is extended by ADR-210 |
 | [210](decisions/ADR-210-a-slice-finish-lands-work-already-committed.md) | a slice finish lands work already committed | accepted · 2026-11-21 · filed with the clean-worktree finish |
 | [211](decisions/ADR-211-the-bench-ships-as-an-optional-package-and-core-imports-none-of-it.md) | the bench ships as an optional package, and core imports none of it | accepted · 2026-11-21 · filed as PR31 (review 0005) |
+| [212](decisions/ADR-212-the-studio-opens-one-loopback-socket-only-when-invoked.md) | the studio opens one loopback socket, only when invoked | accepted · 2026-11-21 |

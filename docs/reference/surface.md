@@ -17,6 +17,7 @@ promise, a shipping decision, a prototype without one, and a frozen experimental
 | `pack` | experimental | packs | rule-pack authors, once a repository vendors one | frozen until a real repository adopts a pack (ADR-130); local profiles are the supported route, and `pack migrate` moves a pinned pack onto them |
 | `distill` | optional | distill | a maintainer turning a repository into a skill or rule proposal | one command, proposal output only; it writes no rule into a projected region |
 | `plugin` | optional | distribution | a harness vendor packaging the same tables this repository ships | generates a harness package; the shipped artefacts are qualified by the packaging tests |
+| `studio` | optional | studio | a maintainer watching the doors of the tool in a browser | one loopback socket, opened only by explicit invocation and read-only (ADR-212); nothing leaves the machine (ADR-075) |
 | `local-models` | optional | local | an operator pointing at a loopback model endpoint | off unless configured; bounded by ADR-075 and ADR-204 |
 | `work` | prototype | work | a design partner sequencing work from documents | document-driven doors; `work inspect` and `work setup` are the usable half and ship in the core path |
 | `action` | prototype | action | an execution runner reading a journal | read and review only; no command here starts an operation |
@@ -37,11 +38,12 @@ promise, a shipping decision, a prototype without one, and a frozen experimental
 | verify | `verify` |
 | federation | `federation` |
 | workspace sharing | `workspace-sharing` |
+| studio | `studio` |
 | compatibility aliases | `aliases` |
 
 ## Command inventory
 
-113 dispatchable paths, one row each in `src/commands/spec.mjs`. The generated
+114 dispatchable paths, one row each in `src/commands/spec.mjs`. The generated
 command pages carry the flags; this table carries the promise.
 
 | Command | Stability | Owner | Writes | MCP tool | Aliases |
@@ -150,6 +152,7 @@ command pages carry the flags; this table carries the promise.
 | `simt slice finish` | stable | adoption | repo | — | `plan finish` |
 | `simt slice start` | stable | adoption | repo | — | `plan start` |
 | `simt status` | stable | adoption | none | — | — |
+| `simt studio` | optional | studio | none | — | — |
 | `simt sync` | stable | adoption | repo | — | — |
 | `simt tests` | stable | adoption | none | — | — |
 | `simt tokens` | stable | adoption | none | — | `harness cost` |

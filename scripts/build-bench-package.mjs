@@ -2,9 +2,9 @@
 //
 // The checked-in source imports its shared core through relative paths, because a checkout
 // runs both trees in place. An installed package cannot: it sits in its own
-// node_modules/@simt-dev/bench, so those specifiers are rewritten to the core package's public
-// `simt-dev/src/*` export. The generated manifest declares simt-dev as a peer, never a
-// dependency, so installing the bench cannot silently install a second core.
+// node_modules/@simt-dev/bench, so those specifiers are rewritten to the core package's
+// public exact `simt-dev/src/<module>` exports. The generated manifest declares simt-dev as a
+// peer, never a dependency, so installing the bench cannot silently install a second core.
 //
 // Usage: node scripts/build-bench-package.mjs [outDir]
 // Then:  npm install <outDir>   (with simt-dev already installed)

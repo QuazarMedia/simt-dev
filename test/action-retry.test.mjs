@@ -18,7 +18,6 @@ import {
   idempotencyKey,
   planRetry,
   precondition,
-  simulateSchedule,
   surfaceProvesIdempotency,
 } from '../src/actions/retry.mjs';
 
@@ -77,9 +76,6 @@ test('a duplicate callback has an effect once', () => {
 test('backoff is deterministic, capped and deadline-aware', () => {
   assert.equal(backoff({ attempt: 3, baseMs: 100, capMs: 5000, seed: 'x' }), backoff({ attempt: 3, baseMs: 100, capMs: 5000, seed: 'x' }));
   assert.ok(backoff({ attempt: 20, baseMs: 100, capMs: 5000, seed: 'x' }) <= 5000);
-  const schedule = simulateSchedule({ attempts: 4, baseMs: 100, capMs: 5000, seed: 'x' });
-  assert.equal(schedule.length, 4);
-  assert.deepEqual(schedule, simulateSchedule({ attempts: 4, baseMs: 100, capMs: 5000, seed: 'x' }));
 
   const bounded = planRetry({ operation: 'read', attempt: 1, status: 503, elapsedMs: 29990, budget: { deadlineMs: 30000, baseMs: 1000, seed: 'x' } });
   assert.equal(bounded.decision, 'stop');

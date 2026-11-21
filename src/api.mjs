@@ -13,9 +13,9 @@
 // and calls the same handler `dispatch` does, so the two surfaces cannot answer
 // differently.
 //
-// The exports map in package.json points `import 'simt-dev'` here, and keeps
-// `./src/*` because the plugin runtime and the harness shims import deep paths.
-// Removing that subpath would break them to make the surface look tidier.
+// The exports map in package.json points `import 'simt-dev'` here. The optional bench
+// package still imports a fixed list of deep modules during its migration; package.json
+// names each one exactly. A wildcard is not part of the supported surface.
 
 export { run, renderText, renderJson } from './run.mjs';
 export { checkRepo, checkTargets, checkTarget, frozenFindings } from './commands/sync.mjs';

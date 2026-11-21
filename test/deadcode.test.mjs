@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
@@ -15,77 +16,109 @@ async function walk(dir, out = []) {
   return out;
 }
 
-/**
- * Every `export`ed binding in `src/`, with its defining file.
- *
- * Includes `export { x }` and `export { x as y }`, because a re-export is just as
- * dead as an unexported function when nothing imports it — and more confusingly so,
- * because it reads as a published surface.
- */
-async function exportedBindings(files) {
-  const found = [];
-  for (const file of files) {
-    const text = await readFile(file, 'utf8');
-    for (const m of text.matchAll(/^export\s+(?:async\s+)?(?:function|const|class|let)\s+([A-Za-z_$][\w$]*)/gm)) {
-      found.push({ name: m[1], file });
-    }
-    for (const m of text.matchAll(/^export\s*\{([^}]*)\}/gm)) {
-      for (const part of m[1].split(',')) {
-        const name = part.trim().split(/\s+as\s+/).pop()?.trim();
-        if (name) found.push({ name, file });
-      }
-    }
-  }
-  return found;
+/** The source set this test reads: the core tree and the optional packages. */
+async function walkSources() {
+  return [...(await walk(join(ROOT, 'src'))), ...(await walk(join(ROOT, 'packages')))];
+}
+
+/** Strip comments before asking whether a name occurs, so a mention is not a use. */
+function withoutComments(text) {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
+}
+
+function isProductionPath(file) {
+  return !file.split(sep).includes('test') && !file.endsWith('.test.mjs');
 }
 
 /**
- * Occurrences of `name` outside its own file.
+ * Production files that mention `name` after comments are removed.
  *
- * Deliberately counting whole files rather than import statements. A dead export can
- * still be reachable — through a template, a spread, or a name a caller builds at
- * runtime — and a name this tool only ever passes to its own importer is what we are
- * trying to find. What this cannot see is an occurrence in a file the walk missed, so
- * the walk covers `src`, `test` and `bin` and nothing else; a binding reachable only
- * from a script outside the checkout is not a thing this package ships.
+ * Test files are deliberately not part of the answer: a binding a test names and a
+ * production entry point never imports is not reachable. ADR-191 makes reachability a
+ * review step rather than a demand that every prototype binding have a command.
  */
-async function usesOutside(name, file, corpus) {
+function productionUses(name, corpus) {
   const pattern = new RegExp(`\\b${name.replace(/\$/g, '\\$')}\\b`, 'g');
+  const declaration = new RegExp(`^\\s*(?:export\\s+)?(?:async\\s+)?(?:function|const|class|let)\\s+${name}\\b[^\\n]*`, 'gm');
   const hits = [];
-  for (const [other, text] of corpus) {
-    if (other === file) continue;
-    const count = [...text.matchAll(pattern)].length;
-    if (count > 0) hits.push({ file: other, count });
+  for (const [file, text] of corpus) {
+    if (!isProductionPath(file)) continue;
+    const body = withoutComments(text).replace(declaration, '');
+    if ([...body.matchAll(pattern)].length > 0) hits.push(file);
   }
   return hits;
 }
 
-test('no exported binding in src/ has no caller', async () => {
-  const [srcFiles, testFiles] = await Promise.all([walkSources(), walk(join(ROOT, 'test'))]);
-  const binFiles = (await readdir(join(ROOT, 'bin')))
-    .filter((n) => n.endsWith('.mjs'))
-    .map((n) => join(ROOT, 'bin', n));
-
-  const corpus = [];
-  for (const file of [...srcFiles, ...testFiles, ...binFiles]) {
-    corpus.push([file, await readFile(file, 'utf8')]);
+/** Literal static and dynamic imports, including lazy routes. */
+function importSpecifiers(text) {
+  const clean = withoutComments(text);
+  const specs = [];
+  for (const match of clean.matchAll(/^\s*import\s+(?:[^'";]*?\s+from\s+)?['"]([^'"]+)['"]/gm)) {
+    specs.push(match[1]);
   }
-
-  const dead = [];
-  for (const { name, file } of await exportedBindings(srcFiles)) {
-    // `__internals` is a testing seam, and every module that offers one spells it the
-    // same way, so it cannot be counted by name: it is four different seams with one
-    // name. Each is still required to have a caller; they are listed here because the
-    // check below would otherwise pass a seam nobody imports.
-    const hits = await usesOutside(name, file, corpus);
-    if (hits.length === 0) dead.push(`${name} in ${file.replace(`${ROOT}/`, '')}`);
+  for (const match of clean.matchAll(/^\s*export\s+[^'";]*?\s+from\s+['"]([^'"]+)['"]/gm)) {
+    specs.push(match[1]);
   }
+  for (const match of clean.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(match[1]);
+  return [...new Set(specs)];
+}
 
-  assert.deepEqual(
-    dead,
-    [],
-    `exported but never imported. An export is a promise to a caller, and this package has no other callers:\n  ${dead.join('\n  ')}`,
-  );
+/** Resolve a relative or self-reference specifier to a shipped file, or null. */
+function resolveSpecifier(from, specifier) {
+  if (specifier.startsWith('.')) {
+    const base = resolve(dirname(from), specifier);
+    for (const candidate of [base, `${base}.mjs`, join(base, 'index.mjs')]) {
+      if (existsSync(candidate) && candidate.endsWith('.mjs')) return candidate;
+    }
+    return null;
+  }
+  if (specifier === 'simt-dev') return join(ROOT, 'src', 'api.mjs');
+  if (specifier.startsWith('simt-dev/')) {
+    const target = join(ROOT, specifier.slice('simt-dev/'.length));
+    return existsSync(target) ? target : null;
+  }
+  return null;
+}
+
+test('every production module edge resolves, including lazy routes', async () => {
+  const files = [
+    ...(await walkSources()),
+    ...(await walk(join(ROOT, 'bin'))),
+    ...(await walk(join(ROOT, 'scripts'))),
+  ];
+  const missing = [];
+  for (const file of files) {
+    for (const specifier of importSpecifiers(await readFile(file, 'utf8'))) {
+      if (!specifier.startsWith('.') && !specifier.startsWith('simt-dev')) continue;
+      if (resolveSpecifier(file, specifier) === null) {
+        missing.push(`${file.replace(`${ROOT}${sep}`, '')} -> ${specifier}`);
+      }
+    }
+  }
+  assert.deepEqual(missing, [], `an import names a file this package does not ship:\n  ${missing.join('\n  ')}`);
+});
+
+test('a test-only or comment-only occurrence cannot certify production reachability', () => {
+  const corpus = new Map([
+    ['src/owner.mjs', 'export function retiredThing() {}\n'],
+    ['src/comment.mjs', 'const untouched = 1; // retiredThing is named here but never imported.\n'],
+    ['test/owner.test.mjs', "import { retiredThing } from '../src/owner.mjs';\nretiredThing();\n"],
+  ]);
+  assert.deepEqual(productionUses('retiredThing', corpus), [], 'a test or comment certified reachability');
+
+  corpus.set('src/caller.mjs', "import { retiredThing } from './owner.mjs';\nretiredThing();\n");
+  assert.deepEqual(productionUses('retiredThing', corpus), ['src/caller.mjs']);
+});
+
+test('the bindings retired by PR32 are gone from their module namespaces', async () => {
+  const [lock, retry, observe] = await Promise.all([
+    import('../src/projection/lock.mjs'),
+    import('../src/actions/retry.mjs'),
+    import('../src/actions/observe.mjs'),
+  ]);
+  assert.equal('writeLockVariants' in lock, false, 'the retired variant writer is still exported');
+  assert.equal('simulateSchedule' in retry, false, 'the test-only scheduler is still exported');
+  assert.equal('jobState' in observe, false, 'the observation helper is still exported instead of private');
 });
 
 test('every __internals seam is actually imported', async () => {
@@ -114,7 +147,7 @@ test('every __internals seam is actually imported', async () => {
     offered.push(file);
 
     const rel = file.replace(`${ROOT}/src/`, '');
-    const base = basename(rel);
+    const base = rel.split('/').pop();
     const importer = new RegExp(
       `import\\s*\\{[^}]*\\b__internals\\b[^}]*\\}\\s*from\\s*'[^']*${base.replace('.', '\\.')}'`,
     );
@@ -125,13 +158,3 @@ test('every __internals seam is actually imported', async () => {
   assert.ok(offered.length > 0, 'no module offers a seam, so this test is asserting nothing');
   assert.deepEqual(dead, [], `a __internals seam nobody imports:\n  ${dead.join('\n  ')}`);
 });
-
-/**
- * The source set this test reads: the core tree and the optional packages.
- *
- * The bench left `src/` for `packages/bench` (review 0003 Q79): it still calls
- * `measure/records.mjs`, so an export used only by the bench is used, not dead.
- */
-async function walkSources() {
-  return [...(await walk(join(ROOT, 'src'))), ...(await walk(join(ROOT, 'packages')))];
-}

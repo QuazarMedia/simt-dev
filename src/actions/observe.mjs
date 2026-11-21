@@ -46,7 +46,7 @@ export function channelIndependence(channels = []) {
 /**
  * The state of an asynchronous job, from its own identity rather than its first response.
  */
-export function jobState(job = null) {
+function jobState(job = null) {
   if (!isObject(job)) return 'unknown';
   const status = String(job.state ?? job.status ?? '').toLowerCase();
   if (['succeeded', 'success', 'completed', 'done', '200', '201'].includes(status)) return 'succeeded';

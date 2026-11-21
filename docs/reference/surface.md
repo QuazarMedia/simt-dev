@@ -223,14 +223,52 @@ next major, and removing one is a deprecation with a window like any other name.
 | --- | --- | --- |
 | `.` | stable | the library surface above |
 | `./package.json` | stable | so a consumer can read the version and engines floor |
-| `./src/*` | deprecate | deep imports kept for the generated plugin runtime; import from the package root instead |
+| `./src/brief/assemble.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/brief/packet.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/commands/doc-input.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/commands/skills.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/graph/compile.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/graph/load.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/hooks/dispatcher.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/index/map.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/knowledge/observations.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/measure/ablation.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/measure/corpus.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/measure/metrics.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/measure/records.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/measure/stats.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/measure/task-schema.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/measure/tasks.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/name.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/output/index.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/package-version.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/plan/index.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/projection/manifest.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/projection/markers.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/projection/mdc.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/projection/project.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/projection/rules.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/projection/surfaces.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/repo-root.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/resolve/fingerprint.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/review/critic.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/run.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/state.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/sys/proc.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/testing/parsers.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/testing/patches.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/testing/paths.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/testing/runners.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/testing/vault.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/util/canonical.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/work/assurance.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 
 ## Deprecations
 
 | Working today | Use instead | Window |
 | --- | --- | --- |
 | simt sync --check | simt sync (drop --check: it reports before it writes) | accepted and announced; sync reports before it writes, so the flag asks nothing new |
-| deep imports through simt-dev/src/* | the package root exports | until the plugin runtime imports the root; not removed in a patch release |
+| deep imports through simt-dev/src/<module> | the package root exports; the optional bench uses the exact ./src/<module> entries above | the wildcard is gone; only the bench migration list remains and it gains no new paths |
 
 A removal is a separate, later decision: it needs the replacement to be the documented
 route for a release, and the deprecation to have been printed by the surface it names.

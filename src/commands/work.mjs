@@ -21,7 +21,7 @@ import { normalizePath } from '../work/artifacts.mjs';
 import { proposeScope } from '../work/setup.mjs';
 import { loadManifest, manifestPath } from '../manifest/schema.mjs';
 import { writeManifest } from '../projection/manifest.mjs';
-import { commitJournal, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
+import { commitJournal, ignoreJournal, journalIgnoreNext, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { buildCapsule, checkResume, duplicateEffects, reopenFor } from '../coordination/handoff.mjs';
 import { schedule } from '../coordination/workgraph.mjs';
@@ -180,8 +180,14 @@ export async function workSetupCommand(args, flags) {
 
   const before = await readBefore(await manifestPath(root));
   const after = proposal.changed ? proposal.text : before;
-  const diffs = flags.diff === true ? [{ path: MANIFEST_FILE, before, after }] : [];
   const retired = proposal.changed ? legacyManifest(root) : null;
+  const ignoreBefore = proposal.changed ? await readBefore(join(root, '.gitignore')) : null;
+  const ignoreAfter = proposal.changed ? journalIgnoreNext(ignoreBefore ?? '') : null;
+  const diffs = flags.diff === true ? [
+    { path: MANIFEST_FILE, before: retired === null ? before : null, after },
+    ...(retired === null ? [] : [{ path: MANIFEST_LEGACY, before, after: null }]),
+    ...(ignoreAfter === null ? [] : [{ path: '.gitignore', before: ignoreBefore, after: ignoreAfter }]),
+  ] : [];
   const apply = proposal.changed ? applyCommand(proposal.scope) : null;
   const payload = {
     ok: true,
@@ -189,6 +195,7 @@ export async function workSetupCommand(args, flags) {
     root,
     manifest: MANIFEST_FILE,
     retired,
+    addsLocalIgnore: ignoreAfter !== null,
     dryRun: !mode.apply,
     changed: proposal.changed,
     written: false,
@@ -218,6 +225,7 @@ export async function workSetupCommand(args, flags) {
     }
     let set = null;
     try {
+      await ignoreJournal(root, journal);
       set = await commitJournal(root, 'work setup', journal);
     } catch (error) {
       return fail(`${MANIFEST_FILE} is written, but its journal set is not: ${reason(error)}`, EXIT.FAIL, `the scope stands; ${CLI} undo cannot reverse this write, so edit the file by hand if it has to go`);
@@ -238,6 +246,7 @@ function renderSetup(payload) {
     `scope      ${payload.scope.id}  ${payload.scope.kind ?? 'any'}  ${payload.scope.paths.join(', ')}`,
   ];
   for (const command of payload.scope.validators ?? []) lines.push(`validator  ${command}`);
+  if (payload.addsLocalIgnore) lines.push('gitignore  .simt/local/');
   if (payload.retired !== null) lines.push(`retires    ${payload.retired}`);
   if (!payload.changed) lines.push('unchanged  this scope is already declared; nothing to write');
   else lines.push(payload.written ? 'wrote      one scope' : 'would add  one scope (preview: no bytes written)');

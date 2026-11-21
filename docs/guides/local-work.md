@@ -17,7 +17,8 @@ simt knowledge why retention.current --scope handbook --as-of 2024-06-01 --known
 ```
 
 Use the returned path and anchor to open the section in your editor. The scope limits
-which repository files enter the corpus. The optional `--where` limits which
+which repository files enter the corpus. The ranked list shows the best matching
+section per file. The optional `--where` limits which
 metadata values can answer a particular query. A historical query supplies both
 the effective date and the date through which observations may be used.
 
@@ -112,8 +113,14 @@ under the approved paths. It withholds private tracker paths and ignored sources
 
 ## Roll back a scope
 
-If `work setup` was the last journaled write, preview `simt undo` and apply it
-with `simt undo --yes` if the preview matches the change you want to remove.
-Otherwise, remove only the scope you added from `simt.json` and delete its
-rebuildable cache at `.simt/local/corpus/handbook.json`. Keep your canonical
-documents, reviewed metadata, existing validators, tracker and receipts.
+If `work setup` was the last journaled write, preview `simt undo --diff` and
+apply it with `simt undo --yes` if the preview matches what you want to restore.
+Undo restores the previous manifest and any Git ignore edit made by setup.
+The local journal and any built cache are separate from the tracked files.
+If you keep local state after removing the ignore entry, keep it excluded from
+Git through your local exclude file.
+
+If you have edited the manifest since setup, remove only the scope you added
+from `simt.json`. The cache at `.simt/local/corpus/handbook.json` is safe to
+delete in either case. Keep your canonical documents, reviewed metadata,
+existing validators, tracker and receipts.

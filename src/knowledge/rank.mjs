@@ -62,6 +62,27 @@ function coverage(terms, text) {
   return hits / terms.length;
 }
 
+function lexicalCoverage(unit, terms) {
+  const text = `${Array.isArray(unit.headings) ? unit.headings.join(' ') : ''} ${unit.text ?? ''}`;
+  const body = coverage(terms, text);
+  if (!isText(unit.label)) return body;
+  const label = coverage(terms, unit.label);
+  // An incidental mention can match every term in a long section. Give the source's
+  // own name equal weight so it can compete with sections that merely refer to it.
+  return (body + label) / 2;
+}
+
+/** Apply the same scope and permission rules to scored and exact lookup. */
+export function rankEligibility({ scope = {}, permissions = null } = {}) {
+  const required = Object.entries(scope ?? {}).filter(([, value]) => value !== undefined && value !== null);
+  const allowed = Array.isArray(permissions) ? new Set(permissions) : null;
+  return (unit) => {
+    if (allowed !== null && isText(unit.permission) && !allowed.has(unit.permission)) return 'permission';
+    const relation = satisfiesScope(unit.scope, required);
+    return relation === 'conflict' ? 'scope-mismatch' : relation === 'unknown' ? 'unknown-scope' : null;
+  };
+}
+
 /**
  * The total, from its parts.
  *
@@ -90,8 +111,7 @@ function labelsOf(unit, hubPenalty) {
 }
 
 function scoreOf(unit, terms, maxAuthority) {
-  const text = `${(Array.isArray(unit.headings) ? unit.headings.join(' ') : '')} ${unit.text ?? ''}`;
-  const lexical = coverage(terms, text);
+  const lexical = lexicalCoverage(unit, terms);
   const authority = Math.min(1, Math.max(0, Number(unit.authority) || 0) / maxAuthority);
   const evidence = Math.min(1, Math.max(0, Number(unit.evidence) || 0) / 3);
   const links = Math.max(0, Number(unit.links) || 0);
@@ -135,33 +155,27 @@ const publicHit = (hit) => ({
 /**
  * Rank the units a question may use.
  *
- * @param {{id?: string, path?: string, kind?: string, language?: string, text?: string, headings?: string[], scope?: object|null, authority?: number, evidence?: number, links?: number, derived?: boolean, stale?: boolean, permission?: string, conflictsWith?: {id: string, kind: string}[]}[]} units
+ * @param {{id?: string, path?: string, kind?: string, language?: string, text?: string, headings?: string[], label?: string, scope?: object|null, authority?: number, evidence?: number, links?: number, derived?: boolean, stale?: boolean, permission?: string, conflictsWith?: {id: string, kind: string}[]}[]} units
  * @param {{query?: string, scope?: object, permissions?: string[]|null, limit?: number}} [options]
  * @returns {object}
  */
 export function rank(units = [], { query = '', scope = {}, permissions = null, limit = 10 } = {}) {
   const terms = queryTerms(query);
-  const required = Object.entries(scope ?? {}).filter(([, value]) => value !== undefined && value !== null);
-  const allowed = Array.isArray(permissions) ? new Set(permissions) : null;
+  const classify = rankEligibility({ scope, permissions });
   const eligible = [];
   const unknownScope = [];
   const excluded = [];
 
   for (const unit of Array.isArray(units) ? units : []) {
-    if (allowed !== null && isText(unit.permission) && !allowed.has(unit.permission)) {
-      excluded.push({ id: unit.id ?? null, reason: 'permission' });
+    const reason = classify(unit);
+    if (reason === 'unknown-scope') {
+      if (lexicalCoverage(unit, terms) > 0) {
+        unknownScope.push({ id: unit.id ?? null, path: unit.path ?? null, class: reason });
+      }
       continue;
     }
-    const relation = satisfiesScope(unit.scope, required);
-    if (relation === 'conflict') {
-      excluded.push({ id: unit.id ?? null, reason: 'scope-mismatch' });
-      continue;
-    }
-    const text = `${(Array.isArray(unit.headings) ? unit.headings.join(' ') : '')} ${unit.text ?? ''}`;
-    if (relation === 'unknown') {
-      // A unit that cannot be placed is not silently dropped, and not ranked as if it
-      // applied: it is reported beside the answer.
-      if (coverage(terms, text) > 0) unknownScope.push({ id: unit.id ?? null, path: unit.path ?? null, class: 'unknown-scope' });
+    if (reason !== null) {
+      excluded.push({ id: unit.id ?? null, reason });
       continue;
     }
     eligible.push(unit);

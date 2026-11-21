@@ -79,7 +79,7 @@ simt verify status --changed --scope handbook
 | WK14 | Turn stale evidence and repeated work into reviewed maintenance | Maintenance | lifecycle | M | WK07, WK09, WK12 | Complete | 4caaae053cde35f4951c1d0639a5f5ebee22442b · test: node --test test/knowledge-debt.test.mjs test/knowledge-derivations.test.mjs test/lessons.test.mjs test/work-graduation.test.mjs test/work-doors.test.mjs test/docs.test.mjs |
 | WK15 | Qualify local adoption, migrate incrementally, and publish support | Release | qualify | M | WK06, WK10, WK12, WK13, WK14 | Complete | bd483c38bce724eb244dc8012e41335247ea6357 · test: npm test (isolated), npm run lint, npm run verify:shipped — bf7fb8f65376154fa0c3b28948259676f1dcf1b3 · test: npm test (isolated), npm run lint, npm run verify:shipped, two installed repository trials |
 
-WK06 is the first usable checkpoint. WK10 and WK12 make it a daily workflow. WK15 is the release exit. The [local qualification record](../reference/local-work-qualification.md) records the synthetic results. The two maintainer-led trials remain pending.
+WK06 is the first usable checkpoint. WK10 and WK12 make it a daily workflow. WK15 is the release exit. The [local qualification record](../reference/local-work-qualification.md) records the synthetic results and the two opted-in repository trials.
 
 ## Slices
 

@@ -18,10 +18,12 @@ A released pair installs by name: `npm install simt-dev @simt-dev/bench`. Instal
 rather than the directory: npm symlinks a directory install, and the package's core imports
 would then resolve beside the source checkout rather than beside `simt-dev`.
 
-The build rewrites the package's relative core imports to `simt-dev/src/*` and records
-`simt-dev` as a peer dependency, so the two packages share one core rather than installing a
-second copy. Without the package, every `simt bench` command exits `UNSUPPORTED` with the
-install remedy; the rest of the CLI, API and MCP surface runs unchanged.
+The build rewrites the package's relative core imports to the core's public exact
+`simt-dev/src/<module>` exports — one explicit entry per module in `package.json`'s
+`exports` map, no `./src/*` wildcard — and records `simt-dev` as a peer dependency, so the
+two packages share one core rather than installing a second copy. Without the package, every
+`simt bench` command exits `UNSUPPORTED` with the install remedy; the rest of the CLI, API
+and MCP surface runs unchanged.
 
 Replay and calibration answer from one JSON document and run offline. They are retained
 here because their vocabulary is the bench's, not the core's.

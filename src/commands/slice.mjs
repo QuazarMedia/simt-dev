@@ -643,31 +643,39 @@ function cachedResult({ name, at }) {
 }
 
 /**
- * The worktree's own commit when there is nothing staged. A slice whose work is already
- * committed has no commit for `finish` to make, but it still has to land; only tracked
- * edits that are not in a commit block the merge. Untracked files do not: cleanup keeps
- * them and their worktree, which is the same answer it gives after committing the
- * staged path.
+ * The worktree's own commit when it has one to land. `start` created this branch from
+ * main, so every commit ahead of main belongs to the slice; the branch is the boundary,
+ * not a commit count. A slice whose work is already committed has no commit for `finish`
+ * to make, but it still has to land. Once a commit is ahead, every tracked change still in
+ * the worktree blocks it - staged as well as unstaged - because landing the commit would
+ * leave that work attributed to the slice. Untracked files do not: cleanup keeps them and
+ * the worktree, as ADR-209 rules.
+ *
+ * With no commit ahead, staged files are the normal path and return null; without staged
+ * files, an unstaged edit refuses and a clean tree has nothing to land.
  */
-async function committedSlice(work, main) {
-  const status = String(await gitText(work, ['status', '--porcelain']).catch(() => ''))
+async function committedSlice(work, main, { staged = false } = {}) {
+  const status = String(await gitText(work, ['status', '--porcelain', '--untracked-files=no']).catch(() => ''))
     .split('\n')
     .filter(Boolean);
-  const dirty = status.filter((line) => !line.startsWith('??')).map((line) => line.slice(2).trim());
-  if (dirty.length > 0) {
-    return { error: `${work} has uncommitted changes (${dirty.slice(0, 3).join(', ')})` };
-  }
+  const dirty = status.map((line) => line.slice(2).trim());
   const sha = await gitText(work, ['rev-parse', 'HEAD']).catch(() => null);
   const mainHead = await gitText(main, ['rev-parse', 'HEAD']).catch(() => null);
   if (sha === null || mainHead === null) {
     return { error: `could not read ${sha === null ? 'the worktree HEAD' : 'the main checkout HEAD'}` };
   }
   const ahead = Number(await gitText(work, ['rev-list', '--count', `${mainHead}..HEAD`]).catch(() => '0'));
-  if (!(ahead > 0)) {
+  if (dirty.length > 0 && (ahead > 0 || !staged)) {
+    return { error: `${work} has uncommitted changes (${dirty.slice(0, 3).join(', ')})` };
+  }
+  if (ahead > 0) {
+    const subject = await gitText(work, ['log', '-1', '--format=%s']).catch(() => '');
+    return { sha, subject };
+  }
+  if (!staged) {
     return { error: `${work} has nothing staged and no commits ahead of ${main}` };
   }
-  const subject = await gitText(work, ['log', '-1', '--format=%s']).catch(() => '');
-  return { sha, subject };
+  return null;
 }
 
 async function finishSlice(root, id, flags) {
@@ -710,7 +718,7 @@ async function finishSlice(root, id, flags) {
   // Nothing staged is not nothing to land: the slice may already be committed in its
   // worktree. Read that commit now so the dry run can name it and the apply can skip
   // creating a second, empty one.
-  const committed = staged.length === 0 ? await committedSlice(work, main) : null;
+  const committed = await committedSlice(work, main, { staged: staged.length > 0 });
   const subject = committed?.sha ? committed.subject : subjectFor(type, id, title);
 
   if (!mode.apply) {
@@ -748,8 +756,8 @@ async function finishSlice(root, id, flags) {
       `gates    pre-commit  ${gateLine} (run on apply)`,
       committed?.sha
         ? `staged   0 file(s)  (HEAD ${committed.sha} is already committed; finish lands it)`
-        : staged.length === 0
-          ? `staged   0 file(s)  (finish refuses: ${committed?.error ?? 'nothing staged'})`
+        : committed?.error
+          ? `staged   ${staged.length} file(s)  (finish refuses: ${committed.error})`
           : `staged   ${staged.length} file(s)`,
       `subject  ${subject}`,
       stateLine,

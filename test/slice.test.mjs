@@ -230,6 +230,29 @@ test('a commit ahead with a tracked edit still in the worktree refuses to land',
   assert.equal(existsSync(worktree), true, 'the worktree was removed with the edit still in it');
 });
 
+test('a staged edit after the slice commit also refuses to land', async () => {
+  const { root } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+  await git(['-C', worktree, 'commit', '-qm', 'feat(a27): commit the slice']);
+  const committed = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 3;\n');
+  await git(['-C', worktree, 'add', 'a.mjs']);
+
+  const preview = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true' }));
+  assert.equal(preview.code, 0, preview.stderr);
+  assert.match(preview.stdout, /finish refuses: .*has uncommitted changes \(a\.mjs\)/, 'the dry run hid the refusal');
+
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
+  assert.notEqual(result.code, 0, 'a staged edit after the commit was landed as a second commit');
+  assert.match(result.stdout + result.stderr, /has uncommitted changes \(a\.mjs\)/, 'the refusal did not name the staged edit');
+  assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), committed, 'a second commit was made');
+});
+
 test('a clean worktree with no commits ahead refuses to land', async () => {
   const { root } = await startableRepo();
   const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));

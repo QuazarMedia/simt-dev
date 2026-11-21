@@ -1,5 +1,5 @@
 ---
-simt-affects: ["src/studio/server.mjs", "src/studio/api.mjs", "src/commands/studio.mjs", "test/studio-server.test.mjs", "test/studio-api.test.mjs", "test/studio-shell.test.mjs"]
+simt-affects: ["src/studio/server.mjs", "src/studio/api.mjs", "src/commands/studio.mjs", "src/studio/public/overview.js", "test/studio-server.test.mjs", "test/studio-api.test.mjs", "test/studio-shell.test.mjs", "test/studio-overview.test.mjs"]
 simt-supersedes: [{ adr: "ADR-187", ruling: 5, kind: "narrowed" }]
 ---
 
@@ -54,6 +54,10 @@ behaviour; it is an explicitly invoked tool, the same category as `simt mcp` hol
 - `test/studio-shell.test.mjs` holds the shell to ruling 5: no shipped asset references
   another origin, the asset budget and file-line ceiling hold, and a refusal renders its
   error and remedy rather than hiding behind a loading state.
+- `test/studio-overview.test.mjs` holds the Overview to rulings 4 and 5: it is a pure
+  view-model over the doors' own documents, a failed slot or a refused check/work read is
+  confined to its own card while the rest still answer, every finding renders with its
+  remedy, and a count opens the rows behind it rather than hiding them.
 - The surface inventory classifies `studio` as `optional` (ADR-207): shipped and supported
   when used, not part of the adoption path.
 - A future control surface must cite this record and add its own; the read-only promise here

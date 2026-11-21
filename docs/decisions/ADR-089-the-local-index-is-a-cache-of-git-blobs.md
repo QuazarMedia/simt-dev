@@ -1,6 +1,6 @@
 # ADR-089 — The local index is a cache of git blobs
 
-Status: **accepted** · 2026-10-18 · filed as R20 (plan 0003)
+Status: **accepted** · 2026-10-18 · filed as R20 (plan 0003) · ruling 2 narrowed by [ADR-201](ADR-201-the-index-records-its-inputs-and-unknown-freshness-is-a-state.md) (2026-11-21): an unchanged blob is still not re-read, but its edges are re-resolved when the tracked path set or the language table changes.
 
 **Affects:** `src/index/store.mjs`, `src/commands/repoindex.mjs`, `test/index.test.mjs`
 

@@ -30,7 +30,16 @@ export async function indexCommand(args, flags) {
       const answer = wantsSearch ? await opened.search(task, { limit }) : await opened.rank(task, { limit });
       if (answer.ok !== true) return fail(answer.error.message, EXIT.FAIL, `run: ${CLI} index`);
       const rows = Array.isArray(answer.data) ? answer.data : [];
-      const payload = { ok: true, command: 'index', root, asked: wantsSearch ? 'search' : 'rank', task, rows };
+      const provenance = await opened.basis();
+      const payload = {
+        ok: true,
+        command: 'index',
+        root,
+        asked: wantsSearch ? 'search' : 'rank',
+        task,
+        rows,
+        basis: provenance.ok === true ? provenance.data : null,
+      };
       if (isJson(flags)) {
         emitJson(payload);
         return EXIT.OK;
@@ -58,11 +67,15 @@ export async function indexCommand(args, flags) {
         emitJson(payload);
         return EXIT.OK;
       }
+      const freshness = status.data.freshness ?? { state: status.data.stale ? 'stale' : 'current' };
+      const basis = status.data.basis?.index ?? {};
       emit([
-        `files    ${status.data.counts.files}`,
-        `symbols  ${status.data.counts.symbols}`,
-        `edges    ${status.data.counts.edges}`,
-        `stale    ${status.data.stale ? 'yes - run: simt index' : 'no'}`,
+        `files     ${status.data.counts.files}`,
+        `symbols   ${status.data.counts.symbols}`,
+        `edges     ${status.data.counts.edges}`,
+        `freshness ${freshness.state}${freshness.reason ? ` - ${freshness.reason}` : ''}`,
+        `stale     ${freshness.state === 'stale' ? 'yes - run: simt index' : freshness.state === 'current' ? 'no' : freshness.state}`,
+        `basis     ${basis.available ? `index ${basis.build}` : 'no build'} · rows staged · overlay none`,
       ].join('\n'));
       return EXIT.OK;
     } finally {

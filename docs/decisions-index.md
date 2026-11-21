@@ -99,7 +99,7 @@ in [architecture/history.md](architecture/history.md).
 | [086](decisions/ADR-086-the-stable-prefix-comes-first-and-the-lock-records-both-digests.md) | The stable prefix comes first, and the lock records both digests | accepted · 2026-10-18 · filed as R13 (plan 0003) · ruling 3's file name is superseded by ADR-110 |
 | [087](decisions/ADR-087-a-run-is-evidence-for-one-tree.md) | A run is evidence for one tree | accepted · 2026-10-18 · filed as R17 (plan 0003) |
 | [088](decisions/ADR-088-a-marked-line-is-enforced-by-a-checker.md) | A marked line is enforced by a checker | accepted · 2026-10-18 · filed as R19 (plan 0003) · ruling 3 narrowed by ADR-090 |
-| [089](decisions/ADR-089-the-local-index-is-a-cache-of-git-blobs.md) | The local index is a cache of git blobs | accepted · 2026-10-18 · filed as R20 (plan 0003) |
+| [089](decisions/ADR-089-the-local-index-is-a-cache-of-git-blobs.md) | The local index is a cache of git blobs | accepted · 2026-10-18 · filed as R20 (plan 0003) · ruling 2 narrowed by ADR-201 (2026-11-21): an unchanged blob is still not re-read, but its edges are re-resolved when the tracked path set or the language table changes. |
 | [090](decisions/ADR-090-an-optional-adapter-is-off-until-named.md) | An optional adapter is off until a repository names it | accepted · 2026-10-18 · filed as R21 (plan 0003) |
 | [091](decisions/ADR-091-the-map-ranks-files-a-task-mentions.md) | The map ranks the files a task mentions, and the files next to them | accepted · 2026-10-18 · filed as R22 (plan 0003) |
 | [092](decisions/ADR-092-tests-are-imports-conventions-and-coverage.md) | A test is an import, a conventional neighbour, or a coverage record | accepted · 2026-10-18 · filed as R24 (plan 0003) |
@@ -209,3 +209,4 @@ in [architecture/history.md](architecture/history.md).
 | [198](decisions/ADR-198-the-strict-gate-verdict-is-opted-into.md) | the strict gate verdict is opted into, and the default keeps its answer | accepted · 2026-11-19 |
 | [199](decisions/ADR-199-the-work-schema-carries-versions-and-a-validator-is-installed-only-when-its-file-is.md) | the work schema carries versions, and a validator is installed only when its file is | accepted · 2026-11-19 · supersedes ADR-144 ruling 1 |
 | [200](decisions/ADR-200-a-repository-that-runs-a-source-checkout-has-no-release-to-pin.md) | a repository that runs a source checkout has no release to pin | accepted · 2026-11-20 · affects every repository that adopts simt-dev from a checkout |
+| [201](decisions/ADR-201-the-index-records-its-inputs-and-unknown-freshness-is-a-state.md) | the index records the inputs it was built from, and unknown freshness is a state | accepted · 2026-11-21 · filed as review 0005 PR23 · narrows ADR-089 ruling 2 |

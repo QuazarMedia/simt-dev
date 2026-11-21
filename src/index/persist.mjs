@@ -252,7 +252,7 @@ export function treeDigest(listed) {
   return createHash('sha1').update(rows, 'utf8').digest('hex');
 }
 
-export async function writeSqlite(root, next, removed, symbols, edges, fts, embeddings = [], tree = '') {
+export async function writeSqlite(root, next, removed, symbols, edges, fts, embeddings = [], tree = '', meta = {}) {
   const { DatabaseSync } = await import('node:sqlite');
   // The canonical file is written when it is this version's or older (the
   // migration upgrades the older one in place,): a database at
@@ -343,6 +343,10 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     // than node id, so nothing else deletes the old bodies. Left in place, a file that
     // dropped its CJK text stayed findable by it.
     const dropTri = db.prepare('delete from fts_tri where ref = ?');
+    // An unchanged importer re-resolves its edges when the tracked path set or the
+    // language table moves. Its source row and nodes stay; only the edges it owns
+    // are replaced.
+    const dropEdgesByOwner = db.prepare('delete from edges where owner_source_id = ?');
     const upsertVector = db.prepare(`insert into vectors(node_id, model, dims, vec) values (?, ?, ?, ?)
       on conflict(node_id) do update set model = excluded.model, dims = excluded.dims, vec = excluded.vec`);
     const dropSource = [
@@ -357,12 +361,20 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       const sourceId = sourceIdOf.get(row.path)?.id;
       if (sourceId !== undefined) for (const st of dropDependents) st.run(sourceId);
       dropTri.run(row.path);
-      upsertSource.run(row.path, row.blob, row.lang, row.bytes, JSON.stringify({ pkg: row.pkg ?? '' }));
+      upsertSource.run(row.path, row.blob, row.lang, row.bytes, JSON.stringify({
+        pkg: row.pkg ?? '',
+        imports: Array.isArray(row.imports) ? row.imports : [],
+        resolution: row.resolution ?? 'none',
+      }));
     }
     for (const path of removed) {
       for (const st of dropSource) st.run(path);
       // fts_tri is still path-keyed: the trigram table keeps its v4 shape .
       db.prepare('delete from fts_tri where ref = ?').run(path);
+    }
+    for (const path of Array.isArray(meta.edgeOwners) ? meta.edgeOwners : []) {
+      const sourceId = sourceIdOf.get(path)?.id;
+      if (sourceId !== undefined) dropEdgesByOwner.run(sourceId);
     }
     for (const row of next) {
       addFileNode.run(row.path, sourceIdOf.get(row.path).id);
@@ -407,6 +419,13 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     );
     upsertMeta.run('schema', SCHEMA_V);
     upsertMeta.run('tree', tree);
+    // What the build read, beside the tree it saw. A reader compares digests
+    // instead of guessing from a blob: an unchanged blob under a new parser,
+    // package root or tracked path set is a rebuild, and an absent stamp is one
+    // too (the cache was written by a reading this version cannot describe).
+    upsertMeta.run('inputs', meta.inputs ?? '');
+    upsertMeta.run('resolution', meta.resolution ?? '');
+    upsertMeta.run('build', meta.build ?? '');
     db.exec('commit');
   } catch (error) {
     try { db.exec('rollback'); } catch { /* a failed begin has nothing to undo */ }
@@ -528,10 +547,69 @@ export async function readSchema(root) {
   return rows[0]?.value ?? '';
 }
 
-/** The tree the stored index was built from, or '' when no build has vouched for one. */
-export async function readTreeDigest(root) {
-  const { rows } = await readSqliteRows(root, "select value from meta where key = 'tree'");
-  return rows[0]?.value ?? '';
+const BUILD_META_KEYS = ['schema', 'tree', 'inputs', 'resolution', 'build'];
+
+/**
+ * The stamps a build leaves, with the read error attached.
+ *
+ * One open for all five: a reader that compared `tree` from one connection and
+ * `inputs` from another could see two different builds as one.
+ */
+export async function readBuildMeta(root) {
+  const placeholders = BUILD_META_KEYS.map(() => '?').join(', ');
+  const { rows, error } = await readSqliteRows(
+    root,
+    `select key, value from meta where key in (${placeholders})`,
+    BUILD_META_KEYS,
+  );
+  if (error) return { meta: {}, error };
+  return { meta: Object.fromEntries(rows.map((row) => [row.key, row.value])), error: null };
+}
+
+/**
+ * Run several reads on one connection, inside one read transaction.
+ *
+ * The graph is files, symbols and edges; three separate opens could straddle a
+ * concurrent build and answer with rows from two of them. WAL makes the
+ * transaction's snapshot cheap, and a read is exactly where "which build is
+ * this" has to have one answer.
+ */
+export async function readSqliteBatch(root, queries = []) {
+  let DatabaseSync;
+  try {
+    ({ DatabaseSync } = await import('node:sqlite'));
+  } catch {
+    return { results: null, error: null };
+  }
+  let file;
+  try {
+    file = await resolveSqliteFile(root);
+  } catch (error) {
+    return { results: null, error: asIndexError(error) };
+  }
+  if (!file) return { results: null, error: null };
+  const db = new DatabaseSync(file);
+  try {
+    db.exec('begin');
+    const results = queries.map(([sql, params = []]) => db.prepare(sql).all(...params));
+    db.exec('commit');
+    return { results, error: null };
+  } catch (error) {
+    try { db.exec('rollback'); } catch { /* a failed begin has nothing to undo */ }
+    return { results: null, error: asIndexError(error) };
+  } finally {
+    db.close();
+  }
+}
+
+/** One digest spelling for an index input: JSON of the canonical value. */
+export function digestOfParts(value) {
+  return createHash('sha1').update(JSON.stringify(value), 'utf8').digest('hex');
+}
+
+/** A digest of text bytes, for an injected parser's identity. */
+export function digestOfText(text) {
+  return createHash('sha1').update(String(text ?? ''), 'utf8').digest('hex');
 }
 
 export async function countSqlite(root) {

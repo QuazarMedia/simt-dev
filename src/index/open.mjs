@@ -14,7 +14,8 @@ import { coverage } from './coverage.mjs';
 import { governs } from './govern.mjs';
 import { dependents } from './impact.mjs';
 import { rankFiles } from './map.mjs';
-import { isIndexStale, readEdges, readFiles, readSymbols, reindex, searchFtsBm25 } from './store.mjs';
+import { indexFreshness, readBasis } from './freshness.mjs';
+import { readGraph, reindex, searchFtsBm25 } from './store.mjs';
 
 const INDEX_CODES = {
   BUILD: 'E_BUILD',
@@ -32,17 +33,27 @@ function fail(code, message) {
 }
 
 /**
- * The files, symbols and edges the index holds. The lazy projection of
- * `loadGraph`: no FTS bodies, no vectors, because nothing on this handle
- * scores them.
+ * The files, symbols and edges the index holds, from one build.
+ *
+ * The lazy projection of `loadGraph`: no FTS bodies, no vectors, because
+ * nothing on this handle scores them - and one read transaction, because three
+ * opens could answer from two builds.
  */
 async function loadGraphData(root) {
-  const [files, symbols, edges] = await Promise.all([
-    readFiles(root),
-    readSymbols(root),
-    readEdges(root),
-  ]);
-  return { files, symbols, edges };
+  return readGraph(root);
+}
+
+/**
+ * Attach the provenance without changing the value a caller already iterates.
+ *
+ * Non-enumerable on purpose: `Array.isArray` still holds, a JSON payload of the
+ * rows is unchanged, and `result.data.basis` answers "which build was this".
+ */
+function withBasis(value, basis) {
+  if (value === null || typeof value !== 'object') return value;
+  if (Object.prototype.hasOwnProperty.call(value, 'basis')) return value;
+  Object.defineProperty(value, 'basis', { value: basis, enumerable: false, configurable: true });
+  return value;
 }
 
 /**
@@ -67,6 +78,12 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
 
   let closed = false;
   let cached = null;
+  let cachedBasis = null;
+
+  async function basis() {
+    if (cachedBasis === null) cachedBasis = await readBasis(root);
+    return cachedBasis;
+  }
 
   async function graph() {
     if (closed) throw new Error(INDEX_CODES.CLOSED);
@@ -86,13 +103,28 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
   const handle = {
     ok: true,
 
+    /** What the index was built from: build, tree, inputs, resolution, overlay and row basis. */
+    basis: () => answered(async () => ok(await basis())),
+
     /** Freshness and row counts of the open index. */
     status: () =>
       answered(async () => {
         const g = await graph();
+        // A read failure is named before an emptiness is reported: a locked or
+        // corrupt index used to answer "the index is empty", which is a fact
+        // about a different index.
+        if (g.files.error) {
+          const code = typeof g.files.error.code === 'string' ? g.files.error.code : INDEX_CODES.READ;
+          return fail(code, g.files.error.message ?? String(g.files.error));
+        }
         if (g.files.length === 0) return fail(INDEX_CODES.NO_INDEX, 'the index is empty');
-        const stale = await isIndexStale(root);
-        return ok({ stale, counts: { files: g.files.length, symbols: g.symbols.length, edges: g.edges.length } });
+        const freshness = await indexFreshness(root);
+        return ok({
+          stale: freshness.state === 'stale',
+          freshness,
+          counts: { files: g.files.length, symbols: g.symbols.length, edges: g.edges.length },
+          basis: await basis(),
+        });
       }),
 
     /**
@@ -109,7 +141,8 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
           const code = typeof rows.error.code === 'string' ? rows.error.code : INDEX_CODES.READ;
           return fail(code, rows.error.message ?? String(rows.error));
         }
-        return ok(limit === undefined ? rows : rows.slice(0, limit));
+        const answer = limit === undefined ? rows : rows.slice(0, limit);
+        return ok(withBasis(answer, await basis()));
       }),
 
     /**
@@ -129,7 +162,8 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
           return fail(code, bm25.error.message ?? String(bm25.error));
         }
         const ranked = rankFiles({ ...g, bm25, task });
-        return ok(limit === undefined ? ranked : ranked.slice(0, limit));
+        const answer = limit === undefined ? ranked : ranked.slice(0, limit);
+        return ok(withBasis(answer, await basis()));
       }),
 
     /**
@@ -142,7 +176,7 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
     coverage: (paths, options) =>
       answered(async () => {
         const g = await graph();
-        return ok(coverage({ files: g.files, imports: g.edges }, paths, options));
+        return ok(withBasis(coverage({ files: g.files, imports: g.edges }, paths, options), await basis()));
       }),
 
     /**
@@ -155,7 +189,7 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
     impact: (file, { limit } = {}) =>
       answered(async () => {
         const g = await graph();
-        return ok(dependents(file, g.edges, limit));
+        return ok(withBasis(dependents(file, g.edges, limit), await basis()));
       }),
 
     /**
@@ -166,7 +200,8 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
      * @param {{records?: {id: string, title: string, text: string}[], ctx?: {files: Set<string>, commands: Set<string>, roots: string[]}}} [corpus]
      * @returns {Promise<{ok: true, data: {kind: string, id: string, detail?: string}[]}|{ok: false, error: {code: string, message: string}}>}
      */
-    governs: (file, corpus) => answered(() => ok(governs(file, corpus ?? {}))),
+    governs: (file, corpus) =>
+      answered(async () => ok(withBasis(governs(file, corpus ?? {}), await basis()))),
 
     /** Release the handle. Calls after it answer `E_CLOSED`. */
     close() {

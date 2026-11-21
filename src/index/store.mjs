@@ -6,7 +6,7 @@
 // that has not changed is not read again.
 
 import { spawn } from 'node:child_process';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { git as gitRaw } from '../sys/git.mjs';
@@ -26,10 +26,13 @@ import {
   SQLITE_FILE,
   countSqlite,
   decodeVectorBlob,
+  digestOfParts,
+  digestOfText,
   encodeVectorBlob,
+  readBuildMeta,
   readSchema,
+  readSqliteBatch,
   readSqliteRows,
-  readTreeDigest,
   treeDigest,
   writeSqlite,
 } from './persist.mjs';
@@ -43,6 +46,16 @@ const MARKERS = ['package.json', 'pyproject.toml', 'go.mod', 'Cargo.toml', 'pom.
 // tokenizing it would buy nothing . The cap sits under that file on purpose
 // so the 65 MiB test exercises the skip, not the tokenize path.
 const BLOB_CAP = 16 * 1024 * 1024;
+
+// What the built-in extractor and import resolver mean, separately from the
+// database schema. Bump it when their reading changes: every cache built by the
+// older reading is then re-extracted, which a schema migration is not for.
+const INDEX_INPUT_REVISION = 2;
+
+// The index's file scope. `git ls-files -s` is the whole tracked tree; a build
+// that restricted it would be a second meaning of the cache, and the stamp says
+// which one this is.
+const INDEX_SCOPE = 'tracked-tree';
 
 // Per root, because a repository may declare its own language in `.simt/ecosystems/`.
 // The module-level table was the shipped set for every repository in the process.
@@ -66,7 +79,7 @@ const INDEX_NODE_FLOOR = '22.20.0';
  * both FTS schemas in a memory database and every read path used to pay for it.
  */
 let floorChecked;
-async function ensureIndexSupport() {
+export async function ensureIndexSupport() {
   floorChecked ??= (async () => {
     try {
       const { DatabaseSync } = await import('node:sqlite');
@@ -241,10 +254,25 @@ export async function reindex(root, opts = {}) {
   const version = await readSchema(root);
   // A cache written before symbols existed has the right blobs and the wrong
   // tables. Re-extract once, then an unchanged blob stays untouched.
-  const force = version !== SCHEMA_V;
-  const previous = await readFiles(root);
+  const forceSchema = version !== SCHEMA_V;
+  // The package layout is an input of the row, not decoration: an unchanged blob
+  // under a new nearest package marker has a new `pkg`, and resolution can cross a
+  // boundary it did not before.
+  const packages = await packageLayout(root, listed);
+  const adapter = await resolveAdapter(root, opts);
+  const stored = await readBuildMeta(root);
+  const inputs = inputsDigest(root, { adapter, packages });
+  const resolution = resolutionDigest(root, listed);
+  // A cache with no stamp was written by a reading this one cannot describe, so
+  // it is rebuilt rather than partly reused.
+  const force = forceSchema || stored.error != null || !stored.meta.inputs || stored.meta.inputs !== inputs;
+  // Import resolution reads the tracked path set and the language table, not a
+  // file's bytes. When either moves, an unchanged importer's edge can name a
+  // destination that was added, deleted or renamed; its stored specifiers are
+  // enough to re-resolve the edge without reading the blob again.
+  const resolutionChanged = !force && Boolean(stored.meta.resolution) && stored.meta.resolution !== resolution;
+  const previous = await readBuildRows(root);
   const prior = new Map(previous.map((row) => [row.path, row]));
-  const cache = new Map();
   const changed = [];
   for (const entry of listed) {
     const old = prior.get(entry.path);
@@ -256,7 +284,6 @@ export async function reindex(root, opts = {}) {
   // streamed and tokenized: their row is written, their text is never read.
   const textBlobs = changed.map((entry) => entry.blob).filter((blob) => (sizes.get(blob) ?? 0) <= BLOB_CAP);
   const texts = await blobTexts(root, textBlobs);
-  const adapter = await resolveAdapter(root, opts);
   const paths = new Set(listed.map((entry) => entry.path));
   const next = [];
   const symbols = [];
@@ -265,25 +292,41 @@ export async function reindex(root, opts = {}) {
   let skipped = 0;
   for (const entry of changed) {
     const lang = langOf(entry.path, root);
+    const text = texts.get(entry.blob);
+    const pulled = text == null
+      ? { symbols: [], imports: [], edges: null }
+      : await runExtract(entry.path, text, lang, adapter.module);
+    const resolved = pulled.edges ?? resolveImports(entry.path, pulled.imports, paths, lang);
     next.push({
       path: entry.path,
       blob: entry.blob,
       lang,
       bytes: sizes.get(entry.blob) ?? 0,
-      pkg: await packageOf(root, entry.path, cache),
+      pkg: packages.get(entry.path) ?? '',
+      // Kept so a later build can re-resolve this file's edges without its bytes.
+      imports: Array.isArray(pulled.imports) ? pulled.imports : [],
+      resolution: text == null ? 'none' : pulled.edges ? 'adapter' : 'builtin',
     });
-    const text = texts.get(entry.blob);
-    const pulled = text == null
-      ? { symbols: [], imports: [], edges: null }
-      : await runExtract(entry.path, text, lang, adapter.module);
     symbols.push(...pulled.symbols);
-    edges.push(...(pulled.edges ?? resolveImports(entry.path, pulled.imports, paths, lang)));
+    edges.push(...resolved);
     // A null blob is binary: recorded in `skipped`, never tokenized.
     if (text == null) {
       skipped += 1;
       continue;
     }
     fts.push(...buildFtsBodies(entry.path, pulled.symbols, text, root));
+  }
+  const edgeOwners = [];
+  if (resolutionChanged) {
+    for (const row of previous) {
+      if (!paths.has(row.path)) continue;
+      // An adapter's edges are its own reading; its identity is part of `inputs`,
+      // so an adapter change already forced a re-extraction. A file that imported
+      // nothing has no edge a new path set could change.
+      if (row.resolution !== 'builtin' || !Array.isArray(row.imports) || row.imports.length === 0) continue;
+      edgeOwners.push(row.path);
+      edges.push(...resolveImports(row.path, row.imports, paths, row.lang));
+    }
   }
   const removed = previous.filter((row) => !paths.has(row.path)).map((row) => row.path);
   // The tree this build vouches for, stored beside the rows so a later read
@@ -295,44 +338,74 @@ export async function reindex(root, opts = {}) {
     fetchImpl: opts.fetchImpl,
   });
   const tree = treeDigest(listed);
-  await writeSqlite(root, next, removed, symbols, edges, fts, embedBuild.rows, tree);
-  const stored = await countSqlite(root);
+  const build = digestOfParts(['index-build-v1', tree, inputs, resolution]);
+  await writeSqlite(root, next, removed, symbols, edges, fts, embedBuild.rows, tree, {
+    inputs,
+    resolution,
+    build,
+    edgeOwners,
+  });
+  const counts = await countSqlite(root);
   return {
     files: listed.length,
     updated: next.length,
     removed: removed.length,
-    symbols: stored.symbols,
-    edges: stored.edges,
-    embeddings: stored.embeddings ?? 0,
+    edgesRefreshed: edgeOwners.length,
+    symbols: counts.symbols,
+    edges: counts.edges,
+    embeddings: counts.embeddings ?? 0,
     embedState: embedBuild.state,
     parsers: adapter.state,
+    inputs,
+    resolution,
+    build,
     skipped,
     ms: Date.now() - started,
   };
 }
 
+/** The nearest package directory for every listed path, computed once per build. */
+async function packageLayout(root, listed) {
+  const cache = new Map();
+  const packages = new Map();
+  for (const entry of listed) packages.set(entry.path, await packageOf(root, entry.path, cache));
+  return packages;
+}
+
+const byEntryName = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+
 /**
- * Whether the stored index predates the current tree.
+ * The parser, language table, package layout and scope a build's rows are a function of.
  *
- * One `git ls-files -s` and one meta read: no blob is re-read, so the check
- * costs ~100 ms and every read path can afford it. False when no build has
- * vouched for a tree (that is cold, not stale) and when git cannot answer -
- * a cache of blobs is still a cache when the worktree tool is missing, and
- * refusing to serve it would turn every offline read into an error.
- *
- * @returns {Promise<boolean>}
+ * The package layout is the set of package roots the tracked files resolve to, not
+ * the path-to-package map: a file added inside an existing package changes neither
+ * a row's `pkg` nor how a relative import resolves, and rebuilding the tree for it
+ * would make every newly tracked file a full re-extraction.
  */
-export async function isIndexStale(root, opts = {}) {
-  await ensureIndexSupport();
-  const stored = await readTreeDigest(root);
-  if (!stored) return false;
-  let listed;
-  try {
-    listed = await lsFiles(root);
-  } catch {
-    return false;
-  }
-  return treeDigest(listed) !== stored;
+function inputsDigest(root, { adapter, packages }) {
+  return digestOfParts({
+    format: 'index-inputs-v1',
+    schema: SCHEMA_V,
+    revision: INDEX_INPUT_REVISION,
+    scope: INDEX_SCOPE,
+    parser: {
+      state: adapter.state,
+      id: adapter.id ?? '',
+      file: adapter.file ?? '',
+      digest: adapter.digest ?? '',
+    },
+    languages: Object.entries(langTable(root)).sort(byEntryName),
+    packages: [...new Set(packages.values())].sort(),
+  });
+}
+
+/** What import resolution reads: the tracked path set and the language table. */
+function resolutionDigest(root, listed) {
+  return digestOfParts({
+    format: 'index-resolution-v1',
+    languages: Object.entries(langTable(root)).sort(byEntryName),
+    paths: listed.map((entry) => entry.path),
+  });
 }
 
 async function buildEmbeddings(root, listed, changedFts, { force, embed, allowRemote, fetchImpl }) {
@@ -401,43 +474,95 @@ async function buildEmbeddings(root, listed, changedFts, { force, embed, allowRe
 function withReadError(rows, error) {
   if (error) rows.error = error;
   return rows;
-}/** File rows, sorted by path. The same blobs read back as the same rows. */
+}
+// The v5 layout keys files as `sources` rows; the git blob sha is `revision`
+// and the package directory rides in `props`, which the v4 `files` table named
+// `pkg`. One spelling per read, shared by the single read and the batched one.
+const FILES_SQL = `select s.path as path, s.revision as blob, s.lang as lang, s.bytes as bytes,
+  json_extract(s.props, '$.pkg') as pkg from sources s where s.kind = 'blob' order by s.path`;
+const SYMBOLS_SQL = `select s.path as path, n.name as name, json_extract(n.props, '$.kind') as kind,
+  n.line as line, json_extract(n.props, '$.sig') as sig,
+  json_extract(n.props, '$.exported') as exported
+  from nodes n join sources s on s.id = n.source_id and s.kind = 'blob'
+  where n.kind = 'symbol' order by s.path, n.line, n.name, n.kind`;
+// An import edge's src is the file that imports. Paths come back from the node
+// key (`file:<path>`) and the stable `dst_key`: node ids are regenerated when a
+// file changes, so a path is the only key that survives a reindex of one
+// endpoint.
+const EDGES_SQL = `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight
+  from edges e join nodes ns on ns.id = e.src_id order by src, dst, kind`;
+
+/** File rows, sorted by path. The same blobs read back as the same rows. */
 export async function readFiles(root) {
-  // The v5 layout keys files as `sources` rows; the git blob sha is `revision`
-  // and the package directory rides in `props`, which the v4 `files` table
-  // named `pkg`.
-  const { rows, error } = await readSqliteRows(
-    root,
-    `select s.path as path, s.revision as blob, s.lang as lang, s.bytes as bytes,
-      json_extract(s.props, '$.pkg') as pkg from sources s where s.kind = 'blob' order by s.path`,
-  );
+  const { rows, error } = await readSqliteRows(root, FILES_SQL);
   return withReadError(rows, error);
 }
 
 /** Symbol rows for the blobs currently indexed. */
 export async function readSymbols(root) {
-  const { rows, error } = await readSqliteRows(
-    root,
-    `select s.path as path, n.name as name, json_extract(n.props, '$.kind') as kind,
-      n.line as line, json_extract(n.props, '$.sig') as sig,
-      json_extract(n.props, '$.exported') as exported
-      from nodes n join sources s on s.id = n.source_id and s.kind = 'blob'
-      where n.kind = 'symbol' order by s.path, n.line, n.name, n.kind`,
-  );
+  const { rows, error } = await readSqliteRows(root, SYMBOLS_SQL);
   return withReadError(rows, error);
 }
 
-/** Edges currently indexed. An import edge's src is the file that imports. */
+/** Edges currently indexed. */
 export async function readEdges(root) {
-  // Paths come back from the node key (`file:<path>`) and the stable `dst_key`:
-  // node ids are regenerated when a file changes, so a path is the only key
-  // that survives a reindex of one endpoint.
+  const { rows, error } = await readSqliteRows(root, EDGES_SQL);
+  return withReadError(rows, error);
+}
+
+/**
+ * Files, symbols and edges from one build.
+ *
+ * Three separate opens can straddle a concurrent write and answer with rows
+ * from two builds; one read transaction answers with the rows of exactly one.
+ */
+export async function readGraph(root) {
+  const { results, error } = await readSqliteBatch(root, [
+    [FILES_SQL],
+    [SYMBOLS_SQL],
+    [EDGES_SQL],
+  ]);
+  const [files, symbols, edges] = results ?? [[], [], []];
+  return {
+    files: withReadError(files, error),
+    symbols: withReadError(symbols, error),
+    edges: withReadError(edges, error),
+  };
+}
+
+/**
+ * The build rows, including what a later build needs to re-resolve their edges.
+ *
+ * `imports` is stored as JSON in `props`; a row written before that field
+existed has `null`, and a build that must re-resolve it re-extracts instead.
+ */
+async function readBuildRows(root) {
   const { rows, error } = await readSqliteRows(
     root,
-    `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight
-      from edges e join nodes ns on ns.id = e.src_id order by src, dst, kind`,
+    `select s.path as path, s.revision as blob, s.lang as lang, s.bytes as bytes,
+      json_extract(s.props, '$.pkg') as pkg,
+      json_extract(s.props, '$.imports') as imports,
+      json_extract(s.props, '$.resolution') as resolution
+      from sources s where s.kind = 'blob' order by s.path`,
   );
-  return withReadError(rows, error);
+  return withReadError(
+    rows.map((row) => ({
+      ...row,
+      imports: parseImports(row.imports),
+      resolution: row.resolution ?? null,
+    })),
+    error,
+  );
+}
+
+function parseImports(value) {
+  if (typeof value !== 'string' || value === '') return null;
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 /** FTS rows currently indexed: one row per section, first section first. */
@@ -624,7 +749,7 @@ export async function packageOf(root, filePath, cache) {
 
 
 
-async function lsFiles(root) {
+export async function lsFiles(root) {
   const stdout = await gitRaw(root, ['ls-files', '-s', '-z']);
   const rows = [];
   for (const rec of stdout.split('\0')) {
@@ -640,22 +765,48 @@ async function lsFiles(root) {
 }
 
 async function resolveAdapter(root, opts) {
-  if (opts.adapter) return { module: opts.adapter, state: 'loaded' };
+  if (opts.adapter) {
+    // An injected parser is code this process was handed, not a file the
+    // repository names. Its source is its identity, so a different reading is a
+    // different input even at the same call site.
+    return {
+      module: opts.adapter,
+      state: 'loaded',
+      id: 'injected',
+      file: '',
+      digest: digestOfText(String(opts.adapter.extract ?? opts.adapter)),
+    };
+  }
   let manifest = null;
   try {
     const read = await readManifest(root);
     if (!read.error) manifest = read.manifest;
   } catch {
-    return { module: null, state: 'off' };
+    return { module: null, state: 'off', id: '' };
   }
   const name = manifest?.index?.parsers;
-  if (typeof name !== 'string' || name === '') return { module: null, state: 'off' };
+  if (typeof name !== 'string' || name === '') return { module: null, state: 'off', id: '' };
   try {
     const { createRequire } = await import('node:module');
     const req = createRequire(join(root, 'package.json'));
-    return { module: req(name), state: 'loaded' };
+    // The resolved file's bytes are part of the input: a parser fix under the
+    // same config name is still a different reading of the same blob.
+    const file = req.resolve(name);
+    let digest = '';
+    try {
+      digest = digestOfText(await readFile(file, 'utf8'));
+    } catch {
+      digest = '';
+    }
+    return {
+      module: req(name),
+      state: 'loaded',
+      id: name,
+      file: root && file.startsWith(root) ? file.slice(root.length + 1) : file,
+      digest,
+    };
   } catch {
-    return { module: null, state: 'missing' };
+    return { module: null, state: 'missing', id: name };
   }
 }
 

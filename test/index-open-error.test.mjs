@@ -38,6 +38,12 @@ test('a corrupt index surfaces the underlying message, not [object Object] (A20)
     assert.equal(typeof result.error.message, 'string');
     assert.notEqual(result.error.message, '[object Object]', 'the error object was stringified');
     assert.ok(result.error.message.length > 0, 'the message is empty');
+
+    // Status used to check "no rows" before "the read failed", so a corrupt
+    // database answered E_NO_INDEX "the index is empty" (PR23).
+    const status = await ix.status();
+    assert.equal(status.ok, false);
+    assert.equal(status.error.code, 'INDEX_CORRUPT', 'a corrupt index was reported as empty');
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -63,6 +69,10 @@ test('a busy index keeps INDEX_BUSY rather than collapsing it to E_READ (A20)', 
       const result = await ix.search('anything');
       assert.equal(result.ok, false);
       assert.equal(result.error.code, 'INDEX_BUSY', 'the busy code was replaced by E_READ');
+
+      const status = await ix.status();
+      assert.equal(status.ok, false);
+      assert.equal(status.error.code, 'INDEX_BUSY', 'a busy index was reported as empty');
     } finally {
       lock.close();
     }

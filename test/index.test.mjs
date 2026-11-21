@@ -5,24 +5,26 @@
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtemp, mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 import { git } from './fixture.mjs';
+import { indexFreshness, isIndexStale } from '../src/index/freshness.mjs';
 import {
   buildFtsBodies,
   ftsQueryTerms,
-  isIndexStale,
   readEdges,
   readFiles,
   readFts,
+  readGraph,
   readSymbols,
   reindex,
   searchFtsBm25,
   tokenizeText,
 } from '../src/index/store.mjs';
+import { buildOverlay } from '../src/index/overlay.mjs';
 import { SQLITE_FILE, indexFileFor } from '../src/index/persist.mjs';
 import { openIndex } from '../src/index/open.mjs';
 import { indexCommand } from '../src/commands/repoindex.mjs';
@@ -376,6 +378,243 @@ test('openIndex answers with pure data and a structured error when closed (Q76)'
     const afterClose = await ix.status();
     assert.equal(afterClose.ok, false);
     assert.equal(afterClose.error.code, 'E_CLOSED');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an added, deleted or renamed import destination re-resolves an unchanged importer (PR23)', async () => {
+  // Resolution reads the tracked path set, not the importer's bytes. An unchanged
+  // importer kept an edge naming a destination that no longer existed (or kept
+  // missing one that had arrived), and no build ever looked again.
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, '.gitignore'), '.simt/\n');
+    await writeFile(join(root, 'src', 'a.mjs'), "import { b } from './b.mjs';\nexport const a = b;\n");
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    await reindex(root);
+    assert.deepEqual(
+      (await readEdges(root)).filter((edge) => edge.src === 'src/a.mjs').map((edge) => edge.dst),
+      ['./b.mjs'],
+      'an unresolved specifier is stored as itself',
+    );
+
+    // The destination arrives. The importer's blob does not change.
+    await writeFile(join(root, 'src', 'b.mjs'), 'export const b = 1;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'add b']);
+    const added = await reindex(root);
+    assert.equal(added.updated, 1, 'only the new destination needed extraction');
+    assert.equal(added.edgesRefreshed, 1, 'the unchanged importer took part in the re-resolution');
+    assert.deepEqual(
+      (await readEdges(root)).filter((edge) => edge.src === 'src/a.mjs').map((edge) => edge.dst),
+      ['src/b.mjs'],
+      'the edge still names the specifier after the destination arrived',
+    );
+
+    // The destination is renamed: the old edge must go, not linger.
+    await git(['-C', root, 'mv', 'src/b.mjs', 'src/c.mjs']);
+    await git(['-C', root, 'commit', '-qm', 'rename b']);
+    const renamed = await reindex(root);
+    assert.equal(renamed.updated, 1, 'only the renamed destination was extracted');
+    assert.deepEqual(
+      (await readEdges(root)).filter((edge) => edge.src === 'src/a.mjs').map((edge) => edge.dst),
+      ['./b.mjs'],
+      'a renamed destination left the old resolved edge behind',
+    );
+
+    // A destination that existed and is deleted is the same case from the other side.
+    await writeFile(join(root, 'src', 'b.mjs'), 'export const b = 2;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'b again']);
+    await reindex(root);
+    assert.deepEqual(
+      (await readEdges(root)).filter((edge) => edge.src === 'src/a.mjs').map((edge) => edge.dst),
+      ['src/b.mjs'],
+    );
+    await git(['-C', root, 'rm', '-q', 'src/b.mjs']);
+    await git(['-C', root, 'commit', '-qm', 'drop b']);
+    const deleted = await reindex(root);
+    assert.equal(deleted.updated, 0);
+    assert.deepEqual(
+      (await readEdges(root)).filter((edge) => edge.src === 'src/a.mjs').map((edge) => edge.dst),
+      ['./b.mjs'],
+      'a deleted destination left the resolved edge behind',
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an unchanged source is re-extracted when the parser reading changes (PR23)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  try {
+    await git(['init', '-q', root]);
+    await writeFile(join(root, 'a.ts'), 'export const a = 1;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    await reindex(root);
+    assert.ok((await readSymbols(root)).some((row) => row.name === 'a'), 'the built-in reading ran');
+
+    const changed = await reindex(root, {
+      adapter: {
+        extract() {
+          return {
+            symbols: [{ name: 'Exact', kind: 'function', line: 1, sig: 'exact', exported: 1 }],
+            edges: [],
+          };
+        },
+      },
+    });
+    assert.equal(changed.updated, 1, 'the unchanged blob was reused under a new parser');
+    assert.deepEqual((await readSymbols(root)).map((row) => row.name), ['Exact']);
+
+    const back = await reindex(root);
+    assert.equal(back.updated, 1, 'a second parser change was not a rebuild');
+    assert.ok((await readSymbols(root)).some((row) => row.name === 'a'));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an unchanged source is rebuilt under a new package root (PR23)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'apps', 'web', 'src'), { recursive: true });
+    await writeFile(join(root, '.gitignore'), '.simt/\n');
+    await writeFile(join(root, 'apps', 'web', 'src', 'a.js'), 'export const a = 1;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    await reindex(root);
+    assert.equal((await readFiles(root)).find((row) => row.path === 'apps/web/src/a.js').pkg, '');
+
+    await writeFile(join(root, 'apps', 'web', 'package.json'), '{ "name": "web" }\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'package root']);
+    await reindex(root);
+    assert.equal(
+      (await readFiles(root)).find((row) => row.path === 'apps/web/src/a.js').pkg,
+      'apps/web',
+      'an unchanged source kept the package it had before the marker existed',
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('freshness is a state, and a failed git read is unknown rather than current (PR23)', async () => {
+  const root = await repo();
+  try {
+    assert.equal((await indexFreshness(root)).state, 'cold', 'no build yet is cold');
+    await reindex(root);
+    assert.equal((await indexFreshness(root)).state, 'current');
+
+    await git(['-C', root, 'rm', '-q', 'README']);
+    assert.equal((await indexFreshness(root)).state, 'stale');
+    await git(['-C', root, 'commit', '-qm', 'drop readme']);
+    await reindex(root);
+    assert.equal((await indexFreshness(root)).state, 'current');
+
+    // The cache is intact and the repository is what cannot be read. Reporting
+    // `not stale` here was the conflation this state removes.
+    await rm(join(root, '.git'), { recursive: true, force: true });
+    const unknown = await indexFreshness(root);
+    assert.equal(unknown.state, 'unknown');
+    assert.match(unknown.reason, /git/);
+    assert.equal(await isIndexStale(root), false, 'the boolean helper reports only a known stale index');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('simultaneous incremental builders agree with a clean rebuild (PR23)', async () => {
+  const root = await repo();
+  try {
+    await reindex(root);
+    await writeFile(join(root, 'apps', 'web', 'src', 'f1.js'), 'export const n = 101;\n');
+    await writeFile(join(root, 'README'), 'hello again\n');
+    await git(['-C', root, 'add', 'README', 'apps/web/src/f1.js']);
+
+    const runs = await Promise.all([reindex(root), reindex(root), reindex(root)]);
+    for (const run of runs) assert.ok(run.files > 0, 'a concurrent builder answered no files');
+    const incremental = await readGraph(root);
+    assert.equal(incremental.files.error, undefined, 'the graph read failed after concurrent writes');
+
+    await rm(join(root, SQLITE_FILE));
+    await reindex(root);
+    assert.deepEqual(await readFiles(root), incremental.files, 'files differ from a clean rebuild');
+    assert.deepEqual(await readSymbols(root), incremental.symbols, 'symbols differ from a clean rebuild');
+    assert.deepEqual(await readEdges(root), incremental.edges, 'edges differ from a clean rebuild');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('an unstaged edit belongs to the overlay, and the index keeps the staged blob (PR23)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 1;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    await reindex(root);
+    const staged = await readFiles(root);
+
+    await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 99;\n');
+    assert.equal((await indexFreshness(root)).state, 'current', 'an unstaged edit made the cache look stale');
+    assert.deepEqual(await readFiles(root), staged, 'the unstaged bytes reached the cached row');
+
+    const overlay = await buildOverlay({
+      changes: [{ path: 'src/a.mjs' }],
+      read: () => readFile(join(root, 'src', 'a.mjs'), 'utf8'),
+    });
+    assert.match(overlay.nodes[0].revision, /^worktree:/, 'the edit is labelled as the working tree, not a blob');
+    assert.notEqual(overlay.nodes[0].revision, `staged:${staged[0].blob}`);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('openIndex names the build, the overlay and the staged basis of every answer (PR23)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'a.mjs'), 'export const alpha = 1;\n');
+    await writeFile(join(root, 'a.test.mjs'), "import { alpha } from './src/a.mjs';\nconsole.log(alpha);\n");
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    const ix = await openIndex(root);
+    assert.equal(ix.ok, true);
+    const status = await ix.status();
+    assert.equal(status.data.freshness.state, 'current');
+    assert.equal(status.data.basis.rows.source, 'git-index');
+    assert.equal(status.data.basis.rows.label, 'staged');
+    assert.equal(status.data.basis.overlay.applied, false);
+    assert.match(status.data.basis.index.build, /^[0-9a-f]{40}$/);
+
+    const answers = [
+      await ix.search('alpha'),
+      await ix.rank(''),
+      await ix.coverage(['src/a.mjs']),
+      await ix.impact('src/a.mjs'),
+      await ix.governs('src/a.mjs'),
+    ];
+    for (const answer of answers) {
+      assert.equal(answer.ok, true);
+      assert.equal(answer.data.basis.index.build, status.data.basis.index.build, 'an answer came from another build');
+      assert.equal(answer.data.basis.overlay.applied, false);
+      assert.equal(answer.data.basis.rows.label, 'staged');
+    }
+    const basis = await ix.basis();
+    assert.equal(basis.ok, true);
+    assert.equal(basis.data.index.tree, status.data.basis.index.tree);
+    ix.close();
   } finally {
     await rm(root, { recursive: true, force: true });
   }

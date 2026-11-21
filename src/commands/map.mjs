@@ -7,7 +7,8 @@
 
 import { EXIT, emit, emitJson, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
-import { isIndexStale, readEdges, readEmbeddings, readFiles, readFts, readSymbols, reindex, searchFtsBm25 } from '../index/store.mjs';
+import { indexFreshness } from '../index/freshness.mjs';
+import { readEmbeddings, readFts, readGraph, reindex, searchFtsBm25 } from '../index/store.mjs';
 import {
   DEFAULT_BUDGET,
   formatRecall,
@@ -58,6 +59,7 @@ export async function mapCommand(args, flags) {
     budget,
     matched,
     basis,
+    freshness: loaded.freshness?.state ?? 'unknown',
     shown: rendered.shown,
     total: rendered.total,
     truncated: rendered.truncated,
@@ -75,6 +77,9 @@ export async function mapCommand(args, flags) {
     `total    ${rendered.total}`,
     `budget   ${budget}`,
   ];
+  if (loaded.freshness && loaded.freshness.state !== 'current') {
+    lines.push(`freshness ${loaded.freshness.state}${loaded.freshness.reason ? ` - ${loaded.freshness.reason}` : ''}`);
+  }
   if (rendered.text) lines.push(rendered.text);
   emit(lines.join('\n'));
   return EXIT.OK;
@@ -129,23 +134,23 @@ export async function loadGraph(root, { build = true, task = '', embed = false }
     }
   }
   const wantFts = String(task ?? '').trim().length > 0;
-  const [files, symbols, edges, fts, embeddings] = await Promise.all([
-    readFiles(root),
-    readSymbols(root),
-    readEdges(root),
+  // One read transaction for the graph: three opens could span a concurrent build.
+  const graph = await readGraph(root);
+  const [fts, embeddings] = await Promise.all([
     wantFts ? readFts(root) : Promise.resolve([]),
     embed === true ? readEmbeddings(root) : Promise.resolve([]),
   ]);
+  const { files, symbols, edges } = graph;
   // A present index that cannot be read is named, not served as empty
   //: `cold` is "nothing here", `broken` is "something is
   // here and the read failed".
   const broken = !build && Boolean(files.error);
   if (!build && files.length === 0) {
-    return { files: [], symbols: [], edges: [], fts: [], embeddings: [], cold: true, broken, stale: false };
+    return { files: [], symbols: [], edges: [], fts: [], embeddings: [], cold: true, broken, stale: false, freshness: { state: 'cold' } };
   }
-  // A caller that may not build still learns the index is old
+  // A caller that may not build still learns the index is old or unreadable
   //: the digest compare costs one `git ls-files -s`, and the freshness
   // signal is what lets a UI distrust the packet instead of quoting it.
-  const stale = !build && files.length > 0 && (await isIndexStale(root));
-  return { files, symbols, edges, fts, embeddings, stale, broken };
+  const freshness = build ? { state: 'current' } : await indexFreshness(root);
+  return { files, symbols, edges, fts, embeddings, stale: freshness.state === 'stale', broken, freshness };
 }

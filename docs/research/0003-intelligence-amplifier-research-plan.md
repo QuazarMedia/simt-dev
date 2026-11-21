@@ -569,8 +569,8 @@ it mentions (Aider's approach). It renders within a budget at one of three detai
 `outline` (paths), `names` or `signatures`. It is deterministic: fixed iterations, sorted ties.
 
 **Accept.** recall@10 is the mean fraction of a task's gold files that land in the top 10.
-`simt bench report` prints it. The PageRank-only map measured 55.6% on the 20 mined tasks;
-R28's hybrid fusion raised the same tasks to 62.1%, clearing the 60% bar (ADR-091, ADR-225).
+`simt bench report` prints it. On the 20 mined tasks the shipped hybrid map measures 62.1%,
+clearing the 60% bar (ADR-091, ADR-225).
 
 ### R23 — Impact analysis: `simt-dev impact <file|symbol>` (M)
 
@@ -894,7 +894,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | ADR-088 | kernel shrinks; compliance not lower (unmeasured) | Complete |
 | R20 | Index store | 3 | review 0002 S47 | M | D6 (ADR-089) | reindex < 300 ms; deterministic | Complete |
 | R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 (ADR-090) | ≥ 90% symbol recall | Complete |
-| R22 | Ranked repo map | 3 | R21 | M | ADR-091 | recall@10 62.1% (bar 60%; 55.6% before R28) | Complete |
+| R22 | Ranked repo map | 3 | R21 | M | ADR-091 | recall@10 62.1% (bar 60%) | Complete |
 | R23 | Impact analysis | 3 | R21, R25 | M | ADR-096 | importers, tests, one consumer | Complete |
 | R24 | Test mapping | 3 | R21 | M | ADR-092 | precision 1.0 (bar 0.8) | Complete |
 | R25 | Governance graph, `why` | 3 | R20 | S | ADR-093 | ADR-017 at 4c27514; unresolved tokens reported | Complete |

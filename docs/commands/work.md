@@ -9,7 +9,7 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 | `simt work schedule (--input <file> \| --scope <id> [--public])` | `--input`, `--scope`, `--public` | which ready tasks can run together under capacity and resource constraints |
 | `simt work handoff (--input <file> \| --scope <id> --task <id>)` | `--input`, `--scope`, `--task`, `--session` | build a resume capsule from ids and provenance, never from a transcript |
 | `simt work resume --input <file> [--scope <id>]` | `--input`, `--scope`, `--session` | revalidate permission, target, dependencies, authorization and lease before reuse |
-| `simt work graduate --input <file>` | `--input` | whether repeated traces can be proposed as a procedure, and what still blocks it |
+| `simt work graduate (--input <file> \| --scope <id>)` | `--input`, `--scope` | whether repeated traces can be proposed as a procedure, and what still blocks it |
 | `simt work packet --input <file>` | `--input` | the proof-bearing task packet, inside its byte budget or explicitly incomplete |
 
 Writes to the repository: `simt work setup`. Each prints its plan and writes nothing without `--yes`.

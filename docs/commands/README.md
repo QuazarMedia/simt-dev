@@ -97,7 +97,7 @@ simt brief "<task>" [--scope <id>]                                              
 simt check                                                                                 # report stale or missing generated regions and every check finding
 
 # work
-simt work graduate --input <file>                                                          # whether repeated traces can be proposed as a procedure, and what still blocks it
+simt work graduate (--input <file> | --scope <id>)                                         # whether repeated traces can be proposed as a procedure, and what still blocks it
 simt work handoff (--input <file> | --scope <id> --task <id>)                              # build a resume capsule from ids and provenance, never from a transcript
 simt work inspect                                                                          # what this repository's work consists of, and which validations are actually available
 simt work packet --input <file>                                                            # the proof-bearing task packet, inside its byte budget or explicitly incomplete
@@ -165,7 +165,7 @@ simt init [path]                                                                
 
 # knowledge
 simt knowledge build --scope <id> [--yes]                                                  # build the scoped corpus of declared sections under the ignored local area
-simt knowledge debt --input <file>                                                         # rank stale and unsupported knowledge by consequence per effort
+simt knowledge debt (--input <file> | --scope <id>)                                        # rank stale and unsupported knowledge by consequence per effort
 simt knowledge derivations --input <file>                                                  # which outputs a source, template or skill change puts in question
 simt knowledge export (--input <file> | --scope <id>)                                      # a bounded, permission-filtered packet another repository can read offline
 simt knowledge impact (--input <file> --refs <ids> | --changed --scope <id>)               # what a change reaches over typed edges, and where the graph is unknown

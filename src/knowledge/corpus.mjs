@@ -194,9 +194,9 @@ export async function buildCorpus({ scope = {}, scopes = null, candidates = [], 
       inventory.push({ path, state: 'symlink', reason: 'a symlink is not a source; its target is not a path this scope declared' });
       continue;
     }
-    const owned = resolveScope([scope], path);
-    if (owned.scope === null) {
-      const conflict = owned.error?.kind === 'conflict' ? `claimed by ${owned.error.candidates.join(' and ')}` : 'no declared scope claims it';
+    const owned = resolveScope(declared, path);
+    if (owned.scope !== scope.id) {
+      const conflict = owned.error?.kind === 'conflict' ? `claimed by ${owned.error.candidates.join(' and ')}` : owned.scope === null ? 'unclaimed' : `owned by ${owned.scope}`;
       inventory.push({ path, state: 'outside', reason: `${path} is ${conflict}` });
       continue;
     }

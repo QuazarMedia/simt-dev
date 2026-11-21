@@ -24,6 +24,7 @@ import { langOf, packageOf } from '../index/store.mjs';
 import { localRel } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { gitPaths } from '../sys/git.mjs';
+import { readChanges } from '../sys/changes.mjs';
 import { cmp } from '../util/sort.mjs';
 
 /**
@@ -52,8 +53,12 @@ export async function gateCommand(args, flags) {
   let renames = [];
   let deleted = [];
   if (flags.changed === true) {
-    const diff = await changedFiles(root);
-    if (diff.error) return diff.error;
+    let diff;
+    try {
+      diff = await readChanges(root);
+    } catch (error) {
+      return fail(`could not read the diff (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository that has a commit');
+    }
     changed = [...new Set([...changed, ...diff.files])].sort();
     renames = diff.renames;
     deleted = diff.deleted;
@@ -355,45 +360,3 @@ async function tracked(root) {
     };
   }
 }
-
-async function changedFiles(root) {
-  try {
-    // `--name-status` names what happened as well as what changed. A rename used to
-    // arrive as two unrelated paths and a deletion as a path that no longer exists, so a
-    // renamed module and a deleted one both selected nothing while exiting 0.
-    const status = await gitPaths(root, ['diff', '--name-status', '-z', 'HEAD'], { maxBuffer: 8 << 20 });
-    const files = [];
-    const renames = [];
-    const deleted = [];
-    for (let index = 0; index < status.length; index += 1) {
-      const code = status[index];
-      if (!/^[A-Z]/.test(code)) continue;
-      if (code.startsWith('R') || code.startsWith('C')) {
-        const from = status[index + 1];
-        const to = status[index + 2];
-        index += 2;
-        if (from && to) {
-          renames.push({ from, to });
-          files.push(from, to);
-        }
-        continue;
-      }
-      const path = status[index + 1];
-      index += 1;
-      if (!path) continue;
-      files.push(path);
-      if (code.startsWith('D')) deleted.push(path);
-    }
-    const untracked = await gitPaths(root, ['ls-files', '--others', '--exclude-standard'], { maxBuffer: 8 << 20 });
-    return { files: [...new Set([...files, ...untracked])].sort(), renames, deleted };
-  } catch (error) {
-    return {
-      error: fail(
-        `could not read the diff (${error.message})`,
-        EXIT.UNSUPPORTED,
-        'run this inside a git repository that has a commit',
-      ),
-    };
-  }
-}
-

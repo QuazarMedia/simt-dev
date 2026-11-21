@@ -53,7 +53,7 @@ const MODULES = [
   },
   {
     name: 'Verification',
-    paths: ['verify plan', 'verify select', 'verify status', 'verify contracts', 'verify documents', 'verify procedures'],
+    paths: ['verify plan', 'verify select', 'verify run', 'verify status', 'verify contracts', 'verify documents', 'verify procedures'],
     when: 'Before choosing checks, when closing recorded obligations, or when checking a generated document, a procedure or a set of obligation results',
   },
   {

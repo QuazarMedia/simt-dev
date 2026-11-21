@@ -31,7 +31,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [init](init.md) | 1 |
 | [knowledge](knowledge.md) | 9 |
 | [adapter](adapter.md) | 1 |
-| [verify](verify.md) | 6 |
+| [verify](verify.md) | 7 |
 | [lessons](lessons.md) | 4 |
 | [lease](lease.md) | 1 |
 | [local](local.md) | 1 |
@@ -182,8 +182,9 @@ simt verify contracts --input <file>                                            
 simt verify documents --input <file>                                                       # check a generated document against its template, sections and source scope
 simt verify plan --input <file>                                                            # the next observation worth making, and the point at which there is not one
 simt verify procedures --input <file>                                                      # check procedures for missing imports, calls and impossible prerequisites
+simt verify run --changed --scope <id> [--yes]                                             # run selected local validators and record scoped evidence
 simt verify select (--input <file> | (--changed | --staged) --scope <id>)                  # the narrowest checks that prove a change, and whether a Git hook may run them
-simt verify status --input <file>                                                          # closure over recorded obligations, and what is unresolved
+simt verify status (--input <file> | --changed --scope <id> [--input <attestations>])      # closure over recorded obligations, and what is unresolved
 
 # lessons
 simt lessons capture                                                                       # scan the ledger and history for new lesson candidates

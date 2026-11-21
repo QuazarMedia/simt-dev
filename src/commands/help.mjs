@@ -27,6 +27,7 @@ ${CLI} verify plan --input    the next observation worth making, from the
                            obligations still unmet
 ${CLI} verify select --input  the narrowest checks that prove a change, and
                            whether a Git hook may run them
+${CLI} verify run --changed --scope <id>  preview local checks or run them with --yes
 ${CLI} verify status --input  closure over recorded obligations, and what is
                            unresolved and why
 ${CLI} action status --journal  where an operation stands from its journal,
@@ -319,7 +320,8 @@ ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
 
-const FLAGS = `--json                 structured output (compact; one document, one line)
+const FLAGS = `--staged               verify select: read the index without working-tree edits
+--json                 structured output (compact; one document, one line)
 --pretty                indent --json for a human
 --max-bytes <n>         hard ceiling on emitted bytes (0 = unlimited, default 0)
 --budget <n>            context budget for a brief (default 2048)

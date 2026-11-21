@@ -457,3 +457,117 @@ for (const shape of ['handbook', 'operations']) {
     assert.match(missing.out, /no claim or section/);
   });
 }
+
+test('installed scoped verification captures current, stale and raced local receipts', async () => {
+  const root = join(stage, 'verify-consumer');
+  await mkdir(root);
+  await git(['init', '-q'], { cwd: root });
+  const installed = await run('npm', ['install', '--no-audit', '--no-fund', '--offline', tarball], {
+    cwd: root, env: NO_ESTATE,
+  });
+  assert.equal(installed.code, 0, installed.out);
+  await writeFile(join(root, '.gitignore'), 'node_modules/\n.simt/local/\n');
+  await mkdir(join(root, 'handbook'));
+  await mkdir(join(root, 'remote'));
+  await writeFile(join(root, 'handbook/policy.md'), '# Policy\n');
+  await writeFile(join(root, 'remote/item.json'), '{}\n');
+  await mkdir(join(root, 'src'));
+  await mkdir(join(root, 'test'));
+  await writeFile(join(root, 'src/check.mjs'), 'export const limit = 1;\n');
+  await writeFile(join(root, 'test/check.test.mjs'), 'import test from "node:test";\nimport assert from "node:assert/strict";\nimport { limit } from "../src/check.mjs";\ntest("limit", () => assert.ok(limit > 0));\n');
+
+  await writeFile(join(root, 'validate.mjs'), [
+    'import { mkdirSync, readFileSync, writeFileSync } from "node:fs";',
+    'mkdirSync(".simt/local", { recursive: true });',
+    'writeFileSync(".simt/local/validator-ran", "yes");',
+    'const path = process.argv[2];',
+    'const mode = readFileSync(path, "utf8").trim();',
+    'if (mode === "timeout") await new Promise((resolve) => setTimeout(resolve, 5000));',
+    'if (mode === "race") writeFileSync(path, "changed by validator");',
+    'if (mode === "failure") process.exitCode = 4;',
+    'if (mode !== "no-count") console.log("simt checked:", mode === "zero" ? 0 : 1);',
+    'console.log("secret=synthetic-validation-output");',
+  ].join('\n'));
+  const setup = ['work', 'setup', '--scope', 'handbook', '--path', 'handbook', '--kind', 'document'];
+  for (const args of [setup, [...setup, '--yes']]) {
+    const result = await simt(root, args);
+    assert.equal(result.code, 0, result.out);
+  }
+  const manifestPath = join(root, MANIFEST_FILE);
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.work.version = 3;
+  manifest.work.scopes[0].checks = [{
+    id: 'structure', argv: ['node', 'validate.mjs', 'handbook/policy.md'], covers: ['structure'], timeoutMs: 500,
+  }, { id: 'missing', argv: ['simt-missing-fixture'], covers: ['source-support'] }];
+  manifest.work.scopes.push({ id: 'remote', paths: ['remote'], kind: 'remote-object',
+    checks: [{ id: 'external', execution: 'remote', covers: ['remote-check'] }] });
+  manifest.work.scopes.push({ id: 'code', paths: ['src'], kind: 'source' });
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  const adoption = await simt(root, ['init', '--yes']);
+  assert.equal(adoption.code, 0, adoption.out);
+  const appliedSync = await simt(root, ['sync', '--yes']);
+  assert.equal(appliedSync.code, 0, appliedSync.out);
+  await git(['add', '.'], { cwd: root });
+  await git(['commit', '-qm', 'existing document workflow'], { cwd: root });
+  const check = async (sub, args = [], scope = 'handbook', code = 0) => {
+    const result = await simt(root, ['verify', sub, '--changed', '--scope', scope, '--json', ...args]);
+    assert.equal(result.code, code, result.out);
+    return JSON.parse(result.out.split('\n')[0]);
+  };
+  const writeMode = (mode) => writeFile(join(root, 'handbook/policy.md'), `${mode}\n`);
+  await writeMode('pass');
+  assert.equal((await check('select')).executed, false);
+  assert.equal((await check('run')).dryRun, true);
+  assert.equal((await check('run', ['--yes', '--dry-run'])).executed, false);
+  assert.equal((await check('status')).structuralGreen, false);
+  const sync = await simt(root, ['sync']);
+  assert.ok(sync.code === 0 || (sync.code === 1 && sync.out.includes('would write')), sync.out);
+  assert.equal((await simt(root, ['mcp', '--list'])).code, 0);
+  await assert.rejects(readFile(join(root, '.simt/local/validator-ran')), { code: 'ENOENT' });
+
+  const passed = await check('run', ['--yes']);
+  assert.equal(passed.receipts[0].count, 1);
+  assert.equal(passed.receipts[0].outcome, 'pass');
+  assert.equal(passed.receipts[0].evidence.redactions, 1);
+  let status = await check('status');
+  assert.equal(status.structuralGreen, true);
+  assert.equal(status.verified, false);
+  const semantic = status.results.find(({ kind }) => kind === 'semantic-review');
+  assert.equal(semantic.state, 'pending-review');
+  const attestations = join(root, '.simt/local/review.json');
+  await writeFile(attestations, JSON.stringify({ attestations: [
+    { id: semantic.id, inputDigest: semantic.inputDigest, reviewer: 'Fixture maintainer' },
+  ] }));
+  assert.equal((await check('status', ['--input', attestations])).verified, true);
+  await writeMode('new edit');
+  status = await check('status', ['--input', attestations]);
+  assert.equal(status.results.find(({ kind }) => kind === 'structure').state, 'stale');
+  assert.equal(status.results.find(({ kind }) => kind === 'semantic-review').state, 'pending-review');
+
+  for (const [mode, outcome] of [
+    ['failure', 'failed'], ['zero', 'zero-items'], ['no-count', 'count-unavailable'],
+    ['timeout', 'timeout'], ['race', 'raced'],
+  ]) {
+    await writeMode(mode);
+    const result = await check('run', ['--yes'], 'handbook', 1);
+    assert.equal(result.receipts[0].outcome, outcome, mode);
+    assert.equal((await check('status')).structuralGreen, false, mode);
+  }
+  await writeMode('sources: [elsewhere.md]');
+  assert.ok((await check('select')).selection.unverified.some(({ reason }) => reason === 'missing-executable'));
+  await writeFile(join(root, 'remote/item.json'), '{"revision":2}\n');
+  const remote = await check('run', ['--yes'], 'remote');
+  assert.equal(remote.executed, false);
+  assert.ok(remote.unverified.some(({ reason }) => reason === 'remote-check-unavailable-locally'));
+
+  await writeMode('# Policy');
+  await writeFile(join(root, 'remote/item.json'), '{}\n');
+  await writeFile(join(root, 'src/check.mjs'), 'export const limit = 2;\n');
+  const source = await check('run', ['--yes'], 'code');
+  assert.equal(source.receipts[0].class, 'source');
+  assert.equal(source.receipts[0].outcome, 'pass');
+  assert.ok(source.receipts[0].count > 0);
+  assert.equal((await check('status', [], 'code')).structuralGreen, true);
+  const ledger = await readFile(join(root, '.simt/local/ledger.jsonl'), 'utf8');
+  assert.doesNotMatch(ledger, /synthetic-validation-output|changed by validator/);
+});

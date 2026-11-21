@@ -126,7 +126,7 @@ export async function indexTreeId(root) {
 
 export async function recordRun(
   root,
-  { cmd, exit, ms, output, gate = null, kind = null, subject = null, revision = null, toolchain = null, cwd = null, outcome = null },
+  { cmd, exit, ms, output, gate = null, kind = null, subject = null, revision = null, toolchain = null, cwd = null, outcome = null, verification = null },
 ) {
   const { entries: prior } = await readLedger(root).catch(() => ({ entries: [] }));
   // The tree the gate RAN ON, which is not always the tree the ledger lives in. A
@@ -135,8 +135,8 @@ export async function recordRun(
   // a tree no gate had run against - the defect this binding prevents. `tree` keeps
   // its old meaning for readers that predate `subjectTree`.
   const subjectRoot = subject ?? root;
-  const worktreeTree = await treeId(subjectRoot);
-  const indexTree = await indexTreeId(subjectRoot);
+  const worktreeTree = verification?.evidence?.subject?.tree ?? await treeId(subjectRoot);
+  const indexTree = verification === null ? await indexTreeId(subjectRoot) : null;
   const line = {
     v: 2,
     ts: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
@@ -152,6 +152,7 @@ export async function recordRun(
     ...(typeof revision === 'string' ? { revision } : {}),
     ...(toolchain !== null && typeof toolchain === 'object' ? { toolchain } : {}),
     ...(typeof cwd === 'string' ? { cwd } : {}),
+    ...(verification === null ? {} : { verification }),
     outcome: outcome ?? (exit === 0 ? 'passed' : 'failed'),
     cmd,
     command: cmd,

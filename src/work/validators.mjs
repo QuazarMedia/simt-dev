@@ -10,7 +10,8 @@ const ID = /^[\w][\w.-]*$/;
 const safeArg = (value) => typeof value === 'string' && value.length > 0 && !/[\u0000-\u001f\u007f]/.test(value);
 
 export function validatorProblem(check) {
-  if (!check || typeof check !== 'object' || Array.isArray(check) || !ID.test(check.id ?? '')) return 'needs an id using letters, digits, dots, underscores or hyphens';
+  if (!check || typeof check !== 'object' || Array.isArray(check) || (typeof check.id !== 'string' || !ID.test(check.id))) return 'needs an id using letters, digits, dots, underscores or hyphens';
+  if (/^legacy-validator-[0-9]+$/.test(check.id)) return 'uses an id reserved for legacy validator commands';
   const fields = new Set(['id', 'argv', 'gate', 'cwd', 'covers', 'execution', 'provider', 'mandatory', 'timeoutMs']);
   const unknown = Object.keys(check).find((key) => !fields.has(key));
   if (unknown) return `has an unknown field ${unknown}`;

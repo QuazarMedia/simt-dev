@@ -9,10 +9,11 @@
 //     missing or unreachable verifier is never a pass, and a closure that claims the remote
 //     scope needs its reviewed contract.
 
-import { EXIT, fail, present } from '../output/index.mjs';
+import { EXIT, fail, present, writeMode } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { selectLocalVerification } from '../verify/local-selection.mjs';
+import { localVerificationStatus, runLocalVerification } from '../verify/local-run.mjs';
 import { planNext } from '../verify/next.mjs';
 import { closureReport } from '../verify/closure.mjs';
 import { checkVerifyRun, selectVerification } from '../verify/select.mjs';
@@ -104,23 +105,8 @@ function inputProblems(sub, doc) {
 
 export async function verifyCommand(sub, args, flags) {
   if (args.length > 0) return fail(`unknown verify ${sub} argument ${args[0]}`, EXIT.USAGE, USAGE);
-  if (sub === 'select' && (flags.changed || flags.staged || flags.scope !== undefined)) {
-    const usage = `run: ${CLI} verify select (--changed | --staged) --scope <id>`;
-    if (typeof flags.scope !== 'string' || flags.scope === '' ||
-        Boolean(flags.changed) === Boolean(flags.staged) || flags.input !== undefined) {
-      return fail('select needs one diff mode and a scope, or an explicit input', EXIT.USAGE, usage);
-    }
-    let local;
-    try {
-      local = await selectLocalVerification(commandRoot(flags), { scopeId: flags.scope, staged: flags.staged === true });
-    } catch (error) {
-      return fail(`cannot read the scoped diff: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
-    }
-    if (local.error !== undefined) return fail(local.error, EXIT.CONFIG, local.remedy);
-    const { selectedChecks, ...result } = local;
-    const payload = { ok: true, command: 'verify select', ...result, run: checkVerifyRun({ selected: local.selection.selected }) };
-    present(payload, () => renderSelect(payload), flags);
-    return EXIT.OK;
+  if (sub === 'run' || flags.changed || flags.staged || flags.scope !== undefined) {
+    return localCommand(sub, flags);
   }
   const read = await readJsonDocument(flags, 'input');
   if (read.error !== undefined) return fail(read.error, EXIT.USAGE, USAGE);
@@ -132,6 +118,65 @@ export async function verifyCommand(sub, args, flags) {
   if (payload.error !== undefined) return fail(payload.error, EXIT.FAIL, 'a document of obligations, capabilities and constraints');
   present(payload, () => (sub === 'plan' ? renderPlan(payload.plan) : sub === 'select' ? renderSelect(payload) : renderStatus(payload.report)), flags);
   return EXIT.OK;
+}
+
+async function localCommand(sub, flags) {
+  const usage = `run: ${CLI} verify ${sub} ${sub === 'select' ? '(--changed | --staged)' : '--changed'} --scope <id>`;
+  if (typeof flags.scope !== 'string' || flags.scope === '' ||
+      Boolean(flags.changed) === Boolean(flags.staged) ||
+      (sub !== 'select' && flags.staged === true) || (sub !== 'status' && flags.input !== undefined)) {
+    return fail(`verify ${sub} needs one supported diff mode and a scope`, EXIT.USAGE, usage);
+  }
+  try {
+    const local = await selectLocalVerification(commandRoot(flags), { scopeId: flags.scope, staged: flags.staged === true });
+    if (local.error !== undefined) return fail(local.error, EXIT.CONFIG, local.remedy);
+    const { selectedChecks, ...result } = local;
+    if (sub === 'select') {
+      const payload = { ok: true, command: 'verify select', ...result, run: checkVerifyRun({ selected: local.selection.selected }) };
+      present(payload, () => renderSelect(payload), flags);
+      return EXIT.OK;
+    }
+    if (sub === 'run') {
+      const mode = writeMode(flags);
+      const execution = await runLocalVerification(local, { apply: mode.apply });
+      const ok = !execution.receipts.some(({ outcome }) => outcome !== 'pass');
+      const payload = { ok, command: 'verify run', scope: local.scope, dryRun: !mode.apply, ...execution };
+      present(payload, () => renderLocalRun(payload), flags);
+      return ok ? EXIT.OK : EXIT.FAIL;
+    }
+    let attestations = [];
+    if (flags.input !== undefined) {
+      const read = await readJsonDocument(flags, 'input');
+      if (read.error !== undefined) return fail(read.error, EXIT.USAGE, usage);
+      if (!Array.isArray(read.doc.attestations)) return fail('attestations must be a list', EXIT.USAGE, usage);
+      attestations = read.doc.attestations;
+    }
+    const status = await localVerificationStatus(local, attestations);
+    const payload = { ok: true, command: 'verify status', scope: local.scope, basis: local.basis, ...status };
+    present(payload, () => renderLocalStatus(payload), flags);
+    return EXIT.OK;
+  } catch (error) {
+    return fail(`could not ${sub} scoped verification: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+  }
+}
+
+function renderLocalRun(payload) {
+  const lines = [`scope      ${payload.scope}`];
+  for (const check of payload.planned) lines.push(`plan       ${check.id}  ${check.covers.length} obligation(s)`);
+  for (const receipt of payload.receipts) lines.push(`receipt    ${receipt.evidence.summary}`);
+  for (const pending of payload.unverified) lines.push(`unverified ${pending.obligation}  ${pending.reason}`);
+  for (const entry of payload.pending) lines.push(`unmapped   ${entry.path}  ${entry.reason}`);
+  if (payload.dryRun) lines.push(`preview    run ${CLI} verify run --changed --scope ${payload.scope} --yes to execute`);
+  return lines.join('\n');
+}
+
+function renderLocalStatus(payload) {
+  const lines = [`scope      ${payload.scope} (${payload.basis})`,
+    `structure  ${payload.structuralGreen ? 'verified' : 'unverified'}`,
+    `verdict    ${payload.verified ? 'verified' : 'open'}`];
+  for (const result of payload.results) lines.push(`${result.state.padEnd(16)} ${result.id}  ${result.basis}`);
+  for (const entry of payload.pending) lines.push(`unmapped   ${entry.path}  ${entry.reason}`);
+  return lines.join('\n');
 }
 
 function renderPlan(plan) {

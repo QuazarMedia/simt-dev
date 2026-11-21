@@ -258,6 +258,40 @@ footer {
 .refusal-label { color: var(--accent); }
 .refusal-code { margin: 0.5rem 0 0; color: var(--dim); font-size: 0.8rem; }
 
+.overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(21rem, 1fr));
+  gap: var(--gap);
+}
+
+.overview .card:first-child,
+.overview .card:nth-child(2) { grid-column: 1 / -1; }
+
+.rows { margin-top: 0.5rem; }
+
+.rows summary {
+  cursor: pointer;
+  color: var(--accent);
+  padding: 0.2rem 0;
+}
+
+.rows[open] summary { margin-bottom: 0.5rem; }
+
+.slot-error { color: var(--bad); overflow-wrap: anywhere; }
+
+.remedy-command {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+  border-left: 2px solid var(--accent);
+  padding-left: 0.75rem;
+}
+
+.computed {
+  margin: 0;
+  color: var(--dim);
+  font-size: 0.8rem;
+}
+
 code, kbd {
   padding: 0 0.35em;
   border: 1px solid var(--line);

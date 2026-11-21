@@ -5,6 +5,7 @@
 
 import { readDoor } from './client.js';
 import { badge, card, emptyState, escapeHtml } from './components.js';
+import { overview } from './overview.js';
 import { createRouter } from './router.js';
 
 const THEME_KEY = 'simt-studio-theme';
@@ -44,9 +45,26 @@ async function home() {
 
 const later = (name) => () => emptyState({ title: name, hint: 'This room is not part of this build yet.' });
 
+// The snapshot is the view's spine: its refusal refuses the room. The check and work
+// reads fail alone, each confined to its own card, the way the snapshot's slots do.
+const alone = (path) => readDoor(path).catch((error) => error.payload ?? {
+  ok: false,
+  error: String(error?.message ?? error),
+  remedy: 'reload the page; if it persists, restart the studio',
+});
+
+async function overviewRoom() {
+  const [snapshot, check, work] = await Promise.all([
+    readDoor('/api/status'),
+    alone('/api/check'),
+    alone('/api/work'),
+  ]);
+  return overview(snapshot, check, work);
+}
+
 const routes = new Map([
   ['/', { view: home }],
-  ['/overview', { view: later('Overview') }],
+  ['/overview', { view: overviewRoom }],
   ['/pulse', { view: later('Pulse') }],
   ['/board', { view: later('Board') }],
   ['/custody', { view: later('Custody') }],

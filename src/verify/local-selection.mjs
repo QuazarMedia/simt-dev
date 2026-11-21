@@ -49,7 +49,7 @@ async function codeClosure({ root, paths, indexed, read, work, scope, live }) {
   ]));
 }
 
-export async function selectLocalVerification(inputRoot, { scopeId, staged = false }) {
+export async function selectLocalVerification(inputRoot, { scopeId, staged = false, extraPaths = [] }) {
   const root = await realpath(inputRoot);
   const work = await readWork(root);
   if (!work.ok) return { error: work.problems[0].message, remedy: work.problems[0].remedy };
@@ -68,7 +68,7 @@ export async function selectLocalVerification(inputRoot, { scopeId, staged = fal
   const pending = [];
   const paths = [];
   let omitted = 0;
-  for (const path of changes.files) {
+  for (const path of [...new Set([...changes.files, ...extraPaths])].sort()) {
     const owner = resolveScope(work.scopes, path);
     if (denied(path) || owner.ignored) {
       omitted += 1;

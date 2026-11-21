@@ -162,8 +162,8 @@ function receiptState(receipt, snapshot, obligation) {
   return validateEvidence(receipt.evidence, { revisions, needed: [{ id: obligation.id }] }).current ? 'pass' : 'unverified';
 }
 
-export async function localVerificationStatus(plan, attestations = []) {
-  const { entries, errors } = await readLedger(plan.root);
+export async function localVerificationStatus(plan, attestations = [], { ledger = null } = {}) {
+  const { entries, errors } = ledger ?? await readLedger(plan.root);
   const receipts = entries.filter(({ kind, verification }) => kind === KIND &&
     verification?.version === 1 && verification.scope === plan.scope && verification.basis === plan.basis)
     .map(({ verification }) => verification).reverse();
@@ -188,8 +188,9 @@ export async function localVerificationStatus(plan, attestations = []) {
     const runs = checks.filter(({ covers }) => covers.includes(obligation.id)).map((check) => {
       const receipt = receipts.find(({ check: id, evidence }) =>
         id === check.id && Array.isArray(evidence?.obligations) && evidence.obligations.some((item) => item?.id === obligation.id));
+      const state = receipt ? receiptState(receipt, snapshots.get(check.id), obligation) : 'unrun';
       return { check: check.id, provider: check.provider, count: receipt?.count ?? null,
-        state: receipt ? receiptState(receipt, snapshots.get(check.id), obligation) : 'unrun' };
+        state, receipt: state === 'pass' ? receipt.evidence.canon : null };
     });
     const passes = runs.filter(({ state }) => state === 'pass');
     const providers = new Set(passes.map(({ provider }) => provider ?? 'unspecified'));

@@ -25,6 +25,7 @@ import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { buildCapsule, checkResume, duplicateEffects, reopenFor } from '../coordination/handoff.mjs';
 import { schedule } from '../coordination/workgraph.mjs';
 import { scheduleLocal } from '../coordination/local-tracker.mjs';
+import { localHandoff, localResume } from '../coordination/local-handoff.mjs';
 import { proposeGraduation, promotionReady } from '../memory/graduation.mjs';
 import { readJsonDocument } from './doc-input.mjs';
 
@@ -350,8 +351,36 @@ export async function workScheduleCommand(args, flags) {
     return fail(`could not read the configured tracker: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
   }
 }
-export const workHandoffCommand = (args, flags) => documentDoor('handoff', args, flags, workHandoffFacts);
-export const workResumeCommand = (args, flags) => documentDoor('resume', args, flags, workResumeFacts);
+export const workHandoffCommand = (args, flags) => flags.scope === undefined
+  ? documentDoor('handoff', args, flags, workHandoffFacts)
+  : localHandoffDoor('handoff', args, flags);
+export const workResumeCommand = (args, flags) => flags.scope === undefined
+  ? documentDoor('resume', args, flags, workResumeFacts)
+  : localHandoffDoor('resume', args, flags);
+
+async function localHandoffDoor(sub, args, flags) {
+  const creating = sub === 'handoff';
+  const usage = `run: ${CLI} work ${sub} --scope <id> ${creating ? '--task <id>' : '--input <capsule>'}`;
+  if (args.length > 0 || typeof flags.scope !== 'string' || flags.scope === '' ||
+      (creating ? typeof flags.task !== 'string' || flags.input !== undefined
+        : flags.task !== undefined || typeof flags.input !== 'string')) return fail('invalid local handoff arguments', EXIT.USAGE, usage);
+  try {
+    const root = commandRoot(flags);
+    let result;
+    if (creating) result = await localHandoff(root, flags.scope, flags.task, flags.session);
+    else {
+      const read = await readJsonDocument(flags, 'input');
+      if (read.error !== undefined) return fail(read.error, EXIT.USAGE, usage);
+      result = await localResume(root, flags.scope, read.doc.capsule ?? read.doc, flags.session);
+    }
+    if (result.error !== undefined) return fail(result.error, EXIT.FAIL, result.remedy ?? usage);
+    const payload = { ok: true, command: `work ${sub}`, ...result };
+    present(payload, () => renderWork(payload), flags);
+    return EXIT.OK;
+  } catch (error) {
+    return fail(`could not ${sub} local work: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+  }
+}
 export const workGraduateCommand = (args, flags) => documentDoor('graduate', args, flags, workGraduateFacts);
 
 function renderWork(payload) {
@@ -373,7 +402,8 @@ function renderSchedule(payload) {
 }
 
 function renderHandoff(payload) {
-  const lines = [`capsule    ${payload.capsule.digest}`, `goal       ${payload.capsule.goal}`, `target     ${payload.capsule.target.incarnation}`];
+  const lines = [`capsule    ${payload.capsule.digest}`, `goal       ${payload.capsule.goal}`,
+    payload.capsule.local === undefined ? `target     ${payload.capsule.target.incarnation}` : `scope      ${payload.capsule.local.scope}`];
   for (const entry of payload.capsule.completed) lines.push(`done       ${entry.obligation}  ${entry.receipt ?? ''}`);
   for (const entry of payload.capsule.uncertainty) lines.push(`uncertain  ${entry.id}  ${entry.reason}`);
   lines.push(`excluded   ${payload.capsule.excluded.join(', ')}`);
@@ -387,6 +417,7 @@ function renderResume(payload) {
   const lines = [`resumable  ${payload.resume.resumable ? 'yes' : 'no'}`];
   for (const failure of payload.resume.failures) lines.push(`blocked    ${failure.check}  ${failure.reason}`);
   if (payload.duplicates.safe === false) lines.push(`duplicates ${payload.duplicates.duplicates.join(', ')}`);
+  for (const id of payload.reopened.retained ?? []) lines.push(`retained   ${id}`);
   for (const entry of payload.reopened.reopened) lines.push(`reopened   ${entry.obligation}  ${entry.reason}`);
   return lines.join('\n');
 }

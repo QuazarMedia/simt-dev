@@ -42,6 +42,7 @@ export function buildCapsule({
   goal = null,
   intent = null,
   target = null,
+  local = null,
   snapshot = null,
   completed = [],
   uncertainty = [],
@@ -51,13 +52,18 @@ export function buildCapsule({
 } = {}) {
   if (!isText(goal)) throw new Error('a capsule needs a goal');
   if (!isObject(intent) || !isText(intent.digest)) throw new Error('a capsule needs the intent digest it belongs to');
-  if (!isObject(target) || !isText(target.incarnation)) throw new Error('a capsule needs the target incarnation it was built against');
+  if (local === null && (!isObject(target) || !isText(target.incarnation))) throw new Error('a capsule needs the target incarnation it was built against');
+  if (local !== null && (!isObject(local) || !['project', 'worktree', 'scope', 'task'].every((key) => isText(local[key])))) {
+    throw new Error('a local capsule needs the project, source worktree, scope and task');
+  }
 
   const capsule = {
     schema: CAPSULE_SCHEMA,
     goal,
     intent: { digest: intent.digest },
-    target: { identity: target.identity ?? null, incarnation: target.incarnation },
+    target: local === null ? { identity: target.identity ?? null, incarnation: target.incarnation } : null,
+    ...(local === null ? {} : { local: { project: local.project, worktree: local.worktree,
+      scope: local.scope, task: local.task, lease: local.lease ?? null } }),
     snapshot: isObject(snapshot) ? { digest: snapshot.digest ?? null, revision: snapshot.revision ?? null } : null,
     completed: (Array.isArray(completed) ? completed : []).filter(isObject).map((entry) => ({
       obligation: entry.obligation ?? null,

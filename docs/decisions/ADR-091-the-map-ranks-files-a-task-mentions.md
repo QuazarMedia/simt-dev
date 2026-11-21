@@ -1,6 +1,6 @@
 # ADR-091 — The map ranks the files a task mentions, and the files next to them
 
-Status: **accepted** · 2026-10-18 · filed as R22 (plan 0003)
+Status: **accepted** · 2026-10-18 · filed as R22 (plan 0003) · measurement updated by ADR-225
 
 **Affects:** `src/index/map.mjs`, `src/commands/map.mjs`, `src/commands/bench.mjs`,
 `test/map.test.mjs`
@@ -50,8 +50,7 @@ comparison against the mined patches is a property of this checkout's index
 and of the vault on this machine. A checkout with no index, or no vault,
 reports the figure as unmeasured. On the 20 mined tasks available here, mean
 recall@10 is 55.6% of gold files. The bar is 60%, and this ranking does not
-meet it. R28 later fused this ranking with FTS5 BM25 by reciprocal-rank fusion;
-on the same 20 tasks the fused map measures 62.1%, clearing the bar (ADR-225).
+meet it.
 
 ## Rejected
 

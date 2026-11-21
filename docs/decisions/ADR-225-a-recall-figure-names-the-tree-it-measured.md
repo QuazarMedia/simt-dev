@@ -40,8 +40,9 @@ file addition look like a retrieval regression.
 
 1. **The shipped map's published figure is 62.1%**, the hybrid FTS5 ranking measured on the
    20 mined tasks at the commit that shipped it (`3976c0eb`). The bar is 60%. `61.3%` is
-   withdrawn: it reproduces at no R28 commit. `55.6%` is R22's PageRank-only figure and is
-   stated as the value before R28, never as the current one.
+   withdrawn: it reproduces at no R28 commit. `55.6%` is R22's PageRank-only figure; it is
+   stated only as the value before R28, and ADR-091's status names this record so the
+   figure is not read as current.
 
 2. **A recall figure names the tree it measured.** A later tree is a different measurement.
    Where a record cites a drifted figure, it states the file count and the gold paths that
@@ -54,10 +55,11 @@ file addition look like a retrieval regression.
 
 ## Consequences
 
-ADR-091, plan 0003's R22 row and R22/R28 notes, plan 0004's audit and the compat audit test
-all state 62.1%, with 55.6% only as the before value. `simt map --recall` on this checkout
-still reports unmeasured, because the vault is absent; a reader who reconstructs the corpus
-on today's tree gets 49.1%, and ruling 2 says what that is.
+ADR-091 leaves its accepted body untouched; its status names this record. Plan 0003's R22
+row and R22/R28 notes, plan 0004's audit and the compat audit test state 62.1%, with 55.6%
+only as the before value. `simt map --recall` on this checkout still reports unmeasured,
+because the vault is absent; a reader who reconstructs the corpus on today's tree gets
+49.1%, and ruling 2 says what that is.
 
 ## Rejected
 
@@ -67,5 +69,6 @@ on today's tree gets 49.1%, and ruling 2 says what that is.
   regression.
 - **Keeping 61.3% because it is close.** Rejected: two R28 commits measure 62.1%, and a
   figure that cannot be reproduced is a claim, not a measurement.
-- **Editing ADR-091's ruling.** Rejected: its recall definition and ranking ruling stand.
-  Only its consequence carried the old measurement, and that now names both values.
+- **Editing ADR-091's body.** Rejected: its consequence records the measurement it took,
+  and rewriting it in place would erase what the record said when it was accepted. Its
+  status names this record, which carries the update.

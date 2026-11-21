@@ -101,7 +101,7 @@ in [architecture/history.md](architecture/history.md).
 | [088](decisions/ADR-088-a-marked-line-is-enforced-by-a-checker.md) | A marked line is enforced by a checker | accepted · 2026-10-18 · filed as R19 (plan 0003) · ruling 3 narrowed by ADR-090 |
 | [089](decisions/ADR-089-the-local-index-is-a-cache-of-git-blobs.md) | The local index is a cache of git blobs | accepted · 2026-10-18 · filed as R20 (plan 0003) · ruling 2 narrowed by ADR-201 (2026-11-21): an unchanged blob is still not re-read, but its edges are re-resolved when the tracked path set or the language table changes. |
 | [090](decisions/ADR-090-an-optional-adapter-is-off-until-named.md) | An optional adapter is off until a repository names it | accepted · 2026-10-18 · filed as R21 (plan 0003) |
-| [091](decisions/ADR-091-the-map-ranks-files-a-task-mentions.md) | The map ranks the files a task mentions, and the files next to them | accepted · 2026-10-18 · filed as R22 (plan 0003) |
+| [091](decisions/ADR-091-the-map-ranks-files-a-task-mentions.md) | The map ranks the files a task mentions, and the files next to them | accepted · 2026-10-18 · filed as R22 (plan 0003) · measurement updated by ADR-225 |
 | [092](decisions/ADR-092-tests-are-imports-conventions-and-coverage.md) | A test is an import, a conventional neighbour, or a coverage record | accepted · 2026-10-18 · filed as R24 (plan 0003) |
 | [093](decisions/ADR-093-why-names-what-governs-a-file.md) | why names what governs a file | accepted · 2026-10-18 · filed as R25 (plan 0003) |
 | [094](decisions/ADR-094-a-change-runs-the-tests-that-import-it.md) | a change runs the tests that import it | accepted · 2026-10-18 · filed as R16 (plan 0003) |

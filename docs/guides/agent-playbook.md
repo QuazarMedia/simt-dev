@@ -55,7 +55,11 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
    narrow or the task evolves, run `simt map --task "<task>" --level outline` for paths,
    `--level names` for exported symbols, or `--level signatures` for declaration lines.
    Pass `--embed` when `local.embed` is configured in `simt.json` and clears the +10-point
-   recall@10 bar.
+   recall@10 bar. With `--json`, `basis` says what the ranking answers: `no-task` when no
+   task was given, `matched` when a path or symbol matches the task's words, and
+   `unmatched` when none does, leaving `files` as graph-proximity or BM25 body context
+   rather than matches. `unmatched` replaces the former `graph-only` value; scripts that
+   compare `basis === 'graph-only'` must update.
 2. **Check blast radius before changing a shared file or export.** Run
    `simt impact <file|symbol>` to see every direct and transitive importer, the tests
    covering them, the governing rules and ADRs, and any sibling repository in the

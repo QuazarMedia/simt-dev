@@ -155,6 +155,22 @@ test('a caution about unresolved Affects names only the decisions that govern th
   assert.ok(!stdout.includes('orphan.mjs'), stdout);
 });
 
+test('a body-only task says FILES is context, not the graph hub', async (t) => {
+  // The token is in the file's body, so BM25 ranks it; no path or symbol mentions it. The
+  // caution used to call that ranking the graph hub, which it is not.
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'src', 'keep.mjs'), 'export function keep(value) {\n  return value;\n}\n// zebracorn\n');
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'body token']);
+
+  const { code, stdout, stderr } = await run(root, ['brief', 'zebracorn']);
+  assert.equal(code, 0, stderr);
+  assert.match(stdout, /matched 0: no path or symbol mentions this task, so FILES is context rather than a match/, stdout);
+  assert.ok(stdout.includes('src/keep.mjs'), 'the body hit is still offered as context');
+  assert.ok(!stdout.includes('graph hub'), stdout);
+});
+
 test('a modified file is context, not the task scope or its kind', async (t) => {
   // A dirty plan file used to become `scope`, and "every path named is documentation"
   // then classified a code task as docs and offered the docs commands.

@@ -56,6 +56,43 @@ test('a task that names a file produces its kind, its file and its test', async 
   assert.ok(stdout.includes('npm run test'), stdout);
 });
 
+test('a task that names a file still surfaces its skill and lesson', async (t) => {
+  // FILES narrowed to the matched file; SKILLS and LESSONS must still find a record whose
+  // path list names it. SKILLS also stopped budgeting a NAME by the BODY's bytes, which
+  // held back every real skill against a 512-byte allowance.
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, '.simt'), { recursive: true });
+  await writeFile(
+    join(root, '.simt', 'skills.graph.json'),
+    `${JSON.stringify({
+      version: 1,
+      capabilities: [{ id: 'keep', summary: 'Keeping a value' }],
+      skills: [
+        {
+          name: 'keeper',
+          summary: 'Keep a file',
+          capabilities: ['keep'],
+          stack: ['node'],
+          keywords: ['keep'],
+          paths: ['src/keep.mjs'],
+          bytes: 4096,
+          sources: [{ repo: 'f', path: 'src/keep.mjs', role: 'canonical', bytes: 24 }],
+        },
+      ],
+    }, null, 2)}\n`,
+  );
+  await mkdir(join(root, 'docs', 'lessons'), { recursive: true });
+  await writeFile(join(root, 'docs', 'lessons', '0001-keep.md'), '---\nsimt-trigger: { paths: ["src/keep.mjs"] }\n---\n\n# Keep the helper\n');
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'records']);
+
+  const { code, stdout, stderr } = await run(root, ['brief', 'fix the keep helper in src/keep.mjs']);
+  assert.equal(code, 0, stderr);
+  assert.match(stdout, /SKILLS\n\s+keeper /, stdout);
+  assert.match(stdout, /LESSONS\n\s+0001-keep /, stdout);
+});
+
 test('a modified file is context, not the task scope or its kind', async (t) => {
   // A dirty plan file used to become `scope`, and "every path named is documentation"
   // then classified a code task as docs and offered the docs commands.

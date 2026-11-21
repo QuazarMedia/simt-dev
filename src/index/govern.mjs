@@ -89,12 +89,19 @@ export function decisionHits(records, file, ctx) {
   const unresolved = [];
   for (const record of records) {
     let named = false;
+    const dangling = [];
     for (const token of affectsTokens(record.text)) {
       const resolved = resolveToken(token, ctx);
-      if (resolved.kind === 'unresolved') unresolved.push({ token: resolved.token, id: record.id });
+      if (resolved.kind === 'unresolved') dangling.push({ token: resolved.token, id: record.id });
       else if (resolved.kind === 'paths' && resolved.paths.includes(file)) named = true;
     }
-    if (named) hits.push({ kind: 'decision', id: record.id, detail: record.title });
+    if (!named) continue;
+    hits.push({ kind: 'decision', id: record.id, detail: record.title });
+    // Only a record that names THIS file is an edge this answer needs. Reporting every
+    // record's dangling tokens made one governing decision arrive with a caution listing
+    // the whole corpus's unresolved Affects - 35 tokens about files the task never named.
+    // `unresolvedAffects` is where the corpus-wide report lives.
+    unresolved.push(...dangling);
   }
   return { hits, unresolved };
 }

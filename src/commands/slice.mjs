@@ -741,6 +741,7 @@ async function finishSlice(root, id, flags) {
         dryRun: true,
         subject,
         staged,
+        refusal: committed?.error ?? null,
         gates: { event: 'pre-commit', declared, skipped: split.skipped.map((s) => s.name) },
         state: stateJson,
         land: existsSync(worktree) ? { from: main, branch, merge: true, remove: true } : null,

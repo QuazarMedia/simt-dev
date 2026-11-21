@@ -257,6 +257,18 @@ test('a staged edit after the slice commit also refuses to land', async () => {
   assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), committed, 'a second commit was made');
 });
 
+test('the finish dry run reports the same refusal in text and JSON', async () => {
+  const { root } = await startA27();
+  const text = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true' }));
+  assert.equal(text.code, 0, text.stderr);
+  const match = text.stdout.match(/\(finish refuses: (.*)\)$/m);
+  assert.ok(match, `the text dry run hid the refusal: ${text.stdout}`);
+
+  const json = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true', json: true }));
+  assert.equal(json.code, 0, json.stderr);
+  assert.equal(JSON.parse(json.stdout).refusal, match[1], 'the JSON dry run reported a different refusal');
+});
+
 test('a clean worktree with no commits ahead refuses to land', async () => {
   const { root, worktree } = await startA27();
   const mainHead = String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim();

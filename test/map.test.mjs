@@ -163,6 +163,30 @@ test('a task word reaches the file through a plural directory and a camel case s
   assert.ok(plural.find((row) => row.path === 'src/packs.mjs').resolver > 0);
 });
 
+test('a camel-case symbol resolves its file from the symbol name or a word inside it', () => {
+  // `readBench` is the only thing the file holds. The exact spelling matches the symbol;
+  // `bench` does not, and tokenize does not split camel case, so only the camel-case rule
+  // can put the file in the resolver list for that task.
+  const input = {
+    files: [{ path: 'src/packs/manage.mjs' }, { path: 'src/name.mjs' }],
+    edges: [{ src: 'src/packs/manage.mjs', dst: 'src/name.mjs', kind: 'import', weight: 1 }],
+    symbols: [
+      { path: 'src/packs/manage.mjs', name: 'readBench', exported: 1 },
+      { path: 'src/name.mjs', name: 'CLI', exported: 1 },
+    ],
+  };
+  const exact = rankFiles({ ...input, task: 'readBench' });
+  assert.ok(exact.find((row) => row.path === 'src/packs/manage.mjs').resolver > 0, 'the symbol name resolves its file');
+  assert.equal(exact.find((row) => row.path === 'src/name.mjs').resolver, 0, 'the hub is not a match');
+
+  const inside = rankFiles({ ...input, task: 'bench' });
+  assert.ok(
+    inside.find((row) => row.path === 'src/packs/manage.mjs').resolver > 0,
+    'a word inside the camel-case symbol is evidence',
+  );
+  assert.equal(inside.find((row) => row.path === 'src/name.mjs').resolver, 0);
+});
+
 test('outline, names and signatures stay inside the budget', () => {
   const ranked = rankFiles({
     files: [{ path: 'src/alpha.mjs' }, { path: 'src/beta.mjs' }],
@@ -204,6 +228,16 @@ test('simt map renders the ranking, and recall is unmeasured without a vault', a
   assert.match(ranked.stdout, /src\/keep\.mjs/);
   const again = await capture(() => mapCommand([], { root, task: 'change greet in src/keep.mjs', budget: '0' }));
   assert.equal(again.stdout, ranked.stdout);
+
+  // The JSON files are the rendered rows, not the resolver's rows: `resolver` is an
+  // internal score for filtering, and a fourth field here would be public API.
+  const json = await capture(() => mapCommand([], { root, task: 'change greet in src/keep.mjs', budget: '0', json: true }));
+  assert.equal(json.code, 0);
+  const payload = JSON.parse(json.stdout);
+  assert.ok(payload.files.length > 0);
+  for (const row of payload.files) {
+    assert.deepEqual(Object.keys(row).sort(), ['path', 'rank'], JSON.stringify(row));
+  }
 
   const unknown = await capture(() => mapCommand([], { root, level: 'prose' }));
   assert.equal(unknown.code, 2);

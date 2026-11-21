@@ -12,10 +12,10 @@ did not take.
 ## Keep the task list current, every turn
 
 - Before anything else in a turn, check the task list this harness provides. Its
-  name differs by surface — `todowrite` in opencode v2 (behind `experimental.todo`,
-  off by default), `TodoWrite` in Claude Code, `update_plan` in Codex — and its own
-  plan or task panel counts too. That list is what the person you work for reads to
-  see where the work stands, and it is only useful if it is true.
+  name differs by surface — `todowrite` in opencode v2 (opt-in via `experimental.todo`),
+  `TodoWrite` in Cursor and Claude Code, `write_todos` in Gemini CLI, `update_plan` in
+  Codex — and a plan or task panel of its own counts too. That list is what the person you
+  work for reads to see where the work stands, and it is only useful if it is true.
 - Mirror the work you are about to start as items: one per step, the tracker id in
   the item that names the slice, and exactly one marked in progress.
 - Mark an item completed in the same turn as the work that finished, not at the end

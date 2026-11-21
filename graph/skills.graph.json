@@ -314,13 +314,13 @@
         "agent",
         "install"
       ],
-      "bytes": 9824,
+      "bytes": 9826,
       "sources": [
         {
           "repo": "simt-dev",
           "path": "skills/simt-commands",
-          "bytes": 9824,
-          "sha256": "1739ed5e34ad87210b012f3045cde3d658262c3c53912a1c514536d7c97c3b0b",
+          "bytes": 9826,
+          "sha256": "608dc08fa5f4a71a8f52094a90c1d28b52213c75425522deee9b5cbd7326ab10",
           "role": "canonical"
         }
       ],

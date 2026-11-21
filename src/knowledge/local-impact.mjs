@@ -101,7 +101,11 @@ async function localEdges({ root, candidates, paths, aliases, scopeAllows, unkno
       unknown.push(failure(record.path, 'duplicate-procedure-id'));
     } else byProcedure.set(record.id, paths.get(record.path)?.id);
   }
-  const edges = importEdges(entries).map(({ src, dst }) => ({ from: paths.get(src).id, to: paths.get(dst).id, basis: 'code-import' }));
+  // Import resolution also emits external dependency names. The scoped graph only has local nodes.
+  const edges = importEdges(entries).flatMap(({ src, dst }) => {
+    const target = paths.get(dst);
+    return target ? [{ from: paths.get(src).id, to: target.id, basis: 'code-import' }] : [];
+  });
   for (const record of procedures) {
     for (const called of record.calls) {
       const to = byProcedure.get(called);

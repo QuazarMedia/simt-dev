@@ -241,6 +241,7 @@ for (const shape of ['handbook', 'operations']) {
       'handbook/caller.md': frontmatter({ id: 'desk', type: 'procedure' }, '# @recipe desk\n# @calls equipment\n'),
       'handbook/helper.mjs': 'export const check = true;\n',
       'handbook/check.mjs': 'import { check } from "./helper.mjs";\nexport { check };\n',
+      'handbook/build.py': 'from pathlib import Path\nimport distribution_not_in_repo\n',
     });
     files['.simt/knowledge/derivations.json'] = JSON.stringify({
       receipts: [{
@@ -294,6 +295,7 @@ for (const shape of ['handbook', 'operations']) {
       assert.ok(report.affected.recipes.includes('desk'));
       assert.ok(report.affected.helpers.includes('handbook/check.mjs'), JSON.stringify(report));
       assert.deepEqual(report.reviewHelpers, ['handbook/helper.mjs']);
+      assert.doesNotMatch(JSON.stringify(report), /distribution_not_in_repo/);
       const bases = new Set(report.dependencies.map(({ basis }) => basis));
       for (const basis of ['document-citation', 'procedure-call', 'procedure-import', 'code-import']) assert.ok(bases.has(basis));
     }

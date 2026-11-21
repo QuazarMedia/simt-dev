@@ -18,13 +18,15 @@
 //     where it came from, and from which revision, is not an answer a maintainer can open.
 
 import { EDGE_KINDS } from './claims.mjs';
-import { rank } from './rank.mjs';
+import { rank, rankEligibility } from './rank.mjs';
 
 /** The declared authority bases, in the order ranking prefers them. */
 const AUTHORITY_LEVELS = Object.freeze({ reviewed: 3, declared: 2, evidence: 1 });
 
 const isText = (value) => typeof value === 'string' && value.length > 0;
 const unitKey = (unit) => JSON.stringify([unit.path, unit.id]);
+const sectionMatches = (unit, id) =>
+  unit.id === id || unit.artifact === id || (isText(unit.anchor) && `${unit.path}#${unit.anchor}` === id);
 
 /** The authority basis a unit carries: its artifact's declared metadata, or bare evidence. */
 function basisOf(artifact) {
@@ -51,8 +53,7 @@ export function citationOf(unit, artifact) {
 }
 
 /** The corpus units in the shape `rank` scores, with the artifact's declared metadata joined. */
-function rankableUnits(corpus) {
-  const byPath = new Map((corpus?.artifacts ?? []).map((artifact) => [artifact.path, artifact]));
+function rankableUnits(corpus, byPath) {
   return (corpus?.units ?? []).map((unit) => {
     const artifact = byPath.get(unit.path);
     const basis = basisOf(artifact);
@@ -61,6 +62,8 @@ function rankableUnits(corpus) {
       path: unit.path,
       text: unit.text,
       headings: unit.headings,
+      label: unit.path?.split('/').at(-1)?.replace(/\.[^.]+$/, ''),
+      permission: unit.permission,
       language: artifact?.language ?? null,
       kind: artifact?.type ?? null,
       scope: artifact?.scope ?? null,
@@ -82,12 +85,19 @@ function rankableUnits(corpus) {
  * @returns {object}
  */
 export function rankCorpus(corpus, { query = '', scope = {}, permissions = null, limit = 10 } = {}) {
-  const units = rankableUnits(corpus);
-  const report = rank(units, { query, scope, permissions, limit });
+  const byPath = new Map((corpus?.artifacts ?? []).map((artifact) => [artifact.path, artifact]));
+  const units = rankableUnits(corpus, byPath);
+  const report = rank(units, { query, scope, permissions, limit: Infinity });
+  const cap = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : Infinity;
 
   const byId = new Map((corpus?.units ?? []).map((unit) => [unitKey(unit), unit]));
-  const byPath = new Map((corpus?.artifacts ?? []).map((artifact) => [artifact.path, artifact]));
-  const ranked = report.ranked.map((hit) => {
+  // Apply the limit to sources so a long document cannot fill the answer with its own sections.
+  const bestByPath = new Map();
+  for (const hit of report.ranked) {
+    if (bestByPath.size >= cap) break;
+    if (!bestByPath.has(hit.path)) bestByPath.set(hit.path, hit);
+  }
+  const ranked = [...bestByPath.values()].map((hit) => {
     const unit = byId.get(unitKey(hit));
     const artifact = unit === undefined ? undefined : byPath.get(unit.path);
     return {
@@ -100,13 +110,12 @@ export function rankCorpus(corpus, { query = '', scope = {}, permissions = null,
   const wanted = String(query).trim();
   const exact = [];
   if (wanted !== '') {
-    for (const unit of corpus?.units ?? []) {
+    const classify = rankEligibility({ scope, permissions });
+    for (const candidate of units) {
+      if (classify(candidate) !== null) continue;
+      const unit = byId.get(unitKey(candidate));
       const artifact = byPath.get(unit.path);
-      const named =
-        unit.id === wanted ||
-        unit.artifact === wanted ||
-        unit.path === wanted ||
-        artifact?.id === wanted;
+      const named = sectionMatches(unit, wanted) || unit.path === wanted || artifact?.id === wanted;
       if (named && !exact.some((entry) => entry.id === unit.id && entry.citation.path === unit.path)) {
         exact.push({ id: unit.id, citation: citationOf(unit, artifact) });
       }
@@ -126,7 +135,7 @@ export function rankCorpus(corpus, { query = '', scope = {}, permissions = null,
     ranked,
     scope: corpus?.scope ?? null,
     where: { ...scope },
-    exact: exact.slice(0, Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : exact.length),
+    exact: exact.slice(0, cap),
     reasons,
   };
 }
@@ -193,7 +202,7 @@ export function citationFor(corpus, id) {
     const claim = (Array.isArray(artifact.claims) ? artifact.claims : []).find((record) => record.id === id);
     if (claim !== undefined) return { kind: 'claim', claim, artifact };
   }
-  const unit = units.find((record) => record.id === id || record.artifact === id);
+  const unit = units.find((record) => sectionMatches(record, id));
   if (unit !== undefined) {
     const artifact = artifacts.find((record) => record.path === unit.path);
     if (artifact !== undefined) return { kind: 'section', unit, artifact };

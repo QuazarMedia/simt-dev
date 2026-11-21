@@ -151,6 +151,49 @@ test('a CJK question retrieves its section, and an exact id is a plain citation 
   assert.ok(byPath.exact.length > 0, 'a path is not a citation lookup');
 });
 
+test('a cited path and anchor can be reopened after assigning an artifact id', async () => {
+  const root = await repo();
+  await build(root);
+  const path = 'handbook/retention-new.md';
+  const ref = path + '#retention';
+  const ranked = JSON.parse((await rank(root, ['--query', ref])).stdout);
+  const expected = ranked.exact[0].citation;
+  assert.equal(expected.path, path);
+  assert.equal(expected.artifact, 'retention.new#retention');
+  const reopened = await why(root, ref);
+  assert.equal(reopened.code, 0, reopened.stdout);
+  assert.deepEqual(JSON.parse(reopened.stdout).source, expected);
+});
+
+test('a scoped limit counts distinct sources and a source name beats incidental mentions', async () => {
+  const root = await repo({
+    'handbook/a-overview.md': '# Overview\n\n## First\n\nIntegration check status polling.\n\n## Second\n\nIntegration check status polling.',
+    'handbook/b-runbook.md': '# Runbook\n\nIntegration check polling.',
+    'handbook/integration-check-status.md': '# Integration check-status\n\nPolls the service.',
+  });
+  await build(root);
+  const result = JSON.parse((await rank(root, ['--query', 'integration check status polling', '--limit', '3'])).stdout);
+  assert.deepEqual(result.ranked.map(({ path }) => path), [
+    'handbook/integration-check-status.md', 'handbook/a-overview.md', 'handbook/b-runbook.md',
+  ]);
+  assert.equal(result.ranked[0].citation.anchor, 'integration-check-status');
+});
+
+test('exact queries obey the same scope and permission constraints as ranked queries', async () => {
+  const root = await repo();
+  await build(root);
+  const path = 'handbook/retention-fr.md';
+  const options = ['--query', path, '--where', 'jurisdiction=DE'];
+  const result = JSON.parse((await rank(root, options)).stdout);
+  assert.deepEqual(result.exact, []);
+  assert.ok(result.excluded.some(({ reason }) => reason === 'scope-mismatch'));
+
+  const corpus = { units: [{ path, id: 'private-section', permission: 'private', text: 'detail' }] };
+  const restricted = rankCorpus(corpus, { query: 'private-section', permissions: [] });
+  assert.deepEqual(restricted.exact, []);
+  assert.deepEqual(restricted.ranked, []);
+});
+
 test('both time axes answer the historical question, not the newest document', async () => {
   const root = await repo();
   await build(root);

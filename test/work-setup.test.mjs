@@ -98,11 +98,20 @@ test('the preview writes nothing, and the apply writes exactly the bytes it show
 test('undo restores the manifest the setup replaced, and removes the one it created', async () => {
   const created = await shape('handbook');
   const flags = ['work', 'setup', '--scope', 'handbook', '--path', 'handbook', '--kind', 'document'];
+  const ignorePath = join(created, '.gitignore');
+  const originalIgnore = 'owned-local-file\n';
+  writeFileSync(ignorePath, originalIgnore);
+  const preview = await json(created, [...flags, '--diff']);
+  assert.equal(preview.addsLocalIgnore, true);
+  assert.match(JSON.stringify(preview), /\.gitignore/);
+  assert.equal(readFileSync(ignorePath, 'utf8'), originalIgnore);
   await json(created, [...flags, '--yes']);
   assert.equal(existsSync(join(created, 'simt.json')), true);
+  assert.match(readFileSync(ignorePath, 'utf8'), /\.simt\/local\//);
   const undone = await simt(['undo', '--root', created, '--yes']);
   assert.equal(undone.code, 0, undone.stderr);
   assert.equal(existsSync(join(created, 'simt.json')), false, 'undo left the manifest the setup created');
+  assert.equal(readFileSync(ignorePath, 'utf8'), originalIgnore);
 
   const handwritten = {
     $comment: 'kept as written',

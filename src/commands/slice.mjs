@@ -731,6 +731,7 @@ async function finishSlice(root, id, flags) {
   // worktree. Read that commit now so the dry run can name it and the apply can skip
   // creating a second, empty one.
   const committed = await committedSlice(work, main, { staged: staged.length > 0 });
+  const refusal = committed?.error ?? null;
   const subject = committed?.sha ? committed.subject : subjectFor(type, id, title);
 
   if (!mode.apply) {
@@ -754,7 +755,7 @@ async function finishSlice(root, id, flags) {
         dryRun: true,
         subject,
         staged,
-        refusal: committed?.error ?? null,
+        refusal,
         gates: { event: 'pre-commit', declared, skipped: split.skipped.map((s) => s.name) },
         state: stateJson,
         land: existsSync(worktree) ? { from: main, branch, merge: true, remove: true } : null,
@@ -764,8 +765,8 @@ async function finishSlice(root, id, flags) {
     }
     const committedLine = committed?.sha
       ? `HEAD ${committed.sha} is already committed; finish lands it`
-      : committed?.error
-        ? `finish refuses: ${committed.error}`
+      : refusal !== null
+        ? `finish refuses: ${refusal}`
         : null;
     const lines = [
       `repo     ${root}`,

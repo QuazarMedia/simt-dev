@@ -280,15 +280,23 @@ test('finish lands a staged deletion', async () => {
 });
 
 test('the finish dry run reports the same refusal in text and JSON', async () => {
-  const { root } = await startA27();
-  const text = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true' }));
-  assert.equal(text.code, 0, text.stderr);
-  const match = text.stdout.match(/\(finish refuses: (.*)\)$/m);
-  assert.ok(match, `the text dry run hid the refusal: ${text.stdout}`);
+  for (const dirty of [false, true]) {
+    const { root, worktree } = await startA27();
+    if (dirty) {
+      await commitA27(worktree);
+      await writeFile(join(worktree, 'a.mjs'), 'export const a = 3;\n');
+    }
+    const label = dirty ? 'dirty' : 'empty';
 
-  const json = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true', json: true }));
-  assert.equal(json.code, 0, json.stderr);
-  assert.equal(JSON.parse(json.stdout).refusal, match[1], 'the JSON dry run reported a different refusal');
+    const text = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true' }));
+    assert.equal(text.code, 0, `${label}: ${text.stderr}`);
+    const match = text.stdout.match(/\(finish refuses: (.*)\)$/m);
+    assert.ok(match, `${label}: the text dry run hid the refusal: ${text.stdout}`);
+
+    const json = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true', json: true }));
+    assert.equal(json.code, 0, `${label}: ${json.stderr}`);
+    assert.equal(JSON.parse(json.stdout).refusal, match[1], `${label}: the JSON dry run reported a different refusal`);
+  }
 });
 
 test('a clean worktree with no commits ahead refuses to land', async () => {

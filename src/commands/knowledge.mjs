@@ -17,24 +17,115 @@ import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
 import { readWork } from '../work/effective.mjs';
-import { ALWAYS_DENIED, CORPUS_DIR, CORPUS_DEFAULTS, buildCorpus } from '../knowledge/corpus.mjs';
+import { ALWAYS_DENIED, CORPUS_DIR, CORPUS_DEFAULTS, CORPUS_SCHEMA_VERSION, buildCorpus } from '../knowledge/corpus.mjs';
 import { IDENTITY_FILE, identityMap, readIdentityMap } from '../knowledge/lineage.mjs';
 import { inventorySources } from '../knowledge/sources.mjs';
+import { citationFor, citationOf, corpusDocument, rankCorpus } from '../knowledge/query.mjs';
 import { buildClaimGraph, impact, lineage, proposedEdges, readClaim } from '../knowledge/claims.mjs';
 import { findConflicts } from '../knowledge/conflicts.mjs';
-import { applicableClaims, readApplicability } from '../knowledge/validity.mjs';
+import { applicableClaims, readApplicability, SCOPE_FIELDS } from '../knowledge/validity.mjs';
 import { MAX_PAGE, exportBundle, importBundle } from '../knowledge/bundle.mjs';
 import { readJsonDocument } from './doc-input.mjs';
 import { rank as rankUnits } from '../knowledge/rank.mjs';
 import { regenerationCandidates } from '../knowledge/derivations.mjs';
 import { aggregate as aggregateDebt, coldStart as coldStartDebt, rank as rankDebt, weightSensitivity } from '../knowledge/debt.mjs';
 import { impactReport } from '../knowledge/impact.mjs';
+import { digestOf } from '../knowledge/observations.mjs';
 import { extractDocument } from '../knowledge/sections.mjs';
 
-const WHY_USAGE = `run: ${CLI} knowledge why <claim-id> --claims <file> [--limit <n>] [--page <n>]`;
+const WHY_USAGE = `run: ${CLI} knowledge why <claim-id> (--claims <file> | --scope <id>) [--limit <n>] [--page <n>]`;
+const RANK_USAGE = `run: ${CLI} knowledge rank (--input <file> | --scope <id>) --query "<question>"`;
 const EXPORT_USAGE = `run: ${CLI} knowledge export --input <file>`;
 const IMPORT_USAGE = `run: ${CLI} knowledge import --input <file>`;
 const BUILD_USAGE = `run: ${CLI} knowledge build --scope <id> [--yes]`;
+
+/** The marker a maintainer adds to turn a section into a reviewed claim, as the extractor reads it. */
+const CLAIM_MARKER_EXAMPLE = '<!-- claim: id=<id> subject=<subject> predicate=<predicate> type=number value=<value> status=reviewed -->';
+
+/**
+ * The scope dimensions a `--where` flag names, validated against the ones a claim can carry.
+ * Nothing is inferred from the query's spelling: a dimension nobody declared is a usage error.
+ *
+ * @param {unknown} value
+ * @returns {{scope: object}|{error: string}}
+ */
+function parseWhere(value) {
+  if (value === undefined || value === null || value === '') return { scope: {} };
+  if (typeof value !== 'string') return { error: `--where takes key=value pairs, e.g. ${SCOPE_FIELDS[0]}=DE` };
+  const scope = {};
+  for (const pair of value.split(',')) {
+    const eq = pair.indexOf('=');
+    const key = eq === -1 ? '' : pair.slice(0, eq).trim();
+    const val = eq === -1 ? '' : pair.slice(eq + 1).trim();
+    if (!SCOPE_FIELDS.includes(key)) return { error: `--where: \`${key === '' ? pair.trim() : key}\` is not a scope dimension; known dimensions: ${SCOPE_FIELDS.join(', ')}` };
+    if (val === '') return { error: `--where ${key} needs a value` };
+    scope[key] = val;
+  }
+  return { scope };
+}
+
+/**
+ * The one declared scope a command names, read from the effective work declaration.
+ *
+ * @param {object} flags
+ * @param {string} verb what the caller wants to do with the scope, for the refusal's wording
+ * @returns {Promise<{root: string, work: object, scope: object}|{error: {message: string, exit: number, remedy: string}}>}
+ */
+async function declaredScope(flags, verb) {
+  const root = commandRoot(flags);
+  const work = await readWork(root);
+  if (!work.ok) return { error: { message: `${MANIFEST_FILE}'s work declaration is invalid: ${work.problems[0].message}`, exit: EXIT.CONFIG, remedy: work.problems[0].remedy } };
+  if (!work.declared) {
+    return { error: { message: `this repository declares no work, so it has no scope to ${verb}`, exit: EXIT.USAGE, remedy: `run: ${CLI} work setup --scope <id> --path <dir> --kind document` } };
+  }
+  const scope = work.scopes.find((row) => row.id === flags.scope);
+  if (scope === undefined) {
+    const known = work.scopes.map((row) => `\`${row.id}\``).join(', ');
+    return { error: { message: `\`${flags.scope}\` is not a declared scope`, exit: EXIT.USAGE, remedy: known === '' ? `declare one first: ${CLI} work setup --scope <id> --path <dir> --kind document` : `declared scopes are ${known}; pass one of them as --scope` } };
+  }
+  return { root, work, scope };
+}
+
+/**
+ * The built corpus one declared scope answers from, or the actionable reason it cannot.
+ *
+ * A missing, unreadable or foreign-schema corpus is a rebuild away, and the refusal says so.
+ * Freshness covers what the corpus indexed: a changed or vanished source makes its sections
+ * stale. A new file is a coverage gap the next build closes, not a wrong answer, so it does
+ * not refuse the query.
+ *
+ * @param {object} flags
+ * @returns {Promise<{root: string, scope: object, corpus: object}|{error: {message: string, exit: number, remedy: string}}>}
+ */
+async function scopedCorpus(flags) {
+  const declared = await declaredScope(flags, 'query');
+  if (declared.error !== undefined) return declared;
+  const { root, scope } = declared;
+  const rebuild = `run: ${CLI} knowledge build --scope ${scope.id} --yes`;
+  const text = await readTextFile(join(root, CORPUS_DIR, `${scope.id}.json`));
+  if (text === null) return { error: { message: `no corpus is built for scope \`${scope.id}\``, exit: EXIT.FAIL, remedy: rebuild } };
+  let corpus;
+  try {
+    corpus = JSON.parse(text);
+  } catch {
+    return { error: { message: `the corpus for scope \`${scope.id}\` does not parse`, exit: EXIT.FAIL, remedy: rebuild } };
+  }
+  if (corpus?.schema !== CORPUS_SCHEMA_VERSION || corpus?.scope !== scope.id) {
+    return { error: { message: `the corpus for scope \`${scope.id}\` was written under another schema or scope`, exit: EXIT.FAIL, remedy: rebuild } };
+  }
+  const stale = [];
+  for (const row of Array.isArray(corpus.inventory) ? corpus.inventory : []) {
+    if (row.state !== 'indexed') continue;
+    const bytes = await readBytes(join(root, row.path));
+    if (bytes === null) stale.push(`${row.path} is gone`);
+    else if (digestOf(bytes.toString('utf8')) !== row.digest) stale.push(`${row.path} changed`);
+  }
+  if (stale.length > 0) {
+    const shown = stale.slice(0, 5).join('; ');
+    return { error: { message: `the corpus for scope \`${scope.id}\` is stale: ${shown}${stale.length > 5 ? `; and ${stale.length - 5} more` : ''}`, exit: EXIT.FAIL, remedy: rebuild } };
+  }
+  return { root, scope, corpus };
+}
 
 /**
  * @param {object} doc
@@ -42,7 +133,7 @@ const BUILD_USAGE = `run: ${CLI} knowledge build --scope <id> [--yes]`;
  * @param {{limit?: number, page?: number}} [paging]
  * @returns {object}
  */
-export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0, asOf = null, knownAt = null } = {}) {
+export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0, asOf = null, knownAt = null, scope = {} } = {}) {
   const declared = Array.isArray(doc.claims) ? doc.claims : null;
   if (declared === null) return { error: 'the document needs a claims list' };
   // A caller through `run()` passes the strings `parse` never saw: the same rejection has
@@ -96,6 +187,7 @@ export function knowledgeWhyFacts(doc, id, { limit = MAX_PAGE, page = 0, asOf = 
         predicate: claim.predicate,
         asOf,
         knownAt,
+        scope,
         authority: Array.isArray(doc.authority) ? doc.authority : [],
       });
     } catch (error) {
@@ -292,6 +384,14 @@ export async function knowledgeCommand(sub, args, flags) {
   if (sub === 'why') {
     if (args.length === 0) return fail('a claim id is required', EXIT.USAGE, WHY_USAGE);
     if (args.length > 1) return fail(`unknown knowledge why argument ${args[1]}`, EXIT.USAGE, WHY_USAGE);
+    if (flags.scope !== undefined) {
+      if (flags.claims !== undefined) return fail('knowledge why reads --claims or --scope, not both', EXIT.USAGE, WHY_USAGE);
+      const where = parseWhere(flags.where);
+      if (where.error !== undefined) return fail(where.error, EXIT.USAGE, WHY_USAGE);
+      const loaded = await scopedCorpus(flags);
+      if (loaded.error !== undefined) return fail(loaded.error.message, loaded.error.exit, loaded.error.remedy);
+      return whyFromCorpus(loaded.corpus, args[0], flags, where.scope);
+    }
     const read = await readJsonDocument(flags, 'claims');
     if (read.error !== undefined) return fail(read.error, EXIT.USAGE, WHY_USAGE);
     const payload = knowledgeWhyFacts(read.doc, args[0], {
@@ -307,6 +407,19 @@ export async function knowledgeCommand(sub, args, flags) {
 
   // The four document doors answer a question over one file, and none of them writes.
   if (sub === 'rank' || sub === 'derivations' || sub === 'debt' || sub === 'impact') {
+    if (sub === 'rank' && flags.scope !== undefined) {
+      if (args.length > 0) return fail(`unknown knowledge rank argument ${args[0]}`, EXIT.USAGE, RANK_USAGE);
+      if (flags.input !== undefined) return fail('knowledge rank reads --input or --scope, not both', EXIT.USAGE, RANK_USAGE);
+      if (typeof flags.query !== 'string' || flags.query.trim() === '') return fail('rank needs --query', EXIT.USAGE, RANK_USAGE);
+      const where = parseWhere(flags.where);
+      if (where.error !== undefined) return fail(where.error, EXIT.USAGE, RANK_USAGE);
+      const loaded = await scopedCorpus(flags);
+      if (loaded.error !== undefined) return fail(loaded.error.message, loaded.error.exit, loaded.error.remedy);
+      const limit = Number.isFinite(Number(flags.limit)) ? Math.floor(Number(flags.limit)) : 10;
+      const payload = { ok: true, command: 'knowledge rank', ...rankCorpus(loaded.corpus, { query: flags.query, scope: where.scope, limit }) };
+      present(payload, () => renderKnowledge(payload), flags);
+      return EXIT.OK;
+    }
     const usage = `run: ${CLI} knowledge ${sub} --input <file>`;
     if (args.length > 0) return fail(`unknown knowledge ${sub} argument ${args[0]}`, EXIT.USAGE, usage);
     const document = await readJsonDocument(flags, 'input');
@@ -359,8 +472,65 @@ export async function knowledgeCommand(sub, args, flags) {
   return payload.ok ? EXIT.OK : EXIT.FAIL;
 }
 
+/**
+ * `knowledge why` over a built corpus: a claim gets the full explanation, and a section
+ * without one gets its citation and the supported way to add a claim. A section is evidence;
+ * refusing it outright would hide the source the search just found.
+ *
+ * @param {object} corpus
+ * @param {string} id
+ * @param {object} flags
+ * @param {object} where the scope dimensions the question requires
+ * @returns {number}
+ */
+function whyFromCorpus(corpus, id, flags, where) {
+  const found = citationFor(corpus, id);
+  if (found === null) {
+    return fail(`no claim or section \`${id}\` in scope \`${corpus.scope}\``, EXIT.FAIL, `run: ${CLI} knowledge rank --scope ${corpus.scope} --query "<terms>" to find the id a citation carries`);
+  }
+  if (found.kind === 'claim') {
+    const payload = knowledgeWhyFacts(corpusDocument(corpus), id, {
+      limit: flags.limit,
+      page: flags.page,
+      asOf: flags.asOf,
+      knownAt: flags.knownAt,
+      scope: where,
+    });
+    if (payload.error !== undefined) return fail(payload.error, EXIT.FAIL, WHY_USAGE);
+    payload.scope = corpus.scope;
+    payload.source = { path: found.artifact.path, revision: found.artifact.revision, provenance: found.artifact.provenance };
+    present(payload, () => renderWhy(payload), flags);
+    return EXIT.OK;
+  }
+  const claims = Array.isArray(found.artifact.claims) ? found.artifact.claims : [];
+  const payload = {
+    ok: true,
+    command: 'knowledge why',
+    id,
+    scope: corpus.scope,
+    kind: found.kind,
+    claim: null,
+    source: found.unit !== undefined
+      ? citationOf(found.unit, found.artifact)
+      : { path: found.artifact.path, revision: found.artifact.revision, provenance: found.artifact.provenance, authorityBasis: 'evidence' },
+    claims: claims.map((claim) => claim.id),
+    reason: claims.length > 0
+      ? `this artifact holds ${claims.length} claim(s); ask about one by its id`
+      : 'this section is evidence, and no reviewed claim states it',
+    addClaim: {
+      marker: CLAIM_MARKER_EXAMPLE,
+      remedy: `add a claim marker beside the section in ${found.artifact.path}, then run: ${CLI} knowledge build --scope ${corpus.scope} --yes`,
+    },
+  };
+  present(payload, () => renderWhy(payload), flags);
+  return EXIT.OK;
+}
+
 function renderWhy(payload) {
+  if (payload.claim === null) return renderCitation(payload);
   const lines = [`claim      ${payload.id}`];
+  if (payload.scope !== undefined) lines.push(`scope      ${payload.scope}`);
+  if (payload.source !== undefined) lines.push(`source     ${payload.source.path} (${payload.source.provenance})`);
   lines.push(`asserts    ${payload.claim.subject} ${payload.claim.predicate} = ${JSON.stringify(payload.claim.value)}${payload.claim.unit ? ` ${payload.claim.unit}` : ''}`);
   lines.push(`status     ${payload.claim.status ?? 'unspecified'}`);
   lines.push(`lineage    ${payload.lineage.total} node(s), ${payload.lineage.edges} edge(s)`);
@@ -385,6 +555,23 @@ function renderWhy(payload) {
   lines.push(`page       ${payload.page.index} (limit ${payload.page.size}, ${payload.page.total} node(s))`);
   if (payload.lineage.truncated || payload.impact.truncated) lines.push('truncated  1');
   if (!payload.certifies) lines.push('certifies  no: this scan covers declared claims, not the documents behind them');
+  return lines.join('\n');
+}
+
+function renderCitation(payload) {
+  const source = payload.source;
+  const lines = [
+    `citation   ${payload.id}`,
+    `scope      ${payload.scope}`,
+    `source     ${source.path}${source.anchor ? `#${source.anchor}` : ''}`,
+  ];
+  if (source.lineStart !== undefined) lines.push(`lines      ${source.lineStart}..${source.lineEnd} (bytes ${source.byteStart}..${source.byteEnd})`);
+  lines.push(`revision   ${source.revision ?? '(none)'} (${source.provenance})`);
+  lines.push(`authority  ${source.authorityBasis ?? 'evidence'}`);
+  lines.push(`reason     ${payload.reason}`);
+  for (const id of payload.claims) lines.push(`claim      ${id}  run: ${CLI} knowledge why ${id} --scope ${payload.scope}`);
+  lines.push(`add claim  ${payload.addClaim.marker}`);
+  lines.push(`remedy     ${payload.addClaim.remedy}`);
   return lines.join('\n');
 }
 
@@ -427,18 +614,10 @@ function renderImport(payload) {
  * @returns {Promise<number>}
  */
 async function knowledgeBuildCommand(flags) {
-  const root = commandRoot(flags);
   const mode = writeMode(flags);
-  const work = await readWork(root);
-  if (!work.ok) return fail(`${MANIFEST_FILE}'s work declaration is invalid: ${work.problems[0].message}`, EXIT.CONFIG, work.problems[0].remedy);
-  if (!work.declared) {
-    return fail('this repository declares no work, so it has no scope to build', EXIT.USAGE, `run: ${CLI} work setup --scope <id> --path <dir> --kind document`);
-  }
-  const scope = work.scopes.find((row) => row.id === flags.scope);
-  if (scope === undefined) {
-    const known = work.scopes.map((row) => `\`${row.id}\``).join(', ');
-    return fail(`\`${flags.scope}\` is not a declared scope`, EXIT.USAGE, known === '' ? `declare one first: ${BUILD_USAGE.replace('run: ', '')}` : `declared scopes are ${known}; pass one of them as --scope`);
-  }
+  const declared = await declaredScope(flags, 'build');
+  if (declared.error !== undefined) return fail(declared.error.message, declared.error.exit, declared.error.remedy);
+  const { root, work, scope } = declared;
 
   const relativePath = join(CORPUS_DIR, `${scope.id}.json`);
   const path = join(root, relativePath);
@@ -594,8 +773,20 @@ export function renderKnowledge(payload) {
 
 function renderRank(payload) {
   const lines = [`query      ${payload.query}`];
-  for (const hit of payload.ranked) lines.push(`${String(hit.score).padStart(6)}  ${hit.id}  ${hit.path ?? ''}`);
+  if (payload.scope !== undefined && payload.scope !== null) lines.push(`scope      ${payload.scope}`);
+  for (const hit of payload.ranked) {
+    lines.push(`${String(hit.score).padStart(6)}  ${hit.id}  ${hit.path ?? ''}`);
+    if (hit.citation != null) {
+      const cite = hit.citation;
+      lines.push(`        cite ${cite.path}${cite.anchor ? `#${cite.anchor}` : ''} lines ${cite.lineStart}..${cite.lineEnd} · ${cite.authorityBasis} · ${cite.revision ?? cite.provenance}`);
+    }
+  }
   if (payload.ranked.length === 0) lines.push('ranked     none for this question');
+  for (const reason of payload.reasons ?? []) lines.push(`because    ${reason}`);
+  for (const entry of payload.exact ?? []) {
+    const cite = entry.citation;
+    lines.push(`exact      ${entry.id}  ${cite.path}${cite.anchor ? `#${cite.anchor}` : ''} lines ${cite.lineStart}..${cite.lineEnd}`);
+  }
   for (const unit of payload.unknownScope) lines.push(`unknown    ${unit.path ?? unit.id}  scope not stated, so it cannot be ranked as if it applied`);
   for (const unit of payload.excluded) lines.push(`excluded   ${unit.id ?? '(no id)'}  ${unit.reason}`);
   lines.push(`embeddings ${payload.embeddings}`);

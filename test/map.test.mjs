@@ -120,6 +120,49 @@ test('a file the task names outranks a file it does not, and a neighbour comes w
   assert.ok(!ranked.some((row) => row.path === 'src/alone.mjs'));
 });
 
+test('a path the task spells is the answer, not one candidate among word overlaps', () => {
+  const ranked = rankFiles({
+    files: [{ path: 'src/commands/why.mjs' }, { path: 'src/testing/paths.mjs' }],
+    edges: [],
+    symbols: [
+      { path: 'src/commands/why.mjs', name: 'whyCommand', exported: 1 },
+      { path: 'src/testing/paths.mjs', name: 'isTestPath', exported: 1 },
+    ],
+    task: 'fix the path resolution in src/commands/why.mjs',
+  });
+  assert.equal(ranked[0].path, 'src/commands/why.mjs');
+  assert.equal(
+    ranked.some((row) => row.path === 'src/testing/paths.mjs'),
+    false,
+    'a word overlap is not a candidate when the task names a path',
+  );
+});
+
+test('a task word reaches the file through a plural directory and a camel case symbol', () => {
+  // `packs` is `pack` and `migratePack` is `migrate`: the two spellings the resolver used
+  // to miss, which let the import hub outrank the file the task was actually about.
+  const camel = rankFiles({
+    files: [{ path: 'src/migrations/manage.mjs' }, { path: 'src/name.mjs' }],
+    edges: [{ src: 'src/migrations/manage.mjs', dst: 'src/name.mjs', kind: 'import', weight: 1 }],
+    symbols: [
+      { path: 'src/migrations/manage.mjs', name: 'migratePack', exported: 1 },
+      { path: 'src/name.mjs', name: 'CLI', exported: 1 },
+    ],
+    task: 'migrate the pack',
+  });
+  assert.equal(camel[0].path, 'src/migrations/manage.mjs');
+  assert.equal(camel.find((row) => row.path === 'src/name.mjs').resolver, 0, 'the hub is not a match');
+
+  const plural = rankFiles({
+    files: [{ path: 'src/packs.mjs' }, { path: 'src/name.mjs' }],
+    edges: [{ src: 'src/packs.mjs', dst: 'src/name.mjs', kind: 'import', weight: 1 }],
+    symbols: [{ path: 'src/name.mjs', name: 'CLI', exported: 1 }],
+    task: 'add a pack flag',
+  });
+  assert.equal(plural[0].path, 'src/packs.mjs');
+  assert.ok(plural.find((row) => row.path === 'src/packs.mjs').resolver > 0);
+});
+
 test('outline, names and signatures stay inside the budget', () => {
   const ranked = rankFiles({
     files: [{ path: 'src/alpha.mjs' }, { path: 'src/beta.mjs' }],

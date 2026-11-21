@@ -56,6 +56,20 @@ test('a task that names a file produces its kind, its file and its test', async 
   assert.ok(stdout.includes('npm run test'), stdout);
 });
 
+test('a modified file is context, not the task scope or its kind', async (t) => {
+  // A dirty plan file used to become `scope`, and "every path named is documentation"
+  // then classified a code task as docs and offered the docs commands.
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await writeFile(join(root, 'README.md'), '# fixture\n\nedited in the working tree\n');
+  const { code, stdout, stderr } = await run(root, ['brief', 'add a flag to the keep helper']);
+  assert.equal(code, 0, stderr);
+  assert.ok(stdout.includes('kind feature'), stdout);
+  assert.match(stdout, /scope the whole repository/);
+  assert.match(stdout, /the working tree has 1 modified file/);
+  assert.ok(!stdout.includes('kind docs'), stdout);
+});
+
 test('--proof attaches the proof summary and the default packet is unchanged (A39)', async (t) => {
   const root = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));

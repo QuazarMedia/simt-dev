@@ -214,7 +214,12 @@ export async function assembleBrief({
 } = {}) {
   const named = paths !== null;
   const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(`${STATE_DIR}/`));
-  const scope = named ? parsePathList(paths) : dirty;
+  // A dirty file is where the reader is standing, not what the task asked about. When a
+  // task is given, its scope is the paths it names; the working tree is a fact reported
+  // beside it, because otherwise a modified plan file made a code task "docs", and the
+  // packet offered format commands for a change to the pack migration.
+  const asked = task.trim().length > 0;
+  const scope = named ? parsePathList(paths) : asked ? [] : dirty;
 
   const graph = await loadGraph(root, { build, task, embed: flags?.embed === true });
   if (graph.error) return { error: graph.error };
@@ -223,7 +228,7 @@ export async function assembleBrief({
   const { files, symbols, edges, fts = [], embeddings = [] } = graph;
   const filePaths = new Set(files.map((file) => file.path));
 
-  const { kind, basis } = classifyTask(task, { paths: scope });
+  const { kind, basis } = classifyTask(task, { paths: named ? scope : [] });
   const packet = collect();
   packet.add('TASK', `kind ${kind} — ${basis}`, {
     hard: true,
@@ -233,9 +238,15 @@ export async function assembleBrief({
   packet.add('TASK', `scope ${scope.length > 0 ? scope.join(', ') : 'the whole repository'}`, {
     why: [named ? 'named with --paths' : 'taken from the files git reports as modified'],
   });
-  if (task.length === 0 && !named) {
+  if (!asked && !named) {
     packet.add('CAUTIONS', 'no task was given, so the packet describes the working tree rather than a task', {
       why: ['an unasked question has no answer to be short of'],
+    });
+  }
+  if (asked && !named && dirty.length > 0) {
+    const shown = dirty.slice(0, 3).join(', ');
+    packet.add('CAUTIONS', `the working tree has ${dirty.length} modified file(s) (${shown}${dirty.length > 3 ? ', …' : ''}); they are not this task's scope`, {
+      why: ['a dirty checkout is where the reader stands, not what the task asked about'],
     });
   }
   if (graphStale) {
@@ -285,13 +296,19 @@ export async function assembleBrief({
   const ranked = rankFiles({ files, symbols, edges, fts, bm25, embeddings, queryVector, task });
   // An empty match is a different answer from a weak one: the ranking is then the graph
   // hub, which is what a reader who asked about `zebracorn` must not read as a hit
-  const matched = ranked.filter((row) => (row.score ?? 0) > 0).length;
+  const matched = ranked.filter((row) => (row.resolver ?? 0) > 0).length;
+  // When the task did match files, the graph hub and the BM25 tail are not answers: they
+  // are the rows the fused ranking keeps for coverage, and listing them under FILES made
+  // a two-file task look like it touched `src/name.mjs`. `resolver` is the score from the
+  // task's own words against paths and symbols; a fused score is positive for neighbours
+  // too. The hub stays for a task that matched nothing, where it is all there is.
+  const focused = matched > 0 ? ranked.filter((row) => (row.resolver ?? 0) > 0) : ranked;
   if (task.trim().length > 0 && matched === 0) {
     packet.add('CAUTIONS', 'matched 0: no file or symbol mentions this task, so FILES is the graph hub rather than a match', {
       why: ['an answer to a graph-shaped question is not an answer to this task'],
     });
   }
-  const rendered = renderMap(ranked, symbols, { level: 'names', budget: budget > 0 ? budget * MAP_FACTOR : 0 });
+  const rendered = renderMap(focused, symbols, { level: 'names', budget: budget > 0 ? budget * MAP_FACTOR : 0 });
   for (const line of rendered.text.split('\n')) {
     packet.add('FILES', line, { why: ['ranked by the task words against the import graph'] });
   }
@@ -322,7 +339,7 @@ export async function assembleBrief({
     });
   }
 
-  const likely = ranked.slice(0, LIKELY_FILES).map((row) => row.path);
+  const likely = focused.slice(0, LIKELY_FILES).map((row) => row.path);
   const untested = [];
   packet.add('TESTS', `the index knows direct importers; \`${CLI} tests <path>\` is the authority for multi-line and dynamic imports`, {
     why: ['a cheap packet and an exact answer are different questions'],

@@ -100,7 +100,7 @@ export function rankFiles({
   // this graph otherwise returns the file every module imports, and the files
   // the task named never reach the top 10.
   const baseRanked = kept
-    .map((path, i) => ({ path, rank: rank[i], score: scores.get(path) ?? 0 }))
+    .map((path, i) => ({ path, rank: rank[i], score: scores.get(path) ?? 0, resolver: scores.get(path) ?? 0 }))
     .sort(byRank);
 
   if (String(task ?? '').trim().length === 0) return baseRanked;
@@ -136,7 +136,10 @@ export function rankFiles({
   if (embedRanked.length > 0) {
     lists.push({ items: embedRanked, weight: 1.5 });
   }
-  return rrfFuse(lists, RRF_K);
+  // Carry the resolver score beside the fused rank. A caller that wants "the files this
+  // task actually names" cannot read that off the fused number - every graph neighbour
+  // has one - and treating each fused row as a match listed the hub as task files.
+  return rrfFuse(lists, RRF_K).map((row) => ({ ...row, resolver: scores.get(row.path) ?? 0 }));
 }
 
 /**
@@ -404,11 +407,26 @@ function scoreFiles(nodes, symbolsByPath, task) {
   const scores = new Map(nodes.map((path) => [path, 0]));
   const { text, terms } = termsOf(task);
   if (terms.size === 0) return scores;
+  // A path the task spells is the strongest evidence there is: the reader already named
+  // the file. Word overlap elsewhere is then a coincidence - `path` in
+  // `src/testing/paths.mjs` was a candidate beside `src/commands/why.mjs` for a task that
+  // named the latter - so a spelled path is the whole answer.
+  const spelled = nodes.filter((path) => text.includes(path.toLowerCase()));
+  if (spelled.length > 0) {
+    const exact = new Map(nodes.map((path) => [path, 0]));
+    for (const path of spelled) exact.set(path, 8);
+    return exact;
+  }
   const segFreq = new Map();
   for (const path of nodes) {
     for (const segment of segments(path)) segFreq.set(segment, (segFreq.get(segment) ?? 0) + 1);
   }
   const cap = Math.max(3, Math.floor(nodes.length * 0.15));
+  // `pack` names `packs/`. The task's wording and the tree's directory name disagree by
+  // a plural, and exact segment equality let the graph hub outrank the file the task was
+  // about because `packs` is not `pack`.
+  const singular = (word) => (word.length > 4 && word.endsWith('s') ? word.slice(0, -1) : word);
+  const forms = new Set([...terms].flatMap((term) => [term, singular(term)]));
   // A term that labels every file ("src") is the tree, not the task. A long
   // word that sits inside dozens of paths ("decision") is the same thing, so
   // the substring count uses the same ceiling.
@@ -436,7 +454,8 @@ function scoreFiles(nodes, symbolsByPath, task) {
     const stem = stemOf(lower);
     if (stem.length >= 3 && terms.has(stem) && !common(segFreq.get(stem) ?? 0)) score += 4;
     for (const segment of segments(lower)) {
-      if (terms.has(segment) && !common(segFreq.get(segment) ?? 0)) score += 2;
+      if (forms.has(segment) && !common(segFreq.get(segment) ?? 0)) score += 2;
+      else if (forms.has(singular(segment)) && !common(segFreq.get(singular(segment)) ?? 0)) score += 2;
     }
     for (const term of terms) {
       const freq = termFreq.get(term) ?? 0;
@@ -451,6 +470,15 @@ function scoreFiles(nodes, symbolsByPath, task) {
     for (const symbol of symbolsByPath.get(path) ?? []) {
       const name = String(symbol.name ?? '').toLowerCase();
       if (name.length >= 3 && terms.has(name) && (symFreq.get(name) ?? 0) <= 5) hits += 1;
+      // `migrate` names `migratePack`. Camel case is not a word boundary the term set
+      // carries, so a rare symbol containing a long task term is evidence too; without
+      // it the file holding the function was absent from the resolver list entirely.
+      else if (
+        [...terms].some((term) => term.length >= 5 && name.includes(term)) &&
+        (symFreq.get(name) ?? 0) <= 2
+      ) {
+        hits += 1;
+      }
     }
     scores.set(path, score + Math.min(hits, 8));
   }
@@ -495,7 +523,11 @@ function mentions(text, term) {
 function termsOf(task) {
   const text = String(task ?? '').toLowerCase();
   const terms = new Set();
-  for (const word of text.split(/[^a-z0-9-]+/)) {
+  for (const word of text.split(/[^a-z0-9./-]+/)) {
+    // A path names its files as a whole - `text.includes` scores that below. Splitting it
+    // into `src/commands/why.mjs` -> `src`, `commands`, `why` made every file in
+    // `src/commands/` a match for a task that named one file.
+    if (word.includes('/')) continue;
     if (word.length >= 3 && !STOP.has(word)) terms.add(word);
   }
   return { text, terms };

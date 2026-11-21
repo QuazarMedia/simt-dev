@@ -184,6 +184,10 @@ export const VALUE_FLAGS = new Set([
   'query',
   'refs',
   'weights',
+  // knowledge rank|why --scope: the scope dimensions the question requires, as key=value
+  // pairs. A value rather than a switch, because a dimension nobody declared is a usage
+  // error, not a guess from the query's spelling.
+  'where',
   // knowledge why: the two dates a bitemporal query needs, both required together.
   'as-of',
   'known-at',

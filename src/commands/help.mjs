@@ -19,7 +19,7 @@ ${CLI} work setup --scope <id> --path <dir>  declare one work scope in the manif
                            (--kind <kind>, --validator "<command>"); previewed, --yes writes
 ${CLI} knowledge why <id>     what a claim derives from, what depends on it,
                            and where another claim contradicts it
-                           (reads --claims <file>)
+                           (reads --claims <file>, or --scope <id> for the built corpus)
 ${CLI} knowledge export --input  a bounded, permission-filtered packet for
                            another repository to read offline
 ${CLI} knowledge import --input  validate such a packet as data; it executes nothing
@@ -32,7 +32,7 @@ ${CLI} verify status --input  closure over recorded obligations, and what is
 ${CLI} action status --journal  where an operation stands from its journal,
                            and what the state permits next
 ${CLI} knowledge rank       ranked evidence units, and what was excluded or unplaced
-                           (reads --input <file> --query "<question>")
+                           (reads --input <file>, or --scope <id>, with --query "<question>")
 ${CLI} knowledge impact --input  what a change reaches over typed edges, and where
                            the graph is unknown (--refs <id,...>)
 ${CLI} knowledge derivations --input  which outputs a source or template change
@@ -375,6 +375,8 @@ const FLAGS = `--json                 structured output (compact; one document, 
 --search <task>         index: BM25 rows for a task, from the open cache
 --rank <task>           index: files ranked for a task, from the open cache
 --query <text>          knowledge rank: the question the units are ranked against
+--where <k=v,...>       knowledge rank|why --scope: the scope dimensions the question
+                        requires, e.g. jurisdiction=DE,product=acme
 --refs <ids>            knowledge impact: the changed claim or artifact ids, comma separated
 --weights <k=n,...>     knowledge debt: the scoring weights, e.g. obligations=3,effort=1
 --limit <n>             knowledge why: how many nodes one page carries (1..100)

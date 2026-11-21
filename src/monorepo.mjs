@@ -23,8 +23,23 @@ import { join } from 'node:path';
 /** Packaged trees are not packages: their directories are dependencies. */
 const SKIP_DIRS = new Set(['node_modules', 'target', 'vendor', 'dist', 'build', '.git', '.venv', 'venv']);
 
-/** What makes a directory a package once a pattern has matched it. */
-const PACKAGE_MARKERS = ['package.json', 'Cargo.toml', 'go.mod', 'build.gradle', 'build.gradle.kts', 'pyproject.toml', 'mix.exs'];
+/**
+ * What makes a directory a package once a pattern has matched it.
+ *
+ * Exported because the index's `pkg` attribution and the gate's package grouping
+ * must not carry a second table: a nested Gradle or Maven module that the
+ * workspace projection recognises is a package the index has to name too.
+ */
+export const PACKAGE_MARKERS = [
+  'package.json',
+  'Cargo.toml',
+  'go.mod',
+  'build.gradle',
+  'build.gradle.kts',
+  'pyproject.toml',
+  'pom.xml',
+  'mix.exs',
+];
 
 /**
  * The declarations this tool reads. `patterns` reads a list of repo-relative

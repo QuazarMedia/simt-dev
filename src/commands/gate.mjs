@@ -3,7 +3,8 @@
 // Paths name the change. `--changed` reads the diff instead. The tests are the
 // ones that import a changed file, directly or through other files, and the
 // runner is the one the package already uses. Nothing else runs. A report
-// this tool knows how to read is compacted; the raw log is kept.
+// this tool knows how to read is compacted; an unrecognised log is marked
+// `unavailable` and kept raw.
 
 import { existsSync } from 'node:fs';
 import { mkdir, readdir, unlink, writeFile } from 'node:fs/promises';
@@ -16,7 +17,7 @@ import { detectTestRunner } from '../testing/runners.mjs';
 import { readReports } from '../testing/parsers.mjs';
 import { spawnBounded } from '../sys/proc.mjs';
 import { loadManifest } from '../manifest/schema.mjs';
-import { compactOutput } from '../index/compact.mjs';
+import { compactReport } from '../index/compact.mjs';
 import { coverage } from '../index/coverage.mjs';
 import { readImportEdges } from '../index/gate.mjs';
 import { langOf, packageOf } from '../index/store.mjs';
@@ -251,7 +252,10 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     if (result.timedOut) text.push(`timeout  ${runner.displayCmd} exceeded ${gateTimeoutMs() / 1000}s`);
     const body = stderr ? `${stdout}\n${stderr}` : stdout;
     rawParts.push(body);
-    const compact = compactOutput(body);
+    // A report-only runner writes the result to the file and little or nothing to
+    // stdout. Read the report this run already collected before falling back to the
+    // raw stream; otherwise a readable JUnit report was counted but never compacted.
+    const compaction = compactReport(reportText || body);
     // Whether the runner was actually asked to run the files: a runner that ignores its
     // selector exits 0 having run nothing, and the old report called that a pass. The
     // check is only a claim about the output mentioning each file, which is what a
@@ -266,9 +270,13 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
       unproven,
       timedOut: result.timedOut,
       truncated: result.truncated,
+      compact: compaction.status,
+      ...(compaction.format ? { reportFormat: compaction.format } : {}),
       ...(parsed ? { passed: parsed.passed, failed: parsed.failed } : {}),
     });
-    text.push(compact ?? body);
+    // The raw body is still the fallback. `unavailable` says the text was not a
+    // report this tool reads, so the reader is not invited to mistake it for one.
+    text.push(compaction.text ?? body);
   }
   const unproven = runs.flatMap((run) => run.unproven ?? []);
   // `--strict` is the opt-in versioned verdict (ADR-198). The default stays compatible:

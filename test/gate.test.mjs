@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { test } from 'node:test';
 import { existsSync } from 'node:fs';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
@@ -329,6 +329,101 @@ test('gate --strict fails when the runner never mentions the files it was given 
     assert.equal(strict.code, 1);
     const payload = JSON.parse(strict.stdout);
     assert.deepEqual(payload.runs[0].unproven, ['test/keep.test.mjs']);
+    assert.equal(payload.runs[0].compact, 'unavailable', 'a non-report stays raw and says so');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('focused selection and the full suite deliberately disagree (PR33)', async () => {
+  // The focused gate runs the importing test only. The same repository's full test
+  // command still runs the unrelated failing test. They must not be made to agree:
+  // a focused run is evidence about the change, not a replacement for the whole suite.
+  const root = await mkdtemp(join(tmpdir(), 'idx-gate-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await mkdir(join(root, 'test'), { recursive: true });
+    await writeFile(join(root, 'package.json'), '{ "scripts": { "test": "node --test" } }\n');
+    await writeFile(join(root, 'src', 'keep.mjs'), 'export const keep = 1;\n');
+    await writeFile(join(root, 'src', 'other.mjs'), 'export const other = 1;\n');
+    await writeFile(
+      join(root, 'test', 'keep.test.mjs'),
+      "import { test } from 'node:test';\nimport { keep } from '../src/keep.mjs';\ntest('focused keep', () => { if (keep !== 1) throw new Error('keep'); });\n",
+    );
+    await writeFile(
+      join(root, 'test', 'other.test.mjs'),
+      "import { test } from 'node:test';\nimport { other } from '../src/other.mjs';\ntest('failing other', () => { if (other === 1) throw new Error('other'); });\n",
+    );
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+
+    const focused = await capture(() => gateCommand(['src/keep.mjs'], { root }));
+    assert.equal(focused.code, 0, focused.stdout);
+    assert.match(focused.stdout, /test\/keep\.test\.mjs/);
+    assert.match(focused.stdout, /passed  1/);
+    assert.equal(focused.stdout.includes('failing other'), false);
+
+    let fullCode = 0;
+    let fullText = '';
+    // This test itself runs under `node --test`; a child that inherits
+    // NODE_TEST_CONTEXT reports to the parent and exits 0 regardless of failures.
+    const env = { ...process.env };
+    for (const key of Object.keys(env)) {
+      if (key.startsWith('NODE_TEST')) delete env[key];
+    }
+    try {
+      const out = await exec('node', ['--test'], { cwd: root, env, maxBuffer: 16 << 20 });
+      fullText = `${out.stdout}${out.stderr}`;
+    } catch (error) {
+      fullCode = error.code;
+      fullText = `${error.stdout}${error.stderr}`;
+    }
+    assert.equal(fullCode, 1);
+    assert.match(fullText, /failing other/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a nested Gradle package is attributed and runs from its own marker (PR33)', async () => {
+  // The workspace projection reads `build.gradle`; the index and gate used to have a
+  // different marker table, which attributed this source to the repository root and ran
+  // its tests from there. One shared table makes the package boundary agree.
+  const root = await mkdtemp(join(tmpdir(), 'idx-gate-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'apps', 'web', 'src'), { recursive: true });
+    await mkdir(join(root, 'apps', 'web', 'test'), { recursive: true });
+    await writeFile(join(root, 'apps', 'web', 'build.gradle'), 'plugins { id "java" }\n');
+    await writeFile(join(root, 'apps', 'web', 'src', 'keep.mjs'), 'export const keep = 1;\n');
+    await writeFile(
+      join(root, 'apps', 'web', 'test', 'keep.test.mjs'),
+      "import { test } from 'node:test';\nimport { keep } from '../src/keep.mjs';\ntest('k', () => { if (keep !== 1) throw new Error('k'); });\n",
+    );
+    await writeFile(
+      join(root, 'simt.json'),
+      JSON.stringify({
+        test: {
+          runner: {
+            command: [
+              process.execPath,
+              '-e',
+              "require('fs').writeFileSync('cwd.txt', process.cwd())",
+            ],
+          },
+        },
+      }),
+    );
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+
+    const payload = JSON.parse(
+      (await capture(() => gateCommand(['apps/web/src/keep.mjs'], { root, json: true }))).stdout,
+    );
+    assert.equal(payload.code, 0, payload.runs?.[0]?.stderr);
+    assert.equal(payload.runs[0].package, 'apps/web');
+    assert.equal(await readFile(join(root, 'apps', 'web', 'cwd.txt'), 'utf8'), await realpath(join(root, 'apps', 'web')));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -373,6 +468,8 @@ test('a report the runner writes is read and then removed (PR14)', async () => {
     const payload = JSON.parse((await capture(() => gateCommand(['src/keep.mjs'], { root, json: true }))).stdout);
     assert.equal(payload.code, 0, payload.runs?.[0]?.stderr);
     assert.deepEqual(payload.runs[0].passed, ['t > k']);
+    assert.equal(payload.runs[0].compact, 'compacted');
+    assert.equal(payload.runs[0].reportFormat, 'junit');
     assert.equal(existsSync(join(root, 'report.xml')), false, 'the report belongs to the run and is cleaned up');
   } finally {
     await rm(root, { recursive: true, force: true });

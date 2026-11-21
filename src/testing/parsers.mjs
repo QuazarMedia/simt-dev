@@ -1,8 +1,12 @@
 // Parsers for the report formats a test runner writes.
 //
-// A runner's verdict is read from one of four shapes: TAP, the Vitest/Jest JSON result,
+// A runner's verdict is read from one of five shapes: TAP, the Vitest/Jest JSON result,
 // JUnit XML, `go test -json`, and libtest's text. They are parsers, not graders, so the
 // gate, the index and the bench read a run the same way.
+//
+// The full reader returns ids and the failure text together. `compact.mjs` renders that
+// structure; the wrappers below expose only ids because that is what selection and
+// scoring consume.
 import { readFile, readdir, rm, stat } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -19,6 +23,39 @@ export function dedupeSorted(items) {
   return [...new Set(items)].sort();
 }
 
+function assertionName(assertion) {
+  const parts = [...(assertion.ancestorTitles ?? []), assertion.title].filter(Boolean);
+  if (parts.length > 0) return parts.join(' > ');
+  return String(assertion.fullName ?? '').trim();
+}
+
+function fileLocation(file, location) {
+  if (!file) return '';
+  const line = location && Number.isFinite(location.line) ? `:${location.line}` : '';
+  const column = location && Number.isFinite(location.column) ? `:${location.column}` : '';
+  return `${file}${line}${column}`;
+}
+
+function locationIn(text) {
+  const match = /[\w./-]+\.(?:java|kt|py|go|mjs|js|ts|tsx):\d+(?::\d+)?/.exec(text);
+  return match ? match[0] : '';
+}
+
+function xmlAttr(attrs, key) {
+  const match = new RegExp(`\\b${key}=["']([^"']*)["']`).exec(attrs);
+  if (!match) return '';
+  return decode(match[1]).trim();
+}
+
+function decode(text) {
+  return String(text)
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&');
+}
+
 /**
  * Parse TAP version 13 output from `node --test --test-reporter=tap`.
  *
@@ -26,29 +63,44 @@ export function dedupeSorted(items) {
  * `type: 'suite'` and are used only to build `parent > child` qualified IDs.
  *
  * @param {string} text
- * @returns {{passed: string[], failed: string[]}}
+ * @returns {{passed: string[], failed: string[], skipped: number,
+ *   failures: {id: string, detail: string, location: string}[]}|null}
  */
-export function parseTapOutput(text) {
+function parseTapReport(text) {
   const passed = [];
   const failed = [];
+  const failures = [];
+  let skipped = 0;
+  let saw = false;
   const lines = String(text ?? '').split('\n');
   const stack = [];
   let pending = null;
 
-  const flush = () => {
+  const flush = (end) => {
     if (!pending) return;
-    if (pending.type !== 'suite' && !pending.hadChild && !pending.directive) {
-      const id = [...pending.ancestors, pending.name].join(' > ');
-      if (pending.ok) passed.push(id);
-      else failed.push(id);
+    if (pending.type !== 'suite' && !pending.hadChild) {
+      if (pending.directive) {
+        skipped += 1;
+      } else {
+        const id = [...pending.ancestors, pending.name].join(' > ');
+        if (pending.ok) {
+          passed.push(id);
+        } else {
+          failed.push(id);
+          const stop = pending.yaml ? end : pending.start + 1;
+          const detail = lines.slice(pending.start, stop).join('\n').trimEnd();
+          failures.push({ id, detail, location: locationIn(detail) });
+        }
+      }
     }
     pending = null;
   };
 
-  for (const raw of lines) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index];
     const sub = /^(\s*)# Subtest:\s+(.*)$/.exec(raw);
     if (sub) {
-      flush();
+      flush(index);
       const indent = sub[1].length;
       while (stack.length > 0 && stack[stack.length - 1].indent >= indent) stack.pop();
       if (stack.length > 0) stack[stack.length - 1].hadChild = true;
@@ -58,7 +110,7 @@ export function parseTapOutput(text) {
 
     const res = /^(\s*)(not ok|ok)\s+\d+(?:\s+-\s+(.*?))?(?:\s+#\s*(SKIP|TODO)\b.*)?$/i.exec(raw);
     if (res) {
-      flush();
+      flush(index);
       const indent = res[1].length;
       while (stack.length > 0 && stack[stack.length - 1].indent > indent) stack.pop();
       let hadChild = false;
@@ -69,19 +121,88 @@ export function parseTapOutput(text) {
       const ok = res[2].toLowerCase() === 'ok';
       const name = (res[3] ?? '').trim();
       const directive = res[4] ? res[4].toUpperCase() : null;
-      if (name) pending = { indent, ok, name, ancestors, hadChild, directive, type: null };
+      if (name) {
+        saw = true;
+        pending = {
+          start: index > 0 && /^\s*# Subtest:/.test(lines[index - 1]) ? index - 1 : index,
+          yaml: index + 1 < lines.length && /^\s+---\s*$/.test(lines[index + 1]),
+          ok,
+          name,
+          ancestors,
+          hadChild,
+          directive,
+          type: null,
+        };
+      }
       continue;
     }
 
     if (pending) {
       const typeMatch = /^\s*type:\s*['"]?(test|suite)['"]?\s*$/.exec(raw);
       if (typeMatch) pending.type = typeMatch[1];
-      else if (/^\s*\.\.\.\s*$/.test(raw)) flush();
+      else if (/^\s*\.\.\.\s*$/.test(raw)) flush(index + 1);
     }
   }
-  flush();
+  flush(lines.length);
 
-  return { passed: dedupeSorted(passed), failed: dedupeSorted(failed) };
+  if (!saw) return null;
+  return { passed: dedupeSorted(passed), failed: dedupeSorted(failed), skipped, failures };
+}
+
+/**
+ * Parse TAP version 13 output.
+ *
+ * @param {string} text
+ * @returns {{passed: string[], failed: string[]}}
+ */
+export function parseTapOutput(text) {
+  const report = parseTapReport(text) ?? { passed: [], failed: [] };
+  return { passed: report.passed, failed: report.failed };
+}
+
+function parseVitestReport(text) {
+  const raw = String(text ?? '').trim();
+  const start = raw.indexOf('{');
+  const end = raw.lastIndexOf('}');
+  if (start === -1 || end === -1 || end < start) return null;
+  let doc;
+  try {
+    doc = JSON.parse(raw.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(doc.testResults)) return null;
+
+  const passed = [];
+  const failed = [];
+  const failures = [];
+  let skipped = 0;
+  let saw = false;
+  for (const suite of doc.testResults) {
+    const file = typeof suite?.name === 'string' ? suite.name : '';
+    for (const assertion of suite?.assertionResults ?? []) {
+      const id = assertionName(assertion);
+      if (!id) continue;
+      saw = true;
+      const status = String(assertion.status ?? '');
+      if (status === 'passed') {
+        passed.push(id);
+        continue;
+      }
+      if (status === 'pending' || status === 'skipped' || status === 'todo') {
+        skipped += 1;
+        continue;
+      }
+      if (status !== 'failed') continue;
+      const messages = Array.isArray(assertion.failureMessages) ? assertion.failureMessages.filter(Boolean) : [];
+      const location = locationIn(messages.join('\n')) || fileLocation(file, assertion.location);
+      const detail = [`not ok  ${id}`, ...(location ? [`  location: ${location}`] : []), ...messages].join('\n');
+      failed.push(id);
+      failures.push({ id, detail, location });
+    }
+  }
+  if (!saw) return null;
+  return { passed: dedupeSorted(passed), failed: dedupeSorted(failed), skipped, failures };
 }
 
 /**
@@ -92,43 +213,47 @@ export function parseTapOutput(text) {
  * @returns {{passed: string[], failed: string[]}}
  */
 export function parseVitestJson(text) {
-  const passed = [];
-  const failed = [];
-  const raw = String(text ?? '').trim();
-  const start = raw.indexOf('{');
-  const end = raw.lastIndexOf('}');
-  if (start === -1 || end === -1 || end < start) return { passed, failed };
-
-  let doc;
-  try {
-    doc = JSON.parse(raw.slice(start, end + 1));
-  } catch {
-    return { passed, failed };
-  }
-
-  for (const suite of doc.testResults ?? []) {
-    for (const assertion of suite.assertionResults ?? []) {
-      const parts = [...(assertion.ancestorTitles ?? []), assertion.title].filter(Boolean);
-      const id = parts.length > 0 ? parts.join(' > ') : (assertion.fullName ?? '').trim();
-      if (!id) continue;
-      if (assertion.status === 'passed') passed.push(id);
-      else if (assertion.status === 'failed') failed.push(id);
-    }
-  }
-
-  return { passed: dedupeSorted(passed), failed: dedupeSorted(failed) };
+  const report = parseVitestReport(text) ?? { passed: [], failed: [] };
+  return { passed: report.passed, failed: report.failed };
 }
 
-function xmlAttr(attrs, key) {
-  const match = new RegExp(`\\b${key}=["']([^"']*)["']`).exec(attrs);
-  if (!match) return '';
-  return match[1]
-    .replaceAll('&quot;', '"')
-    .replaceAll('&apos;', "'")
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&amp;', '&')
-    .trim();
+function parseJunitReport(xml) {
+  const passed = [];
+  const failed = [];
+  const failures = [];
+  let skipped = 0;
+  let saw = false;
+  const source = String(xml ?? '');
+  const tagRe = /<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g;
+
+  for (const match of source.matchAll(tagRe)) {
+    const attrs = match[1] ?? '';
+    const inner = match[2] ?? '';
+    const name = xmlAttr(attrs, 'name');
+    if (!name) continue;
+    saw = true;
+    const classname = xmlAttr(attrs, 'classname');
+    const id = classname ? `${classname} > ${name}` : name;
+    if (/<skipped\b/i.test(inner)) {
+      skipped += 1;
+      continue;
+    }
+    if (!/<(?:failure|error)\b/i.test(inner)) {
+      passed.push(id);
+      continue;
+    }
+    const file = xmlAttr(attrs, 'file');
+    const line = xmlAttr(attrs, 'line');
+    const fromAttrs = file ? `${file}${line ? `:${line}` : ''}` : '';
+    const body = failureBody(inner);
+    const location = fromAttrs || locationIn(body);
+    const detail = [`not ok  ${id}`, ...(location ? [`  location: ${location}`] : []), ...(body ? [body] : [])].join('\n');
+    failed.push(id);
+    failures.push({ id, detail, location });
+  }
+
+  if (!saw) return null;
+  return { passed: dedupeSorted(passed), failed: dedupeSorted(failed), skipped, failures };
 }
 
 /**
@@ -138,25 +263,58 @@ function xmlAttr(attrs, key) {
  * @returns {{passed: string[], failed: string[]}}
  */
 export function parseJunitXml(xml) {
+  const report = parseJunitReport(xml) ?? { passed: [], failed: [] };
+  return { passed: report.passed, failed: report.failed };
+}
+
+function failureBody(inner) {
+  const chunks = [];
+  const re = /<(?:failure|error)\b([^>]*)(?:\/>|>([\s\S]*?)<\/(?:failure|error)>)/gi;
+  for (const match of String(inner).matchAll(re)) {
+    const message = xmlAttr(match[1] ?? '', 'message');
+    const body = decode(match[2] ?? '').trim();
+    if (message) chunks.push(message);
+    if (body && body !== message) chunks.push(body);
+  }
+  if (chunks.length > 0) return chunks.join('\n');
+  return decode(inner).trim();
+}
+
+function parseGoReport(text) {
+  const output = new Map();
   const passed = [];
   const failed = [];
-  const source = String(xml ?? '');
-  const tagRe = /<testcase\b([^>]*?)(?:\/>|>([\s\S]*?)<\/testcase>)/g;
-
-  for (const match of source.matchAll(tagRe)) {
-    const attrs = match[1] ?? '';
-    const inner = match[2] ?? '';
-    const name = xmlAttr(attrs, 'name');
-    const classname = xmlAttr(attrs, 'classname');
-    if (!name) continue;
-    if (/<skipped\b/i.test(inner)) continue;
-
-    const id = classname ? `${classname} > ${name}` : name;
-    if (/<(?:failure|error)\b/i.test(inner)) failed.push(id);
-    else passed.push(id);
+  const failures = [];
+  let skipped = 0;
+  let saw = false;
+  for (const line of String(text ?? '').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('{')) continue;
+    let event;
+    try {
+      event = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    if (typeof event.Action !== 'string') continue;
+    if (typeof event.Test !== 'string' || event.Test.length === 0) continue;
+    saw = true;
+    const id = event.Package ? `${event.Package} > ${event.Test}` : event.Test;
+    if (event.Action === 'output' && typeof event.Output === 'string') {
+      output.set(id, `${output.get(id) ?? ''}${event.Output}`);
+      continue;
+    }
+    if (event.Action === 'pass') passed.push(id);
+    else if (event.Action === 'skip') skipped += 1;
+    else if (event.Action === 'fail') {
+      const body = (output.get(id) ?? '').trimEnd();
+      const detail = body ? `not ok  ${id}\n${body}` : `not ok  ${id}`;
+      failed.push(id);
+      failures.push({ id, detail, location: locationIn(body) });
+    }
   }
-
-  return { passed: dedupeSorted(passed), failed: dedupeSorted(failed) };
+  if (!saw) return null;
+  return { passed: dedupeSorted(passed), failed: dedupeSorted(failed), skipped, failures };
 }
 
 /**
@@ -167,24 +325,32 @@ export function parseJunitXml(xml) {
  * @returns {{passed: string[], failed: string[]}}
  */
 export function parseGoTestJson(text) {
+  const report = parseGoReport(text) ?? { passed: [], failed: [] };
+  return { passed: report.passed, failed: report.failed };
+}
+
+function parseCargoReport(text) {
   const passed = [];
   const failed = [];
+  const failures = [];
+  let skipped = 0;
+  let saw = false;
   for (const line of String(text ?? '').split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed.startsWith('{')) continue;
-    let event;
-    try {
-      event = JSON.parse(trimmed);
-    } catch {
+    const match = /^test\s+(.+?)\s+\.\.\.\s+(ok|FAILED|ignored)\s*$/.exec(line.trimEnd());
+    if (!match) continue;
+    saw = true;
+    if (match[2] === 'ignored') {
+      skipped += 1;
       continue;
     }
-    if (typeof event.Test !== 'string' || event.Test.length === 0) continue;
-    const id = event.Package ? `${event.Package} > ${event.Test}` : event.Test;
-    if (event.Action === 'pass') passed.push(id);
-    else if (event.Action === 'fail') failed.push(id);
+    if (match[2] === 'ok') passed.push(match[1]);
+    else {
+      failed.push(match[1]);
+      failures.push({ id: match[1], detail: `not ok  ${match[1]}`, location: '' });
+    }
   }
-
-  return { passed: dedupeSorted(passed), failed: dedupeSorted(failed) };
+  if (!saw) return null;
+  return { passed: dedupeSorted(passed), failed: dedupeSorted(failed), skipped, failures };
 }
 
 /**
@@ -198,14 +364,38 @@ export function parseGoTestJson(text) {
  * @returns {{passed: string[], failed: string[]}}
  */
 export function parseCargoTestOutput(text) {
-  const passed = [];
-  const failed = [];
-  for (const line of String(text ?? '').split('\n')) {
-    const match = /^test\s+(.+?)\s+\.\.\.\s+(ok|FAILED|ignored)\s*$/.exec(line.trimEnd());
-    if (!match || match[2] === 'ignored') continue;
-    (match[2] === 'ok' ? passed : failed).push(match[1]);
+  const report = parseCargoReport(text) ?? { passed: [], failed: [] };
+  return { passed: report.passed, failed: report.failed };
+}
+
+/**
+ * Read one known test report without knowing which format produced it.
+ *
+ * The returned structure is the single source for both the gate/bench ids and the
+ * compact renderer. `null` means the text is not a known report, which callers must
+ * present as an explicit unavailable status rather than an empty pass.
+ *
+ * @param {string} text
+ * @returns {{format: string, passed: string[], failed: string[], skipped: number,
+ *   failures: {id: string, detail: string, location: string}[]}|null}
+ */
+export function parseTestReport(text) {
+  const raw = String(text ?? '');
+  if (!raw.trim()) return null;
+
+  if (/^TAP version \d+/m.test(raw) || /^(?:not )?ok \d+/m.test(raw)) {
+    const tap = parseTapReport(raw);
+    if (tap) return { format: 'tap', ...tap };
   }
-  return { passed: dedupeSorted(passed), failed: dedupeSorted(failed) };
+  const vitest = parseVitestReport(raw);
+  if (vitest) return { format: 'vitest', ...vitest };
+  const junit = parseJunitReport(raw);
+  if (junit) return { format: 'junit', ...junit };
+  const go = parseGoReport(raw);
+  if (go) return { format: 'go', ...go };
+  const cargo = parseCargoReport(raw);
+  if (cargo) return { format: 'cargo', ...cargo };
+  return null;
 }
 
 /** Every `*.xml` under `dir`, sorted, for a deterministic read order. */

@@ -52,7 +52,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR30 | Retire or explicitly retain experimental packs | P2 | surface | M | PR29, PR16 | Complete | 52c579e2025423cf7d21445c3fbb9e844fa7252c |
 | PR31 | Move bench and synthetic research outside the stable core | P2 | surface | L | PR30, PR20, PR14 | Complete | 04601e72170426f675de3adedba50fb2f8fdc45c · test: node --test test/bench.test.mjs test/bench2.test.mjs test/bench3.test.mjs test/distill.test.mjs test/work-door-parity.test.mjs test/work-release.test.mjs test/work-replay.test.mjs test/work-calibration.test.mjs test/pack-imports.test.mjs test/packaging.test.mjs test/testing.test.mjs test/pilot-remote.test.mjs test/shipped-decisions.test.mjs |
 | PR32 | Verify reachability, remove dead bindings, and narrow exports safely | P2 | surface | M | PR31, PR22 | Complete | a6301712c72eedc41ddfec089ab4dde4f69f54d5 |
-| PR33 | Consolidate duplicate test reporting and repository adapters | P2 | runners | M | PR14, PR31 | Queued | — |
+| PR33 | Consolidate duplicate test reporting and repository adapters | P2 | runners | M | PR14, PR31 | Complete | 9938e2465abd8cb83facd2acba62dc077ff2e2e4 |
 | PR34 | Migrate and retire legacy compatibility paths on evidence | P2 | adoption | M | PR08, PR32, PR16 | Queued | — |
 | PR35 | Make CLI, API, MCP, and generated references agree | P1 | surface | M | PR32, PR22, PR19 | Queued | — |
 | PR36 | Make the isolated test and release qualification gate reproducible | P1 | ci | M | PR17, PR28, PR32, PR33 | Queued | — |

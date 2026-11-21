@@ -14,6 +14,7 @@ All notable changes to this package are recorded here. The format follows
 
 - A follows-source manifest carries `{ follows: "source" }` instead of `projection.simtDevSha` and `projection.version`; converting one drops the stale pair on the next `init` or `sync`. The generated region is still checked and re-rendered by `sync --yes` when the rule text changes.
 - The `simt-dev/src/*` wildcard is gone. The optional bench's 39 exact deep imports remain as a migration list, while the retired variant writer, test-only retry schedule simulator and exported job-state helper are removed from the shipped surface (PR32).
+- Focused gate output renders from the same structured reader as the runner parsers, so TAP, Vitest/Jest, JUnit, Go and Cargo agree on pass/fail/skip counts; a report file is compacted too, and an unrecognised log carries `compact: "unavailable"` with its raw text. The index and workspace projection share one package-marker table, so nested Gradle, Maven and Mix ownership agrees between attribution, ranking and the gate (PR33).
 
 ## [0.11.0] — 2026-11-20
 

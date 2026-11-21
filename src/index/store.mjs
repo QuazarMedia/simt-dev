@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 
 import { git as gitRaw } from '../sys/git.mjs';
 
+import { PACKAGE_MARKERS } from '../monorepo.mjs';
 import { readManifest } from '../projection/manifest.mjs';
 import { readLocalConfig } from '../local/config.mjs';
 import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
@@ -39,8 +40,6 @@ import {
 } from './persist.mjs';
 
 export { SQLITE_FILE, decodeVectorBlob, encodeVectorBlob };
-
-const MARKERS = ['package.json', 'pyproject.toml', 'go.mod', 'Cargo.toml', 'pom.xml'];
 
 // A tracked blob larger than this is recorded with its size and counted in
 // `skipped`, not streamed and tokenized: a 65 MiB file is indexed as a row, and
@@ -745,7 +744,7 @@ export async function packageOf(root, filePath, cache) {
     }
     seen.push(dir);
     let hit = false;
-    for (const name of MARKERS) {
+    for (const name of PACKAGE_MARKERS) {
       try {
         await stat(join(root, dir, name));
         hit = true;

@@ -13,7 +13,8 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { gateCommand } from '../src/commands/gate.mjs';
-import { compactOutput } from '../src/index/compact.mjs';
+import { compactOutput, compactReport } from '../src/index/compact.mjs';
+import { parseTestReport } from '../src/testing/parsers.mjs';
 import { capture } from './fixture.mjs';
 
 const exec = promisify(execFile);
@@ -40,6 +41,12 @@ test('tap keeps the failure and counts the pass', () => {
     '    expected 2',
     '  ...',
   ].join('\n');
+  const report = parseTestReport(text);
+  assert.equal(report.format, 'tap');
+  assert.deepEqual(report.passed, ['adds the value']);
+  assert.deepEqual(report.failed, ['rejects the value']);
+  assert.equal(report.skipped, 0);
+  assert.match(report.failures[0].detail, /expected 2/);
   const compact = compactOutput(text);
   assert.match(compact, /rejects the value/);
   assert.match(compact, /expected 2/);
@@ -60,6 +67,10 @@ test('junit xml keeps the failure and counts the pass', () => {
     '  </testcase>',
     '</testsuite>',
   ].join('\n');
+  const report = parseTestReport(text);
+  assert.equal(report.format, 'junit');
+  assert.deepEqual(report.passed, ['app.FooTest > adds']);
+  assert.deepEqual(report.failed, ['app.FooTest > rejects']);
   const compact = compactOutput(text);
   assert.match(compact, /app\.FooTest > rejects/);
   assert.match(compact, /expected 2 but was 1/);
@@ -103,6 +114,10 @@ test('vitest and jest json keep the failure message and the location', () => {
       },
     ],
   });
+  const report = parseTestReport(text);
+  assert.equal(report.format, 'vitest');
+  assert.deepEqual(report.passed, ['keep > adds']);
+  assert.deepEqual(report.failed, ['keep > rejects']);
   const compact = compactOutput(text);
   assert.match(compact, /keep > rejects/);
   assert.match(compact, /AssertionError: expected 2/);
@@ -121,7 +136,12 @@ test('go test json keeps the failing output and counts the pass', () => {
     { Action: 'output', Package: 'example.com/pkg', Test: 'TestRejects', Output: '    foo_test.go:18: expected 2\n' },
     { Action: 'fail', Package: 'example.com/pkg', Test: 'TestRejects' },
   ];
-  const compact = compactOutput(events.map((event) => JSON.stringify(event)).join('\n'));
+  const text = events.map((event) => JSON.stringify(event)).join('\n');
+  const report = parseTestReport(text);
+  assert.equal(report.format, 'go');
+  assert.deepEqual(report.passed, ['example.com/pkg > TestAdds']);
+  assert.deepEqual(report.failed, ['example.com/pkg > TestRejects']);
+  const compact = compactOutput(text);
   assert.match(compact, /example\.com\/pkg > TestRejects/);
   assert.match(compact, /foo_test\.go:18/);
   assert.match(compact, /expected 2/);
@@ -129,9 +149,53 @@ test('go test json keeps the failing output and counts the pass', () => {
   assert.match(compact, /passed  1/);
 });
 
-test('a log that is not a test report is left alone', () => {
+test('a skipped test is counted and is never a pass', () => {
+  const text = [
+    'TAP version 13',
+    'ok 1 - runs',
+    'ok 2 - waits # SKIP not on this platform',
+    '1..2',
+  ].join('\n');
+  const report = parseTestReport(text);
+  assert.deepEqual(report.passed, ['runs']);
+  assert.deepEqual(report.failed, []);
+  assert.equal(report.skipped, 1);
+  assert.match(compactOutput(text), /skipped  1/);
+});
+
+test('cargo test output is read by the same structure', () => {
+  const text = [
+    'running 3 tests',
+    'test adds ... ok',
+    'test rejects ... FAILED',
+    'test waits ... ignored',
+    '',
+    'failures:',
+    '    rejects',
+    '',
+    'test result: FAILED. 1 passed; 1 failed; 1 ignored',
+  ].join('\n');
+  const report = parseTestReport(text);
+  assert.equal(report.format, 'cargo');
+  assert.deepEqual(report.passed, ['adds']);
+  assert.deepEqual(report.failed, ['rejects']);
+  assert.equal(report.skipped, 1);
+  const compact = compactOutput(text);
+  assert.match(compact, /failed  1/);
+  assert.match(compact, /passed  1/);
+  assert.match(compact, /skipped  1/);
+});
+
+test('a log that is not a test report is left alone and says unavailable', () => {
+  assert.deepEqual(compactReport('make: *** [test] Error 1\n'), {
+    status: 'unavailable',
+    format: null,
+    text: null,
+  });
   assert.equal(compactOutput('make: *** [test] Error 1\n'), null);
   assert.equal(compactOutput(''), null);
+  assert.equal(parseTestReport('{"testResults": ['), null);
+  assert.equal(compactReport('{"testResults": [').status, 'unavailable');
 });
 
 test('gate prints the failure, counts the pass, and keeps the raw log', async () => {

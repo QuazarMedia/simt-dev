@@ -95,8 +95,8 @@ export const SPEC = [
   // so it takes the scope, not a file list - an undeclared path has no authority to enter it.
   { path: 'knowledge build', usage: '--scope <id> [--yes]', summary: 'build the scoped corpus of declared sections under the ignored local area', writes: 'repo', flags: ["yes","diff","scope"], },
   { path: 'work schedule', usage: '(--input <file> | --scope <id> [--public])', summary: 'which ready tasks can run together under capacity and resource constraints', flags: ["input","scope","public"], },
-  { path: 'work handoff', usage: '--input <file>', summary: 'build a resume capsule from ids and provenance, never from a transcript', flags: ["input"], },
-  { path: 'work resume', usage: '--input <file>', summary: 'revalidate permission, target, dependencies, authorization and lease before reuse', flags: ["input"], },
+  { path: 'work handoff', usage: '(--input <file> | --scope <id> --task <id>)', summary: 'build a resume capsule from ids and provenance, never from a transcript', flags: ["input","scope","task","session"], },
+  { path: 'work resume', usage: '--input <file> [--scope <id>]', summary: 'revalidate permission, target, dependencies, authorization and lease before reuse', flags: ["input","scope","session"], },
   { path: 'work graduate', usage: '--input <file>', summary: 'whether repeated traces can be proposed as a procedure, and what still blocks it', flags: ["input"], },
   { path: 'bench replay', usage: '--input <file>', summary: 'counterfactual replay: did an irrelevant change move the outcome?', flags: ["input"], },
   { path: 'bench calibrate', usage: '--input <file>', summary: 'false-accept rate against expert labels, and the autonomy it does or does not justify', flags: ["input"], },

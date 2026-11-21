@@ -27,7 +27,7 @@ test('every command plan 4 names dispatches', async () => {
 });
 
 test('the installed first-session commands in plan 6 are dispatchable', async () => {
-  const plan = await readFile(new URL('../docs/plans/0006-local-work-and-knowledge.md', import.meta.url), 'utf8');
+  const plan = await readFile(new URL('../docs/plans/archive/0006-local-work-and-knowledge.md', import.meta.url), 'utf8');
   const commands = [...plan.matchAll(/^simt ([a-z][a-z-]* [a-z][a-z-]*)/gm)].map((match) => match[1]);
   assert.ok(commands.length >= 10, 'the plan declared no first-session sequence');
   assert.deepEqual([...new Set(commands.filter((path) => !SPEC_PATHS.includes(path)))], []);

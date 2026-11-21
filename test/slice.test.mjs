@@ -20,7 +20,7 @@ import { parse } from '../src/argv.mjs';
 import { reindex } from '../src/index/store.mjs';
 import { CLI, MANIFEST_FILE } from '../src/name.mjs';
 import { EXIT } from '../src/output/index.mjs';
-import { capture, git, tempDir } from './fixture.mjs';
+import { capture, git, simt, tempDir } from './fixture.mjs';
 
 test('every subcommand that needs an id refuses without one, and says what to run', async () => {
   const root = await tempDir('slice-');
@@ -322,7 +322,7 @@ test('the dry-run refusal names a missing worktree, not the allowed tracker-row 
   const { root, worktree } = await startA27();
   await rm(worktree, { recursive: true, force: true });
 
-  const result = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true', json: true }));
+  const result = await simt(['slice', 'finish', 'A27', '--root', root, '--test', 'true', '--json']);
   assert.equal(result.code, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.refusal, `no worktree for A27 at ${join('.simt', 'local', 'worktrees', 'a27')}`);

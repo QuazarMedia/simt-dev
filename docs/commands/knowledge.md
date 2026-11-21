@@ -10,7 +10,7 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 | `simt knowledge rank (--input <file> \| --scope <id>) --query "<question>"` | `--input`, `--limit`, `--query`, `--scope`, `--where` | rank evidence units by authority and quality, and report what was excluded |
 | `simt knowledge derivations --input <file>` | `--input` | which outputs a source, template or skill change puts in question |
 | `simt knowledge debt --input <file>` | `--input`, `--weights` | rank stale and unsupported knowledge by consequence per effort |
-| `simt knowledge impact --input <file> --refs <ids>` | `--input`, `--limit`, `--refs` | what a change reaches over typed edges, and where the graph is unknown |
+| `simt knowledge impact (--input <file> --refs <ids> \| --changed --scope <id>)` | `--input`, `--limit`, `--refs`, `--changed`, `--scope` | what a change reaches over typed edges, and where the graph is unknown |
 | `simt knowledge sections <file.md>` | `--limit` | the retrieval units a long document yields, with anchors and byte ranges |
 | `simt knowledge build --scope <id> [--yes]` | `--yes`, `--diff`, `--scope` | build the scoped corpus of declared sections under the ignored local area |
 

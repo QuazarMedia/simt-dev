@@ -89,7 +89,7 @@ export const SPEC = [
   { path: 'knowledge rank', usage: '(--input <file> | --scope <id>) --query "<question>"', summary: 'rank evidence units by authority and quality, and report what was excluded', flags: ["input","limit","query","scope","where"], },
   { path: 'knowledge derivations', usage: '--input <file>', summary: 'which outputs a source, template or skill change puts in question', flags: ["input"], },
   { path: 'knowledge debt', usage: '--input <file>', summary: 'rank stale and unsupported knowledge by consequence per effort', flags: ["input","weights"], },
-  { path: 'knowledge impact', usage: '--input <file> --refs <ids>', summary: 'what a change reaches over typed edges, and where the graph is unknown', flags: ["input","limit","refs"], },
+  { path: 'knowledge impact', usage: '(--input <file> --refs <ids> | --changed --scope <id>)', summary: 'what a change reaches over typed edges, and where the graph is unknown', flags: ["input","limit","refs","changed","scope"], },
   { path: 'knowledge sections', usage: '<file.md>', summary: 'the retrieval units a long document yields, with anchors and byte ranges', flags: ["limit"], },
   // The one knowledge writer: it derives a corpus from files the repository already declared,
   // so it takes the scope, not a file list - an undeclared path has no authority to enter it.

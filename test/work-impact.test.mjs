@@ -10,7 +10,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
+import { git, simt, tempDir } from './fixture.mjs';
 
 import { buildClaimGraph } from '../src/knowledge/claims.mjs';
 import { digestOf } from '../src/knowledge/observations.mjs';
@@ -206,3 +209,93 @@ test('the report is deterministic, and the module reads nothing', async () => {
   const source = await readFile(new URL('../src/knowledge/impact.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });
+
+const frontmatter = (fields, body) =>
+  `---\n${Object.entries(fields).map(([key, value]) => `${key}: ${JSON.stringify(value)}`).join('\n')}\n---\n${body}`;
+
+for (const shape of ['handbook', 'operations']) {
+  test(`scoped Git impact reaches reviewed dependents in the ${shape} shape`, async () => {
+    const root = await tempDir('simt-local-impact-');
+    const files = {
+      'simt.json': JSON.stringify({ work: { version: 2, scopes: [
+        { id: 'handbook', paths: ['handbook'], kind: 'document', ignore: ['private'] },
+        { id: 'separate', paths: ['handbook/elsewhere'], kind: 'document' },
+      ] } }),
+      'handbook/source.md': frontmatter({ id: 'policy', authority: 'reviewed' }, '# Policy\n\nRetain for 30 days.\n'),
+      'handbook/requirements.md': frontmatter({ id: 'requirements', authority: 'reviewed',
+        sources: ['handbook/source.md#policy'] }, '# Requirements\n'),
+      'handbook/spec.md': frontmatter({ id: 'specification', authority: 'reviewed',
+        sources: ['handbook/requirements.md'] }, '# Specification\n'),
+      'handbook/draft.md': frontmatter({ id: 'draft', sources: ['handbook/source.md'] }, '# Draft\n'),
+      'handbook/gap.md': frontmatter({ id: 'gap', authority: 'reviewed',
+        sources: ['handbook/missing.md'] }, '# Missing\n'),
+      'handbook/template.md': '# Template\n',
+      'handbook/output.md': '<!-- generated, do not edit -->\n# Output\n',
+      'handbook/unknown.md': '<!-- generated, do not edit -->\n# Unknown output\n',
+      'handbook/private/notes.md': '# Personal note\n',
+      'handbook/elsewhere/notes.md': '# Another scope\n',
+    };
+    if (shape === 'operations') Object.assign(files, {
+      'handbook/recipe.md': frontmatter({ id: 'equipment', type: 'procedure' },
+        '# @recipe equipment\n# @imports handbook/helper.mjs\n'),
+      'handbook/caller.md': frontmatter({ id: 'desk', type: 'procedure' }, '# @recipe desk\n# @calls equipment\n'),
+      'handbook/helper.mjs': 'export const check = true;\n',
+      'handbook/check.mjs': 'import { check } from "./helper.mjs";\nexport { check };\n',
+    });
+    files['.simt/knowledge/derivations.json'] = JSON.stringify({
+      receipts: [{
+        id: 'generated-output',
+        output: { path: 'handbook/output.md', digest: digestOf(files['handbook/output.md']) },
+        tools: [{ kind: 'template', id: 'handbook/template.md', version: 1, digest: digestOf(files['handbook/template.md']) }],
+        generator: { id: 'existing-generator', version: 1 },
+        complete: true,
+      }],
+    });
+    for (const [path, content] of Object.entries(files)) {
+      await mkdir(dirname(join(root, path)), { recursive: true });
+      await writeFile(join(root, path), content);
+    }
+    await git(['init', '-q'], { cwd: root });
+    await git(['add', '.'], { cwd: root });
+    await git(['commit', '-qm', 'baseline'], { cwd: root });
+    const run = async () => {
+      const result = await simt(['knowledge', 'impact', '--changed', '--scope', 'handbook', '--json'], { cwd: root });
+      assert.equal(result.code, 0, result.stdout + result.stderr);
+      return JSON.parse(result.stdout);
+    };
+    assert.equal((await run()).status, 'nothing-changed');
+
+    await writeFile(join(root, 'handbook/source.md'), files['handbook/source.md'].replace('30', '31'));
+    await writeFile(join(root, 'handbook/private/notes.md'), '# Local scratch edit\n');
+    await writeFile(join(root, 'handbook/elsewhere/notes.md'), '# Another scope edit\n');
+    await git(['mv', 'handbook/template.md', 'handbook/template rules.md'], { cwd: root });
+    if (shape === 'operations') {
+      await writeFile(join(root, 'handbook/recipe.md'), files['handbook/recipe.md'] + '\nUse the equipment register.\n');
+      await writeFile(join(root, 'handbook/helper.mjs'), files['handbook/helper.mjs'].replace('true', 'false'));
+    }
+    const gitStatus = async () => (await git(['status', '--porcelain', '--untracked-files=all'], { cwd: root })).stdout;
+    const before = await gitStatus();
+    const report = await run();
+    assert.equal(await gitStatus(), before);
+    assert.equal(report.excludedCount, 2);
+    assert.doesNotMatch(JSON.stringify(report), /private\/notes|elsewhere\/notes/);
+    assert.deepEqual(report.renames, [{ from: 'handbook/template.md', to: 'handbook/template rules.md' }]);
+    assert.ok(report.affected.artifacts.includes('requirements'));
+    assert.ok(report.affected.artifacts.includes('specification'));
+    assert.ok(!report.affected.artifacts.includes('draft'));
+    assert.ok(report.proposed.includes('draft'));
+    assert.ok(report.unknown.some(({ reason }) => reason === 'unresolved-source'));
+    assert.ok(report.unknown.some(({ reason }) => reason === 'no-generation-receipt'));
+    assert.equal(report.complete, false);
+    assert.equal(report.regeneration.executed, false);
+    assert.equal(report.regeneration.stale[0].output, 'handbook/output.md');
+    assert.equal(report.regeneration.stale[0].generator.id, 'existing-generator');
+    if (shape === 'operations') {
+      assert.ok(report.affected.recipes.includes('desk'));
+      assert.ok(report.affected.helpers.includes('handbook/check.mjs'), JSON.stringify(report));
+      assert.deepEqual(report.reviewHelpers, ['handbook/helper.mjs']);
+      const bases = new Set(report.dependencies.map(({ basis }) => basis));
+      for (const basis of ['document-citation', 'procedure-call', 'procedure-import', 'code-import']) assert.ok(bases.has(basis));
+    }
+  });
+}

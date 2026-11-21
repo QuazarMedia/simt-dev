@@ -17,9 +17,8 @@ import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
 import { readWork } from '../work/effective.mjs';
-import { ALWAYS_DENIED, CORPUS_DIR, CORPUS_DEFAULTS, CORPUS_SCHEMA_VERSION, buildCorpus } from '../knowledge/corpus.mjs';
-import { IDENTITY_FILE, identityMap, readIdentityMap } from '../knowledge/lineage.mjs';
-import { inventorySources } from '../knowledge/sources.mjs';
+import { CORPUS_DIR, CORPUS_SCHEMA_VERSION } from '../knowledge/corpus.mjs';
+import { collectCorpus } from '../knowledge/collect.mjs';
 import { citationFor, citationOf, corpusDocument, rankCorpus } from '../knowledge/query.mjs';
 import { buildClaimGraph, impact, lineage, proposedEdges, readClaim } from '../knowledge/claims.mjs';
 import { findConflicts } from '../knowledge/conflicts.mjs';
@@ -30,6 +29,7 @@ import { rank as rankUnits } from '../knowledge/rank.mjs';
 import { regenerationCandidates } from '../knowledge/derivations.mjs';
 import { aggregate as aggregateDebt, coldStart as coldStartDebt, rank as rankDebt, weightSensitivity } from '../knowledge/debt.mjs';
 import { impactReport } from '../knowledge/impact.mjs';
+import { scopedImpact } from '../knowledge/local-impact.mjs';
 import { digestOf } from '../knowledge/observations.mjs';
 import { extractDocument } from '../knowledge/sections.mjs';
 
@@ -405,6 +405,26 @@ export async function knowledgeCommand(sub, args, flags) {
     return EXIT.OK;
   }
 
+  if (sub === 'impact' && (flags.changed === true || flags.scope !== undefined)) {
+    const usage = `run: ${CLI} knowledge impact --changed --scope <id>`;
+    if (args.length > 0 || flags.changed !== true || typeof flags.scope !== 'string' ||
+        flags.input !== undefined || flags.refs !== undefined) {
+      return fail('scoped impact needs --changed and --scope without an explicit input or refs', EXIT.USAGE, usage);
+    }
+    const declared = await declaredScope(flags, 'inspect');
+    if (declared.error !== undefined) return fail(declared.error.message, declared.error.exit, declared.error.remedy);
+    let report;
+    try {
+      report = await scopedImpact({ ...declared, limit: flags.limit });
+    } catch (error) {
+      return fail(`could not inspect the scoped change: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+    }
+    if (report.error !== undefined) return fail(report.error, EXIT.FAIL, report.remedy);
+    const payload = { ok: true, command: 'knowledge impact', ...report };
+    present(payload, () => renderImpact(payload), flags);
+    return EXIT.OK;
+  }
+
   // The four document doors answer a question over one file, and none of them writes.
   if (sub === 'rank' || sub === 'derivations' || sub === 'debt' || sub === 'impact') {
     if (sub === 'rank' && flags.scope !== undefined) {
@@ -633,43 +653,9 @@ async function knowledgeBuildCommand(flags) {
     }
   }
 
-  let inventory;
-  try {
-    inventory = await inventorySources(root, { paths: scope.paths, maxFiles: CORPUS_DEFAULTS.maxFiles });
-  } catch (error) {
-    return fail(`cannot list the tracked files of this repository: ${String(error?.message ?? error).split('\n')[0]}`, EXIT.CONFIG, 'knowledge build reads tracked files; run it in a Git repository with one commit');
-  }
-
-  // The identity map decides what a moved document is still cited as, so a map this reader
-  // cannot read stops the build instead of silently losing every id in it.
-  const declaredIdentities = await readTextFile(join(root, IDENTITY_FILE));
-  let identities = {};
-  if (declaredIdentities !== null) {
-    let doc;
-    try {
-      doc = JSON.parse(declaredIdentities);
-    } catch (error) {
-      return fail(`${IDENTITY_FILE} is not JSON: ${error.message}`, EXIT.CONFIG, 'fix the file, or remove it; a map nobody can read maps nothing');
-    }
-    const map = readIdentityMap(doc);
-    // A map this reader cannot read is fatal: dropping an entry loses an id the repository
-    // declared. A duplicate is not that - every entry is readable, and two paths claiming one
-    // id is the same ambiguity a duplicate frontmatter id is, which the corpus reports per
-    // path rather than refusing the whole build.
-    const fatal = map.problems.find((entry) => entry.code !== 'duplicate-id');
-    if (fatal !== undefined) return fail(`${IDENTITY_FILE}: ${fatal.message}`, EXIT.CONFIG, fatal.remedy);
-    identities = identityMap(map.paths);
-  }
-
-  const corpus = await buildCorpus({
-    scope,
-    scopes: work.scopes,
-    candidates: inventory.candidates,
-    policy: { deny: ALWAYS_DENIED, identities, maxBytes: CORPUS_DEFAULTS.maxBytes, unitBytes: CORPUS_DEFAULTS.unitBytes },
-    previous,
-    read: (path) => readBytes(join(root, path)),
-    sidecar: (path) => readTextFile(join(root, `${path}.meta.json`)),
-  });
+  const collected = await collectCorpus({ root, work, scope, previous });
+  if (collected.error !== undefined) return fail(collected.error, EXIT.CONFIG, collected.remedy);
+  const { corpus, truncated } = collected;
   // The stored document is the corpus, and only the corpus: a build statistic kept inside it
   // would make the second build differ from the first byte for byte.
   const stored = { schema: corpus.schema, scope: corpus.scope, policy: corpus.policy, counts: corpus.counts, inventory: corpus.inventory, artifacts: corpus.artifacts, units: corpus.units, problems: corpus.problems };
@@ -686,7 +672,7 @@ async function knowledgeBuildCommand(flags) {
     dryRun: !mode.apply,
     changed,
     written: false,
-    truncated: inventory.truncated,
+    truncated,
     policy: corpus.policy,
     counts: corpus.counts,
     reused: corpus.reused,
@@ -797,6 +783,11 @@ function renderDerivations(payload) {
   const lines = [`candidates ${payload.candidates.length}`];
   for (const entry of payload.candidates) lines.push(`stale      ${entry.output}  ${(entry.reasons ?? []).join('; ')}`);
   for (const entry of payload.conflicts ?? []) lines.push(`conflict   ${entry.output}  ${(entry.reasons ?? []).join('; ')}`);
+  if (payload.status === 'nothing-changed') lines.push('change     no changed paths in this scope');
+  for (const entry of payload.proposed ?? []) lines.push(`proposed    ${entry}`);
+  for (const entry of payload.regeneration?.stale ?? []) {
+    lines.push(`stale      ${entry.output}${entry.generator ? `  generator=${entry.generator.id}` : ''}  ${entry.reasons.join(', ')}`);
+  }
   for (const entry of payload.unknown ?? []) lines.push(`unknown    ${typeof entry === 'string' ? entry : entry.output ?? entry.id}  receipt absence cannot justify a minimal safe set`);
   for (const entry of payload.reusable ?? []) lines.push(`reuse      ${typeof entry === 'string' ? entry : entry.output ?? entry.id}`);
   return lines.join('\n');
@@ -828,6 +819,11 @@ function renderImpact(payload) {
     ? affected.map((entry) => ['affected', entry])
     : Object.entries(affected).flatMap(([bucket, list]) => (Array.isArray(list) ? list : []).map((entry) => [bucket, entry]));
   for (const [bucket, entry] of rows) lines.push(`${bucket.padEnd(10)} ${typeof entry === 'string' ? entry : entry.id ?? JSON.stringify(entry)}`);
+  if (payload.status === 'nothing-changed') lines.push('change     no changed paths in this scope');
+  for (const entry of payload.proposed ?? []) lines.push(`proposed    ${entry}`);
+  for (const entry of payload.regeneration?.stale ?? []) {
+    lines.push(`stale      ${entry.output}${entry.generator ? `  generator=${entry.generator.id}` : ''}  ${entry.reasons.join(', ')}`);
+  }
   for (const entry of payload.unknown ?? []) lines.push(`unknown    ${entry.ref ?? entry.id}  ${entry.reason ?? 'unknown'}`);
   for (const entry of payload.excluded ?? []) lines.push(`excluded   ${entry.id ?? entry.ref}  ${entry.reason ?? 'excluded'}`);
   for (const reason of payload.reasons ?? []) lines.push(`because    ${reason}`);

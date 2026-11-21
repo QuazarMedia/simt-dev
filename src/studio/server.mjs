@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 import { apiAnswer } from './api.mjs';
 import { within } from '../trust/paths.mjs';
 
-export const STUDIO_HOST = '127.0.0.1';
+const STUDIO_HOST = '127.0.0.1';
 export const STUDIO_DEFAULT_PORT = 4310;
 
 const COOKIE = 'simt_studio';

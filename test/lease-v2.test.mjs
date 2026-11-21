@@ -7,7 +7,7 @@
 // every path an older checkout holds.
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -42,6 +42,58 @@ test('a v1 record is read as a path resource with a holder and a fence', async (
   assert.equal(leases[0].holder.harness, 'claude');
   assert.equal(leases[0].path, 'src/a.mjs');
   assert.equal(leases[0].session, 'alpha');
+});
+
+test('legacy and current lease files are merged, and a write retires the old path (PR34)', async () => {
+  const root = await repo();
+  const legacyPath = join(root, '.simt', 'leases.json');
+  const expiresAt = Date.now() + 60_000;
+  await mkdir(join(root, '.simt', 'local'), { recursive: true });
+  await writeFile(
+    legacyPath,
+    `${JSON.stringify({
+      schemaVersion: 1,
+      leases: [
+        { path: 'src/legacy.mjs', session: 'old', expiresAt },
+        // The same claim the current file carries, with a stale expiry. The current
+        // record must win rather than list the holder twice.
+        { path: 'src/current.mjs', session: 'new', expiresAt: expiresAt - 1 },
+      ],
+    })}\n`,
+  );
+  // The legacy file alone is still a lease document: this is the repository that has
+  // not written since the state move, and the hook must enforce both claims.
+  const legacyOnly = await readLeases(root);
+  assert.equal(legacyOnly.error, null);
+  assert.deepEqual(legacyOnly.leases.map((l) => l.path).sort(), ['src/current.mjs', 'src/legacy.mjs']);
+
+  await writeFile(
+    join(root, LEASE_FILE),
+    `${JSON.stringify({
+      schemaVersion: 2,
+      leases: [
+        {
+          resource: { kind: 'path', id: 'src/current.mjs' },
+          holder: { session: 'new', harness: null },
+          fence: 1,
+          acquiredAt: Date.now(),
+          expiresAt,
+        },
+      ],
+    })}\n`,
+  );
+
+  const read = await readLeases(root);
+  assert.equal(read.error, null);
+  assert.deepEqual(read.leases.map((l) => l.path).sort(), ['src/current.mjs', 'src/legacy.mjs']);
+  assert.equal(read.leases.find((l) => l.path === 'src/current.mjs').expiresAt, expiresAt);
+
+  await writeLeases(root, read.leases);
+  await assert.rejects(readFile(legacyPath), 'the old path belongs to the migrated state');
+  const again = await readLeases(root);
+  assert.equal(again.error, null);
+  assert.deepEqual(again.leases.map((l) => l.path).sort(), ['src/current.mjs', 'src/legacy.mjs']);
+  await rm(root, { recursive: true, force: true });
 });
 
 test('writing produces schema 2 with resource, holder, fence and both times', async () => {

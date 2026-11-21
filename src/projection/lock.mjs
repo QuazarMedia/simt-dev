@@ -13,8 +13,8 @@ import { join } from 'node:path';
 
 import { readLockedVariants } from '../kernel/variants.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { LOCK_FILE, LOCK_LEGACY } from '../name.mjs';
 import { desiredRegion, provenanceDigest, LOCAL_PROFILE_DIR } from './rules.mjs';
+import { readLockText } from './lock-file.mjs';
 import { readManifest } from './manifest.mjs';
 
 /** The lock's own format. Bumped only when a reader must interpret an old file
@@ -53,15 +53,7 @@ export async function computeLock(root, flags = {}, manifest = undefined) {
  *  next write migrates it, and a permission failure on the new name is not an excuse
  *  to fall back to an older file. */
 export async function readLock(root) {
-  let text = null;
-  for (const name of [LOCK_FILE, LOCK_LEGACY]) {
-    try {
-      text = await readFile(join(root, name), 'utf8');
-      break;
-    } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
-  }
+  const { text } = await readLockText(root);
   if (text === null) return { lock: null, error: null };
   try {
     const lock = JSON.parse(text);

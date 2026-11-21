@@ -13,6 +13,7 @@ import { join } from 'node:path';
 
 import { desiredRegion } from '../src/projection/rules.mjs';
 import { computeLock, readLock } from '../src/projection/lock.mjs';
+import { readLockedVariants } from '../src/kernel/variants.mjs';
 import { LOCK_FILE, LOCK_LEGACY } from '../src/name.mjs';
 import { frozenFindings, syncCommand } from '../src/commands/sync.mjs';
 import { plan } from '../src/projection/project.mjs';
@@ -158,6 +159,31 @@ test('init writes the lock, so check --frozen is green after adoption (Q29)', as
   assert.equal(applied.code, 0);
   assert.ok((await readFile(join(root, LOCK_FILE), 'utf8')).length > 0, 'init wrote the lock');
   assert.deepEqual(await frozenFindings(root, {}), [], 'a frozen check is green after init');
+  await rm(root, { recursive: true, force: true });
+});
+
+test('one locator answers the frozen check, the plan and the variant fold (PR34)', async () => {
+  const root = await repo();
+  const legacy = {
+    version: 1,
+    inputs: 'a'.repeat(64),
+    outputs: 'b'.repeat(64),
+    variants: { 'rule.slot': 'legacy-winner' },
+  };
+  await writeFile(join(root, LOCK_LEGACY), `${JSON.stringify(legacy, null, 2)}\n`);
+
+  // Legacy alone: all three readers see it, and the plan reports an existing lock.
+  assert.deepEqual((await readLock(root)).lock.variants, legacy.variants);
+  assert.deepEqual(await readLockedVariants(root), legacy.variants);
+  const planned = await plan(root, {});
+  const target = planned.targets.find((t) => t.file === LOCK_FILE);
+  assert.equal(target.exists, true, 'the plan missed a lock the other readers found');
+
+  // Both names: the current file wins, and the legacy one is not merged into it.
+  const current = { ...legacy, variants: { 'rule.slot': 'current-winner' } };
+  await writeFile(join(root, LOCK_FILE), `${JSON.stringify(current, null, 2)}\n`);
+  assert.deepEqual((await readLock(root)).lock.variants, current.variants);
+  assert.deepEqual(await readLockedVariants(root), current.variants);
   await rm(root, { recursive: true, force: true });
 });
 

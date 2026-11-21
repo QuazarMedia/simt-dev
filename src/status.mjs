@@ -3,7 +3,7 @@
 // `status --line` is for shell prompts, tmux and agent status lines: it must
 // answer in well under 50 ms, which rules out everything `check` does (rule
 // loading, projection, gate probing). So `check` — the one command that
-// already measures all of it — writes `.simt/check.json` on every run, and
+// already measures all of it — writes `.simt/local/check.json` on every run, and
 // `--line` reads only that file plus one `git rev-parse HEAD` to notice new
 // commits. No fingerprint, no rule reads, no capability probe.
 //
@@ -34,7 +34,6 @@ import { LOCAL_DIR } from './state.mjs';
 import { gitText } from './sys/git.mjs';
 
 const CACHE_FILE = join(LOCAL_DIR, 'check.json');
-const CACHE_FILE_LEGACY = '.simt/check.json';
 const CACHE_VERSION = 1;
 
 /**
@@ -86,15 +85,15 @@ export async function writeCheckCache(root, record) {
 
 /** The last record `check` wrote, or null when it never ran (or a writer invalidated it). */
 export async function readCheckCache(root) {
-  // The pre-move path is a fallback for one release.
+  // The pre-move cache is deliberately not read. It is disposable state, so a cache
+  // left at `.simt/check.json` has no information worth recovering, and reading it would
+  // keep a stale record alive after the move that retired it. `check` rebuilds the new
+  // one; the old file is also still in TREE_EXCLUDES so it cannot enter a tree id.
   let raw;
   try {
-    raw = await readFile(cachePath(root), 'utf8').catch(async (error) => {
-      if (error.code !== 'ENOENT') throw error;
-      return readFile(join(root, CACHE_FILE_LEGACY), 'utf8');
-    });
+    raw = await readFile(cachePath(root), 'utf8');
   } catch (error) {
-    if (error.code === 'ENOENT') return null;
+    if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return null;
     throw error;
   }
   try {

@@ -665,17 +665,16 @@ async function committedSlice(work, main, { staged = false } = {}) {
     return { error: `could not read ${sha === null ? 'the worktree HEAD' : 'the main checkout HEAD'}` };
   }
   const ahead = Number(await gitText(work, ['rev-list', '--count', `${mainHead}..HEAD`]).catch(() => '0'));
-  if (dirty.length > 0 && (ahead > 0 || !staged)) {
-    return { error: `${work} has uncommitted changes (${dirty.slice(0, 3).join(', ')})` };
-  }
+  const dirtyError = dirty.length > 0
+    ? { error: `${work} has uncommitted changes (${dirty.slice(0, 3).join(', ')})` }
+    : null;
   if (ahead > 0) {
+    if (dirtyError) return dirtyError;
     const subject = await gitText(work, ['log', '-1', '--format=%s']).catch(() => '');
     return { sha, subject };
   }
-  if (!staged) {
-    return { error: `${work} has nothing staged and no commits ahead of ${main}` };
-  }
-  return null;
+  if (staged) return null;
+  return dirtyError ?? { error: `${work} has nothing staged and no commits ahead of ${main}` };
 }
 
 async function finishSlice(root, id, flags) {
@@ -749,16 +748,17 @@ async function finishSlice(root, id, flags) {
       });
       return EXIT.OK;
     }
+    const committedLine = committed?.sha
+      ? `HEAD ${committed.sha} is already committed; finish lands it`
+      : committed?.error
+        ? `finish refuses: ${committed.error}`
+        : null;
     const lines = [
       `repo     ${root}`,
       `slice    ${id}  ${doc}`,
       `worktree ${relative(main, work)}${existsSync(worktree) ? '' : '  (missing: finish will refuse)'}`,
       `gates    pre-commit  ${gateLine} (run on apply)`,
-      committed?.sha
-        ? `staged   0 file(s)  (HEAD ${committed.sha} is already committed; finish lands it)`
-        : committed?.error
-          ? `staged   ${staged.length} file(s)  (finish refuses: ${committed.error})`
-          : `staged   ${staged.length} file(s)`,
+      `staged   ${staged.length} file(s)${committedLine ? `  (${committedLine})` : ''}`,
       `subject  ${subject}`,
       stateLine,
       `land     ${branch} -> ${main}, then remove the worktree (on apply from the main checkout)`,

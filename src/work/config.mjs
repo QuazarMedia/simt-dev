@@ -32,10 +32,10 @@ export const WORK_VERSION = 2;
 export const SUPPORTED_WORK_VERSIONS = Object.freeze([1, 2, 3]);
 
 /** The version each field arrived in. A field absent here is version 1's. */
-const FIELD_VERSION = new Map([['scope.ignore', 2], ['scope.checks', 3], ['scope.independent', 3]]);
+const FIELD_VERSION = new Map([['scope.ignore', 2], ['scope.checks', 3], ['scope.independent', 3], ['scope.tracker', 3]]);
 
 const TOP_KEYS = new Set(['version', 'scopes', 'targets', 'adapters']);
-const SCOPE_KEYS = new Set(['id', 'paths', 'kind', 'validators', 'targets', 'ignore', 'checks', 'independent']);
+const SCOPE_KEYS = new Set(['id', 'paths', 'kind', 'validators', 'targets', 'ignore', 'checks', 'independent', 'tracker']);
 const TARGET_KEYS = new Set(['namespace', 'type', 'name']);
 const KINDS = new Set(['source', 'document', 'dataset', 'recipe', 'remote-object']);
 
@@ -172,6 +172,17 @@ export function validateWork(work) {
           (!Array.isArray(scope.independent) || scope.independent.some((kind) => !OBLIGATION_KINDS.includes(kind)))) {
         problems.push(problem(`${at}.independent`, 'independent must list obligation kinds', `choose from ${OBLIGATION_KINDS.join(', ')}`, 'invalid-independence'));
       }
+      if (version >= 3 && scope.tracker !== undefined) {
+        const declaration = scope.tracker;
+        if (!isObject(declaration) || !isText(declaration.path) || !['plan', 'markdown-items', 'markdown-table', 'json'].includes(declaration.kind)
+            || !['private', 'shared'].includes(declaration.visibility)
+            || Object.keys(declaration).some((key) => !['kind', 'path', 'visibility'].includes(key))) {
+          problems.push(problem(`${at}.tracker`, 'tracker needs kind, path and visibility', 'declare one plan, markdown-items, markdown-table or json source as private or shared', 'invalid-tracker'));
+        } else {
+          const bad = pathProblem(`${at}.tracker.path`, declaration.path);
+          if (bad !== null) problems.push(bad);
+        }
+      }
       if (scope.targets !== undefined && (!Array.isArray(scope.targets) || !scope.targets.every(isText))) {
         problems.push(problem(`${at}.targets`, `${at}.targets must be a list of target ids`, 'reference a declared target by its id', 'invalid-targets'));
       }
@@ -235,6 +246,7 @@ export function normalizedWork(work) {
       ignore: (Array.isArray(scope.ignore) ? scope.ignore : []).filter(isText),
       ...(Array.isArray(scope.checks) ? { checks: scope.checks } : {}),
       ...(Array.isArray(scope.independent) ? { independent: scope.independent } : {}),
+      ...(isObject(scope.tracker) ? { tracker: { ...scope.tracker, path: normalizePath(scope.tracker.path) || '.' } } : {}),
     })),
     targets: Array.isArray(work?.targets) ? work.targets.filter(isObject) : [],
     adapters: Array.isArray(work?.adapters) ? work.adapters.filter(isText) : [],

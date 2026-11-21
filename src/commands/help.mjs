@@ -320,7 +320,8 @@ ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,
                            upgrade and the installers stay CLI-only by design)`;
 
-const FLAGS = `--staged               verify select: read the index without working-tree edits
+const FLAGS = `--public               work schedule: withhold private tracker identifiers and paths
+--staged               verify select: read the index without working-tree edits
 --json                 structured output (compact; one document, one line)
 --pretty                indent --json for a human
 --max-bytes <n>         hard ceiling on emitted bytes (0 = unlimited, default 0)

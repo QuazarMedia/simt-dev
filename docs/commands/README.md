@@ -102,7 +102,7 @@ simt work handoff --input <file>                                                
 simt work inspect                                                                          # what this repository's work consists of, and which validations are actually available
 simt work packet --input <file>                                                            # the proof-bearing task packet, inside its byte budget or explicitly incomplete
 simt work resume --input <file>                                                            # revalidate permission, target, dependencies, authorization and lease before reuse
-simt work schedule --input <file>                                                          # which ready tasks can run together under capacity and resource constraints
+simt work schedule (--input <file> | --scope <id> [--public])                              # which ready tasks can run together under capacity and resource constraints
 simt work setup --scope <id> --path <dir> [--kind <kind>] [--validator "<command>"]        # declare one work scope in the manifest, previewed before it writes
 
 # workspace

@@ -110,6 +110,7 @@ export const BOOL_FLAGS = new Set([
   // is a different question.
   'changed',
   'staged',
+  'public',
   // gate: treat an unproven selection as a failure. Off by default because the answer
   // `nothing-selected` with exit 0 predates the flag and every existing consumer reads
   // it; a repository that wants the stricter verdict opts in (ADR-198).

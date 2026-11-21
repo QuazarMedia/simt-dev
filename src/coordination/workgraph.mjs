@@ -127,7 +127,8 @@ export function schedule({ tasks = [], evidence = {}, capacity = 2, spent = {} }
   const serialized = [];
   const limited = [];
 
-  for (const id of ready) {
+  const priority = (id) => Number.isFinite(byId.get(id)?.priority) ? byId.get(id).priority : 0;
+  for (const id of [...ready].sort((a, b) => priority(b) - priority(a) || a.localeCompare(b))) {
     if (inCycle.has(id)) continue;
     const task = byId.get(id) ?? {};
     const budget = checkBudget({ task, spent: spent?.[id] ?? {} });

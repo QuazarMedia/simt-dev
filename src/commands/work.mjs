@@ -24,6 +24,7 @@ import { commitJournal, journaledRemoveFile, journaledWriteFile } from '../journ
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { buildCapsule, checkResume, duplicateEffects, reopenFor } from '../coordination/handoff.mjs';
 import { schedule } from '../coordination/workgraph.mjs';
+import { scheduleLocal } from '../coordination/local-tracker.mjs';
 import { proposeGraduation, promotionReady } from '../memory/graduation.mjs';
 import { readJsonDocument } from './doc-input.mjs';
 
@@ -333,7 +334,22 @@ async function documentDoor(sub, args, flags, facts) {
   return EXIT.OK;
 }
 
-export const workScheduleCommand = (args, flags) => documentDoor('schedule', args, flags, workScheduleFacts);
+export async function workScheduleCommand(args, flags) {
+  if (flags.scope === undefined && flags.public !== true) return documentDoor('schedule', args, flags, workScheduleFacts);
+  const usage = `run: ${CLI} work schedule --scope <id> [--public]`;
+  if (args.length > 0 || typeof flags.scope !== 'string' || flags.scope === '' || flags.input !== undefined) {
+    return fail('tracker scheduling needs a scope without an explicit input', EXIT.USAGE, usage);
+  }
+  try {
+    const result = await scheduleLocal(commandRoot(flags), flags.scope, { publicOnly: flags.public === true });
+    if (result.error !== undefined) return fail(result.error, EXIT.CONFIG, result.remedy);
+    const payload = { ok: true, command: 'work schedule', ...result };
+    present(payload, () => renderSchedule(payload), flags);
+    return EXIT.OK;
+  } catch (error) {
+    return fail(`could not read the configured tracker: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+  }
+}
 export const workHandoffCommand = (args, flags) => documentDoor('handoff', args, flags, workHandoffFacts);
 export const workResumeCommand = (args, flags) => documentDoor('resume', args, flags, workResumeFacts);
 export const workGraduateCommand = (args, flags) => documentDoor('graduate', args, flags, workGraduateFacts);
@@ -347,10 +363,12 @@ function renderWork(payload) {
 
 function renderSchedule(payload) {
   const lines = [`dispatch   ${payload.dispatch.length === 0 ? 'none' : payload.dispatch.join(', ')}`];
-  for (const entry of payload.serialized) lines.push(`serialized ${entry.id}  ${entry.resource === null ? 'capacity' : `after ${entry.after.join(', ')} on ${entry.resource}`}`);
-  for (const entry of payload.limited) lines.push(`limited    ${entry.id}  ${entry.reason}`);
-  for (const component of payload.cycle) lines.push(`cycle      ${component.reason}`);
-  if (payload.waiting.length > 0) lines.push(`waiting    ${payload.waiting.join(', ')}`);
+  if (payload.withheld) lines.push('tracker    private');
+  for (const entry of payload.serialized ?? []) lines.push(`serialized ${entry.id}  ${entry.resource === null ? 'capacity' : `after ${entry.after.join(', ')} on ${entry.resource}`}`);
+  for (const entry of payload.limited ?? []) lines.push(`limited    ${entry.id}  ${entry.reason}`);
+  for (const component of payload.cycle ?? []) lines.push(`cycle      ${component.reason}`);
+  for (const entry of payload.waiting ?? []) lines.push(`waiting    ${entry.id}  ${entry.missing.join(', ')}`);
+  for (const entry of payload.problems ?? []) lines.push(`problem    ${entry.code}  ${entry.id ?? entry.source ?? ''}`);
   return lines.join('\n');
 }
 

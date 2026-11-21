@@ -94,7 +94,7 @@ export const SPEC = [
   // The one knowledge writer: it derives a corpus from files the repository already declared,
   // so it takes the scope, not a file list - an undeclared path has no authority to enter it.
   { path: 'knowledge build', usage: '--scope <id> [--yes]', summary: 'build the scoped corpus of declared sections under the ignored local area', writes: 'repo', flags: ["yes","diff","scope"], },
-  { path: 'work schedule', usage: '--input <file>', summary: 'which ready tasks can run together under capacity and resource constraints', flags: ["input"], },
+  { path: 'work schedule', usage: '(--input <file> | --scope <id> [--public])', summary: 'which ready tasks can run together under capacity and resource constraints', flags: ["input","scope","public"], },
   { path: 'work handoff', usage: '--input <file>', summary: 'build a resume capsule from ids and provenance, never from a transcript', flags: ["input"], },
   { path: 'work resume', usage: '--input <file>', summary: 'revalidate permission, target, dependencies, authorization and lease before reuse', flags: ["input"], },
   { path: 'work graduate', usage: '--input <file>', summary: 'whether repeated traces can be proposed as a procedure, and what still blocks it', flags: ["input"], },

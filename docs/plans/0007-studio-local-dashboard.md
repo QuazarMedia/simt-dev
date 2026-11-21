@@ -44,7 +44,7 @@ the browser changes nothing; killing the server loses nothing.
 | `harness detect`, `agent-hooks status/explain`, the policy table (`src/agenthooks/policy.mjs`) | The Harness wall shows each detected harness, its hook state, and live `policy.decided` events with the rule that fired |
 | `tokens` measures what the tool wrote, per loader and per session (ADR-064/075) | The Budget view is a treemap of that measurement; session transcripts are local paths only |
 | Plans are markdown trackers the tool parses (`src/plan/index.mjs`); slices have worktrees, briefs and leases | The Board renders tracker rows with dependency arrows, worktree and lease chips, and the `plan next` answer highlighted |
-| No HTTP surface exists anywhere in `src/`; MCP is stdio-only; ADR-187 ruled the rollout opens no socket | A new ADR-210 permits exactly one loopback socket, opened only by explicit invocation of `simt studio`, under ADR-075's privacy contract |
+| No HTTP surface exists anywhere in `src/`; MCP is stdio-only; ADR-187 ruled the rollout opens no socket | A new ADR-212 permits exactly one loopback socket, opened only by explicit invocation of `simt studio`, under ADR-075's privacy contract |
 
 **Evidence.** Inventoried the command spec, the MCP tool tables, the event/ledger/lease
 stores and the harness policy module at the baseline SHA. Confirmed by search that no
@@ -60,9 +60,10 @@ simt studio --port 4318     # a fixed port when the default is taken
 simt studio --no-open       # print the URL without launching a browser
 ```
 
-The server binds `127.0.0.1` only, prints `http://127.0.0.1:<port>/#<token>`, and serves
-the shell. The token is exchanged for an HttpOnly, SameSite=Strict cookie on first load;
-every later request is checked against it. `Ctrl-C` stops the server and removes nothing.
+The server binds `127.0.0.1` only, prints `http://127.0.0.1:<port>/?token=<token>`, and serves
+the shell. The token is one-shot: the first load exchanges it for an HttpOnly, SameSite=Strict
+cookie and redirects to `/`, so the token leaves the address bar; a replayed token query is
+refused. Every later request is checked against the cookie. `Ctrl-C` stops the server and removes nothing.
 An unconfigured repository is not refused: the overview shows the same actionable next
 step `work inspect` gives, and the studio becomes useful as the repository adopts.
 
@@ -130,7 +131,7 @@ with a table view that carries the same data.
 - **Surface disposition.** `simt studio` ships as `optional` in the surface inventory
   (ADR-207) until ST15 qualifies it; MCP gains no tools (ADR-126); no existing command's
   output changes (ADR-187's contract ruling stands — only its no-socket clause is
-  amended, by ADR-210, for this explicitly invoked surface).
+  amended, by ADR-212, for this explicitly invoked surface).
 - **Budgets.** The whole shell (HTML + CSS + JS, uncompressed) stays under 120 KB; the
   server answers any read route in under 50 ms on the fixture repository; the test suite
   asserts both. No asset over the file-line ceiling; views split into small modules.
@@ -176,7 +177,7 @@ control route; `release` owns qualification tests and docs.
 
 ### ST01 — One loopback socket: the studio server, token and command
 
-Write ADR-210 first: the studio opens exactly one socket, bound to `127.0.0.1`, only when
+Write ADR-212 first: the studio opens exactly one socket, bound to `127.0.0.1`, only when
 `simt studio` is invoked; it amends ADR-187's no-socket clause for this surface and keeps
 ADR-075 intact. Add the `studio` command to the spec (`writes: 'none'`, no MCP row,
 disposition `optional` per ADR-207), the flags (`--port`, `--no-open`) to argv, and

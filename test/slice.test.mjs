@@ -292,6 +292,11 @@ test('the finish dry run reports the same refusal in text and JSON', async () =>
     assert.equal(text.code, 0, `${label}: ${text.stderr}`);
     const match = text.stdout.match(/\(finish refuses: (.*)\)$/m);
     assert.ok(match, `${label}: the text dry run hid the refusal: ${text.stdout}`);
+    assert.match(
+      match[1],
+      dirty ? / has uncommitted changes \(a\.mjs\)$/ : / has nothing staged and no commits ahead of .+$/,
+      `${label}: the refusal named the wrong condition`,
+    );
 
     const json = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true', json: true }));
     assert.equal(json.code, 0, `${label}: ${json.stderr}`);

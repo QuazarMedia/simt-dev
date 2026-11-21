@@ -33,6 +33,9 @@ export async function briefCommand(args, flags, commands = []) {
     return fail(`--budget must be a byte count, not ${flags.budget}`, EXIT.USAGE, `run: ${CLI} brief --budget ${DEFAULT_BRIEF_BYTES}`);
   }
 
+  if (flags.scope !== undefined && (typeof flags.scope !== 'string' || flags.scope === '' || flags.paths !== undefined)) {
+    return fail('a scoped brief needs a scope id without --paths', EXIT.USAGE, `run: ${CLI} brief "<task>" --scope <id>`);
+  }
   const result = await assembleBrief({
     root: commandRoot(flags),
     task: String(args[0] ?? flags.task ?? ''),
@@ -41,6 +44,7 @@ export async function briefCommand(args, flags, commands = []) {
     flags,
     commands,
     proof: flags.proof === true,
+    workScope: flags.scope ?? null,
   });
   if (result.error) return result.error;
   // Unreachable from here — only a delivered brief asks for a cold index to be reported
@@ -61,6 +65,7 @@ export async function briefCommand(args, flags, commands = []) {
         basis,
         task,
         scope,
+        ...(result.workScope === undefined ? {} : { workScope: result.workScope }),
         budget: ceiling,
         bytes: packed.after,
         before: packed.before,

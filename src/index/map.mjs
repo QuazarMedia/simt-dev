@@ -447,15 +447,20 @@ function scoreFiles(nodes, symbolsByPath, task) {
     }
     for (const name of seen) symFreq.set(name, (symFreq.get(name) ?? 0) + 1);
   }
+  // A task naming a symbol rather than a file: `migrate` names `migratePack`, and camel
+  // case is not a word boundary the term set carries. Computed once, not per symbol.
+  const longTerms = [...terms].filter((term) => term.length >= 5);
   for (const path of nodes) {
     const lower = path.toLowerCase();
     let score = 0;
-    if (lower.length >= 3 && text.includes(lower)) score += 8;
     const stem = stemOf(lower);
     if (stem.length >= 3 && terms.has(stem) && !common(segFreq.get(stem) ?? 0)) score += 4;
     for (const segment of segments(lower)) {
-      if (forms.has(segment) && !common(segFreq.get(segment) ?? 0)) score += 2;
-      else if (forms.has(singular(segment)) && !common(segFreq.get(singular(segment)) ?? 0)) score += 2;
+      // One plural step on either side, so `packs/` answers a task that says `pack` and
+      // a task saying `packs` reaches `pack.mjs`. The frequency guard reads the segment
+      // the path actually has, not the form the task happened to use.
+      const word = forms.has(segment) ? segment : singular(segment);
+      if (forms.has(word) && !common(segFreq.get(segment) ?? 0)) score += 2;
     }
     for (const term of terms) {
       const freq = termFreq.get(term) ?? 0;
@@ -470,13 +475,9 @@ function scoreFiles(nodes, symbolsByPath, task) {
     for (const symbol of symbolsByPath.get(path) ?? []) {
       const name = String(symbol.name ?? '').toLowerCase();
       if (name.length >= 3 && terms.has(name) && (symFreq.get(name) ?? 0) <= 5) hits += 1;
-      // `migrate` names `migratePack`. Camel case is not a word boundary the term set
-      // carries, so a rare symbol containing a long task term is evidence too; without
-      // it the file holding the function was absent from the resolver list entirely.
-      else if (
-        [...terms].some((term) => term.length >= 5 && name.includes(term)) &&
-        (symFreq.get(name) ?? 0) <= 2
-      ) {
+      // The rare symbol that contains a long task term is evidence too; without it a
+      // task naming only `readBench` left the file holding it out of the resolver list.
+      else if ((symFreq.get(name) ?? 0) <= 2 && longTerms.some((term) => name.includes(term))) {
         hits += 1;
       }
     }

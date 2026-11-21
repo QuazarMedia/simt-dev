@@ -364,6 +364,7 @@ test('openIndex answers with pure data and a structured error when closed (Q76)'
     const ranked = await ix.rank('');
     assert.equal(ranked.ok, true);
     assert.equal(ranked.data.length, 2, 'every file ranks, best first');
+    assert.deepEqual(Object.keys(ranked.data[0]).sort(), ['path', 'rank', 'score'], 'the SDK answer keeps its documented shape');
     const cov = await ix.coverage(['src/a.mjs']);
     assert.equal(cov.ok, true);
     assert.deepEqual(cov.data, ['a.test.mjs']);

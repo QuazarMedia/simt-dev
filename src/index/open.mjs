@@ -162,7 +162,10 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
           return fail(code, bm25.error.message ?? String(bm25.error));
         }
         const ranked = rankFiles({ ...g, bm25, task });
-        const answer = limit === undefined ? ranked : ranked.slice(0, limit);
+        // `resolver` is rankFiles' task-word score for internal filtering; this answer's
+        // shape is `path`/`rank`/`score`, and a fourth field would be public API nobody
+        // documented. The fused `score` stays what a caller reads as relevance.
+        const answer = (limit === undefined ? ranked : ranked.slice(0, limit)).map(({ path, rank, score }) => ({ path, rank, score }));
         return ok(withBasis(answer, await basis()));
       }),
 

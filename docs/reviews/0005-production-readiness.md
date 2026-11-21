@@ -49,7 +49,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR27 | Resolve each release once and verify cross-channel promotion | P1 | release | M | PR17 | Complete | 6abb3071377c6f9a28eb63a01601441b98a06d6f |
 | PR28 | Qualify installed packages and state platform prerequisites | P1 | release | M | PR27, PR11 | Complete | 9a65d8a941d0ca9313e6d98e8666ab965c3a7d23 |
 | PR29 | Publish one supported surface and deprecation map | P2 | surface | M | — | Complete | cfacc16781d49c825d3ef6d0dc9d8b0b94d9bc82 |
-| PR30 | Retire or explicitly retain experimental packs | P2 | surface | M | PR29, PR16 | Queued | — |
+| PR30 | Retire or explicitly retain experimental packs | P2 | surface | M | PR29, PR16 | Complete | 52c579e2025423cf7d21445c3fbb9e844fa7252c |
 | PR31 | Move bench and synthetic research outside the stable core | P2 | surface | L | PR30, PR20, PR14 | Queued | — |
 | PR32 | Verify reachability, remove dead bindings, and narrow exports safely | P2 | surface | M | PR31, PR22 | Queued | — |
 | PR33 | Consolidate duplicate test reporting and repository adapters | P2 | runners | M | PR14, PR31 | Queued | — |

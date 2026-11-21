@@ -1,5 +1,5 @@
 {
-  "name": "simt-bench",
+  "name": "@simt-dev/bench",
   "private": true,
   "version": "0.0.0",
   "description": "The optional benchmark package for simt-dev: task mining, agent runs, grading and statistical reports. Installed only by repositories that measure an agent.",

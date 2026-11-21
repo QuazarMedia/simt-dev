@@ -23,7 +23,6 @@
   "files": [
     "bin",
     "src",
-    "packages/bench/src",
     "rules",
     "templates",
     "agents",

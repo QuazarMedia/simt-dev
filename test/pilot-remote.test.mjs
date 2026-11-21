@@ -15,7 +15,7 @@ import { idempotencyKey, planRetry } from '../src/actions/retry.mjs';
 import { checkCommand } from '../src/actions/machine.mjs';
 import { selectProtocol, fallbackIntent } from '../src/actions/recovery.mjs';
 import { duplicateEffects } from '../src/coordination/handoff.mjs';
-import { offline } from '../src/bench/replay.mjs';
+import { offline } from '../packages/bench/src/replay.mjs';
 
 const fixture = JSON.parse(await readFile(new URL('./fixtures/pilot-remote.json', import.meta.url), 'utf8'));
 

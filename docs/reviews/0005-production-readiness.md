@@ -50,7 +50,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR28 | Qualify installed packages and state platform prerequisites | P1 | release | M | PR27, PR11 | Complete | 9a65d8a941d0ca9313e6d98e8666ab965c3a7d23 |
 | PR29 | Publish one supported surface and deprecation map | P2 | surface | M | — | Complete | cfacc16781d49c825d3ef6d0dc9d8b0b94d9bc82 |
 | PR30 | Retire or explicitly retain experimental packs | P2 | surface | M | PR29, PR16 | Complete | 52c579e2025423cf7d21445c3fbb9e844fa7252c |
-| PR31 | Move bench and synthetic research outside the stable core | P2 | surface | L | PR30, PR20, PR14 | Queued | — |
+| PR31 | Move bench and synthetic research outside the stable core | P2 | surface | L | PR30, PR20, PR14 | Complete | 04601e72170426f675de3adedba50fb2f8fdc45c · test: node --test test/bench.test.mjs test/bench2.test.mjs test/bench3.test.mjs test/distill.test.mjs test/work-door-parity.test.mjs test/work-release.test.mjs test/work-replay.test.mjs test/work-calibration.test.mjs test/pack-imports.test.mjs test/packaging.test.mjs test/testing.test.mjs test/pilot-remote.test.mjs test/shipped-decisions.test.mjs |
 | PR32 | Verify reachability, remove dead bindings, and narrow exports safely | P2 | surface | M | PR31, PR22 | Queued | — |
 | PR33 | Consolidate duplicate test reporting and repository adapters | P2 | runners | M | PR14, PR31 | Queued | — |
 | PR34 | Migrate and retire legacy compatibility paths on evidence | P2 | adoption | M | PR08, PR32, PR16 | Queued | — |

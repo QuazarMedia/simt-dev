@@ -45,6 +45,7 @@ test('a row that declares no writes leaves a repository alone', async () => {
     ['self-update', 'reaches the network'],
     ['agent-hook', 'reads a payload from stdin'],
     ['mcp', 'a long-lived transport'],
+    ['studio', 'a long-lived server; opens a browser by default'],
   ]);
   const dir = await mkdtemp(join(tmpdir(), 'simt-writes-'));
   await exec('git', ['init', '-q', dir]);

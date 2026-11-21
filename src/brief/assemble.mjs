@@ -530,7 +530,12 @@ export async function assembleBrief({
       budget: Math.min(budget > 0 ? budget : DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES),
       required: [...new Set(kept.map((item) => item.section))],
     });
-    proofSummary = { complete: report.complete, omittedObligations: report.omittedObligations };
+    const mandatory = new Set(units.filter((unit) => unit.mandatory).map((unit) => unit.id));
+    proofSummary = {
+      complete: report.complete,
+      omittedObligations: report.omittedObligations,
+      selectedMandatory: report.selected.filter((id) => mandatory.has(id)),
+    };
   }
 
   const sections = {};

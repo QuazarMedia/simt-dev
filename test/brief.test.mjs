@@ -236,11 +236,11 @@ test('the matched-0 caution is mandatory in --proof at the default ceiling', asy
     (item) => item.section === 'CAUTIONS' && item.text.startsWith('matched 0:'),
   );
   assert.ok(caution, 'the matched-0 caution was not assembled');
-  // Hard packet items are the proof's mandatory units; if this becomes soft, the
-  // default ceiling can still hide that FILES is context rather than a match.
-  assert.equal(caution.priority, 'hard', 'the matched-0 caution is not mandatory proof');
-  assert.equal(assembled.packed.cut.includes(caution.id), false, 'the default packet cut the caution');
   assert.ok(assembled.proof, '--proof did not attach a summary');
+  assert.ok(
+    assembled.proof.selectedMandatory.includes(caution.id),
+    `the matched-0 caution was not selected as mandatory proof: ${JSON.stringify(assembled.proof.selectedMandatory)}`,
+  );
   assert.equal(assembled.proof.complete, true, 'the proof summary dropped a kept section');
   assert.deepEqual(assembled.proof.omittedObligations, []);
 });

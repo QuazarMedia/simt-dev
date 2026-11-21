@@ -16,6 +16,7 @@ import { commandRoot } from '../repo-root.mjs';
 import { detectFacets } from '../work/facets.mjs';
 import { capabilityCards, probeLocal } from '../work/capabilities.mjs';
 import { readWork } from '../work/effective.mjs';
+import { maintenanceContext, scopedGraduation } from '../work/maintenance.mjs';
 import { normalizePath } from '../work/artifacts.mjs';
 import { proposeScope } from '../work/setup.mjs';
 import { loadManifest, manifestPath } from '../manifest/schema.mjs';
@@ -381,7 +382,22 @@ async function localHandoffDoor(sub, args, flags) {
     return fail(`could not ${sub} local work: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
   }
 }
-export const workGraduateCommand = (args, flags) => documentDoor('graduate', args, flags, workGraduateFacts);
+export async function workGraduateCommand(args, flags) {
+  if (flags.scope === undefined) return documentDoor('graduate', args, flags, workGraduateFacts);
+  const usage = `run: ${CLI} work graduate --scope <id>`;
+  if (args.length > 0 || typeof flags.scope !== 'string' || flags.scope === '' || flags.input !== undefined) {
+    return fail('scoped graduation needs a scope without an explicit input', EXIT.USAGE, usage);
+  }
+  try {
+    const context = await maintenanceContext(commandRoot(flags), flags.scope);
+    if (context.error) return fail(context.error, EXIT.CONFIG, context.remedy);
+    const result = { ok: true, command: 'work graduate', scope: flags.scope, ...scopedGraduation(context) };
+    present(result, () => renderGraduate(result), flags);
+    return EXIT.OK;
+  } catch (error) {
+    return fail(`could not derive a scoped proposal: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+  }
+}
 
 function renderWork(payload) {
   if (payload.command === 'work schedule') return renderSchedule(payload);
@@ -427,11 +443,12 @@ function renderGraduate(payload) {
   lines.push(`proposals  ${payload.proposals.length}`);
   for (const proposal of payload.proposals) {
     lines.push(`${String(proposal.state).padEnd(22)} ${proposal.id ?? proposal.goal}`);
-    for (const reason of proposal.reasons ?? []) lines.push(`           ${reason}`);
+    for (const reason of proposal.reasons ?? (proposal.reason ? [proposal.reason] : [])) lines.push(`           ${reason}`);
     if (proposal.promotion !== null && proposal.promotion !== undefined) {
       lines.push(`promotion  ${proposal.promotion.ready ? 'ready' : 'not ready'}${proposal.promotion.reason ? `: ${proposal.promotion.reason}` : ''}`);
     }
   }
+  if (payload.truncated) lines.push('truncated  bounded scoped maintenance report');
   return lines.join('\n');
 }
 

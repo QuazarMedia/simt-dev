@@ -17,6 +17,7 @@ import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
 import { readWork } from '../work/effective.mjs';
+import { maintenanceContext, scopedDebt } from '../work/maintenance.mjs';
 import { CORPUS_DIR, CORPUS_SCHEMA_VERSION } from '../knowledge/corpus.mjs';
 import { collectCorpus, readLocalBytes } from '../knowledge/collect.mjs';
 import { configuredCatalogue, scopedExchange } from '../knowledge/catalogue.mjs';
@@ -411,6 +412,25 @@ export async function knowledgeCommand(sub, args, flags) {
     return EXIT.OK;
   }
 
+  if (sub === 'debt' && flags.scope !== undefined) {
+    const usage = `run: ${CLI} knowledge debt --scope <id>`;
+    if (args.length > 0 || flags.input !== undefined || typeof flags.scope !== 'string' || flags.scope === '') {
+      return fail('scoped debt needs a scope without an explicit input', EXIT.USAGE, usage);
+    }
+    try {
+      const context = await maintenanceContext(commandRoot(flags), flags.scope);
+      if (context.error) return fail(context.error, EXIT.CONFIG, context.remedy);
+      const backlog = await scopedDebt(context);
+      const base = knowledgeDebtFacts({ items: backlog.items }, { weights: parseWeights(flags.weights) });
+      const payload = { ...base, scope: flags.scope, ranked: base.ranked.slice(0, backlog.limit),
+        truncated: backlog.scanTruncated || base.ranked.length > backlog.limit,
+        lessonCandidates: backlog.lessonCandidates, proposalOnly: true };
+      present(payload, () => renderDebt(payload), flags);
+      return EXIT.OK;
+    } catch (error) {
+      return fail(`could not derive scoped debt: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+    }
+  }
   if (sub === 'impact' && (flags.changed === true || flags.scope !== undefined)) {
     const usage = `run: ${CLI} knowledge impact --changed --scope <id>`;
     if (args.length > 0 || flags.changed !== true || typeof flags.scope !== 'string' ||
@@ -846,6 +866,10 @@ function renderDebt(payload) {
   if (payload.sensitivity?.moved !== undefined) {
     for (const moved of payload.sensitivity.moved) lines.push(`moved      ${moved.id} ${moved.before} -> ${moved.after}`);
     lines.push(`because    ${payload.sensitivity.explanation}`);
+  }
+  if (payload.scope !== undefined) {
+    for (const entry of payload.ranked) lines.push(`next       ${entry.ref}  ${entry.next}`);
+    if (payload.truncated) lines.push('truncated  bounded scoped maintenance report');
   }
   return lines.join('\n');
 }

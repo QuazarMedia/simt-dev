@@ -9,10 +9,11 @@
 import { createServer } from 'node:http';
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { dirname, extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { apiAnswer } from './api.mjs';
+import { within } from '../trust/paths.mjs';
 
 export const STUDIO_HOST = '127.0.0.1';
 export const STUDIO_DEFAULT_PORT = 4310;
@@ -40,10 +41,13 @@ const SECURITY_HEADERS = {
   'cache-control': 'no-store',
 };
 
-// The placeholder shell ST01 ships; ST03 replaces these files, not this table.
-const SHELL_ROUTES = new Map([
-  ['/', ['index.html', 'text/html; charset=utf-8']],
-  ['/shell.css', ['shell.css', 'text/css; charset=utf-8']],
+// The shell is every file under public/, served by extension. Containment keeps a
+// crafted path inside the directory (ADR-205); an unknown type or file is a refusal,
+// never a directory listing.
+const CONTENT_TYPES = new Map([
+  ['.html', 'text/html; charset=utf-8'],
+  ['.css', 'text/css; charset=utf-8'],
+  ['.js', 'text/javascript; charset=utf-8'],
 ]);
 
 /** Constant-time equality: hash both sides so length never short-circuits the compare. */
@@ -129,12 +133,23 @@ export async function startStudioServer({ port = STUDIO_DEFAULT_PORT, root } = {
       return res.end(req.method === 'HEAD' ? undefined : body);
     }
 
-    const route = SHELL_ROUTES.get(url.pathname);
-    if (!route) {
-      return refusal(res, 404, 'STUDIO_UNKNOWN_ROUTE', 'the studio serves its shell and the /api routes as they ship');
+    let rel;
+    try {
+      rel = url.pathname === '/' ? 'index.html' : decodeURIComponent(url.pathname.slice(1));
+    } catch {
+      return refusal(res, 404, 'STUDIO_UNKNOWN_ROUTE', 'the studio serves its shell and the /api routes');
     }
-    const [file, type] = route;
-    const body = await readFile(join(PUBLIC_DIR, file));
+    const file = join(PUBLIC_DIR, rel);
+    const type = CONTENT_TYPES.get(extname(file));
+    if (!type || !within(PUBLIC_DIR, file).ok) {
+      return refusal(res, 404, 'STUDIO_UNKNOWN_ROUTE', 'the studio serves its shell and the /api routes');
+    }
+    let body;
+    try {
+      body = await readFile(file);
+    } catch {
+      return refusal(res, 404, 'STUDIO_UNKNOWN_ROUTE', 'the studio serves its shell and the /api routes');
+    }
     res.writeHead(200, { ...SECURITY_HEADERS, 'content-type': type });
     res.end(req.method === 'HEAD' ? undefined : body);
   });

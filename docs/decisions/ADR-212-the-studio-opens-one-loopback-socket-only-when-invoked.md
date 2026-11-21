@@ -1,5 +1,5 @@
 ---
-simt-affects: ["src/studio/server.mjs", "src/studio/api.mjs", "src/commands/studio.mjs", "test/studio-server.test.mjs", "test/studio-api.test.mjs"]
+simt-affects: ["src/studio/server.mjs", "src/studio/api.mjs", "src/commands/studio.mjs", "test/studio-server.test.mjs", "test/studio-api.test.mjs", "test/studio-shell.test.mjs"]
 simt-supersedes: [{ adr: "ADR-187", ruling: 5, kind: "narrowed" }]
 ---
 
@@ -51,6 +51,9 @@ behaviour; it is an explicitly invoked tool, the same category as `simt mcp` hol
 - `test/studio-api.test.mjs` extends the ADR-035 parity assertion to a third transport: each
   read route's JSON deep-equals the CLI's `--json` document on the same repository, and the
   check route answers without writing the gate's cache.
+- `test/studio-shell.test.mjs` holds the shell to ruling 5: no shipped asset references
+  another origin, the asset budget and file-line ceiling hold, and a refusal renders its
+  error and remedy rather than hiding behind a loading state.
 - The surface inventory classifies `studio` as `optional` (ADR-207): shipped and supported
   when used, not part of the adoption path.
 - A future control surface must cite this record and add its own; the read-only promise here

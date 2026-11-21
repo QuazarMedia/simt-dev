@@ -182,7 +182,7 @@ simt verify contracts --input <file>                                            
 simt verify documents --input <file>                                                       # check a generated document against its template, sections and source scope
 simt verify plan --input <file>                                                            # the next observation worth making, and the point at which there is not one
 simt verify procedures --input <file>                                                      # check procedures for missing imports, calls and impossible prerequisites
-simt verify select --input <file>                                                          # the narrowest checks that prove a change, and whether a Git hook may run them
+simt verify select (--input <file> | (--changed | --staged) --scope <id>)                  # the narrowest checks that prove a change, and whether a Git hook may run them
 simt verify status --input <file>                                                          # closure over recorded obligations, and what is unresolved
 
 # lessons

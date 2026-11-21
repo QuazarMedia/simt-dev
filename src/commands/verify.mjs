@@ -11,6 +11,8 @@
 
 import { EXIT, fail, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
+import { commandRoot } from '../repo-root.mjs';
+import { selectLocalVerification } from '../verify/local-selection.mjs';
 import { planNext } from '../verify/next.mjs';
 import { closureReport } from '../verify/closure.mjs';
 import { checkVerifyRun, selectVerification } from '../verify/select.mjs';
@@ -102,6 +104,24 @@ function inputProblems(sub, doc) {
 
 export async function verifyCommand(sub, args, flags) {
   if (args.length > 0) return fail(`unknown verify ${sub} argument ${args[0]}`, EXIT.USAGE, USAGE);
+  if (sub === 'select' && (flags.changed || flags.staged || flags.scope !== undefined)) {
+    const usage = `run: ${CLI} verify select (--changed | --staged) --scope <id>`;
+    if (typeof flags.scope !== 'string' || flags.scope === '' ||
+        Boolean(flags.changed) === Boolean(flags.staged) || flags.input !== undefined) {
+      return fail('select needs one diff mode and a scope, or an explicit input', EXIT.USAGE, usage);
+    }
+    let local;
+    try {
+      local = await selectLocalVerification(commandRoot(flags), { scopeId: flags.scope, staged: flags.staged === true });
+    } catch (error) {
+      return fail(`cannot read the scoped diff: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+    }
+    if (local.error !== undefined) return fail(local.error, EXIT.CONFIG, local.remedy);
+    const { selectedChecks, ...result } = local;
+    const payload = { ok: true, command: 'verify select', ...result, run: checkVerifyRun({ selected: local.selection.selected }) };
+    present(payload, () => renderSelect(payload), flags);
+    return EXIT.OK;
+  }
   const read = await readJsonDocument(flags, 'input');
   if (read.error !== undefined) return fail(read.error, EXIT.USAGE, USAGE);
   const problems = inputProblems(sub, read.doc);
@@ -136,6 +156,15 @@ function renderSelect(payload) {
   }
   for (const entry of selection.plan) {
     lines.push(`plan       ${entry.id.padEnd(24)}${entry.class.padEnd(9)}${entry.basis}${entry.environment ? `  env=${entry.environment}` : ''}`);
+  }
+  if (payload.scope !== undefined) {
+    lines.push(`scope      ${payload.scope} (${payload.basis})`);
+    for (const check of payload.checks) {
+      if (!check.available) lines.push(`unavailable ${check.id}  ${check.reason}`);
+    }
+    for (const entry of payload.pending) lines.push(`unmapped    ${entry.path}  ${entry.reason}`);
+    for (const entry of payload.renames) lines.push(`rename      ${entry.from} -> ${entry.to}`);
+    for (const path of payload.deleted) lines.push(`deleted     ${path}`);
   }
   for (const entry of selection.unverified) lines.push(`unverified ${entry.obligation}  ${entry.reason}`);
   if (selection.environment.length > 0) lines.push(`environment ${selection.environment.join(', ')}`);

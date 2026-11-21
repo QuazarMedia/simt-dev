@@ -117,9 +117,12 @@ async function isMainCheckout(root, main) {
   return top !== null && canonicalPath(top) === canonicalPath(main);
 }
 
-/** The first line of a git failure, which is the one naming the conflict. */
+/** The first line of a git failure. `merge` writes its conflict to stdout, so an empty
+ *  stderr falls back to the wrapped message rather than reporting no reason at all. */
 function gitDetail(error) {
-  return String(error?.stderr ?? error?.message ?? error).trim().split('\n')[0];
+  const stderr = String(error?.stderr ?? '').trim();
+  const message = String(error?.message ?? error).trim();
+  return (stderr || message).split('\n')[0];
 }
 
 /**

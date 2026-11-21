@@ -147,6 +147,77 @@ test('finish from the main checkout merges the slice, commits the row and remove
   assert.match(String(log.stdout), /^Merge branch 'slice\/a27'/, 'the slice was not a merge commit');
 });
 
+test('a conflicting merge aborts, reports the commit and row, and leaves main usable', async () => {
+  const { root, tracker } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+  // A main commit on the same line the slice changes: the merge has to conflict.
+  await writeFile(join(root, 'a.mjs'), 'export const a = 3;\n');
+  await git(['-C', root, 'add', 'a.mjs']);
+  await git(['-C', root, 'commit', '-qm', 'main change']);
+
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
+  assert.notEqual(result.code, 0, `a conflicted merge was reported as success: ${result.stdout}${result.stderr}`);
+  const output = result.stdout + result.stderr;
+  const sha = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+  assert.match(output, new RegExp(sha), 'the committed sha was not reported');
+  assert.match(output, /row recorded/, 'the row state was not reported');
+  assert.match(output, /the merge into .* failed/, 'the refused merge was not named');
+
+  // Aborted, not left half-merged: no MERGE_HEAD, the main file unchanged, and the
+  // only dirty path is the tracker row the finish recorded before merging.
+  assert.equal(existsSync(join(root, '.git', 'MERGE_HEAD')), false, 'the merge was left in progress');
+  assert.equal((await readFile(join(root, 'a.mjs'), 'utf8')).trim(), 'export const a = 3;', 'main work was overwritten');
+  const status = String((await git(['-C', root, 'status', '--porcelain', '--untracked-files=no'])).stdout);
+  assert.match(status, /0004-audit-remediation\.md/, 'the recorded row is not visible');
+  assert.deepEqual(status.split('\n').filter((line) => line.trim() !== '').map((line) => line.slice(2).trim()), ['docs/reviews/0004-audit-remediation.md'], 'a merge left more than the row behind');
+  assert.match(await readFile(tracker, 'utf8'), /Complete/, 'the row did not record the commit');
+});
+
+test('a prompt slice lands without a tracker row', async () => {
+  const { root } = await startableRepo();
+  const prompt = 'fix the prompt slice helper';
+  const started = await capture(() => sliceCommand('start', [prompt], { root, yes: true, dashdash: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const id = 'fix-the-prompt-slice-helper';
+  const worktree = join(root, '.simt', 'local', 'worktrees', id);
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+
+  const result = await capture(() => sliceCommand('finish', [id], { root, yes: true, test: 'true' }));
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /no tracker row/, 'the prompt slice claimed a row');
+  assert.equal(existsSync(worktree), false, 'the prompt worktree survived');
+  const branch = await git(['-C', root, 'branch', '--list', `slice/${id}`]);
+  assert.equal(String(branch.stdout).trim(), '', 'the prompt branch survived');
+  assert.equal((await readFile(join(root, 'a.mjs'), 'utf8')).trim(), 'export const a = 2;', 'the prompt slice was not merged');
+  const status = String((await git(['-C', root, 'status', '--porcelain', '--untracked-files=no'])).stdout).trim();
+  assert.equal(status, '', 'a tracker file was written for a prompt slice');
+});
+
+test('a worktree holding untracked files is kept and named', async () => {
+  const { root } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+  await writeFile(join(worktree, 'scratch.txt'), 'not part of the slice\n');
+
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
+  assert.equal(result.code, 0, result.stderr);
+  assert.match(result.stdout, /kept\s+\.simt\/local\/worktrees\/a27/, 'the kept worktree was not named');
+  assert.match(result.stdout, /kept\s+slice\/a27/, 'the kept branch was not named');
+  assert.equal(existsSync(join(worktree, 'scratch.txt')), true, 'the untracked file was deleted');
+  assert.equal((await readFile(join(root, 'a.mjs'), 'utf8')).trim(), 'export const a = 2;', 'the slice was not merged');
+});
+
 test('finish from inside the worktree refuses before it commits anything', async () => {
   const { root } = await startableRepo();
   const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));

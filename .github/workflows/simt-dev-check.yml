@@ -8,10 +8,11 @@
 # change overwrites it.
 #
 # The steps below run what this repository declares - its tests and its registry lint,
-# the same two `.githooks/pre-push` runs - and NOT `simt check`. That check is
-# red here by design: this AGENTS.md is written by hand and deliberately never
-# self-adopted, so the check reports it as unmanaged on every run. A gate that is red
-# the day it lands is worse than no gate.
+# the same two `.githooks/pre-push` runs - and NOT `simt check`. This repository
+# adopts itself, so the generated AGENTS.md region is current; the check is still red
+# on this repository's own file-length ceiling for package-lock.json and on its missing
+# packageManager pin. Those are findings to fix, not a reason to gate every push on a
+# job that starts red.
 #
 # Every step runs from this checkout: this package has zero dependencies, so there is
 # nothing to install and no binary to resolve. Nothing here can pass by skipping - a

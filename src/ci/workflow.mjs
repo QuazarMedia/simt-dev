@@ -28,12 +28,13 @@
 //     which is why the header says so in the file rather than in this comment.
 //
 // The own copy also RUNS something different, and that is not a variation for taste.
-// `simt check` is red in this repository by design: AGENTS.md here is written by
-// hand and deliberately never self-adopted (see its own "Why this repository is not
-// self-adopted"), so the check reports it as unmanaged forever. A gate that is red on
-// the day it lands is the one thing worse than no gate - it teaches the reader to
-// ignore it - so the own copy runs what this repository actually declares, which is
-// what `.githooks/pre-push` already runs.
+// This repository DOES adopt itself: AGENTS.md carries the generated region and
+// `simt check` reports it current. The check is still red, but for findings about this
+// repository's own code - package-lock.json is over the file-length ceiling and
+// package.json declares no `packageManager` - not because the projection is missing.
+// A gate that is red on the day it lands is the one thing worse than no gate: it
+// teaches the reader to ignore it. So the own copy runs what this repository declares,
+// which is what `.githooks/pre-push` already runs.
 //
 // The directory decides whether it applies at all: a repo with no
 // `.github/workflows` is not a GitHub Actions repo, and silently creating that
@@ -96,10 +97,11 @@ function header(own) {
 # change overwrites it.
 #
 # The steps below run what this repository declares - its tests and its registry lint,
-# the same two \`.githooks/pre-push\` runs - and NOT \`${CLI} check\`. That check is
-# red here by design: this AGENTS.md is written by hand and deliberately never
-# self-adopted, so the check reports it as unmanaged on every run. A gate that is red
-# the day it lands is worse than no gate.
+# the same two \`.githooks/pre-push\` runs - and NOT \`${CLI} check\`. This repository
+# adopts itself, so the generated AGENTS.md region is current; the check is still red
+# on this repository's own file-length ceiling for package-lock.json and on its missing
+# packageManager pin. Those are findings to fix, not a reason to gate every push on a
+# job that starts red.
 #
 # Every step runs from this checkout: this package has zero dependencies, so there is
 # nothing to install and no binary to resolve. Nothing here can pass by skipping - a

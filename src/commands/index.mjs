@@ -388,6 +388,24 @@ export const IMPLEMENTED = {
 };
 
 /**
+ * The canonical dispatch key for a command spelling, or null.
+ *
+ * The CLI resolves aliases and group defaults before it looks a handler up; `run` used
+ * to look the caller's spelling up directly, so `run('compare')` and `run('skills')`
+ * were unknown commands while the same words worked in a terminal. One resolver answers
+ * both surfaces, and a two-word spelling that a group default would read as an argument
+ * (`decide <title>`) is refused rather than silently reinterpreted: `run` takes its
+ * arguments separately.
+ */
+export function normalizeCommandPath(command) {
+  if (typeof command !== 'string') return null;
+  const words = command.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0 || words.length > 2) return null;
+  const resolved = resolveCommandPath(words[0], words[1]);
+  return resolved !== null && resolved.consumed === words.length ? resolved.path : null;
+}
+
+/**
  * Resolve one command path to its handler, its declared flags and its closed value sets.
  *
  * The library surface needs the same answer `dispatch` gets and must not build a second
@@ -395,12 +413,15 @@ export const IMPLEMENTED = {
  * `test/spec.test.mjs` exists to catch, and it would be invisible here.
  */
 export async function resolveCommand(path) {
-  const load = IMPLEMENTED[path];
+  const canonical = normalizeCommandPath(path);
+  if (canonical === null) return null;
+  const load = IMPLEMENTED[canonical];
   if (!load) return null;
   return {
+    path: canonical,
     run: await load(),
-    declared: DECLARED.get(path) ?? new Set(),
-    values: VALUES.get(path) ?? {},
+    declared: DECLARED.get(canonical) ?? new Set(),
+    values: VALUES.get(canonical) ?? {},
   };
 }
 

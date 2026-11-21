@@ -54,7 +54,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR32 | Verify reachability, remove dead bindings, and narrow exports safely | P2 | surface | M | PR31, PR22 | Complete | a6301712c72eedc41ddfec089ab4dde4f69f54d5 |
 | PR33 | Consolidate duplicate test reporting and repository adapters | P2 | runners | M | PR14, PR31 | Complete | 9938e2465abd8cb83facd2acba62dc077ff2e2e4 |
 | PR34 | Migrate and retire legacy compatibility paths on evidence | P2 | adoption | M | PR08, PR32, PR16 | Complete | 33b92c765653ef4e8cc187a77749c5729bbc414c |
-| PR35 | Make CLI, API, MCP, and generated references agree | P1 | surface | M | PR32, PR22, PR19 | Queued | — |
+| PR35 | Make CLI, API, MCP, and generated references agree | P1 | surface | M | PR32, PR22, PR19 | Complete | 3957b70889c7d1158107aec5eb630d051c8a4b04 |
 | PR36 | Make the isolated test and release qualification gate reproducible | P1 | ci | M | PR17, PR28, PR32, PR33 | Queued | — |
 | PR37 | Qualify production readiness from installed consumer fixtures | P1 | release | M | PR18, PR25, PR26, PR28, PR34, PR35, PR36, PR38 | Queued | — |
 | PR38 | Bind an inline agent-hook override to its invocation | P0 | agenthooks | M | — | Complete | b65d36fc54897c0b576c85dc02bf6a90f857befb |

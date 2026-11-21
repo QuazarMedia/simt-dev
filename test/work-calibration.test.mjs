@@ -16,7 +16,7 @@ import {
   judgeDigest,
   lowerBound,
   preregister,
-} from '../src/bench/calibration.mjs';
+} from '../packages/bench/src/calibration.mjs';
 
 const pairs = (counts, over = {}) => [
   ...Array.from({ length: counts.correct ?? 0 }, () => ({ model: 'accept', expert: 'accept', scope: 'rates', ...over })),
@@ -114,6 +114,6 @@ test('the bound is a lower bound, and it never exceeds the observed rate', () =>
 test('the module is deterministic and reads nothing', async () => {
   const args = { scope: 'rates', capability: 'docs', prereg: prereg(), calibration: calibration({ pairs: pairs({ correct: 5 }) }) };
   assert.deepEqual(autonomy(args), autonomy(args));
-  const source = await readFile(new URL('../src/bench/calibration.mjs', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../packages/bench/src/calibration.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });

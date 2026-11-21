@@ -25,6 +25,8 @@ import { buildCanary, gradeOutcome, goldSubmission, noopSubmission, publicTask, 
 import { runWorld, oracleVerdict } from './work-world.mjs';
 import { PROBES, runProbes } from './work-probes.mjs';
 
+export { benchCalibrateCommand, benchReplayCommand } from './evaluation.mjs';
+
 /**
  * Refuse an authorised bench run that names no harness.
  *

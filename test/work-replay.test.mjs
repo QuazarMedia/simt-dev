@@ -21,7 +21,7 @@ import {
   renameInvariant,
   replayable,
   unitPreserving,
-} from '../src/bench/replay.mjs';
+} from '../packages/bench/src/replay.mjs';
 
 const observation = (over = {}) => ({ fields: { rate: 0.19, name: 'discount', ...over } });
 
@@ -131,6 +131,6 @@ test('an undeclared relation is reported, not applied', () => {
 
 test('the replay is deterministic and reads nothing', async () => {
   assert.deepEqual(metamorphic({ before: observation(), after: observation(), relations: ['rename-invariance'] }), metamorphic({ before: observation(), after: observation(), relations: ['rename-invariance'] }));
-  const source = await readFile(new URL('../src/bench/replay.mjs', import.meta.url), 'utf8');
+  const source = await readFile(new URL('../packages/bench/src/replay.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });

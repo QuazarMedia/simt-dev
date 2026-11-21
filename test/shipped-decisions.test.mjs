@@ -286,7 +286,7 @@ function estateNamesInFile(label, text) {
     .flatMap((line, i) => (estateNameIn(line) ? [`${label}:${i + 1}  ${JSON.stringify(estateNameIn(line))}`] : []));
 }
 
-const SHIPPED_ROOTS = ['bin', 'src', 'packages/bench/src', 'rules', 'docs/decisions', 'templates', 'agents', 'skills', 'ecosystems', 'harnesses'];
+const SHIPPED_ROOTS = ['bin', 'src', 'rules', 'docs/decisions', 'templates', 'agents', 'skills', 'ecosystems', 'harnesses'];
 const SHIPPED_FILES = ['CHANGELOG.md', 'README.md', 'LICENSE', 'package.json'];
 
 test('nothing this package publishes names a repository from this estate', async () => {

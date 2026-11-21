@@ -5,16 +5,16 @@
 // present (review 0003 Q79). Those questions now live under `src/testing/`, and this test
 // holds the direction: nothing outside the bench may import it.
 //
-// `src/commands/bench.mjs` is the bench's own command surface, and is the one file
-// allowed to reach it. When the bench becomes an optional package, this is the file whose
-// static imports become a loader.
+// `src/commands/bench.mjs` is the bench's own command surface, and is the one file allowed
+// to reach it: it is now a loader that resolves the optional package, so the allowance is
+// for that door rather than for a static dependency.
 import assert from 'node:assert/strict';
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, resolve, sep } from 'node:path';
 import { test } from 'node:test';
 
 const ROOT = resolve(new URL('..', import.meta.url).pathname);
-const ALLOWED = new Set(['src/commands/bench.mjs', 'bin/simt.mjs', 'src/compare/learn.mjs']);
+const ALLOWED = new Set(['src/commands/bench.mjs']);
 
 async function sourceFiles(dir) {
   const out = [];
@@ -31,7 +31,7 @@ test('no production module imports the bench', async () => {
   const offenders = [];
   for (const file of await sourceFiles(join(ROOT, 'src'))) {
     const rel = relative(ROOT, file).split(sep).join('/');
-    if (rel.startsWith('src/bench/') || ALLOWED.has(rel)) continue;
+    if (ALLOWED.has(rel)) continue;
     const text = await readFile(file, 'utf8');
     // A comment may name a bench path; only a static or dynamic import can depend on one.
     for (const match of text.matchAll(/(?:from\s*|import\s*\(\s*)['"]([^'"]*\bbench\/[^'"]*)['"]/g)) {

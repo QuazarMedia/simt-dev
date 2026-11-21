@@ -9,7 +9,7 @@
 //   * an under-covered trace replayed as if it proved something;
 //   * an offline replay reported as a live acceptance run.
 
-import { canonicalJson } from '../util/canonical.mjs';
+import { canonicalJson } from '../../../src/util/canonical.mjs';
 
 /** The relations a contract may declare. Nothing outside this list is applied. */
 export const RELATIONS = Object.freeze(['rename-invariance', 'unit-preserving', 'read-channel-equivalence', 'idempotent-repetition', 'effective-date-divergence']);

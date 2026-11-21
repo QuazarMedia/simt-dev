@@ -12,8 +12,8 @@
 // Autonomy is recommended only inside a declared scope, at a declared bar, on a lower confidence
 // bound, with the hard constraints checked last so no score can outvote them.
 
-import { digestOf } from '../knowledge/observations.mjs';
-import { canonicalJson } from '../util/canonical.mjs';
+import { digestOf } from '../../../src/knowledge/observations.mjs';
+import { canonicalJson } from '../../../src/util/canonical.mjs';
 
 /** What a scope may be allowed to do. */
 export const AUTONOMY = Object.freeze(['autonomous', 'review-required', 'blocked']);

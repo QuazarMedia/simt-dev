@@ -317,7 +317,9 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // the files that implement the rule; a record that named neither would not be actionable.
   // ADR-204 joined because its ruling is ABOUT which destination a request may reach and
   // which modules enforce it, so it names the transport, the client and the two callers it
-  // holds to one policy; the paths are the argument, not decoration.
+  // holds to one policy; the paths are the argument, not decoration. ADR-205 joined because
+  // the ruling is ABOUT which base a path is contained by and which module a repository may
+  // execute, so the containment module and the parser loader are the evidence for it.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -348,6 +350,7 @@ assert.deepEqual(leaking, [
     'ADR-137',
     'ADR-202',
     'ADR-204',
+    'ADR-205',
   ]);
 });
 

@@ -213,3 +213,4 @@ in [architecture/history.md](architecture/history.md).
 | [202](decisions/ADR-202-a-skill-source-is-identified-by-a-digest-and-a-repository-names-its-own-registry.md) | a skill source is identified by a digest, and a repository names its own registry | accepted · 2026-11-21 · filed as review 0005 PR24 |
 | [203](decisions/ADR-203-a-release-is-resolved-once-and-promoted-from-its-descriptor.md) | a release is resolved once, and promotion verifies the source it resolved | accepted · 2026-11-21 · filed as review 0005 PR27 |
 | [204](decisions/ADR-204-a-local-model-endpoint-is-one-bounded-destination.md) | a local model endpoint is one bounded destination | accepted · 2026-11-21 · filed as review 0005 PR25 |
+| [205](decisions/ADR-205-containment-is-canonical-and-repository-code-is-opt-in.md) | containment is canonical, and a repository's code is opt-in twice | accepted · 2026-11-21 · filed as review 0005 PR26 |

@@ -29,6 +29,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { measureSkill } from '../graph/load.mjs';
+import { within } from '../trust/paths.mjs';
 
 /**
  * Every place a declared source can legitimately be.
@@ -51,9 +52,20 @@ function candidateLocations(source, { workspaceRoot = null, root = null } = {}) 
 export async function locateSource(source, options = {}) {
   const candidates = candidateLocations(source, options);
   const measured = [];
+  let escaped = null;
 
   for (const candidate of candidates) {
     if (!existsSync(candidate.path)) continue;
+    // A registry is workspace data, and `source.path` comes out of it. Join is a string
+    // operation: `../` or a link can land the candidate outside the workspace or repo it
+    // was declared against, and the file found there would be installed under a name
+    // nobody reviewed (ADR-205).
+    const base = candidate.how === 'workspace' ? options.workspaceRoot : options.root;
+    const check = await within(base, candidate.path);
+    if (!check.ok) {
+      escaped = candidate.path;
+      continue;
+    }
     let volume;
     try {
       volume = await measureSkill(candidate.path);
@@ -98,8 +110,9 @@ export async function locateSource(source, options = {}) {
     bytes: null,
     sha256: null,
     identity: null,
-    reason:
-      measured.length === 0
+    reason: escaped !== null
+      ? `a declared source resolves outside the workspace or repository: ${escaped}`
+      : measured.length === 0
         ? 'no candidate location exists'
         : typeof source.sha256 === 'string'
           ? 'no candidate matches the declared sha256'

@@ -115,6 +115,9 @@ export async function indexCommand(args, flags) {
     `ms       ${result.ms}`,
   ];
   if (result.parsers === 'missing') lines.push('note     index.parsers did not load, so the built-in extractors ran');
+  if (result.parsers === 'refused') {
+    lines.push('note     index.parsers is not in trust.execute, so it was not run; add the specifier there to opt in');
+  }
   if (!ignored) lines.push(`note     ${file} is not gitignored, and the cache is not meant to be committed`);
   emit(lines.join('\n'));
   return EXIT.OK;

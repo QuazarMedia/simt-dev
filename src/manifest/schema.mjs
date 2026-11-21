@@ -136,6 +136,11 @@ export const KEYS = [
   // The focused runner a repository declares when no detector recognises its stack. It
   // is *repo* data: the tool runs it and never writes it.
   { key: 'test.runner', owner: 'repo', since: '0.11.0', check: (v) => runnerSpecProblem(v) },
+  // ADR-205: code a repository asks this tool to run is a second declaration. `index.parsers`
+  // names it and `trust.execute` permits it; the schema owns both shapes so a typo is named
+  // here rather than silently disabling a parser or, worse, enabling one.
+  { key: 'trust', owner: 'repo', since: '0.13.0', check: (v) => (isObject(v) ? null : 'trust must be an object') },
+  { key: 'trust.execute', owner: 'repo', since: '0.13.0', check: (v) => (isStringList(v) ? null : 'trust.execute must be a list of module specifiers') },
 ];
 
 const KNOWABLE = new Set(KEYS.map((entry) => entry.key));

@@ -28,6 +28,7 @@ check that decides whether a value is valid.
 | `federation` | repo | external code-graph MCP servers, each with its `command`, `args`, `tool`, `argument` |
 | `local` | repo | loopback `chat`/`embed` endpoints, off until named |
 | `test.runner` | repo | how this repository runs a selected set of test files |
+| `trust` | repo | the module specifiers this repository lets the tool execute (`trust.execute`) |
 | `work` | repo | what this repository produces, which directories own it, and how each part is validated |
 | `$comment` | tool | a free note, string or list |
 
@@ -96,6 +97,28 @@ stale. The generated region is still checked and re-rendered by `simt sync --yes
 rule text changes, because that is a real change to the projected bytes, not a pin to
 rewrite. `simt init --no-follow-source` returns the repository to a release pin, and
 `init --yes` keeps the declaration it finds.
+
+## Code the repository asks this tool to run
+
+`index.parsers` names a module that the index imports, which runs whatever that module
+does when it loads. A manifest is data a clone can carry, so the tool asks for a second
+declaration before it runs the repository's code:
+
+```json
+{
+  "index": { "parsers": "./tools/parser.mjs" },
+  "trust": { "execute": ["./tools/parser.mjs"] }
+}
+```
+
+`trust.execute` lists module specifiers, compared literally with `index.parsers`. The
+list missing, the block malformed, or an unrecognised key inside it all mean the module is
+not loaded: the built-in extractors run, `simt repo index` prints `note` with the reason,
+and the refusal is part of the index's input digest, so adding the entry rebuilds. The
+same rule is why `check` names a misshaped `trust` block rather than ignoring it. The
+other declarations this tool runs (`gates.commands`, `federation.servers`) are commands an
+operator asked it to run; a parser is loaded by an ordinary index read, which is why only
+that one needs the second key.
 
 ## The `work` declaration
 

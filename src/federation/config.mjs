@@ -35,7 +35,9 @@
 // runs. A malformed block costs the reader one line, which is exactly what they need to fix
 // it — and a silent skip is the failure that line exists to prevent.
 
-import { isAbsolute, relative, resolve } from 'node:path';
+import { resolve } from 'node:path';
+
+import { withinSync } from '../trust/paths.mjs';
 
 import { readManifest } from '../projection/manifest.mjs';
 import { DEFAULT_TIMEOUT_MS } from './client.mjs';
@@ -125,8 +127,11 @@ export function federationServers(manifest) {
 /**
  * Whether the MCP server may ask repo-declared servers on this call.
  *
- * Pure: everything it reads comes in through the arguments, so the same call always
- * gives the same answer. Two gates, both closed by default :
+ * Everything it reads comes in through the arguments. It also asks the filesystem one
+ * question - what these paths resolve to - because a lexical comparison would accept a
+ * link inside the ground that points outside it, and the root in that case is a directory
+ * with a crafted manifest whose `command` this tool would spawn (ADR-205). Two gates,
+ * both closed by default :
  *
  * 1. The `root` a model supplies must sit inside the server's own ground — its cwd or
  *    the resolved workspace root. A root anywhere else is a directory with a crafted
@@ -141,10 +146,7 @@ export function federationServers(manifest) {
 export function federationAccess({ root, cwd, workspaceRoot, serverNames, userConfig, configPath }) {
   const requested = resolve(root);
   const grounds = [cwd, workspaceRoot].filter((base) => typeof base === 'string' && base.length > 0).map((base) => resolve(base));
-  const inside = grounds.some((base) => {
-    const rel = relative(base, requested);
-    return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
-  });
+  const inside = grounds.some((base) => withinSync(base, requested).ok);
   if (!inside) {
     return {
       message: `federation_query refuses a root outside the server workspace: ${requested}`,

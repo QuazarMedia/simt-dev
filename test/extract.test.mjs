@@ -244,7 +244,12 @@ test('a parser that is named and not installed leaves the built-in rows', async 
   const root = await mkdtemp(join(tmpdir(), 'idx-'));
   await git(['init', '-q', root]);
   await writeFile(join(root, 'a.ts'), 'export const a = 1;\n');
-  await writeFile(join(root, 'simt.json'), `${JSON.stringify({ index: { parsers: 'not-installed-parsers' } })}\n`);
+  // Named and trusted, but absent: the state this lane is about. Trusting it keeps the
+  // refusal lane (ADR-205) out of what is a resolution failure, not a policy one.
+  await writeFile(
+    join(root, 'simt.json'),
+    `${JSON.stringify({ index: { parsers: 'not-installed-parsers' }, trust: { execute: ['not-installed-parsers'] } })}\n`,
+  );
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'initial']);
   const result = await reindex(root);

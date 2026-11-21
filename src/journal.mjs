@@ -48,6 +48,7 @@ import { STATE_DIR } from './name.mjs';
 import { LOCAL_DIR } from './state.mjs';
 import { HOOKS_DIR } from './hooks/shim.mjs';
 import { git, gitText } from './sys/git.mjs';
+import { assertWithin, assertWithinSync } from './trust/paths.mjs';
 
 const JOURNAL_DIR = join(LOCAL_DIR, 'journal');
 const JOURNAL_DIR_LEGACY = '.simt/journal';
@@ -94,9 +95,9 @@ async function readOrNull(path) {
  * `journaledWriteFile`, which snapshots `before` itself.
  */
 export function recordCreatedFile(root, acc, path, text) {
-  if (relative(root, path).startsWith('..')) {
-    throw new Error(`journal refuses a write outside the repository: ${path}`);
-  }
+  // Canonical, not lexical: a path that is inside by spelling and outside through a
+  // link is outside (ADR-205). This one stays synchronous because its callers are.
+  assertWithinSync(root, path, 'write');
   acc.push(fileEntry(rel(root, path), null, Buffer.from(text, 'utf8')));
 }
 
@@ -126,9 +127,7 @@ function fileEntry(path, before, after) {
  *   `undo` must restore the mode the run found, not just the bytes
  */
 export async function journaledWriteFile(root, acc, path, text, { mode } = {}) {
-  if (relative(root, path).startsWith('..')) {
-    throw new Error(`journal refuses a write outside the repository: ${path}`);
-  }
+  await assertWithin(root, path, 'write');
   const before = await readOrNull(path);
   // Internal state is written, not recorded — see the module header, which
   // names the shim directory as the one exception under STATE_DIR.
@@ -175,9 +174,7 @@ async function treeFiles(dir) {
  * otherwise destroy the bytes the entry needs.
  */
 export async function journaledCopyDir(root, acc, src, dest) {
-  if (relative(root, dest).startsWith('..')) {
-    throw new Error(`journal refuses a copy outside the repository: ${dest}`);
-  }
+  await assertWithin(root, dest, 'copy');
   const before = new Map();
   for (const abs of await treeFiles(dest)) {
     before.set(rel(root, abs), await readOrNull(abs));
@@ -204,9 +201,7 @@ export async function journaledCopyDir(root, acc, src, dest) {
  * already absent records nothing — there is no state to restore.
  */
 export async function journaledRemoveFile(root, acc, path) {
-  if (relative(root, path).startsWith('..')) {
-    throw new Error(`journal refuses a removal outside the repository: ${path}`);
-  }
+  await assertWithin(root, path, 'removal');
   const before = await readOrNull(path);
   if (before === null) return;
   const r = rel(root, path);
@@ -253,9 +248,10 @@ async function linkState(path) {
  * @param {string} target the target string to write, as the link spells it
  */
 export async function journaledSymlink(root, acc, path, target) {
-  if (relative(root, path).startsWith('..')) {
-    throw new Error(`journal refuses a link outside the repository: ${path}`);
-  }
+  // The POINTER is what must be inside; its target is a string the repo chose, and a
+  // link out of the repo is legitimate only where a caller decided it is (a workspace
+  // sibling). Writing the pointer through a link to a directory outside is not.
+  await assertWithin(root, path, 'link');
   const before = await linkState(path);
   if (before === target) return null;
   if (before === undefined) {

@@ -13,6 +13,7 @@ import { git as gitRaw } from '../sys/git.mjs';
 
 import { readManifest } from '../projection/manifest.mjs';
 import { readLocalConfig } from '../local/config.mjs';
+import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { extract, resolveImports } from './extract.mjs';
 // the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
@@ -399,6 +400,9 @@ function inputsDigest(root, { adapter, packages }) {
     scope: INDEX_SCOPE,
     parser: {
       state: adapter.state,
+      // The refusal's reason is not part of the reading, but the refusal is: a policy
+      // change from refused to loaded must rebuild, and so must a different message
+      // only when the message is what makes the state. The state and id carry that.
       id: adapter.id ?? '',
       file: adapter.file ?? '',
       digest: adapter.digest ?? '',
@@ -799,6 +803,13 @@ async function resolveAdapter(root, opts) {
   }
   const name = manifest?.index?.parsers;
   if (typeof name !== 'string' || name === '') return { module: null, state: 'off', id: '' };
+  // Loading the parser RUNS it. A manifest is data a clone can carry, so the specifier
+  // must also appear in the repository's explicit opt-in; missing or invalid policy is
+  // closed, and the built-in extractors are the fallback (ADR-205).
+  const allowed = executionAllowed(trustPolicy(manifest), name);
+  if (!allowed.allowed) {
+    return { module: null, state: 'refused', id: name, reason: allowed.reason };
+  }
   try {
     const { createRequire } = await import('node:module');
     const req = createRequire(join(root, 'package.json'));

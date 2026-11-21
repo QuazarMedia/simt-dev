@@ -1370,6 +1370,22 @@ handed its cost function, reads no clock, no network and no PATH, and the test t
 repository twice catches the failure a test can catch, which is state leaking between calls. Two
 machines is the claim this row makes and no test in this repository can execute it.
 
+**R09 — Complete** (ADR-078). Landed as `73373b4c`; the mechanism is
+`src/kernel/inferability.mjs`, wired through `src/projection/rules.mjs` and the card's verb list
+in `src/kernel/card.mjs`. A blank-line block marked
+`<!-- simt-inferable-when: <expression> -->` leaves the region when the repository proves every
+term — a `KNOWN_TAGS` fact or stack tag, a `card:<verb>` the card names, or a `gate:<name>` its
+manifest declares — and nothing is dropped without the marker. The marker is stripped whether or
+not the line leaves, an unmarked body is returned by identity, an out-of-vocabulary term is a
+defect `check` reports, and `sync --explain` names each removal and its evidence. The row's
+accept — "fixture repos remove the expected lines, each with a reason" — is
+`test/inferability.test.mjs`: its 16 tests cover a marked line leaving, a conjunction holding
+only when every term does, the closed vocabulary rejecting an unknown verb or gate, the marker
+never reaching the region, and byte-identical renders; it is 16/16 green on this tree
+(`node --test test/inferability.test.mjs`). `test/shipped.test.mjs` carries the estate-name
+allowlist for the new `simt-` word. No shipped rule is marked, because no shipped line is wholly
+inferable; ADR-078 records that as a separate content pass.
+
 ## 15. Risks and how determinism survives
 
 | Risk | Mitigation |

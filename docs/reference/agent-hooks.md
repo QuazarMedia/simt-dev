@@ -8,6 +8,7 @@ that decide are smaller than the parts that deliver. ADR-205 records why it is p
 
 | Harness | Config the tool writes | Tool event | Prompt event |
 | --- | --- | --- | --- |
+| `antigravity` | `.agents/hooks.json` | `PreToolUse` | none (no prompt event) |
 | `claude` | `.claude/settings.json` | `PreToolUse` | `UserPromptSubmit` (adds context) |
 | `codex` | `.codex/hooks.json` | `PreToolUse` | `UserPromptSubmit` (adds context) |
 | `cursor` | `.cursor/hooks.json` | `preToolUse` (fails closed) | `beforeSubmitPrompt` (cannot inject) |
@@ -22,8 +23,9 @@ that difference into either silence or a blocked call.
 
 `agent-hook pre-tool-use --harness <id>` reads the payload, derives facts (the command,
 the git facts it can parse, the paths written) and returns a decision. A denial exits
-with the adapter's `denyExit` (`2`, the convention the dialects share) and prints the
-harness's own JSON shape. A repository that has adopted the tool also records the denial
+with the adapter's `denyExit` — `2` for `claude`, `codex`, `cursor` and `opencode`, where
+the exit status is the signal, and `0` for `gemini` and `antigravity`, whose dialects carry
+the denial in the JSON they print — and prints the harness's own JSON shape. A repository that has adopted the tool also records the denial
 as a lesson candidate; that write can fail without changing the decision.
 
 - **An empty or unparseable payload is allowed** (exit `0`, with a note). Nothing to check

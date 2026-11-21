@@ -61,7 +61,7 @@ export async function locateSource(source, options = {}) {
     // was declared against, and the file found there would be installed under a name
     // nobody reviewed (ADR-205).
     const base = candidate.how === 'workspace' ? options.workspaceRoot : options.root;
-    const check = await within(base, candidate.path);
+    const check = within(base, candidate.path);
     if (!check.ok) {
       escaped = candidate.path;
       continue;

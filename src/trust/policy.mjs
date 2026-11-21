@@ -49,7 +49,9 @@ export function trustPolicy(manifest) {
     findings.push('`trust.execute` must be a list of module specifiers');
     return { execute: [], findings };
   }
-  return { execute: block.execute.map((name) => name.trim()), findings };
+  // Literal on purpose: the entry names the specifier the manifest will load, so a value
+  // with stray spaces must not become permission for the trimmed spelling.
+  return { execute: block.execute.slice(), findings };
 }
 
 /**

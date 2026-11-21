@@ -37,7 +37,7 @@
 
 import { resolve } from 'node:path';
 
-import { withinSync } from '../trust/paths.mjs';
+import { within } from '../trust/paths.mjs';
 
 import { readManifest } from '../projection/manifest.mjs';
 import { DEFAULT_TIMEOUT_MS } from './client.mjs';
@@ -146,7 +146,7 @@ export function federationServers(manifest) {
 export function federationAccess({ root, cwd, workspaceRoot, serverNames, userConfig, configPath }) {
   const requested = resolve(root);
   const grounds = [cwd, workspaceRoot].filter((base) => typeof base === 'string' && base.length > 0).map((base) => resolve(base));
-  const inside = grounds.some((base) => withinSync(base, requested).ok);
+  const inside = grounds.some((base) => within(base, requested).ok);
   if (!inside) {
     return {
       message: `federation_query refuses a root outside the server workspace: ${requested}`,

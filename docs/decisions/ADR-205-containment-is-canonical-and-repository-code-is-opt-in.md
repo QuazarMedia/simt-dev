@@ -84,8 +84,9 @@ harness is free to ignore.
   racing the tool; that attacker already has the repository.
 - `federationAccess` is no longer pure in the "reads nothing" sense — it resolves paths.
   Its signature and decision table are unchanged.
-- `withinSync` exists for callers whose signature is synchronous (`recordCreatedFile`,
-  the federation gate); a caller with no such constraint uses the async form.
+- The check is synchronous: it is two `realpath` calls on paths the command already
+  touched, so there is no I/O to overlap and no async twin to drift. A caller awaiting it
+  is awaiting a plain answer, which is why there is only one `within`.
 
 ## Alternatives
 

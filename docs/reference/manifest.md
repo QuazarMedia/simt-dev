@@ -113,8 +113,9 @@ declaration before it runs the repository's code:
 
 `trust.execute` lists module specifiers, compared literally with `index.parsers`. The
 list missing, the block malformed, or an unrecognised key inside it all mean the module is
-not loaded: the built-in extractors run, `simt repo index` prints `note` with the reason,
-and the refusal is part of the index's input digest, so adding the entry rebuilds. The
+not loaded: the built-in extractors run, `simt repo index` prints a `note` saying the
+policy refused it, `simt check` names the reason, and the refusal is part of the index's
+input digest, so adding the entry rebuilds. The
 same rule is why `check` names a misshaped `trust` block rather than ignoring it. The
 other declarations this tool runs (`gates.commands`, `federation.servers`) are commands an
 operator asked it to run; a parser is loaded by an ordinary index read, which is why only

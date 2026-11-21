@@ -24,7 +24,7 @@ import { reindex } from '../src/index/store.mjs';
 import { federationAccess } from '../src/federation/config.mjs';
 import { locateSource } from '../src/resolve/source.mjs';
 import { executionAllowed, trustPolicy } from '../src/trust/policy.mjs';
-import { within, withinSync } from '../src/trust/paths.mjs';
+import { within } from '../src/trust/paths.mjs';
 
 const exec = promisify(execFile);
 const git = (root, ...args) => exec('git', ['-C', root, ...args]);
@@ -43,7 +43,7 @@ test('trust: a link inside the repository that points outside it is outside', as
       ok: false,
       reason: 'it resolves outside the repository (a link can point out)',
     });
-    assert.equal(withinSync(root, join(root, 'escape')).ok, false);
+    assert.equal(within(root, join(root, 'escape')).ok, false);
 
     // And a path that is inside by spelling, written through the link.
     const acc = [];
@@ -63,6 +63,13 @@ test('trust: a link inside the repository that points outside it is outside', as
     await symlink(join(root, 'real'), join(root, 'inside'));
     await journaledWriteFile(root, [], join(root, 'inside', 'a.txt'), 'bytes\n');
     assert.equal(await readFile(join(root, 'real', 'a.txt'), 'utf8'), 'bytes\n');
+
+    // A child whose NAME starts with two dots is not a parent reference.
+    await mkdir(join(root, '..cache'));
+    assert.equal(within(root, join(root, '..cache', 'a.txt')).ok, true);
+
+    // A removal outside is refused the same way a write is.
+    await assert.rejects(() => journaledRemoveFile(root, [], join(outside, 'gone.txt')), /removal outside the repository/);
   } finally {
     await rm(root, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });
@@ -89,26 +96,6 @@ test('trust: a retry gives the same refusal, and unblocking the path makes it su
   } finally {
     await rm(root, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });
-  }
-});
-
-test('trust: a worktree root behaves like any other root', async () => {
-  // A linked worktree is a directory whose `.git` is a file. Nothing in containment
-  // reads it; the case is here because the boundary must not start caring.
-  const worktree = await scratch();
-  const sibling = await scratch();
-  try {
-    await writeFile(join(worktree, '.git'), `gitdir: ${join(sibling, '.git')}\n`);
-    await mkdir(join(worktree, 'src'));
-    await journaledWriteFile(worktree, [], join(worktree, 'src', 'a.mjs'), 'export const a = 1;\n');
-    assert.equal(await readFile(join(worktree, 'src', 'a.mjs'), 'utf8'), 'export const a = 1;\n');
-    assert.equal((await within(worktree, join(worktree, 'src', 'a.mjs'))).ok, true);
-    assert.equal((await within(worktree, join(sibling, 'a.mjs'))).ok, false);
-    // A removal outside is refused the same way a write is.
-    await assert.rejects(() => journaledRemoveFile(worktree, [], join(sibling, 'a.mjs')), /removal outside the repository/);
-  } finally {
-    await rm(worktree, { recursive: true, force: true });
-    await rm(sibling, { recursive: true, force: true });
   }
 });
 
@@ -163,7 +150,10 @@ test('trust: a parser runs only when the manifest opts in twice', async () => {
 test('trust: the policy is data, and every shape but the one it reads is closed', () => {
   assert.deepEqual(trustPolicy(null), { execute: [], findings: [] });
   assert.deepEqual(trustPolicy({}), { execute: [], findings: [] });
-  assert.deepEqual(trustPolicy({ trust: { execute: [' a '] } }), { execute: ['a'], findings: [] });
+  // Compared literally, so stray spaces stay part of the value rather than becoming
+  // permission for the trimmed spelling `index.parsers` does not name.
+  assert.deepEqual(trustPolicy({ trust: { execute: [' a '] } }), { execute: [' a '], findings: [] });
+  assert.equal(executionAllowed({ execute: [' a '], findings: [] }, 'a').allowed, false);
   assert.match(trustPolicy({ trust: { execute: 'a' } }).findings[0], /list of module specifiers/);
   assert.match(trustPolicy({ trust: { execute: [''] } }).findings[0], /list of module specifiers/);
   assert.match(trustPolicy({ trust: { allow: [] } }).findings[0], /not a recognised trust key/);

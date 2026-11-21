@@ -116,7 +116,10 @@ export async function indexCommand(args, flags) {
   ];
   if (result.parsers === 'missing') lines.push('note     index.parsers did not load, so the built-in extractors ran');
   if (result.parsers === 'refused') {
-    lines.push('note     index.parsers is not in trust.execute, so it was not run; add the specifier there to opt in');
+    // The state covers a missing entry and a malformed block alike; naming only the
+    // missing entry would send a repository with `trust: []` to add a line to a value
+    // that is the problem. `check` carries the finding's own words.
+    lines.push('note     index.parsers was not run: the trust policy does not permit it; `simt check` names the reason');
   }
   if (!ignored) lines.push(`note     ${file} is not gitignored, and the cache is not meant to be committed`);
   emit(lines.join('\n'));

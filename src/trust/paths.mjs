@@ -15,32 +15,17 @@
 //
 // The answer is deliberately conservative. A path that cannot be resolved (EACCES, ELOOP)
 // is NOT inside: a check that cannot prove containment must not claim it.
+//
+// One resolver and one check, synchronous on purpose. The calls are two `realpath` calls
+// on paths a command already touched, so there is no I/O to overlap and no reason for an
+// async twin: a second loop is a second answer waiting to drift, which is the defect this
+// module exists to end.
 
-import { realpath } from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
-import { isAbsolute, join, relative, resolve } from 'node:path';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 /** The filesystem's answer for a path that may not exist yet. */
-async function canonical(path) {
-  const target = resolve(String(path));
-  const missing = [];
-  let cursor = target;
-  for (;;) {
-    try {
-      const real = await realpath(cursor);
-      return missing.length === 0 ? real : join(real, ...missing.slice().reverse());
-    } catch (error) {
-      if (error.code !== 'ENOENT') return { unresolved: error.code ?? 'EIO' };
-      const parent = resolve(cursor, '..');
-      if (parent === cursor) return { unresolved: 'ENOENT' };
-      missing.push(cursor.slice(parent.length + 1));
-      cursor = parent;
-    }
-  }
-}
-
-/** The synchronous form, for callers whose contract is a synchronous boolean. */
-function canonicalSync(path) {
+function canonical(path) {
   const target = resolve(String(path));
   const missing = [];
   let cursor = target;
@@ -63,7 +48,8 @@ function contained(root, target) {
   if (target.unresolved !== undefined) return { ok: false, reason: `the path could not be resolved (${target.unresolved})` };
   const rel = relative(root, target);
   if (rel === '') return { ok: true, reason: null };
-  if (rel.startsWith('..') || isAbsolute(rel)) {
+  // `..cache` is a child whose name starts with two dots; only `..` and `../x` leave.
+  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
     return { ok: false, reason: 'it resolves outside the repository (a link can point out)' };
   }
   return { ok: true, reason: null };
@@ -74,16 +60,10 @@ function contained(root, target) {
  *
  * @param {string} root
  * @param {string} target
- * @returns {Promise<{ok: boolean, reason: string|null}>}
+ * @returns {{ok: boolean, reason: string|null}}
  */
-export async function within(root, target) {
-  const [a, b] = await Promise.all([canonical(root), canonical(target)]);
-  return contained(a, b);
-}
-
-/** The same answer without awaiting, for a caller that is already synchronous. */
-export function withinSync(root, target) {
-  return contained(canonicalSync(root), canonicalSync(target));
+export function within(root, target) {
+  return contained(canonical(root), canonical(target));
 }
 
 /**
@@ -97,15 +77,8 @@ export function withinSync(root, target) {
  * @param {string} target
  * @param {string} what e.g. 'write', 'copy', 'removal', 'link'
  */
-export async function assertWithin(root, target, what) {
-  const check = await within(root, target);
-  if (check.ok) return;
-  throw new Error(`journal refuses a ${what} outside the repository: ${target} (${check.reason})`);
-}
-
-/** The synchronous twin, for a caller whose own signature is synchronous. */
-export function assertWithinSync(root, target, what) {
-  const check = withinSync(root, target);
+export function assertWithin(root, target, what) {
+  const check = within(root, target);
   if (check.ok) return;
   throw new Error(`journal refuses a ${what} outside the repository: ${target} (${check.reason})`);
 }

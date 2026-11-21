@@ -152,7 +152,7 @@ with a table view that carries the same data.
 | ID | Slice | Phase | Lane | Tier | Depends on | State | SHA / evidence |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | ST01 | One loopback socket: the studio server, token and command | Foundation | server | M | — | Complete | f819a7096fcb45eb86a1f55f39a807fbbf410874 · test: node --test test/studio-server.test.mjs test/spec.test.mjs test/docs.test.mjs test/help.test.mjs |
-| ST02 | The API bridge serves the doors' own objects | Foundation | api | S | ST01 | Queued | — |
+| ST02 | The API bridge serves the doors' own objects | Foundation | api | S | ST01 | Complete | 93c906755cd5bbc2d41fcf6c5ba1b459e07d883f · test: node --test test/studio-api.test.mjs test/studio-server.test.mjs |
 | ST03 | The shell: design system, themes, navigation, zero external assets | Foundation | shell | M | ST01 | Queued | — |
 | ST04 | Overview: the snapshot with every defect named | Observe | views | S | ST02, ST03 | Queued | — |
 | ST05 | The Pulse: live events over SSE, replayed on connect | Observe | views | M | ST02, ST03 | Queued | — |

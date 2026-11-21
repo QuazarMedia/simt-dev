@@ -1,96 +1,15 @@
 // ST01: the studio socket is loopback-only, token-guarded and read-only (ADR-212).
 //
-// The server is a long-running child, so these tests spawn the binary and speak HTTP
-// to it rather than using the fixture's wait-for-exit runner. Host-header refusal is
-// asserted with raw node:http requests, because fetch derives Host from the URL and
-// cannot present the foreign name the defense exists for.
+// The spawn/HTTP harness lives in studio-fixture.mjs, shared with the API parity tests.
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { request } from 'node:http';
-import { createHash } from 'node:crypto';
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { BIN, git, simt, tempDir } from './fixture.mjs';
-
-const URL_LINE = /open (http:\/\/127\.0\.0\.1:(\d+)\/\?token=(\S+))/;
-
-function httpReq(port, { path = '/', method = 'GET', headers = {} } = {}) {
-  return new Promise((resolve, reject) => {
-    const req = request({ host: '127.0.0.1', port, path, method, headers }, (res) => {
-      let body = '';
-      res.on('data', (d) => { body += d; });
-      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }));
-    });
-    req.on('error', reject);
-    req.end();
-  });
-}
-
-async function startStudio(cwd, extra = []) {
-  const args = ['studio', '--no-open', ...(extra.includes('--port') ? [] : ['--port', '0']), ...extra];
-  const child = spawn(process.execPath, [BIN, ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
-  let out = '';
-  let err = '';
-  child.stdout.on('data', (d) => { out += d; });
-  child.stderr.on('data', (d) => { err += d; });
-  const started = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`studio did not start: ${out} ${err}`)), 10000);
-    child.on('exit', (code) => {
-      clearTimeout(timer);
-      reject(new Error(`studio exited ${code} before printing a URL: ${out} ${err}`));
-    });
-    const poll = setInterval(() => {
-      const m = out.match(URL_LINE);
-      if (m) {
-        clearTimeout(timer);
-        clearInterval(poll);
-        resolve({ url: m[1], port: Number(m[2]), token: m[3] });
-      }
-    }, 25);
-  });
-  const stop = async () => {
-    if (child.exitCode !== null) return child.exitCode;
-    child.kill('SIGINT');
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(-1); }, 5000);
-      child.on('exit', (code) => { clearTimeout(timer); resolve(code); });
-    });
-  };
-  return { child, stop, ...started, base: `http://127.0.0.1:${started.port}` };
-}
-
-/** Exchange the one-time token for the session cookie, the way the first page load does. */
-async function session(studio) {
-  const res = await httpReq(studio.port, { path: `/?token=${studio.token}` });
-  assert.equal(res.status, 303);
-  return res.headers['set-cookie'][0].split(';')[0];
-}
-
-async function fixtureRepo() {
-  const root = await tempDir('simt-studio-');
-  await writeFile(join(root, 'README.md'), '# studio fixture\n');
-  await git(['init', '-q'], { cwd: root });
-  await git(['add', 'README.md'], { cwd: root });
-  await git(['commit', '-qm', 'fixture'], { cwd: root });
-  return root;
-}
-
-async function treeDigest(root) {
-  const out = [];
-  const walk = async (dir, rel) => {
-    for (const entry of await readdir(dir, { withFileTypes: true })) {
-      const path = join(dir, entry.name);
-      const name = rel ? `${rel}/${entry.name}` : entry.name;
-      if (entry.isDirectory()) await walk(path, name);
-      else out.push(`${name} ${createHash('sha256').update(await readFile(path)).digest('hex')}`);
-    }
-  };
-  await walk(root, '');
-  return out.sort().join('\n');
-}
+import { BIN, simt, tempDir } from './fixture.mjs';
+import { fixtureRepo, httpReq, session, startStudio, treeDigest } from './studio-fixture.mjs';
 
 test('studio serves the shell on loopback after a one-shot token exchange', async (t) => {
   const root = await fixtureRepo();

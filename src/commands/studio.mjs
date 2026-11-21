@@ -20,7 +20,7 @@ export async function studioCommand(args, flags) {
 
   let studio;
   try {
-    studio = await startStudioServer({ port });
+    studio = await startStudioServer({ port, root });
   } catch (error) {
     if (error.code === 'EADDRINUSE') {
       return fail(`port ${port} is already serving`, EXIT.FAIL, 'pass --port <n> for another port, or --port 0 for an ephemeral one');

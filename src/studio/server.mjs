@@ -12,6 +12,8 @@ import { readFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { apiAnswer } from './api.mjs';
+
 export const STUDIO_HOST = '127.0.0.1';
 export const STUDIO_DEFAULT_PORT = 4310;
 
@@ -69,11 +71,11 @@ function refusal(res, status, error, remedy) {
 /**
  * Start the studio server on the loopback interface.
  *
- * `port` 0 asks the OS for an ephemeral port; the resolved one is returned. The caller
- * owns the lifetime: `close()` ends the listener and every open connection, so a SIGINT
- * leaves no socket behind.
+ * `port` 0 asks the OS for an ephemeral port; the resolved one is returned. `root` is
+ * the repository every /api read answers about. The caller owns the lifetime: `close()`
+ * ends the listener and every open connection, so a SIGINT leaves no socket behind.
  */
-export async function startStudioServer({ port = STUDIO_DEFAULT_PORT } = {}) {
+export async function startStudioServer({ port = STUDIO_DEFAULT_PORT, root } = {}) {
   const token = randomBytes(32).toString('base64url');
   let tokenLive = true;
   let boundPort = port;
@@ -113,6 +115,18 @@ export async function startStudioServer({ port = STUDIO_DEFAULT_PORT } = {}) {
 
     if (!sameSecret(cookieValue(req.headers.cookie), token)) {
       return refusal(res, 401, 'STUDIO_NO_SESSION', 'open the URL the running studio printed; it carries the one-time token');
+    }
+
+    if (url.pathname.startsWith('/api/')) {
+      let answer;
+      try {
+        answer = await apiAnswer(root, url);
+      } catch (error) {
+        return refusal(res, 500, 'STUDIO_API_FAILED', `the read failed: ${error.message}`);
+      }
+      const body = JSON.stringify(answer.document);
+      res.writeHead(answer.status, { ...SECURITY_HEADERS, 'content-type': 'application/json; charset=utf-8' });
+      return res.end(req.method === 'HEAD' ? undefined : body);
     }
 
     const route = SHELL_ROUTES.get(url.pathname);

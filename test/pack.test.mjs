@@ -239,6 +239,45 @@ test('the installed tool ships no eval corpus, and says so instead of scoring th
   assert.equal(result.out.includes(PACKAGE_ROOT), false, 'the installed tool reached into this checkout');
 });
 
+test('the installed package qualifies every door it ships (PR28)', async () => {
+  // A tarball can install and still be incomplete: `files` lists directories, and the
+  // doors those directories are meant to serve - the command, the library export, the
+  // MCP surface - are not the same question as "does the bin run". Each is exercised
+  // here against the installed copy, not against this checkout.
+  // A copy, not the seed: this test installs hooks, and every later test copies the
+  // seed expecting the git config it was made with.
+  const root = await adopted();
+  const installed = JSON.parse(await readFile(join(root, 'node_modules', 'simt-dev', 'package.json'), 'utf8'));
+
+  const version = await simt(root, ['--version']);
+  assert.equal(version.code, 0, version.out);
+  assert.match(version.out, new RegExp(`simt-dev ${installed.version.replaceAll('.', '\\.')}`));
+
+  const library = await run(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      "const api = await import('simt-dev'); if (typeof api.assembleBrief !== 'function') process.exit(3);",
+    ],
+    { cwd: root, env: NO_ESTATE },
+  );
+  assert.equal(library.code, 0, `the installed package has no usable library export:\n${library.out}`);
+
+  const mcp = await simt(root, ['mcp', '--list']);
+  assert.equal(mcp.code, 0, mcp.out);
+  assert.match(mcp.out, /MCP surface over stdio/);
+  assert.match(mcp.out, /read-only/);
+
+  // The shims are rendered by the installed copy too, so a `files` entry that dropped
+  // the hook generator would show up here rather than at a consumer's first commit.
+  const hooks = await simt(root, ['hooks', 'install', '--root', '.', '--yes']);
+  assert.equal(hooks.code, 0, hooks.out);
+  const shim = await readFile(join(root, '.simt', 'hooks', 'pre-commit'), 'utf8');
+  assert.match(shim, /^#!\/bin\/sh/);
+  assert.match(shim, /hooks run pre-commit/);
+});
+
 test('the decisions the tool explains itself with are in the tarball', async () => {
   const root = join(stage, 'seed');
 

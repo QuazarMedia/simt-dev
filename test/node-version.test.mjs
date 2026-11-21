@@ -29,6 +29,27 @@ test('the Node floor is compared numerically, not as a string', () => {
   assert.equal(satisfiesMinimum('22.9.0'), false);
 });
 
+test('the floor is one number across every artefact that states it (ADR-206)', async () => {
+  // Each of these is read by a different consumer - an installer, a bootstrap, a build
+  // script, a launcher, a publish job - and before this test nothing compared the set.
+  const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.equal(pkg.engines.node, `>=${MIN_NODE}`, 'package.json engines.node is not the floor');
+
+  const py = await readFile(PY, 'utf8');
+  const tuple = /MIN_NODE = \(([\d, ]+)\)/.exec(py)?.[1];
+  assert.ok(tuple, 'the launcher pins no floor');
+  assert.equal(tuple.replaceAll(' ', ''), MIN_NODE.split('.').join(','), 'the launcher floor differs from src/node-version.mjs');
+
+  const build = await readFile(new URL('../scripts/build-sea.mjs', import.meta.url), 'utf8');
+  assert.equal(/const NODE_VERSION = 'v([\d.]+)'/.exec(build)?.[1], MIN_NODE, 'the SEA base is not the floor');
+
+  const publish = await readFile(new URL('../.github/workflows/publish.yml', import.meta.url), 'utf8');
+  assert.ok(
+    publish.includes(`node-version: '${MIN_NODE}'`),
+    'the publish job runs on a node that is not the floor',
+  );
+});
+
 test('the entry point checks the floor before it loads the CLI, and the launcher agrees', async () => {
   const bin = await readFile(BIN, 'utf8');
   assert.match(bin, /satisfiesMinimum\(process\.versions\.node\)/);

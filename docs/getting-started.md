@@ -51,7 +51,8 @@ runtime: the command works with no Node installed.
 
 Each release carries one executable per platform — macOS arm64 and x64, Linux x64 —
 beside its `.sha256`. Pin the release you download, and run this from the repository's top
-level:
+level: (the snippet checks the platform first; on a host outside that list it prints the
+npm and PyPI fallback and stops).
 
 ```sh
 version=<version>; os=$(uname -s | tr A-Z a-z); arch=$(uname -m | sed "s/x86_64/x64/")
@@ -68,6 +69,10 @@ its hooks and its CI run — this is the same command the hook shim prints as it
 Both the snippet above and the generated CI workflow verify the asset against the
 published `.sha256` before it runs: a digest that does not match stops the copy, so a
 truncated or substituted download never becomes the command.
+
+No binary for your host (Linux arm64, Windows)? Use npm or PyPI there with Node 22.20.0,
+or WSL2 on Windows. The full matrix, floors and fallbacks are in
+[platform and channel support](reference/support.md).
 
 ## The first run
 

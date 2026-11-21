@@ -320,6 +320,10 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // holds to one policy; the paths are the argument, not decoration. ADR-205 joined because
   // the ruling is ABOUT which base a path is contained by and which module a repository may
   // execute, so the containment module and the parser loader are the evidence for it.
+  // ADR-206 joined because its ruling is ABOUT which module publishes the support
+  // matrix and which command checks a platform before downloading, so it names both and
+  // the pages that must agree with them; a record that named neither would not be
+  // actionable when the table drifts.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -351,6 +355,7 @@ assert.deepEqual(leaking, [
     'ADR-202',
     'ADR-204',
     'ADR-205',
+    'ADR-206',
   ]);
 });
 

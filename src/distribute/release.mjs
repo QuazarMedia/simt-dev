@@ -16,6 +16,7 @@
 // repository pinned are the bytes its gate runs, on a machine with nothing else.
 
 import { CLI, PACKAGE_NAME } from '../name.mjs';
+import { MIN_NODE } from '../node-version.mjs';
 
 // The GitHub repository the release is published from. A fact about where the
 // bytes come from, like the npm registry host: a reader outside this estate
@@ -105,6 +106,12 @@ export function releaseUrl(version, osArch) {
  * that is committed and shared: a URL rendered for the machine that wrote the
  * shim would be a 404 for the colleague who clones it.
  *
+ * The platform is also CHECKED before anything is fetched. A host outside TARGETS
+ * (Linux arm64 today, anything Windows) used to curl a name the release does not
+ * publish and report a 404, which reads as a broken release rather than as a
+ * platform whose install is a different channel. The fallback names those channels
+ * and is a command, not a location (ADR-206).
+ *
  * The transport is TLS from the release, and the version the bytes report is
  * checked against the repository's pin by the dispatcher itself (ADR-098), so
  * the remedy does not also carry a checksum: it is the shortest command that
@@ -115,12 +122,19 @@ export function releaseUrl(version, osArch) {
  */
 export function localInstall(version) {
   return [
-    `mkdir -p ${LOCAL_BIN_DIR}`,
     ...platformLines(),
-    `curl -fsSL "${releaseBase(version)}/${assetNameExpr(version)}" -o ${LOCAL_BIN}`,
-    `chmod +x ${LOCAL_BIN}`,
+    `case "$os-$arch" in ${TARGETS.join('|')}) mkdir -p ${LOCAL_BIN_DIR} && curl -fsSL "${releaseBase(version)}/${assetNameExpr(version)}" -o ${LOCAL_BIN} && chmod +x ${LOCAL_BIN} ;; *) echo "${BINARY_FALLBACK}" >&2; false ;; esac`,
   ].join(' && ');
 }
+
+/**
+ * What a host outside TARGETS is told, as one line a remedy can carry.
+ *
+ * `localInstall` echoes it and fails, so the reader sees the same sentence whether
+ * they copied the remedy or the documented snippet. No apostrophes: a remedy is
+ * embedded in single quotes by `renderLocator`, which refuses a quote in it.
+ */
+export const BINARY_FALLBACK = `no release binary for this platform (published: ${TARGETS.join(', ')}); install with npm or pip and Node >= ${MIN_NODE}`;
 
 /**
  * The two shell lines that derive this machine's release target at run time.
@@ -138,5 +152,12 @@ export function localInstall(version) {
  * @returns {string[]} POSIX sh lines assigning `$os` and `$arch`
  */
 export function platformLines() {
-  return [`os=$(uname -s | tr A-Z a-z)`, `arch=$(uname -m | sed "s/x86_64/x64/")`];
+  // `aarch64` -> `arm64` as well as `x86_64` -> `x64`: Linux ARM hosts answer
+  // `aarch64`, and a name the case below does not recognise would fall through to
+  // the platform fallback on a machine running arm64 macOS-like bytes.
+  return [
+    `os=$(uname -s | tr A-Z a-z)`,
+    `arch=$(uname -m | sed "s/x86_64/x64/")`,
+    `arch=$(printf %s "$arch" | sed "s/aarch64/arm64/")`,
+  ];
 }

@@ -34,7 +34,9 @@ can actually run are installed.
 ## Try it on one repository
 
 Requires **Node >= 22.20.0** for npm and PyPI. **macOS and Linux**; use **WSL2** on Windows.
-Homebrew and the release binary carry their own Node runtime.
+Homebrew and the release binary carry their own Node runtime; the binary is published for
+macOS arm64/x64 and Linux x64, and every other host installs with npm or pip.
+[Full support matrix and fallbacks →](docs/reference/support.md)
 
 Install once, then run from the repository you want to adopt:
 

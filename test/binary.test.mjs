@@ -33,6 +33,7 @@ import {
   LOCAL_BIN_DIR,
   assetName,
   assetNameExpr,
+  BINARY_FALLBACK,
   releaseBase,
   releaseUrl,
   localInstall,
@@ -53,11 +54,24 @@ function enginesFloor() {
 // The channel facts: one module, three rendered surfaces
 // ---------------------------------------------------------------------------
 
-test('binary: the release builds exactly the platforms a remedy can name', () => {
+test('binary: the release builds exactly the platforms a remedy can name', async () => {
   // The locator's remedy downloads from this list at runtime; a platform here
   // that the release does not build is a remedy that fetches a 404, and one
   // missing is a machine whose remedy cannot name its own asset.
   assert.deepEqual(TARGETS, ['darwin-arm64', 'darwin-x64', 'linux-x64']);
+
+  // The publish matrix is the same list, in the same order. A target added to one and
+  // not the other ships a release with no build job (or a build for an asset no
+  // remedy names), and the failure lands at tag time.
+  const workflow = await readFile(new URL('../.github/workflows/publish.yml', import.meta.url), 'utf8');
+  const built = [...workflow.matchAll(/^\s+- target: (\S+)$/gm)].map((m) => m[1]);
+  assert.deepEqual(built, TARGETS, 'the publish matrix and the channel target list disagree');
+
+  // The post-release verification downloads each one by name, and its list is a
+  // literal in shell; it must be the channel's list too.
+  const loop = /for target in ([^;]+); do/.exec(workflow);
+  assert.ok(loop, 'the release verification has no target loop to check');
+  assert.deepEqual(loop[1].trim().split(/\s+/), TARGETS, 'the verification loop names different targets');
 });
 
 test('binary: darwin builds on the supported arm64 and Intel macOS 15 runners', async () => {
@@ -133,6 +147,37 @@ test('binary: the repository-local path is beneath .simt, named for the command'
   // state, and be named for what the reader types.
   assert.equal(LOCAL_BIN_DIR, '.simt/bin');
   assert.equal(LOCAL_BIN, `${LOCAL_BIN_DIR}/simt`);
+});
+
+test('binary: the download refuses a platform the release does not build', async () => {
+  // Linux arm64 and anything Windows used to reach `curl` with an asset name that does
+  // not exist, so the reader got a 404 from the release. The command now checks the
+  // platform it derived and prints the channels that do run there.
+  const dir = await mkdtemp(path.join(tmpdir(), 'simt-local-install-'));
+  const stub = path.join(dir, 'bin');
+  await mkdir(stub, { recursive: true });
+  const curlLog = path.join(dir, 'curl.log');
+  const write = async (name, text) => {
+    await writeFile(path.join(stub, name), text);
+    await chmod(path.join(stub, name), 0o755);
+  };
+  await write('uname', '#!/bin/sh\ncase "$1" in\n  -s) echo Linux ;;\n  -m) echo aarch64 ;;\nesac\n');
+  await write('curl', `#!/bin/sh\nprintf fetched >> ${curlLog}\n`);
+  try {
+    const run = spawnSync('/bin/sh', ['-c', localInstall('1.2.3')], {
+      cwd: dir,
+      env: { PATH: `${stub}:${process.env.PATH}` },
+      encoding: 'utf8',
+    });
+    assert.notEqual(run.status, 0, 'an unsupported platform reported success');
+    assert.match(run.stderr, /no release binary for this platform/);
+    assert.match(run.stderr, /npm or pip/);
+    assert.ok(!existsSync(curlLog), 'the install fetched an asset before checking the platform');
+    assert.ok(!existsSync(path.join(dir, LOCAL_BIN)), 'the install created a binary from nowhere');
+    for (const target of TARGETS) assert.ok(BINARY_FALLBACK.includes(target), `the fallback does not name ${target}`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test('binary: the one-line install is copy-paste safe', () => {

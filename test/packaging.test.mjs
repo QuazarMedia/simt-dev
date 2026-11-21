@@ -26,6 +26,8 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 import { TARGETS } from '../src/distribute/release.mjs';
+import { CHANNELS, GIT_FLOOR, PYTHON_FLOOR, SUPPORT_DOC, SUPPORTED_OS, supportRows } from '../src/distribute/support.mjs';
+import { MIN_NODE } from '../src/node-version.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const pkg = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
@@ -55,6 +57,46 @@ test('packaging: the wheel carries the same paths the tarball carries', () => {
   );
 
   assert.ok(wheel.includes('package.json'), 'the wheel must carry package.json - the tool reads its own engines.node');
+});
+
+test('packaging: the published support table is the support matrix', async () => {
+  // Four channels used to describe their own prerequisites in four paragraphs, one of
+  // which promised a binary for a platform the release does not build. The table is
+  // data now; this is the test that makes the page a publication of it rather than a
+  // fifth copy (ADR-206).
+  const doc = await readFile(new URL(`../${SUPPORT_DOC}`, import.meta.url), 'utf8');
+  const rows = [...doc.matchAll(/^\| (npm|PyPI|Homebrew|release binary) \| (.+) \|$/gm)].map((m) => [m[1], m[2]]);
+  assert.deepEqual(rows.map(([channel]) => channel), supportRows().map((row) => row.channel));
+
+  for (const row of CHANNELS) {
+    // Backticks are markdown, not content: the row is read as the reader sees it.
+    const line = rows.find(([channel]) => channel === row.channel)?.[1]?.replaceAll('`', '');
+    assert.ok(line, `no support row for ${row.channel}`);
+    for (const cell of [row.install, row.needs, row.platforms, row.fallback]) {
+      assert.ok(line.includes(cell), `${row.channel} row does not state: ${cell}`);
+    }
+  }
+
+  // The floors and the platforms are the module's, not numbers typed into prose.
+  assert.ok(doc.includes(`Node >= ${MIN_NODE}`), 'the page does not state the node floor');
+  assert.ok(doc.includes(`Python ${PYTHON_FLOOR}`), 'the page does not state the python floor');
+  assert.ok(doc.includes(`Git ${GIT_FLOOR}`), 'the page does not state the git floor');
+  for (const target of TARGETS) assert.ok(doc.includes(target), `the page does not name ${target}`);
+  assert.match(doc, /Linux arm64 is not published today/, 'the deferred target must be stated, not omitted');
+
+  // The channel prerequisites are also the package metadata a registry shows.
+  assert.deepEqual(pkg.os, SUPPORTED_OS, 'package.json os and the support matrix disagree');
+  assert.match(pyproject, new RegExp(`^requires-python = ">=${PYTHON_FLOOR.replace('.', '\\.')}"$`, 'm'));
+  for (const os of SUPPORTED_OS) {
+    const classifier = os === 'darwin' ? 'Operating System :: MacOS' : 'Operating System :: POSIX :: Linux';
+    assert.ok(pyproject.includes(classifier), `pyproject.toml does not classify ${os}`);
+  }
+
+  // The two pages a reader lands on name the matrix rather than restating a subset.
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+  assert.ok(readme.includes(SUPPORT_DOC), 'the README does not link the support matrix');
+  const start = await readFile(new URL('../docs/getting-started.md', import.meta.url), 'utf8');
+  assert.ok(start.includes('reference/support.md'), 'the installation guide does not link the support matrix');
 });
 
 test('packaging: the version is read, not written twice', () => {

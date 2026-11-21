@@ -1,8 +1,8 @@
 // The release acceptance matrix as data (ADR-214).
 //
 // A green source suite cannot establish installation, upgrade, configuration or
-// enforcement in a receiving repository (review 0005, PR37). This module is the
-// single place that states WHAT a release must prove and FROM WHERE: installed
+// enforcement in a receiving repository. This module is the single place that
+// states WHAT a release must prove and FROM WHERE: installed
 // artefacts only, against independently staged fixtures — never this checkout.
 // `docs/reference/acceptance.md` is its publication, and `test/acceptance.test.mjs`
 // fails when the two disagree, in the same way `support.md` and `support.mjs`

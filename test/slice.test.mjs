@@ -227,8 +227,9 @@ test('a commit ahead with a tracked edit still in the worktree refuses to land',
 
   const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
   assert.equal(result.code, EXIT.USAGE, 'an uncommitted tracked edit was landed with the commit');
-  assert.ok(
-    result.stderr.includes(`${worktree} has uncommitted changes (a.mjs)`),
+  assert.match(
+    result.stderr,
+    new RegExp(`^ERROR ${EXIT.USAGE} .* has uncommitted changes \\(a\\.mjs\\)$`, 'm'),
     `the refusal did not name the edit: ${result.stderr}`,
   );
   assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), committed, 'a second commit was made');
@@ -248,8 +249,9 @@ test('a staged edit after the slice commit also refuses to land', async () => {
 
   const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
   assert.equal(result.code, EXIT.USAGE, 'a staged edit after the commit was landed as a second commit');
-  assert.ok(
-    result.stderr.includes(`${worktree} has uncommitted changes (a.mjs)`),
+  assert.match(
+    result.stderr,
+    new RegExp(`^ERROR ${EXIT.USAGE} .* has uncommitted changes \\(a\\.mjs\\)$`, 'm'),
     `the refusal did not name the staged edit: ${result.stderr}`,
   );
   assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), committed, 'a second commit was made');
@@ -260,8 +262,9 @@ test('a clean worktree with no commits ahead refuses to land', async () => {
   const mainHead = String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim();
   const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
   assert.equal(result.code, EXIT.USAGE, 'an empty slice was reported as landed');
-  assert.ok(
-    result.stderr.includes(`${worktree} has nothing staged and no commits ahead of ${root}`),
+  assert.match(
+    result.stderr,
+    new RegExp(`^ERROR ${EXIT.USAGE} .* has nothing staged and no commits ahead of .+$`, 'm'),
     `the refusal did not name both missing contributions: ${result.stderr}`,
   );
   assert.equal(String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim(), mainHead, 'main moved for an empty slice');

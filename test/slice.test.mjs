@@ -191,6 +191,13 @@ test('finish lands work already committed in the worktree without a second commi
   await git(['-C', worktree, 'commit', '-qm', message]);
   const committed = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
 
+  const preview = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true' }));
+  assert.equal(preview.code, 0, preview.stderr);
+  assert.ok(
+    preview.stdout.includes(`HEAD ${committed} is already committed; finish lands it`),
+    `the dry run did not name the commit it would land: ${preview.stdout}`,
+  );
+
   const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
   assert.equal(result.code, 0, result.stderr);
   assert.ok(result.stdout.includes(`commit   ${committed}  ${message}`), `the existing commit and its subject were not reported: ${result.stdout}`);
@@ -200,6 +207,41 @@ test('finish lands work already committed in the worktree without a second commi
   const parents = String((await git(['-C', root, 'log', '-1', '--format=%P'])).stdout).trim().split(' ');
   assert.ok(parents.includes(committed), 'the slice commit is not a parent of the merge');
   assert.equal(String((await git(['-C', root, 'status', '--porcelain', '--untracked-files=no'])).stdout).trim(), '', 'the tracker row was not committed with the merge');
+});
+
+test('a commit ahead with a tracked edit still in the worktree refuses to land', async () => {
+  const { root } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+  await git(['-C', worktree, 'commit', '-qm', 'feat(a27): commit the slice']);
+  const committed = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 3;\n');
+  const mainHead = String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim();
+
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
+  assert.notEqual(result.code, 0, 'an uncommitted tracked edit was landed with the commit');
+  assert.match(result.stdout + result.stderr, /has uncommitted changes \(a\.mjs\)/, 'the refusal did not name the edit');
+  assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), committed, 'a second commit was made');
+  assert.equal(String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim(), mainHead, 'the commit was merged anyway');
+  assert.equal(existsSync(worktree), true, 'the worktree was removed with the edit still in it');
+});
+
+test('a clean worktree with no commits ahead refuses to land', async () => {
+  const { root } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+
+  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  const mainHead = String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim();
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
+  assert.notEqual(result.code, 0, 'an empty slice was reported as landed');
+  assert.match(result.stdout + result.stderr, /has nothing staged and no commits ahead of/, 'the refusal did not name both missing contributions');
+  assert.equal(String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim(), mainHead, 'main moved for an empty slice');
+  assert.equal(existsSync(worktree), true, 'the empty worktree was removed');
 });
 
 test('a conflicting merge aborts, reports the commit and row, and leaves main usable', async () => {

@@ -14,7 +14,7 @@ promise, a shipping decision, a prototype without one, and a frozen experimental
 | `adoption` | stable | adoption | a repository adopting the tool, and the agent working in it | the path this review is about: init, projection, gates, hooks, evidence, index, brief |
 | `workspace-sharing` | stable | workspace | a maintainer carrying rules once for a workspace of repositories | the user-level half of the workspace surface (ADR-084); an alias spelling stays supported |
 | `bench` | optional | bench | maintainers measuring brief quality against their own corpus | shipped because its fixtures are the measurement; not needed to adopt or run the gates |
-| `pack` | experimental | packs | rule-pack authors, once a repository vendors one | frozen until a real repository adopts a pack (ADR-130); local profiles are the supported route |
+| `pack` | experimental | packs | rule-pack authors, once a repository vendors one | frozen until a real repository adopts a pack (ADR-130); local profiles are the supported route, and `pack migrate` moves a pinned pack onto them |
 | `distill` | optional | distill | a maintainer turning a repository into a skill or rule proposal | one command, proposal output only; it writes no rule into a projected region |
 | `plugin` | optional | distribution | a harness vendor packaging the same tables this repository ships | generates a harness package; the shipped artefacts are qualified by the packaging tests |
 | `local-models` | optional | local | an operator pointing at a loopback model endpoint | off unless configured; bounded by ADR-075 and ADR-204 |
@@ -41,7 +41,7 @@ promise, a shipping decision, a prototype without one, and a frozen experimental
 
 ## Command inventory
 
-112 dispatchable paths, one row each in `src/commands/spec.mjs`. The generated
+113 dispatchable paths, one row each in `src/commands/spec.mjs`. The generated
 command pages carry the flags; this table carries the promise.
 
 | Command | Stability | Owner | Writes | MCP tool | Aliases |
@@ -122,6 +122,7 @@ command pages carry the flags; this table carries the promise.
 | `simt mcp` | stable | adoption | none | — | — |
 | `simt pack lint` | experimental | packs | none | — | — |
 | `simt pack new` | experimental | packs | repo | — | — |
+| `simt pack migrate` | experimental | packs | repo | — | — |
 | `simt pack publish` | experimental | packs | registry | — | — |
 | `simt plan done` | stable | adoption | repo | `plan_done` | — |
 | `simt plan labels` | stable | adoption | none | — | — |

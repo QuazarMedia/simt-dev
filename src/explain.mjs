@@ -226,6 +226,12 @@ export const EXPLAIN_CODES = {
     fix: 'Restore it with: git checkout -- .simt/packs/<name> (or remove the declaration, then: simt sync --yes).',
     example: 'A fresh clone with .simt/packs untracked: PACK-MISSING names the directory.',
   },
+  'pack-migrate-refused': {
+    what: 'A pinned pack could not be moved onto local profiles: the manifest is unreadable, the pack is undeclared or missing, its bytes no longer digest to the pin, a rule has no id, two rules collide, or a profile already holds different bytes.',
+    why: 'ADR-208: the migration copies the pack byte for byte, so every refusal is a case where copying would change the effective rules, launder an edit nobody reviewed, or overwrite a rule the repository wrote. Guessing in any of them is worse than the pack staying where it is.',
+    fix: 'Read the remedy on the finding: restore the pinned bytes, declare the pack, add the missing id, rename a colliding rule, or move the existing profile aside; then run: simt pack migrate <name> --yes.',
+    example: 'A pack edited after it was pinned: PACK-MIGRATE-REFUSED names the pin and the digest, and writes nothing.',
+  },
   'pack-name-invalid': {
     what: 'The manifest names a pack that cannot be a directory name: it escapes the pack directory or uses characters a path cannot hold.',
     why: 'ADR-065: a pack name is built into a path the renderer reads, so a hand-edited manifest pointing outside the repository would make the region depend on bytes the reader does not have — the one failure this tool exists to prevent.',

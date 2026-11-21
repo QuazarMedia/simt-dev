@@ -125,6 +125,9 @@ export const SPEC = [
   // documented, and it gains no feature until one is adopted somewhere real (ADR-130).
   { path: 'pack lint', usage: '[dir] [--require-measured]', summary: 'lint a rule pack in the working directory', defaultFor: 'pack', stability: 'experimental', flags: ["diff","require-measured","source"], },
   { path: 'pack new', usage: '<name> --source <spec>', summary: 'scaffold a rule pack', stability: 'experimental', flags: ["diff","require-measured","source","yes","dry-run"], writes: 'repo' },
+  // The supported way off the frozen path: the pack's own bytes become local profiles,
+  // the declaration leaves the manifest, and the directory stays as provenance (ADR-208).
+  { path: 'pack migrate', usage: '<name> --yes', summary: 'move a pinned pack onto local profiles byte for byte, keeping the pin auditable', stability: 'experimental', flags: ["diff","require-measured","source","yes","dry-run"], writes: 'repo' },
   { path: 'pack publish', usage: '[dir] --yes', summary: 'publish a rule pack', stability: 'experimental', flags: ["diff","require-measured","source","yes"], writes: 'registry' },
   { path: 'plan done', usage: '<id> [<sha>] --yes', mcp: { name: 'plan_done', flags: [] }, summary: 'mark one tracker row complete, with its SHA and its evidence', flags: ["diff","state","test","yes","dry-run"], writes: 'repo' },
   { path: 'plan labels', summary: 'the header each tracker column matched, and the labels this repository configured', flags: [] },

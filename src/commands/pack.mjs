@@ -10,7 +10,7 @@
 // exits non-zero when the pack fails.
 
 import { existsSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 
 import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/index.mjs';
 import { CLI, MANIFEST_FILE, MANIFEST_LEGACY } from '../name.mjs';
@@ -20,6 +20,7 @@ import {
   PACK_JSON,
   describeSourceProblem,
   lintPack,
+  migratePack,
   npmPackageOf,
   publishPack,
   readBench,
@@ -34,6 +35,7 @@ export async function packCommand(sub, args, flags) {
   if (sub === 'new') return packNew(args, flags);
   if (sub === 'lint') return packLint(args, flags);
   if (sub === 'publish') return packPublish(args, flags);
+  if (sub === 'migrate') return packMigrate(args, flags);
   return fail(`unknown pack subcommand ${sub ?? '(none)'}`, EXIT.USAGE, `run: ${CLI} pack lint [dir]`);
 }
 
@@ -205,6 +207,70 @@ async function summaryLine(dir) {
   if (bench.measured !== true) return `measured unmeasured (no ΔR recorded in ${BENCH_JSON})`;
   const dR = typeof bench.dR === 'number' ? (bench.dR >= 0 ? `+${bench.dR}` : `${bench.dR}`) : '(no dR)';
   return `measured dR ${dR} over ${bench.tasks ?? '?'} tasks (${bench.run ?? 'unrecorded run'})`;
+}
+
+/**
+ * Leave the experimental pack path without retyping its rules (ADR-208).
+ *
+ * The pack directory is not removed: it is the provenance record a reader audits the
+ * move against, and deleting vendored bytes is the repository's decision, not a
+ * migration's. What changes is which of the two the projection reads first - local
+ * profiles outrank packs - and the rules themselves are copied byte for byte.
+ */
+async function packMigrate(args, flags) {
+  const name = args[0];
+  if (!name) {
+    return fail('pack migrate needs a pack name', EXIT.USAGE, `run: ${CLI} pack migrate <name>  (name one declared under packs in the manifest)`);
+  }
+  const nameProblem = packNameProblem(name);
+  if (nameProblem !== null) return fail(nameProblem, EXIT.USAGE, 'a pack name is the directory name its bytes vendor under');
+
+  const root = resolve(commandRoot(flags));
+  const { apply, dryRun } = writeMode(flags);
+  const result = await migratePack(root, name, { apply });
+  const profiles = result.files.map((file) => relative(root, file.dest));
+  const diffs = flags.diff === true ? result.files.map((file) => ({ path: file.dest, before: file.before ?? null, after: file.text })) : [];
+
+  if (isJson(flags)) {
+    emitJson({
+      ok: result.ok,
+      command: 'pack migrate',
+      root,
+      name,
+      applied: apply,
+      profiles,
+      pack: result.pack,
+      findings: result.findings,
+      ...diffField(diffs, flags),
+    });
+    return result.ok ? EXIT.OK : EXIT.FAIL;
+  }
+
+  const lines = [`pack     ${name}${result.pack?.version ? ` ${result.pack.version}` : ''}`];
+  if (result.pack !== null) lines.push(`digest   ${result.pack.digest}`);
+  for (const file of result.files) lines.push(`PLAN     ${relative(root, file.dest)}  <- ${PACK_DIR}/${name}/${file.rel}`);
+  if (result.ok) lines.push(`PLAN     ${MANIFEST_FILE} packs -= ${name}`);
+  for (const finding of result.findings) {
+    lines.push(`${finding.status.toUpperCase().padEnd(24)} ${finding.file}  ${finding.detail}`);
+    lines.push(`                        remedy: ${finding.remedy}`);
+  }
+  if (result.ok) {
+    lines.push(
+      '',
+      apply
+        ? `WROTE    ${result.files.length} profile(s); ${PACK_DIR}/${name} stays in place as the provenance record`
+        : dryRun
+          ? 'DRY-RUN  nothing written'
+          : `PLAN     nothing written; apply with: ${CLI} pack migrate ${name} --yes`,
+    );
+    if (apply) lines.push(`NEXT     re-render the region: ${CLI} sync --yes`);
+  } else {
+    lines.push('', `FAILED   ${result.findings.length} finding(s)`);
+  }
+  emit(lines.join('\n'));
+  // After the report: the report says what, the diff shows it .
+  emitDiffs(diffs, flags);
+  return result.ok ? EXIT.OK : EXIT.FAIL;
 }
 
 async function packPublish(args, flags) {

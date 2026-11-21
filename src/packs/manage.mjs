@@ -22,6 +22,8 @@ import { promisify } from 'node:util';
 
 import { PACK_DIR, packDigest, packNameProblem } from '../packs.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
+import { manifestText, readManifest } from '../projection/manifest.mjs';
+import { LOCAL_PROFILE_DIR, parseRuleMeta } from '../projection/rules.mjs';
 import { parseFrontmatter } from '../text/frontmatter.mjs';
 
 const exec = promisify(execFile);
@@ -558,6 +560,137 @@ export async function publishPack(dir, { apply = false } = {}) {
     return { pack: linted.pack, ok: false, published: false, skipped: false, planned, findings };
   }
   return { pack: linted.pack, ok: true, published: true, skipped: false, planned, findings };
+}
+
+/**
+ * Move a vendored pack onto local profiles, byte for byte (ADR-208).
+ *
+ * A pack and a local profile are the same rule bytes in two places: the pack under
+ * `.simt/packs/<name>/rules`, the profile as one `.simt/profiles/<file>.md`. Local
+ * profiles are the configuration path this tool supports first, so a repository that
+ * pinned an experimental pack needs a way off it that does not retype the rules.
+ *
+ * What makes the move safe is that it copies, never rewrites: the destination file is
+ * the pack's own bytes, so its `simt-id`, priority and applies list are unchanged and
+ * the effective rule text is the same. The pack's directory is left in place - it is
+ * the provenance record (source, version, pinned digest), and deleting it is the
+ * repository's call once it no longer needs the audit trail.
+ *
+ * It refuses rather than guesses: a missing manifest, an undeclared pack, a drifted pin
+ * (the bytes are not the bytes that were pinned), a rule with no `simt-id`, two rules
+ * that would land on one file name, or an existing profile with different bytes. Each
+ * of those would change effective rules or overwrite work, which is the one outcome a
+ * migration must not have.
+ *
+ * @param {string} root
+ * @param {string} name the declared pack name
+ * @param {{apply?: boolean}} [options]
+ * @returns {Promise<{ok: boolean, pack: object|null, files: {rel: string, dest: string, text: string}[], manifest: object|null, findings: object[]}>}
+ */
+export async function migratePack(root, name, { apply = false } = {}) {
+  const refuse = (detail, remedy) => ({
+    ok: false,
+    pack: null,
+    files: [],
+    manifest: null,
+    findings: [{ file: join(PACK_DIR, name), status: 'pack-migrate-refused', detail, remedy }],
+  });
+
+  const { manifest, exists, error } = await readManifest(root);
+  if (!exists || error !== null || manifest === null) {
+    return refuse(`no readable ${MANIFEST_FILE} in ${root}`, `adopt the repository first: ${CLI} init --yes`);
+  }
+  const declared = Array.isArray(manifest.packs) ? manifest.packs : [];
+  const entry = declared.find((candidate) => candidate?.name === name);
+  if (entry === undefined) {
+    return refuse(`the manifest declares no pack named \`${name}\``, `name a pack under \`packs\`, or migrate the one you pinned`);
+  }
+
+  const dir = join(root, PACK_DIR, name);
+  let present = false;
+  try {
+    present = (await stat(dir)).isDirectory();
+  } catch {
+    present = false;
+  }
+  if (!present) {
+    return refuse(`pack \`${name}\` has no directory at ${PACK_DIR}/${name}`, `restore the bytes first: git checkout -- ${PACK_DIR}/${name}`);
+  }
+
+  const digest = await packDigest(dir);
+  if (typeof entry.digest === 'string' && entry.digest !== digest) {
+    return refuse(
+      `pack \`${name}\` is pinned to ${entry.digest} and its bytes digest to ${digest}`,
+      `restore the pinned bytes (git checkout -- ${PACK_DIR}/${name}) or re-pin them, then migrate again`,
+    );
+  }
+
+  const rels = await packRuleFiles(dir);
+  if (rels.length === 0) {
+    return refuse(`no rule files under ${PACK_DIR}/${name}/rules`, 'a pack with no rules has nothing to migrate');
+  }
+
+  const files = [];
+  const names = new Map();
+  for (const rel of rels) {
+    const text = await readFile(join(dir, rel), 'utf8');
+    const id = parseRuleMeta(text)['simt-id'];
+    if (typeof id !== 'string' || id === '') {
+      return refuse(`${PACK_DIR}/${name}/${rel} has no \`simt-id\` frontmatter`, 'a local profile is selected by its id; add one to the rule first');
+    }
+    const base = basename(rel);
+    if (names.has(base)) {
+      return refuse(`two rules in pack \`${name}\` would both become ${LOCAL_PROFILE_DIR}/${base}`, `rename one of ${names.get(base)} and ${rel} in the pack`);
+    }
+    names.set(base, rel);
+    const dest = join(root, LOCAL_PROFILE_DIR, base);
+    const before = await readBefore(dest);
+    if (before !== null && before !== text) {
+      return refuse(
+        `${LOCAL_PROFILE_DIR}/${base} already exists with different bytes`,
+        'move that profile aside or merge the two by hand; a migration does not overwrite a repository rule',
+      );
+    }
+    files.push({ rel, dest, text, before });
+  }
+
+  const next = { ...manifest, packs: declared.filter((candidate) => candidate?.name !== name) };
+  if (next.packs.length === 0) delete next.packs;
+  const manifestPath = join(root, MANIFEST_FILE);
+  const manifestBefore = await readBefore(manifestPath);
+
+  if (apply) {
+    await applyPlan(
+      root,
+      [
+        ...files.map((file) =>
+          change({
+            path: file.dest,
+            before: file.before,
+            after: file.text,
+            owner: 'pack migrate',
+            reason: 'the pinned pack becomes a local profile, byte for byte',
+          }),
+        ),
+        change({
+          path: manifestPath,
+          before: manifestBefore,
+          after: manifestText(next),
+          owner: 'pack migrate',
+          reason: 'the pack declaration moves to the local profile directory',
+        }),
+      ],
+      { mode: { apply: true }, label: 'pack migrate' },
+    );
+  }
+
+  return {
+    ok: true,
+    pack: { name, version: entry.version ?? null, source: entry.source ?? null, digest },
+    files: files.map((file) => ({ rel: file.rel, dest: file.dest, text: file.text, dir: join(root, LOCAL_PROFILE_DIR) })),
+    manifest: next,
+    findings: [],
+  };
 }
 
 /**

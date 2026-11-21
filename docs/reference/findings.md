@@ -40,6 +40,7 @@ the command that fixes it, and what a reader sees.
 | `ORPHANED` | A managed rule file this run would not write: narrowing a surface’s output left a file the tool once generated and now ignores. |
 | `PACK-DECLARED-TWICE` | The manifest declares the same pack twice: the second declaration is read as the first, so one of them is dead text. |
 | `PACK-DIGEST-MISMATCH` | The pack’s bytes no longer match the digest the manifest pins: someone edited the vendored copy, or vendored different bytes than the pin records. |
+| `PACK-MIGRATE-REFUSED` | A pinned pack could not be moved onto local profiles: the manifest is unreadable, the pack is undeclared or missing, its bytes no longer digest to the pin, a rule has no id, two rules collide, or a profile already holds different bytes. |
 | `PACK-MISSING` | The manifest declares a pack with no directory: every rule the pack carries is missing from this repository’s projection. |
 | `PACK-NAME-INVALID` | The manifest names a pack that cannot be a directory name: it escapes the pack directory or uses characters a path cannot hold. |
 | `PACK-UNPINNED` | The pack has no digest: nothing records which bytes it was declared at. Its rules still render, and the gate stays green. |

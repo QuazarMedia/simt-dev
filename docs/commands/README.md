@@ -37,7 +37,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [local](local.md) | 1 |
 | [map](map.md) | 1 |
 | [mcp](mcp.md) | 1 |
-| [pack](pack.md) | 3 |
+| [pack](pack.md) | 4 |
 | [plan](plan.md) | 5 |
 | [plugin](plugin.md) | 1 |
 | [pr-body](pr-body.md) | 1 |
@@ -204,6 +204,7 @@ simt mcp [--list]                                                               
 
 # pack
 simt pack lint [dir] [--require-measured]                                            # lint a rule pack in the working directory
+simt pack migrate <name> --yes                                                       # move a pinned pack onto local profiles byte for byte, keeping the pin auditable
 simt pack new <name> --source <spec>                                                 # scaffold a rule pack
 simt pack publish [dir] --yes                                                        # publish a rule pack
 

@@ -299,12 +299,16 @@ ${CLI} pack lint [dir]        validate a pack: identity, source, rules, and the
                            bench summary (--require-measured rejects a pack with
                            no measured ΔR; a pack vendored under .simt/packs/ is
                            also checked against the manifest's pin)
+${CLI} pack migrate <name> [--yes]
+                           move a pinned pack onto local profiles, byte for byte;
+                           the pack directory stays as the provenance record
+                           (dry-run unless --yes; refuses a drifted pin)
 ${CLI} pack publish [dir] [--yes]
                            publish an npm-sourced pack to the registry
                            (dry-run unless --yes; skips a version already live;
                            a git-sourced pack names the tag-and-push instead)
 pack is experimental: frozen, no repository vendors one, and removal is a later
-                           plan's decision (ADR-130)
+                           plan's decision (ADR-130); \`pack migrate\` is the exit
 ${CLI} docs commands --yes    render the command reference in docs/commands from the spec
 ${CLI} mcp                    the read-only surface as MCP tools over stdio
                            (--list prints it without reading stdin; init, sync,

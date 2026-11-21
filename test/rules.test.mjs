@@ -326,6 +326,9 @@ test('the prose locations left in place are counted, so the decision cannot go u
   // actionable when the table drifts. ADR-207 joined because its ruling is ABOUT which
   // module carries the surface inventory and which page publishes it, so it names both;
   // a record that named neither could not be followed when a command loses its row.
+  // ADR-208 joined because its ruling is ABOUT which command carries the migration and
+  // which loader parses a rule id, so it names the command, the module and the projection
+  // loader; a record that named none of them could not be followed to the exit it promises.
 assert.deepEqual(leaking, [
     'ADR-016',
     'ADR-021',
@@ -359,6 +362,7 @@ assert.deepEqual(leaking, [
     'ADR-205',
     'ADR-206',
     'ADR-207',
+    'ADR-208',
   ]);
 });
 

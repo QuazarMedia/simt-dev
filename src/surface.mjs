@@ -71,7 +71,7 @@ export const DISPOSITIONS = [
     stability: 'experimental',
     owner: 'packs',
     consumer: 'rule-pack authors, once a repository vendors one',
-    note: 'frozen until a real repository adopts a pack (ADR-130); local profiles are the supported route',
+    note: 'frozen until a real repository adopts a pack (ADR-130); local profiles are the supported route, and `pack migrate` moves a pinned pack onto them',
     groups: ['pack'],
   },
   {

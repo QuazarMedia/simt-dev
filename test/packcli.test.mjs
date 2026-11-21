@@ -12,6 +12,7 @@
 // a table of sources is not a behaviour the binary renders.
 
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile, chmod, symlink } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +20,7 @@ import { test } from 'node:test';
 import { promisify } from 'node:util';
 import { execFile } from 'node:child_process';
 
-import { packDigest } from '../src/packs.mjs';
+import { PACK_DIR, packDigest } from '../src/packs.mjs';
 import { BENCH_JSON, PACK_JSON, describeSourceProblem, describeVersionProblem, npmPackageOf, packRuleFiles, readPack } from '../src/packs/manage.mjs';
 import { buildManifest, manifestText } from '../src/projection/manifest.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
@@ -80,6 +81,39 @@ async function measure(dir, name = 'house', version = '0.1.0') {
   await writeFile(join(dir, BENCH_JSON), `${JSON.stringify(bench, null, 2)}\n`);
   return bench;
 }
+
+test('pack migrate previews, applies with --yes, and refuses an undeclared pack (PR30)', async () => {
+  const root = await scratch();
+  await mkdir(join(root, PACK_DIR, 'house', 'rules'), { recursive: true });
+  await writeFile(join(root, PACK_DIR, 'house', 'rules', 'house.md'), RULE('house'));
+  await writeFile(
+    join(root, PACK_DIR, 'house', PACK_JSON),
+    `${JSON.stringify({ name: 'house', version: '0.1.0', source: 'git+https://example.invalid/house.git' }, null, 2)}\n`,
+  );
+  const digest = await packDigest(join(root, PACK_DIR, 'house'));
+  const manifest = buildManifest({ root, stack: [], sha: 'abc1234', version: '0.2.1' });
+  manifest.packs = [{ name: 'house', source: 'git+https://example.invalid/house.git', version: '0.1.0', digest }];
+  await writeFile(join(root, MANIFEST_FILE), manifestText(manifest));
+
+  const preview = await run(['pack', 'migrate', 'house', '--root', root]);
+  assert.equal(preview.code, 0, preview.out);
+  assert.match(preview.out, /PLAN     \.simt\/profiles\/house\.md/);
+  assert.match(preview.out, /PLAN     simt\.json packs -= house/);
+  assert.equal(existsSync(join(root, '.simt', 'profiles', 'house.md')), false, 'a preview wrote');
+
+  const applied = await run(['pack', 'migrate', 'house', '--root', root, '--yes']);
+  assert.equal(applied.code, 0, applied.out);
+  assert.match(applied.out, /NEXT     re-render the region: simt sync --yes/);
+  assert.equal(await readFile(join(root, '.simt', 'profiles', 'house.md'), 'utf8'), RULE('house'));
+  assert.equal(JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8')).packs, undefined);
+
+  // The pack directory is the provenance record, so it is still there to audit.
+  assert.ok(existsSync(join(root, PACK_DIR, 'house', PACK_JSON)));
+
+  const undeclared = await run(['pack', 'migrate', 'house', '--root', root]);
+  assert.notEqual(undeclared.code, 0, 'a second migration had something to do');
+  assert.match(undeclared.out, /declares no pack named/);
+});
 
 test('pack new previews by default and writes with --yes', async () => {
   const root = await scratch();

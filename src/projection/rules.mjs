@@ -558,7 +558,7 @@ export async function loadRules(root = null) {
   const out = [];
   for (const item of collected) {
     const text = await readFile(join(item.dir, item.file), 'utf8');
-    const meta = parseFrontmatter(text);
+    const meta = parseRuleMeta(text);
     const body = stripFrontmatter(text);
     out.push({
       file: item.file,
@@ -860,7 +860,14 @@ function demoteHeadings(text) {
     .join('\n');
 }
 
-function parseFrontmatter(text) {
+/**
+ * The frontmatter keys a rule or profile declares, parsed the way the loader reads them.
+ *
+ * Exported for `pack migrate` (ADR-208): a migration that read `simt-id` with its own
+ * regex would be a second parser, and the two would disagree the first time either
+ * learned a quoting rule the other did not.
+ */
+export function parseRuleMeta(text) {
   const { front } = splitBlock(text);
   if (front === null) return {};
   const out = {};

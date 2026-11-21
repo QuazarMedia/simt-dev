@@ -9,6 +9,7 @@
 // through the binary rather than imported, so what is tested is what a reader runs.
 
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -94,6 +95,47 @@ async function desired(root) {
   const { body, meta } = await desiredRegion(root, {});
   return { body, sources: meta.sources };
 }
+
+test('a pinned pack migrates onto local profiles with its rules unchanged (PR30)', async () => {
+  // The local profile path is the one this tool supports first, so a repository that
+  // pinned the experimental pack needs a route off it that does not retype the rules.
+  // The bytes are copied, not rendered: the body a reader gets must be identical, and
+  // the pack directory must stay as the record of what was pinned.
+  const { root } = await repoWithPack();
+  const before = await desired(root);
+
+  const preview = await run(['pack', 'migrate', 'house', '--root', root]);
+  assert.equal(preview.code, 0, preview.out);
+  assert.match(preview.out, /PLAN     \.simt\/profiles\/house-node\.md/);
+  assert.match(preview.out, /apply with: simt pack migrate house --yes/);
+  assert.equal(existsSync(join(root, '.simt/profiles/house-node.md')), false, 'a preview wrote a profile');
+  assert.equal(JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8')).packs.length, 1, 'a preview edited the manifest');
+
+  const applied = await run(['pack', 'migrate', 'house', '--root', root, '--yes']);
+  assert.equal(applied.code, 0, applied.out);
+  assert.match(applied.out, /WROTE    1 profile/);
+  assert.equal(await readFile(join(root, '.simt/profiles/house-node.md'), 'utf8'), HOUSE_RULE, 'the profile is not the pack byte-for-byte');
+  assert.equal(JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8')).packs, undefined, 'the pack declaration stayed');
+  assert.ok(existsSync(join(root, PACK_DIR, 'house', 'rules', 'stacks', 'house-node.md')), 'the provenance record was deleted');
+
+  const after = await desired(root);
+  assert.equal(after.body, before.body, 'the migration changed the effective rules');
+  assert.ok(after.sources.some((source) => source.startsWith('.simt/profiles/')), `sources were ${JSON.stringify(after.sources)}`);
+});
+
+test('a pack whose bytes drifted from its pin does not migrate (PR30)', async () => {
+  // The pin is the whole trust statement of a vendored pack. Migrating bytes that are
+  // not the bytes it names would make the move a laundering step for an edit nobody
+  // reviewed, so the drift is a refusal and the profile directory stays empty.
+  const { root } = await repoWithPack();
+  await writeFile(join(root, PACK_DIR, 'house', 'rules', 'stacks', 'house-node.md'), `${HOUSE_RULE}\n## Unreviewed edit\n`);
+
+  const refused = await run(['pack', 'migrate', 'house', '--root', root, '--yes']);
+  assert.notEqual(refused.code, 0, 'a drifted pack migrated');
+  assert.match(refused.out, /is pinned to .* and its bytes digest to/);
+  assert.equal(existsSync(join(root, '.simt/profiles/house-node.md')), false);
+  assert.equal(JSON.parse(await readFile(join(root, MANIFEST_FILE), 'utf8')).packs.length, 1);
+});
 
 test("a pack's rules reach the region, and the region names the pack directory", async () => {
   const { root } = await repoWithPack();

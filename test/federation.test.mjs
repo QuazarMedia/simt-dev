@@ -241,11 +241,22 @@ test('the federation tool refuses a root outside the server workspace (Q13)', as
   const root = await fixture({ servers: [answeringEntry()] });
   t.after(() => rm(root, { recursive: true, force: true }));
 
-  await assert.rejects(() => federationTool().run({ root, query: 'anything' }), (error) => {
-    assert.match(error.message, /outside the server workspace/);
-    assert.match(error.remedy, /workspace this server was started in/);
-    return true;
-  });
+  // With no declared workspace, resolution falls back to a sibling heuristic. In a
+  // full suite the shared temp parent can itself look like a workspace, which puts
+  // this fixture inside it and tests the wrong gate. Decline it explicitly: the
+  // server's cwd is then the only ground, and the fixture is outside it.
+  const previous = process.env.SIMT_DEV_WORKSPACE;
+  process.env.SIMT_DEV_WORKSPACE = 'off';
+  try {
+    await assert.rejects(() => federationTool().run({ root, query: 'anything' }), (error) => {
+      assert.match(error.message, /outside the server workspace/);
+      assert.match(error.remedy, /workspace this server was started in/);
+      return true;
+    });
+  } finally {
+    if (previous === undefined) delete process.env.SIMT_DEV_WORKSPACE;
+    else process.env.SIMT_DEV_WORKSPACE = previous;
+  }
 });
 
 test('the federation tool refuses a server the user config does not name (Q13)', async (t) => {

@@ -8,7 +8,10 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
+import { git, simt, tempDir } from './fixture.mjs';
 
 import { coverage } from '../src/index/coverage.mjs';
 import {
@@ -186,4 +189,111 @@ test('a field of the wrong type is refused, not read as an empty list (PR20)', a
   assert.equal(await verifyCommand('select', [], { input: await doc({ changed: 'src/a.mjs' }) }), 2);
   assert.equal(await verifyCommand('select', [], { input: await doc({ changed: ['src/a.mjs'] }) }), 0);
   assert.equal(await verifyCommand('plan', [], { input: await doc({ obligations: 'all' }) }), 2);
+});
+
+async function localRepository(additional = []) {
+  const root = await tempDir('simt-verify-selection-');
+  const files = {
+    'simt.json': JSON.stringify({
+      work: { version: 3, scopes: [{
+        id: 'docs', paths: ['docs', 'src'], kind: 'document', ignore: ['private'],
+        validators: ['node "scripts/check docs.mjs"'],
+        independent: ['links'],
+        checks: [
+          { id: 'link-a', gate: 'docs-links', covers: ['links'], provider: 'same' },
+          { id: 'link-b', argv: ['node', 'scripts/check docs.mjs'], covers: ['links'], provider: 'same' },
+          { id: 'source-support', argv: ['simt-fixture-missing'], covers: ['source-support'] },
+          { id: 'review', execution: 'human', covers: ['semantic-review'] },
+          { id: 'remote', execution: 'remote', covers: ['remote-check'] },
+        ],
+      }, ...additional] },
+      gates: { commands: { 'docs-links': 'node "scripts/check docs.mjs"' } },
+    }),
+    'docs/changes.md': '# Policy\n',
+    'docs/deleted.md': '# Retired\n',
+    'docs-old/unmapped.md': '# Neighbour\n',
+    'docs/private/notes.md': '# Private\n',
+    'src/rate.mjs': 'export const rate = 1;\n',
+    'test/rate.test.mjs': 'import { rate } from "../src/rate.mjs";\nexport { rate };\n',
+    'scripts/check docs.mjs': 'throw new Error("must never run during selection");\n',
+  };
+  for (const [path, bytes] of Object.entries(files)) {
+    await mkdir(dirname(join(root, path)), { recursive: true });
+    await writeFile(join(root, path), bytes);
+  }
+  await git(['init', '-q'], { cwd: root });
+  await git(['add', '.'], { cwd: root });
+  await git(['commit', '-qm', 'initial'], { cwd: root });
+  const select = async (mode = '--changed', scope = 'docs') => {
+    const result = await simt(['verify', 'select', mode, '--scope', scope, '--json'], { cwd: root });
+    assert.equal(result.code, 0, result.stdout + result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  return { root, select };
+}
+
+test('repo selection plans staged document checks and shows independent, unavailable and semantic obligations', async () => {
+  const { root, select } = await localRepository();
+  assert.equal((await select()).selection.status, 'no-op');
+  const path = 'docs/changes.md';
+  await writeFile(join(root, path), '# Policy\n\n[Link](deleted.md)\n\nsources: [deleted.md]\n');
+  await git(['add', path], { cwd: root });
+  await writeFile(join(root, path), '# Working draft\n');
+  const staged = await select('--staged');
+  const worktree = await select();
+  assert.deepEqual(staged.selection.changed, [path]);
+  assert.equal(staged.basis, 'staged');
+  assert.equal(staged.executed, false);
+  assert.equal(staged.selection.claimsGreen, false);
+  assert.ok(staged.selection.selected.document.includes('legacy-validator-1'));
+  const declared = staged.checks.find(({ id }) => id === 'link-a');
+  assert.deepEqual(declared.argv, ['node', 'scripts/check docs.mjs']);
+  assert.equal(declared.provider, 'same');
+  assert.equal(declared.cwd, await realpath(root));
+  assert.ok(staged.selection.unverified.some(({ reason }) => reason === 'insufficient-independent-validators'));
+  assert.ok(staged.selection.unverified.some(({ reason }) => reason === 'missing-executable'));
+  assert.ok(staged.selection.unverified.some(({ reason }) => reason === 'human-review-required'));
+  assert.ok(!worktree.obligations.some(({ kind }) => kind === 'links' || kind === 'source-support'));
+});
+
+test('repo selection preserves source closure and surfaces rename, deletion and an unmapped sibling', async () => {
+  const { root, select } = await localRepository();
+  await git(['mv', 'docs/changes.md', 'docs/new name.md'], { cwd: root });
+  await git(['rm', '-q', 'docs/deleted.md'], { cwd: root });
+  await writeFile(join(root, 'src/rate.mjs'), 'export const rate = 2;\n');
+  await writeFile(join(root, 'docs-old/unmapped.md'), '# Changed neighbour\n');
+  await writeFile(join(root, 'docs/private/notes.md'), '# Changed private note\n');
+  const result = await select();
+  assert.deepEqual(result.sourceTests, ['test/rate.test.mjs']);
+  assert.ok(result.selection.selected.document.includes('legacy-validator-1'));
+  assert.deepEqual(result.renames, [{ from: 'docs/changes.md', to: 'docs/new name.md' }]);
+  assert.deepEqual(result.deleted, ['docs/deleted.md']);
+  assert.deepEqual(result.pending, [{ path: 'docs-old/unmapped.md', reason: 'unmapped-path' }]);
+  assert.equal(result.omitted, 1);
+  assert.doesNotMatch(JSON.stringify(result), /private\/notes/);
+});
+
+test('ambiguous scope and remote obligations stay unverified', async () => {
+  const { root, select } = await localRepository([
+    { id: 'one', paths: ['docs/ambiguous/a?'], kind: 'document' },
+    { id: 'two', paths: ['docs/ambiguous/a*'], kind: 'document' },
+    { id: 'remote-scope', paths: ['remote'], kind: 'remote-object',
+      checks: [{ id: 'external', execution: 'remote', covers: ['remote-check'] }] },
+  ]);
+  await mkdir(join(root, 'docs/ambiguous/a1'), { recursive: true });
+  await writeFile(join(root, 'docs/ambiguous/a1/memo.md'), '# Unowned\n');
+  await mkdir(join(root, 'remote'), { recursive: true });
+  await writeFile(join(root, 'remote/task.json'), '{}\n');
+  const result = await select('--changed', 'remote-scope');
+  assert.ok(result.pending.some(({ reason }) => reason === 'ambiguous-scope'));
+  assert.ok(result.selection.unverified.some(({ reason }) => reason === 'remote-check-unavailable-locally'));
+  assert.deepEqual(result.selection.selected.remote, []);
+});
+
+test('unknown paths do not expand to a similarly named scope', () => {
+  const chosen = selectVerification({
+    changed: ['docs-old/other.md'],
+    validators: [{ id: 'docs', class: 'document', scope: ['docs'] }],
+  });
+  assert.deepEqual(chosen.selected.document, []);
 });

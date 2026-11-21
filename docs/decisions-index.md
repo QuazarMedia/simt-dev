@@ -223,3 +223,12 @@ in [architecture/history.md](architecture/history.md).
 | [212](decisions/ADR-212-the-studio-opens-one-loopback-socket-only-when-invoked.md) | the studio opens one loopback socket, only when invoked | accepted · 2026-11-21 |
 | [213](decisions/ADR-213-legacy-readers-have-one-owner-and-only-recovery-value-keeps-them.md) | a legacy format has one owner, and only recovery value keeps it | accepted · 2026-11-21 |
 | [214](decisions/ADR-214-the-acceptance-matrix-is-one-inventory-and-limits-are-declared-before-data.md) | the acceptance matrix is one inventory, and its limits are declared before data | accepted · 2026-11-21 · filed as review 0005 PR37 |
+| [215](decisions/ADR-215-scoped-change-impact-reports-observed-dependencies.md) | Scoped change impact reports observed dependencies | accepted · 2026-11-21 |
+| [216](decisions/ADR-216-scoped-verification-describes-admissible-checks-before-running-them.md) | Scoped verification describes admissible checks before running them | accepted · 2026-11-21 |
+| [217](decisions/ADR-217-scoped-local-verification-records-evidence-for-observed-inputs.md) | Scoped local verification records evidence for observed inputs | accepted · 2026-11-21 |
+| [218](decisions/ADR-218-a-scoped-brief-carries-committed-citations-and-current-local-verificatio.md) | A scoped brief carries committed citations and current local verification | accepted · 2026-11-21 |
+| [219](decisions/ADR-219-local-scheduling-preserves-the-authority-of-the-configured-tracker.md) | Local scheduling preserves the authority of the configured tracker | accepted · 2026-11-21 |
+| [220](decisions/ADR-220-local-handoffs-bind-task-evidence-to-a-git-worktree-family.md) | Local handoffs bind task evidence to a Git worktree family | accepted · 2026-11-21 |
+| [221](decisions/ADR-221-offline-knowledge-exchange-checks-local-scope-and-provenance.md) | Offline knowledge exchange checks local scope and provenance | accepted · 2026-11-21 |
+| [222](decisions/ADR-222-local-maintenance-derives-proposals-from-current-scoped-evidence.md) | Local maintenance derives proposals from current scoped evidence | accepted · 2026-11-21 |
+| [223](decisions/ADR-223-scoped-retrieval-ranks-distinct-sources.md) | Scoped retrieval ranks distinct sources | accepted · 2026-11-21 |

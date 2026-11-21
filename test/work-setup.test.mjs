@@ -98,11 +98,20 @@ test('the preview writes nothing, and the apply writes exactly the bytes it show
 test('undo restores the manifest the setup replaced, and removes the one it created', async () => {
   const created = await shape('handbook');
   const flags = ['work', 'setup', '--scope', 'handbook', '--path', 'handbook', '--kind', 'document'];
+  const ignorePath = join(created, '.gitignore');
+  const originalIgnore = 'owned-local-file\n';
+  writeFileSync(ignorePath, originalIgnore);
+  const preview = await json(created, [...flags, '--diff']);
+  assert.equal(preview.addsLocalIgnore, true);
+  assert.match(JSON.stringify(preview), /\.gitignore/);
+  assert.equal(readFileSync(ignorePath, 'utf8'), originalIgnore);
   await json(created, [...flags, '--yes']);
   assert.equal(existsSync(join(created, 'simt.json')), true);
+  assert.match(readFileSync(ignorePath, 'utf8'), /\.simt\/local\//);
   const undone = await simt(['undo', '--root', created, '--yes']);
   assert.equal(undone.code, 0, undone.stderr);
   assert.equal(existsSync(join(created, 'simt.json')), false, 'undo left the manifest the setup created');
+  assert.equal(readFileSync(ignorePath, 'utf8'), originalIgnore);
 
   const handwritten = {
     $comment: 'kept as written',
@@ -214,7 +223,7 @@ test('a setup refuses what it cannot do, and changes nothing when it refuses', a
   writeFileSync(join(root, 'simt.json'), `${JSON.stringify({ work: { version: 7 } }, null, 2)}\n`);
   const invalid = await simt(['work', 'setup', '--scope', 'x', '--path', 'docs', '--root', root, '--yes']);
   assert.notEqual(invalid.code, 0);
-  assert.match(invalid.stderr, /simt\.json's work declaration is invalid: work\.version must be one of 1, 2, not 7/);
+  assert.match(invalid.stderr, /simt\.json's work declaration is invalid: work\.version must be one of 1, 2, 3, not 7/);
 
   writeFileSync(join(root, 'simt.json'), '{ not json\n');
   const unreadable = await simt(['work', 'setup', '--scope', 'x', '--path', 'docs', '--root', root, '--yes']);

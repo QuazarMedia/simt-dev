@@ -10,7 +10,8 @@
 // never and to `simt undo` never. A holder that died leaves it behind; a lock whose pid no
 // longer exists, or that is older than the ceiling, is stale and is taken.
 
-import { mkdir, open, readFile, unlink } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { link, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { CLI } from '../name.mjs';
@@ -66,39 +67,31 @@ export async function withWriteLock(root, fn, { waitMs = 10_000 } = {}) {
   const path = lockPath(root);
   await mkdir(dirname(path), { recursive: true });
   const deadline = Date.now() + waitMs;
-  let handle = null;
-  while (handle === null) {
-    try {
-      handle = await open(path, 'wx');
-    } catch (error) {
-      if (error.code !== 'EEXIST') throw error;
-      if (await stale(path)) {
-        await unlink(path).catch(() => {});
-        continue;
+  const candidate = `${path}.${process.pid}.${randomUUID()}`;
+  await writeFile(candidate, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }), { flag: 'wx', mode: 0o600 });
+  try {
+    for (;;) {
+      try {
+        // Publish ownership and its bytes together. Creating an empty lock before
+        // writing its owner lets a concurrent writer reap the live lock as corrupt.
+        await link(candidate, path);
+        break;
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+        if (await stale(path)) {
+          await unlink(path).catch(() => {});
+          continue;
+        }
+        if (Date.now() >= deadline) throw new WriteBusy(`another ${CLI} process is writing this repository; retry when it finishes`);
+        await new Promise((settle) => setTimeout(settle, POLL_MS));
       }
-      if (Date.now() >= deadline) {
-        const holder = await readFile(path, 'utf8').then(
-          (text) => JSON.parse(text),
-          () => null,
-        );
-        throw new WriteBusy(
-          `another ${CLI} process is writing this repository${holder?.pid ? ` (pid ${holder.pid})` : ''}; retry when it finishes`,
-        );
-      }
-      await new Promise((settle) => setTimeout(settle, POLL_MS));
     }
-  }
-  try {
-    await handle.writeFile(JSON.stringify({ pid: process.pid, at: new Date().toISOString() }));
-    await handle.close();
-  } catch (error) {
-    await handle.close().catch(() => {});
-    await unlink(path).catch(() => {});
-    throw error;
-  }
-  try {
-    return await fn();
+    try {
+      return await fn();
+    } finally {
+      await unlink(path).catch(() => {});
+    }
   } finally {
-    await unlink(path).catch(() => {});
+    await unlink(candidate).catch(() => {});
   }
 }

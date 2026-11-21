@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { git, cmd } from './fixture.mjs';
+import { qualifyLocalWork } from './fixtures/local-work/local-qualification.mjs';
 import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
@@ -103,6 +104,7 @@ function simt(root, args, env = NO_ESTATE) {
 }
 
 let stage = '';
+let tarball = '';
 let run1 = 0;
 
 /**
@@ -120,13 +122,13 @@ before(async () => {
   const pack = join(stage, 'pack');
   await mkdir(pack);
 
-  const packed = await run('npm', ['pack', '--pack-destination', pack], { cwd: PACKAGE_ROOT });
+  const packed = await run('npm', ['pack', '--pack-destination', pack], { cwd: PACKAGE_ROOT, env: NO_ESTATE });
   assert.equal(packed.code, 0, `npm pack failed:\n${packed.out}`);
   // Not from stdout: npm interleaves `npm notice` lines with the filename, and
   // picking a line out of that is a guess that survives one npm version.
   const tarballs = (await readdir(pack)).filter((name) => name.endsWith('.tgz'));
   assert.deepEqual(tarballs.length, 1, `npm pack wrote ${tarballs.length} tarballs: ${tarballs}`);
-  const tarball = join(pack, tarballs[0]);
+  tarball = join(pack, tarballs[0]);
 
   const seed = join(stage, 'seed');
   await mkdir(seed);
@@ -138,7 +140,7 @@ before(async () => {
   );
   assert.equal(installed.code, 0, `installing the tarball failed:\n${installed.out}`);
 
-  const npm = (await run('npm', ['--version'])).out.trim();
+  const npm = (await run('npm', ['--version'], { env: NO_ESTATE })).out.trim();
   const pkg = await run(
     'npm',
     [
@@ -399,4 +401,198 @@ test('a consumer with no estate is told every way to point at one', async () => 
   assert.match(result.out, /--workspace/);
   assert.match(result.out, /SIMT_DEV_WORKSPACE/);
   assert.match(result.out, /config\.json/);
+});
+for (const shape of ['handbook', 'operations']) {
+  test(`local scope first session in an installed ${shape} checkout`, async (t) => {
+    const fixture = join(PACKAGE_ROOT, 'test', 'fixtures', 'local-work', shape);
+    const origin = join(stage, `origin-${shape}`);
+    const root = join(stage, `consumer-${shape}`);
+    await cp(fixture, origin, { recursive: true, filter: (path) => !path.endsWith('transcript.json') });
+    await git(['init', '-q'], { cwd: origin });
+    await git(['add', '.'], { cwd: origin });
+    await git(['commit', '-qm', 'seed sources'], { cwd: origin });
+    await git(['clone', '-q', origin, root]);
+    const installed = await run('npm', ['install', '--no-audit', '--no-fund', '--offline', tarball], {
+      cwd: root, env: NO_ESTATE,
+    });
+    assert.equal(installed.code, 0, installed.out);
+
+    const status = async () => (await git(['status', '--porcelain'], { cwd: root })).stdout;
+    const denied = await simt(root, ['knowledge', 'rank', '--scope', 'handbook', '--query', 'retention']);
+    assert.notEqual(denied.code, 0);
+    assert.match(denied.out, /declares no work/);
+    const guide = await readFile(join(root, 'node_modules', 'simt-dev', 'docs/guides/local-work.md'), 'utf8');
+    const commands = guide.match(/```sh\n([\s\S]*?)```/)[1].trim().split('\n');
+    const results = [];
+    for (const [index, command] of commands.entries()) {
+      const preview = [0, 1, 3].includes(index);
+      const before = preview ? await status() : null;
+      const { stdout } = await exec('sh', ['-ec', `${command} --json`], {
+        cwd: root, env: { ...NO_ESTATE, PATH: `${join(root, 'node_modules', '.bin')}:${NO_ESTATE.PATH}` },
+      });
+      results.push(JSON.parse(stdout));
+      if (preview) assert.equal(await status(), before, command);
+    }
+
+    const [, , , , , ranked, scoped, opened, historical] = results;
+    const cite = (result) => {
+      const hit = result.ranked.find((entry) => entry.path === 'handbook/current.md');
+      assert.ok(hit);
+      return [hit.citation.path, hit.citation.anchor];
+    };
+    assert.ok(ranked.ranked.some((entry) => entry.path === 'handbook/other.md'));
+    assert.ok(ranked.ranked.every((entry) => entry.citation.path === entry.path), 'equal headings must not exchange citations');
+    assert.ok(scoped.excluded.some((entry) => entry.reason === 'scope-mismatch'));
+    assert.ok(!scoped.ranked.some((entry) => entry.path === 'handbook/other.md'));
+    assert.equal(historical.at.result, 'applicable');
+    const transcript = {
+      search: cite(ranked),
+      scoped: cite(scoped),
+      opened: [opened.source.path, opened.source.anchor],
+      historical: historical.at.claims.map((claim) => claim.id),
+    };
+    assert.deepEqual(transcript, JSON.parse(await readFile(join(fixture, 'transcript.json'), 'utf8')));
+    assert.match(await readFile(join(root, transcript.opened[0]), 'utf8'), /# Device checkout/);
+
+    await mkdir(join(root, 'handbook/private'));
+    await writeFile(join(root, 'handbook/private/private-task.md'), '# Private device checkout retention task');
+    const briefArgs = ['brief', 'device checkout retention', '--scope', 'handbook', '--json'];
+    const brief = await simt(root, briefArgs);
+    assert.equal(brief.code, 0, brief.out);
+    const packet = JSON.parse(brief.out);
+    assert.equal(packet.workScope, 'handbook');
+    assert.match(packet.text, /knowledge sections 'handbook\//);
+    assert.match(packet.text, /verify status --changed --scope 'handbook'/);
+    assert.ok(packet.proof.citations.every(({ digest }) => digest.startsWith('committed:')));
+    assert.ok(packet.proof.citations.length > 0);
+    assert.doesNotMatch(brief.out, /private-task|Private device/);
+    const tiny = JSON.parse((await simt(root, [...briefArgs, '--budget', '48'])).out);
+    assert.ok(Buffer.byteLength(tiny.text) <= 48);
+    assert.equal(tiny.proof.complete, false);
+
+    const missing = await simt(root, ['knowledge', 'why', 'handbook/missing.md', '--scope', 'handbook']);
+    assert.notEqual(missing.code, 0);
+    assert.match(missing.out, /no claim or section/);
+    const result = await qualifyLocalWork({ root, shape,
+      invoke: (args, env) => simt(root, args, { ...NO_ESTATE, ...env }) });
+    t.diagnostic(JSON.stringify(result));
+  });
+}
+
+test('installed scoped verification captures current, stale and raced local receipts', async () => {
+  const root = join(stage, 'verify-consumer');
+  await mkdir(root);
+  await git(['init', '-q'], { cwd: root });
+  const installed = await run('npm', ['install', '--no-audit', '--no-fund', '--offline', tarball], {
+    cwd: root, env: NO_ESTATE,
+  });
+  assert.equal(installed.code, 0, installed.out);
+  await writeFile(join(root, '.gitignore'), 'node_modules/\n.simt/local/\n');
+  await mkdir(join(root, 'handbook'));
+  await mkdir(join(root, 'remote'));
+  await writeFile(join(root, 'handbook/policy.md'), '# Policy\n');
+  await writeFile(join(root, 'remote/item.json'), '{}\n');
+  await mkdir(join(root, 'src'));
+  await mkdir(join(root, 'test'));
+  await writeFile(join(root, 'src/check.mjs'), 'export const limit = 1;\n');
+  await writeFile(join(root, 'test/check.test.mjs'), 'import test from "node:test";\nimport assert from "node:assert/strict";\nimport { limit } from "../src/check.mjs";\ntest("limit", () => assert.ok(limit > 0));\n');
+
+  await writeFile(join(root, 'validate.mjs'), [
+    'import { mkdirSync, readFileSync, writeFileSync } from "node:fs";',
+    'mkdirSync(".simt/local", { recursive: true });',
+    'writeFileSync(".simt/local/validator-ran", "yes");',
+    'const path = process.argv[2];',
+    'const mode = readFileSync(path, "utf8").trim();',
+    'if (mode === "timeout") await new Promise((resolve) => setTimeout(resolve, 5000));',
+    'if (mode === "race") writeFileSync(path, "changed by validator");',
+    'if (mode === "failure") process.exitCode = 4;',
+    'if (mode !== "no-count") console.log("simt checked:", mode === "zero" ? 0 : 1);',
+    'console.log("secret=synthetic-validation-output");',
+  ].join('\n'));
+  const setup = ['work', 'setup', '--scope', 'handbook', '--path', 'handbook', '--kind', 'document'];
+  for (const args of [setup, [...setup, '--yes']]) {
+    const result = await simt(root, args);
+    assert.equal(result.code, 0, result.out);
+  }
+  const manifestPath = join(root, MANIFEST_FILE);
+  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+  manifest.work.version = 3;
+  manifest.work.scopes[0].checks = [{
+    id: 'structure', argv: ['node', 'validate.mjs', 'handbook/policy.md'], covers: ['structure'], timeoutMs: 500,
+  }, { id: 'missing', argv: ['simt-missing-fixture'], covers: ['source-support'] }];
+  manifest.work.scopes.push({ id: 'remote', paths: ['remote'], kind: 'remote-object',
+    checks: [{ id: 'external', execution: 'remote', covers: ['remote-check'] }] });
+  manifest.work.scopes.push({ id: 'code', paths: ['src'], kind: 'source' });
+  await writeFile(manifestPath, JSON.stringify(manifest));
+  const adoption = await simt(root, ['init', '--yes']);
+  assert.equal(adoption.code, 0, adoption.out);
+  const appliedSync = await simt(root, ['sync', '--yes']);
+  assert.equal(appliedSync.code, 0, appliedSync.out);
+  await git(['add', '.'], { cwd: root });
+  await git(['commit', '-qm', 'existing document workflow'], { cwd: root });
+  const check = async (sub, args = [], scope = 'handbook', code = 0) => {
+    const result = await simt(root, ['verify', sub, '--changed', '--scope', scope, '--json', ...args]);
+    assert.equal(result.code, code, result.out);
+    return JSON.parse(result.out.split('\n')[0]);
+  };
+  const writeMode = (mode) => writeFile(join(root, 'handbook/policy.md'), `${mode}\n`);
+  await writeMode('pass');
+  assert.equal((await check('select')).executed, false);
+  assert.equal((await check('run')).dryRun, true);
+  assert.equal((await check('run', ['--yes', '--dry-run'])).executed, false);
+  assert.equal((await check('status')).structuralGreen, false);
+  const sync = await simt(root, ['sync']);
+  assert.ok(sync.code === 0 || (sync.code === 1 && sync.out.includes('would write')), sync.out);
+  assert.equal((await simt(root, ['mcp', '--list'])).code, 0);
+  await assert.rejects(readFile(join(root, '.simt/local/validator-ran')), { code: 'ENOENT' });
+
+  const passed = await check('run', ['--yes']);
+  assert.equal(passed.receipts[0].count, 1);
+  assert.equal(passed.receipts[0].outcome, 'pass');
+  assert.equal(passed.receipts[0].evidence.redactions, 1);
+  let status = await check('status');
+  assert.equal(status.structuralGreen, true);
+  assert.equal(status.verified, false);
+  const scopedBrief = await simt(root, ['brief', 'policy', '--scope', 'handbook']);
+  assert.equal(scopedBrief.code, 0, scopedBrief.out);
+  assert.match(scopedBrief.out, /1\/2 obligations verified, 1 pending/);
+  assert.match(scopedBrief.out, /no committed source section matched/);
+  const semantic = status.results.find(({ kind }) => kind === 'semantic-review');
+  assert.equal(semantic.state, 'pending-review');
+  const attestations = join(root, '.simt/local/review.json');
+  await writeFile(attestations, JSON.stringify({ attestations: [
+    { id: semantic.id, inputDigest: semantic.inputDigest, reviewer: 'Fixture maintainer' },
+  ] }));
+  assert.equal((await check('status', ['--input', attestations])).verified, true);
+  await writeMode('new edit');
+  status = await check('status', ['--input', attestations]);
+  assert.equal(status.results.find(({ kind }) => kind === 'structure').state, 'stale');
+  assert.equal(status.results.find(({ kind }) => kind === 'semantic-review').state, 'pending-review');
+
+  for (const [mode, outcome] of [
+    ['failure', 'failed'], ['zero', 'zero-items'], ['no-count', 'count-unavailable'],
+    ['timeout', 'timeout'], ['race', 'raced'],
+  ]) {
+    await writeMode(mode);
+    const result = await check('run', ['--yes'], 'handbook', 1);
+    assert.equal(result.receipts[0].outcome, outcome, mode);
+    assert.equal((await check('status')).structuralGreen, false, mode);
+  }
+  await writeMode('sources: [elsewhere.md]');
+  assert.ok((await check('select')).selection.unverified.some(({ reason }) => reason === 'missing-executable'));
+  await writeFile(join(root, 'remote/item.json'), '{"revision":2}\n');
+  const remote = await check('run', ['--yes'], 'remote');
+  assert.equal(remote.executed, false);
+  assert.ok(remote.unverified.some(({ reason }) => reason === 'remote-check-unavailable-locally'));
+
+  await writeMode('# Policy');
+  await writeFile(join(root, 'remote/item.json'), '{}\n');
+  await writeFile(join(root, 'src/check.mjs'), 'export const limit = 2;\n');
+  const source = await check('run', ['--yes'], 'code');
+  assert.equal(source.receipts[0].class, 'source');
+  assert.equal(source.receipts[0].outcome, 'pass');
+  assert.ok(source.receipts[0].count > 0);
+  assert.equal((await check('status', [], 'code')).structuralGreen, true);
+  const ledger = await readFile(join(root, '.simt/local/ledger.jsonl'), 'utf8');
+  assert.doesNotMatch(ledger, /synthetic-validation-output|changed by validator/);
 });

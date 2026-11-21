@@ -43,7 +43,7 @@ promise, a shipping decision, a prototype without one, and a frozen experimental
 
 ## Command inventory
 
-114 dispatchable paths, one row each in `src/commands/spec.mjs`. The generated
+115 dispatchable paths, one row each in `src/commands/spec.mjs`. The generated
 command pages carry the flags; this table carries the promise.
 
 | Command | Stability | Owner | Writes | MCP tool | Aliases |
@@ -158,6 +158,7 @@ command pages carry the flags; this table carries the promise.
 | `simt tokens` | stable | adoption | none | — | `harness cost` |
 | `simt verify plan` | prototype | verification | none | `verify_plan` | — |
 | `simt verify select` | prototype | verification | none | `verify_select` | — |
+| `simt verify run` | prototype | verification | repo | — | — |
 | `simt verify status` | prototype | verification | none | `verify_status` | — |
 | `simt undo` | stable | adoption | repo | — | — |
 | `simt workspace upgrade` | stable | adoption | repo | — | `upgrade` |

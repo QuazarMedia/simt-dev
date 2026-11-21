@@ -30,6 +30,7 @@
     "ecosystems",
     "harnesses",
     "docs/decisions",
+    "docs/guides/local-work.md",
     "CHANGELOG.md"
   ],
   "keywords": [

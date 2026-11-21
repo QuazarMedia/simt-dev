@@ -16,14 +16,17 @@ import { commandRoot } from '../repo-root.mjs';
 import { detectFacets } from '../work/facets.mjs';
 import { capabilityCards, probeLocal } from '../work/capabilities.mjs';
 import { readWork } from '../work/effective.mjs';
+import { maintenanceContext, scopedGraduation } from '../work/maintenance.mjs';
 import { normalizePath } from '../work/artifacts.mjs';
 import { proposeScope } from '../work/setup.mjs';
 import { loadManifest, manifestPath } from '../manifest/schema.mjs';
 import { writeManifest } from '../projection/manifest.mjs';
-import { commitJournal, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
+import { commitJournal, ignoreJournal, journalIgnoreNext, journaledRemoveFile, journaledWriteFile } from '../journal.mjs';
 import { diffField, emitDiffs, readBefore } from '../diff.mjs';
 import { buildCapsule, checkResume, duplicateEffects, reopenFor } from '../coordination/handoff.mjs';
 import { schedule } from '../coordination/workgraph.mjs';
+import { scheduleLocal } from '../coordination/local-tracker.mjs';
+import { localHandoff, localResume } from '../coordination/local-handoff.mjs';
 import { proposeGraduation, promotionReady } from '../memory/graduation.mjs';
 import { readJsonDocument } from './doc-input.mjs';
 
@@ -177,8 +180,14 @@ export async function workSetupCommand(args, flags) {
 
   const before = await readBefore(await manifestPath(root));
   const after = proposal.changed ? proposal.text : before;
-  const diffs = flags.diff === true ? [{ path: MANIFEST_FILE, before, after }] : [];
   const retired = proposal.changed ? legacyManifest(root) : null;
+  const ignoreBefore = proposal.changed ? await readBefore(join(root, '.gitignore')) : null;
+  const ignoreAfter = proposal.changed ? journalIgnoreNext(ignoreBefore ?? '') : null;
+  const diffs = flags.diff === true ? [
+    { path: MANIFEST_FILE, before: retired === null ? before : null, after },
+    ...(retired === null ? [] : [{ path: MANIFEST_LEGACY, before, after: null }]),
+    ...(ignoreAfter === null ? [] : [{ path: '.gitignore', before: ignoreBefore, after: ignoreAfter }]),
+  ] : [];
   const apply = proposal.changed ? applyCommand(proposal.scope) : null;
   const payload = {
     ok: true,
@@ -186,6 +195,7 @@ export async function workSetupCommand(args, flags) {
     root,
     manifest: MANIFEST_FILE,
     retired,
+    addsLocalIgnore: ignoreAfter !== null,
     dryRun: !mode.apply,
     changed: proposal.changed,
     written: false,
@@ -215,6 +225,7 @@ export async function workSetupCommand(args, flags) {
     }
     let set = null;
     try {
+      await ignoreJournal(root, journal);
       set = await commitJournal(root, 'work setup', journal);
     } catch (error) {
       return fail(`${MANIFEST_FILE} is written, but its journal set is not: ${reason(error)}`, EXIT.FAIL, `the scope stands; ${CLI} undo cannot reverse this write, so edit the file by hand if it has to go`);
@@ -235,6 +246,7 @@ function renderSetup(payload) {
     `scope      ${payload.scope.id}  ${payload.scope.kind ?? 'any'}  ${payload.scope.paths.join(', ')}`,
   ];
   for (const command of payload.scope.validators ?? []) lines.push(`validator  ${command}`);
+  if (payload.addsLocalIgnore) lines.push('gitignore  .simt/local/');
   if (payload.retired !== null) lines.push(`retires    ${payload.retired}`);
   if (!payload.changed) lines.push('unchanged  this scope is already declared; nothing to write');
   else lines.push(payload.written ? 'wrote      one scope' : 'would add  one scope (preview: no bytes written)');
@@ -333,10 +345,68 @@ async function documentDoor(sub, args, flags, facts) {
   return EXIT.OK;
 }
 
-export const workScheduleCommand = (args, flags) => documentDoor('schedule', args, flags, workScheduleFacts);
-export const workHandoffCommand = (args, flags) => documentDoor('handoff', args, flags, workHandoffFacts);
-export const workResumeCommand = (args, flags) => documentDoor('resume', args, flags, workResumeFacts);
-export const workGraduateCommand = (args, flags) => documentDoor('graduate', args, flags, workGraduateFacts);
+export async function workScheduleCommand(args, flags) {
+  if (flags.scope === undefined && flags.public !== true) return documentDoor('schedule', args, flags, workScheduleFacts);
+  const usage = `run: ${CLI} work schedule --scope <id> [--public]`;
+  if (args.length > 0 || typeof flags.scope !== 'string' || flags.scope === '' || flags.input !== undefined) {
+    return fail('tracker scheduling needs a scope without an explicit input', EXIT.USAGE, usage);
+  }
+  try {
+    const result = await scheduleLocal(commandRoot(flags), flags.scope, { publicOnly: flags.public === true });
+    if (result.error !== undefined) return fail(result.error, EXIT.CONFIG, result.remedy);
+    const payload = { ok: true, command: 'work schedule', ...result };
+    present(payload, () => renderSchedule(payload), flags);
+    return EXIT.OK;
+  } catch (error) {
+    return fail(`could not read the configured tracker: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+  }
+}
+export const workHandoffCommand = (args, flags) => flags.scope === undefined
+  ? documentDoor('handoff', args, flags, workHandoffFacts)
+  : localHandoffDoor('handoff', args, flags);
+export const workResumeCommand = (args, flags) => flags.scope === undefined
+  ? documentDoor('resume', args, flags, workResumeFacts)
+  : localHandoffDoor('resume', args, flags);
+
+async function localHandoffDoor(sub, args, flags) {
+  const creating = sub === 'handoff';
+  const usage = `run: ${CLI} work ${sub} --scope <id> ${creating ? '--task <id>' : '--input <capsule>'}`;
+  if (args.length > 0 || typeof flags.scope !== 'string' || flags.scope === '' ||
+      (creating ? typeof flags.task !== 'string' || flags.input !== undefined
+        : flags.task !== undefined || typeof flags.input !== 'string')) return fail('invalid local handoff arguments', EXIT.USAGE, usage);
+  try {
+    const root = commandRoot(flags);
+    let result;
+    if (creating) result = await localHandoff(root, flags.scope, flags.task, flags.session);
+    else {
+      const read = await readJsonDocument(flags, 'input');
+      if (read.error !== undefined) return fail(read.error, EXIT.USAGE, usage);
+      result = await localResume(root, flags.scope, read.doc.capsule ?? read.doc, flags.session);
+    }
+    if (result.error !== undefined) return fail(result.error, EXIT.FAIL, result.remedy ?? usage);
+    const payload = { ok: true, command: `work ${sub}`, ...result };
+    present(payload, () => renderWork(payload), flags);
+    return EXIT.OK;
+  } catch (error) {
+    return fail(`could not ${sub} local work: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+  }
+}
+export async function workGraduateCommand(args, flags) {
+  if (flags.scope === undefined) return documentDoor('graduate', args, flags, workGraduateFacts);
+  const usage = `run: ${CLI} work graduate --scope <id>`;
+  if (args.length > 0 || typeof flags.scope !== 'string' || flags.scope === '' || flags.input !== undefined) {
+    return fail('scoped graduation needs a scope without an explicit input', EXIT.USAGE, usage);
+  }
+  try {
+    const context = await maintenanceContext(commandRoot(flags), flags.scope);
+    if (context.error) return fail(context.error, EXIT.CONFIG, context.remedy);
+    const result = { ok: true, command: 'work graduate', scope: flags.scope, ...scopedGraduation(context) };
+    present(result, () => renderGraduate(result), flags);
+    return EXIT.OK;
+  } catch (error) {
+    return fail(`could not derive a scoped proposal: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+  }
+}
 
 function renderWork(payload) {
   if (payload.command === 'work schedule') return renderSchedule(payload);
@@ -347,15 +417,18 @@ function renderWork(payload) {
 
 function renderSchedule(payload) {
   const lines = [`dispatch   ${payload.dispatch.length === 0 ? 'none' : payload.dispatch.join(', ')}`];
-  for (const entry of payload.serialized) lines.push(`serialized ${entry.id}  ${entry.resource === null ? 'capacity' : `after ${entry.after.join(', ')} on ${entry.resource}`}`);
-  for (const entry of payload.limited) lines.push(`limited    ${entry.id}  ${entry.reason}`);
-  for (const component of payload.cycle) lines.push(`cycle      ${component.reason}`);
-  if (payload.waiting.length > 0) lines.push(`waiting    ${payload.waiting.join(', ')}`);
+  if (payload.withheld) lines.push('tracker    private');
+  for (const entry of payload.serialized ?? []) lines.push(`serialized ${entry.id}  ${entry.resource === null ? 'capacity' : `after ${entry.after.join(', ')} on ${entry.resource}`}`);
+  for (const entry of payload.limited ?? []) lines.push(`limited    ${entry.id}  ${entry.reason}`);
+  for (const component of payload.cycle ?? []) lines.push(`cycle      ${component.reason}`);
+  for (const entry of payload.waiting ?? []) lines.push(`waiting    ${entry.id}  ${entry.missing.join(', ')}`);
+  for (const entry of payload.problems ?? []) lines.push(`problem    ${entry.code}  ${entry.id ?? entry.source ?? ''}`);
   return lines.join('\n');
 }
 
 function renderHandoff(payload) {
-  const lines = [`capsule    ${payload.capsule.digest}`, `goal       ${payload.capsule.goal}`, `target     ${payload.capsule.target.incarnation}`];
+  const lines = [`capsule    ${payload.capsule.digest}`, `goal       ${payload.capsule.goal}`,
+    payload.capsule.local === undefined ? `target     ${payload.capsule.target.incarnation}` : `scope      ${payload.capsule.local.scope}`];
   for (const entry of payload.capsule.completed) lines.push(`done       ${entry.obligation}  ${entry.receipt ?? ''}`);
   for (const entry of payload.capsule.uncertainty) lines.push(`uncertain  ${entry.id}  ${entry.reason}`);
   lines.push(`excluded   ${payload.capsule.excluded.join(', ')}`);
@@ -369,6 +442,7 @@ function renderResume(payload) {
   const lines = [`resumable  ${payload.resume.resumable ? 'yes' : 'no'}`];
   for (const failure of payload.resume.failures) lines.push(`blocked    ${failure.check}  ${failure.reason}`);
   if (payload.duplicates.safe === false) lines.push(`duplicates ${payload.duplicates.duplicates.join(', ')}`);
+  for (const id of payload.reopened.retained ?? []) lines.push(`retained   ${id}`);
   for (const entry of payload.reopened.reopened) lines.push(`reopened   ${entry.obligation}  ${entry.reason}`);
   return lines.join('\n');
 }
@@ -378,11 +452,12 @@ function renderGraduate(payload) {
   lines.push(`proposals  ${payload.proposals.length}`);
   for (const proposal of payload.proposals) {
     lines.push(`${String(proposal.state).padEnd(22)} ${proposal.id ?? proposal.goal}`);
-    for (const reason of proposal.reasons ?? []) lines.push(`           ${reason}`);
+    for (const reason of proposal.reasons ?? (proposal.reason ? [proposal.reason] : [])) lines.push(`           ${reason}`);
     if (proposal.promotion !== null && proposal.promotion !== undefined) {
       lines.push(`promotion  ${proposal.promotion.ready ? 'ready' : 'not ready'}${proposal.promotion.reason ? `: ${proposal.promotion.reason}` : ''}`);
     }
   }
+  if (payload.truncated) lines.push('truncated  bounded scoped maintenance report');
   return lines.join('\n');
 }
 

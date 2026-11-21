@@ -23,18 +23,19 @@
 // This module reads nothing and writes nothing: `init` and `doctor` decide when to ask.
 
 import { normalizePath } from './artifacts.mjs';
+import { OBLIGATION_KINDS, validatorProblem } from './validators.mjs';
 
 /** The version this build writes. */
 export const WORK_VERSION = 2;
 
 /** Every version this parser reads. Version 1 is a version-2 declaration without `ignore`. */
-export const SUPPORTED_WORK_VERSIONS = Object.freeze([1, 2]);
+export const SUPPORTED_WORK_VERSIONS = Object.freeze([1, 2, 3]);
 
 /** The version each field arrived in. A field absent here is version 1's. */
-const FIELD_VERSION = new Map([['scope.ignore', 2]]);
+const FIELD_VERSION = new Map([['scope.ignore', 2], ['scope.checks', 3], ['scope.independent', 3], ['scope.tracker', 3], ['scope.catalogue', 3], ['scope.share', 3]]);
 
 const TOP_KEYS = new Set(['version', 'scopes', 'targets', 'adapters']);
-const SCOPE_KEYS = new Set(['id', 'paths', 'kind', 'validators', 'targets', 'ignore']);
+const SCOPE_KEYS = new Set(['id', 'paths', 'kind', 'validators', 'targets', 'ignore', 'checks', 'independent', 'tracker', 'catalogue', 'share']);
 const TARGET_KEYS = new Set(['namespace', 'type', 'name']);
 const KINDS = new Set(['source', 'document', 'dataset', 'recipe', 'remote-object']);
 
@@ -153,6 +154,51 @@ export function validateWork(work) {
       if (scope.validators !== undefined && (!Array.isArray(scope.validators) || !scope.validators.every(isText))) {
         problems.push(problem(`${at}.validators`, `${at}.validators must be a list of commands`, 'a validator is a command this repository can actually run', 'invalid-validators'));
       }
+      if (version >= 3 && scope.checks !== undefined) {
+        if (!Array.isArray(scope.checks)) {
+          problems.push(problem(`${at}.checks`, 'checks must be a list', 'declare an id, execution and coverage for each check', 'invalid-checks'));
+        } else {
+          const names = new Set();
+          scope.checks.forEach((check, checkIndex) => {
+            const field = `${at}.checks[${checkIndex}]`;
+            const reason = validatorProblem(check);
+            if (reason !== null) problems.push(problem(field, `${field} ${reason}`, 'update the check declaration', 'invalid-check'));
+            else if (names.has(check.id)) problems.push(problem(field, `${field} repeats ${check.id}`, 'use a unique check id in the scope', 'duplicate-check'));
+            else names.add(check.id);
+          });
+        }
+      }
+      if (version >= 3 && scope.independent !== undefined &&
+          (!Array.isArray(scope.independent) || scope.independent.some((kind) => !OBLIGATION_KINDS.includes(kind)))) {
+        problems.push(problem(`${at}.independent`, 'independent must list obligation kinds', `choose from ${OBLIGATION_KINDS.join(', ')}`, 'invalid-independence'));
+      }
+      if (version >= 3 && scope.tracker !== undefined) {
+        const declaration = scope.tracker;
+        if (!isObject(declaration) || !isText(declaration.path) || !['plan', 'markdown-items', 'markdown-table', 'json'].includes(declaration.kind)
+            || !['private', 'shared'].includes(declaration.visibility)
+            || Object.keys(declaration).some((key) => !['kind', 'path', 'visibility'].includes(key))) {
+          problems.push(problem(`${at}.tracker`, 'tracker needs kind, path and visibility', 'declare one plan, markdown-items, markdown-table or json source as private or shared', 'invalid-tracker'));
+        } else {
+          const bad = pathProblem(`${at}.tracker.path`, declaration.path);
+          if (bad !== null) problems.push(bad);
+        }
+      }
+      if (version >= 3 && scope.catalogue !== undefined) {
+        if (!isText(scope.catalogue) || !scope.catalogue.endsWith('.json')) {
+          problems.push(problem(`${at}.catalogue`, 'catalogue must name a local JSON file', 'use a repository-relative path to a catalogue', 'invalid-catalogue'));
+        } else {
+          const bad = pathProblem(`${at}.catalogue`, scope.catalogue);
+          if (bad !== null) problems.push(bad);
+        }
+      }
+      if (version >= 3 && scope.share !== undefined) {
+        if (!Array.isArray(scope.share) || !scope.share.every(isText)) {
+          problems.push(problem(`${at}.share`, 'share must list the paths permitted for scoped export', 'list only paths approved for sharing, or omit it to withhold the scope', 'invalid-share-policy'));
+        } else scope.share.forEach((path, index) => {
+          const bad = pathProblem(`${at}.share[${index}]`, path);
+          if (bad !== null) problems.push(bad);
+        });
+      }
       if (scope.targets !== undefined && (!Array.isArray(scope.targets) || !scope.targets.every(isText))) {
         problems.push(problem(`${at}.targets`, `${at}.targets must be a list of target ids`, 'reference a declared target by its id', 'invalid-targets'));
       }
@@ -214,6 +260,11 @@ export function normalizedWork(work) {
       kind: typeof scope.kind === 'string' ? scope.kind : null,
       validators: (Array.isArray(scope.validators) ? scope.validators : []).filter(isText),
       ignore: (Array.isArray(scope.ignore) ? scope.ignore : []).filter(isText),
+      ...(Array.isArray(scope.checks) ? { checks: scope.checks } : {}),
+      ...(Array.isArray(scope.independent) ? { independent: scope.independent } : {}),
+      ...(typeof scope.catalogue === 'string' ? { catalogue: normalizePath(scope.catalogue) } : {}),
+      ...(Array.isArray(scope.share) ? { share: scope.share.map((path) => normalizePath(path) || '.') } : {}),
+      ...(isObject(scope.tracker) ? { tracker: { ...scope.tracker, path: normalizePath(scope.tracker.path) || '.' } } : {}),
     })),
     targets: Array.isArray(work?.targets) ? work.targets.filter(isObject) : [],
     adapters: Array.isArray(work?.adapters) ? work.adapters.filter(isText) : [],

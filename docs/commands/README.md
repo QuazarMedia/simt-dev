@@ -31,7 +31,7 @@ Every path this binary dispatches is listed here, and nowhere else in the docs.
 | [init](init.md) | 1 |
 | [knowledge](knowledge.md) | 9 |
 | [adapter](adapter.md) | 1 |
-| [verify](verify.md) | 6 |
+| [verify](verify.md) | 7 |
 | [lessons](lessons.md) | 4 |
 | [lease](lease.md) | 1 |
 | [local](local.md) | 1 |
@@ -91,18 +91,18 @@ simt bench run --yes                                                            
 simt bench world --input <file>                                                            # run the seeded world model and ask the oracle what the effects should be
 
 # brief
-simt brief "<task>"                                                                        # the packet for a task: rules, skills and the files it names, within a budget
+simt brief "<task>" [--scope <id>]                                                         # the packet for a task: rules, skills and the files it names, within a budget
 
 # check
 simt check                                                                                 # report stale or missing generated regions and every check finding
 
 # work
-simt work graduate --input <file>                                                          # whether repeated traces can be proposed as a procedure, and what still blocks it
-simt work handoff --input <file>                                                           # build a resume capsule from ids and provenance, never from a transcript
+simt work graduate (--input <file> | --scope <id>)                                         # whether repeated traces can be proposed as a procedure, and what still blocks it
+simt work handoff (--input <file> | --scope <id> --task <id>)                              # build a resume capsule from ids and provenance, never from a transcript
 simt work inspect                                                                          # what this repository's work consists of, and which validations are actually available
 simt work packet --input <file>                                                            # the proof-bearing task packet, inside its byte budget or explicitly incomplete
-simt work resume --input <file>                                                            # revalidate permission, target, dependencies, authorization and lease before reuse
-simt work schedule --input <file>                                                          # which ready tasks can run together under capacity and resource constraints
+simt work resume --input <file> [--scope <id>]                                             # revalidate permission, target, dependencies, authorization and lease before reuse
+simt work schedule (--input <file> | --scope <id> [--public])                              # which ready tasks can run together under capacity and resource constraints
 simt work setup --scope <id> --path <dir> [--kind <kind>] [--validator "<command>"]        # declare one work scope in the manifest, previewed before it writes
 
 # workspace
@@ -165,11 +165,11 @@ simt init [path]                                                                
 
 # knowledge
 simt knowledge build --scope <id> [--yes]                                                  # build the scoped corpus of declared sections under the ignored local area
-simt knowledge debt --input <file>                                                         # rank stale and unsupported knowledge by consequence per effort
+simt knowledge debt (--input <file> | --scope <id>)                                        # rank stale and unsupported knowledge by consequence per effort
 simt knowledge derivations --input <file>                                                  # which outputs a source, template or skill change puts in question
-simt knowledge export --input <file>                                                       # a bounded, permission-filtered packet another repository can read offline
-simt knowledge impact --input <file> --refs <ids>                                          # what a change reaches over typed edges, and where the graph is unknown
-simt knowledge import --input <file>                                                       # validate an exported packet as data, and never execute it
+simt knowledge export (--input <file> | --scope <id>)                                      # a bounded, permission-filtered packet another repository can read offline
+simt knowledge impact (--input <file> --refs <ids> | --changed --scope <id>)               # what a change reaches over typed edges, and where the graph is unknown
+simt knowledge import --input <file> [--scope <id>]                                        # validate an exported packet as data, and never execute it
 simt knowledge rank (--input <file> | --scope <id>) --query "<question>"                   # rank evidence units by authority and quality, and report what was excluded
 simt knowledge sections <file.md>                                                          # the retrieval units a long document yields, with anchors and byte ranges
 simt knowledge why <claim-id> (--claims <file> | --scope <id>) [--limit <n>] [--page <n>]  # what a claim derives from, what depends on it, what applied at a date, and where it conflicts
@@ -182,8 +182,9 @@ simt verify contracts --input <file>                                            
 simt verify documents --input <file>                                                       # check a generated document against its template, sections and source scope
 simt verify plan --input <file>                                                            # the next observation worth making, and the point at which there is not one
 simt verify procedures --input <file>                                                      # check procedures for missing imports, calls and impossible prerequisites
-simt verify select --input <file>                                                          # the narrowest checks that prove a change, and whether a Git hook may run them
-simt verify status --input <file>                                                          # closure over recorded obligations, and what is unresolved
+simt verify run --changed --scope <id> [--yes]                                             # run selected local validators and record scoped evidence
+simt verify select (--input <file> | (--changed | --staged) --scope <id>)                  # the narrowest checks that prove a change, and whether a Git hook may run them
+simt verify status (--input <file> | --changed --scope <id> [--input <attestations>])      # closure over recorded obligations, and what is unresolved
 
 # lessons
 simt lessons capture                                                                       # scan the ledger and history for new lesson candidates

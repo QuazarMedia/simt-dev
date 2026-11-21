@@ -7,7 +7,11 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+
+import { git, simt, tempDir } from './fixture.mjs';
+import { writeLeases } from '../src/lease.mjs';
 
 import {
   EXCLUDED,
@@ -128,4 +132,73 @@ test('a capsule with no recorded approval does not fail the authorization check'
   const result = checkResumeForApproval(capsule, { target: { incarnation: 'inc-1' } });
   assert.deepEqual(result.failures, []);
   assert.equal(result.resumable, true);
+});
+
+test('local resume revalidates two obligations in the current and a second worktree', async () => {
+  const root = await tempDir('simt-local-capsule-');
+  const secondary = await tempDir('simt-second-worktree-');
+  const outside = await tempDir('simt-capsule-data-');
+  const name = 'SAVE-1';
+  const scope = 'handbook';
+  const pathA = 'handbook/first-policy.md';
+  const pathB = 'handbook/second-policy.md';
+  const files = {
+    '.gitignore': '.simt/local/\n',
+    'simt.json': JSON.stringify({ work: { version: 3, scopes: [{
+      id: scope, paths: ['handbook'], kind: 'document', validators: ['node validate.cjs'],
+      tracker: { kind: 'json', path: 'handbook/board.json', visibility: 'shared' },
+    }] } }),
+    'validate.cjs': 'console.log("simt checked: 2");\n',
+    'handbook/board.json': JSON.stringify({ version: 1, tasks: [
+      { id: name, state: 'in progress', artifacts: [pathA, pathB], description: 'PRIVATE TASK CHECKLIST' },
+    ] }),
+    [pathA]: '# First policy\n',
+    [pathB]: '# Second policy\n',
+  };
+  await mkdir(join(root, 'handbook'));
+  for (const [path, text] of Object.entries(files)) await writeFile(join(root, path), text);
+  await git(['init', '-q'], { cwd: root });
+  await git(['add', '.'], { cwd: root });
+  await git(['commit', '-qm', 'initial local board'], { cwd: root });
+  await git(['worktree', 'add', '--detach', secondary], { cwd: root });
+  const put = (cwd, path, text) => writeFile(join(cwd, path), text);
+  await put(root, pathA, 'PRIVATE SOURCE EXCERPT A');
+  await put(root, pathB, 'PRIVATE SOURCE EXCERPT B');
+  const call = async (cwd, args, code = 0) => {
+    const result = await simt([...args, '--json'], { cwd });
+    assert.equal(result.code, code, result.stdout + result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  await call(root, ['verify', 'run', '--changed', '--scope', scope, '--yes']);
+  const lease = { path: pathA, session: 'session-a', expiresAt: Date.now() + 60_000 };
+  await writeLeases(root, [lease]);
+  const handoff = await call(root, ['work', 'handoff', '--scope', scope, '--task', name, '--session', 'session-a']);
+  assert.equal(handoff.resume.resumable, true);
+  assert.equal(handoff.capsule.target, null);
+  assert.equal(handoff.capsule.completed.length, 2);
+  assert.doesNotMatch(JSON.stringify(handoff.capsule), /first-policy|second-policy|PRIVATE|session-a|transcript body/);
+  const stored = join(outside, 'capsule.json');
+  await writeFile(stored, JSON.stringify(handoff));
+  const resume = (cwd, scopeId = scope, code = 0) =>
+    call(cwd, ['work', 'resume', '--scope', scopeId, '--input', stored, '--session', 'session-a'], code);
+  assert.equal((await resume(root)).reopened.retained.length, 2);
+  await put(root, pathA, 'changed since handoff');
+  const same = await resume(root);
+  assert.equal(same.reopened.retained.length, 1);
+  assert.equal(same.reopened.reopened.length, 1);
+  await put(secondary, pathA, 'changed since handoff');
+  await put(secondary, pathB, 'PRIVATE SOURCE EXCERPT B');
+  const other = await resume(secondary);
+  assert.equal(other.resume.resumable, true);
+  assert.deepEqual(other.reopened, same.reopened);
+
+  await writeLeases(root, [{ ...lease, expiresAt: Date.now() - 1000 }]);
+  const expired = await resume(secondary);
+  assert.equal(expired.resume.resumable, false);
+  assert.ok(expired.resume.failures.some(({ check, reason }) => check === 'lease' && /expired/.test(reason)));
+
+  const manifest = JSON.parse(files['simt.json']);
+  manifest.work.scopes = [];
+  await put(secondary, 'simt.json', JSON.stringify(manifest));
+  assert.match((await resume(secondary, scope, 1)).error, /no tracker is configured/);
 });

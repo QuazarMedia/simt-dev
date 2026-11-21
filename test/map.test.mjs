@@ -265,24 +265,20 @@ test('simt map renders the ranking, and recall is unmeasured without a vault', a
   await rm(bare, { recursive: true, force: true });
 });
 
-test('map says when the ranking is context rather than a match (Q52)', async () => {
+test('map says when the ranking is the graph hub rather than a match (Q52)', async () => {
   const root = await mkdtemp(join(tmpdir(), 'idx-nomatch-'));
   await git(['init', '-q', root]);
   await mkdir(join(root, 'src'), { recursive: true });
-  // The token is in the body, so BM25 ranks it and its fused score is positive; no path
-  // or symbol mentions it, so it is still not a match. A fused-score `matched` count
-  // reported this as one.
-  await writeFile(join(root, 'src', 'keep.mjs'), 'export function greet() {}\n// zebracorn\n');
+  await writeFile(join(root, 'src', 'keep.mjs'), 'export function greet() {}\n');
   await git(['-C', root, 'add', '-A']);
   await git(['-C', root, 'commit', '-qm', 'initial']);
 
   const hub = await capture(() => mapCommand([], { root, task: 'zebracorn', budget: '0' }));
   assert.equal(hub.code, 0);
-  assert.match(hub.stdout, /basis\s+graph-only/);
+  assert.match(hub.stdout, /basis\s+unmatched/);
   assert.match(hub.stdout, /no path or symbol mentions this task/);
   const hubJson = await capture(() => mapCommand([], { root, task: 'zebracorn', budget: '0', json: true }));
-  assert.equal(JSON.parse(hubJson.stdout).matched, 0, 'a body hit is not a path or symbol match');
-  assert.ok(JSON.parse(hubJson.stdout).files.length > 0, 'the BM25 rows are still offered as context');
+  assert.equal(JSON.parse(hubJson.stdout).matched, 0, 'the hub is not a path or symbol match');
 
   const matched = await capture(() => mapCommand([], { root, task: 'change greet in src/keep.mjs', budget: '0' }));
   assert.match(matched.stdout, /basis\s+matched/);
@@ -290,6 +286,25 @@ test('map says when the ranking is context rather than a match (Q52)', async () 
   // No task is not a miss either: nothing was asked, so nothing is claimed.
   const bare = await capture(() => mapCommand([], { root, budget: '0' }));
   assert.match(bare.stdout, /basis\s+no-task/);
+  await rm(root, { recursive: true, force: true });
+});
+
+test('a body-only hit is context, not a match', async () => {
+  // BM25 ranks the token because it is in the body; no path or symbol mentions it. The
+  // fused score is positive and a fused-score count used to report this as matched.
+  const root = await mkdtemp(join(tmpdir(), 'idx-body-'));
+  await git(['init', '-q', root]);
+  await mkdir(join(root, 'src'), { recursive: true });
+  await writeFile(join(root, 'src', 'keep.mjs'), 'export function greet() {}\n// zebracorn\n');
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'initial']);
+
+  const body = await capture(() => mapCommand([], { root, task: 'zebracorn', budget: '0', json: true }));
+  assert.equal(body.code, 0);
+  const payload = JSON.parse(body.stdout);
+  assert.equal(payload.matched, 0, 'a body hit is not a path or symbol match');
+  assert.ok(payload.files.length > 0, 'the BM25 rows are still offered as context');
+  assert.equal(payload.basis, 'unmatched', 'the basis names the absence of a resolver match, not a cause');
   await rm(root, { recursive: true, force: true });
 });
 

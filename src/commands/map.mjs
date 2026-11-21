@@ -46,12 +46,13 @@ export async function mapCommand(args, flags) {
       : null;
   const ranked = rankFiles({ ...loaded, bm25, queryVector, task });
   const rendered = renderMap(ranked, loaded.symbols, { level, budget });
-  // What the ranking is an answer to. `graph-only` says no path or symbol mentioned the
-  // task; reading a fused score as a hit is how `map --task zebracorn` looked useful,
-  // because that score is positive for a BM25 body hit and for every graph neighbour.
-  // The match is the resolver score the brief filters on.
-  const matched = ranked.filter((row) => (row.resolver ?? 0) > 0).length;
-  const basis = task.trim().length === 0 ? 'no-task' : matched > 0 ? 'matched' : 'graph-only';
+  // What the ranking is an answer to. `unmatched` says no path or symbol mentioned the
+  // task; the list can then be the graph hub or BM25 body hits, both context rather than
+  // a match. Reading a fused score as a hit is how `map --task zebracorn` looked useful,
+  // because that score is positive for a body hit and for every graph neighbour. The
+  // match is the resolver score the brief filters on.
+  const matched = ranked.filter((row) => row.resolver > 0).length;
+  const basis = task.trim().length === 0 ? 'no-task' : matched > 0 ? 'matched' : 'unmatched';
   const payload = {
     ok: true,
     command: 'map',
@@ -73,7 +74,7 @@ export async function mapCommand(args, flags) {
   }
   const lines = [
     `level    ${level}`,
-    `basis    ${basis}${basis === 'graph-only' ? ' (no path or symbol mentions this task; the ranking is context, not a match)' : ''}`,
+    `basis    ${basis}${basis === 'unmatched' ? ' (no path or symbol mentions this task; the ranking is context, not a match)' : ''}`,
     `shown    ${rendered.shown}`,
     `total    ${rendered.total}`,
     `budget   ${budget}`,

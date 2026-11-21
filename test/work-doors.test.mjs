@@ -13,6 +13,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
+import { git, simt, tempDir } from './fixture.mjs';
+import { digestOf } from '../src/knowledge/observations.mjs';
+import { exportBundle } from '../src/knowledge/bundle.mjs';
+
 const BIN = fileURLToPath(new URL('../bin/simt.mjs', import.meta.url));
 
 function repo() {
@@ -424,4 +428,89 @@ test('a bitemporal question with one date is refused rather than answered', () =
     assert.match(String(error.stderr), /knownAt must be an ISO date \(YYYY-MM-DD\)/);
     return true;
   });
+});
+
+test('scoped offline exchange validates native catalogue locations, expiry and export permission', async () => {
+  const root = await tempDir('simt-offline-catalogue-');
+  const repoId = 'independent-docs';
+  const scopeId = 'handbook';
+  const local = 'handbook/policy.md';
+  const remote = 'handbook/archive.md';
+  const privatePath = 'handbook/private/board.md';
+  const ignored = 'handbook/internal/notes.md';
+  const manifest = { id: repoId, work: { version: 3, scopes: [{
+    id: scopeId, paths: ['handbook'], kind: 'document', ignore: ['internal'],
+    share: ['handbook'], catalogue: 'offline-index.json',
+    tracker: { kind: 'markdown-items', path: 'handbook/private', visibility: 'private' },
+  }] } };
+  const policy = '---\nscope: {"jurisdiction":"DE"}\n---\n# Retention\n\nThe primary evidence describes a 30-day device retention policy.';
+  const archive = '# History\n\nThe previous rule was different.';
+  mkdirSync(join(root, 'handbook/private'), { recursive: true });
+  mkdirSync(join(root, 'handbook/internal'), { recursive: true });
+  writeFileSync(join(root, 'simt.json'), JSON.stringify(manifest));
+  writeFileSync(join(root, local), policy);
+  writeFileSync(join(root, remote), archive);
+  writeFileSync(join(root, privatePath), '# PRIVATE TRACKER TITLE');
+  writeFileSync(join(root, ignored), '# DENIED TITLE');
+  await git(['init', '-q'], { cwd: root });
+  await git(['add', '.'], { cwd: root });
+  await git(['commit', '-qm', 'original texts'], { cwd: root });
+  const revision = (await git(['rev-parse', 'HEAD'], { cwd: root })).stdout.trim();
+  const committed = async (path) => `committed:${(await git(['rev-parse', `HEAD:${path}`], { cwd: root })).stdout.trim()}`;
+  const entry = { id: 'catalogue.lookup', path: local, anchor: 'retention', permission: 'internal', revision: await committed(local) };
+  const candidate = { id: 'catalogue.archive', path: remote, anchor: 'history', permission: 'public', revision: await committed(remote) };
+  const observation = { ref: entry.id, observedAt: '2024-01-01', expiresAt: '2099-01-01', digest: digestOf('external check') };
+  const independentIndex = {
+    version: 1, repository: repoId, revision, entries: [entry, candidate, entry,
+      { id: 'private-export', path: privatePath, anchor: 'private-tracker-title', permission: 'public', revision: await committed(privatePath) },
+      { id: 'ignored-export', path: ignored, anchor: 'denied-title', permission: 'public', revision: await committed(ignored) }],
+    links: [{ from: entry.id, to: candidate.id, kind: 'derived-from' },
+      { from: entry.id, to: candidate.id, kind: 'external-adjacency' }],
+    observations: [{ ...observation, id: 'fresh-check' }, { ...observation, id: 'fresh-check' },
+      { ...observation, id: 'expired-check', expiresAt: '2024-01-02' }],
+  };
+  const path = join(root, 'offline-index.json');
+  const write = (doc) => writeFileSync(path, JSON.stringify(doc));
+  const call = async (args, code = 0) => {
+    const result = await simt(['knowledge', ...args, '--scope', scopeId, '--json'], { cwd: root });
+    assert.equal(result.code, code, result.stdout + result.stderr);
+    return JSON.parse(result.stdout);
+  };
+  write(independentIndex);
+  const imported = await call(['import', '--input', path]);
+  assert.deepEqual(imported.entries.map(({ id }) => id), [candidate.id, entry.id]);
+  assert.deepEqual(imported.duplicates, [entry.id, 'fresh-check']);
+  assert.equal(imported.observations[0].basis, 'external-observation');
+  assert.equal(imported.edges[0].status, 'proposed');
+  assert.ok(imported.problems.some(({ code }) => code === 'unsupported-catalogue-edge'));
+  assert.ok(imported.problems.some(({ code }) => code === 'unavailable-offline-observation'));
+  assert.doesNotMatch(JSON.stringify(imported), /private\/board|internal\/notes/);
+  assert.deepEqual(await call(['import', '--input', path]), imported);
+
+  await call(['build', '--yes']);
+  const alias = await call(['rank', '--query', entry.id]);
+  assert.equal(alias.catalogue.matched, entry.id);
+  assert.equal(alias.exact[0].citation.path, local);
+  const direct = await call(['rank', '--query', local]);
+  assert.deepEqual(alias.exact[0].citation, direct.exact[0].citation);
+  assert.deepEqual((await call(['rank', '--query', entry.id, '--where', 'jurisdiction=FR'])).exact, []);
+  write({ ...independentIndex, repository: 'wrong-repository' });
+  assert.match((await call(['import', '--input', path], 1)).error, /another repository/);
+  write({ ...independentIndex, revision: 'wrong-revision' });
+  assert.match((await call(['import', '--input', path], 1)).error, /stale/);
+  assert.ok((await call(['rank', '--query', 'retention'])).ranked.some(({ path }) => path === local));
+
+  const exported = await call(['export']);
+  assert.deepEqual(new Set(exported.bundle.facts.map(({ revision }) => revision.ref)), new Set([local, remote]));
+  assert.doesNotMatch(JSON.stringify(exported), /PRIVATE TRACKER|DENIED TITLE|private\/board|internal\/notes/);
+  write(exported);
+  const exchange = await call(['import', '--input', path]);
+  assert.equal(exchange.facts.length, exported.bundle.facts.length);
+  assert.ok(exchange.facts.every(({ basis }) => basis === 'external-observation'));
+  const expired = exportBundle({ repository: 'another-producer', expiresAt: '2000-01-01',
+    facts: [{ id: 'old', text: 'external data', revision: { ref: local, digest: digestOf(policy) } }] });
+  write(expired);
+  assert.ok((await call(['import', '--input', path], 1)).problems.some(({ code }) => code === 'expired'));
+  write({ ...exported.bundle, facts: [...exported.bundle.facts, exported.bundle.facts[0]] });
+  assert.match((await call(['import', '--input', path], 1)).error, /producer digest/);
 });

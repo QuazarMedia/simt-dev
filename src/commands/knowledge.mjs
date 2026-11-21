@@ -9,7 +9,7 @@
 // paginated: a door that can only answer "all of it" is a door whose answer grows without a
 // bound, and the cut has to be visible rather than implied.
 
-import { readFile, mkdir, rename, unlink, writeFile } from 'node:fs/promises';
+import { readFile, mkdir, realpath, rename, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import { EXIT, fail, note, present, writeMode } from '../output/index.mjs';
@@ -18,11 +18,12 @@ import { commandRoot } from '../repo-root.mjs';
 import { diffField, emitDiffs } from '../diff.mjs';
 import { readWork } from '../work/effective.mjs';
 import { CORPUS_DIR, CORPUS_SCHEMA_VERSION } from '../knowledge/corpus.mjs';
-import { collectCorpus } from '../knowledge/collect.mjs';
+import { collectCorpus, readLocalBytes } from '../knowledge/collect.mjs';
+import { configuredCatalogue, scopedExchange } from '../knowledge/catalogue.mjs';
 import { citationFor, citationOf, corpusDocument, rankCorpus } from '../knowledge/query.mjs';
 import { buildClaimGraph, impact, lineage, proposedEdges, readClaim } from '../knowledge/claims.mjs';
 import { findConflicts } from '../knowledge/conflicts.mjs';
-import { applicableClaims, readApplicability, SCOPE_FIELDS } from '../knowledge/validity.mjs';
+import { applicableClaims, readApplicability, satisfiesScope, SCOPE_FIELDS } from '../knowledge/validity.mjs';
 import { MAX_PAGE, exportBundle, importBundle } from '../knowledge/bundle.mjs';
 import { readJsonDocument } from './doc-input.mjs';
 import { rank as rankUnits } from '../knowledge/rank.mjs';
@@ -30,7 +31,6 @@ import { regenerationCandidates } from '../knowledge/derivations.mjs';
 import { aggregate as aggregateDebt, coldStart as coldStartDebt, rank as rankDebt, weightSensitivity } from '../knowledge/debt.mjs';
 import { impactReport } from '../knowledge/impact.mjs';
 import { scopedImpact } from '../knowledge/local-impact.mjs';
-import { digestOf } from '../knowledge/observations.mjs';
 import { extractDocument } from '../knowledge/sections.mjs';
 
 const WHY_USAGE = `run: ${CLI} knowledge why <claim-id> (--claims <file> | --scope <id>) [--limit <n>] [--page <n>]`;
@@ -102,7 +102,10 @@ async function scopedCorpus(flags) {
   if (declared.error !== undefined) return declared;
   const { root, scope } = declared;
   const rebuild = `run: ${CLI} knowledge build --scope ${scope.id} --yes`;
-  const text = await readTextFile(join(root, CORPUS_DIR, `${scope.id}.json`));
+  const physicalRoot = await realpath(root);
+  const relativePath = join(CORPUS_DIR, `${scope.id}.json`);
+  const bytes = await readLocalBytes(physicalRoot, relativePath, 64 << 20);
+  const text = bytes?.toString('utf8') ?? null;
   if (text === null) return { error: { message: `no corpus is built for scope \`${scope.id}\``, exit: EXIT.FAIL, remedy: rebuild } };
   let corpus;
   try {
@@ -113,18 +116,21 @@ async function scopedCorpus(flags) {
   if (corpus?.schema !== CORPUS_SCHEMA_VERSION || corpus?.scope !== scope.id) {
     return { error: { message: `the corpus for scope \`${scope.id}\` was written under another schema or scope`, exit: EXIT.FAIL, remedy: rebuild } };
   }
+  const live = await collectCorpus(declared);
+  if (live.error !== undefined) return { error: { message: live.error, exit: EXIT.CONFIG, remedy: live.remedy } };
+  const indexed = new Map(live.corpus.inventory.filter(({ state }) => state === 'indexed').map((row) => [row.path, row]));
   const stale = [];
   for (const row of Array.isArray(corpus.inventory) ? corpus.inventory : []) {
-    if (row.state !== 'indexed') continue;
-    const bytes = await readBytes(join(root, row.path));
-    if (bytes === null) stale.push(`${row.path} is gone`);
-    else if (digestOf(bytes.toString('utf8')) !== row.digest) stale.push(`${row.path} changed`);
+    if (row?.state !== 'indexed') continue;
+    const current = indexed.get(row.path);
+    if (!current) stale.push('a cached source is gone or outside current scope permissions');
+    else if (current.digest !== row.digest) stale.push(`${current.path} changed`);
   }
   if (stale.length > 0) {
     const shown = stale.slice(0, 5).join('; ');
     return { error: { message: `the corpus for scope \`${scope.id}\` is stale: ${shown}${stale.length > 5 ? `; and ${stale.length - 5} more` : ''}`, exit: EXIT.FAIL, remedy: rebuild } };
   }
-  return { root, scope, corpus };
+  return { ...declared, corpus: live.corpus };
 }
 
 /**
@@ -436,7 +442,18 @@ export async function knowledgeCommand(sub, args, flags) {
       const loaded = await scopedCorpus(flags);
       if (loaded.error !== undefined) return fail(loaded.error.message, loaded.error.exit, loaded.error.remedy);
       const limit = Number.isFinite(Number(flags.limit)) ? Math.floor(Number(flags.limit)) : 10;
-      const payload = { ok: true, command: 'knowledge rank', ...rankCorpus(loaded.corpus, { query: flags.query, scope: where.scope, limit }) };
+      const catalogue = await configuredCatalogue(loaded, loaded.corpus);
+      const alias = catalogue?.entries?.find(({ id }) => id === flags.query);
+      const query = alias?.artifact ?? flags.query;
+      const scoped = rankCorpus(loaded.corpus, { query, scope: where.scope, limit });
+      const required = Object.entries(where.scope);
+      scoped.exact = scoped.exact.filter(({ citation }) =>
+        satisfiesScope(citation.scope, required) === 'match' &&
+        (!alias || citation.path === alias.path && citation.anchor === alias.anchor));
+      const payload = { ok: true, command: 'knowledge rank', ...scoped, query: flags.query,
+        ...(catalogue === null ? {} : { catalogue: catalogue.error ? { error: catalogue.error }
+          : { matched: scoped.exact.length > 0 ? alias?.id ?? null : null, candidates: catalogue.entries.length, problems: catalogue.problems.length } }) };
+
       present(payload, () => renderKnowledge(payload), flags);
       return EXIT.OK;
     }
@@ -476,6 +493,31 @@ export async function knowledgeCommand(sub, args, flags) {
     return knowledgeBuildCommand(flags);
   }
 
+  if ((sub === 'export' || sub === 'import') && flags.scope !== undefined) {
+    const usage = `run: ${CLI} knowledge ${sub} --scope <id>${sub === 'import' ? ' --input <file>' : ''}`;
+    if (args.length > 0 || typeof flags.scope !== 'string' ||
+        (sub === 'import' ? flags.input === undefined : flags.input !== undefined)) {
+      return fail('scoped exchange needs the intended scope and input form', EXIT.USAGE, usage);
+    }
+    const context = await declaredScope(flags, sub);
+    if (context.error !== undefined) return fail(context.error.message, context.error.exit, context.error.remedy);
+    let doc = null;
+    if (sub === 'import') {
+      const read = await readJsonDocument(flags, 'input');
+      if (read.error !== undefined) return fail(read.error, EXIT.USAGE, usage);
+      doc = read.doc;
+    }
+    try {
+      const result = await scopedExchange(sub, context, { doc, limit: Number(flags.limit ?? 20), page: Number(flags.page ?? 0) });
+      if (result.error !== undefined) return fail(result.error, EXIT.FAIL, result.remedy ?? usage);
+      const payload = { ok: true, command: `knowledge ${sub}`, ...result };
+      present(payload, () => sub === 'export' ? renderExport(payload)
+        : Array.isArray(payload.entries) ? renderCatalogue(payload) : renderImport(payload), flags);
+      return payload.ok ? EXIT.OK : EXIT.FAIL;
+    } catch (error) {
+      return fail(`cannot ${sub} scoped knowledge: ${error.message.split('\n')[0]}`, EXIT.FAIL, usage);
+    }
+  }
   if (args.length > 0) return fail(`unknown knowledge ${sub} argument ${args[0]}`, EXIT.USAGE, sub === 'export' ? EXPORT_USAGE : IMPORT_USAGE);
   const read = await readJsonDocument(flags, 'input');
   if (read.error !== undefined) return fail(read.error, EXIT.USAGE, sub === 'export' ? EXPORT_USAGE : IMPORT_USAGE);
@@ -610,6 +652,13 @@ function renderExport(payload) {
   return lines.join('\n');
 }
 
+function renderCatalogue(payload) {
+  return [`candidates ${payload.entries.length}`, `proposed   ${payload.edges.length} edge(s)`,
+    `observed   ${payload.observations.length} external record(s)`,
+    ...payload.problems.map(({ code, id }) => `unknown    ${code}${id ? `  ${id}` : ''}`),
+    'executed   0'].join('\n');
+}
+
 function renderImport(payload) {
   const lines = [
     `accepted   ${payload.ok ? 'yes' : 'no'}`,
@@ -704,14 +753,6 @@ async function knowledgeBuildCommand(flags) {
   present(payload, () => renderBuild(payload), flags);
   emitDiffs(diffs, flags);
   return EXIT.OK;
-}
-
-async function readBytes(path) {
-  try {
-    return await readFile(path);
-  } catch {
-    return null;
-  }
 }
 
 async function readTextFile(path) {

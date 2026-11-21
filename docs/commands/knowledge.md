@@ -5,8 +5,8 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 | Command | Flags | What it does |
 | --- | --- | --- |
 | `simt knowledge why <claim-id> (--claims <file> \| --scope <id>) [--limit <n>] [--page <n>]` | `--as-of`, `--claims`, `--known-at`, `--limit`, `--page`, `--scope`, `--where` | what a claim derives from, what depends on it, what applied at a date, and where it conflicts |
-| `simt knowledge export --input <file>` | `--input` | a bounded, permission-filtered packet another repository can read offline |
-| `simt knowledge import --input <file>` | `--input` | validate an exported packet as data, and never execute it |
+| `simt knowledge export (--input <file> \| --scope <id>)` | `--input`, `--scope`, `--limit`, `--page` | a bounded, permission-filtered packet another repository can read offline |
+| `simt knowledge import --input <file> [--scope <id>]` | `--input`, `--scope` | validate an exported packet as data, and never execute it |
 | `simt knowledge rank (--input <file> \| --scope <id>) --query "<question>"` | `--input`, `--limit`, `--query`, `--scope`, `--where` | rank evidence units by authority and quality, and report what was excluded |
 | `simt knowledge derivations --input <file>` | `--input` | which outputs a source, template or skill change puts in question |
 | `simt knowledge debt --input <file>` | `--input`, `--weights` | rank stale and unsupported knowledge by consequence per effort |

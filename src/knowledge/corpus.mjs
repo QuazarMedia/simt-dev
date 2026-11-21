@@ -186,8 +186,8 @@ export async function buildCorpus({ scope = {}, scopes = null, candidates = [], 
     }
     // Denial is answered from the path alone, before the reader is reached.
     const allowed = mayIndex({ path, deniedPaths: deny.length > 0 ? deny : ALWAYS_DENIED });
-    if (!allowed.indexed) {
-      inventory.push({ path, state: 'denied', reason: allowed.reason });
+    if (!allowed.indexed || deny.includes('.')) {
+      inventory.push({ path, state: 'denied', reason: allowed.reason ?? 'the repository root is private' });
       continue;
     }
     if (candidate.symlink === true) {

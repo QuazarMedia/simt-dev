@@ -1,6 +1,6 @@
 ---
 name: simt-commands
-description: Command reference for simt-dev: which commands are mutating vs read-only, and a scenario-to-command mapping for the agent.
+description: "Command reference for simt-dev: which commands are mutating vs read-only, and a scenario-to-command mapping for the agent."
 ---
 
 ## Dry run

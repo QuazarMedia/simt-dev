@@ -1,6 +1,6 @@
 ---
 name: release-process
-description: Use when releasing simt-dev: cutting a version, writing the changelog, bumping the version, tagging, the publish and publish-channels workflows, npm staging, the PyPI and Homebrew channels, or deprecating a version.
+description: "Use when releasing simt-dev: cutting a version, writing the changelog, bumping the version, tagging, the publish and publish-channels workflows, npm staging, the PyPI and Homebrew channels, or deprecating a version."
 ---
 
 The release is one commit, one tag, and two workflows. `publish.yml` runs on the

@@ -13,7 +13,8 @@ did not take.
 
 - Before anything else in a turn, check the task list this harness provides. Its
   name differs by surface — `todowrite` in opencode v2 (opt-in via `experimental.todo`),
-  `TodoWrite` in Cursor and Claude Code, `write_todos` in Gemini CLI, `update_plan` in
+  `TodoWrite` in Cursor IDE and Claude Code, `updateTodos` in Cursor CLI/ACP,
+  `todo_write` in Cursor Cloud Agent, `write_todos` in Gemini CLI, `update_plan` in
   Codex — and a plan or task panel of its own counts too. That list is what the person you
   work for reads to see where the work stands, and it is only useful if it is true.
 - Mirror the work you are about to start as items: one per step, the tracker id in

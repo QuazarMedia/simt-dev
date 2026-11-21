@@ -5,15 +5,32 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>simt studio</title>
 <link rel="stylesheet" href="/shell.css">
+<script type="module" src="/app.js"></script>
 </head>
 <body>
-<main>
-<h1>simt studio</h1>
-<p>The socket is open and guarded. This is the placeholder shell the server ships;
-the observatory views arrive with the next slices, built from the same facts the
-CLI and MCP doors serve.</p>
-<p>Nothing on this page leaves the machine. Stop the studio with <kbd>Ctrl-C</kbd>
-in the terminal that started it; the repository is untouched.</p>
-</main>
+<a class="skip" href="#view">Skip to content</a>
+<header>
+  <h1 class="brand">simt studio</h1>
+  <button id="theme-toggle" type="button" aria-label="switch color mode">light mode</button>
+</header>
+<div class="layout">
+  <nav aria-label="Studio rooms">
+    <a href="#/">Studio</a>
+    <a href="#/overview">Overview</a>
+    <a href="#/pulse">Pulse</a>
+    <a href="#/board">Board</a>
+    <a href="#/custody">Custody</a>
+    <a href="#/constellation">Constellation</a>
+    <a href="#/harness">Harness wall</a>
+    <a href="#/budget">Budget</a>
+    <a href="#/helm">Helm</a>
+    <a href="#/library">Library</a>
+    <a href="#/bench">Bench</a>
+  </nav>
+  <main id="view" aria-busy="true">
+    <div class="loading" role="status">reading the repository…</div>
+  </main>
+</div>
+<footer>loopback only · read-only · nothing leaves this machine · Ctrl-C stops the studio</footer>
 </body>
 </html>

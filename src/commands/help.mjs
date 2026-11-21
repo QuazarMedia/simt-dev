@@ -462,7 +462,7 @@ const FLAGS = `--public               work schedule: withhold private tracker id
                          URLs (refused by default)
 --embed                 index / map / brief: compute or query optional local vector embeddings
                         (never on by default: --embed is the only switch, and the +10-point
-                        recall@10 bar is the precondition for using it, not a switch)
+                        recall@10 bar is the precondition for shipping them on, not a switch)
 --labels <path>         bench critic: the labelled set of historical diffs to score
 --cross-group           bench ablate: compare across harness, model and experiment
                         groups instead of refusing the comparison

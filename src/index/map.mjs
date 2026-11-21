@@ -30,21 +30,25 @@ export const RRF_K = 40;
 export const EMBED_RECALL_GAIN_BAR = 0.1;
 
 /**
- * The only thing that turns embeddings on — and why the bar does not.
+ * What turns embeddings on, and what the bar decides.
  *
- * The accept bar this module enforces reads "embeddings stay off by default unless they
- * raise recall@10 by at least 10 points". The clause is a floor under the default, not a
- * switch that flips it: the measurement reads mined tasks and gold patches from a vault
- * outside the worktree, so
- * a verdict kept as state would rank the same tree differently on the author's machine and
- * in CI. ADR-131 ruling 2 already keeps the vector path out of every run that did not name
- * it. So the bar decides whether `--embed` is worth passing, `--embed` stays the switch, and
- * the report says both rather than leaving an `accepted: true` beside an unexplained `off`
- * (ADR-224).
+ * The accept bar reads "embeddings stay off by default unless they raise recall@10 by at
+ * least 10 points". That is a release gate: it was applied when the shipped default was
+ * chosen (off, because no measurement has cleared it), and `measureRecall` reports whether
+ * a later measurement would justify changing it.
+ *
+ * It is not a runtime switch, and it does not gate `--embed`: the measurement reads mined
+ * tasks and gold patches from a vault outside the worktree, so a verdict kept as state would
+ * rank the same tree differently on the machine that measured it and in CI. ADR-131 ruling 2
+ * also keeps the vector path out of every run that did not name it, and a default that
+ * flipped on an accepted arm would send a query embedding on every prompt submit — a model
+ * call no run asked for. `--embed` stays the switch, and the report says both (ADR-224).
  */
 export const EMBEDDINGS_SWITCH = '--embed';
 export const EMBEDDINGS_DEFAULT = 'off';
-export const EMBEDDINGS_DEFAULT_REASON = `off: ${EMBEDDINGS_SWITCH} is the only switch; the +${Math.round(EMBED_RECALL_GAIN_BAR * 100)}-point bar is the precondition for using it, never the switch itself (ADR-131 ruling 2, ADR-224)`;
+/** The bar, spelled once, for the verdict and its explanation. */
+export const EMBED_RECALL_GAIN_LABEL = `+${Math.round(EMBED_RECALL_GAIN_BAR * 100)}-point`;
+export const EMBEDDINGS_DEFAULT_REASON = `off — ${EMBEDDINGS_SWITCH} is the only switch, and the bar gates opting in, never the default (ADR-131 ruling 2, ADR-224)`;
 const TOP = 10;
 export const DEFAULT_BUDGET = 2048;
 
@@ -218,10 +222,10 @@ export function goldPaths(patch) {
  * not evidence the map missed the file (ADR-076).
  *
  * When `embed: true` (or stored embeddings are provided), also evaluates recall@10
- * with embeddings fused in and measures the acceptance gate: embeddings stay off by
+ * with embeddings fused in and reports the acceptance gate: embeddings stay off by
  * default unless they raise gold-file recall@10 by at least 10 percentage points
- * (`EMBED_RECALL_GAIN_BAR = 0.1`). The gate's verdict is reported and never applied —
- * `--embed` is the switch (ADR-224).
+ * (`EMBED_RECALL_GAIN_BAR = 0.1`). `recall` stays the default ranking's figure; the
+ * arm's is in `embedRecall` (ADR-224).
  *
  * @param {string} root
  * @param {{
@@ -314,17 +318,18 @@ export async function measureRecall(root, opts = {}) {
   const baseRecall = sum / tasks;
   const embedRecall = checkEmbed && embedEvaluated > 0 ? embedSum / tasks : null;
   const embedDelta = embedRecall === null ? null : embedRecall - baseRecall;
-  // The bar decides whether the embedding arm earned a place. It never flips the
-  // default: `embedAccepted` is reported for the human deciding whether to pass
-  // `--embed` (ADR-224), because a verdict read from an out-of-tree vault cannot be a
-  // default every machine agrees on.
+  // The bar is a release gate, and `embedAccepted` reports it for the human deciding
+  // whether to change the shipped default. It never flips it here: a verdict read from an
+  // out-of-tree vault cannot be a default every machine agrees on (ADR-224).
   const embedAccepted = embedDelta !== null && embedDelta + 1e-9 >= EMBED_RECALL_GAIN_BAR;
   return {
     measured: true,
     reason: '',
     tasks,
     missing,
-    recall: embedAccepted ? embedRecall : baseRecall,
+    // The headline is the ranking a default run gets. An accepted embedding arm is
+    // reported beside it, never substituted for it (ADR-224).
+    recall: baseRecall,
     baseRecall,
     embedRecall,
     embedDelta,
@@ -343,11 +348,9 @@ export function formatRecall(result) {
   // no verdict to report, and a sentence about embeddings there would be an opinion.
   if (result.embedDelta === null || result.embedDelta === undefined) return line;
   const delta = `${result.embedDelta >= 0 ? '+' : ''}${(result.embedDelta * 100).toFixed(1)}`;
-  const bar = `+${Math.round(EMBED_RECALL_GAIN_BAR * 100)}-point`;
-  const verdict = result.embedAccepted
-    ? `cleared the ${bar} bar (${delta}) and stay off: ${EMBEDDINGS_SWITCH} is the only switch`
-    : `did not clear the ${bar} bar (${delta}) and stay off: ${EMBEDDINGS_SWITCH} is the only switch`;
-  return `${line}\nembeddings ${verdict}`;
+  const verdict = result.embedAccepted ? 'cleared' : 'did not clear';
+  // The explanation has one owner, so the CLI and the JSON cannot drift apart.
+  return `${line}\nembeddings ${verdict} the ${EMBED_RECALL_GAIN_LABEL} bar (${delta}); ${EMBEDDINGS_DEFAULT_REASON}`;
 }
 
 function pageRank(nodes, links, scores) {

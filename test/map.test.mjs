@@ -16,6 +16,7 @@ import { git, capture } from './fixture.mjs';
 import {
   DAMPING,
   EMBEDDINGS_DEFAULT,
+  EMBEDDINGS_DEFAULT_REASON,
   EMBEDDINGS_SWITCH,
   EMBED_RECALL_GAIN_BAR,
   ITERATIONS,
@@ -482,7 +483,13 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   assert.equal(withHelpfulEmbed.embeddingsDefault, 'off');
   assert.match(withHelpfulEmbed.embeddingsDefaultReason, /--embed/);
   assert.match(withHelpfulEmbed.embeddingsDefaultReason, /ADR-224/);
-  assert.match(formatRecall(withHelpfulEmbed), /cleared the \+10-point bar \(\+100\.0\).*--embed/s);
+  // The headline stays the default ranking's figure even when the arm is accepted: the
+  // number a reader sees must be the one a default run achieves (ADR-224 ruling 2).
+  assert.equal(withHelpfulEmbed.recall, withHelpfulEmbed.baseRecall);
+  assert.equal(withHelpfulEmbed.recall, 0);
+  // One explanation, shared by the CLI and the JSON, not two phrasings that can drift.
+  assert.ok(formatRecall(withHelpfulEmbed).includes(EMBEDDINGS_DEFAULT_REASON));
+  assert.match(formatRecall(withHelpfulEmbed), /cleared the \+10-point bar \(\+100\.0\); off .*--embed/s);
 
   // With unhelpful embeddings (+0 pts < +10 pts), embedAccepted is false and recall stays at baseRecall.
   const withFlatEmbed = await measureRecall(root, {
@@ -497,7 +504,8 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   assert.equal(withFlatEmbed.embeddingsDefault, EMBEDDINGS_DEFAULT);
   assert.equal(withFlatEmbed.embeddingsDefault, 'off');
   assert.match(withFlatEmbed.embeddingsDefaultReason, new RegExp(EMBEDDINGS_SWITCH));
-  assert.match(formatRecall(withFlatEmbed), /did not clear the \+10-point bar \(\+0\.0\).*--embed/s);
+  assert.ok(formatRecall(withFlatEmbed).includes(EMBEDDINGS_DEFAULT_REASON));
+  assert.match(formatRecall(withFlatEmbed), /did not clear the \+10-point bar \(\+0\.0\); off .*--embed/s);
 
   await rm(root, { recursive: true, force: true });
 });

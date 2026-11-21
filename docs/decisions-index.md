@@ -232,3 +232,4 @@ in [architecture/history.md](architecture/history.md).
 | [221](decisions/ADR-221-offline-knowledge-exchange-checks-local-scope-and-provenance.md) | Offline knowledge exchange checks local scope and provenance | accepted · 2026-11-21 |
 | [222](decisions/ADR-222-local-maintenance-derives-proposals-from-current-scoped-evidence.md) | Local maintenance derives proposals from current scoped evidence | accepted · 2026-11-21 |
 | [223](decisions/ADR-223-scoped-retrieval-ranks-distinct-sources.md) | Scoped retrieval ranks distinct sources | accepted · 2026-11-21 |
+| [224](decisions/ADR-224-the-embedding-recall-bar-is-a-precondition-not-a-switch.md) | The embedding recall bar is a precondition, not a switch | accepted · 2026-11-21 |

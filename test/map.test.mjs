@@ -15,9 +15,12 @@ import { join } from 'node:path';
 import { git, capture } from './fixture.mjs';
 import {
   DAMPING,
+  EMBEDDINGS_DEFAULT,
+  EMBEDDINGS_SWITCH,
   EMBED_RECALL_GAIN_BAR,
   ITERATIONS,
   RRF_K,
+  formatRecall,
   goldPaths,
   measureRecall,
   rankFiles,
@@ -458,6 +461,9 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   const withoutEmbed = await measureRecall(root, { vaultRoot: vault });
   assert.equal(withoutEmbed.baseRecall, 0);
   assert.equal(withoutEmbed.embeddingsDefault, 'off');
+  // No embedding arm was measured, so there is no verdict to report and no sentence
+  // about a switch that was never tested.
+  assert.doesNotMatch(formatRecall(withoutEmbed), /embeddings/);
 
   // With embeddings that align `t-sem` with `src/mod11.mjs`, recall rises from 0.0 to 1.0 (+100 pts >= +10 pts).
   const withHelpfulEmbed = await measureRecall(root, {
@@ -469,6 +475,14 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   assert.equal(withHelpfulEmbed.embedRecall, 1);
   assert.equal(withHelpfulEmbed.embedDelta, 1);
   assert.equal(withHelpfulEmbed.embedAccepted, true);
+  // Accepted is reported, never applied: a default run still reads no vectors, because
+  // `--embed` is the switch and a vault-backed verdict is not a default every machine
+  // agrees on (ADR-131 ruling 2, ADR-224).
+  assert.equal(withHelpfulEmbed.embeddingsDefault, EMBEDDINGS_DEFAULT);
+  assert.equal(withHelpfulEmbed.embeddingsDefault, 'off');
+  assert.match(withHelpfulEmbed.embeddingsDefaultReason, /--embed/);
+  assert.match(withHelpfulEmbed.embeddingsDefaultReason, /ADR-224/);
+  assert.match(formatRecall(withHelpfulEmbed), /cleared the \+10-point bar \(\+100\.0\).*--embed/s);
 
   // With unhelpful embeddings (+0 pts < +10 pts), embedAccepted is false and recall stays at baseRecall.
   const withFlatEmbed = await measureRecall(root, {
@@ -478,7 +492,12 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   });
   assert.equal(withFlatEmbed.embedDelta, 0);
   assert.equal(withFlatEmbed.embedAccepted, false);
+  // The rejected branch reaches the same default by the same route; the reason travels
+  // with the report so a reader is not left guessing why `off` sits beside a verdict.
+  assert.equal(withFlatEmbed.embeddingsDefault, EMBEDDINGS_DEFAULT);
   assert.equal(withFlatEmbed.embeddingsDefault, 'off');
+  assert.match(withFlatEmbed.embeddingsDefaultReason, new RegExp(EMBEDDINGS_SWITCH));
+  assert.match(formatRecall(withFlatEmbed), /did not clear the \+10-point bar \(\+0\.0\).*--embed/s);
 
   await rm(root, { recursive: true, force: true });
 });

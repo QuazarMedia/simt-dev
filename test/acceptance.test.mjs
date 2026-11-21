@@ -20,7 +20,6 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
-import { fileURLToPath } from 'node:url';
 
 import { EXIT } from '../src/output/index.mjs';
 import { CLI } from '../src/name.mjs';

@@ -83,10 +83,10 @@ export const SPEC = [
   // effect disagreed, and a reader who trusted the help believed their commits were gated
   // Git hooks are a separate, explicit install.
   { path: 'init', usage: '[path]', summary: 'adopt this repository: manifest, region, agents, agent-hooks; git hooks install separately', writes: 'repo', flags: ["yes","accept-conflicts","backup","baselines","ci","diff","follow-source","harness","agents","surfaces"], },
-  { path: 'knowledge why', usage: '<claim-id> --claims <file> [--limit <n>] [--page <n>]', mcp: { name: 'knowledge_why', flags: ['as-of','known-at','limit','page'] }, summary: 'what a claim derives from, what depends on it, what applied at a date, and where it conflicts', defaultFor: 'knowledge', flags: ["as-of","claims","known-at","limit","page"], },
+  { path: 'knowledge why', usage: '<claim-id> (--claims <file> | --scope <id>) [--limit <n>] [--page <n>]', mcp: { name: 'knowledge_why', flags: ['as-of','known-at','limit','page'] }, summary: 'what a claim derives from, what depends on it, what applied at a date, and where it conflicts', defaultFor: 'knowledge', flags: ["as-of","claims","known-at","limit","page","scope","where"], },
   { path: 'knowledge export', usage: '--input <file>', mcp: { name: 'knowledge_export', flags: [] }, summary: 'a bounded, permission-filtered packet another repository can read offline', flags: ["input"], },
   { path: 'knowledge import', usage: '--input <file>', mcp: { name: 'knowledge_import', flags: [] }, summary: 'validate an exported packet as data, and never execute it', flags: ["input"], },
-  { path: 'knowledge rank', usage: '--input <file> --query "<question>"', summary: 'rank evidence units by authority and quality, and report what was excluded', flags: ["input","limit","query"], },
+  { path: 'knowledge rank', usage: '(--input <file> | --scope <id>) --query "<question>"', summary: 'rank evidence units by authority and quality, and report what was excluded', flags: ["input","limit","query","scope","where"], },
   { path: 'knowledge derivations', usage: '--input <file>', summary: 'which outputs a source, template or skill change puts in question', flags: ["input"], },
   { path: 'knowledge debt', usage: '--input <file>', summary: 'rank stale and unsupported knowledge by consequence per effort', flags: ["input","weights"], },
   { path: 'knowledge impact', usage: '--input <file> --refs <ids>', summary: 'what a change reaches over typed edges, and where the graph is unknown', flags: ["input","limit","refs"], },

@@ -300,6 +300,11 @@ test('packaging: the release builds, stages and verifies the optional bench (ADR
     'the release check does not install both published packages',
   );
   assert.match(channels, /bench replay --input/, 'the release check does not run a bench command');
+  assert.match(
+    channels,
+    /steps\.expected\.outputs\.run == 'true'/,
+    'the bench check must skip tags whose publish workflow predates the bench release',
+  );
 });
 
 test('packaging: the version is not a burned placeholder (Q06)', () => {

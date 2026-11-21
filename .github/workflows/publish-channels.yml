@@ -153,11 +153,30 @@ jobs:
     env:
       VERSION: ${{ needs.resolve.outputs.version }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The tagged tree answers whether that release was wired for the
+          # bench at all. The channels job can be re-run for an older version,
+          # which has no bench artifact and must not fail this check.
+          ref: v${{ needs.resolve.outputs.version }}
+
+      - id: expected
+        name: this release's workflow stages the bench
+        run: |
+          set -eu
+          if grep -Fq 'build-bench-package.mjs dist/bench' .github/workflows/publish.yml; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::v${VERSION} predates the optional bench release; skipping the released-pair check"
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22.20.0'
 
       - name: install the pair by name and run a bench command
+        if: steps.expected.outputs.run == 'true'
         # `--prefix` puts node_modules and the bin shim under a directory that
         # has no package.json and is outside any checkout, so the install is
         # resolved from the registry exactly as a consumer would resolve it.

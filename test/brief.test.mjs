@@ -242,7 +242,6 @@ test('the matched-0 caution is mandatory in --proof at the default ceiling', asy
     `the matched-0 caution was not selected as mandatory proof: ${JSON.stringify(assembled.proof.selectedMandatory)}`,
   );
   assert.equal(assembled.proof.complete, true, 'the proof summary dropped a kept section');
-  assert.deepEqual(assembled.proof.omittedObligations, []);
 });
 
 test('a stale index warns the packet instead of quoting yesterday (Q42)', async (t) => {

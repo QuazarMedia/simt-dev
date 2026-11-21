@@ -73,6 +73,7 @@ test('descriptor: one explicit release resolves to version, commit and every ass
   assert.equal(descriptor.version, VERSION);
   assert.equal(descriptor.tag, `v${VERSION}`);
   assert.equal(descriptor.commit, COMMIT);
+  assert.equal(descriptor.request, 'explicit');
   assert.deepEqual(
     descriptor.assets.map((asset) => asset.target),
     TARGETS,
@@ -151,12 +152,24 @@ test("descriptor: the tap is checked against the release's bytes when it names t
 test('descriptor: a recheck refuses a release whose world moved', async () => {
   const descriptor = await resolved();
 
-  const moved = await verifyRelease(descriptor, {
+  // The alias case: this run asked for `latest`, so npm's newest version IS the
+  // release and a newer one landing before promotion means the two jobs disagree.
+  const latest = (await resolveRelease('latest', estate().probe)).descriptor;
+  assert.equal(latest.request, 'latest');
+  const moved = await verifyRelease(latest, {
     ...estate().probe,
     latestVersion: async () => '0.8.0',
   });
   assert.equal(moved.ok, false);
   assert.match(moved.errors.join('\n'), /moved from 0\.7\.0 to 0\.8\.0/);
+
+  // An explicit version does not move when a newer release lands: promoting 0.7.0
+  // after 0.8.0 is the documented retry, and it must still recheck clean.
+  const older = await verifyRelease(descriptor, {
+    ...estate().probe,
+    latestVersion: async () => '0.8.0',
+  });
+  assert.deepEqual(older, { ok: true, errors: [] });
 
   const bytes = await verifyRelease(descriptor, {
     ...estate().probe,
@@ -273,7 +286,7 @@ test('script: a simulated dry run writes the descriptor and the job outputs', as
 test('script: a moving latest fails the recheck instead of promoting two releases', async () => {
   const dir = await fixture();
   try {
-    const resolvedRun = await script(dir, [`--simulate=${dir}`, `--request=${VERSION}`, `--out=${join(dir, 'd.json')}`]);
+    const resolvedRun = await script(dir, [`--simulate=${dir}`, '--request=latest', `--out=${join(dir, 'd.json')}`]);
     assert.equal(resolvedRun.code, 0, resolvedRun.stderr);
 
     await writeFile(join(dir, 'npm-version.txt'), '0.8.0');

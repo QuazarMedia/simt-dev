@@ -111,7 +111,8 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: resolve and validate the whole release
+      - id: d
+        name: resolve and validate the whole release
         # The form value is an ENVIRONMENT VARIABLE, never interpolated into the
         # script: `${{ inputs.version }}` inside a `run:` block is text from a
         # dispatch form landing in shell before anything validated it. The
@@ -228,8 +229,24 @@ jobs:
         # step and visible here.
         run: |
           set -eu
-          python -m pip download --no-deps --dest /tmp/served "simt-dev==${VERSION}" >/dev/null
           built="$(sha256sum dist/*.whl | cut -d' ' -f1)"
+          # `--only-binary :all:` rather than letting pip pick: if the wheel were
+          # missing, pip would build one from the sdist and the comparison would pass
+          # on bytes PyPI never served - or differ for a reason that has nothing to do
+          # with the upload. A missing wheel must fail, not become a local build.
+          #
+          # An upload is served immediately in practice, but a registry edge can lag a
+          # few seconds; five attempts keep a green release from going red on that and
+          # still fail loudly when the wheel is genuinely not there.
+          attempt=0
+          until python -m pip download --only-binary :all: --no-deps --dest /tmp/served "simt-dev==${VERSION}" >/dev/null 2>&1; do
+            attempt=$((attempt + 1))
+            if [ "$attempt" -ge 5 ]; then
+              echo "::error::PyPI does not serve wheel simt-dev==${VERSION} after ${attempt} attempts"
+              exit 1
+            fi
+            sleep 5
+          done
           served="$(sha256sum /tmp/served/*.whl | cut -d' ' -f1)"
           if [ "$built" != "$served" ]; then
             echo "::error::PyPI serves simt-dev ${VERSION} as ${served}, but this run built ${built}"
@@ -373,6 +390,10 @@ jobs:
       TAP: ${{ vars.HOMEBREW_TAP || 'QuazarMedia/homebrew-tap' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The tag the release was cut from, so the comparison runs the checksum
+          # reader that release shipped rather than whatever main holds today.
+          ref: v${{ needs.resolve.outputs.version }}
 
       - name: the tap formula names this release's bytes
         # Not just the version: the formula that a `brew install` will follow
@@ -385,22 +406,26 @@ jobs:
           printf '%s' "$DESCRIPTOR" > release/descriptor.json
           url="https://raw.githubusercontent.com/${TAP}/main/Formula/simt-dev.rb"
           curl -fsSL "$url" -o /tmp/simt-dev.rb
-          node --input-type=module -e '
-            import fs from "node:fs";
-            import { formulaChecksums } from "./src/distribute/descriptor.mjs";
-            const descriptor = JSON.parse(fs.readFileSync("release/descriptor.json", "utf8"));
-            const declared = formulaChecksums(fs.readFileSync("/tmp/simt-dev.rb", "utf8"), descriptor.version);
-            let bad = 0;
-            for (const asset of descriptor.assets) {
-              const tap = declared.get(asset.target);
-              if (tap === undefined) {
-                console.error(`::error::the tap formula does not name simt-dev-${descriptor.version}-${asset.target}`);
-                bad += 1;
-              } else if (tap !== asset.sha256) {
-                console.error(`::error::the tap formula names ${tap} for ${asset.target}, but the release serves ${asset.sha256}`);
-                bad += 1;
-              }
+          # A quoted heredoc delimiter, not `-e '...'`: the JavaScript uses
+          # `${...}` template literals, and in single quotes shellcheck reads them as
+          # shell parameter expansions that do not expand (SC2016). A quoted heredoc
+          # says "this text is not shell" once, instead of escaping it line by line.
+          node --input-type=module - <<'JS'
+          import fs from "node:fs";
+          import { formulaChecksums } from "./src/distribute/descriptor.mjs";
+          const descriptor = JSON.parse(fs.readFileSync("release/descriptor.json", "utf8"));
+          const declared = formulaChecksums(fs.readFileSync("/tmp/simt-dev.rb", "utf8"), descriptor.version);
+          let bad = 0;
+          for (const asset of descriptor.assets) {
+            const tap = declared.get(asset.target);
+            if (tap === undefined) {
+              console.error(`::error::the tap formula does not name simt-dev-${descriptor.version}-${asset.target}`);
+              bad += 1;
+            } else if (tap !== asset.sha256) {
+              console.error(`::error::the tap formula names ${tap} for ${asset.target}, but the release serves ${asset.sha256}`);
+              bad += 1;
             }
-            if (bad > 0) process.exit(1);
-            console.log(`the tap serves ${descriptor.version} at the resolved bytes`);
-          '
+          }
+          if (bad > 0) process.exit(1);
+          console.log(`the tap serves ${descriptor.version} at the resolved bytes`);
+          JS

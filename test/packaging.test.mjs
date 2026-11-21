@@ -257,6 +257,11 @@ test('packaging: the channels resolve one release and serialise per destination 
   // destination queues on the RESOLVED version, and no channel reads npm itself.
   const channels = await readFile(new URL('../.github/workflows/publish-channels.yml', import.meta.url), 'utf8');
   assert.match(channels, /^  resolve:/m, 'there must be one resolution job');
+  // A job output is `steps.<id>.outputs.<name>`: without the id the resolve job
+  // succeeds and every channel receives the empty string (actionlint catches this,
+  // and so does this line).
+  assert.match(channels, /- id: d\n\s+name: resolve and validate the whole release/);
+  assert.match(channels, /descriptor: \$\{\{ steps\.d\.outputs\.descriptor \}\}/);
   assert.ok(!/npm view simt-dev version/.test(channels), 'a channel still resolved `latest` on its own');
   assert.match(channels, /group: publish-pypi-\$\{\{ needs\.resolve\.outputs\.version \}\}/);
   assert.match(channels, /group: publish-brew-\$\{\{ needs\.resolve\.outputs\.version \}\}/);

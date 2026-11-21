@@ -175,7 +175,11 @@ export async function resolveRelease(raw, probe) {
   if (assets.length === TARGETS.length) errors.push(...(await tapErrors(assets, version, probe)));
 
   if (errors.length > 0) return { descriptor: null, errors };
-  const descriptor = { schema: DESCRIPTOR_SCHEMA, version, tag, commit, assets };
+  // `request` is what the caller asked for, kept so a recheck knows which drift is
+  // drift: for `latest` the registry's newest version IS the release, and for an
+  // explicit version it is irrelevant - an older release promoted after a newer one
+  // was published is a normal retry, not a moving target (ADR-203 ruling 4).
+  const descriptor = { schema: DESCRIPTOR_SCHEMA, request: request.request, version, tag, commit, assets };
   return { descriptor: { ...descriptor, id: descriptorId(descriptor) }, errors: [] };
 }
 
@@ -216,6 +220,9 @@ export function checkDescriptor(descriptor) {
     errors.push(`the release descriptor has schema ${descriptor.schema}, and this tool reads ${DESCRIPTOR_SCHEMA}`);
   }
   if (!SEMVER.test(String(descriptor.version ?? ''))) errors.push('the release descriptor names no concrete version');
+  if (descriptor.request !== 'latest' && descriptor.request !== 'explicit') {
+    errors.push('the release descriptor does not record whether it resolved latest or an explicit version');
+  }
   if (!/^[0-9a-f]{40}$/.test(String(descriptor.commit ?? ''))) errors.push('the release descriptor names no commit');
   if (!Array.isArray(descriptor.assets)) errors.push('the release descriptor carries no assets');
   else {
@@ -244,15 +251,20 @@ export async function verifyRelease(descriptor, probe) {
   const errors = checkDescriptor(descriptor);
   if (errors.length > 0) return { ok: false, errors };
 
-  try {
-    const newest = String(await probe.latestVersion()).trim();
-    if (newest !== descriptor.version) {
-      errors.push(
-        `npm's newest version moved from ${descriptor.version} to ${newest} after this release was resolved; re-run the workflow so one run promotes one release`,
-      );
+  // Only a `latest` request depends on where the alias points. An explicit version
+  // stays the same release when a newer one lands, and refusing it would make the
+  // documented retry of an older release impossible.
+  if (descriptor.request === 'latest') {
+    try {
+      const newest = String(await probe.latestVersion()).trim();
+      if (newest !== descriptor.version) {
+        errors.push(
+          `npm's newest version moved from ${descriptor.version} to ${newest} after this release was resolved; re-run the workflow so one run promotes one release`,
+        );
+      }
+    } catch (error) {
+      errors.push(`could not re-read the newest version from npm: ${error.message}`);
     }
-  } catch (error) {
-    errors.push(`could not re-read the newest version from npm: ${error.message}`);
   }
 
   try {

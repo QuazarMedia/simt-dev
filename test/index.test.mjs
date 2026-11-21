@@ -449,6 +449,42 @@ test('an added, deleted or renamed import destination re-resolves an unchanged i
   }
 });
 
+test('a changed importer and a changed path set in one build insert its edges once (PR23 regression)', async () => {
+  // The re-resolution loop walks `previous`, and a changed row is in it. With the
+  // blob and the path set both moving - the ordinary case for a working tree that
+  // gained a file - the changed importer was extracted AND re-resolved from its
+  // stored specifiers, so every edge it owns was inserted twice and the whole
+  // build died on the edges unique key (seen through `slice start`, which maps the
+  // repository first).
+  const root = await mkdtemp(join(tmpdir(), 'idx-'));
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, '.gitignore'), '.simt/\n');
+    await writeFile(join(root, 'src', 'a.mjs'), "import { b } from './b.mjs';\nexport const a = b;\n");
+    await writeFile(join(root, 'src', 'b.mjs'), 'export const b = 1;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    await reindex(root);
+
+    // One blob changes and one path arrives in the same build.
+    await writeFile(join(root, 'src', 'a.mjs'), "import { b } from './b.mjs';\nexport const a = b + 1;\n");
+    await writeFile(join(root, 'src', 'c.mjs'), 'export const c = 3;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'edit a, add c']);
+    const rebuilt = await reindex(root);
+    assert.equal(rebuilt.updated, 2);
+    assert.equal(rebuilt.edgesRefreshed, 0, 'a changed importer was re-resolved a second time');
+    assert.deepEqual(
+      (await readEdges(root)).filter((edge) => edge.src === 'src/a.mjs').map((edge) => edge.dst),
+      ['src/b.mjs'],
+      'the changed importer carries its edge exactly once',
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('an unchanged source is re-extracted when the parser reading changes (PR23)', async () => {
   const root = await mkdtemp(join(tmpdir(), 'idx-'));
   try {

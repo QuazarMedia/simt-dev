@@ -318,8 +318,15 @@ export async function reindex(root, opts = {}) {
   }
   const edgeOwners = [];
   if (resolutionChanged) {
+    // ONLY the unchanged importers: a changed row was just extracted and its edges
+    // are already in `edges`, so re-resolving its stored specifiers would add every
+    // edge a second time (and from the imports the file no longer has). The two
+    // conditions overlap whenever a blob and the tracked path set both move, which
+    // is common - and the second insert of a key the first one claimed is a UNIQUE
+    // constraint failure for the whole build (PR23 regression).
+    const changedPaths = new Set(changed.map((entry) => entry.path));
     for (const row of previous) {
-      if (!paths.has(row.path)) continue;
+      if (!paths.has(row.path) || changedPaths.has(row.path)) continue;
       // An adapter's edges are its own reading; its identity is part of `inputs`,
       // so an adapter change already forced a re-extraction. A file that imported
       // nothing has no edge a new path set could change.

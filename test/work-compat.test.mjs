@@ -1,7 +1,7 @@
 // Plan 0004 W01: the predecessor audit and the compatibility baseline.
 //
 // The failure this slice exists for is a document that says Complete while one of its
-// own cells records 55.6% against a 60% bar, and no evidence column at all. The audit is
+// own cells records a measurement below its bar, and no evidence column at all. The audit is
 // tested against that shape, and against the real plan 0003 tracker, because an audit
 // that only passes on a fixture proves the fixture.
 
@@ -71,16 +71,18 @@ test('audit: a row is graded by its own cells, not by its state', async () => {
   assert.ok(audit.issues.some((issue) => /R03: names ADR-9999/.test(issue)), audit.issues.join('\n'));
 });
 
-test('audit: the real plan 0003 is read through the parser, including the R22 miss', async () => {
+test('audit: the real plan 0003 is read through the parser, including R22 after R28', async () => {
   const audit = await auditPredecessor(ROOT);
   assert.equal(audit.error, undefined, audit.error);
   assert.match(audit.doc, /^0003-/);
   assert.equal(audit.found, 55, 'R01-R55 are the predecessor rows');
   for (const row of audit.rows) assert.equal(typeof row.disposition, 'string', `${row.id} has no disposition`);
   const r22 = audit.rows.find((row) => row.id === 'R22');
+  // The cell now carries the fused ranking's figure; 55.6% survives only as the before
+  // value, so the audit must read the first number and grade it met (ADR-225).
   assert.deepEqual(
     { measured: r22.metric.measured, bar: r22.metric.bar, disposition: r22.metric.disposition },
-    { measured: 55.6, bar: 60, disposition: 'missed' },
+    { measured: 62.1, bar: 60, disposition: 'met' },
   );
   // Plan 0003's tracker has no evidence column. That is the honest finding, and it is
   // reported once rather than as fifty-five invented per-row failures.

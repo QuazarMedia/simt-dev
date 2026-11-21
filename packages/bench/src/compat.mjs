@@ -91,8 +91,8 @@ function numberFromRef(ref) {
 /**
  * A metric cell read for a verdict rather than copied.
  *
- * The plan's own cells carry both numbers — `recall@10 55.6% (bar 60%)` — and the
- * defect W01 exists for is that a row reading Complete was never compared against them.
+ * A cell carries both numbers — `recall@10 62.1% (bar 60%)` — and the defect W01
+ * exists for is that a row reading Complete was never compared against them.
  * A cell with no `bar` is a claim, not a measurement, and is reported as unmeasured.
  */
 export function metricOf(cell) {

@@ -569,8 +569,8 @@ it mentions (Aider's approach). It renders within a budget at one of three detai
 `outline` (paths), `names` or `signatures`. It is deterministic: fixed iterations, sorted ties.
 
 **Accept.** recall@10 is the mean fraction of a task's gold files that land in the top 10.
-`simt bench report` prints it. On the 20 mined tasks in this checkout the figure is 55.6%.
-The bar is 60%, and this ranking does not meet it (ADR-091).
+`simt bench report` prints it. The PageRank-only map measured 55.6% on the 20 mined tasks;
+R28's hybrid fusion raised the same tasks to 62.1%, clearing the 60% bar (ADR-091, ADR-225).
 
 ### R23 — Impact analysis: `simt-dev impact <file|symbol>` (M)
 
@@ -894,7 +894,7 @@ Size: S is up to 2 days, M up to a week, L more.
 | R19 | Rule-to-check compiler | 2 | R07 (R21 for `import-direction`) | M | ADR-088 | kernel shrinks; compliance not lower (unmeasured) | Complete |
 | R20 | Index store | 3 | review 0002 S47 | M | D6 (ADR-089) | reindex < 300 ms; deterministic | Complete |
 | R21 | Extractors (+ optional tree-sitter) | 3 | R20 | L | D2 (ADR-090) | ≥ 90% symbol recall | Complete |
-| R22 | Ranked repo map | 3 | R21 | M | ADR-091 | recall@10 55.6% (bar 60%) | Complete |
+| R22 | Ranked repo map | 3 | R21 | M | ADR-091 | recall@10 62.1% (bar 60%; 55.6% before R28) | Complete |
 | R23 | Impact analysis | 3 | R21, R25 | M | ADR-096 | importers, tests, one consumer | Complete |
 | R24 | Test mapping | 3 | R21 | M | ADR-092 | precision 1.0 (bar 0.8) | Complete |
 | R25 | Governance graph, `why` | 3 | R20 | S | ADR-093 | ADR-017 at 4c27514; unresolved tokens reported | Complete |
@@ -1339,8 +1339,8 @@ and `lessons` into the SQLite FTS5 `fts` table (with deterministic Okapi BM25 fa
 `scoreFtsBm25` for JSONL), and `src/index/map.mjs` (`rankFiles`, `rrfFuse`) fuses FTS5
 `bm25(fts)` (`searchFtsBm25`), PageRank graph proximity, and resolver signals via
 reciprocal-rank fusion (`RRF_K = 40`). On this repository's 20 mined benchmark tasks,
-deterministic hybrid retrieval raises gold-file recall@10 from 54.3% to 61.3% (SQLite FTS5)
-and 60.3% (JSONL), clearing ADR-091's 60% bar. Optional local embeddings via R37
+deterministic hybrid retrieval raises gold-file recall@10 from 54.3% to 62.1% (SQLite FTS5),
+clearing ADR-091's 60% bar; re-derived at `3976c0eb` (ADR-225). Optional local embeddings via R37
 (`--embed`, `local.embed`) are stored as `Float32Array` SQLite blobs in the `embeddings`
 table (`encodeVectorBlob`, `decodeVectorBlob`), ranked by brute-force cosine similarity
 (`cosineSimilarity`, `rankByCosine`), and gated by `measureRecall` against

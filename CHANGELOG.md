@@ -4,7 +4,12 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.12.0] — 2026-11-21
+
+The local dashboard arrives (`simt studio`), the release acceptance matrix becomes one
+inventory, and `@simt-dev/bench` ships as its own package, staged beside the core. The
+knowledge doors query a scoped corpus directly, `simt slice finish` lands the merged
+commit, and the production-readiness review closes at PR38.
 
 ### Added
 

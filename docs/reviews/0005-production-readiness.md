@@ -56,7 +56,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR34 | Migrate and retire legacy compatibility paths on evidence | P2 | adoption | M | PR08, PR32, PR16 | Complete | 33b92c765653ef4e8cc187a77749c5729bbc414c |
 | PR35 | Make CLI, API, MCP, and generated references agree | P1 | surface | M | PR32, PR22, PR19 | Complete | 3957b70889c7d1158107aec5eb630d051c8a4b04 |
 | PR36 | Make the isolated test and release qualification gate reproducible | P1 | ci | M | PR17, PR28, PR32, PR33 | Complete | 9397ba14a1f253279c32646f6952767f3695a7f8 |
-| PR37 | Qualify production readiness from installed consumer fixtures | P1 | release | M | PR18, PR25, PR26, PR28, PR34, PR35, PR36, PR38 | Queued | — |
+| PR37 | Qualify production readiness from installed consumer fixtures | P1 | release | M | PR18, PR25, PR26, PR28, PR34, PR35, PR36, PR38 | Complete | 664aa34108ba209c295edfc739448549031ece39 |
 | PR38 | Bind an inline agent-hook override to its invocation | P0 | agenthooks | M | — | Complete | b65d36fc54897c0b576c85dc02bf6a90f857befb |
 
 Worktree boundaries follow the files, including shared tests and generated outputs. Use the tracker dependencies for sequencing and check planned paths before parallel work. Serialize overlapping edits to the command spec, projection, dispatcher, or shared fixtures. Keep a focused regression and rendered consumer acceptance with the slice that changes behavior. Use the full document name `0005-production-readiness.md` when archiving because the separate knowledge plan also uses 0005.

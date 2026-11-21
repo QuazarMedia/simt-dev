@@ -318,6 +318,17 @@ test('a clean worktree with no commits ahead refuses to land', async () => {
   assert.equal(existsSync(worktree), true, 'the empty worktree was removed');
 });
 
+test('the dry-run refusal names a missing worktree, not the allowed tracker-row edit', async () => {
+  const { root, worktree } = await startA27();
+  await rm(worktree, { recursive: true, force: true });
+
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true', json: true }));
+  assert.equal(result.code, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.refusal, `no worktree for A27 at ${join('.simt', 'local', 'worktrees', 'a27')}`);
+  assert.doesNotMatch(result.stdout, /has uncommitted changes/);
+});
+
 test('a conflicting merge aborts, reports the commit and row, and leaves main usable', async () => {
   const { root, tracker } = await startableRepo();
   const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));

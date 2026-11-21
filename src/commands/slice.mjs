@@ -694,7 +694,9 @@ async function finishSlice(root, id, flags) {
   const { branch, worktree } = places(main, id);
   // The checkout whose staged tree is the slice: the worktree when it exists, so a caller
   // can inspect the plan from either checkout. Applying is stricter - see below.
-  const work = existsSync(worktree) ? worktree : root;
+  const worktreeExists = existsSync(worktree);
+  const work = worktreeExists ? worktree : root;
+  const noWorktree = `no worktree for ${id} at ${relative(main, worktree)}`;
 
   const type = String(flags.type ?? 'feat');
   if (!TYPE.test(type)) {
@@ -720,8 +722,10 @@ async function finishSlice(root, id, flags) {
   // Nothing staged is not nothing to land: the slice may already be committed in its
   // worktree. Read that commit now so the dry run can name it and the apply can skip
   // creating a second, empty one.
-  const committed = await committedSlice(work, main, { staged: staged.length > 0 });
-  const refusal = committed?.error ?? null;
+  const committed = worktreeExists
+    ? await committedSlice(work, main, { staged: staged.length > 0 })
+    : null;
+  const refusal = worktreeExists ? committed?.error ?? null : noWorktree;
   const subject = committed?.sha ? committed.subject : subjectFor(type, id, title);
 
   if (!mode.apply) {
@@ -784,11 +788,7 @@ async function finishSlice(root, id, flags) {
     );
   }
   if (!existsSync(worktree)) {
-    return fail(
-      `no worktree for ${id} at ${relative(main, worktree)}`,
-      EXIT.USAGE,
-      `run: ${CLI} slice start ${id}`,
-    );
+    return fail(noWorktree, EXIT.USAGE, `run: ${CLI} slice start ${id}`);
   }
   // `start` already flipped the tracker row in the main checkout, and that edit is
   // meant to travel with the merge; every other change would be merged under the

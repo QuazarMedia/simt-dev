@@ -32,6 +32,24 @@ did not take.
   — so you stop re-discovering what the repository already knows.
 - Before editing a file, run `simt why <file>`. It lists the decisions, rules,
   skills, gates and lessons that govern that file. Edit with those in mind.
+- A packet that is cold, or that says the index predates the tree, is a guess about
+  the files: run `simt index`, then the packet again.
+
+## What you can run, and when
+
+| When | Command | What you get |
+| --- | --- | --- |
+| Starting a task | `simt brief "<task>"` | kind, commands, files, tests, decisions |
+| Before an edit | `simt why <file>` | the records that govern that file |
+| Need every test or importer | `simt tests <file>` · `simt impact <file>` | the exact edges, not a ranking |
+| Choosing work | `simt plan status` · `simt plan next` | tracker counts · the next ready slice |
+| Building | `simt slice start <id>` · `simt slice finish <id>` | worktree, gates, commit, SHA |
+| Before committing | `simt check` · `simt gate --changed` | projection drift · tests the diff reaches |
+| Changing a ruling | `simt rules why <ADR>` · `simt decide --yes` | the record, then a new one |
+| An unexplained failure | `simt explain <CODE>` | what it means and the remedy |
+
+Anything not here is still discoverable: `simt help --all` lists every command and
+flag, and the `simt-commands` skill maps a situation to the command that answers it.
 
 ## Plan the next slice
 
@@ -100,6 +118,17 @@ they print what they would change and exit without writing. Add `--yes` to
 apply. Read the dry-run output first — it is the plan — then re-run with
 `--yes`. A dry-run that shows an unexpected file is a reason to stop, not to
 add `--yes` and hope.
+
+## What simt owns, and what a nonzero exit means
+
+- Never hand-edit the generated region (`simt:begin` … `simt:end`) or a file
+  under `docs/commands/`: `simt sync --yes` renders them, and `simt check`
+  reports drift before a commit does. A change to rule text lands through sync,
+  not through the rendered copy.
+- A nonzero exit is a failure with a remedy, not output to skim. Read the
+  `REMEDY` line; `2` is bad arguments, `4` an invalid registry, `5` something
+  this repository or platform cannot satisfy. For anything else, `simt explain
+  <CODE>` names the finding, the fix and the command.
 
 For the full command reference — which commands are mutating vs read-only, and
 the scenario-to-command mapping — read the `simt-commands` skill.

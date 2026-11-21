@@ -218,6 +218,7 @@ test('a conflicting merge aborts, reports the commit and row, and leaves main us
   await writeFile(join(root, 'a.mjs'), 'export const a = 3;\n');
   await git(['-C', root, 'add', 'a.mjs']);
   await git(['-C', root, 'commit', '-qm', 'main change']);
+  const mainHead = String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim();
 
   const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
   assert.notEqual(result.code, 0, `a conflicted merge was reported as success: ${result.stdout}${result.stderr}`);
@@ -225,16 +226,20 @@ test('a conflicting merge aborts, reports the commit and row, and leaves main us
   const sha = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
   assert.match(output, new RegExp(sha), 'the committed sha was not reported');
   assert.match(output, /row recorded/, 'the row state was not reported');
-  assert.match(output, /the merge into .* failed/, 'the refused merge was not named');
+  assert.match(output, /failed: git merge --no-ff --no-commit slice\/a27 failed/, 'the refusal carried no reason');
 
-  // Aborted, not left half-merged: no MERGE_HEAD, the main file unchanged, and the
-  // only dirty path is the tracker row the finish recorded before merging.
+  // Aborted, not left half-merged: no MERGE_HEAD, main at its own commit, the file and
+  // branch untouched, and the only dirty path is the tracker row recorded before merging.
   assert.equal(existsSync(join(root, '.git', 'MERGE_HEAD')), false, 'the merge was left in progress');
+  assert.equal(String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim(), mainHead, 'main moved');
   assert.equal((await readFile(join(root, 'a.mjs'), 'utf8')).trim(), 'export const a = 3;', 'main work was overwritten');
+  assert.match(String((await git(['-C', root, 'branch', '--list', 'slice/a27'])).stdout), /slice\/a27/, 'the slice branch was removed');
+  assert.equal(existsSync(worktree), true, 'the slice worktree was removed');
   const status = String((await git(['-C', root, 'status', '--porcelain', '--untracked-files=no'])).stdout);
-  assert.match(status, /0004-audit-remediation\.md/, 'the recorded row is not visible');
   assert.deepEqual(status.split('\n').filter((line) => line.trim() !== '').map((line) => line.slice(2).trim()), ['docs/reviews/0004-audit-remediation.md'], 'a merge left more than the row behind');
-  assert.match(await readFile(tracker, 'utf8'), /Complete/, 'the row did not record the commit');
+  const row = (await readFile(tracker, 'utf8')).split('\n').find((line) => line.startsWith('| A27 |'));
+  assert.ok(row, 'the A27 row disappeared');
+  assert.match(row, new RegExp(`Complete.*${sha}`), 'the row did not record this commit');
 });
 
 test('a prompt slice lands without a tracker row', async () => {

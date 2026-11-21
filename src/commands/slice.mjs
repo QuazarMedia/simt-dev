@@ -117,12 +117,12 @@ async function isMainCheckout(root, main) {
   return top !== null && canonicalPath(top) === canonicalPath(main);
 }
 
-/** The first line of a git failure. `merge` writes its conflict to stdout, so an empty
- *  stderr falls back to the wrapped message rather than reporting no reason at all. */
+/** The first line of a git failure, with the wrapped message as the fallback when git
+ *  wrote nothing to stderr: `git merge` reports its conflict on stdout, and returning an
+ *  empty detail made a refused merge look like a successful one. */
 function gitDetail(error) {
-  const stderr = String(error?.stderr ?? '').trim();
-  const message = String(error?.message ?? error).trim();
-  return (stderr || message).split('\n')[0];
+  const detail = String(error?.stderr ?? '').trim() || String(error?.message ?? error).trim();
+  return detail.split('\n')[0];
 }
 
 /**

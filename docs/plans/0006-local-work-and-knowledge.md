@@ -1,6 +1,6 @@
 # Plan 0006 — Make work and knowledge usable in local repositories
 
-Status: **queued** · 2026-11-19
+Status: **in progress** · 2026-11-21
 
 Implementation owner: simt-dev
 
@@ -79,7 +79,7 @@ simt verify status --changed --scope handbook
 | WK14 | Turn stale evidence and repeated work into reviewed maintenance | Maintenance | lifecycle | M | WK07, WK09, WK12 | Complete | 4caaae053cde35f4951c1d0639a5f5ebee22442b · test: node --test test/knowledge-debt.test.mjs test/knowledge-derivations.test.mjs test/lessons.test.mjs test/work-graduation.test.mjs test/work-doors.test.mjs test/docs.test.mjs |
 | WK15 | Qualify local adoption, migrate incrementally, and publish support | Release | qualify | M | WK06, WK10, WK12, WK13, WK14 | Queued | — |
 
-WK06 is the first usable checkpoint. WK10 and WK12 make it a daily workflow. WK15 is the release exit.
+WK06 is the first usable checkpoint. WK10 and WK12 make it a daily workflow. WK15 is the release exit. The [local qualification record](../reference/local-work-qualification.md) records the synthetic results. The two maintainer-led trials remain pending.
 
 ## Slices
 
@@ -179,4 +179,4 @@ Run the lifecycle below from an installed artifact and test incremental adoption
 - **Evidence quality.** Freeze a labelled corpus before measuring. Include exact lookup, multilingual terms, same subject with a different scope, effective-date and knowledge-date differences, conflicts, missing sources, and a source edit that changes multiple outputs. Require correct disposition in every mandatory scope, privacy, temporal and negative-control fixture. Require top-five retrieval of the labelled source in at least 90% of lookup cases in **each** repository shape, with denominators reported. Compare with the fixture's existing lexical/search baseline and record regressions.
 - **Change and continuity.** In each shape, change a source or procedure, surface affected outputs, select and run existing checks, record current evidence, resume an interrupted local task and reopen only invalidated obligations. Include error, incomplete/partial selection, and stale-evidence runs. An intentionally unsupported case must produce an actionable response.
 - **Boundaries.** Assert zero network attempts with the local profile, no access to excluded paths, no remote dispatch, no operator scratch in exported/shared data, and no writes in preview. Prove deterministic output and an incremental rebuild equivalent to a clean rebuild. Record the host and data sizes used to measure cold and warm build and query latency.
-- **Dependencies on existing plans.** [Plan 0005](0005-knowledge-doors-in-default-flows.md) is the starting integration. Reuse the fixes in [Review 0005](../reviews/0005-production-readiness.md) PR01/PR07/PR08 for setup writes, PR02/PR09 for manifest and root, PR04/PR05/PR14 for runner and evidence, PR19/PR20 for shared readers, PR21/PR22/PR26 for read/trust boundaries, and PR23 for index provenance. Coordinate shared files and write one fix per invariant. Prototype and validate the read-only corpus and query path in parallel. A shipping slice that uses one of these shared invariants requires its applicable fix or test evidence at integration.
+- **Dependencies on existing plans.** [Plan 0005](archive/0005-knowledge-doors-in-default-flows.md) is the starting integration. Reuse the fixes in [Review 0005](../reviews/archive/0005-production-readiness.md) PR01/PR07/PR08 for setup writes, PR02/PR09 for manifest and root, PR04/PR05/PR14 for runner and evidence, PR19/PR20 for shared readers, PR21/PR22/PR26 for read/trust boundaries, and PR23 for index provenance. Coordinate shared files and write one fix per invariant. Prototype and validate the read-only corpus and query path in parallel. A shipping slice that uses one of these shared invariants requires its applicable fix or test evidence at integration.

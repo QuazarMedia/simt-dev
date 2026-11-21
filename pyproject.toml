@@ -128,6 +128,7 @@ pattern = '"version":\s*"(?P<version>[^"]+)"'
 "ecosystems" = "simt_dev/vendored/ecosystems"
 "harnesses" = "simt_dev/vendored/harnesses"
 "docs/decisions" = "simt_dev/vendored/docs/decisions"
+"docs/guides/local-work.md" = "simt_dev/vendored/docs/guides/local-work.md"
 "CHANGELOG.md" = "simt_dev/vendored/CHANGELOG.md"
 "package.json" = "simt_dev/vendored/package.json"
 
@@ -148,6 +149,7 @@ include = [
     "/ecosystems",
     "/harnesses",
     "/docs/decisions",
+    "/docs/guides/local-work.md",
     "/CHANGELOG.md",
     "/package.json",
     "/README.md",

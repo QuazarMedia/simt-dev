@@ -1,0 +1,12 @@
+[
+  {"query":"device checkout retention","expected":"handbook/current.md"},
+  {"query":"30 days","expected":"handbook/current.md"},
+  {"query":"14 days","expected":"handbook/archive.md"},
+  {"query":"retention.archive","expected":"handbook/archive.md"},
+  {"query":"retention.current","expected":"handbook/current.md"},
+  {"query":"handbook/current.md","expected":"handbook/current.md"},
+  {"query":"device-checkout-archive","expected":"handbook/archive.md"},
+  {"query":"durée conservation","expected":"handbook/other.md"},
+  {"query":"90 days","expected":"handbook/other.md"},
+  {"query":"retention","where":"jurisdiction=FR","expected":"handbook/other.md"}
+]

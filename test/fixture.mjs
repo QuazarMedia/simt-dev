@@ -19,6 +19,7 @@ import { join, relative, sep } from 'node:path';
 
 import { loadRegistry } from '../src/graph/load.mjs';
 import { CLI, MANIFEST_FILE } from '../src/name.mjs';
+import './isolate.mjs';
 
 /**
  * A RegExp matching literal text, with `{cli}` the command and `{manifest}` the manifest
@@ -45,23 +46,6 @@ export function cmd(text) {
 }
 
 const exec = promisify(execFile);
-
-/**
- * Remove the host's Git identity, signing and config injection from this process.
- *
- * `-c user.name=...` on the command line is not enough: `GIT_AUTHOR_NAME` and its
- * siblings outrank it, and `GIT_CONFIG_COUNT` injects config at a scope a test cannot
- * see. A full-suite run on a machine with any of those set failed for a reason that
- * had nothing to do with the code, which is the inheritance ADR-031 records. The
- * suite builds the identity it needs and reads no global or system config; a test
- * that wants a global config sets `GIT_CONFIG_GLOBAL` itself, after this runs.
- */
-const HOST_GIT_ENV = /^GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL|DATE)$|^GIT_CONFIG_(COUNT|KEY_\d+|VALUE_\d+)$/;
-for (const name of Object.keys(process.env)) {
-  if (HOST_GIT_ENV.test(name)) delete process.env[name];
-}
-process.env.GIT_CONFIG_GLOBAL = '/dev/null';
-process.env.GIT_CONFIG_SYSTEM = '/dev/null';
 
 /**
  * git with an identity, always.

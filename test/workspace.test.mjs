@@ -435,8 +435,13 @@ test('workspace: an edit between two calls in one process is answered fresh (PR2
 
   const prevCwd = process.cwd();
   const prevXdg = process.env.XDG_CONFIG_HOME;
+  const prevWorkspace = process.env.SIMT_DEV_WORKSPACE;
   try {
     process.chdir(repo);
+    // An outer qualification env may set `SIMT_DEV_WORKSPACE=off`; the environment
+    // outranks the config this test is about, so it has to be absent for the question
+    // to be answerable at all.
+    delete process.env.SIMT_DEV_WORKSPACE;
     process.env.XDG_CONFIG_HOME = home;
     assert.equal((await workspace({})).root, wsA);
     // Same length, different content: the second answer must not be the cached first.
@@ -444,6 +449,8 @@ test('workspace: an edit between two calls in one process is answered fresh (PR2
     assert.equal((await workspace({})).root, wsB, 'the cache kept serving the pre-edit config');
   } finally {
     process.chdir(prevCwd);
+    if (prevWorkspace === undefined) delete process.env.SIMT_DEV_WORKSPACE;
+    else process.env.SIMT_DEV_WORKSPACE = prevWorkspace;
     if (prevXdg === undefined) delete process.env.XDG_CONFIG_HOME;
     else process.env.XDG_CONFIG_HOME = prevXdg;
   }

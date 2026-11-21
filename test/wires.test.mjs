@@ -1,6 +1,7 @@
 // The doors that made the remaining Plan 4 modules reachable: each test asserts the fact the
 // module exists to produce, through the command a reader would run.
 
+import './isolate.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';

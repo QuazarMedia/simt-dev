@@ -5,6 +5,7 @@
 // stdout: the client then shows nothing and reports no error, because from its side the
 // stream is simply malformed.
 
+import './isolate.mjs';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 // The pre-push gate runs this suite in a detached worktree under the temp

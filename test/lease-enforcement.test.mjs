@@ -2,6 +2,7 @@
 // and by nothing else; a report that lists claims without that level implies exclusion it cannot
 // deliver.
 
+import './isolate.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync } from 'node:fs';

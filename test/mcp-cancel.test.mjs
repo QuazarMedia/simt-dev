@@ -7,6 +7,7 @@
 // Nothing tested this. The wiring is in `serve` (a peek at each line, because the loop is
 // blocked awaiting the tool) and in the tools (which check the signal between rows), and
 // an untested wiring is one refactor away from a hang that only a client sees.
+import './isolate.mjs';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFile } from 'node:child_process';

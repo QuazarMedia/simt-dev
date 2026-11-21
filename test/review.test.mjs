@@ -15,6 +15,7 @@
 //      counts with precision and recall — or names the missing input instead of
 //      inferring the metric.
 
+import './isolate.mjs';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createServer } from 'node:http';

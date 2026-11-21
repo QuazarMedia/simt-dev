@@ -43,7 +43,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR21 | Separate MCP reads from cache writes and process execution | P1 | transport | M | PR09, PR02 | Complete | 20722ee329feb60bd4cd6d4ec4d6622b30727a3e |
 | PR22 | Bound MCP framing and make response contracts consistent | P1 | transport | M | PR21 | Complete | d092ff35c5db4d1419b873617663a98a853acc7a |
 | PR23 | Make index provenance and rebuild semantics coherent | P1 | retrieval | M | PR10, PR09 | Complete | 7869ead14b7f01af9c43b6efe33456e13f5d33ef |
-| PR24 | Fix registry portability, skill identity, and workspace caching | P1 | retrieval | M | PR23 | Queued | — |
+| PR24 | Fix registry portability, skill identity, and workspace caching | P1 | retrieval | M | PR23 | Complete | aa3ef1840ce79325f86d6676e7fac066023c5590 |
 | PR25 | Enforce local model data and transport boundaries | P1 | retrieval | M | PR24, PR21 | Queued | — |
 | PR26 | Audit filesystem scope and executable configuration ownership | P1 | trust | M | PR08, PR05, PR21, PR24 | Queued | — |
 | PR27 | Resolve each release once and verify cross-channel promotion | P1 | release | M | PR17 | Queued | — |

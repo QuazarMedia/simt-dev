@@ -42,7 +42,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR20 | Make document-driven verification reject malformed input | P1 | work | M | PR19 | Complete | 4afc0e34a194b79e5ea6a100b808d1e4cdc86638 |
 | PR21 | Separate MCP reads from cache writes and process execution | P1 | transport | M | PR09, PR02 | Complete | 20722ee329feb60bd4cd6d4ec4d6622b30727a3e |
 | PR22 | Bound MCP framing and make response contracts consistent | P1 | transport | M | PR21 | Complete | d092ff35c5db4d1419b873617663a98a853acc7a |
-| PR23 | Make index provenance and rebuild semantics coherent | P1 | retrieval | M | PR10, PR09 | Queued | — |
+| PR23 | Make index provenance and rebuild semantics coherent | P1 | retrieval | M | PR10, PR09 | Complete | 7869ead14b7f01af9c43b6efe33456e13f5d33ef |
 | PR24 | Fix registry portability, skill identity, and workspace caching | P1 | retrieval | M | PR23 | Queued | — |
 | PR25 | Enforce local model data and transport boundaries | P1 | retrieval | M | PR24, PR21 | Queued | — |
 | PR26 | Audit filesystem scope and executable configuration ownership | P1 | trust | M | PR08, PR05, PR21, PR24 | Queued | — |

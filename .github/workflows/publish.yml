@@ -69,7 +69,7 @@ jobs:
   # that says 0.1.0 would put a version on a registry that no file in this
   # repository claims, and nothing would notice until somebody installed it.
   version:
-    name: the tag is this package's version
+    name: Check the version tag
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -291,7 +291,7 @@ jobs:
   # not wait on them - it records the version that is now staged, with the notes
   # for exactly that version cut out of CHANGELOG.md.
   create-release:
-    name: create the release
+    name: Create the GitHub release
     needs: [version, publish-npm]
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -442,7 +442,7 @@ jobs:
   # left alone: releases are serialised by hand, not by this job, and an older
   # tag must never rewrite a newer mirror.
   sync-formula:
-    name: the committed formula names the served bytes
+    name: Sync the Homebrew formula
     needs: [version, build-binary]
     runs-on: ubuntu-latest
     timeout-minutes: 10

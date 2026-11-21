@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   offline:
-    name: offline ${{ matrix.os }} node ${{ matrix.node }}
+    name: Test offline on ${{ matrix.os }} node ${{ matrix.node }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -42,7 +42,7 @@ jobs:
         run: node scripts/bench-index.mjs
 
   artifacts:
-    name: artifacts ${{ matrix.os }} node ${{ matrix.node }}
+    name: Build qualification artifacts on ${{ matrix.os }} node ${{ matrix.node }}
     needs: offline
     runs-on: ${{ matrix.os }}
     strategy:

@@ -105,7 +105,7 @@ jobs:
   # -------------------------------------------------------------------------
   # One resolution
   resolve:
-    name: resolve one release
+    name: Resolve the release version
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -144,7 +144,7 @@ jobs:
   # an offline replay, which is the cheapest command that loads the optional
   # package through the core's dynamic import.
   verify-bench:
-    name: the released bench pairs with this release
+    name: Verify the released bench pair
     needs: [resolve]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -206,7 +206,7 @@ jobs:
   # -------------------------------------------------------------------------
   # PyPI
   publish-pypi:
-    name: publish to PyPI
+    name: Publish to PyPI
     needs: [resolve]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -333,7 +333,7 @@ jobs:
   # -------------------------------------------------------------------------
   # Homebrew
   publish-brew:
-    name: publish to Homebrew
+    name: Publish to Homebrew
     needs: [resolve]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -455,7 +455,7 @@ jobs:
           echo "pushed simt-dev $VERSION to ${TAP}@main"
 
   verify-brew:
-    name: the tap serves this release
+    name: Verify the tap serves the release
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [resolve, publish-brew]

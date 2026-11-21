@@ -47,7 +47,7 @@ Each slice below owns its findings, proposed change, and acceptance checks. **Ob
 | PR25 | Enforce local model data and transport boundaries | P1 | retrieval | M | PR24, PR21 | Complete | c87eeb1f9f81ba3aaf24f40b5192c4db5ef00ef9 |
 | PR26 | Audit filesystem scope and executable configuration ownership | P1 | trust | M | PR08, PR05, PR21, PR24 | Complete | 863c42544b7227e2d7a85428c1322b437cac360b |
 | PR27 | Resolve each release once and verify cross-channel promotion | P1 | release | M | PR17 | Complete | 6abb3071377c6f9a28eb63a01601441b98a06d6f |
-| PR28 | Qualify installed packages and state platform prerequisites | P1 | release | M | PR27, PR11 | Queued | — |
+| PR28 | Qualify installed packages and state platform prerequisites | P1 | release | M | PR27, PR11 | Complete | 9a65d8a941d0ca9313e6d98e8666ab965c3a7d23 |
 | PR29 | Publish one supported surface and deprecation map | P2 | surface | M | — | Queued | — |
 | PR30 | Retire or explicitly retain experimental packs | P2 | surface | M | PR29, PR16 | Queued | — |
 | PR31 | Move bench and synthetic research outside the stable core | P2 | surface | L | PR30, PR20, PR14 | Queued | — |

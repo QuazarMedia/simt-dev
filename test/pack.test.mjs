@@ -199,32 +199,32 @@ test('an installed consumer reads its own repository-local registry (PR24)', asy
 
   // The way an agent actually stands in a repository: a subdirectory, no `--root`.
   // Resolution ascends to the repository this copy is, so the registry it reads is the
-  // one above it and not the package's absence; the example file gives the directory a
-  // reason to exist rather than making resolution depend on an empty path.
+  // one above it and not the package's absence. The directory needs no content: a cwd is
+  // a place to stand, and the answer comes from the path, not from a file in it.
   const nested = join(root, 'app', 'src');
   await mkdir(nested, { recursive: true });
-  await writeFile(join(nested, 'index.mjs'), 'export const start = 1;\n');
-  const fromBelow = await run(join(root, 'node_modules', '.bin', CLI), ['graph', 'lint'], { cwd: nested, env: NO_ESTATE });
+  const installed = join(root, 'node_modules', '.bin', CLI);
+  const fromBelow = await run(installed, ['graph', 'lint'], { cwd: nested, env: NO_ESTATE });
   assert.equal(fromBelow.code, 0, fromBelow.out);
-  assert.match(fromBelow.out, /\.simt[/\\]skills\.graph\.json/);
-  assert.equal(fromBelow.out.includes(PACKAGE_ROOT), false, 'the installed tool reached into this checkout');
+  // The exact registry, not any `.simt` the output mentions and not merely "not the
+  // checkout": the root above the subdirectory is the only acceptable answer.
+  const registry = join(realpathSync(root), '.simt', 'skills.graph.json');
+  assert.ok(fromBelow.out.includes(registry), `the nested run did not read ${registry}:\n${fromBelow.out}`);
 
   // The other branch of the same resolution: with a git repository present, the root
   // git reports wins over the `.simt` walk-up. A decoy registry between the
   // subdirectory and the root is what makes that a claim instead of a coincidence —
   // the nearer one is what a walk-up would stop at, and it is deliberately unreadable.
-  const init = await run('git', ['init', '--quiet'], { cwd: root, env: NO_ESTATE });
+  const init = await run('git', ['init', '--quiet'], { cwd: root });
   assert.equal(init.code, 0, init.out);
   await mkdir(join(root, 'app', '.simt'), { recursive: true });
   await writeFile(join(root, 'app', '.simt', 'skills.graph.json'), '{ this is not a registry\n');
 
-  const withGit = await run(join(root, 'node_modules', '.bin', CLI), ['graph', 'lint'], { cwd: nested, env: NO_ESTATE });
+  const withGit = await run(installed, ['graph', 'lint'], { cwd: nested, env: NO_ESTATE });
   assert.equal(withGit.code, 0, withGit.out);
-  // Git answers with the physical path; compare the same one the answer names.
-  const registry = join(realpathSync(root), '.simt', 'skills.graph.json');
-  assert.ok(withGit.out.includes(registry), `the run did not read ${registry}:\n${withGit.out}`);
-  assert.equal(withGit.out.includes(join('app', '.simt')), false, 'resolution stopped at the nearer .simt a walk-up would find');
-  assert.equal(withGit.out.includes(PACKAGE_ROOT), false, 'the installed tool reached into this checkout');
+  // Same registry: the decoy nearer the subdirectory would refuse to parse, and this
+  // path cannot name it.
+  assert.ok(withGit.out.includes(registry), `the git-root run did not read ${registry}:\n${withGit.out}`);
 });
 
 test('an explicitly named registry wins over the absence', async () => {

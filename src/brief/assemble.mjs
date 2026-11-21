@@ -45,13 +45,13 @@ import { classifyTask, cardVerbs } from './kind.mjs';
 import { briefAdvice } from '../advice/advice.mjs';
 import { commandCard } from '../kernel/card.mjs';
 import { decisionHits, scopeHits, sourceRoots } from '../index/govern.mjs';
-import { rankFiles, renderMap } from '../index/map.mjs';
+import { rankFiles, renderMap, spelledPaths } from '../index/map.mjs';
 import { embedTaskQuery } from '../index/vectors.mjs';
 import { searchFtsBm25 } from '../index/store.mjs';
 import { coverage } from '../index/coverage.mjs';
 import { loadRegistry } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
-import { closure, rankSkills, selectWithinBudget } from '../resolve/resolve.mjs';
+import { closure, rankSkills } from '../resolve/resolve.mjs';
 import { tokenize } from '../text/tokens.mjs';
 import { loadGraph } from '../commands/map.mjs';
 import { dirtyPaths, parsePathList } from '../commands/skills.mjs';
@@ -233,9 +233,7 @@ export async function assembleBrief({
   // is what the reader already decided to touch. Emptying the scope for every task left
   // SKILLS and LESSONS with no path to match, so a skill declaring this file's path could
   // not surface; the dirty tree is still only scope when nothing was asked.
-  const spelled = asked && pending === null
-    ? [...filePaths].filter((path) => task.toLowerCase().includes(path.toLowerCase()))
-    : [];
+  const spelled = asked && pending === null ? spelledPaths(task, filePaths) : [];
   const scope = pending ?? (asked ? spelled : dirty);
 
   const { kind, basis } = classifyTask(task, { paths: pending ?? spelled });
@@ -245,9 +243,12 @@ export async function assembleBrief({
     why: ['the kind chooses the commands, and the commands are the part a reader cannot recover from a wrong guess'],
   });
   packet.add('TASK', `task ${task.length > 0 ? task : '(none given)'}`, { hard: true, why: ['the packet is an answer to this'] });
-  packet.add('TASK', `scope ${scope.length > 0 ? scope.join(', ') : 'the whole repository'}`, {
-    why: [named ? 'named with --paths' : asked ? 'the paths the task spells' : 'taken from the files git reports as modified'],
-  });
+  const scopeWhy = named
+    ? 'named with --paths'
+    : asked
+      ? spelled.length > 0 ? 'the paths the task spells' : 'the task names no path, so the whole repository'
+      : 'taken from the files git reports as modified';
+  packet.add('TASK', `scope ${scope.length > 0 ? scope.join(', ') : 'the whole repository'}`, { why: [scopeWhy] });
   if (!asked && !named) {
     packet.add('CAUTIONS', 'no task was given, so the packet describes the working tree rather than a task', {
       why: ['an unasked question has no answer to be short of'],
@@ -440,25 +441,26 @@ export async function assembleBrief({
       { forced: [] },
     );
     const expanded = closure(rankedSkills.selected, loaded.registry.skills);
-    // The packet names a skill and its byte size; it does not inline the body. Budgeting
-    // the NAME by the BODY (`budget / 4`, inherited from `skills brief`) held back every
-    // real body, because most are kilobytes against a 512-byte allowance - a section that
-    // could never show the skill whose declared path the task named. The packet's own
-    // packer still enforces its ceiling on the lines below.
-    const selection = selectWithinBudget(expanded, { all: true });
-    for (const entry of selection.picked.slice(0, SKILL_NAMES)) {
+    // The packet prints a skill's NAME and size; the body never enters its bytes. Budgeting
+    // the name by the body (`budget / 4`, inherited from `skills brief`) held back every
+    // real body against a 512-byte allowance, so the section could never show the skill
+    // whose declared path the task named. A registry-deferred skill is a body to fetch,
+    // not one this packet stands in for, so it is the only thing filtered out.
+    const offered = expanded.filter((entry) => !entry.skill.deferred);
+    for (const entry of offered.slice(0, SKILL_NAMES)) {
       const reasons = [...entry.reasons];
       packet.add('SKILLS', `${entry.skill.name} — ${entry.skill.bytes} B, ${reasons.join(' ')}`, {
         why: [`\`${CLI} skills show ${entry.skill.name}\` reads the body`],
       });
     }
-    if (selection.picked.length > SKILL_NAMES) {
-      packet.add('CAUTIONS', `skills matched but not named: ${selection.picked.slice(SKILL_NAMES).map((entry) => entry.skill.name).sort().join(', ')}`, {
+    if (offered.length > SKILL_NAMES) {
+      packet.add('CAUTIONS', `skills matched but not named: ${offered.slice(SKILL_NAMES).map((entry) => entry.skill.name).sort().join(', ')}`, {
         why: [`\`${CLI} skills find <query>\` lists the rest`],
       });
     }
-    if (selection.deferred.length > 0) {
-      packet.add('CAUTIONS', `skills deferred by the registry: ${selection.deferred.map((entry) => entry.skill.name).sort().join(', ')}`, {
+    const deferred = expanded.filter((entry) => entry.skill.deferred);
+    if (deferred.length > 0) {
+      packet.add('CAUTIONS', `skills deferred by the registry: ${deferred.map((entry) => entry.skill.name).sort().join(', ')}`, {
         why: ['a skill the registry marks deferred is not one this packet can stand in for'],
       });
     }

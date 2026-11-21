@@ -403,6 +403,18 @@ function closure(nodes, edges, scores) {
   return [...keep].sort();
 }
 
+/**
+ * The paths a task spells whole. Shared with the brief, whose scope is the same question;
+ * two copies of "did the task name this file" would answer it differently one day.
+ * @param {string} task
+ * @param {Iterable<string>} paths
+ * @returns {string[]}
+ */
+export function spelledPaths(task, paths) {
+  const text = String(task ?? '').toLowerCase();
+  return [...paths].filter((path) => text.includes(path.toLowerCase()));
+}
+
 function scoreFiles(nodes, symbolsByPath, task) {
   const scores = new Map(nodes.map((path) => [path, 0]));
   const { text, terms } = termsOf(task);
@@ -411,7 +423,7 @@ function scoreFiles(nodes, symbolsByPath, task) {
   // the file. Word overlap elsewhere is then a coincidence - `path` in
   // `src/testing/paths.mjs` was a candidate beside `src/commands/why.mjs` for a task that
   // named the latter - so a spelled path is the whole answer.
-  const spelled = nodes.filter((path) => text.includes(path.toLowerCase()));
+  const spelled = spelledPaths(text, nodes);
   if (spelled.length > 0) {
     const exact = new Map(nodes.map((path) => [path, 0]));
     for (const path of spelled) exact.set(path, 8);

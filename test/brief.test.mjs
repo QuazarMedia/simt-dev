@@ -74,7 +74,7 @@ test('a task that names a file still surfaces its skill and lesson', async (t) =
           summary: 'Keep a file',
           capabilities: ['keep'],
           stack: ['node'],
-          keywords: ['keep'],
+          keywords: ['escrow'],
           paths: ['src/keep.mjs'],
           bytes: 4096,
           sources: [{ repo: 'f', path: 'src/keep.mjs', role: 'canonical', bytes: 24 }],
@@ -89,8 +89,33 @@ test('a task that names a file still surfaces its skill and lesson', async (t) =
 
   const { code, stdout, stderr } = await run(root, ['brief', 'fix the keep helper in src/keep.mjs']);
   assert.equal(code, 0, stderr);
-  assert.match(stdout, /SKILLS\n\s+keeper /, stdout);
+  // The keyword is deliberately not in the task: the skill can only be found by the path
+  // it declares, which is the signal the empty scope had removed.
+  assert.match(stdout, /SKILLS\n\s+keeper .*path:src\/keep\.mjs/, stdout);
   assert.match(stdout, /LESSONS\n\s+0001-keep /, stdout);
+});
+
+test('a caution about unresolved Affects names only the decisions that govern the task', async (t) => {
+  // Every decision's dangling token used to arrive beside the one that did govern the
+  // file - 35 of them in this repository's own brief. `simt why` reports the corpus list.
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+  await mkdir(join(root, 'docs', 'decisions'), { recursive: true });
+  await writeFile(
+    join(root, 'docs', 'decisions', 'ADR-001-keep.md'),
+    '# ADR-001 — Keep\n\nStatus: **accepted**\nAffects: `src/keep.mjs`, `missing.mjs`\n',
+  );
+  await writeFile(
+    join(root, 'docs', 'decisions', 'ADR-002-other.md'),
+    '# ADR-002 — Other\n\nStatus: **accepted**\nAffects: `src/other.mjs`, `orphan.mjs`\n',
+  );
+  await git(['-C', root, 'add', '-A']);
+  await git(['-C', root, 'commit', '-qm', 'decisions']);
+
+  const { code, stdout, stderr } = await run(root, ['brief', 'fix the keep helper in src/keep.mjs']);
+  assert.equal(code, 0, stderr);
+  assert.match(stdout, /nothing resolves: missing\.mjs/, stdout);
+  assert.ok(!stdout.includes('orphan.mjs'), stdout);
 });
 
 test('a modified file is context, not the task scope or its kind', async (t) => {

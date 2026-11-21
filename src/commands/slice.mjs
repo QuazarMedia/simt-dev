@@ -42,7 +42,7 @@ import { EXIT, emit, emitJson, fail, isJson, note, writeMode } from '../output/i
 import { planDone, planNext } from '../plan/index.mjs';
 import { loadFormat } from '../plan/template.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
-import { renderGateReport, runGates, stagedFiles } from '../hooks/dispatcher.mjs';
+import { renderGateReport, runGates } from '../hooks/dispatcher.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { indexTreeId, passEntryForGate, readLedger } from '../ledger/index.mjs';
 import {
@@ -60,7 +60,7 @@ import { readManifest } from '../projection/manifest.mjs';
 import { CLI, MANIFEST_FILE } from '../name.mjs';
 import { LOCAL_DIR } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
-import { git, gitText } from '../sys/git.mjs';
+import { git, gitPaths, gitText } from '../sys/git.mjs';
 import { abandonSlice } from './slice-abandon.mjs';
 
 /**
@@ -643,6 +643,19 @@ function cachedResult({ name, at }) {
 }
 
 /**
+ * The paths a slice commit carries. This is deliberately wider than the gate helper's
+ * `stagedFiles`, which omits deletions because a formatter cannot read a path that is
+ * gone; a commit can and must carry a deletion.
+ */
+async function stagedForCommit(work) {
+  try {
+    return (await gitPaths(work, ['diff', '--cached', '--name-only', '--diff-filter=ACDMRT'])) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+/**
  * The worktree's own commit when it has one to land. `start` created this branch from
  * main, so every commit ahead of main belongs to the slice; the branch is the boundary,
  * not a commit count. A slice whose work is already committed has no commit for `finish`
@@ -712,7 +725,7 @@ async function finishSlice(root, id, flags) {
   const declared = manifest.manifest?.gates?.preCommit ?? [];
   const apply = `run: ${CLI} slice finish ${id}${test ? ` --test ${JSON.stringify(test)}` : ''} --yes`;
 
-  const staged = await stagedFiles(work);
+  const staged = await stagedForCommit(work);
   const split = await splitGates(work, declared, manifest.manifest);
   // Nothing staged is not nothing to land: the slice may already be committed in its
   // worktree. Read that commit now so the dry run can name it and the apply can skip

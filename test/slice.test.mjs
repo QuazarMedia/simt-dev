@@ -69,7 +69,7 @@ async function startableRepo() {
   return { root, tracker };
 }
 
-/** Start A27 and return the main checkout and the worktree every finish case uses. */
+/** Start A27 and return the main checkout and worktree the pre-committed finish cases use. */
 async function startA27() {
   const { root } = await startableRepo();
   const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
@@ -255,6 +255,21 @@ test('a staged edit after the slice commit also refuses to land', async () => {
     `the refusal did not name the staged edit: ${result.stderr}`,
   );
   assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), committed, 'a second commit was made');
+});
+
+test('finish lands a staged deletion', async () => {
+  const { root, worktree } = await startA27();
+  await rm(join(worktree, 'a.mjs'));
+  await git(['-C', worktree, 'add', '-A']);
+
+  const preview = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true' }));
+  assert.equal(preview.code, 0, preview.stderr);
+  assert.match(preview.stdout, /staged   1 file\(s\)/, preview.stdout);
+  assert.doesNotMatch(preview.stdout, /finish refuses/, preview.stdout);
+
+  const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(existsSync(join(root, 'a.mjs')), false, 'the staged deletion was not merged');
 });
 
 test('the finish dry run reports the same refusal in text and JSON', async () => {

@@ -195,6 +195,18 @@ test('an installed consumer reads its own repository-local registry (PR24)', asy
   const lint = await simt(root, ['graph', 'lint', '--root', '.']);
   assert.equal(lint.code, 0, lint.out);
   assert.match(lint.out, /\.simt[/\\]skills\.graph\.json/);
+
+  // The way an agent actually stands in a repository: a subdirectory, no `--root`.
+  // Resolution ascends to the repository this copy is, so the registry it reads is the
+  // one above it and not the package's absence; the example file gives the directory a
+  // reason to exist rather than making resolution depend on an empty path.
+  const nested = join(root, 'app', 'src');
+  await mkdir(nested, { recursive: true });
+  await writeFile(join(nested, 'index.mjs'), 'export const start = 1;\n');
+  const fromBelow = await run(join(root, 'node_modules', '.bin', CLI), ['graph', 'lint'], { cwd: nested, env: NO_ESTATE });
+  assert.equal(fromBelow.code, 0, fromBelow.out);
+  assert.match(fromBelow.out, /\.simt[/\\]skills\.graph\.json/);
+  assert.equal(fromBelow.out.includes(PACKAGE_ROOT), false, 'the installed tool reached into this checkout');
 });
 
 test('an explicitly named registry wins over the absence', async () => {

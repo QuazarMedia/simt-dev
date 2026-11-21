@@ -19,6 +19,7 @@ import { sliceCommand } from '../src/commands/slice.mjs';
 import { parse } from '../src/argv.mjs';
 import { reindex } from '../src/index/store.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
+import { EXIT } from '../src/output/index.mjs';
 import { capture, git, tempDir } from './fixture.mjs';
 
 test('every subcommand that needs an id refuses without one, and says what to run', async () => {
@@ -66,6 +67,22 @@ async function startableRepo() {
   await git(['-C', root, 'commit', '-qm', 'initial'], { cwd: root });
   await reindex(root);
   return { root, tracker };
+}
+
+/** Start A27 and return the main checkout and the worktree every finish case uses. */
+async function startA27() {
+  const { root } = await startableRepo();
+  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
+  assert.equal(started.code, 0, started.stderr);
+  return { root, worktree: join(root, '.simt', 'local', 'worktrees', 'a27') };
+}
+
+/** Commit the slice edit and return the commit finish must land. */
+async function commitA27(worktree, message = 'feat(a27): commit the slice') {
+  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
+  await git(['-C', worktree, 'add', '-A']);
+  await git(['-C', worktree, 'commit', '-qm', message]);
+  return String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
 }
 
 test('a failed worktree add releases the lease it claimed (A26)', async () => {
@@ -180,16 +197,9 @@ test('finish from the main checkout merges the slice, commits the row and remove
 });
 
 test('finish lands work already committed in the worktree without a second commit', async () => {
-  const { root } = await startableRepo();
-  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
-  assert.equal(started.code, 0, started.stderr);
-
-  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
-  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
-  await git(['-C', worktree, 'add', '-A']);
+  const { root, worktree } = await startA27();
   const message = 'feat(a27): commit the slice in its worktree';
-  await git(['-C', worktree, 'commit', '-qm', message]);
-  const committed = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+  const committed = await commitA27(worktree, message);
 
   const preview = await capture(() => sliceCommand('finish', ['A27'], { root, test: 'true' }));
   assert.equal(preview.code, 0, preview.stderr);
@@ -210,36 +220,25 @@ test('finish lands work already committed in the worktree without a second commi
 });
 
 test('a commit ahead with a tracked edit still in the worktree refuses to land', async () => {
-  const { root } = await startableRepo();
-  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
-  assert.equal(started.code, 0, started.stderr);
-
-  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
-  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
-  await git(['-C', worktree, 'add', '-A']);
-  await git(['-C', worktree, 'commit', '-qm', 'feat(a27): commit the slice']);
-  const committed = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+  const { root, worktree } = await startA27();
+  const committed = await commitA27(worktree);
   await writeFile(join(worktree, 'a.mjs'), 'export const a = 3;\n');
   const mainHead = String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim();
 
   const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
-  assert.notEqual(result.code, 0, 'an uncommitted tracked edit was landed with the commit');
-  assert.match(result.stdout + result.stderr, /has uncommitted changes \(a\.mjs\)/, 'the refusal did not name the edit');
+  assert.equal(result.code, EXIT.USAGE, 'an uncommitted tracked edit was landed with the commit');
+  assert.ok(
+    result.stderr.includes(`${worktree} has uncommitted changes (a.mjs)`),
+    `the refusal did not name the edit: ${result.stderr}`,
+  );
   assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), committed, 'a second commit was made');
   assert.equal(String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim(), mainHead, 'the commit was merged anyway');
   assert.equal(existsSync(worktree), true, 'the worktree was removed with the edit still in it');
 });
 
 test('a staged edit after the slice commit also refuses to land', async () => {
-  const { root } = await startableRepo();
-  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
-  assert.equal(started.code, 0, started.stderr);
-
-  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
-  await writeFile(join(worktree, 'a.mjs'), 'export const a = 2;\n');
-  await git(['-C', worktree, 'add', '-A']);
-  await git(['-C', worktree, 'commit', '-qm', 'feat(a27): commit the slice']);
-  const committed = String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim();
+  const { root, worktree } = await startA27();
+  const committed = await commitA27(worktree);
   await writeFile(join(worktree, 'a.mjs'), 'export const a = 3;\n');
   await git(['-C', worktree, 'add', 'a.mjs']);
 
@@ -248,21 +247,23 @@ test('a staged edit after the slice commit also refuses to land', async () => {
   assert.match(preview.stdout, /finish refuses: .*has uncommitted changes \(a\.mjs\)/, 'the dry run hid the refusal');
 
   const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
-  assert.notEqual(result.code, 0, 'a staged edit after the commit was landed as a second commit');
-  assert.match(result.stdout + result.stderr, /has uncommitted changes \(a\.mjs\)/, 'the refusal did not name the staged edit');
+  assert.equal(result.code, EXIT.USAGE, 'a staged edit after the commit was landed as a second commit');
+  assert.ok(
+    result.stderr.includes(`${worktree} has uncommitted changes (a.mjs)`),
+    `the refusal did not name the staged edit: ${result.stderr}`,
+  );
   assert.equal(String((await git(['-C', worktree, 'rev-parse', 'HEAD'])).stdout).trim(), committed, 'a second commit was made');
 });
 
 test('a clean worktree with no commits ahead refuses to land', async () => {
-  const { root } = await startableRepo();
-  const started = await capture(() => sliceCommand('start', ['A27'], { root, yes: true, session: 'tester' }));
-  assert.equal(started.code, 0, started.stderr);
-
-  const worktree = join(root, '.simt', 'local', 'worktrees', 'a27');
+  const { root, worktree } = await startA27();
   const mainHead = String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim();
   const result = await capture(() => sliceCommand('finish', ['A27'], { root, yes: true, test: 'true' }));
-  assert.notEqual(result.code, 0, 'an empty slice was reported as landed');
-  assert.match(result.stdout + result.stderr, /has nothing staged and no commits ahead of/, 'the refusal did not name both missing contributions');
+  assert.equal(result.code, EXIT.USAGE, 'an empty slice was reported as landed');
+  assert.ok(
+    result.stderr.includes(`${worktree} has nothing staged and no commits ahead of ${root}`),
+    `the refusal did not name both missing contributions: ${result.stderr}`,
+  );
   assert.equal(String((await git(['-C', root, 'rev-parse', 'HEAD'])).stdout).trim(), mainHead, 'main moved for an empty slice');
   assert.equal(existsSync(worktree), true, 'the empty worktree was removed');
 });

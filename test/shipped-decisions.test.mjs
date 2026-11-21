@@ -287,7 +287,7 @@ function estateNamesInFile(label, text) {
 }
 
 const SHIPPED_ROOTS = ['bin', 'src', 'rules', 'docs/decisions', 'templates', 'agents', 'skills', 'ecosystems', 'harnesses'];
-const SHIPPED_FILES = ['CHANGELOG.md', 'README.md', 'LICENSE', 'package.json'];
+const SHIPPED_FILES = ['CHANGELOG.md', 'README.md', 'LICENSE', 'package.json', 'docs/guides/local-work.md'];
 
 test('nothing this package publishes names a repository from this estate', async () => {
   // These records ship. `pyproject.toml` force-includes `docs/decisions` into the wheel

@@ -72,8 +72,10 @@ export function buildCapsule({
     })).sort((a, b) => String(a.obligation).localeCompare(String(b.obligation))),
     uncertainty: (Array.isArray(uncertainty) ? uncertainty : []).filter(isObject).map((entry) => ({ id: entry.id ?? null, reason: entry.reason ?? null })),
     next: isObject(next) ? { action: next.action ?? null, admissible: next.admissible === true } : null,
-    budget: { actions: budget.actions ?? null, seconds: budget.seconds ?? null },
-    approval: isObject(approval) ? { digest: approval.digest ?? null, scope: approval.scope ?? null } : null,
+    ...(local === null || budget.actions !== undefined || budget.seconds !== undefined
+      ? { budget: { actions: budget.actions ?? null, seconds: budget.seconds ?? null } } : {}),
+    ...(local === null || isObject(approval)
+      ? { approval: isObject(approval) ? { digest: approval.digest ?? null, scope: approval.scope ?? null } : null } : {}),
     excluded: [...EXCLUDED],
     rebuiltFrom: 'ids-and-provenance',
   };

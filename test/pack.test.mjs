@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 import { git, cmd } from './fixture.mjs';
+import { qualifyLocalWork } from './fixtures/local-work/local-qualification.mjs';
 import { CLI } from '../src/name.mjs';
 import { MANIFEST_FILE } from '../src/name.mjs';
 
@@ -402,7 +403,7 @@ test('a consumer with no estate is told every way to point at one', async () => 
   assert.match(result.out, /config\.json/);
 });
 for (const shape of ['handbook', 'operations']) {
-  test(`local scope first session in an installed ${shape} checkout`, async () => {
+  test(`local scope first session in an installed ${shape} checkout`, async (t) => {
     const fixture = join(PACKAGE_ROOT, 'test', 'fixtures', 'local-work', shape);
     const origin = join(stage, `origin-${shape}`);
     const root = join(stage, `consumer-${shape}`);
@@ -472,6 +473,9 @@ for (const shape of ['handbook', 'operations']) {
     const missing = await simt(root, ['knowledge', 'why', 'handbook/missing.md', '--scope', 'handbook']);
     assert.notEqual(missing.code, 0);
     assert.match(missing.out, /no claim or section/);
+    const result = await qualifyLocalWork({ root, shape,
+      invoke: (args, env) => simt(root, args, { ...NO_ESTATE, ...env }) });
+    t.diagnostic(JSON.stringify(result));
   });
 }
 

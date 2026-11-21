@@ -234,21 +234,70 @@ export const API_EXPORTS = [
 ];
 
 /**
+ * The exact deep modules the optional bench package still imports.
+ *
+ * This is a migration list, not a new wildcard: the bench build rewrites its relative
+ * core imports to these specifiers, and the package exports map names each one. The
+ * list is checked against the bench's actual imports and against package.json, so a new
+ * deep import cannot be published accidentally by adding it in one place only.
+ */
+export const LEGACY_DEEP_IMPORTS = [
+  'brief/assemble.mjs',
+  'brief/packet.mjs',
+  'commands/doc-input.mjs',
+  'commands/skills.mjs',
+  'graph/compile.mjs',
+  'graph/load.mjs',
+  'hooks/dispatcher.mjs',
+  'index/map.mjs',
+  'knowledge/observations.mjs',
+  'measure/ablation.mjs',
+  'measure/corpus.mjs',
+  'measure/metrics.mjs',
+  'measure/records.mjs',
+  'measure/stats.mjs',
+  'measure/task-schema.mjs',
+  'measure/tasks.mjs',
+  'name.mjs',
+  'output/index.mjs',
+  'package-version.mjs',
+  'plan/index.mjs',
+  'projection/manifest.mjs',
+  'projection/markers.mjs',
+  'projection/mdc.mjs',
+  'projection/project.mjs',
+  'projection/rules.mjs',
+  'projection/surfaces.mjs',
+  'repo-root.mjs',
+  'resolve/fingerprint.mjs',
+  'review/critic.mjs',
+  'run.mjs',
+  'state.mjs',
+  'sys/proc.mjs',
+  'testing/parsers.mjs',
+  'testing/patches.mjs',
+  'testing/paths.mjs',
+  'testing/runners.mjs',
+  'testing/vault.mjs',
+  'util/canonical.mjs',
+  'work/assurance.mjs',
+];
+
+/**
  * The package export map, with what each entry promises.
  *
- * `./src/*` is the one entry this review recommends narrowing, and it is left working
- * here because the plugin runtime imports through it; PR32 owns replacing it. Recording
- * it as a deprecation now is what makes that replacement a scheduled act rather than a
- * surprise for a consumer.
+ * The wildcard is gone. Each `./src/<module>` entry below exists only because the
+ * optional bench imports it today; a new deep import needs a deliberate addition here,
+ * not a path that happens to resolve.
  */
 export const PACKAGE_EXPORTS = [
   { key: '.', stability: 'stable', note: 'the library surface above' },
   { key: './package.json', stability: 'stable', note: 'so a consumer can read the version and engines floor' },
-  {
-    key: './src/*',
+  ...LEGACY_DEEP_IMPORTS.map((module) => ({
+    key: `./src/${module}`,
     stability: 'deprecate',
-    note: 'deep imports kept for the generated plugin runtime; import from the package root instead',
-  },
+    note: 'the optional bench still imports this exact module; import from the package root instead',
+  })),
 ];
 
 /** What already works but is on its way out, and what a reader does instead. */
@@ -262,9 +311,9 @@ export const DEPRECATIONS = [
     window: 'accepted and announced; sync reports before it writes, so the flag asks nothing new',
   },
   {
-    what: 'deep imports through simt-dev/src/*',
-    replacedBy: 'the package root exports',
-    window: 'until the plugin runtime imports the root; not removed in a patch release',
+    what: 'deep imports through simt-dev/src/<module>',
+    replacedBy: 'the package root exports; the optional bench uses the exact ./src/<module> entries above',
+    window: 'the wildcard is gone; only the bench migration list remains and it gains no new paths',
   },
 ];
 

@@ -72,11 +72,18 @@ test('the optional bench package builds with its core imports rewritten', async 
     assert.equal(pkg.repository?.url, core.repository.url);
     assert.equal(pkg.repository?.directory, 'packages/bench');
 
+    const coreSpecifiers = new Set();
     for (const file of await sources(join(out, 'src'))) {
       const source = await readFile(file, 'utf8');
       assert.equal(source.includes("'../../../src/"), false, `${relative(out, file)} still reaches into the checkout`);
+      for (const match of source.matchAll(/from 'simt-dev\/(src\/[^']+)'/g)) coreSpecifiers.add(match[1]);
     }
     assert.match(await readFile(join(out, 'src', 'commands.mjs'), 'utf8'), /from 'simt-dev\/src\//);
+
+    // The rewritten specifiers are the package's exact legacy exports. A wildcard would
+    // let this pass while exposing every internal module, so the key is compared too.
+    const missing = [...coreSpecifiers].filter((specifier) => core.exports[`./${specifier}`] === undefined);
+    assert.deepEqual(missing, [], `the bench imports paths package.json does not export: ${missing.join(', ')}`);
   } finally {
     await rm(out, { recursive: true, force: true });
   }

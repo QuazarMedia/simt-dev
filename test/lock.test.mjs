@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { desiredRegion } from '../src/projection/rules.mjs';
-import { computeLock, readLock, writeLockVariants } from '../src/projection/lock.mjs';
+import { computeLock, readLock } from '../src/projection/lock.mjs';
 import { LOCK_FILE, LOCK_LEGACY } from '../src/name.mjs';
 import { frozenFindings, syncCommand } from '../src/commands/sync.mjs';
 import { plan } from '../src/projection/project.mjs';
@@ -98,7 +98,12 @@ test('a lock under the old name is read, and the next write migrates it (ADR-110
   assert.deepEqual(read, lock, 'the legacy file answers as a lock');
   assert.deepEqual(await frozenFindings(root, {}), [], 'a frozen check reads the legacy lock');
 
-  await writeLockVariants(root, {});
+  // A write only happens when the lock it computes differs from the one on disk. Make
+  // the legacy file stale, then let the production writer replace it under the new name.
+  const stale = `${JSON.stringify({ ...lock, outputs: '0'.repeat(64) }, null, 2)}\n`;
+  await writeFile(join(root, LOCK_LEGACY), stale);
+  const written = await capture(() => syncCommand([], { root, yes: true }));
+  assert.equal(written.code, 0, 'the production writer succeeds');
   assert.equal(
     await readFile(join(root, LOCK_FILE), 'utf8'),
     `${JSON.stringify(lock, null, 2)}\n`,
@@ -106,7 +111,7 @@ test('a lock under the old name is read, and the next write migrates it (ADR-110
   );
   assert.equal(
     await readFile(join(root, LOCK_LEGACY), 'utf8'),
-    `${JSON.stringify(lock, null, 2)}\n`,
+    stale,
     'the legacy lock is read, never rewritten',
   );
   await rm(root, { recursive: true, force: true });

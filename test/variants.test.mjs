@@ -17,10 +17,16 @@ import {
   readLockedVariants,
   variantsDefect,
 } from '../src/kernel/variants.mjs';
-import { readLock, writeLockVariants } from '../src/projection/lock.mjs';
+import { computeLock, readLock } from '../src/projection/lock.mjs';
 import { LOCK_FILE, LOCK_LEGACY } from '../src/name.mjs';
 import { desiredRegion } from '../src/projection/rules.mjs';
 import { git, keepTemp } from './fixture.mjs';
+
+async function writeVariantLock(root, variants) {
+  const lock = await computeLock(root, { variants });
+  await writeFile(join(root, LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
+  return lock;
+}
 
 async function makeVariantRepo() {
   const root = await mkdtemp(join(tmpdir(), 'simt-variants-'));
@@ -178,7 +184,7 @@ test('projection uses the locked winner from simt.lock.json and check --frozen v
   assert.doesNotMatch(before.body, /simt-variants/);
 
   // Write locked variant `b` to simt.lock.json
-  const lock = await writeLockVariants(root, {
+  const lock = await writeVariantLock(root, {
     'house.push': {
       winner: 'b',
       variant: 'b',
@@ -232,7 +238,7 @@ test('a locked winner under the old lock name is read, not lost (ADR-110)', asyn
   const root = await makeVariantRepo();
 
   // The lock a pre-rename run wrote, moved to the legacy name.
-  const lock = await writeLockVariants(root, { 'house.push': { winner: 'b' } });
+  const lock = await writeVariantLock(root, { 'house.push': { winner: 'b' } });
   await rm(join(root, LOCK_FILE), { force: true });
   await writeFile(join(root, LOCK_LEGACY), `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
 

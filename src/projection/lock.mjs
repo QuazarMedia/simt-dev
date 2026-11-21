@@ -8,7 +8,7 @@
 // rewritten.
 
 import { createHash } from 'node:crypto';
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { readLockedVariants } from '../kernel/variants.mjs';
@@ -45,17 +45,6 @@ export async function computeLock(root, flags = {}, manifest = undefined) {
   const hasVariants =
     variants && typeof variants === 'object' && Object.keys(variants).length > 0;
   return hasVariants ? { version: LOCK_VERSION, inputs, outputs, variants } : { version: LOCK_VERSION, inputs, outputs };
-}
-
-/**
- * Record locked variant winners in `simt.lock.json` alongside updated digests.
- */
-export async function writeLockVariants(root, nextVariants, flags = {}) {
-  const existing = await readLockedVariants(root);
-  const merged = { ...existing, ...(nextVariants ?? {}) };
-  const lock = await computeLock(root, { ...flags, variants: merged });
-  await writeFile(join(root, LOCK_FILE), `${JSON.stringify(lock, null, 2)}\n`, 'utf8');
-  return lock;
 }
 
 /** Read a lock, or null when the file is not there. A file that does not parse is an

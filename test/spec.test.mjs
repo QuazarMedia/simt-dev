@@ -255,8 +255,10 @@ test('surface: the inventory is derived from the spec, one row per command', () 
 test('surface: the library and package exports carry a decision, and deprecations name a replacement', () => {
   assert.equal(new Set(API_EXPORTS.map((entry) => entry.name)).size, API_EXPORTS.length, 'an export is listed twice');
   for (const entry of API_EXPORTS) assert.ok(entry.module.length > 0, `${entry.name} has no module`);
-  assert.deepEqual(PACKAGE_EXPORTS.map((entry) => entry.key), ['.', './package.json', './src/*']);
-  assert.equal(PACKAGE_EXPORTS.find((entry) => entry.key === './src/*').stability, 'deprecate');
+  const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  assert.deepEqual(PACKAGE_EXPORTS.map((entry) => entry.key), Object.keys(pkg.exports), 'the surface page and package.json disagree');
+  assert.equal(PACKAGE_EXPORTS.some((entry) => entry.key.includes('*')), false, 'a wildcard export remains');
+  assert.ok(PACKAGE_EXPORTS.filter((entry) => entry.key.startsWith('./src/')).length > 0, 'the bench migration list is empty');
   assert.ok(DEPRECATIONS.length > 0);
   for (const entry of DEPRECATIONS) {
     assert.ok(entry.replacedBy.length > 0, `${entry.what} names no replacement`);

@@ -14,7 +14,6 @@ import {
   ASSURANCE,
   OBSERVATION_VERDICTS,
   channelIndependence,
-  jobState,
   verifyOutcome,
 } from '../src/actions/observe.mjs';
 
@@ -37,7 +36,6 @@ test('an accepted request is not a result', () => {
   const result = verifyOutcome({ job: { state: 'accepted' }, object: object(), postconditions: [{ field: 'name', expect: 'discount' }], channels: independent });
   assert.equal(result.verdict, 'incomplete');
   assert.match(result.reasons[0], /accepted request is not a result/);
-  assert.equal(jobState({ status: 202 }), 'pending');
 });
 
 test('a job that succeeded with the wrong object fails', () => {

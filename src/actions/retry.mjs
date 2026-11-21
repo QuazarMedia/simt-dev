@@ -112,13 +112,6 @@ export function duplicateCallback(seen = [], callback = {}) {
   return { duplicate: known.includes(key), key, reason: known.includes(key) ? 'this callback was already applied' : null };
 }
 
-/**
- * A simulated schedule, for tests and for showing a reviewer the shape before running it.
- */
-export function simulateSchedule({ attempts = 3, baseMs = 100, capMs = 5000, seed = 'simt' } = {}) {
-  return Array.from({ length: Math.max(0, attempts) }, (_, index) => backoff({ attempt: index + 1, baseMs, capMs, seed }));
-}
-
 /** Whether a surface's success signal proves idempotency. It never does. */
 export function surfaceProvesIdempotency(surface) {
   return { proves: false, reason: `${surface ?? 'this surface'} reports that it accepted the action, not that the target applied it once` };

@@ -531,11 +531,16 @@ test('the adopting gate stays on one platform and the floor (S48)', () => {
 });
 
 test('the own copy runs a gate this repository can actually pass', async () => {
-  // `simt check` is red here by design: this AGENTS.md is hand-written and never
-  // self-adopted, so the check reports it as unmanaged on every run. A CI job that is
-  // red the day it lands is worse than no job, because it teaches the reader to ignore
-  // the thing they added in order to stop ignoring things.
+  // This repository adopts itself, so the generated AGENTS.md region is current. `simt
+  // check` is still red on this repository's own findings (package-lock.json over the
+  // file-length ceiling, no packageManager pin), and a CI job that is red the day it
+  // lands is worse than no job: it teaches the reader to ignore the thing they added in
+  // order to stop ignoring things. The file must say that, not the old claim that the
+  // repository never adopted itself.
   const own = renderWorkflow({ own: true });
+  assert.match(own, /adopts itself/);
+  assert.match(own, /packageManager pin/);
+  assert.doesNotMatch(own, /never self-adopted/);
   assert.doesNotMatch(own, /run: \|/);
   assert.match(own, /run: npm test/);
   assert.match(own, /run: npm run lint/);

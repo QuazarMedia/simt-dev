@@ -26,7 +26,7 @@ function spelled(key) {
   return key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 }
 
-function failure(command, code, message, remedy) {
+function failure(command, code, message, remedy, domainCode) {
   return {
     command,
     ok: false,
@@ -35,7 +35,14 @@ function failure(command, code, message, remedy) {
     documents: [],
     notes: [],
     warnings: [],
-    error: { message, remedy: remedy ?? `run: ${CLI} --help`, exitCode: code },
+    error: {
+      message,
+      remedy: remedy ?? `run: ${CLI} --help`,
+      exitCode: code,
+      // A handler with its own machine-readable refusal keeps it. The CLI still prints
+      // the message; a library caller can branch on the code without parsing prose.
+      ...(domainCode === undefined ? {} : { code: domainCode }),
+    },
   };
 }
 
@@ -48,44 +55,60 @@ function failure(command, code, message, remedy) {
 export async function run(command, { args = [], flags = {}, root } = {}) {
   const resolved = await resolveCommand(command);
   if (resolved === null) return failure(command, EXIT.USAGE, `unknown command \`${command}\``);
+  const path = resolved.path;
 
   // The guard rails the dispatcher applies, applied here for the same reason: a library
   // caller that passes `--frozen` to `status` must be told, not quietly served a default.
   for (const key of Object.keys(flags)) {
     if (GLOBAL_FLAGS.has(key) || resolved.declared.has(spelled(key))) continue;
-    return failure(command, EXIT.USAGE, `--${spelled(key)} is not a flag of \`${command}\``);
+    return failure(path, EXIT.USAGE, `--${spelled(key)} is not a flag of \`${path}\``);
   }
   for (const [flag, allowed] of Object.entries(resolved.values)) {
     const value = flags[flag.replace(/-([a-z])/g, (_, c) => c.toUpperCase())];
     if (value !== undefined && !allowed.includes(value)) {
-      return failure(command, EXIT.USAGE, `--${flag} takes ${allowed.join(', ')}; received ${value}`);
+      return failure(path, EXIT.USAGE, `--${flag} takes ${allowed.join(', ')}; received ${value}`);
     }
   }
 
   clearWarnings();
-  jsonCommand(command);
+  jsonCommand(path);
   jsonIndentDefault(flags.pretty === true);
   maxBytesLimit(flags.maxBytes);
   jsonFailMode(flags.json === true);
 
   const effective = root === undefined ? flags : { root, ...flags };
-  const produced = await withOutputState(() => withSink(() => resolved.run(args, effective)));
-  // The same finaliser the dispatcher uses: a library caller and a terminal caller must
-  // not disagree about the exit code a document carries, or whether a flag was superseded.
-  const finalised = finaliseJson(produced.documents, {
-    code: produced.code,
-    deprecated: Object.fromEntries(deprecatedFlags(command, flags)),
-  });
-  return {
-    command,
-    ok: finalised.code === EXIT.OK,
-    code: finalised.code,
-    text: produced.text,
-    documents: finalised.documents,
-    notes: produced.notes,
-    warnings: warnings(),
-    error: produced.error,
-  };
+  try {
+    const produced = await withOutputState(() => withSink(() => resolved.run(args, effective)));
+    // The same finaliser the dispatcher uses: a library caller and a terminal caller must
+    // not disagree about the exit code a document carries, or whether a flag was superseded.
+    const finalised = finaliseJson(produced.documents, {
+      code: produced.code,
+      deprecated: Object.fromEntries(deprecatedFlags(path, flags)),
+    });
+    return {
+      command: path,
+      ok: finalised.code === EXIT.OK,
+      code: finalised.code,
+      text: produced.text,
+      documents: finalised.documents,
+      notes: produced.notes,
+      warnings: warnings(),
+      error: produced.error,
+    };
+  } catch (error) {
+    // The CLI has always turned a thrown handler into a reported failure; a library
+    // caller used to get a rejected promise and no result at all. A handler's own
+    // exit code, remedy and domain code survive, so this is the same refusal, carried
+    // as data.
+    const code = Number.isInteger(error?.exitCode) && error.exitCode > 0 ? error.exitCode : EXIT.FAIL;
+    return failure(
+      path,
+      code,
+      error?.message ?? String(error),
+      error?.remedy,
+      typeof error?.code === 'string' ? error.code : undefined,
+    );
+  }
 }
 
 /** The text the command printed, as one string. Empty when it answered in JSON. */

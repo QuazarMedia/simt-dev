@@ -16,6 +16,7 @@ import { join } from 'node:path';
 import { promisify } from 'node:util';
 
 import { renderJson, renderText, run } from '../src/run.mjs';
+import { IMPLEMENTED } from '../src/commands/index.mjs';
 
 const exec = promisify(execFile);
 const RUN_URL = new URL('../src/run.mjs', import.meta.url).href;
@@ -90,6 +91,53 @@ test('an unknown command is refused with the usage code', async () => {
   const result = await run('not a command');
   assert.equal(result.code, 2);
   assert.match(result.error.message, /unknown command/);
+});
+
+test('an alias or group default resolves to the path the CLI dispatches', async () => {
+  // `run` looked the caller's spelling up in IMPLEMENTED directly, so `compare` and
+  // `skills` were unknown here while the same words worked in a terminal. The canonical
+  // path is also the one a JSON document names.
+  const root = await mkdtemp(join(tmpdir(), 'simt-run-'));
+  try {
+    const alias = await run('compare', { root });
+    assert.equal(alias.command, 'workspace compare');
+    const group = await run('plan', { flags: { json: true }, root: process.cwd() });
+    assert.equal(group.command, 'plan status');
+    assert.equal(renderJson(group).command, 'plan status');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a closed flag value is refused before the handler runs', async () => {
+  const result = await run('map', { flags: { level: 'everything' } });
+  assert.equal(result.code, 2);
+  assert.match(result.error.message, /--level takes/);
+});
+
+test('a handler that throws is a result, with its code, remedy and domain code', async () => {
+  // The CLI has always caught a thrown handler; `run` rejected, so the same failure was
+  // an answer in a terminal and an unhandled exception in a library or MCP caller.
+  const path = 'pr35 throws';
+  IMPLEMENTED[path] = async () => async () => {
+    const error = new Error('the handler refused');
+    error.exitCode = 7;
+    error.remedy = 'run: fix the input';
+    error.code = 'E_PR35';
+    throw error;
+  };
+  try {
+    const result = await run(path);
+    assert.equal(result.command, path);
+    assert.equal(result.ok, false);
+    assert.equal(result.code, 7);
+    assert.equal(result.error.exitCode, 7);
+    assert.equal(result.error.remedy, 'run: fix the input');
+    assert.equal(result.error.code, 'E_PR35');
+    assert.equal(result.error.message, 'the handler refused');
+  } finally {
+    delete IMPLEMENTED[path];
+  }
 });
 
 test('a gate keeps its exit code, its notes and its text in the result', async () => {

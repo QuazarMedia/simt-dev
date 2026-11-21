@@ -40,5 +40,9 @@ try {
   // document on stdout. Letting the loop empty first makes the exit honest
   process.exitCode = code;
 } catch (error) {
-  process.exit(fail(error?.message ?? String(error), EXIT.FAIL));
+  // A handler may name its own exit code and remedy. The old catch flattened every
+  // throw to EXIT.FAIL, so a typed refusal lost both the code a script branches on and
+  // the line that says how to recover.
+  const code = Number.isInteger(error?.exitCode) && error.exitCode > 0 ? error.exitCode : EXIT.FAIL;
+  process.exit(fail(error?.message ?? String(error), code, error?.remedy));
 }

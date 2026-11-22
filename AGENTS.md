@@ -135,7 +135,7 @@ agent, and confirm every instruction in it is one that agent can act on.
 
 <!-- simt:begin -->
 <!-- simt:generated -->
-<!-- simt:sha=6e2ffc97c0471c099993a454c272a7471b2a45eb -->
+<!-- simt:sha=6a85a11948e27ec5c8854ec14b8366614662bb23 -->
 <!-- simt:sources=rules/core.md,rules/stacks/python.md,rules/mdc/intake-questions.mdc,rules/mdc/slice-commit.mdc,rules/mdc/test-gate.mdc -->
 <!-- Generated content. Do not edit by hand - your changes are overwritten.
      Run `simt sync --yes` to regenerate, or `simt check` to see what is stale. -->
@@ -324,17 +324,19 @@ evidence for a test you have not run.
 ### Commit message
 
 A message is read by the next agent before they are told what to do. The title says
-what changed; the body carries only what the diff cannot: why the change was asked
-for, and what was run to prove it. A reader never reconstructs that from the patch.
+what changed in one line; the body carries what that line cannot — what the change
+is, why it was asked for, and what was run to prove it. A reader never reconstructs
+that from the patch.
 
 The title is Conventional Commits: imperative, no trailing period, a short scope slug
 that names the subsystem — not a ticket id.
 
     feat(dispatcher): skip the test gate on a push that already passed
 
-The body is sections in a fixed order, separated by one blank line. `Why` is always
-present; the other two appear only when they have something to say, and a one-line
-commit has no body at all.
+The body is sections in a fixed order, separated by one blank line. `What` and
+`Why` are always present; the other two appear only when they have something to say.
+
+    What: <the title said out: what the change is, in one to two sentences>
 
     Why: <the task, defect, or decision that asked for this, in one to three sentences>
 
@@ -342,15 +344,17 @@ commit has no body at all.
 
     Evidence: <what ran on this tree, and what it said>
 
-`Why` is the one claim the diff cannot make. `Delta` states a change the patch does
-not show by itself — skipped work, scheduling, wire format — as one line with an
-ASCII arrow, never a paragraph. `Evidence` names the commands that ran and their
-result; it is the fixed shape that makes "never claim a test you did not run"
-checkable, and it appears only when something ran.
+`What` is the title in a sentence or two — the change explained, not a file list
+recited. It is capped on purpose: one to two sentences, never a paragraph, and no
+more detail than the title asks for. `Why` is the one claim the diff cannot make.
+`Delta` states a change the patch does not show by itself — skipped work, scheduling,
+wire format — as one line with an ASCII arrow, never a paragraph. `Evidence` names
+the commands that ran and their result; it is the fixed shape that makes "never
+claim a test you did not run" checkable, and it appears only when something ran.
 
-What the title and the diff already say — what changed, what the state was before —
-is not a section. The diff is the What and the Before, written down; a section that
-restates them spends words on what the tree already shows.
+The state before the change is not a section of its own: `Delta` carries the
+before -> arrow, and the diff is the before written down. A section that recites
+what the tree already shows spends words on what the patch will show anyway.
 
 The message ends with a trailer block, the last paragraph after one blank line:
 decision and task ids on a `Refs:` line when a record settles the change, then the

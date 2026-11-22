@@ -12,6 +12,7 @@ import { run, renderJson } from '../run.mjs';
 import { checkRepo } from '../commands/sync.mjs';
 import { boardPayload } from './board.mjs';
 import { evidenceChains } from './evidence.mjs';
+import { knowledgeGraph } from './knowledge.mjs';
 import { EXIT, emitJson, jsonCommand, withOutputState, withSink } from '../output/index.mjs';
 import { finaliseJson } from '../output/envelope.mjs';
 import { within } from '../trust/paths.mjs';
@@ -25,6 +26,9 @@ const ROUTES = new Map([
   ['/api/board', { board: true }],
   ['/api/evidence', { command: 'evidence' }],
   ['/api/evidence/chains', { chains: true }],
+  ['/api/knowledge/graph', { knowledgeGraph: true }],
+  ['/api/knowledge/why', { command: 'knowledge why', scope: true }],
+  ['/api/knowledge/rank', { command: 'knowledge rank', scope: true, query: true }],
   ['/api/work', { command: 'work inspect' }],
 ]);
 
@@ -78,6 +82,24 @@ export async function apiAnswer(root, url) {
       args.push(id);
     }
   }
+  const flags = { json: true };
+  if (route.query) {
+    const query = url.searchParams.get('query');
+    const scope = url.searchParams.get('scope');
+    if (query === null || query.trim() === '' || scope === null || scope === '') {
+      return denied(400, 'STUDIO_QUERY_REQUIRED', 'knowledge rank needs a query and its declared scope');
+    }
+    flags.query = query;
+    flags.scope = scope;
+  } else if (route.scope) {
+    const id = url.searchParams.get('id');
+    const scope = url.searchParams.get('scope');
+    if (id === null || id === '' || scope === null || scope === '') {
+      return denied(400, 'STUDIO_SCOPE_REQUIRED', 'knowledge why needs one claim id and its declared scope');
+    }
+    args.push(id);
+    flags.scope = scope;
+  }
 
   if (route.check) {
     const document = await sealedDocument('check', async () => {
@@ -105,7 +127,16 @@ export async function apiAnswer(root, url) {
     return { status: 200, document };
   }
 
-  const result = await run(route.command, { args, flags: { json: true }, root });
+  if (route.knowledgeGraph) {
+    const document = await sealedDocument('knowledge graph', async () => {
+      const payload = await knowledgeGraph(root, url.searchParams.get('scope'));
+      emitJson(payload);
+      return payload.ok ? EXIT.OK : EXIT.FAIL;
+    });
+    return { status: 200, document };
+  }
+
+  const result = await run(route.command, { args, flags, root });
   const document = renderJson(result);
   if (document !== null) return { status: 200, document };
 

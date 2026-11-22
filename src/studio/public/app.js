@@ -4,8 +4,9 @@
 // fetch path and the refusal rendering are exercised from the first load.
 
 import { readDoor } from './client.js';
-import { badge, card, emptyState, escapeHtml, refusalPanel } from './components.js';
+import { badge, card, emptyState, escapeHtml, loading, refusalPanel } from './components.js';
 import { board } from './board.js';
+import { constellation, layoutGraph, rankPanel, whyPanel } from './constellation.js';
 import { custody } from './custody.js';
 import { overview } from './overview.js';
 import { pulse } from './pulse.js';
@@ -134,6 +135,74 @@ async function boardRoom() {
   return board(await readDoor('/api/board'));
 }
 
+function drawConstellation(payload) {
+  const canvas = document.getElementById('constellation-canvas');
+  const plot = layoutGraph(payload.graph, payload.seed);
+  const context = canvas?.getContext?.('2d');
+  if (!context) return;
+  const style = getComputedStyle(document.documentElement);
+  context.clearRect(0, 0, plot.width, plot.height);
+  const at = new Map(plot.nodes.map((node) => [node.id, node]));
+  context.lineWidth = 1;
+  for (const edge of payload.graph.edges ?? []) {
+    const from = at.get(edge.from);
+    const to = at.get(edge.to);
+    if (!from || !to) continue;
+    context.strokeStyle = style.getPropertyValue(edge.status === 'proposed' ? '--warn' : '--line');
+    context.setLineDash(edge.kind === 'derived-from' ? [4, 3] : []);
+    context.beginPath();
+    context.moveTo(from.x, from.y);
+    context.lineTo(to.x, to.y);
+    context.stroke();
+  }
+  context.setLineDash([]);
+  for (const node of plot.nodes) {
+    context.fillStyle = style.getPropertyValue(node.unknownScope ? '--warn' : node.kind === 'claim' ? '--accent' : '--ok');
+    context.beginPath();
+    context.arc(node.x, node.y, node.kind === 'claim' ? 5 : 7, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = style.getPropertyValue('--ink');
+    context.font = '11px ui-monospace, monospace';
+    context.fillText(node.id, node.x + 9, node.y + 4);
+  }
+}
+
+async function constellationRoom() {
+  const payload = await readDoor('/api/knowledge/graph');
+  if (payload.ok) {
+    setTimeout(() => {
+      drawConstellation(payload);
+      const view = document.getElementById('view');
+      const scope = payload.scope;
+      view.onclick = async (event) => {
+        const button = event.target.closest('.constellation-node');
+        if (!button) return;
+        const panel = document.getElementById('constellation-why');
+        if (!panel) return;
+        panel.innerHTML = loading('reading the why');
+        try {
+          panel.innerHTML = whyPanel(await readDoor(`/api/knowledge/why?scope=${encodeURIComponent(scope)}&id=${encodeURIComponent(button.dataset.nodeId)}`));
+        } catch (error) {
+          panel.innerHTML = refusalPanel(error.payload ?? { ok: false, error: String(error?.message ?? error), remedy: 'retry the node, or run simt knowledge why in a terminal' });
+        }
+      };
+      const form = document.getElementById('constellation-rank');
+      form?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const result = document.getElementById('constellation-rank-result');
+        const query = new FormData(form).get('query') ?? '';
+        result.innerHTML = loading('ranking the corpus');
+        try {
+          result.innerHTML = rankPanel(await readDoor(`/api/knowledge/rank?scope=${encodeURIComponent(scope)}&query=${encodeURIComponent(String(query))}`));
+        } catch (error) {
+          result.innerHTML = refusalPanel(error.payload ?? { ok: false, error: String(error?.message ?? error), remedy: 'retry, or run simt knowledge rank in a terminal' });
+        }
+      });
+    }, 0);
+  }
+  return constellation(payload);
+}
+
 async function custodyRoom() {
   const draw = (payload) => {
     document.getElementById('view').innerHTML = custody(payload);
@@ -166,7 +235,7 @@ const routes = new Map([
   ['/pulse', { view: pulseRoom }],
   ['/board', { view: boardRoom }],
   ['/custody', { view: custodyRoom }],
-  ['/constellation', { view: later('Constellation') }],
+  ['/constellation', { view: constellationRoom }],
   ['/harness', { view: later('Harness wall') }],
   ['/budget', { view: later('Budget') }],
   ['/helm', { view: later('Helm') }],

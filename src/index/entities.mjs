@@ -53,11 +53,19 @@ function selectByDirectory(paths, context, current) {
   return scored[0].score > scored[1].score ? scored[0].path : undefined;
 }
 
-export function resolveEntityAnchors(task, { files = [], symbols = [] } = {}) {
-  const { paths, names } = entityDirectory(files, symbols);
+export function createEntityResolver({ files = [], symbols = [] } = {}) {
+  const directory = entityDirectory(files, symbols);
+  return (task, { context = '' } = {}) => resolveAnchors(task, directory, context);
+}
+
+export function resolveEntityAnchors(task, graph) {
+  return createEntityResolver(graph)(task);
+}
+
+function resolveAnchors(task, { paths, names }, shared) {
   const terms = queryEntities(task);
   const contexts = terms.map((term) => new Set(fieldQueryTerms(term)));
-  const context = new Map();
+  const context = new Map(fieldQueryTerms(shared).map((word) => [word, 1]));
   for (const words of contexts) {
     for (const word of words) context.set(word, (context.get(word) ?? 0) + 1);
   }

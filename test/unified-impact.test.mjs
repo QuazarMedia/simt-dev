@@ -91,3 +91,22 @@ test('conventional tracked impact inputs use exact identity and code-only output
   assert.deepEqual(report.knowledge.inputs.affected.artifacts, ['notes']);
   assert.equal(report.code.targets[0].symbol, 'example');
 });
+
+test('impact --json stays one document when the workspace siblings are not git repositories', async () => {
+  // A workspace full of stale sibling repos used to wedge one `{ok:false}` document
+  // into stdout per sibling: `tracked` answered a library call with `fail`, which emits.
+  // An empty `.git` directory classifies as a repo but fails `ls-files` - the exact
+  // shape of the fixture dirs left in the temp directory the gate worktree lives in.
+  const ws = await tempDir('unified-impact-ws-');
+  for (const name of ['stale-a', 'stale-b']) await mkdir(join(ws, name, '.git'), { recursive: true });
+  const root = await tempDir('unified-impact-repo-');
+  await mkdir(join(root, 'api'));
+  await writeFile(join(root, 'api/report.schema.json'), '{"type":"number"}\n');
+  await writeFile(join(root, 'simt.json'), JSON.stringify({ workspace: ws }));
+  await ensureGit(root);
+  const result = await simt(['impact', 'api/report.schema.json', '--json'], { cwd: root });
+  assert.equal(result.code, 0, result.stderr || result.stdout);
+  const lines = result.stdout.trim().split('\n');
+  assert.equal(lines.length, 1, `expected exactly one JSON document, got ${lines.length}`);
+  assert.equal(JSON.parse(lines[0]).ok, true);
+});

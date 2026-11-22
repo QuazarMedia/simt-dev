@@ -282,8 +282,12 @@ async function tracked(root) {
     // filename never matches it.
     return { files: await gitPaths(root, ['ls-files']) };
   } catch (error) {
+    // `issue`, not `fail`: this is a library path whose result the caller reads
+    // in-process, and `fail` emits one `{ok:false}` document to stdout per call -
+    // one per non-repo sibling in the workspace, wedged into the command's single
+    // result document under `--json`.
     return {
-      error: fail(
+      error: issue(
         `could not read the tree (${error.message})`,
         EXIT.UNSUPPORTED,
         'run this inside a git repository',

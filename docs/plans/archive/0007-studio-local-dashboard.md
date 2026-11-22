@@ -1,6 +1,6 @@
 # Plan 0007 — Studio: a local observatory for watching and steering simt
 
-Status: **queued** · 2026-11-21
+Status: **closed** — 15 row(s): 15 Complete · 2026-11-22
 
 Implementation owner: simt-dev
 

@@ -35,11 +35,31 @@ export async function briefPayload(args, { only = null } = {}) {
     build: false,
     only,
   });
-  if (result.error) throw Object.assign(new Error('the index could not be read'), { remedy: `run: ${CLI} index` });
-  if (result.cold) {
-    throw Object.assign(new Error('the index is empty, so the packet cannot be assembled'), {
-      remedy: `run: ${CLI} index`,
+  if (result.error) {
+    // An assembly failure already carries its own message and remedy. Replacing both
+    // with the index remedy made a build failure or an unreadable tree look like a cold
+    // index.
+    const failure = result.error;
+    throw Object.assign(new Error(failure?.message ?? 'the packet could not be assembled'), {
+      remedy: failure?.remedy ?? null,
     });
+  }
+  if (result.cold) {
+    const broken = result.broken === true;
+    const detail = result.indexError?.message;
+    throw Object.assign(
+      new Error(
+        broken
+          ? `could not read the index${detail ? ` (${detail})` : ''}`
+          : 'the index is empty, so the packet cannot be assembled',
+      ),
+      {
+        remedy:
+          result.indexError?.code === 'INDEX_BUSY'
+            ? 'wait for the other index run, then retry'
+            : `run: ${CLI} index`,
+      },
+    );
   }
   return {
     root: result.root,

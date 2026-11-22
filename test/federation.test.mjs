@@ -11,13 +11,14 @@
 // that declared nothing pays nothing at all.
 
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { test } from 'node:test';
 
 import { callTool, DEFAULT_TIMEOUT_MS } from '../src/federation/client.mjs';
 import { federationAccess, federationServers } from '../src/federation/config.mjs';
+import { assembleBrief } from '../src/brief/assemble.mjs';
 import { CONFIG_DIR, CONFIG_FILE } from '../src/workspace.mjs';
 import { TOOLS } from '../src/mcp/tools.mjs';
 import { git, simt as simtCli } from './fixture.mjs';
@@ -156,6 +157,23 @@ test('a declared server answers and the brief cites it as the source', async (t)
     `the packet did not cite the server: ${JSON.stringify(federation)}`,
   );
   assert.ok(federation.includes('fixture-graph covers python'), `the packet did not record coverage: ${JSON.stringify(federation)}`);
+});
+
+test('a skills-only view never starts a declared federation server', async (t) => {
+  const markerDir = await mkdtemp(join(tmpdir(), 'federation-marker-'));
+  const marker = join(markerDir, 'started');
+  const server = {
+    name: 'never-called',
+    command: process.execPath,
+    args: ['-e', `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'started')`],
+  };
+  const root = await fixture({ servers: [server] });
+  t.after(() => rm(root, { recursive: true, force: true }));
+  t.after(() => rm(markerDir, { recursive: true, force: true }));
+
+  const packet = await assembleBrief({ root, task: 'fix the keep helper', only: 'SKILLS' });
+  assert.ok(packet.items.every((item) => item.section === 'SKILLS'), 'the view assembled another section');
+  await assert.rejects(access(marker), 'the skills view started a server it could not cite');
 });
 
 test('a malformed entry is a caution, and the servers beside it still answer', async (t) => {

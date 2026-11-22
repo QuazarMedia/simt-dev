@@ -20,6 +20,14 @@ test('a section the packet does not have is a programming error, not a dropped l
   assert.throws(() => items.add('NOTASECTION', 'x'), /unknown brief section NOTASECTION/);
 });
 
+test('a view collects only the section it asked for', () => {
+  const items = collect({ sections: ['SKILLS'] });
+  items.add('TASK', 'not in the view');
+  items.add('SKILLS', 'the selected skill');
+  assert.deepEqual(items.items.map((item) => item.section), ['SKILLS']);
+  assert.equal(items.items[0].text, 'the selected skill');
+});
+
 test('an empty or non-string line is not added, because a blank item spends bytes saying nothing', () => {
   const items = collect();
   items.add('TASK', '');

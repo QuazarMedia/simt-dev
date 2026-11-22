@@ -26,13 +26,6 @@ import { gitText } from '../sys/git.mjs';
 
 export { parsePathList };
 
-/** A repeated or comma-separated flag as a list; absent is empty. */
-export function listFlag(value) {
-  return (Array.isArray(value) ? value : [value])
-    .flatMap((v) => parsePathList(v))
-    .filter(Boolean);
-}
-
 /** git status paths, so path signals come from the real diff. */
 export async function dirtyPaths(root) {
   try {

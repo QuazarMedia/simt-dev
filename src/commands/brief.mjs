@@ -58,7 +58,14 @@ export async function briefCommand(args, flags, commands = []) {
   // Unreachable from here — only a delivered brief asks for a cold index to be reported
   // rather than built — but a silent empty packet would be the worst way to find out.
   if (result.cold) {
-    return fail('the index is empty, and this command will not assemble a packet from it', EXIT.UNSUPPORTED, `run ${CLI} index`);
+    const detail = result.indexError?.message;
+    return fail(
+      result.broken
+        ? `could not read the index${detail ? ` (${detail})` : ''}`
+        : 'the index is empty, and this command will not assemble a packet from it',
+      EXIT.UNSUPPORTED,
+      result.indexError?.code === 'INDEX_BUSY' ? 'wait for the other index run, then retry' : `run: ${CLI} index`,
+    );
   }
   const { root, kind, basis, task, scope, budget: ceiling, items, packed, sections } = result;
   const cut = new Set(packed.cut);

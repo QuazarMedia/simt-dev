@@ -230,6 +230,31 @@ test('mcp: --list answers without reading stdin', async () => {
   assert.match(stdout, /Nothing here writes to your repositories/);
 });
 
+test('mcp: a broken index is named, not reported as an empty one', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'simt-brief-broken-'));
+  await writeFile(join(dir, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
+  await mkdir(join(dir, 'src'), { recursive: true });
+  await writeFile(join(dir, 'src', 'keep.mjs'), 'export function keep(value) { return value; }\n');
+  await exec('git', ['init', '-q', dir]);
+  await exec('git', ['-C', dir, 'add', '-A']);
+  await exec('git', ['-C', dir, '-c', 'user.email=tests@simt.invalid', '-c', 'user.name=simt-dev tests', 'commit', '-qm', 'initial']);
+  await mkdir(join(dir, '.simt'), { recursive: true });
+  await writeFile(join(dir, '.simt', 'index.sqlite'), 'not a database');
+
+  const state = { version: null };
+  await handle(req('initialize', { protocolVersion: '2025-11-25' }), TOOLS, { state });
+  const result = await handle(
+    req('tools/call', { name: 'brief', arguments: { root: dir, task: 'fix src/keep.mjs' } }, 2),
+    TOOLS,
+    { state },
+  );
+  assert.equal(result.result.isError, true, JSON.stringify(result.result));
+  assert.match(result.result.structuredContent.error, /could not read the index/);
+  assert.match(result.result.structuredContent.error, /corrupt/);
+  assert.match(result.result.structuredContent.remedy, new RegExp(`${CLI} index`));
+  assertValid(result.result.structuredContent, ERROR_SHAPE, 'brief broken');
+});
+
 test('mcp: brief reads the index and never builds one', async () => {
   // `brief` is the one tool every argument of which is optional, so the generic loop above
   // reaches it with `{}` and a root of the process's cwd. That is exactly how a read-only

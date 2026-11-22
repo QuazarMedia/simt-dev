@@ -84,16 +84,24 @@ const SOFT = 'soft';
  * score. A number per item would be a second thing to keep consistent with the order, and
  * the two would drift.
  */
-export function collect() {
+export function collect({ sections = null } = {}) {
   const items = [];
+  if (sections !== null) {
+    for (const section of sections) {
+      if (!SECTIONS.includes(section)) throw new Error(`unknown brief section ${section}`);
+    }
+  }
+  const allowed = sections === null ? null : new Set(sections);
   return {
     items,
     /**
      * Add one line. An empty or non-string line is not added: a blank item is a byte the
-     * packet spends saying nothing.
+     * packet spends saying nothing. A section the caller did not ask for is ignored here,
+     * so a view never assembles items it will only filter out again.
      */
     add(section, text, { hard = false, why = [] } = {}) {
       if (!SECTIONS.includes(section)) throw new Error(`unknown brief section ${section}`);
+      if (allowed !== null && !allowed.has(section)) return this;
       if (typeof text !== 'string' || text.length === 0) return this;
       const order = items.length;
       items.push({ id: String(order), section, text, priority: hard ? HARD : SOFT, order, why });

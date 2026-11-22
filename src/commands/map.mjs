@@ -148,7 +148,18 @@ export async function loadGraph(root, { build = true, task = '', embed = false }
   // here and the read failed".
   const broken = !build && Boolean(files.error);
   if (!build && files.length === 0) {
-    return { files: [], symbols: [], edges: [], fts: [], embeddings: [], cold: true, broken, stale: false, freshness: { state: 'cold' } };
+    return {
+      files: [],
+      symbols: [],
+      edges: [],
+      fts: [],
+      embeddings: [],
+      cold: true,
+      broken,
+      indexError: files.error ?? null,
+      stale: false,
+      freshness: { state: 'cold' },
+    };
   }
   // A caller that may not build still learns the index is old or unreadable
   //: the digest compare costs one `git ls-files -s`, and the freshness

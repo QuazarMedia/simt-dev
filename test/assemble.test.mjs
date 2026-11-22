@@ -44,7 +44,21 @@ test('a delivered packet on a cold index reports cold instead of waiting on a wa
   // No index has been built here, and `build: false` is what a prompt submit passes: the
   // first prompt in a fresh clone reports a cold index rather than spending the budget.
   const cold = await assembleBrief({ root, task: 'fix the keep helper', build: false });
-  assert.deepEqual(cold, { cold: true });
+  assert.equal(cold.cold, true);
+  assert.equal(cold.broken, false);
+  assert.equal(cold.indexError, null);
+});
+
+test('an unreadable index is named, not reported as empty', async () => {
+  const root = await repo();
+  await mkdir(join(root, '.simt'), { recursive: true });
+  await writeFile(join(root, '.simt', 'index.sqlite'), 'not a database');
+
+  const broken = await assembleBrief({ root, task: 'fix the keep helper', build: false });
+  assert.equal(broken.cold, true);
+  assert.equal(broken.broken, true);
+  assert.equal(broken.indexError?.code, 'INDEX_CORRUPT');
+  assert.match(broken.indexError.message, /corrupt/);
 });
 
 test('a task that names a file produces its kind, its file, its test and its command', async () => {

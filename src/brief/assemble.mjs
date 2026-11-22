@@ -201,8 +201,11 @@ async function knowledgePointers(root) {
  *   packet that does not know them reports every one of them as unresolved
  * @param {boolean} [options.proof] also report whether the kept packet proves every
  *   section it kept; the default packet's bytes never change
+ * @param {string|null} [options.only] keep only this section, for a view such as the
+ *   packet's SKILLS section
  * @returns a packet, or `{ error }` carrying the exit code a failure already reported, or
- *   `{ cold: true }` when the index is empty and this caller may not build one
+ *   `{ cold: true, broken, indexError }` when this caller may not build the index; `broken`
+ *   is true when an index is present but unreadable, and `indexError` is its error
  */
 export async function assembleBrief({
   root = process.cwd(),
@@ -218,6 +221,9 @@ export async function assembleBrief({
   only = null,
 } = {}) {
   if (workScope !== null) return assembleScopedBrief({ root, task, budget, workScope });
+  // A view is the same packet with the other sections never collected, so it shares the
+  // packer, the budget and the cut line rather than a second arithmetic (ADR-226).
+  const section = only === null ? null : String(only).toUpperCase();
   const named = paths !== null;
   const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(`${STATE_DIR}/`));
   // A dirty file is where the reader is standing, not what the task asked about. When a
@@ -229,7 +235,9 @@ export async function assembleBrief({
 
   const graph = await loadGraph(root, { build, task, embed: flags?.embed === true });
   if (graph.error) return { error: graph.error };
-  if (graph.cold) return { cold: true };
+  if (graph.cold) {
+    return { cold: true, broken: graph.broken === true, indexError: graph.indexError ?? null };
+  }
   const graphStale = graph.stale === true;
   const { files, symbols, edges, fts = [], embeddings = [] } = graph;
   const filePaths = new Set(files.map((file) => file.path));
@@ -241,7 +249,7 @@ export async function assembleBrief({
   const scope = pending ?? (asked ? spelled : dirty);
 
   const { kind, basis } = classifyTask(task, { paths: pending ?? spelled });
-  const packet = collect();
+  const packet = collect({ sections: section === null ? null : [section] });
   packet.add('TASK', `kind ${kind} — ${basis}`, {
     hard: true,
     why: ['the kind chooses the commands, and the commands are the part a reader cannot recover from a wrong guess'],
@@ -394,7 +402,7 @@ export async function assembleBrief({
     });
   }
 
-  if (federate) {
+  if (federate && (section === null || section === 'FEDERATION')) {
     const { servers, findings } = await readFederation(root);
     for (const finding of findings) {
       packet.add('CAUTIONS', `federation: ${finding}`, {
@@ -510,11 +518,7 @@ export async function assembleBrief({
     }
   }
 
-  // A view is the same packet with the other sections removed before packing, so the
-  // skills view shares the packer, the budget and the cut line rather than a second
-  // arithmetic (ADR-226).
-  const section = only === null ? null : String(only).toUpperCase();
-  const items = section === null ? packet.items : packet.items.filter((item) => item.section === section);
+  const items = packet.items;
   const packed = buildPacket(items, { budget });
   const cut = new Set(packed.cut);
 
@@ -554,5 +558,5 @@ export async function assembleBrief({
     sections[item.section].push(item.text);
   }
 
-  return { root, kind, basis, task, scope, budget, only: section, items, packed, sections, proof: proofSummary };
+  return { root, kind, basis, task, scope, budget, items, packed, sections, proof: proofSummary };
 }

@@ -405,7 +405,7 @@ test('CLI: a workspace that exists but holds none of the repos is named, not exp
 });
 
 test('CLI: without a workspace the catalogue still lists every skill, with one line of context', async () => {
-  const app = await scratch({ 'package.json': '{"name":"lonely"}', 'skills/local/SKILL.md': '# local\n' });
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const { code, stdout } = await run(['skills', 'index', '--root', app], { SIMT_DEV_WORKSPACE: 'off' });
   assert.equal(code, 0, stdout);
   assert.match(stdout, /workspace none configured/);
@@ -457,7 +457,7 @@ test('workspace: an edit between two calls in one process is answered fresh (PR2
 });
 
 test('CLI: graph lint without a workspace warns and still lints the registry', async () => {
-  const app = await scratch({ 'package.json': '{"name":"lonely"}', 'skills/local/SKILL.md': '# local\n' });
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const { code, json } = await runJson(['graph', 'lint'], { SIMT_DEV_WORKSPACE: 'off' });
   assert.equal(code, 0, 'an absent workspace is a fact, not a registry error');
   assert.equal(json.verified, false, 'it must say the bodies were not verified');
@@ -530,7 +530,7 @@ test('CLI: the skills view never inlines a body', async () => {
 
 test('CLI: skills show reads the body the view only named', async () => {
   const { root } = await skillWorkspace();
-  const app = await scratch({ 'package.json': '{"name":"lonely"}', 'skills/local/SKILL.md': '# local\n' });
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   await exec('git', ['-C', app, 'init', '-q', '-b', 'main']);
   await exec('git', ['-C', app, 'add', '-A']);
   await exec('git', [
@@ -550,7 +550,7 @@ test('CLI: skills show reads the body the view only named', async () => {
 });
 
 test('CLI: skills show without a workspace explains instead of printing a bare path', async () => {
-  const app = await scratch({ 'package.json': '{"name":"lonely"}', 'skills/local/SKILL.md': '# local\n' });
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const { code, stdout } = await run(['skills', 'show', 'wrangler', '--root', app], {
     SIMT_DEV_WORKSPACE: 'off',
   });
@@ -562,7 +562,7 @@ test('CLI: skills show without a workspace explains instead of printing a bare p
 test('CLI: skills install without a workspace refuses rather than half-installing', async () => {
   // The opposite of show: installing a body it cannot read is a failed install,
   // not a degraded mode.
-  const app = await scratch({ 'package.json': '{"name":"lonely"}', 'skills/local/SKILL.md': '# local\n' });
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const { code, stderr } = await run(['skills', 'install', 'wrangler', '--root', app, '--yes'], {
     SIMT_DEV_WORKSPACE: 'off',
   });
@@ -571,7 +571,7 @@ test('CLI: skills install without a workspace refuses rather than half-installin
 });
 
 test('CLI: doctor reports which source answered', async () => {
-  const app = await scratch({ 'package.json': '{"name":"lonely"}', 'skills/local/SKILL.md': '# local\n' });
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   // Config is emptied and the workspace is switched off, so the answer cannot come
   // from the machine running the suite. What is left is a location-independent one,
   // which is what lets this assert a source rather than merely assert that some
@@ -586,14 +586,14 @@ test('CLI: doctor reports which source answered', async () => {
 
 test('CLI: an unparseable config makes doctor fail rather than fall through silently', async () => {
   const cfg = await scratch({ [`simt-dev/${CONFIG_FILE}`]: '{' });
-  const app = await scratch({ 'package.json': '{"name":"lonely"}', 'skills/local/SKILL.md': '# local\n' });
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const { code, stderr } = await run(['doctor', '--root', app], { XDG_CONFIG_HOME: cfg, SIMT_DEV_WORKSPACE: 'off' });
   assert.notEqual(code, 0);
   assert.match(stderr, /workspace config .*config\.json: unparseable JSON/);
 });
 
 test('CLI: a single repo with no workspace adopts and gates normally', async () => {
-  const app = await scratch({ 'package.json': '{"name":"lonely"}', 'skills/local/SKILL.md': '# local\n' });
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const init = await run(['init', app, '--yes'], { SIMT_DEV_WORKSPACE: 'off' });
   assert.equal(init.code, 0, init.stderr);
   const check = await run(['check', '--root', app], { SIMT_DEV_WORKSPACE: 'off' });
@@ -602,7 +602,7 @@ test('CLI: a single repo with no workspace adopts and gates normally', async () 
 });
 
 test('CLI: --workspace is honoured end to end', async () => {
-  const app = await scratch({ 'package.json': '{"name":"lonely"}', 'skills/local/SKILL.md': '# local\n' });
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const ws = await workspaceWithRepo();
   const { code, stdout } = await run(['doctor', '--root', app, '--workspace', ws], { SIMT_DEV_WORKSPACE: '/from/env' });
   assert.equal(code, 0);
@@ -615,7 +615,7 @@ test('CLI: the environment variable is inert in a repo that declared no workspac
   // The consumer runs the tool FROM the repo, so the test does too: cwd is the
   // repo, not this checkout, and the variable is an existing directory so that an
   // errant honouring of it would be visible in the report.
-  const app = await scratch({ 'package.json': '{"name":"lonely"}', 'skills/local/SKILL.md': '# local\n' });
+  const app = await scratch({ 'package.json': '{"name":"lonely"}' });
   const marker = await scratch();
   const { code, stdout } = await run(['doctor', '--root', app], { SIMT_DEV_WORKSPACE: marker }, app);
   assert.equal(code, 0, stdout);

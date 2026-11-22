@@ -122,14 +122,15 @@ test('a database at a newer version is served from a sidecar, never overwritten 
     const file = join(root, SQLITE_FILE);
     const newer = new DatabaseSync(file);
     newer.exec('pragma user_version = 7');
-    newer.exec(`update meta set value = '6' where key = 'schema'`);
+    newer.exec(`update meta set value = '7' where key = 'schema'`);
     newer.close();
     await reindex(root);
     const intact = new DatabaseSync(file);
     assert.equal(Number(intact.prepare('pragma user_version').get().user_version), 7, 'the newer database is untouched');
-    assert.equal(intact.prepare(`select value from meta where key = 'schema'`).get().value, '6');
+    assert.equal(intact.prepare(`select value from meta where key = 'schema'`).get().value, '7');
     intact.close();
-    const sidecar = indexFileFor(root, '6');
+    const sidecar = indexFileFor(root, '7');
+    assert.notEqual(sidecar, file);
     assert.ok((await stat(sidecar)).size > 0, 'this version built its sidecar');
     const rows = await readFiles(root);
     assert.ok(rows.length > 0, 'reads are served from the sidecar, not the foreign file');

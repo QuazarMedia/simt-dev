@@ -1,66 +1,31 @@
-/* Custody: ledger chains, current bright, superseded dim, failed links red. */
-
-.custody-intro { margin-top: 0; }
-.custody-chain {
-  margin-bottom: 1rem;
-  padding: 0.75rem;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--bg);
-}
-.custody-chain:last-child { margin-bottom: 0; }
-.custody-current { box-shadow: inset 3px 0 0 var(--accent); }
-.custody-stale { opacity: 0.72; }
-.custody-chain-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; }
-.custody-chain-head h2 { margin: 0; flex: 1 1 12rem; font-size: 0.85rem; color: var(--ink); overflow-wrap: anywhere; }
-.custody-links { list-style: none; margin: 0.6rem 0 0; padding: 0; display: grid; gap: 0.35rem; }
-.custody-link {
-  display: grid;
-  grid-template-columns: 7rem 7rem minmax(8rem, 1fr) 5rem 5rem;
-  gap: 0.4rem;
-  align-items: baseline;
-  padding: 0.4rem 0.5rem;
-  border-left: 3px solid var(--line);
-  background: var(--surface);
-  border-radius: 4px;
-  font-size: 0.78rem;
-  overflow-wrap: anywhere;
-}
-.custody-ok { border-left-color: var(--ok); }
-.custody-warn { border-left-color: var(--warn); }
-.custody-bad { border-left-color: var(--bad); }
-.custody-neutral { border-left-color: var(--dim); }
-.custody-failed { background: color-mix(in srgb, var(--bad) 8%, var(--surface)); }
-.custody-legacy { opacity: 0.8; border-left-style: dashed; }
-.custody-gate { color: var(--ink); }
-.custody-cmd { color: var(--dim); }
-.custody-duration, .custody-adr { color: var(--dim); }
-.custody-summary, .custody-note { grid-column: 1 / -1; color: var(--dim); }
-.custody-note { color: var(--warn); }
-.custody-claim { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.custody-claim label { color: var(--dim); }
-.custody-claim input {
-  flex: 1 1 18rem;
-  font: inherit;
-  padding: 0.35rem 0.5rem;
-  background: var(--bg);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-}
-.custody-claim button {
-  font: inherit;
-  padding: 0.35rem 0.8rem;
-  background: var(--bg);
-  color: var(--ink);
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  cursor: pointer;
-}
-.custody-verdict { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; }
-.custody-claim-text { overflow-wrap: anywhere; }
-.custody-claim .computed { flex-basis: 100%; }
-.custody-catalog summary { cursor: pointer; color: var(--accent); }
-.custody-catalog ul { margin: 0.75rem 0 0; padding-left: 1rem; }
-.custody-catalog li { margin-bottom: 0.6rem; }
-.custody-catalog p { margin: 0.2rem 0 0; color: var(--dim); }
+/* Custody: ledger chains, current bright, superseded dim, failed links red. */ .custody-intro {margin-top: 0;}
+.custody-chain {margin-bottom: 1rem; padding: .75rem; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg);}
+.custody-chain:last-child {margin-bottom: 0;}
+.custody-current {box-shadow: inset 3px 0 0 var(--accent);}
+.custody-stale {opacity: .72;}
+.custody-chain-head {display: flex; flex-wrap: wrap; align-items: center; gap: .4rem;}
+.custody-chain-head h2 {margin: 0; flex: 1 1 12rem; font-size: .85rem; color: var(--ink); overflow-wrap: anywhere;}
+.custody-links {list-style: none; margin: .6rem 0 0; padding: 0; display: grid; gap: .35rem;}
+.custody-link {display: grid; grid-template-columns: 7rem 7rem minmax(8rem, 1fr) 5rem 5rem; gap: .4rem; align-items: baseline; padding: .4rem .5rem; border-left: 3px solid var(--line); background: var(--surface); border-radius: 4px; font-size: .78rem; overflow-wrap: anywhere;}
+.custody-ok {border-left-color: var(--ok);}
+.custody-warn {border-left-color: var(--warn);}
+.custody-bad {border-left-color: var(--bad);}
+.custody-neutral {border-left-color: var(--dim);}
+.custody-failed {background: color-mix(in srgb, var(--bad) 8%, var(--surface));}
+.custody-legacy {opacity: .8; border-left-style: dashed;}
+.custody-gate {color: var(--ink);}
+.custody-cmd {color: var(--dim);}
+.custody-duration, .custody-adr {color: var(--dim);}
+.custody-summary, .custody-note {grid-column: 1 / -1; color: var(--dim);}
+.custody-note {color: var(--warn);}
+.custody-claim {display: flex; flex-wrap: wrap; align-items: center; gap: .5rem;}
+.custody-claim label {color: var(--dim);}
+.custody-claim input {flex: 1 1 18rem; font: inherit; padding: .35rem .5rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px;}
+.custody-claim button {font: inherit; padding: .35rem .8rem; background: var(--bg); color: var(--ink); border: 1px solid var(--accent); border-radius: 4px; cursor: pointer;}
+.custody-verdict {display: flex; flex-wrap: wrap; align-items: baseline; gap: .5rem;}
+.custody-claim-text {overflow-wrap: anywhere;}
+.custody-claim .computed {flex-basis: 100%;}
+.custody-catalog summary {cursor: pointer; color: var(--accent);}
+.custody-catalog ul {margin: .75rem 0 0; padding-left: 1rem;}
+.custody-catalog li {margin-bottom: .6rem;}
+.custody-catalog p {margin: .2rem 0 0; color: var(--dim);}

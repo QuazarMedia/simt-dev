@@ -9,7 +9,7 @@ import { badge, card, emptyState, escapeHtml } from './components.js';
 const WIDTH = 800;
 const HEIGHT = 460;
 
-export function scopeLabel(scope) {
+function scopeLabel(scope) {
   if (scope === null || scope === undefined) return 'unknown scope';
   if (typeof scope !== 'object') return String(scope);
   const entries = Object.entries(scope).sort(([a], [b]) => a.localeCompare(b));

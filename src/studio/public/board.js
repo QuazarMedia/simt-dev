@@ -47,7 +47,7 @@ export function dependencyEdges(slices) {
 }
 
 /** The active claim covering a slice, by its explicit slice id or its worktree path. */
-export function leaseFor(slice, leases) {
+function leaseFor(slice, leases) {
   const worktree = `/worktrees/${slice.id.toLowerCase()}`;
   return leases.find(
     (lease) =>
@@ -56,7 +56,7 @@ export function leaseFor(slice, leases) {
   ) ?? null;
 }
 
-export function worktreeFor(slice, worktrees) {
+function worktreeFor(slice, worktrees) {
   const id = slice.id.toLowerCase();
   return worktrees.find((worktree) => worktree.id.toLowerCase() === id) ?? null;
 }

@@ -58,7 +58,7 @@ export function tone(kind) {
 }
 
 /** The room that explains the event's subject. */
-export function viewFor(kind) {
+function viewFor(kind) {
   return ROUTES[kind] ?? '#/overview';
 }
 

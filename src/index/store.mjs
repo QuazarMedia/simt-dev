@@ -608,12 +608,15 @@ export async function readFieldedFts(root) {
   return withReadError(rows, error);
 }
 
-export async function searchFtsBm25F(root, task, { fts } = {}) {
-  if (fts !== undefined) return withReadError(scoreFtsBm25F(fts, task), fts.error);
+export async function searchFtsBm25F(root, task, { fts, fields = BM25F_FIELDS } = {}) {
+  if (!fields.length || fields.some((name) => !BM25F_FIELDS.includes(name))) throw new Error('unknown BM25F field');
+  if (fts !== undefined) return withReadError(scoreFtsBm25F(fts, task, { fields }), fts.error);
   const terms = fieldQueryTerms(task);
   if (!terms.length) return [];
   // Score and collapse sections in SQLite so one large file cannot fill the
   // result cap or force every matching section over the storage boundary.
+  const phrases = terms.map(ftsQuote).join(' OR ');
+  const match = fields === BM25F_FIELDS ? phrases : `{${fields.join(' ')}} : (${phrases})`;
   const { rows, error } = await readSqliteRows(root,
     `with hits as materialized (
        select f.kind, substr(n.key, 6) as path, f.rowid as section,
@@ -626,7 +629,7 @@ export async function searchFtsBm25F(root, task, { fts } = {}) {
      )
      select kind, path, score from ranked where position = 1
      order by score desc, path asc limit ?`,
-    [terms.map(ftsQuote).join(' OR '), FTS_LIMIT], { legacySql: null });
+    [match, FTS_LIMIT], { legacySql: null });
   return withReadError(bestFieldHits(rows), error);
 }
 

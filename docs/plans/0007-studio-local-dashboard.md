@@ -155,7 +155,7 @@ with a table view that carries the same data.
 | ST02 | The API bridge serves the doors' own objects | Foundation | api | S | ST01 | Complete | 93c906755cd5bbc2d41fcf6c5ba1b459e07d883f · test: node --test test/studio-api.test.mjs test/studio-server.test.mjs |
 | ST03 | The shell: design system, themes, navigation, zero external assets | Foundation | shell | M | ST01 | Complete | 8af3bcde8f8eba8cd56dbeca6dae367c373df7b5 · test: node --test test/studio-shell.test.mjs test/studio-server.test.mjs test/studio-api.test.mjs |
 | ST04 | Overview: the snapshot with every defect named | Observe | views | S | ST02, ST03 | Complete | 67a9131297900196a8916624dd92b8160836c51f · test: node --test test/studio-overview.test.mjs test/studio-api.test.mjs |
-| ST05 | The Pulse: live events over SSE, replayed on connect | Observe | views | M | ST02, ST03 | Queued | — |
+| ST05 | The Pulse: live events over SSE, replayed on connect | Observe | views | M | ST02, ST03 | Complete | de07984 · test: node --test test/studio-events.test.mjs test/studio-server.test.mjs |
 | ST06 | The Board: plans, slices, worktrees and leases | Observe | views | S | ST04 | Queued | — |
 | ST07 | Custody: gate evidence bound to trees | Observe | views | S | ST02, ST03 | Queued | — |
 | ST08 | The Constellation: knowledge graph with the why panel | Observe | views | M | ST02, ST03 | Queued | — |

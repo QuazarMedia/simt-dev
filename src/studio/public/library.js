@@ -14,7 +14,7 @@ function candidateRow(candidate) {
   const story = candidate.errorLine
     ? `<p class="slot-error"><strong>failed</strong> ${escapeHtml(candidate.errorLine)}</p>${candidate.fixDiff ? `<pre class="computed">${escapeHtml(candidate.fixDiff)}</pre>` : ''}`
     : `<p class="computed">${escapeHtml(candidate.summary ?? 'no fail-then-fix story recorded')}</p>`;
-  return `<article class="card library-candidate" data-lesson="${escapeHtml(candidate.id)}">
+  return `<article class="card" data-lesson="${escapeHtml(candidate.id)}">
     <header><strong>${escapeHtml(candidate.id)}</strong> ${badge(candidate.kind ?? 'candidate', 'warn')}</header>
     ${story}
     <p class="computed"><code>simt lessons review ${escapeHtml(candidate.id)} --yes</code></p>
@@ -23,7 +23,7 @@ function candidateRow(candidate) {
 }
 
 function promotedRow(lesson) {
-  return `<article class="card library-lesson" data-lesson="${escapeHtml(lesson.id)}">
+  return `<article class="card" data-lesson="${escapeHtml(lesson.id)}">
     <header><strong>${escapeHtml(lesson.title ?? lesson.id)}</strong> ${badge(lesson.expired ? 'expired' : 'promoted', lesson.expired ? 'bad' : 'ok')}</header>
     <p class="computed"><code>${escapeHtml(lesson.id)}</code>${lesson.expires ? ` · expires ${escapeHtml(lesson.expires)}` : ''}</p>
     <p>${escapeHtml(lesson.summary ?? '')}</p>
@@ -32,7 +32,7 @@ function promotedRow(lesson) {
 
 function skillCard(skill) {
   return `<button type="button" class="skill-card" data-skill="${escapeHtml(skill.name)}">
-    <span class="skill-name">${escapeHtml(skill.name)}</span>
+    ${escapeHtml(skill.name)}
     <span class="computed">${escapeHtml(formatBytes(skill.bytes))}${skill.deferred ? ' · deferred' : ''}</span>
     <span class="computed">${escapeHtml(skill.summary ?? '')}</span>
   </button>`;
@@ -88,7 +88,7 @@ export function library(payload) {
     <label class="library-search" for="library-search">filter lessons and skills <input id="library-search" type="search" autocomplete="off" placeholder="name, capability or failure"></label>
     <div id="library-lessons">${lessonShelfHtml(payload)}</div>
     ${card({ title: count === undefined ? 'Skill catalog' : `Skill catalog · ${count} skills`, body: catalogHtml(payload) })}
-    <div id="library-reading" class="library-reading" aria-live="polite">${emptyState({ title: 'Reading pane', hint: 'Choose a skill to read its body.' })}</div>
+    <div id="library-reading" aria-live="polite">${emptyState({ title: 'Reading pane', hint: 'Choose a skill to read its body.' })}</div>
   </section>`;
 }
 
@@ -96,7 +96,7 @@ export function library(payload) {
 export function skillPane(payload) {
   if (!payload?.ok) return refusalPanel(payload ?? { ok: false });
   const skill = payload;
-  return `<article class="card skill-reading">
+  return `<article class="card">
     <header><h2>${escapeHtml(skill.name ?? 'skill')}</h2>${payload.bodyFrom ? badge(payload.bodyFrom, 'neutral') : ''}</header>
     <p class="computed">${escapeHtml(formatBytes(skill.bytes))}${skill.deferred ? ' · deferred' : ''}</p>
     <p>${escapeHtml(skill.summary ?? '')}</p>

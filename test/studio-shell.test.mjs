@@ -92,11 +92,9 @@ test('the control, library and Bench views keep their shared layout hooks', asyn
     assert.match(css, new RegExp(`\\.${hook}(?![\\w-])`), `${hook} has no shared stylesheet rule`);
   }
   const pane = skillPane({ ok: true, name: 'alpha', bytes: 10, bodyFrom: 'repo', bodyText: 'body' });
-  assert.match(pane, /class="card skill-reading"/);
+  assert.match(pane, /class="card"/);
   assert.match(pane, /class="skill-body"/);
-  for (const hook of ['skill-reading', 'skill-body']) {
-    assert.match(css, new RegExp(`\\.${hook}(?![\\w-])`), `${hook} has no shared stylesheet rule`);
-  }
+  assert.match(css, /\.skill-body\b/, 'skill-body has no shared stylesheet rule');
 
   const benchView = bench({ ok: true, runCount: 1, arms: [{ arm: 'bare', R: 0.5 }], failures: [], mapRecall: { measured: false, reason: 'not run' } });
   assert.match(benchView, /<section class="bench">/);

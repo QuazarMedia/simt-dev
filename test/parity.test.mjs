@@ -13,7 +13,7 @@
 // list, `root` on the CLI list, the workspace display note on CLI find).
 // Everything else must be identical, field for field.
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { before, test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname, resolve } from 'node:path';
@@ -25,6 +25,13 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const exec = promisify(execFile);
+
+// The index is a local cache in `.simt/`, ignored by git. A pre-push gate runs this file
+// from a clean copy that has no cache, so the brief parity case must build the same index
+// a consumer would; otherwise the test passes only in a developer's warmed checkout.
+before(async () => {
+  await exec(process.execPath, [BIN, 'index'], { cwd: ROOT });
+});
 
 const tool = (name) => {
   const found = TOOLS.find((t) => t.name === name);

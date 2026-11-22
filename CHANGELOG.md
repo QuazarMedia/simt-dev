@@ -4,7 +4,13 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.13.0] — 2026-11-22
+
+Plan 0006's local work and knowledge flow is complete (WK06–WK15): the scoped impact
+graph, selected verification with recorded receipts, cited brief packets, and export and
+import of committed citations. The Studio ships its live operations, evidence, context and
+steering rooms, qualified from a packed install, and the skills brief retires its flags for
+the packet's `--only` view (ADR-226).
 
 ### Added
 

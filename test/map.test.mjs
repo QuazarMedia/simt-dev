@@ -12,7 +12,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { git, capture } from './fixture.mjs';
+import { git, capture, ensureGit, simt, tempDir } from './fixture.mjs';
 import {
   DAMPING,
   EMBEDDINGS_DEFAULT,
@@ -566,3 +566,41 @@ test('R28: SQLite vector blobs, brute-force cosine similarity, and +10-point rec
   await rm(root, { recursive: true, force: true });
 });
 
+
+test('experimental map explains exact entity, lexical, graph and coupling contributions', async () => {
+  const root = await tempDir('map-v2-explain-');
+  await writeFile(join(root, 'helper.mjs'), 'export function resolveToken() { return 1; }\n// session provenance boundary');
+  await writeFile(join(root, 'app.mjs'), "import { resolveToken as resolve } from './helper.mjs';\nexport function verify() { return resolve(); }");
+  await writeFile(join(root, 'support.mjs'), '// session provenance boundary renewal');
+  await writeFile(join(root, 'noise.mjs'), '// tangential kaleidoscope');
+  await ensureGit(root);
+
+  const invoke = (flags) => simt(['map', ...flags, '--budget', '0', '--json'], { cwd: root });
+  const cold = await invoke(['--task', 'resolveToken', '--explain']);
+  assert.equal(cold.code, 0, cold.stdout + cold.stderr);
+  const first = JSON.parse(cold.stdout);
+  assert.equal(first.retrieval, 'v2');
+  assert.equal(first.basis, 'matched');
+  assert.equal(first.files[0].path, 'helper.mjs');
+  const helper = first.evidence.find(({ path }) => path === 'helper.mjs').channels;
+  assert.equal(helper.entity.matches[0].matched, 'resolveToken');
+  assert.ok(helper.bm25f.matchedFields.includes('symbol_names'));
+  const app = first.evidence.find(({ path }) => path === 'app.mjs').channels;
+  assert.ok(app.directional.witness.steps.some(({ kind }) => kind === 'called_by' || kind === 'imported_by_symbol'));
+  assert.ok(first.evidence.find(({ path }) => path === 'support.mjs').channels.coupling.conceptual > 0);
+
+  const index = await simt(['index', '--retrieval', 'v2', '--json'], { cwd: root });
+  assert.equal(index.code, 0, index.stdout + index.stderr);
+  assert.equal((await invoke(['--task', 'resolveToken', '--explain'])).stdout, cold.stdout);
+  const plain = JSON.parse((await invoke(['--task', 'resolveToken'])).stdout);
+  assert.equal(plain.retrieval, undefined);
+  assert.equal(plain.evidence, undefined);
+
+  const context = JSON.parse((await invoke(['--task', 'kaleidoscope', '--explain'])).stdout);
+  assert.equal(context.basis, 'unmatched');
+  assert.ok(context.files.some(({ path }) => path === 'noise.mjs'));
+  const noTask = JSON.parse((await invoke(['--explain'])).stdout);
+  assert.equal(noTask.basis, 'no-task');
+  assert.equal(noTask.evidence[0].path, 'helper.mjs');
+  assert.ok(noTask.evidence[0].channels.centrality.score > 0);
+});

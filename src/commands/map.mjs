@@ -30,14 +30,25 @@ export async function mapCommand(args, flags) {
     return fail(`budget must be a non-negative integer`, EXIT.USAGE, `run: ${CLI} map --budget 2048`);
   }
   const task = typeof flags.task === 'string' ? flags.task : '';
+  const retrieval = flags.retrieval ?? (flags.explain === true ? 'v2' : 'v1');
+  if (retrieval !== 'v1' && retrieval !== 'v2') {
+    return fail(`unknown retrieval version ${retrieval}`, EXIT.USAGE, 'use --retrieval v1 or v2');
+  }
+  const experimental = retrieval === 'v2';
+  const searching = task.trim().length > 0;
   let loaded;
   try {
-    loaded = await loadLiveGraph(root, { text: task.trim().length > 0, embed: flags.embed === true });
+    loaded = await loadLiveGraph(root, {
+      text: !experimental && searching,
+      fielded: experimental && searching,
+      binding: experimental && searching,
+      embed: flags.embed === true,
+    });
     if (loaded.broken) throw new Error(loaded.indexError?.message ?? 'the index cannot be read');
   } catch (error) {
     return fail(`could not map this repository (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository');
   }
-  const bm25 = task.trim().length > 0 ? await searchFtsBm25(root, task, { fts: loaded.fts }) : [];
+  const bm25 = !experimental && searching ? await searchFtsBm25(root, task, { fts: loaded.fts }) : [];
   const queryVector =
     flags.embed === true && loaded.embeddings.length > 0
       ? await embedTaskQuery(root, task, {
@@ -45,14 +56,17 @@ export async function mapCommand(args, flags) {
           allowRemote: flags.allowRemote === true,
         })
       : null;
-  const ranked = rankFiles({ ...loaded, bm25, queryVector, task });
+  const result = experimental
+    ? await (await import('../index/map-v2.mjs')).rankMapV2(root, loaded, task, { explain: flags.explain === true, queryVector })
+    : null;
+  const ranked = result?.ranked ?? rankFiles({ ...loaded, bm25, queryVector, task });
   const rendered = renderMap(ranked, loaded.symbols, { level, budget });
   // What the ranking is an answer to. `unmatched` says no path or symbol mentioned the
   // task; the list can then be the graph hub or BM25 body hits, both context rather than
   // a match. Reading a fused score as a hit is how `map --task zebracorn` looked useful,
   // because that score is positive for a body hit and for every graph neighbour. The
   // match is the resolver score the brief filters on.
-  const matched = ranked.filter((row) => row.resolver > 0).length;
+  const matched = result?.matched ?? ranked.filter((row) => row.resolver > 0).length;
   const basis = task.trim().length === 0 ? 'no-task' : matched > 0 ? 'matched' : 'unmatched';
   const payload = {
     ok: true,
@@ -69,6 +83,8 @@ export async function mapCommand(args, flags) {
     truncated: rendered.truncated,
     files: rendered.files,
     text: rendered.text,
+    ...(experimental ? { retrieval } : {}),
+    ...(result && flags.explain === true ? { evidence: result.evidence, feedback: result.feedback } : {}),
   };
   if (isJson(flags)) {
     emitJson(payload);
@@ -85,6 +101,19 @@ export async function mapCommand(args, flags) {
     lines.push(`freshness ${loaded.freshness.state}${loaded.freshness.reason ? ` - ${loaded.freshness.reason}` : ''}`);
   }
   if (rendered.text) lines.push(rendered.text);
+  if (payload.evidence) {
+    for (const row of payload.evidence) {
+      const channels = Object.entries(row.channels).map(([name, channel]) => {
+        const path = channel.witness?.steps.map(({ kind, dst }) => `${kind} ${dst}`).join(' → ');
+        const fields = channel.matchedFields?.join(', ');
+        const matches = channel.matches?.map(({ matched }) => matched).join(', ');
+        return `${name} #${channel.rank} (${channel.score.toFixed(4)})${path ? ` [${channel.witness.seed} → ${path}]` : ''}${fields ? ` [${fields}]` : ''}${matches ? ` [${matches}]` : ''}`;
+      });
+      lines.push(`evidence  ${row.path}  ${channels.join('  ')}`);
+    }
+    const expansion = payload.feedback?.expansion ?? [];
+    if (expansion.length) lines.push(`feedback  ${expansion.map(({ term, sources }) => `${term} (${sources.join(', ')})`).join(', ')}`);
+  }
   emit(lines.join('\n'));
   return EXIT.OK;
 }

@@ -273,13 +273,16 @@ export const LEGACY_DEEP_IMPORTS = [
   'review/critic.mjs',
   'run.mjs',
   'state.mjs',
+  'sys/git.mjs',
   'sys/proc.mjs',
   'testing/parsers.mjs',
   'testing/patches.mjs',
   'testing/paths.mjs',
   'testing/runners.mjs',
   'testing/vault.mjs',
+  'text/tokens.mjs',
   'util/canonical.mjs',
+  'util/sort.mjs',
   'work/assurance.mjs',
 ];
 

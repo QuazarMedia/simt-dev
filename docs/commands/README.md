@@ -157,7 +157,7 @@ simt ignore [--yes] [--diff]                                                    
 simt impact <file|symbol>                                                                  # who a change reaches over the import closure: importers, their tests and the contract
 
 # index
-simt index [--open] [--search <task>] [--embed]                                            # rebuild the index, or ask the open cache for rows and ranks
+simt index [--open] [--search <task>] [--embed] [--retrieval v2]                           # rebuild the index, or ask the open cache for rows and ranks
 simt index overlay --input <file>                                                          # a working-tree or staged node labelled by its provenance, never both
 
 # init
@@ -199,7 +199,7 @@ simt lease [<paths>] --session                                                  
 simt local doctor [--allow-remote]                                                         # the local model endpoints, and whether they answer
 
 # map
-simt map --task "<task>"                                                                   # the files a task is most likely to touch, within a byte budget
+simt map [--task "<task>"] [--retrieval v2] [--explain]                                    # the files a task is most likely to touch, within a byte budget
 
 # mcp
 simt mcp [--list]                                                                          # serve the read-only MCP surface over stdio

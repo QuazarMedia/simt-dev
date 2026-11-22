@@ -382,6 +382,7 @@ const FLAGS = `--public               work schedule: withhold private tracker id
 --search <task>         index: BM25 rows for a task, from the open cache
 --rank <task>           index: files ranked for a task, from the open cache
 --query <text>          knowledge rank: the question the units are ranked against
+--retrieval <v1|v2>     knowledge rank, brief --scope: select the retrieval policy
 --where <k=v,...>       knowledge rank|why --scope: the scope dimensions the question
                         requires, e.g. jurisdiction=DE,product=acme
 --refs <ids>            knowledge impact: the changed claim or artifact ids, comma separated

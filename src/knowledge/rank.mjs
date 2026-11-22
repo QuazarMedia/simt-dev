@@ -19,6 +19,10 @@
 // discusses the question - but it carries the `obsolete` or `boilerplate-hub` label and a
 // penalty, so it cannot quietly outrank the source that applies.
 
+import { fieldProximity, fieldQueryTerms, fieldTokens, queryPairs, scoreFieldRows } from '../index/bm25f.mjs';
+import { smoothedIdf } from '../index/lexical.mjs';
+import { cmp } from '../util/sort.mjs';
+import { extractClaims } from './claims.mjs';
 import { satisfiesScope } from './validity.mjs';
 
 export const RANK_SCHEMA_VERSION = 1;
@@ -72,6 +76,45 @@ function lexicalCoverage(unit, terms) {
   return (body + label) / 2;
 }
 
+const KNOWLEDGE_FIELDS = ['label', 'headings', 'claims', 'body'];
+const KNOWLEDGE_WEIGHTS = [10, 2.5, 6, 1];
+
+function claimText(unit) {
+  const claims = Array.isArray(unit.claims) ? unit.claims : extractClaims(unit.text).claims;
+  return claims.flatMap((claim) => typeof claim === 'string' ? [claim]
+    : [claim?.id, claim?.subject, claim?.predicate, claim?.value, claim?.unit]
+      .filter((field) => typeof field === 'string' || typeof field === 'number')).join(' ');
+}
+
+function knowledgeFields(unit, ref) {
+  return {
+    ref,
+    label: fieldTokens(unit.label),
+    headings: fieldTokens(Array.isArray(unit.headings) ? unit.headings.join(' ') : ''),
+    claims: fieldTokens(claimText(unit)),
+    body: fieldTokens(unit.text),
+  };
+}
+
+function fieldedKnowledgeScores(units, query, terms) {
+  if (!terms.length || !units.length) return [];
+  const rows = units.map(knowledgeFields);
+  const scores = scoreFieldRows(rows, terms, { columns: KNOWLEDGE_FIELDS, weights: KNOWLEDGE_WEIGHTS, idf: smoothedIdf });
+  const top = scores.reduce((best, score) => Math.max(best, score), 0);
+  if (top === 0) return scores;
+  const pairs = queryPairs(query);
+  const proximity = fieldProximity(rows, pairs, { fields: KNOWLEDGE_FIELDS });
+  const combined = scores.map((score, row) => score / top + (pairs.length ? 0.15 * (proximity.get(row)?.size ?? 0) / pairs.length : 0));
+  const highest = combined.reduce((best, score) => Math.max(best, score), 0);
+  return combined.map((score) => Math.round(score / highest * 1e6) / 1e6);
+}
+
+function matchesFielded(unit, terms) {
+  const fields = knowledgeFields(unit, null);
+  const tokens = new Set(KNOWLEDGE_FIELDS.flatMap((field) => fields[field].split(' ')));
+  return terms.some((term) => tokens.has(term));
+}
+
 /** Apply the same scope and permission rules to scored and exact lookup. */
 export function rankEligibility({ scope = {}, permissions = null } = {}) {
   const required = Object.entries(scope ?? {}).filter(([, value]) => value !== undefined && value !== null);
@@ -110,8 +153,7 @@ function labelsOf(unit, hubPenalty) {
   return [...new Set(labels)];
 }
 
-function scoreOf(unit, terms, maxAuthority) {
-  const lexical = lexicalCoverage(unit, terms);
+function scoreOf(unit, lexical, maxAuthority) {
   const authority = Math.min(1, Math.max(0, Number(unit.authority) || 0) / maxAuthority);
   const evidence = Math.min(1, Math.max(0, Number(unit.evidence) || 0) / 3);
   const links = Math.max(0, Number(unit.links) || 0);
@@ -131,13 +173,13 @@ function scoreOf(unit, terms, maxAuthority) {
 }
 
 /** Score first, then authority, then coverage, then path and id: the whole order is data. */
-function compare(a, b) {
+function compare(a, b, compareText) {
   return (
     b.score - a.score ||
     b.components.authority - a.components.authority ||
     b.components.lexical - a.components.lexical ||
-    String(a.path ?? '').localeCompare(String(b.path ?? '')) ||
-    String(a.id ?? '').localeCompare(String(b.id ?? ''))
+    compareText(String(a.path ?? ''), String(b.path ?? '')) ||
+    compareText(String(a.id ?? ''), String(b.id ?? ''))
   );
 }
 
@@ -156,11 +198,13 @@ const publicHit = (hit) => ({
  * Rank the units a question may use.
  *
  * @param {{id?: string, path?: string, kind?: string, language?: string, text?: string, headings?: string[], label?: string, scope?: object|null, authority?: number, evidence?: number, links?: number, derived?: boolean, stale?: boolean, permission?: string, conflictsWith?: {id: string, kind: string}[]}[]} units
- * @param {{query?: string, scope?: object, permissions?: string[]|null, limit?: number}} [options]
+ * @param {{query?: string, scope?: object, permissions?: string[]|null, limit?: number, retrieval?: 'v1'|'v2'}} [options]
  * @returns {object}
  */
-export function rank(units = [], { query = '', scope = {}, permissions = null, limit = 10 } = {}) {
-  const terms = queryTerms(query);
+export function rank(units = [], { query = '', scope = {}, permissions = null, limit = 10, retrieval = 'v1' } = {}) {
+  const fielded = retrieval === 'v2';
+  const terms = fielded ? fieldQueryTerms(query) : queryTerms(query);
+  const compareText = fielded ? cmp : (a, b) => a.localeCompare(b);
   const classify = rankEligibility({ scope, permissions });
   const eligible = [];
   const unknownScope = [];
@@ -169,28 +213,38 @@ export function rank(units = [], { query = '', scope = {}, permissions = null, l
   for (const unit of Array.isArray(units) ? units : []) {
     const reason = classify(unit);
     if (reason === 'unknown-scope') {
-      if (lexicalCoverage(unit, terms) > 0) {
+      if (fielded ? matchesFielded(unit, terms) : lexicalCoverage(unit, terms) > 0) {
         unknownScope.push({ id: unit.id ?? null, path: unit.path ?? null, class: reason });
       }
       continue;
     }
     if (reason !== null) {
-      excluded.push({ id: unit.id ?? null, reason });
+      excluded.push({ id: fielded ? null : unit.id ?? null, reason });
       continue;
     }
     eligible.push(unit);
   }
 
-  const maxAuthority = Math.max(1, ...eligible.map((unit) => Math.max(0, Number(unit.authority) || 0)));
-  const scored = eligible.map((unit) => scoreOf(unit, terms, maxAuthority)).filter((hit) => hit.components.lexical > 0);
+  const maxAuthority = eligible.reduce((top, unit) => Math.max(top, Number(unit.authority) || 0), 1);
+  const lexical = fielded ? fieldedKnowledgeScores(eligible, query, terms) : eligible.map((unit) => lexicalCoverage(unit, terms));
+  const scored = eligible.map((unit, index) => scoreOf(unit, lexical[index] ?? 0, maxAuthority))
+    .filter((hit) => hit.components.lexical > 0).sort((a, b) => compare(a, b, compareText));
   const cap = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : scored.length;
+  const seen = new Set();
+  const ranked = fielded ? scored.filter(({ path }) => {
+    if (path == null) return true;
+    if (seen.has(path)) return false;
+    seen.add(path);
+    return true;
+  }) : scored;
 
   return {
     version: RANK_SCHEMA_VERSION,
     query,
-    ranked: scored.sort(compare).slice(0, cap).map(publicHit),
-    unknownScope: unknownScope.sort((a, b) => String(a.path).localeCompare(String(b.path))),
-    excluded,
+    ranked: ranked.slice(0, cap).map(publicHit),
+    unknownScope: unknownScope.sort((a, b) => compareText(String(a.path), String(b.path)) || (fielded ? cmp(String(a.id), String(b.id)) : 0)),
+    excluded: fielded ? excluded.sort((a, b) => cmp(a.reason, b.reason)) : excluded,
+    ...(fielded ? { retrieval } : {}),
     embeddings: 'off',
     weights: RANK_WEIGHTS,
   };
@@ -205,9 +259,9 @@ export function rank(units = [], { query = '', scope = {}, permissions = null, l
  *
  * @param {object[]} units
  * @param {{query: string, gold: string[], scope?: object, permissions?: string[]|null}[]} corpus
- * @param {{limit?: number}} [options]
+ * @param {{limit?: number, retrieval?: 'v1'|'v2'}} [options]
  */
-export function evaluateRank(units = [], corpus = [], { limit = 10 } = {}) {
+export function evaluateRank(units = [], corpus = [], { limit = 10, retrieval = 'v1' } = {}) {
   const byId = new Map((Array.isArray(units) ? units : []).map((unit) => [unit.id, unit]));
   const strata = { byLanguage: new Map(), byKind: new Map() };
   const failures = [];
@@ -222,7 +276,7 @@ export function evaluateRank(units = [], corpus = [], { limit = 10 } = {}) {
   };
 
   for (const entry of Array.isArray(corpus) ? corpus : []) {
-    const result = rank(units, { query: entry.query, scope: entry.scope ?? {}, permissions: entry.permissions ?? null, limit });
+    const result = rank(units, { query: entry.query, scope: entry.scope ?? {}, permissions: entry.permissions ?? null, limit, retrieval });
     const ranked = new Set(result.ranked.map((hit) => hit.id));
     const unplaceable = new Set(result.unknownScope.map((hit) => hit.id));
     const expected = Array.isArray(entry.gold) ? entry.gold : [];

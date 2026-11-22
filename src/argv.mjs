@@ -188,6 +188,7 @@ export const VALUE_FLAGS = new Set([
   'search',
   'rank',
   'query',
+  'retrieval',
   'refs',
   'weights',
   // knowledge rank|why --scope: the scope dimensions the question requires, as key=value

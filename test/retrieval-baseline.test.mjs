@@ -62,7 +62,7 @@ test('retrieval v1 records four failure classes and six CLI envelopes in an isol
   const composite = await probe(['brief', scenario.compositePrompt, '--explain']);
   const map = await probe(['map', '--task', scenario.mixedPrompt]);
   const impact = await probe(['impact', 'rankRecords']);
-  const why = await probe(['why', 'src/rank.mjs']);
+  const why = await probe(['why', 'src/rank.mjs', '--retrieval', 'v1']);
   const gate = await probe(['gate', 'src/inventory.mjs']);
   const check = await probe(['check']);
   const metrics = {

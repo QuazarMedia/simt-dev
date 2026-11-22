@@ -32,7 +32,7 @@ async function worktreeChanges(root) {
 
 }
 
-function candidatePaths(changes, policy) {
+export function candidatePaths(changes, policy) {
   return filterAllowed(changes.filter(({ path }) => safePath(path) && (policy?.allows?.(path) ?? true)), policy).allowed;
 }
 

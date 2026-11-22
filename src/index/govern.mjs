@@ -3,10 +3,10 @@
 // A decision governs the files its Affects line names. The line is prose, so the
 // only tokens that count are the ones in backticks, joined across the lines the
 // paragraph wraps onto. A rule governs a file its scope matches. A skill, a gate
-// and a lesson do the same with their own path list. Nothing here is stored: the
-// answer is the records on disk.
+// and a lesson do the same with their own path list.
 
 import { parseDecisionFrontmatter } from '../memory/decide.mjs';
+import { namesTree, stackCompatible } from '../resolve/resolve.mjs';
 import { parseFrontmatter } from '../text/frontmatter.mjs';
 import { cmp } from '../util/sort.mjs';
 
@@ -139,12 +139,17 @@ export function unresolvedAffects(records, ctx) {
 }
 
 /** Rules, skills, gates and lessons whose path list matches this file. */
-export function scopeHits(file, { rules = [], skills = [], gates = [], lessons = [], commands = {} }) {
+export function eligibleSkillScopes(skills, { tree = [], repoSignals = [] } = {}) {
+  return skills.filter((skill) => !skill.stack?.length || stackCompatible(skill, repoSignals))
+    .map((skill) => ({ ...skill, paths: skill.paths.filter((glob) => !namesTree(tree, glob)) }));
+}
+
+export function scopeHits(file, { rules = [], skills = [], gates = [], lessons = [], commands = {}, tree, repoSignals }) {
   const hits = [];
   for (const rule of rules) {
     if (rule.paths.some((glob) => matchGlob(glob, file))) hits.push({ kind: 'rule', id: rule.id, detail: rule.detail });
   }
-  for (const skill of skills) {
+  for (const skill of tree === undefined ? skills : eligibleSkillScopes(skills, { tree, repoSignals })) {
     if (skill.paths.some((glob) => matchGlob(glob, file))) hits.push({ kind: 'skill', id: skill.id, detail: skill.detail });
   }
   for (const gate of gates) {
@@ -179,8 +184,8 @@ export function governs(file, corpus) {
   return sortHits([...hits, ...scopeHits(file, scopes)]);
 }
 
-function sortHits(hits) {
-  const order = { decision: 0, rule: 1, skill: 2, gate: 3, lesson: 4 };
+export function sortHits(hits) {
+  const order = { decision: 0, rule: 1, skill: 2, gate: 3, lesson: 4, owner: 5 };
   return [...hits].sort((a, b) => (order[a.kind] - order[b.kind]) || cmp(a.id, b.id));
 }
 

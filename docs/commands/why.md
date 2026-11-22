@@ -4,6 +4,6 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 
 | Command | Flags | What it does |
 | --- | --- | --- |
-| `simt why [<subject>]` | — | what governs a path, rule, decision, skill or finding code |
+| `simt why [<subject>] [--retrieval v1\|v2]` | `--retrieval` | what governs a path, rule, decision, skill or finding code |
 
 None of these write to the repository.

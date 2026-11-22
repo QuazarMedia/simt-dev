@@ -17,6 +17,7 @@ function publicScope(scope, tokens) {
     qualifiedName: scope.qualifiedName,
     kind: scope.kind,
     line: tokens[scope.nameIndex].line,
+    endLine: tokens[scope.end - 1]?.line ?? tokens[scope.first].line,
     start: tokens[scope.first].start,
     end: tokens[scope.end - 1]?.end ?? tokens[scope.first].end,
   };

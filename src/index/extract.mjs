@@ -64,19 +64,32 @@ export function extractSymbolEvidence(filePath, text, lang, references) {
  * strategy below.
  */
 export function resolveImports(filePath, imports, files, lang) {
-  const have = files instanceof Set ? files : new Set(files);
-  const stems = indexByStem(have);
-  const dirs = lang === 'go' || lang === 'csharp' ? indexDirs(have, lang === 'go' ? '.go' : '.cs') : null;
+  const resolve = createImportResolver(files);
   const edges = [];
   const seen = new Set();
   for (const spec of imports) {
-    const dst = resolveOne(filePath, spec, have, stems, dirs, lang);
+    const dst = resolve(filePath, spec, lang) ?? spec;
     if (seen.has(dst)) continue;
     seen.add(dst);
     edges.push({ src: filePath, dst, kind: 'import', weight: 1 });
   }
   edges.sort(byEdge);
   return edges;
+}
+
+export function createImportResolver(files) {
+  const have = files instanceof Set ? files : new Set(files);
+  let stems;
+  const directories = new Map();
+  return (filePath, spec, lang) => {
+    if (!spec) return null;
+    if (!relativeSpec(spec)) {
+      if (lang === 'go' || lang === 'csharp') {
+        if (!directories.has(lang)) directories.set(lang, indexDirs(have, lang === 'go' ? '.go' : '.cs'));
+      } else stems ??= indexByStem(have);
+    }
+    return resolveOne(filePath, spec, have, stems, directories.get(lang), lang);
+  };
 }
 
 /** Stem (basename) to tracked paths, so a namespace lookup touches its stem group, not the tree. */
@@ -209,15 +222,16 @@ function resolveOne(filePath, spec, files, stems, dirs, lang) {
       // Namespace-as-directory: `A.B.C` and `example.com/mod/pkg` use dots and
       // slashes interchangeably for what is a directory on disk.
       const dotted = lang === 'csharp' ? String(spec).replace(/\\/g, '/').split('.').join('/') : String(spec);
-      return dirHit(dotted, dirs) ?? spec;
+      return dirHit(dotted, dirs);
     }
     const candidates = nonRelativeCandidates(String(spec), lang);
-    if (candidates === null) return spec;
-    return suffixHit(candidates, files, stems) ?? spec;
+    if (candidates === null) return null;
+    return suffixHit(candidates, files, stems);
   }
   const dir = filePath.includes('/') ? filePath.slice(0, filePath.lastIndexOf('/')) : '';
   const base = slash(dir, rel);
   const candidates = [base];
+  if (lang === 'python') candidates.push(base ? `${base}/__init__.py` : '__init__.py');
   const dot = base.lastIndexOf('.');
   const bare = dot > base.lastIndexOf('/') ? null : base;
   if (bare !== null) {
@@ -235,7 +249,7 @@ function resolveOne(filePath, spec, files, stems, dirs, lang) {
       if (files.has(swapped)) return swapped;
     }
   }
-  return spec;
+  return null;
 }
 
 function relativeSpec(spec) {

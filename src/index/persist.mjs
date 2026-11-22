@@ -12,6 +12,7 @@ import { LOCAL_DIR } from '../state.mjs';
 import { cmp } from '../util/sort.mjs';
 import { BM25F_FIELDS } from './bm25f.mjs';
 import { lexicalWriter } from './lexical-store.mjs';
+import { persistSymbolGraph } from './symbol-persist.mjs';
 
 export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
 const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
@@ -464,6 +465,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     const upsertMeta = db.prepare(
       'insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value',
     );
+    if (next.length || removed.length || meta.edgeOwners?.length) persistSymbolGraph(db);
     upsertMeta.run('schema', SCHEMA_V);
     if (meta.fielded || invalidatedFielded) {
       const ready = meta.fielded ? '1' : '0';
@@ -688,7 +690,7 @@ export async function countSqlite(root) {
     root,
     `select
       (select count(*) from nodes where kind = 'symbol') as symbols,
-      (select count(*) from edges) as edges,
+      (select count(*) from edges where coalesce(props, '') = '') as edges,
       (select count(*) from vectors) as embeddings`,
   );
   const row = rows[0] ?? {};

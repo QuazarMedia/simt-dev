@@ -17,6 +17,7 @@ import { readLocalConfig } from '../local/config.mjs';
 import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { foldIdentifierText } from '../text/identifiers.mjs';
+import { SYMBOL_GRAPH_QUERIES } from './symbol-persist.mjs';
 import { extract, extractSymbolEvidence, resolveImports } from './extract.mjs';
 import { BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldQueryTerms, fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F } from './bm25f.mjs';
 // the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
@@ -52,7 +53,7 @@ const BLOB_CAP = 16 * 1024 * 1024;
 // What the built-in extractor and import resolver mean, separately from the
 // database schema. Bump it when their reading changes: every cache built by the
 // older reading is then re-extracted, which a schema migration is not for.
-const INDEX_INPUT_REVISION = 4;
+const INDEX_INPUT_REVISION = 5;
 
 // The index's file scope. `git ls-files -s` is the whole tracked tree; a build
 // that restricted it would be a second meaning of the cache, and the stamp says
@@ -517,7 +518,7 @@ const SYMBOLS_SQL = `select s.path as path, n.name as name, json_extract(n.props
 // file changes, so a path is the only key that survives a reindex of one
 // endpoint.
 const EDGES_SQL = `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight
-  from edges e join nodes ns on ns.id = e.src_id order by src, dst, kind`;
+  from edges e join nodes ns on ns.id = e.src_id where coalesce(e.props, '') = '' order by src, dst, kind`;
 
 /** File rows, sorted by path. The same blobs read back as the same rows. */
 export async function readFiles(root) {
@@ -548,12 +549,26 @@ export async function readGraph(root) {
     [FILES_SQL],
     [SYMBOLS_SQL],
     [EDGES_SQL],
+    ["select value from meta where key = 'binding_coverage'"],
   ]);
-  const [files, symbols, edges] = results ?? [[], [], []];
+  const [files, symbols, edges, coverage] = results ?? [[], [], [], []];
   return {
     files: withReadError(files, error),
     symbols: withReadError(symbols, error),
     edges: withReadError(edges, error),
+    bindingCoverage: coverage.length ? JSON.parse(coverage[0].value) : null,
+  };
+}
+
+export async function readSymbolGraph(root) {
+  const { results, error } = await readSqliteBatch(root, SYMBOL_GRAPH_QUERIES);
+  const [edges, metadata] = results ?? [[], []];
+  const values = new Map(metadata.map(({ key, value }) => [key, JSON.parse(value)]));
+  return {
+    edges: edges.map(({ src, kind, dst, path, props }) => ({ src, kind, dst, path, ...JSON.parse(props) })),
+    bindingCoverage: values.get('binding_coverage') ?? null,
+    unresolved: values.get('binding_unresolved') ?? [],
+    error,
   };
 }
 

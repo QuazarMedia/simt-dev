@@ -16,7 +16,11 @@ import { BIN, git, tempDir } from './fixture.mjs';
 
 const URL_LINE = /open (http:\/\/127\.0\.0\.1:(\d+)\/\?token=(\S+))/;
 
-export function httpReq(port, { path = '/', method = 'GET', headers = {} } = {}) {
+/**
+ * A request that gives up: a server that accepts and never answers must fail the test,
+ * not hang it. A suite whose one wedged socket waits forever has no run time at all.
+ */
+export function httpReq(port, { path = '/', method = 'GET', headers = {}, timeoutMs = 10000 } = {}) {
   return new Promise((resolve, reject) => {
     const req = request({ host: '127.0.0.1', port, path, method, headers }, (res) => {
       let body = '';
@@ -24,6 +28,7 @@ export function httpReq(port, { path = '/', method = 'GET', headers = {} } = {})
       res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body }));
     });
     req.on('error', reject);
+    req.setTimeout(timeoutMs, () => req.destroy(new Error(`no response within ${timeoutMs} ms`)));
     req.end();
   });
 }
@@ -36,11 +41,9 @@ export async function startStudio(cwd, extra = []) {
   child.stdout.on('data', (d) => { out += d; });
   child.stderr.on('data', (d) => { err += d; });
   const started = await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`studio did not start: ${out} ${err}`)), 10000);
-    child.on('exit', (code) => {
-      clearTimeout(timer);
-      reject(new Error(`studio exited ${code} before printing a URL: ${out} ${err}`));
-    });
+    // The poll must die with the promise: a child that exits before printing its URL
+    // rejects, and an interval left behind then keeps the test process alive after every
+    // test has run - a suite that fails one spawn and then hangs for the rest of the day.
     const poll = setInterval(() => {
       const m = out.match(URL_LINE);
       if (m) {
@@ -49,6 +52,18 @@ export async function startStudio(cwd, extra = []) {
         resolve({ url: m[1], port: Number(m[2]), token: m[3] });
       }
     }, 25);
+    // The child that misses the window is still running, and a running child holds its
+    // pipes open: kill it before rejecting, or the test process lives past the last test.
+    const timer = setTimeout(() => {
+      clearInterval(poll);
+      child.kill('SIGKILL');
+      reject(new Error(`studio did not start: ${out} ${err}`));
+    }, 10000);
+    child.on('exit', (code) => {
+      clearTimeout(timer);
+      clearInterval(poll);
+      reject(new Error(`studio exited ${code} before printing a URL: ${out} ${err}`));
+    });
   });
   const stop = async () => {
     if (child.exitCode !== null) return child.exitCode;

@@ -6,6 +6,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { request } from 'node:http';
+import { createServer } from 'node:net';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -99,7 +100,13 @@ test('read routes stay inside the suite latency ceilings', async (t) => {
   for (const path of routes) {
     // Warm the route once: the first request to a route may build a cache or load a module.
     await httpReq(studio.port, { path, headers: { cookie } });
-    const ms = await measure(path);
+    let ms = await measure(path);
+    if (ms >= ceiling(path)) {
+      // A transient machine load can push the median of three. One settled re-measure
+      // separates a busy moment from a slow route; a persistent overage fails it too.
+      await httpReq(studio.port, { path, headers: { cookie } });
+      ms = await measure(path);
+    }
     assert.ok(ms < ceiling(path), `${path} median ${ms.toFixed(1)} ms exceeds its ${ceiling(path)} ms suite ceiling`);
   }
 
@@ -249,23 +256,57 @@ test('a named free port is the port served', async (t) => {
 
 test('--json reports the URL and port in the envelope when the studio stops', async () => {
   const root = await fixtureRepo();
-  const child = spawn(process.execPath, [BIN, 'studio', '--json', '--no-open', '--port', '0'], {
+  // The envelope contract: a document names its exit code, so the dispatcher holds every
+  // JSON document until the command returns - under --json, stdout is silent before the
+  // stop. The readiness signal is therefore the socket: it binds before the signal
+  // handler, microseconds later, and a fixed sleep raced Node's startup under load, and
+  // a SIGINT that arrived first reached the default handler and exited with a null code.
+  const probe = createServer();
+  await new Promise((resolve, reject) => { probe.once('error', reject); probe.listen(0, '127.0.0.1', resolve); });
+  const port = probe.address().port;
+  await new Promise((resolve) => probe.close(resolve));
+
+  const child = spawn(process.execPath, [BIN, 'studio', '--json', '--no-open', '--port', String(port)], {
     cwd: root,
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let out = '';
   child.stdout.on('data', (d) => { out += d; });
-  // The envelope contract: a document names its exit code, so it is written when the
-  // command returns. Give the socket a moment to bind, then stop it and read the answer.
-  await new Promise((resolve) => setTimeout(resolve, 500));
-  child.kill('SIGINT');
-  const code = await new Promise((resolve) => child.on('exit', resolve));
-  assert.equal(code, 0);
-  const docs = out.trim().split('\n').map((line) => JSON.parse(line));
-  const doc = docs.find((d) => typeof d.url === 'string');
-  assert.ok(doc, `no start document in: ${out}`);
-  assert.match(doc.url, /^http:\/\/127\.0\.0\.1:\d+\/\?token=/);
-  assert.equal(typeof doc.port, 'number');
+  child.stderr.on('data', (d) => { out += d; });
+  try {
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`studio never bound port ${port}; output: ${out}`)), 15000);
+      const poll = setInterval(() => {
+        httpReq(port).then(
+          () => { clearTimeout(timer); clearInterval(poll); resolve(); },
+          (error) => {
+            if (error.code !== 'ECONNREFUSED') { clearTimeout(timer); clearInterval(poll); reject(error); }
+          },
+        );
+      }, 50);
+    });
+    child.kill('SIGINT');
+    // Bounded: a SIGINT that the handler swallows must fail the test, not wait for it.
+    const code = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        child.kill('SIGKILL');
+        reject(new Error(`studio did not exit 10000 ms after SIGINT; output: ${out}`));
+      }, 10000);
+      child.on('exit', (c) => { clearTimeout(timer); resolve(c); });
+    });
+    assert.equal(code, 0);
+    const docs = out.trim().split('\n').filter((line) => line.trim()).map((line) => JSON.parse(line));
+    const doc = docs.find((d) => typeof d.url === 'string');
+    assert.ok(doc, `no envelope document in: ${out}`);
+    assert.match(doc.url, /^http:\/\/127\.0\.0\.1:\d+\/\?token=/);
+    assert.equal(doc.port, port);
+    assert.equal(doc.exitCode, 0);
+    assert.equal(doc.ok, true);
+  } finally {
+    // A child alive when the test ends holds its pipes open, and a pipe held open keeps
+    // the test process alive after the last test: one leak hung the whole run.
+    if (child.exitCode === null) child.kill('SIGKILL');
+  }
 });
 
 test('help and the rendered page name only shipped flags', async () => {

@@ -5,10 +5,12 @@
 // before it opens the file.
 
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
 import { mkdtemp, mkdir, readFile, writeFile, symlink, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { desiredRegion } from '../src/projection/rules.mjs';
 import { installedSkills, projectedSkill } from '../src/projection/disclosure.mjs';
@@ -94,6 +96,32 @@ test('two different files that share a name are both named', async () => {
   assert.match(desired.body, /- widget \(\.claude\/skills\) — Open this when the other widget/);
   assert.equal(desired.body.includes('A second body.'), false);
   await rm(root, { recursive: true, force: true });
+});
+
+test('every tracked skill frontmatter parses as compact YAML', async () => {
+  // `description: Use when releasing simt-dev: cutting a version...` reads as prose,
+  // and is a parse error to a strict YAML parser: the second `: ` ends the value and
+  // opens a nested mapping inside a compact one. The projection's own frontmatter read
+  // is a line strip, so it never saw the failure; the harness that loads these files
+  // does, and warns on every skill it cannot parse.
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const { stdout } = spawnSync('git', ['ls-files', '--', '*.md'], { cwd: root, encoding: 'utf8' });
+  const skills = stdout.split('\n').filter((line) => line.endsWith('SKILL.md'));
+  assert.ok(skills.length > 0, 'the checkout ships skills');
+  for (const rel of skills) {
+    const text = await readFile(join(root, rel), 'utf8');
+    const lines = text.split('\n');
+    assert.equal(lines[0], '---', `${rel}: no frontmatter`);
+    const end = lines.indexOf('---', 1);
+    assert.ok(end > 0, `${rel}: frontmatter does not close`);
+    for (const line of lines.slice(1, end)) {
+      const match = /^([A-Za-z_][\w-]*):[ \t]*(.*)$/.exec(line);
+      if (!match) continue; // a continuation line of a block scalar
+      const [, key, value] = match;
+      if (/^[>"'|]/.test(value)) continue; // a quoted or block scalar owns its colons
+      assert.ok(!value.includes(': '), `${rel}: ${key} carries an unquoted ": ", which a YAML parser reads as a nested mapping`);
+    }
+  }
 });
 
 test('a skill with no description says so, and names the command that shows it', async () => {

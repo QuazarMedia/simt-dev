@@ -359,7 +359,7 @@ export async function copyTree(from, to) {
     // slice exists to make impossible.
     filter: (src) => {
       const rel = relative(from, src).split(sep).join('/');
-      return rel === '' || !/(^|\/)(node_modules|dist|\.git|\.simt)(\/|$)/.test(rel);
+      return rel === '' || !/(^|\/)(node_modules|dist|\.sea-cache|\.git|\.simt)(\/|$)/.test(rel);
     },
   });
 }

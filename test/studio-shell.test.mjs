@@ -56,8 +56,8 @@ test('the page carries no inline script or style the CSP would refuse', async ()
 
 test('both themes, the system preference and reduced motion are in the stylesheet', async () => {
   const css = (await assets()).find((a) => a.name === 'shell.css').body;
-  assert.match(css, /@media \(prefers-color-scheme: light\)/);
-  assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(css, /@media \(prefers-color-scheme:\s*light\)/);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)/);
   assert.match(css, /\[data-theme="light"\]/);
   assert.match(css, /:focus-visible/);
 });

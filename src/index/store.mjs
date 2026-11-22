@@ -18,6 +18,7 @@ import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { foldIdentifierText } from '../text/identifiers.mjs';
 import { buildCochange } from './cochange.mjs';
+import { CITATIONS_BASIS_SQL, prepareCitations } from './commit-citations.mjs';
 import { readCochangeBasis, readFts, withReadError } from './graph-read.mjs';
 export { readEdges, readFiles, readFts, readGraph, readSymbolGraph, readSymbols } from './graph-read.mjs';
 import { extract, extractSymbolEvidence, resolveImports } from './extract.mjs';
@@ -358,9 +359,10 @@ export async function reindex(root, opts = {}) {
   });
   const tree = treeDigest(listed);
   const { prepareGovernance } = await import('./governance-store.mjs');
-  const [cochange, governance] = await Promise.all([
+  const [cochange, governance, citations] = await Promise.all([
     readCochangeBasis(root).then((basis) => buildCochange(root, basis, paths, { refresh: force || resolutionChanged })),
     prepareGovernance(root, listed),
+    readSqliteRows(root, CITATIONS_BASIS_SQL).then(({ rows }) => prepareCitations(root, rows[0]?.value)),
   ]);
   const build = digestOfParts(['index-build-v1', tree, inputs, resolution]);
   await writeSqlite(root, next, removed, symbols, edges, fts, embedBuild.rows, tree, {
@@ -372,6 +374,7 @@ export async function reindex(root, opts = {}) {
     fieldedRows,
     cochange,
     governance,
+    citations,
     embedBasis: embedBuild.basis ?? null,
   });
   const counts = await countSqlite(root);

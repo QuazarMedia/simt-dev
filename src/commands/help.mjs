@@ -175,9 +175,9 @@ ${CLI} workspace compare      org-wide matrix across every sibling repo
                            repos that have not adopted yet;
                            --concurrency <n> caps the rows built at once)
 ${CLI} index                   rebuild the local file index from git blob hashes
-${CLI} why <subject>         what governs a path: a decision whose Affects line names
-                           it, a rule whose scope matches it, a skill, a gate or
-                           a lesson. A subject is also ADR-NNN, rule:<id>,
+${CLI} why <subject>...     what governs paths, directories and symbols, with witness paths
+                           (--changed selects paths from the Git diff).
+                           A subject is also ADR-NNN, rule:<id>,
                            skill:<name> or a finding code, and each answers
                            through the command that owned that question. With no
                            subject, the Affects tokens this tree cannot resolve

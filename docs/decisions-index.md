@@ -256,3 +256,4 @@ in [architecture/history.md](architecture/history.md).
 | [245](decisions/ADR-245-precise-test-selection-requires-bound-git-hunks.md) | Precise test selection requires bound Git hunks | accepted · 2026-11-22 |
 | [246](decisions/ADR-246-code-and-knowledge-impact-join-by-exact-artifact-identity.md) | Code and knowledge impact join by exact artifact identity | accepted · 2026-11-22 |
 | [247](decisions/ADR-247-governance-applies-only-with-current-path-and-stack-evidence.md) | Governance applies only with current path and stack evidence | accepted · 2026-11-22 · supersedes ADR-093 ruling 2 · supersedes ADR-093 ruling 3 |
+| [248](decisions/ADR-248-governance-witnesses-carry-typed-paths-and-commit-citations.md) | Governance witnesses carry typed paths and commit citations | accepted · 2026-11-22 |

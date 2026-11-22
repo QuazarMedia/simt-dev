@@ -266,6 +266,6 @@ simt tokens [--repos] [--session]                                               
 simt undo --yes                                                                            # restore the last journaled set of writes, if untouched
 
 # why
-simt why [<subject>] [--retrieval v1|v2]                                                   # what governs a path, rule, decision, skill or finding code
+simt why [<subject>...] | --changed                                                        # what governs paths, symbols, rules, decisions, skills or finding codes
 ```
 <!-- simt:commands:end -->

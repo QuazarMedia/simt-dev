@@ -175,7 +175,7 @@ export const SPEC = [
   { path: 'verify status', usage: '(--input <file> | --changed --scope <id> [--input <attestations>])', mcp: { name: 'verify_status', flags: [] }, summary: 'closure over recorded obligations, and what is unresolved', defaultFor: 'verify', flags: ["input","changed","scope"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff","dry-run"], },
   { path: 'workspace upgrade', usage: '--yes', summary: 'replace this installation with the pinned release', writes: 'repo', aliases: ['upgrade'], flags: ["yes","all","diff","workspace","dry-run"], },
-  { path: 'why', usage: '[<subject>] [--retrieval v1|v2]', summary: 'what governs a path, rule, decision, skill or finding code', flags: ['retrieval'], values: { retrieval: ['v1', 'v2'] }, },
+  { path: 'why', usage: '[<subject>...] | --changed', summary: 'what governs paths, symbols, rules, decisions, skills or finding codes', flags: ['changed', 'retrieval'], values: { retrieval: ['v1', 'v2'] }, },
 ];
 
 

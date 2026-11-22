@@ -270,13 +270,15 @@ test('simt map renders the ranking, and recall is unmeasured without a vault', a
   await rm(bare, { recursive: true, force: true });
 });
 
-test('map --recall names the commit and file count it measured (ADR-225)', async () => {
+test('map --recall names the commit, file count and working-tree state it measured (ADR-225)', async () => {
   const root = await mkdtemp(join(tmpdir(), 'idx-recall-tree-'));
   const vaultParent = await mkdtemp(join(tmpdir(), 'idx-recall-vault-'));
   const previous = process.env.SIMT_DEV_VAULT_DIR;
   try {
     await git(['init', '-q', root]);
     await mkdir(join(root, 'src'), { recursive: true });
+    await mkdir(join(root, '.git', 'info'), { recursive: true });
+    await writeFile(join(root, '.git', 'info', 'exclude'), '.simt/\n');
     await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 1;\n');
     await writeFile(join(root, 'src', 'b.mjs'), 'export const b = 1;\n');
     await git(['-C', root, 'add', '-A']);
@@ -301,7 +303,19 @@ test('map --recall names the commit and file count it measured (ADR-225)', async
     const json = await capture(() => mapCommand([], { root, recall: true, json: true }));
     assert.equal(json.code, 0, json.stderr);
     const payload = JSON.parse(json.stdout);
-    assert.deepEqual(payload.recall.tree, { commit, files: 2 });
+    assert.deepEqual(payload.recall.tree, { commit, files: 2, dirty: false });
+
+    await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 2;\n');
+    const dirtyText = await capture(() => mapCommand([], { root, recall: true }));
+    assert.equal(dirtyText.code, 0, dirtyText.stderr);
+    assert.match(
+      dirtyText.stdout,
+      new RegExp(`tree\\s+${commit.slice(0, 8)} \\(2 files, uncommitted changes\\)`),
+    );
+
+    const dirtyJson = await capture(() => mapCommand([], { root, recall: true, json: true }));
+    assert.equal(dirtyJson.code, 0, dirtyJson.stderr);
+    assert.equal(JSON.parse(dirtyJson.stdout).recall.tree.dirty, true);
   } finally {
     if (previous === undefined) delete process.env.SIMT_DEV_VAULT_DIR;
     else process.env.SIMT_DEV_VAULT_DIR = previous;

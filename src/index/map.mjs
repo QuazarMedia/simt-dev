@@ -240,13 +240,17 @@ export function goldPaths(patch) {
  */
 export async function measureRecall(root, opts = {}) {
   // A figure without the tree it measured is read as a statement about the code, not
-  // about the checkout it ran in (ADR-225 ruling 2). Read the commit and the file count
-  // together with the rows so every answer, measured or not, can name them.
-  const [commit, files] = await Promise.all([
+  // about the checkout it ran in (ADR-225 ruling 2). Read the commit, the file count and
+  // the worktree state together with the rows so every answer, measured or not, can name
+  // them; a commit and a count are identical before and after an uncommitted edit.
+  const [commit, dirty, files] = await Promise.all([
     gitText(root, ['rev-parse', 'HEAD']).then((out) => out?.trim() || null).catch(() => null),
+    gitText(root, ['status', '--porcelain=v1', '--untracked-files=normal'], { allowFailure: true })
+      .then((out) => (out === null ? null : out.length > 0))
+      .catch(() => null),
     readFiles(root, opts),
   ]);
-  const tree = { commit, files: files.length };
+  const tree = { commit, files: files.length, dirty };
   const tasksDir = join(root, '.simt', 'bench', 'tasks');
   let names;
   try {
@@ -349,8 +353,14 @@ export async function measureRecall(root, opts = {}) {
 }
 
 export function formatRecall(result) {
+  const worktree =
+    result?.tree?.dirty === true
+      ? ', uncommitted changes'
+      : result?.tree?.dirty === null
+        ? ', working tree unknown'
+        : '';
   const tree = result?.tree
-    ? `\ntree     ${result.tree.commit ? result.tree.commit.slice(0, 8) : 'uncommitted'} (${result.tree.files} files)`
+    ? `\ntree     ${result.tree.commit ? result.tree.commit.slice(0, 8) : 'uncommitted'} (${result.tree.files} files${worktree})`
     : '';
   if (!result?.measured || result.recall === null) {
     return `recall@10 unmeasured (${result?.reason ?? 'not run'})${tree}`;

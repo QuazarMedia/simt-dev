@@ -2,13 +2,12 @@ import { collectCorpus } from '../knowledge/collect.mjs';
 import { rankCorpus } from '../knowledge/query.mjs';
 import { CLI } from '../name.mjs';
 import { EXIT, fail } from '../output/index.mjs';
+import { shellWord } from '../sys/proc.mjs';
 import { selectLocalVerification } from '../verify/local-selection.mjs';
 import { localVerificationStatus } from '../verify/local-run.mjs';
 import { readWork } from '../work/effective.mjs';
 import { buildPacket, collect, DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES } from './packet.mjs';
 import { buildProofPacket } from './proof.mjs';
-
-const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
 
 export async function assembleScopedBrief({ root, task, budget, workScope, retrieval = 'v1' }) {
   const work = await readWork(root);
@@ -23,7 +22,7 @@ export async function assembleScopedBrief({ root, task, budget, workScope, retri
   const matches = new Map();
   for (const { citation } of [...ranked.exact, ...ranked.ranked]) {
     if (!citation || matches.has(citation.path) || !/\.(?:md|markdown)$/i.test(citation.path)) continue;
-    const command = `${CLI} knowledge sections ${quote(citation.path)}`;
+    const command = `${CLI} knowledge sections ${shellWord(citation.path)}`;
     matches.set(citation.path, {
       id: citation.path,
       text: `${citation.path}${citation.anchor ? `#${citation.anchor}` : ''} (${citation.authorityBasis}) · ${command}`,
@@ -38,7 +37,7 @@ export async function assembleScopedBrief({ root, task, budget, workScope, retri
   const status = selection.error ? null : await localVerificationStatus(selection);
   const packet = collect();
   packet.add('TASK', `local scope ${workScope}`);
-  const flag = `--scope ${quote(workScope)}`;
+  const flag = `--scope ${shellWord(workScope)}`;
   packet.add('COMMANDS', `${CLI} verify status --changed ${flag}`);
   if (status !== null && selection.obligations.length > 0) {
     const passed = status.results.filter(({ state }) => state === 'pass').length;

@@ -220,17 +220,26 @@ export async function assembleBrief({
   workScope = null,
   retrieval = 'v1',
   only = null,
+  subtask = null,
 } = {}) {
   if (workScope !== null) return assembleScopedBrief({ root, task, budget, workScope, retrieval });
   // A view is the same packet with the other sections never collected, so it shares the
   // packer, the budget and the cut line rather than a second arithmetic (ADR-226).
   const section = only === null ? null : String(only).toUpperCase();
-  if (retrieval === 'v2' && !proof) {
+  if (retrieval === 'v2' || subtask !== null) {
     const { decomposePrompt } = await import('./decompose.mjs');
     const parts = decomposePrompt(task);
-    if (parts.length > 1 || /\b(?:without|except|never|unless|only when|do not|leave|keep|if)\b/iu.test(task)) {
+    const selected = subtask === null ? null : parts.find(({ id }) => id === subtask);
+    if (subtask !== null && !selected) {
+      return { error: { message: 'subtask ' + subtask + ' is outside 1–' + parts.length,
+        remedy: 'run simt brief --retrieval v2 with the same prompt to list its subtasks', exitCode: 2 } };
+    }
+    if (selected || parts.length > 1 || /\b(?:without|except|never|unless|only when|do not|leave|keep|if)\b/iu.test(task)) {
       const { assembleCompositeBrief } = await import('./multi.mjs');
-      return assembleCompositeBrief({ root, task, parts, paths, budget, flags, build, commands, section });
+      const result = await assembleCompositeBrief({ root, task, parts: selected ? [selected] : parts,
+        paths, budget, flags, build, commands, section, subtask });
+      if (proof && !result.cold) result.proof = await summarizeProof(root, result.items, result.packed, budget);
+      return result;
     }
   }
   // A view collects one section, so a block of work runs only when the collected section
@@ -567,36 +576,36 @@ export async function assembleBrief({
   const packed = buildPacket(items, { budget });
   const cut = new Set(packed.cut);
 
-  // A proof summary answers only what the kept packet itself proves: each kept section is
-  // an obligation, and each kept line cites the tree it was read from (A39).
-  let proofSummary;
-  if (proof) {
-    const head = (await gitText(root, ['rev-parse', 'HEAD']))?.trim() ?? '';
-    const kept = items.filter((item) => !cut.has(item.id));
-    const units = kept.map((item) => ({
-      id: item.id,
-      text: item.text,
-      obligations: [item.section],
-      mandatory: item.priority === 'hard',
-      revision: {
-        ref: head.length > 0 ? head : 'worktree',
-        digest: `sha256-${createHash('sha256').update(item.text).digest('hex')}`,
-      },
-      anchor: null,
-    }));
-    const report = buildProofPacket(units, {
-      budget: Math.min(budget > 0 ? budget : DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES),
-      required: [...new Set(kept.map((item) => item.section))],
-    });
-    const mandatory = new Set(units.filter((unit) => unit.mandatory).map((unit) => unit.id));
-    proofSummary = {
-      complete: report.complete,
-      omittedObligations: report.omittedObligations,
-      selectedMandatory: report.selected.filter((id) => mandatory.has(id)),
-    };
-  }
+  const proofSummary = proof ? await summarizeProof(root, items, packed, budget) : undefined;
 
   const sections = keptSections(items, cut);
 
   return { root, kind, basis, task, scope, budget, items, packed, sections, proof: proofSummary };
+}
+
+async function summarizeProof(root, items, packed, budget) {
+  const cut = new Set(packed.cut);
+  const head = (await gitText(root, ['rev-parse', 'HEAD']))?.trim() ?? '';
+  const kept = items.filter((item) => !cut.has(item.id));
+  const units = kept.map((item) => ({
+    id: item.id,
+    text: item.text,
+    obligations: [item.section],
+    mandatory: item.priority === 'hard',
+    revision: {
+      ref: head.length > 0 ? head : 'worktree',
+      digest: `sha256-${createHash('sha256').update(item.text).digest('hex')}`,
+    },
+    anchor: null,
+  }));
+  const report = buildProofPacket(units, {
+    budget: Math.min(budget > 0 ? budget : DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES),
+    required: [...new Set(kept.map((item) => item.section))],
+  });
+  const mandatory = new Set(units.filter((unit) => unit.mandatory).map((unit) => unit.id));
+  return {
+    complete: report.complete,
+    omittedObligations: report.omittedObligations,
+    selectedMandatory: report.selected.filter((id) => mandatory.has(id)),
+  };
 }

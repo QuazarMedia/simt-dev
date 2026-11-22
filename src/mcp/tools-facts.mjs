@@ -5,6 +5,7 @@ import { discover } from '../compare/discover.mjs';
 import { buildRows, resolveConcurrency, summarise } from '../compare/row.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { checkRepo } from '../commands/sync.mjs';
+import { parseSubtaskId } from '../brief/drilldown.mjs';
 import { retrievalMode } from '../index/retrieval-mode.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { SECTIONS, DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
@@ -33,7 +34,10 @@ export async function briefPayload(args, { only = null } = {}) {
     });
   }
   const budget = Number.isFinite(args?.budget) && args.budget >= 0 ? args.budget : DEFAULT_BRIEF_BYTES;
-  const retrieval = retrievalMode(args?.retrieval);
+  const subtask = parseSubtaskId(args?.subtask);
+  if (Number.isNaN(subtask)) throw new Error('subtask must be a positive integer');
+  const retrieval = retrievalMode(args?.retrieval ?? (subtask === null ? undefined : 'v2'));
+  if (subtask !== null && retrieval === 'v1') throw new Error('subtask selection requires retrieval v2');
   if (retrieval === null) throw new Error("retrieval must be v1 or v2");
   const result = await assembleBrief({
     root,
@@ -41,6 +45,7 @@ export async function briefPayload(args, { only = null } = {}) {
     paths: typeof args?.paths === 'string' ? args.paths : null,
     budget,
     retrieval,
+    subtask,
     build: false,
     only,
   });
@@ -261,6 +266,7 @@ export const TOOLS_FACTS = [
         task: { type: 'string', description: "what the agent is about to do, in the user's own words" },
         paths: { type: 'string', description: 'comma-separated paths to scope the packet to, instead of the files git reports as modified' },
         budget: { type: 'number', description: 'byte ceiling; 0 means the whole packet (default 2048)' },
+        subtask: { type: 'integer', minimum: 1, description: 'focus the packet on this subtask number' },
         retrieval: { type: 'string', enum: ['v1', 'v2'], description: 'v2 enables experimental composite packets' },
         only: { type: 'string', description: `one section of the packet, e.g. files or decisions; default is the whole packet (${SECTIONS.join(', ').toLowerCase()})` },
       },

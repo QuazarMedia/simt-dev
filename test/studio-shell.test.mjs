@@ -12,6 +12,9 @@ import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { badge, emptyState, escapeHtml, refusalPanel, table } from '../src/studio/public/components.js';
+import { bench } from '../src/studio/public/bench.js';
+import { control, controlPreview } from '../src/studio/public/control.js';
+import { library, skillPane } from '../src/studio/public/library.js';
 import { fixtureRepo, httpReq, session, startStudio } from './studio-fixture.mjs';
 
 const PUBLIC_DIR = fileURLToPath(new URL('../src/studio/public/', import.meta.url));
@@ -57,6 +60,51 @@ test('both themes, the system preference and reduced motion are in the styleshee
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(css, /\[data-theme="light"\]/);
   assert.match(css, /:focus-visible/);
+});
+
+test('the control, library and Bench views keep their shared layout hooks', async () => {
+  const css = (await assets()).find((a) => a.name === 'shell.css').body;
+  const libraryPayload = {
+    ok: true,
+    lessons: {
+      ok: true,
+      candidates: [{ id: 'candidate-1', status: 'candidate', kind: 'fail-then-fix', errorLine: 'boom' }],
+      promoted: [{ id: 'lesson-1', title: 'Lesson', summary: 'promoted' }],
+    },
+    skills: { ok: true, skills: [{ name: 'alpha', bytes: 10, summary: 'first' }] },
+  };
+
+  const controlView = control({ ok: true, commands: ['sync'] });
+  assert.match(controlView, /class="control-form"/);
+  assert.match(controlView, /id="control-result"/);
+  assert.match(
+    controlPreview({ ok: true, digest: 'sha256-x', plan: { files: ['a'], diff: [{ path: 'a', before: 'old', after: 'new' }] } }),
+    /class="control-side"/,
+  );
+  for (const hook of ['control-form', 'control-side']) {
+    assert.match(css, new RegExp(`\\.${hook}(?![\\w-])`), `${hook} has no shared stylesheet rule`);
+  }
+  assert.match(css, /#control-result\b/);
+
+  const libraryView = library(libraryPayload);
+  for (const hook of ['library', 'library-search', 'library-shelf', 'library-catalog', 'skill-card']) {
+    assert.match(libraryView, new RegExp(`class="[^"]*\\b${hook}(?=\\s|")`), `${hook} is missing from the library view`);
+    assert.match(css, new RegExp(`\\.${hook}(?![\\w-])`), `${hook} has no shared stylesheet rule`);
+  }
+  const pane = skillPane({ ok: true, bodyFrom: 'repo', skill: { name: 'alpha', bytes: 10 }, bodyText: 'body' });
+  assert.match(pane, /class="card skill-reading"/);
+  assert.match(pane, /class="skill-body"/);
+  for (const hook of ['skill-reading', 'skill-body']) {
+    assert.match(css, new RegExp(`\\.${hook}(?![\\w-])`), `${hook} has no shared stylesheet rule`);
+  }
+
+  const benchView = bench({ ok: true, runCount: 1, arms: [{ arm: 'bare', R: 0.5 }], failures: [], mapRecall: { measured: false, reason: 'not run' } });
+  assert.match(benchView, /<section class="bench">/);
+  assert.match(benchView, /class="card"/);
+  assert.match(benchView, /class="empty"/);
+  assert.match(benchView, /<progress/);
+  assert.match(css, /\.card\b/);
+  assert.match(css, /\.empty\b/);
 });
 
 test('the refusal panel renders the door payload, escaped', () => {

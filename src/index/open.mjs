@@ -124,6 +124,7 @@ export async function openIndex(root, { build = true, refresh = false } = {}) {
           freshness,
           counts: { files: g.files.length, symbols: g.symbols.length, edges: g.edges.length },
           basis: await basis(),
+          bindingCoverage: g.bindingCoverage,
         });
       }),
 

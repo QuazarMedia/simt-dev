@@ -15,6 +15,17 @@ export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
 const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
 export const SCHEMA_V = '5';
 
+// The writer has waited 5 s for a busy database since ADR-115; a reader that
+// returned immediately turned a transient build into INDEX_BUSY for a caller that
+// cannot retry. The same bound here lets the read wait, then name the contention.
+const BUSY_TIMEOUT_MS = 5000;
+
+function openRead(DatabaseSync, file, busyTimeout = BUSY_TIMEOUT_MS) {
+  const db = new DatabaseSync(file);
+  db.exec(`pragma busy_timeout = ${busyTimeout}`);
+  return db;
+}
+
 // The FTS tables carry their tokenizer in their definition, so `if not exists`
 // cannot migrate them: a v3 database would keep tokenizing new rows the v3 way
 // (ASCII fold, kind and ref searchable), and a v4 `fts` table cannot grow the
@@ -304,7 +315,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
   const db = new DatabaseSync(target);
   try {
     db.exec('pragma journal_mode = WAL');
-    db.exec('pragma busy_timeout = 5000');
+    db.exec(`pragma busy_timeout = ${BUSY_TIMEOUT_MS}`);
     db.exec('pragma synchronous = normal');
     db.exec(SCHEMA);
     db.exec(FTS_SCHEMA);
@@ -446,9 +457,9 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
  * when the file cannot be read as a database - the caller decides whether that
  * is a cold start or a corrupt one.
  */
-async function storedVersion(file) {
+async function storedVersion(file, busyTimeout = BUSY_TIMEOUT_MS) {
   const { DatabaseSync } = await import('node:sqlite');
-  const db = new DatabaseSync(file);
+  const db = openRead(DatabaseSync, file, busyTimeout);
   try {
     const user = Number(db.prepare('pragma user_version').get()?.user_version ?? 0);
     if (user > 0) return String(user);
@@ -490,7 +501,7 @@ function asIndexError(error) {
  * null when no index for this version exists. Throws when a present file
  * cannot be read as a database - corrupt, not cold.
  */
-async function resolveSqliteFile(root) {
+async function resolveSqliteFile(root, { busyTimeout = BUSY_TIMEOUT_MS } = {}) {
   // The pre-move path is a fallback for one release.
   let file = join(root, SQLITE_FILE);
   try {
@@ -503,7 +514,7 @@ async function resolveSqliteFile(root) {
       return null;
     }
   }
-  const version = await storedVersion(file);
+  const version = await storedVersion(file, busyTimeout);
   // An older database is readable in place: its tables carry the same columns,
   // and the next write migrates it. Only a newer one is routed to a sidecar.
   if (canonicalForWrite(version)) return file;
@@ -521,8 +532,11 @@ async function resolveSqliteFile(root) {
  * `{ rows: [], error: null }` (cold), a present index that cannot be read is
  * an empty row set with a named error - "locked", "no such column" and
  * "corrupt" used to all look like "no results".
+ *
+ * The optional `busyTimeout` lets the timeout test reach the mapping without
+ * holding the suite for the production bound; callers otherwise take the default.
  */
-export async function readSqliteRows(root, sql, params = []) {
+export async function readSqliteRows(root, sql, params = [], { busyTimeout = BUSY_TIMEOUT_MS } = {}) {
   let DatabaseSync;
   try {
     ({ DatabaseSync } = await import('node:sqlite'));
@@ -531,12 +545,12 @@ export async function readSqliteRows(root, sql, params = []) {
   }
   let file;
   try {
-    file = await resolveSqliteFile(root);
+    file = await resolveSqliteFile(root, { busyTimeout });
   } catch (error) {
     return { rows: [], error: asIndexError(error) };
   }
   if (!file) return { rows: [], error: null };
-  const db = new DatabaseSync(file);
+  const db = openRead(DatabaseSync, file, busyTimeout);
   try {
     return { rows: db.prepare(sql).all(...params), error: null };
   } catch (error) {
@@ -592,7 +606,7 @@ export async function readSqliteBatch(root, queries = []) {
     return { results: null, error: asIndexError(error) };
   }
   if (!file) return { results: null, error: null };
-  const db = new DatabaseSync(file);
+  const db = openRead(DatabaseSync, file);
   try {
     db.exec('begin');
     const results = queries.map(([sql, params = []]) => db.prepare(sql).all(...params));

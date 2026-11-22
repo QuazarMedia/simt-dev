@@ -14,7 +14,7 @@ import { test } from 'node:test';
 // These tests are about the protocol, not workspace discovery, so decline it.
 process.env.SIMT_DEV_WORKSPACE = 'off';
 
-import { access, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -23,8 +23,11 @@ import { handle, serve, PROTOCOL_VERSION, RPC, SUPPORTED_VERSIONS } from '../src
 import { TOOLS, ERROR_SHAPE } from '../src/mcp/tools.mjs';
 import { assertValid } from '../src/mcp/schema.mjs';
 import { CLI } from '../src/name.mjs';
+import { reindex } from '../src/index/store.mjs';
+import { SQLITE_FILE } from '../src/index/persist.mjs';
 
 import { BIN, exec, req, at, converse } from './mcp-fixture.mjs';
+import { holdIndexLock } from './fixture.mjs';
 // --- end to end over a real pipe ------------------------------------------------
 
 test('mcp: a real session answers on the protocol channel and nothing else', async () => {
@@ -302,6 +305,37 @@ test('mcp: brief reads the index and never builds one', async () => {
   const packet = warm.result.structuredContent;
   assert.match(packet.text, /src\/keep\.mjs/, 'the packet names the file the task mentions');
   assert.ok(packet.bytes > 0 && packet.bytes <= 2048, `packet was ${packet.bytes} bytes`);
+});
+
+test('mcp: skills_brief waits for a transient index write instead of reporting INDEX_BUSY', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'simt-skills-busy-'));
+  try {
+    await mkdir(join(dir, 'src'), { recursive: true });
+    await writeFile(join(dir, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
+    await writeFile(join(dir, 'src', 'keep.mjs'), 'export function keep(value) { return value; }\n');
+    await exec('git', ['init', '-q', dir]);
+    await exec('git', ['-C', dir, 'add', '-A']);
+    await exec('git', [
+      '-C', dir,
+      '-c', 'user.email=tests@simt.invalid',
+      '-c', 'user.name=simt-dev tests',
+      '-c', 'commit.gpgsign=false',
+      'commit', '-qm', 'initial',
+    ]);
+    await reindex(dir);
+
+    const lock = await holdIndexLock(join(dir, SQLITE_FILE));
+    try {
+      const view = TOOLS.find((tool) => tool.name === 'skills_brief');
+      const packet = await view.run({ root: dir, task: 'fix src/keep.mjs', paths: 'src/keep.mjs' });
+      assert.equal(packet.root, dir);
+      assert.equal(packet.task, 'fix src/keep.mjs');
+    } finally {
+      await lock.done;
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 test('mcp: subscribing is refused with the reason, and never advertised', async () => {
   // Two facts that have to agree: the capability says no subscriptions, and a client that

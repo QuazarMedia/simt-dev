@@ -10,11 +10,9 @@ import { test } from 'node:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
-
-import { git } from './fixture.mjs';
+import { git, holdIndexLock } from './fixture.mjs';
 import { reindex } from '../src/index/store.mjs';
-import { SQLITE_FILE } from '../src/index/persist.mjs';
+import { SQLITE_FILE, readSqliteRows } from '../src/index/persist.mjs';
 import { openIndex } from '../src/index/open.mjs';
 
 test('a corrupt index surfaces the underlying message, not [object Object] (A20)', async () => {
@@ -49,7 +47,7 @@ test('a corrupt index surfaces the underlying message, not [object Object] (A20)
   }
 });
 
-test('a busy index keeps INDEX_BUSY rather than collapsing it to E_READ (A20)', async () => {
+test('a transient busy index is waited for, not reported as INDEX_BUSY (A20)', async () => {
   const root = await mkdtemp(join(tmpdir(), 'idx-open-busy-'));
   try {
     await git(['init', '-q', root]);
@@ -58,23 +56,37 @@ test('a busy index keeps INDEX_BUSY rather than collapsing it to E_READ (A20)', 
     await git(['-C', root, 'commit', '-qm', 'initial']);
     await reindex(root);
 
-    const lock = new DatabaseSync(join(root, SQLITE_FILE));
+    const lock = await holdIndexLock(join(root, SQLITE_FILE));
     try {
-      // WAL lets readers proceed beside a writer; DELETE mode makes the exclusive
-      // transaction block the read, which is the SQLITE_BUSY path this test needs.
-      lock.exec('pragma journal_mode=delete');
-      lock.exec('begin exclusive');
       const ix = await openIndex(root, { build: false });
       assert.equal(ix.ok, true, 'the handle opens; the database is locked');
       const result = await ix.search('anything');
-      assert.equal(result.ok, false);
-      assert.equal(result.error.code, 'INDEX_BUSY', 'the busy code was replaced by E_READ');
-
-      const status = await ix.status();
-      assert.equal(status.ok, false);
-      assert.equal(status.error.code, 'INDEX_BUSY', 'a busy index was reported as empty');
+      assert.equal(result.ok, true, JSON.stringify(result));
     } finally {
-      lock.close();
+      await lock.done;
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('a busy index that does not clear keeps INDEX_BUSY (A20)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-open-timeout-'));
+  try {
+    await git(['init', '-q', root]);
+    await writeFile(join(root, 'a.md'), '# a\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    await reindex(root);
+
+    const lock = await holdIndexLock(join(root, SQLITE_FILE));
+    try {
+      // The wait is tested above; disabling it here proves the timeout still maps
+      // SQLITE_BUSY to INDEX_BUSY rather than collapsing it to E_READ.
+      const result = await readSqliteRows(root, 'select 1', [], { busyTimeout: 0 });
+      assert.equal(result.error?.code, 'INDEX_BUSY', 'the busy code was replaced by E_READ');
+    } finally {
+      await lock.done;
     }
   } finally {
     await rm(root, { recursive: true, force: true });

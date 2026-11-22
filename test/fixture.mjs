@@ -10,7 +10,7 @@
 // skill bodies live in a synthetic workspace generated from the registry rather
 // than copied out of sibling repositories.
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { rmSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { cp, mkdir, mkdtemp, writeFile, readdir } from 'node:fs/promises';
@@ -73,6 +73,51 @@ export function git(args, options = {}) {
     // scrubbed process environment rather than from whatever the developer exported.
     env: { ...process.env, ...options.env },
   });
+}
+
+/**
+ * Hold an exclusive SQLite transaction from another process, then release it.
+ *
+ * A busy wait inside `node:sqlite` is synchronous, so a timer in the reading process
+ * cannot release the lock it is waiting on. The child process has its own event loop,
+ * which is what makes the wait in the parent observable.
+ *
+ * @param {string} file
+ * @param {number} [releaseAfterMs]
+ * @returns {Promise<{done: Promise<void>}>}
+ */
+export async function holdIndexLock(file, releaseAfterMs = 1000) {
+  const script = `
+    import { DatabaseSync } from 'node:sqlite';
+    const db = new DatabaseSync(process.env.SIMT_LOCK_FILE);
+    db.exec('pragma journal_mode=delete');
+    db.exec('begin exclusive');
+    process.stdout.write('locked\\n');
+    setTimeout(() => { db.close(); }, ${releaseAfterMs});
+  `;
+  const child = spawn(process.execPath, ['--input-type=module', '-e', script], {
+    env: { ...process.env, SIMT_LOCK_FILE: file },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  let stderr = '';
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  const done = new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('exit', (code) => (code === 0 ? resolve() : reject(new Error(`lock child exited ${code}: ${stderr}`))));
+  });
+  // The ready await below reports a spawn failure; this keeps the same failure from
+  // also surfacing as an unhandled rejection before the caller ever sees `done`.
+  done.catch(() => {});
+  await new Promise((resolve, reject) => {
+    let stdout = '';
+    child.stdout.on('data', (chunk) => {
+      stdout += chunk;
+      if (stdout.includes('locked')) resolve();
+    });
+    child.once('error', reject);
+    child.once('exit', (code) => reject(new Error(`lock child exited ${code} before locking: ${stderr}`)));
+  });
+  return { done };
 }
 
 /**

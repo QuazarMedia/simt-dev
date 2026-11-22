@@ -5,7 +5,7 @@ simt-supersedes: []
 
 # ADR-115 — the index stamps its schema version, migrates older databases in place, serves newer ones from a sidecar, and names a corrupt index
 
-Status: **accepted** · 2026-10-31 · filed as review 0003 Q44
+Status: **accepted** · 2026-10-31 · filed as review 0003 Q44 · ruling 4 extended by ADR-229
 
 ## Context
 

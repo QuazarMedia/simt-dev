@@ -71,7 +71,7 @@ test('read routes stay inside the suite latency ceilings', async (t) => {
   // contention does not fail a correct read. The full gate is the one route whose
   // own work is larger, and its ceiling sizes to the slowest qualifying runner -
   // 216.4 ms settled on the 2-vCPU CI pin under four-way concurrency - recorded in
-  // ADR-231, which supersedes the authoring-machine value in ADR-228.
+  // ADR-242, which supersedes the authoring-machine value in ADR-228.
   const READ_CEILING = 75;
   const GATE_CEILING = 300;
   const routes = [

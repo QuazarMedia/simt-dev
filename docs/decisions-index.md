@@ -117,7 +117,7 @@ in [architecture/history.md](architecture/history.md).
 | [105](decisions/ADR-105-the-json-ceiling-shrinks-arrays-and-never-cuts-bytes.md) | the JSON ceiling shrinks arrays and never cuts bytes | accepted · 2026-10-29 · filed as review 0003 Q10 |
 | [106](decisions/ADR-106-the-harness-hook-runs-through-a-repo-shim.md) | the harness hook runs through a repo shim, and `failClosed` only with it | accepted · 2026-10-29 |
 | [107](decisions/ADR-107-an-install-can-name-one-harness-and-the-skipped-ones-are-named.md) | an install can be narrowed to one harness, and the skipped ones are named | accepted · 2026-10-30 |
-| [108](decisions/ADR-108-an-adoption-builds-the-index-and-a-command-refreshes-it-on-read.md) | an adoption builds the index, and a command that reads it refreshes it on read | accepted · 2026-10-30 |
+| [108](decisions/ADR-108-an-adoption-builds-the-index-and-a-command-refreshes-it-on-read.md) | an adoption builds the index, and a command that reads it refreshes it on read | accepted · 2026-10-30 · ruling 2 superseded by ADR-237 |
 | [109](decisions/ADR-109-simt-dev-is-its-own-consumer-and-the-guards-that-kept-it-from-being-one-are-retired.md) | simt-dev is its own consumer, and the guards that kept it from being one are retired | accepted · 2026-10-30 |
 | [110](decisions/ADR-110-the-lock-file-follows-the-manifest-name-and-the-old-name-is-read-until-the-next-write.md) | the lock is `simt.lock.json`, and the old name is read until the next write | accepted · 2026-10-30 · supersedes ADR-086 ruling 3's file name |
 | [111](decisions/ADR-111-the-tool-ships-one-agent-rendered-per-harness-and-installs-it-with-init-and-a-command.md) | the tool ships one agent, rendered per harness, and installs it with init and a command | accepted · 2026-10-30 |
@@ -236,7 +236,18 @@ in [architecture/history.md](architecture/history.md).
 | [225](decisions/ADR-225-a-recall-figure-names-the-tree-it-measured.md) | A recall figure names the tree it measured | accepted · 2026-11-21 |
 | [226](decisions/ADR-226-the-skills-brief-is-a-view-of-the-packet.md) | The skills brief is a view of the packet, not a second packet | accepted · 2026-11-21 |
 | [227](decisions/ADR-227-control-is-the-writers-preview-confirmed-by-digest.md) | Control is the writer's preview, confirmed by digest | accepted · 2026-11-22 |
-| [228](decisions/ADR-228-the-studio-is-qualified-from-a-packed-install.md) | the studio is qualified from a packed install | accepted · 2026-11-22 · the /api/check 200 ms value is superseded by ADR-231 (300 ms); the method stands |
+| [228](decisions/ADR-228-the-studio-is-qualified-from-a-packed-install.md) | the studio is qualified from a packed install | accepted · 2026-11-22 · the /api/check 200 ms value is superseded by ADR-242 (300 ms); the method stands |
 | [229](decisions/ADR-229-a-read-waits-for-a-transient-index-write-and-then-names-it.md) | a read waits for a transient index write, then names it | accepted · 2026-11-22 |
 | [230](decisions/ADR-230-a-commit-message-carries-what-the-diff-cannot.md) | a commit message carries what the diff cannot | accepted · 2026-11-22 |
-| [231](decisions/ADR-231-the-gate-ceiling-sizes-to-the-slowest-runner.md) | the gate ceiling sizes to the slowest runner, not the authoring machine | accepted · 2026-11-22 |
+| [231](decisions/ADR-231-deterministic-retrieval-benchmarks-keep-gold-separate-from-prompts.md) | Deterministic retrieval benchmarks keep gold separate from prompts | accepted · 2026-11-22 |
+| [232](decisions/ADR-232-experimental-retrieval-shares-one-identifier-and-field-weight-policy.md) | Experimental retrieval shares one identifier and field-weight policy | accepted · 2026-11-22 |
+| [233](decisions/ADR-233-lexical-coupling-measures-current-file-rarity.md) | Lexical coupling measures current file rarity | accepted · 2026-11-22 |
+| [234](decisions/ADR-234-experimental-retrieval-expands-only-uncertain-queries.md) | Experimental retrieval expands only uncertain queries | accepted · 2026-11-22 |
+| [235](decisions/ADR-235-fielded-knowledge-ranking-scores-only-eligible-sources.md) | Fielded knowledge ranking scores only eligible sources | accepted · 2026-11-22 |
+| [236](decisions/ADR-236-the-symbol-graph-records-file-local-evidence.md) | The symbol graph records file-local evidence | accepted · 2026-11-22 |
+| [237](decisions/ADR-237-live-graph-reads-leave-the-staged-cache-intact.md) | Live graph reads leave the staged cache intact | accepted · 2026-11-22 · supersedes ADR-108 ruling 2 |
+| [238](decisions/ADR-238-experimental-graph-retrieval-follows-directional-evidence.md) | Experimental graph retrieval follows directional evidence | accepted · 2026-11-22 |
+| [239](decisions/ADR-239-a-composite-prompt-preserves-clause-and-scope-evidence.md) | A composite prompt preserves clause and scope evidence | accepted · 2026-11-22 |
+| [240](decisions/ADR-240-a-composite-packet-rewards-diminishing-evidence-returns.md) | A composite packet rewards diminishing evidence returns | accepted · 2026-11-22 |
+| [241](decisions/ADR-241-the-commit-message-opens-with-what.md) | The commit message opens with What | accepted · 2026-11-22 |
+| [242](decisions/ADR-242-the-gate-ceiling-sizes-to-the-slowest-runner.md) | the gate ceiling sizes to the slowest runner, not the authoring machine | accepted · 2026-11-22 |

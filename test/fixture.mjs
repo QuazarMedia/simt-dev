@@ -451,3 +451,21 @@ export async function tempDir(prefix = 'simt-') {
   TEMP_DIRS.push(dir);
   return dir;
 }
+
+/**
+ * A private repository with the index the brief cases read.
+ *
+ * The MCP brief tools are read-only, so they open an index that already exists rather
+ * than build one. A checkout-level index is written by other test files while these run,
+ * and an INDEX_BUSY from that overlap is the suite's scheduling, not the answer under
+ * test. One tracked path is all the SKILLS section and the parity cases need.
+ */
+export async function briefIndexFixture() {
+  const root = await tempDir('simt-brief-index-');
+  await mkdir(join(root, 'skills', 'simt-commands'), { recursive: true });
+  await writeFile(join(root, 'skills', 'simt-commands', 'SKILL.md'), '# commands\n');
+  await ensureGit(root);
+  const { code, stderr } = await simt(['index', '--root', root]);
+  if (code !== 0) throw new Error(`could not index the brief fixture: ${stderr}`);
+  return root;
+}

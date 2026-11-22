@@ -13,25 +13,19 @@
 // list, `root` on the CLI list, the workspace display note on CLI find).
 // Everything else must be identical, field for field.
 import assert from 'node:assert/strict';
-import { before, test } from 'node:test';
+import { test } from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { TOOLS } from '../src/mcp/tools.mjs';
+import { briefIndexFixture } from './fixture.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 const BIN = resolve(ROOT, 'bin', 'simt.mjs');
 const exec = promisify(execFile);
-
-// The index is a local cache in `.simt/`, ignored by git. A pre-push gate runs this file
-// from a clean copy that has no cache, so the brief parity case must build the same index
-// a consumer would; otherwise the test passes only in a developer's warmed checkout.
-before(async () => {
-  await exec(process.execPath, [BIN, 'index'], { cwd: ROOT });
-});
 
 const tool = (name) => {
   const found = TOOLS.find((t) => t.name === name);
@@ -84,8 +78,12 @@ test('parity: rules_why answers both directions on both surfaces', async () => {
 });
 
 test('parity: skills_brief is the brief SKILLS view on both surfaces', async () => {
-  const mcp = await tool('skills_brief').run({ root: ROOT, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md' });
-  const command = answer(await cli('brief', '--only', 'skills', '--task', 'read the commands skill', '--paths', 'skills/simt-commands/SKILL.md', '--root', ROOT));
+  // The MCP tool is read-only, so it reads an index that already exists. Give it a private
+  // repository rather than the checkout's cache, which other test files write while this
+  // one runs.
+  const root = await briefIndexFixture();
+  const mcp = await tool('skills_brief').run({ root, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md' });
+  const command = answer(await cli('brief', '--only', 'skills', '--task', 'read the commands skill', '--paths', 'skills/simt-commands/SKILL.md', '--root', root));
   assert.deepEqual(mcp, command);
 });
 

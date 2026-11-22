@@ -7,14 +7,14 @@
 
 import './isolate.mjs';
 import assert from 'node:assert/strict';
-import { after, before, test } from 'node:test';
+import { before, test } from 'node:test';
 // The pre-push gate runs this suite in a detached worktree under the temp
 // directory. With no workspace declared, the sibling heuristic treats that
 // parent as a workspace and `compare` scans every scratch directory beside it.
 // These tests are about the protocol, not workspace discovery, so decline it.
 process.env.SIMT_DEV_WORKSPACE = 'off';
 
-import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -27,26 +27,11 @@ import { desiredRegion } from '../src/projection/rules.mjs';
 import { planNext } from '../src/plan/index.mjs';
 
 import { BIN, exec, req, at, converse } from './mcp-fixture.mjs';
-import { git } from './fixture.mjs';
+import { briefIndexFixture } from './fixture.mjs';
 
-// The index-backed cases get a repository of their own. A checkout-level index is written
-// by other test files while this one runs, and an INDEX_BUSY here was the suite's
-// scheduling, not the answer under test.
 let INDEXED;
 before(async () => {
-  INDEXED = await mkdtemp(join(tmpdir(), 'simt-mcp-brief-'));
-  await mkdir(join(INDEXED, 'skills', 'simt-commands'), { recursive: true });
-  await mkdir(join(INDEXED, 'src'), { recursive: true });
-  await writeFile(join(INDEXED, 'skills', 'simt-commands', 'SKILL.md'), '# commands\n');
-  await writeFile(join(INDEXED, 'src', 'keep.mjs'), 'export const keep = 1;\n');
-  await writeFile(join(INDEXED, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
-  await git(['init', '-q', INDEXED]);
-  await git(['-C', INDEXED, 'add', '-A']);
-  await git(['-C', INDEXED, 'commit', '-qm', 'fixture']);
-  await exec(process.execPath, [BIN, 'index', '--root', INDEXED]);
-});
-after(async () => {
-  if (INDEXED) await rm(INDEXED, { recursive: true, force: true });
+  INDEXED = await briefIndexFixture();
 });
 
 // --- protocol ------------------------------------------------------------------

@@ -45,7 +45,8 @@ test('runs paired bootstrap comparisons with actual arm feature toggles and stab
   assert.deepEqual(first.arms.map((arm) => arm.name), RETRIEVAL_ARMS);
   assert.deepEqual(featuresPerArm.get('baseline-v1'), []);
   assert.deepEqual(featuresPerArm.get('+cochange'), ['cochange']);
-  assert.equal(featuresPerArm.get('full-v2').length, 7);
+  assert.equal(featuresPerArm.get('full-v2').length, 8);
+  assert.deepEqual(featuresPerArm.get('+governance'), ['governance']);
   assert.equal(first.samples, 1000);
   const bm25f = first.arms.find(({ name }) => name === '+bm25f-ident');
   const mrr = bm25f.comparisons.find(({ metric }) => metric === 'reciprocalRank');

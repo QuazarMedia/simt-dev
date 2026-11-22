@@ -134,10 +134,10 @@ with a table view that carries the same data.
   amended, by ADR-212, for this explicitly invoked surface).
 - **Budgets.** The whole shell (HTML + CSS + JS, uncompressed) stays under 120 KB; the
   server answers every read route in under 50 ms on the fixture repository except
-  `/api/check`, which runs the full gate. The status-backed reads use 75 ms test ceilings
-  as concurrency headroom and `/api/check` uses 200 ms, all measured in ADR-228; the test
-  suite covers every GET path in `STUDIO_READ_ROUTES`. No asset over the file-line
-  ceiling; views split into small modules.
+  `/api/check`, which runs the full gate. The status-backed reads and the claim-chain read
+  use 75 ms test ceilings as concurrency headroom and `/api/check` uses 200 ms, all
+  measured in ADR-228; the test suite covers every GET path in `STUDIO_READ_ROUTES`. No
+  asset over the file-line ceiling; views split into small modules.
 
 ## Data ownership
 
@@ -175,7 +175,9 @@ ST15 qualification limits: `test/studio-server.test.mjs` measures every GET path
 seven-sample fixture run measured `/api/status` at 42.8 ms (41.4–44.5; 75 ms ceiling after
 collapsing three git spawns to one), `/api/check` at 105.1 ms (101.6–124.6; 200 ms
 ceiling, the full gate), and `/api/helm?path=status` at 44.1 ms (43.4–50.9; 75 ms ceiling,
-the same status door). Only `/api/check` exceeded 50 ms; the other two use the 75 ms
+the same status door). `/api/evidence/chains?claim=…` measured 53.9 ms under full-suite
+concurrency (under 50 ms quietly) and has a 75 ms ceiling because the claim verdict runs
+`git write-tree`. Only `/api/check` exceeded 50 ms quietly; the other three use the 75 ms
 ceilings as concurrency headroom. Every other route measured 0.2–31.6 ms. A new GET path
 fails the latency coverage assertion until the test names it. The keyboard-only walkthrough
 of every room in both themes is an excluded manual check; it must be performed and recorded

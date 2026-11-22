@@ -77,7 +77,7 @@ export const SPEC = [
   { path: 'hooks run', usage: '<event>', summary: "run one git event's gates now, as git would", writes: 'repo', flags: ["yes","diff","dry-run","agent"], },
   { path: 'hooks status', summary: 'what each git event routes to; --agent reports each harness instead', defaultFor: 'hooks', flags: ["agent","diff","dry-run"], },
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff","yes"], writes: 'repo' },
-  { path: 'impact', usage: '<file|symbol|file#symbol> [--retrieval v2]', summary: 'who a change reaches over the import closure: importers, their tests and the contract', flags: ['retrieval'], values: { retrieval: ['v1', 'v2'] }, },
+  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>"', mcp: { name: 'impact', flags: ['all', 'changed', 'retrieval', 'task'] }, summary: 'trace importers, tests, governance, consumers and related files for a change', flags: ['all', 'changed', 'retrieval', 'task'], values: { retrieval: ['v1', 'v2'] }, },
   { path: 'index', usage: '[--open] [--search <task>] [--embed] [--retrieval v2]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","retrieval","search"], values: { retrieval: ["v1", "v2"] }, },
   // "hooks" used to be in this sentence and `init` never installed one: the promise and the
   // effect disagreed, and a reader who trusted the help believed their commits were gated

@@ -3,7 +3,7 @@ import { symbolKey, symbolNodePaths } from './bind.mjs';
 import { BM25F_FIELDS, fieldQueryTerms, scoreFtsBm25F } from './bm25f.mjs';
 import { directionalGraph, expandDirectional } from './directional.mjs';
 import { exactEntityCandidates, searchEntityCandidates } from './entities.mjs';
-import { collectFileTerms, sparseTfIdfCosine, topFileSignature } from './lexical.mjs';
+import { conceptualPartners } from './lexical.mjs';
 import { rrfFuse } from './map.mjs';
 import { searchWithFeedback } from './prf.mjs';
 import { searchFtsBm25F } from './store.mjs';
@@ -91,17 +91,7 @@ function couplingHits(rows, changes, anchors, paths) {
     if (sources.has(src)) record(dst, 'evolutionary', Math.min(1, weight), src);
     if (sources.has(dst)) record(src, 'evolutionary', Math.min(1, weight), dst);
   }
-  const files = collectFileTerms(rows);
-  const frequencies = new Map();
-  for (const terms of files.values()) for (const term of terms.keys()) frequencies.set(term, (frequencies.get(term) ?? 0) + 1);
-  const stats = { documents: files.size, terms: new Map([...frequencies].map(([term, df]) => [term, { df }])) };
-  const signatures = [...sources].sort(cmp).map((path) => [path, topFileSignature(files.get(path) ?? [], stats)]);
-  const vocabulary = new Set(signatures.flatMap(([, signature]) => signature.map(({ term }) => term)));
-  for (const [path, counts] of files) {
-    if (sources.has(path) || [...counts.keys()].every((term) => !vocabulary.has(term))) continue;
-    const signature = topFileSignature(counts, stats);
-    for (const [anchor, candidate] of signatures) record(path, 'conceptual', sparseTfIdfCosine(candidate, signature), anchor);
-  }
+  for (const { path, source, score } of conceptualPartners(rows, sources)) record(path, 'conceptual', score, source);
   return [...best.values()].map((row) => ({ ...row, score: row.conceptual + row.evolutionary })).sort(byScore).slice(0, LIMIT);
 }
 

@@ -190,9 +190,10 @@ ${CLI} tests <path>          the tests that exercise a file: an import, the conv
                            --changed reads from the diff
 ${CLI} gate [path...]        the tests a change reaches, and only those
                            (--changed reads the diff instead of the paths)
-${CLI} impact <file|symbol|file#symbol> [--retrieval v2]
+${CLI} impact <file|symbol|file#symbol>... [--retrieval v2]
                            who a change reaches: importers, tests, governance and consumers
-                           (v2 ranks bound symbols by directness and graph degree)
+                           (--changed uses Git hunks, --task resolves names in a prompt,
+                           and --all also shows conceptual matches when dependents exist)
 ${CLI} map [--task "<text>"] [--level outline|names|signatures]
                            the files this task is most likely to touch, within
                            --budget bytes (default 2048; 0 is unlimited). outline

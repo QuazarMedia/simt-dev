@@ -17,6 +17,7 @@ through it. `simt mcp --list` prints the surface without reading stdin.
 | `doctor` | Classify a repository: stack tags, the facts with the file that proved each, and manifest presence. Call this first when the repo is unknown. Read-only: `--fix` and `--diff` stay on the command. |
 | `evidence_validate` | Validate a ledger evidence record against a tree, target and obligations, and report the chain of custody behind it. |
 | `federation_query` | Ask a declared code-graph server one structural question; the answer names the server. Starts only servers simt.json names; none declared is an error. |
+| `impact` | Trace impact for file or symbol targets, Git diff hunks, or named entities in a task. Reports callers, tests, governance and consumers. |
 | `index_overlay` | A working-tree or staged index node labelled by the provenance its revision proves, with the artifact obligations it carries. |
 | `knowledge_export` | A bounded, permission-filtered packet another repository can read offline; restricted facts are dropped before the page is cut. |
 | `knowledge_import` | Validate an exported packet as data: schema, version, expiry and revision digests. It executes nothing and treats every fact as text. |

@@ -85,7 +85,7 @@ command pages carry the flags; this table carries the promise.
 | `simt hooks run` | stable | adoption | repo | — | — |
 | `simt hooks status` | stable | adoption | none | — | — |
 | `simt ignore` | stable | adoption | repo | — | — |
-| `simt impact` | stable | adoption | none | — | — |
+| `simt impact` | stable | adoption | none | `impact` | — |
 | `simt index` | stable | adoption | none | — | — |
 | `simt init` | stable | adoption | repo | — | — |
 | `simt knowledge why` | prototype | knowledge | none | `knowledge_why` | — |

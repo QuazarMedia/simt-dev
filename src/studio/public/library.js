@@ -14,7 +14,7 @@ function candidateRow(candidate) {
   const story = candidate.errorLine
     ? `<p class="slot-error"><strong>failed</strong> ${escapeHtml(candidate.errorLine)}</p>${candidate.fixDiff ? `<pre class="computed">${escapeHtml(candidate.fixDiff)}</pre>` : ''}`
     : `<p class="computed">${escapeHtml(candidate.summary ?? 'no fail-then-fix story recorded')}</p>`;
-  return `<article class="card" data-lesson="${escapeHtml(candidate.id)}">
+  return `<article class="card library-candidate" data-lesson="${escapeHtml(candidate.id)}">
     <header><strong>${escapeHtml(candidate.id)}</strong> ${badge(candidate.kind ?? 'candidate', 'warn')}</header>
     ${story}
     <p class="computed"><code>simt lessons review ${escapeHtml(candidate.id)} --yes</code></p>
@@ -23,7 +23,7 @@ function candidateRow(candidate) {
 }
 
 function promotedRow(lesson) {
-  return `<article class="card" data-lesson="${escapeHtml(lesson.id)}">
+  return `<article class="card library-lesson" data-lesson="${escapeHtml(lesson.id)}">
     <header><strong>${escapeHtml(lesson.title ?? lesson.id)}</strong> ${badge(lesson.expired ? 'expired' : 'promoted', lesson.expired ? 'bad' : 'ok')}</header>
     <p class="computed"><code>${escapeHtml(lesson.id)}</code>${lesson.expires ? ` · expires ${escapeHtml(lesson.expires)}` : ''}</p>
     <p>${escapeHtml(lesson.summary ?? '')}</p>
@@ -31,8 +31,10 @@ function promotedRow(lesson) {
 }
 
 function skillCard(skill) {
-  return `<button type="button" class="badge" data-skill="${escapeHtml(skill.name)}">
-    <code>${escapeHtml(skill.name)}</code> ${escapeHtml(formatBytes(skill.bytes))}${skill.deferred ? ` ${badge('deferred', 'warn')}` : ''} ${escapeHtml(skill.summary ?? '')}
+  return `<button type="button" class="skill-card" data-skill="${escapeHtml(skill.name)}">
+    <span class="skill-name">${escapeHtml(skill.name)}</span>
+    <span class="computed">${escapeHtml(formatBytes(skill.bytes))}${skill.deferred ? ' · deferred' : ''}</span>
+    <span class="computed">${escapeHtml(skill.summary ?? '')}</span>
   </button>`;
 }
 
@@ -57,7 +59,7 @@ export function filterLibrary(payload, query) {
 const shelf = (title, rows, render, empty) =>
   card({
     title,
-    body: rows.length > 0 ? `<div class="rows">${rows.map(render).join('')}</div>` : emptyState({ title: empty, hint: 'Nothing on this shelf yet.' }),
+    body: rows.length > 0 ? `<div class="rows library-shelf">${rows.map(render).join('')}</div>` : emptyState({ title: empty, hint: 'Nothing on this shelf yet.' }),
   });
 
 /** The two lesson shelves after the client-side filter. */
@@ -75,18 +77,18 @@ export function catalogCardsHtml(payload, query = '') {
 }
 
 export function catalogHtml(payload, query = '') {
-  return `<div id="library-catalog">${catalogCardsHtml(payload, query)}</div>`;
+  return `<div id="library-catalog" class="library-catalog">${catalogCardsHtml(payload, query)}</div>`;
 }
 
 /** The library page: search, candidate shelf, promoted shelf, and the catalog. */
 export function library(payload) {
   if (!payload || typeof payload !== 'object') return refusalPanel({ ok: false, error: 'the library returned no payload', remedy: 'reload the page' });
   const count = payload.skills?.skills?.length;
-  return `<section aria-label="Library">
-    <label for="library-search">filter lessons and skills <input id="library-search" type="search" autocomplete="off" placeholder="name, capability or failure"></label>
+  return `<section class="library" aria-label="Library">
+    <label class="library-search" for="library-search">filter lessons and skills <input id="library-search" type="search" autocomplete="off" placeholder="name, capability or failure"></label>
     <div id="library-lessons">${lessonShelfHtml(payload)}</div>
     ${card({ title: count === undefined ? 'Skill catalog' : `Skill catalog · ${count} skills`, body: catalogHtml(payload) })}
-    <div id="library-reading" aria-live="polite">${emptyState({ title: 'Reading pane', hint: 'Choose a skill to read its body.' })}</div>
+    <div id="library-reading" class="library-reading" aria-live="polite">${emptyState({ title: 'Reading pane', hint: 'Choose a skill to read its body.' })}</div>
   </section>`;
 }
 
@@ -94,10 +96,10 @@ export function library(payload) {
 export function skillPane(payload) {
   if (!payload?.ok) return refusalPanel(payload ?? { ok: false });
   const skill = payload.skill ?? {};
-  return `<article class="card">
+  return `<article class="card skill-reading">
     <header><h2>${escapeHtml(skill.name ?? 'skill')}</h2>${payload.bodyFrom ? badge(payload.bodyFrom, 'neutral') : ''}</header>
     <p class="computed">${escapeHtml(formatBytes(skill.bytes))}${skill.deferred ? ' · deferred' : ''}</p>
     <p>${escapeHtml(skill.summary ?? '')}</p>
-    <pre>${escapeHtml(payload.bodyText ?? '(no body)')}</pre>
+    <pre class="skill-body">${escapeHtml(payload.bodyText ?? '(no body)')}</pre>
   </article>`;
 }

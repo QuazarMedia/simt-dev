@@ -72,3 +72,16 @@ footer {padding: .6rem 1.25rem; border-top: 1px solid var(--line); color: var(--
 code, kbd {padding: 0 .35em; border: 1px solid var(--line); border-radius: 4px; font-family: var(--font); color: var(--ink);}
 @media (max-width: 48rem) {.layout {grid-template-columns: 1fr;}nav {flex-direction: row; overflow-x: auto; border-right: none; border-bottom: 1px solid var(--line);}nav a {white-space: nowrap;}}
 @media (prefers-reduced-motion: reduce) {*, *::before, *::after {animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important;}}
+.control-form,.library {display: grid; gap: .6rem;}
+.control-form label,.library-search {display: grid; gap: .25rem; color: var(--dim); font-size: .8rem;}
+.control-form select,.control-form textarea,.library-search input {font: inherit; padding: .35rem .5rem; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 4px;}
+.control-form button,#control-result button {justify-self: start; font: inherit; padding: .4rem .9rem; color: var(--ink); background: var(--bg); border: 1px solid var(--accent); border-radius: 4px; cursor: pointer;}
+#control-result {margin-top: 1rem;}
+.control-side {max-height: 10rem; overflow: auto; margin: 0; white-space: pre-wrap; font-size: .75rem;}
+.library-shelf {display: grid; gap: .75rem;}
+.library * {min-width: 0;}
+.library-shelf pre {max-height: 8rem; overflow: auto; white-space: pre-wrap;}
+.library-shelf header,.skill-reading header {padding: 0; border: 0; background: none;}
+.library-catalog {display: grid; grid-template-columns: repeat(auto-fill,minmax(13rem,1fr)); gap: .6rem;}
+.skill-card {display: grid; gap: .2rem; padding: .6rem .7rem; text-align: left; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer;}
+.skill-body {max-height: 30rem; overflow: auto; padding: .8rem; font-size: .8rem; white-space: pre-wrap;}

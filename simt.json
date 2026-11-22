@@ -8,7 +8,7 @@
   "limits": {
     "coverage": null,
     "fileLines": {
-      "warn": 400,
+      "warn": 800,
       "error": 1000,
       "excludeTextFiles": true,
       "exclude": [

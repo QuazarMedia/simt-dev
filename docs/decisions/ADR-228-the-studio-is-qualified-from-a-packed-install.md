@@ -1,5 +1,5 @@
 ---
-simt-affects: ["src/surface.mjs", "src/docs/reference.mjs", "docs/reference/surface.md", "test/studio-release.test.mjs", "test/fixtures/studio", "docs/plans/0007-studio-local-dashboard.md"]
+simt-affects: ["src/surface.mjs", "src/studio/server.mjs", "src/docs/reference.mjs", "docs/reference/surface.md", "test/studio-release.test.mjs", "test/studio-server.test.mjs", "test/fixtures/studio", "docs/plans/0007-studio-local-dashboard.md"]
 ---
 
 # ADR-228 — the studio is qualified from a packed install
@@ -30,33 +30,37 @@ inventory to say what was qualified and at which code SHA.
 4. **The surface row carries the evidence.** `src/surface.mjs` keeps studio `optional` —
    it is supported when used, but it is not part of the adoption path — and records the
    qualification SHA `f6760f1`, the read-route latency commit these transcripts measure.
-   The first qualification was `b1711fb`; the SHA moves with the studio source, not with
-   this decision. The generated `docs/reference/surface.md` renders that row, so a reader
+   The first qualification was `b1711fb`; the SHA names the commit whose studio behavior
+   the transcripts measure, so a test-only change that leaves that behavior intact does
+   not move it. The generated `docs/reference/surface.md` renders that row, so a reader
    can go from the promise to the evidence without a second inventory.
-5. **The manual walkthrough is named, not claimed.** Keyboard-only traversal of every view
-   in both themes remains the review's manual step; the automated suite checks the focus
-   styles, theme switch, reduced-motion rule, asset budget and request set, and the review
-   records the human walkthrough.
+5. **The manual walkthrough is excluded, not claimed.** Keyboard-only traversal of every
+   view in both themes is a manual check the suite cannot perform. The shell test asserts
+   the stylesheet's theme selectors, focus styles, reduced-motion rule and asset budget,
+   not rendered tab order or contrast. The server test asserts the loopback URL and the
+   foreign Host and Origin refusals; the qualification transcripts record no external
+   requests. A human must perform and record the walkthrough before a complete
+   accessibility pass is claimed, and this record does not claim it was performed.
 6. **Read-route ceilings are measured, not inherited.** The server test covers every GET
    path in `STUDIO_READ_ROUTES`; the SSE feed is measured to first byte because it does
-   not complete. The status snapshot is one git call instead of three, and the remaining
-   ceilings (75 ms for the status-backed and claim-chain reads, 200 ms for the full gate)
-   are recorded with the measurements below. A new GET path fails coverage until the test
-   names it.
+   not complete. The status snapshot is one git call instead of three. Under four-way
+   suite concurrency every read except the full gate gets a 75 ms ceiling; `/api/check`
+   gets 200 ms. The 50 ms warm budget and the measurements below remain the target, not a
+   second assertion. A new GET path fails coverage until the test names it.
 
 ## Read-route latency limits
 
-The automated qualification asserts the 120 KB asset budget and a loopback-only request
-set. `test/studio-server.test.mjs` measures every GET path in the server's
-`STUDIO_READ_ROUTES` inventory; the SSE feed is measured to first byte because it never
-completes, and the shell entry, stylesheet and app module are measured with the routes. A
-new GET path reaches the inventory through the route table and fails the coverage
-assertion until the latency test names it.
+`test/studio-shell.test.mjs` asserts the 120 KB asset budget, and the server test asserts
+the loopback URL and the foreign Host and Origin refusals. `test/studio-server.test.mjs`
+measures every GET path in the server's `STUDIO_READ_ROUTES` inventory; the SSE feed is
+measured to first byte because it never completes, and the shell entry, stylesheet and app
+module are measured with the routes. A new GET path reaches the inventory through the
+route table and fails the coverage assertion until the latency test names it.
 
-In the warm run, only `/api/check` exceeds the 50 ms budget. The status-backed reads and the
-claim-chain read measured below it in a quiet run, but their test ceilings are 75 ms so a
-loaded suite does not turn scheduling noise into a failure; `/api/check` is the
-substantive exception. A warm seven-sample fixture run on 2026-11-22 measured:
+In the warm run, only `/api/check` exceeds the 50 ms budget. Under four-way suite
+concurrency the test holds every read except the gate to a 75 ms ceiling, so CPU contention
+does not turn a correct read into a failure; `/api/check` is the substantive exception at
+200 ms. A warm seven-sample fixture run on 2026-11-22 measured:
 
 - `/api/status` at **42.8 ms median** (41.4–44.5 ms) after collapsing three
   `git rev-parse` spawns into one `HEAD HEAD^{tree}` call; its recorded ceiling is 75 ms.
@@ -69,20 +73,21 @@ substantive exception. A warm seven-sample fixture run on 2026-11-22 measured:
   private index; its recorded ceiling is 75 ms.
 
 The other routes measured 0.2–31.6 ms, with the plain evidence-chain reads at the high end.
-These are recorded ceilings, not silent passes: the 75 ms group is concurrency headroom
-around sub-50 ms reads except the claim walk, and the 200 ms gate ceiling is the
-substantive exception. The test asserts a warm three-sample median under
-`--test-concurrency=4`.
+These are suite ceilings, not silent passes: 75 ms is headroom over the 50 ms warm budget,
+and the claim walk is the one other read that measured above that budget when the suite
+was loaded. `/api/check` remains the substantive exception at 200 ms. The test asserts a
+warm three-sample median under `--test-concurrency=4`.
 
 The full keyboard-only walkthrough of every room in both themes is excluded from
-automation: the suite has no browser dependency, and the shell tests assert focus styles,
-theme selection and reduced-motion rules rather than rendered tab order. A human must
-perform and record that walkthrough before claiming a complete accessibility pass; ST15
-records it as an excluded manual check, not as a completed one.
+automation: the suite has no browser dependency, and the shell tests assert theme
+selectors, focus styles and reduced-motion rules rather than rendered tab order or
+contrast. A human must perform and record that walkthrough before claiming a complete
+accessibility pass; ST15 records it as an excluded manual check, not as a completed one,
+and this decision does not claim it was performed.
 
 ## Consequences
 
-- A studio change after `f6760f1` must regenerate the qualification SHA and the two
+- A studio behavior change after `f6760f1` must regenerate the qualification SHA and the two
   transcripts; the release test fails when the surface page and the fixtures drift.
 - The optional bench is not required for qualification; its absence is exercised as the
   labelled state in ST14, and the transcripts record whether it was present.

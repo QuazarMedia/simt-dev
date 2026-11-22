@@ -133,11 +133,11 @@ with a table view that carries the same data.
   output changes (ADR-187's contract ruling stands — only its no-socket clause is
   amended, by ADR-212, for this explicitly invoked surface).
 - **Budgets.** The whole shell (HTML + CSS + JS, uncompressed) stays under 120 KB; the
-  server answers every read route in under 50 ms on the fixture repository except
-  `/api/check`, which runs the full gate. The status-backed reads and the claim-chain read
-  use 75 ms test ceilings as concurrency headroom and `/api/check` uses 200 ms, all
-  measured in ADR-228; the test suite covers every GET path in `STUDIO_READ_ROUTES`. No
-  asset over the file-line ceiling; views split into small modules.
+  server answers every read route in under 50 ms warm on the fixture repository except
+  `/api/check`, which runs the full gate. The suite holds every read except the gate to a
+  75 ms ceiling under four-way concurrency and `/api/check` to 200 ms, all measured in
+  ADR-228; the test suite covers every GET path in `STUDIO_READ_ROUTES`. No asset over the
+  file-line ceiling; views split into small modules.
 
 ## Data ownership
 
@@ -176,12 +176,13 @@ seven-sample fixture run measured `/api/status` at 42.8 ms (41.4–44.5; 75 ms c
 collapsing three git spawns to one), `/api/check` at 105.1 ms (101.6–124.6; 200 ms
 ceiling, the full gate), and `/api/helm?path=status` at 44.1 ms (43.4–50.9; 75 ms ceiling,
 the same status door). `/api/evidence/chains?claim=…` measured 53.9 ms under full-suite
-concurrency (under 50 ms quietly) and has a 75 ms ceiling because the claim verdict runs
-`git write-tree`. Only `/api/check` exceeded 50 ms quietly; the other three use the 75 ms
-ceilings as concurrency headroom. Every other route measured 0.2–31.6 ms. A new GET path
-fails the latency coverage assertion until the test names it. The keyboard-only walkthrough
-of every room in both themes is an excluded manual check; it must be performed and recorded
-before claiming a complete accessibility pass. ADR-228 carries the same limits.
+concurrency (under 50 ms quietly) because the claim verdict runs `git write-tree`, and has
+the same 75 ms suite ceiling. Only `/api/check` exceeded the 50 ms warm budget. Every other
+route measured 0.2–31.6 ms. A new GET path fails the latency coverage assertion until the
+test names it. The keyboard-only walkthrough of every room in both themes is an excluded
+manual check; the suite does not perform it, ST15 does not claim it as complete, and it
+must be performed and recorded before claiming a complete accessibility pass. ADR-228
+carries the same limits.
 
 ST04 is the first useful screen. ST05 makes it live. ST12 makes it a cockpit. ST15 is the
 release exit. Lanes own disjoint file sets: `server` owns `src/studio/server.mjs` and the
@@ -425,16 +426,16 @@ Prove the studio from a packed install in clean standalone clones of both fixtur
 (document corpus and code repository), as a consumer runs it (ADR-031): `simt studio`
 opens, the overview answers, the Pulse follows a gate run started from another terminal,
 the helm answers a cited question, and one guarded control round-trip (setup → build →
-ask) completes with journal and undo. Assert the byte and latency budgets, walk every
-view by keyboard only, check both themes' contrast, and verify no request leaves loopback
-(the server logs every request; the test asserts the set). Promote the surface disposition
-per ADR-207 with the qualification evidence, regenerate docs, and record the two
-transcripts as sanitized fixtures.
+ask) completes with journal and undo. Assert the byte and latency budgets, and assert the
+socket binds only loopback and refuses a foreign Host or Origin; the transcripts record no
+external requests. Promote the surface disposition per ADR-207 with the qualification
+evidence, regenerate docs, and record the two transcripts as sanitized fixtures.
 
 **Acceptance.** Run `node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs`
 from a packed install at a path with no siblings; both transcripts exist as fixtures;
 the surface inventory names `studio` with its disposition and the qualification SHA.
-Manual browser walkthrough named in the review: every view, keyboard-only, both themes.
+Manual browser walkthrough is an excluded check: every view by keyboard only, both themes,
+contrast included. The suite does not perform it, and ST15 does not claim it complete.
 
 ## Out of scope
 

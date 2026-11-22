@@ -224,11 +224,12 @@ export async function assembleBrief({
   // A view is the same packet with the other sections never collected, so it shares the
   // packer, the budget and the cut line rather than a second arithmetic (ADR-226).
   const section = only === null ? null : String(only).toUpperCase();
-  // The skills view is the only one in existence, and it collects nothing but SKILLS. The
-  // work whose results feed no other section — file ranking, decisions, lessons, the
-  // generated-region scan — is skipped here instead of done and dropped by collect(): the
-  // packet's bytes are what collect() already made them, so nothing a reader sees changes.
-  const skillsOnly = section === 'SKILLS';
+  // A view collects one section, so a block of work runs only when the collected section
+  // consumes its result: collect() would drop the rest, and paying for it changes nothing
+  // a reader sees. `section` null is the whole packet, where every block runs. Each call
+  // names the sections its block contributes to — directly, or through `focused`/`likely`
+  // — so a view for any future section keeps exactly the work it needs and skips the rest.
+  const need = (sections) => section === null || sections.includes(section);
   const named = paths !== null;
   const dirty = (await dirtyPaths(root)).filter((path) => !path.startsWith(`${STATE_DIR}/`));
   // A dirty file is where the reader is standing, not what the task asked about. When a
@@ -314,10 +315,12 @@ export async function assembleBrief({
     });
   }
 
-  // `focused` feeds the FILES section and the `likely` list below; in the skills view both
-  // are dropped by collect(), so the ranking that produces them is not run.
+  // `focused` feeds FILES directly and TESTS, DECISIONS and LESSONS through `likely`, and
+  // the FEDERATION fallback question when no task was given; its cautions (matched 0, map
+  // held back) make CAUTIONS a consumer too. A view collecting none of them pays nothing
+  // for the ranking that produces it.
   let focused = [];
-  if (!skillsOnly) {
+  if (need(['FILES', 'TESTS', 'DECISIONS', 'LESSONS', 'FEDERATION', 'CAUTIONS'])) {
     const bm25 = task.trim().length > 0 ? await searchFtsBm25(root, task, { fts }) : [];
     const queryVector =
       flags?.embed === true && embeddings.length > 0
@@ -386,7 +389,7 @@ export async function assembleBrief({
     else packet.add('TESTS', `${path} -> ${found.join(' ')}`, { why: ['the test imports it, or sits beside it'] });
   }
 
-  if (!skillsOnly) {
+  if (need(['DECISIONS', 'CAUTIONS'])) {
     const records = await decisionRecords(root);
     const ctx = {
       files: filePaths,
@@ -490,7 +493,7 @@ export async function assembleBrief({
     }
   }
 
-  if (!skillsOnly) {
+  if (need(['LESSONS'])) {
     const lessonTargets = [...new Set([...scope, ...likely])];
     const taskTokenSet = new Set(tokenize(task));
     for (const lesson of await lessonScopes(root)) {
@@ -510,7 +513,9 @@ export async function assembleBrief({
         });
       }
     }
+  }
 
+  if (need(['CAUTIONS'])) {
     const generated = await generatedRegions(root);
     if (generated.length > 0) {
       packet.add('CAUTIONS', `generated — edit the source, not these: ${generated.join(', ')}`, {

@@ -25,7 +25,7 @@ async function post(studio, cookie, path, body) {
   return { status: res.status, body: await res.json() };
 }
 
-test('preview writes nothing and apply with the matching digest writes the previewed set', async (t) => {
+test('preview writes nothing and apply with the matching digest writes the previewed set', async () => {
   const repo = await root();
   const before = await treeDigest(repo);
   const preview = await controlPreview(repo, setup);

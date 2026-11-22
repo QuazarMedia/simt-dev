@@ -10,7 +10,7 @@ import { buildProofPacket } from './proof.mjs';
 
 const quote = (value) => `'${value.replaceAll("'", "'\\''")}'`;
 
-export async function assembleScopedBrief({ root, task, budget, workScope }) {
+export async function assembleScopedBrief({ root, task, budget, workScope, retrieval = 'v1' }) {
   const work = await readWork(root);
   if (!work.ok) return { error: fail(work.problems[0].message, EXIT.CONFIG, work.problems[0].remedy) };
   const scope = work.scopes.find(({ id }) => id === workScope);
@@ -19,7 +19,7 @@ export async function assembleScopedBrief({ root, task, budget, workScope }) {
   if (collected.error) return { error: fail(collected.error, EXIT.CONFIG, collected.remedy) };
   const ceiling = Math.min(budget > 0 ? budget : DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES);
   const committed = collected.corpus.units.filter(({ provenance }) => provenance === 'committed');
-  const ranked = rankCorpus({ ...collected.corpus, units: committed }, { query: task, limit: 4 });
+  const ranked = rankCorpus({ ...collected.corpus, units: committed }, { query: task, limit: 4, retrieval });
   const matches = new Map();
   for (const { citation } of [...ranked.exact, ...ranked.ranked]) {
     if (!citation || matches.has(citation.path) || !/\.(?:md|markdown)$/i.test(citation.path)) continue;
@@ -72,6 +72,7 @@ export async function assembleScopedBrief({ root, task, budget, workScope }) {
   return {
     root, kind: 'work', basis: 'declared local scope', task, scope: scope.paths, workScope, budget: ceiling,
     items: packet.items, packed, sections,
+    ...(retrieval === 'v2' ? { retrieval } : {}),
     proof: { complete: matches.size > 0 && citations.length === matches.size,
       citations, omittedObligations: [...matches.keys()].filter((path) => !citations.some(({ id }) => id === path)) },
   };

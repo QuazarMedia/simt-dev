@@ -333,3 +333,38 @@ test('corpus edges come only from resolved, non-proposed references', () => {
   ]);
   assert.deepEqual(doc.authority, [], 'a corpus invented an authority order');
 });
+test('the opt-in fielded policy reaches file input, repository rank and scoped briefs', async () => {
+  const root = await repo();
+  await build(root);
+  const selected = ['--retrieval', 'v2'];
+  const scoped = await rank(root, ['--query', 'device checkout retention', '--where', 'jurisdiction=DE', ...selected]);
+  assert.equal(scoped.code, 0, scoped.stdout);
+  const ranked = JSON.parse(scoped.stdout);
+  assert.equal(ranked.retrieval, 'v2');
+  assert.ok(ranked.ranked.every(({ citation }) => citation.scope.jurisdiction === 'DE'));
+  assert.ok(ranked.excluded.every(({ id }) => id === null));
+
+  const brief = await simt(['brief', 'device checkout retention', '--scope', 'handbook', '--root', root, ...selected, '--json']);
+  assert.equal(brief.code, 0, brief.stdout);
+  const packet = JSON.parse(brief.stdout);
+  assert.equal(packet.retrieval, 'v2');
+  assert.ok(packet.proof.citations.some(({ id }) => id === 'handbook/retention-new.md'));
+
+  const input = join(root, 'input.json');
+  writeFileSync(input, JSON.stringify({
+    permissionsHeld: [],
+    units: [
+      { id: 'secret', text: 'privileged retention', permission: 'restricted' },
+      { id: 'public', label: 'Retention', text: 'public guidance' },
+    ],
+  }));
+  const args = ['knowledge', 'rank', '--input', input, '--query', 'retention', '--json'];
+  const plain = JSON.parse((await simt(args)).stdout);
+  const fielded = JSON.parse((await simt([...args, ...selected])).stdout);
+  assert.equal(plain.retrieval, undefined);
+  assert.equal(fielded.retrieval, 'v2');
+  assert.equal(fielded.schemaVersion, plain.schemaVersion);
+  assert.deepEqual(fielded.ranked.map(({ id }) => id), ['public']);
+  assert.deepEqual(fielded.excluded, [{ id: null, reason: 'permission' }]);
+  assert.match(refusal(await simt([...args, '--retrieval', 'future'])), /unknown retrieval mode/);
+});

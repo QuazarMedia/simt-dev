@@ -25,14 +25,14 @@ export function queryPairs(task) {
   return [...pairs.values()];
 }
 
-export function fieldProximity(rows, pairs) {
+export function fieldProximity(rows, pairs, { fields = BM25F_FIELDS } = {}) {
   const hits = new Map();
   if (!pairs.length) return hits;
   const vocabulary = new Set(pairs.flat());
   for (const row of rows) {
     const path = row.ref ?? row.path;
     const found = hits.get(path) ?? new Set();
-    for (const field of BM25F_FIELDS) {
+    for (const field of fields) {
       if (!row[field] || found.size === pairs.length) continue;
       const previous = new Map();
       for (const [position, word] of row[field].split(' ').entries()) {
@@ -64,48 +64,56 @@ export function bestFieldHits(rows, limit = 200) {
   return [...best.values()].sort((a, b) => b.score - a.score || cmp(a.path, b.path)).slice(0, limit);
 }
 
-/** Mirrors FTS5's weighted phrase frequencies and unweighted document lengths. */
-export function scoreFtsBm25F(rows, task, { limit = 200, fields = BM25F_FIELDS } = {}) {
-  const terms = fieldQueryTerms(task);
-  if (!terms.length || !rows.length) return [];
+function sqliteIdf(documents, count) {
+  const weight = Math.log((documents - count + 0.5) / (count + 0.5));
+  return weight > 0 ? weight : 1e-6;
+}
+
+/** Weighted field frequencies with unweighted length normalization. */
+export function scoreFieldRows(rows, terms, {
+  columns = BM25F_FIELDS, weights = BM25F_WEIGHTS, fields = columns, idf = sqliteIdf,
+} = {}) {
   const positions = new Map(terms.map((word, index) => [word, index]));
   const documentFrequency = new Uint32Array(terms.length);
+  const active = columns.map((name) => fields.includes(name));
   let totalLength = 0;
   const docs = rows.map((row) => {
     const frequencies = new Float64Array(terms.length);
     let length = 0;
-    for (let field = 0; field < BM25F_FIELDS.length; field += 1) {
-      const name = BM25F_FIELDS[field];
-      const active = fields.includes(name);
-      const tokens = (row[name] ?? '').split(' ');
-      for (const word of tokens) {
+    for (let field = 0; field < columns.length; field += 1) {
+      for (const word of (row[columns[field]] ?? '').split(' ')) {
         if (word === '') continue;
         length += 1;
-        const index = active ? positions.get(word) : undefined;
-        if (index !== undefined) frequencies[index] += BM25F_WEIGHTS[field];
+        const index = active[field] ? positions.get(word) : undefined;
+        if (index !== undefined) frequencies[index] += weights[field];
       }
     }
     for (let index = 0; index < terms.length; index += 1) {
       if (frequencies[index] > 0) documentFrequency[index] += 1;
     }
     totalLength += length;
-    return { row, length, frequencies };
+    return { length, frequencies };
   });
   const average = totalLength / rows.length || 1;
-  const idf = Array.from(documentFrequency, (count) => {
-    const weight = Math.log((rows.length - count + 0.5) / (count + 0.5));
-    return weight > 0 ? weight : 1e-6;
-  });
-  const hits = [];
-  for (const { row, length, frequencies } of docs) {
+  const rarity = Array.from(documentFrequency, (count) => idf(rows.length, count));
+  return docs.map(({ length, frequencies }) => {
     const norm = 1.2 * (1 - 0.75 + 0.75 * length / average);
     let score = 0;
     for (let index = 0; index < terms.length; index += 1) {
       const frequency = frequencies[index];
-      if (frequency > 0) score += idf[index] * (frequency * 2.2) / (frequency + norm);
+      if (frequency > 0) score += rarity[index] * (frequency * 2.2) / (frequency + norm);
     }
-    if (score > 0) hits.push({ kind: row.kind ?? 'code', path: row.ref ?? row.path, score });
-  }
+    return score;
+  });
+}
+
+/** Mirrors FTS5's weighted phrase frequencies and unweighted document lengths. */
+export function scoreFtsBm25F(rows, task, { limit = FIELD_RESULT_LIMIT, fields = BM25F_FIELDS } = {}) {
+  const terms = fieldQueryTerms(task);
+  if (!terms.length || !rows.length) return [];
+  const scores = scoreFieldRows(rows, terms, { fields });
+  const hits = rows.flatMap((row, index) => scores[index] > 0
+    ? [{ kind: row.kind ?? 'code', path: row.ref ?? row.path, score: scores[index] }] : []);
   return bestFieldHits(hits, limit);
 }
 

@@ -17,6 +17,7 @@
 //   * A citation is the unit's own byte range and revision label. An answer that cannot say
 //     where it came from, and from which revision, is not an answer a maintainer can open.
 
+import { cmp } from '../util/sort.mjs';
 import { EDGE_KINDS } from './claims.mjs';
 import { rank, rankEligibility } from './rank.mjs';
 
@@ -81,13 +82,13 @@ function rankableUnits(corpus, byPath) {
  * lookup, not a score, so it carries no rank and does not displace one.
  *
  * @param {object} corpus the stored corpus document
- * @param {{query?: string, scope?: object, permissions?: string[]|null, limit?: number}} [options]
+ * @param {{query?: string, scope?: object, permissions?: string[]|null, limit?: number, retrieval?: 'v1'|'v2'}} [options]
  * @returns {object}
  */
-export function rankCorpus(corpus, { query = '', scope = {}, permissions = null, limit = 10 } = {}) {
+export function rankCorpus(corpus, { query = '', scope = {}, permissions = null, limit = 10, retrieval = 'v1' } = {}) {
   const byPath = new Map((corpus?.artifacts ?? []).map((artifact) => [artifact.path, artifact]));
   const units = rankableUnits(corpus, byPath);
-  const report = rank(units, { query, scope, permissions, limit: Infinity });
+  const report = rank(units, { query, scope, permissions, limit: Infinity, retrieval });
   const cap = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : Infinity;
 
   const byId = new Map((corpus?.units ?? []).map((unit) => [unitKey(unit), unit]));
@@ -120,7 +121,9 @@ export function rankCorpus(corpus, { query = '', scope = {}, permissions = null,
         exact.push({ id: unit.id, citation: citationOf(unit, artifact) });
       }
     }
-    exact.sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    exact.sort((a, b) => retrieval === 'v2'
+      ? cmp(String(a.id), String(b.id)) || cmp(a.citation.path, b.citation.path)
+      : String(a.id).localeCompare(String(b.id)));
   }
 
   const reasons = [];

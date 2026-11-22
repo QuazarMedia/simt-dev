@@ -20,6 +20,7 @@ import { CLI } from '../name.mjs';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
 import { SECTIONS, DEFAULT_BRIEF_BYTES, explainPacket } from '../brief/packet.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
+import { retrievalMode } from '../index/retrieval-mode.mjs';
 import { commandRoot } from '../repo-root.mjs';
 
 export async function briefCommand(args, flags, commands = []) {
@@ -48,11 +49,17 @@ export async function briefCommand(args, flags, commands = []) {
   if (flags.scope !== undefined && (typeof flags.scope !== 'string' || flags.scope === '' || flags.paths !== undefined)) {
     return fail('a scoped brief needs a scope id without --paths', EXIT.USAGE, `run: ${CLI} brief "<task>" --scope <id>`);
   }
+  const retrieval = retrievalMode(flags.retrieval);
+  if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
+  if (retrieval === 'v2' && flags.scope === undefined) {
+    return fail('fielded brief retrieval needs a work scope', EXIT.USAGE, `run: ${CLI} brief "<task>" --scope <id> --retrieval v2`);
+  }
   const result = await assembleBrief({
     root: commandRoot(flags),
     task: String(args[0] ?? flags.task ?? ''),
     paths: flags.paths === undefined ? null : flags.paths,
     budget,
+    retrieval,
     flags,
     commands,
     proof: flags.proof === true,
@@ -86,6 +93,7 @@ export async function briefCommand(args, flags, commands = []) {
         task,
         scope,
         ...(result.workScope === undefined ? {} : { workScope: result.workScope }),
+        ...(result.retrieval === undefined ? {} : { retrieval: result.retrieval }),
         budget: ceiling,
         bytes: packed.after,
         before: packed.before,

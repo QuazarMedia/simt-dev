@@ -183,3 +183,52 @@ test('ranking is deterministic and reads nothing', async () => {
   const source = await readFile(new URL('../src/knowledge/rank.mjs', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /node:fs|node:net|fetch\(|process\.env|Date\.|Math\.random/);
 });
+
+test('fielded knowledge ranks rare terms, phrases and distinct sources with auditable scores', () => {
+  const units = [
+    { id: 'gold', path: 'source.md', label: 'Fractional recovery', claims: ['reimbursement'], text: 'statutory clawback' },
+    { id: 'repeat', path: 'source.md', label: 'Fractional recovery', text: 'statutory clawback' },
+    { id: 'scattered', path: 'scattered.md', text: `statutory ${'filler '.repeat(20)}clawback` },
+    ...Array.from({ length: 12 }, (_, i) => ({
+      id: `general-${i}`, path: `general-${i}.md`, text: 'generic statutory process statutory statutory',
+    })),
+  ];
+  const options = { query: 'statutory clawback reimbursement', retrieval: 'v2', limit: 20 };
+  const result = rank(units, options);
+  assert.equal(result.retrieval, 'v2');
+  assert.equal(result.ranked[0].id, 'gold');
+  assert.ok(result.ranked.findIndex(({ id }) => id === 'scattered') < result.ranked.findIndex(({ id }) => id === 'general-0'));
+  assert.equal(result.ranked.filter(({ path }) => path === 'source.md').length, 1);
+  assert.deepEqual(rank([...units].reverse(), options), result);
+  for (const { score, components } of result.ranked) {
+    assert.equal(score, scoreFrom(components));
+    assert.ok(components.lexical >= 0 && components.lexical <= 1);
+  }
+});
+
+test('the multilingual fielded cohort reaches the recall bar and folds diacritics', () => {
+  const units = corpusUnits();
+  const entries = corpus().map((entry) => ({ ...entry, query: entry.query.replaceAll('ö', 'o') }));
+  const report = evaluateRank(units, entries, { retrieval: 'v2' });
+  assert.ok(report.recallAt10 >= 0.9);
+  assert.ok(report.byLanguage.every(({ recall }) => recall >= 0.9));
+  const mixed = rank([
+    { id: 'hangul', text: '신청기간은 내일까지입니다.' },
+    { id: 'latin', label: 'München', text: 'Frist für die Bevölkerung.' },
+  ], { query: 'munchen bevolkerung', retrieval: 'v2' }).ranked;
+  assert.equal(mixed[0].id, 'latin');
+  assert.equal(rank([{ id: 'ko', text: '신청기간 입니다' }], { query: '신청기간', retrieval: 'v2' }).ranked[0].id, 'ko');
+});
+
+test('excluded sources affect neither field rarity nor reported identifiers', () => {
+  const visible = [{ id: 'allowed', path: 'public.md', text: 'retention', scope: DE }];
+  const excluded = [
+    { id: 'restricted-source', path: 'secret.md', text: 'retention '.repeat(50), scope: DE, permission: 'hidden', authority: 999 },
+    { id: 'other-source', path: 'elsewhere.md', text: 'retention '.repeat(50), scope: { jurisdiction: 'FR' } },
+  ];
+  const options = { query: 'retention', retrieval: 'v2', scope: DE, permissions: [] };
+  const result = rank([...visible, ...excluded], options);
+  assert.deepEqual(result.ranked, rank(visible, options).ranked);
+  assert.deepEqual(result.excluded, [{ id: null, reason: 'permission' }, { id: null, reason: 'scope-mismatch' }]);
+  assert.doesNotMatch(JSON.stringify(result), /restricted-source|other-source|secret\.md|elsewhere\.md/);
+});

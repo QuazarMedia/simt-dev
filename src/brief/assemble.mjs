@@ -218,9 +218,10 @@ export async function assembleBrief({
   commands = [],
   proof = false,
   workScope = null,
+  retrieval = 'v1',
   only = null,
 } = {}) {
-  if (workScope !== null) return assembleScopedBrief({ root, task, budget, workScope });
+  if (workScope !== null) return assembleScopedBrief({ root, task, budget, workScope, retrieval });
   // A view is the same packet with the other sections never collected, so it shares the
   // packer, the budget and the cut line rather than a second arithmetic (ADR-226).
   const section = only === null ? null : String(only).toUpperCase();

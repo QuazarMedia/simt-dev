@@ -21,6 +21,7 @@ import { maintenanceContext, scopedDebt } from '../work/maintenance.mjs';
 import { CORPUS_DIR, CORPUS_SCHEMA_VERSION } from '../knowledge/corpus.mjs';
 import { collectCorpus, readLocalBytes } from '../knowledge/collect.mjs';
 import { configuredCatalogue, scopedExchange } from '../knowledge/catalogue.mjs';
+import { retrievalMode } from '../index/retrieval-mode.mjs';
 import { citationFor, citationOf, corpusDocument, rankCorpus } from '../knowledge/query.mjs';
 import { buildClaimGraph, impact, lineage, proposedEdges, readClaim } from '../knowledge/claims.mjs';
 import { findConflicts } from '../knowledge/conflicts.mjs';
@@ -281,7 +282,7 @@ export function knowledgeImportFacts(doc) {
  * @param {{query?: string, limit?: number}} [options]
  * @returns {object}
  */
-function knowledgeRankFacts(doc, { query = '', limit = 10 } = {}) {
+function knowledgeRankFacts(doc, { query = '', limit = 10, retrieval = 'v1' } = {}) {
   const units = Array.isArray(doc?.units) ? doc.units : null;
   if (units === null) return { error: 'the document needs a units list: [{id, path, text, headings, scope, authority}]' };
   if (typeof query !== 'string' || query.trim() === '') return { error: 'rank needs --query' };
@@ -289,7 +290,7 @@ function knowledgeRankFacts(doc, { query = '', limit = 10 } = {}) {
     ok: true,
     command: 'knowledge rank',
     ...rankUnits(units, {
-      query,
+      query, retrieval,
       scope: doc.scope ?? {},
       permissions: Array.isArray(doc.permissionsHeld) ? doc.permissionsHeld : null,
       limit: Number.isFinite(Number(limit)) ? Math.floor(Number(limit)) : 10,
@@ -453,6 +454,8 @@ export async function knowledgeCommand(sub, args, flags) {
 
   // The four document doors answer a question over one file, and none of them writes.
   if (sub === 'rank' || sub === 'derivations' || sub === 'debt' || sub === 'impact') {
+    const retrieval = retrievalMode(flags.retrieval);
+    if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
     if (sub === 'rank' && flags.scope !== undefined) {
       if (args.length > 0) return fail(`unknown knowledge rank argument ${args[0]}`, EXIT.USAGE, RANK_USAGE);
       if (flags.input !== undefined) return fail('knowledge rank reads --input or --scope, not both', EXIT.USAGE, RANK_USAGE);
@@ -465,7 +468,7 @@ export async function knowledgeCommand(sub, args, flags) {
       const catalogue = await configuredCatalogue(loaded, loaded.corpus);
       const alias = catalogue?.entries?.find(({ id }) => id === flags.query);
       const query = alias?.artifact ?? flags.query;
-      const scoped = rankCorpus(loaded.corpus, { query, scope: where.scope, limit });
+      const scoped = rankCorpus(loaded.corpus, { query, scope: where.scope, limit, retrieval });
       const required = Object.entries(where.scope);
       scoped.exact = scoped.exact.filter(({ citation }) =>
         satisfiesScope(citation.scope, required) === 'match' &&
@@ -483,7 +486,7 @@ export async function knowledgeCommand(sub, args, flags) {
     if (document.error !== undefined) return fail(document.error, EXIT.USAGE, usage);
     const payload =
       sub === 'rank'
-        ? knowledgeRankFacts(document.doc, { query: flags.query, limit: flags.limit })
+        ? knowledgeRankFacts(document.doc, { query: flags.query, limit: flags.limit, retrieval })
         : sub === 'derivations'
           ? knowledgeDerivationsFacts(document.doc)
           : sub === 'debt'

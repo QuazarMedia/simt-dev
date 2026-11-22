@@ -44,7 +44,7 @@ The automated qualification asserts the 120 KB asset budget and a loopback-only 
 set. It does not claim the whole 50 ms read-route budget: `/api/status` measures about
 65–75 ms and `/api/check` about 130–145 ms on the fixture, because each runs the same
 command work as its CLI door. Every other read route is asserted under 50 ms; the two
-exceptions have their own ceiling in the release test and are recorded here rather than
+exceptions have their own ceiling in the server test and are recorded here rather than
 treated as passes.
 
 The full keyboard-only walkthrough of every room in both themes is excluded from

@@ -169,7 +169,7 @@ with a table view that carries the same data.
 
 ST15 qualification limits: the 50 ms read-route budget is met by every read route except
 `/api/status` (~65–75 ms) and `/api/check` (~130–145 ms), which run the same command work
-as their CLI doors and have recorded exception ceilings in the release test. The
+as their CLI doors and have recorded exception ceilings in the server test. The
 keyboard-only walkthrough of every room in both themes is an excluded manual check; it
 must be performed and recorded before claiming a complete accessibility pass. ADR-228
 carries the same limits.

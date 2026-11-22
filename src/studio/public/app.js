@@ -10,6 +10,7 @@ import { budget, sessionPathError } from './budget.js';
 import { constellation, layoutGraph, rankPanel, whyPanel } from './constellation.js';
 import { custody } from './custody.js';
 import { harnessWall, policyEventItem } from './harness.js';
+import { commandForm, fieldsFor, helm, invocation, resultPanel } from './helm.js';
 import { overview } from './overview.js';
 import { pulse } from './pulse.js';
 import { createRouter } from './router.js';
@@ -144,6 +145,80 @@ async function overviewRoom() {
 
 async function boardRoom() {
   return board(await readDoor('/api/board'));
+}
+
+async function helmRoom() {
+  const payload = await readDoor('/api/helm');
+  if (!payload.ok) return helm(payload);
+  const byPath = new Map((payload.commands ?? []).map((row) => [row.path, row]));
+  setTimeout(() => {
+    const list = document.getElementById('helm-commands');
+    const filter = document.getElementById('helm-filter');
+    const panel = document.getElementById('helm-form-panel');
+    const result = document.getElementById('helm-result');
+    const open = (row) => {
+      panel.innerHTML = commandForm(row);
+      const form = document.getElementById('helm-form');
+      const output = document.getElementById('helm-invocation');
+      const sync = () => {
+        output.textContent = invocation(row, Object.fromEntries(new FormData(form).entries()));
+      };
+      form.addEventListener('input', sync);
+      form.addEventListener('change', sync);
+      sync();
+      document.getElementById('helm-copy')?.addEventListener('click', () => {
+        navigator.clipboard?.writeText(output.textContent).catch(() => {});
+      });
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const data = new FormData(form);
+        const values = Object.fromEntries(data.entries());
+        const args = [];
+        const flags = {};
+        for (const field of fieldsFor(row)) {
+          const raw = data.get(`${field.kind}:${field.name}`);
+          if (field.kind === 'arg') {
+            if (typeof raw === 'string' && raw.trim() !== '') args.push(raw);
+          } else if (field.boolean) {
+            if (raw !== null) flags[field.name] = true;
+          } else if (typeof raw === 'string' && raw.trim() !== '') {
+            flags[field.name] = raw;
+          }
+        }
+        output.textContent = invocation(row, values);
+        if (row.runnable === false) {
+          result.innerHTML = refusalPanel({ ok: false, error: 'this read has no document answer on the bridge', remedy: 'copy the CLI command and run it in a terminal' });
+          return;
+        }
+        result.innerHTML = loading('running the read');
+        try {
+          const path = `/api/helm?path=${encodeURIComponent(row.path)}&args=${encodeURIComponent(JSON.stringify(args))}&flags=${encodeURIComponent(JSON.stringify(flags))}`;
+          result.innerHTML = resultPanel(await readDoor(path));
+        } catch (error) {
+          result.innerHTML = refusalPanel(error.payload ?? { ok: false, error: String(error?.message ?? error), remedy: 'copy the CLI command and run it in a terminal' });
+        }
+      });
+    };
+    list?.addEventListener('click', (event) => {
+      const button = event.target.closest('.helm-command');
+      const row = button ? byPath.get(button.dataset.command) : null;
+      if (row) open(row);
+    });
+    filter?.addEventListener('input', () => {
+      const needle = filter.value.trim().toLowerCase();
+      for (const item of list?.children ?? []) item.hidden = needle !== '' && !item.textContent.toLowerCase().includes(needle);
+    });
+    if (!window.__simtHelmKey) {
+      window.__simtHelmKey = (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+          event.preventDefault();
+          document.getElementById('helm-filter')?.focus();
+        }
+      };
+      window.addEventListener('keydown', window.__simtHelmKey);
+    }
+  }, 0);
+  return helm(payload);
 }
 
 async function budgetRoom() {
@@ -298,7 +373,7 @@ const routes = new Map([
   ['/constellation', { view: constellationRoom }],
   ['/harness', { view: harnessRoom }],
   ['/budget', { view: budgetRoom }],
-  ['/helm', { view: later('Helm') }],
+  ['/helm', { view: helmRoom }],
   ['/library', { view: later('Library') }],
   ['/bench', { view: later('Bench') }],
 ]);

@@ -12,6 +12,7 @@ import { run, renderJson } from '../run.mjs';
 import { checkRepo } from '../commands/sync.mjs';
 import { boardPayload } from './board.mjs';
 import { evidenceChains } from './evidence.mjs';
+import { HELM_UNRUNNABLE, helmCatalog, helmRow } from './helm.mjs';
 import { harnessPayload } from './harness.mjs';
 import { knowledgeGraph } from './knowledge.mjs';
 import { EXIT, emitJson, jsonCommand, withOutputState, withSink } from '../output/index.mjs';
@@ -30,6 +31,7 @@ const ROUTES = new Map([
   ['/api/evidence', { command: 'evidence' }],
   ['/api/evidence/chains', { chains: true }],
   ['/api/harness', { harness: true }],
+  ['/api/helm', { helm: true }],
   ['/api/knowledge/graph', { knowledgeGraph: true }],
   ['/api/knowledge/why', { command: 'knowledge why', scope: true }],
   ['/api/knowledge/rank', { command: 'knowledge rank', scope: true, query: true }],
@@ -154,6 +156,57 @@ export async function apiAnswer(root, url) {
       return payload.ok ? EXIT.OK : EXIT.FAIL;
     });
     return { status: 200, document };
+  }
+
+  if (route.helm) {
+    const path = url.searchParams.get('path');
+    if (path === null || path === '') {
+      const document = await sealedDocument('helm', async () => {
+        emitJson({ ok: true, command: 'helm', root, commands: helmCatalog() });
+        return EXIT.OK;
+      });
+      return { status: 200, document };
+    }
+    const row = helmRow(path);
+    if (row === null) {
+      return denied(403, 'STUDIO_HELM_WRITER_DENIED', `the helm runs read-only doors only; \`${path}\` is not in the spec's read-only rows`);
+    }
+    if (HELM_UNRUNNABLE.has(row.path)) {
+      return denied(403, 'STUDIO_HELM_NOT_RUNNABLE', `\`${row.path}\` is a read with no document answer here; copy the command and run it in a terminal`);
+    }
+    let args = [];
+    let flags = {};
+    try {
+      const rawArgs = url.searchParams.get('args');
+      const rawFlags = url.searchParams.get('flags');
+      args = rawArgs === null || rawArgs === '' ? [] : JSON.parse(rawArgs);
+      flags = rawFlags === null || rawFlags === '' ? {} : JSON.parse(rawFlags);
+    } catch {
+      return denied(400, 'STUDIO_HELM_BAD_INPUT', 'args and flags must be JSON arrays and objects');
+    }
+    if (!Array.isArray(args) || args.some((arg) => typeof arg !== 'string')) {
+      return denied(400, 'STUDIO_HELM_BAD_INPUT', 'args must be an array of strings');
+    }
+    if (flags === null || typeof flags !== 'object' || Array.isArray(flags)) {
+      return denied(400, 'STUDIO_HELM_BAD_INPUT', 'flags must be a JSON object');
+    }
+    const allowed = new Set([...(row.flags ?? []), 'json']);
+    for (const [name, value] of Object.entries(flags)) {
+      if (!allowed.has(name)) return denied(400, 'STUDIO_HELM_UNKNOWN_FLAG', `\`${name}\` is not a flag of \`${row.path}\``);
+      if (typeof value !== 'string' && typeof value !== 'number' && typeof value !== 'boolean') {
+        return denied(400, 'STUDIO_HELM_BAD_INPUT', `\`${name}\` must be a scalar value`);
+      }
+    }
+    const result = await run(row.path, { args, flags: { ...flags, json: true }, root });
+    const document = renderJson(result);
+    if (document !== null) {
+      const answer = await sealedDocument('helm', async () => {
+        emitJson({ ok: true, command: 'helm', root, path: row.path, document });
+        return EXIT.OK;
+      });
+      return { status: 200, document: answer };
+    }
+    return denied(400, 'STUDIO_HELM_REFUSED', result.error?.message ?? `\`${row.path}\` refused`);
   }
 
   const result = await run(route.command, { args, flags, root });

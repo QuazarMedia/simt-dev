@@ -15,7 +15,7 @@ import { buildCorpusDocument, verifyCorpusDocument, writeCorpusDocument } from '
 import { regradeRun, runBench } from './run.mjs';
 import { buildBenchReport } from './report.mjs';
 import { formatRecall, measureRecall } from '../../../src/index/map.mjs';
-import { ablateBench } from './ablate.mjs';
+import { ablateBench, renderRetrievalAblation, replayRetrievalAblation } from './ablate.mjs';
 import { runBenchProbes } from './probes.mjs';
 import { criticBench } from '../../../src/review/critic.mjs';
 import { listFlag } from '../../../src/commands/skills.mjs';
@@ -287,7 +287,25 @@ async function recallOrUnmeasured(root) {
   }
 }
 
+async function retrievalAblateCommand(positional, flags) {
+  const usage = `run: ${CLI} bench ablate --input <observations.json>`;
+  if (positional.length > 0 || flags.yes === true) {
+    return fail('retrieval ablation input is a read-only replay', EXIT.USAGE, usage);
+  }
+  const read = await readBenchDocument(flags, 'bench ablate');
+  if (read.error !== undefined) return fail(read.error, EXIT.USAGE, usage);
+  try {
+    const report = await replayRetrievalAblation(read.doc, { selected: flags.arm === undefined ? undefined : listFlag(flags.arm) });
+    if (isJson(flags)) emitJson({ ok: true, command: 'bench ablate', mode: 'retrieval-replay', ...report });
+    else emit(renderRetrievalAblation(report));
+    return EXIT.OK;
+  } catch (error) {
+    return fail(error.message, EXIT.CONFIG, usage);
+  }
+}
+
 export async function benchAblateCommand(positional, flags) {
+  if (flags.input !== undefined) return retrievalAblateCommand(positional, flags);
   const root = resolve(commandRoot(flags, positional));
   const { dryRun, apply } = writeMode(flags);
   if (apply) {

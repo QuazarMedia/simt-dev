@@ -276,7 +276,7 @@ ${CLI} bench run [--yes]      run benchmark tasks across arms in isolated one-co
 ${CLI} bench report           statistical report across benchmark arms (R, Q, C, CPI, cache)
                             (read-only; paired bootstrap 95% CIs; --compare <a> <b>
                             prints deltas with McNemar and Wilcoxon p-values)
-${CLI} bench ablate [--yes]    leave-one-out ablation across core, profile and process sections
+${CLI} bench ablate [--yes | --input <file>]   rule ablation or offline retrieval observation replay
                             (dry-run unless --yes; 10-task canary with escalation,
                             value-per-KB ranking and deletion candidates)
 ${CLI} bench probes [--yes]    12 synthetic rule-compliance probes with deterministic graders

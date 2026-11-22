@@ -124,6 +124,24 @@ function percentilePair(sortedValues) {
   return [sortedValues[loIdx], sortedValues[hiIdx]];
 }
 
+/** Bootstrap a paired mean from one delta per independent task. */
+export function pairedMeanCi(deltas, { samples = DEFAULT_BOOTSTRAP_SAMPLES, seed = DEFAULT_BOOTSTRAP_SEED } = {}) {
+  if (deltas.length === 0) return null;
+  const center = mean(deltas);
+  if (deltas.every((value) => value === deltas[0])) return { mean: center, ci95: [center, center] };
+  const rng = createRng(seed);
+  const values = new Array(samples);
+  for (let iteration = 0; iteration < samples; iteration += 1) {
+    let sum = 0;
+    for (let draw = 0; draw < deltas.length; draw += 1) {
+      sum += deltas[Math.floor(rng() * deltas.length)];
+    }
+    values[iteration] = sum / deltas.length;
+  }
+  values.sort((a, b) => a - b);
+  return { mean: center, ci95: percentilePair(values) };
+}
+
 /**
  * Paired bootstrap 95% confidence intervals over task rows.
  *

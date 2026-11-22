@@ -93,13 +93,16 @@
     "./src/review/critic.mjs": "./src/review/critic.mjs",
     "./src/run.mjs": "./src/run.mjs",
     "./src/state.mjs": "./src/state.mjs",
+    "./src/sys/git.mjs": "./src/sys/git.mjs",
     "./src/sys/proc.mjs": "./src/sys/proc.mjs",
     "./src/testing/parsers.mjs": "./src/testing/parsers.mjs",
     "./src/testing/patches.mjs": "./src/testing/patches.mjs",
     "./src/testing/paths.mjs": "./src/testing/paths.mjs",
     "./src/testing/runners.mjs": "./src/testing/runners.mjs",
     "./src/testing/vault.mjs": "./src/testing/vault.mjs",
+    "./src/text/tokens.mjs": "./src/text/tokens.mjs",
     "./src/util/canonical.mjs": "./src/util/canonical.mjs",
+    "./src/util/sort.mjs": "./src/util/sort.mjs",
     "./src/work/assurance.mjs": "./src/work/assurance.mjs"
   },
   "devDependencies": {

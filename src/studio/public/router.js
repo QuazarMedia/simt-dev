@@ -1,8 +1,3 @@
-// The hash router: one container, a route table, and a loading state that a refusal
-// always replaces. Hashes that do not start with '/' are in-page anchors (the skip
-// link), not routes - rendering them would navigate away from the room you are in.
-// innerHTML is safe here by construction: every mounted string is composed by
-// components.js, which escapes every repository-sourced value before interpolation.
 
 import { emptyState, loading, refusalPanel } from './components.js';
 
@@ -27,7 +22,6 @@ export function createRouter({ container, routes, fallback }) {
         remedy: 'reload the page; if it persists, restart the studio',
       });
     }
-    // A newer navigation won the race while this view was reading; drop the stale answer.
     if (ticket !== seq) return;
     container.innerHTML = html;
     container.setAttribute('aria-busy', 'false');

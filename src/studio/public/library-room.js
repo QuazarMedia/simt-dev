@@ -1,7 +1,3 @@
-// The Library room's wiring: filter the fetched shelves and open one skill body.
-//
-// The search only re-renders the fetched rows, never re-fetches or re-ranks. Kept out of
-// app.js so the shell entry stays under the per-asset line ceiling.
 
 import { readDoor } from './client.js';
 import { loading, refusalPanel } from './components.js';

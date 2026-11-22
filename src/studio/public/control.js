@@ -1,5 +1,3 @@
-// Guarded control's view: a preview diff, its digest, and an explicit apply. There is no
-// default action, no auto-apply and no batch; the reader confirms the bytes they saw.
 
 import { badge, card, escapeHtml, refusalPanel } from './components.js';
 

@@ -1,8 +1,3 @@
-// The Constellation's view-model: a deterministic claim graph plus its table twin.
-//
-// Positions are a pure function of the sorted node ids and the corpus seed, so the same
-// corpus draws the same sky on every machine. Unknown-scope nodes get their own band; an
-// edge's kind chooses a line class, and a proposed edge is faint rather than omitted.
 
 import { badge, card, emptyState, escapeHtml } from './components.js';
 
@@ -41,8 +36,6 @@ export function layoutGraph(graph, seed = '') {
     ...known.map((node, index) => ({ ...node, ...point(index, known.length, 'known', phase), band: 'known' })),
     ...unknown.map((node, index) => ({ ...node, ...point(index, unknown.length, 'unknown'), band: 'unknown' })),
   ];
-  // `seed` is carried with the coordinates so a reader can tell two corpora apart even when
-  // they happen to have the same node count.
   return { seed, width: WIDTH, height: HEIGHT, nodes: placed };
 }
 

@@ -1,8 +1,3 @@
-// The Library: two lesson shelves and a skill card catalog, all from the doors' payloads.
-//
-// Search is a client-side filter over the fetched rows. Nothing is re-ranked: the order
-// is the order `lessons list` and `skills index` returned, and a byte label is the
-// registry's own number.
 
 import { badge, card, emptyState, escapeHtml, refusalPanel } from './components.js';
 

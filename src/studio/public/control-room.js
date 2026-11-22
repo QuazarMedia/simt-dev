@@ -1,7 +1,3 @@
-// The control room's wiring: preview, confirm by digest, apply, then offer undo.
-//
-// Kept out of app.js so the shell entry stays under the per-asset line ceiling; the view
-// builders and the POST client remain the single owners of the markup and transport.
 
 import { postDoor, readDoor } from './client.js';
 import { loading, refusalPanel } from './components.js';

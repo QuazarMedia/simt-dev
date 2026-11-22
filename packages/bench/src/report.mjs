@@ -193,6 +193,19 @@ export async function buildBenchReport(
 
   const accounting = reportAccounting(filtered, { prices, samples, seed, exclusions: errored.length });
   const regressed = filtered.filter((record) => Number(record.regressions ?? 0) > 0).length;
+  // An aggregate is not allowed to hide the task that produced it: every failed task is
+  // named beside the arm it belongs to, once per (arm, task) across repetitions.
+  const failedTasks = new Map();
+  for (const row of evaluated) {
+    if (row.R !== 0) continue;
+    failedTasks.set(`${row.arm}\u0000${row.task}`, {
+      task: row.task,
+      arm: row.arm,
+      harness: row.harness,
+      model: row.model,
+    });
+  }
+  const failures = [...failedTasks.values()].sort((a, b) => a.arm.localeCompare(b.arm) || a.task.localeCompare(b.task));
 
   const report = {
     reportSchema: REPORT_SCHEMA,
@@ -214,6 +227,7 @@ export async function buildBenchReport(
     experiment,
     strata,
     arms,
+    failures,
     comparisons: comparison ? [comparison] : [],
     comparison,
     ...accounting,

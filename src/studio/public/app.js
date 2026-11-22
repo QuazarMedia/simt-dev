@@ -1,10 +1,7 @@
-// The shell entry: theme, navigation state, and the route table. Rooms whose views
-// ship in later slices render an honest empty state, not a broken link. The home
-// room reads /api/status through the same client every later view uses, so the
-// fetch path and the refusal rendering are exercised from the first load.
 
 import { readDoor } from './client.js';
 import { badge, card, emptyState, escapeHtml, loading, refusalPanel } from './components.js';
+import { benchRoom } from './bench-room.js';
 import { board } from './board.js';
 import { controlRoom } from './control-room.js';
 import { budget, sessionPathError } from './budget.js';
@@ -52,8 +49,6 @@ async function home() {
   );
 }
 
-const later = (name) => () => emptyState({ title: name, hint: 'This room is not part of this build yet.' });
-
 let pulseSource = null;
 let harnessSource = null;
 function closePulse() {
@@ -70,9 +65,6 @@ function closeHarness() {
   }
 }
 
-// The Pulse is the one room that keeps a socket open after its first render. The stream
-// is replaced on every return to the room, and a resync clears the ribbon before the
-// server's replay arrives; nothing else in the shell owns an EventSource.
 function pulseRoom() {
   closePulse();
   const state = { events: [], kind: 'all', connected: true };
@@ -110,8 +102,6 @@ function pulseRoom() {
         state.connected = true;
         draw();
       } catch {
-        // A malformed line is already reported by the log reader; the feed keeps its
-        // last good state rather than replacing the room with an exception.
       }
     };
     source.addEventListener('resync', () => {
@@ -128,8 +118,6 @@ window.addEventListener('hashchange', () => {
   if (location.hash !== '#/harness') closeHarness();
 });
 
-// The snapshot is the view's spine: its refusal refuses the room. The check and work
-// reads fail alone, each confined to its own card, the way the snapshot's slots do.
 const alone = (path) => readDoor(path).catch((error) => error.payload ?? {
   ok: false,
   error: String(error?.message ?? error),
@@ -262,7 +250,6 @@ async function harnessRoom() {
         feed.insertAdjacentHTML('afterbegin', policyEventItem(event));
         while (feed.children.length > 50) feed.lastElementChild.remove();
       } catch {
-        // The log reader already reports a malformed line; keep the last good feed.
       }
     };
     source.addEventListener('resync', () => {
@@ -378,7 +365,7 @@ const routes = new Map([
   ['/helm', { view: helmRoom }],
   ['/control', { view: controlRoom }],
   ['/library', { view: libraryRoom }],
-  ['/bench', { view: later('Bench') }],
+  ['/bench', { view: benchRoom }],
 ]);
 
 bootTheme();

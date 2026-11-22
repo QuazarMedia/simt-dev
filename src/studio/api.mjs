@@ -10,6 +10,7 @@ import { resolve } from 'node:path';
 
 import { run, renderJson } from '../run.mjs';
 import { checkRepo } from '../commands/sync.mjs';
+import { benchInput, benchPayload } from './bench.mjs';
 import { boardPayload } from './board.mjs';
 import { evidenceChains } from './evidence.mjs';
 import { CONTROL_ALLOWLIST, controlApply, controlPreview } from './control.mjs';
@@ -116,9 +117,43 @@ export async function apiAnswer(root, url, body = null) {
     return { status: payload.ok ? 200 : 400, document };
   }
 
+  if (url.pathname === '/api/bench') {
+    const raw = url.searchParams.get('compare');
+    const compare = raw === null || raw.trim() === '' ? null : raw.split(',').map((part) => part.trim()).filter(Boolean);
+    if (compare !== null && compare.length !== 2) {
+      return denied(400, 'STUDIO_COMPARE_REQUIRED', 'bench compare needs two arm names: compare=a,b');
+    }
+    const document = await sealedDocument('bench report', async () => {
+      const payload = await benchPayload(root, compare);
+      emitJson(payload);
+      return Number.isInteger(payload.exitCode) ? payload.exitCode : payload.ok === false ? EXIT.FAIL : EXIT.OK;
+    });
+    return { status: 200, document };
+  }
+
+  if (url.pathname === '/api/bench/replay' || url.pathname === '/api/bench/calibrate') {
+    const kind = url.pathname.endsWith('/replay') ? 'replay' : 'calibrate';
+    const input = url.searchParams.get('input');
+    if (input === null || input.trim() === '') {
+      return denied(400, 'STUDIO_INPUT_REQUIRED', `bench ${kind} needs a JSON input path inside the repository`);
+    }
+    const containment = within(root, resolve(root, input));
+    if (!containment.ok) {
+      return denied(403, 'STUDIO_PATH_DENIED', `the document read stays inside the repository: ${containment.reason}`);
+    }
+    const document = await sealedDocument(`bench ${kind}`, async () => {
+      const payload = await benchInput(kind, root, resolve(root, input));
+      emitJson(payload);
+      // A blocked calibration or a failed replay relation is a verdict with its own
+      // exit, so the document keeps the CLI's code instead of flattening it to zero.
+      return Number.isInteger(payload.exitCode) ? payload.exitCode : payload.ok === false ? EXIT.FAIL : EXIT.OK;
+    });
+    return { status: 200, document };
+  }
+
   const route = ROUTES.get(url.pathname);
   if (!route) {
-    return denied(404, 'STUDIO_UNKNOWN_ROUTE', `the studio serves ${[...ROUTES.keys(), '/api/library', '/api/library/skill'].join(', ')}`);
+    return denied(404, 'STUDIO_UNKNOWN_ROUTE', `the studio serves ${[...ROUTES.keys(), '/api/library', '/api/library/skill', '/api/bench', '/api/bench/replay', '/api/bench/calibrate'].join(', ')}`);
   }
 
   const args = [];

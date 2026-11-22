@@ -268,6 +268,7 @@ export async function benchReportCommand(positional, flags) {
       pricesLoaded: report.pricesLoaded,
       runCount: report.runCount,
       arms: report.arms,
+      failures: report.failures,
       comparison: report.comparison,
       mapRecall,
     });

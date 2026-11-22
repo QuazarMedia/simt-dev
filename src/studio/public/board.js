@@ -1,8 +1,3 @@
-// The Board's view-model: tracker rows as cards, lanes as columns, dependencies as edges.
-//
-// All values arrive from the board payload, which is `plan status` plus `plan next` and the
-// worktree/lease readers. This module only groups and renders them; it does not read a
-// tracker or a state file itself.
 
 import { badge, card, emptyState, escapeHtml } from './components.js';
 
@@ -29,8 +24,6 @@ export function dependenciesOf(slice) {
   return String(raw ?? '')
     .split(',')
     .map((id) => id.trim())
-    // The tracker writes "none" as an em dash (or one of its common spellings); it is
-    // not a dependency named after punctuation.
     .filter((id) => id && !['—', '-', 'n/a'].includes(id.toLowerCase()));
 }
 

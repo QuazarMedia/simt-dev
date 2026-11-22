@@ -1,8 +1,3 @@
-// The Helm: a palette over the spec's read-only rows, with forms generated from usage.
-//
-// The spec is the source. This module receives the rows the API read from it, derives a
-// form from each row's usage and flags, and composes the exact CLI spelling. It never
-// invent a command and never executes one; the API bridge owns the allowlist.
 
 import { badge, card, emptyState, escapeHtml, refusalPanel } from './components.js';
 
@@ -11,8 +6,6 @@ export function fieldsFor(row) {
   const fields = [];
   const seen = new Set();
   const usage = String(row?.usage ?? '');
-  // The flag match consumes its value placeholder even when the usage wraps it in
-  // parentheses or quotes; the remaining text is where the positional placeholders are.
   const flagPattern = /--([a-z0-9-]+)(?:\s+["']?<([^>]+)>["']?)?/gi;
   const flags = [];
   for (const match of usage.matchAll(flagPattern)) {

@@ -1,9 +1,3 @@
-// The Overview view-model: the status snapshot as cards, pure string building so a
-// node test asserts what renders without a DOM. Three doors feed it - the snapshot
-// for the slots, the check for the findings rows, the work inspection for the next
-// step - and each fails alone: a refused check or work read renders its refusal in
-// its own card while the snapshot's slots still answer (ADR-045: a count opens the
-// rows behind it, never a summary that hides them).
 
 import { badge, card, escapeHtml, refusalPanel, table } from './components.js';
 

@@ -12,6 +12,7 @@ import { rankSkills } from '../resolve/resolve.mjs';
 import { INDEX_STOP, STOPWORDS, tokenize } from '../text/tokens.mjs';
 import { cmp } from '../util/sort.mjs';
 import { bindSubtaskAnchors } from './anchors.mjs';
+import { detailCommands, drillFooter, subtaskCoverage } from './drilldown.mjs';
 import { classifySubtaskIntents, subtaskCommands } from './kind.mjs';
 import { keptSections } from './packet.mjs';
 import { clusterSubtasks, orderSubtasks, subtaskLanes } from './plan-graph.mjs';
@@ -128,7 +129,7 @@ async function retrieveSubtasks(root, graph, tasks, allowed) {
   }));
 }
 
-export async function assembleCompositeBrief({ root, task, parts, paths, budget, flags, build, commands, section }) {
+export async function assembleCompositeBrief({ root, task, parts, paths, budget, flags, build, commands, section, subtask = null }) {
   const need = (facets) => section === null || facets.includes(section);
   const [graph, repo, registry, records, lessons] = await Promise.all([
     loadLiveGraph(root, { build, fielded: true, nativeLexical: true, binding: true }),
@@ -152,7 +153,7 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
   const candidates = candidatePool(section, tasks.length > 1);
   const add = candidates.add;
   add('TASK', 'kind', 'kind ' + kind + ' — ' + basis, 0, 1, true);
-  if (tasks.length <= 1) add('TASK', 'task', compact(task, 180), 0, 1, true);
+  if (tasks.length <= 1) add('TASK', 'task', compact(subtask === null ? task : tasks[0].text, 180), 0, 1, true);
   for (const row of subtaskCommands(tasks, card).commands) {
     for (const id of row.subtasks) add('COMMANDS', row.command, row.label + '  ' + row.command, id, 1, ['test', 'focused'].includes(row.verb));
   }
@@ -219,10 +220,17 @@ export async function assembleCompositeBrief({ root, task, parts, paths, budget,
   if (graph.stale) add('CAUTIONS', 'stale', 'The live index has incomplete source evidence. Run simt index --retrieval v2.', 0, 1, true);
 
   const items = candidates.items();
-  const packed = buildCompactPacket(items, { budget });
+  const drillDown = detailCommands(task, tasks, { paths: named, selected: subtask });
+  const footerBytes = Math.min(350, Math.floor(budget / 4));
+  const packed = buildCompactPacket(items, { budget, footer: drillFooter(tasks, drillDown, footerBytes), footerBytes });
+  const constraints = tasks.flatMap(({ id, constraints: rows }) => rows.map((row) => ({ subtaskId: id, ...row })));
   return {
     root, kind, basis, task, scope, budget, items, packed,
     sections: keptSections(items, packed.cut),
-    composite: { retrieval: 'v2', subtasks: tasks, lanes, overlaps, taskOrder: { ...plan, obligations } },
+    composite: {
+      retrieval: 'v2', subtasks: tasks, lanes, overlaps, taskOrder: { ...plan, obligations },
+      constraints, subtaskCoverage: subtaskCoverage(tasks, items, packed.cut), drillDown,
+      ...(subtask === null ? {} : { selectedSubtask: subtask }),
+    },
   };
 }

@@ -202,6 +202,7 @@ export const VALUE_FLAGS = new Set([
   'page',
   'journal',
   'task',
+  'subtask',
   // plan next: stay inside one tier, or one wave, or both. A value, not a switch,
   // because the answer to "which tier" is the whole question.
   'tier',

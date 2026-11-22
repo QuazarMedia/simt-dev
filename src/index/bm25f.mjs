@@ -108,3 +108,25 @@ export function scoreFtsBm25F(rows, task, { limit = 200, fields = BM25F_FIELDS }
   }
   return bestFieldHits(hits, limit);
 }
+
+export const FIELD_RESULT_LIMIT = 200;
+
+/** Collapse sections in SQL before applying the path result cap. */
+export function fieldSearchStatement(terms, fields = BM25F_FIELDS) {
+  const phrases = terms.map(ftsQuote).join(' OR ');
+  const match = fields === BM25F_FIELDS ? phrases : `{${fields.join(' ')}} : (${phrases})`;
+  return [
+    `with hits as materialized (
+       select f.kind, substr(n.key, 6) as path, f.rowid as section,
+         -bm25(fts, ${BM25F_WEIGHTS.join(', ')}) as score
+       from fts f join nodes n on n.id = f.node_id
+       where fts match ? and (select value from meta where key = 'fts_fields') = '1'
+     ), ranked as (
+       select kind, path, score, row_number() over (partition by path order by score desc, section) as position
+       from hits
+     )
+     select kind, path, score from ranked where position = 1
+     order by score desc, path asc limit ?`,
+    [match, FIELD_RESULT_LIMIT],
+  ];
+}

@@ -11,6 +11,7 @@ import { resolve } from 'node:path';
 import { run, renderJson } from '../run.mjs';
 import { checkRepo } from '../commands/sync.mjs';
 import { boardPayload } from './board.mjs';
+import { evidenceChains } from './evidence.mjs';
 import { EXIT, emitJson, jsonCommand, withOutputState, withSink } from '../output/index.mjs';
 import { finaliseJson } from '../output/envelope.mjs';
 import { within } from '../trust/paths.mjs';
@@ -22,6 +23,8 @@ const ROUTES = new Map([
   ['/api/plan', { command: 'plan status' }],
   ['/api/plan/next', { command: 'plan next', id: true }],
   ['/api/board', { board: true }],
+  ['/api/evidence', { command: 'evidence' }],
+  ['/api/evidence/chains', { chains: true }],
   ['/api/work', { command: 'work inspect' }],
 ]);
 
@@ -89,6 +92,15 @@ export async function apiAnswer(root, url) {
     const document = await sealedDocument('board', async () => {
       emitJson(await boardPayload(root));
       return EXIT.OK;
+    });
+    return { status: 200, document };
+  }
+
+  if (route.chains) {
+    const document = await sealedDocument('evidence chains', async () => {
+      const payload = await evidenceChains(root, { claim: url.searchParams.get('claim') });
+      emitJson(payload);
+      return payload.ok ? EXIT.OK : EXIT.FAIL;
     });
     return { status: 200, document };
   }

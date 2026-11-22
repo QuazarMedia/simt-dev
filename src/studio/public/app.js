@@ -4,8 +4,9 @@
 // fetch path and the refusal rendering are exercised from the first load.
 
 import { readDoor } from './client.js';
-import { badge, card, emptyState, escapeHtml } from './components.js';
+import { badge, card, emptyState, escapeHtml, refusalPanel } from './components.js';
 import { board } from './board.js';
+import { custody } from './custody.js';
 import { overview } from './overview.js';
 import { pulse } from './pulse.js';
 import { createRouter } from './router.js';
@@ -133,12 +134,38 @@ async function boardRoom() {
   return board(await readDoor('/api/board'));
 }
 
+async function custodyRoom() {
+  const draw = (payload) => {
+    document.getElementById('view').innerHTML = custody(payload);
+    bindClaim();
+  };
+  const bindClaim = () => {
+    const form = document.getElementById('custody-claim');
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const claim = new FormData(form).get('claim') ?? '';
+      try {
+        draw(await readDoor(`/api/evidence/chains?claim=${encodeURIComponent(String(claim))}`));
+      } catch (error) {
+        document.getElementById('view').innerHTML = refusalPanel(error.payload ?? {
+          ok: false,
+          error: String(error?.message ?? error),
+          remedy: 'reload the page; if it persists, restart the studio',
+        });
+      }
+    });
+  };
+  const payload = await readDoor('/api/evidence/chains');
+  setTimeout(bindClaim, 0);
+  return custody(payload);
+}
+
 const routes = new Map([
   ['/', { view: home }],
   ['/overview', { view: overviewRoom }],
   ['/pulse', { view: pulseRoom }],
   ['/board', { view: boardRoom }],
-  ['/custody', { view: later('Custody') }],
+  ['/custody', { view: custodyRoom }],
   ['/constellation', { view: later('Constellation') }],
   ['/harness', { view: later('Harness wall') }],
   ['/budget', { view: later('Budget') }],

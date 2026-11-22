@@ -16,6 +16,7 @@ import { readManifest } from '../projection/manifest.mjs';
 import { readLocalConfig } from '../local/config.mjs';
 import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
+import { foldIdentifierText } from '../text/identifiers.mjs';
 import { extract, resolveImports } from './extract.mjs';
 // the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
 // names the extensions that RESOLVE to a language (JavaScript claims `.ts` for extraction
@@ -104,27 +105,8 @@ export function ftsKindOf(filePath, lang = '') {
   return 'docs';
 }
 
-/**
- * The one fold for the FTS pipeline
- *
- * NFKC before NFKD so compatibility variants fold first (half-width katakana
- * to full-width) and combining marks strip after (München -> munchen), then
- * lowercase. That is what FTS5 `unicode61 remove_diacritics 2` does to the
- * same text on the sqlite side: ß stays ß on both (this SQLite build does
- * not fold it), and a run the fold keeps whole matches a run it keeps whole.
- *
- * The strip spares the combining dakuten and handakuten (U+3099 U+309A): NFKD
- * splits ド into ト plus a mark, and dropping that mark would voice every
- * がぎぐげご to かきくけこ. unicode61 never strips them either, so the final
- * NFKC recomposes what the strip spared.
- */
 function foldText(text) {
-  return String(text ?? '')
-    .normalize('NFKC')
-    .normalize('NFKD')
-    .replace(/\p{M}/gu, (mark) => (mark === '゙' || mark === '゚' ? mark : ''))
-    .normalize('NFKC')
-    .toLowerCase();
+  return foldIdentifierText(text).toLowerCase();
 }
 
 const FOLD_RUN = /[\p{L}\p{N}]+/gu;

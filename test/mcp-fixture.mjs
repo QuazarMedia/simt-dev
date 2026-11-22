@@ -4,6 +4,7 @@
 // protocol.
 
 import { execFile, spawn } from 'node:child_process';
+import { createInterface } from 'node:readline';
 import { promisify } from 'node:util';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -40,4 +41,46 @@ function converse(raw) {
   });
 }
 
-export { BIN, exec, req, at, converse };
+/**
+ * A live `simt mcp` session. `converse` runs a whole exchange; this lets a test
+ * finish the handshake before it changes outside state, so a timing assertion
+ * measures the request and not the child's startup.
+ */
+function session() {
+  const child = spawn(process.execPath, [BIN, 'mcp'], { stdio: ['pipe', 'pipe', 'pipe'] });
+  let stdout = '';
+  let stderr = '';
+  const pending = new Map();
+  const closed = new Promise((resolve, reject) => {
+    child.on('error', reject);
+    child.on('close', () => {
+      for (const waiter of pending.values()) waiter.reject(new Error('mcp closed before answering'));
+      pending.clear();
+      resolve({ stdout, stderr });
+    });
+  });
+  createInterface({ input: child.stdout }).on('line', (line) => {
+    stdout += `${line}\n`;
+    const message = JSON.parse(line);
+    const waiter = pending.get(message.id);
+    if (waiter) {
+      pending.delete(message.id);
+      waiter.resolve(message);
+    }
+  });
+  child.stderr.on('data', (chunk) => { stderr += chunk; });
+  return {
+    request(message) {
+      return new Promise((resolve, reject) => {
+        pending.set(message.id, { resolve, reject });
+        child.stdin.write(`${JSON.stringify(message)}\n`);
+      });
+    },
+    async close() {
+      child.stdin.end();
+      return closed;
+    },
+  };
+}
+
+export { BIN, exec, req, at, converse, session };

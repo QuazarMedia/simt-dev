@@ -14,7 +14,7 @@ import { test } from 'node:test';
 // These tests are about the protocol, not workspace discovery, so decline it.
 process.env.SIMT_DEV_WORKSPACE = 'off';
 
-import { access, mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -23,11 +23,10 @@ import { handle, serve, PROTOCOL_VERSION, RPC, SUPPORTED_VERSIONS } from '../src
 import { TOOLS, ERROR_SHAPE } from '../src/mcp/tools.mjs';
 import { assertValid } from '../src/mcp/schema.mjs';
 import { CLI } from '../src/name.mjs';
-import { reindex } from '../src/index/store.mjs';
 import { SQLITE_FILE } from '../src/index/persist.mjs';
 
-import { BIN, exec, req, at, converse } from './mcp-fixture.mjs';
-import { holdIndexLock } from './fixture.mjs';
+import { BIN, exec, req, at, converse, session } from './mcp-fixture.mjs';
+import { briefIndexFixture, holdIndexLock } from './fixture.mjs';
 // --- end to end over a real pipe ------------------------------------------------
 
 test('mcp: a real session answers on the protocol channel and nothing else', async () => {
@@ -307,34 +306,31 @@ test('mcp: brief reads the index and never builds one', async () => {
   assert.ok(packet.bytes > 0 && packet.bytes <= 2048, `packet was ${packet.bytes} bytes`);
 });
 
-test('mcp: skills_brief waits for a transient index write instead of reporting INDEX_BUSY', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'simt-skills-busy-'));
+test('mcp: skills_brief waits for a transient index write over the request channel', async () => {
+  const dir = await briefIndexFixture();
+  const client = session();
   try {
-    await mkdir(join(dir, 'src'), { recursive: true });
-    await writeFile(join(dir, 'package.json'), '{"name":"fixture","version":"1.0.0"}\n');
-    await writeFile(join(dir, 'src', 'keep.mjs'), 'export function keep(value) { return value; }\n');
-    await exec('git', ['init', '-q', dir]);
-    await exec('git', ['-C', dir, 'add', '-A']);
-    await exec('git', [
-      '-C', dir,
-      '-c', 'user.email=tests@simt.invalid',
-      '-c', 'user.name=simt-dev tests',
-      '-c', 'commit.gpgsign=false',
-      'commit', '-qm', 'initial',
-    ]);
-    await reindex(dir);
+    const init = await client.request(req('initialize', { protocolVersion: '2025-11-25' }, 1));
+    assert.equal(init.result.protocolVersion, '2025-11-25');
 
-    const lock = await holdIndexLock(join(dir, SQLITE_FILE));
+    const lock = await holdIndexLock(join(dir, SQLITE_FILE), 1200);
+    const started = performance.now();
     try {
-      const view = TOOLS.find((tool) => tool.name === 'skills_brief');
-      const packet = await view.run({ root: dir, task: 'fix src/keep.mjs', paths: 'src/keep.mjs' });
-      assert.equal(packet.root, dir);
-      assert.equal(packet.task, 'fix src/keep.mjs');
+      const answer = await client.request(req('tools/call', {
+        name: 'skills_brief',
+        arguments: { root: dir, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md' },
+      }, 2));
+      assert.equal(answer.result.isError, false, JSON.stringify(answer.result));
+      assert.equal(answer.result.structuredContent.root, dir);
+      assert.equal(answer.result.structuredContent.task, 'read the commands skill');
+      assert.ok(answer.result.structuredContent.sections.SKILLS, 'the packet did not include SKILLS');
+      assert.ok(performance.now() - started >= 1000, 'the request did not wait for the index lock');
     } finally {
       await lock.done;
     }
   } finally {
-    await rm(dir, { recursive: true, force: true });
+    const { stderr } = await client.close();
+    assert.equal(stderr, '');
   }
 });
 test('mcp: subscribing is refused with the reason, and never advertised', async () => {

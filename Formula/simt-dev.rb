@@ -16,14 +16,14 @@ class SimtDev < Formula
   license "Apache-2.0"
 
   if OS.mac? && Hardware::CPU.arm?
-    url "https://github.com/QuazarMedia/simt-dev/releases/download/v0.12.0/simt-dev-0.12.0-darwin-arm64"
-    sha256 "2e96b6b030b411f5e97c8dd5b88b10296078ab2c31fac33416957569f91ac311"
+    url "https://github.com/QuazarMedia/simt-dev/releases/download/v0.13.0/simt-dev-0.13.0-darwin-arm64"
+    sha256 "2cca166a657fd845de392d982efb0fd826425bf2bb4466af32b978b955fe1993"
   elsif OS.mac?
-    url "https://github.com/QuazarMedia/simt-dev/releases/download/v0.12.0/simt-dev-0.12.0-darwin-x64"
-    sha256 "6e756b04ccb12bcae5cdd3aabacd9f6ba1639dd80ccac3701f27b1e6c965118d"
+    url "https://github.com/QuazarMedia/simt-dev/releases/download/v0.13.0/simt-dev-0.13.0-darwin-x64"
+    sha256 "c180610cfc0dd363b8c198c812377a4250dba271c6bcf53f94bcbc49c5f1002c"
   else
-    url "https://github.com/QuazarMedia/simt-dev/releases/download/v0.12.0/simt-dev-0.12.0-linux-x64"
-    sha256 "d5279983e23ff9b84afeeb5b33e058e0e6c1461f884547fdad37da321a7b64ba"
+    url "https://github.com/QuazarMedia/simt-dev/releases/download/v0.13.0/simt-dev-0.13.0-linux-x64"
+    sha256 "24e5203a097ae9ef569b9b9f0d6f5f98b51dedd792e8b02fce8e4c75badb6054"
   end
 
   def install

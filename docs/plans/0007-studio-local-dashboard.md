@@ -161,7 +161,7 @@ with a table view that carries the same data.
 | ST08 | The Constellation: knowledge graph with the why panel | Observe | views | M | ST02, ST03 | Complete | dd68837 · test: node --test test/studio-knowledge.test.mjs test/work-query.test.mjs |
 | ST09 | The Harness wall: detection, hooks and live policy decisions | Observe | views | S | ST05 | Complete | c11f580 · test: node --test test/studio-harness.test.mjs test/studio-events.test.mjs |
 | ST10 | The Budget: token treemap and session split | Observe | views | S | ST02, ST03 | Complete | 5c67184 · test: node --test test/studio-tokens.test.mjs test/tokens.test.mjs |
-| ST11 | The Helm: a command palette for every read-only door | Steer | control | M | ST02, ST03 | Queued | — |
+| ST11 | The Helm: a command palette for every read-only door | Steer | control | M | ST02, ST03 | Complete | 621578c · test: node --test test/studio-helm.test.mjs test/studio-api.test.mjs test/mcp-spec.test.mjs |
 | ST12 | Guarded control: preview, confirm by digest, journal, undo | Steer | control | L | ST11, ST05 | Queued | — |
 | ST13 | The Library: lessons and skills browsers | Steer | views | S | ST02, ST03 | Queued | — |
 | ST14 | The Bench room: reports and comparisons as charts | Steer | views | S | ST02, ST03 | Queued | — |

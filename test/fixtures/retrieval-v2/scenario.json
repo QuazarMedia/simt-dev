@@ -1,0 +1,58 @@
+{
+  "mixedPrompt": "Fix the lexical ranking in rank.mjs, add prompt segmentation to brief, update inventory to handle symbol call sites, and fix a typo in README.md",
+  "compositePrompt": "Refactor the authentication middleware to support refresh token rotation, add unit tests for expired sessions, migrate database schema for audit logs, and document the new rate limits in the API guide",
+  "mixedGold": [
+    "src/rank.mjs",
+    "src/brief.mjs",
+    "src/inventory.mjs",
+    "README.md"
+  ],
+  "files": {
+    "package.json": "{\"name\":\"retrieval-consumer\",\"type\":\"module\",\"scripts\":{\"test\":\"node --test\"}}\n",
+    "README.md": "# Retrieval consumer\n",
+    "src/rank.mjs": "export function rankRecords() { return 1; }\nexport function formatRecords() { return 2; }\n",
+    "src/brief.mjs": "import { rankRecords } from './rank.mjs';\nexport function brief() { return rankRecords(); }\n",
+    "src/inventory.mjs": "export function inventory() { return []; }\n",
+    "src/dispatcher.mjs": "import { formatRecords } from './rank.mjs';\nexport function dispatchFormat() { return formatRecords(); }\n",
+    "test/rank.test.mjs": "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { rankRecords } from '../src/rank.mjs';\ntest('rank.test.mjs', () => assert.equal(rankRecords(), 1));\n",
+    "test/format.test.mjs": "import { test } from 'node:test';\nimport assert from 'node:assert/strict';\nimport { dispatchFormat } from '../src/dispatcher.mjs';\ntest('format.test.mjs', () => assert.equal(dispatchFormat(), 2));\n",
+    "docs/decisions/ADR-001-ranking.md": "# ADR-001 — Ranking\n\nStatus: **accepted**\n\nAffects: `src/rank.mjs`\n",
+    "docs/decisions/ADR-002-auth.md": "# ADR-002 — Authentication\n\nStatus: **accepted**\n\nAffects: `src/authentication-00.mjs`\n",
+    "test/expired-sessions.test.mjs": "import '../src/authentication-00.mjs';\n",
+    "src/database-schema.mjs": "export const auditLogs = [];\n",
+    "docs/api-guide.md": "# API guide\n\nRate limits are documented here.\n",
+    "docs/lessons/0001-expired-sessions.md": "---\nsimt-trigger: { paths: [\"src/authentication-00.mjs\"] }\n---\n\n# Cover expired sessions\n"
+  },
+  "skills": [
+    {
+      "name": "ranking",
+      "summary": "Ranking records",
+      "stack": [
+        "node"
+      ],
+      "paths": [
+        "src/rank.mjs"
+      ]
+    },
+    {
+      "name": "session-review",
+      "summary": "Authentication middleware and refresh token rotation",
+      "stack": [
+        "node"
+      ],
+      "paths": [
+        "src/authentication-00.mjs"
+      ]
+    },
+    {
+      "name": "edge-storage",
+      "summary": "Edge worker storage",
+      "stack": [
+        "cloudflare-workers"
+      ],
+      "paths": [
+        "src/**"
+      ]
+    }
+  ]
+}

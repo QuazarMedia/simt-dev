@@ -4,6 +4,16 @@ All notable changes to this package are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Removed
+
+- `simt skills brief --skill <name>` and `--plan` are withdrawn (ADR-226). `--skill` no longer forces a skill and `--plan` no longer switches bodies to a fetch list; the packet's `--only skills` view selects from task text and paths, and a script passing either flag now gets a usage error. Use `simt skills find` to discover a skill and `simt skills show <name>` to read its body.
+
+### Changed
+
+- MCP `brief` and `skills_brief` in an unindexed repository now return an error whose remedy is `run: simt index`, instead of returning a registry-only packet under the same name; `skills_brief` returns the brief document with `only` applied, not a second schema (ADR-226). The command and its `skills select` alias also use the packet's 2,048-byte default, down from 20,480, and no longer inline bodies; `--budget 0` or `--all` still asks for the whole view.
+
 ## [0.12.0] — 2026-11-21
 
 The local dashboard arrives (`simt studio`), the release acceptance matrix becomes one

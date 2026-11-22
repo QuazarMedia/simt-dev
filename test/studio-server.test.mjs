@@ -8,6 +8,7 @@ import { spawn } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import { startStudioServer } from '../src/studio/server.mjs';
 import { BIN, simt, tempDir } from './fixture.mjs';
 import { fixtureRepo, httpReq, session, startStudio, treeDigest } from './studio-fixture.mjs';
 
@@ -36,6 +37,68 @@ test('studio serves the shell on loopback after a one-shot token exchange', asyn
   const css = await httpReq(studio.port, { path: '/shell.css', headers: { cookie: cookie.split(';')[0] } });
   assert.equal(css.status, 200);
   assert.match(css.headers['content-type'], /text\/css/);
+});
+
+test('the accepted request set is loopback-only and names only the shell and API routes', async (t) => {
+  const root = await fixtureRepo();
+  const seen = [];
+  const studio = await startStudioServer({ port: 0, root, onRequest: (entry) => seen.push(entry) });
+  t.after(() => studio.close());
+
+  const exchange = await httpReq(studio.port, { path: `/?token=${studio.token}` });
+  assert.equal(exchange.status, 303);
+  const cookie = exchange.headers['set-cookie'][0].split(';')[0];
+  assert.equal((await httpReq(studio.port, { headers: { cookie } })).status, 200);
+  assert.equal((await httpReq(studio.port, { path: '/shell.css', headers: { cookie } })).status, 200);
+  assert.equal((await httpReq(studio.port, { path: '/api/status', headers: { cookie } })).status, 200);
+
+  // A foreign Host is refused before the accepted-request recorder sees it. The recorder
+  // therefore describes the set the page actually reached, not merely our ability to log.
+  const foreign = await httpReq(studio.port, { headers: { host: 'evil.example', cookie } });
+  assert.equal(foreign.status, 403);
+  assert.deepEqual(seen.map((entry) => entry.path), [`/?token=${studio.token}`, '/', '/shell.css', '/api/status']);
+  for (const entry of seen) {
+    assert.match(entry.host, new RegExp(`^(?:127\\.0\\.0\\.1|localhost):${studio.port}$`), JSON.stringify(entry));
+  }
+});
+
+test('read routes answer inside the 50 ms budget, with the two CLI-backed exceptions measured', async (t) => {
+  const root = await fixtureRepo();
+  const studio = await startStudio(root);
+  t.after(() => studio.stop());
+  const cookie = await session(studio);
+  const routes = [
+    '/', '/shell.css', '/app.js',
+    '/api/tokens', '/api/plan', '/api/plan/next', '/api/board',
+    '/api/evidence', '/api/evidence/chains', '/api/harness', '/api/helm',
+    '/api/knowledge/graph', '/api/knowledge/why', '/api/knowledge/rank?query=fixture',
+    '/api/work', '/api/library', '/api/library/skill?name=nope', '/api/bench', '/api/control',
+  ];
+  const median = (times) => [...times].sort((a, b) => a - b)[Math.floor(times.length / 2)];
+  const measure = async (path) => {
+    const times = [];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const started = performance.now();
+      await httpReq(studio.port, { path, headers: { cookie } });
+      times.push(performance.now() - started);
+    }
+    return median(times);
+  };
+
+  for (const path of routes) {
+    // Warm the route once: the first request to a route may build a cache or load a module.
+    await httpReq(studio.port, { path, headers: { cookie } });
+    const ms = await measure(path);
+    assert.ok(ms < 50, `${path} median ${ms.toFixed(1)} ms exceeds the 50 ms read-route budget`);
+  }
+
+  // The fixture's status and check doors run the same CLI work as their commands; they are
+  // the two measured exceptions, recorded in ADR-228 rather than silently exempted here.
+  for (const [path, ceiling] of [['/api/status', 150], ['/api/check', 300]]) {
+    await httpReq(studio.port, { path, headers: { cookie } });
+    const ms = await measure(path);
+    assert.ok(ms < ceiling, `${path} median ${ms.toFixed(1)} ms exceeds its recorded ${ceiling} ms exception ceiling`);
+  }
 });
 
 test('a replayed, wrong or off-route token query is refused', async (t) => {

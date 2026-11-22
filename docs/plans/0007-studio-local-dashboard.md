@@ -167,6 +167,13 @@ with a table view that carries the same data.
 | ST14 | The Bench room: reports and comparisons as charts | Steer | views | S | ST02, ST03 | Complete | 45b5298 · test: node --test test/studio-bench.test.mjs |
 | ST15 | Qualify the studio: installed fixtures, budgets, accessibility, surface | Release | release | M | ST04, ST09, ST12, ST13, ST14 | Complete | b1711fb · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — 5823334 · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — 4f120ab · test: node --test test/studio-shell.test.mjs |
 
+ST15 qualification limits: the 50 ms read-route budget is met by every read route except
+`/api/status` (~65–75 ms) and `/api/check` (~130–145 ms), which run the same command work
+as their CLI doors and have recorded exception ceilings in the release test. The
+keyboard-only walkthrough of every room in both themes is an excluded manual check; it
+must be performed and recorded before claiming a complete accessibility pass. ADR-228
+carries the same limits.
+
 ST04 is the first useful screen. ST05 makes it live. ST12 makes it a cockpit. ST15 is the
 release exit. Lanes own disjoint file sets: `server` owns `src/studio/server.mjs` and the
 command row; `api` owns `src/studio/api.mjs`; `shell` owns `src/studio/public/` core

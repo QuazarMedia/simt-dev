@@ -94,10 +94,13 @@ async function controlBody(req) {
  * Start the studio server on the loopback interface.
  *
  * `port` 0 asks the OS for an ephemeral port; the resolved one is returned. `root` is
- * the repository every /api read answers about. The caller owns the lifetime: `close()`
- * ends the listener and every open connection, so a SIGINT leaves no socket behind.
+ * the repository every /api read answers about. The optional `onRequest` receives the
+ * accepted request's method, URL and Host after the loopback check, so a test can assert
+ * the request set without changing production behaviour. The caller owns the lifetime:
+ * `close()` ends the listener and every open connection, so a SIGINT leaves no socket
+ * behind.
  */
-export async function startStudioServer({ port = STUDIO_DEFAULT_PORT, root } = {}) {
+export async function startStudioServer({ port = STUDIO_DEFAULT_PORT, root, onRequest } = {}) {
   const token = randomBytes(32).toString('base64url');
   let tokenLive = true;
   let boundPort = port;
@@ -110,6 +113,7 @@ export async function startStudioServer({ port = STUDIO_DEFAULT_PORT, root } = {
     if (host !== authority && host !== `localhost:${boundPort}`) {
       return refusal(res, 403, 'STUDIO_FOREIGN_HOST', 'open the studio by the loopback URL it printed');
     }
+    onRequest?.({ method: req.method, path: req.url, host });
     const origin = req.headers.origin;
     if (origin !== undefined && origin !== `http://${authority}` && origin !== `http://localhost:${boundPort}`) {
       return refusal(res, 403, 'STUDIO_FOREIGN_ORIGIN', 'requests must come from the studio page itself');

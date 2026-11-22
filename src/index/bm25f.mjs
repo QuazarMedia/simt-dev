@@ -13,6 +13,43 @@ export function fieldQueryTerms(task) {
   return [...new Set(fieldTokens(task).split(' ').filter((word) => word && !STOPWORDS.has(word)))].slice(0, 48);
 }
 
+export const PHRASE_WINDOW = 8;
+
+export function queryPairs(task) {
+  const words = fieldTokens(task).split(' ').filter((word) => word && !STOPWORDS.has(word)).slice(0, 48);
+  const pairs = new Map();
+  for (let index = 1; index < words.length && pairs.size < 8; index += 1) {
+    const pair = [words[index - 1], words[index]];
+    pairs.set(pair.join(' '), pair);
+  }
+  return [...pairs.values()];
+}
+
+export function fieldProximity(rows, pairs) {
+  const hits = new Map();
+  if (!pairs.length) return hits;
+  const vocabulary = new Set(pairs.flat());
+  for (const row of rows) {
+    const path = row.ref ?? row.path;
+    const found = hits.get(path) ?? new Set();
+    for (const field of BM25F_FIELDS) {
+      if (!row[field] || found.size === pairs.length) continue;
+      const previous = new Map();
+      for (const [position, word] of row[field].split(' ').entries()) {
+        if (!vocabulary.has(word)) continue;
+        for (const [index, [left, right]] of pairs.entries()) {
+          const other = word === left ? right : word === right ? left : null;
+          const before = previous.get(other);
+          if (before !== undefined && position - before <= PHRASE_WINDOW + 1) found.add(index);
+        }
+        previous.set(word, position);
+      }
+    }
+    if (found.size) hits.set(path, found);
+  }
+  return hits;
+}
+
 export function ftsQuote(term) {
   return `"${String(term).replaceAll('"', '""')}"`;
 }
@@ -28,7 +65,7 @@ export function bestFieldHits(rows, limit = 200) {
 }
 
 /** Mirrors FTS5's weighted phrase frequencies and unweighted document lengths. */
-export function scoreFtsBm25F(rows, task, { limit = 200 } = {}) {
+export function scoreFtsBm25F(rows, task, { limit = 200, fields = BM25F_FIELDS } = {}) {
   const terms = fieldQueryTerms(task);
   if (!terms.length || !rows.length) return [];
   const positions = new Map(terms.map((word, index) => [word, index]));
@@ -38,11 +75,13 @@ export function scoreFtsBm25F(rows, task, { limit = 200 } = {}) {
     const frequencies = new Float64Array(terms.length);
     let length = 0;
     for (let field = 0; field < BM25F_FIELDS.length; field += 1) {
-      const tokens = (row[BM25F_FIELDS[field]] ?? '').split(' ');
+      const name = BM25F_FIELDS[field];
+      const active = fields.includes(name);
+      const tokens = (row[name] ?? '').split(' ');
       for (const word of tokens) {
         if (word === '') continue;
         length += 1;
-        const index = positions.get(word);
+        const index = active ? positions.get(word) : undefined;
         if (index !== undefined) frequencies[index] += BM25F_WEIGHTS[field];
       }
     }

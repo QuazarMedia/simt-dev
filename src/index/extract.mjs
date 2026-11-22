@@ -5,6 +5,7 @@
 // and an import graph, and it is the same result on every machine.
 
 import { cmp } from '../util/sort.mjs';
+import { extractBindings } from './bindings.mjs';
 // the extension table is the records' `languages[].exts` (ADR-013: content is data,
 // the engine is code). A new language lands in a record, not a row the extractor edits.
 import { languageExts } from '../ecosystem/records.mjs';
@@ -19,11 +20,11 @@ const EXTS = languageExts();
  * @param {string} filePath
  * @param {string} text
  * @param {string} lang
- * @returns {{symbols: object[], imports: string[]}}
+ * @returns {{symbols: object[], imports: string[], namedImports: object[], reexports: object[]}}
  */
 export function extract(filePath, text, lang) {
   const fn = BY_LANG[lang];
-  if (!fn || text.includes('\0')) return { symbols: [], imports: [] };
+  if (!fn || text.includes('\0')) return { symbols: [], imports: [], namedImports: [], reexports: [] };
   const found = fn(text);
   const symbols = [];
   const seen = new Set();
@@ -41,7 +42,7 @@ export function extract(filePath, text, lang) {
     });
   }
   symbols.sort(bySymbol);
-  return { symbols, imports: found.imports };
+  return { symbols, imports: found.imports, ...extractBindings(filePath, text, lang) };
 }
 
 /**

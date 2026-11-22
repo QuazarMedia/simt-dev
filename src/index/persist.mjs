@@ -399,6 +399,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       upsertSource.run(row.path, row.blob, row.lang, row.bytes, JSON.stringify({
         pkg: row.pkg ?? '',
         imports: Array.isArray(row.imports) ? row.imports : [],
+        bindings: row.bindings,
         resolution: row.resolution ?? 'none',
       }));
     }

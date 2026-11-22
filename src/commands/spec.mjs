@@ -77,7 +77,7 @@ export const SPEC = [
   { path: 'hooks run', usage: '<event>', summary: "run one git event's gates now, as git would", writes: 'repo', flags: ["yes","diff","dry-run","agent"], },
   { path: 'hooks status', summary: 'what each git event routes to; --agent reports each harness instead', defaultFor: 'hooks', flags: ["agent","diff","dry-run"], },
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff","yes"], writes: 'repo' },
-  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>"', mcp: { name: 'impact', flags: ['all', 'changed', 'retrieval', 'task'] }, summary: 'trace importers, tests, governance, consumers and related files for a change', flags: ['all', 'changed', 'retrieval', 'task'], values: { retrieval: ['v1', 'v2'] }, },
+  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>"', mcp: { name: 'impact', flags: ['all', 'changed', 'retrieval', 'task', 'with-knowledge'] }, summary: 'trace importers, tests, governance, consumers and related files for a change', flags: ['all', 'changed', 'retrieval', 'task', 'with-knowledge'], values: { retrieval: ['v1', 'v2'] }, },
   { path: 'index', usage: '[--open] [--search <task>] [--embed] [--retrieval v2]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","retrieval","search"], values: { retrieval: ["v1", "v2"] }, },
   // "hooks" used to be in this sentence and `init` never installed one: the promise and the
   // effect disagreed, and a reader who trusted the help believed their commits were gated
@@ -89,7 +89,7 @@ export const SPEC = [
   { path: 'knowledge rank', usage: '(--input <file> | --scope <id>) --query "<question>"', summary: 'rank evidence units by authority and quality, and report what was excluded', flags: ["input","limit","query","scope","where","retrieval"], },
   { path: 'knowledge derivations', usage: '--input <file>', summary: 'which outputs a source, template or skill change puts in question', flags: ["input"], },
   { path: 'knowledge debt', usage: '(--input <file> | --scope <id>)', summary: 'rank stale and unsupported knowledge by consequence per effort', flags: ["input","weights","scope"], },
-  { path: 'knowledge impact', usage: '(--input <file> --refs <ids> | --changed --scope <id>)', summary: 'what a change reaches over typed edges, and where the graph is unknown', flags: ["input","limit","refs","changed","scope"], },
+  { path: 'knowledge impact', usage: '(--input <file> --refs <ids> | --changed [--scope <id>])', summary: 'what a change reaches over typed edges, and where the graph is unknown', flags: ["input","limit","refs","changed","scope"], },
   { path: 'knowledge sections', usage: '<file.md>', summary: 'the retrieval units a long document yields, with anchors and byte ranges', flags: ["limit"], },
   // The one knowledge writer: it derives a corpus from files the repository already declared,
   // so it takes the scope, not a file list - an undeclared path has no authority to enter it.

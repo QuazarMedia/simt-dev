@@ -23,6 +23,7 @@ export const TOOLS_READ = [
         changed: { type: 'boolean' },
         retrieval: { type: 'string', enum: ['v1', 'v2'] },
         all: { type: 'boolean' },
+        withKnowledge: { type: 'boolean' },
       },
       required: [],
     },

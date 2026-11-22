@@ -7,7 +7,7 @@
 import { readFile } from 'node:fs/promises';
 import { basename, join, resolve } from 'node:path';
 
-import { EXIT, fail, present } from '../output/index.mjs';
+import { EXIT, fail, isJson, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { discover } from '../compare/discover.mjs';
 import { loadLiveGraph } from '../index/live.mjs';
@@ -44,7 +44,9 @@ function issue(message, exitCode = EXIT.USAGE, remedy = USAGE) {
 export async function impactCommand(args, flags, commands = []) {
   try {
     const payload = await impactFacts(commandRoot(flags), args, flags, commands);
-    present(payload, () => render(payload), flags);
+    const knowledge = payload.knowledge && !isJson(flags)
+      ? (await import('../index/unified-impact.mjs')).renderKnowledgeBridge(payload.knowledge) : [];
+    present(payload, () => render(payload, knowledge), flags);
     return EXIT.OK;
   } catch (error) {
     if (error.exitCode === undefined) throw error;
@@ -91,6 +93,9 @@ export async function impactFacts(root, args, flags = {}, commands = []) {
     consumersFor(root, flags, files, targets, reach.importers),
     precise ? impactChannels(root, graph, reach, sources, flags.all === true) : {},
   ]) : [[], [], { references: [], truncated: false }, impactChannelsEmpty()];
+  const knowledge = flags.withKnowledge === true
+    ? await (await import('../index/unified-impact.mjs')).knowledgeForImpact(root, { files: [...sources], graph, gone, changed })
+    : null;
   return {
     ok: true,
     command: 'impact',
@@ -103,6 +108,7 @@ export async function impactFacts(root, args, flags = {}, commands = []) {
     consumers: consumers.references,
     truncated: reach.truncated || consumers.truncated || (extra.cochangeTruncated ?? false),
     ...(precise ? { ...extra, targets, symbols: targets.filter(({ symbol }) => symbol) } : {}),
+    ...(knowledge ? { knowledge } : {}),
     ...(graph.basis.overlay.applied ? { provenance: graph.basis } : {}),
   };
 }
@@ -229,7 +235,7 @@ async function consumersFor(root, flags, paths, targets, importers) {
   return { references: refs.references, truncated: truncated || refs.truncated };
 }
 
-function render(payload) {
+function render(payload, knowledge) {
   const targets = payload.targets ?? [payload];
   if (!targets.length) return 'no changed files';
   const lines = targets.flatMap(({ file, symbol }) => [`file      ${file}`, ...(symbol ? [`symbol    ${symbol}`] : [])]);
@@ -244,6 +250,7 @@ function render(payload) {
   for (const hit of payload.governs) lines.push(`${hit.kind.padEnd(10)}${hit.id}  ${hit.detail}`);
   for (const owner of payload.owners) lines.push(`owner     ${owner}`);
   for (const consumer of payload.consumers) lines.push(`consumer  ${consumer.repo}/${consumer.path}  ${consumer.contract}`);
+  lines.push(...knowledge);
   if (payload.truncated) lines.push('truncated  1');
   return lines.join('\n');
 }

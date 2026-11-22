@@ -1,5 +1,5 @@
 import { cmp } from '../util/sort.mjs';
-import { symbolKey } from './bind.mjs';
+import { symbolKey, symbolNodePaths } from './bind.mjs';
 import { BM25F_FIELDS, fieldQueryTerms } from './bm25f.mjs';
 import { directionalGraph, expandDirectional } from './directional.mjs';
 import { searchEntityCandidates } from './entities.mjs';
@@ -36,11 +36,8 @@ function centrality(files, edges) {
 }
 
 function structuralHits(graph, paths, anchors, lexical, changes) {
-  const nodes = new Map([...paths].map((path) => [`file:${path}`, path]));
   const edges = graph.symbolGraph?.edges ?? [];
-  for (const { kind, src, dst } of edges) {
-    if (kind === 'contains' && nodes.has(src)) nodes.set(dst, nodes.get(src));
-  }
+  const nodes = symbolNodePaths(paths, edges);
   const byName = new Map();
   for (const symbol of graph.symbols) {
     const key = symbolKey(symbol.path, symbol.name, symbol.line);

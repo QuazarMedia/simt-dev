@@ -420,3 +420,42 @@ export function evaluateIntent(corpus = []) {
     unknown,
   };
 }
+
+const KIND_REQUIREMENTS = ['feature', 'refactor', 'bugfix', 'docs'];
+
+/** Keep each task's legacy kind and intent vector alongside the composite kind. */
+export function classifySubtaskIntents(subtasks) {
+  const tasks = subtasks.map((task) => {
+    const paths = [...new Set(task.anchors.map(({ path }) => path))];
+    const intent = task.query.trim() ? classifyIntent(task.query, { paths }) : null;
+    return { ...task, intent, commandVerbs: intent ? cardVerbs(intent.kind) : [] };
+  });
+  const present = new Set(tasks.flatMap(({ intent }) => intent ? [intent.kind] : []));
+  const kind = KIND_REQUIREMENTS.find((candidate) => present.has(candidate)) ?? DEFAULT_KIND;
+  const required = new Set(tasks.flatMap(({ intent }) => intent?.obligations ?? []));
+  return { kind, tasks, obligations: OBLIGATIONS.filter((value) => required.has(value)) };
+}
+
+export function subtaskCommands(tasks, card) {
+  const byVerb = new Map();
+  for (const { id, commandVerbs } of tasks) {
+    for (const verb of commandVerbs) {
+      const subjects = byVerb.get(verb) ?? [];
+      subjects.push(id);
+      byVerb.set(verb, subjects);
+    }
+  }
+  const commands = new Map();
+  for (const line of card.lines) {
+    const subjects = byVerb.get(line.verb);
+    if (!subjects || !line.command) continue;
+    const key = JSON.stringify([line.command, line.cwd ?? '']);
+    const row = commands.get(key) ?? { ...line, verbs: [], subtasks: [] };
+    if (!row.verbs.includes(line.verb)) row.verbs.push(line.verb);
+    row.subtasks = [...new Set([...row.subtasks, ...subjects])].sort((a, b) => a - b);
+    commands.set(key, row);
+  }
+  const declared = new Set([...commands.values()].flatMap((row) => row.verbs));
+  const verbs = cardVerbs(DEFAULT_KIND).filter((verb) => declared.has(verb));
+  return { verbs, commands: [...commands.values()] };
+}

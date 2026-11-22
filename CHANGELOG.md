@@ -6,13 +6,45 @@ All notable changes to this package are recorded here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Plan 0006's local work and knowledge flow is complete (WK06–WK15): the shipped `docs/guides/local-work.md` takes a packed install from one scope and its first cited answer through impact, selected verification and a recorded receipt. Two self-contained fixtures and two opted-in repository trials cover the handbook and mixed documentation/recipe shapes, with the commands, measurements, privacy boundary and rollback recorded in `docs/reference/local-work-qualification.md`.
+- `simt knowledge impact --changed --scope <id>` turns a repository diff into the scoped impact graph, including rename old/new paths, stale derived outputs, and proposed and unknown edges kept distinct.
+- `simt verify select (--changed | --staged) --scope <id>` plans typed document, link, source-support, generator and procedure checks from the diff, and names every unmapped path. `simt verify run --changed --scope <id> [--yes]` runs the configured local validators and records revision- and input-bound evidence, while `simt verify status --changed --scope <id>` reports the closure and accepts manual attestations.
+- `simt brief "<task>" --scope <id>` builds a small cited packet from a local knowledge scope, with follow-up commands for the source, check or receipt it names.
+- Version 3 work scopes can declare a `tracker`; `simt work schedule --scope <id> [--public]` reads plan, Markdown item, Markdown table or JSON trackers, `simt work handoff --scope <id> --task <id>` builds a local resume capsule, and `simt work resume --input <file> [--scope <id>]` revalidates it against current evidence. `--public` omits a private tracker.
+- `simt knowledge export --scope <id>` exports committed citations only under the scope's approved `share` paths, withholding private tracker paths and ignored sources. `simt knowledge import --input <file> --scope <id>` validates a version 1 catalogue as data and preserves unsupported edges as unknown.
+- `simt knowledge debt --scope <id>` and `simt work graduate --scope <id>` derive bounded maintenance and graduation proposals from current scoped evidence, without writing policy, knowledge or tasks.
+- The Studio's live operations rooms: **Pulse** tails the event log over an authenticated SSE route, with a bounded replay, ULIDs, a resync signal on rotation, and gate-bracket pairing; **Board** renders plan lanes with dependency edges, `plan next` highlighting, worktree and lease chips.
+- The Studio's evidence and knowledge rooms: **Custody** groups ledger runs by tree and keeps current, stale, failed and v1 local-only links distinct, with a claim check and gate catalog; **Constellation** draws the corpus graph deterministically with its table twin and why/rank panels; **Harness wall** joins harness detection and hook status, adding live policy decisions.
+- The Studio's context and command rooms: **Budget** draws a byte-proportional token treemap and the session rules/file-reads/tool-output split, refusing remote paths before reading them; **Helm** derives a read-only command palette and argument forms from the CLI spec, with writers refused before a handler runs.
+- The Studio's steering and measurement rooms: **Control** previews a fixed writer allowlist and applies only the digest the reader saw, with undo from the same journal; **Library** serves lessons and the skill catalog with search and a reading pane; **Bench** serves reports, replay, calibration and two-arm comparisons, naming failing tasks and an absent optional package.
+
+### Changed
+
+- `simt brief --only <section>` now accepts every section the packet knows, not only `skills`, and assembly runs only the work a collected section consumes. `simt skills brief` and its `skills select` alias render that same skills view instead of a second packer (ADR-226).
+- MCP `brief` and `skills_brief` in an unindexed repository now return an error whose remedy is `run: simt index`, instead of returning a registry-only packet under the same name; `skills_brief` returns the brief document with `only` applied, not a second schema (ADR-226). The command and its `skills select` alias also use the packet's 2,048-byte default, down from 20,480, and no longer inline bodies; `--budget 0` or `--all` still asks for the whole view.
+- `simt map --recall` names the tree it measured in both text and JSON: the HEAD commit, indexed file count, and whether the worktree had uncommitted changes.
+- Studio read routes are measured together: `statusSnapshot` resolves HEAD and its tree with one `git rev-parse`, every GET route has a recorded latency, and the suite holds reads to a 75 ms ceiling with a 200 ms gate ceiling.
+- The Studio is qualified from a packed install, not only the checkout: `test/studio-release.test.mjs` opens both fixture shapes through the installed binary, completes a guarded setup/undo round-trip, and records the loopback request set and the optional surface row.
+- Publish, publish-channels and qualify workflow job display names now state the action each job takes; their ids and dependency wiring are unchanged.
+- The Studio qualification transcripts now state that the manual keyboard and contrast walkthrough is excluded, rather than claiming the automated suite performed it.
+
 ### Removed
 
 - `simt skills brief --skill <name>` and `--plan` are withdrawn (ADR-226). `--skill` no longer forces a skill and `--plan` no longer switches bodies to a fetch list; the packet's `--only skills` view selects from task text and paths, and a script passing either flag now gets a usage error. Use `simt skills find` to discover a skill and `simt skills show <name>` to read its body.
 
-### Changed
+### Fixed
 
-- MCP `brief` and `skills_brief` in an unindexed repository now return an error whose remedy is `run: simt index`, instead of returning a registry-only packet under the same name; `skills_brief` returns the brief document with `only` applied, not a second schema (ADR-226). The command and its `skills select` alias also use the packet's 2,048-byte default, down from 20,480, and no longer inline bodies; `--budget 0` or `--all` still asks for the whole view.
+- `simt map --recall` reports the shipped default ranking's recall rather than an accepted embedding arm's figure, explains that the embedding bar is a release gate rather than a switch, and keeps `--embed` off in both branches for the stated reason.
+- Skill frontmatter descriptions containing a package name and colon are quoted, so strict YAML loaders no longer reject the descriptions as nested mappings; the registry's recorded bytes and digest match the body again.
+- Index readers now use the writer's five-second busy timeout, so a transient rebuild no longer surfaces as `INDEX_BUSY` from `brief` or `skills_brief`; contention beyond the bound still reports the existing error and remedy.
+- The installed local-work trials fixed scoped ranking and citation reopening on existing repositories, a crash on Python package imports during impact, and an unjournaled setup ignore edit that undo now restores. Both trials reach every labelled source in the top five.
+- The Studio's control form and library shelves are restored after ST14, Bench uses native progress bars and the shared card/table styles, and unused room hooks and selectors are gone. The readable styles stay under the 120 KB asset budget.
+- The Library reading pane reads the skill route's top-level metadata, so a real skill no longer appears as `skill` at `0 B`.
+- Narrow Studio layouts keep their content readable: the Gate brackets table has a labelled horizontal scroll region with a minimum column width, Custody run links stack into one column below 48rem, and the horizontal room bar keeps its content height while main takes the remaining viewport.
+- A corrupt index is named as corrupt rather than reported as empty, and a skills-only brief no longer starts federation or collects sections it drops.
+- The full test suite no longer starts a Studio server or opens a browser through the spec-writes tier; the long-lived `studio` row is skipped with its reason.
 
 ## [0.12.0] — 2026-11-21
 

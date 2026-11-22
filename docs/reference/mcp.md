@@ -27,8 +27,8 @@ through it. `simt mcp --list` prints the surface without reading stdin.
 | `pr_body` | The pull request body: ledger evidence for this tree, the decisions the diff touches, gate state, and the ADR-008 verdict with what was not reviewed. |
 | `rules_list` | The rule catalogue, and which rules a repository actually receives. Pass root for the selection, not just the catalogue. |
 | `rules_why` | Why a rule exists: a rule id for the decisions that settled it, or an ADR id for the rules that repeat it. An uncited rule is a finding, reported so. |
-| `skills_brief` | THE entry point. Resolve the skill set for a task: selected with why, deferred, and not selected with the reason to override. |
-| `skills_find` | Raw search across capability, keyword and summary. Use when skills_brief has nothing and you suspect a skill exists. |
+| `skills_brief` | The skills view of `brief`: the same packet with only its SKILLS section. Skill names and sizes; read a body with skills_show. |
+| `skills_find` | Raw search across capability, keyword and summary. Use when the brief names nothing and you suspect a skill exists. |
 | `skills_index` | Full skill catalogue: every skill with summary, size, stack tags and deferred flag. The fallback when brief returns nothing useful. |
 | `skills_show` | One skill body and the metadata needed to judge it: source path, the location it was read from, and its cited decisions. |
 | `skills_why` | The signal chain for one skill in one repository: its score, the reasons, whether the stack gate admits it, and what would select it. |

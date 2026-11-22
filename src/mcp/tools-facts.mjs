@@ -5,7 +5,6 @@ import { discover } from '../compare/discover.mjs';
 import { buildRows, resolveConcurrency, summarise } from '../compare/row.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { checkRepo } from '../commands/sync.mjs';
-import { skillsBriefFacts } from '../commands/skills.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
 import { federationAccess, readFederation } from '../federation/config.mjs';
@@ -16,6 +15,47 @@ import { configPaths, readUserConfig, resolveWorkspace } from '../workspace.mjs'
 import { CLI } from '../name.mjs';
 import { GATE_KINDS, output, rootArg } from './schemas.mjs';
 import { rootOf } from './schemas.mjs';
+
+/**
+ * The packet payload behind `brief` and its `skills_brief` view.
+ *
+ * Read, never build: every tool here declares itself read-only, and a call that indexed
+ * the tree would make that declaration false. A cold repository is told the command that
+ * makes the index rather than handed a second, registry-only document under the same
+ * name; the skills view is a section of this packet, not another packet (ADR-226).
+ */
+export async function briefPayload(args, { only = null } = {}) {
+  const root = rootOf(args);
+  const budget = Number.isFinite(args?.budget) && args.budget >= 0 ? args.budget : DEFAULT_BRIEF_BYTES;
+  const result = await assembleBrief({
+    root,
+    task: typeof args?.task === 'string' ? args.task : '',
+    paths: typeof args?.paths === 'string' ? args.paths : null,
+    budget,
+    build: false,
+    only,
+  });
+  if (result.error) throw Object.assign(new Error('the index could not be read'), { remedy: `run: ${CLI} index` });
+  if (result.cold) {
+    throw Object.assign(new Error('the index is empty, so the packet cannot be assembled'), {
+      remedy: `run: ${CLI} index`,
+    });
+  }
+  return {
+    root: result.root,
+    kind: result.kind,
+    basis: result.basis,
+    task: result.task,
+    scope: result.scope,
+    budget: result.budget,
+    bytes: result.packed.after,
+    before: result.packed.before,
+    floorHeld: result.packed.floorHeld,
+    cut: result.packed.cut,
+    sections: result.sections,
+    text: result.packed.text,
+  };
+}
 
 export const TOOLS_FACTS = [
   {
@@ -195,65 +235,7 @@ export const TOOLS_FACTS = [
       required: [],
     },
     async run(args) {
-      const root = rootOf(args);
-      const budget = Number.isFinite(args?.budget) && args.budget >= 0 ? args.budget : DEFAULT_BRIEF_BYTES;
-      // Read, never build: every tool here declares itself read-only, and a call that
-      // indexed the tree would make that declaration false. A brief with no index to read
-      // says which command makes one - the same rule the delivered packet follows, so a
-      // pull and a push pay the same price and neither one writes.
-      const result = await assembleBrief({
-        root,
-        task: typeof args?.task === 'string' ? args.task : '',
-        paths: typeof args?.paths === 'string' ? args.paths : null,
-        budget,
-        build: false,
-      });
-      if (result.error) throw Object.assign(new Error('the index could not be read'), { remedy: `run: ${CLI} index` });
-      // A repository with no index is not a failed call. Every surface points here first,
-      // so the one tool told to be the entry point must answer in a repository that has
-      // never been indexed - it falls back to the skill packet, which is read from the
-      // package rather than the tree, and names the command that unlocks the rest .
-      if (result.cold) {
-        const task = typeof args?.task === 'string' ? args.task : '';
-        const facts = await skillsBriefFacts(root, { ...(args ?? {}), task });
-        // Through JSON once, so the packet carries exactly what the text block shows: a
-        // property whose value is `undefined` survives `stringify` as nothing at all, and
-        // the two blocks would then describe different objects.
-        const text = JSON.stringify(facts, null, 2);
-        const packet = JSON.parse(text);
-        const size = Buffer.byteLength(text);
-        return {
-          root,
-          kind: 'skills',
-          basis: 'registry',
-          task,
-          scope: [],
-          budget,
-          bytes: size,
-          before: size,
-          // The skill packet is one document and is not cut to fit: saying the floor held
-          // when the answer is over it is the class of claim this review exists to remove.
-          floorHeld: size <= budget,
-          cut: size <= budget ? [] : ['text'],
-          sections: { skills: (packet.resolved ?? []).map((s) => s.name) },
-          text,
-          note: `no index here, so this is the skill packet; run: ${CLI} index for the repository packet`,
-        };
-      }
-      return {
-        root: result.root,
-        kind: result.kind,
-        basis: result.basis,
-        task: result.task,
-        scope: result.scope,
-        budget: result.budget,
-        bytes: result.packed.after,
-        before: result.packed.before,
-        floorHeld: result.packed.floorHeld,
-        cut: result.packed.cut,
-        sections: result.sections,
-        text: result.packed.text,
-      };
+      return briefPayload(args);
     },
   },
   {

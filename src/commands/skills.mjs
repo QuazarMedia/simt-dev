@@ -1,13 +1,9 @@
-// `simt skills` - tier 0 (index), tier 1 (brief), tier 2 (show), plus find/why.
+// `simt skills` - index, the packet's skills view, show, why and find.
 //
-// Implementation sequence steps 4 and 5.
-//
-// Output design: one fact per line, fixed field order, no
-// wrapping, no ANSI on any stream, bounded by --max-bytes with an explicit
-// TRUNCATED line. The NOT SELECTED block is as important as the resolved block -
-// the agent can see what exists and why it was excluded, and override in one
-// token instead of guessing. Suppressing it is how a discovery tool becomes a
-// black box.
+// Output design: one fact per line, fixed field order, no wrapping, no ANSI on any
+// stream, bounded by --max-bytes with an explicit TRUNCATED line. The packet's SKILLS
+// view carries names, sizes and reasons, never a body; `show` is the one door a body
+// comes through, which makes its cost visible before it is paid (ADR-226).
 
 import { readFile, realpath } from 'node:fs/promises';
 import { repoContext } from '../context.mjs';
@@ -19,7 +15,7 @@ import { loadRegistry } from '../graph/load.mjs';
 import { bodyFile, sourcePath } from '../resolve/body.mjs';
 import { unknownSkills, scoreCorpus } from '../resolve/eval.mjs';
 import { PACKAGE_ROOT, resolveWorkspace, WORKSPACE_REMEDY } from '../workspace.mjs';
-import { rankSkills, closure, selectWithinBudget, scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
+import { scoreSkill, selectionVerdict, stackCompatible } from '../resolve/resolve.mjs';
 import { tokenize } from '../text/tokens.mjs';
 import { localSkillNodes } from '../resolve/local.mjs';
 import { nearMatches } from '../resolve/near.mjs';
@@ -30,7 +26,12 @@ import { gitText } from '../sys/git.mjs';
 
 export { parsePathList };
 
-const DEFAULT_BUDGET = 20480;
+/** A repeated or comma-separated flag as a list; absent is empty. */
+export function listFlag(value) {
+  return (Array.isArray(value) ? value : [value])
+    .flatMap((v) => parsePathList(v))
+    .filter(Boolean);
+}
 
 /** git status paths, so path signals come from the real diff. */
 export async function dirtyPaths(root) {
@@ -51,11 +52,6 @@ export async function dirtyPaths(root) {
   }
 }
 
-export function listFlag(value) {
-  return (Array.isArray(value) ? value : [value])
-    .flatMap((v) => parsePathList(v))
-    .filter(Boolean);
-}
 
 // --- cores: one computation for the CLI and the MCP tools  ----------------
 //
@@ -113,126 +109,6 @@ function skillFacts(skill) {
     variants: skill.variants ?? [],
     aliasOf: skill.aliasOf ?? null,
     variantOf: skill.variantOf ?? null,
-  };
-}
-
-/** Tier 1: the selection the task resolves to, with the text packet's display sets. */
-export async function skillsBriefFacts(root, args = {}) {
-  const registry = await skillsRegistry(args);
-  // One context per call: a second question about the same repository inside this
-  // command costs nothing.
-  const ctx = args.ctx ?? repoContext(root);
-  const repo = await ctx.fingerprint();
-  const { note: workspace, root: workspaceRoot } = await announceWorkspace(args);
-  const repoStack = repo.signals;
-  const paths = args.paths ? parsePathList(args.paths) : await dirtyPaths(root);
-  const taskTokens = tokenize(args.task ?? '');
-  const forced = listFlag(args.skill);
-  const budget = args.budget ?? DEFAULT_BUDGET;
-  const task = args.task ?? null;
-  const repoFacts = { root, stack: repoStack, facts: repo.facts };
-
-  // The repo's own skills rank alongside the registry, so every command agrees on
-  // the names a reader in this repo can address.
-  const pool = [...registry.skills, ...(await localSkillNodes(root, registry, repoStack))];
-
-  // A brief with no task and no paths resolves on stack alone, which produces a
-  // plausible-looking list the agent may act on. It warns rather than silently
-  // answering; under `--json` the warning is a field, not prose on stdout.
-  if (!args.task && paths.length === 0 && forced.length === 0) {
-    const warning =
-      'no --task and no staged files, so selection can only use the repo signals. ' +
-      'pass --task "<what you are doing>" or stage files so the diff drives selection, ' +
-      'or pass --all to take everything for this stack.';
-    if (args.all) {
-      const usable = pool.filter((s) => stackCompatible(s, repoStack));
-      return {
-        kind: 'all',
-        repoStack,
-        inline: usable.filter((s) => !s.deferred),
-        deferred: usable.filter((s) => s.deferred),
-        warning,
-      };
-    }
-    return {
-      kind: 'brief',
-      repo: repoFacts,
-      workspace,
-      task,
-      budget,
-      inlineBytes: 0,
-      resolved: [],
-      deferred: [],
-      excluded: [],
-      shown: [],
-      shownDeferred: [],
-      shownUsed: 0,
-      pointerOnly: false,
-      warning,
-    };
-  }
-
-  const context = { repoStack, taskTokens, paths };
-  const { selected, excluded } = rankSkills(pool, context, { forced });
-
-  // Hard dependencies are pulled in even when they did not score, and even past
-  // budget: a skill that is useless without its dependency is worse than a large
-  // context, because it silently misleads.
-  const expanded = closure(selected, pool);
-  const { picked, deferred, used: inlineBytes } = selectWithinBudget(expanded, {
-    budget,
-    all: args.all === true,
-  });
-  const closureNames = new Set(expanded.map((e) => e.skill.name));
-
-  const plain = (entry) => ({
-    name: entry.skill.name,
-    bytes: entry.skill.bytes,
-    summary: entry.skill.summary,
-    why: [...entry.reasons, ...[...entry.via].map((v) => `requires:${v}`)],
-  });
-  // A body the packet cannot paste costs nothing. Charging the catalogue size
-  // is how a brief with no workspace reports "budget capped" and then prints
-  // the same remedy once per skill.
-  const readable = new Set();
-  for (const entry of expanded) {
-    if (await bodyReadable(entry.skill, workspaceRoot, root)) readable.add(entry.skill.name);
-  }
-  const pointerOnly = expanded.length > 0 && readable.size === 0;
-
-  let shown = picked;
-  let shownDeferred = deferred;
-  let shownUsed = inlineBytes;
-  if (pointerOnly) {
-    const priced = expanded.map((e) =>
-      e.skill.deferred ? e : { ...e, skill: { ...e.skill, bytes: 0 } },
-    );
-    const again = selectWithinBudget(priced, { budget, all: args.all === true });
-    shown = again.picked;
-    shownDeferred = again.deferred;
-    shownUsed = again.used;
-  }
-
-  return {
-    kind: 'brief',
-    repo: repoFacts,
-    workspace,
-    workspaceRoot,
-    task,
-    budget,
-    inlineBytes,
-    resolved: picked.map(plain),
-    deferred: deferred.map((e) => ({
-      name: e.skill.name,
-      bytes: e.skill.bytes,
-      reason: e.skill.deferred ? 'marked deferred' : 'over budget',
-    })),
-    excluded: excluded.filter((e) => !closureNames.has(e.skill.name)).map((e) => ({ name: e.skill.name, reason: e.reason })),
-    shown,
-    shownDeferred,
-    shownUsed,
-    pointerOnly,
-    excludedEntries: excluded.filter((e) => !closureNames.has(e.skill.name)),
   };
 }
 
@@ -409,38 +285,6 @@ function repoLine(repo) {
   return repo.facts.length > 0 ? `${stack} +${repo.facts.length} facts` : stack;
 }
 
-/** `--all` with no other signal: everything this stack can use, deferred excluded. */
-async function emitAllFacts(facts, flags) {
-  const { inline, deferred, repoStack, warning } = facts;
-
-  if (isJson(flags)) {
-    emitJson(
-      {
-                ok: true,
-                all: true,
-                repoStack,
-                inline: inline.map((s) => s.name),
-                deferred: deferred.map((s) => s.name),
-                ...(warning ? { warning } : {}),
-              },
-    );
-    return EXIT.OK;
-  }
-
-  const total = inline.reduce((n, s) => n + s.bytes, 0);
-  const lines = [
-    `ALL ${inline.length} skills for this stack, ${kb(total)} (deferred excluded, use skills show)`,
-    '',
-    ...inline.map((s) => `${s.name.padEnd(26)} ${kb(s.bytes).padStart(7)}  ${s.stack.join('+')}`),
-  ];
-  if (warning) lines.push('', warning);
-  if (deferred.length > 0) {
-    lines.push('', `DEFERRED ${deferred.length}: ${deferred.map((s) => s.name).join(', ')}`);
-  }
-  emit(lines.join('\n'));
-  return EXIT.OK;
-}
-
 // --- find ---------------------------------------------------------------------
 
 export async function findCommand(args, flags) {
@@ -480,112 +324,24 @@ export async function findCommand(args, flags) {
   return EXIT.OK;
 }
 
-// --- brief: tier 1 ------------------------------------------------------------
-export async function briefCommand(args, flags) {
-  const root = commandRoot(flags);
-  const ctx = repoContext(root);
-  let facts;
-  try {
-    facts = await skillsBriefFacts(root, { ...flags, ctx });
-  } catch (error) {
-    return fail(error.message, error.exitCode ?? EXIT.FAIL, error.remedy);
-  }
+// --- brief: the skills view of the packet -------------------------------------
 
-  if (facts.kind === 'all') {
-    return emitAllFacts(facts, flags);
-  }
-
-  // `ok: true` because the command did what was asked; the answer being weak
-  // is what `warning` carries. Failing here would tell a caller the tool
-  // broke when in fact it is telling them their query was.
-  if (isJson(flags)) {
-    const { shown, shownDeferred, shownUsed, pointerOnly, excludedEntries, workspaceRoot, kind, ...doc } = facts;
-    emitJson({ ok: true, ...doc });
-    return EXIT.OK;
-  }
-
-  if (facts.warning) {
-    const repo = await ctx.fingerprint();
-    emit(
-      [
-        `repo ${root.split('/').pop()} (${repoLine(repo)})`,
-        '',
-        facts.warning,
-      ].join('\n'),
-    );
-    return EXIT.OK;
-  }
-
-  const { shown, shownDeferred, shownUsed, pointerOnly, excludedEntries, workspace, workspaceRoot, budget } = facts;
-  const lines = [];
-  const repo = await ctx.fingerprint();
-
-  lines.push(
-    `RESOLVED ${shown.length} skills, ${kb(shownUsed)}${flags.all || shownUsed <= budget ? '' : ' (budget capped)'} - repo ${root.split('/').pop()} (${repoLine(repo)})`,
-  );
-
-  if (pointerOnly) {
-    // One remedy, then a pointer per skill. The exclusion reasons stay available
-    // through `skills why`; printing every one of them is a second copy of the
-    // catalogue, which is what pushed this packet over the budget it was saving.
-    lines.push(`bodies: not on this machine — ${WORKSPACE_REMEDY}`, '');
-    for (const entry of shown) lines.push(pointerLine(entry));
-    if (shownDeferred.length > 0) {
-      lines.push('', `DEFERRED ${shownDeferred.length} (marked deferred)`);
-      for (const entry of shownDeferred) lines.push(pointerLine(entry));
-    }
-    const hidden = excludedEntries;
-    if (hidden.length > 0) {
-      lines.push('', `NOT SELECTED ${hidden.length}`, '', `  notes: ${CLI} skills why <name> | ${CLI} skills show <name>`);
-    }
-    lines.push('', 'OVERRIDE  --skill <name> | --budget <bytes> | --all | --paths <globs>');
-    emit(lines.join('\n'));
-    return EXIT.OK;
-  }
-
-  lines.push(workspace);
-  lines.push('');
-
-  for (const entry of shown) {
-    const why = [...entry.reasons, ...[...entry.via].map((v) => `requires:${v}`)];
-    lines.push(
-      `SKILL ${entry.skill.name.padEnd(26)} ${kb(entry.skill.bytes).padStart(7)}  ${why.join(' ')}`,
-    );
-  }
-
-  if (flags.plan) {
-    lines.push('', 'PLAN (fetch each body only when a step needs it)');
-    for (const entry of shown) {
-      lines.push(`  ${CLI} skills show ${entry.skill.name}`);
-    }
-  } else {
-    lines.push('', 'BODIES');
-    for (const entry of shown) {
-      lines.push('', `--- ${entry.skill.name} (${entry.skill.summary})`);
-      lines.push(await readBody(entry.skill, workspaceRoot, root));
-    }
-  }
-
-  if (shownDeferred.length > 0) {
-    lines.push('', `DEFERRED ${shownDeferred.length} (over ${kb(budget)} or marked deferred)`);
-    for (const entry of shownDeferred) {
-      const reason = entry.skill.deferred ? 'marked deferred' : 'over budget';
-      lines.push(`  ${entry.skill.name.padEnd(26)} ${kb(entry.skill.bytes).padStart(7)}  ${reason}`);
-    }
-  }
-
-  const notSelected = excludedEntries;
-  if (notSelected.length > 0) {
-    lines.push('', 'NOT SELECTED');
-    for (const { skill, reason } of notSelected) {
-      lines.push(`  ${skill.name.padEnd(26)} ${reason}`);
-    }
-    lines.push('', `  notes: ${CLI} skills why <name> | ${CLI} skills show <name>`);
-  }
-
-  lines.push('', 'OVERRIDE  --skill <name> | --budget <bytes> | --all | --paths <globs>');
-  emit(lines.join('\n'));
-  return EXIT.OK;
+/**
+ * `skills brief` and MCP's `skills_brief` render the packet's SKILLS section.
+ *
+ * The tier-1 loop this command owned had its own 20 KB default and its own budget
+ * arithmetic, which is why ADR-052 exists: the two surfaces drifted. The view now
+ * delegates to `brief --only skills`, so one packer, one budget and one document answer
+ * the question (ADR-226).
+ */
+export async function briefCommand(args, flags, commands = []) {
+  const { briefCommand: runBrief } = await import('./brief.mjs');
+  const next = { ...flags, only: 'skills' };
+  // `--all` was the tier-1 way to ask for the whole answer; the packet spells that as a
+  // zero ceiling, which the packer already treats as unlimited.
+  if (flags.all === true) next.budget = 0;
+  delete next.all;
+  return runBrief(args, next, commands);
 }
 
 // --- show: tier 2 -------------------------------------------------------------
@@ -782,20 +538,7 @@ export async function evalCommand(positional, flags) {
   return okRun ? EXIT.OK : EXIT.FAIL;
 }
 
-// --- bodies -------------------------------------------------------------------
-
-/** A one-line pointer. The reasons stay, so a brief that cannot inline still says why. */
-function pointerLine(entry) {
-  const why = [...entry.reasons, ...[...entry.via].map((v) => `requires:${v}`)];
-  return `pointer  ${entry.skill.name.padEnd(26)} ${why.join(' ')}`;
-}
-
-/** True when `readBody` would return the skill text rather than an explanation of its absence. */
-async function bodyReadable(skill, workspaceRoot, root) {
-  const full = await sourcePath(skill, workspaceRoot, root);
-  return Boolean(full && existsSync(full));
-}
-
+/** The skill body, or the one reason it cannot be read here. */
 async function readBody(skill, workspaceRoot, root) {
   const full = await sourcePath(skill, workspaceRoot, root);
   if (!full) {

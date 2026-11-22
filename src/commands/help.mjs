@@ -82,7 +82,7 @@ ${CLI} brief "<task>"         one packet for a task: the kind, the commands, the
                            says why each was kept or dropped
 
 ${CLI} skills index           tier-0 catalog: every skill, one line each
-${CLI} skills brief --task    tier-1 pre-assembled brief  <- the common case
+${CLI} skills brief --task    the packet's SKILLS section (brief --only skills)
 ${CLI} skills show <name>     tier-2 body (respects --max-bytes)
 ${CLI} skills why <name>      the signal chain that selected it
 ${CLI} skills find <query>    search across capability and keyword
@@ -326,9 +326,8 @@ const FLAGS = `--public               work schedule: withhold private tracker id
 --pretty                indent --json for a human
 --max-bytes <n>         hard ceiling on emitted bytes (0 = unlimited, default 0)
 --budget <n>            context budget for a brief (default 2048)
-                        (skills brief keeps its own default of 20480)
---plan                  emit a fetch plan instead of inlining skill bodies
---skill <name>          force a skill into the brief (repeatable)
+--only <section>        brief: emit only one section (skills)
+--all                   skills brief: the whole packet, no byte ceiling
 --task "<text>"         the task text used for capability resolution
 --paths <globs>         comma-separated path globs used for path resolution
 --proof                 brief --json: report whether the packet proves what it kept

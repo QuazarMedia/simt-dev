@@ -256,17 +256,12 @@ test('mcp: brief reads the index and never builds one', async () => {
   const call = (id) => handle(req('tools/call', { name: 'brief', arguments: { root: dir, task: 'fix src/keep.mjs' } }, id), TOOLS, { state });
 
   const cold = await call(2);
-  // Q56: the tool every surface names as the entry point must answer in a repository
-  // nobody has indexed. It falls back to the skill packet - which is read from the
-  // package, not the tree - and names the command that unlocks the repository packet.
-  const briefTool = TOOLS.find((t) => t.name === 'brief');
-  assert.equal(cold.result.isError, false, JSON.stringify(cold.result));
-  assert.equal(cold.result.structuredContent.basis, 'registry');
-  assert.match(cold.result.structuredContent.note, new RegExp(`${CLI} index`));
-  // The skill set is a list, and an empty one in a scratch repository is honest: the
-  // packet says what it excluded, and the note says what would fill it in.
-  assert.ok(Array.isArray(cold.result.structuredContent.sections.skills));
-  assertValid(cold.result.structuredContent, briefTool.outputSchema, 'brief fallback');
+  // Q56/ADR-226: no tool writes, and there is no registry-only packet under the same
+  // name. A cold repository is told the one command that unlocks the packet.
+  assert.equal(cold.result.isError, true, JSON.stringify(cold.result));
+  assert.match(cold.result.structuredContent.error, /index is empty/);
+  assert.match(cold.result.structuredContent.remedy, new RegExp(`${CLI} index`));
+  assertValid(cold.result.structuredContent, ERROR_SHAPE, 'brief cold');
   await assert.rejects(
     access(join(dir, '.simt')),
     'brief built an index, which no tool here may do',

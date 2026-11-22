@@ -132,8 +132,8 @@ test('spec: a command declares every flag its own module reads', () => {
     // parameter indirection, and the failure that matters is a flag read and declared
     // nowhere - it is silently accepted and ignored (review 0003 Q62).
     // A path may declare a flag this file never names: `skills brief` passes its flags
-    // to skillsBriefFacts, which reads `args.task`. The rule that holds is the one
-    // below - nothing a module reads may go undeclared - not its converse.
+    // to `brief`, which reads them. The rule that holds is the one below - nothing a
+    // module reads may go undeclared - not its converse.
     for (const flag of read) assert.ok(declared.has(flag), `${file} reads --${flag}, and no path declares it`);
   }
 });

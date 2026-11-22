@@ -1,6 +1,6 @@
 # ADR-052 — a dependency is counted against the budget, and there is one budget
 
-Status: accepted · 2026-10-09
+Status: **superseded by [ADR-226](ADR-226-the-skills-brief-is-a-view-of-the-packet.md)** · 2026-10-09
 **Affects:** `src/resolve/resolve.mjs`, `src/commands/skills.mjs`, `src/mcp/tools.mjs`,
 `test/resolve.test.mjs`, `test/mcp.test.mjs`. Closes S06 of
 `docs/reviews/archive/0002-full-review-adoption-and-public-release.md`.

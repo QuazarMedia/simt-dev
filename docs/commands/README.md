@@ -91,7 +91,7 @@ simt bench run --yes                                                            
 simt bench world --input <file>                                                            # run the seeded world model and ask the oracle what the effects should be
 
 # brief
-simt brief "<task>" [--scope <id>]                                                         # the packet for a task: rules, skills and the files it names, within a budget
+simt brief "<task>" [--only skills] [--scope <id>]                                         # the packet for a task: rules, skills and the files it names, within a budget
 
 # check
 simt check                                                                                 # report stale or missing generated regions and every check finding
@@ -233,7 +233,7 @@ simt rules show <id>                                                            
 simt rules why <id|ADR-NNN> [--all]                                                        # the decision that settled a rule, and whether it is still in force
 
 # skills
-simt skills brief --task "<task>"                                                          # the packet for a task, read from the skill registry
+simt skills brief --task "<task>"                                                          # the packet's SKILLS section: names, sizes and why, without bodies
 simt skills compile [<name>]                                                               # compile a skill to the Agent Skills standard
 simt skills eval [corpus]                                                                  # score the skill registry against transcripts
 simt skills find <query>                                                                   # skills that match a query

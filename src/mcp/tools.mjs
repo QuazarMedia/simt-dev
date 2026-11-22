@@ -14,10 +14,11 @@
 // CLI keeps its field names; the tools adopt them. What is shared is the whole
 // answer, because two answers to one question is what ADR-035 rules out.
 //
-// Bodies are never inlined by `skills_brief`. Tier 1 is a set of pointers and reasons;
-// the body is a separate call. A 384 KB reference inlined into a tool result is the exact
-// failure progressive disclosure exists to prevent, and a transport makes it easier to
-// cause by accident because the caller cannot see the size until it has paid for it.
+// Bodies are never inlined by the packet. `brief` and its `skills_brief` view name the
+// skills they selected and a separate call reads one body; a 384 KB reference inlined
+// into a tool result is the exact failure progressive disclosure exists to prevent, and a
+// transport makes it easier to cause by accident because the caller cannot see the size
+// until it has paid for it.
 
 import { TOOLS_READ } from './tools-read.mjs';
 import { TOOLS_FACTS } from './tools-facts.mjs';

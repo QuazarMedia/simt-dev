@@ -3,7 +3,7 @@
 // The review's acceptance criterion is literal — `tools/call` structured content
 // equals the CLI `--json` result minus the envelope — and the cores exist to make
 // it true by construction: both surfaces call `checkRepo`, `diagnose`,
-// `rulesCatalogue`, `rulesWhyFacts`, `skillsBriefFacts`, `skillsFindFacts`,
+// `rulesCatalogue`, `rulesWhyFacts`, `skillsFindFacts`,
 // `skillsShowFacts` and `skillsWhyFacts`. This test holds that construction,
 // over the checkout itself, so a future second copy fails here rather than in
 // a reader's session.
@@ -76,9 +76,9 @@ test('parity: rules_why answers both directions on both surfaces', async () => {
   }
 });
 
-test('parity: skills_brief answers the selection on both surfaces', async () => {
-  const mcp = await tool('skills_brief').run({ root: ROOT, task: 'write a test' });
-  const command = answer(await cli('skills', 'brief', '--root', ROOT, '--task', 'write a test'));
+test('parity: skills_brief is the brief SKILLS view on both surfaces', async () => {
+  const mcp = await tool('skills_brief').run({ root: ROOT, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md' });
+  const command = answer(await cli('brief', '--only', 'skills', '--task', 'read the commands skill', '--paths', 'skills/simt-commands/SKILL.md', '--root', ROOT));
   assert.deepEqual(mcp, command);
 });
 

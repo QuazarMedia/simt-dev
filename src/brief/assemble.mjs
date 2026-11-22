@@ -215,6 +215,7 @@ export async function assembleBrief({
   commands = [],
   proof = false,
   workScope = null,
+  only = null,
 } = {}) {
   if (workScope !== null) return assembleScopedBrief({ root, task, budget, workScope });
   const named = paths !== null;
@@ -509,7 +510,12 @@ export async function assembleBrief({
     }
   }
 
-  const packed = buildPacket(packet.items, { budget });
+  // A view is the same packet with the other sections removed before packing, so the
+  // skills view shares the packer, the budget and the cut line rather than a second
+  // arithmetic (ADR-226).
+  const section = only === null ? null : String(only).toUpperCase();
+  const items = section === null ? packet.items : packet.items.filter((item) => item.section === section);
+  const packed = buildPacket(items, { budget });
   const cut = new Set(packed.cut);
 
   // A proof summary answers only what the kept packet itself proves: each kept section is
@@ -517,7 +523,7 @@ export async function assembleBrief({
   let proofSummary;
   if (proof) {
     const head = (await gitText(root, ['rev-parse', 'HEAD']))?.trim() ?? '';
-    const kept = packet.items.filter((item) => !cut.has(item.id));
+    const kept = items.filter((item) => !cut.has(item.id));
     const units = kept.map((item) => ({
       id: item.id,
       text: item.text,
@@ -542,11 +548,11 @@ export async function assembleBrief({
   }
 
   const sections = {};
-  for (const item of packet.items) {
+  for (const item of items) {
     if (cut.has(item.id)) continue;
     sections[item.section] ??= [];
     sections[item.section].push(item.text);
   }
 
-  return { root, kind, basis, task, scope, budget, items: packet.items, packed, sections, proof: proofSummary };
+  return { root, kind, basis, task, scope, budget, only: section, items, packed, sections, proof: proofSummary };
 }

@@ -45,7 +45,7 @@ in [architecture/history.md](architecture/history.md).
 | [031](decisions/ADR-031-the-suite-stages-the-environment-it-needs.md) | the suite stages the environment it needs, because a test that inherits the author's directory is not evidence | accepted · 2026-10-08 |
 | [032](decisions/ADR-032-provenance-is-a-content-digest-not-a-commit.md) | provenance is a digest of the content that leaves this package, not a commit id | accepted · 2026-10-08 · ruling 1 narrowed by ADR-054 |
 | [034](decisions/ADR-034-a-staged-tool-refuses-a-partially-staged-file.md) | A staged tool refuses a partially staged file rather than staging around it | accepted · 2026-10-08 · affects every repo with a pre-commit hook |
-| [035](decisions/ADR-035-one-write-decision-and-one-json-document.md) | One place decides whether a run may write, and one document says whether it did | accepted · 2026-10-08 · affects every command that writes or reports |
+| [035](decisions/ADR-035-one-write-decision-and-one-json-document.md) | One place decides whether a run may write, and one document says whether it did | accepted · 2026-10-08 · affects every command that writes or reports · ruling 5 superseded by ADR-226 |
 | [036](decisions/ADR-036-a-writer-that-writes-says-so-and-the-instructions-naming-it-move-with-it.md) | A command that writes says so, and every instruction that names it moves with it | accepted · 2026-10-08 · affects sync, every remedy naming it, and the generated-region note shipped into every consumer repository |
 | [037](decisions/ADR-037-unchanged-means-writing-would-not-change-a-byte.md) | `unchanged` means writing would not change a byte, not that the body matches | accepted · 2026-10-08 · affects every generated region, in every file style |
 | [038](decisions/ADR-038-the-gate-filter-belongs-to-every-manifest-writer.md) | The gate filter belongs to every writer of a manifest, not to `init` | accepted · 2026-10-08 · amends ADR-017 ruling 1 · affects every code path that calls buildManifest |
@@ -62,7 +62,7 @@ in [architecture/history.md](architecture/history.md).
 | [049](decisions/ADR-049-a-ruling-that-a-later-record-moved-says-so-where-it-is-printed.md) | a ruling that a later record moved says so where it is printed | accepted · 2026-10-09 |
 | [050](decisions/ADR-050-a-byte-count-is-not-a-region-and-updated-is-not-a-change-of-rules.md) | a byte count is not a region, and `updated` is not a change of rules | accepted · 2026-10-09 |
 | [051](decisions/ADR-051-a-pointer-is-the-readers-only-route-so-it-is-not-a-convenience.md) | a pointer is the reader's only route, so it is not a convenience | accepted · 2026-10-09 |
-| [052](decisions/ADR-052-a-dependency-is-counted-against-the-budget-and-there-is-one-budget.md) | a dependency is counted against the budget, and there is one budget | accepted · 2026-10-09 |
+| [052](decisions/ADR-052-a-dependency-is-counted-against-the-budget-and-there-is-one-budget.md) | a dependency is counted against the budget, and there is one budget | superseded by ADR-226 · 2026-10-09 |
 | [053](decisions/ADR-053-the-node-floor-is-22-20-0.md) | The Node floor is 22.20.0 | accepted · 2026-10-10 |
 | [054](decisions/ADR-054-the-digest-covers-every-byte-that-leaves-the-package.md) | The digest covers every byte that leaves the package, and a cause is read off the body | accepted · 2026-10-10 · amends ADR-032 |
 | [055](decisions/ADR-055-a-status-line-travels-so-it-may-not-name-a-location.md) | A status line travels, so it may not name a location; prose is the record's own argument | accepted · 2026-10-10 · filed as S54 · affects a file in this tool |
@@ -234,3 +234,4 @@ in [architecture/history.md](architecture/history.md).
 | [223](decisions/ADR-223-scoped-retrieval-ranks-distinct-sources.md) | Scoped retrieval ranks distinct sources | accepted · 2026-11-21 |
 | [224](decisions/ADR-224-the-embedding-recall-bar-is-a-precondition-not-a-switch.md) | The embedding recall bar is a precondition, not a switch | accepted · 2026-11-21 |
 | [225](decisions/ADR-225-a-recall-figure-names-the-tree-it-measured.md) | A recall figure names the tree it measured | accepted · 2026-11-21 |
+| [226](decisions/ADR-226-the-skills-brief-is-a-view-of-the-packet.md) | The skills brief is a view of the packet, not a second packet | accepted · 2026-11-21 |

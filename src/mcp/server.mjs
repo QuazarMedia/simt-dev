@@ -337,7 +337,7 @@ export async function handle(request, tools, { packageVersion, state, root, sign
 // prompt pointed at `brief` - three answers to "where do I start", and the one a model
 // read first was the only one it could not call .
 const INSTRUCTIONS =
-  'Read-only. Every answer is JSON. Call `skills_brief` first: it returns the pre-assembled skill set for a task, plus what it deliberately left out and why, and it needs no index. Call `brief` for the repository packet once the index exists.';
+  'Read-only. Every answer is JSON. Call `brief` first: it returns the pre-assembled packet for a task, including the skills it selected and why. Call `skills_brief` for only the SKILLS section, and `skills_show` for one body.';
 
 function serverInfo(packageVersion) {
   return { ...SERVER_INFO, version: packageVersion ?? '0.0.0' };

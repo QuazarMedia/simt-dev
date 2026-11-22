@@ -1,6 +1,10 @@
 # ADR-035 — One place decides whether a run may write, and one document says whether it did
 
-Status: **accepted** · 2026-10-08 · affects every command that writes or reports
+Status: **accepted** · 2026-10-08 · affects every command that writes or reports · ruling 5 superseded by [ADR-226](ADR-226-the-skills-brief-is-a-view-of-the-packet.md)
+
+> **Ruling 5 superseded by ADR-226.** It required `skills brief` with no input to report a
+> `warning` field. That command is now `brief --only skills`; the packet has no warning field
+> and reports what it cut instead.
 
 ## Context
 

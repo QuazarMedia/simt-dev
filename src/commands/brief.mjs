@@ -11,9 +11,9 @@
 // command line: what a task may be, what the ceiling may be, and how the packet is
 // rendered for a terminal or for `--json`.
 //
-// One thing is deliberately missing: `skills brief` keeps its own behaviour, and MCP's
-// `skills_brief` keeps its own shape. Superseding them changes two accepted decisions
-// (ADR-035, ADR-052) and the MCP contract, and this slice carries no ADR to do it.
+// `--only skills` is the view `simt skills brief` and MCP's `skills_brief` render. The
+// tier-1 command had its own 20 KB default and its own budget arithmetic; both now go
+// through this assembly, so one packer and one budget answer the question (ADR-226).
 
 import { CLI } from '../name.mjs';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
@@ -32,6 +32,13 @@ export async function briefCommand(args, flags, commands = []) {
   if (!Number.isInteger(budget) || budget < 0) {
     return fail(`--budget must be a byte count, not ${flags.budget}`, EXIT.USAGE, `run: ${CLI} brief --budget ${DEFAULT_BRIEF_BYTES}`);
   }
+  const only = flags.only === undefined ? null : String(flags.only).toLowerCase();
+  if (only !== null && only !== 'skills') {
+    return fail(`unknown brief section ${flags.only}`, EXIT.USAGE, `run: ${CLI} brief --only skills`);
+  }
+  if (only !== null && flags.scope !== undefined) {
+    return fail('a scoped brief is not filtered', EXIT.USAGE, `run: ${CLI} brief "<task>" --only skills`);
+  }
 
   if (flags.scope !== undefined && (typeof flags.scope !== 'string' || flags.scope === '' || flags.paths !== undefined)) {
     return fail('a scoped brief needs a scope id without --paths', EXIT.USAGE, `run: ${CLI} brief "<task>" --scope <id>`);
@@ -45,6 +52,7 @@ export async function briefCommand(args, flags, commands = []) {
     commands,
     proof: flags.proof === true,
     workScope: flags.scope ?? null,
+    only: only === null ? null : only.toUpperCase(),
   });
   if (result.error) return result.error;
   // Unreachable from here — only a delivered brief asks for a cold index to be reported

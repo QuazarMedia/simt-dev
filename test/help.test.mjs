@@ -84,37 +84,6 @@ test('a command path whose group is unknown is a usage error, not a silent defau
 
 // --- flags --------------------------------------------------------------------
 
-/**
- * `--skill` is documented as repeatable and was not.
- *
- * `flags.skill = value` meant `--skill a --skill b` resolved to `b`, with `a` dropped
- * silently — no error, no warning, and a brief missing a skill the caller had named by
- * hand. For a tool whose stated design rule is that the answer is a function of what was
- * asked, a flag that discards half its input is a correctness bug, not a papercut.
- */
-test('--skill accumulates instead of overwriting', () => {
-  const { value } = parse(['skills', 'brief', '--skill', 'a', '--skill', 'b']);
-  assert.deepEqual(value.flags.skill, ['a', 'b']);
-});
-
-test('--skill still accepts the comma-separated form it always accepted', async () => {
-  // A superset, not a replacement: `--skill a,b` parsed before this change and must
-  // parse identically now, or the fix traded one broken spelling for another.
-  const { listFlag } = await import('../src/commands/skills.mjs');
-  const comma = parse(['--skill', 'a,b']).value.flags.skill;
-  const repeated = parse(['--skill', 'a', '--skill', 'b']).value.flags.skill;
-  const mixed = parse(['--skill', 'a', '--skill', 'b,c']).value.flags.skill;
-  assert.deepEqual(listFlag(comma), ['a', 'b']);
-  assert.deepEqual(listFlag(repeated), ['a', 'b']);
-  assert.deepEqual(listFlag(mixed), ['a', 'b', 'c']);
-});
-
-test('an absent repeatable flag is an empty list, not a stringified undefined', async () => {
-  const { listFlag } = await import('../src/commands/skills.mjs');
-  assert.deepEqual(listFlag(undefined), []);
-  assert.deepEqual(listFlag([]), []);
-});
-
 // --- tiers and the 2 KB page (Q61) -------------------------------------------
 
 test('help: the top-level page fits in 2 KB and says where the rest is', async () => {

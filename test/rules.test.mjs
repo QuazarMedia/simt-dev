@@ -156,6 +156,9 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-023',
     'ADR-025',
     'ADR-032',
+    // ADR-035 joined when ADR-226 retired the tier-1 skills brief: ruling 5's
+    // `warning` field went with it, and the status line states the supersession.
+    'ADR-035',
     'ADR-042',
     'ADR-058',
     'ADR-059',
@@ -450,7 +453,9 @@ test('accepted is read from the status, not from one record\'s spelling of it', 
   // author's habits rather than the document.
   const { decisions } = await loadDecisions();
   const notAccepted = decisions.filter((d) => !d.accepted).map((d) => d.id);
-  assert.deepEqual(notAccepted, ['ADR-011', 'ADR-113'], 'only a record whose status starts with "superseded" may read as not accepted');
+  // ADR-052 joined when ADR-226 retired the tier-1 budget loop: the whole record is
+  // superseded, so its status begins with "superseded".
+  assert.deepEqual(notAccepted, ['ADR-011', 'ADR-052', 'ADR-113'], 'only a record whose status starts with "superseded" may read as not accepted');
 });
 
 test('a ruling that was overturned says so where it is printed', async () => {

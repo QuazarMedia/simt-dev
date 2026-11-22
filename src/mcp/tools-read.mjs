@@ -3,7 +3,8 @@
 import { provenanceDigest } from '../projection/project.mjs';
 import { diagnose, serialisedFindings } from '../commands/doctor.mjs';
 import { rulesCatalogue, rulesWhyFacts } from '../commands/rules.mjs';
-import { skillsBriefFacts, skillsFindFacts, skillsShowFacts, skillsWhyFacts } from '../commands/skills.mjs';
+import { skillsFindFacts, skillsShowFacts, skillsWhyFacts } from '../commands/skills.mjs';
+import { briefPayload } from './tools-facts.mjs';
 import { output, rootArg } from './schemas.mjs';
 import { registry, rootOf } from './schemas.mjs';
 
@@ -58,39 +59,22 @@ export const TOOLS_READ = [
   },
 
   {
-    outputSchema: output.skills_brief,
+    outputSchema: output.brief,
     name: 'skills_brief',
     description:
-      'THE entry point. Resolve the skill set for a task: selected with why, deferred, and not selected with the reason to override.',
+      'The skills view of `brief`: the same packet with only its SKILLS section. Skill names and sizes; read a body with skills_show.',
     inputSchema: {
       type: 'object',
       properties: {
         root: { type: 'string' },
         task: { type: 'string', description: 'what you are about to do, in your own words' },
-        paths: { type: 'string', description: 'comma-separated globs; defaults to the git diff' },
-        budget: { type: 'number', description: 'context budget in bytes (default 20480)' },
-        skill: { type: 'string', description: 'force a skill in, comma-separated' },
-        all: { type: 'boolean', description: 'ignore the budget' },
-        registry: { type: 'string', description: 'path to skills.graph.json; else --registry / SIMT_REGISTRY / default tiers' },
+        paths: { type: 'string', description: 'comma-separated paths to scope the packet' },
+        budget: { type: 'number', description: 'byte ceiling (default 2048)' },
       },
       required: [],
     },
     async run(args) {
-      const root = rootOf(args);
-      const facts = await skillsBriefFacts(root, args ?? {});
-      // No body is ever returned by this tool: a caller that wants one calls
-      // skills_show, which makes the cost visible before it is paid.
-      if (facts.kind === 'all') {
-        return {
-          all: true,
-          repoStack: facts.repoStack,
-          inline: facts.inline.map((s) => s.name),
-          deferred: facts.deferred.map((s) => s.name),
-          ...(facts.warning ? { warning: facts.warning } : {}),
-        };
-      }
-      const { shown, shownDeferred, shownUsed, pointerOnly, excludedEntries, workspaceRoot, kind, ...doc } = facts;
-      return doc;
+      return briefPayload(args, { only: 'SKILLS' });
     },
   },
 
@@ -130,7 +114,7 @@ export const TOOLS_READ = [
   {
     outputSchema: output.skills_find,
     name: 'skills_find',
-    description: 'Raw search across capability, keyword and summary. Use when skills_brief has nothing and you suspect a skill exists.',
+    description: 'Raw search across capability, keyword and summary. Use when the brief names nothing and you suspect a skill exists.',
     inputSchema: {
       type: 'object',
       properties: {

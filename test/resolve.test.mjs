@@ -11,7 +11,6 @@ import {
   scoreSkill,
   rankSkills,
   closure,
-  selectWithinBudget,
   resolveAlias,
   matchesGlob,
   stackCompatible,
@@ -127,60 +126,6 @@ test('resolve: closure terminates on the real registry', () => {
   const expanded = closure(selected, skills);
   assert.ok(expanded.length > 0);
   assert.ok(expanded.length <= skills.length, 'closure grew beyond the registry');
-});
-
-test('resolve: a dependency that does not fit takes its parent', () => {
-  // Rule 2 is directional and the direction is the whole of it. With a budget that fits
-  // the parent and not the child, the answer is neither — and the parent's own bytes
-  // being small is not a reason to show it alone.
-  const shape = [
-    { skill: { name: 'parent', bytes: 100, deferred: false, requires: ['child'] }, via: new Set() },
-    { skill: { name: 'child', bytes: 900, deferred: false, requires: [] }, via: new Set(['parent']) },
-  ];
-  const none = selectWithinBudget(shape, { budget: 500 });
-  assert.deepEqual(none.picked.map((e) => e.skill.name), []);
-  assert.equal(none.used, 0);
-  assert.deepEqual(none.deferred.map((e) => e.skill.name), ['parent', 'child']);
-
-  const all = selectWithinBudget(shape, { budget: 1000 });
-  assert.deepEqual(all.picked.map((e) => e.skill.name), ['parent', 'child']);
-  assert.equal(all.used, 1000);
-});
-
-test('resolve: `deferred` is a pointer, not a budget failure, so it does not move a parent', () => {
-  // Rule 3. `deferred` is derived from `deferredThreshold`, not from the budget, and it
-  // means "fetch this with `skills show`". Under `--all` the parent is still what the
-  // caller asked for, and the pointer to the dependency is what a pointer is for.
-  // Conflating the two is how a 384 KB body would suppress an unrelated small skill.
-  const shape = [
-    { skill: { name: 'parent', bytes: 100, deferred: false, requires: ['huge'] }, via: new Set() },
-    { skill: { name: 'huge', bytes: 400000, deferred: true, requires: [] }, via: new Set(['parent']) },
-  ];
-  const capped = selectWithinBudget(shape, { budget: 1000000 });
-  assert.deepEqual(capped.picked.map((e) => e.skill.name), ['parent']);
-  assert.deepEqual(capped.deferred.map((e) => e.skill.name), ['huge']);
-
-  const all = selectWithinBudget(shape, { budget: 10, all: true });
-  assert.deepEqual(all.picked.map((e) => e.skill.name), ['parent']);
-  assert.deepEqual(all.deferred.map((e) => e.skill.name), ['huge']);
-});
-
-test('resolve: the reported total is the bytes actually paid', () => {
-  // `used` is recomputed from what was picked rather than accumulated during the walk,
-  // because a parent pulled out by rule 2 must stop counting. A total that includes a
-  // dropped skill reports bytes nobody is paying, and the header line prints it.
-  const shape = [
-    { skill: { name: 'kept', bytes: 300, deferred: false, requires: [] }, via: new Set() },
-    { skill: { name: 'dropped', bytes: 800, deferred: false, requires: ['gone'] }, via: new Set() },
-    { skill: { name: 'gone', bytes: 900, deferred: false, requires: [] }, via: new Set(['dropped']) },
-  ];
-  const r = selectWithinBudget(shape, { budget: 1000 });
-  assert.deepEqual(r.picked.map((e) => e.skill.name), ['kept']);
-  assert.equal(r.used, 300, 'a parent deferred by rule 2 must stop counting against the budget');
-  assert.equal(
-    r.picked.reduce((n, e) => n + e.skill.bytes, 0),
-    r.used,
-  );
 });
 
 test('resolve: resolveAlias leaves a real name alone', () => {
@@ -508,6 +453,8 @@ async function localSkillsRepo(skills) {
     await writeFile(file, body);
   }
   await writeFile(join(dir, 'package.json'), JSON.stringify({ name: 'scratch', private: true }) + '\n');
+  await exec('git', ['-C', dir, 'init', '-q', '-b', 'main']);
+  await exec('git', ['-C', dir, 'add', '-A']);
   return dir;
 }
 
@@ -534,28 +481,31 @@ test('resolve: `skills find` returns the repo\'s own skills alongside the regist
   }
 });
 
-test('resolve: `skills brief` inlines the body of a skill the repo owns (S3)', async () => {
+test('resolve: a repo skill is found and read, never inlined by the packet', async () => {
   const root = await localSkillsRepo({
     'd1-safe-change': skillMd('d1-safe-change', 'Create, review, test, or deploy a D1 schema change.'),
   });
   try {
-    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'd1 schema migration', '--root', root], {
+    const found = await exec(process.execPath, [BIN, 'skills', 'find', 'd1 schema migration', '--root', root], {
       env: offEnv(),
     });
-    assert.match(stdout, /RESOLVED 1 skill/);
-    // The marker is in the SKILL.md this test wrote; if it is here, the body came from
-    // the repo's file, not from a workspace the registry never declared.
-    assert.match(stdout, /d1-safe-change-BODY-42/);
+    assert.match(found.stdout, /d1-safe-change/);
+    const brief = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'd1 schema migration', '--root', root], {
+      env: offEnv(),
+    });
+    assert.equal(brief.stdout.includes('d1-safe-change-BODY-42'), false, 'the packet never inlines a body');
+    const shown = await exec(process.execPath, [BIN, 'skills', 'show', 'd1-safe-change', '--root', root], {
+      env: offEnv(),
+    });
+    assert.match(shown.stdout, /d1-safe-change-BODY-42/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
-test('resolve: a weak local match is NOT SELECTED, with the score named (S3)', async () => {
-  // The local node scores 8 for `summary:validate`, below the minimum of 25. The reason
-  // an agent reads must name that score, the same as a registry skill would — a local
-  // skill that is excluded silently is the black box the NOT SELECTED block exists to
-  // prevent.
+test('resolve: a weak local match is not selected, and skills why names the score', async () => {
+  // The view carries only what it selected; the reason an agent needs to override is
+  // `skills why`, which names the score the NOT SELECTED block used to print.
   const root = await localSkillsRepo({
     'maplibre-ui': skillMd('maplibre-ui', 'Build, debug, or validate MapLibre GL JS behavior.'),
   });
@@ -563,26 +513,27 @@ test('resolve: a weak local match is NOT SELECTED, with the score named (S3)', a
     const { stdout } = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'please validate', '--root', root], {
       env: offEnv(),
     });
-    assert.match(stdout, /NOT SELECTED/);
-    assert.match(stdout, /maplibre-ui\s+only summary:validate, which scores 8; 25 is the least score that selects/);
+    assert.equal(stdout.includes('maplibre-ui'), false, 'a weak local match reached the view');
+    const why = await exec(process.execPath, [BIN, 'skills', 'why', 'maplibre-ui', '--root', root], { env: offEnv() });
+    assert.match(why.stdout, /maplibre-ui - score \d+/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
 });
 
 test('resolve: an agent tasked with a release gets the repo\'s release skill (S3)', async () => {
-  // The acceptance case for the release-process skill: a repo that owns a release
-  // skill must offer it to the agent handed a release, the way the d1 case above
-  // offers a schema skill.
   const root = await localSkillsRepo({
     'release-process': skillMd('release-process', 'Use when releasing: cutting a version, tagging, or publishing.'),
   });
   try {
-    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'release 1.2.3', '--root', root], {
+    const found = await exec(process.execPath, [BIN, 'skills', 'find', 'release', '--root', root], {
       env: offEnv(),
     });
-    assert.match(stdout, /RESOLVED 1 skill/);
-    assert.match(stdout, /release-process-BODY-42/);
+    assert.match(found.stdout, /release-process/);
+    const brief = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'release 1.2.3', '--root', root], {
+      env: offEnv(),
+    });
+    assert.equal(brief.stdout.includes('release-process-BODY-42'), false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

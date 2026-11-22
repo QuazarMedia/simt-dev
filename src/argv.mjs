@@ -50,7 +50,6 @@ export const BOOL_FLAGS = new Set([
   // prints the URL without launching a browser; the positive is the default there.
   'open',
   'check',
-  'plan',
   'help',
   'version',
   // JSON output: indent it. Off by default because a pipe is not a person, and the
@@ -159,6 +158,7 @@ export const BOOL_FLAGS = new Set([
 ]);
 
 export const VALUE_FLAGS = new Set([
+  'only',
   'budget',
   // bench critic: the labelled set of historical diffs to score.
   // A path, not a switch, because the labels themselves come from a human under
@@ -200,7 +200,6 @@ export const VALUE_FLAGS = new Set([
   'limit',
   'page',
   'journal',
-  'skill',
   'task',
   // plan next: stay inside one tier, or one wave, or both. A value, not a switch,
   // because the answer to "which tier" is the whole question.
@@ -300,7 +299,7 @@ export const VALUE_FLAGS = new Set([
  * is a superset of the old behaviour, not a replacement: `--skill a,b` parsed before it
  * parses now.
  */
-export const REPEATABLE_FLAGS = new Set(['skill', 'arm', 'compare', 'supersedes']);
+export const REPEATABLE_FLAGS = new Set(['arm', 'compare', 'supersedes']);
 
 /**
  * Whether a raw argv asks for JSON, read before parsing succeeds.

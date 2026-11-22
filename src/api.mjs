@@ -21,7 +21,7 @@ export { run, renderText, renderJson } from './run.mjs';
 export { checkRepo, checkTargets, checkTarget, frozenFindings } from './commands/sync.mjs';
 export { diagnose, serialisedFindings } from './commands/doctor.mjs';
 export { rulesCatalogue, rulesWhyFacts } from './commands/rules.mjs';
-export { skillsBriefFacts, skillsFindFacts, skillsShowFacts, skillsWhyFacts } from './commands/skills.mjs';
+export { skillsFindFacts, skillsShowFacts, skillsWhyFacts } from './commands/skills.mjs';
 export { assembleBrief } from './brief/assemble.mjs';
 export { loadRegistry } from './graph/load.mjs';
 export { discover } from './compare/discover.mjs';

@@ -77,7 +77,7 @@ returns a JSON object with `task`, `commands`, `files`, `tests`, `decisions`, `s
 5. **Load skills progressively (Tier 0 → Tier 1 → Tier 2).** Never read every skill file
    upfront:
    - Tier 0: `simt skills index` (or MCP `skills_index`) lists one line per skill.
-   - Tier 1: `simt skills brief --task "<task>"` (or MCP `skills_brief`) ranks compatible
+   - Tier 1: `simt brief "<task>" --only skills` (or MCP `skills_brief`) ranks compatible
      skills within budget (`--plan` emits a fetch plan without bodies).
    - Tier 2: `simt skills show <name> --max-bytes 8192` (or MCP `skills_show`) loads only
      the chosen skill's body.

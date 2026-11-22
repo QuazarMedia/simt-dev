@@ -203,7 +203,6 @@ next major, and removing one is a deprecation with a window like any other name.
 | `serialisedFindings` | `src/commands/doctor.mjs` | stable |
 | `rulesCatalogue` | `src/commands/rules.mjs` | stable |
 | `rulesWhyFacts` | `src/commands/rules.mjs` | stable |
-| `skillsBriefFacts` | `src/commands/skills.mjs` | stable |
 | `skillsFindFacts` | `src/commands/skills.mjs` | stable |
 | `skillsShowFacts` | `src/commands/skills.mjs` | stable |
 | `skillsWhyFacts` | `src/commands/skills.mjs` | stable |

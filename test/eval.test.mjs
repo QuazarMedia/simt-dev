@@ -24,7 +24,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -107,11 +107,18 @@ test('eval: the brief a reader gets says why, through the shipped binary (S04)',
   // nothing, and the output must say why rather than printing an empty list.
   const root = await mkdtemp(join(tmpdir(), 'simt-eval-'));
   try {
-    await mkdir(join(root, '.git'), { recursive: true });
     await writeFile(join(root, 'package.json'), JSON.stringify({ name: 'w', private: true }) + '\n');
-    const { stdout } = await exec(process.execPath, [BIN, 'skills', 'brief', '--task', 'fix a typo in the README', '--root', root]);
-    assert.match(stdout, /RESOLVED 0 skills/);
-    assert.match(stdout, /NOT SELECTED/);
+    await exec('git', ['-C', root, 'init', '-q', '-b', 'main']);
+    await exec('git', ['-C', root, 'add', '-A']);
+    await exec('git', [
+      '-C', root,
+      '-c', 'user.email=tests@simt.invalid',
+      '-c', 'user.name=simt-dev tests',
+      '-c', 'commit.gpgsign=false',
+      'commit', '-qm', 'initial',
+    ]);
+    const { stdout } = await exec(process.execPath, [BIN, 'brief', 'fix a typo in the README', '--root', root]);
+    assert.match(stdout, /matched 0/);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

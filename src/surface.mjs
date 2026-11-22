@@ -217,7 +217,6 @@ export const API_EXPORTS = [
   { name: 'serialisedFindings', module: 'commands/doctor.mjs' },
   { name: 'rulesCatalogue', module: 'commands/rules.mjs' },
   { name: 'rulesWhyFacts', module: 'commands/rules.mjs' },
-  { name: 'skillsBriefFacts', module: 'commands/skills.mjs' },
   { name: 'skillsFindFacts', module: 'commands/skills.mjs' },
   { name: 'skillsShowFacts', module: 'commands/skills.mjs' },
   { name: 'skillsWhyFacts', module: 'commands/skills.mjs' },

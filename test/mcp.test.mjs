@@ -39,7 +39,7 @@ test('mcp: initialize answers with the protocol version and the read-only instru
   // One entry point, named as a tool. The instruction used to name a CLI command the
   // caller could not invoke, while the tool description called itself the entry point and
   // the prompt pointed at a third one (Q56).
-  assert.match(r.result.instructions, /Call `skills_brief` first/);
+  assert.match(r.result.instructions, /Call `brief` first/);
 });
 
 test('mcp: an unsupported protocol version gets ours, not an echo of theirs', async () => {
@@ -363,48 +363,25 @@ test('mcp: every description is short, and the total grows only with the surface
   assert.ok(total <= CEILING * TOOLS.length, `${total} bytes of description across ${TOOLS.length} tools`);
 });
 
-test('mcp: skills_brief and `skills brief` answer the same question identically', async () => {
-  // Q15: the budget arithmetic was written twice and the copies had already
-  // drifted — this one checked `deferred` *after* the budget and inlined a
-  // deferred dependency, while `skills brief` checked it first and did not.
-  // Both surfaces now call `skillsBriefFacts`, and this test holds them to the
-  // same document. Two budgets, because one of them proves the budget is doing
-  // something: 2,000 for a group of 13,503 and 20,000 for the same one.
-  const brief = TOOLS.find((t) => t.name === 'skills_brief');
+test('mcp: skills_brief is the brief SKILLS view on both surfaces', async () => {
+  // One packer, one budget (ADR-226). Both surfaces render the packet's SKILLS section,
+  // so the documents are equal at a tight budget and at the whole-packet budget.
+  const view = TOOLS.find((t) => t.name === 'skills_brief');
   const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-
-  for (const budget of [2000, 20000]) {
-    const mcp = await brief.run({ budget, skill: 'parallel-feature-team', root: ROOT });
+  for (const budget of [1024, 0]) {
+    const mcp = await view.run({ budget, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md', root: ROOT });
     const { stdout } = await exec(process.execPath, [
       resolve(ROOT, 'bin', 'simt.mjs'),
-      'skills', 'brief', '--root', ROOT, '--skill', 'parallel-feature-team',
+      'brief', '--root', ROOT, '--task', 'read the commands skill', '--paths', 'skills/simt-commands/SKILL.md', '--only', 'skills',
       '--budget', String(budget), '--json',
     ]);
     const cli = JSON.parse(stdout);
-
-    assert.deepEqual(
-      mcp.resolved,
-      cli.resolved,
-      `budget ${budget}: the two surfaces resolved different skills`,
+    assert.deepEqual(mcp.sections, cli.sections);
+    assert.equal(mcp.text, cli.text);
+    assert.ok(
+      Object.keys(mcp.sections).every((section) => section === 'SKILLS'),
+      `unexpected sections: ${Object.keys(mcp.sections).join(', ')}`,
     );
-    assert.deepEqual(
-      mcp.deferred,
-      cli.deferred,
-      `budget ${budget}: the two surfaces deferred different skills`,
-    );
-    assert.deepEqual(
-      mcp.excluded,
-      cli.excluded,
-      `budget ${budget}: the two surfaces excluded different skills`,
-    );
-    assert.equal(
-      mcp.inlineBytes,
-      cli.inlineBytes,
-      `budget ${budget}: the two surfaces report different bytes`,
-    );
-    // And the budget is real in both, which is the property the two copies used to share
-    // only by accident.
-    assert.ok(mcp.inlineBytes <= budget, `${mcp.inlineBytes} bytes against a ${budget}-byte budget`);
   }
 });
 

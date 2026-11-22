@@ -7,7 +7,7 @@
 
 import './isolate.mjs';
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
+import { before, test } from 'node:test';
 // The pre-push gate runs this suite in a detached worktree under the temp
 // directory. With no workspace declared, the sibling heuristic treats that
 // parent as a workspace and `compare` scans every scratch directory beside it.
@@ -28,6 +28,15 @@ import { desiredRegion } from '../src/projection/rules.mjs';
 import { planNext } from '../src/plan/index.mjs';
 
 import { BIN, exec, req, at, converse } from './mcp-fixture.mjs';
+
+const CHECKOUT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+// The pre-push gate runs from a clean copy with no ignored `.simt/index`. The
+// skills_brief parity cases read the same packet as the CLI, so build the cache the
+// consumer would build; the protocol tests themselves still read nothing.
+before(async () => {
+  await exec(process.execPath, [BIN, 'index'], { cwd: CHECKOUT });
+});
 
 // --- protocol ------------------------------------------------------------------
 

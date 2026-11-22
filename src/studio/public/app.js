@@ -12,6 +12,7 @@ import { constellation, layoutGraph, rankPanel, whyPanel } from './constellation
 import { custody } from './custody.js';
 import { harnessWall, policyEventItem } from './harness.js';
 import { commandForm, fieldsFor, helm, invocation, resultPanel } from './helm.js';
+import { libraryRoom } from './library-room.js';
 import { overview } from './overview.js';
 import { pulse } from './pulse.js';
 import { createRouter } from './router.js';
@@ -376,7 +377,7 @@ const routes = new Map([
   ['/budget', { view: budgetRoom }],
   ['/helm', { view: helmRoom }],
   ['/control', { view: controlRoom }],
-  ['/library', { view: later('Library') }],
+  ['/library', { view: libraryRoom }],
   ['/bench', { view: later('Bench') }],
 ]);
 

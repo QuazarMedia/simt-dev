@@ -16,6 +16,7 @@ import { CONTROL_ALLOWLIST, controlApply, controlPreview } from './control.mjs';
 import { HELM_UNRUNNABLE, helmCatalog, helmRow } from './helm.mjs';
 import { harnessPayload } from './harness.mjs';
 import { knowledgeGraph } from './knowledge.mjs';
+import { libraryPayload, librarySkill } from './library.mjs';
 import { EXIT, emitJson, jsonCommand, withOutputState, withSink } from '../output/index.mjs';
 import { finaliseJson } from '../output/envelope.mjs';
 import { within } from '../trust/paths.mjs';
@@ -97,9 +98,27 @@ export async function apiAnswer(root, url, body = null) {
     return { status, document };
   }
 
+  if (url.pathname === '/api/library') {
+    const document = await sealedDocument('library', async () => {
+      const payload = await libraryPayload(root);
+      emitJson(payload);
+      return payload.ok ? EXIT.OK : EXIT.FAIL;
+    });
+    return { status: 200, document };
+  }
+
+  if (url.pathname === '/api/library/skill') {
+    const payload = await librarySkill(root, url.searchParams.get('name'));
+    const document = await sealedDocument('skills show', async () => {
+      emitJson(payload);
+      return payload.ok ? EXIT.OK : EXIT.FAIL;
+    });
+    return { status: payload.ok ? 200 : 400, document };
+  }
+
   const route = ROUTES.get(url.pathname);
   if (!route) {
-    return denied(404, 'STUDIO_UNKNOWN_ROUTE', `the studio serves ${[...ROUTES.keys()].join(', ')}`);
+    return denied(404, 'STUDIO_UNKNOWN_ROUTE', `the studio serves ${[...ROUTES.keys(), '/api/library', '/api/library/skill'].join(', ')}`);
   }
 
   const args = [];

@@ -26,6 +26,11 @@ import { gitText } from '../sys/git.mjs';
 
 export { parsePathList };
 
+/** One flag value or a repeated flag, flattened into a list (the bench package's input). */
+export function listFlag(value) {
+  return (Array.isArray(value) ? value : [value]).flatMap((v) => parsePathList(v)).filter(Boolean);
+}
+
 /** git status paths, so path signals come from the real diff. */
 export async function dirtyPaths(root) {
   try {

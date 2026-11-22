@@ -4,7 +4,7 @@ import { gitPaths } from '../sys/git.mjs';
 import { cmp } from '../util/sort.mjs';
 import { bindSymbols, symbolNodePaths } from './bind.mjs';
 import { createImportResolver, extract, resolveImports } from './extract.mjs';
-import { readLiveSnapshot } from './graph-read.mjs';
+import { readCochange, readLiveSnapshot } from './graph-read.mjs';
 import { buildOverlay, filterAllowed, readWorktreeFile, revisionOf } from './overlay.mjs';
 import { treeDigest } from './persist.mjs';
 import {
@@ -78,14 +78,14 @@ function edgeKey({ src, kind, dst }) {
  * Callers on a latency-sensitive surface can refuse the transient cold build.
  */
 export async function loadLiveGraph(root, options = {}) {
-  const { build = true, text = false, fielded = false, nativeLexical = false, binding = false, embed = false, policy, retainTargets = [] } = options;
+  const { build = true, text = false, fielded = false, nativeLexical = false, binding = false, embed = false, cochange = false, policy, retainTargets = [] } = options;
   const gitState = Promise.all([lsFiles(root), worktreeChanges(root)]);
   const snapshotState = nativeLexical ? gitState.then(([listed, dirty]) => readLiveSnapshot(root, {
     text, fielded: false, binding, tree: treeDigest(listed),
     bindingEdits: dirty.some(({ path }) => langOf(path, root) !== ''),
   })) : readLiveSnapshot(root, { text, fielded, binding });
-  const [snapshot, [listed, changes], embeddings] = await Promise.all([
-    snapshotState, gitState, embed ? readEmbeddings(root) : [],
+  const [snapshot, [listed, changes], embeddings, changesets] = await Promise.all([
+    snapshotState, gitState, embed ? readEmbeddings(root) : [], cochange ? readCochange(root) : [],
   ]);
   const result = { files: [], symbols: [], edges: [], fts: [], fieldedRows: [], embeddings: [] };
   if (snapshot.error || (!build && !snapshot.meta.build)) {
@@ -192,6 +192,7 @@ export async function loadLiveGraph(root, options = {}) {
   const stale = problems.size > 0 || (!build && mismatched);
   return {
     ...result, symbolGraph, stale,
+    cochange: changesets.filter(({ src, dst }) => paths.has(src) && paths.has(dst)),
     nativeLexical: nativeLexical && snapshot.meta.fts_fields === '1',
     freshness: { state: stale ? 'stale' : 'current', base: snapshot.meta.build ? mismatched ? 'stale' : 'current' : 'cold' },
     basis: {

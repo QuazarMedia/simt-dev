@@ -250,3 +250,4 @@ in [architecture/history.md](architecture/history.md).
 | [239](decisions/ADR-239-a-composite-prompt-preserves-clause-and-scope-evidence.md) | A composite prompt preserves clause and scope evidence | accepted · 2026-11-22 |
 | [240](decisions/ADR-240-a-composite-packet-rewards-diminishing-evidence-returns.md) | A composite packet rewards diminishing evidence returns | accepted · 2026-11-22 |
 | [241](decisions/ADR-241-deterministic-retrieval-benchmarks-keep-gold-separate-from-prompts.md) | Deterministic retrieval benchmarks keep gold separate from prompts | accepted · 2026-11-22 |
+| [242](decisions/ADR-242-co-change-confidence-comes-from-bounded-untangled-history.md) | Co-change confidence comes from bounded untangled history | accepted · 2026-11-22 |

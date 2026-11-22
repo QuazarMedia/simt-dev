@@ -17,7 +17,8 @@ import { readLocalConfig } from '../local/config.mjs';
 import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { foldIdentifierText } from '../text/identifiers.mjs';
-import { readFts, withReadError } from './graph-read.mjs';
+import { buildCochange } from './cochange.mjs';
+import { readCochangeBasis, readFts, withReadError } from './graph-read.mjs';
 export { readEdges, readFiles, readFts, readGraph, readSymbolGraph, readSymbols } from './graph-read.mjs';
 import { extract, extractSymbolEvidence, resolveImports } from './extract.mjs';
 import { BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldQueryTerms, fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F } from './bm25f.mjs';
@@ -356,6 +357,7 @@ export async function reindex(root, opts = {}) {
     fetchImpl: opts.fetchImpl,
   });
   const tree = treeDigest(listed);
+  const cochange = await buildCochange(root, await readCochangeBasis(root), paths, { refresh: force || resolutionChanged });
   const build = digestOfParts(['index-build-v1', tree, inputs, resolution]);
   await writeSqlite(root, next, removed, symbols, edges, fts, embedBuild.rows, tree, {
     inputs,
@@ -364,6 +366,7 @@ export async function reindex(root, opts = {}) {
     edgeOwners,
     fielded,
     fieldedRows,
+    cochange,
     embedBasis: embedBuild.basis ?? null,
   });
   const counts = await countSqlite(root);

@@ -57,6 +57,14 @@ const MIN_CASES = Math.max(...SUBTASK_COUNTS);
 const publicFields = new Set(['id', 'stratum', 'prompt', 'requests', 'base']);
 const retrievalFacets = new Set(['FILES', 'TESTS', 'DECISIONS', 'SKILLS', 'LESSONS', 'CAUTIONS']);
 
+export function publicRetrievalTask(task) {
+  const descriptor = Object.fromEntries([...publicFields].filter((key) => Object.hasOwn(task, key)).map((key) => [key, task[key]]));
+  if (Array.isArray(descriptor.requests)) {
+    descriptor.requests = descriptor.requests.map(({ command, target }) => ({ command, target }));
+  }
+  return descriptor;
+}
+
 async function lexicalCases(root, candidates, count) {
   const mined = new Map();
   for (const candidate of candidates) {

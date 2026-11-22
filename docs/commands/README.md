@@ -76,7 +76,7 @@ simt agents install --yes                                                       
 simt agents status                                                                         # what each harness carries, and what is not installed yet
 
 # bench
-simt bench ablate --yes                                                                    # measure one arm of the brief against its ablation
+simt bench ablate [--yes] [--input <file>]                                                 # measure rule ablations or replay retrieval observations
 simt bench calibrate --input <file>                                                        # false-accept rate against expert labels, and the autonomy it does or does not justify
 simt bench compat --input <file>                                                           # compare two baselines, or audit the predecessor document
 simt bench corpus --input <file>                                                           # the stratified canary corpus, with gold, noop and wrong graded apart

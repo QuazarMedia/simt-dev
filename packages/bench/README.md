@@ -27,3 +27,25 @@ and MCP surface runs unchanged.
 
 Replay and calibration answer from one JSON document and run offline. They are retained
 here because their vocabulary is the bench's, not the core's.
+
+## Replay retrieval ablations offline
+
+Run `simt bench ablate --input observations.json --json` to grade previously
+captured retrieval results. Use `--arm +bm25f-ident` to compare one arm with
+`baseline-v1`. Gaps in the evidence appear as missing observations.
+
+The input contains three objects of interest.
+
+- `tasks` lists public task descriptors with `id`, `stratum`, and `prompt`.
+- `gold` maps task IDs to expected evidence. Use `files` for lexical or
+  vocabulary-gap tasks, `subtasks` for composite tasks, and `impact` plus
+  `governance` for structural tasks.
+- `observations` maps arm names to task IDs and their observed results. A
+  lexical observation contains a `ranking` array. A composite observation
+  contains `packets` at byte budgets 1024, 2048 and 4096, each with `text`,
+  `files` and `facets`. A structural observation contains `impact` and
+  `governance` arrays of returned identifiers.
+
+The live runner takes a local evaluator and supplies only the public task,
+fixture files, arm features and budgets. It rejects any change in output
+bytes across repeated calls or reversed file enumeration before grading.

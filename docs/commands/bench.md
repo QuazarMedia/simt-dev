@@ -4,7 +4,7 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 
 | Command | Flags | What it does |
 | --- | --- | --- |
-| `simt bench ablate --yes` | `--all`, `--arm`, `--compare`, `--cross-group`, `--harness`, `--labels`, `--model`, `--regrade`, `--replace`, `--reps`, `--task` | measure one arm of the brief against its ablation |
+| `simt bench ablate [--yes] [--input <file>]` | `--all`, `--arm`, `--compare`, `--cross-group`, `--harness`, `--input`, `--labels`, `--model`, `--regrade`, `--replace`, `--reps`, `--task` | measure rule ablations or replay retrieval observations |
 | `simt bench critic` | `--all`, `--arm`, `--compare`, `--cross-group`, `--harness`, `--labels`, `--model`, `--regrade`, `--replace`, `--reps`, `--task` | score the review critic against the labelled bench set |
 | `simt bench export --yes` | `--yes`, `--all`, `--arm`, `--compare`, `--cross-group`, `--harness`, `--labels`, `--model`, `--regrade`, `--replace`, `--reps`, `--task` | write the sealed bench corpus as one signed document |
 | `simt bench import` | `--all`, `--arm`, `--compare`, `--cross-group`, `--harness`, `--labels`, `--model`, `--regrade`, `--replace`, `--reps`, `--task` | verify a sealed corpus and load it into the vault |

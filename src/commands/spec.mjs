@@ -41,7 +41,7 @@ export const SPEC = [
   // A group like `agent-hooks`: `install` writes the agent file into each harness's own
   // directory and `status` reports what a harness carries. The default is the read.
   { path: 'agents status', summary: 'what each harness carries, and what is not installed yet', defaultFor: 'agents', flags: ["diff","harness"], },
-  { path: 'bench ablate', usage: '--yes', summary: 'measure one arm of the brief against its ablation', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
+  { path: 'bench ablate', usage: '[--yes] [--input <file>]', summary: 'measure rule ablations or replay retrieval observations', flags: ["all","arm","compare","cross-group","harness","input","labels","model","regrade","replace","reps","task"], },
   { path: 'bench critic', summary: 'score the review critic against the labelled bench set', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench export', usage: '--yes', summary: 'write the sealed bench corpus as one signed document', writes: 'repo', flags: ["yes","all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },
   { path: 'bench import', summary: 'verify a sealed corpus and load it into the vault', flags: ["all","arm","compare","cross-group","harness","labels","model","regrade","replace","reps","task"], },

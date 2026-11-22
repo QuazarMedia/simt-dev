@@ -728,7 +728,7 @@ Columns follow `templates/plan/tracker.json` (`Lane` names disjoint subsystems s
 | D01 | Baseline audit & live-failure fixtures | 0 | bench | S | research 0004 W52 | S | — | 4 live failure classes pinned; ADR-031 isolated | Complete | e96cec228a6b776b3e9dd2c315a1e241425b144f · test: node --test test/retrieval-baseline.test.mjs |
 | D02 | Multi-task & composite benchmark corpus | 0 | bench | M | D01 | M | P1 | >=30 tasks/stratum across 4 strata; gold 100% | Complete | bc52d28f1a7291b643f58ab0bcb601909ec00561 · test: node --test test/bench-multitask-corpus.test.mjs |
 | D03 | Retrieval, MSC & impact grading harness | 0 | bench | M | D02 | M | P1 | exact MSC/MFC/MRR/Hub-Noise/latency metrics | Complete | b03b64ecd2ae97c39532fccb6f5b97061b14758e · test: node --test test/retrieval-metrics.test.mjs |
-| D04 | Ablation runner & determinism gate | 0 | bench | S | D03 | S | P1 | paired bootstrap CIs; strict byte determinism | Queued | |
+| D04 | Ablation runner & determinism gate | 0 | bench | S | D03 | S | P1 | paired bootstrap CIs; strict byte determinism | Complete | 5ad795f8c9b160ff6b5060312646e25a434617f1 · test: node --test test/retrieval-ablation.test.mjs |
 | D05 | Dual-emission identifier tokenizer | 1 | index | S | D01 | S | P2 | camelCase/snake/kebab/CJK round-trip; >=10 MB/s | Queued | |
 | D06 | SQLite v6 multi-column BM25F schema | 1 | index | M | D05 | M | P2 | v5->v6 migration; SQLite/JS BM25F parity | Queued | |
 | D07 | Hierarchical entity index & phrase boost | 1 | index | M | D06 | M | P2 | 4-tier lookup + FTS5 NEAR phrase scoring | Queued | |

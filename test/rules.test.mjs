@@ -175,6 +175,9 @@ test('every partial supersession in the corpus is found, with its kind and its r
     'ADR-097',
     'ADR-098',
     'ADR-099',
+    // ADR-108 joined when ADR-237 landed: its status line states that ruling 2 is
+    // superseded, and the parser reads the claim on the changed record.
+    'ADR-108',
     // ADR-120 joined when ADR-197 landed: its status line states that ruling 1's evidence
     // matching is superseded, which is the claim the parser reads on the changed record.
     'ADR-120',

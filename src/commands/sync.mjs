@@ -34,6 +34,7 @@ import { commitJournal } from '../journal.mjs';
 import { applyPlan, change } from '../write/plan.mjs';
 import { buildCacheRecord, hooksSummary, invalidateCheckCache, writeCheckCache } from '../status.mjs';
 import { computeLock, readLock } from '../projection/lock.mjs';
+import { withFindingCauses } from '../kernel/finding-causes.mjs';
 import { runDeclaredChecks } from '../kernel/checks.mjs';
 import { decisionsCutoff, decisionsDir } from '../decisions/dir.mjs';
 import { lintDecisions } from '../memory/decide.mjs';
@@ -60,7 +61,10 @@ import { commandRoot } from '../repo-root.mjs';
  *  people learn to ignore. A *foreign* one — a real file or a real directory where the
  *  pointer belongs — is reported loudly with what is in the way, because that one is a
  *  decision somebody has to make. */
+const GRAPH_ADVISORIES = ['dead-export', 'graph-coverage-warn', 'hub-fanin-warn', 'hub-fanout-warn'];
+
 export const SYNC_NON_BLOCKING = new Set([
+  ...GRAPH_ADVISORIES,
   // An unknown manifest key is named, not failed, in both commands.
   // The manifest is the repository's file; a key this build does not read says the
   // repository is newer or older than the tool, and neither is something `sync` can
@@ -131,6 +135,7 @@ export const SYNC_NON_BLOCKING = new Set([
 // to decline. A repo without them gets the finding with its remedy, and the decision
 // does not fail the gate.
 export const CHECK_NON_BLOCKING = new Set([
+  ...GRAPH_ADVISORIES,
   // An unknown manifest key is named, not failed: the repository owns the file, and a
   // key this build does not read is a fact about the version, not a broken gate.
   'manifest-unknown-key',
@@ -140,10 +145,6 @@ export const CHECK_NON_BLOCKING = new Set([
   'budget-cut',
   'file-lines-warn',
   'check-unbuilt',
-  'dead-export',
-  'graph-coverage-warn',
-  'hub-fanin-warn',
-  'hub-fanout-warn',
   'inert',
   'inconsistent',
   'optional',
@@ -657,7 +658,7 @@ export async function checkRepo(root, opts = {}) {
   // not the folded region, so a line that left the prompt is still the line that runs.
   const fp = await ctx.fingerprint();
   const { selected } = select(rules.filter((r) => r.error === null), fp.stack ?? [], fp.facts ?? []);
-  findings.push(...(await runDeclaredChecks(root, selected, manifest ?? null)));
+  findings.push(...(await runDeclaredChecks(root, selected, manifest ?? null, { changed: opts.changed === true })));
 
   // one resolution shared with `decide --check`, so the two commands
   // cannot disagree about whose records these are or which are historical.
@@ -691,7 +692,7 @@ export async function checkRepo(root, opts = {}) {
   // `checkRepo` is also the MCP tool's implementation, and a read tool that created a
   // cache on a fresh fixture was writing a file it never said it would. A pure check is
   // the default; the command below opts in.
-  if (opts.writeCache === true) await writeCheckCache(
+  if (opts.writeCache === true && opts.changed !== true) await writeCheckCache(
     root,
     await buildCacheRecord(root, {
       rulesOk,
@@ -702,7 +703,7 @@ export async function checkRepo(root, opts = {}) {
       warnings: findings.filter((f) => CHECK_NON_BLOCKING.has(f.status)).length,
     }),
   );
-  return { ok: bad.length === 0, findings };
+  return { ok: bad.length === 0, findings: withFindingCauses(findings) };
 }
 
 export async function checkCommand(positional, flags) {

@@ -30,6 +30,13 @@ const SYMBOLS_SQL = `select s.path as path, n.name as name, json_extract(n.props
 const EDGES_SQL = `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight
   from edges e join nodes ns on ns.id = e.src_id where coalesce(e.props, '') = '' order by src, dst, kind`;
 
+export async function readSourceLineFacts(root) {
+  const { rows } = await readSqliteRows(root, `select s.path, s.revision as blob,
+    json_extract(s.props, '$.lines') as lines, json_extract(s.props, '$.generated') as generated
+    from sources s where s.kind = 'blob' and json_type(s.props, '$.lines') is not null`);
+  return new Map(rows.map((row) => [row.path, row]));
+}
+
 /** File rows, sorted by path. The same blobs read back as the same rows. */
 export async function readFiles(root) {
   const { rows, error } = await readSqliteRows(root, FILES_SQL);

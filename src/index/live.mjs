@@ -36,9 +36,13 @@ export function candidatePaths(changes, policy) {
   return filterAllowed(changes.filter(({ path }) => safePath(path) && (policy?.allows?.(path) ?? true)), policy).allowed;
 }
 
+export function readWorktreeState(root) {
+  return Promise.all([lsFiles(root), worktreeChanges(root)]);
+}
+
 /** For readers that only need to identify a live path, with no content reads. */
 export async function livePaths(root, { policy } = {}) {
-  const [listed, dirty] = await Promise.all([lsFiles(root), worktreeChanges(root)]);
+  const [listed, dirty] = await readWorktreeState(root);
   const paths = new Set(candidatePaths(listed, policy).map(({ path }) => path));
   for (const change of candidatePaths(dirty, policy)) {
     if (change.status === 'deleted') paths.delete(change.path);
@@ -79,9 +83,9 @@ function edgeKey({ src, kind, dst }) {
  */
 export async function loadLiveGraph(root, options = {}) {
   const { build = true, text = false, fielded = false, nativeLexical = false, binding = false,
-    embed = false, cochange = false, policy, retainTargets = [], rangePaths = [] } = options;
-  const gitState = Promise.all([lsFiles(root), worktreeChanges(root)]);
-  const snapshotState = binding || nativeLexical ? gitState.then(([listed, dirty]) => readLiveSnapshot(root, {
+    embed = false, cochange = false, policy, retainTargets = [], rangePaths = [],
+    gitState = readWorktreeState(root), checkScope = false } = options;
+  const snapshotState = binding || nativeLexical ? Promise.resolve(gitState).then(([listed, dirty]) => readLiveSnapshot(root, {
     text, fielded: fielded && !nativeLexical, binding, tree: treeDigest(listed),
     bindingEdits: dirty.some(({ path }) => langOf(path, root) !== ''), lightweight: nativeLexical, rangePaths,
   })) : readLiveSnapshot(root, { text, fielded });
@@ -198,6 +202,7 @@ export async function loadLiveGraph(root, options = {}) {
   const stale = problems.size > 0 || (!build && mismatched);
   return {
     ...result, symbolGraph, stale, ranges,
+    ...(checkScope ? { previousEdges: snapshot.edges } : {}),
     cochange: changesets.filter(({ src, dst }) => paths.has(src) && paths.has(dst)),
     nativeLexical: nativeLexical && snapshot.meta.fts_fields === '1',
     freshness: { state: stale ? 'stale' : 'current', base: snapshot.meta.build ? mismatched ? 'stale' : 'current' : 'cold' },

@@ -34,6 +34,9 @@ import { provenanceDigest } from '../projection/project.mjs';
 import { applyHooksInstall, plannedDiffs, planHooksInstall } from './hooks.mjs';
 import { fileFor } from '../hooks/shim.mjs';
 import { commitJournal, ignoreJournal, journalHygiene, journalIgnoreNext } from '../journal.mjs';
+import { unrunnableGates } from '../gates/index.mjs';
+import { readCapability } from '../hooks/capability.mjs';
+import { withFindingCauses } from '../kernel/finding-causes.mjs';
 import { commandRoot } from '../repo-root.mjs';
 
 /**
@@ -116,6 +119,11 @@ async function collectFindings(root, { result, ws, shared, withDiffs = false, ct
         why: null,
         safe: false,
       });
+    }
+    for (const { status, gate, detail, remedy, cause } of unrunnableGates(manifest, await readCapability(root))) {
+      if (status !== 'unrunnable') continue;
+      findings.push({ id: status, gate, severity: 'warning', detail, remedy,
+        why: 'the repository owns the gate and runner', safe: false, cause });
     }
     const sha = await provenanceDigest();
     const repair = await planManifestRepair(root, result.stack, sha);    if (repair !== null) {
@@ -294,12 +302,12 @@ export async function diagnose(root, args = {}) {
   // names it, and the exit code says the repository is not in a state a reader can act on.
   const invalidConfig = findings.some((f) => f.id === 'manifest-invalid');
   const code = failure || invalidConfig ? EXIT.CONFIG : EXIT.OK;
-  return { result, ws, shared, findings, failure, code };
+  return { result, ws, shared, findings: withFindingCauses(findings), failure, code };
 }
 
 /** The findings as JSON-safe data: drops the `apply` closures only `--fix` uses. */
 export function serialisedFindings(findings) {
-  return findings.map(({ id, severity, detail, remedy, why, safe, fixed }) => ({
+  return findings.map(({ id, severity, detail, remedy, why, safe, fixed, gate, rootCause, causedBy }) => ({
     id,
     severity,
     detail,
@@ -308,6 +316,9 @@ export function serialisedFindings(findings) {
     why: why ?? null,
     safe,
     fixed: fixed === true,
+    ...(gate ? { gate } : {}),
+    ...(rootCause ? { rootCause } : {}),
+    ...(causedBy ? { causedBy } : {}),
   }));
 }
 

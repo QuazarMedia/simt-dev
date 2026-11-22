@@ -293,6 +293,8 @@ export const output = {
             status: { type: 'string' },
             detail: { type: ['string', 'null'] },
             remedy: { type: ['string', 'null'] },
+            rootCause: { type: 'object' },
+            causedBy: { type: 'string' },
           },
           required: ['file', 'status'],
         },

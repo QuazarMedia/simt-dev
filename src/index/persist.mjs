@@ -407,6 +407,9 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
         imports: Array.isArray(row.imports) ? row.imports : [],
         bindings: row.bindings,
         resolution: row.resolution ?? 'none',
+        hasLineFacts: row.hasLineFacts,
+        lines: row.lines,
+        generated: row.generated,
       }));
     }
     const deleteSource = db.prepare('delete from sources where id = ?');

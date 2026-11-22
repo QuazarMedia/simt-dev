@@ -259,3 +259,4 @@ in [architecture/history.md](architecture/history.md).
 | [248](decisions/ADR-248-governance-witnesses-carry-typed-paths-and-commit-citations.md) | Governance witnesses carry typed paths and commit citations | accepted · 2026-11-22 |
 | [249](decisions/ADR-249-import-direction-is-repository-policy.md) | Import direction is repository policy | accepted · 2026-11-22 · D34 |
 | [250](decisions/ADR-250-structural-checks-are-opt-in.md) | Structural checks are opt-in | accepted · 2026-11-22 · D35 |
+| [251](decisions/ADR-251-check-reuses-staged-source-evidence.md) | Check reuses staged source evidence | accepted · 2026-11-22 · D36 |

@@ -17,6 +17,7 @@ import { readLocalConfig } from '../local/config.mjs';
 import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { foldIdentifierText } from '../text/identifiers.mjs';
+import { sourceLineFacts } from './source-lines.mjs';
 import { buildCochange } from './cochange.mjs';
 import { CITATIONS_BASIS_SQL, prepareCitations } from './commit-citations.mjs';
 import { readCochangeBasis, readFts, withReadError } from './graph-read.mjs';
@@ -286,7 +287,7 @@ export async function reindex(root, opts = {}) {
   const changed = [];
   for (const entry of listed) {
     const old = prior.get(entry.path);
-    if (!force && old && old.blob === entry.blob) continue;
+    if (!force && old && old.blob === entry.blob && old.hasLineFacts) continue;
     changed.push(entry);
   }
   const sizes = await blobSizes(root, changed.map((entry) => entry.blob));
@@ -314,6 +315,8 @@ export async function reindex(root, opts = {}) {
       lang,
       bytes: sizes.get(entry.blob) ?? 0,
       pkg: packages.get(entry.path) ?? '',
+      ...(texts.has(entry.blob) ? sourceLineFacts(text) : {}),
+      hasLineFacts: true,
       // Kept so a later build can re-resolve this file's edges without its bytes.
       imports: Array.isArray(pulled.imports) ? pulled.imports : [],
       bindings: { namedImports: pulled.namedImports ?? [], reexports: pulled.reexports ?? [], chunk: pulled.chunk },
@@ -517,6 +520,7 @@ async function readBuildRows(root) {
     root,
     `select s.path as path, s.revision as blob, s.lang as lang, s.bytes as bytes,
       json_extract(s.props, '$.pkg') as pkg,
+      json_extract(s.props, '$.hasLineFacts') as hasLineFacts,
       json_extract(s.props, '$.imports') as imports,
       json_extract(s.props, '$.resolution') as resolution
       from sources s where s.kind = 'blob' order by s.path`,

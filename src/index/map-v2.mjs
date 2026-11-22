@@ -124,7 +124,7 @@ function explainRanks(ranked, lists, fields) {
   return [...evidence.values()];
 }
 
-export async function rankMapV2(root, graph, task, { explain = false, queryVector = null, coupling = true, structure = null, exactOnly = false } = {}) {
+export async function rankMapV2(root, graph, task, { explain = false, queryVector = null, coupling = true, structure = null, exactOnly = false, feedbackEnabled = true, directional = true } = {}) {
   const paths = new Set(graph.files.map(({ path }) => path));
   if (!task.trim()) {
     const structural = centrality(paths, graph.edges);
@@ -140,9 +140,10 @@ export async function rankMapV2(root, graph, task, { explain = false, queryVecto
   ]);
   const changed = new Set(overlayRows.map(({ ref }) => ref));
   const valid = ({ path }) => paths.has(path) && !changed.has(path);
-  const feedback = await searchWithFeedback(root, task, {
-    ranking: graph.nativeLexical ? original.filter(valid) : original, graph, anchors: entities.anchors, fts,
-  });
+  const ranking = graph.nativeLexical ? original.filter(valid) : original;
+  const feedback = feedbackEnabled
+    ? await searchWithFeedback(root, task, { ranking, graph, anchors: entities.anchors, fts })
+    : { ranking, reason: 'disabled', expansion: [] };
   const exact = entities.candidates.filter(({ tier, path }) => tier <= 2 && paths.has(path));
   const matched = new Set(entities.candidates.filter(({ tier }) => tier <= 3).map(({ path }) => path));
   const phrases = new Map(entities.candidates.map(({ path, phrase, components }) => [path, { phrase, score: components.proximity }]));
@@ -158,7 +159,7 @@ export async function rankMapV2(root, graph, task, { explain = false, queryVecto
   const lists = [
     { id: 'entity', weight: 3, items: exact },
     { id: 'bm25f', weight: 2, items: lexical },
-    { id: 'directional', weight: 1, items: structuralHits(structure ?? prepareMapStructure(graph), paths, exact, lexical) },
+    { id: 'directional', weight: 1, items: directional ? structuralHits(structure ?? prepareMapStructure(graph), paths, exact, lexical) : [] },
     { id: 'coupling', weight: 0.6, items: coupling ? couplingHits(fts ?? overlayRows, changes, exact.length ? exact : lexical, paths) : [] },
   ];
   if (queryVector && graph.embeddings?.length) {

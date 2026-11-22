@@ -9,7 +9,7 @@ import {
 } from './retrieval-metrics.mjs';
 
 const BASELINE = 'baseline-v1';
-const FEATURES = ['bm25f-ident', 'guarded-prf', 'directional-graph', 'symbol-bind', 'decompose', 'submodular-pack', 'cochange'];
+const FEATURES = ['bm25f-ident', 'guarded-prf', 'directional-graph', 'symbol-bind', 'decompose', 'submodular-pack', 'cochange', 'governance'];
 const arms = new Map([
   [BASELINE, []],
   ...FEATURES.map((feature) => [`+${feature}`, [feature]]),
@@ -90,13 +90,12 @@ export async function runRetrievalAblation({
   const entries = Object.entries(files).sort(([a], [b]) => cmp(a, b));
   const ordered = Object.freeze(Object.fromEntries(entries));
   const permuted = Object.freeze(Object.fromEntries([...entries].reverse()));
-  const results = [];
-  let baselineRows;
-  for (const name of RETRIEVAL_ARMS.filter((arm) => arm === BASELINE || selected.includes(arm))) {
-    const rows = [];
-    const options = { arm: name, features: Object.freeze([...arms.get(name)]), budgets: PACKET_BUDGETS };
-    for (const task of taskOrder) {
-      const descriptor = publicRetrievalTask(task);
+  const chosen = RETRIEVAL_ARMS.filter((arm) => arm === BASELINE || selected.includes(arm));
+  const rowsByArm = new Map(chosen.map((name) => [name, []]));
+  for (const task of taskOrder) {
+    const descriptor = publicRetrievalTask(task);
+    for (const name of chosen) {
+      const options = { arm: name, features: Object.freeze([...arms.get(name)]), budgets: PACKET_BUDGETS };
       const first = await evaluate({ ...options, task: structuredClone(descriptor), files: ordered });
       const bytes = JSON.stringify(first);
       const repeat = await evaluate({ ...options, task: structuredClone(descriptor), files: ordered });
@@ -104,18 +103,21 @@ export async function runRetrievalAblation({
       if (bytes !== JSON.stringify(repeat) || bytes !== JSON.stringify(reordered)) {
         throw new Error(`non-deterministic retrieval: ${name} on ${task.id}`);
       }
-      if (first != null) rows.push({ id: task.id, stratum: task.stratum, metrics: gradeObservation(task, gold[task.id], first) });
+      if (first != null) rowsByArm.get(name).push({ id: task.id, stratum: task.stratum, metrics: gradeObservation(task, gold[task.id], first) });
     }
-    if (name === BASELINE) baselineRows = rows;
+  }
+  const baselineRows = rowsByArm.get(BASELINE);
+  const results = chosen.map((name) => {
+    const rows = rowsByArm.get(name);
     const summary = summarizeRetrieval(rows);
-    results.push({
+    return {
       name,
       observed: rows.length,
       missing: taskOrder.length - rows.length,
       summary,
       comparisons: name === BASELINE ? [] : compareRetrieval(summary, baselineRows, rows, { samples, seed, taskCount: taskOrder.length }),
-    });
-  }
+    };
+  });
   return { tasks: taskOrder.length, samples, seed, arms: results };
 }
 

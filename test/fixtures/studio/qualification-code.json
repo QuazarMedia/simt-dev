@@ -3,7 +3,7 @@
   "fixture": "code-repository",
   "install": "npm-packed-tarball",
   "standalone": true,
-  "qualifiedSha": "5823334",
+  "qualifiedSha": "4f120ab",
   "steps": [
     "studio opens on a loopback token exchange",
     "overview answers /api/status",
@@ -15,7 +15,7 @@
   ],
   "requests": ["/", "/api/status", "/api/events", "/api/helm", "/api/control", "/api/control/preview", "/api/control/apply"],
   "externalRequests": [],
-  "assets": { "files": 25, "bytes": 122573, "limitBytes": 122880 },
+  "assets": { "files": 25, "bytes": 121110, "limitBytes": 122880 },
   "keyboardWalkthrough": "recorded by the release review, both themes",
   "passed": true
 }

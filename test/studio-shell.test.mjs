@@ -62,6 +62,11 @@ test('both themes, the system preference and reduced motion are in the styleshee
   assert.match(css, /:focus-visible/);
 });
 
+test('the narrow shell keeps the room bar to its own row', async () => {
+  const css = (await assets()).find((a) => a.name === 'shell.css').body;
+  assert.match(css, /@media \(max-width:48rem\)\{\.layout\{grid-template-columns:1fr;grid-template-rows:auto 1fr;\}/);
+});
+
 test('the control, library and Bench views keep their shared layout hooks', async () => {
   const css = (await assets()).find((a) => a.name === 'shell.css').body;
   const libraryPayload = {

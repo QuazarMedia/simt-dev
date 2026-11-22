@@ -70,7 +70,7 @@ footer{padding:.6rem 1.25rem;border-top:1px solid var(--line);color:var(--dim);f
 .pulse-time{display:block;margin-top:.35rem;color:var(--dim);font-size:.7rem;}
 @keyframes pulse-in{from{opacity:0;transform:translateY(2px);}}
 code,kbd{padding:0 .35em;border:1px solid var(--line);border-radius:4px;font-family:var(--font);color:var(--ink);}
-@media (max-width:48rem){.layout{grid-template-columns:1fr;}nav{flex-direction:row;overflow-x:auto;border-right:none;border-bottom:1px solid var(--line);}nav a{white-space:nowrap;}}
+@media (max-width:48rem){.layout{grid-template-columns:1fr;grid-template-rows:auto 1fr;}nav{flex-direction:row;overflow-x:auto;border-right:none;border-bottom:1px solid var(--line);}nav a{white-space:nowrap;}}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;}}
 .control-form,.library,.library-catalog{display:grid;gap:.6rem}
 .library-shelf{display:grid;gap:.75rem}

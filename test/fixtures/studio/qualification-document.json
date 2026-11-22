@@ -14,7 +14,7 @@
   ],
   "requests": ["/", "/api/status", "/api/helm", "/api/control", "/api/control/preview", "/api/control/apply"],
   "externalRequests": [],
-  "assets": { "files": 25, "bytes": 122265, "limitBytes": 122880 },
+  "assets": { "files": 25, "bytes": 122293, "limitBytes": 122880 },
   "keyboardWalkthrough": "excluded: manual browser walkthrough not performed by the automated qualification",
   "passed": true
 }

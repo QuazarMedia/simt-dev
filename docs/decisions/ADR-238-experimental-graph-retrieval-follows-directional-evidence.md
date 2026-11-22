@@ -1,5 +1,5 @@
 ---
-simt-affects: ["src/index/directional.mjs", "src/index/map.mjs", "src/commands/map.mjs"]
+simt-affects: ["src/index/directional.mjs", "src/index/map.mjs", "src/index/map-v2.mjs", "src/commands/map.mjs"]
 simt-supersedes: []
 ---
 # ADR-238 — Experimental graph retrieval follows directional evidence

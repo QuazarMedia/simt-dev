@@ -78,7 +78,7 @@ export const SPEC = [
   { path: 'hooks status', summary: 'what each git event routes to; --agent reports each harness instead', defaultFor: 'hooks', flags: ["agent","diff","dry-run"], },
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff","yes"], writes: 'repo' },
   { path: 'impact', usage: '<file|symbol>', summary: 'who a change reaches over the import closure: importers, their tests and the contract', flags: [], },
-  { path: 'index', usage: '[--open] [--search <task>] [--embed]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","search"], },
+  { path: 'index', usage: '[--open] [--search <task>] [--embed] [--retrieval v2]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","retrieval","search"], values: { retrieval: ["v1", "v2"] }, },
   // "hooks" used to be in this sentence and `init` never installed one: the promise and the
   // effect disagreed, and a reader who trusted the help believed their commits were gated
   // Git hooks are a separate, explicit install.
@@ -117,7 +117,7 @@ export const SPEC = [
   { path: 'lessons list', summary: 'deterministic lesson candidates and the promoted lessons', defaultFor: 'lessons', flags: ["diff","expires","paths","task"], },
   { path: 'lessons review', usage: '<id> --yes', summary: 'promote one lesson candidate into docs/lessons', flags: ["diff","expires","paths","task","yes"], writes: 'repo' },
   { path: 'local doctor', usage: '[--allow-remote]', summary: 'the local model endpoints, and whether they answer', defaultFor: 'local', flags: ["allow-remote"], },
-  { path: 'map', usage: '--task "<task>"', summary: 'the files a task is most likely to touch, within a byte budget', flags: ["allow-remote","budget","embed","level","recall","task"], values: { level: ['outline', 'names', 'signatures'] }, },
+  { path: 'map', usage: '[--task "<task>"] [--retrieval v2] [--explain]', summary: 'the files a task is most likely to touch, within a byte budget', flags: ["allow-remote","budget","embed","explain","level","recall","retrieval","task"], values: { retrieval: ["v1", "v2"], level: ['outline', 'names', 'signatures'] }, },
   { path: 'mcp', usage: '[--list]', summary: 'serve the read-only MCP surface over stdio', flags: ["list"], },
   // The default is the read: `pack` alone lints the working directory,
   // the way `skills` alone indexes and `graph` alone lints.

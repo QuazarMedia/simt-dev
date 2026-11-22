@@ -112,7 +112,7 @@ export async function loadLiveGraph(root, options = {}) {
   for (const path of tombstones) paths.delete(path);
   const mismatched = treeDigest(listed) !== snapshot.meta.tree;
   const stagedChanges = eligible.filter((file) => !tombstones.has(file.path) && !reads.has(file.path) && !problems.has(file.path)
-    && file.blob !== base.get(file.path)?.blob);
+    && (file.blob !== base.get(file.path)?.blob || (fielded && snapshot.meta.fts_fields !== '1')));
   const allowedBlobs = build ? stagedChanges.filter(({ path, mode }) => mode.startsWith('100') && (text || fielded || langOf(path, root))) : [];
   const sizes = await blobSizes(root, allowedBlobs.map(({ blob }) => blob));
   const blobBodies = await blobTexts(root, allowedBlobs.filter(({ blob }) => sizes.get(blob) <= BLOB_CAP).map(({ blob }) => blob));
@@ -143,10 +143,12 @@ export async function loadLiveGraph(root, options = {}) {
       provenance: node ? 'worktree' : 'committed',
       revision: node?.revision ?? (entry ? revisionOf('staged', entry.blob) : null),
     };
-    const regenerated = body !== undefined ? parseFile(root, path, body, file, { text, fielded, binding }) : null;
     const kept = stagedSame && entry.mode.startsWith('100') && !node && !missingRead;
+    const regenerated = body !== undefined && !kept ? parseFile(root, path, body, file, { text, fielded, binding }) : null;
+    const cachedSymbols = symbolRows.get(path) ?? [];
     const selected = regenerated ?? (kept ? {
-      file: old, symbols: symbolRows.get(path) ?? [], fts: legacyRows.get(path) ?? [], fielded: fieldRows.get(path) ?? [],
+      file: old, symbols: cachedSymbols, fts: legacyRows.get(path) ?? [],
+      fielded: fielded && body !== undefined ? buildFieldedFtsBodies(path, cachedSymbols, body, root) : fieldRows.get(path) ?? [],
     } : null);
     result.files.push(file);
     if (!selected) continue;

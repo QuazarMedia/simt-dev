@@ -85,6 +85,7 @@ export async function indexCommand(args, flags) {
   let result;
   try {
     result = await reindex(root, {
+      fielded: flags.retrieval === 'v2',
       embed: flags.embed === true,
       allowRemote: flags.allowRemote === true,
     });

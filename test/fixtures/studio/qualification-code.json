@@ -3,7 +3,7 @@
   "fixture": "code-repository",
   "install": "npm-packed-tarball",
   "standalone": true,
-  "qualifiedSha": "b1711fb",
+  "qualifiedSha": "5823334",
   "steps": [
     "studio opens on a loopback token exchange",
     "overview answers /api/status",

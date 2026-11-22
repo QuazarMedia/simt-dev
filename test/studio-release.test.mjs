@@ -21,7 +21,7 @@ import { DISPOSITIONS, NAMED_SURFACES } from '../src/surface.mjs';
 
 const exec = promisify(execFile);
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const STUDIO_SHA = 'b1711fb';
+const STUDIO_SHA = '5823334';
 const QUALIFIED = ['test/fixtures/studio/qualification-document.json', 'test/fixtures/studio/qualification-code.json'];
 const URL_LINE = /open (http:\/\/127\.0\.0\.1:(\d+)\/\?token=(\S+))/;
 const NO_ESTATE = Object.fromEntries(Object.entries({ ...process.env, SIMT_DEV_WORKSPACE: 'off' }).filter(([name]) => !/^npm_config_/i.test(name)));

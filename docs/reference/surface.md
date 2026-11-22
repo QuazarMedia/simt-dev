@@ -17,7 +17,7 @@ promise, a shipping decision, a prototype without one, and a frozen experimental
 | `pack` | experimental | packs | rule-pack authors, once a repository vendors one | frozen until a real repository adopts a pack (ADR-130); local profiles are the supported route, and `pack migrate` moves a pinned pack onto them | — |
 | `distill` | optional | distill | a maintainer turning a repository into a skill or rule proposal | one command, proposal output only; it writes no rule into a projected region | — |
 | `plugin` | optional | distribution | a harness vendor packaging the same tables this repository ships | generates a harness package; the shipped artefacts are qualified by the packaging tests | — |
-| `studio` | optional | studio | a maintainer watching and steering the doors of the tool in a browser | one loopback socket, opened only by explicit invocation and read-only except the guarded writer path (ADR-212, ADR-227); nothing leaves the machine (ADR-075) | b1711fb |
+| `studio` | optional | studio | a maintainer watching and steering the doors of the tool in a browser | one loopback socket, opened only by explicit invocation and read-only except the guarded writer path (ADR-212, ADR-227); nothing leaves the machine (ADR-075) | 5823334 |
 | `local-models` | optional | local | an operator pointing at a loopback model endpoint | off unless configured; bounded by ADR-075 and ADR-204 | — |
 | `work` | prototype | work | a design partner sequencing work from documents | document-driven doors; `work inspect` and `work setup` are the usable half and ship in the core path | — |
 | `action` | prototype | action | an execution runner reading a journal | read and review only; no command here starts an operation | — |

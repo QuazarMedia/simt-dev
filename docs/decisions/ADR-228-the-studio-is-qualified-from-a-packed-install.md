@@ -29,9 +29,10 @@ inventory to say what was qualified and at which code SHA.
    provenance, never for live timing.
 4. **The surface row carries the evidence.** `src/surface.mjs` keeps studio `optional` —
    it is supported when used, but it is not part of the adoption path — and records the
-   qualification SHA `b1711fb`, the commit that added the packed-install evidence and the
-   surface row. The generated `docs/reference/surface.md` renders that row, so a reader can
-   go from the promise to the evidence without a second inventory.
+   qualification SHA `5823334`, the review commit that restored the readable baseline these
+   transcripts measure. The first qualification was `b1711fb`; the SHA moves with the studio
+   source, not with this decision. The generated `docs/reference/surface.md` renders that row,
+   so a reader can go from the promise to the evidence without a second inventory.
 5. **The manual walkthrough is named, not claimed.** Keyboard-only traversal of every view
    in both themes remains the review's manual step; the automated suite checks the focus
    styles, theme switch, reduced-motion rule, asset budget and request set, and the review
@@ -39,7 +40,7 @@ inventory to say what was qualified and at which code SHA.
 
 ## Consequences
 
-- A studio change after `b1711fb` must regenerate the qualification SHA and the two
+- A studio change after `5823334` must regenerate the qualification SHA and the two
   transcripts; the release test fails when the surface page and the fixtures drift.
 - The optional bench is not required for qualification; its absence is exercised as the
   labelled state in ST14, and the transcripts record whether it was present.

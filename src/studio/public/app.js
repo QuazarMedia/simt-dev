@@ -8,6 +8,7 @@ import { badge, card, emptyState, escapeHtml, loading, refusalPanel } from './co
 import { board } from './board.js';
 import { constellation, layoutGraph, rankPanel, whyPanel } from './constellation.js';
 import { custody } from './custody.js';
+import { harnessWall, policyEventItem } from './harness.js';
 import { overview } from './overview.js';
 import { pulse } from './pulse.js';
 import { createRouter } from './router.js';
@@ -50,10 +51,18 @@ async function home() {
 const later = (name) => () => emptyState({ title: name, hint: 'This room is not part of this build yet.' });
 
 let pulseSource = null;
+let harnessSource = null;
 function closePulse() {
   if (pulseSource) {
     pulseSource.close();
     pulseSource = null;
+  }
+}
+
+function closeHarness() {
+  if (harnessSource) {
+    harnessSource.close();
+    harnessSource = null;
   }
 }
 
@@ -112,6 +121,7 @@ function pulseRoom() {
 
 window.addEventListener('hashchange', () => {
   if (location.hash !== '#/pulse') closePulse();
+  if (location.hash !== '#/harness') closeHarness();
 });
 
 // The snapshot is the view's spine: its refusal refuses the room. The check and work
@@ -133,6 +143,31 @@ async function overviewRoom() {
 
 async function boardRoom() {
   return board(await readDoor('/api/board'));
+}
+
+async function harnessRoom() {
+  const payload = await readDoor('/api/harness');
+  setTimeout(() => {
+    const feed = document.getElementById('harness-feed');
+    if (!feed) return;
+    const source = new EventSource('/api/events');
+    harnessSource = source;
+    source.onmessage = (message) => {
+      try {
+        const event = JSON.parse(message.data);
+        if (event.kind !== 'policy.decided') return;
+        feed.querySelector('.empty-hint')?.remove();
+        feed.insertAdjacentHTML('afterbegin', policyEventItem(event));
+        while (feed.children.length > 50) feed.lastElementChild.remove();
+      } catch {
+        // The log reader already reports a malformed line; keep the last good feed.
+      }
+    };
+    source.addEventListener('resync', () => {
+      feed.innerHTML = '<li class="empty-hint">The event log rotated; waiting for the next decision.</li>';
+    });
+  }, 0);
+  return harnessWall(payload);
 }
 
 function drawConstellation(payload) {
@@ -236,7 +271,7 @@ const routes = new Map([
   ['/board', { view: boardRoom }],
   ['/custody', { view: custodyRoom }],
   ['/constellation', { view: constellationRoom }],
-  ['/harness', { view: later('Harness wall') }],
+  ['/harness', { view: harnessRoom }],
   ['/budget', { view: later('Budget') }],
   ['/helm', { view: later('Helm') }],
   ['/library', { view: later('Library') }],

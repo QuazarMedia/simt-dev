@@ -152,6 +152,31 @@ export async function agentHookCommand(args, flags) {
     } catch {
       // Recording a lesson candidate must never block or alter the hook decision.
     }
+    // A policy decision is the wall's live input. Record only a decision a policy took
+    // part in: writing an event for every allowed command would put an append on the hot
+    // path for events no rule fired on. The append is best-effort for the same reason the
+    // lesson is - it must never change the verdict.
+    if (decision.blocked.length > 0 || decision.lifted.length > 0) {
+      try {
+        const { appendEvent } = await import('../state/events.mjs');
+        await appendEvent(root, {
+          kind: 'policy.decided',
+          harness: row.id,
+          subject: command ?? event,
+          data: {
+            decision: decision.decision,
+            event,
+            blocked: decision.blocked,
+            lifted: decision.lifted,
+            unknown: decision.unknown,
+            adrs: decision.adrs,
+            messages: decision.messages,
+          },
+        });
+      } catch {
+        // A missing event is a gap in the wall, not a different policy answer.
+      }
+    }
   }
 
   emit(JSON.stringify(json));

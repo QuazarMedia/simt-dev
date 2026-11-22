@@ -40,6 +40,18 @@ test('every harness blocks a push, in its own dialect and with its own exit code
   }
 });
 
+test('a policy decision lands in the event log for the live wall', async () => {
+  const root = await repo();
+  const result = HOOK('claude', shell.claude('git push origin main', root));
+  assert.equal(result.code, 2);
+  const lines = (await readFile(join(root, '.simt', 'local', 'events.jsonl'), 'utf8')).trim().split('\n');
+  const event = JSON.parse(lines.at(-1));
+  assert.equal(event.kind, 'policy.decided');
+  assert.equal(event.harness, 'claude');
+  assert.equal(event.data.decision, 'deny');
+  assert.deepEqual(event.data.blocked, ['push']);
+});
+
 test('a rewrite blocks too, and the message is the record that governs it', async () => {
   const root = await repo();
   for (const row of adapters()) {

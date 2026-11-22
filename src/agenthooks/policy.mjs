@@ -161,3 +161,8 @@ export const POLICY_IDS = POLICIES.map((p) => p.id);
 export function policiesFor(event) {
   return POLICIES.filter((p) => p.event === event);
 }
+
+/** The reader's view of the table: the fields that explain a policy, without matchers. */
+export function policyCatalog() {
+  return POLICIES.map(({ id, adr, event, inspects, message }) => ({ id, adr, event, inspects, message }));
+}

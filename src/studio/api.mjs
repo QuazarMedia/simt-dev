@@ -12,6 +12,7 @@ import { run, renderJson } from '../run.mjs';
 import { checkRepo } from '../commands/sync.mjs';
 import { boardPayload } from './board.mjs';
 import { evidenceChains } from './evidence.mjs';
+import { harnessPayload } from './harness.mjs';
 import { knowledgeGraph } from './knowledge.mjs';
 import { EXIT, emitJson, jsonCommand, withOutputState, withSink } from '../output/index.mjs';
 import { finaliseJson } from '../output/envelope.mjs';
@@ -26,6 +27,7 @@ const ROUTES = new Map([
   ['/api/board', { board: true }],
   ['/api/evidence', { command: 'evidence' }],
   ['/api/evidence/chains', { chains: true }],
+  ['/api/harness', { harness: true }],
   ['/api/knowledge/graph', { knowledgeGraph: true }],
   ['/api/knowledge/why', { command: 'knowledge why', scope: true }],
   ['/api/knowledge/rank', { command: 'knowledge rank', scope: true, query: true }],
@@ -130,6 +132,15 @@ export async function apiAnswer(root, url) {
   if (route.knowledgeGraph) {
     const document = await sealedDocument('knowledge graph', async () => {
       const payload = await knowledgeGraph(root, url.searchParams.get('scope'));
+      emitJson(payload);
+      return payload.ok ? EXIT.OK : EXIT.FAIL;
+    });
+    return { status: 200, document };
+  }
+
+  if (route.harness) {
+    const document = await sealedDocument('harness', async () => {
+      const payload = await harnessPayload(root);
       emitJson(payload);
       return payload.ok ? EXIT.OK : EXIT.FAIL;
     });

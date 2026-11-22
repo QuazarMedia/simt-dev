@@ -2,7 +2,7 @@ export const MAX_SUBTASKS = 12;
 
 const VERBS = 'add|audit|build|change|check|compare|create|delete|deploy|design|document|enable|ensure|explain|extract|fix|implement|improve|inspect|investigate|list|migrate|move|optimize|pin|profile|refactor|remove|rename|repair|replace|report|review|run|split|support|test|trace|update|validate|verify|write';
 const ACTION = '(?:please\\s+)?(?:' + VERBS + ')\\b|(?:we\\s+)?(?:must|should|need\\s+to|have\\s+to)\\s+(?:' + VERBS + ')\\b';
-const GUARD = /^(?:if|unless|only\s+when)\b/iu;
+const GUARD = /^(?:if|unless|only\s+when|before|after)\b/iu;
 const LEADING = new RegExp('^(?:(?:first|next|finally|also|then)[, ]+)?(?:' + ACTION + '|if\\b|unless\\b|only\\s+when\\b)', 'iu');
 const ACTION_AT = new RegExp('(?:' + ACTION + '|if\\b|unless\\b|only\\s+when\\b)', 'iuy');
 const SEPARATOR = /(?:[;.!?]\s+|,\s*|\s+)(?:(and|then|also|plus|finally)\s+)?(?:(then|also|finally)\s+)?/giu;
@@ -116,7 +116,8 @@ function clauseOffsets(source, masked, block) {
     const from = block.start + match.index;
     // A leading guard and its first unprotected comma belong to the same action.
     const prefix = masked.slice(start, from).trimStart();
-    if (separator.startsWith(',') && !match[1] && !match[2] && GUARD.test(prefix) && !prefix.includes(',')) continue;
+    if (separator.startsWith(',') && !match[1] && !match[2] && !prefix.includes(',')
+      && (GUARD.test(prefix) || /^(?:first|next|then|finally)$/iu.test(prefix))) continue;
     push(from);
     start = from + separator.length;
     sequence = (match[2] ?? match[1] ?? '').toLowerCase();

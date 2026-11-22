@@ -18,6 +18,15 @@ function fileKey(path) {
   return `file:${path}`;
 }
 
+/** Map canonical graph keys to their repository paths through containment. */
+export function symbolNodePaths(paths, edges) {
+  const nodes = new Map([...paths].map((path) => [fileKey(path), path]));
+  for (const { kind, src, dst } of edges) {
+    if (kind === 'contains' && nodes.has(src)) nodes.set(dst, nodes.get(src));
+  }
+  return nodes;
+}
+
 function fileInfo(file, symbols) {
   const direct = new Map();
   const locals = new Map();

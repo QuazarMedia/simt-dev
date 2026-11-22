@@ -23,6 +23,7 @@ import {
 } from './store.mjs';
 import { cmp } from '../util/sort.mjs';
 import { INDEX_STOP as STOP } from '../text/tokens.mjs';
+import { gitText } from '../sys/git.mjs';
 
 export const ITERATIONS = 20;
 export const DAMPING = 0.85;
@@ -238,16 +239,23 @@ export function goldPaths(patch) {
  * }} [opts]
  */
 export async function measureRecall(root, opts = {}) {
+  // A figure without the tree it measured is read as a statement about the code, not
+  // about the checkout it ran in (ADR-225 ruling 2). Read the commit and the file count
+  // together with the rows so every answer, measured or not, can name them.
+  const [commit, files] = await Promise.all([
+    gitText(root, ['rev-parse', 'HEAD']).then((out) => out?.trim() || null).catch(() => null),
+    readFiles(root, opts),
+  ]);
+  const tree = { commit, files: files.length };
   const tasksDir = join(root, '.simt', 'bench', 'tasks');
   let names;
   try {
     names = (await readdir(tasksDir)).filter((name) => name.endsWith('.json')).sort();
   } catch {
-    return { measured: false, reason: 'no tasks', tasks: 0, missing: 0, recall: null };
+    return { measured: false, reason: 'no tasks', tasks: 0, missing: 0, recall: null, tree };
   }
-  const files = await readFiles(root, opts);
   if (files.length === 0) {
-    return { measured: false, reason: 'no index', tasks: 0, missing: 0, recall: null };
+    return { measured: false, reason: 'no index', tasks: 0, missing: 0, recall: null, tree };
   }
   const [symbols, edges, fts] = await Promise.all([
     readSymbols(root, opts),
@@ -314,7 +322,7 @@ export async function measureRecall(root, opts = {}) {
       }
     }
   }
-  if (tasks === 0) return { measured: false, reason: 'no gold patches', tasks: 0, missing, recall: null };
+  if (tasks === 0) return { measured: false, reason: 'no gold patches', tasks: 0, missing, recall: null, tree };
   const baseRecall = sum / tasks;
   const embedRecall = checkEmbed && embedEvaluated > 0 ? embedSum / tasks : null;
   const embedDelta = embedRecall === null ? null : embedRecall - baseRecall;
@@ -336,21 +344,25 @@ export async function measureRecall(root, opts = {}) {
     embedAccepted,
     embeddingsDefault: EMBEDDINGS_DEFAULT,
     embeddingsDefaultReason: EMBEDDINGS_DEFAULT_REASON,
+    tree,
   };
 }
 
 export function formatRecall(result) {
+  const tree = result?.tree
+    ? `\ntree     ${result.tree.commit ? result.tree.commit.slice(0, 8) : 'uncommitted'} (${result.tree.files} files)`
+    : '';
   if (!result?.measured || result.recall === null) {
-    return `recall@10 unmeasured (${result?.reason ?? 'not run'})`;
+    return `recall@10 unmeasured (${result?.reason ?? 'not run'})${tree}`;
   }
   const line = `recall@10 ${(result.recall * 100).toFixed(1)}% of gold files, over ${result.tasks} mined tasks`;
   // Only an arm that was measured says anything about the switch. An unmeasured run has
   // no verdict to report, and a sentence about embeddings there would be an opinion.
-  if (result.embedDelta === null || result.embedDelta === undefined) return line;
+  if (result.embedDelta === null || result.embedDelta === undefined) return `${line}${tree}`;
   const delta = `${result.embedDelta >= 0 ? '+' : ''}${(result.embedDelta * 100).toFixed(1)}`;
   const verdict = result.embedAccepted ? 'cleared' : 'did not clear';
   // The explanation has one owner, so the CLI and the JSON cannot drift apart.
-  return `${line}\nembeddings ${verdict} the ${EMBED_RECALL_GAIN_LABEL} bar (${delta}); ${EMBEDDINGS_DEFAULT_REASON}`;
+  return `${line}\nembeddings ${verdict} the ${EMBED_RECALL_GAIN_LABEL} bar (${delta}); ${EMBEDDINGS_DEFAULT_REASON}${tree}`;
 }
 
 function pageRank(nodes, links, scores) {

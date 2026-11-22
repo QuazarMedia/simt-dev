@@ -31,6 +31,7 @@ import {
 } from '../src/index/map.mjs';
 import { cosineSimilarity, rankByCosine } from '../src/index/vectors.mjs';
 import { loadGraph, mapCommand } from '../src/commands/map.mjs';
+import { resolveVaultDir } from '../src/testing/vault.mjs';
 import { SQLITE_FILE } from '../src/index/persist.mjs';
 import {
   buildFtsBody,
@@ -267,6 +268,46 @@ test('simt map renders the ranking, and recall is unmeasured without a vault', a
   assert.equal(refused.code, 5);
   await rm(root, { recursive: true, force: true });
   await rm(bare, { recursive: true, force: true });
+});
+
+test('map --recall names the commit and file count it measured (ADR-225)', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'idx-recall-tree-'));
+  const vaultParent = await mkdtemp(join(tmpdir(), 'idx-recall-vault-'));
+  const previous = process.env.SIMT_DEV_VAULT_DIR;
+  try {
+    await git(['init', '-q', root]);
+    await mkdir(join(root, 'src'), { recursive: true });
+    await writeFile(join(root, 'src', 'a.mjs'), 'export const a = 1;\n');
+    await writeFile(join(root, 'src', 'b.mjs'), 'export const b = 1;\n');
+    await git(['-C', root, 'add', '-A']);
+    await git(['-C', root, 'commit', '-qm', 'initial']);
+    const commit = (await git(['-C', root, 'rev-parse', 'HEAD'])).stdout.trim();
+    await reindex(root);
+
+    process.env.SIMT_DEV_VAULT_DIR = vaultParent;
+    const vault = resolveVaultDir(root);
+    await mkdir(join(root, '.simt', 'bench', 'tasks'), { recursive: true });
+    await writeFile(
+      join(root, '.simt', 'bench', 'tasks', 't.json'),
+      JSON.stringify({ id: 't-1', prompt: 'change a' }),
+    );
+    await mkdir(join(vault, 't-1'), { recursive: true });
+    await writeFile(join(vault, 't-1', 'gold.patch'), 'diff --git a/src/a.mjs b/src/a.mjs\n');
+
+    const text = await capture(() => mapCommand([], { root, recall: true }));
+    assert.equal(text.code, 0, text.stderr);
+    assert.match(text.stdout, new RegExp(`tree\\s+${commit.slice(0, 8)} \\(2 files\\)`));
+
+    const json = await capture(() => mapCommand([], { root, recall: true, json: true }));
+    assert.equal(json.code, 0, json.stderr);
+    const payload = JSON.parse(json.stdout);
+    assert.deepEqual(payload.recall.tree, { commit, files: 2 });
+  } finally {
+    if (previous === undefined) delete process.env.SIMT_DEV_VAULT_DIR;
+    else process.env.SIMT_DEV_VAULT_DIR = previous;
+    await rm(root, { recursive: true, force: true });
+    await rm(vaultParent, { recursive: true, force: true });
+  }
 });
 
 test('map says when the ranking is the graph hub rather than a match (Q52)', async () => {

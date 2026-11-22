@@ -254,13 +254,16 @@ next major, and removing one is a deprecation with a window like any other name.
 | `./src/review/critic.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/run.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/state.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/sys/git.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/sys/proc.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/testing/parsers.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/testing/patches.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/testing/paths.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/testing/runners.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/testing/vault.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/text/tokens.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/util/canonical.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
+| `./src/util/sort.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 | `./src/work/assurance.mjs` | deprecate | the optional bench still imports this exact module; import from the package root instead |
 
 ## Deprecations

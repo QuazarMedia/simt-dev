@@ -27,7 +27,8 @@ import { desiredRegion } from '../src/projection/rules.mjs';
 import { planNext } from '../src/plan/index.mjs';
 
 import { BIN, exec, req, at, converse } from './mcp-fixture.mjs';
-import { briefIndexFixture } from './fixture.mjs';
+import { briefIndexFixture, holdIndexLock } from './fixture.mjs';
+import { SQLITE_FILE } from '../src/index/persist.mjs';
 
 let INDEXED;
 before(async () => {
@@ -386,6 +387,31 @@ test('mcp: skills_brief is the brief SKILLS view on both surfaces', async () => 
       Object.keys(mcp.sections).every((section) => section === 'SKILLS'),
       `unexpected sections: ${Object.keys(mcp.sections).join(', ')}`,
     );
+  }
+});
+
+test('mcp: skills_brief waits out a busy index over the request channel', async () => {
+  const lock = await holdIndexLock(join(INDEXED, SQLITE_FILE), 1200);
+  const started = performance.now();
+  try {
+    const { stdout, stderr } = await converse([
+      req('initialize', { protocolVersion: '2025-11-25' }, 1),
+      req('tools/call', {
+        name: 'skills_brief',
+        arguments: { root: INDEXED, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md' },
+      }, 2),
+    ].map((line) => JSON.stringify(line)).join('\n') + '\n');
+    const messages = stdout.trim().split('\n').map((line) => JSON.parse(line));
+    const answer = messages.find((message) => message.id === 2);
+    assert.ok(answer, stdout);
+    assert.equal(answer.result.isError, false, JSON.stringify(answer.result));
+    assert.equal(answer.result.structuredContent.root, INDEXED);
+    assert.equal(answer.result.structuredContent.task, 'read the commands skill');
+    assert.ok(answer.result.structuredContent.sections.SKILLS, 'the packet did not include SKILLS');
+    assert.ok(performance.now() - started >= 500, 'the request did not wait for the index lock');
+    assert.equal(stderr, '');
+  } finally {
+    await lock.done;
   }
 });
 

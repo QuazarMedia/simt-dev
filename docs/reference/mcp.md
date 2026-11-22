@@ -11,7 +11,7 @@ through it. `simt mcp --list` prints the surface without reading stdin.
 | `action_review` | A review bundle before execution: contract, semantic delta, target incarnation, authorization and postconditions, with the checks still missing. |
 | `action_status` | Where an operation stands from its journal: the state, whether it is resumable, whether an effect may be in flight, the recovery the state permits, the recorded authorization, and the guarantee the adapter can promise. |
 | `adapter_check` | Validate adapter descriptors as data: interfaces, capability and side effects, with observe-only kept apart from execute. Nothing is loaded or run. |
-| `brief` | The packet for one task in prompt-sized bytes: kind, commands, files, tests, decisions, skills. With no task it describes the repository. |
+| `brief` | The packet for a task prompt in prompt-sized bytes: kind, commands, files, tests, decisions, skills. With no task it describes the repository. |
 | `check` | The gate for one repository: region current, unmanaged, drifted or malformed, and rule files lacking an id. Read-only - it never repairs. |
 | `compare` | The workspace matrix: adoption, region, SHA, hooks and gates per repo, plus problems. Pages with limit/cursor; honors progressToken and cancellation. |
 | `doctor` | Classify a repository: stack tags, the facts with the file that proved each, and manifest presence. Call this first when the repo is unknown. Read-only: `--fix` and `--diff` stay on the command. |

@@ -152,6 +152,12 @@ async function nativeProximity(root, pairs) {
   return { hits, error };
 }
 
+export function exactEntityCandidates(task, graph) {
+  const anchors = resolveEntityAnchors(task, graph);
+  const candidates = fuseEntitySignals(anchors, [], [], new Map(), []);
+  return { anchors, candidates };
+}
+
 /** Rank from an already-built index, or from explicit fielded rows for live overlays. */
 export async function searchEntityCandidates(root, task, { files, symbols, fts } = {}) {
   const pairs = queryPairs(task);

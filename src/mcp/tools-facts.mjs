@@ -5,6 +5,7 @@ import { discover } from '../compare/discover.mjs';
 import { buildRows, resolveConcurrency, summarise } from '../compare/row.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { checkRepo } from '../commands/sync.mjs';
+import { retrievalMode } from '../index/retrieval-mode.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { SECTIONS, DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
 import { federationAccess, readFederation } from '../federation/config.mjs';
@@ -32,11 +33,14 @@ export async function briefPayload(args, { only = null } = {}) {
     });
   }
   const budget = Number.isFinite(args?.budget) && args.budget >= 0 ? args.budget : DEFAULT_BRIEF_BYTES;
+  const retrieval = retrievalMode(args?.retrieval);
+  if (retrieval === null) throw new Error("retrieval must be v1 or v2");
   const result = await assembleBrief({
     root,
     task: typeof args?.task === 'string' ? args.task : '',
     paths: typeof args?.paths === 'string' ? args.paths : null,
     budget,
+    retrieval,
     build: false,
     only,
   });
@@ -78,6 +82,7 @@ export async function briefPayload(args, { only = null } = {}) {
     floorHeld: result.packed.floorHeld,
     cut: result.packed.cut,
     sections: result.sections,
+    ...result.composite,
     text: result.packed.text,
   };
 }
@@ -248,7 +253,7 @@ export const TOOLS_FACTS = [
     outputSchema: output.brief,
     name: 'brief',
     description:
-      'The packet for one task in prompt-sized bytes: kind, commands, files, tests, decisions, skills. With no task it describes the repository.',
+      'The packet for a task prompt in prompt-sized bytes: kind, commands, files, tests, decisions, skills. With no task it describes the repository.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -256,6 +261,7 @@ export const TOOLS_FACTS = [
         task: { type: 'string', description: "what the agent is about to do, in the user's own words" },
         paths: { type: 'string', description: 'comma-separated paths to scope the packet to, instead of the files git reports as modified' },
         budget: { type: 'number', description: 'byte ceiling; 0 means the whole packet (default 2048)' },
+        retrieval: { type: 'string', enum: ['v1', 'v2'], description: 'v2 enables experimental composite packets' },
         only: { type: 'string', description: `one section of the packet, e.g. files or decisions; default is the whole packet (${SECTIONS.join(', ').toLowerCase()})` },
       },
       required: [],

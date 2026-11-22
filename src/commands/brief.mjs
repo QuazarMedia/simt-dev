@@ -51,9 +51,6 @@ export async function briefCommand(args, flags, commands = []) {
   }
   const retrieval = retrievalMode(flags.retrieval);
   if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
-  if (retrieval === 'v2' && flags.scope === undefined) {
-    return fail('fielded brief retrieval needs a work scope', EXIT.USAGE, `run: ${CLI} brief "<task>" --scope <id> --retrieval v2`);
-  }
   const result = await assembleBrief({
     root: commandRoot(flags),
     task: String(args[0] ?? flags.task ?? ''),
@@ -102,6 +99,7 @@ export async function briefCommand(args, flags, commands = []) {
         sections,
         explain: flags.explain === true ? explainPacket(items, { cut }) : undefined,
         proof: result.proof,
+        ...result.composite,
         text: packed.text,
       },
     );

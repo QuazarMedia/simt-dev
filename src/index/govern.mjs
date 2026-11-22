@@ -106,6 +106,25 @@ export function decisionHits(records, file, ctx) {
   return { hits, unresolved };
 }
 
+export function decisionPaths(records, ctx) {
+  const byPath = new Map();
+  const tokens = new Map();
+  for (const record of records) {
+    const paths = new Set();
+    for (const token of affectsTokens(record.text)) {
+      if (!tokens.has(token)) tokens.set(token, resolveToken(token, ctx));
+      const resolved = tokens.get(token);
+      if (resolved.kind === 'paths') for (const path of resolved.paths) paths.add(path);
+    }
+    for (const path of paths) {
+      const rows = byPath.get(path) ?? [];
+      rows.push({ id: record.id, detail: record.title });
+      byPath.set(path, rows);
+    }
+  }
+  return byPath;
+}
+
 /** Every unresolved Affects token, one per record. */
 export function unresolvedAffects(records, ctx) {
   const found = [];

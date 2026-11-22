@@ -238,7 +238,7 @@ export async function assembleBrief({
       const { assembleCompositeBrief } = await import('./multi.mjs');
       const result = await assembleCompositeBrief({ root, task, parts: selected ? [selected] : parts,
         paths, budget, flags, build, commands, section, subtask });
-      if (proof && !result.cold) result.proof = await summarizeProof(root, result.items, result.packed, budget);
+      if (proof && !result.cold) result.proof = await summarizeProof(root, result.items, result.packed, budget, true);
       return result;
     }
   }
@@ -583,14 +583,16 @@ export async function assembleBrief({
   return { root, kind, basis, task, scope, budget, items, packed, sections, proof: proofSummary };
 }
 
-async function summarizeProof(root, items, packed, budget) {
+async function summarizeProof(root, items, packed, budget, diverse = false) {
   const cut = new Set(packed.cut);
   const head = (await gitText(root, ['rev-parse', 'HEAD']))?.trim() ?? '';
   const kept = items.filter((item) => !cut.has(item.id));
   const units = kept.map((item) => ({
     id: item.id,
     text: item.text,
-    obligations: [item.section],
+    obligations: diverse && item.subtaskIds?.length
+      ? item.subtaskIds.map((id) => 'T' + id + '/' + item.section) : [item.section],
+    lineage: item.subtaskIds?.length ? item.id : undefined,
     mandatory: item.priority === 'hard',
     revision: {
       ref: head.length > 0 ? head : 'worktree',
@@ -600,7 +602,8 @@ async function summarizeProof(root, items, packed, budget) {
   }));
   const report = buildProofPacket(units, {
     budget: Math.min(budget > 0 ? budget : DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES),
-    required: [...new Set(kept.map((item) => item.section))],
+    required: [...new Set(units.flatMap(({ obligations }) => obligations))],
+    diverse,
   });
   const mandatory = new Set(units.filter((unit) => unit.mandatory).map((unit) => unit.id));
   return {

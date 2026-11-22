@@ -71,25 +71,28 @@ function prepare(items, { facetWeights = {}, taskWeights = {}, saturation = {}, 
     const relevance = new Map();
     let subject = Infinity;
     for (const row of item.relevance ?? []) {
-      const { subtask, score, facet = section } = row;
+      const { subtask, score, facet = section, duplicateKey: group = duplicateKey ?? id } = row;
       if (!Number.isFinite(score) || score <= 0) continue;
       const key = JSON.stringify([subtask, facet]);
-      if ((relevance.get(key)?.score ?? 0) < score) relevance.set(key, { subtask, facet, score });
+      if ((relevance.get(key)?.score ?? 0) < score) relevance.set(key, { subtask, facet, score, group });
       if (Number.isFinite(subtask)) subject = Math.min(subject, subtask);
     }
     const effects = [];
-    for (const [key, { subtask, facet, score }] of [...relevance].sort(([a], [b]) => cmp(a, b))) {
+    for (const [key, { subtask, facet, score, group }] of [...relevance].sort(([a], [b]) => cmp(a, b))) {
       const weight = (facetWeights[facet] ?? DEFAULT_WEIGHTS[facet] ?? 1) * (taskWeights[subtask] ?? 1);
       const beta = saturation[facet] ?? 1;
       if (weight > 0 && beta > 0 && Number.isFinite(weight) && Number.isFinite(beta)) {
-        effects.push(effect(key, duplicateKey ?? id, score, weight, beta));
+        effects.push(effect(key, group, score, weight, beta));
       }
     }
     const floor = facetFloors[section];
     if (Number.isFinite(floor) && floor > 0 && relevance.size) {
       effects.push(effect(JSON.stringify(['floor', section]), 'first', 1, floor, 1));
     }
-    return { id, bytes, effects, order: sectionOrder.get(section) ?? SECTIONS.length, subject, hard: priority === 'hard' };
+    return {
+      id, bytes, effects, order: sectionOrder.get(section) ?? SECTIONS.length, subject, hard: priority === 'hard',
+      covers: item.covers ?? null, densityWeight: item.densityWeight ?? 1,
+    };
   }).sort(candidateOrder);
   return { rows, dimensions: dimensions.size, groups: groups.size };
 }
@@ -134,14 +137,17 @@ function greedy(model, hard, soft, budget, { regularizer = 0, augment = false } 
   let utility = trace.reduce((sum, row) => sum + row.gain, 0);
   let best = { trace: [...trace], bytes, utility };
   const used = new Set();
+  const coverage = new Set(hard.flatMap(({ covers }) => covers ?? []));
+  const eligible = ({ covers }) => covers === null || covers.some((claim) => !coverage.has(claim));
+  const weightedDensity = (gain, row) => density(gain, row.bytes + regularizer) * row.densityWeight;
   const compare = (a, b) => a.priority === b.priority ? candidateOrder(a.row, b.row) : b.priority - a.priority;
   const byDensity = heap(compare);
   const byGain = augment ? heap(compare) : null;
   for (const row of soft) {
-    if (row.bytes > budget - bytes) continue;
+    if (row.bytes > budget - bytes || !eligible(row)) continue;
     const gain = delta(row);
     if (gain <= 0) continue;
-    byDensity.push({ row, gain, epoch: 0, priority: density(gain, row.bytes + regularizer) });
+    byDensity.push({ row, gain, epoch: 0, priority: weightedDensity(gain, row) });
     byGain?.push({ row, gain, epoch: 0, priority: gain });
   }
 
@@ -150,10 +156,10 @@ function greedy(model, hard, soft, budget, { regularizer = 0, augment = false } 
     for (;;) {
       const entry = queue.pop();
       if (entry === undefined) return undefined;
-      if (used.has(entry.row.id) || entry.row.bytes > budget - bytes) continue;
+      if (used.has(entry.row.id) || entry.row.bytes > budget - bytes || !eligible(entry.row)) continue;
       if (entry.epoch === epoch) return entry;
       const gain = delta(entry.row);
-      if (gain > 0) queue.push({ row: entry.row, gain, epoch, priority: weight(gain, entry.row.bytes) });
+      if (gain > 0) queue.push({ row: entry.row, gain, epoch, priority: weight(gain, entry.row) });
     }
   }
 
@@ -169,10 +175,11 @@ function greedy(model, hard, soft, budget, { regularizer = 0, augment = false } 
         byGain.push(entry);
       }
     }
-    const entry = take(byDensity, (gain, cost) => density(gain, cost + regularizer));
+    const entry = take(byDensity, weightedDensity);
     if (!entry) break;
     const gain = delta(entry.row, true);
     used.add(entry.row.id);
+    for (const claim of entry.row.covers ?? []) coverage.add(claim);
     utility += gain;
     bytes += entry.row.bytes;
     trace.push(record(entry.row, gain));
@@ -188,7 +195,7 @@ function greedy(model, hard, soft, budget, { regularizer = 0, augment = false } 
  * The density arm and the regularized density-plus-singleton arm share the
  * same mandatory floor and compare utility under the same objective.
  */
-export function packSubmodular(items, { budget = DEFAULT_BRIEF_BYTES, ...weights } = {}) {
+export function packSubmodular(items, { budget = DEFAULT_BRIEF_BYTES, algorithm = 'auto', ...weights } = {}) {
   if (!Number.isSafeInteger(budget) || budget < 0) throw new RangeError('budget must be a non-negative integer');
   const model = prepare(items, weights);
   const hard = model.rows.filter((row) => row.hard);
@@ -208,12 +215,17 @@ export function packSubmodular(items, { budget = DEFAULT_BRIEF_BYTES, ...weights
     method = budget === 0 ? 'unlimited' : 'floor';
   } else {
     const densityOnly = greedy(model, hard, soft, budget);
-    const regularized = greedy(model, hard, soft, budget, {
-      regularizer: Math.max(1, (budget - floor) / Math.max(1, soft.length)), augment: true,
-    });
-    const preferRegularized = better(regularized, densityOnly);
-    result = preferRegularized ? regularized : densityOnly;
-    method = preferRegularized ? 'regularized' : 'density';
+    if (algorithm === 'density') {
+      result = densityOnly;
+      method = 'density';
+    } else {
+      const regularized = greedy(model, hard, soft, budget, {
+        regularizer: Math.max(1, (budget - floor) / Math.max(1, soft.length)), augment: true,
+      });
+      const preferRegularized = better(regularized, densityOnly);
+      result = preferRegularized ? regularized : densityOnly;
+      method = preferRegularized ? 'regularized' : 'density';
+    }
   }
   const selected = new Set(result.trace.map(({ id }) => id));
   return {

@@ -24,6 +24,7 @@
 // obligation covered, every mandatory unit kept, and the stable part inside the ceiling.
 
 import { DEFAULT_BRIEF_BYTES, PROMPT_CAP_BYTES } from './packet.mjs';
+import { packSubmodular } from './submodular.mjs';
 
 export const PROOF_SCHEMA_VERSION = 1;
 
@@ -52,10 +53,10 @@ function renderUnit(unit, citation) {
  * Build a proof-bearing packet.
  *
  * @param {object[]} units
- * @param {{budget?: number, required?: string[]}} [options]
+ * @param {{budget?: number, required?: string[], diverse?: boolean}} [options]
  * @returns {object}
  */
-export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, required = [] } = {}) {
+export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, required = [], diverse = false } = {}) {
   if (!Number.isFinite(budget) || budget < 0) throw new Error(`a packet budget must be a non-negative number, not ${JSON.stringify(budget)}`);
   if (budget > PROMPT_CAP_BYTES) throw new Error(`a packet budget may not exceed the measured cap of ${PROMPT_CAP_BYTES} bytes`);
 
@@ -75,6 +76,10 @@ export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, req
       rejected.push({ id: unit.id, reason: 'no-citation', detail: 'name the revision and the anchor a reader can check' });
       continue;
     }
+    if (citations.has(unit.id)) {
+      rejected.push({ id: unit.id, reason: 'duplicate-id', detail: 'use a unique identity for each citation' });
+      continue;
+    }
     citations.set(unit.id, citation);
     candidates.push({
       id: unit.id,
@@ -83,55 +88,45 @@ export function buildProofPacket(units = [], { budget = DEFAULT_BRIEF_BYTES, req
       mandatory: unit.mandatory === true,
       dynamic: unit.dynamic === true,
       authority: Math.max(0, Number(unit.authority) || 0),
+      lineage: unit.lineage ?? citation.anchor?.path ?? citation.ref,
       // The unit's own encoded bytes. The newline that separates it from its neighbour is
       // charged when it is placed, so the running total is the packet's length (A40).
       cost: byteLength(renderUnit(unit, citation)),
     });
   }
 
-  const covered = new Set();
-  const selected = [];
-  const order = [];
-  let stableBytes = 0;
-  let overBudget = false;
+  const stable = candidates.filter(({ dynamic }) => !dynamic);
+  const packed = packSubmodular(stable.map((unit) => ({
+    id: unit.id, section: 'KNOWLEDGE', priority: unit.mandatory ? 'hard' : 'soft',
+    // Each row carries a separator. The first separator is credited to the capacity.
+    bytes: unit.cost + 1,
+    covers: unit.obligations,
+    densityWeight: 1 + Math.min(0.5, unit.authority / 10),
+    relevance: [
+      ...unit.obligations.map((facet) => ({ subtask: 0, facet: 'proof:' + facet, score: 1, duplicateKey: 'covered' })),
+      ...(diverse ? [{ subtask: 0, facet: 'lineage', score: 1, duplicateKey: unit.lineage }] : []),
+    ],
+  })), {
+    budget: Math.floor(budget) + 1,
+    algorithm: diverse ? 'auto' : 'density',
+    facetWeights: { lineage: 0.2 },
+  });
+  const byId = new Map(stable.map((unit) => [unit.id, unit]));
+  const order = packed.trace.map(({ id }) => id);
+  const selected = order.map((id) => byId.get(id));
+  const covered = new Set(selected.flatMap(({ obligations }) => obligations));
+  const selectedIds = new Set(order);
+  const stableBytes = Math.max(0, packed.bytes - Number(selected.length > 0));
+  const overBudget = !packed.feasible;
   const reasons = [];
-
-  for (const unit of candidates.filter((candidate) => candidate.mandatory && !candidate.dynamic)) {
-    if (selected.length > 0) stableBytes += 1;
-    selected.push(unit);
-    order.push(unit.id);
-    stableBytes += unit.cost;
-    for (const obligation of unit.obligations) covered.add(obligation);
-  }
-  if (stableBytes > budget) {
-    overBudget = true;
-    reasons.push(`the mandatory units alone are ${stableBytes} bytes against a ${budget}-byte ceiling, so the packet is over budget and incomplete`);
-  }
-
-  // Greedy by marginal coverage per byte, with authority as a bounded multiplier. The bound
-  // matters: without it the most authoritative page wins every tie, which is how a hub becomes
-  // the packet.
-  for (;;) {
-    let best = null;
-    for (const unit of candidates) {
-      if (selected.includes(unit) || unit.dynamic) continue;
-      const gain = unit.obligations.filter((obligation) => !covered.has(obligation)).length;
-      if (gain === 0) continue;
-      if (stableBytes + (selected.length > 0 ? 1 : 0) + unit.cost > budget) continue;
-      const score = (gain / unit.cost) * (1 + Math.min(0.5, unit.authority / 10));
-      if (best === null || score > best.score || (score === best.score && unit.id < best.unit.id)) best = { unit, score };
-    }
-    if (best === null) break;
-    if (selected.length > 0) stableBytes += 1;
-    selected.push(best.unit);
-    order.push(best.unit.id);
-    stableBytes += best.unit.cost;
-    for (const obligation of best.unit.obligations) covered.add(obligation);
+  if (overBudget) {
+    reasons.push('the mandatory units alone are ' + stableBytes + ' bytes against a ' + budget
+      + '-byte ceiling, so the packet is over budget and incomplete');
   }
 
   const cut = [];
   for (const unit of candidates) {
-    if (selected.includes(unit)) continue;
+    if (selectedIds.has(unit.id)) continue;
     if (unit.dynamic) continue;
     const gain = unit.obligations.filter((obligation) => !covered.has(obligation)).length;
     cut.push({

@@ -32,6 +32,20 @@ test('a known key with an impossible value is named in the repository\'s words',
   assert.deepEqual(manifestProblems({ surfaces: { opencode: true } }), ['surfaces must be null or a list of surface ids']);
 });
 
+test('localSkills accepts the ids a repo writes and the records the installer writes', () => {
+  // `skills install` records provenance into localSkills; the string-only check
+  // predated the record shape and refused the file the installer had just written.
+  assert.deepEqual(manifestProblems({ localSkills: ['hand-written'] }), []);
+  assert.deepEqual(
+    manifestProblems({ localSkills: [{ name: 'simt-commands', from: 'simt-dev/skills/simt-commands', variant: null, bytes: 9826, sha: 'aca41fe02bf6' }] }),
+    [],
+    'a provenance record the installer wrote is not a problem',
+  );
+  assert.deepEqual(manifestProblems({ localSkills: ['hand-written', { name: 'installed' }] }), []);
+  assert.deepEqual(manifestProblems({ localSkills: [{}] }), ['localSkills must be a list of skill ids or provenance records']);
+  assert.deepEqual(manifestProblems({ localSkills: ['ok', 42] }), ['localSkills must be a list of skill ids or provenance records']);
+});
+
 test('a key this tool does not know is not a problem', () => {
   // The file's own comment invites a repository to keep its keys through a re-init, so
   // refusing an unknown one would make the validator the owner of a repository's file.

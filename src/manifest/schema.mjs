@@ -52,6 +52,12 @@ export async function manifestPath(root) {
 
 
 const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+// A repository hand-writes bare skill ids; `skills install` records provenance
+// (`{name, from, variant, bytes, sha}`), and the reader treats the two as equal by
+// name. A string-only list refused the file the installer had just written, so the
+// boundary accepts both shapes and names an entry that is neither.
+const isSkillEntry = (value) => (typeof value === 'string' ? value !== '' : isObject(value) && typeof value.name === 'string' && value.name !== '');
+const isSkillList = (value) => Array.isArray(value) && value.every(isSkillEntry);
 const isStringList = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string');
 const isNameList = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string' && item !== '');
 const isStringMap = (value) => isObject(value) && Object.values(value).every((item) => typeof item === 'string' && item !== '');
@@ -102,7 +108,7 @@ export const KEYS = [
   { key: 'gates.cwd', owner: 'repo', since: '0.10.0', check: (v) => (isStringMap(v) ? null : 'gates.cwd must be an object of gate name to a directory') },
   { key: 'gates.evidence', owner: 'repo', since: '0.10.0', check: (v) => (v === 'warn' || v === 'block' ? null : 'gates.evidence must be "warn" or "block"') },
   { key: 'gates.prePushSkipTest', owner: 'repo', since: '0.10.0', check: (v) => skipTestProblem(v) },
-  { key: 'localSkills', owner: 'repo', since: '0.7.0', check: (v) => (isStringList(v) ? null : 'localSkills must be a list of skill ids') },
+  { key: 'localSkills', owner: 'repo', since: '0.7.0', check: (v) => (isSkillList(v) ? null : 'localSkills must be a list of skill ids or provenance records') },
   { key: 'profiles', owner: 'repo', since: '0.8.0', check: (v) => (isStringList(v) ? null : 'profiles must be a list of profile ids') },
   { key: 'substitutions', owner: 'repo', since: '0.8.0', check: (v) => (isObject(v) ? null : 'substitutions must be an object keyed by rule id') },
   { key: 'packs', owner: 'repo', since: '0.8.0', check: (v) => (Array.isArray(v) ? null : 'packs must be a list') },

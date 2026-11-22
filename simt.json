@@ -35,7 +35,14 @@
     }
   },
   "localSkills": [
-    "release-process"
+    "release-process",
+    {
+      "name": "simt-commands",
+      "from": "simt-dev/skills/simt-commands",
+      "variant": null,
+      "bytes": 9826,
+      "sha": "aca41fe02bf6"
+    }
   ],
   "workspace": "..",
   "decisions": {

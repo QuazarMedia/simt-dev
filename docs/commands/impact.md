@@ -4,6 +4,6 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 
 | Command | Flags | What it does |
 | --- | --- | --- |
-| `simt impact <file\|symbol\|file#symbol> [--retrieval v2]` | `--retrieval` | who a change reaches over the import closure: importers, their tests and the contract |
+| `simt impact <file\|symbol\|file#symbol>... \| --changed \| --task "<prompt>"` | `--all`, `--changed`, `--retrieval`, `--task` | trace importers, tests, governance, consumers and related files for a change |
 
 None of these write to the repository.

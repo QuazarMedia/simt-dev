@@ -14,7 +14,10 @@ import { promisify } from 'node:util';
 
 import { impactCommand } from '../src/commands/impact.mjs';
 import { dependents, ownersOf } from '../src/index/impact.mjs';
-import { capture } from './fixture.mjs';
+import { reindex } from '../src/index/store.mjs';
+import { TOOLS } from '../src/mcp/tools.mjs';
+import { readChangeHunks } from '../src/sys/changes.mjs';
+import { capture, ensureGit, simt, tempDir } from './fixture.mjs';
 
 const exec = promisify(execFile);
 const tick = String.fromCharCode(96);
@@ -142,6 +145,77 @@ test('impact follows a resolved Kotlin import (Q40)', async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+test('changed impact isolates an edited function and shares its facts with MCP', async () => {
+  const root = await tempDir('impact-changed-');
+  await mkdir(join(root, 'test'));
+  const library = "export function scoreOrders() {\n  const rareReconciliationToken = 1;\n  return rareReconciliationToken;\n}\n"
+    + "export function formatOrders() {\n  return 'formatted orders';\n}\n";
+  const sources = {
+    'library.mjs': library,
+    'order-caller.mjs': "import { scoreOrders } from './library.mjs';\nexport function checkOrder() { return scoreOrders(); }",
+    'format-caller.mjs': "import { formatOrders } from './library.mjs';\nexport function checkFormat() { return formatOrders(); }",
+    'test/order.test.mjs': "import { checkOrder } from '../order-caller.mjs';\n",
+    'test/format.test.mjs': "import { checkFormat } from '../format-caller.mjs';\n",
+    'release.json': '{"build":1}',
+  };
+  for (const [path, body] of Object.entries(sources)) await writeFile(join(root, path), body);
+  await ensureGit(root);
+  await writeFile(join(root, 'library.mjs'), library.replace('Token = 1', 'Token = 2'));
+  await writeFile(join(root, 'release.json'), '{"build":2}');
+  await git(['-C', root, 'commit', '-qam', 'score policy and release version']);
+  await writeFile(join(root, 'analogy.mjs'), library.replace('scoreOrders', 'scoreReturns').replace('formatOrders', 'formatReturns'));
+  await git(['-C', root, 'add', 'analogy.mjs']);
+  await git(['-C', root, 'commit', '-qm', 'add independent scoring implementation']);
+  await reindex(root);
+  await writeFile(join(root, 'library.mjs'), library.replace('Token = 1', 'Token = 3'));
+
+  const cli = await simt(['impact', '--changed', '--all', '--json'], { cwd: root });
+  assert.equal(cli.code, 0, cli.stderr || cli.stdout);
+  const { schemaVersion, exitCode, ...changed } = JSON.parse(cli.stdout);
+  assert.equal(schemaVersion, 1);
+  assert.equal(exitCode, 0);
+  assert.deepEqual(changed.symbols, [{ file: 'library.mjs', symbol: 'scoreOrders', lines: [1] }]);
+  assert.deepEqual(changed.importers, ['order-caller.mjs']);
+  assert.deepEqual(changed.tests, ['test/order.test.mjs']);
+  assert.deepEqual(changed.structural.direct.map(({ path }) => path), ['order-caller.mjs']);
+  assert.deepEqual(changed.testTiers.transitive.map(({ path }) => path), ['test/order.test.mjs']);
+  assert.deepEqual(changed.cochange.map(({ dst }) => dst), ['release.json']);
+  assert.ok(changed.conceptual.some(({ path }) => path === 'analogy.mjs'));
+  assert.ok(changed.conceptual.length <= 3);
+  const tool = TOOLS.find(({ name }) => name === 'impact');
+  const mcp = await tool.run({ root: changed.root, changed: true, all: true });
+  assert.deepEqual(JSON.parse(JSON.stringify(mcp)), changed);
+
+  const multi = await simt(['impact', 'library.mjs#scoreOrders', 'library.mjs#formatOrders', '--json'], { cwd: root });
+  assert.equal(multi.code, 0, multi.stderr || multi.stdout);
+  assert.deepEqual(JSON.parse(multi.stdout).tests, ['test/format.test.mjs', 'test/order.test.mjs']);
+  const task = await simt(['impact', '--task', 'Check the callers of scoreOrders', '--json'], { cwd: root });
+  assert.equal(task.code, 0, task.stderr || task.stdout);
+  assert.deepEqual(JSON.parse(task.stdout).tests, ['test/order.test.mjs']);
+
+  await writeFile(join(root, 'library.mjs'), '// shared module change\n' + library.replace('Token = 1', 'Token = 3'));
+  const broad = await simt(['impact', '--changed', '--json'], { cwd: root });
+  assert.equal(broad.code, 0, broad.stderr || broad.stdout);
+  assert.deepEqual(JSON.parse(broad.stdout).symbols, []);
+  assert.equal(JSON.parse(broad.stdout).tests.length, 2);
+});
+
+test('patch ranges preserve unusual paths and deletion coordinates', async () => {
+  const root = await tempDir('impact-hunks-');
+  const unusual = 'a space\nand line.mjs';
+  await writeFile(join(root, unusual), 'first\nsecond\nthird\n');
+  await writeFile(join(root, 'b.mjs'), 'some\nlines\n');
+  await ensureGit(root);
+  await writeFile(join(root, unusual), 'first\nthird\n');
+  await writeFile(join(root, 'b.mjs'), 'some\nelsewhere\n');
+  await writeFile(join(root, 'z.mjs'), 'untracked\n');
+  assert.deepEqual(await readChangeHunks(root), [
+    { path: unusual, status: 'M', hunks: [{ line: 1, count: 0 }] },
+    { path: 'b.mjs', status: 'M', hunks: [{ line: 2, count: 1 }] },
+    { path: 'z.mjs', status: '?', hunks: [] },
+  ]);
 });
 
 function git(args) {

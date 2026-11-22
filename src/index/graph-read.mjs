@@ -1,4 +1,5 @@
 import { BM25F_FIELDS } from './bm25f.mjs';
+import { BINDING_VERSION } from './bind.mjs';
 import { readSqliteBatch, readSqliteRows } from './persist.mjs';
 import { symbolGraphQueries } from './symbol-persist.mjs';
 
@@ -95,13 +96,15 @@ export async function readFts(root) {
   return withReadError(rows, error);
 }
 
-export async function readLiveSnapshot(root, { text, fielded, binding, tree, bindingEdits }) {
-  const chunks = !binding ? '' : tree === undefined ? ", json_extract(s.props, '$.bindings') as bindings"
-    : ", case when ? or (select value from meta where key = 'tree') != ? then json_extract(s.props, '$.bindings') end as bindings";
+export async function readLiveSnapshot(root, { text, fielded, binding, tree, bindingEdits, lightweight, rangePaths = [] }) {
+  const chunks = binding ? `, case when ? or (select value from meta where key = 'tree') is not ?
+    or (select value from meta where key = 'binding_version') is not ?
+    or s.path in (select value from json_each(?))
+    then json_extract(s.props, '$.bindings') end as bindings` : '';
   const queries = [
     [`select ${FILE_COLUMNS}, json_extract(s.props, '$.imports') as imports,
       json_extract(s.props, '$.resolution') as resolution
-      ${binding ? ", json_extract(s.props, '$.bindings') as bindings" : ''} ${FILE_SOURCE}`],
+      ${chunks} ${FILE_SOURCE}`, binding ? [Number(bindingEdits), tree, String(BINDING_VERSION), JSON.stringify(rangePaths)] : []],
     [SYMBOLS_SQL],
     [EDGES_SQL],
     ["select key, value from meta where key in ('tree', 'build', 'fts_fields')"],
@@ -110,7 +113,7 @@ export async function readLiveSnapshot(root, { text, fielded, binding, tree, bin
   if (fielded) queries.push([`select f.kind, substr(n.key, 6) as ref, ${BM25F_FIELDS.map((field) => `f.${field}`).join(', ')}
     from fts f join nodes n on n.id = f.node_id where (select value from meta where key = 'fts_fields') = '1'
     order by ref, f.rowid`]);
-  if (binding) queries.push(...symbolGraphQueries({ lightweight: tree !== undefined && !bindingEdits }));
+  if (binding) queries.push(...symbolGraphQueries({ lightweight: lightweight && !bindingEdits }));
   const { results, error } = await readSqliteBatch(root, queries);
   const [files, symbols, edges, meta, ...extra] = results ?? [[], [], [], []];
   const fts = text ? extra.shift() ?? [] : [];

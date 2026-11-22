@@ -42,6 +42,28 @@ export const ERROR_SHAPE = {
 };
 
 export const output = {
+  impact: {
+    type: 'object',
+    properties: {
+      root: { type: 'string' },
+      file: { type: 'string' },
+      symbol: { type: 'string' },
+      importers: { type: 'array', items: { type: 'string' } },
+      tests: { type: 'array', items: { type: 'string' } },
+      governs: { type: 'array', items: { type: 'object' } },
+      owners: { type: 'array', items: { type: 'string' } },
+      consumers: { type: 'array', items: { type: 'object' } },
+      truncated: { type: 'boolean' },
+      targets: { type: 'array', items: { type: 'object' } },
+      symbols: { type: 'array', items: { type: 'object' } },
+      tiers: { type: 'object' },
+      structural: { type: 'object' },
+      testTiers: { type: 'object' },
+      cochange: { type: 'array', items: { type: 'object' } },
+      conceptual: { type: 'array', items: { type: 'object' } },
+    },
+    required: ['root', 'file', 'symbol', 'importers', 'tests', 'governs', 'owners', 'consumers', 'truncated'],
+  },
   doctor: {
     // The `doctor --json` document minus its envelope: the same findings, the
     // same workspace answer, the same fingerprint. 

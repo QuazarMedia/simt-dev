@@ -4,11 +4,33 @@ import { provenanceDigest } from '../projection/project.mjs';
 import { diagnose, serialisedFindings } from '../commands/doctor.mjs';
 import { rulesCatalogue, rulesWhyFacts } from '../commands/rules.mjs';
 import { skillsFindFacts, skillsShowFacts, skillsWhyFacts } from '../commands/skills.mjs';
+import { SPEC } from '../commands/spec.mjs';
 import { briefPayload } from './tools-facts.mjs';
 import { output, rootArg } from './schemas.mjs';
 import { registry, rootOf } from './schemas.mjs';
 
 export const TOOLS_READ = [
+  {
+    outputSchema: output.impact,
+    name: 'impact',
+    description: 'Trace impact for file or symbol targets, Git diff hunks, or named entities in a task. Reports callers, tests, governance and consumers.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        root: { type: 'string' },
+        targets: { type: 'array', items: { type: 'string', minLength: 1 } },
+        task: { type: 'string' },
+        changed: { type: 'boolean' },
+        retrieval: { type: 'string', enum: ['v1', 'v2'] },
+        all: { type: 'boolean' },
+      },
+      required: [],
+    },
+    async run(args) {
+      const { impactFacts } = await import('../commands/impact.mjs');
+      return impactFacts(rootOf(args), args.targets ?? [], args, SPEC.map(({ path }) => path));
+    },
+  },
   {
     outputSchema: output.doctor,
     name: 'doctor',

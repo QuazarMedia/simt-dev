@@ -78,12 +78,13 @@ function edgeKey({ src, kind, dst }) {
  * Callers on a latency-sensitive surface can refuse the transient cold build.
  */
 export async function loadLiveGraph(root, options = {}) {
-  const { build = true, text = false, fielded = false, nativeLexical = false, binding = false, embed = false, cochange = false, policy, retainTargets = [] } = options;
+  const { build = true, text = false, fielded = false, nativeLexical = false, binding = false,
+    embed = false, cochange = false, policy, retainTargets = [], rangePaths = [] } = options;
   const gitState = Promise.all([lsFiles(root), worktreeChanges(root)]);
-  const snapshotState = nativeLexical ? gitState.then(([listed, dirty]) => readLiveSnapshot(root, {
-    text, fielded: false, binding, tree: treeDigest(listed),
-    bindingEdits: dirty.some(({ path }) => langOf(path, root) !== ''),
-  })) : readLiveSnapshot(root, { text, fielded, binding });
+  const snapshotState = binding || nativeLexical ? gitState.then(([listed, dirty]) => readLiveSnapshot(root, {
+    text, fielded: fielded && !nativeLexical, binding, tree: treeDigest(listed),
+    bindingEdits: dirty.some(({ path }) => langOf(path, root) !== ''), lightweight: nativeLexical, rangePaths,
+  })) : readLiveSnapshot(root, { text, fielded });
   const [snapshot, [listed, changes], embeddings, changesets] = await Promise.all([
     snapshotState, gitState, embed ? readEmbeddings(root) : [], cochange ? readCochange(root) : [],
   ]);
@@ -131,9 +132,10 @@ export async function loadLiveGraph(root, options = {}) {
   const dirtyCode = [...overlayNodes.keys(), ...problems, ...stagedChanges
     .filter(({ path, blob }) => blob !== base.get(path)?.blob).map(({ path }) => path)]
     .some((path) => base.get(path)?.lang || langOf(path, root));
-  const rebind = binding && (dirtyCode || (changedPathSet && !nativeLexical) || snapshot.binding?.version !== BINDING_VERSION);
-  const canRebind = rebind && (dirtyCode || !nativeLexical || mismatched);
+  const canRebind = binding && (dirtyCode || (changedPathSet && !nativeLexical) || snapshot.binding?.version !== BINDING_VERSION);
   const evidence = [];
+  const wantedRanges = new Set(rangePaths);
+  const ranges = new Map();
   for (const path of [...paths].sort(cmp)) {
     const old = base.get(path);
     const entry = staged.get(path);
@@ -163,9 +165,11 @@ export async function loadLiveGraph(root, options = {}) {
     result.symbols.push(...selected.symbols);
     result.fts.push(...selected.fts);
     result.fieldedRows.push(...selected.fielded);
-    if (canRebind) {
+    if (canRebind || wantedRanges.has(path)) {
       const { bindings, ...source } = selected.file;
-      evidence.push(bindings ? { ...source, ...JSON.parse(bindings) } : source);
+      const parsed = bindings ? { ...source, ...JSON.parse(bindings) } : source;
+      if (canRebind) evidence.push(parsed);
+      if (wantedRanges.has(path)) ranges.set(path, parsed.chunk?.scopes ?? []);
     }
     const useCached = !regenerated && (!changedPathSet && retainTargets.length === 0 || selected.file.resolution === 'adapter');
     const edges = useCached ? cachedEdges.get(path) ?? [] : resolveImports(path, selected.file.imports ?? [], resolvePaths, lang, resolveImport);
@@ -192,7 +196,7 @@ export async function loadLiveGraph(root, options = {}) {
   }
   const stale = problems.size > 0 || (!build && mismatched);
   return {
-    ...result, symbolGraph, stale,
+    ...result, symbolGraph, stale, ranges,
     cochange: changesets.filter(({ src, dst }) => paths.has(src) && paths.has(dst)),
     nativeLexical: nativeLexical && snapshot.meta.fts_fields === '1',
     freshness: { state: stale ? 'stale' : 'current', base: snapshot.meta.build ? mismatched ? 'stale' : 'current' : 'cold' },

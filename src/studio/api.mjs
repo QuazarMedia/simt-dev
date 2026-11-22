@@ -21,6 +21,8 @@ import { CLI } from '../name.mjs';
 
 const ROUTES = new Map([
   ['/api/status', { command: 'status' }],
+  ['/api/tokens', { command: 'tokens' }],
+  ['/api/tokens/session', { command: 'tokens', session: true }],
   ['/api/check', { check: true }],
   ['/api/plan', { command: 'plan status' }],
   ['/api/plan/next', { command: 'plan next', id: true }],
@@ -85,6 +87,13 @@ export async function apiAnswer(root, url) {
     }
   }
   const flags = { json: true };
+  if (route.session) {
+    const session = url.searchParams.get('session');
+    if (session === null || session.trim() === '') {
+      return denied(400, 'STUDIO_SESSION_REQUIRED', 'tokens --session requires a local transcript path');
+    }
+    flags.session = session;
+  }
   if (route.query) {
     const query = url.searchParams.get('query');
     const scope = url.searchParams.get('scope');

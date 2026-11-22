@@ -6,6 +6,7 @@
 import { readDoor } from './client.js';
 import { badge, card, emptyState, escapeHtml, loading, refusalPanel } from './components.js';
 import { board } from './board.js';
+import { budget, sessionPathError } from './budget.js';
 import { constellation, layoutGraph, rankPanel, whyPanel } from './constellation.js';
 import { custody } from './custody.js';
 import { harnessWall, policyEventItem } from './harness.js';
@@ -145,6 +146,30 @@ async function boardRoom() {
   return board(await readDoor('/api/board'));
 }
 
+async function budgetRoom() {
+  const payload = await readDoor('/api/tokens');
+  setTimeout(() => {
+    const form = document.getElementById('budget-session');
+    const result = document.getElementById('budget-session-result');
+    form?.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const path = String(new FormData(form).get('session') ?? '');
+      const refused = sessionPathError(path);
+      if (refused) {
+        result.innerHTML = refusalPanel({ ok: false, ...refused });
+        return;
+      }
+      result.innerHTML = loading('measuring the session');
+      try {
+        result.innerHTML = budget(await readDoor(`/api/tokens/session?session=${encodeURIComponent(path)}`));
+      } catch (error) {
+        result.innerHTML = refusalPanel(error.payload ?? { ok: false, error: String(error?.message ?? error), remedy: 'retry the session path, or run simt tokens --session in a terminal' });
+      }
+    });
+  }, 0);
+  return budget(payload);
+}
+
 async function harnessRoom() {
   const payload = await readDoor('/api/harness');
   setTimeout(() => {
@@ -272,7 +297,7 @@ const routes = new Map([
   ['/custody', { view: custodyRoom }],
   ['/constellation', { view: constellationRoom }],
   ['/harness', { view: harnessRoom }],
-  ['/budget', { view: later('Budget') }],
+  ['/budget', { view: budgetRoom }],
   ['/helm', { view: later('Helm') }],
   ['/library', { view: later('Library') }],
   ['/bench', { view: later('Bench') }],

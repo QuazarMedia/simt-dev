@@ -168,7 +168,7 @@ with a table view that carries the same data.
 | ST12 | Guarded control: preview, confirm by digest, journal, undo | Steer | control | L | ST11, ST05 | Complete | 2cd1816 · test: node --test test/studio-control.test.mjs test/undo.test.mjs test/studio-events.test.mjs |
 | ST13 | The Library: lessons and skills browsers | Steer | views | S | ST02, ST03 | Complete | 06350cb · test: node --test test/studio-library.test.mjs test/lessons.test.mjs test/skill-coverage.test.mjs |
 | ST14 | The Bench room: reports and comparisons as charts | Steer | views | S | ST02, ST03 | Complete | 45b5298 · test: node --test test/studio-bench.test.mjs |
-| ST15 | Qualify the studio: installed fixtures, budgets, accessibility, surface | Release | release | M | ST04, ST09, ST12, ST13, ST14 | Complete | b1711fb · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — 5823334 · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — 4f120ab · test: node --test test/studio-shell.test.mjs — 0d769ae · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — a764c8a · test: node --test test/studio-shell.test.mjs test/studio-control.test.mjs test/studio-library.test.mjs test/studio-bench.test.mjs — f6760f1 · test: node --test test/studio-release.test.mjs test/studio-server.test.mjs test/status.test.mjs |
+| ST15 | Qualify the studio: installed fixtures, budgets, accessibility, surface | Release | release | M | ST04, ST09, ST12, ST13, ST14 | Complete | b1711fb · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — 5823334 · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — 4f120ab · test: node --test test/studio-shell.test.mjs — 0d769ae · test: node --test test/studio-release.test.mjs test/pack.test.mjs test/shipped.test.mjs test/studio-server.test.mjs test/studio-control.test.mjs — a764c8a · test: node --test test/studio-shell.test.mjs test/studio-control.test.mjs test/studio-library.test.mjs test/studio-bench.test.mjs — f6760f1 · test: node --test test/studio-release.test.mjs test/studio-server.test.mjs test/status.test.mjs — e5a9ec3 · test: node --test --test-concurrency=1 test/studio-release.test.mjs test/studio-server.test.mjs test/status.test.mjs |
 
 ST15 qualification limits: `test/studio-server.test.mjs` measures every GET path in
 `STUDIO_READ_ROUTES`, plus the SSE first byte and the shell/app assets. A warm
@@ -179,8 +179,11 @@ the same status door). `/api/evidence/chains?claim=…` measured 53.9 ms under f
 concurrency (under 50 ms quietly) because the claim verdict runs `git write-tree`, and has
 the same 75 ms suite ceiling. Only `/api/check` exceeded the 50 ms warm budget. Every other
 route measured 0.2–31.6 ms. A new GET path fails the latency coverage assertion until the
-test names it. The keyboard-only walkthrough of every room in both themes is an excluded
-manual check; the suite does not perform it, ST15 does not claim it as complete, and it
+test names it. The latest ST15 evidence command pins `--test-concurrency=1` so the
+packed-install test's `npm pack` cannot overlap the read-route timing run; the project's
+normal four-way suite is separate from the qualification evidence. The keyboard-only
+walkthrough of every room in both themes is an excluded manual check; the suite does not
+perform it, ST15 does not claim it as complete, and it
 must be performed and recorded before claiming a complete accessibility pass. ADR-228
 carries the same limits.
 

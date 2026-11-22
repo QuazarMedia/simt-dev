@@ -576,6 +576,43 @@ test('a tree with knowledge inputs gains a pointer to the directory, the README 
   assert.ok(!stdout.includes('claim:secret-123'), 'the packet enumerated a claim');
 });
 
+test('--only renders one section of the packet, and every section is a view', async (t) => {
+  // The door admits every section the packet knows, not just skills: a reader who wants
+  // the file ranking without the rest of the packet pays for the ranking alone.
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const { code, stdout } = await run(root, ['brief', 'fix the keep helper in src/keep.mjs', '--only', 'files', '--json']);
+  assert.equal(code, 0, stdout);
+  const payload = JSON.parse(stdout);
+  assert.deepEqual(Object.keys(payload.sections), ['FILES']);
+  assert.ok(payload.sections.FILES.some((line) => line.includes('src/keep.mjs')), stdout);
+
+  // The view that already existed keeps its bytes: skills is a section like the rest.
+  const skills = await run(root, ['brief', 'fix the keep helper in src/keep.mjs', '--only', 'skills', '--json']);
+  assert.equal(skills.code, 0, skills.stdout);
+  const skillsPayload = JSON.parse(skills.stdout);
+  assert.ok(Object.keys(skillsPayload.sections).every((section) => section === 'SKILLS'));
+
+  // Sections that have nothing to say in this tree are absent, not empty.
+  const decisions = await run(root, ['brief', 'fix the keep helper in src/keep.mjs', '--only', 'decisions', '--json']);
+  assert.equal(decisions.code, 0, decisions.stdout);
+  assert.deepEqual(JSON.parse(decisions.stdout).sections, {});
+});
+
+test('--only rejects a section the packet does not know, and names the ones it does', async (t) => {
+  const root = await fixture();
+  t.after(() => rm(root, { recursive: true, force: true }));
+
+  const { code, stdout, stderr } = await run(root, ['brief', 'fix the keep helper', '--only', 'bogus']);
+  assert.notEqual(code, 0);
+  const output = `${stdout}\n${stderr}`;
+  assert.match(output, /unknown brief section bogus/);
+  // The remedy is the list itself: a reader can pick the next word from it.
+  assert.match(output, /files/);
+  assert.match(output, /cautions/);
+});
+
 test('a tree without knowledge inputs gains no KNOWLEDGE section (K3)', async (t) => {
   const root = await fixture();
   t.after(() => rm(root, { recursive: true, force: true }));

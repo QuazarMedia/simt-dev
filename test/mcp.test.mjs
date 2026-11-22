@@ -394,6 +394,26 @@ test('mcp: skills_brief is the brief SKILLS view on both surfaces', async () => 
   }
 });
 
+test('mcp: brief accepts any section the packet knows, and matches the CLI view', async () => {
+  // The CLI's --only <section> and the tool's `only` are one door with two handles:
+  // same packer, same bytes, and the same answer to a section the packet does not know.
+  const view = TOOLS.find((t) => t.name === 'brief');
+  const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  for (const only of ['files', 'decisions', 'cautions']) {
+    const mcp = await view.run({ only, task: 'read the commands skill', paths: 'skills/simt-commands/SKILL.md', root: ROOT });
+    const { stdout } = await exec(process.execPath, [
+      resolve(ROOT, 'bin', 'simt.mjs'),
+      'brief', '--root', ROOT, '--task', 'read the commands skill', '--paths', 'skills/simt-commands/SKILL.md',
+      '--only', only, '--json',
+    ]);
+    const cli = JSON.parse(stdout);
+    assert.deepEqual(mcp.sections, cli.sections);
+    assert.equal(mcp.text, cli.text);
+    assert.ok(Object.keys(mcp.sections).every((section) => section === only.toUpperCase()));
+  }
+  await assert.rejects(() => view.run({ only: 'bogus', root: ROOT }), /unknown brief section bogus/);
+});
+
 test('mcp: no mutating command is exposed as a tool', () => {
   // The load-bearing invariant of this file. Each of these writes, and each is meant to be
   // read as a diff by a human first (ADR-001, ADR-004). A model can call a tool; a model

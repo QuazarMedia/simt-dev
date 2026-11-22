@@ -6,7 +6,7 @@ import { buildRows, resolveConcurrency, summarise } from '../compare/row.mjs';
 import { GATES } from '../hooks/gates.mjs';
 import { checkRepo } from '../commands/sync.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
-import { DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
+import { SECTIONS, DEFAULT_BRIEF_BYTES } from '../brief/packet.mjs';
 import { federationAccess, readFederation } from '../federation/config.mjs';
 import { consult } from '../federation/query.mjs';
 import { planNext, planDone } from '../plan/index.mjs';
@@ -26,6 +26,11 @@ import { rootOf } from './schemas.mjs';
  */
 export async function briefPayload(args, { only = null } = {}) {
   const root = rootOf(args);
+  if (only !== null && !SECTIONS.includes(String(only).toUpperCase())) {
+    throw Object.assign(new Error(`unknown brief section ${only}`), {
+      remedy: `one of ${SECTIONS.join(', ').toLowerCase()}`,
+    });
+  }
   const budget = Number.isFinite(args?.budget) && args.budget >= 0 ? args.budget : DEFAULT_BRIEF_BYTES;
   const result = await assembleBrief({
     root,
@@ -251,11 +256,15 @@ export const TOOLS_FACTS = [
         task: { type: 'string', description: "what the agent is about to do, in the user's own words" },
         paths: { type: 'string', description: 'comma-separated paths to scope the packet to, instead of the files git reports as modified' },
         budget: { type: 'number', description: 'byte ceiling; 0 means the whole packet (default 2048)' },
+        only: { type: 'string', description: `one section of the packet, e.g. files or decisions; default is the whole packet (${SECTIONS.join(', ').toLowerCase()})` },
       },
       required: [],
     },
     async run(args) {
-      return briefPayload(args);
+      // Pass the section as given: the assembly normalizes case, and a door that rewrote
+      // it would echo `BOGUS` in an error the caller wrote as `bogus`.
+      const only = typeof args?.only === 'string' && args.only.trim().length > 0 ? args.only : null;
+      return briefPayload(args, { only });
     },
   },
   {

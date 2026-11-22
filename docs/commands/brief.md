@@ -4,6 +4,6 @@ Rendered from the command spec by `simt docs commands --yes`; do not edit by han
 
 | Command | Flags | What it does |
 | --- | --- | --- |
-| `simt brief "<task>" [--only skills] [--scope <id>]` | `--budget`, `--explain`, `--only`, `--paths`, `--proof`, `--task`, `--scope` | the packet for a task: rules, skills and the files it names, within a budget |
+| `simt brief "<task>" [--only <section>] [--scope <id>]` | `--budget`, `--explain`, `--only`, `--paths`, `--proof`, `--task`, `--scope` | the packet for a task: rules, skills and the files it names, within a budget |
 
 None of these write to the repository.

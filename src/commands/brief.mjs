@@ -11,13 +11,14 @@
 // command line: what a task may be, what the ceiling may be, and how the packet is
 // rendered for a terminal or for `--json`.
 //
-// `--only skills` is the view `simt skills brief` and MCP's `skills_brief` render. The
-// tier-1 command had its own 20 KB default and its own budget arithmetic; both now go
-// through this assembly, so one packer and one budget answer the question (ADR-226).
+// `--only <section>` renders one section of the packet as a view; MCP's `skills_brief`
+// is its SKILLS instance. The tier-1 command had its own 20 KB default and its own
+// budget arithmetic; both now go through this assembly, so one packer and one budget
+// answer the question (ADR-226).
 
 import { CLI } from '../name.mjs';
 import { EXIT, emit, emitJson, fail, isJson } from '../output/index.mjs';
-import { DEFAULT_BRIEF_BYTES, explainPacket } from '../brief/packet.mjs';
+import { SECTIONS, DEFAULT_BRIEF_BYTES, explainPacket } from '../brief/packet.mjs';
 import { assembleBrief } from '../brief/assemble.mjs';
 import { commandRoot } from '../repo-root.mjs';
 
@@ -33,11 +34,15 @@ export async function briefCommand(args, flags, commands = []) {
     return fail(`--budget must be a byte count, not ${flags.budget}`, EXIT.USAGE, `run: ${CLI} brief --budget ${DEFAULT_BRIEF_BYTES}`);
   }
   const only = flags.only === undefined ? null : String(flags.only).toLowerCase();
-  if (only !== null && only !== 'skills') {
-    return fail(`unknown brief section ${flags.only}`, EXIT.USAGE, `run: ${CLI} brief --only skills`);
+  if (only !== null && !SECTIONS.includes(only.toUpperCase())) {
+    return fail(
+      `unknown brief section ${flags.only}`,
+      EXIT.USAGE,
+      `run: ${CLI} brief --only <section> — one of ${SECTIONS.join(', ').toLowerCase()}`,
+    );
   }
   if (only !== null && flags.scope !== undefined) {
-    return fail('a scoped brief is not filtered', EXIT.USAGE, `run: ${CLI} brief "<task>" --only skills`);
+    return fail('a scoped brief is not filtered', EXIT.USAGE, `run: ${CLI} brief "<task>" --only <section>`);
   }
 
   if (flags.scope !== undefined && (typeof flags.scope !== 'string' || flags.scope === '' || flags.paths !== undefined)) {

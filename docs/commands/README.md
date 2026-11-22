@@ -91,7 +91,7 @@ simt bench run --yes                                                            
 simt bench world --input <file>                                                            # run the seeded world model and ask the oracle what the effects should be
 
 # brief
-simt brief "<task>" [--only skills] [--scope <id>]                                         # the packet for a task: rules, skills and the files it names, within a budget
+simt brief "<task>" [--only <section>] [--scope <id>]                                      # the packet for a task: rules, skills and the files it names, within a budget
 
 # check
 simt check                                                                                 # report stale or missing generated regions and every check finding

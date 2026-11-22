@@ -285,8 +285,17 @@ export async function assembleBrief({
     });
   }
 
-  const repo = await fingerprint(root);
-  const card = await commandCard({ root, manifest: repo.manifest ?? null, stack: repo.stack, facts: repo.facts });
+  // The fingerprint feeds the skill ranking (`repo.signals`) and the card feeds COMMANDS
+  // and the decisions context's command list; CAUTIONS is a consumer through both, because
+  // the registry's cautions name the skills the ranking selected. A view collecting none
+  // of them pays nothing for the read. The fallbacks keep every reference below defined
+  // when the read is skipped.
+  let repo = null;
+  let card = { lines: [], dropped: [] };
+  if (need(['COMMANDS', 'SKILLS', 'DECISIONS', 'CAUTIONS'])) {
+    repo = await fingerprint(root);
+    card = await commandCard({ root, manifest: repo.manifest ?? null, stack: repo.stack, facts: repo.facts });
+  }
   const wanted = cardVerbs(kind);
   const chosen = card.lines.filter((line) => wanted.includes(line.verb));
   for (const line of chosen.length > 0 ? chosen : card.lines) {
@@ -309,10 +318,12 @@ export async function assembleBrief({
   // The knowledge pointer. Soft, because it names a directory the
   // reader can list in one command; a packet under pressure loses the pointer
   // before it loses a command or a path.
-  for (const line of await knowledgePointers(root)) {
-    packet.add('KNOWLEDGE', line, {
-      why: ['the repository authored knowledge inputs, and a door is how they are read'],
-    });
+  if (need(['KNOWLEDGE'])) {
+    for (const line of await knowledgePointers(root)) {
+      packet.add('KNOWLEDGE', line, {
+        why: ['the repository authored knowledge inputs, and a door is how they are read'],
+      });
+    }
   }
 
   // `focused` feeds FILES directly and TESTS, DECISIONS and LESSONS through `likely`, and
@@ -358,7 +369,10 @@ export async function assembleBrief({
   // model produced, so it stays deterministic. The tier exists only if the history resolved
   // a similar task, and the claim travels with its own numbers and its unmeasured accept
   // bar; simt-dev never selects the model an agent runs.
-  const advice = await briefAdvice(root, { task, scope, kind });
+  let advice = null;
+  if (need(['ADVICE', 'CAUTIONS'])) {
+    advice = await briefAdvice(root, { task, scope, kind });
+  }
   if (advice?.picked) {
     packet.add('ADVICE', advice.picked.line, {
       why: ['the tier is the estate’s own bench ladder, and a human still names the model'],
@@ -377,16 +391,18 @@ export async function assembleBrief({
 
   const likely = focused.slice(0, LIKELY_FILES).map((row) => row.path);
   const untested = [];
-  packet.add('TESTS', `the index knows direct importers; \`${CLI} tests <path>\` is the authority for multi-line and dynamic imports`, {
-    why: ['a cheap packet and an exact answer are different questions'],
-  });
-  for (const path of likely) {
-    // The packet's own edges, walked by the same function `tests` uses .
-    const found = coverage({ files, imports: edges.filter((edge) => edge.kind === 'import') }, [path], {
-      transitive: false,
+  if (need(['TESTS', 'CAUTIONS'])) {
+    packet.add('TESTS', `the index knows direct importers; \`${CLI} tests <path>\` is the authority for multi-line and dynamic imports`, {
+      why: ['a cheap packet and an exact answer are different questions'],
     });
-    if (found.length === 0) untested.push(path);
-    else packet.add('TESTS', `${path} -> ${found.join(' ')}`, { why: ['the test imports it, or sits beside it'] });
+    for (const path of likely) {
+      // The packet's own edges, walked by the same function `tests` uses .
+      const found = coverage({ files, imports: edges.filter((edge) => edge.kind === 'import') }, [path], {
+        transitive: false,
+      });
+      if (found.length === 0) untested.push(path);
+      else packet.add('TESTS', `${path} -> ${found.join(' ')}`, { why: ['the test imports it, or sits beside it'] });
+    }
   }
 
   if (need(['DECISIONS', 'CAUTIONS'])) {
@@ -456,40 +472,42 @@ export async function assembleBrief({
     }
   }
 
-  const loaded = await loadRegistry(null, flags);
-  if (!loaded.ok) {
-    packet.add('CAUTIONS', `the skill registry did not load (${loaded.errors[0]}), so no skill was offered`, {
-      why: ['every other section is independent of the registry, which is why this is a caution and not a failure'],
-    });
-  } else {
-    const rankedSkills = rankSkills(
-      loaded.registry.skills,
-      { repoStack: repo.signals, taskTokens: tokenize(task), paths: scope, tree: [...filePaths] },
-      { forced: [] },
-    );
-    const expanded = closure(rankedSkills.selected, loaded.registry.skills);
-    // The packet prints a skill's NAME and size; the body never enters its bytes. Budgeting
-    // the name by the body (`budget / 4`, inherited from `skills brief`) held back every
-    // real body against a 512-byte allowance, so the section could never show the skill
-    // whose declared path the task named. A registry-deferred skill is a body to fetch,
-    // not one this packet stands in for, so it is the only thing filtered out.
-    const offered = expanded.filter((entry) => !entry.skill.deferred);
-    for (const entry of offered.slice(0, SKILL_NAMES)) {
-      const reasons = [...entry.reasons];
-      packet.add('SKILLS', `${entry.skill.name} — ${entry.skill.bytes} B, ${reasons.join(' ')}`, {
-        why: [`\`${CLI} skills show ${entry.skill.name}\` reads the body`],
+  if (need(['SKILLS', 'CAUTIONS'])) {
+    const loaded = await loadRegistry(null, flags);
+    if (!loaded.ok) {
+      packet.add('CAUTIONS', `the skill registry did not load (${loaded.errors[0]}), so no skill was offered`, {
+        why: ['every other section is independent of the registry, which is why this is a caution and not a failure'],
       });
-    }
-    if (offered.length > SKILL_NAMES) {
-      packet.add('CAUTIONS', `skills matched but not named: ${offered.slice(SKILL_NAMES).map((entry) => entry.skill.name).sort().join(', ')}`, {
-        why: [`\`${CLI} skills find <query>\` lists the rest`],
-      });
-    }
-    const deferred = expanded.filter((entry) => entry.skill.deferred);
-    if (deferred.length > 0) {
-      packet.add('CAUTIONS', `skills deferred by the registry: ${deferred.map((entry) => entry.skill.name).sort().join(', ')}`, {
-        why: ['a skill the registry marks deferred is not one this packet can stand in for'],
-      });
+    } else {
+      const rankedSkills = rankSkills(
+        loaded.registry.skills,
+        { repoStack: repo.signals, taskTokens: tokenize(task), paths: scope, tree: [...filePaths] },
+        { forced: [] },
+      );
+      const expanded = closure(rankedSkills.selected, loaded.registry.skills);
+      // The packet prints a skill's NAME and size; the body never enters its bytes. Budgeting
+      // the name by the body (`budget / 4`, inherited from `skills brief`) held back every
+      // real body against a 512-byte allowance, so the section could never show the skill
+      // whose declared path the task named. A registry-deferred skill is a body to fetch,
+      // not one this packet stands in for, so it is the only thing filtered out.
+      const offered = expanded.filter((entry) => !entry.skill.deferred);
+      for (const entry of offered.slice(0, SKILL_NAMES)) {
+        const reasons = [...entry.reasons];
+        packet.add('SKILLS', `${entry.skill.name} — ${entry.skill.bytes} B, ${reasons.join(' ')}`, {
+          why: [`\`${CLI} skills show ${entry.skill.name}\` reads the body`],
+        });
+      }
+      if (offered.length > SKILL_NAMES) {
+        packet.add('CAUTIONS', `skills matched but not named: ${offered.slice(SKILL_NAMES).map((entry) => entry.skill.name).sort().join(', ')}`, {
+          why: [`\`${CLI} skills find <query>\` lists the rest`],
+        });
+      }
+      const deferred = expanded.filter((entry) => entry.skill.deferred);
+      if (deferred.length > 0) {
+        packet.add('CAUTIONS', `skills deferred by the registry: ${deferred.map((entry) => entry.skill.name).sort().join(', ')}`, {
+          why: ['a skill the registry marks deferred is not one this packet can stand in for'],
+        });
+      }
     }
   }
 

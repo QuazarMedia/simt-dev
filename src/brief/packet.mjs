@@ -30,7 +30,7 @@ export const PROMPT_CAP_BYTES = 2048;
  * The order is fixed and identical in every packet. A reader who has to search for the
  * command is paying the cost the packet exists to remove.
  */
-const SECTIONS = ['TASK', 'ADVICE', 'COMMANDS', 'KNOWLEDGE', 'FILES', 'TESTS', 'DECISIONS', 'FEDERATION', 'SKILLS', 'LESSONS', 'CAUTIONS'];
+export const SECTIONS = ['TASK', 'ADVICE', 'COMMANDS', 'KNOWLEDGE', 'FILES', 'TESTS', 'DECISIONS', 'FEDERATION', 'SKILLS', 'LESSONS', 'CAUTIONS'];
 
 /**
  * What each section is worth when something has to go.

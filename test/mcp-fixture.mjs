@@ -28,16 +28,17 @@ const at = (version, method, params = {}, id = 1) =>
  * the child's stdin would never be closed, the server would wait forever for EOF, and the
  * test would hang rather than fail. Ending stdin explicitly is what makes EOF arrive.
  *
- * `--no-warnings`: on a Node where node:sqlite is still experimental (the 22.x CI pin),
- * the child prints an ExperimentalWarning to stderr on first index use. The session's
- * stderr must stay empty for the transport assertions, and runtime noise is not a
- * server diagnostic.
+ * `--no-warnings` on the argv: on a Node where node:sqlite is still experimental
+ * (the 22.x CI pin), the child prints an ExperimentalWarning to stderr on first
+ * index use, and the session's stderr must stay empty for the transport
+ * assertions. Runtime noise is not a server diagnostic. It rides the argv, not
+ * `options.execArgv`: `spawn` ignores that option - only `fork` reads it - and
+ * the first fix attempt shipped with a flag that never reached the child.
  */
 function converse(raw) {
   return new Promise((res, rej) => {
-    const child = spawn(process.execPath, [BIN, 'mcp'], {
+    const child = spawn(process.execPath, ['--no-warnings', BIN, 'mcp'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      execArgv: ['--no-warnings'],
     });
     let stdout = '';
     let stderr = '';
@@ -55,9 +56,8 @@ function converse(raw) {
  * measures the request and not the child's startup.
  */
 function session() {
-  const child = spawn(process.execPath, [BIN, 'mcp'], {
+  const child = spawn(process.execPath, ['--no-warnings', BIN, 'mcp'], {
     stdio: ['pipe', 'pipe', 'pipe'],
-    execArgv: ['--no-warnings'],
   });
   let stdout = '';
   let stderr = '';

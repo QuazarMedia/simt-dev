@@ -1,4 +1,4 @@
-import { bindSymbols } from './bind.mjs';
+import { bindSymbols, BINDING_VERSION } from './bind.mjs';
 import { canonicalJson } from '../util/canonical.mjs';
 
 const edgeSql = (props = 'e.props') => `select e.src_id as srcId, src.key as src, e.kind, e.dst_key as dst,
@@ -11,9 +11,10 @@ function edgeIdentity({ src, kind, dst }) {
 }
 
 export function persistSymbolGraph(db) {
-  const files = db.prepare(`select path, lang, json_extract(props, '$.bindings') as bindings
-    from sources where kind = 'blob' order by path`).all().map(({ path, lang, bindings }) => ({
-    path, lang, ...(bindings == null ? {} : JSON.parse(bindings)),
+  const files = db.prepare(`select path, lang, json_extract(props, '$.bindings') as bindings,
+    json_extract(props, '$.imports') as imports
+    from sources where kind = 'blob' order by path`).all().map(({ path, lang, bindings, imports }) => ({
+    path, lang, imports: JSON.parse(imports ?? '[]'), ...(bindings == null ? {} : JSON.parse(bindings)),
   }));
   const symbols = db.prepare(`select s.path, n.name, n.line, json_extract(n.props, '$.sig') as sig,
     json_extract(n.props, '$.exported') as exported
@@ -63,12 +64,13 @@ export function persistSymbolGraph(db) {
   const upsertMeta = db.prepare('insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value');
   upsertMeta.run('binding_coverage', canonicalJson(bindingCoverage));
   upsertMeta.run('binding_unresolved', canonicalJson(unresolved));
+  upsertMeta.run('binding_version', String(BINDING_VERSION));
 }
 
 export function symbolGraphQueries({ lightweight = false } = {}) {
   return [
     [`${edgeSql(lightweight ? 'null as props' : undefined)} order by src, e.kind, dst`],
-    [lightweight ? "select key, value from meta where key = 'binding_coverage'"
-      : "select key, value from meta where key in ('binding_coverage', 'binding_unresolved')"],
+    [lightweight ? "select key, value from meta where key in ('binding_coverage', 'binding_version')"
+      : "select key, value from meta where key in ('binding_coverage', 'binding_version', 'binding_unresolved')"],
   ];
 }

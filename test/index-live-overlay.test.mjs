@@ -80,6 +80,17 @@ test('transient reads use changed blobs after a commit and leave clean reads col
   assert.deepEqual(await readFile(join(root, SQLITE_FILE)), old);
 });
 
+test('a cold live graph keeps binary blob metadata and leaves it out of the search index', async () => {
+  const root = await tempDir('index-live-binary-');
+  const body = Buffer.from([0xff, 0, 0x12]);
+  await writeFile(join(root, 'asset.bin'), body);
+  await ensureGit(root);
+  const graph = await loadLiveGraph(root, { text: true, binding: true });
+  assert.equal(graph.files.find(({ path }) => path === 'asset.bin').bytes, body.length);
+  assert.deepEqual(graph.fts, []);
+  assert.equal(graph.stale, false);
+});
+
 test('why and file checks can address a newly created path', async () => {
   const root = await tempDir('index-live-paths-');
   await writeFile(join(root, 'existing.mjs'), '// existing\n');

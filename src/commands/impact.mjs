@@ -15,10 +15,13 @@ import {
   contractReferences,
   dependents,
   filesExporting,
+  impactTopology,
   isContractPath,
   ownersOf,
   relatedContracts,
+  traceImpact,
 } from '../index/impact.mjs';
+import { retrievalMode } from '../index/retrieval-mode.mjs';
 import { governs, sourceRoots } from '../index/govern.mjs';
 import { decisionRecords, ruleScopes } from './why.mjs';
 import { resolveWorkspace } from '../workspace.mjs';
@@ -33,19 +36,22 @@ export async function impactCommand(args, flags, commands = []) {
   if (args.length > 1) return fail(`unknown impact argument ${args[1]}`, EXIT.USAGE, `run: ${CLI} impact <file|symbol>`);
   const target = args[0];
   if (!target) return fail(`a file or a symbol is required`, EXIT.USAGE, `run: ${CLI} impact <file|symbol>`);
+  const retrieval = retrievalMode(flags.retrieval ?? (target.includes('#') ? 'v2' : undefined));
+  if (retrieval === null) return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
+  const precise = retrieval === 'v2';
   const root = commandRoot(flags);
   let graph;
   try {
-    graph = await loadLiveGraph(root);
+    graph = await loadLiveGraph(root, { binding: precise });
     if (graph.broken) throw new Error(graph.indexError?.message ?? 'the index cannot be read');
   } catch (error) {
     return fail(`could not read the tree (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository');
   }
   const files = new Set(graph.files.map(({ path }) => path));
-  const { edges: imports, symbols } = graph;
-  const resolved = resolveTarget(target, files, symbols);
+  const { symbols } = graph;
+  const resolved = resolveTarget(target, files, symbols, precise);
   if (resolved.error) return resolved.error;
-  const reach = dependents(resolved.file, imports);
+  const reach = precise ? traceImpact(impactTopology(graph), [resolved], { root }) : dependents(resolved.file, graph.edges);
   const [governanceItems, owners, consumers] = await Promise.all([
     governance(root, resolved.file, files, commands),
     readOwners(root, resolved.file),
@@ -58,8 +64,7 @@ export async function impactCommand(args, flags, commands = []) {
     root,
     file: resolved.file,
     symbol: resolved.symbol,
-    importers: reach.importers,
-    tests: reach.tests,
+    ...reach,
     governs: governanceItems,
     owners,
     consumers: consumers.references,
@@ -70,10 +75,18 @@ export async function impactCommand(args, flags, commands = []) {
   return EXIT.OK;
 }
 
-function resolveTarget(target, files, symbols) {
+function resolveTarget(target, files, symbols, precise) {
   if (files.has(target)) return { file: target, symbol: '' };
-  const exported = filesExporting(target, symbols);
-  if (exported.length === 1) return { file: exported[0], symbol: target };
+  const split = target.lastIndexOf('#');
+  const qualified = precise && split > 0 && files.has(target.slice(0, split));
+  const name = qualified ? target.slice(split + 1) : target;
+  const candidates = qualified ? symbols.filter(({ path }) => path === target.slice(0, split)) : symbols;
+  const exported = filesExporting(name, candidates);
+  if (exported.length === 1) {
+    const file = exported[0];
+    const lines = candidates.filter((row) => row.path === file && row.name === name && row.exported).map(({ line }) => line);
+    return { file, symbol: name, lines };
+  }
   if (exported.length === 0) {
     return { error: fail(`not a file or an export: ${target}`, EXIT.USAGE, `pass a path git tracks, or the name of one export`) };
   }
@@ -81,7 +94,7 @@ function resolveTarget(target, files, symbols) {
     error: fail(
       `${target} is exported by ${exported.join(', ')}`,
       EXIT.USAGE,
-      `pass the path of the export you mean`,
+      precise ? `pass <file>#${name} to select one export` : 'pass the path of the export you mean',
     ),
   };
 }
@@ -159,8 +172,12 @@ async function consumersFor(root, flags, paths, target, importers) {
 function render(payload) {
   const lines = [`file      ${payload.file}`];
   if (payload.symbol) lines.push(`symbol    ${payload.symbol}`);
-  for (const path of payload.importers) lines.push(`importer  ${path}`);
-  for (const path of payload.tests) lines.push(`test      ${path}`);
+  const tiers = new Map(Object.entries(payload.tiers ?? {}).flatMap(([tier, rows]) =>
+    rows.map(({ path, hop }) => [path, `  (${tier}, hop ${hop})`])));
+  for (const path of payload.importers) lines.push(`importer  ${path}${tiers.get(path) ?? ''}`);
+  for (const path of payload.tests) lines.push(`test      ${path}${tiers.get(path) ?? ''}`);
+  if (payload.conservativeFallback) lines.push('fallback  unresolved bindings; file-level edges used where available');
+  if (payload.suppressedHubMediated) lines.push(`hub paths omitted  ${payload.suppressedHubMediated}`);
   for (const hit of payload.governs) lines.push(`${hit.kind.padEnd(10)}${hit.id}  ${hit.detail}`);
   for (const owner of payload.owners) lines.push(`owner     ${owner}`);
   for (const consumer of payload.consumers) lines.push(`consumer  ${consumer.repo}/${consumer.path}  ${consumer.contract}`);

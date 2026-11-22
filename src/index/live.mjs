@@ -2,7 +2,7 @@ import { realpath } from 'node:fs/promises';
 
 import { gitPaths } from '../sys/git.mjs';
 import { cmp } from '../util/sort.mjs';
-import { bindSymbols, symbolNodePaths } from './bind.mjs';
+import { bindSymbols, BINDING_VERSION, symbolNodePaths } from './bind.mjs';
 import { createImportResolver, extract, resolveImports } from './extract.mjs';
 import { readCochange, readLiveSnapshot } from './graph-read.mjs';
 import { buildOverlay, filterAllowed, readWorktreeFile, revisionOf } from './overlay.mjs';
@@ -131,17 +131,18 @@ export async function loadLiveGraph(root, options = {}) {
   const dirtyCode = [...overlayNodes.keys(), ...problems, ...stagedChanges
     .filter(({ path, blob }) => blob !== base.get(path)?.blob).map(({ path }) => path)]
     .some((path) => base.get(path)?.lang || langOf(path, root));
-  const rebind = binding && (dirtyCode || (changedPathSet && !nativeLexical) || !snapshot.binding?.bindingCoverage);
+  const rebind = binding && (dirtyCode || (changedPathSet && !nativeLexical) || snapshot.binding?.version !== BINDING_VERSION);
   const canRebind = rebind && (dirtyCode || !nativeLexical || mismatched);
   const evidence = [];
   for (const path of [...paths].sort(cmp)) {
     const old = base.get(path);
     const entry = staged.get(path);
     const node = overlayNodes.get(path);
-    const body = reads.get(path) ?? blobBodies.get(entry?.blob);
+    const stagedBody = blobBodies.get(entry?.blob);
+    const body = reads.get(path) ?? stagedBody ?? undefined;
     const stagedSame = entry && entry.blob === old?.blob;
     const lang = old?.lang || langOf(path, root);
-    const missingRead = problems.has(path) || (!stagedSame && !node && body === undefined && lang && entry?.mode !== '120000');
+    const missingRead = problems.has(path) || (!stagedSame && !node && stagedBody === undefined && lang && entry?.mode !== '120000');
     if (missingRead) problems.add(path);
     const file = {
       path, lang, blob: node ? null : entry?.blob ?? null,
@@ -182,7 +183,7 @@ export async function loadLiveGraph(root, options = {}) {
         || old.lines.join('\0') !== edge.lines.join('\0');
       return { path, ...edge, provenance: live ? 'worktree' : 'committed' };
     }));
-    symbolGraph = { edges, bindingCoverage, unresolved };
+    symbolGraph = { edges, bindingCoverage, unresolved, version: BINDING_VERSION };
   } else if (symbolGraph) {
     const nodes = base.size === snapshot.files.length && !changedPathSet ? null : symbolNodePaths(paths, symbolGraph.edges);
     symbolGraph.edges = symbolGraph.edges.filter(({ src, dst }) => !nodes || (nodes.has(src) && nodes.has(dst)))

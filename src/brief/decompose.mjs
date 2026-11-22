@@ -4,7 +4,7 @@ const VERBS = 'add|audit|build|change|check|compare|create|delete|deploy|design|
 const ACTION = '(?:please\\s+)?(?:' + VERBS + ')\\b|(?:we\\s+)?(?:must|should|need\\s+to|have\\s+to)\\s+(?:' + VERBS + ')\\b';
 const GUARD = /^(?:if|unless|only\s+when)\b/iu;
 const LEADING = new RegExp('^(?:(?:first|next|finally|also|then)[, ]+)?(?:' + ACTION + '|if\\b|unless\\b|only\\s+when\\b)', 'iu');
-const ACTION_AT = new RegExp('(?:' + ACTION + ')', 'iuy');
+const ACTION_AT = new RegExp('(?:' + ACTION + '|if\\b|unless\\b|only\\s+when\\b)', 'iuy');
 const SEPARATOR = /(?:[;.!?]\s+|,\s*|\s+)(?:(and|then|also|plus|finally)\s+)?(?:(then|also|finally)\s+)?/giu;
 const HEADING = /^[\t ]*(#{1,6})[\t ]+(.*)$/u;
 const LIST = /^[\t ]*(?:\d{1,4}[.)]|[-*+•])[\t ]+(?:\[[ xX]\][\t ]+)?/u;
@@ -15,7 +15,7 @@ const LOCATOR = /(?:[A-Za-z][A-Za-z0-9+.-]*:\/\/[^\s<>\x60"']+|(?:\.{1,2}\/|\/)?
 const REGEX_LITERAL = /(?<![\p{L}\p{N}_/])\/(?:\\.|[^/\r\n\\])+\/[dgimsuvy]*(?=[\s.,;!?)]|$)/gu;
 const DIRECTORY = /(?:[\p{L}\p{N}_.$@+\-]+\/)+/u;
 
-function maskText(source) {
+export function maskPrompt(source) {
   const chars = source.split('');
   function cover(start, end) {
     for (let i = start; i < end; i += 1) {
@@ -153,7 +153,7 @@ function cluster(clauses) {
 /** A bounded task list with stable IDs and the original spans of every clause. */
 export function decomposePrompt(prompt) {
   const source = String(prompt ?? '');
-  const { masked, fencedLines } = maskText(source);
+  const { masked, fencedLines } = maskPrompt(source);
   const clauses = blocksOf(source, masked, fencedLines).flatMap((block) => clauseOffsets(source, masked, block))
     .map((clause, index) => ({ id: index + 1, ...clause }));
   const groups = clauses.length <= MAX_SUBTASKS ? clauses.map((clause) => [clause]) : cluster(clauses);

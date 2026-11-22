@@ -176,7 +176,7 @@ export function renderSurfacePage() {
   const commands = commandInventory();
   const rows = DISPOSITIONS.map(
     (entry) =>
-      `| \`${entry.id}\` | ${entry.stability} | ${entry.owner} | ${cell(entry.consumer)} | ${cell(entry.note)} |`,
+      `| \`${entry.id}\` | ${entry.stability} | ${entry.owner} | ${cell(entry.consumer)} | ${cell(entry.note)} | ${entry.qualification ?? '—'} |`,
   );
   const aliases = aliasInventory()
     .sort((a, b) => (a.alias < b.alias ? -1 : a.alias > b.alias ? 1 : 0))
@@ -192,8 +192,8 @@ export function renderSurfacePage() {
     '',
     '## Dispositions',
     '',
-    '| Surface | Stability | Owner | Consumer | What the word means here |',
-    '| --- | --- | --- | --- | --- |',
+    '| Surface | Stability | Owner | Consumer | What the word means here | Qualification SHA |',
+    '| --- | --- | --- | --- | --- | --- |',
     ...rows,
     '',
     '## The surfaces this review named',

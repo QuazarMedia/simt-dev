@@ -236,3 +236,4 @@ in [architecture/history.md](architecture/history.md).
 | [225](decisions/ADR-225-a-recall-figure-names-the-tree-it-measured.md) | A recall figure names the tree it measured | accepted · 2026-11-21 |
 | [226](decisions/ADR-226-the-skills-brief-is-a-view-of-the-packet.md) | The skills brief is a view of the packet, not a second packet | accepted · 2026-11-21 |
 | [227](decisions/ADR-227-control-is-the-writers-preview-confirmed-by-digest.md) | Control is the writer's preview, confirmed by digest | accepted · 2026-11-22 |
+| [228](decisions/ADR-228-the-studio-is-qualified-from-a-packed-install.md) | the studio is qualified from a packed install | accepted · 2026-11-22 |

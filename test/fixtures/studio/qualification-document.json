@@ -1,0 +1,20 @@
+{
+  "schema": "simt.studio.qualification/1",
+  "fixture": "document-corpus",
+  "install": "npm-packed-tarball",
+  "standalone": true,
+  "qualifiedSha": "45b5298",
+  "steps": [
+    "studio opens on a loopback token exchange",
+    "overview answers /api/status",
+    "helm answers /api/helm?path=status",
+    "control previews work setup and writes nothing",
+    "control applies the matching digest and journals the write",
+    "undo restores the tree"
+  ],
+  "requests": ["/", "/api/status", "/api/helm", "/api/control", "/api/control/preview", "/api/control/apply"],
+  "externalRequests": [],
+  "assets": { "files": 29, "bytes": 122682, "limitBytes": 122880 },
+  "keyboardWalkthrough": "recorded by the release review, both themes",
+  "passed": true
+}

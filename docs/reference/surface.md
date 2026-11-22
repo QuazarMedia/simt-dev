@@ -9,22 +9,22 @@ promise, a shipping decision, a prototype without one, and a frozen experimental
 
 ## Dispositions
 
-| Surface | Stability | Owner | Consumer | What the word means here |
-| --- | --- | --- | --- | --- |
-| `adoption` | stable | adoption | a repository adopting the tool, and the agent working in it | the path this review is about: init, projection, gates, hooks, evidence, index, brief |
-| `workspace-sharing` | stable | workspace | a maintainer carrying rules once for a workspace of repositories | the user-level half of the workspace surface (ADR-084); an alias spelling stays supported |
-| `bench` | optional | bench | maintainers measuring brief quality against their own corpus | shipped because its fixtures are the measurement; not needed to adopt or run the gates |
-| `pack` | experimental | packs | rule-pack authors, once a repository vendors one | frozen until a real repository adopts a pack (ADR-130); local profiles are the supported route, and `pack migrate` moves a pinned pack onto them |
-| `distill` | optional | distill | a maintainer turning a repository into a skill or rule proposal | one command, proposal output only; it writes no rule into a projected region |
-| `plugin` | optional | distribution | a harness vendor packaging the same tables this repository ships | generates a harness package; the shipped artefacts are qualified by the packaging tests |
-| `studio` | optional | studio | a maintainer watching the doors of the tool in a browser | one loopback socket, opened only by explicit invocation and read-only (ADR-212); nothing leaves the machine (ADR-075) |
-| `local-models` | optional | local | an operator pointing at a loopback model endpoint | off unless configured; bounded by ADR-075 and ADR-204 |
-| `work` | prototype | work | a design partner sequencing work from documents | document-driven doors; `work inspect` and `work setup` are the usable half and ship in the core path |
-| `action` | prototype | action | an execution runner reading a journal | read and review only; no command here starts an operation |
-| `verify` | prototype | verification | a maintainer validating contracts, documents or procedures | the read doors (`verify plan`, `verify select`, `verify status`) are used by the core path; the validators are prototypes |
-| `knowledge` | prototype | knowledge | a repository exchanging a scoped corpus with another | declared-scope reads are stable in behaviour; the exchange format is a prototype |
-| `federation` | optional | federation | an MCP client asking a declared sibling repository | transport-only, user-allowlisted, and the only tool that may start a process (ADR-205) |
-| `aliases` | stable | compatibility | a script written against an earlier name | every merged spelling resolves to its path and stays until the next major; an alias adds no capability |
+| Surface | Stability | Owner | Consumer | What the word means here | Qualification SHA |
+| --- | --- | --- | --- | --- | --- |
+| `adoption` | stable | adoption | a repository adopting the tool, and the agent working in it | the path this review is about: init, projection, gates, hooks, evidence, index, brief | — |
+| `workspace-sharing` | stable | workspace | a maintainer carrying rules once for a workspace of repositories | the user-level half of the workspace surface (ADR-084); an alias spelling stays supported | — |
+| `bench` | optional | bench | maintainers measuring brief quality against their own corpus | shipped because its fixtures are the measurement; not needed to adopt or run the gates | — |
+| `pack` | experimental | packs | rule-pack authors, once a repository vendors one | frozen until a real repository adopts a pack (ADR-130); local profiles are the supported route, and `pack migrate` moves a pinned pack onto them | — |
+| `distill` | optional | distill | a maintainer turning a repository into a skill or rule proposal | one command, proposal output only; it writes no rule into a projected region | — |
+| `plugin` | optional | distribution | a harness vendor packaging the same tables this repository ships | generates a harness package; the shipped artefacts are qualified by the packaging tests | — |
+| `studio` | optional | studio | a maintainer watching the doors of the tool in a browser | one loopback socket, opened only by explicit invocation and read-only except the guarded writer path (ADR-212, ADR-227); nothing leaves the machine (ADR-075) | 45b5298 |
+| `local-models` | optional | local | an operator pointing at a loopback model endpoint | off unless configured; bounded by ADR-075 and ADR-204 | — |
+| `work` | prototype | work | a design partner sequencing work from documents | document-driven doors; `work inspect` and `work setup` are the usable half and ship in the core path | — |
+| `action` | prototype | action | an execution runner reading a journal | read and review only; no command here starts an operation | — |
+| `verify` | prototype | verification | a maintainer validating contracts, documents or procedures | the read doors (`verify plan`, `verify select`, `verify status`) are used by the core path; the validators are prototypes | — |
+| `knowledge` | prototype | knowledge | a repository exchanging a scoped corpus with another | declared-scope reads are stable in behaviour; the exchange format is a prototype | — |
+| `federation` | optional | federation | an MCP client asking a declared sibling repository | transport-only, user-allowlisted, and the only tool that may start a process (ADR-205) | — |
+| `aliases` | stable | compatibility | a script written against an earlier name | every merged spelling resolves to its path and stays until the next major; an alias adds no capability | — |
 
 ## The surfaces this review named
 

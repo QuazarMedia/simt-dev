@@ -271,7 +271,7 @@ export async function reindex(root, opts = {}) {
   const resolution = resolutionDigest(root, listed);
   // A cache with no stamp was written by a reading this one cannot describe, so
   // it is rebuilt rather than partly reused.
-  const force = forceSchema || (fielded && !hadFielded) || stored.error != null || stored.meta.inputs !== priorInputs;
+  const force = forceSchema || (fielded && stored.meta.lexical_terms !== '1') || stored.error != null || stored.meta.inputs !== priorInputs;
   // Import resolution reads the tracked path set and the language table, not a
   // file's bytes. When either moves, an unchanged importer's edge can name a
   // destination that was added, deleted or renamed; its stored specifiers are
@@ -631,6 +631,33 @@ export async function searchFtsBm25F(root, task, { fts, fields = BM25F_FIELDS } 
      order by score desc, path asc limit ?`,
     [match, FTS_LIMIT], { legacySql: null });
   return withReadError(bestFieldHits(rows), error);
+}
+
+export async function readLexicalStats(root) {
+  const { results, error } = await readSqliteBatch(root, [
+    ['select count(*) as documents from lexical_files'],
+    ['select term, df, cf from term_stats order by term'],
+  ]);
+  const [counts, terms] = results ?? [[], []];
+  return {
+    documents: counts[0]?.documents ?? 0,
+    terms: new Map(terms.map(({ term, df, cf }) => [term, { df, cf }])),
+    error,
+  };
+}
+
+export async function readFileSignatures(root, paths) {
+  const { rows, error } = await readSqliteRows(root,
+    `select path, term, weight from file_signatures
+      where path in (select value from json_each(?)) order by path, position`,
+    [JSON.stringify(paths)]);
+  const signatures = new Map();
+  for (const { path, term, weight } of rows) {
+    const signature = signatures.get(path) ?? [];
+    signature.push({ term, weight });
+    signatures.set(path, signature);
+  }
+  return { signatures, error };
 }
 
 /** Stored vector embeddings, decoded as Float32Array per path. */

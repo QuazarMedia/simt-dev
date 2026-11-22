@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 import { LOCAL_DIR } from '../state.mjs';
 import { cmp } from '../util/sort.mjs';
 import { BM25F_FIELDS } from './bm25f.mjs';
+import { lexicalWriter } from './lexical-store.mjs';
 
 export const SQLITE_FILE = join(LOCAL_DIR, 'index.sqlite');
 const SQLITE_FILE_LEGACY = '.simt/index.sqlite';
@@ -347,7 +348,12 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     // A plain rebuild retains the legacy ranking. After an experimental build
     // activates the fielded table, changed or removed rows must update both.
     const fieldedWasBuilt = db.prepare("select value from meta where key = 'fts_fields'").get()?.value === '1';
-    const ownsFielded = meta.fielded || fieldedWasBuilt;
+    const invalidatedFielded = fieldedWasBuilt && !meta.fielded;
+    if (invalidatedFielded) db.exec('delete from fts');
+    const lexical = lexicalWriter(db, {
+      enabled: meta.fielded && (next.length > 0 || removed.length > 0),
+      invalidated: invalidatedFielded,
+    });
     const upsertSource = db.prepare(`insert into sources(kind, path, revision, lang, bytes, status, props)
       values('blob', ?, ?, ?, ?, 'indexed', ?)
       on conflict(kind, path) do update set revision = excluded.revision, lang = excluded.lang,
@@ -359,10 +365,14 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     const dropDependents = [
       db.prepare('delete from vectors where node_id in (select id from nodes where source_id = ?)'),
       db.prepare('delete from fts_legacy where node_id in (select id from nodes where source_id = ?)'),
-      ...(ownsFielded ? [db.prepare('delete from fts where node_id in (select id from nodes where source_id = ?)')] : []),
+      ...(meta.fielded ? [db.prepare('delete from fts where node_id in (select id from nodes where source_id = ?)')] : []),
       db.prepare('delete from edges where owner_source_id = ?'),
       db.prepare('delete from nodes where source_id = ?'),
     ];
+    function removeDependents(sourceId) {
+      lexical?.drop(sourceId);
+      for (const statement of dropDependents) statement.run(sourceId);
+    }
     const addFileNode = db.prepare(`insert into nodes(key, kind, source_id, trust) values('file:' || ?, 'file', ?, 'observed')`);
     const addSymbol = db.prepare(`insert into nodes(key, kind, source_id, name, line, props)
       values('sym:' || ? || '#' || ? || '@' || ?, 'symbol', ?, ?, ?, ?)`);
@@ -384,7 +394,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       on conflict(node_id) do update set model = excluded.model, dims = excluded.dims, vec = excluded.vec`);
     for (const row of next) {
       const sourceId = sourceIdOf.get(row.path)?.id;
-      if (sourceId !== undefined) for (const st of dropDependents) st.run(sourceId);
+      if (sourceId !== undefined) removeDependents(sourceId);
       dropTri.run(row.path);
       upsertSource.run(row.path, row.blob, row.lang, row.bytes, JSON.stringify({
         pkg: row.pkg ?? '',
@@ -397,7 +407,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
     for (const path of removed) {
       const sourceId = sourceIdOf.get(path)?.id;
       if (sourceId === undefined) continue;
-      for (const st of dropDependents) st.run(sourceId);
+      removeDependents(sourceId);
       dropIncoming.run(path);
       deleteSource.run(sourceId);
       // fts_tri is still path-keyed: the trigram table keeps its v4 shape .
@@ -442,6 +452,7 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       const entry = ids.get(row.ref);
       if (entry) addFielded.run(...BM25F_FIELDS.map((field) => row[field]), entry.nodeId, row.kind);
     }
+    lexical?.add(meta.fieldedRows ?? [], ids);
     for (const row of embeddings) {
       const entry = ids.get(row.path);
       if (!entry) continue;
@@ -453,7 +464,11 @@ export async function writeSqlite(root, next, removed, symbols, edges, fts, embe
       'insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value',
     );
     upsertMeta.run('schema', SCHEMA_V);
-    if (ownsFielded) upsertMeta.run('fts_fields', meta.fielded ? '1' : '0');
+    if (meta.fielded || invalidatedFielded) {
+      const ready = meta.fielded ? '1' : '0';
+      upsertMeta.run('fts_fields', ready);
+      upsertMeta.run('lexical_terms', ready);
+    }
     upsertMeta.run('tree', tree);
     // What the build read, beside the tree it saw. A reader compares digests
     // instead of guessing from a blob: an unchanged blob under a new parser,
@@ -600,7 +615,7 @@ export async function readSchema(root) {
   return rows[0]?.value ?? '';
 }
 
-const BUILD_META_KEYS = ['schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis', 'fts_fields'];
+const BUILD_META_KEYS = ['schema', 'tree', 'inputs', 'resolution', 'build', 'embed_basis', 'fts_fields', 'lexical_terms'];
 
 /**
  * The stamps a build leaves, with the read error attached.

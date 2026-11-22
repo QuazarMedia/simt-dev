@@ -154,7 +154,7 @@ simt hooks status                                                               
 simt ignore [--yes] [--diff]                                                               # render the one ignore list into every harness ignore file
 
 # impact
-simt impact <file|symbol|file#symbol>... | --changed | --task "<prompt>"                   # trace importers, tests, governance, consumers and related files for a change
+simt impact <file|symbol|file#symbol>... | --changed | --task "<prompt>"                   # trace the import closure, tests and related evidence for a change
 
 # index
 simt index [--open] [--search <task>] [--embed] [--retrieval v2]                           # rebuild the index, or ask the open cache for rows and ranks
@@ -266,6 +266,6 @@ simt tokens [--repos] [--session]                                               
 simt undo --yes                                                                            # restore the last journaled set of writes, if untouched
 
 # why
-simt why [<subject>]                                                                       # what governs a path, rule, decision, skill or finding code
+simt why [<subject>] [--retrieval v1|v2]                                                   # what governs a path, rule, decision, skill or finding code
 ```
 <!-- simt:commands:end -->

@@ -77,7 +77,7 @@ export const SPEC = [
   { path: 'hooks run', usage: '<event>', summary: "run one git event's gates now, as git would", writes: 'repo', flags: ["yes","diff","dry-run","agent"], },
   { path: 'hooks status', summary: 'what each git event routes to; --agent reports each harness instead', defaultFor: 'hooks', flags: ["agent","diff","dry-run"], },
   { path: 'ignore', usage: '[--yes] [--diff]', summary: 'render the one ignore list into every harness ignore file', flags: ["diff","yes"], writes: 'repo' },
-  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>"', mcp: { name: 'impact', flags: ['all', 'changed', 'retrieval', 'task', 'with-knowledge'] }, summary: 'trace importers, tests, governance, consumers and related files for a change', flags: ['all', 'changed', 'retrieval', 'task', 'with-knowledge'], values: { retrieval: ['v1', 'v2'] }, },
+  { path: 'impact', usage: '<file|symbol|file#symbol>... | --changed | --task "<prompt>"', mcp: { name: 'impact', flags: ['all', 'changed', 'retrieval', 'task', 'with-knowledge'] }, summary: 'trace the import closure, tests and related evidence for a change', flags: ['all', 'changed', 'retrieval', 'task', 'with-knowledge'], values: { retrieval: ['v1', 'v2'] }, },
   { path: 'index', usage: '[--open] [--search <task>] [--embed] [--retrieval v2]', summary: 'rebuild the index, or ask the open cache for rows and ranks', flags: ["allow-remote","embed","limit","open","rank","retrieval","search"], values: { retrieval: ["v1", "v2"] }, },
   // "hooks" used to be in this sentence and `init` never installed one: the promise and the
   // effect disagreed, and a reader who trusted the help believed their commits were gated
@@ -175,7 +175,7 @@ export const SPEC = [
   { path: 'verify status', usage: '(--input <file> | --changed --scope <id> [--input <attestations>])', mcp: { name: 'verify_status', flags: [] }, summary: 'closure over recorded obligations, and what is unresolved', defaultFor: 'verify', flags: ["input","changed","scope"], },
   { path: 'undo', usage: '--yes', summary: 'restore the last journaled set of writes, if untouched', writes: 'repo', flags: ["yes","diff","dry-run"], },
   { path: 'workspace upgrade', usage: '--yes', summary: 'replace this installation with the pinned release', writes: 'repo', aliases: ['upgrade'], flags: ["yes","all","diff","workspace","dry-run"], },
-  { path: 'why', usage: '[<subject>]', summary: 'what governs a path, rule, decision, skill or finding code', flags: [], },
+  { path: 'why', usage: '[<subject>] [--retrieval v1|v2]', summary: 'what governs a path, rule, decision, skill or finding code', flags: ['retrieval'], values: { retrieval: ['v1', 'v2'] }, },
 ];
 
 

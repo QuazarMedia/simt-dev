@@ -357,7 +357,11 @@ export async function reindex(root, opts = {}) {
     fetchImpl: opts.fetchImpl,
   });
   const tree = treeDigest(listed);
-  const cochange = await buildCochange(root, await readCochangeBasis(root), paths, { refresh: force || resolutionChanged });
+  const { prepareGovernance } = await import('./governance-store.mjs');
+  const [cochange, governance] = await Promise.all([
+    readCochangeBasis(root).then((basis) => buildCochange(root, basis, paths, { refresh: force || resolutionChanged })),
+    prepareGovernance(root, listed),
+  ]);
   const build = digestOfParts(['index-build-v1', tree, inputs, resolution]);
   await writeSqlite(root, next, removed, symbols, edges, fts, embedBuild.rows, tree, {
     inputs,
@@ -367,6 +371,7 @@ export async function reindex(root, opts = {}) {
     fielded,
     fieldedRows,
     cochange,
+    governance,
     embedBasis: embedBuild.basis ?? null,
   });
   const counts = await countSqlite(root);

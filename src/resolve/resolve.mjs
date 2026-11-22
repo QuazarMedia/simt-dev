@@ -92,11 +92,13 @@ const CAPABILITY_ALIASES = {
  * spending one of the packet's few skill names on every task in the repository. The share
  * is the resolver's existing "labels every file" ceiling, not a new number.
  */
-function namesTree(tree, glob) {
-  if (tree.length === 0) return false;
+export function namesTree(tree, glob) {
+  const cap = Math.max(2, Math.floor(tree.length * 0.15));
   let hits = 0;
-  for (const path of tree) if (matchesGlob(path, glob)) hits += 1;
-  return hits > Math.max(2, Math.floor(tree.length * 0.15));
+  for (const path of tree) {
+    if (matchesGlob(path, glob) && ++hits > cap) return true;
+  }
+  return false;
 }
 
 export function scoreSkill(skill, context) {

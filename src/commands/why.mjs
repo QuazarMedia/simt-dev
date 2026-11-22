@@ -11,7 +11,7 @@
 // `explain`. Those paths still answer; this only removes the choice. A prefix (`rule:`,
 // `skill:`) settles the one case the corpus cannot: a name both kinds carry.
 
-import { realpathSync, statSync } from 'node:fs';
+import { existsSync, realpathSync, statSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
@@ -30,9 +30,10 @@ import {
 import { parseFrontmatter } from '../text/frontmatter.mjs';
 import { listPromotedLessons } from '../memory/lessons.mjs';
 import { commandRoot } from '../repo-root.mjs';
-import { livePaths } from '../index/live.mjs';
+import { candidatePaths, livePaths } from '../index/live.mjs';
+import { gitPaths } from '../sys/git.mjs';
 
-const RULE_DIRS = ['rules', 'rules/stacks', 'rules/mdc', '.simt/profiles'];
+export const RULE_DIRS = ['rules', 'rules/stacks', 'rules/mdc', '.simt/profiles'];
 
 /** Upper case with a hyphen: a finding code, never a rule id or a path. */
 const FINDING_SHAPE = /^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)+$/;
@@ -163,6 +164,14 @@ export async function whyCommand(args, flags, commands = []) {
   const target = args[0];
   if (target && shapedSubject(target)) return answer(await classify(target, { root, files: new Set() }), flags);
 
+  if (target && flags.retrieval !== 'v1') {
+    const staged = await gitPaths(root, ['ls-files', '--cached'], { allowFailure: true });
+    const files = new Set(candidatePaths((staged ?? []).map((path) => ({ path }))).map(({ path }) => path));
+    const path = resolvePathSubject(target, root, files)?.path ?? target;
+    // Untracked and removed paths still use the live inventory. A tracked
+    // path query does not need Git to inspect every worktree file.
+    if (files.has(path) && existsSync(join(root, path))) return reportPath(path, flags, { root, files, commands });
+  }
   const listed = await tracked(root);
   if (listed.error) return listed.error;
   const files = new Set(listed.files);
@@ -172,7 +181,8 @@ export async function whyCommand(args, flags, commands = []) {
   }
 
   const located = resolvePathSubject(target, root, files);
-  const subject = await classify(located?.path ?? target, { root, files });
+  const path = located?.path ?? target;
+  const subject = files.has(path) ? { kind: 'path', value: path } : await classify(path, { root, files });
   // Only after classification: a rule id that also names a directory is a rule.
   if (subject.error && located?.directory) {
     return fail(`${located.directory} is a directory`, EXIT.USAGE, 'pass a file: a directory is not a subject');
@@ -225,22 +235,33 @@ async function answer(subject, flags, context = null) {
 }
 
 async function reportPath(target, flags, { root, files, commands }) {
+  if (flags.retrieval !== undefined && !['v1', 'v2'].includes(flags.retrieval)) {
+    return fail('unknown retrieval mode', EXIT.USAGE, 'pass --retrieval v1 or --retrieval v2');
+  }
   const ctx = { files, commands: new Set(commands ?? []), roots: sourceRoots(files) };
-  const records = await decisionRecords(root);
-  const corpus = await loadCorpus(root);
-  const items = governs(target, { records, ...corpus, ctx });
-  const payload = { ok: true, command: 'why', root, path: target, items };
+  const payload = { ok: true, command: 'why', root, path: target };
+  if (flags.retrieval === 'v1') {
+    const [records, corpus] = await Promise.all([decisionRecords(root), loadCorpus(root)]);
+    payload.items = governs(target, { records, ...corpus, ctx });
+  } else {
+    const { governingPath } = await import('../index/governance-store.mjs');
+    Object.assign(payload, await governingPath(root, target, ctx));
+  }
   if (isJson(flags)) {
     emitJson(payload);
     return EXIT.OK;
   }
-  if (items.length === 0) {
+  const { items, historical = [] } = payload;
+  if (items.length === 0 && historical.length === 0) {
     // `none` alone read as a broken command. The second line says which records were
     // consulted, so an ungoverned file is distinguishable from a search that never ran.
     emit(`none     nothing recorded names ${target}\nnote     looked for a decision simt-affects entry, a rule/skill/lesson path list, and a gate extension`);
     return EXIT.OK;
   }
-  emit(items.map((item) => `${item.kind.padEnd(10)}${item.id}  ${item.detail}`).join('\n'));
+  emit([
+    ...items.map((item) => `${item.kind.padEnd(10)}${item.id}  ${item.detail}`),
+    ...historical.map((item) => `historical ${item.id}  ${item.detail}  superseded by ${item.supersededBy}`),
+  ].join('\n'));
   return EXIT.OK;
 }
 
@@ -339,7 +360,7 @@ export async function ruleScopes(root) {
 async function skillScopes(root) {
   return (await registrySkills(root))
     .filter((skill) => Array.isArray(skill.paths) && skill.paths.length > 0)
-    .map((skill) => ({ id: String(skill.name ?? ''), detail: String(skill.summary ?? ''), paths: skill.paths }));
+    .map((skill) => ({ id: String(skill.name ?? ''), detail: String(skill.summary ?? ''), paths: skill.paths, stack: skill.stack }));
 }
 
 export async function lessonScopes(root) {

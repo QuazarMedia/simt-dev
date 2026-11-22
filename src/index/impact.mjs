@@ -11,6 +11,7 @@ import { coverage } from './coverage.mjs';
 import { createImportResolver } from './extract.mjs';
 import { cmp } from '../util/sort.mjs';
 
+export const CODEOWNERS_PATHS = ['.github/CODEOWNERS', 'CODEOWNERS', 'docs/CODEOWNERS'];
 const IMPACT_LIMIT = 64;
 const HUB_DEGREE_THRESHOLD = 32;
 const DEGREE_POWER = 0.55;

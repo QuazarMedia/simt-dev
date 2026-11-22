@@ -12,6 +12,7 @@ import { CLI } from '../name.mjs';
 import { discover } from '../compare/discover.mjs';
 import { loadLiveGraph } from '../index/live.mjs';
 import {
+  CODEOWNERS_PATHS,
   contractReferences,
   dependents,
   filesExporting,
@@ -171,7 +172,7 @@ async function governance(root, paths, files, commands) {
 }
 
 async function readOwners(root, paths) {
-  for (const path of ['.github/CODEOWNERS', 'CODEOWNERS', 'docs/CODEOWNERS']) {
+  for (const path of CODEOWNERS_PATHS) {
     try {
       const text = await readFile(join(root, path), 'utf8');
       return unique([...paths].flatMap((file) => ownersOf(text, file)));

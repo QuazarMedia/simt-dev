@@ -9,10 +9,12 @@
 // index has the edges . A direction still has to be named before the prose
 // can leave, or the line would say Enforced and nothing would be enforcing it.
 
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import { relative, resolve, sep } from 'node:path';
 
 import { CLI } from '../name.mjs';
+import { livePaths } from '../index/live.mjs';
+import { readWorktreeFile } from '../index/overlay.mjs';
 import { git, gitPaths } from '../sys/git.mjs';
 
 export const CHECK_MARKER = 'simt-check';
@@ -175,6 +177,7 @@ async function fileLines(root, check, manifest) {
   const errorAt = Number.isInteger(limits.error) ? limits.error : DEFAULT_ERROR;
   const files = await tracked(root);
   if (files === null) return [];
+  const base = await realpath(root);
   const findings = [];
   const prefixes = Array.isArray(exclude) ? exclude.filter((g) => typeof g === 'string' && g !== '') : [];
   const skipText = limits.excludeTextFiles === true;
@@ -187,11 +190,11 @@ async function fileLines(root, check, manifest) {
     if (skipText && isTextFile(rel)) continue;
     let text;
     try {
-      text = await readFile(resolve(root, rel));
+      text = await readWorktreeFile(base, rel);
     } catch {
       continue;
     }
-    if (text.includes(0)) continue;
+    if (text === null || text.includes(0)) continue;
     const source = text.toString('utf8');
     // The region marker is this tool naming itself as the generator. A path the
     // repository names is the other exemption; a filename that looks generated is not.
@@ -357,7 +360,7 @@ function exempt(rel, prefixes) {
 
 async function tracked(root) {
   try {
-    return await gitPaths(root, ['ls-files']);
+    return await livePaths(root);
   } catch {
     return null;
   }

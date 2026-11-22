@@ -24,8 +24,8 @@
 //
 // `build` is the one behaviour that depends on the caller. A delivered packet passes
 // `build: false`, so the first prompt in a fresh clone reports a cold index instead of
-// waiting on a repository walk; the command and the MCP tool, which a person asked for,
-// build the index they need.
+// waiting on a cold extraction; interactive callers can read the missing staged evidence
+// for the current packet.
 //
 // `federate` is the second, and it exists to keep the delivery's latency promise honest: a
 // packet delivered into a prompt submits within 300 ms, and starting someone else's server
@@ -54,7 +54,7 @@ import { loadRegistry } from '../graph/load.mjs';
 import { fingerprint } from '../resolve/fingerprint.mjs';
 import { closure, rankSkills } from '../resolve/resolve.mjs';
 import { tokenize } from '../text/tokens.mjs';
-import { loadGraph } from '../commands/map.mjs';
+import { loadLiveGraph } from '../index/live.mjs';
 import { dirtyPaths, parsePathList } from '../commands/skills.mjs';
 import { decisionRecords, lessonScopes } from '../commands/why.mjs';
 import { readFederation } from '../federation/config.mjs';
@@ -240,8 +240,7 @@ export async function assembleBrief({
   const asked = task.trim().length > 0;
   const pending = named ? parsePathList(paths) : null;
 
-  const graph = await loadGraph(root, { build, task, embed: flags?.embed === true });
-  if (graph.error) return { error: graph.error };
+  const graph = await loadLiveGraph(root, { build, text: task.trim().length > 0, embed: flags?.embed === true });
   if (graph.cold) {
     return { cold: true, broken: graph.broken === true, indexError: graph.indexError ?? null };
   }
@@ -280,9 +279,9 @@ export async function assembleBrief({
     });
   }
   if (graphStale) {
-    packet.add('CAUTIONS', 'the index predates the current tree, so files added or removed since the last build are missing or ghosted', {
+    packet.add('CAUTIONS', 'the index predates the current tree or some edits could not be read; file evidence may be incomplete', {
       hard: true,
-      why: ['this caller may not rebuild the index; run a command that can before quoting the file list'],
+      why: ['run simt index to refresh staged evidence before quoting the file list'],
     });
   }
 

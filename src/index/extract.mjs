@@ -63,8 +63,7 @@ export function extractSymbolEvidence(filePath, text, lang, references) {
  * one matches; a non-relative one goes through the language's namespace
  * strategy below.
  */
-export function resolveImports(filePath, imports, files, lang) {
-  const resolve = createImportResolver(files);
+export function resolveImports(filePath, imports, files, lang, resolve = createImportResolver(files)) {
   const edges = [];
   const seen = new Set();
   for (const spec of imports) {

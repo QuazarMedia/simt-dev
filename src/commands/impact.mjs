@@ -10,8 +10,7 @@ import { basename, join, resolve } from 'node:path';
 import { EXIT, fail, present } from '../output/index.mjs';
 import { CLI } from '../name.mjs';
 import { discover } from '../compare/discover.mjs';
-import { extract } from '../index/extract.mjs';
-import { importEdges, readEntries } from '../index/gate.mjs';
+import { loadLiveGraph } from '../index/live.mjs';
 import {
   contractReferences,
   dependents,
@@ -35,19 +34,23 @@ export async function impactCommand(args, flags, commands = []) {
   const target = args[0];
   if (!target) return fail(`a file or a symbol is required`, EXIT.USAGE, `run: ${CLI} impact <file|symbol>`);
   const root = commandRoot(flags);
-  const listed = await tracked(root);
-  if (listed.error) return listed.error;
-  const files = new Set(listed.files);
-  const entries = await readEntries(root, files);
-  const imports = importEdges(entries);
-  const symbols = entries.flatMap((entry) => (entry.lang ? extract(entry.path, entry.text, entry.lang).symbols : []));
+  let graph;
+  try {
+    graph = await loadLiveGraph(root);
+    if (graph.broken) throw new Error(graph.indexError?.message ?? 'the index cannot be read');
+  } catch (error) {
+    return fail(`could not read the tree (${error.message})`, EXIT.UNSUPPORTED, 'run this inside a git repository');
+  }
+  const files = new Set(graph.files.map(({ path }) => path));
+  const { edges: imports, symbols } = graph;
   const resolved = resolveTarget(target, files, symbols);
   if (resolved.error) return resolved.error;
   const reach = dependents(resolved.file, imports);
-  const governs = await governance(root, resolved.file, files, commands);
-  const owners = await readOwners(root, resolved.file);
-  const contracts = await contractsFor(root, listed.files, resolved, reach.importers);
-  const consumers = await consumersFor(root, flags, basename(root), contracts);
+  const [governanceItems, owners, consumers] = await Promise.all([
+    governance(root, resolved.file, files, commands),
+    readOwners(root, resolved.file),
+    consumersFor(root, flags, files, resolved, reach.importers),
+  ]);
   const truncated = reach.truncated || consumers.truncated;
   const payload = {
     ok: true,
@@ -57,10 +60,11 @@ export async function impactCommand(args, flags, commands = []) {
     symbol: resolved.symbol,
     importers: reach.importers,
     tests: reach.tests,
-    governs,
+    governs: governanceItems,
     owners,
     consumers: consumers.references,
     truncated,
+    ...(graph.basis.overlay.applied ? { provenance: graph.basis } : {}),
   };
   present(payload, () => render(payload), flags);
   return EXIT.OK;
@@ -83,8 +87,7 @@ function resolveTarget(target, files, symbols) {
 }
 
 async function governance(root, file, files, commands) {
-  const records = await decisionRecords(root);
-  const rules = await ruleScopes(root);
+  const [records, rules] = await Promise.all([decisionRecords(root), ruleScopes(root)]);
   const ctx = { files, commands: new Set(commands), roots: sourceRoots(files) };
   return governs(file, { records, rules, ctx });
 }
@@ -116,17 +119,19 @@ async function contractsFor(root, files, resolved, importers) {
   return relatedContracts(contracts, { file: resolved.file, symbol: resolved.symbol, importers });
 }
 
-async function consumersFor(root, flags, repoName, contracts) {
-  if (contracts.length === 0) return { references: [], truncated: false };
-  const workspace = await resolveWorkspace(flags);
+async function consumersFor(root, flags, paths, target, importers) {
+  const workspace = await resolveWorkspace({ ...flags, repoRoot: root });
   if (!workspace.root) return { references: [], truncated: false };
   const found = await discover(workspace.root);
   if (found.shape !== 'workspace') return { references: [], truncated: false };
   const here = resolve(root);
+  const siblings = found.repos.filter((repo) => resolve(repo) !== here);
+  if (!siblings.length) return { references: [], truncated: false };
+  const contracts = await contractsFor(root, paths, target, importers);
+  if (!contracts.length) return { references: [], truncated: false };
   const files = [];
   let truncated = false;
-  for (const repo of found.repos) {
-    if (resolve(repo) === here) continue;
+  for (const repo of siblings) {
     const listed = await tracked(repo);
     if (listed.error) continue;
     const name = basename(repo);
@@ -147,7 +152,7 @@ async function consumersFor(root, flags, repoName, contracts) {
       }
     }
   }
-  const refs = contractReferences(contracts, repoName, files);
+  const refs = contractReferences(contracts, basename(root), files);
   return { references: refs.references, truncated: truncated || refs.truncated };
 }
 

@@ -17,7 +17,8 @@ import { readLocalConfig } from '../local/config.mjs';
 import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { foldIdentifierText } from '../text/identifiers.mjs';
-import { SYMBOL_GRAPH_QUERIES } from './symbol-persist.mjs';
+import { readFts, withReadError } from './graph-read.mjs';
+export { readEdges, readFiles, readFts, readGraph, readSymbolGraph, readSymbols } from './graph-read.mjs';
 import { extract, extractSymbolEvidence, resolveImports } from './extract.mjs';
 import { BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldQueryTerms, fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F } from './bm25f.mjs';
 // the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
@@ -48,7 +49,7 @@ export { BM25F_WEIGHTS, SQLITE_FILE, decodeVectorBlob, encodeVectorBlob, scoreFt
 // `skipped`, not streamed and tokenized: a 65 MiB file is indexed as a row, and
 // tokenizing it would buy nothing . The cap sits under that file on purpose
 // so the 65 MiB test exercises the skip, not the tokenize path.
-const BLOB_CAP = 16 * 1024 * 1024;
+export const BLOB_CAP = 16 * 1024 * 1024;
 
 // What the built-in extractor and import resolver mean, separately from the
 // database schema. Bump it when their reading changes: every cache built by the
@@ -495,84 +496,6 @@ async function buildEmbeddings(root, listed, changedFts, { force, embed, allowRe
 }
 
 /**
- * Read wrappers return arrays with the read error attached:
- * callers that iterate are untouched, and callers that report - map among
- * them - can tell a broken index from an empty one.
- */
-function withReadError(rows, error) {
-  if (error) rows.error = error;
-  return rows;
-}
-// The v5 layout keys files as `sources` rows; the git blob sha is `revision`
-// and the package directory rides in `props`, which the v4 `files` table named
-// `pkg`. One spelling per read, shared by the single read and the batched one.
-const FILES_SQL = `select s.path as path, s.revision as blob, s.lang as lang, s.bytes as bytes,
-  json_extract(s.props, '$.pkg') as pkg from sources s where s.kind = 'blob' order by s.path`;
-const SYMBOLS_SQL = `select s.path as path, n.name as name, json_extract(n.props, '$.kind') as kind,
-  n.line as line, json_extract(n.props, '$.sig') as sig,
-  json_extract(n.props, '$.exported') as exported
-  from nodes n join sources s on s.id = n.source_id and s.kind = 'blob'
-  where n.kind = 'symbol' order by s.path, n.line, n.name, n.kind`;
-// An import edge's src is the file that imports. Paths come back from the node
-// key (`file:<path>`) and the stable `dst_key`: node ids are regenerated when a
-// file changes, so a path is the only key that survives a reindex of one
-// endpoint.
-const EDGES_SQL = `select substr(ns.key, 6) as src, e.dst_key as dst, e.kind as kind, e.weight as weight
-  from edges e join nodes ns on ns.id = e.src_id where coalesce(e.props, '') = '' order by src, dst, kind`;
-
-/** File rows, sorted by path. The same blobs read back as the same rows. */
-export async function readFiles(root) {
-  const { rows, error } = await readSqliteRows(root, FILES_SQL);
-  return withReadError(rows, error);
-}
-
-/** Symbol rows for the blobs currently indexed. */
-export async function readSymbols(root) {
-  const { rows, error } = await readSqliteRows(root, SYMBOLS_SQL);
-  return withReadError(rows, error);
-}
-
-/** Edges currently indexed. */
-export async function readEdges(root) {
-  const { rows, error } = await readSqliteRows(root, EDGES_SQL);
-  return withReadError(rows, error);
-}
-
-/**
- * Files, symbols and edges from one build.
- *
- * Three separate opens can straddle a concurrent write and answer with rows
- * from two builds; one read transaction answers with the rows of exactly one.
- */
-export async function readGraph(root) {
-  const { results, error } = await readSqliteBatch(root, [
-    [FILES_SQL],
-    [SYMBOLS_SQL],
-    [EDGES_SQL],
-    ["select value from meta where key = 'binding_coverage'"],
-  ]);
-  const [files, symbols, edges, coverage] = results ?? [[], [], [], []];
-  return {
-    files: withReadError(files, error),
-    symbols: withReadError(symbols, error),
-    edges: withReadError(edges, error),
-    bindingCoverage: coverage.length ? JSON.parse(coverage[0].value) : null,
-  };
-}
-
-export async function readSymbolGraph(root) {
-  const { results, error } = await readSqliteBatch(root, SYMBOL_GRAPH_QUERIES);
-  const [edges, metadata] = results ?? [[], []];
-  const values = new Map(metadata.map(({ key, value }) => [key, JSON.parse(value)]));
-  return {
-    edges: edges.map(({ src, kind, dst, path, props }) => ({ src, kind, dst, path, ...JSON.parse(props) })),
-    bindingCoverage: values.get('binding_coverage') ?? null,
-    unresolved: values.get('binding_unresolved') ?? [],
-    error,
-  };
-}
-
-/**
  * The build rows, including what a later build needs to re-resolve their edges.
  *
  * `imports` is stored as JSON in `props`; a row written before that field
@@ -605,14 +528,6 @@ function parseImports(value) {
   } catch {
     return null;
   }
-}
-
-/** Legacy FTS rows, in the original section order used by the baseline ranker. */
-export async function readFts(root) {
-  const sql = (table) => `select f.kind as kind, substr(n.key, 6) as ref, f.body as body
-    from ${table} f join nodes n on n.id = f.node_id order by ref, kind, f.rowid`;
-  const { rows, error } = await readSqliteRows(root, sql('fts_legacy'), [], { legacySql: sql('fts') });
-  return withReadError(rows, error);
 }
 
 export async function readFieldedFts(root) {
@@ -808,7 +723,7 @@ export async function lsFiles(root) {
     if (tab < 0) continue;
     const meta = rec.slice(0, tab).split(' ');
     if (meta[2] !== '0') continue;
-    rows.push({ blob: meta[1], path: rec.slice(tab + 1) });
+    rows.push({ blob: meta[1], path: rec.slice(tab + 1), mode: meta[0] });
   }
   rows.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return rows;
@@ -966,7 +881,7 @@ export async function blobTexts(root, blobs) {
   });
 }
 
-async function blobSizes(root, blobs) {
+export async function blobSizes(root, blobs) {
   const unique = [...new Set(blobs)];
   const sizes = new Map();
   if (unique.length === 0) return sizes;

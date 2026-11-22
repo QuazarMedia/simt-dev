@@ -20,7 +20,7 @@ export function persistSymbolGraph(db) {
     json_extract(n.props, '$.exported') as exported
     from nodes n join sources s on s.id = n.source_id
     where s.kind = 'blob' and n.kind = 'symbol' order by s.path, n.line, n.name`).all();
-  const { ownerRows, bindingCoverage, unresolved } = bindSymbols(files, symbols);
+  const { ownerRows, bindingCoverage, unresolved, starExports } = bindSymbols(files, symbols);
   const nodeIds = new Map();
   const owners = new Map();
   for (const row of db.prepare(`select n.id, n.key, s.id as ownerId, s.path, n.kind
@@ -64,6 +64,7 @@ export function persistSymbolGraph(db) {
   const upsertMeta = db.prepare('insert into meta(key, value) values (?, ?) on conflict(key) do update set value = excluded.value');
   upsertMeta.run('binding_coverage', canonicalJson(bindingCoverage));
   upsertMeta.run('binding_unresolved', canonicalJson(unresolved));
+  upsertMeta.run('binding_star_exports', canonicalJson(starExports));
   upsertMeta.run('binding_version', String(BINDING_VERSION));
 }
 
@@ -71,6 +72,6 @@ export function symbolGraphQueries({ lightweight = false } = {}) {
   return [
     [`${edgeSql(lightweight ? 'null as props' : undefined)} order by src, e.kind, dst`],
     [lightweight ? "select key, value from meta where key in ('binding_coverage', 'binding_version')"
-      : "select key, value from meta where key in ('binding_coverage', 'binding_version', 'binding_unresolved')"],
+      : "select key, value from meta where key in ('binding_coverage', 'binding_version', 'binding_unresolved', 'binding_star_exports')"],
   ];
 }

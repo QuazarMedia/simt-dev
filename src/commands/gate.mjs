@@ -18,13 +18,13 @@ import { readReports } from '../testing/parsers.mjs';
 import { spawnBounded } from '../sys/proc.mjs';
 import { loadManifest } from '../manifest/schema.mjs';
 import { compactReport } from '../index/compact.mjs';
-import { coverage } from '../index/coverage.mjs';
-import { readImportEdges } from '../index/gate.mjs';
+import { coverage, preciseCoverage } from '../index/coverage.mjs';
+import { readGateGraph } from '../index/gate.mjs';
 import { langOf, packageOf } from '../index/store.mjs';
 import { localRel } from '../state.mjs';
 import { commandRoot } from '../repo-root.mjs';
 import { gitPaths } from '../sys/git.mjs';
-import { readChanges } from '../sys/changes.mjs';
+import { readChangeHunks, readChanges } from '../sys/changes.mjs';
 import { cmp } from '../util/sort.mjs';
 
 /**
@@ -47,6 +47,9 @@ const RAW_LOG_KEEP = 5;
 
 export async function gateCommand(args, flags) {
   const root = commandRoot(flags);
+  const reportSelection = flags.precise === true || flags.conservative === true;
+  const fallbackReason = flags.conservative === true ? 'full file reach was requested'
+    : flags.strict === true ? 'strict mode requires full file reach' : null;
   const listed = await tracked(root);
   if (listed.error) return listed.error;
   let changed = args.filter(Boolean);
@@ -67,12 +70,15 @@ export async function gateCommand(args, flags) {
     if (flags.changed === true) {
       // No change: nothing is unmatched and no language is implicated, so the
       // graph is vacuously resolved and the verdict is still said out loud.
+      const selection = reportSelection ? { mode: 'conservative', reason: 'there are no changed files',
+        hubMediatedSkipped: [], otherSkipped: 0 } : null;
       if (isJson(flags)) {
         emitJson(
-          { ok: true, command: 'gate', root, selected: [], unmatched: [], graph: 'resolved', verdict: 'nothing-selected', code: 0 },
+          { ok: true, command: 'gate', root, selected: [], unmatched: [], graph: 'resolved', verdict: 'nothing-selected', code: 0,
+            ...(selection ? { selection } : {}) },
         );
       } else {
-        emit('selected  0\nverdict  nothing-selected');
+        emit(['selected  0', 'verdict  nothing-selected', ...selectionText(selection)].join('\n'));
       }
       return EXIT.OK;
     }
@@ -111,13 +117,17 @@ export async function gateCommand(args, flags) {
       );
     }
   }
-  let edges;
+  let live;
+  const hunks = flags.precise === true && fallbackReason === null && flags.changed === true
+    ? await readChangeHunks(root).catch(() => null) : null;
   try {
-    edges = await readImportEdges(root, gone);
+    live = await readGateGraph(root, { gone, hunks });
   } catch (error) {
     return fail(`could not read the import graph (${error.message})`, EXIT.FAIL, `run: ${CLI} index`);
   }
-  const selected = coverage({ imports: edges }, changed, { root });
+  const edges = live.edges;
+  const { selected, selection } = reportSelection ? preciseCoverage(live, changed, hunks, { root, fallbackReason })
+    : { selected: coverage({ imports: edges }, changed, { root }), selection: null };
   // the selection explains itself. `unmatched` names explicit paths the
   // tracked tree does not carry (untracked but present, so the run proceeds);
   // `graph` is `unresolved` when a language has edges but none of them reaches
@@ -144,19 +154,28 @@ export async function gateCommand(args, flags) {
       code: unproven ? EXIT.FAIL : 0,
       renames,
       deleted,
+      ...(selection ? { selection } : {}),
     };
     if (isJson(flags)) {
       emitJson(payload);
       return payload.code === 0 ? EXIT.OK : EXIT.FAIL;
     }
-    const lines = ['selected  0', `verdict  ${payload.verdict}`];
+    const lines = ['selected  0', `verdict  ${payload.verdict}`, ...selectionText(selection)];
     if (unmatched.length > 0) lines.push(`unmatched  ${unmatched.join(', ')}`);
     if (graph === 'unresolved') lines.push('graph  unresolved');
     if (unproven) lines.push('strict  no test is reachable from this change; name one, or drop --strict');
     emit(lines.join('\n'));
     return payload.code === 0 ? EXIT.OK : EXIT.FAIL;
   }
-  return runSelected(root, flags, selected, { unmatched, graph, spec, renames, deleted, changed });
+  return runSelected(root, flags, selected, { unmatched, graph, spec, renames, deleted, changed, selection });
+}
+
+function selectionText(selection) {
+  if (!selection) return [];
+  const reason = selection.reason ? `  ${selection.reason}` : '';
+  const skipped = selection.hubMediatedSkipped.map((path) => `hub test omitted  ${path}`);
+  if (selection.otherSkipped) skipped.push(`other file-level tests omitted  ${selection.otherSkipped}`);
+  return [`selection  ${selection.mode}${reason}`, ...skipped];
 }
 
 /**
@@ -192,7 +211,7 @@ function graphState(edges, files, root = null) {
   return 'resolved';
 }
 
-async function runSelected(root, flags, selected, { unmatched = [], graph = 'resolved', spec = null, renames = [], deleted = [], changed = [] } = {}) {
+async function runSelected(root, flags, selected, { unmatched = [], graph = 'resolved', spec = null, renames = [], deleted = [], changed = [], selection = null } = {}) {
   const cache = new Map();
   const groups = new Map();
   for (const file of selected) {
@@ -203,7 +222,7 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
   }
   const runs = [];
   let code = 0;
-  const text = [];
+  const text = selectionText(selection);
   const rawParts = [];
   for (const [pkg, files] of [...groups.entries()].sort((a, b) => cmp(a[0], b[0]))) {
     const relative = files.map((file) => (pkg && file.startsWith(`${pkg}/`) ? file.slice(pkg.length + 1) : file));
@@ -324,6 +343,7 @@ async function runSelected(root, flags, selected, { unmatched = [], graph = 'res
     runs,
     renames,
     deleted,
+    ...(selection ? { selection } : {}),
     // The versioned strict verdict adds what the default answer never had to say: whether
     // every selected file was actually mentioned by the runner.
     ...(flags.strict === true ? { strict: { unproven } } : {}),

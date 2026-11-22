@@ -18,6 +18,10 @@ import { importsOf } from './tests.mjs';
  * @returns {string[]}
  */
 export function selectTests(changed, imports, { root = null } = {}) {
+  return [...reverseImportClosure(changed, imports)].filter((path) => isTestPath(path, root)).sort();
+}
+
+export function reverseImportClosure(changed, imports) {
   const reverse = new Map();
   for (const edge of imports) {
     if (edge.kind && edge.kind !== 'import') continue;
@@ -26,7 +30,6 @@ export function selectTests(changed, imports, { root = null } = {}) {
     else reverse.set(edge.dst, [edge.src]);
   }
   const seen = new Set();
-  const tests = [];
   const queue = [];
   for (const file of changed) {
     if (!file || seen.has(file)) continue;
@@ -35,7 +38,6 @@ export function selectTests(changed, imports, { root = null } = {}) {
   }
   while (queue.length > 0) {
     const file = queue.pop();
-    if (isTestPath(file, root)) tests.push(file);
     const importers = reverse.get(file);
     if (!importers) continue;
     for (const importer of importers) {
@@ -44,8 +46,7 @@ export function selectTests(changed, imports, { root = null } = {}) {
       queue.push(importer);
     }
   }
-  tests.sort();
-  return tests;
+  return seen;
 }
 
 /** Import edges for the texts the caller already read. One pass, no second parse. */
@@ -59,9 +60,13 @@ export function importEdges(entries) {
   return imports;
 }
 
-/** Resolve live imports while retaining a removed target for the gate's diff. */
-export async function readImportEdges(root, files) {
-  const graph = await loadLiveGraph(root, { retainTargets: [...files] });
+/** Resolve live imports while retaining removed targets for the gate's diff. */
+export async function readGateGraph(root, { gone, hunks }) {
+  const graph = await loadLiveGraph(root, {
+    retainTargets: [...gone],
+    binding: hunks !== null,
+    rangePaths: (hunks ?? []).filter(({ hunks: ranges }) => ranges.length).map(({ path }) => path),
+  });
   if (graph.broken) throw new Error(graph.indexError?.message ?? 'the index cannot be read');
-  return graph.edges;
+  return graph;
 }

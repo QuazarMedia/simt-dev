@@ -6,6 +6,8 @@
 
 import { cmp } from '../util/sort.mjs';
 import { extractBindings } from './bindings.mjs';
+import { extractReferences } from './references.mjs';
+import { scanSource } from './syntax.mjs';
 // the extension table is the records' `languages[].exts` (ADR-013: content is data,
 // the engine is code). A new language lands in a record, not a row the extractor edits.
 import { languageExts } from '../ecosystem/records.mjs';
@@ -22,7 +24,7 @@ const EXTS = languageExts();
  * @param {string} lang
  * @returns {{symbols: object[], imports: string[], namedImports: object[], reexports: object[]}}
  */
-export function extract(filePath, text, lang) {
+export function extract(filePath, text, lang, { references = false } = {}) {
   const fn = BY_LANG[lang];
   if (!fn || text.includes('\0')) return { symbols: [], imports: [], namedImports: [], reexports: [] };
   const found = fn(text);
@@ -42,7 +44,18 @@ export function extract(filePath, text, lang) {
     });
   }
   symbols.sort(bySymbol);
-  return { symbols, imports: found.imports, ...extractBindings(filePath, text, lang) };
+  return { symbols, imports: found.imports, ...extractSymbolEvidence(filePath, text, lang, references) };
+}
+
+export function extractSymbolEvidence(filePath, text, lang, references) {
+  if (!references) return extractBindings(filePath, text, lang);
+  const tokens = scanSource(text, lang);
+  const ranges = [];
+  const bindings = extractBindings(filePath, text, lang, tokens, ranges);
+  return {
+    ...bindings,
+    chunk: extractReferences(filePath, text, lang, { tokens, bindings: bindings.namedImports, ranges }),
+  };
 }
 
 /**

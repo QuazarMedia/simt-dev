@@ -218,7 +218,7 @@ const KEYWORDS = Object.freeze({
   ruby: new Set(['require', 'require_relative', 'autoload']),
 });
 
-export function extractBindings(path, text, lang, sourceTokens) {
+export function extractBindings(path, text, lang, sourceTokens, ranges) {
   const namedImports = [];
   const reexports = [];
   if (!Object.hasOwn(KEYWORDS, lang)) return { namedImports, reexports };
@@ -246,6 +246,7 @@ export function extractBindings(path, text, lang, sourceTokens) {
     if (script && (value === 'import' ? next === '(' || next === '.'
       : next !== '*' && next !== '{' && next !== 'type')) continue;
     const { rows, end } = statement(tokens, index);
+    const before = namedImports.length + reexports.length;
     if (script) scriptImports(value, rows, line, add, reexport);
     else if (lang === 'python' && value === '__all__') {
       if (column === 0 && ['=', '+='].includes(rows[0]?.value) && ['[', '('].includes(rows[1]?.value)) {
@@ -256,12 +257,14 @@ export function extractBindings(path, text, lang, sourceTokens) {
     } else if (lang === 'python') {
       if (column === 0) topLevel.add(line);
       pythonImports(value, rows, line, add);
-    }
-    else if (lang === 'rust') rustUse(rows, '', line, add, reexport, publicRustUse(tokens, index));
+    } else if (lang === 'rust') rustUse(rows, '', line, add, reexport, publicRustUse(tokens, index));
     else if (lang === 'go') goImports(rows, add);
     else if (lang === 'dart') dartBindings(value, rows, line, add, reexport);
     else if (lang === 'ruby') rubyImports(value, rows, line, add);
     else dottedImport(lang, rows, line, add);
+    if (ranges && before < namedImports.length + reexports.length) {
+      ranges.push({ start: tokens[index].start, end: tokens[end].end });
+    }
     index = end;
   }
 

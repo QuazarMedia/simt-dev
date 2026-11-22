@@ -17,8 +17,7 @@ import { readLocalConfig } from '../local/config.mjs';
 import { executionAllowed, trustPolicy } from '../trust/policy.mjs';
 import { localEmbed } from '../local/client.mjs';
 import { foldIdentifierText } from '../text/identifiers.mjs';
-import { extractBindings } from './bindings.mjs';
-import { extract, resolveImports } from './extract.mjs';
+import { extract, extractSymbolEvidence, resolveImports } from './extract.mjs';
 import { BM25F_FIELDS, BM25F_WEIGHTS, bestFieldHits, fieldQueryTerms, fieldSearchStatement, fieldTokens, ftsQuote, scoreFtsBm25F } from './bm25f.mjs';
 // the extension-to-language map is the records' `languages[]` (ADR-013). `canonical`
 // names the extensions that RESOLVE to a language (JavaScript claims `.ts` for extraction
@@ -53,7 +52,7 @@ const BLOB_CAP = 16 * 1024 * 1024;
 // What the built-in extractor and import resolver mean, separately from the
 // database schema. Bump it when their reading changes: every cache built by the
 // older reading is then re-extracted, which a schema migration is not for.
-const INDEX_INPUT_REVISION = 3;
+const INDEX_INPUT_REVISION = 4;
 
 // The index's file scope. `git ls-files -s` is the whole tracked tree; a build
 // that restricted it would be a second meaning of the cache, and the stamp says
@@ -313,7 +312,7 @@ export async function reindex(root, opts = {}) {
       pkg: packages.get(entry.path) ?? '',
       // Kept so a later build can re-resolve this file's edges without its bytes.
       imports: Array.isArray(pulled.imports) ? pulled.imports : [],
-      bindings: { namedImports: pulled.namedImports ?? [], reexports: pulled.reexports ?? [] },
+      bindings: { namedImports: pulled.namedImports ?? [], reexports: pulled.reexports ?? [], chunk: pulled.chunk },
       resolution: text == null ? 'none' : pulled.edges ? 'adapter' : 'builtin',
     });
     symbols.push(...pulled.symbols);
@@ -858,13 +857,13 @@ async function runExtract(filePath, text, lang, adapter) {
     try {
       const got = await adapter.extract(filePath, text, lang);
       if (got && Array.isArray(got.symbols)) {
-        return { ...normalise(filePath, got), ...extractBindings(filePath, text, lang) };
+        return { ...normalise(filePath, got), ...extractSymbolEvidence(filePath, text, lang, true) };
       }
     } catch {
       // A parser that throws does not sink the index. The built-in rows are the cache.
     }
   }
-  return extract(filePath, text, lang);
+  return extract(filePath, text, lang, { references: true });
 }
 
 function normalise(filePath, got) {

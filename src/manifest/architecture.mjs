@@ -27,3 +27,24 @@ export function architectureProblem(value) {
   }
   return null;
 }
+
+export function graphLimitsProblem(value) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return 'limits.graph must be an object';
+  if (value.cycles !== undefined && value.cycles !== false && value.cycles !== true
+    && (!value.cycles || typeof value.cycles !== 'object' || Array.isArray(value.cycles)
+      || (value.cycles.exclude !== undefined && !listOf(value.cycles.exclude, isRepositoryGlob)))) {
+    return 'limits.graph.cycles must be a boolean or {exclude: repository globs}';
+  }
+  for (const key of ['brokenImports', 'deadExports']) {
+    if (value[key] !== undefined && typeof value[key] !== 'boolean') return `limits.graph.${key} must be a boolean`;
+  }
+  if (value.entrypoints !== undefined && !listOf(value.entrypoints, isRepositoryGlob)) {
+    return 'limits.graph.entrypoints must list repository globs';
+  }
+  for (const key of ['maxFanIn', 'maxFanOut']) {
+    if (value[key] !== undefined && (!Number.isSafeInteger(value[key]) || value[key] < 0)) {
+      return `limits.graph.${key} must be a nonnegative integer`;
+    }
+  }
+  return null;
+}

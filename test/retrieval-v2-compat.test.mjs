@@ -175,3 +175,30 @@ test('installed index upgrades v5 and leaves a newer file byte-identical', async
   const mapped = await cli(root, ['map', '--task', 'rate', '--retrieval', 'v2']);
   assert.equal(mapped.files[0].path, 'rate.mjs');
 });
+
+test('the packaged architecture example works in a receiving repository', async () => {
+  const guide = await readFile(join(dirname(dirname(bin)), 'docs', 'guides', 'retrieval.md'), 'utf8');
+  const profile = guide.match(/```markdown\n([\s\S]*?)\n```/u)?.[1];
+  const manifest = guide.match(/```json\n([\s\S]*?)\n```/u)?.[1];
+  assert.ok(profile && manifest);
+  const root = await consumer({
+    'package.json': '{"name":"architecture-fixture","type":"module"}',
+    'src/application/rate.mjs': 'export const rate = 1;\n',
+    'src/storage/read.mjs': 'import { rate } from "../application/rate.mjs";\n',
+    '.simt/profiles/architecture.md': profile,
+  });
+  await cli(root, ['init', '--yes']);
+  const path = join(root, 'simt.json');
+  const adopted = JSON.parse(await readFile(path, 'utf8'));
+  await writeFile(path, JSON.stringify({ ...adopted, ...JSON.parse(manifest) }, null, 2) + '\n');
+  await cli(root, ['sync', '--yes']);
+  const rendered = await readFile(join(root, 'AGENTS.md'), 'utf8');
+  assert.match(rendered, /Follow the dependency direction declared in simt.json/u);
+  assert.doesNotMatch(rendered, /simt-check: import-direction/u);
+  const result = await cli(root, ['check'], { exit: 1 });
+  const violation = result.findings.find(({ status }) => status === 'import-direction-violation');
+  assert.deepEqual(violation?.witness, ['src/storage/read.mjs', 'src/application/rate.mjs']);
+  assert.equal(violation.specifier, '../application/rate.mjs');
+  assert.equal(violation.line, 1);
+  assert.equal((await cli(root, ['explain', violation.status])).code, violation.status);
+});

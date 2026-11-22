@@ -49,6 +49,8 @@ const CHECK_PIPELINE = [
   'src/memory/decide.mjs',
   // Declared checkers: file-lines, forbid-regex, forbidden-path, required-file.
   'src/kernel/checks.mjs',
+  'src/kernel/graph-checks.mjs',
+  'src/kernel/graph-invariants.mjs',
   // The kernel-mode cut.
   'src/kernel/budget.mjs',
   // The base-config findings.
@@ -90,6 +92,19 @@ test('every status the check pipeline can emit has an explanation', async () => 
     [],
     `check can emit statuses with no \`explain\` entry: ${unexplained.sort().join(', ')}`,
   );
+});
+
+test('the CLI explains every architectural and graph finding', async () => {
+  const codes = ['import-direction-violation', 'import-cycle', 'broken-relative-import',
+    'dead-export', 'graph-coverage-warn', 'hub-fanin-warn', 'hub-fanout-warn'];
+  for (const status of codes) {
+    const { code, stdout } = await run(['explain', status.toUpperCase(), '--json']);
+    assert.equal(code, 0, stdout);
+    const document = JSON.parse(stdout);
+    assert.equal(document.code, status);
+    assert.match(document.why, /ADR-24[9]|ADR-250/u);
+    assert.ok(document.fix.length > 0);
+  }
 });
 
 test('every entry carries what, why, fix and example', () => {

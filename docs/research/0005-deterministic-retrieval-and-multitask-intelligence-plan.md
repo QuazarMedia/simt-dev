@@ -1,6 +1,6 @@
 # Plan 0005 — Deterministic Retrieval, Multi-Task Decomposition, and Structural Precision
 
-Status: **proposed — audit and literature review complete; D01–D40 queued** · created 2026-11-22 · baseline `8c38faf`
+Status: **implemented through D40 · experimental retrieval stays opt-in · Linux runtime qualification pending** · created 2026-11-22 · baseline `8c38faf`
 Depends on: [plan 0003](0003-intelligence-amplifier-research-plan.md) (55/55 Complete) and [plan 0004](0004-knowledge-and-remote-work-intelligence-plan.md) (52/52 Complete).
 Owner: **simt-dev**. All research findings are grounded in live code inspection at `8c38faf`, read-only CLI probes on this checkout, and primary 2021–2026 IR/SE literature.
 Smallest independently valuable implementation slice: **D01**, an executable baseline audit and live-failure regression suite pinning the four concrete defects exposed below; then **D05** (dual-emission identifier tokenizer) and **D17** (deterministic multi-task prompt segmenter) along disjoint lanes. Authoring this plan does not complete any slice.
@@ -721,6 +721,16 @@ Because $\log(1 + \cdot)$ is strictly concave, the **marginal gain** $\Delta(c \
 
 ## 13. Tracker
 
+The [paired benchmark](evidence/0005-benchmark-report.md) and
+[installed-consumer qualification](evidence/0005-compatibility.md) record the
+measured rollout. ADR-252 settles the defaults. ADR-095 governs gate output
+compaction. ADR-240 settles composite brief packing.
+
+The D27 one-commit co-change update took 8.4–11.3 ms with the Apple Git
+binary directly on PATH and 21.7–25.6 ms through `/usr/bin/git`. The
+15 ms target was met only in the direct-binary probe. The D27 commit
+body misnames the index test. Its tracker row records `test/index.test.mjs`.
+
 Columns follow `templates/plan/tracker.json` (`Lane` names disjoint subsystems so parallel agents can work `index`, `graph`, and `decompose` simultaneously without touching the same files). All `D` rows start `Queued`. Paths and test commands in §§5–12 are planned deliverables, not installed features at `8c38faf`.
 
 | ID | Slice | Phase | Lane | Tier | Depends on | Size | Needs ADR | Success metric | State | SHA / evidence |
@@ -764,7 +774,7 @@ Columns follow `templates/plan/tracker.json` (`Lane` names disjoint subsystems s
 | D37 | Full paired ablation & scale benchmark run | 7 | rollout | M | D04, D25, D26, D30, D31, D33, D36 | M | P1 | preregistered bars evaluated & reported honestly | Complete | 9d28829f64c16f0c5c525e588d2d644c52b822d7 · test: node --test --test-concurrency=4 test/retrieval-ablation.test.mjs test/retrieval-metrics.test.mjs test/bench-multitask-corpus.test.mjs test/map.test.mjs test/index-directional.test.mjs test/why-precision.test.mjs |
 | D38 | Compatibility & isolated-consumer verification | 7 | rollout | M | D37 | M | — | full suite + ADR-031 isolated install 100% pass | Complete | 7b37b7cc41c39fb58aec66bb68b73f58164a169a · test: SIMT_QUALIFY_SEA=1 npm test |
 | D39 | Progressive rollout & ADR ratification | 7 | rollout | S | D38 | S | P1 | numbered ADRs landed; clean rollback flags | Complete | 799ceba91113988ab4d4eb02a043af2a4a0a9467 · test: node --test --test-concurrency=4 test/retrieval-rollout.test.mjs test/rules.test.mjs test/gate.test.mjs test/why-precision.test.mjs |
-| D40 | Docs, explain codes & multi-task playbooks | 7 | rollout | S | D39 | S | — | docs/spec/genericity tests pass; receiver-clean | Queued | |
+| D40 | Docs, explain codes & multi-task playbooks | 7 | rollout | S | D39 | S | — | docs/spec/genericity tests pass; receiver-clean | Complete | e7fef25ee66536c610b0d9b744e705a36c77f7b5 · test: node --test --test-concurrency=4 test/docs.test.mjs test/spec.test.mjs test/genericity.test.mjs test/explain.test.mjs test/shipped.test.mjs test/shipped-decisions.test.mjs |
 
 ## 14. Risks and how determinism survives
 

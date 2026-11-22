@@ -8,10 +8,12 @@ the command that fixes it, and what a reader sees.
 | --- | --- |
 | `ABSENT` | The file the gate reads does not exist: no AGENTS.md at the repository root, so there is no region to compare. |
 | `BEYOND-READ-LIMIT` | The generated region ends past a reader’s documented read limit, so that reader stops mid-region and never sees the rules below the cut. |
+| `BROKEN-RELATIVE-IMPORT` | An observed relative import resolves to no tracked or working-tree file. |
 | `BUDGET` | The always-on projection carries more bytes than this repository agreed to carry in budget.bytes — and nothing was cut. |
 | `BUDGET-CUT` | The projection was cut to fit budget.bytes: kernel mode packed least-valuable-first and named every cut rule under "Deferred rules". |
-| `CHECK-UNBUILT` | A selected rule declares a checker this tool does not know, so the gate has no direction to enforce and refuses to pretend otherwise. |
+| `CHECK-UNBUILT` | A selected import-direction marker has no architecture policy in simt.json. |
 | `CURRENT` | Not a defect: the file on disk is byte-for-byte what the tool would write. This is the gate’s passing state for that file. |
+| `DEAD-EXPORT` | A declared export outside the public entrypoints has no observed cross-file binding. |
 | `DRIFT` | The file on disk differs from what the tool would write: someone edited the generated region, or the rules changed underneath it. |
 | `DUPLICATE-DECISION-ID` | Two decision records claim one number: the index only sees the first, so the second is a record no provenance answer can reach. |
 | `ECOSYSTEM-RECORD-INVALID` | A record under .simt/ecosystems/ did not validate, so it was quarantined and the shipped record with its id (if any) is in force. |
@@ -22,7 +24,12 @@ the command that fixes it, and what a reader sees.
 | `GATE-CWD-MISSING` | gates.cwd names a directory that is not a directory in this repository: the gate would run somewhere that does not exist. |
 | `GATE-CWD-OUTSIDE` | gates.cwd resolves outside the repository: the gate would run outside the tree it is supposed to guard. |
 | `GENERATED` | The path carries bytes this tool generates, so a write there is discarded by the next sync instead of applied. |
+| `GRAPH-COVERAGE-WARN` | The dead-export review skipped a language or lacked a declared public entrypoint. |
 | `HOOKS-DISABLE` | The command removes or reroutes the git hooks the gates run in: core.hooksPath is unset or repointed, or the hooks directory is deleted. |
+| `HUB-FANIN-WARN` | The module has more internal importers than limits.graph.maxFanIn allows. |
+| `HUB-FANOUT-WARN` | The module imports more internal modules than limits.graph.maxFanOut allows. |
+| `IMPORT-CYCLE` | The live import graph contains a dependency cycle. |
+| `IMPORT-DIRECTION-VIOLATION` | An import or import chain violates the architecture policy in simt.json. |
 | `INCONSISTENT` | The project’s tsconfig spells `moduleResolution` in a form the TypeScript parser accepts but the documentation does not, so it compiles and quietly disagrees with every repository that spells it the documented way. |
 | `INERT` | The TypeScript base config is present but inert: nothing in the repository reads it, so it constrains no file. |
 | `INVALID` | A file the tool reads declares something it cannot use: a rule with unparseable frontmatter, a manifest surface no editor documents, or a checker error the compiler reports. |

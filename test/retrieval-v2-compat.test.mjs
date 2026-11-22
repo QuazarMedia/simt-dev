@@ -24,7 +24,9 @@ before(async () => {
   const install = await tempDir('installed-retrieval-');
   const env = { ...process.env, npm_config_cache: join(install, 'cache') };
   const { stdout } = await exec('npm', ['pack', '--json', '--pack-destination', install], { cwd: ROOT, env });
-  const [{ name, filename }] = JSON.parse(stdout);
+  // npm 12's `pack --json` emits an object keyed by name; the form before it is an array.
+  const packed = JSON.parse(stdout);
+  const [{ name, filename }] = Array.isArray(packed) ? packed : Object.values(packed);
   await writeFile(join(install, 'package.json'), '{"private":true}');
   await exec('npm', ['install', '--offline', '--ignore-scripts', '--no-audit', '--no-fund', join(install, filename)],
     { cwd: install, env });

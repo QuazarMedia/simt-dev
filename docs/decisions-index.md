@@ -101,10 +101,10 @@ in [architecture/history.md](architecture/history.md).
 | [088](decisions/ADR-088-a-marked-line-is-enforced-by-a-checker.md) | A marked line is enforced by a checker | accepted · 2026-10-18 · filed as R19 (plan 0003) · ruling 3 narrowed by ADR-090 |
 | [089](decisions/ADR-089-the-local-index-is-a-cache-of-git-blobs.md) | The local index is a cache of git blobs | accepted · 2026-10-18 · filed as R20 (plan 0003) · ruling 2 narrowed by ADR-201 (2026-11-21): an unchanged blob is still not re-read, but its edges are re-resolved when the tracked path set or the language table changes. |
 | [090](decisions/ADR-090-an-optional-adapter-is-off-until-named.md) | An optional adapter is off until a repository names it | accepted · 2026-10-18 · filed as R21 (plan 0003) |
-| [091](decisions/ADR-091-the-map-ranks-files-a-task-mentions.md) | The map ranks the files a task mentions, and the files next to them | accepted · 2026-10-18 · filed as R22 (plan 0003) · measurement updated by ADR-225 |
+| [091](decisions/ADR-091-the-map-ranks-files-a-task-mentions.md) | The map ranks the files a task mentions, and the files next to them | accepted · 2026-10-18 · filed as R22 (plan 0003) · measurement updated by ADR-225 · ruling 1 narrowed by ADR-252 |
 | [092](decisions/ADR-092-tests-are-imports-conventions-and-coverage.md) | A test is an import, a conventional neighbour, or a coverage record | accepted · 2026-10-18 · filed as R24 (plan 0003) |
 | [093](decisions/ADR-093-why-names-what-governs-a-file.md) | why names what governs a file | accepted · 2026-10-18 · filed as R25 (plan 0003) |
-| [094](decisions/ADR-094-a-change-runs-the-tests-that-import-it.md) | a change runs the tests that import it | accepted · 2026-10-18 · filed as R16 (plan 0003) |
+| [094](decisions/ADR-094-a-change-runs-the-tests-that-import-it.md) | a change runs the tests that import it | accepted · 2026-10-18 · filed as R16 (plan 0003) · ruling 1 narrowed by ADR-252 |
 | [095](decisions/ADR-095-gate-output-keeps-the-failures.md) | gate output keeps the failures | accepted · 2026-10-18 · filed as R18 (plan 0003) |
 | [096](decisions/ADR-096-impact-names-who-a-change-reaches.md) | impact names who a change reaches | accepted · 2026-10-18 · filed as R23 (plan 0003) |
 | [097](decisions/ADR-097-the-channels-publish-by-hand-and-the-version-rides-in-as-an-input.md) | the channels publish by hand, and the version rides in as an input | accepted · 2026-10-25 · ruling 3's Homebrew precondition is superseded by ADR-098, which also restates what each channel now waits on |
@@ -260,3 +260,4 @@ in [architecture/history.md](architecture/history.md).
 | [249](decisions/ADR-249-import-direction-is-repository-policy.md) | Import direction is repository policy | accepted · 2026-11-22 · D34 |
 | [250](decisions/ADR-250-structural-checks-are-opt-in.md) | Structural checks are opt-in | accepted · 2026-11-22 · D35 |
 | [251](decisions/ADR-251-check-reuses-staged-source-evidence.md) | Check reuses staged source evidence | accepted · 2026-11-22 · D36 |
+| [252](decisions/ADR-252-retrieval-defaults-follow-paired-evidence.md) | Retrieval defaults follow paired evidence | accepted · 2026-11-22 · D39 |

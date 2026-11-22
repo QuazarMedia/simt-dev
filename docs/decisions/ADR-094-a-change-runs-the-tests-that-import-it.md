@@ -1,6 +1,6 @@
 # ADR-094 — a change runs the tests that import it
 
-Status: **accepted** · 2026-10-18 · filed as R16 (plan 0003)
+Status: **accepted** · 2026-10-18 · filed as R16 (plan 0003) · ruling 1 narrowed by ADR-252
 
 **Affects:** `src/index/gate.mjs`, `src/commands/gate.mjs`, `test/gate.test.mjs`
 
